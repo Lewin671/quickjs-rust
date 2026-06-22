@@ -62,8 +62,9 @@ pub(crate) use function::{CallEnv, call_function, construct_function, ensure_con
 use function::{Function, NativeFunction};
 pub(crate) use property::{
     PropertyKey, array_as_object_prototype, array_has_own_property, array_own_property_descriptor,
-    array_own_property_keys, array_own_property_names, array_prototype, constructor_prototype,
-    constructor_prototype_slot, function_delete_own_property, function_delete_own_symbol_property,
+    array_own_property_keys, array_own_property_names, array_prototype,
+    constructor_named_prototype, constructor_prototype, constructor_prototype_slot,
+    function_delete_own_property, function_delete_own_symbol_property,
     function_intrinsic_prototype_slot, function_own_property_descriptor,
     function_own_property_keys, function_own_property_names, function_own_property_symbols,
     function_own_symbol_property_descriptor, function_prototype,

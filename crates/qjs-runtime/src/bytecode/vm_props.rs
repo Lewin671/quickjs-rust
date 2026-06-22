@@ -33,11 +33,21 @@ impl Vm<'_> {
         object: &Value,
         key: &crate::PropertyKey,
     ) -> bool {
-        if !matches!(object, Value::Object(object) if symbol::is_symbol_primitive(object)) {
+        let Value::Object(symbol_object) = object else {
+            return false;
+        };
+        if !symbol::is_symbol_primitive(symbol_object) {
             return false;
         }
         let env = self.current_env();
-        !property_set_uses_setter(object, key, &env)
+        if property_set_uses_setter(object, key, &env) {
+            return false;
+        }
+        // A Proxy anywhere in the prototype chain may carry a `set` trap that
+        // `property_set_uses_setter` cannot inspect; the assignment must still
+        // be attempted so the trap observes it. Only a plain data write onto the
+        // Symbol primitive is the silent no-op (strict TypeError).
+        !prototype_chain_has_proxy(symbol_object.prototype_slot())
     }
 
     pub(super) fn is_global_object(&self, value: &Value) -> bool {

@@ -276,7 +276,7 @@ pub(crate) fn function_prototype_chain_descriptor(
     }
 }
 
-fn constructor_named_prototype(env: &CallEnv, name: &str) -> Option<ObjectRef> {
+pub(crate) fn constructor_named_prototype(env: &CallEnv, name: &str) -> Option<ObjectRef> {
     let Some(Value::Function(function)) = env.get(name) else {
         return None;
     };

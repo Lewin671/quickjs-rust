@@ -103,10 +103,49 @@ pub(crate) fn set_property(
             Value::Proxy(proxy),
             env,
         ),
-        _ => Err(RuntimeError {
+        // PutValue with a primitive base (number/string/boolean/bigint):
+        // ToObject coerces the primitive to its wrapper, then `[[Set]]` runs
+        // with the original primitive as the receiver. A setter or a Proxy in
+        // the wrapper's prototype chain therefore still fires.
+        Value::Number(_) => set_primitive_property("Number", object, key, value, env),
+        Value::Boolean(_) => set_primitive_property("Boolean", object, key, value, env),
+        Value::BigInt(_) => set_primitive_property("BigInt", object, key, value, env),
+        Value::String(_) => set_primitive_property("String", object, key, value, env),
+        Value::Null | Value::Undefined => Err(RuntimeError {
             thrown: None,
             message: "member assignment target is not an object".to_owned(),
         }),
+    }
+}
+
+/// OrdinarySet for a primitive base. Resolves the governing descriptor through
+/// the primitive wrapper's prototype chain (proxy-aware), running any setter or
+/// Proxy `set` trap against the original primitive as the receiver. A data
+/// write resolves to `false`: ToObject yields a fresh wrapper and the receiver
+/// is the primitive, so creating an own property is unobservable (a silent
+/// no-op in sloppy mode; the caller raises the strict TypeError).
+fn set_primitive_property(
+    constructor_name: &str,
+    receiver: Value,
+    key: String,
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<bool, RuntimeError> {
+    let Some(prototype) = crate::constructor_named_prototype(env, constructor_name) else {
+        return Ok(false);
+    };
+    match ordinary_chain_property(&prototype, &key) {
+        Err(ProxyInChain) => crate::reflect::ordinary_set(
+            Value::Object(prototype),
+            &PropertyKey::String(key),
+            value,
+            receiver,
+            env,
+        ),
+        Ok(descriptor) => match apply_set_step(descriptor, receiver, value, env)? {
+            SetStep::Done(ok) => Ok(ok),
+            SetStep::WriteData => Ok(false),
+        },
     }
 }
 

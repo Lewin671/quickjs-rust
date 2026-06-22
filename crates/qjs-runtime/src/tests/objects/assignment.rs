@@ -83,3 +83,34 @@ fn ordinary_set_runs_setter_in_strict_mode() {
     );
     assert!(eval("'use strict'; var o = { get p() { return 1; } }; o.p = 5;").is_err());
 }
+
+#[test]
+fn put_value_on_primitive_base_routes_through_wrapper_prototype() {
+    // PutValue with a primitive base coerces to the wrapper object and runs
+    // [[Set]], so a setter installed on the wrapper prototype chain fires. A
+    // Proxy in the chain is consulted via its `set` trap (number/string/
+    // boolean/bigint/symbol all box through ToObject).
+    assert_eq!(
+        eval(
+            "var n = 0;
+             Object.setPrototypeOf(Number.prototype, new Proxy({}, { set() { n += 1; return true; } }));
+             (5).foo = 1;
+             n;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "var n = 0;
+             Object.setPrototypeOf(Symbol.prototype, new Proxy({}, { set() { n += 1; return true; } }));
+             Symbol().foo = 1;
+             n;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    // A plain data write onto a primitive is unobservable: silent in sloppy
+    // mode, a TypeError in strict mode.
+    assert_eq!(eval("(5).foo = 1; (5).foo;"), Ok(Value::Undefined));
+    assert!(eval("'use strict'; (5).foo = 1;").is_err());
+    assert!(eval("'use strict'; Symbol().foo = 1;").is_err());
+}
