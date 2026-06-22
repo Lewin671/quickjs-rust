@@ -953,3 +953,13 @@ fn private_class_method_name_does_not_create_inner_binding() {
         Ok(Value::String("1:1".to_owned().into()))
     );
 }
+
+#[test]
+fn class_methods_capture_live_outer_lexical_cell() {
+    assert_eq!(
+        eval(
+            "let called = 0; class C { m() { called += 1; } } called = 0; new C().m(); called = 0; new C().m(); called;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+}

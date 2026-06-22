@@ -68,6 +68,9 @@ impl Vm<'_> {
         };
         std::rc::Rc::make_mut(string).push_str(suffix);
         let result = Value::String(string.clone());
+        if let Some(upvalue) = self.local_upvalues.get(slot).and_then(Option::as_ref) {
+            upvalue.set(result.clone());
+        }
         self.write_through_captured(&local_meta.name, result.clone());
         if local_meta.from_env || self.bytecode.local_is_body_hoist_only(slot) {
             let name = local_meta.name.clone();
@@ -105,6 +108,9 @@ impl Vm<'_> {
         suffix: &str,
         is_strict: bool,
     ) -> Result<Value, RuntimeError> {
+        if self.env.locals().contains_key(name) {
+            return self.append_string_literal_global_via_store(name, suffix, is_strict);
+        }
         {
             let mut realm = self.realm.borrow_mut();
             if let Some(Value::String(string)) = realm.get_mut(name) {
@@ -122,10 +128,20 @@ impl Vm<'_> {
                             result.clone()
                         });
                 }
+                self.write_through_captured(name, result.clone());
                 return Ok(result);
             }
         }
 
+        self.append_string_literal_global_via_store(name, suffix, is_strict)
+    }
+
+    fn append_string_literal_global_via_store(
+        &mut self,
+        name: &str,
+        suffix: &str,
+        is_strict: bool,
+    ) -> Result<Value, RuntimeError> {
         let left = self.load_global(name)?;
         let mut env = self.current_env();
         let result = operations::eval_binary(

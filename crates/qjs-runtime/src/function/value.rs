@@ -8,7 +8,7 @@ use std::{
 use qjs_ast::{FunctionParams, Stmt};
 
 use crate::CallEnv;
-use crate::function::ModuleImports;
+use crate::function::{ModuleImports, Upvalue};
 use crate::module::ModuleHostRef;
 use crate::{
     Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, Value,
@@ -72,6 +72,9 @@ pub struct Function {
     /// False for function declarations (whose name is an ordinary mutable outer
     /// binding) and for methods.
     pub(crate) immutable_name_binding: bool,
+    /// An immutable binding supplied through the captured environment rather
+    /// than the function's own name, currently used for class inner names.
+    pub(crate) immutable_env_binding: Option<String>,
     /// Parameter names. Held behind `Rc` so the frequent `Function` value
     /// clones (every property read, capture sync, and call setup) only bump a
     /// refcount instead of deep-cloning the parameter AST, which dominated call
@@ -90,6 +93,7 @@ pub struct Function {
     pub(crate) module_imports: ModuleImports,
     pub(crate) with_stack: Vec<Value>,
     pub(crate) capture_writeback: Option<CaptureWriteback>,
+    pub(crate) upvalues: Vec<Upvalue>,
     pub(crate) local_names: Vec<String>,
     pub(crate) bytecode: Option<Rc<Bytecode>>,
     pub(crate) native: Option<NativeFunction>,
@@ -160,6 +164,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) name: Option<String>,
     pub(crate) has_name_binding: bool,
     pub(crate) immutable_name_binding: bool,
+    pub(crate) immutable_env_binding: Option<String>,
     pub(crate) params: Rc<FunctionParams>,
     pub(crate) env: HashMap<String, Value>,
     pub(crate) module_host: Option<ModuleHostRef>,
@@ -180,6 +185,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
     pub(crate) with_stack: Vec<Value>,
     pub(crate) capture_writeback: Option<CaptureWriteback>,
+    pub(crate) upvalues: Vec<Upvalue>,
 }
 
 #[derive(Clone, Copy)]
@@ -283,6 +289,7 @@ impl Function {
         let function = Self {
             has_name_binding: name.is_some(),
             immutable_name_binding: false,
+            immutable_env_binding: None,
             name,
             params: Rc::new(params),
             env: Rc::new(env),
@@ -291,6 +298,7 @@ impl Function {
             module_imports: HashMap::new(),
             with_stack: Vec::new(),
             capture_writeback: None,
+            upvalues: Vec::new(),
             local_names,
             bytecode: Some(bytecode),
             native: None,
@@ -338,6 +346,7 @@ impl Function {
             name,
             has_name_binding,
             immutable_name_binding,
+            immutable_env_binding,
             params,
             env,
             module_host,
@@ -358,6 +367,7 @@ impl Function {
             captured_env,
             with_stack,
             capture_writeback,
+            upvalues,
         } = compiled;
         let prototype = ObjectRef::with_prototype(
             HashMap::new(),
@@ -366,6 +376,7 @@ impl Function {
         let function = Self {
             has_name_binding,
             immutable_name_binding,
+            immutable_env_binding,
             name,
             params,
             env: Rc::new(env),
@@ -374,6 +385,7 @@ impl Function {
             module_imports,
             with_stack,
             capture_writeback,
+            upvalues,
             local_names,
             bytecode: Some(bytecode),
             native: None,
@@ -482,6 +494,7 @@ impl Function {
             name: Some(name),
             has_name_binding: false,
             immutable_name_binding: false,
+            immutable_env_binding: None,
             params: Rc::new(FunctionParams::positional(vec![String::new(); length])),
             env: Rc::new(HashMap::new()),
             captured_env: Rc::new(RefCell::new(HashMap::new())),
@@ -489,6 +502,7 @@ impl Function {
             module_imports: HashMap::new(),
             with_stack: Vec::new(),
             capture_writeback: None,
+            upvalues: Vec::new(),
             local_names: Vec::new(),
             bytecode: None,
             native: None,
@@ -536,6 +550,7 @@ impl Function {
         let function = Self {
             has_name_binding: false,
             immutable_name_binding: false,
+            immutable_env_binding: None,
             name,
             params: Rc::new(FunctionParams::positional(params)),
             env: Rc::new(env),
@@ -544,6 +559,7 @@ impl Function {
             module_imports: HashMap::new(),
             with_stack: Vec::new(),
             capture_writeback: None,
+            upvalues: Vec::new(),
             local_names: Vec::new(),
             bytecode: None,
             native,

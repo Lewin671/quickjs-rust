@@ -141,7 +141,7 @@ impl Vm<'_> {
     /// home object resolves `super.x` (instance: prototype; static:
     /// constructor) and carries the private environment.
     fn build_private_method(
-        &self,
+        &mut self,
         def: &ClassMethodDef,
         is_static: bool,
         prototype: &ObjectRef,
@@ -149,6 +149,7 @@ impl Vm<'_> {
         name: Option<&str>,
     ) -> Value {
         let mut method_env = self.function_capture_env(&def.bytecode, &def.local_names);
+        self.insert_lexical_captures(&mut method_env, &def.lexical_captures);
         bind_inner_name(&mut method_env, name, constructor_function);
         let home_object = if is_static {
             Value::Function(constructor_function.clone())
@@ -159,6 +160,7 @@ impl Vm<'_> {
             name: class_method_function_name_with_base(def.method_kind, def.name.clone()),
             has_name_binding: false,
             immutable_name_binding: false,
+            immutable_env_binding: name.map(str::to_owned),
             params: std::rc::Rc::new(def.params.clone()),
             env: method_env.clone(),
             module_host: self.module_host.clone(),
@@ -183,6 +185,7 @@ impl Vm<'_> {
                 &def.local_names,
                 name,
             ),
+            upvalues: self.captured_upvalues_for_function(&def.bytecode, &def.lexical_captures),
         });
         function.set_source_text(def.source_text.clone());
         if def.is_generator && def.is_async {
@@ -217,6 +220,7 @@ impl Vm<'_> {
             name: None,
             has_name_binding: false,
             immutable_name_binding: false,
+            immutable_env_binding: name.map(str::to_owned),
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
             env: field_env.clone(),
             module_host: self.module_host.clone(),
@@ -241,6 +245,7 @@ impl Vm<'_> {
                 &definition.local_names,
                 name,
             ),
+            upvalues: Vec::new(),
         })
     }
 

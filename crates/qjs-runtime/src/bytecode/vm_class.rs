@@ -75,6 +75,7 @@ impl Vm<'_> {
             name: constructor.name.clone(),
             has_name_binding: false,
             immutable_name_binding: false,
+            immutable_env_binding: name.map(str::to_owned),
             params: std::rc::Rc::new(constructor.params.clone()),
             env: constructor_env,
             module_host: self.module_host.clone(),
@@ -99,6 +100,7 @@ impl Vm<'_> {
                 &constructor.local_names,
                 name,
             ),
+            upvalues: Vec::new(),
         });
 
         // Static-side inheritance: a subclass constructor inherits the parent
@@ -333,6 +335,7 @@ impl Vm<'_> {
                         name: None,
                         has_name_binding: false,
                         immutable_name_binding: false,
+                        immutable_env_binding: name.map(str::to_owned),
                         params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
                         env: key_env.clone(),
                         module_host: self.module_host.clone(),
@@ -357,6 +360,7 @@ impl Vm<'_> {
                             local_names,
                             name,
                         ),
+                        upvalues: Vec::new(),
                     });
                     let this_value = self.env.get("this").unwrap_or(Value::Undefined);
                     let value = self.run_field_initializer(&thunk, this_value)?;
@@ -373,7 +377,7 @@ impl Vm<'_> {
     /// Builds and installs a single method/accessor on the prototype (instance)
     /// or the constructor (static).
     fn install_method(
-        &self,
+        &mut self,
         method: &ClassMethodDef,
         key: PropertyKey,
         prototype: &ObjectRef,
@@ -381,6 +385,7 @@ impl Vm<'_> {
         name: Option<&str>,
     ) -> Result<(), RuntimeError> {
         let mut method_env = self.function_capture_env(&method.bytecode, &method.local_names);
+        self.insert_lexical_captures(&mut method_env, &method.lexical_captures);
         bind_class_inner_name(&mut method_env, name, constructor_function);
         // A method's home object resolves `super.x`: instance methods and
         // accessors use the prototype; static members use the constructor.
@@ -393,6 +398,7 @@ impl Vm<'_> {
             name: class_method_function_name(method, &key),
             has_name_binding: false,
             immutable_name_binding: false,
+            immutable_env_binding: name.map(str::to_owned),
             params: std::rc::Rc::new(method.params.clone()),
             env: method_env.clone(),
             module_host: self.module_host.clone(),
@@ -417,6 +423,8 @@ impl Vm<'_> {
                 &method.local_names,
                 name,
             ),
+            upvalues: self
+                .captured_upvalues_for_function(&method.bytecode, &method.lexical_captures),
         });
         method_function.set_source_text(method.source_text.clone());
         if method.is_generator && method.is_async {
@@ -490,6 +498,7 @@ impl Vm<'_> {
             name: None,
             has_name_binding: false,
             immutable_name_binding: false,
+            immutable_env_binding: name.map(str::to_owned),
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
             env: field_env.clone(),
             module_host: self.module_host.clone(),
@@ -510,6 +519,7 @@ impl Vm<'_> {
             captured_env: Rc::new(RefCell::new(field_env)),
             with_stack: self.with_stack.clone(),
             capture_writeback: self.class_member_capture_writeback(bytecode, local_names, name),
+            upvalues: Vec::new(),
         }))
     }
 
@@ -597,6 +607,7 @@ impl Vm<'_> {
             name: None,
             has_name_binding: false,
             immutable_name_binding: false,
+            immutable_env_binding: name.map(str::to_owned),
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
             env: block_env.clone(),
             module_host: self.module_host.clone(),
@@ -617,6 +628,7 @@ impl Vm<'_> {
             captured_env: Rc::new(RefCell::new(block_env)),
             with_stack: self.with_stack.clone(),
             capture_writeback: self.class_member_capture_writeback(bytecode, local_names, name),
+            upvalues: Vec::new(),
         });
         self.run_field_initializer(&thunk, Value::Function(constructor_function.clone()))?;
         Ok(())

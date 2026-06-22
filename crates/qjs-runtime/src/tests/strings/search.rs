@@ -303,6 +303,20 @@ fn evaluates_string_search_builtins() {
         ),
         Ok(Value::String("1:4".to_owned().into()))
     );
+    assert_eq!(
+        eval(
+            "let called = 0; class RE extends RegExp { [Symbol.replace](...args) { const actual = super[Symbol.replace](...args); called += 1; return actual; } } let out = []; for (const [[source, flags], input, replacement] of [[['b', 'g'], 'abc abc abc', 'z'], [['a(b)(ca)', 'g'], 'abcabcabcabc', '$2-$1']]) { called = 0; out.push(input.replaceAll(new RE(source, flags), replacement) + ':' + called); } out.join('|');"
+        ),
+        Ok(Value::String(
+            "azc azc azc:1|ca-bbcca-bbc:1".to_owned().into()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "let called = 0; let calls; class RE extends RegExp { [Symbol.replace](...args) { const actual = super[Symbol.replace](...args); called += 1; return actual; } } function getFn(value) { return function(...args) { calls.push([this].concat(args)); return value; }; } const t = (function() { return this; })(); const input = 'aaa abc'; called = 0; calls = []; let actual = input.replaceAll(new RE('(a)', 'g'), getFn('z')); actual + ':' + called + ':' + calls.length + ':' + (calls[0][0] === t) + ':' + calls[3][3];"
+        ),
+        Ok(Value::String("zzz zbc:1:4:true:4".to_owned().into()))
+    );
 }
 
 #[test]

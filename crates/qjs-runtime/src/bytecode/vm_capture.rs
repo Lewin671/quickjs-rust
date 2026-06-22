@@ -9,13 +9,62 @@
 
 use std::collections::HashMap;
 
-use crate::{CallEnv, Function, Value};
+use crate::{CallEnv, Function, Value, function::Upvalue};
 
 use super::CaptureWriteback;
 use super::ir::{Bytecode, Op};
 use super::vm::Vm;
 
 impl Vm<'_> {
+    pub(super) fn captured_upvalues_for_function(
+        &mut self,
+        function_bytecode: &Bytecode,
+        lexical_captures: &[(String, usize)],
+    ) -> Vec<Upvalue> {
+        function_bytecode
+            .locals
+            .iter()
+            .filter(|local| local.from_env)
+            .filter_map(|local| {
+                lexical_captures
+                    .iter()
+                    .find(|(name, _)| name == &local.name)
+                    .map(|(_, slot)| self.ensure_upvalue_for_parent_slot(*slot))
+            })
+            .collect()
+    }
+
+    fn ensure_upvalue_for_parent_slot(&mut self, slot: usize) -> Upvalue {
+        if let Some(upvalue) = self.local_upvalues.get(slot).and_then(Option::as_ref) {
+            return upvalue.clone();
+        }
+        if self
+            .bytecode
+            .locals
+            .get(slot)
+            .is_some_and(|local| local.from_env)
+        {
+            let index = self.bytecode.locals[..slot]
+                .iter()
+                .filter(|local| local.from_env)
+                .count();
+            if let Some(upvalue) = self.upvalues.get(index) {
+                return upvalue.clone();
+            }
+        }
+        let value = self
+            .locals
+            .get(slot)
+            .and_then(Option::as_ref)
+            .cloned()
+            .unwrap_or_else(|| Value::Function(Function::uninitialized_lexical_marker()));
+        let upvalue = Upvalue::new(value);
+        if let Some(local_upvalue) = self.local_upvalues.get_mut(slot) {
+            *local_upvalue = Some(upvalue.clone());
+        }
+        upvalue
+    }
+
     pub(super) fn function_capture_env(
         &self,
         function_bytecode: &Bytecode,

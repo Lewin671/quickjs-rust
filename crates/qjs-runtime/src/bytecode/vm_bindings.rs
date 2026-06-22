@@ -3,8 +3,12 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::{
-    GLOBAL_THIS_BINDING, Property, PropertyKey, RuntimeError, Value, function::CallEnv, is_truthy,
-    object::boxed_primitive, property::has_property, property_value, property_value_key,
+    GLOBAL_THIS_BINDING, Property, PropertyKey, RuntimeError, Value,
+    function::{CallEnv, Upvalue},
+    is_truthy,
+    object::boxed_primitive,
+    property::has_property,
+    property_value, property_value_key,
     symbol::unscopables_symbol,
 };
 
@@ -171,6 +175,41 @@ impl Vm<'_> {
                 }
             })
             .collect()
+    }
+
+    pub(super) fn initial_local_upvalues(
+        bytecode: &Bytecode,
+        _locals: &[Slot],
+        upvalues: &[Upvalue],
+    ) -> Vec<Option<Upvalue>> {
+        let mut next_received = 0;
+        let mut local_upvalues = vec![None; bytecode.locals.len()];
+        for (slot, local) in bytecode.locals.iter().enumerate() {
+            if local.from_env {
+                if let Some(upvalue) = upvalues.get(next_received) {
+                    local_upvalues[slot] = Some(upvalue.clone());
+                }
+                next_received += 1;
+            }
+        }
+        let plan = super::upvalue_resolver::resolve_upvalues(bytecode);
+        for slot in plan.cell_slots {
+            let Some(local) = bytecode.locals.get(slot) else {
+                continue;
+            };
+            if local.hoisted || local.parameter || local.from_env {
+                continue;
+            }
+            let value = _locals
+                .get(slot)
+                .and_then(Option::as_ref)
+                .cloned()
+                .unwrap_or_else(
+                    || Value::Function(crate::Function::uninitialized_lexical_marker()),
+                );
+            local_upvalues[slot] = Some(Upvalue::new(value));
+        }
+        local_upvalues
     }
 
     /// Keeps the frame's shared `captured_env` copy of a slot binding current
@@ -655,6 +694,9 @@ impl Vm<'_> {
     }
 
     pub(super) fn load_local(&self, slot: usize) -> Result<Value, RuntimeError> {
+        if let Some(value) = self.upvalue_slot_value(slot) {
+            return self.checked_local_value(slot, value);
+        }
         if let Some(local) = self.bytecode.locals.get(slot)
             && local.from_env
             && let Some(value) = self.env.module_import_value(&local.name)
@@ -668,16 +710,7 @@ impl Vm<'_> {
             return Ok(value);
         }
         match self.locals.get(slot) {
-            Some(Some(Value::Function(function))) if function.is_uninitialized_lexical_marker() => {
-                Err(RuntimeError {
-                    thrown: None,
-                    message: format!(
-                        "ReferenceError: undefined identifier `{}`",
-                        self.bytecode.locals[slot].name
-                    ),
-                })
-            }
-            Some(Some(value)) => Ok(value.clone()),
+            Some(Some(value)) => self.checked_local_value(slot, value.clone()),
             Some(None) => Err(RuntimeError {
                 thrown: None,
                 message: format!(
@@ -692,7 +725,38 @@ impl Vm<'_> {
         }
     }
 
+    pub(super) fn local_slot_value(&self, slot: usize) -> Option<Value> {
+        self.upvalue_slot_value(slot)
+            .or_else(|| self.locals.get(slot).and_then(Option::as_ref).cloned())
+    }
+
+    pub(super) fn upvalue_slot_value(&self, slot: usize) -> Option<Value> {
+        self.local_upvalues
+            .get(slot)
+            .and_then(Option::as_ref)
+            .map(Upvalue::get)
+    }
+
+    fn checked_local_value(&self, slot: usize, value: Value) -> Result<Value, RuntimeError> {
+        if matches!(
+            &value,
+            Value::Function(function) if function.is_uninitialized_lexical_marker()
+        ) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: format!(
+                    "ReferenceError: undefined identifier `{}`",
+                    self.bytecode.locals[slot].name
+                ),
+            });
+        }
+        Ok(value)
+    }
+
     pub(super) fn load_local_or_undefined(&self, slot: usize) -> Result<Value, RuntimeError> {
+        if let Some(value) = self.upvalue_slot_value(slot) {
+            return Ok(value);
+        }
         if let Some(local) = self.bytecode.locals.get(slot)
             && local.from_env
             && let Some(value) = self.env.module_import_value(&local.name)
@@ -714,19 +778,23 @@ impl Vm<'_> {
         // never clones the `Local` (its owned `name` would be a heap
         // allocation on every assignment); the binding name is resolved by
         // reference, and only on the cold capture/global-sync paths.
-        let (mutable, from_env, hoisted) = {
+        let (mutable, from_env, hoisted, module_import, immutable_env_binding) = {
             let local_meta = self.bytecode.locals.get(slot).ok_or_else(|| RuntimeError {
                 thrown: None,
                 message: "bytecode local index out of bounds".to_owned(),
             })?;
-            (local_meta.mutable, local_meta.from_env, local_meta.hoisted)
+            (
+                local_meta.mutable,
+                local_meta.from_env,
+                local_meta.hoisted,
+                self.env.has_module_import(&local_meta.name),
+                !local_meta.parameter
+                    && !local_meta.hoisted
+                    && (self.env.is_immutable_lexical_binding(&local_meta.name)
+                        || self.env.is_immutable_function_name(&local_meta.name)),
+            )
         };
-        if self
-            .bytecode
-            .locals
-            .get(slot)
-            .is_some_and(|local| self.env.has_module_import(&local.name))
-        {
+        if module_import {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
@@ -742,7 +810,27 @@ impl Vm<'_> {
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
         }
+        let upvalue_initialized = self
+            .local_upvalues
+            .get(slot)
+            .and_then(Option::as_ref)
+            .map(|upvalue| upvalue.get())
+            .is_some_and(|value| {
+                !matches!(
+                    value,
+                    Value::Function(function) if function.is_uninitialized_lexical_marker()
+                )
+            });
+        if (local.is_some() || upvalue_initialized) && immutable_env_binding {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: assignment to constant variable".to_owned(),
+            });
+        }
         *local = Some(value.clone());
+        if let Some(upvalue) = self.local_upvalues.get(slot).and_then(Option::as_ref) {
+            upvalue.set(value.clone());
+        }
         // A closure created in this frame shares its captured-binding snapshot
         // through `captured_env`; keep a captured copy of this slot current so
         // later calls of that closure observe the new value.
@@ -803,8 +891,11 @@ impl Vm<'_> {
     }
 
     pub(super) fn assign_local(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
-        match self.locals.get(slot) {
-            Some(Some(Value::Function(function))) if function.is_uninitialized_lexical_marker() => {
+        let current = self
+            .upvalue_slot_value(slot)
+            .or_else(|| self.locals.get(slot).and_then(Option::as_ref).cloned());
+        match current {
+            Some(Value::Function(function)) if function.is_uninitialized_lexical_marker() => {
                 Err(RuntimeError {
                     thrown: None,
                     message: format!(
@@ -813,17 +904,13 @@ impl Vm<'_> {
                     ),
                 })
             }
-            Some(Some(_)) => self.store_local(slot, value),
-            Some(None) => Err(RuntimeError {
+            Some(_) => self.store_local(slot, value),
+            None => Err(RuntimeError {
                 thrown: None,
                 message: format!(
                     "ReferenceError: undefined identifier `{}`",
                     self.bytecode.locals[slot].name
                 ),
-            }),
-            None => Err(RuntimeError {
-                thrown: None,
-                message: "bytecode local index out of bounds".to_owned(),
             }),
         }
     }
@@ -923,7 +1010,22 @@ impl Vm<'_> {
             thrown: None,
             message: "bytecode local index out of bounds".to_owned(),
         })?;
+        let refresh_upvalue = self
+            .bytecode
+            .locals
+            .get(slot)
+            .is_some_and(|local| !local.from_env)
+            && self
+                .local_upvalues
+                .get(slot)
+                .and_then(Option::as_ref)
+                .is_some_and(|upvalue| local.is_some() || !upvalue.is_shared());
         *local = None;
+        if refresh_upvalue && let Some(upvalue) = self.local_upvalues.get_mut(slot) {
+            *upvalue = Some(Upvalue::new(Value::Function(
+                crate::Function::uninitialized_lexical_marker(),
+            )));
+        }
         if let Some(name) = self.bytecode.local_name_at(slot) {
             if self
                 .bytecode
@@ -1195,6 +1297,13 @@ impl Vm<'_> {
                     value
                 };
                 if self.locals[index].is_some() || self.bytecode.local_is_from_env(index) {
+                    if self.locals[index]
+                        .as_ref()
+                        .is_some_and(|current| !is_uninitialized_lexical_value(current))
+                        && is_uninitialized_lexical_value(&value)
+                    {
+                        continue;
+                    }
                     self.locals[index] = Some(value.clone());
                     self.write_through_captured(&name, value.clone());
                     if self.bytecode.global_scope && self.realm.borrow().contains_key(&name) {
@@ -1394,6 +1503,19 @@ impl Vm<'_> {
                     new_env.insert(name.to_owned(), value.clone());
                 }
             }
+            if let Some(upvalue) = self.local_upvalues.get_mut(slot)
+                && upvalue.is_some()
+            {
+                let value = self
+                    .locals
+                    .get(slot)
+                    .and_then(Option::as_ref)
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        Value::Function(crate::Function::uninitialized_lexical_marker())
+                    });
+                *upvalue = Some(Upvalue::new(value));
+            }
         }
         // Record these as per-iteration bindings for the enclosing loop so a
         // write to one never leaks to an outer captured env that may hold a
@@ -1444,4 +1566,8 @@ pub(super) fn is_call_frame_binding(name: &str) -> bool {
             | "this"
             | "arguments"
     )
+}
+
+fn is_uninitialized_lexical_value(value: &Value) -> bool {
+    matches!(value, Value::Function(function) if function.is_uninitialized_lexical_marker())
 }

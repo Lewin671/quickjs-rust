@@ -418,6 +418,30 @@ fn for_of_loop_variable_shadowing_outer_does_not_leak_into_the_outer_binding() {
 }
 
 #[test]
+fn call_env_tdz_alias_does_not_clobber_initialized_for_of_binding() {
+    // A later closure capture of a same-named `for-of` binding can leave a TDZ
+    // alias in a temporary call environment. Writing that environment back must
+    // not overwrite the already-initialized binding used by an earlier loop.
+    assert_eq!(
+        eval(
+            "function touch(value) { return String(value); } \
+             const cases = [{ label: 'first', args: [] }]; \
+             for (const { label, args } of cases) { \
+               touch(`seen ${label}`); \
+             } \
+             if (true) { \
+               for (const { label, args } of cases) { \
+                 const spy = { toLocaleString(...receivedArgs) { return `later ${label}`; } }; \
+                 spy.toLocaleString(...args); \
+               } \
+             } \
+             'ok';"
+        ),
+        Ok(Value::String("ok".to_owned().into()))
+    );
+}
+
+#[test]
 fn for_of_let_body_write_to_distinct_outer_does_not_disturb_loop_variable() {
     // The per-iteration loop variable keeps its own value while an outer binding
     // written in the same body propagates to a pre-loop closure: the loop walks

@@ -597,7 +597,8 @@ impl Compiler {
             return;
         };
         for name in binding.names() {
-            self.declare_var_kind_slot(&name, *kind);
+            let slot = self.declare_var_kind_slot(&name, *kind);
+            self.emit(Op::ClearLocal(slot));
         }
     }
 

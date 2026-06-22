@@ -166,6 +166,7 @@ pub(crate) fn call_function(
                     bytecode: bytecode.clone(),
                     env: function_env.env,
                     captured_env: activation_captured_env,
+                    upvalues: function.upvalues.clone(),
                     with_stack: function.with_stack.clone(),
                     refresh_captured_slots_on_resume: true,
                     capture_writeback,
@@ -231,6 +232,7 @@ pub(crate) fn call_function(
             bytecode,
             function_env.env,
             activation_captured_env,
+            function.upvalues.clone(),
             function.with_stack.clone(),
             activation_writeback,
         );
@@ -777,6 +779,8 @@ fn function_env(
     if function.immutable_name_binding
         && let Some(name) = &function.name
     {
+        frame_env.set_immutable_function_name(name.clone());
+    } else if let Some(name) = &function.immutable_env_binding {
         frame_env.set_immutable_function_name(name.clone());
     } else if function.lexical_this
         && let Some(name) = env.immutable_function_name()

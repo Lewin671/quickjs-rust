@@ -192,6 +192,7 @@ fn eval_async_module_body(
             bytecode: Rc::new(bytecode.clone()),
             env: function_env,
             captured_env: Rc::clone(&captured_env),
+            upvalues: Vec::new(),
             with_stack: Vec::new(),
             refresh_captured_slots_on_resume: false,
             capture_writeback: None,

@@ -157,6 +157,12 @@ impl Compiler {
             .global_names()
             .iter()
             .map(String::as_str)
+            .chain(
+                function_bytecode
+                    .written_binding_names()
+                    .iter()
+                    .map(String::as_str),
+            )
             .chain(function_bytecode.local_names())
         {
             if function_local_names

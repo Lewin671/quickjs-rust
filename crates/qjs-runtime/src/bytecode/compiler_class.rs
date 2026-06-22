@@ -135,14 +135,13 @@ impl Compiler {
                         });
                         continue;
                     }
-                    let bytecode = compile_class_function_body_with_captures(
+                    let (bytecode, lexical_captures) = self.compile_class_function_body(
                         name,
                         params,
                         body,
                         &local_names,
                         is_generator,
                         is_async,
-                        &[],
                     )?;
 
                     let method_kind = match member.kind {
@@ -163,6 +162,7 @@ impl Compiler {
                             name: Some(format!("#{private_name}")),
                             params: params.clone(),
                             local_names,
+                            lexical_captures,
                             bytecode: Rc::new(bytecode),
                             source_text,
                             is_generator,
@@ -198,6 +198,7 @@ impl Compiler {
                         name: method_name,
                         params: params.clone(),
                         local_names,
+                        lexical_captures,
                         bytecode: Rc::new(bytecode),
                         source_text,
                         is_generator,
@@ -541,6 +542,7 @@ impl Compiler {
             &[],
         )?;
         let mut lexical_captures = self.active_lexical_captures(&bytecode, local_names);
+        lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
         if !lexical_captures.is_empty() {
             let captured_lexicals = lexical_captures
                 .iter()
@@ -562,6 +564,7 @@ impl Compiler {
                 &captured_lexicals,
             )?;
             lexical_captures = self.active_lexical_captures(&bytecode, local_names);
+            lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
         }
         Ok((bytecode, runtime_lexical_captures(lexical_captures)))
     }

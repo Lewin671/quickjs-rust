@@ -478,6 +478,7 @@ pub(super) struct ClassMethodDef {
     pub(super) name: Option<String>,
     pub(super) params: FunctionParams,
     pub(super) local_names: Vec<String>,
+    pub(super) lexical_captures: Vec<(String, usize)>,
     pub(super) bytecode: Rc<Bytecode>,
     pub(super) source_text: Option<Rc<str>>,
     /// Whether the method is a generator method (`*m() {}`).
@@ -1012,6 +1013,7 @@ fn collect_written_binding_names_from_ops(
         match op {
             Op::StoreGlobalStrict(name)
             | Op::StoreGlobalSloppy(name)
+            | Op::AppendStringLiteralGlobal { name, .. }
             | Op::StoreLocalOrGlobalSloppy { name, .. }
             | Op::StoreIdentWith {
                 name, slot: None, ..
@@ -1023,6 +1025,7 @@ fn collect_written_binding_names_from_ops(
             }
             Op::StoreLocal(slot)
             | Op::AssignLocal(slot)
+            | Op::AppendStringLiteralLocal { slot, .. }
             | Op::StoreIdentWith {
                 slot: Some(slot), ..
             }
@@ -1050,6 +1053,7 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
             Op::LoadGlobal(name)
             | Op::StoreGlobalStrict(name)
             | Op::StoreGlobalSloppy(name)
+            | Op::AppendStringLiteralGlobal { name, .. }
             | Op::TypeofGlobal(name) => {
                 names.insert(name.clone());
             }

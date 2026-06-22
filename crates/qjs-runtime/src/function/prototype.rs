@@ -191,6 +191,7 @@ fn build_dynamic_function(
         name: Some(name),
         has_name_binding: true,
         immutable_name_binding: false,
+        immutable_env_binding: None,
         params: Rc::new(params),
         env: env_snapshot.clone(),
         module_host: None,
@@ -211,6 +212,7 @@ fn build_dynamic_function(
         captured_env: Rc::new(RefCell::new(env_snapshot)),
         with_stack: Vec::new(),
         capture_writeback: None,
+        upvalues: Vec::new(),
     });
     Ok(created)
 }

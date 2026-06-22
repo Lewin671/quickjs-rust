@@ -54,6 +54,10 @@ impl Upvalue {
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
     }
+
+    pub(crate) fn is_shared(&self) -> bool {
+        Rc::strong_count(&self.0) > 1
+    }
 }
 
 impl std::fmt::Debug for Upvalue {

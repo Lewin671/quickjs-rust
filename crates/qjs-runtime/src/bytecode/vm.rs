@@ -10,7 +10,7 @@ use super::vm_try::TryFrame;
 use crate::{
     Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, NEW_TARGET_BINDING, ObjectRef, PropertyKey,
     RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value, construct_function,
-    function::{CallEnv, CompiledUserFunction, Realm},
+    function::{CallEnv, CompiledUserFunction, Realm, Upvalue},
     initialize_builtins, is_truthy, to_js_string_with_env, to_property_key_value,
 };
 use std::{
@@ -36,11 +36,17 @@ pub(super) fn eval_function_bytecode(
     bytecode: &Bytecode,
     env: CallEnv,
     captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    upvalues: Vec<Upvalue>,
     with_stack: Vec<Value>,
     capture_writeback: Option<CaptureWriteback>,
 ) -> FunctionBytecodeResult<'_> {
-    let mut vm =
-        Vm::new_with_globals_captures_and_with_stack(bytecode, env, captured_env, with_stack);
+    let mut vm = Vm::new_with_globals_captures_upvalues_and_with_stack(
+        bytecode,
+        env,
+        captured_env,
+        upvalues,
+        with_stack,
+    );
     vm.capture_writeback = capture_writeback;
     let value = vm.run();
     // A frame that neither creates closures nor holds any captured (`from_env`)
@@ -71,6 +77,8 @@ pub(super) struct Vm<'a> {
     pub(super) ip: usize,
     pub(super) stack: Vec<Value>,
     pub(super) locals: Vec<Slot>,
+    pub(super) local_upvalues: Vec<Option<Upvalue>>,
+    pub(super) upvalues: Vec<Upvalue>,
     /// Shared realm plus this frame's internal/caller-scope bindings.
     pub(super) env: CallEnv,
     pub(super) realm: Realm,
@@ -156,7 +164,7 @@ impl<'a> Vm<'a> {
             if !global_lexical_names.iter().any(|name| name == &local.name) {
                 continue;
             }
-            let Some(Some(_value)) = self.locals.get(slot) else {
+            let Some(_value) = self.local_slot_value(slot) else {
                 continue;
             };
             self.env.mark_global_lexical_binding(local.name.clone());
@@ -172,15 +180,34 @@ impl<'a> Vm<'a> {
         captured_env: Rc<RefCell<HashMap<String, Value>>>,
         with_stack: Vec<Value>,
     ) -> Self {
+        Self::new_with_globals_captures_upvalues_and_with_stack(
+            bytecode,
+            env,
+            captured_env,
+            Vec::new(),
+            with_stack,
+        )
+    }
+
+    pub(super) fn new_with_globals_captures_upvalues_and_with_stack(
+        bytecode: &'a Bytecode,
+        env: CallEnv,
+        captured_env: Rc<RefCell<HashMap<String, Value>>>,
+        upvalues: Vec<Upvalue>,
+        with_stack: Vec<Value>,
+    ) -> Self {
         let realm = env.realm_rc();
         let module_host = env.module_host();
         let parameter_captured_envs = env.parameter_captured_envs().to_vec();
         let locals = Self::initial_slots(bytecode, &env);
+        let local_upvalues = Self::initial_local_upvalues(bytecode, &locals, &upvalues);
         Self {
             bytecode,
             ip: 0,
             stack: Vec::with_capacity(64),
             locals,
+            local_upvalues,
+            upvalues,
             env,
             realm,
             module_host,
@@ -205,10 +232,10 @@ impl<'a> Vm<'a> {
     /// Builds a `CallEnv` over the shared realm with this frame's live slots.
     pub(super) fn frame_call_env(&self) -> CallEnv {
         let mut locals = self.env.snapshot_locals();
-        for (index, slot) in self.locals.iter().enumerate() {
-            if let Some(value) = slot {
+        for index in 0..self.locals.len() {
+            if let Some(value) = self.local_slot_value(index) {
                 let name = self.bytecode.locals[index].name.clone();
-                locals.insert(name.clone(), value.clone());
+                locals.insert(name.clone(), value);
                 // A block lexical that shadows a same-named binding is stored
                 // under a mangled name (`\0lexical:w:N`); also expose it under
                 // its plain source name so a direct eval (or other dynamic name
@@ -217,7 +244,9 @@ impl<'a> Vm<'a> {
                 // block's binding overwrites an outer one, and an exited block's
                 // cleared slot (None) never wins.
                 if let Some(source_name) = unmangle_lexical_storage_name(&name) {
-                    locals.insert(source_name.to_owned(), value.clone());
+                    if let Some(value) = self.local_slot_value(index) {
+                        locals.insert(source_name.to_owned(), value);
+                    }
                 }
             }
         }
@@ -546,10 +575,13 @@ impl<'a> Vm<'a> {
                     if in_parameter_prologue {
                         self.parameter_captured_envs.push(Rc::clone(&captured_env));
                     }
+                    let upvalues =
+                        self.captured_upvalues_for_function(&bytecode, &lexical_captures);
                     let function = Function::new_user_compiled(CompiledUserFunction {
                         name,
                         has_name_binding,
                         immutable_name_binding,
+                        immutable_env_binding: None,
                         params: Rc::new(params),
                         env,
                         module_host: self.module_host.clone(),
@@ -570,6 +602,7 @@ impl<'a> Vm<'a> {
                         captured_env,
                         with_stack: self.with_stack.clone(),
                         capture_writeback,
+                        upvalues,
                     });
                     function.set_source_text(source_text);
                     self.capture_private_environment(&function);
