@@ -253,9 +253,18 @@ impl Vm<'_> {
         // there (and propagated back to the caller on return); only a true realm
         // global goes to the shared cell.
         if let Some(slot) = self.bytecode.local_slot(&name)
-            && let Some(local) = self.locals.get_mut(slot)
-            && local.is_some()
+            && self.locals.get(slot).is_some_and(Option::is_some)
         {
+            if self.local_slot_targets_non_writable_global(slot, &name) {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!("TypeError: Cannot assign to read only property '{name}'"),
+                });
+            }
+            let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
+                thrown: None,
+                message: "bytecode local index out of bounds".to_owned(),
+            })?;
             *local = Some(value.clone());
             self.env.insert(name.clone(), value.clone());
             if self.bytecode.global_scope
@@ -354,9 +363,15 @@ impl Vm<'_> {
             });
         }
         if let Some(slot) = self.bytecode.local_slot(&name)
-            && let Some(local) = self.locals.get_mut(slot)
-            && local.is_some()
+            && self.locals.get(slot).is_some_and(Option::is_some)
         {
+            if self.local_slot_targets_non_writable_global(slot, &name) {
+                return Ok(());
+            }
+            let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
+                thrown: None,
+                message: "bytecode local index out of bounds".to_owned(),
+            })?;
             *local = Some(value.clone());
             self.env.insert(name.clone(), value.clone());
             if self.bytecode.global_scope

@@ -403,6 +403,21 @@ impl Vm<'_> {
         global_this.own_property(name)
     }
 
+    pub(super) fn local_slot_targets_non_writable_global(&self, slot: usize, name: &str) -> bool {
+        let is_global_shadow = self.bytecode.global_scope
+            && self.bytecode.local_is_body_hoist_only(slot)
+            && !is_compiler_temporary(name);
+        let is_sloppy_fallback = self
+            .bytecode
+            .locals
+            .get(slot)
+            .is_some_and(|local| local.sloppy_global_fallback);
+        (is_global_shadow || is_sloppy_fallback)
+            && self
+                .global_this_own_property(name)
+                .is_some_and(|property| !property.writable)
+    }
+
     /// Resolves an identifier inside a `with` body to the innermost with-object
     /// that binds `name` (an own-or-inherited property not filtered out by the
     /// object's `Symbol.unscopables`). Returns `None` when no with-object binds
@@ -786,6 +801,9 @@ impl Vm<'_> {
             .is_some_and(|local| local.sloppy_global_fallback);
         match self.locals.get(slot) {
             Some(Some(_)) => {
+                if self.local_slot_targets_non_writable_global(slot, &name) {
+                    return Ok(());
+                }
                 if is_sloppy_global_fallback || self.has_realm_or_global_this_binding(&name) {
                     let syncs_global_snapshot = is_sloppy_global_fallback
                         && self.captured_or_local_matches_global_this(&name);
@@ -804,6 +822,9 @@ impl Vm<'_> {
             }
             Some(None) => {
                 if is_sloppy_global_fallback {
+                    if self.local_slot_targets_non_writable_global(slot, &name) {
+                        return Ok(());
+                    }
                     let syncs_global_snapshot = self.captured_or_local_matches_global_this(&name);
                     if syncs_global_snapshot {
                         self.record_sloppy_global_name(&name);

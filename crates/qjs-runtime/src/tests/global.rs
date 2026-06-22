@@ -140,6 +140,10 @@ fn global_infinity_is_non_writable() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval("function harness() {} Infinity = true; typeof Infinity + ':' + Infinity;"),
+        Ok(Value::String("number:Infinity".to_owned().into()))
+    );
 }
 
 #[test]
@@ -154,6 +158,16 @@ fn global_undefined_is_non_writable() {
     assert_eq!(
         eval(
             "let caught = false; try { (function() { 'use strict'; undefined = 1; })(); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("function harness() {} undefined = 5; typeof undefined + ':' + undefined;"),
+        Ok(Value::String("undefined:undefined".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function harness() {} let caught = false; try { (function() { 'use strict'; undefined = 1; })(); } catch (error) { caught = error instanceof TypeError; } caught;"
         ),
         Ok(Value::Boolean(true))
     );
