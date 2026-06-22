@@ -522,3 +522,25 @@ fn for_await_over_sync_iterable_of_promises_awaits_values() {
         "1,2"
     );
 }
+
+#[test]
+fn body_thrown_native_error_rejects_with_a_real_error_object() {
+    // A native error thrown by the async-generator body (here the
+    // AsyncGeneratorFunction constructor rejecting an `await` in parameters)
+    // must reject the `next()` promise with the materialized Error object, not
+    // `undefined`. Previously the rejection reason defaulted to `undefined`
+    // because the internal error carried no pre-built thrown value.
+    assert_eq!(
+        eval_log(
+            "let log = []; \
+             let AGF = Object.getPrototypeOf(async function* () {}).constructor; \
+             let g = async function* () { AGF('x = await 42', ''); }; \
+             g().next().then( \
+               () => log.push('fulfilled'), \
+               (e) => log.push(e instanceof SyntaxError) \
+             ); \
+             log;"
+        ),
+        "true"
+    );
+}

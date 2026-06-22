@@ -352,7 +352,7 @@ fn drain(generator: &ObjectRef, env: &mut CallEnv) {
                 continue;
             }
             Err(error) => {
-                let reason = error.thrown.map_or(Value::Undefined, |value| *value);
+                let reason = crate::error::runtime_error_to_value(error, env);
                 reject_front(generator, reason, env);
                 continue;
             }
@@ -553,7 +553,7 @@ fn resume_body(generator: &ObjectRef, resume: Resume, env: &mut CallEnv) {
             drain(generator, env);
         }
         Err(error) => {
-            let reason = error.thrown.map_or(Value::Undefined, |value| *value);
+            let reason = crate::error::runtime_error_to_value(error, env);
             reject_front(generator, reason, env);
             drain(generator, env);
         }
@@ -741,7 +741,7 @@ fn async_from_sync_method(
             Err(error) => {
                 promise::reject_promise_capability(
                     &capability,
-                    error.thrown.map_or(Value::Undefined, |value| *value),
+                    crate::error::runtime_error_to_value(error, env),
                     env,
                 );
                 return Value::Object(capability);
@@ -782,7 +782,7 @@ fn async_from_sync_method(
         Err(error) => {
             promise::reject_promise_capability(
                 &capability,
-                error.thrown.map_or(Value::Undefined, |value| *value),
+                crate::error::runtime_error_to_value(error, env),
                 env,
             );
             return Value::Object(capability);
@@ -801,7 +801,7 @@ fn async_from_sync_method(
         Err(error) => {
             promise::reject_promise_capability(
                 &capability,
-                error.thrown.map_or(Value::Undefined, |value| *value),
+                crate::error::runtime_error_to_value(error, env),
                 env,
             );
             return Value::Object(capability);
@@ -812,7 +812,7 @@ fn async_from_sync_method(
         Err(error) => {
             promise::reject_promise_capability(
                 &capability,
-                error.thrown.map_or(Value::Undefined, |value| *value),
+                crate::error::runtime_error_to_value(error, env),
                 env,
             );
             return Value::Object(capability);

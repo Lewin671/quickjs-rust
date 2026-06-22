@@ -976,3 +976,23 @@ fn drains_promise_all_settled_thenable_rejections_after_script() {
         ))
     );
 }
+
+#[test]
+fn then_handler_native_throw_rejects_with_a_real_error_object() {
+    // When a `then` reaction handler throws a native error (one the engine
+    // raises internally, carrying only a message), the chained promise must
+    // reject with the materialized Error object rather than `undefined`.
+    // The log array is shared by reference, so reaction writes after the job
+    // queue drains are observable in the returned array.
+    let outcome = eval(
+        "let log = []; \
+         Promise.resolve(1) \
+           .then(() => { null.x; }) \
+           .then(() => log.push('fulfilled'), (e) => log.push(e instanceof TypeError)); \
+         log;",
+    );
+    let Ok(Value::Array(log)) = outcome else {
+        panic!("expected an array log, got {outcome:?}");
+    };
+    assert_eq!(log.to_vec(), vec![Value::Boolean(true)]);
+}

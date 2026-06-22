@@ -297,7 +297,7 @@ fn settle_reaction_capability(
                 call_function(resolve, Value::Undefined, vec![value], env, false)?;
             }
             Err(error) => {
-                let reason = error.thrown.map_or(Value::Undefined, |value| *value);
+                let reason = crate::error::runtime_error_to_value(error, env);
                 call_function(reject, Value::Undefined, vec![reason], env, false)?;
             }
         }
@@ -316,7 +316,7 @@ fn settle_reaction_capability(
         Err(error) => settle_promise(
             &capability,
             PROMISE_REJECTED,
-            error.thrown.map_or(Value::Undefined, |value| *value),
+            crate::error::runtime_error_to_value(error, env),
             env,
         ),
     }
