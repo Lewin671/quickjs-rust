@@ -177,7 +177,7 @@ pub(crate) fn install_async_generator(
     async_generator_prototype.define_property(
         "constructor".to_owned(),
         Property::data(
-            Value::Function(async_generator_function),
+            Value::Object(async_generator_function_prototype.clone()),
             false,
             false,
             true,

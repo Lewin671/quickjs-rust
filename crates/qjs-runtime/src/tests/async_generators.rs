@@ -437,6 +437,15 @@ fn prototype_chain_tags() {
         Value::Boolean(true)
     );
     assert_eq!(
+        eval(
+            "async function* g() {} \
+             var AsyncGenerator = Object.getPrototypeOf(g); \
+             AsyncGenerator.prototype.constructor === AsyncGenerator;"
+        )
+        .expect("eval"),
+        Value::Boolean(true)
+    );
+    assert_eq!(
         eval("typeof AsyncGeneratorFunction;").expect("eval"),
         Value::String("undefined".to_owned().into())
     );
