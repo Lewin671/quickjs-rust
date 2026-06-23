@@ -440,6 +440,55 @@ var $262 = {
         configurable: true
       });
     }
+    var crossRealmSymbol = function Symbol(description) {
+      return globalThis.Symbol(description);
+    };
+    var crossRealmSymbolPrototype = Object.create(globalThis.Symbol.prototype);
+    Object.defineProperty(crossRealmSymbolPrototype, "constructor", {
+      value: crossRealmSymbol,
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
+    crossRealmSymbol.prototype = crossRealmSymbolPrototype;
+    Object.defineProperty(crossRealmSymbol, "for", {
+      value: function for_(key) {
+        return globalThis.Symbol.for(key);
+      },
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
+    Object.defineProperty(crossRealmSymbol, "keyFor", {
+      value: function keyFor(symbol) {
+        return globalThis.Symbol.keyFor(symbol);
+      },
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
+    [
+      "asyncIterator",
+      "hasInstance",
+      "isConcatSpreadable",
+      "iterator",
+      "match",
+      "matchAll",
+      "replace",
+      "search",
+      "species",
+      "split",
+      "toPrimitive",
+      "toStringTag",
+      "unscopables",
+      "dispose",
+      "asyncDispose"
+    ].forEach(function(name) {
+      var descriptor = Object.getOwnPropertyDescriptor(globalThis.Symbol, name);
+      if (descriptor) {
+        Object.defineProperty(crossRealmSymbol, name, descriptor);
+      }
+    });
     var crossRealmBuiltinConstructors = {};
     var crossRealmBuiltinPrototypes = {};
     [
@@ -520,6 +569,7 @@ var $262 = {
     __quickjsRustRealmGlobal.Array = crossRealmArray;
     __quickjsRustRealmGlobal.Function = crossRealmFunction;
     __quickjsRustRealmGlobal.RegExp = crossRealmRegExp;
+    __quickjsRustRealmGlobal.Symbol = crossRealmSymbol;
     __quickjsRustRealmGlobal.Boolean = crossRealmBuiltinConstructors.Boolean;
     __quickjsRustRealmGlobal.Number = crossRealmBuiltinConstructors.Number;
     __quickjsRustRealmGlobal.String = crossRealmBuiltinConstructors.String;
