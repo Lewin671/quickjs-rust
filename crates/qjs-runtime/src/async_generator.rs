@@ -47,6 +47,7 @@ const WRAP_PROMISE: &str = "\0WrapPromise";
 const WRAP_DONE: &str = "\0WrapDone";
 
 /// How a pending async-generator request was requested.
+#[derive(Clone)]
 enum RequestKind {
     Next(Value),
     Return(Value),
@@ -348,6 +349,10 @@ fn drain(generator: &ObjectRef, env: &mut CallEnv) {
                 continue;
             }
             Ok(GeneratorOutcome::Return(value)) => {
+                if front_is_return_request(generator) {
+                    schedule_return_await(generator, value, env);
+                    return;
+                }
                 resolve_front(generator, value, true, env);
                 continue;
             }
@@ -365,25 +370,30 @@ fn drain(generator: &ObjectRef, env: &mut CallEnv) {
 /// (or `{ value, done: true }` for a `return(v)`), while a `throw` rejects.
 /// Returns whether a request was served (so the caller keeps draining).
 fn settle_completed_front(generator: &ObjectRef, env: &mut CallEnv) -> bool {
-    let request = {
-        let mut slot = generator.async_generator_state().borrow_mut();
-        let Some(state) = slot.as_mut() else {
+    let kind = {
+        let slot = generator.async_generator_state().borrow();
+        let Some(state) = slot.as_ref() else {
             return false;
         };
-        if state.queue.is_empty() {
+        let Some(request) = state.queue.first() else {
             return false;
-        }
-        state.queue.remove(0)
+        };
+        request.kind.clone()
     };
-    match request.kind {
+    match kind {
         RequestKind::Next(_) => {
-            settle_resolve(&request.capability, Value::Undefined, true, env);
+            if let Some(request) = dequeue_front(generator) {
+                settle_resolve(&request.capability, Value::Undefined, true, env);
+            }
         }
         RequestKind::Return(value) => {
-            settle_resolve(&request.capability, value, true, env);
+            schedule_return_await(generator, value, env);
+            return false;
         }
         RequestKind::Throw(value) => {
-            promise::reject_promise_capability(&request.capability, value, env);
+            if let Some(request) = dequeue_front(generator) {
+                promise::reject_promise_capability(&request.capability, value, env);
+            }
         }
     }
     true
@@ -400,6 +410,17 @@ fn front_resume(generator: &ObjectRef) -> Option<Resume> {
         RequestKind::Return(value) => Resume::Return(value.clone()),
         RequestKind::Throw(value) => Resume::Throw(value.clone()),
     })
+}
+
+fn front_is_return_request(generator: &ObjectRef) -> bool {
+    let slot = generator.async_generator_state().borrow();
+    let Some(state) = slot.as_ref() else {
+        return false;
+    };
+    state
+        .queue
+        .first()
+        .is_some_and(|request| matches!(request.kind, RequestKind::Return(_)))
 }
 
 fn set_draining(generator: &ObjectRef, value: bool) {
@@ -462,6 +483,15 @@ fn schedule_yield_await(generator: &ObjectRef, value: Value, env: &mut CallEnv) 
     promise::perform_await(value, on_fulfilled, on_rejected, env);
 }
 
+/// Schedules the `AsyncGeneratorResolve(..., done = true)` unwrapping step.
+/// The front request remains queued until the fulfillment/rejection reaction
+/// settles it, preserving request order while `return(value)` awaits `value`.
+fn schedule_return_await(generator: &ObjectRef, value: Value, env: &mut CallEnv) {
+    let on_fulfilled = reaction(NativeFunction::AsyncGeneratorReturnFulfilled, generator);
+    let on_rejected = reaction(NativeFunction::AsyncGeneratorReturnRejected, generator);
+    promise::perform_await(value, on_fulfilled, on_rejected, env);
+}
+
 /// Builds a reaction native carrying the async generator object.
 fn reaction(native: NativeFunction, generator: &ObjectRef) -> Value {
     let mut function = Function::new_native(None, 1, native, false);
@@ -514,6 +544,26 @@ pub(crate) fn call_async_generator_reaction(
             resume_body(&generator, Resume::Throw(value), env);
             Ok(Some(Value::Undefined))
         }
+        NativeFunction::AsyncGeneratorReturnFulfilled => {
+            let Some(Value::Object(generator)) = function.env.get(ASYNC_GEN) else {
+                return Ok(None);
+            };
+            let generator = generator.clone();
+            resolve_front(&generator, value, true, env);
+            set_draining(&generator, true);
+            drain(&generator, env);
+            Ok(Some(Value::Undefined))
+        }
+        NativeFunction::AsyncGeneratorReturnRejected => {
+            let Some(Value::Object(generator)) = function.env.get(ASYNC_GEN) else {
+                return Ok(None);
+            };
+            let generator = generator.clone();
+            reject_front(&generator, value, env);
+            set_draining(&generator, true);
+            drain(&generator, env);
+            Ok(Some(Value::Undefined))
+        }
         NativeFunction::AsyncFromSyncIteratorValueFulfilled => {
             async_from_sync_value_fulfilled(function, value, env);
             Ok(Some(Value::Undefined))
@@ -552,8 +602,12 @@ fn resume_body(generator: &ObjectRef, resume: Resume, env: &mut CallEnv) {
             drain(generator, env);
         }
         Ok(GeneratorOutcome::Return(value)) => {
-            resolve_front(generator, value, true, env);
-            drain(generator, env);
+            if front_is_return_request(generator) {
+                schedule_return_await(generator, value, env);
+            } else {
+                resolve_front(generator, value, true, env);
+                drain(generator, env);
+            }
         }
         Err(error) => {
             let reason = crate::error::runtime_error_to_value(error, env);

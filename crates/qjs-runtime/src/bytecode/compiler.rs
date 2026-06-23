@@ -914,6 +914,9 @@ impl Compiler {
             Stmt::Return { argument, .. } => {
                 if let Some(argument) = argument {
                     self.compile_expr(argument)?;
+                    if self.async_generator_body {
+                        self.emit(Op::Await);
+                    }
                 } else {
                     self.emit_load_undefined();
                 }

@@ -537,6 +537,43 @@ fn yield_star_return_awaits_outer_return_before_inner_return_lookup() {
 }
 
 #[test]
+fn return_before_start_awaits_promise_value() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             var resolve; \
+             var promise = new Promise(function(r) { resolve = r; }); \
+             async function* g() { throw new Error('unreachable'); } \
+             var it = g(); \
+             it.return(promise).then(function(result) { o.push(result.value); o.push(result.done); }); \
+             resolve('unwrapped'); \
+             o;"
+        ),
+        "unwrapped,true"
+    );
+}
+
+#[test]
+fn completed_return_undefined_settles_after_promise_jobs() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             var tick = Promise.resolve().then(function() { o.push('tick 1'); }).then(function() { o.push('tick 2'); }); \
+             async function* normalCompletion() {} \
+             async function* bareReturn() { return; } \
+             async function* explicitUndefined() { return undefined; } \
+             async function* explicitVoid() { return void 0; } \
+             normalCompletion().next().then(function() { o.push('normal'); }); \
+             bareReturn().next().then(function() { o.push('bare'); }); \
+             explicitUndefined().next().then(function() { o.push('explicit'); }); \
+             explicitVoid().next().then(function() { o.push('void'); }); \
+             o;"
+        ),
+        "tick 1,normal,bare,tick 2,explicit,void"
+    );
+}
+
+#[test]
 fn for_await_over_sync_iterable_of_promises_awaits_values() {
     // CreateAsyncFromSyncIterator: a sync iterable whose values are promises has
     // each value awaited before the loop body sees it.
