@@ -198,6 +198,45 @@ fn await_of_rejected_promise_in_try_catch() {
 }
 
 #[test]
+fn async_resume_preserves_body_hoisted_function_shadowing_intrinsic() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             var intrinsicTypeError = TypeError; \
+             function throwsAsync(expected, func) { \
+               return new Promise(function(resolve) { \
+                 var res = func(); \
+                 var onFulfilled, onRejected; \
+                 var settlement = new Promise(function(resolve, reject) { \
+                   onFulfilled = resolve; onRejected = reject; \
+                 }); \
+                 res.then(onFulfilled, onRejected); \
+                 resolve(settlement.then(function() { \
+                   throw new Error('no throw'); \
+                 }, function(thrown) { \
+                   if (thrown.constructor !== expected) { \
+                     throw new Error('mismatch'); \
+                   } \
+                 })); \
+               }); \
+             } \
+             async function f() { \
+               function TypeError() {} \
+               await throwsAsync(TypeError, async function() { throw new TypeError(); }); \
+               try { \
+                 await throwsAsync(intrinsicTypeError, async function() { throw new TypeError(); }); \
+                 o.push('fulfilled'); \
+               } catch (error) { \
+                 o.push(error.message); \
+               } \
+             } \
+             f(); o;"
+        ),
+        "mismatch"
+    );
+}
+
+#[test]
 fn uncaught_rejection_rejects_returned_promise() {
     assert_eq!(
         eval_log(

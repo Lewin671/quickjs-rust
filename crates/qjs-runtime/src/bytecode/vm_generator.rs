@@ -426,11 +426,9 @@ fn refresh_activation_captures_from_realm(vm: &mut Vm<'_>) {
             }
             continue;
         }
-        if vm
-            .bytecode
-            .local_slot(&name)
-            .is_some_and(|slot| vm.bytecode.local_is_parameter(slot))
-        {
+        if vm.bytecode.local_slot(&name).is_some_and(|slot| {
+            vm.bytecode.local_is_parameter(slot) || vm.bytecode.local_is_body_hoist_only(slot)
+        }) {
             continue;
         }
         if vm.env.locals().contains_key(&format!(
