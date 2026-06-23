@@ -653,6 +653,23 @@ pub(crate) fn native_throw_type_error() -> Result<Value, RuntimeError> {
     })
 }
 
+pub(crate) fn native_realm_throw_type_error(
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let message = "TypeError: restricted function property access".to_owned();
+    if let Some(Value::Object(prototype)) = argument_values.first() {
+        let error = crate::ObjectRef::with_prototype(HashMap::new(), Some(prototype.clone()));
+        return Err(RuntimeError {
+            thrown: Some(Box::new(Value::Object(error))),
+            message,
+        });
+    }
+    Err(RuntimeError {
+        thrown: None,
+        message,
+    })
+}
+
 pub(crate) fn function_call_this(this_arg: Option<Value>, env: &CallEnv, is_strict: bool) -> Value {
     let this_value = this_arg.unwrap_or(Value::Undefined);
     match this_value {

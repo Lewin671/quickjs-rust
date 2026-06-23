@@ -119,6 +119,9 @@ pub(super) fn call_core_native(
             crate::function::native_mapped_argument_set(argument_values, env)
         }
         NativeFunction::ThrowTypeError => crate::function::native_throw_type_error(),
+        NativeFunction::RealmThrowTypeError => {
+            crate::function::native_realm_throw_type_error(argument_values)
+        }
         _ => unreachable!("native function was not handled by its owning dispatcher"),
     }
 }

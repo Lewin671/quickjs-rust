@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::{
-    CallEnv, InstanceElementInitializer,
+    CROSS_REALM_TYPE_ERROR_PROTOTYPE, CallEnv, InstanceElementInitializer,
     arguments::arguments_object,
     captures::{
         caller_capture_matches_existing, caller_global_this_has_own_property,
@@ -31,7 +31,6 @@ const CROSS_REALM_EVAL_ERROR_PROTOTYPE: &str = "__quickjsRustRealmEvalErrorProto
 const CROSS_REALM_RANGE_ERROR_PROTOTYPE: &str = "__quickjsRustRealmRangeErrorPrototype";
 const CROSS_REALM_REFERENCE_ERROR_PROTOTYPE: &str = "__quickjsRustRealmReferenceErrorPrototype";
 const CROSS_REALM_SYNTAX_ERROR_PROTOTYPE: &str = "__quickjsRustRealmSyntaxErrorPrototype";
-const CROSS_REALM_TYPE_ERROR_PROTOTYPE: &str = "__quickjsRustRealmTypeErrorPrototype";
 const CROSS_REALM_URI_ERROR_PROTOTYPE: &str = "__quickjsRustRealmURIErrorPrototype";
 const CROSS_REALM_AGGREGATE_ERROR_PROTOTYPE: &str = "__quickjsRustRealmAggregateErrorPrototype";
 const CROSS_REALM_SUPPRESSED_ERROR_PROTOTYPE: &str = "__quickjsRustRealmSuppressedErrorPrototype";

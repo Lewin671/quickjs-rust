@@ -294,6 +294,27 @@ fn throw_type_error_poison_is_a_single_shared_intrinsic() {
 }
 
 #[test]
+fn realm_marked_strict_arguments_use_realm_throw_type_error() {
+    assert_eq!(
+        eval(
+            "var prototype = {}; \
+             var f = Function('\"use strict\"; return arguments;'); \
+             var g = Function('\"use strict\"; return arguments;'); \
+             Object.defineProperty(f, '__quickjsRustRealmTypeErrorPrototype', { value: prototype }); \
+             Object.defineProperty(g, '__quickjsRustRealmTypeErrorPrototype', { value: prototype }); \
+             var local = (function() { 'use strict'; return arguments; })(); \
+             var localThrow = Object.getOwnPropertyDescriptor(local, 'callee').get; \
+             var first = Object.getOwnPropertyDescriptor(f(), 'callee').get; \
+             var second = Object.getOwnPropertyDescriptor(g(), 'callee').get; \
+             var thrownPrototype; \
+             try { first(); } catch (error) { thrownPrototype = Object.getPrototypeOf(error); } \
+             [first !== localThrow, first === second, thrownPrototype === prototype].join(':');"
+        ),
+        Ok(Value::String("true:true:true".to_owned().into()))
+    );
+}
+
+#[test]
 fn evaluates_destructured_parameters() {
     assert_eq!(
         eval(

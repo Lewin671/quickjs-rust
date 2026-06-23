@@ -21,6 +21,10 @@ pub(crate) const THROW_TYPE_ERROR_INTRINSIC: &str = "%ThrowTypeError%";
 /// `Array.prototype.values` / `Array.prototype[Symbol.iterator]`.
 pub(crate) const ARRAY_PROTO_VALUES_INTRINSIC: &str = "%ArrayProto_values%";
 
+pub(crate) const CROSS_REALM_TYPE_ERROR_PROTOTYPE: &str = "__quickjsRustRealmTypeErrorPrototype";
+
+pub(crate) const CROSS_REALM_THROW_TYPE_ERROR_INTRINSIC: &str = "__quickjsRustRealmThrowTypeError";
+
 pub(crate) use arguments::{native_mapped_argument_get, native_mapped_argument_set};
 pub(crate) use call::{
     call_function, construct_function, ensure_constructor, initialize_instance_fields,
@@ -39,7 +43,7 @@ pub(crate) use prototype::{
     native_async_generator_function_constructor, native_function, native_function_prototype_apply,
     native_function_prototype_bind, native_function_prototype_call,
     native_function_prototype_has_instance, native_function_prototype_to_string,
-    native_generator_function, native_throw_type_error,
+    native_generator_function, native_realm_throw_type_error, native_throw_type_error,
 };
 pub(crate) use strict::is_strict_function_body;
 pub(crate) use upvalue::Upvalue;

@@ -384,6 +384,7 @@ pub(crate) enum NativeFunction {
     MappedArgumentGet,
     MappedArgumentSet,
     ThrowTypeError,
+    RealmThrowTypeError,
     JsonParse,
     JsonRawJson,
     JsonIsRawJson,

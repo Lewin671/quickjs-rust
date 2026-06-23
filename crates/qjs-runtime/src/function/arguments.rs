@@ -34,7 +34,7 @@ pub(super) fn arguments_object(
         }
     }
     if function.is_strict || !function.params.is_simple() {
-        define_restricted_callee(&object, env);
+        define_restricted_callee(&object, function, env);
     } else {
         // A sloppy-mode simple-parameter function's `arguments.callee` is a
         // data property holding the executing function (CreateUnmappedArguments
@@ -126,19 +126,20 @@ fn mapped_argument_setter(parameter_name: String, backing: ObjectRef) -> Value {
     ))
 }
 
-fn define_restricted_callee(object: &ObjectRef, env: &CallEnv) {
+fn define_restricted_callee(object: &ObjectRef, function: &Function, env: &CallEnv) {
     // Reuse the realm's shared %ThrowTypeError% so the strict `callee` poison
     // getter is the same object as `Function.prototype.arguments`/`caller`'s.
-    let throw_type_error = env
-        .get_realm(super::THROW_TYPE_ERROR_INTRINSIC)
-        .unwrap_or_else(|| {
-            Value::Function(Function::new_native(
-                Some("ThrowTypeError"),
-                0,
-                NativeFunction::ThrowTypeError,
-                false,
-            ))
-        });
+    let throw_type_error = cross_realm_throw_type_error(function).unwrap_or_else(|| {
+        env.get_realm(super::THROW_TYPE_ERROR_INTRINSIC)
+            .unwrap_or_else(|| {
+                Value::Function(Function::new_native(
+                    Some("ThrowTypeError"),
+                    0,
+                    NativeFunction::ThrowTypeError,
+                    false,
+                ))
+            })
+    });
     object.define_property(
         "callee".to_owned(),
         Property::accessor(
@@ -148,6 +149,43 @@ fn define_restricted_callee(object: &ObjectRef, env: &CallEnv) {
             false,
         ),
     );
+}
+
+fn cross_realm_throw_type_error(function: &Function) -> Option<Value> {
+    let crate::Property {
+        value: Value::Object(prototype),
+        ..
+    } = function.own_property(super::CROSS_REALM_TYPE_ERROR_PROTOTYPE)?
+    else {
+        return None;
+    };
+    if let Some(crate::Property {
+        value: Value::Function(throw_type_error),
+        ..
+    }) = prototype.own_property(super::CROSS_REALM_THROW_TYPE_ERROR_INTRINSIC)
+    {
+        return Some(Value::Function(throw_type_error));
+    }
+
+    let target = Value::Function(Function::new_native(
+        Some(""),
+        0,
+        NativeFunction::RealmThrowTypeError,
+        false,
+    ));
+    let throw_type_error = Function::new_bound(
+        target,
+        Value::Undefined,
+        vec![Value::Object(prototype.clone())],
+        0,
+    );
+    throw_type_error.freeze();
+    let value = Value::Function(throw_type_error);
+    prototype.define_property(
+        super::CROSS_REALM_THROW_TYPE_ERROR_INTRINSIC.to_owned(),
+        Property::fixed_non_enumerable(value.clone()),
+    );
+    Some(value)
 }
 
 fn define_arguments_iterator(object: &ObjectRef, env: &CallEnv) {
