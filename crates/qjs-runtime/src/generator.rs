@@ -243,7 +243,9 @@ pub(crate) fn call_generator_native(
         // never reaches here; treat the awaited value as a plain yield rather
         // than panicking on a malformed body.
         GeneratorOutcome::Await(value) => iterator_result(value, false, env),
-        GeneratorOutcome::Return(value) => iterator_result(value, true, env),
+        GeneratorOutcome::Return(value) | GeneratorOutcome::ReturnAlreadyAwaited(value) => {
+            iterator_result(value, true, env)
+        }
     };
     Ok(Some(result))
 }

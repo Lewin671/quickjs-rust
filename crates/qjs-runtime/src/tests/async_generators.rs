@@ -574,6 +574,30 @@ fn completed_return_undefined_settles_after_promise_jobs() {
 }
 
 #[test]
+fn yield_star_return_without_inner_return_awaits_thenable_once() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             var asyncIter = { \
+               [Symbol.asyncIterator]: function() { return this; }, \
+               next: function() { return { done: false }; }, \
+               get return() { o.push('get return'); } \
+             }; \
+             async function* g() { o.push('start'); yield* asyncIter; } \
+             Promise.resolve() \
+               .then(function() { o.push('tick 1'); }) \
+               .then(function() { o.push('tick 2'); }) \
+               .then(function() { o.push('tick 3'); }); \
+             var it = g(); \
+             it.next(); \
+             it.return({ get then() { o.push('get then'); } }); \
+             o;"
+        ),
+        "start,tick 1,get then,tick 2,get return,get then,tick 3"
+    );
+}
+
+#[test]
 fn for_await_over_sync_iterable_of_promises_awaits_values() {
     // CreateAsyncFromSyncIterator: a sync iterable whose values are promises has
     // each value awaited before the loop body sees it.

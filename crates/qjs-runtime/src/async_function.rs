@@ -175,7 +175,7 @@ fn drive(context: &ObjectRef, result_promise: &ObjectRef, resume: Resume, env: &
         Ok(GeneratorOutcome::Yield(awaited) | GeneratorOutcome::YieldDelegate(awaited)) => {
             schedule_await(context, result_promise, awaited, env);
         }
-        Ok(GeneratorOutcome::Return(value)) => {
+        Ok(GeneratorOutcome::Return(value) | GeneratorOutcome::ReturnAlreadyAwaited(value)) => {
             promise::resolve_promise_capability(result_promise, value, env);
         }
         Err(error) => {

@@ -115,6 +115,9 @@ pub(crate) enum GeneratorOutcome {
     Await(Value),
     /// The body returned (or a `return(v)` completed it): `{ value, done: true }`.
     Return(Value),
+    /// The body returned after async `yield*` already awaited the injected
+    /// return value. Async-generator request settlement must not await it again.
+    ReturnAlreadyAwaited(Value),
 }
 
 impl Vm<'_> {
@@ -571,7 +574,7 @@ fn run_from_yield(
                 Resume::Return(value) => super::vm_result::ResumeMode::Return(value),
             });
             let result = vm.run_completion();
-            return drive(
+            return drive_with_return_already_awaited(
                 result,
                 vm,
                 &bytecode,
@@ -740,6 +743,34 @@ fn drive(
             message: "unexpected prologue boundary in a running generator body".to_owned(),
         }),
         Err(error) => Err(error),
+    }
+}
+
+fn drive_with_return_already_awaited(
+    result: Result<Completion, RuntimeError>,
+    vm: Vm<'_>,
+    bytecode: &Rc<Bytecode>,
+    caller_env: &mut CallEnv,
+    refresh_captured_slots_on_resume: bool,
+    capture_writeback: Option<CaptureWriteback>,
+) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
+    match result {
+        Ok(Completion::Return(value)) => {
+            vm.propagate_to_caller(caller_env);
+            vm.write_back_function_captures(capture_writeback.as_ref());
+            Ok((
+                GeneratorState::Completed,
+                GeneratorOutcome::ReturnAlreadyAwaited(value),
+            ))
+        }
+        other => drive(
+            other,
+            vm,
+            bytecode,
+            caller_env,
+            refresh_captured_slots_on_resume,
+            capture_writeback,
+        ),
     }
 }
 

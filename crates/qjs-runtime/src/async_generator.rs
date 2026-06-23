@@ -356,6 +356,10 @@ fn drain(generator: &ObjectRef, env: &mut CallEnv) {
                 resolve_front(generator, value, true, env);
                 continue;
             }
+            Ok(GeneratorOutcome::ReturnAlreadyAwaited(value)) => {
+                resolve_front(generator, value, true, env);
+                continue;
+            }
             Err(error) => {
                 let reason = crate::error::runtime_error_to_value(error, env);
                 reject_front(generator, reason, env);
@@ -608,6 +612,10 @@ fn resume_body(generator: &ObjectRef, resume: Resume, env: &mut CallEnv) {
                 resolve_front(generator, value, true, env);
                 drain(generator, env);
             }
+        }
+        Ok(GeneratorOutcome::ReturnAlreadyAwaited(value)) => {
+            resolve_front(generator, value, true, env);
+            drain(generator, env);
         }
         Err(error) => {
             let reason = crate::error::runtime_error_to_value(error, env);
