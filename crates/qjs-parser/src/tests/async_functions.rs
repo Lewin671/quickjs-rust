@@ -338,6 +338,10 @@ fn await_in_async_parameter_default_is_error() {
         parse_script("async function f(a = await 1) {}").is_err(),
         "await in an async function parameter default is an early error"
     );
+    assert!(
+        parse_script("async () => { (a = await/r/g) => {}; }").is_err(),
+        "await in arrow parameters nested in async code is an early error"
+    );
 }
 
 #[test]

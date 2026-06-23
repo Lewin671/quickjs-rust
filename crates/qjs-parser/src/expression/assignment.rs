@@ -303,6 +303,20 @@ impl Parser {
     fn parenthesized_arrow_parameters(&mut self) -> Result<Option<FunctionParams>, ParseError> {
         let start_cursor = self.cursor;
         self.expect(&TokenKind::LeftParen)?;
+        let previous_generator_params = self.in_generator_params;
+        let previous_async_params = self.in_async_params;
+        self.in_generator_params = self.in_generator;
+        self.in_async_params = self.in_async;
+        let parsed = self.parenthesized_arrow_parameters_after_left_paren(start_cursor);
+        self.in_generator_params = previous_generator_params;
+        self.in_async_params = previous_async_params;
+        parsed
+    }
+
+    fn parenthesized_arrow_parameters_after_left_paren(
+        &mut self,
+        start_cursor: usize,
+    ) -> Result<Option<FunctionParams>, ParseError> {
         let mut positional = Vec::new();
         let mut rest = None;
         if !self.at(&TokenKind::RightParen) {
