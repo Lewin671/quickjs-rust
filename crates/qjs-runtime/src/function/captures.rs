@@ -29,6 +29,9 @@ pub(super) fn sync_global_var_captures(
         return;
     }
     for (name, value) in captured.iter() {
+        if function.immutable_name_binding && function.name.as_deref() == Some(name.as_str()) {
+            continue;
+        }
         // The captured env also holds the ~48 realm intrinsics seeded at
         // function creation. Only a binding this function or one of its nested
         // closures could have reassigned needs syncing back; skipping the rest
@@ -168,6 +171,9 @@ pub(super) fn propagate_function_captures(
     }
     for name in &written_capture_names {
         if is_call_frame_binding(name) {
+            continue;
+        }
+        if function.immutable_name_binding && function.name.as_deref() == Some(name.as_str()) {
             continue;
         }
         let Some(final_value) = result.frame_binding(name).or_else(|| result.binding(name)) else {

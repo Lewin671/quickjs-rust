@@ -102,6 +102,12 @@ impl Vm<'_> {
     }
 
     fn insert_referenced_binding(&self, env: &mut HashMap<String, Value>, name: &str) {
+        if self.env.is_immutable_function_name(name)
+            && let Some(value) = self.env.locals().get(name).cloned()
+        {
+            env.insert(name.to_owned(), value);
+            return;
+        }
         if self.in_parameter_prologue()
             && self
                 .bytecode
@@ -247,6 +253,9 @@ impl Vm<'_> {
         if crate::function::is_internal_binding_name(name) {
             return;
         }
+        if self.env.is_immutable_function_name(name) {
+            return;
+        }
         if self.current_local_binding(name).is_none()
             && self.bytecode.local_slot(name).is_none()
             && !self.env.locals().contains_key(name)
@@ -267,6 +276,9 @@ impl Vm<'_> {
         if crate::function::is_internal_binding_name(target_name) {
             return;
         }
+        if self.env.is_immutable_function_name(target_name) {
+            return;
+        }
         if self.current_local_binding(target_name).is_none()
             && self.bytecode.local_slot(target_name).is_none()
             && !self.env.locals().contains_key(target_name)
@@ -285,6 +297,9 @@ impl Vm<'_> {
         let mut captured_env = self.captured_env.borrow_mut();
         for (name, value) in env {
             if super::vm_bindings::is_compiler_temporary(name) {
+                continue;
+            }
+            if self.in_parameter_prologue() && self.env.is_immutable_function_name(name) {
                 continue;
             }
             captured_env.insert(name.clone(), value.clone());

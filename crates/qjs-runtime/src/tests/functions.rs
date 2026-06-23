@@ -1244,4 +1244,26 @@ fn named_function_expression_name_binding_is_immutable() {
         ),
         Ok(Value::String("true:true".to_owned().into()))
     );
+    assert_eq!(
+        eval("var ref = function f() { var f; return f; }; ref();"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval(
+            "var f = 'outside'; var probeBody, setBody; var func = function f(_ = 0) { probeBody = function() { return f; }; setBody = function() { f = null; return f; }; }; func(); (probeBody() === func) + ':' + (setBody() === func) + ':' + (probeBody() === func);"
+        ),
+        Ok(Value::String("true:true:true".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "'use strict'; var result; var func = function f(_ = 0) { (function() { try { f = null; result = 'no throw'; } catch (error) { result = error.name; } })(); }; func(); result;"
+        ),
+        Ok(Value::String("TypeError".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var g = 'outside'; var probeBody, setBody; var func = function* g(_ = 0) { probeBody = function() { return g; }; setBody = function() { g = null; return g; }; }; func().next(); (probeBody() === func) + ':' + (setBody() === func) + ':' + (probeBody() === func);"
+        ),
+        Ok(Value::String("true:true:true".to_owned().into()))
+    );
 }

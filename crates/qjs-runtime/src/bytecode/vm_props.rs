@@ -372,6 +372,11 @@ impl Vm<'_> {
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
         }
+        // The inner name of a named function expression is immutable; a sloppy
+        // assignment to it is a silent no-op, even from a nested function.
+        if self.env.is_immutable_function_name(&name) {
+            return Ok(());
+        }
         if let Some(slot) = self.bytecode.local_slot(&name)
             && self.locals.get(slot).is_some_and(Option::is_some)
         {

@@ -334,6 +334,11 @@ impl Vm<'_> {
                     .to_owned(),
             });
         }
+        if self.env.is_immutable_function_name(name)
+            && let Some(value) = self.env.get_local(name)
+        {
+            return Ok(value);
+        }
         if !self.bytecode.global_scope
             && let Some(slot) = self.bytecode.local_slot(name)
             && self.bytecode.local_is_sloppy_global_fallback(slot)

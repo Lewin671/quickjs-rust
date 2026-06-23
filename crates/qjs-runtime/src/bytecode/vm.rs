@@ -621,11 +621,13 @@ impl<'a> Vm<'a> {
                     }
                     let upvalues =
                         self.captured_upvalues_for_function(&bytecode, &lexical_captures);
+                    let immutable_env_binding =
+                        self.captured_immutable_function_name(&bytecode, &local_names);
                     let function = Function::new_user_compiled(CompiledUserFunction {
                         name,
                         has_name_binding,
                         immutable_name_binding,
-                        immutable_env_binding: None,
+                        immutable_env_binding,
                         params: Rc::new(params),
                         env,
                         module_host: self.module_host.clone(),
@@ -1251,6 +1253,20 @@ impl<'a> Vm<'a> {
 
     pub(super) fn pop(&mut self) -> Result<Value, RuntimeError> {
         self.stack.pop().ok_or_else(stack_underflow)
+    }
+
+    fn captured_immutable_function_name(
+        &self,
+        bytecode: &Bytecode,
+        local_names: &[String],
+    ) -> Option<String> {
+        let name = self.env.immutable_function_name()?;
+        if local_names.iter().any(|local| local == name) {
+            return None;
+        }
+        let references_name = bytecode.local_slot(name).is_some()
+            || bytecode.global_names().iter().any(|global| global == name);
+        references_name.then(|| name.to_owned())
     }
 }
 

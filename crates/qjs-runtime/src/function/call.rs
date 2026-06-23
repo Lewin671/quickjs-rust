@@ -211,6 +211,7 @@ pub(crate) fn call_function(
             env,
             is_construct,
         );
+        let immutable_name_caller_value = immutable_name_caller_value(&function, env);
         // The activation captured env is only ever read when the body creates a
         // nested closure or class (those ops snapshot it into the new function's
         // `captured_env`). A body that creates none never reads it, so skip
@@ -247,6 +248,7 @@ pub(crate) fn call_function(
         propagate_lexical_super_this(&function, bytecode, &result);
         propagate_caller_bindings(env, &function_env.caller_binding_names, &result);
         sync_global_var_captures(&function, bytecode, env);
+        restore_immutable_name_caller_value(&function, env, immutable_name_caller_value);
         // A derived constructor implicitly returns its (super-bound) `this`
         // when the body does not return an object, and it is a ReferenceError
         // to finish without having called `super(...)`.
@@ -260,6 +262,50 @@ pub(crate) fn call_function(
         thrown: None,
         message: "user function has no bytecode body".to_owned(),
     })
+}
+
+fn immutable_name_caller_value(function: &Function, env: &CallEnv) -> Option<(String, Value)> {
+    let name = function.name.as_ref()?;
+    if !function.immutable_name_binding {
+        return None;
+    }
+    env.captured_binding_source_env()
+        .and_then(|source| source.borrow().get(name).cloned())
+        .or_else(|| {
+            env.activation_captured_env()
+                .and_then(|source| source.borrow().get(name).cloned())
+        })
+        .or_else(|| env.get(name))
+        .map(|value| (name.clone(), value))
+}
+
+fn restore_immutable_name_caller_value(
+    function: &Function,
+    env: &mut CallEnv,
+    saved: Option<(String, Value)>,
+) {
+    if !function.immutable_name_binding {
+        return;
+    }
+    let Some((name, value)) = saved else {
+        return;
+    };
+    if let Some(source) = env.captured_binding_source_env()
+        && source.borrow().contains_key(&name)
+    {
+        source.borrow_mut().insert(name.clone(), value.clone());
+    }
+    if let Some(source) = env.activation_captured_env()
+        && source.borrow().contains_key(&name)
+    {
+        source.borrow_mut().insert(name.clone(), value.clone());
+    }
+    if let Some(binding) = env.get_local_mut(&name) {
+        *binding = value.clone();
+    }
+    if env.realm_contains(&name) {
+        env.insert_realm(name, value);
+    }
 }
 
 /// Runs a class constructor's instance-field initializers, in definition
@@ -633,12 +679,19 @@ fn function_env(
     let mut local_env = HashMap::with_capacity(
         captured_env.len() + function.params.binding_count() + argument_values.len() + 3,
     );
-    let (function_capture_names, protected_capture_names) = insert_function_captures(
+    let (mut function_capture_names, mut protected_capture_names) = insert_function_captures(
         &mut local_env,
         bytecode,
         &function.local_names,
         &captured_env,
     );
+    if let Some(name) = &function.immutable_env_binding
+        && !protected_capture_names
+            .iter()
+            .any(|protected| protected == name)
+    {
+        protected_capture_names.push(name.clone());
+    }
     drop(captured_env);
     refresh_written_global_captures_from_caller(
         &function.captured_env,
@@ -682,6 +735,7 @@ fn function_env(
     }
     if function.has_name_binding
         && let Some(name) = &function.name
+        && !function_name_is_shadowed_by_body_var(function, bytecode, name)
     {
         local_env.insert(name.clone(), callee.clone());
     }
@@ -776,6 +830,12 @@ fn function_env(
             Value::Boolean(true),
         );
     }
+    if function.immutable_name_binding
+        && let Some(name) = &function.name
+    {
+        function_capture_names.retain(|capture| capture != name);
+        caller_binding_names.retain(|binding| binding != name);
+    }
     let mut frame_env = env.with_frame_locals(local_env);
     if function.immutable_name_binding
         && let Some(name) = &function.name
@@ -803,6 +863,17 @@ fn function_env(
         function_capture_names,
         caller_binding_names,
     }
+}
+
+fn function_name_is_shadowed_by_body_var(
+    function: &Function,
+    bytecode: &Bytecode,
+    name: &str,
+) -> bool {
+    function.immutable_name_binding
+        && bytecode
+            .local_slot(name)
+            .is_some_and(|slot| bytecode.local_is_body_hoist_only(slot))
 }
 
 fn callee_this_realm_env(function: &Function, caller_env: &CallEnv) -> Option<CallEnv> {
