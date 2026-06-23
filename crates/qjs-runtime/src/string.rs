@@ -56,10 +56,11 @@ pub(crate) fn string_utf16_eq(left: &str, right: &str) -> bool {
 }
 
 pub(crate) fn string_from_code_units(code_units: &[u16]) -> String {
-    code_units
-        .iter()
-        .map(|code_unit| string_from_code_unit(*code_unit))
-        .collect()
+    let mut result = String::with_capacity(code_units.len());
+    for code_unit in code_units {
+        push_code_unit(&mut result, *code_unit);
+    }
+    result
 }
 
 pub(crate) fn surrogate_escape_code_unit(character: char) -> Option<u16> {
@@ -92,13 +93,18 @@ pub(crate) fn advance_string_index(characters: &[char], index: usize, unicode: b
 }
 
 pub(crate) fn string_from_code_unit(code_unit: u16) -> String {
+    let mut result = String::new();
+    push_code_unit(&mut result, code_unit);
+    result
+}
+
+pub(crate) fn push_code_unit(result: &mut String, code_unit: u16) {
     if (0xD800..=0xDFFF).contains(&code_unit) {
-        char::from_u32(SURROGATE_ESCAPE_SENTINEL_BASE + u32::from(code_unit) - 0xD800)
-            .unwrap_or(char::REPLACEMENT_CHARACTER)
-            .to_string()
+        result.push(
+            char::from_u32(SURROGATE_ESCAPE_SENTINEL_BASE + u32::from(code_unit) - 0xD800)
+                .unwrap_or(char::REPLACEMENT_CHARACTER),
+        );
     } else {
-        char::from_u32(u32::from(code_unit))
-            .unwrap_or(char::REPLACEMENT_CHARACTER)
-            .to_string()
+        result.push(char::from_u32(u32::from(code_unit)).unwrap_or(char::REPLACEMENT_CHARACTER));
     }
 }

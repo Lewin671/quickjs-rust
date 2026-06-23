@@ -10,7 +10,7 @@ use crate::{
     },
     function_delete_own_property, function_own_property_descriptor,
     object::define_property_on_value_key,
-    string::{string_code_units, string_from_code_unit},
+    string::{string_code_units, string_from_code_unit, surrogate_escape_code_unit},
     to_js_string_with_env, to_length_with_env, to_number_with_env,
 };
 use crate::{PropertyKey, property_value, property_value_key};
@@ -482,7 +482,7 @@ pub(super) fn native_global_encode_uri(
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
-    encode_uri(&source, UriEncodeKind::Uri).map(|s| Value::String(s.into()))
+    encode_uri_string(&source).map(|s| Value::String(s.into()))
 }
 
 pub(super) fn native_global_encode_uri_component(
@@ -491,7 +491,7 @@ pub(super) fn native_global_encode_uri_component(
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
-    encode_uri(&source, UriEncodeKind::Component).map(|s| Value::String(s.into()))
+    encode_uri_component_string(&source).map(|s| Value::String(s.into()))
 }
 
 pub(super) fn native_global_decode_uri(
@@ -518,6 +518,14 @@ pub(crate) fn decode_uri_string(source: &str) -> Result<String, RuntimeError> {
 
 pub(crate) fn decode_uri_component_string(source: &str) -> Result<String, RuntimeError> {
     decode_uri(source, UriDecodeKind::Component)
+}
+
+pub(crate) fn encode_uri_string(source: &str) -> Result<String, RuntimeError> {
+    encode_uri(source, UriEncodeKind::Uri)
+}
+
+pub(crate) fn encode_uri_component_string(source: &str) -> Result<String, RuntimeError> {
+    encode_uri(source, UriEncodeKind::Component)
 }
 
 pub(super) fn native_global_eval(
@@ -1407,40 +1415,48 @@ enum UriDecodeKind {
 }
 
 fn encode_uri(source: &str, kind: UriEncodeKind) -> Result<String, RuntimeError> {
-    let code_units = string_code_units(source);
-    let mut output = String::new();
-    let mut index = 0;
-    while index < code_units.len() {
-        let code_unit = code_units[index];
+    let mut output = String::with_capacity(source.len());
+    let mut chars = source.chars().peekable();
+    while let Some(character) = chars.next() {
+        let Some(code_unit) = surrogate_escape_code_unit(character) else {
+            encode_uri_code_point(&mut output, character as u32, kind)?;
+            continue;
+        };
         let code_point = if is_high_surrogate(code_unit) {
-            let Some(&low) = code_units.get(index + 1) else {
+            let Some(low) = chars.next().and_then(surrogate_escape_code_unit) else {
                 return malformed_uri();
             };
             if !is_low_surrogate(low) {
                 return malformed_uri();
             }
-            index += 1;
             0x10000 + ((u32::from(code_unit) - 0xD800) << 10) + u32::from(low) - 0xDC00
         } else if is_low_surrogate(code_unit) {
             return malformed_uri();
         } else {
             u32::from(code_unit)
         };
-
-        let character = char::from_u32(code_point).ok_or_else(uri_error)?;
-        if is_uri_unescaped(character, kind) {
-            output.push(character);
-        } else {
-            let mut buffer = [0; 4];
-            for byte in character.encode_utf8(&mut buffer).as_bytes() {
-                output.push('%');
-                output.push(hex_upper(byte >> 4));
-                output.push(hex_upper(byte & 0x0F));
-            }
-        }
-        index += 1;
+        encode_uri_code_point(&mut output, code_point, kind)?;
     }
     Ok(output)
+}
+
+fn encode_uri_code_point(
+    output: &mut String,
+    code_point: u32,
+    kind: UriEncodeKind,
+) -> Result<(), RuntimeError> {
+    let character = char::from_u32(code_point).ok_or_else(uri_error)?;
+    if is_uri_unescaped(character, kind) {
+        output.push(character);
+    } else {
+        let mut buffer = [0; 4];
+        for byte in character.encode_utf8(&mut buffer).as_bytes() {
+            output.push('%');
+            output.push(hex_upper(byte >> 4));
+            output.push(hex_upper(byte & 0x0F));
+        }
+    }
+    Ok(())
 }
 
 fn decode_uri(source: &str, kind: UriDecodeKind) -> Result<String, RuntimeError> {

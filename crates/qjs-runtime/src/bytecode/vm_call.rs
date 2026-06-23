@@ -302,7 +302,10 @@ pub(super) fn try_fast_global_native_call(
     };
     let native = function.native?;
     let result = match native {
-        NativeFunction::DecodeUri | NativeFunction::DecodeUriComponent => {
+        NativeFunction::DecodeUri
+        | NativeFunction::DecodeUriComponent
+        | NativeFunction::EncodeUri
+        | NativeFunction::EncodeUriComponent => {
             let source = match arguments.first().cloned().unwrap_or(Value::Undefined) {
                 Value::String(source) => source,
                 Value::Undefined => "undefined".to_owned().into(),
@@ -312,6 +315,10 @@ pub(super) fn try_fast_global_native_call(
                 NativeFunction::DecodeUri => crate::global::decode_uri_string(&source),
                 NativeFunction::DecodeUriComponent => {
                     crate::global::decode_uri_component_string(&source)
+                }
+                NativeFunction::EncodeUri => crate::global::encode_uri_string(&source),
+                NativeFunction::EncodeUriComponent => {
+                    crate::global::encode_uri_component_string(&source)
                 }
                 _ => unreachable!("URI native matched above"),
             };
@@ -400,17 +407,18 @@ fn is_call_forwarding_native(callee: &Value) -> bool {
 }
 
 fn fast_string_from_char_code_numbers(arguments: &[Value]) -> String {
-    let code_units: Vec<u16> = arguments
-        .iter()
-        .map(|value| match value {
+    let mut result = String::with_capacity(arguments.len());
+    for value in arguments {
+        let code_unit = match value {
             Value::Number(number) if number.is_finite() && *number != 0.0 => {
                 number.trunc().rem_euclid(65_536.0) as u16
             }
             Value::Number(_) => 0,
             _ => unreachable!("fast path only accepts numeric arguments"),
-        })
-        .collect();
-    crate::string::string_from_code_units(&code_units)
+        };
+        crate::string::push_code_unit(&mut result, code_unit);
+    }
+    result
 }
 
 fn insert_binding(

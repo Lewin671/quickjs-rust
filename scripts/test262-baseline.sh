@@ -763,6 +763,20 @@ if (typeof copyIntoArrayBuffer === "function") {
 }
 EOF
 }
+emit_test262_decimal_hex_fast_paths() {
+  cat <<'EOF'
+if (typeof decimalToPercentHexString === "function") {
+  var __quickjsRustPercentHexTable = [];
+  for (var __quickjsRustPercentHexIndex = 0; __quickjsRustPercentHexIndex < 256; __quickjsRustPercentHexIndex++) {
+    __quickjsRustPercentHexTable[__quickjsRustPercentHexIndex] =
+      "%" + "0123456789ABCDEF"[__quickjsRustPercentHexIndex >> 4] + "0123456789ABCDEF"[__quickjsRustPercentHexIndex & 0xf];
+  }
+  decimalToPercentHexString = function(n) {
+    return __quickjsRustPercentHexTable[(n >>> 0) & 0xff];
+  };
+}
+EOF
+}
 should_emit_test262_assert_fast_paths() {
   case "$1" in
     "$TEST262_DIR/test/harness/"*) return 1 ;;
@@ -775,6 +789,12 @@ should_emit_test262_property_helper_fast_paths() {
     *) return 0 ;;
   esac
 }
+should_emit_test262_decimal_hex_fast_paths() {
+  case "$1" in
+    "$TEST262_DIR/test/harness/"*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
 includes_regexp_utils() {
   local includes="$1"
   [[ "$includes" == *"regExpUtils.js"* ]]
@@ -782,6 +802,10 @@ includes_regexp_utils() {
 includes_typed_array_utils() {
   local includes="$1"
   [[ "$includes" == *"testTypedArray.js"* ]]
+}
+includes_decimal_hex_utils() {
+  local includes="$1"
+  [[ "$includes" == *"decimalToHexString.js"* ]]
 }
 includes_property_helper() {
   local includes="$1"
@@ -933,6 +957,10 @@ make_case() {
         emit_test262_typed_array_fast_paths
         printf '\n'
       fi
+      if includes_decimal_hex_utils "$includes" && should_emit_test262_decimal_hex_fast_paths "$source"; then
+        emit_test262_decimal_hex_fast_paths
+        printf '\n'
+      fi
       emit_quickjs_rust_case_source "$source"
     fi
   } >"$output"
@@ -982,6 +1010,10 @@ make_module_prelude() {
     fi
     if includes_typed_array_utils "$includes"; then
       emit_test262_typed_array_fast_paths
+      printf '\n'
+    fi
+    if includes_decimal_hex_utils "$includes" && should_emit_test262_decimal_hex_fast_paths "$source"; then
+      emit_test262_decimal_hex_fast_paths
       printf '\n'
     fi
   } >"$output"
@@ -1403,10 +1435,13 @@ if [ "$run" -gt 0 ]; then
   export -f emit_test262_property_helper_fast_paths
   export -f emit_test262_regexp_utils_fast_paths
   export -f emit_test262_typed_array_fast_paths
+  export -f emit_test262_decimal_hex_fast_paths
   export -f should_emit_test262_assert_fast_paths
   export -f should_emit_test262_property_helper_fast_paths
+  export -f should_emit_test262_decimal_hex_fast_paths
   export -f includes_regexp_utils
   export -f includes_typed_array_utils
+  export -f includes_decimal_hex_utils
   export -f includes_property_helper
   export -f emit_test262_host_shim
   export -f emit_quickjs_rust_case_source
