@@ -711,6 +711,29 @@ fn for_await_over_sync_iterable_of_promises_awaits_values() {
 }
 
 #[test]
+fn async_from_sync_rejects_wrapper_immediately_when_promise_resolve_throws() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             async function run() { \
+               var p = Promise.resolve(0); \
+               Object.defineProperty(p, 'constructor', { get: function() { throw new Error('boom'); } }); \
+               o.push('start'); \
+               for await (var x of [p]) {} \
+               o.push('never'); \
+             } \
+             Promise.resolve() \
+               .then(function() { o.push('tick 1'); }) \
+               .then(function() { o.push('tick 2'); }) \
+               .then(function() { o.push('assert ' + o.join('|')); }); \
+             run().catch(function() { o.push('catch'); }); \
+             o;"
+        ),
+        "start,tick 1,tick 2,catch,assert start|tick 1|tick 2|catch"
+    );
+}
+
+#[test]
 fn async_from_sync_next_omits_absent_value_argument() {
     assert_eq!(
         eval_log(

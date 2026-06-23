@@ -751,6 +751,33 @@ pub(crate) fn perform_await(
         }
     };
 
+    perform_await_reactions_on_promise(promise, fulfill_reaction, reject_reaction, env);
+}
+
+/// Schedules `await` reactions for a promise that has already been produced by
+/// `PromiseResolve`. Callers that need to handle `PromiseResolve` abrupt
+/// completions synchronously can do that before reaching this helper.
+pub(crate) fn perform_await_on_promise(
+    promise: ObjectRef,
+    on_fulfilled: Value,
+    on_rejected: Value,
+    env: &mut CallEnv,
+) {
+    // The reactions need a result capability to satisfy the reaction-job
+    // contract; the async driver ignores its eventual settlement.
+    let throwaway = new_pending_promise(env);
+    let fulfill_reaction = promise_reaction(on_fulfilled, throwaway.clone(), true);
+    let reject_reaction = promise_reaction(on_rejected, throwaway, false);
+
+    perform_await_reactions_on_promise(promise, fulfill_reaction, reject_reaction, env);
+}
+
+fn perform_await_reactions_on_promise(
+    promise: ObjectRef,
+    fulfill_reaction: ObjectRef,
+    reject_reaction: ObjectRef,
+    env: &mut CallEnv,
+) {
     match promise_state(&promise).as_deref() {
         Some(PROMISE_PENDING) => {
             add_promise_reaction(&promise, Value::Object(fulfill_reaction));

@@ -927,6 +927,23 @@ fn async_from_sync_method(
         }
     };
 
+    // AsyncFromSyncIteratorContinuation performs PromiseResolve before await.
+    // If that throws, the wrapper promise is rejected immediately rather than
+    // after an additional await-rejection job.
+    let promise_constructor = env.get("Promise").unwrap_or(Value::Undefined);
+    let value_wrapper = match promise::promise_resolve(&promise_constructor, value, env) {
+        Ok(Value::Object(promise)) => promise,
+        Ok(_) => return Value::Object(capability),
+        Err(error) => {
+            promise::reject_promise_capability(
+                &capability,
+                crate::error::runtime_error_to_value(error, env),
+                env,
+            );
+            return Value::Object(capability);
+        }
+    };
+
     // Await the value, then resolve the wrapper promise with `{ value, done }`.
     let on_fulfilled = value_await_reaction(
         NativeFunction::AsyncFromSyncIteratorValueFulfilled,
@@ -938,7 +955,7 @@ fn async_from_sync_method(
         &capability,
         done,
     );
-    promise::perform_await(value, on_fulfilled, on_rejected, env);
+    promise::perform_await_on_promise(value_wrapper, on_fulfilled, on_rejected, env);
     Value::Object(capability)
 }
 
