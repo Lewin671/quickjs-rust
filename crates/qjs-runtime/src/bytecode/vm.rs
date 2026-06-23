@@ -824,7 +824,8 @@ impl<'a> Vm<'a> {
                     catch,
                     finally,
                     catch_scope,
-                } => self.enter_try(catch, finally, catch_scope),
+                    cleanup_slots,
+                } => self.enter_try(catch, finally, catch_scope, cleanup_slots),
                 Op::ExitTry => self.exit_try()?,
                 Op::EndFinally => {
                     if let Some(value) = self.end_finally()? {

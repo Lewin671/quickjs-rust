@@ -318,6 +318,7 @@ pub(super) enum Op {
         catch: Option<usize>,
         finally: Option<usize>,
         catch_scope: Option<CatchScope>,
+        cleanup_slots: Vec<usize>,
     },
     ExitTry,
     EndFinally,

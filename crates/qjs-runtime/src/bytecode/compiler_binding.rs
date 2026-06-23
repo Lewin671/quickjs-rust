@@ -223,6 +223,7 @@ impl Compiler {
             catch: None,
             finally: None,
             catch_scope: None,
+            cleanup_slots: Vec::new(),
         });
         ArrayDestructuring {
             iterator_slot,

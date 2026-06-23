@@ -7,6 +7,7 @@ pub(super) struct TryFrame {
     catch: Option<usize>,
     finally: Option<usize>,
     catch_scope: Option<CatchScope>,
+    cleanup_slots: Vec<usize>,
     catch_scope_active: bool,
     stack_depth: usize,
     /// Depth of the with-object stack when this try region was entered, so an
@@ -20,11 +21,13 @@ impl Vm<'_> {
         catch: Option<usize>,
         finally: Option<usize>,
         catch_scope: Option<CatchScope>,
+        cleanup_slots: Vec<usize>,
     ) {
         self.try_stack.push(TryFrame {
             catch,
             finally,
             catch_scope,
+            cleanup_slots,
             catch_scope_active: false,
             stack_depth: self.stack.len(),
             with_depth: self.with_stack.len(),
@@ -51,7 +54,9 @@ impl Vm<'_> {
             let with_depth = frame.with_depth;
             if let Some(catch) = frame.catch.take() {
                 frame.catch_scope_active = true;
+                let cleanup_slots = frame.cleanup_slots.clone();
                 self.with_stack.truncate(with_depth);
+                self.cleanup_slots(&cleanup_slots)?;
                 self.stack.push(value);
                 self.ip = catch;
                 return Ok(());
@@ -61,6 +66,7 @@ impl Vm<'_> {
         if let Some(frame) = self.try_stack.pop() {
             self.stack.truncate(frame.stack_depth);
             self.with_stack.truncate(frame.with_depth);
+            self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
                 self.pending_throw = Some(value);
@@ -80,6 +86,7 @@ impl Vm<'_> {
         while let Some(frame) = self.try_stack.pop() {
             self.stack.truncate(frame.stack_depth);
             self.with_stack.truncate(frame.with_depth);
+            self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
                 self.pending_return = Some(value);
@@ -97,6 +104,7 @@ impl Vm<'_> {
     /// break/continue target expects its completion value on top.
     pub(super) fn abrupt_jump(&mut self, target: usize) -> Result<(), RuntimeError> {
         if let Some(frame) = self.try_stack.pop() {
+            self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
                 self.pending_jump = Some(target);
@@ -136,5 +144,12 @@ impl Vm<'_> {
             }
             None => Ok(()),
         }
+    }
+
+    fn cleanup_slots(&mut self, slots: &[usize]) -> Result<(), RuntimeError> {
+        for slot in slots {
+            self.clear_local(*slot)?;
+        }
+        Ok(())
     }
 }

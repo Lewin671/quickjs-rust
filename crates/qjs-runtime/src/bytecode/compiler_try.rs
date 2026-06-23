@@ -82,6 +82,7 @@ impl Compiler {
             catch: None,
             finally: None,
             catch_scope: None,
+            cleanup_slots: Vec::new(),
         });
         self.disposable_scope_depth += 1;
         let body_result = self.compile_block_body(body);
@@ -117,6 +118,7 @@ impl Compiler {
             catch: None,
             finally: None,
             catch_scope: None,
+            cleanup_slots: Vec::new(),
         });
         self.disposable_scope_depth += 1;
         let mut body_result = Ok(());
@@ -180,12 +182,16 @@ impl Compiler {
             catch: None,
             finally: None,
             catch_scope: None,
+            cleanup_slots: Vec::new(),
         });
+        let cleanup_start = self.locals.len();
+        let mut cleanup_slots = Vec::new();
         if block_has_using(block) {
             self.compile_disposable_block(block)?;
             self.emit(Op::StoreLocal(result_slot));
         } else {
             self.with_lexical_scope(|compiler| compiler.compile_try_body(block, result_slot))?;
+            cleanup_slots = self.lexical_cleanup_slots_since(cleanup_start);
         }
         self.emit(Op::ExitTry);
 
@@ -210,11 +216,13 @@ impl Compiler {
             catch,
             finally,
             catch_scope: scope,
+            cleanup_slots: slots,
         } = &mut self.code[enter]
         {
             *catch = catch_target;
             *finally = finally_target;
             *scope = catch_scope;
+            *slots = cleanup_slots;
         }
         self.patch_jump(normal_jump, finally_target.unwrap_or(after));
         self.emit(Op::LoadLocal(result_slot));
@@ -227,6 +235,21 @@ impl Compiler {
             self.emit(Op::StoreLocal(result_slot));
         }
         Ok(())
+    }
+
+    fn lexical_cleanup_slots_since(&self, start: usize) -> Vec<usize> {
+        self.locals
+            .iter()
+            .enumerate()
+            .skip(start)
+            .filter(|(_, local)| {
+                !local.name.starts_with("\0\0")
+                    && !local.hoisted
+                    && !local.parameter
+                    && !local.sloppy_global_fallback
+            })
+            .map(|(slot, _)| slot)
+            .collect()
     }
 
     fn compile_catch(

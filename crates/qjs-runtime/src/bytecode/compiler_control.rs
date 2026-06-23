@@ -111,6 +111,7 @@ impl Compiler {
             catch: None,
             finally: None,
             catch_scope: None,
+            cleanup_slots: Vec::new(),
         });
 
         let loop_start = self.code.len();
@@ -268,6 +269,7 @@ impl Compiler {
             catch: None,
             finally: None,
             catch_scope: None,
+            cleanup_slots: Vec::new(),
         });
 
         let loop_start = self.code.len();
@@ -344,6 +346,7 @@ impl Compiler {
             catch: None,
             finally: None,
             catch_scope: None,
+            cleanup_slots: Vec::new(),
         });
         self.disposable_scope_depth += 1;
         let body_result = (|| {

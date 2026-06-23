@@ -837,6 +837,21 @@ fn evaluates_try_catch_finally_statements() {
     );
     assert_eq!(
         eval(
+            "var seen; \
+             try { { let hidden = 18; throw 25; } } \
+             catch (error) { \
+               seen = error; \
+               (function() { \
+                 try { eval('hidden'); seen = 'visible'; } \
+                 catch (inner) { seen = inner instanceof ReferenceError ? seen : 'wrong'; } \
+               })(); \
+             } \
+             seen;"
+        ),
+        Ok(Value::Number(25.0))
+    );
+    assert_eq!(
+        eval(
             "var probeParam, probeBlock; let x = 'outside'; \
              try { throw []; } \
              catch ([_ = probeParam = function() { return x; }]) { \
