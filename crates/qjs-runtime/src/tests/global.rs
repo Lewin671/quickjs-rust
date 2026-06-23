@@ -225,6 +225,35 @@ fn indirect_eval_uses_marked_dynamic_realm_global() {
 }
 
 #[test]
+fn cross_realm_eval_binding_is_not_direct_eval() {
+    assert_eq!(
+        eval(
+            "var __quickjsRustDynamicFunctionRealm; \
+             var other = Object.create(globalThis); \
+             other.eval = function(source) { \
+               var previousRealm = __quickjsRustDynamicFunctionRealm; \
+               __quickjsRustDynamicFunctionRealm = other; \
+               globalThis.__quickjsRustDynamicFunctionRealm = other; \
+               try { return (0, eval)(source); } \
+               finally { \
+                 __quickjsRustDynamicFunctionRealm = previousRealm; \
+                 globalThis.__quickjsRustDynamicFunctionRealm = previousRealm; \
+               } \
+             }; \
+             var x = 'outside'; \
+             var result; \
+             (function() { \
+               var eval = other.eval; \
+               eval('var x = \"inside\";'); \
+               result = x; \
+             }()); \
+             [result, typeof x, other.x].join(':');"
+        ),
+        Ok(Value::String("outside:string:inside".to_owned().into()))
+    );
+}
+
+#[test]
 fn indirect_eval_uses_marked_realm_for_primitive_prototypes() {
     assert_eq!(
         eval(

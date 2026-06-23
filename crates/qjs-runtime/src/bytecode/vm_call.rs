@@ -96,9 +96,11 @@ impl Vm<'_> {
             }
             return Ok(());
         }
-        let in_parameter_scope = direct_eval && self.in_parameter_prologue();
+        let effective_direct_eval = direct_eval
+            && matches!(&callee, Value::Function(function) if function.native == Some(NativeFunction::Eval));
+        let in_parameter_scope = effective_direct_eval && self.in_parameter_prologue();
         let mut env = self.call_env(&callee);
-        if direct_eval {
+        if effective_direct_eval {
             env.env
                 .insert(crate::DIRECT_EVAL_BINDING.to_owned(), Value::Boolean(true));
             env.env.insert(
@@ -128,7 +130,7 @@ impl Vm<'_> {
         env.env
             .remove(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING);
         env.env.set_direct_eval_with_stack(Vec::new());
-        if direct_eval {
+        if effective_direct_eval {
             self.write_through_direct_eval_parameter_captures(&env.env, &env.injected);
         }
         self.apply_call_env(env);

@@ -807,6 +807,9 @@ fn has_global_lexical_binding(
     name: &str,
     include_captured_global_lexicals: bool,
 ) -> bool {
+    if is_marked_dynamic_realm_global(env, global_this) {
+        return false;
+    }
     !global_this.has_own_property(name)
         && (env.is_global_lexical_binding(name)
             || env.realm_contains(name)
