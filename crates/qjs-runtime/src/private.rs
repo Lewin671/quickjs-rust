@@ -11,7 +11,7 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use crate::Value;
+use crate::{ObjectRef, Value};
 
 /// A unique private-name identity. Two [`PrivateName`]s are equal only when
 /// they share the same allocation, so each class evaluation produces distinct
@@ -70,6 +70,7 @@ pub(crate) struct PrivateAccessor {
 pub(crate) struct PrivateBinding {
     pub(crate) id: PrivateName,
     pub(crate) kind: PrivateKind,
+    pub(crate) type_error_prototype: Option<ObjectRef>,
 }
 
 /// The set of private names declared by one class evaluation, keyed by source
@@ -83,15 +84,20 @@ pub(crate) struct PrivateEnvironment {
     /// inside a nested class can resolve a private name declared by an outer
     /// class. Resolution walks this chain outward.
     outer: Option<Rc<PrivateEnvironment>>,
+    type_error_prototype: Option<ObjectRef>,
 }
 
 impl PrivateEnvironment {
     /// Creates a private environment nested inside `outer`, so unresolved names
     /// fall through to the enclosing class.
-    pub(crate) fn with_outer(outer: Option<PrivateEnvironment>) -> Self {
+    pub(crate) fn with_outer(
+        outer: Option<PrivateEnvironment>,
+        type_error_prototype: Option<ObjectRef>,
+    ) -> Self {
         Self {
             bindings: Rc::new(RefCell::new(Vec::new())),
             outer: outer.map(Rc::new),
+            type_error_prototype,
         }
     }
 
@@ -107,6 +113,7 @@ impl PrivateEnvironment {
             PrivateBinding {
                 id: id.clone(),
                 kind: PrivateKind::Field,
+                type_error_prototype: self.type_error_prototype.clone(),
             },
         ));
         id
@@ -131,6 +138,7 @@ impl PrivateEnvironment {
             PrivateBinding {
                 id: id.clone(),
                 kind: PrivateKind::Method(Box::new(function)),
+                type_error_prototype: self.type_error_prototype.clone(),
             },
         ));
         id
@@ -172,6 +180,7 @@ impl PrivateEnvironment {
             PrivateBinding {
                 id: id.clone(),
                 kind: PrivateKind::Accessor(Box::new(PrivateAccessor { get, set })),
+                type_error_prototype: self.type_error_prototype.clone(),
             },
         ));
         id

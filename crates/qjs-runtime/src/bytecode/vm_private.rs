@@ -1,19 +1,24 @@
 //! VM support for private class names: installing private elements when a class
 //! is built, and the `GetPrivate`/`SetPrivate`/`PrivateIn` operations.
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::CallEnv;
 
 use crate::{
     Function, ObjectRef, RuntimeError, Value, call_function,
-    function::{CompiledUserFunction, InstancePrivateElement, PrivateFieldInit},
+    function::{
+        CROSS_REALM_TYPE_ERROR_PROTOTYPE, CompiledUserFunction, InstancePrivateElement,
+        PrivateFieldInit,
+    },
     private::{PrivateBinding, PrivateEnvironment, PrivateKind, PrivateStorage},
 };
 
 use super::ir::{ClassMethodDef, ClassMethodKind, ClassPrivateElementDef};
 use super::vm::Vm;
 use super::vm_class::class_method_function_name_with_base;
+
+const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
 impl Vm<'_> {
     /// Installs the private elements of a class. Methods and accessors become
@@ -122,7 +127,10 @@ impl Vm<'_> {
         if private_elements.is_empty() && enclosing.is_none() {
             return;
         }
-        let environment = PrivateEnvironment::with_outer(enclosing);
+        let environment = PrivateEnvironment::with_outer(
+            enclosing,
+            realm_type_error_prototype(constructor_function, &self.current_env()),
+        );
         prototype.set_private_environment(environment.clone());
         constructor_function.set_private_environment(environment.clone());
         for element in private_elements {
@@ -356,7 +364,10 @@ impl Vm<'_> {
         let binding = self.resolve_private_binding(name)?;
         let storage = private_storage_of(&object).filter(|storage| storage.has(&binding.id));
         let Some(storage) = storage else {
-            return Err(foreign_private_error(name));
+            return Err(foreign_private_error(
+                name,
+                binding.type_error_prototype.as_ref(),
+            ));
         };
         match &binding.kind {
             PrivateKind::Field => Ok(storage.get_field(&binding.id).unwrap_or(Value::Undefined)),
@@ -381,7 +392,10 @@ impl Vm<'_> {
         let binding = self.resolve_private_binding(name)?;
         let storage = private_storage_of(&object).filter(|storage| storage.has(&binding.id));
         let Some(storage) = storage else {
-            return Err(foreign_private_error(name));
+            return Err(foreign_private_error(
+                name,
+                binding.type_error_prototype.as_ref(),
+            ));
         };
         match &binding.kind {
             PrivateKind::Field => {
@@ -558,13 +572,53 @@ fn private_storage_of(value: &Value) -> Option<PrivateStorage> {
     instance_private_storage(value)
 }
 
-fn foreign_private_error(name: &str) -> RuntimeError {
+fn realm_type_error_prototype(function: &Function, env: &CallEnv) -> Option<ObjectRef> {
+    marked_type_error_prototype(function).or_else(|| dynamic_realm_type_error_prototype(env))
+}
+
+fn marked_type_error_prototype(function: &Function) -> Option<ObjectRef> {
+    let crate::Property {
+        value: Value::Object(prototype),
+        ..
+    } = function.own_property(CROSS_REALM_TYPE_ERROR_PROTOTYPE)?
+    else {
+        return None;
+    };
+    Some(prototype)
+}
+
+fn dynamic_realm_type_error_prototype(env: &CallEnv) -> Option<ObjectRef> {
+    let Value::Object(global) = env.get(DYNAMIC_FUNCTION_REALM_GLOBAL)? else {
+        return None;
+    };
+    let Value::Function(type_error) = global.get("TypeError")? else {
+        return None;
+    };
+    let crate::Property {
+        value: Value::Object(prototype),
+        ..
+    } = type_error.own_property("prototype")?
+    else {
+        return None;
+    };
+    Some(prototype)
+}
+
+fn foreign_private_error(name: &str, type_error_prototype: Option<&ObjectRef>) -> RuntimeError {
+    let message = format!(
+        "TypeError: Cannot read private member #{name} from an object whose class did not \
+         declare it"
+    );
+    if let Some(prototype) = type_error_prototype {
+        let error = ObjectRef::with_prototype(HashMap::new(), Some(prototype.clone()));
+        return RuntimeError {
+            thrown: Some(Box::new(Value::Object(error))),
+            message,
+        };
+    }
     RuntimeError {
         thrown: None,
-        message: format!(
-            "TypeError: Cannot read private member #{name} from an object whose class did not \
-             declare it"
-        ),
+        message,
     }
 }
 

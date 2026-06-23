@@ -440,6 +440,55 @@ fn fresh_identity_per_class_evaluation() {
 }
 
 #[test]
+fn private_brand_error_uses_dynamic_realm_type_error_prototype() {
+    assert_eq!(
+        eval(
+            "let realmTypeErrorPrototype = {};
+             function RealmTypeError() {}
+             RealmTypeError.prototype = realmTypeErrorPrototype;
+             var __quickjsRustDynamicFunctionRealm = { TypeError: RealmTypeError };
+             class C {
+               #m() { return 1; }
+               access(other) { return other.#m(); }
+             }
+             __quickjsRustDynamicFunctionRealm = undefined;
+             let c = new C();
+             try { c.access({}); false; } catch (error) {
+               Object.getPrototypeOf(error) === realmTypeErrorPrototype;
+             }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn private_brand_error_uses_marked_function_call_realm() {
+    assert_eq!(
+        eval(
+            "let realmTypeErrorPrototype = {};
+             function RealmTypeError() {}
+             RealmTypeError.prototype = realmTypeErrorPrototype;
+             let realmGlobal = { TypeError: RealmTypeError };
+             let factory = Function(`
+               return class C {
+                 #m() { return 1; }
+                 access(other) { return other.#m(); }
+               }
+             `);
+             Object.defineProperty(factory, '__quickjsRustDynamicFunctionRealm', {
+               value: realmGlobal
+             });
+             let C = factory();
+             let c = new C();
+             try { c.access({}); false; } catch (error) {
+               Object.getPrototypeOf(error) === realmTypeErrorPrototype;
+             }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn nested_class_resolves_outer_private_name() {
     assert_eq!(
         eval(

@@ -368,6 +368,9 @@ var $262 = {
       Object.defineProperty(fn, "__quickjsRustRealmFunctionPrototype", {
         value: crossRealmFunction.prototype
       });
+      Object.defineProperty(fn, "__quickjsRustDynamicFunctionRealm", {
+        value: __quickjsRustRealmGlobal
+      });
       Object.defineProperty(fn, "__quickjsRustRealmArrayPrototype", {
         value: crossRealmArray.prototype
       });
@@ -680,11 +683,25 @@ var $262 = {
     __quickjsRustRealmGlobal.ReferenceError = crossRealmNativeErrors.ReferenceError;
     __quickjsRustRealmGlobal.SyntaxError = crossRealmNativeErrors.SyntaxError;
     __quickjsRustRealmGlobal.TypeError = crossRealmNativeErrors.TypeError;
+    Object.defineProperty(__quickjsRustRealmGlobal, "TypeError", {
+      value: crossRealmNativeErrors.TypeError,
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
     __quickjsRustRealmGlobal.URIError = crossRealmNativeErrors.URIError;
     __quickjsRustRealmGlobal.SuppressedError = crossRealmNativeErrors.SuppressedError;
     __quickjsRustRealmGlobal.globalThis = __quickjsRustRealmGlobal;
     __quickjsRustRealmGlobal.eval = function(source) {
-      var value = (0, eval)(source);
+      var previousRealm = __quickjsRustDynamicFunctionRealm;
+      __quickjsRustDynamicFunctionRealm = __quickjsRustRealmGlobal;
+      globalThis.__quickjsRustDynamicFunctionRealm = __quickjsRustRealmGlobal;
+      try {
+        var value = (0, eval)(source);
+      } finally {
+        __quickjsRustDynamicFunctionRealm = previousRealm;
+        globalThis.__quickjsRustDynamicFunctionRealm = previousRealm;
+      }
       if (typeof value === "function") {
         Object.defineProperty(value, "__quickjsRustRealmTypeErrorPrototype", {
           value: crossRealmNativeErrorPrototypes.TypeError

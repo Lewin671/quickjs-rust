@@ -35,6 +35,7 @@ const CROSS_REALM_URI_ERROR_PROTOTYPE: &str = "__quickjsRustRealmURIErrorPrototy
 const CROSS_REALM_AGGREGATE_ERROR_PROTOTYPE: &str = "__quickjsRustRealmAggregateErrorPrototype";
 const CROSS_REALM_SUPPRESSED_ERROR_PROTOTYPE: &str = "__quickjsRustRealmSuppressedErrorPrototype";
 const CROSS_REALM_ITERATOR_PROTOTYPE: &str = "__quickjsRustRealmIteratorPrototype";
+const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
 pub(crate) fn call_function(
     callee: Value,
@@ -869,6 +870,7 @@ fn function_env(
         function_capture_names.retain(|capture| capture != name);
         caller_binding_names.retain(|binding| binding != name);
     }
+    insert_marked_call_realm(function, &mut local_env);
     let mut frame_env = env.with_frame_locals(local_env);
     if function.immutable_name_binding
         && let Some(name) = &function.name
@@ -895,6 +897,29 @@ fn function_env(
         env: frame_env,
         function_capture_names,
         caller_binding_names,
+    }
+}
+
+fn insert_marked_call_realm(function: &Function, local_env: &mut HashMap<String, Value>) {
+    let Some(crate::Property {
+        value: Value::Object(global),
+        ..
+    }) = function.own_property(DYNAMIC_FUNCTION_REALM_GLOBAL)
+    else {
+        return;
+    };
+    local_env.insert(
+        DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
+        Value::Object(global.clone()),
+    );
+    local_env.insert(
+        GLOBAL_THIS_BINDING.to_owned(),
+        Value::Object(global.clone()),
+    );
+    for name in global.own_property_names() {
+        if let Some(property) = global.own_property(&name) {
+            local_env.insert(name, property.value);
+        }
     }
 }
 
