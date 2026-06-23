@@ -8,8 +8,8 @@ use crate::{
 };
 
 use super::compiler_lexical::{
-    catch_param_annex_b_blocked_names, function_body_annex_b_blocked_names, function_param_names,
-    lexical_declared_names, switch_lexical_declared_names,
+    catch_param_annex_b_blocked_names, for_init_lexical_names, function_body_annex_b_blocked_names,
+    function_param_names, lexical_declared_names, switch_lexical_declared_names,
 };
 use super::compiler_try::{block_has_await_using, block_has_using};
 use super::ir::{Bytecode, Local, Op};
@@ -383,7 +383,12 @@ impl Compiler {
                             }
                         }
                     }
-                    self.collect_hoisted_locals(std::slice::from_ref(body), true);
+                    let blocked = init.as_ref().map_or_else(Vec::new, for_init_lexical_names);
+                    self.with_annex_b_blocked_function_names(&blocked, |compiler| {
+                        compiler.collect_hoisted_locals(std::slice::from_ref(body), true);
+                        Ok(())
+                    })
+                    .expect("hoisted local collection should not fail");
                 }
                 Stmt::ForIn { left, body, .. } | Stmt::ForOf { left, body, .. } => {
                     if let ForInLeft::VarDecl {

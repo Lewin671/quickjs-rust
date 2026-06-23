@@ -189,11 +189,16 @@ impl Compiler {
         if for_init_has_using(init) {
             return self.compile_for_with_disposal(init, test, update, body);
         }
+        let mut init_created_closure = false;
         if let Some(init) = init {
+            let init_start = self.code.len();
             self.compile_for_init(init)?;
+            init_created_closure = self.code[init_start..]
+                .iter()
+                .any(|op| matches!(op, Op::NewFunction { .. } | Op::NewClass { .. }));
             self.emit(Op::Pop);
         }
-        self.compile_for_loop_after_init(init, test, update, body)
+        self.compile_for_loop_after_init(init, test, update, body, init_created_closure)
     }
 
     fn compile_for_with_disposal(
@@ -216,10 +221,30 @@ impl Compiler {
         self.disposable_scope_depth += 1;
         let body_result = (|| {
             if let Some(init) = init {
+                let init_start = self.code.len();
                 self.compile_for_init(init)?;
+                let init_created_closure = self.code[init_start..]
+                    .iter()
+                    .any(|op| matches!(op, Op::NewFunction { .. } | Op::NewClass { .. }));
                 self.emit(Op::Pop);
+                self.compile_for_loop_after_init_with_result(
+                    Some(init),
+                    test,
+                    update,
+                    body,
+                    result_slot,
+                    init_created_closure,
+                )
+            } else {
+                self.compile_for_loop_after_init_with_result(
+                    init,
+                    test,
+                    update,
+                    body,
+                    result_slot,
+                    false,
+                )
             }
-            self.compile_for_loop_after_init_with_result(init, test, update, body, result_slot)
         })();
         self.disposable_scope_depth -= 1;
         body_result?;
@@ -241,11 +266,19 @@ impl Compiler {
         test: Option<&Expr>,
         update: Option<&Expr>,
         body: &Stmt,
+        init_created_closure: bool,
     ) -> Result<(), RuntimeError> {
         let result_slot = self.temp_local("loop_result");
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(result_slot));
-        self.compile_for_loop_after_init_with_result(init, test, update, body, result_slot)
+        self.compile_for_loop_after_init_with_result(
+            init,
+            test,
+            update,
+            body,
+            result_slot,
+            init_created_closure,
+        )
     }
 
     fn compile_for_loop_after_init_with_result(
@@ -255,6 +288,7 @@ impl Compiler {
         update: Option<&Expr>,
         body: &Stmt,
         result_slot: usize,
+        init_created_closure: bool,
     ) -> Result<(), RuntimeError> {
         let blocked = init.map_or_else(Vec::new, for_init_lexical_names);
         let iteration_slots: Vec<usize> = if matches!(
@@ -271,7 +305,7 @@ impl Compiler {
         } else {
             Vec::new()
         };
-        if !iteration_slots.is_empty() {
+        if !iteration_slots.is_empty() && init_created_closure {
             // `for (let ...; test; update)` creates the first per-iteration
             // environment after evaluating the initializer and before the
             // first test/body evaluation. Closures created by the initializer

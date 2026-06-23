@@ -300,6 +300,44 @@ fn for_let_initializer_closure_keeps_initial_iteration_environment() {
 }
 
 #[test]
+fn for_let_head_blocks_annex_b_function_hoist() {
+    assert_eq!(
+        eval(
+            "(function () {
+                for (let f; ; ) {
+                    { function f() {} }
+                    break;
+                }
+                try {
+                    (function () { f; }());
+                } catch (error) {
+                    return error.name + ':' + typeof f;
+                }
+                return 'leaked';
+             }());"
+        ),
+        Ok(Value::String("ReferenceError:undefined".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "(function () {
+                for (let f; ; ) {
+                    { function f() {} }
+                    break;
+                }
+                try {
+                    f;
+                } catch (error) {
+                    return error.name + ':' + typeof f;
+                }
+                return 'leaked';
+             }());"
+        ),
+        Ok(Value::String("ReferenceError:undefined".to_owned().into()))
+    );
+}
+
+#[test]
 fn sibling_closure_mutation_observes_latest_var_binding() {
     assert_eq!(
         eval(
