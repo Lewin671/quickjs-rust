@@ -117,6 +117,77 @@ fn detached_typed_array_numeric_delete_succeeds() {
 }
 
 #[test]
+fn typed_array_numeric_delete_uses_integer_indexed_semantics() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([3]); \
+             Object.defineProperty(Uint8Array.prototype, '0', { \
+               get() { throw 'prototype getter should not run'; }, configurable: true \
+             }); \
+             let valid = delete a[0]; \
+             let out = delete a[1]; \
+             let minusZero = delete a['-0']; \
+             delete Uint8Array.prototype[0]; \
+             valid + ':' + out + ':' + minusZero + ':' + a[0];"
+        ),
+        Ok(Value::String("false:true:true:3".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new BigInt64Array([3n]); \
+             let valid = Reflect.deleteProperty(a, '0'); \
+             let out = Reflect.deleteProperty(a, '1'); \
+             valid + ':' + out + ':' + a[0];"
+        ),
+        Ok(Value::String("false:true:3".to_owned().into()))
+    );
+}
+
+#[test]
+fn typed_array_prototype_chain_set_writes_receiver_property() {
+    assert_eq!(
+        eval(
+            "let calls = 0; \
+             let value = { valueOf() { calls += 1; return 7; } }; \
+             Object.defineProperty(Uint8Array.prototype, '0', { \
+               get() { throw 'getter should not run'; }, \
+               set() { throw 'setter should not run'; }, \
+               configurable: true \
+             }); \
+             let target = new Uint8Array([0]); \
+             let receiver = Object.create(target); \
+             receiver[0] = value; \
+             let arrayReceiver = Object.setPrototypeOf([], target); \
+             arrayReceiver[0] = value; \
+             delete Uint8Array.prototype[0]; \
+             target[0] + ':' + (receiver[0] === value) + ':' \
+             + (arrayReceiver[0] === value) + ':' + arrayReceiver.length + ':' + calls;"
+        ),
+        Ok(Value::String("0:true:true:1:0".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; \
+             let value = { valueOf() { calls += 1; return 7n; } }; \
+             Object.defineProperty(BigInt64Array.prototype, '0', { \
+               get() { throw 'getter should not run'; }, \
+               set() { throw 'setter should not run'; }, \
+               configurable: true \
+             }); \
+             let target = new BigInt64Array([0n]); \
+             let receiver = Object.create(target); \
+             receiver[0] = value; \
+             let arrayReceiver = Object.setPrototypeOf([], target); \
+             arrayReceiver[0] = value; \
+             delete BigInt64Array.prototype[0]; \
+             target[0] + ':' + (receiver[0] === value) + ':' \
+             + (arrayReceiver[0] === value) + ':' + arrayReceiver.length + ':' + calls;"
+        ),
+        Ok(Value::String("0:true:true:1:0".to_owned().into()))
+    );
+}
+
+#[test]
 fn own_property_descriptor_uses_current_indexed_element_state() {
     assert_eq!(
         eval(

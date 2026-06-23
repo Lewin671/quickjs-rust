@@ -68,7 +68,9 @@ pub(crate) fn set_property(
                         elements
                             .prototype_override()
                             .unwrap_or_else(|| array_prototype(env))
-                            .and_then(|prototype| prototype.property(&key))
+                            .and_then(|prototype| {
+                                ordinary_chain_property(&prototype, &key).ok().flatten()
+                            })
                     }
                 };
                 match apply_set_step(property, receiver, value.clone(), env)? {

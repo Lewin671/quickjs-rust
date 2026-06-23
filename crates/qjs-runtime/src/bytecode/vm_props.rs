@@ -509,6 +509,12 @@ pub(super) fn ordinary_chain_property(
 ) -> Result<Option<Property>, ProxyInChain> {
     let mut current = object.clone();
     loop {
+        if crate::typed_array::is_typed_array_object(&current)
+            && let Some(property) =
+                crate::typed_array::typed_array_own_property_descriptor(&current, key)
+        {
+            return Ok(Some(property));
+        }
         if let Some(property) = current.own_property(key) {
             return Ok(Some(property));
         }
