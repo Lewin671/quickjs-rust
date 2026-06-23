@@ -343,6 +343,15 @@ impl Vm<'_> {
             {
                 continue;
             }
+            if self.in_parameter_prologue()
+                && self.env.locals().contains_key(&format!(
+                    "{}{}",
+                    crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
+                    name
+                ))
+            {
+                continue;
+            }
             if let Some(index) = self.bytecode.local_slot(name)
                 && !self.bytecode.local_is_parameter(index)
                 && !self.bytecode.local_is_body_hoist_only(index)

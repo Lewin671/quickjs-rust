@@ -861,6 +861,52 @@ fn direct_eval_allows_arrow_body_arguments_binding() {
 }
 
 #[test]
+fn sloppy_parameter_eval_var_updates_parameter_closures() {
+    assert_eq!(
+        eval(
+            "var scriptArgs = ['-e']; \
+             var x = 'outside'; \
+             var probe1, probe2, probeBody; \
+             (function( \
+               _ = (eval('var x = \"inside\";'), probe1 = function() { return x; }), \
+               __ = probe2 = function() { return x; } \
+             ) { \
+               probeBody = function() { return x; }; \
+             }()); \
+             x + ':' + probe1() + ':' + probe2() + ':' + probeBody();"
+        ),
+        Ok(Value::String(
+            "outside:inside:inside:inside".to_owned().into()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "var x = 'outside'; \
+             var probe1, probe2; \
+             (( \
+               _ = probe1 = function() { return x; }, \
+               ...[__ = (eval('var x = \"inside\";'), probe2 = function() { return x; })] \
+             ) => {})(); \
+             x + ':' + probe1() + ':' + probe2();"
+        ),
+        Ok(Value::String("outside:inside:inside".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var x = 'outside'; \
+             var probe1, probe2; \
+             function* g( \
+               _ = (eval('var x = \"inside\";'), probe1 = function() { return x; }), \
+               __ = probe2 = function() { return x; } \
+             ) {} \
+             g().next(); \
+             x + ':' + probe1() + ':' + probe2();"
+        ),
+        Ok(Value::String("outside:inside:inside".to_owned().into()))
+    );
+}
+
+#[test]
 fn direct_eval_rejects_return_even_inside_function() {
     assert_eq!(
         eval("try { eval('return;'); false; } catch (error) { error instanceof SyntaxError; }"),

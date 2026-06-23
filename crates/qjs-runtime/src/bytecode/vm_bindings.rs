@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::{
@@ -1268,7 +1268,18 @@ impl Vm<'_> {
         // internal/caller-scope binding layer, or (for a genuinely new binding)
         // to the shared realm.
         let locals = env.into_locals();
+        let direct_parameter_eval_vars = locals
+            .keys()
+            .filter_map(|name| {
+                name.strip_prefix(crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX)
+                    .map(str::to_owned)
+            })
+            .collect::<HashSet<_>>();
         for (name, value) in locals {
+            if name.starts_with(crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX) {
+                self.env.insert(name, value);
+                continue;
+            }
             if let Some(index) = self.bytecode.local_slot(&name) {
                 // `frame_call_env` also exposes an active shadowing block-lexical
                 // (stored under a mangled `\0lexical:<name>:<slot>` key) under its
@@ -1281,6 +1292,10 @@ impl Vm<'_> {
                 if super::vm::unmangle_lexical_storage_name(&name).is_none()
                     && self.active_shadowing_lexical_slot(&name, index)
                 {
+                    continue;
+                }
+                if self.in_parameter_prologue() && direct_parameter_eval_vars.contains(&name) {
+                    self.env.insert(name, value);
                     continue;
                 }
                 if self.in_parameter_prologue()
@@ -1320,7 +1335,11 @@ impl Vm<'_> {
                     self.env.insert(name.clone(), value.clone());
                     self.write_through_captured(&name, value);
                 }
-            } else if self.env.locals().contains_key(&name) {
+            } else if self.env.locals().contains_key(&name)
+                || (self.in_parameter_prologue()
+                    && !is_call_frame_binding(&name)
+                    && !is_compiler_temporary(&name))
+            {
                 self.env.insert(name, value);
             } else if self.realm.borrow().contains_key(&name) {
                 // Already a realm binding (shared cell) — leave it; a mutation

@@ -93,6 +93,7 @@ pub(crate) const DIRECT_EVAL_ARGUMENTS_BINDING: &str = "\0\0direct_eval_argument
 /// Instantiation SyntaxError) — a body-scope direct eval does not.
 pub(crate) const DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING: &str =
     "\0\0direct_eval_in_parameter_scope";
+pub(crate) const DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX: &str = "\0\0direct_eval_parameter_var:";
 pub(crate) const DIRECT_EVAL_FUNCTION_CONTEXT_BINDING: &str = "\0\0direct_eval_function_context";
 /// Per-frame marker used by direct eval to apply class-field-initializer early
 /// errors.

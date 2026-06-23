@@ -159,6 +159,13 @@ impl Vm<'_> {
             {
                 continue;
             }
+            if self.env.locals().contains_key(&format!(
+                "{}{}",
+                crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
+                name
+            )) {
+                continue;
+            }
             if self.env.locals().contains_key(name) {
                 self.env.insert(name.clone(), value.clone());
             }
@@ -377,6 +384,13 @@ fn refresh_activation_captures_from_realm(vm: &mut Vm<'_>) {
             .local_slot(&name)
             .is_some_and(|slot| vm.bytecode.local_is_parameter(slot))
         {
+            continue;
+        }
+        if vm.env.locals().contains_key(&format!(
+            "{}{}",
+            crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
+            name
+        )) {
             continue;
         }
         let Some(value) = vm.realm.borrow().get(&name).cloned() else {

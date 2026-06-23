@@ -249,6 +249,11 @@ pub(super) fn native_global_eval(
         env.indirect_eval_frame()
     };
     let direct_function_eval = direct_eval && eval_env.get_local("this").is_some();
+    let direct_parameter_eval = direct_function_eval
+        && matches!(
+            eval_env.get(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING),
+            Some(Value::Boolean(true))
+        );
     // Direct eval inside strict code is itself strict even without its own
     // "use strict" prologue; seed the compiler so Annex B block-function
     // hoisting is correctly suppressed. Indirect eval is sloppy unless its own
@@ -331,6 +336,7 @@ pub(super) fn native_global_eval(
         &bytecode,
         &mut eval_env,
         direct_function_eval,
+        direct_parameter_eval,
         &caller_locals,
         eval_strict,
     );
@@ -360,7 +366,18 @@ pub(super) fn native_global_eval(
                 }
                 continue;
             }
-            if caller_locals.contains(name) {
+            if direct_parameter_eval && hoisted_names.contains(name) && !eval_strict {
+                eval_env.insert(name.to_owned(), value.clone());
+                eval_env.insert(
+                    format!(
+                        "{}{}",
+                        crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
+                        name
+                    ),
+                    Value::Boolean(true),
+                );
+                update_direct_eval_captured_functions(&mut eval_env, name, value.clone());
+            } else if caller_locals.contains(name) {
                 // A caller frame binding (an outer `let`/`var` the eval'd code
                 // assigned): write it back through the frame so the caller's
                 // slot sees the update.
@@ -719,6 +736,7 @@ fn initialize_direct_eval_bindings(
     bytecode: &crate::bytecode::Bytecode,
     env: &mut CallEnv,
     direct_function_eval: bool,
+    direct_parameter_eval: bool,
     caller_locals: &HashSet<String>,
     eval_strict: bool,
 ) {
@@ -728,7 +746,7 @@ fn initialize_direct_eval_bindings(
         env.insert("this".to_owned(), value);
     }
     for name in bytecode.hoisted_local_names() {
-        if !eval_strict && caller_locals.contains(name) {
+        if !eval_strict && caller_locals.contains(name) && !direct_parameter_eval {
             continue;
         }
         if eval_strict {
@@ -736,7 +754,7 @@ fn initialize_direct_eval_bindings(
             continue;
         }
         if direct_function_eval {
-            if !env.locals().contains_key(name) {
+            if direct_parameter_eval || !env.locals().contains_key(name) {
                 env.insert(name.to_owned(), Value::Undefined);
             }
             continue;
