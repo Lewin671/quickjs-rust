@@ -32,6 +32,12 @@ fn evaluates_string_constructor_and_statics() {
         Ok(Value::Number(65535.0))
     );
     assert_eq!(
+        eval(
+            "let value = String.fromCharCode('0x41', true, null, undefined); value.charCodeAt(0) + ':' + value.charCodeAt(1) + ':' + value.charCodeAt(2) + ':' + value.charCodeAt(3);"
+        ),
+        Ok(Value::String("65:1:0:0".to_owned().into()))
+    );
+    assert_eq!(
         eval("String.fromCharCode(0xd800, 0xdc00).charCodeAt(0);"),
         Ok(Value::Number(55296.0))
     );

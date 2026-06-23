@@ -543,6 +543,9 @@ pub(super) fn native_global_eval(
     if let Some(value) = try_eval_regexp_literal_source(&source, env)? {
         return Ok(value);
     }
+    if eval_source_is_only_comments_and_whitespace(&source) {
+        return Ok(Value::Undefined);
+    }
     let script = if direct_eval {
         parse_direct_eval_script(&source, direct_eval_parse_context(env))
     } else {
@@ -720,6 +723,67 @@ pub(super) fn native_global_eval(
         *env = strict_direct_writeback_env.unwrap_or(eval_env);
     }
     result.value
+}
+
+pub(crate) fn eval_source_is_only_comments_and_whitespace(source: &str) -> bool {
+    let mut index = 0;
+    while index < source.len() {
+        let Some(ch) = source[index..].chars().next() else {
+            break;
+        };
+        if is_js_whitespace_or_line_terminator(ch) {
+            index += ch.len_utf8();
+            continue;
+        }
+        let rest = &source[index..];
+        if let Some(line_comment) = rest.strip_prefix("//") {
+            return !line_comment.chars().any(is_js_line_terminator);
+        }
+        if let Some(block_comment) = rest.strip_prefix("/*") {
+            let Some(close) = block_comment.find("*/") else {
+                return false;
+            };
+            index += 2 + close + 2;
+            continue;
+        }
+        return false;
+    }
+    true
+}
+
+fn is_js_whitespace_or_line_terminator(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{0009}'
+            | '\u{000B}'
+            | '\u{000C}'
+            | '\u{0020}'
+            | '\u{00A0}'
+            | '\u{FEFF}'
+            | '\u{1680}'
+            | '\u{2000}'
+            | '\u{2001}'
+            | '\u{2002}'
+            | '\u{2003}'
+            | '\u{2004}'
+            | '\u{2005}'
+            | '\u{2006}'
+            | '\u{2007}'
+            | '\u{2008}'
+            | '\u{2009}'
+            | '\u{200A}'
+            | '\u{202F}'
+            | '\u{205F}'
+            | '\u{3000}'
+            | '\u{000A}'
+            | '\u{000D}'
+            | '\u{2028}'
+            | '\u{2029}'
+    )
+}
+
+fn is_js_line_terminator(ch: char) -> bool {
+    matches!(ch, '\u{000A}' | '\u{000D}' | '\u{2028}' | '\u{2029}')
 }
 
 fn indirect_eval_frame(env: &CallEnv) -> CallEnv {

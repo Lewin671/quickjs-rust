@@ -325,15 +325,8 @@ pub(super) fn try_fast_global_native_call(
             result.map(|s| Value::String(s.into()))
         }
         NativeFunction::StringFromCharCode => {
-            if !arguments
-                .iter()
-                .all(|value| matches!(value, Value::Number(_)))
-            {
-                return None;
-            }
-            Ok(Value::String(
-                fast_string_from_char_code_numbers(arguments).into(),
-            ))
+            let result = fast_string_from_char_code_primitives(arguments)?;
+            result.map(|s| Value::String(s.into()))
         }
         NativeFunction::ParseInt => {
             let source = match arguments.first().cloned().unwrap_or(Value::Undefined) {
@@ -362,6 +355,9 @@ pub(super) fn try_fast_global_native_call(
             let Some(Value::String(source)) = arguments.first() else {
                 return None;
             };
+            if crate::global::eval_source_is_only_comments_and_whitespace(source) {
+                return Some(Ok(Value::Undefined));
+            }
             match crate::global::try_eval_regexp_literal_source(source, realm_env) {
                 Ok(Some(value)) => Ok(value),
                 Ok(None) => return None,
@@ -419,6 +415,50 @@ fn fast_string_from_char_code_numbers(arguments: &[Value]) -> String {
         crate::string::push_code_unit(&mut result, code_unit);
     }
     result
+}
+
+fn fast_string_from_char_code_primitives(
+    arguments: &[Value],
+) -> Option<Result<String, RuntimeError>> {
+    if arguments
+        .iter()
+        .all(|value| matches!(value, Value::Number(_)))
+    {
+        return Some(Ok(fast_string_from_char_code_numbers(arguments)));
+    }
+
+    let mut result = String::with_capacity(arguments.len());
+    for value in arguments {
+        let number = match value {
+            Value::Number(number) => *number,
+            Value::String(source) => match crate::conversion::string_to_number(source) {
+                Ok(number) => number,
+                Err(error) => return Some(Err(error)),
+            },
+            Value::Boolean(true) => 1.0,
+            Value::Boolean(false) | Value::Null => 0.0,
+            Value::Undefined => f64::NAN,
+            Value::BigInt(_) => {
+                return Some(Err(RuntimeError {
+                    thrown: None,
+                    message: "TypeError: cannot convert BigInt to number".to_owned(),
+                }));
+            }
+            Value::Object(_)
+            | Value::Function(_)
+            | Value::Array(_)
+            | Value::Map(_)
+            | Value::Set(_)
+            | Value::Proxy(_) => return None,
+        };
+        let code_unit = if number.is_finite() && number != 0.0 {
+            number.trunc().rem_euclid(65_536.0) as u16
+        } else {
+            0
+        };
+        crate::string::push_code_unit(&mut result, code_unit);
+    }
+    Some(Ok(result))
 }
 
 fn insert_binding(

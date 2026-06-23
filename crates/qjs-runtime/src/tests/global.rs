@@ -82,6 +82,27 @@ fn evaluates_global_undefined_binding() {
 }
 
 #[test]
+fn eval_comment_only_sources_return_undefined() {
+    assert_eq!(eval("eval('// comment only');"), Ok(Value::Undefined));
+    assert_eq!(
+        eval("eval('/* comment\\nonly */ /* second */');"),
+        Ok(Value::Undefined)
+    );
+}
+
+#[test]
+fn eval_line_comment_with_line_terminator_still_evaluates_tail() {
+    assert_eq!(
+        eval("var yy = 0; eval('// ignored\\nyy = -1'); yy;"),
+        Ok(Value::Number(-1.0))
+    );
+    assert_eq!(
+        eval("var yy = 0; eval('// ignored\\u2028yy = -1'); yy;"),
+        Ok(Value::Number(-1.0))
+    );
+}
+
+#[test]
 fn global_nan_is_non_writable() {
     // Sloppy mode: assignment silently fails, NaN remains a number.
     assert_eq!(

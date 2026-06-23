@@ -114,7 +114,7 @@ pub(crate) fn to_primitive_with_env(
     }
 }
 
-fn string_to_number(value: &str) -> Result<f64, RuntimeError> {
+pub(crate) fn string_to_number(value: &str) -> Result<f64, RuntimeError> {
     let trimmed = value.trim_matches(is_ecmascript_trim_code_point);
     if trimmed.is_empty() {
         return Ok(0.0);
