@@ -20,7 +20,10 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    bytecode::{GeneratorOutcome, GeneratorStart, GeneratorState, Resume, resume_generator},
+    bytecode::{
+        GeneratorOutcome, GeneratorStart, GeneratorState, Resume, is_suspended_at_plain_yield,
+        resume_generator,
+    },
     call_function, function_constructor_as_prototype_slot, function_intrinsic_prototype_slot,
     is_truthy, object_prototype, promise, property_value, symbol,
 };
@@ -329,6 +332,13 @@ fn drain(generator: &ObjectRef, env: &mut CallEnv) {
             set_draining(generator, false);
             return;
         };
+        if matches!(resume, Resume::Return(_))
+            && is_suspended_at_plain_yield(generator)
+            && let Resume::Return(value) = resume
+        {
+            schedule_return_resume_await(generator, value, env);
+            return;
+        }
         match resume_generator(generator, resume, env) {
             Ok(GeneratorOutcome::Await(awaited)) => {
                 schedule_internal_await(generator, awaited, env);
@@ -487,6 +497,21 @@ fn schedule_yield_await(generator: &ObjectRef, value: Value, env: &mut CallEnv) 
     promise::perform_await(value, on_fulfilled, on_rejected, env);
 }
 
+/// Schedules the await that precedes resuming a suspended async generator for a
+/// `.return(value)` request. A rejected await is thrown at the suspended `yield`
+/// site so the generator body can catch it.
+fn schedule_return_resume_await(generator: &ObjectRef, value: Value, env: &mut CallEnv) {
+    let on_fulfilled = reaction(
+        NativeFunction::AsyncGeneratorReturnResumeFulfilled,
+        generator,
+    );
+    let on_rejected = reaction(
+        NativeFunction::AsyncGeneratorReturnResumeRejected,
+        generator,
+    );
+    promise::perform_await(value, on_fulfilled, on_rejected, env);
+}
+
 /// Schedules the `AsyncGeneratorResolve(..., done = true)` unwrapping step.
 /// The front request remains queued until the fulfillment/rejection reaction
 /// settles it, preserving request order while `return(value)` awaits `value`.
@@ -545,6 +570,22 @@ pub(crate) fn call_async_generator_reaction(
             };
             let generator = generator.clone();
             // The implicit yield await rejected: throw at the yield site.
+            resume_body(&generator, Resume::Throw(value), env);
+            Ok(Some(Value::Undefined))
+        }
+        NativeFunction::AsyncGeneratorReturnResumeFulfilled => {
+            let Some(Value::Object(generator)) = function.env.get(ASYNC_GEN) else {
+                return Ok(None);
+            };
+            let generator = generator.clone();
+            resume_body(&generator, Resume::Return(value), env);
+            Ok(Some(Value::Undefined))
+        }
+        NativeFunction::AsyncGeneratorReturnResumeRejected => {
+            let Some(Value::Object(generator)) = function.env.get(ASYNC_GEN) else {
+                return Ok(None);
+            };
+            let generator = generator.clone();
             resume_body(&generator, Resume::Throw(value), env);
             Ok(Some(Value::Undefined))
         }

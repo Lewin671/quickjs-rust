@@ -581,6 +581,35 @@ fn return_before_start_rejects_broken_promise_resolve() {
 }
 
 #[test]
+fn return_at_suspended_yield_rejection_is_catchable() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             var caught; \
+             async function* g() { \
+               try { \
+                 yield; \
+                 return 'unreachable'; \
+               } catch (error) { \
+                 caught = error.message; \
+                 return 1; \
+               } \
+             } \
+             var promise = Promise.resolve(42); \
+             Object.defineProperty(promise, 'constructor', { get: function() { throw new Error('broken promise'); } }); \
+             var it = g(); \
+             it.next().then(function() { return it.return(promise); }).then(function(result) { \
+               o.push(caught); \
+               o.push(result.value); \
+               o.push(result.done); \
+             }); \
+             o;"
+        ),
+        "broken promise,1,true"
+    );
+}
+
+#[test]
 fn completed_return_undefined_settles_after_promise_jobs() {
     assert_eq!(
         eval_log(

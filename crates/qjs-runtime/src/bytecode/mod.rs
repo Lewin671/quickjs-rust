@@ -47,8 +47,8 @@ use crate::{RuntimeError, Value};
 pub use ir::Bytecode;
 pub(crate) use vm_class::install_field_value;
 pub(crate) use vm_generator::{
-    CaptureWriteback, GeneratorOutcome, GeneratorStart, GeneratorState, Resume, resume_generator,
-    start_suspended_at_body,
+    CaptureWriteback, GeneratorOutcome, GeneratorStart, GeneratorState, Resume,
+    is_suspended_at_plain_yield, resume_generator, start_suspended_at_body,
 };
 pub(crate) use vm_iter::sync_iterator_for_value;
 pub(crate) use vm_private::apply_instance_private_element;

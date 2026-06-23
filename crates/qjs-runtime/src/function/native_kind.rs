@@ -347,6 +347,13 @@ pub(crate) enum NativeFunction {
     /// Rejection reaction for a `yield`'s implicit operand await: resumes the
     /// body with a throw at the yield site (per AsyncGeneratorYield).
     AsyncGeneratorYieldRejected,
+    /// Fulfillment reaction for `.return(value)` while an async generator is
+    /// suspended at a plain `yield`: resumes with a return completion.
+    AsyncGeneratorReturnResumeFulfilled,
+    /// Rejection reaction for `.return(value)` while an async generator is
+    /// suspended at a plain `yield`: resumes with a throw completion at the
+    /// yield site.
+    AsyncGeneratorReturnResumeRejected,
     /// Fulfillment reaction for a completed async-generator `return(value)`:
     /// resolves the front request with `{ value, done: true }` after unwrapping.
     AsyncGeneratorReturnFulfilled,

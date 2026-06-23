@@ -120,6 +120,15 @@ pub(crate) enum GeneratorOutcome {
     ReturnAlreadyAwaited(Value),
 }
 
+pub(crate) fn is_suspended_at_plain_yield(generator: &ObjectRef) -> bool {
+    let slot = generator.generator_state().borrow();
+    matches!(
+        slot.as_ref(),
+        Some(GeneratorState::SuspendedYield(snapshot))
+            if matches!(snapshot.suspension, SuspensionKind::Ordinary)
+    )
+}
+
 impl Vm<'_> {
     /// Propagates the body's final values for bindings it shares with the
     /// resuming caller back into the caller's environment, so a generator that
