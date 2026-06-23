@@ -93,6 +93,7 @@ pub struct Function {
     pub(crate) module_imports: ModuleImports,
     pub(crate) with_stack: Vec<Value>,
     pub(crate) capture_writeback: Option<CaptureWriteback>,
+    pub(crate) global_capture_names: Vec<String>,
     pub(crate) upvalues: Vec<Upvalue>,
     pub(crate) local_names: Vec<String>,
     pub(crate) bytecode: Option<Rc<Bytecode>>,
@@ -185,6 +186,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
     pub(crate) with_stack: Vec<Value>,
     pub(crate) capture_writeback: Option<CaptureWriteback>,
+    pub(crate) global_capture_names: Vec<String>,
     pub(crate) upvalues: Vec<Upvalue>,
 }
 
@@ -298,6 +300,7 @@ impl Function {
             module_imports: HashMap::new(),
             with_stack: Vec::new(),
             capture_writeback: None,
+            global_capture_names: Vec::new(),
             upvalues: Vec::new(),
             local_names,
             bytecode: Some(bytecode),
@@ -367,6 +370,7 @@ impl Function {
             captured_env,
             with_stack,
             capture_writeback,
+            global_capture_names,
             upvalues,
         } = compiled;
         let prototype = ObjectRef::with_prototype(
@@ -385,6 +389,7 @@ impl Function {
             module_imports,
             with_stack,
             capture_writeback,
+            global_capture_names,
             upvalues,
             local_names,
             bytecode: Some(bytecode),
@@ -502,6 +507,7 @@ impl Function {
             module_imports: HashMap::new(),
             with_stack: Vec::new(),
             capture_writeback: None,
+            global_capture_names: Vec::new(),
             upvalues: Vec::new(),
             local_names: Vec::new(),
             bytecode: None,
@@ -559,6 +565,7 @@ impl Function {
             module_imports: HashMap::new(),
             with_stack: Vec::new(),
             capture_writeback: None,
+            global_capture_names: Vec::new(),
             upvalues: Vec::new(),
             local_names: Vec::new(),
             bytecode: None,

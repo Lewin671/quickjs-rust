@@ -412,6 +412,21 @@ fn forwarded_closure_write_is_visible_to_a_later_read_in_the_same_frame() {
 }
 
 #[test]
+fn arrow_created_after_direct_eval_reads_updated_global_fallback() {
+    assert_eq!(
+        eval(
+            "var a; \
+             function foo() { \
+               eval('a = 10'); \
+               return () => a; \
+             } \
+             foo()();"
+        ),
+        Ok(Value::Number(10.0))
+    );
+}
+
+#[test]
 fn for_of_let_body_write_reaches_outer_closure() {
     // A closure created BEFORE a `for (let … of …)` loop captures an outer
     // binding. The loop body reassigns that binding each iteration and then

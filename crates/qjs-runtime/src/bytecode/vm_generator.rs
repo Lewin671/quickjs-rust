@@ -42,6 +42,7 @@ pub(crate) struct GeneratorStart {
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
     pub(crate) upvalues: Vec<crate::function::Upvalue>,
     pub(crate) with_stack: Vec<Value>,
+    pub(crate) immutable_function_name: Option<String>,
     pub(crate) refresh_captured_slots_on_resume: bool,
     pub(crate) capture_writeback: Option<CaptureWriteback>,
 }
@@ -67,6 +68,7 @@ pub(crate) struct GeneratorSnapshot {
     env: CallEnv,
     captured_env: Rc<RefCell<HashMap<String, Value>>>,
     with_stack: Vec<Value>,
+    immutable_function_name: Option<String>,
     refresh_captured_slots_on_resume: bool,
     capture_writeback: Option<CaptureWriteback>,
     sloppy_global_names: Vec<String>,
@@ -180,6 +182,15 @@ impl Vm<'_> {
                 crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
                 name
             )) {
+                continue;
+            }
+            if self.env.is_immutable_function_name(name)
+                || matches!(
+                    (self.env.locals().get(name), self.captured_env.borrow().get(name)),
+                    (Some(Value::Function(local)), Some(Value::Function(captured)))
+                        if local == captured
+                )
+            {
                 continue;
             }
             if self.env.locals().contains_key(name) {
@@ -308,6 +319,7 @@ impl Vm<'_> {
         refresh_captured_slots_on_resume: bool,
         capture_writeback: Option<CaptureWriteback>,
     ) -> GeneratorSnapshot {
+        let immutable_function_name = self.env.immutable_function_name().map(str::to_owned);
         GeneratorSnapshot {
             bytecode,
             ip: self.ip,
@@ -318,6 +330,7 @@ impl Vm<'_> {
             env: self.env,
             captured_env: self.captured_env,
             with_stack: self.with_stack,
+            immutable_function_name,
             refresh_captured_slots_on_resume,
             capture_writeback,
             sloppy_global_names: self.sloppy_global_names,
@@ -346,6 +359,7 @@ pub(crate) fn start_suspended_at_body(
         captured_env,
         upvalues,
         with_stack,
+        immutable_function_name,
         refresh_captured_slots_on_resume,
         capture_writeback,
     } = start;
@@ -356,6 +370,9 @@ pub(crate) fn start_suspended_at_body(
         upvalues,
         with_stack,
     );
+    if let Some(name) = immutable_function_name {
+        vm.env.set_immutable_function_name(name);
+    }
     vm.capture_writeback = capture_writeback.clone();
     vm.stop_at_prologue = true;
     vm.refresh_from_caller(caller_env);
@@ -409,6 +426,13 @@ fn refresh_activation_captures_from_realm(vm: &mut Vm<'_>) {
         )) {
             continue;
         }
+        if let (Some(Value::Function(local_function)), Some(Value::Function(captured_function))) = (
+            vm.env.locals().get(&name),
+            vm.captured_env.borrow().get(&name),
+        ) && local_function == captured_function
+        {
+            continue;
+        }
         let Some(value) = vm.realm.borrow().get(&name).cloned() else {
             continue;
         };
@@ -437,6 +461,7 @@ fn run_from_start(
         captured_env,
         upvalues,
         with_stack,
+        immutable_function_name,
         refresh_captured_slots_on_resume,
         capture_writeback,
     } = start;
@@ -447,6 +472,9 @@ fn run_from_start(
         upvalues,
         with_stack,
     );
+    if let Some(name) = immutable_function_name {
+        vm.env.set_immutable_function_name(name);
+    }
     vm.capture_writeback = capture_writeback.clone();
     vm.refresh_from_caller(caller_env);
     let result = vm.run_completion();
@@ -474,6 +502,9 @@ fn run_from_yield(
         snapshot.upvalues,
         snapshot.with_stack,
     );
+    if let Some(name) = snapshot.immutable_function_name {
+        vm.env.set_immutable_function_name(name);
+    }
     vm.capture_writeback = snapshot.capture_writeback.clone();
     vm.ip = snapshot.ip;
     vm.stack = snapshot.stack;

@@ -168,6 +168,11 @@ pub(crate) fn call_function(
                     captured_env: activation_captured_env,
                     upvalues: function.upvalues.clone(),
                     with_stack: function.with_stack.clone(),
+                    immutable_function_name: function
+                        .immutable_name_binding
+                        .then(|| function.name.clone())
+                        .flatten()
+                        .or_else(|| function.immutable_env_binding.clone()),
                     refresh_captured_slots_on_resume: true,
                     capture_writeback,
                 },
@@ -697,6 +702,7 @@ fn function_env(
         &function.captured_env,
         &mut local_env,
         bytecode,
+        &function.global_capture_names,
         &protected_capture_names,
         env,
     );
@@ -836,6 +842,18 @@ fn function_env(
         function_capture_names.retain(|capture| capture != name);
         caller_binding_names.retain(|binding| binding != name);
     }
+    if let Some(name) = &function.immutable_env_binding {
+        let captured_value = function
+            .env
+            .get(name)
+            .cloned()
+            .or_else(|| function.captured_env.borrow().get(name).cloned());
+        if let Some(value) = captured_value {
+            local_env.insert(name.clone(), value);
+        }
+        function_capture_names.retain(|capture| capture != name);
+        caller_binding_names.retain(|binding| binding != name);
+    }
     let mut frame_env = env.with_frame_locals(local_env);
     if function.immutable_name_binding
         && let Some(name) = &function.name
@@ -922,24 +940,43 @@ fn refresh_written_global_captures_from_caller(
     captured_env: &Rc<RefCell<HashMap<String, Value>>>,
     local_env: &mut HashMap<String, Value>,
     bytecode: &Bytecode,
+    global_capture_names: &[String],
     protected_capture_names: &[String],
     caller_env: &CallEnv,
 ) {
     let written_names = bytecode.closure_written_binding_names();
     let names = local_env.keys().cloned().collect::<Vec<_>>();
     for name in names {
+        let is_written_capture = written_names.iter().any(|written| written == &name);
+        let is_global_capture = global_capture_names
+            .iter()
+            .any(|global_capture| global_capture == &name);
         if protected_capture_names
             .iter()
             .any(|protected| protected == &name)
-            || !written_names.iter().any(|written| written == &name)
+            || (!is_written_capture && !is_global_capture)
             || !captured_global_this_has_own_property(captured_env, &name)
             || !caller_global_this_has_own_property(caller_env, &name)
         {
             continue;
         }
-        if let Some(value) = caller_env.get(&name) {
+        let value = if is_global_capture && !is_written_capture {
+            caller_global_this_value(caller_env, &name)
+                .or_else(|| caller_env.get_realm(&name))
+                .or_else(|| caller_env.get(&name))
+        } else {
+            caller_env.get(&name)
+        };
+        if let Some(value) = value {
             local_env.insert(name, value);
         }
+    }
+}
+
+fn caller_global_this_value(caller_env: &CallEnv, name: &str) -> Option<Value> {
+    match caller_env.get(GLOBAL_THIS_BINDING) {
+        Some(Value::Object(global)) => global.own_property(name).map(|property| property.value),
+        _ => None,
     }
 }
 

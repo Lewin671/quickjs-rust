@@ -61,8 +61,11 @@ impl Vm<'_> {
             None => object_prototype(&self.env).map(crate::Prototype::Object),
         };
 
-        let mut constructor_env =
-            self.function_capture_env(&constructor.bytecode, &constructor.local_names);
+        let (mut constructor_env, constructor_global_capture_names) = self
+            .function_capture_env_with_global_names(
+                &constructor.bytecode,
+                &constructor.local_names,
+            );
         self.insert_lexical_captures(&mut constructor_env, &constructor.lexical_captures);
         self.refresh_captured_env(&constructor_env);
         let constructor_captured = Rc::new(RefCell::new(constructor_env.clone()));
@@ -100,6 +103,7 @@ impl Vm<'_> {
                 &constructor.local_names,
                 name,
             ),
+            global_capture_names: constructor_global_capture_names,
             upvalues: Vec::new(),
         });
 
@@ -329,7 +333,8 @@ impl Vm<'_> {
                     local_names,
                     bytecode,
                 } => {
-                    let mut key_env = self.function_capture_env(bytecode, local_names);
+                    let (mut key_env, key_global_capture_names) =
+                        self.function_capture_env_with_global_names(bytecode, local_names);
                     bind_class_inner_name(&mut key_env, name, constructor_function);
                     let thunk = Function::new_user_compiled(CompiledUserFunction {
                         name: None,
@@ -360,6 +365,7 @@ impl Vm<'_> {
                             local_names,
                             name,
                         ),
+                        global_capture_names: key_global_capture_names,
                         upvalues: Vec::new(),
                     });
                     let this_value = self.env.get("this").unwrap_or(Value::Undefined);
@@ -384,7 +390,8 @@ impl Vm<'_> {
         constructor_function: &Function,
         name: Option<&str>,
     ) -> Result<(), RuntimeError> {
-        let mut method_env = self.function_capture_env(&method.bytecode, &method.local_names);
+        let (mut method_env, method_global_capture_names) =
+            self.function_capture_env_with_global_names(&method.bytecode, &method.local_names);
         self.insert_lexical_captures(&mut method_env, &method.lexical_captures);
         bind_class_inner_name(&mut method_env, name, constructor_function);
         // A method's home object resolves `super.x`: instance methods and
@@ -423,6 +430,7 @@ impl Vm<'_> {
                 &method.local_names,
                 name,
             ),
+            global_capture_names: method_global_capture_names,
             upvalues: self
                 .captured_upvalues_for_function(&method.bytecode, &method.lexical_captures),
         });
@@ -487,7 +495,8 @@ impl Vm<'_> {
             local_names,
             bytecode,
         } = field.initializer.as_ref()?;
-        let mut field_env = self.function_capture_env(bytecode, local_names);
+        let (mut field_env, field_global_capture_names) =
+            self.function_capture_env_with_global_names(bytecode, local_names);
         bind_class_inner_name(&mut field_env, name, constructor_function);
         let home_object = if field.is_static {
             Value::Function(constructor_function.clone())
@@ -519,6 +528,7 @@ impl Vm<'_> {
             captured_env: Rc::new(RefCell::new(field_env)),
             with_stack: self.with_stack.clone(),
             capture_writeback: self.class_member_capture_writeback(bytecode, local_names, name),
+            global_capture_names: field_global_capture_names,
             upvalues: Vec::new(),
         }))
     }
@@ -601,7 +611,8 @@ impl Vm<'_> {
             local_names,
             bytecode,
         } = block;
-        let mut block_env = self.function_capture_env(bytecode, local_names);
+        let (mut block_env, block_global_capture_names) =
+            self.function_capture_env_with_global_names(bytecode, local_names);
         bind_class_inner_name(&mut block_env, name, constructor_function);
         let thunk = Function::new_user_compiled(CompiledUserFunction {
             name: None,
@@ -628,6 +639,7 @@ impl Vm<'_> {
             captured_env: Rc::new(RefCell::new(block_env)),
             with_stack: self.with_stack.clone(),
             capture_writeback: self.class_member_capture_writeback(bytecode, local_names, name),
+            global_capture_names: block_global_capture_names,
             upvalues: Vec::new(),
         });
         self.run_field_initializer(&thunk, Value::Function(constructor_function.clone()))?;

@@ -185,6 +185,7 @@ impl Vm<'_> {
                 &def.local_names,
                 name,
             ),
+            global_capture_names: Vec::new(),
             upvalues: self.captured_upvalues_for_function(&def.bytecode, &def.lexical_captures),
         });
         function.set_source_text(def.source_text.clone());
@@ -245,6 +246,7 @@ impl Vm<'_> {
                 &definition.local_names,
                 name,
             ),
+            global_capture_names: Vec::new(),
             upvalues: Vec::new(),
         })
     }

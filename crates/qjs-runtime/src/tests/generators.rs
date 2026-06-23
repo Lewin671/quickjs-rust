@@ -530,6 +530,32 @@ fn yield_delegation_threads_next_argument_into_inner() {
 }
 
 #[test]
+fn yield_star_delegate_reads_updated_global_done_after_suspend() {
+    assert_eq!(
+        eval(
+            "var quickIter = {}; \
+             var exprValue, nextReceived, done, iter; \
+             quickIter[Symbol.iterator] = function() { \
+               return { \
+                 next: function(x) { \
+                   nextReceived = x; \
+                   return { done: done, value: 3333 }; \
+                 } \
+               }; \
+             }; \
+             function* g() { exprValue = yield * quickIter; } \
+             done = false; \
+             iter = g(); \
+             iter.next(2222); \
+             done = true; \
+             iter.next(5555); \
+             exprValue + ':' + nextReceived;"
+        ),
+        Ok(Value::String("3333:5555".to_owned().into()))
+    );
+}
+
+#[test]
 fn yield_delegation_forwards_throw_into_inner_catch() {
     assert_eq!(
         number(

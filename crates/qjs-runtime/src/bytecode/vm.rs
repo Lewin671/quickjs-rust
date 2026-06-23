@@ -579,7 +579,11 @@ impl<'a> Vm<'a> {
                     is_async,
                     source_text,
                 } => {
-                    let mut env = self.function_capture_env(&bytecode, &local_names);
+                    let (mut env, mut global_capture_names) =
+                        self.function_capture_env_with_global_names(&bytecode, &local_names);
+                    if is_generator {
+                        global_capture_names.clear();
+                    }
                     self.insert_lexical_captures(&mut env, &lexical_captures);
                     let capture_writeback = self.capture_writeback_for_bytecode(
                         &bytecode,
@@ -648,6 +652,7 @@ impl<'a> Vm<'a> {
                         captured_env,
                         with_stack: self.with_stack.clone(),
                         capture_writeback,
+                        global_capture_names,
                         upvalues,
                     });
                     function.set_source_text(source_text);

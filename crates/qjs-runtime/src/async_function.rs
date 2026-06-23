@@ -130,6 +130,11 @@ pub(crate) fn call_async_function(
             captured_env: captured,
             upvalues: function.upvalues.clone(),
             with_stack: function.with_stack.clone(),
+            immutable_function_name: function
+                .immutable_name_binding
+                .then(|| function.name.clone())
+                .flatten()
+                .or_else(|| function.immutable_env_binding.clone()),
             refresh_captured_slots_on_resume: true,
             capture_writeback,
         })));

@@ -1322,7 +1322,10 @@ impl Vm<'_> {
                 } else {
                     value
                 };
-                if self.locals[index].is_some() || self.bytecode.local_is_from_env(index) {
+                if self.locals[index].is_some()
+                    || self.bytecode.local_is_from_env(index)
+                    || syncs_global_this
+                {
                     if self.locals[index]
                         .as_ref()
                         .is_some_and(|current| !is_uninitialized_lexical_value(current))

@@ -70,7 +70,17 @@ impl Vm<'_> {
         function_bytecode: &Bytecode,
         function_local_names: &[String],
     ) -> HashMap<String, Value> {
+        self.function_capture_env_with_global_names(function_bytecode, function_local_names)
+            .0
+    }
+
+    pub(super) fn function_capture_env_with_global_names(
+        &self,
+        function_bytecode: &Bytecode,
+        function_local_names: &[String],
+    ) -> (HashMap<String, Value>, Vec<String>) {
         let mut env = HashMap::with_capacity(function_bytecode.locals.len());
+        let mut global_capture_names = Vec::new();
         // The created function's `env` field is consulted at construction time to
         // resolve its `.prototype`'s `[[Prototype]]` (`object_prototype(env)`),
         // so seed it with the realm intrinsics. This runs only at closure/class
@@ -90,7 +100,11 @@ impl Vm<'_> {
         referenced_names.dedup();
         for name in referenced_names {
             if !binding_is_declared_local(function_bytecode, &name) {
-                self.insert_referenced_binding(&mut env, &name);
+                if function_bytecode.writes_binding(&name) {
+                    self.insert_referenced_binding(&mut env, &name);
+                } else if self.insert_referenced_global_binding(&mut env, &name) {
+                    global_capture_names.push(name);
+                }
             }
         }
         for name in function_bytecode.local_names() {
@@ -98,7 +112,67 @@ impl Vm<'_> {
                 self.insert_referenced_binding(&mut env, name);
             }
         }
-        env
+        (env, global_capture_names)
+    }
+
+    fn insert_referenced_global_binding(
+        &self,
+        env: &mut HashMap<String, Value>,
+        name: &str,
+    ) -> bool {
+        if self.in_parameter_prologue()
+            || name == "this"
+            || name == "arguments"
+            || !self.with_stack.is_empty()
+            || self.env.locals().contains_key(&format!(
+                "{}{}",
+                crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
+                name
+            ))
+        {
+            self.insert_referenced_binding(env, name);
+            return false;
+        }
+        if self.env.is_immutable_function_name(name)
+            && let Some(value) = self.env.locals().get(name).cloned()
+        {
+            env.insert(name.to_owned(), value);
+            return false;
+        }
+        let local_value = self
+            .bytecode
+            .local_slot(name)
+            .filter(|slot| self.bytecode.local_is_body_hoist_only(*slot))
+            .and_then(|_| self.env.locals().get(name).cloned())
+            .or_else(|| self.current_local_binding(name).cloned())
+            .or_else(|| self.env.locals().get(name).cloned());
+        let global_value = self
+            .global_this_property(name)
+            .or_else(|| self.realm.borrow().get(name).cloned());
+        if let Some(value @ Value::Function(_)) = self.captured_env.borrow().get(name).cloned() {
+            env.insert(name.to_owned(), value);
+            return false;
+        }
+        if self.bytecode.local_slot(name).is_none()
+            && let Some(value) = global_value.clone()
+        {
+            env.insert(name.to_owned(), value);
+            return true;
+        }
+        if let Some(value) = local_value {
+            let is_global_snapshot = global_value.as_ref() == Some(&value);
+            env.insert(name.to_owned(), value);
+            return is_global_snapshot;
+        }
+        if let Some(value) = self
+            .global_this_property(name)
+            .or_else(|| self.realm.borrow().get(name).cloned())
+        {
+            env.insert(name.to_owned(), value);
+            return true;
+        }
+        self.insert_referenced_binding(env, name);
+        false
     }
 
     fn insert_referenced_binding(&self, env: &mut HashMap<String, Value>, name: &str) {
@@ -122,6 +196,17 @@ impl Vm<'_> {
                     Value::Function(Function::uninitialized_lexical_marker()),
                 );
             }
+            return;
+        }
+        if self
+            .bytecode
+            .local_slot(name)
+            .is_some_and(|slot| self.bytecode.local_is_sloppy_global_fallback(slot))
+            && let Some(value) = self
+                .global_this_property(name)
+                .or_else(|| self.realm.borrow().get(name).cloned())
+        {
+            env.insert(name.to_owned(), value);
             return;
         }
         let value = self

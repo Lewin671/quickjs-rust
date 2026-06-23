@@ -212,6 +212,7 @@ fn build_dynamic_function(
         captured_env: Rc::new(RefCell::new(env_snapshot)),
         with_stack: Vec::new(),
         capture_writeback: None,
+        global_capture_names: Vec::new(),
         upvalues: Vec::new(),
     });
     Ok(created)

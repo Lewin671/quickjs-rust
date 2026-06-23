@@ -37,22 +37,22 @@ pub(super) fn sync_global_var_captures(
         // closures could have reassigned needs syncing back; skipping the rest
         // avoids deep-cloning constant intrinsic function objects (their entire
         // property map) on every leaf call — the dominant call-path cost.
-        if is_call_frame_binding(name)
-            || !bytecode.writes_binding(name)
-            || !global_this.has_own_property(name)
-        {
+        if is_call_frame_binding(name) || !global_this.has_own_property(name) {
             continue;
         }
-        if global_this
-            .own_property(name)
-            .is_none_or(|property| property.value != *value)
-        {
+        if !bytecode.writes_binding(name) {
             continue;
         }
         if bytecode
             .local_slot(name)
             .is_some_and(|slot| !bytecode.local_is_sloppy_global_fallback(slot))
         {
+            continue;
+        }
+        let global_value = global_this
+            .own_property(name)
+            .map(|property| property.value);
+        if global_value.as_ref() != Some(value) {
             continue;
         }
         if let Some(binding) = env.get_local_mut(name) {
