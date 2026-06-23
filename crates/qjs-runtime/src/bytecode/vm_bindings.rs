@@ -1231,6 +1231,27 @@ impl Vm<'_> {
         env: &CallEnv,
         injected: &HashMap<String, Value>,
     ) {
+        for name in env.locals().keys() {
+            let Some(source_name) =
+                name.strip_prefix(crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX)
+            else {
+                continue;
+            };
+            let Some(value) = env.get(source_name) else {
+                continue;
+            };
+            self.captured_env
+                .borrow_mut()
+                .insert(source_name.to_owned(), value.clone());
+            self.captured_env
+                .borrow_mut()
+                .insert(name.clone(), Value::Boolean(true));
+            for captured_env in &self.parameter_captured_envs {
+                let mut captured_env = captured_env.borrow_mut();
+                captured_env.insert(source_name.to_owned(), value.clone());
+                captured_env.insert(name.clone(), Value::Boolean(true));
+            }
+        }
         for (name, value) in env.locals() {
             if injected.get(name) == Some(value) {
                 continue;

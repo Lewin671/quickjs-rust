@@ -1115,13 +1115,24 @@ fn insert_function_capture(
         let is_immutable_capture = bytecode
             .local_slot(name)
             .is_some_and(|slot| !bytecode.local_is_mutable(slot));
-        let names = if is_immutable_capture {
-            protected_names
+        if is_immutable_capture {
+            if !protected_names.iter().any(|existing| existing == name) {
+                protected_names.push(name.to_owned());
+            }
         } else {
-            writeback_names
-        };
-        if !names.iter().any(|existing| existing == name) {
-            names.push(name.to_owned());
+            if !writeback_names.iter().any(|existing| existing == name) {
+                writeback_names.push(name.to_owned());
+            }
+        }
+        let marker_name = format!(
+            "{}{}",
+            crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
+            name
+        );
+        if function_env.contains_key(&marker_name)
+            && !protected_names.iter().any(|existing| existing == name)
+        {
+            protected_names.push(name.to_owned());
         }
     }
 }

@@ -412,6 +412,20 @@ fn refresh_activation_captures_from_realm(vm: &mut Vm<'_>) {
         {
             continue;
         }
+        if let Some(value) = direct_eval_parameter_capture_value(vm, &name) {
+            vm.captured_env
+                .borrow_mut()
+                .insert(name.clone(), value.clone());
+            if let Some(slot) = vm.bytecode.local_slot(&name)
+                && let Some(local) = vm.locals.get_mut(slot)
+            {
+                *local = Some(value.clone());
+            }
+            if vm.env.locals().contains_key(&name) {
+                vm.env.insert(name, value);
+            }
+            continue;
+        }
         if vm
             .bytecode
             .local_slot(&name)
@@ -448,6 +462,21 @@ fn refresh_activation_captures_from_realm(vm: &mut Vm<'_>) {
             vm.env.insert(name, value);
         }
     }
+}
+
+fn direct_eval_parameter_capture_value(vm: &Vm<'_>, name: &str) -> Option<Value> {
+    let marker_name = format!(
+        "{}{}",
+        crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
+        name
+    );
+    vm.parameter_captured_envs.iter().find_map(|captured_env| {
+        let captured_env = captured_env.borrow();
+        captured_env
+            .contains_key(&marker_name)
+            .then(|| captured_env.get(name).cloned())
+            .flatten()
+    })
 }
 
 /// Drives a generator from `SuspendedStart`: builds the body VM and runs it.

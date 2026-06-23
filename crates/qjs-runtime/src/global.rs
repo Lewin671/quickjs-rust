@@ -383,7 +383,7 @@ pub(super) fn native_global_eval(
                     ),
                     Value::Boolean(true),
                 );
-                update_direct_eval_captured_functions(&mut eval_env, name, value.clone());
+                update_direct_eval_parameter_captured_functions(&mut eval_env, name, value.clone());
             } else if caller_locals.contains(name) {
                 // A caller frame binding (an outer `let`/`var` the eval'd code
                 // assigned): write it back through the frame so the caller's
@@ -638,6 +638,25 @@ fn update_direct_eval_captured_functions(env: &mut CallEnv, name: &str, value: V
         captured_env
             .borrow_mut()
             .insert(name.to_owned(), value.clone());
+    }
+}
+
+fn update_direct_eval_parameter_captured_functions(env: &mut CallEnv, name: &str, value: Value) {
+    let marker_name = format!(
+        "{}{}",
+        crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
+        name
+    );
+    update_direct_eval_captured_functions(env, name, value.clone());
+    if let Some(captured_env) = env.activation_captured_env() {
+        let mut captured_env = captured_env.borrow_mut();
+        captured_env.insert(name.to_owned(), value);
+        captured_env.insert(marker_name.clone(), Value::Boolean(true));
+    }
+    for captured_env in env.parameter_captured_envs() {
+        captured_env
+            .borrow_mut()
+            .insert(marker_name.clone(), Value::Boolean(true));
     }
 }
 

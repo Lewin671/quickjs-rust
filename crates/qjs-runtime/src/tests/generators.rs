@@ -458,6 +458,62 @@ fn generator_method_parameter_destructuring_reads_live_globals() {
 }
 
 #[test]
+fn generator_body_closures_capture_parameter_direct_eval_vars() {
+    let source = "\
+        var x = 'outside'; \
+        var probe1, probe2, probeBody; \
+        (function*( \
+            _ = (eval('var x = \"inside\";'), probe1 = function() { return x; }), \
+            __ = probe2 = function() { return x; } \
+        ) { \
+            probeBody = function() { return x; }; \
+        }()).next(); \
+        probe1() + ',' + probe2() + ',' + probeBody();";
+    assert_eq!(string(source), "inside,inside,inside");
+
+    let rest_source = "\
+        var x = 'outside'; \
+        var probeParam, probeBody; \
+        (function*( \
+            ...[_ = (eval('var x = \"inside\";'), probeParam = function() { return x; })] \
+        ) { \
+            probeBody = function() { return x; }; \
+        }().next()); \
+        probeParam() + ',' + probeBody();";
+    assert_eq!(string(rest_source), "inside,inside");
+}
+
+#[test]
+fn object_generator_method_body_closures_capture_parameter_direct_eval_vars() {
+    let source = "\
+        var x = 'outside'; \
+        var probe1, probe2, probeBody; \
+        ({ \
+            *m( \
+                _ = (eval('var x = \"inside\";'), probe1 = function() { return x; }), \
+                __ = probe2 = function() { return x; } \
+            ) { \
+                probeBody = function() { return x; }; \
+            } \
+        }.m().next()); \
+        probe1() + ',' + probe2() + ',' + probeBody();";
+    assert_eq!(string(source), "inside,inside,inside");
+
+    let rest_source = "\
+        var x = 'outside'; \
+        var probeParam, probeBody; \
+        ({ \
+            *m( \
+                ...[_ = (eval('var x = \"inside\";'), probeParam = function() { return x; })] \
+            ) { \
+                probeBody = function() { return x; }; \
+            } \
+        }.m().next()); \
+        probeParam() + ',' + probeBody();";
+    assert_eq!(string(rest_source), "inside,inside");
+}
+
+#[test]
 fn private_generator_method() {
     assert_eq!(
         number(

@@ -151,6 +151,18 @@ impl Vm<'_> {
         env: &mut HashMap<String, Value>,
         name: &str,
     ) -> bool {
+        if let Some(value) = self.direct_eval_parameter_binding_value(name) {
+            env.insert(name.to_owned(), value);
+            env.insert(
+                format!(
+                    "{}{}",
+                    crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
+                    name
+                ),
+                Value::Boolean(true),
+            );
+            return false;
+        }
         if self.in_parameter_prologue()
             || name == "this"
             || name == "arguments"
@@ -211,6 +223,18 @@ impl Vm<'_> {
             && let Some(value) = self.env.locals().get(name).cloned()
         {
             env.insert(name.to_owned(), value);
+            return;
+        }
+        if let Some(value) = self.direct_eval_parameter_binding_value(name) {
+            env.insert(name.to_owned(), value);
+            env.insert(
+                format!(
+                    "{}{}",
+                    crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
+                    name
+                ),
+                Value::Boolean(true),
+            );
             return;
         }
         if self.in_parameter_prologue()
@@ -510,6 +534,32 @@ impl Vm<'_> {
             .local_slot(name)
             .and_then(|index| self.locals.get(index))
             .and_then(Option::as_ref)
+    }
+
+    fn direct_eval_parameter_binding_value(&self, name: &str) -> Option<Value> {
+        let marker_name = format!(
+            "{}{}",
+            crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
+            name
+        );
+        let captured_env = self.captured_env.borrow();
+        if captured_env.contains_key(&marker_name) {
+            return captured_env.get(name).cloned();
+        }
+        drop(captured_env);
+        for captured_env in &self.parameter_captured_envs {
+            let captured_env = captured_env.borrow();
+            if captured_env.contains_key(&marker_name) {
+                return captured_env.get(name).cloned();
+            }
+        }
+        if self.env.locals().contains_key(&marker_name) {
+            return self
+                .current_local_binding(name)
+                .cloned()
+                .or_else(|| self.env.locals().get(name).cloned());
+        }
+        None
     }
 }
 
