@@ -312,6 +312,18 @@ fn evaluates_global_eval_builtin() {
         ),
         Ok(Value::String("inside".to_owned().into()))
     );
+    assert_eq!(
+        eval(
+            "var directWith = 'global'; \
+             function testcase() { \
+                 var object = { directWith: 'with' }; \
+                 var directWith = 'local'; \
+                 with (object) { return eval('directWith'); } \
+             } \
+             testcase();"
+        ),
+        Ok(Value::String("with".to_owned().into()))
+    );
 }
 
 #[test]

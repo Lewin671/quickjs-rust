@@ -314,12 +314,13 @@ pub(crate) fn eval_bytecode_with_env(
     env: crate::CallEnv,
 ) -> FunctionBytecodeResult<'_> {
     let captured_env = Rc::new(RefCell::new(env.snapshot_locals()));
+    let with_stack = env.direct_eval_with_stack();
     vm::eval_function_bytecode(
         bytecode,
         env,
         captured_env,
         Vec::new(),
-        Vec::new(),
+        with_stack,
         None,
         true,
     )
@@ -330,12 +331,13 @@ pub(crate) fn eval_bytecode_with_env_ephemeral_global_lexicals(
     env: crate::CallEnv,
 ) -> FunctionBytecodeResult<'_> {
     let captured_env = Rc::new(RefCell::new(env.snapshot_locals()));
+    let with_stack = env.direct_eval_with_stack();
     vm::eval_function_bytecode(
         bytecode,
         env,
         captured_env,
         Vec::new(),
-        Vec::new(),
+        with_stack,
         None,
         false,
     )

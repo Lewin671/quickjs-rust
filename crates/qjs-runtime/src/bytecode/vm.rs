@@ -41,6 +41,7 @@ pub(super) fn eval_function_bytecode(
     capture_writeback: Option<CaptureWriteback>,
     persist_global_lexicals: bool,
 ) -> FunctionBytecodeResult<'_> {
+    let direct_eval_with_stack = !env.direct_eval_with_stack().is_empty();
     let mut vm = Vm::new_with_globals_captures_upvalues_and_with_stack(
         bytecode,
         env,
@@ -50,6 +51,7 @@ pub(super) fn eval_function_bytecode(
     );
     vm.capture_writeback = capture_writeback;
     vm.persist_global_lexicals = persist_global_lexicals;
+    vm.direct_eval_with_stack = direct_eval_with_stack;
     let value = vm.run();
     // A frame that neither creates closures nor holds any captured (`from_env`)
     // local never reads or writes the shared captured env beyond the realm
@@ -110,6 +112,11 @@ pub(super) struct Vm<'a> {
     pub(super) stop_at_prologue: bool,
     /// Enclosing `with` object-environment records, innermost last.
     pub(super) with_stack: Vec<Value>,
+    /// True only for direct eval VMs that inherited an active with-chain from
+    /// their caller. Ordinary functions created inside `with` also retain the
+    /// chain, but their own local/global opcodes must not be dynamically
+    /// re-resolved through it.
+    pub(super) direct_eval_with_stack: bool,
     /// Active `using` disposal scopes (innermost last); each block's resources,
     /// disposed LIFO when the scope exits via the block's implicit finally.
     pub(super) disposable_scopes: Vec<Vec<super::vm_dispose::DisposeResource>>,
@@ -231,6 +238,7 @@ impl<'a> Vm<'a> {
             stop_at_prologue: false,
             array_prototype_cache: None,
             with_stack,
+            direct_eval_with_stack: false,
             disposable_scopes: Vec::new(),
             persist_global_lexicals: true,
         }
@@ -352,7 +360,14 @@ impl<'a> Vm<'a> {
                         })?)
                 }
                 Op::LoadLocal(slot) => {
-                    if let Some(value) = self.handle_runtime_result(self.load_local(slot))? {
+                    let result =
+                        if self.direct_eval_with_stack && self.bytecode.local_is_from_env(slot) {
+                            let name = self.bytecode.locals[slot].name.clone();
+                            self.load_ident_with(&name, Some(slot))
+                        } else {
+                            self.load_local(slot)
+                        };
+                    if let Some(value) = self.handle_runtime_result(result)? {
                         self.stack.push(value);
                     }
                 }
@@ -369,7 +384,14 @@ impl<'a> Vm<'a> {
                 }
                 Op::AssignLocal(slot) => {
                     let value = self.pop()?;
-                    let result = self.assign_local(slot, value);
+                    let result = if self.direct_eval_with_stack
+                        && self.bytecode.local_is_from_env(slot)
+                    {
+                        let name = self.bytecode.locals[slot].name.clone();
+                        self.store_ident_with(&name, Some(slot), self.bytecode.is_strict(), value)
+                    } else {
+                        self.assign_local(slot, value)
+                    };
                     self.handle_runtime_result(result)?;
                 }
                 Op::ClearLocal(slot) => self.clear_local(slot)?,
@@ -379,19 +401,31 @@ impl<'a> Vm<'a> {
                     self.handle_runtime_result(result)?;
                 }
                 Op::LoadGlobal(name) => {
-                    let result = self.load_global(&name);
+                    let result = if self.direct_eval_with_stack {
+                        self.load_ident_with(&name, None)
+                    } else {
+                        self.load_global(&name)
+                    };
                     if let Some(value) = self.handle_runtime_result(result)? {
                         self.stack.push(value);
                     }
                 }
                 Op::StoreGlobalStrict(name) => {
                     let value = self.pop()?;
-                    let result = self.store_global_strict(name, value);
+                    let result = if self.direct_eval_with_stack {
+                        self.store_ident_with(&name, None, true, value)
+                    } else {
+                        self.store_global_strict(name, value)
+                    };
                     self.handle_runtime_result(result)?;
                 }
                 Op::StoreGlobalSloppy(name) => {
                     let value = self.pop()?;
-                    let result = self.store_global_sloppy(name, value);
+                    let result = if self.direct_eval_with_stack {
+                        self.store_ident_with(&name, None, false, value)
+                    } else {
+                        self.store_global_sloppy(name, value)
+                    };
                     self.handle_runtime_result(result)?;
                 }
                 Op::StoreLocalOrGlobalSloppy { slot, name } => {
@@ -401,6 +435,9 @@ impl<'a> Vm<'a> {
                 }
                 Op::TypeofGlobal(name) => {
                     let result: Result<Value, RuntimeError> = (|| {
+                        if self.direct_eval_with_stack {
+                            return self.typeof_ident_with(&name, None);
+                        }
                         let value = if let Some(value) = self.env.module_import_value(&name) {
                             if value.is_uninitialized_lexical_marker() {
                                 return Err(RuntimeError {

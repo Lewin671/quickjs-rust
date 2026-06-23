@@ -63,6 +63,10 @@ pub(crate) struct CallEnv {
     /// `super`, but they do retain access to private names declared by enclosing
     /// classes.
     private_environment: Option<PrivateEnvironment>,
+    /// Dynamic with-object chain active at a direct eval call site. This is
+    /// intentionally not part of ordinary function environments; the VM sets it
+    /// only while invoking the intrinsic eval function as a direct eval.
+    direct_eval_with_stack: Vec<Value>,
     /// The activation captured-env cell for the frame that produced this view.
     /// User callbacks use it to distinguish same-activation closure write-back
     /// from an unrelated caller's same-named local binding.
@@ -108,6 +112,7 @@ impl std::fmt::Debug for CallEnv {
             .field("locals", &self.locals)
             .field("catch_bindings", &self.catch_bindings)
             .field("direct_eval_var_conflicts", &self.direct_eval_var_conflicts)
+            .field("direct_eval_with_stack", &self.direct_eval_with_stack.len())
             .field("module_host", &self.module_host.is_some())
             .field(
                 "activation_captured_env",
@@ -143,6 +148,7 @@ impl CallEnv {
             immutable_function_name: None,
             direct_eval_var_conflicts: HashSet::new(),
             private_environment: None,
+            direct_eval_with_stack: Vec::new(),
             activation_captured_env: None,
             captured_binding_source_env: None,
             parameter_captured_envs: Vec::new(),
@@ -212,6 +218,7 @@ impl CallEnv {
             immutable_function_name: None,
             direct_eval_var_conflicts: HashSet::new(),
             private_environment: None,
+            direct_eval_with_stack: Vec::new(),
             activation_captured_env: None,
             captured_binding_source_env: None,
             parameter_captured_envs: Vec::new(),
@@ -235,6 +242,7 @@ impl CallEnv {
             immutable_function_name: None,
             direct_eval_var_conflicts: HashSet::new(),
             private_environment: None,
+            direct_eval_with_stack: Vec::new(),
             activation_captured_env: None,
             captured_binding_source_env: None,
             parameter_captured_envs: Vec::new(),
@@ -256,6 +264,7 @@ impl CallEnv {
             immutable_function_name: None,
             direct_eval_var_conflicts: HashSet::new(),
             private_environment: None,
+            direct_eval_with_stack: Vec::new(),
             activation_captured_env: None,
             captured_binding_source_env: None,
             parameter_captured_envs: Vec::new(),
@@ -361,6 +370,14 @@ impl CallEnv {
     /// Installs the lexical private-name environment for this frame.
     pub(crate) fn set_private_environment(&mut self, environment: Option<PrivateEnvironment>) {
         self.private_environment = environment;
+    }
+
+    pub(crate) fn set_direct_eval_with_stack(&mut self, with_stack: Vec<Value>) {
+        self.direct_eval_with_stack = with_stack;
+    }
+
+    pub(crate) fn direct_eval_with_stack(&self) -> Vec<Value> {
+        self.direct_eval_with_stack.clone()
     }
 
     /// Installs the activation captured-env identity for this frame.
@@ -517,6 +534,7 @@ impl CallEnv {
             immutable_function_name: None,
             direct_eval_var_conflicts: self.direct_eval_var_conflicts.clone(),
             private_environment: self.private_environment.clone(),
+            direct_eval_with_stack: self.direct_eval_with_stack.clone(),
             activation_captured_env: self.activation_captured_env.clone(),
             captured_binding_source_env: self.captured_binding_source_env.clone(),
             parameter_captured_envs: self.parameter_captured_envs.clone(),

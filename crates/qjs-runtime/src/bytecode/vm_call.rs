@@ -109,6 +109,7 @@ impl Vm<'_> {
                     Value::Boolean(true),
                 );
             }
+            env.env.set_direct_eval_with_stack(self.with_stack.clone());
         } else {
             env.env.remove(crate::DIRECT_EVAL_BINDING);
             env.env.remove(crate::DIRECT_EVAL_STRICT_BINDING);
@@ -120,6 +121,7 @@ impl Vm<'_> {
         env.env.remove(crate::DIRECT_EVAL_STRICT_BINDING);
         env.env
             .remove(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING);
+        env.env.set_direct_eval_with_stack(Vec::new());
         if direct_eval {
             self.write_through_direct_eval_parameter_captures(&env.env, &env.injected);
         }
