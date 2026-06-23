@@ -487,6 +487,7 @@ fn run_from_yield(
     vm.disposable_scopes = snapshot.disposable_scopes;
     let capture_writeback = snapshot.capture_writeback;
     if snapshot.refresh_captured_slots_on_resume {
+        refresh_activation_captures_from_realm(&mut vm);
         vm.refresh_from_captured_env();
         vm.refresh_from_capture_writeback(capture_writeback.as_ref());
     }

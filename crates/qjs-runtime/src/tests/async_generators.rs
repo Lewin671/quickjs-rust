@@ -79,6 +79,26 @@ fn next_chain_observes_yielded_values() {
 }
 
 #[test]
+fn executing_async_generator_queues_nested_next_after_iterator_assignment() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             var iter; \
+             async function* g() { \
+               iter.next().then(r => { o.push('inner'); o.push(r.value); o.push(r.done); }); \
+               yield 1; \
+               yield 2; \
+             } \
+             iter = g(); \
+             iter.next().then(r => { o.push('outer'); o.push(r.value); o.push(r.done); \
+               return iter.next(); }).then(r => { o.push('tail'); o.push(r.value); o.push(r.done); }); \
+             o;"
+        ),
+        "outer,1,false,inner,2,false,tail,undefined,true"
+    );
+}
+
+#[test]
 fn for_await_of_over_async_generator() {
     assert_eq!(
         eval_log(
