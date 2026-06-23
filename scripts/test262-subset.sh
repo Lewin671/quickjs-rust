@@ -556,6 +556,11 @@ var $262 = {
     __quickjsRustRealmGlobal.globalThis = __quickjsRustRealmGlobal;
     __quickjsRustRealmGlobal.eval = function(source) {
       var value = (0, eval)(source);
+      if (typeof value === "function") {
+        Object.defineProperty(value, "__quickjsRustRealmTypeErrorPrototype", {
+          value: crossRealmNativeErrorPrototypes.TypeError
+        });
+      }
       if (typeof value === "function" && value.constructor === intrinsicGeneratorFunction) {
         Object.setPrototypeOf(value, crossRealmGeneratorFunction.prototype);
         Object.setPrototypeOf(value.prototype, realmGeneratorPrototype);

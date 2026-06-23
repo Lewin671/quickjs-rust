@@ -213,6 +213,23 @@ fn calling_class_without_new_throws_type_error() {
 }
 
 #[test]
+fn calling_realm_marked_class_without_new_uses_marked_type_error_prototype() {
+    assert_eq!(
+        eval(
+            "class C {}
+             let realmTypeErrorPrototype = {};
+             Object.defineProperty(C, '__quickjsRustRealmTypeErrorPrototype', {
+               value: realmTypeErrorPrototype
+             });
+             try { C(); false; } catch (e) {
+               Object.getPrototypeOf(e) === realmTypeErrorPrototype;
+             }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn derived_constructor_returning_symbol_throws_type_error() {
     // A Symbol (a primitive, not an Object) returned from a derived constructor
     // does not override `this`; it is a TypeError like any other primitive.

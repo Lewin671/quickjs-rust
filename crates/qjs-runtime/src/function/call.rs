@@ -100,10 +100,7 @@ pub(crate) fn call_function(
         );
     }
     if function.is_class_constructor && !is_construct {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "TypeError: class constructor cannot be invoked without 'new'".to_owned(),
-        });
+        return Err(class_constructor_call_error(&function));
     }
     if let Some(native) = function.native {
         return call_native_function(
@@ -267,6 +264,25 @@ pub(crate) fn call_function(
         thrown: None,
         message: "user function has no bytecode body".to_owned(),
     })
+}
+
+fn class_constructor_call_error(function: &Function) -> RuntimeError {
+    let message = "TypeError: class constructor cannot be invoked without 'new'".to_owned();
+    if let Some(crate::Property {
+        value: Value::Object(prototype),
+        ..
+    }) = function.own_property(CROSS_REALM_TYPE_ERROR_PROTOTYPE)
+    {
+        let error = ObjectRef::with_prototype(HashMap::new(), Some(prototype));
+        return RuntimeError {
+            thrown: Some(Box::new(Value::Object(error))),
+            message,
+        };
+    }
+    RuntimeError {
+        thrown: None,
+        message,
+    }
 }
 
 fn immutable_name_caller_value(function: &Function, env: &CallEnv) -> Option<(String, Value)> {
