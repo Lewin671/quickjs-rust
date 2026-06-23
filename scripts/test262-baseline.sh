@@ -275,8 +275,8 @@ var $262 = {
     );
     var crossRealmGeneratorFunction = function GeneratorFunction() {
       var previousRealm = __quickjsRustDynamicFunctionRealm;
-      __quickjsRustDynamicFunctionRealm = realmGlobal;
-      globalThis.__quickjsRustDynamicFunctionRealm = realmGlobal;
+      __quickjsRustDynamicFunctionRealm = __quickjsRustRealmGlobal;
+      globalThis.__quickjsRustDynamicFunctionRealm = __quickjsRustRealmGlobal;
       try {
         var newTarget = new.target || crossRealmGeneratorFunction;
         var fn = intrinsicGeneratorFunction.apply(null, arguments);
@@ -307,8 +307,8 @@ var $262 = {
     });
     var crossRealmFunction = function Function() {
       var previousRealm = __quickjsRustDynamicFunctionRealm;
-      __quickjsRustDynamicFunctionRealm = realmGlobal;
-      globalThis.__quickjsRustDynamicFunctionRealm = realmGlobal;
+      __quickjsRustDynamicFunctionRealm = __quickjsRustRealmGlobal;
+      globalThis.__quickjsRustDynamicFunctionRealm = __quickjsRustRealmGlobal;
       var newTarget = new.target || crossRealmFunction;
       try {
         var fn = globalThis.Function.apply(null, arguments);
@@ -371,7 +371,7 @@ var $262 = {
       });
       return fn;
     };
-    var realmGlobal = Object.create(globalThis);
+    var __quickjsRustRealmGlobal = Object.create(globalThis);
     var crossRealmObject = function Object(value) {
       return globalThis.Object(value);
     };
@@ -423,7 +423,7 @@ var $262 = {
             return undefined;
           }
           if (this === globalThis.RegExp.prototype) {
-            throw new realmGlobal.TypeError("RegExp prototype accessor requires a RegExp receiver");
+            throw new __quickjsRustRealmGlobal.TypeError("RegExp prototype accessor requires a RegExp receiver");
           }
           return descriptor.get.call(this);
         },
@@ -474,7 +474,7 @@ var $262 = {
               try {
                 return globalThis.String.prototype[method].call(this);
               } catch (error) {
-                throw new realmGlobal.TypeError(error && error.message);
+                throw new __quickjsRustRealmGlobal.TypeError(error && error.message);
               }
             },
             writable: true,
@@ -516,28 +516,28 @@ var $262 = {
       crossRealmNativeErrors[name] = constructor;
       crossRealmNativeErrorPrototypes[name] = prototype;
     });
-    realmGlobal.Object = crossRealmObject;
-    realmGlobal.Array = crossRealmArray;
-    realmGlobal.Function = crossRealmFunction;
-    realmGlobal.RegExp = crossRealmRegExp;
-    realmGlobal.Boolean = crossRealmBuiltinConstructors.Boolean;
-    realmGlobal.Number = crossRealmBuiltinConstructors.Number;
-    realmGlobal.String = crossRealmBuiltinConstructors.String;
-    realmGlobal.Date = crossRealmBuiltinConstructors.Date;
-    realmGlobal.Map = crossRealmBuiltinConstructors.Map;
-    realmGlobal.Set = crossRealmBuiltinConstructors.Set;
-    realmGlobal.WeakMap = crossRealmBuiltinConstructors.WeakMap;
-    realmGlobal.WeakSet = crossRealmBuiltinConstructors.WeakSet;
-    realmGlobal.Error = crossRealmNativeErrors.Error;
-    realmGlobal.EvalError = crossRealmNativeErrors.EvalError;
-    realmGlobal.RangeError = crossRealmNativeErrors.RangeError;
-    realmGlobal.ReferenceError = crossRealmNativeErrors.ReferenceError;
-    realmGlobal.SyntaxError = crossRealmNativeErrors.SyntaxError;
-    realmGlobal.TypeError = crossRealmNativeErrors.TypeError;
-    realmGlobal.URIError = crossRealmNativeErrors.URIError;
-    realmGlobal.SuppressedError = crossRealmNativeErrors.SuppressedError;
-    realmGlobal.globalThis = realmGlobal;
-    realmGlobal.eval = function(source) {
+    __quickjsRustRealmGlobal.Object = crossRealmObject;
+    __quickjsRustRealmGlobal.Array = crossRealmArray;
+    __quickjsRustRealmGlobal.Function = crossRealmFunction;
+    __quickjsRustRealmGlobal.RegExp = crossRealmRegExp;
+    __quickjsRustRealmGlobal.Boolean = crossRealmBuiltinConstructors.Boolean;
+    __quickjsRustRealmGlobal.Number = crossRealmBuiltinConstructors.Number;
+    __quickjsRustRealmGlobal.String = crossRealmBuiltinConstructors.String;
+    __quickjsRustRealmGlobal.Date = crossRealmBuiltinConstructors.Date;
+    __quickjsRustRealmGlobal.Map = crossRealmBuiltinConstructors.Map;
+    __quickjsRustRealmGlobal.Set = crossRealmBuiltinConstructors.Set;
+    __quickjsRustRealmGlobal.WeakMap = crossRealmBuiltinConstructors.WeakMap;
+    __quickjsRustRealmGlobal.WeakSet = crossRealmBuiltinConstructors.WeakSet;
+    __quickjsRustRealmGlobal.Error = crossRealmNativeErrors.Error;
+    __quickjsRustRealmGlobal.EvalError = crossRealmNativeErrors.EvalError;
+    __quickjsRustRealmGlobal.RangeError = crossRealmNativeErrors.RangeError;
+    __quickjsRustRealmGlobal.ReferenceError = crossRealmNativeErrors.ReferenceError;
+    __quickjsRustRealmGlobal.SyntaxError = crossRealmNativeErrors.SyntaxError;
+    __quickjsRustRealmGlobal.TypeError = crossRealmNativeErrors.TypeError;
+    __quickjsRustRealmGlobal.URIError = crossRealmNativeErrors.URIError;
+    __quickjsRustRealmGlobal.SuppressedError = crossRealmNativeErrors.SuppressedError;
+    __quickjsRustRealmGlobal.globalThis = __quickjsRustRealmGlobal;
+    __quickjsRustRealmGlobal.eval = function(source) {
       var value = (0, eval)(source);
       if (typeof value === "function" && value.constructor === intrinsicGeneratorFunction) {
         Object.setPrototypeOf(value, crossRealmGeneratorFunction.prototype);
@@ -545,7 +545,7 @@ var $262 = {
       }
       return value;
     };
-    return { global: realmGlobal };
+    return { global: __quickjsRustRealmGlobal };
   }
 };
 EOF
