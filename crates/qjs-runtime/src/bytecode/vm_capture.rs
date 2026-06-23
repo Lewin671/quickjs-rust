@@ -74,6 +74,37 @@ impl Vm<'_> {
             .0
     }
 
+    pub(super) fn function_capture_env_without_global_names(
+        &self,
+        function_bytecode: &Bytecode,
+        function_local_names: &[String],
+    ) -> HashMap<String, Value> {
+        let mut env = HashMap::with_capacity(function_bytecode.locals.len());
+        {
+            let realm = self.realm.borrow();
+            for name in crate::RUNTIME_INTRINSIC_NAMES {
+                if let Some(value) = realm.get(*name) {
+                    env.insert((*name).to_owned(), value.clone());
+                }
+            }
+        }
+        let mut referenced_names = function_bytecode.closure_referenced_global_names();
+        referenced_names.extend(function_bytecode.closure_written_binding_names());
+        referenced_names.sort();
+        referenced_names.dedup();
+        for name in referenced_names {
+            if !binding_is_declared_local(function_bytecode, &name) {
+                self.insert_referenced_binding(&mut env, &name);
+            }
+        }
+        for name in function_bytecode.local_names() {
+            if !function_local_names.iter().any(|local| local == name) {
+                self.insert_referenced_binding(&mut env, name);
+            }
+        }
+        env
+    }
+
     pub(super) fn function_capture_env_with_global_names(
         &self,
         function_bytecode: &Bytecode,

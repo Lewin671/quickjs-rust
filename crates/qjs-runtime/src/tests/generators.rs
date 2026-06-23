@@ -443,6 +443,21 @@ fn class_generator_method_uses_this() {
 }
 
 #[test]
+fn generator_method_parameter_destructuring_reads_live_globals() {
+    let source = "\
+        function* values() { first += 1; yield; second += 1; } \
+        var first = 0; var second = 0; var calls = 0; \
+        let object = { *method([,]) { if (first !== 1 || second !== 0) throw 'object'; calls += 1; } }; \
+        class Public { *method([,]) { if (first !== 2 || second !== 0) throw 'public'; calls += 1; } } \
+        class Private { *#method([,]) { if (first !== 3 || second !== 0) throw 'private'; calls += 1; } run(arg) { return this.#method(arg); } } \
+        object.method(values()).next(); \
+        new Public().method(values()).next(); \
+        new Private().run(values()).next(); \
+        calls;";
+    assert_eq!(number(source), 3.0);
+}
+
+#[test]
 fn private_generator_method() {
     assert_eq!(
         number(

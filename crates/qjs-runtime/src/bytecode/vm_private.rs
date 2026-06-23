@@ -148,7 +148,11 @@ impl Vm<'_> {
         constructor_function: &Function,
         name: Option<&str>,
     ) -> Value {
-        let mut method_env = self.function_capture_env(&def.bytecode, &def.local_names);
+        let mut method_env = if def.is_generator {
+            self.function_capture_env_without_global_names(&def.bytecode, &def.local_names)
+        } else {
+            self.function_capture_env(&def.bytecode, &def.local_names)
+        };
         self.insert_lexical_captures(&mut method_env, &def.lexical_captures);
         bind_inner_name(&mut method_env, name, constructor_function);
         let home_object = if is_static {

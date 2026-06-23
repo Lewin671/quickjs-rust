@@ -390,8 +390,17 @@ impl Vm<'_> {
         constructor_function: &Function,
         name: Option<&str>,
     ) -> Result<(), RuntimeError> {
-        let (mut method_env, method_global_capture_names) =
-            self.function_capture_env_with_global_names(&method.bytecode, &method.local_names);
+        let (mut method_env, method_global_capture_names) = if method.is_generator {
+            (
+                self.function_capture_env_without_global_names(
+                    &method.bytecode,
+                    &method.local_names,
+                ),
+                Vec::new(),
+            )
+        } else {
+            self.function_capture_env_with_global_names(&method.bytecode, &method.local_names)
+        };
         self.insert_lexical_captures(&mut method_env, &method.lexical_captures);
         bind_class_inner_name(&mut method_env, name, constructor_function);
         // A method's home object resolves `super.x`: instance methods and
