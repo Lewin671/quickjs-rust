@@ -126,6 +126,7 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "Iterator",
     "globalThis",
     "__quickjsRustAssertSameValue",
+    "__quickjsRustVerifyProperty",
     "__quickjsRustBuildString",
     "__quickjsRustIsHTMLDDA",
     "__quickjsRustDetachArrayBuffer",

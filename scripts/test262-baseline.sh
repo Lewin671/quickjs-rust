@@ -733,6 +733,19 @@ emit_test262_assert_fast_paths() {
 assert.sameValue = __quickjsRustAssertSameValue;
 EOF
 }
+emit_test262_property_helper_fast_paths() {
+  cat <<'EOF'
+if (typeof verifyProperty === "function" && typeof __quickjsRustVerifyProperty === "function") {
+  var __quickjsRustOriginalVerifyProperty = verifyProperty;
+  verifyProperty = function(obj, name, desc, options) {
+    if (__quickjsRustVerifyProperty(obj, name, desc, options)) {
+      return true;
+    }
+    return __quickjsRustOriginalVerifyProperty(obj, name, desc, options);
+  };
+}
+EOF
+}
 emit_test262_regexp_utils_fast_paths() {
   cat <<'EOF'
 if (typeof __quickjsRustBuildString === "function") {
@@ -763,6 +776,10 @@ includes_regexp_utils() {
 includes_typed_array_utils() {
   local includes="$1"
   [[ "$includes" == *"testTypedArray.js"* ]]
+}
+includes_property_helper() {
+  local includes="$1"
+  [[ "$includes" == *"propertyHelper.js"* ]]
 }
 emit_quickjs_rust_case_source() {
   cat "$1"
@@ -898,6 +915,10 @@ make_case() {
         cat "$TEST262_DIR/harness/$include"
         printf '\n'
       done
+      if includes_property_helper "$includes"; then
+        emit_test262_property_helper_fast_paths
+        printf '\n'
+      fi
       if includes_regexp_utils "$includes"; then
         emit_test262_regexp_utils_fast_paths
         printf '\n'
@@ -945,6 +966,10 @@ make_module_prelude() {
       cat "$TEST262_DIR/harness/$include"
       printf '\n'
     done
+    if includes_property_helper "$includes"; then
+      emit_test262_property_helper_fast_paths
+      printf '\n'
+    fi
     if includes_regexp_utils "$includes"; then
       emit_test262_regexp_utils_fast_paths
       printf '\n'
@@ -1369,11 +1394,13 @@ if [ "$run" -gt 0 ]; then
   export TIMEOUT_RETRIES
   export WORK_DIR
   export -f emit_test262_assert_fast_paths
+  export -f emit_test262_property_helper_fast_paths
   export -f emit_test262_regexp_utils_fast_paths
   export -f emit_test262_typed_array_fast_paths
   export -f should_emit_test262_assert_fast_paths
   export -f includes_regexp_utils
   export -f includes_typed_array_utils
+  export -f includes_property_helper
   export -f emit_test262_host_shim
   export -f emit_quickjs_rust_case_source
   export -f format_case_result

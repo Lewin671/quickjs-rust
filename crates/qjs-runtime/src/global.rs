@@ -6,8 +6,10 @@ use crate::{
     Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     bytecode::{
         compile_direct_eval_script, eval_bytecode_with_env,
-        eval_bytecode_with_env_ephemeral_global_lexicals,
+        eval_bytecode_with_env_ephemeral_global_lexicals, set_object_property,
     },
+    function_delete_own_property, function_own_property_descriptor,
+    object::define_property_on_value_key,
     string::{string_code_units, string_from_code_unit},
     to_js_string_with_env, to_length_with_env, to_number_with_env,
 };
@@ -83,6 +85,13 @@ pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
         "__quickjsRustAssertSameValue",
         3,
         NativeFunction::Test262AssertSameValue,
+    );
+    define_global_function(
+        env,
+        global_this,
+        "__quickjsRustVerifyProperty",
+        4,
+        NativeFunction::Test262VerifyProperty,
     );
     define_global_function(env, global_this, "escape", 1, NativeFunction::Escape);
     define_global_function(env, global_this, "unescape", 1, NativeFunction::Unescape);
@@ -170,6 +179,215 @@ pub(crate) fn native_test262_assert_same_value(
         thrown: None,
         message,
     })
+}
+
+pub(crate) fn native_test262_verify_property(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    if argument_values.len() < 3 {
+        return verify_property_failure(
+            "verifyProperty should receive at least 3 arguments: obj, name, and descriptor",
+        );
+    }
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let key = match argument_values.get(1) {
+        Some(Value::String(key)) => key.to_string(),
+        _ => return Ok(Value::Boolean(false)),
+    };
+    if !matches!(
+        target,
+        Value::Object(_) | Value::Array(_) | Value::Function(_)
+    ) {
+        return Ok(Value::Boolean(false));
+    }
+    if matches!(&target, Value::Object(object) if crate::typed_array::is_typed_array_object(object))
+    {
+        return Ok(Value::Boolean(false));
+    }
+    if let Some(options) = argument_values.get(3)
+        && !matches!(options, Value::Undefined | Value::Null)
+    {
+        return Ok(Value::Boolean(false));
+    }
+
+    let original = crate::object::own_property_descriptor_key(
+        target.clone(),
+        &PropertyKey::String(key.clone()),
+        env,
+    )?;
+    let desc = argument_values.get(2).cloned().unwrap_or(Value::Undefined);
+    if matches!(desc, Value::Undefined) {
+        if original.is_none() {
+            return Ok(Value::Boolean(true));
+        }
+        return verify_property_failure(&format!("{key} descriptor should be undefined"));
+    }
+    let Some(original) = original else {
+        return verify_property_failure(&format!("{key} should be an own property"));
+    };
+    if original.is_accessor() {
+        return Ok(Value::Boolean(false));
+    }
+    let Value::Object(desc_object) = desc else {
+        if matches!(desc, Value::Array(_) | Value::Function(_) | Value::Proxy(_)) {
+            return Ok(Value::Boolean(false));
+        }
+        return verify_property_failure("The desc argument should be an object or undefined");
+    };
+    if crate::typed_array::is_typed_array_object(&desc_object) {
+        return Ok(Value::Boolean(false));
+    }
+    for name in desc_object.own_property_names() {
+        let Some(desc_field) = desc_object.own_property(&name) else {
+            return Ok(Value::Boolean(false));
+        };
+        if desc_field.is_accessor() {
+            return Ok(Value::Boolean(false));
+        }
+        match name.as_str() {
+            "value" | "writable" | "enumerable" | "configurable" => {}
+            "get" | "set" => return Ok(Value::Boolean(false)),
+            _ => return verify_property_failure(&format!("Invalid descriptor field: {name}")),
+        }
+    }
+
+    if let Some(expected) = desc_object
+        .own_property("value")
+        .map(|property| property.value)
+    {
+        if !expected.same_value(&original.value) {
+            return verify_property_failure(&format!("{key} descriptor value mismatch"));
+        }
+        let actual = property_value_key(target.clone(), &PropertyKey::String(key.clone()), env)?;
+        if !expected.same_value(&actual) {
+            return verify_property_failure(&format!("{key} value mismatch"));
+        }
+    }
+    if let Some(expected) = optional_bool_descriptor_field(&desc_object, "enumerable")? {
+        if expected != original.enumerable || expected != is_string_key_enumerable(&target, &key) {
+            return verify_property_failure(&format!("{key} descriptor enumerable mismatch"));
+        }
+    }
+    if let Some(expected) = optional_bool_descriptor_field(&desc_object, "writable")? {
+        if expected != original.writable || expected != is_string_key_writable(&target, &key, env)?
+        {
+            return verify_property_failure(&format!("{key} descriptor writable mismatch"));
+        }
+    }
+    if let Some(expected) = optional_bool_descriptor_field(&desc_object, "configurable")? {
+        if expected != original.configurable
+            || expected != is_string_key_configurable(&target, &key, &original, env)?
+        {
+            return verify_property_failure(&format!("{key} descriptor configurable mismatch"));
+        }
+    }
+
+    Ok(Value::Boolean(true))
+}
+
+fn optional_bool_descriptor_field(
+    desc_object: &ObjectRef,
+    key: &str,
+) -> Result<Option<bool>, RuntimeError> {
+    let Some(property) = desc_object.own_property(key) else {
+        return Ok(None);
+    };
+    match property.value {
+        Value::Undefined => Ok(None),
+        Value::Boolean(value) => Ok(Some(value)),
+        _ => verify_property_failure(&format!("{key} descriptor field must be boolean")),
+    }
+}
+
+fn verify_property_failure<T>(message: &str) -> Result<T, RuntimeError> {
+    Err(RuntimeError {
+        thrown: None,
+        message: message.to_owned(),
+    })
+}
+
+fn is_string_key_enumerable(target: &Value, key: &str) -> bool {
+    match target {
+        Value::Object(object) => object
+            .own_property(key)
+            .is_some_and(|property| property.enumerable),
+        Value::Array(elements) => crate::array_own_property_descriptor(elements, key)
+            .is_some_and(|property| property.enumerable),
+        Value::Function(function) => function_own_property_descriptor(function, key)
+            .is_some_and(|property| property.enumerable),
+        _ => false,
+    }
+}
+
+fn is_string_key_writable(
+    target: &Value,
+    key: &str,
+    env: &mut CallEnv,
+) -> Result<bool, RuntimeError> {
+    let had_value = crate::object::own_property_descriptor_key(
+        target.clone(),
+        &PropertyKey::String(key.to_owned()),
+        env,
+    )?
+    .is_some();
+    let old_value = property_value_key(target.clone(), &PropertyKey::String(key.to_owned()), env)?;
+    let mut new_value = if matches!(target, Value::Array(_)) && key == "length" {
+        Value::Number((u32::MAX) as f64)
+    } else {
+        Value::String("unlikelyValue".to_owned().into())
+    };
+    if new_value.same_value(&old_value) {
+        new_value = Value::String("unlikelyValue2".to_owned().into());
+    }
+    let _ = set_object_property(target.clone(), key.to_owned(), new_value.clone(), env);
+    let write_succeeded =
+        property_value_key(target.clone(), &PropertyKey::String(key.to_owned()), env)?
+            .same_value(&new_value);
+    if write_succeeded {
+        if had_value {
+            let _ = set_object_property(target.clone(), key.to_owned(), old_value, env)?;
+        } else {
+            delete_string_key(target, key);
+        }
+    }
+    Ok(write_succeeded)
+}
+
+fn is_string_key_configurable(
+    target: &Value,
+    key: &str,
+    original: &Property,
+    env: &mut CallEnv,
+) -> Result<bool, RuntimeError> {
+    let deleted = delete_string_key(target, key);
+    let configurable = crate::object::own_property_descriptor_key(
+        target.clone(),
+        &PropertyKey::String(key.to_owned()),
+        env,
+    )?
+    .is_none();
+    if deleted {
+        let _ = define_property_on_value_key(
+            target.clone(),
+            PropertyKey::String(key.to_owned()),
+            original.clone(),
+            env,
+        )?;
+    }
+    Ok(configurable)
+}
+
+fn delete_string_key(target: &Value, key: &str) -> bool {
+    match target {
+        Value::Object(object) => object.delete_own_property(key),
+        Value::Array(elements) => match key.parse::<usize>() {
+            Ok(index) => elements.delete_index(index),
+            Err(_) => elements.delete_property(key),
+        },
+        Value::Function(function) => function_delete_own_property(function, key),
+        _ => false,
+    }
 }
 
 pub(crate) fn native_test262_build_string(

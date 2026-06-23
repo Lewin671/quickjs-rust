@@ -32,6 +32,9 @@ pub(super) fn call_core_native(
         NativeFunction::Test262AssertSameValue => {
             global::native_test262_assert_same_value(argument_values)
         }
+        NativeFunction::Test262VerifyProperty => {
+            global::native_test262_verify_property(argument_values, env)
+        }
         NativeFunction::Test262BuildString => {
             global::native_test262_build_string(argument_values, env)
         }

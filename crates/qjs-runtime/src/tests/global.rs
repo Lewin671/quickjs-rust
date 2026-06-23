@@ -1235,3 +1235,53 @@ fn test262_build_string_host_helper_matches_regexp_utils_shape() {
         Ok(Value::String("BCD:lone,ranges".to_owned().into()))
     );
 }
+
+#[test]
+fn test262_verify_property_host_helper_checks_data_descriptors() {
+    assert_eq!(
+        eval(
+            "let o = {}; \
+             Object.defineProperty(o, 'x', { value: 7, writable: true, enumerable: true, configurable: true }); \
+             __quickjsRustVerifyProperty(o, 'x', { value: 7, writable: true, enumerable: true, configurable: true });"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert!(
+        eval(
+            "let o = {}; \
+             Object.defineProperty(o, 'x', { value: 7, writable: true, enumerable: true, configurable: true }); \
+             __quickjsRustVerifyProperty(o, 'x', { value: 8 });"
+        )
+        .is_err()
+    );
+    assert_eq!(
+        eval(
+            "let o = {}; \
+             Object.defineProperty(o, 'x', { get: function() { return 1; }, configurable: true }); \
+             __quickjsRustVerifyProperty(o, 'x', { get: o.__lookupGetter__('x'), configurable: true });"
+        ),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval(
+            "__quickjsRustVerifyProperty([1, 2], 'length', { value: 2, writable: true, enumerable: false, configurable: false });"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let o = { x: 1 }; \
+             let desc = {}; \
+             Object.defineProperty(desc, 'value', { get: function() { return 1; } }); \
+             __quickjsRustVerifyProperty(o, 'x', desc);"
+        ),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval(
+            "let p = new Proxy({ x: 1 }, {}); \
+             __quickjsRustVerifyProperty(p, 'x', { value: 1, writable: true, enumerable: true, configurable: true });"
+        ),
+        Ok(Value::Boolean(false))
+    );
+}
