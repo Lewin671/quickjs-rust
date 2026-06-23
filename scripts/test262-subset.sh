@@ -244,6 +244,13 @@ var $262 = {
     };
     var __quickjsRustRealmGlobal = Object.create(globalThis);
     var crossRealmObject = function Object(value) {
+      if (new.target && new.target !== crossRealmObject) {
+        var prototype = new.target.prototype;
+        if (prototype === null || (typeof prototype !== "object" && typeof prototype !== "function")) {
+          prototype = new.target.__quickjsRustRealmObjectPrototype || crossRealmObject.prototype;
+        }
+        return globalThis.Object.create(prototype);
+      }
       return globalThis.Object(value);
     };
     var crossRealmObjectPrototype = Object.create(globalThis.Object.prototype);
@@ -257,6 +264,34 @@ var $262 = {
     var crossRealmFunctionPrototype = function() {};
     Object.defineProperty(crossRealmFunctionPrototype, "constructor", {
       value: crossRealmFunction,
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
+    Object.defineProperty(crossRealmFunctionPrototype, "apply", {
+      value: function apply(thisArg, argArray) {
+        if (typeof this !== "function") {
+          throw new __quickjsRustRealmGlobal.TypeError("Function.prototype.apply target is not callable");
+        }
+        if (argArray !== null && argArray !== undefined) {
+          var argType = typeof argArray;
+          if (argType !== "object" && argType !== "function") {
+            throw new __quickjsRustRealmGlobal.TypeError("Function.prototype.apply argument list must be an object");
+          }
+        }
+        return globalThis.Function.prototype.apply.call(this, thisArg, argArray);
+      },
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
+    Object.defineProperty(crossRealmFunctionPrototype, "bind", {
+      value: function bind() {
+        if (typeof this !== "function") {
+          throw new __quickjsRustRealmGlobal.TypeError("Function.prototype.bind target is not callable");
+        }
+        return globalThis.Function.prototype.bind.apply(this, arguments);
+      },
       writable: true,
       enumerable: false,
       configurable: true

@@ -7,6 +7,7 @@ use crate::{
 use crate::{CallEnv, NEW_TARGET_BINDING, NativeFunction, RuntimeError};
 
 const CROSS_REALM_MAP_PROTOTYPE: &str = "__quickjsRustRealmMapPrototype";
+const CROSS_REALM_OBJECT_PROTOTYPE: &str = "__quickjsRustRealmObjectPrototype";
 const CROSS_REALM_SET_PROTOTYPE: &str = "__quickjsRustRealmSetPrototype";
 const CROSS_REALM_WEAK_MAP_PROTOTYPE: &str = "__quickjsRustRealmWeakMapPrototype";
 const CROSS_REALM_WEAK_SET_PROTOTYPE: &str = "__quickjsRustRealmWeakSetPrototype";
@@ -40,6 +41,7 @@ pub(crate) fn native_construct_prototype_slot(
 
 fn native_construct_realm_prototype_marker(native: Option<NativeFunction>) -> Option<&'static str> {
     Some(match native? {
+        NativeFunction::Object => CROSS_REALM_OBJECT_PROTOTYPE,
         NativeFunction::Map => CROSS_REALM_MAP_PROTOTYPE,
         NativeFunction::Set => CROSS_REALM_SET_PROTOTYPE,
         NativeFunction::WeakMap => CROSS_REALM_WEAK_MAP_PROTOTYPE,

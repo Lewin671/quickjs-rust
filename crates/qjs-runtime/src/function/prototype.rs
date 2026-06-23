@@ -14,6 +14,29 @@ use crate::{
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 const FUNCTION_REALM_PROTOTYPE: &str = "__quickjsRustRealmFunctionPrototype";
 const GENERATOR_FUNCTION_REALM_PROTOTYPE: &str = "__quickjsRustRealmGeneratorFunctionPrototype";
+const CROSS_REALM_FUNCTION_MARKERS: &[&str] = &[
+    "__quickjsRustRealmObjectPrototype",
+    "__quickjsRustRealmFunctionPrototype",
+    "__quickjsRustRealmArrayPrototype",
+    "__quickjsRustRealmRegExpPrototype",
+    "__quickjsRustRealmBooleanPrototype",
+    "__quickjsRustRealmNumberPrototype",
+    "__quickjsRustRealmStringPrototype",
+    "__quickjsRustRealmDatePrototype",
+    "__quickjsRustRealmMapPrototype",
+    "__quickjsRustRealmSetPrototype",
+    "__quickjsRustRealmWeakMapPrototype",
+    "__quickjsRustRealmWeakSetPrototype",
+    "__quickjsRustRealmErrorPrototype",
+    "__quickjsRustRealmEvalErrorPrototype",
+    "__quickjsRustRealmRangeErrorPrototype",
+    "__quickjsRustRealmReferenceErrorPrototype",
+    "__quickjsRustRealmSyntaxErrorPrototype",
+    "__quickjsRustRealmTypeErrorPrototype",
+    "__quickjsRustRealmURIErrorPrototype",
+    "__quickjsRustRealmSuppressedErrorPrototype",
+    "__quickjsRustRealmGeneratorFunctionPrototype",
+];
 
 pub(crate) fn native_function(
     constructor: &Function,
@@ -510,6 +533,7 @@ pub(crate) fn native_function_prototype_bind(
         _ => "bound ".to_owned(),
     };
 
+    let target = this_value.clone();
     let bound = Function::new_bound(this_value, bound_this, bound_arguments, 0);
     bound.define_property(
         "length".to_owned(),
@@ -519,7 +543,19 @@ pub(crate) fn native_function_prototype_bind(
         "name".to_owned(),
         Property::data(Value::String(bound_name.into()), false, false, true),
     );
+    copy_cross_realm_function_markers(&target, &bound);
     Ok(Value::Function(bound))
+}
+
+fn copy_cross_realm_function_markers(source: &Value, target: &Function) {
+    let Value::Function(source) = source else {
+        return;
+    };
+    for name in CROSS_REALM_FUNCTION_MARKERS {
+        if let Some(property) = source.own_property(name) {
+            target.define_property(name.to_string(), property);
+        }
+    }
 }
 
 pub(crate) fn native_function_prototype_has_instance(

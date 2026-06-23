@@ -373,6 +373,18 @@ fn evaluates_object_definition_and_creation_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval(
+            "let realmPrototype = { realm: 'other-object' }; \
+             function C() {} \
+             Object.defineProperty(C, '__quickjsRustRealmObjectPrototype', { value: realmPrototype }); \
+             C.prototype = 1; \
+             let bound = C.bind(null); \
+             let rebound = bound.bind(null); \
+             Object.getPrototypeOf(Reflect.construct(Object, [], rebound)) === realmPrototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("({ value: 1 }).hasOwnProperty('value');"),
         Ok(Value::Boolean(true))
     );
