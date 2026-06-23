@@ -769,6 +769,12 @@ should_emit_test262_assert_fast_paths() {
     *) return 0 ;;
   esac
 }
+should_emit_test262_property_helper_fast_paths() {
+  case "$1" in
+    "$TEST262_DIR/test/harness/"*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
 includes_regexp_utils() {
   local includes="$1"
   [[ "$includes" == *"regExpUtils.js"* ]]
@@ -915,7 +921,7 @@ make_case() {
         cat "$TEST262_DIR/harness/$include"
         printf '\n'
       done
-      if includes_property_helper "$includes"; then
+      if includes_property_helper "$includes" && should_emit_test262_property_helper_fast_paths "$source"; then
         emit_test262_property_helper_fast_paths
         printf '\n'
       fi
@@ -966,7 +972,7 @@ make_module_prelude() {
       cat "$TEST262_DIR/harness/$include"
       printf '\n'
     done
-    if includes_property_helper "$includes"; then
+    if includes_property_helper "$includes" && should_emit_test262_property_helper_fast_paths "$source"; then
       emit_test262_property_helper_fast_paths
       printf '\n'
     fi
@@ -1398,6 +1404,7 @@ if [ "$run" -gt 0 ]; then
   export -f emit_test262_regexp_utils_fast_paths
   export -f emit_test262_typed_array_fast_paths
   export -f should_emit_test262_assert_fast_paths
+  export -f should_emit_test262_property_helper_fast_paths
   export -f includes_regexp_utils
   export -f includes_typed_array_utils
   export -f includes_property_helper
