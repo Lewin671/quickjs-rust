@@ -14,6 +14,8 @@ use crate::{
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 const FUNCTION_REALM_PROTOTYPE: &str = "__quickjsRustRealmFunctionPrototype";
 const GENERATOR_FUNCTION_REALM_PROTOTYPE: &str = "__quickjsRustRealmGeneratorFunctionPrototype";
+const ASYNC_GENERATOR_FUNCTION_REALM_PROTOTYPE: &str =
+    "__quickjsRustRealmAsyncGeneratorFunctionPrototype";
 const CROSS_REALM_FUNCTION_MARKERS: &[&str] = &[
     "__quickjsRustRealmObjectPrototype",
     "__quickjsRustRealmFunctionPrototype",
@@ -36,6 +38,7 @@ const CROSS_REALM_FUNCTION_MARKERS: &[&str] = &[
     "__quickjsRustRealmURIErrorPrototype",
     "__quickjsRustRealmSuppressedErrorPrototype",
     "__quickjsRustRealmGeneratorFunctionPrototype",
+    "__quickjsRustRealmAsyncGeneratorFunctionPrototype",
 ];
 
 pub(crate) fn native_function(
@@ -149,7 +152,7 @@ pub(crate) fn native_async_generator_function_constructor(
     )?;
     crate::async_generator::wire_async_generator_function_intrinsics(&created, env);
     created
-        .set_internal_prototype_slot(crate::native_construct_prototype_slot(constructor, env)?)
+        .set_internal_prototype_slot(async_generator_construct_prototype_slot(constructor, env)?)
         .map_err(|_| RuntimeError {
             thrown: None,
             message: "TypeError: dynamic async generator function prototype could not be set"
@@ -245,9 +248,28 @@ fn generator_construct_prototype_slot(
     constructor: &Function,
     env: &mut CallEnv,
 ) -> Result<Option<Prototype>, RuntimeError> {
+    construct_prototype_slot_with_realm_marker(constructor, env, GENERATOR_FUNCTION_REALM_PROTOTYPE)
+}
+
+fn async_generator_construct_prototype_slot(
+    constructor: &Function,
+    env: &mut CallEnv,
+) -> Result<Option<Prototype>, RuntimeError> {
+    construct_prototype_slot_with_realm_marker(
+        constructor,
+        env,
+        ASYNC_GENERATOR_FUNCTION_REALM_PROTOTYPE,
+    )
+}
+
+fn construct_prototype_slot_with_realm_marker(
+    constructor: &Function,
+    env: &mut CallEnv,
+    marker: &str,
+) -> Result<Option<Prototype>, RuntimeError> {
     if let Some(Value::Function(new_target)) = env.get(crate::NEW_TARGET_BINDING)
         && let Some(Value::Object(realm_prototype)) = new_target
-            .own_property(GENERATOR_FUNCTION_REALM_PROTOTYPE)
+            .own_property(marker)
             .map(|property| property.value)
     {
         let prototype = property_value(Value::Function(new_target), "prototype", env)?;

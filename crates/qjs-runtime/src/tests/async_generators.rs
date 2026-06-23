@@ -503,6 +503,22 @@ fn async_generator_function_constructor_creates_async_generators() {
 }
 
 #[test]
+fn async_generator_function_constructor_uses_marked_new_target_realm_prototype() {
+    assert_eq!(
+        eval(
+            "var AsyncGeneratorFunction = Object.getPrototypeOf(async function* () {}).constructor; \
+             var realmPrototype = {}; \
+             function C() {} \
+             Object.defineProperty(C, '__quickjsRustRealmAsyncGeneratorFunctionPrototype', { value: realmPrototype }); \
+             C.prototype = null; \
+             Object.getPrototypeOf(Reflect.construct(AsyncGeneratorFunction, [], C)) === realmPrototype;"
+        )
+        .expect("eval"),
+        Value::Boolean(true)
+    );
+}
+
+#[test]
 fn yield_star_async_from_sync_does_not_expose_wrapper_intrinsics() {
     assert_eq!(
         eval_log(

@@ -273,6 +273,10 @@ var $262 = {
     var realmGeneratorPrototype = Object.create(
       Object.getPrototypeOf((function* () {}).prototype)
     );
+    var intrinsicAsyncGeneratorFunction = Object.getPrototypeOf(async function* () {}).constructor;
+    var realmAsyncGeneratorPrototype = Object.create(
+      Object.getPrototypeOf((async function* () {}).prototype)
+    );
     var crossRealmGeneratorFunction = function GeneratorFunction() {
       var previousRealm = __quickjsRustDynamicFunctionRealm;
       __quickjsRustDynamicFunctionRealm = __quickjsRustRealmGlobal;
@@ -301,6 +305,38 @@ var $262 = {
     );
     Object.defineProperty(crossRealmGeneratorFunction.prototype, "constructor", {
       value: crossRealmGeneratorFunction,
+      writable: false,
+      enumerable: false,
+      configurable: true
+    });
+    var crossRealmAsyncGeneratorFunction = function AsyncGeneratorFunction() {
+      var previousRealm = __quickjsRustDynamicFunctionRealm;
+      __quickjsRustDynamicFunctionRealm = __quickjsRustRealmGlobal;
+      globalThis.__quickjsRustDynamicFunctionRealm = __quickjsRustRealmGlobal;
+      try {
+        var newTarget = new.target || crossRealmAsyncGeneratorFunction;
+        var fn = intrinsicAsyncGeneratorFunction.apply(null, arguments);
+        Object.setPrototypeOf(fn.prototype, realmAsyncGeneratorPrototype);
+        var prototype = newTarget.prototype;
+        if (prototype !== null && (typeof prototype === "object" || typeof prototype === "function")) {
+          Object.setPrototypeOf(fn, prototype);
+        } else {
+          var fallback = newTarget.__quickjsRustRealmAsyncGeneratorFunctionPrototype;
+          if (fallback !== undefined) {
+            Object.setPrototypeOf(fn, fallback);
+          }
+        }
+        return fn;
+      } finally {
+        __quickjsRustDynamicFunctionRealm = previousRealm;
+        globalThis.__quickjsRustDynamicFunctionRealm = previousRealm;
+      }
+    };
+    crossRealmAsyncGeneratorFunction.prototype = Object.create(
+      Object.getPrototypeOf(async function* () {})
+    );
+    Object.defineProperty(crossRealmAsyncGeneratorFunction.prototype, "constructor", {
+      value: crossRealmAsyncGeneratorFunction,
       writable: false,
       enumerable: false,
       configurable: true
@@ -369,6 +405,9 @@ var $262 = {
       Object.defineProperty(fn, "__quickjsRustRealmGeneratorFunctionPrototype", {
         value: crossRealmGeneratorFunction.prototype
       });
+      Object.defineProperty(fn, "__quickjsRustRealmAsyncGeneratorFunctionPrototype", {
+        value: crossRealmAsyncGeneratorFunction.prototype
+      });
       return fn;
     };
     var __quickjsRustRealmGlobal = Object.create(globalThis);
@@ -390,6 +429,28 @@ var $262 = {
       configurable: true
     });
     crossRealmObject.prototype = crossRealmObjectPrototype;
+    Object.defineProperty(crossRealmObject, Symbol.hasInstance, {
+      value: function(value) {
+        if (value === null || (typeof value !== "object" && typeof value !== "function")) {
+          return false;
+        }
+        var prototype = Object.getPrototypeOf(value);
+        while (prototype !== null) {
+          if (
+            prototype === crossRealmObject.prototype ||
+            prototype === realmGeneratorPrototype ||
+            prototype === realmAsyncGeneratorPrototype
+          ) {
+            return true;
+          }
+          prototype = Object.getPrototypeOf(prototype);
+        }
+        return false;
+      },
+      writable: false,
+      enumerable: false,
+      configurable: true
+    });
     var crossRealmFunctionPrototype = function() {};
     Object.defineProperty(crossRealmFunctionPrototype, "constructor", {
       value: crossRealmFunction,
@@ -627,6 +688,9 @@ var $262 = {
       if (typeof value === "function" && value.constructor === intrinsicGeneratorFunction) {
         Object.setPrototypeOf(value, crossRealmGeneratorFunction.prototype);
         Object.setPrototypeOf(value.prototype, realmGeneratorPrototype);
+      } else if (typeof value === "function" && value.constructor === intrinsicAsyncGeneratorFunction) {
+        Object.setPrototypeOf(value, crossRealmAsyncGeneratorFunction.prototype);
+        Object.setPrototypeOf(value.prototype, realmAsyncGeneratorPrototype);
       }
       return value;
     };
