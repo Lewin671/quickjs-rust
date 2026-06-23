@@ -559,6 +559,33 @@ fn yield_delegation_throw_without_inner_throw_closes_and_type_errors() {
 }
 
 #[test]
+fn yield_delegation_throw_without_inner_throw_uses_abrupt_return_call() {
+    assert_eq!(
+        number(
+            "let iterable = { [Symbol.iterator]() { return this; }, \
+                 next() { return { value: 1, done: false }; }, \
+                 return() { throw 87; } }; \
+             function* outer() { try { yield* iterable; } catch (e) { return e; } } \
+             let it = outer(); it.next(); it.throw(0).value;"
+        ),
+        87.0
+    );
+}
+
+#[test]
+fn yield_delegation_throw_without_inner_throw_uses_abrupt_return_getter() {
+    assert!(boolean(
+        "let thrown = {}; \
+         let iterable = { [Symbol.iterator]() { return this; }, \
+             next() { return { value: 1, done: false }; }, \
+             get throw() {}, \
+             get return() { throw thrown; } }; \
+         function* outer() { try { yield* iterable; } catch (e) { return e === thrown; } } \
+         let it = outer(); it.next(); it.throw(0).value;"
+    ));
+}
+
+#[test]
 fn yield_delegation_forwards_return_and_runs_inner_finally() {
     assert_eq!(
         number(

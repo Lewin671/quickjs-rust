@@ -329,11 +329,15 @@ impl Vm<'_> {
             return Ok(DelegateStep::Continue);
         };
         if matches!(method, Value::Undefined | Value::Null) {
-            // No inner `throw`: close the inner iterator (its return is called,
-            // errors swallowed) and raise a TypeError at the `yield*` site.
+            // No inner `throw`: close the inner iterator first. If `return`
+            // itself completes abruptly, that completion is delivered to the
+            // `yield*` site; otherwise the missing `throw` becomes a TypeError.
             let mut env = self.current_env();
-            let _ = close_iterator(iterator, &mut env);
+            let close_result = close_iterator(iterator, &mut env);
             self.apply_env(env);
+            if self.handle_runtime_result(close_result)?.is_none() {
+                return Ok(DelegateStep::Continue);
+            }
             let result: Result<(), RuntimeError> = Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: the iterator does not provide a 'throw' method".to_owned(),
