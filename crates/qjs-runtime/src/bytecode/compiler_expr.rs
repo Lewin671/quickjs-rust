@@ -256,15 +256,6 @@ impl Compiler {
         body: &Stmt,
         result_slot: usize,
     ) -> Result<(), RuntimeError> {
-        let loop_start = self.code.len();
-        let exit_jump = if let Some(test) = test {
-            self.compile_expr(test)?;
-            let jump = self.emit(Op::JumpIfFalse(usize::MAX));
-            self.emit(Op::Pop);
-            Some(jump)
-        } else {
-            None
-        };
         let blocked = init.map_or_else(Vec::new, for_init_lexical_names);
         let iteration_slots: Vec<usize> = if matches!(
             init,
@@ -279,6 +270,23 @@ impl Compiler {
                 .collect()
         } else {
             Vec::new()
+        };
+        if !iteration_slots.is_empty() {
+            // `for (let ...; test; update)` creates the first per-iteration
+            // environment after evaluating the initializer and before the
+            // first test/body evaluation. Closures created by the initializer
+            // keep the initializer environment; test/body/update closures use
+            // this first iteration environment.
+            self.emit(Op::FreshIterationScope(iteration_slots.clone()));
+        }
+        let loop_start = self.code.len();
+        let exit_jump = if let Some(test) = test {
+            self.compile_expr(test)?;
+            let jump = self.emit(Op::JumpIfFalse(usize::MAX));
+            self.emit(Op::Pop);
+            Some(jump)
+        } else {
+            None
         };
         let body_start = self.code.len();
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {

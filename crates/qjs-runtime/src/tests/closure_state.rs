@@ -280,6 +280,26 @@ fn loop_body_iteration_environment_preserves_outer_captures() {
 }
 
 #[test]
+fn for_let_initializer_closure_keeps_initial_iteration_environment() {
+    assert_eq!(
+        eval(
+            "var probeBefore, probeTest, probeIncr, probeBody;
+             var run = true;
+             for (
+                 let x = 'outside', _ = probeBefore = function () { return x; };
+                 run && (x = 'inside', probeTest = function () { return x; });
+                 probeIncr = function () { return x; }
+             )
+                 probeBody = function () { return x; }, run = false;
+             probeBefore() + ':' + probeTest() + ':' + probeBody() + ':' + probeIncr();"
+        ),
+        Ok(Value::String(
+            "outside:inside:inside:inside".to_owned().into()
+        ))
+    );
+}
+
+#[test]
 fn sibling_closure_mutation_observes_latest_var_binding() {
     assert_eq!(
         eval(
