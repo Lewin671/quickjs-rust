@@ -867,6 +867,13 @@ fn generator_function_constructor_realm_surface() {
          C.prototype = null; \
          Object.getPrototypeOf(Reflect.construct(GeneratorFunction, [], C)) === realmPrototype;"
     ));
+    assert!(boolean(
+        "function* g() {} \
+         let realmPrototype = {}; \
+         Object.defineProperty(g, '__quickjsRustRealmGeneratorFunctionPrototype', { value: realmPrototype }); \
+         g.prototype = null; \
+         Object.getPrototypeOf(g()) === realmPrototype;"
+    ));
     assert_eq!(
         number(
             "let GeneratorFunction = Object.getPrototypeOf(function* () {}).constructor; \

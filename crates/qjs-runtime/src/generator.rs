@@ -200,6 +200,13 @@ fn generator_object_prototype(function: &Function, env: &CallEnv) -> Option<Obje
     if let Some(Value::Object(prototype)) = function
         .own_property("prototype")
         .map(|property| property.value)
+        && !crate::symbol::is_symbol_primitive(&prototype)
+    {
+        return Some(prototype);
+    }
+    if let Some(Value::Object(prototype)) = function
+        .own_property(crate::function::GENERATOR_FUNCTION_REALM_PROTOTYPE)
+        .map(|property| property.value)
     {
         return Some(prototype);
     }

@@ -13,7 +13,8 @@ use crate::{
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 const FUNCTION_REALM_PROTOTYPE: &str = "__quickjsRustRealmFunctionPrototype";
-const GENERATOR_FUNCTION_REALM_PROTOTYPE: &str = "__quickjsRustRealmGeneratorFunctionPrototype";
+pub(crate) const GENERATOR_FUNCTION_REALM_PROTOTYPE: &str =
+    "__quickjsRustRealmGeneratorFunctionPrototype";
 pub(crate) const ASYNC_GENERATOR_FUNCTION_REALM_PROTOTYPE: &str =
     "__quickjsRustRealmAsyncGeneratorFunctionPrototype";
 const CROSS_REALM_FUNCTION_MARKERS: &[&str] = &[
