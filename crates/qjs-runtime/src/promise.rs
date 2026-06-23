@@ -734,24 +734,22 @@ pub(crate) fn perform_await(
     on_rejected: Value,
     env: &mut CallEnv,
 ) {
-    // PromiseResolve(%Promise%, value): reuse an existing native promise,
-    // otherwise wrap the value in a resolved promise.
-    let promise = if is_promise_value(&value) {
-        match value {
-            Value::Object(promise) => promise,
-            _ => unreachable!("is_promise_value guarantees an object"),
-        }
-    } else {
-        let promise = new_pending_promise(env);
-        resolve_promise(&promise, value, env);
-        promise
-    };
-
     // The reactions need a result capability to satisfy the reaction-job
     // contract; the async driver ignores its eventual settlement.
     let throwaway = new_pending_promise(env);
     let fulfill_reaction = promise_reaction(on_fulfilled, throwaway.clone(), true);
     let reject_reaction = promise_reaction(on_rejected, throwaway, false);
+
+    let promise_constructor = env.get("Promise").unwrap_or(Value::Undefined);
+    let promise = match promise_resolve(&promise_constructor, value, env) {
+        Ok(Value::Object(promise)) => promise,
+        Ok(_) => return,
+        Err(error) => {
+            let reason = crate::error::runtime_error_to_value(error, env);
+            enqueue_promise_reaction_job(env, &reject_reaction, reason);
+            return;
+        }
+    };
 
     match promise_state(&promise).as_deref() {
         Some(PROMISE_PENDING) => {

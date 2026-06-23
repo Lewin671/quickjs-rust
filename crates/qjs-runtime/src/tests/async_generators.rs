@@ -554,6 +554,24 @@ fn return_before_start_awaits_promise_value() {
 }
 
 #[test]
+fn return_before_start_rejects_broken_promise_resolve() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             async function* g() { throw new Error('unreachable'); } \
+             var promise = Promise.resolve(42); \
+             Object.defineProperty(promise, 'constructor', { get: function() { throw new Error('broken promise'); } }); \
+             g().return(promise).then( \
+               function() { o.push('fulfilled'); }, \
+               function(error) { o.push(error.message); } \
+             ); \
+             o;"
+        ),
+        "broken promise"
+    );
+}
+
+#[test]
 fn completed_return_undefined_settles_after_promise_jobs() {
     assert_eq!(
         eval_log(
