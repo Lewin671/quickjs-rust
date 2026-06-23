@@ -95,6 +95,10 @@ pub(crate) enum Resume {
     /// `return(v)`: inject a return completion at the yield point so enclosing
     /// `finally` blocks run.
     Return(Value),
+    /// `return(v)` after the async-generator driver has already awaited `v`.
+    /// The injected return completion is the same, but the driver must not
+    /// unwrap the resulting completion value a second time.
+    ReturnAlreadyAwaited(Value),
     /// `throw(v)`: inject `v` as a thrown exception at the yield point.
     Throw(Value),
 }
@@ -511,7 +515,9 @@ fn run_from_yield(
                         GeneratorOutcome::Await(value),
                     ));
                 }
-                Resume::Return(value) => super::vm_result::ResumeMode::Return(value),
+                Resume::Return(value) | Resume::ReturnAlreadyAwaited(value) => {
+                    super::vm_result::ResumeMode::Return(value)
+                }
                 Resume::Throw(value) => super::vm_result::ResumeMode::Throw(value),
             });
             let result = vm.run_completion();
@@ -528,7 +534,9 @@ fn run_from_yield(
             vm.resume_mode = Some(match resume {
                 Resume::Next(value) => super::vm_result::ResumeMode::Awaited(value),
                 Resume::Throw(value) => super::vm_result::ResumeMode::AwaitRejected(value),
-                Resume::Return(value) => super::vm_result::ResumeMode::Return(value),
+                Resume::Return(value) | Resume::ReturnAlreadyAwaited(value) => {
+                    super::vm_result::ResumeMode::Return(value)
+                }
             });
             let result = vm.run_completion();
             return drive(
@@ -546,7 +554,9 @@ fn run_from_yield(
                 Resume::Throw(value) => {
                     super::vm_result::ResumeMode::AwaitReturnValueRejected(value)
                 }
-                Resume::Return(value) => super::vm_result::ResumeMode::Return(value),
+                Resume::Return(value) | Resume::ReturnAlreadyAwaited(value) => {
+                    super::vm_result::ResumeMode::Return(value)
+                }
             });
             let result = vm.run_completion();
             return drive(
@@ -562,7 +572,9 @@ fn run_from_yield(
             vm.resume_mode = Some(match resume {
                 Resume::Next(value) => super::vm_result::ResumeMode::AwaitedReturn(value),
                 Resume::Throw(value) => super::vm_result::ResumeMode::AwaitReturnRejected(value),
-                Resume::Return(value) => super::vm_result::ResumeMode::Return(value),
+                Resume::Return(value) | Resume::ReturnAlreadyAwaited(value) => {
+                    super::vm_result::ResumeMode::Return(value)
+                }
             });
             let result = vm.run_completion();
             return drive(
@@ -580,7 +592,9 @@ fn run_from_yield(
                 Resume::Throw(value) => {
                     super::vm_result::ResumeMode::AwaitReturnValueRejected(value)
                 }
-                Resume::Return(value) => super::vm_result::ResumeMode::Return(value),
+                Resume::Return(value) | Resume::ReturnAlreadyAwaited(value) => {
+                    super::vm_result::ResumeMode::Return(value)
+                }
             });
             let result = vm.run_completion();
             return drive_with_return_already_awaited(
@@ -595,6 +609,7 @@ fn run_from_yield(
         SuspensionKind::Ordinary => {}
     }
 
+    let return_already_awaited = matches!(resume, Resume::ReturnAlreadyAwaited(_));
     let started = match resume {
         // The yield expression evaluates to the resume value.
         Resume::Next(value) => {
@@ -606,14 +621,17 @@ fn run_from_yield(
         Resume::Throw(value) => vm.throw_value(value),
         // A `return(v)` injects a return completion that runs enclosing finally
         // blocks; with no finally it completes the generator immediately.
-        Resume::Return(value) => match vm.return_value(value) {
+        Resume::Return(value) | Resume::ReturnAlreadyAwaited(value) => match vm.return_value(value)
+        {
             Ok(Some(returned)) => {
                 vm.propagate_to_caller(caller_env);
                 vm.write_back_function_captures(capture_writeback.as_ref());
-                return Ok((
-                    GeneratorState::Completed,
-                    GeneratorOutcome::Return(returned),
-                ));
+                let outcome = if return_already_awaited {
+                    GeneratorOutcome::ReturnAlreadyAwaited(returned)
+                } else {
+                    GeneratorOutcome::Return(returned)
+                };
+                return Ok((GeneratorState::Completed, outcome));
             }
             Ok(None) => Ok(()),
             Err(error) => Err(error),
@@ -626,14 +644,25 @@ fn run_from_yield(
         return Err(error);
     }
     let result = vm.run_completion();
-    drive(
-        result,
-        vm,
-        &bytecode,
-        caller_env,
-        refresh_captured_slots_on_resume,
-        capture_writeback,
-    )
+    if return_already_awaited {
+        drive_with_return_already_awaited(
+            result,
+            vm,
+            &bytecode,
+            caller_env,
+            refresh_captured_slots_on_resume,
+            capture_writeback,
+        )
+    } else {
+        drive(
+            result,
+            vm,
+            &bytecode,
+            caller_env,
+            refresh_captured_slots_on_resume,
+            capture_writeback,
+        )
+    }
 }
 
 /// Maps a body run result to a generator state transition and outcome,
@@ -831,6 +860,10 @@ pub(crate) fn resume_generator(
                     *generator.generator_state().borrow_mut() = Some(GeneratorState::Completed);
                     Ok(GeneratorOutcome::Return(value))
                 }
+                Resume::ReturnAlreadyAwaited(value) => {
+                    *generator.generator_state().borrow_mut() = Some(GeneratorState::Completed);
+                    Ok(GeneratorOutcome::ReturnAlreadyAwaited(value))
+                }
                 Resume::Throw(value) => {
                     *generator.generator_state().borrow_mut() = Some(GeneratorState::Completed);
                     Err(throw_completion(value))
@@ -867,6 +900,7 @@ fn completed_outcome(resume: Resume) -> Result<GeneratorOutcome, RuntimeError> {
     match resume {
         Resume::Next(_) => Ok(GeneratorOutcome::Return(Value::Undefined)),
         Resume::Return(value) => Ok(GeneratorOutcome::Return(value)),
+        Resume::ReturnAlreadyAwaited(value) => Ok(GeneratorOutcome::ReturnAlreadyAwaited(value)),
         Resume::Throw(value) => Err(throw_completion(value)),
     }
 }

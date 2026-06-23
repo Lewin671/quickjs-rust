@@ -578,7 +578,7 @@ pub(crate) fn call_async_generator_reaction(
                 return Ok(None);
             };
             let generator = generator.clone();
-            resume_body(&generator, Resume::Return(value), env);
+            resume_body(&generator, Resume::ReturnAlreadyAwaited(value), env);
             Ok(Some(Value::Undefined))
         }
         NativeFunction::AsyncGeneratorReturnResumeRejected => {

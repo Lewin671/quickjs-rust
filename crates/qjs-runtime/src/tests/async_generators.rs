@@ -610,6 +610,28 @@ fn return_at_suspended_yield_rejection_is_catchable() {
 }
 
 #[test]
+fn return_at_suspended_yield_thenable_is_not_unwrapped_twice() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             async function* g() { \
+               o.push('start'); \
+               yield 123; \
+               o.push('unreachable'); \
+             } \
+             Promise.resolve(0) \
+               .then(function() { o.push('tick 1'); }) \
+               .then(function() { o.push('tick 2'); }); \
+             var it = g(); \
+             it.next(); \
+             it.return({ get then() { o.push('get then'); } }); \
+             o;"
+        ),
+        "start,tick 1,get then,tick 2"
+    );
+}
+
+#[test]
 fn completed_return_undefined_settles_after_promise_jobs() {
     assert_eq!(
         eval_log(
