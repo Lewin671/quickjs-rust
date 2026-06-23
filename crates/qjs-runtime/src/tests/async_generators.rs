@@ -510,8 +510,23 @@ fn async_generator_function_constructor_uses_marked_new_target_realm_prototype()
              var realmPrototype = {}; \
              function C() {} \
              Object.defineProperty(C, '__quickjsRustRealmAsyncGeneratorFunctionPrototype', { value: realmPrototype }); \
-             C.prototype = null; \
+             C.prototype = Symbol(); \
              Object.getPrototypeOf(Reflect.construct(AsyncGeneratorFunction, [], C)) === realmPrototype;"
+        )
+        .expect("eval"),
+        Value::Boolean(true)
+    );
+}
+
+#[test]
+fn async_generator_call_uses_marked_function_realm_default_prototype() {
+    assert_eq!(
+        eval(
+            "async function* g() {} \
+             var realmPrototype = {}; \
+             Object.defineProperty(g, '__quickjsRustRealmAsyncGeneratorFunctionPrototype', { value: realmPrototype }); \
+             g.prototype = undefined; \
+             Object.getPrototypeOf(g()) === realmPrototype;"
         )
         .expect("eval"),
         Value::Boolean(true)

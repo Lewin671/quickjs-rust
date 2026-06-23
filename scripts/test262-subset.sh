@@ -562,6 +562,9 @@ var $262 = {
       } else if (typeof value === "function" && value.constructor === intrinsicAsyncGeneratorFunction) {
         Object.setPrototypeOf(value, crossRealmAsyncGeneratorFunction.prototype);
         Object.setPrototypeOf(value.prototype, realmAsyncGeneratorPrototype);
+        Object.defineProperty(value, "__quickjsRustRealmAsyncGeneratorFunctionPrototype", {
+          value: realmAsyncGeneratorPrototype
+        });
       }
       return value;
     };

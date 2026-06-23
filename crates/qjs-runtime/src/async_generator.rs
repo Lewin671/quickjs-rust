@@ -247,6 +247,12 @@ fn async_generator_object_prototype(function: &Function, env: &CallEnv) -> Optio
     {
         return Some(prototype);
     }
+    if let Some(Value::Object(prototype)) = function
+        .own_property(crate::function::ASYNC_GENERATOR_FUNCTION_REALM_PROTOTYPE)
+        .map(|property| property.value)
+    {
+        return Some(prototype);
+    }
     async_generator_prototype(env)
 }
 

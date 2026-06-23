@@ -7,14 +7,14 @@ use crate::CallEnv;
 use crate::function::CompiledUserFunction;
 use crate::{
     Function, GLOBAL_THIS_BINDING, NativeFunction, Property, Prototype, RuntimeError, Value,
-    array::array_like_values_with_env, object::boxed_primitive, property_value,
+    array::array_like_values_with_env, object::boxed_primitive, property_value, symbol,
     to_js_string_with_env, to_length_with_env,
 };
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 const FUNCTION_REALM_PROTOTYPE: &str = "__quickjsRustRealmFunctionPrototype";
 const GENERATOR_FUNCTION_REALM_PROTOTYPE: &str = "__quickjsRustRealmGeneratorFunctionPrototype";
-const ASYNC_GENERATOR_FUNCTION_REALM_PROTOTYPE: &str =
+pub(crate) const ASYNC_GENERATOR_FUNCTION_REALM_PROTOTYPE: &str =
     "__quickjsRustRealmAsyncGeneratorFunctionPrototype";
 const CROSS_REALM_FUNCTION_MARKERS: &[&str] = &[
     "__quickjsRustRealmObjectPrototype",
@@ -273,14 +273,19 @@ fn construct_prototype_slot_with_realm_marker(
             .map(|property| property.value)
     {
         let prototype = property_value(Value::Function(new_target), "prototype", env)?;
-        if !matches!(
-            prototype,
-            Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Proxy(_)
-        ) {
+        if !is_construct_prototype_value(&prototype) {
             return Ok(Some(Prototype::Object(realm_prototype)));
         }
     }
     crate::native_construct_prototype_slot(constructor, env)
+}
+
+fn is_construct_prototype_value(value: &Value) -> bool {
+    match value {
+        Value::Object(prototype) => !symbol::is_symbol_primitive(prototype),
+        Value::Function(_) | Value::Array(_) | Value::Proxy(_) => true,
+        _ => false,
+    }
 }
 
 fn dynamic_function_construct_prototype_slot(
