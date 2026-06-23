@@ -5,7 +5,7 @@ use crate::{
     property_value, symbol, to_number_with_env,
 };
 
-use super::element::{read_elements, write_element};
+use super::element::write_element;
 use super::{
     TYPED_ARRAY_BUFFER_PROPERTY, TYPED_ARRAY_BYTE_OFFSET_PROPERTY, TYPED_ARRAY_KIND_PROPERTY,
     TYPED_ARRAY_LENGTH_PROPERTY, TYPED_ARRAY_LENGTH_TRACKING_PROPERTY, bytes_per_element,
@@ -203,18 +203,8 @@ fn initialize_from_buffer(
         }
     };
 
-    let bytes = array_buffer::buffer_bytes(&buffer);
-    let values = read_elements(native, &bytes, offset, length);
     let _ = byte_length;
-    install_view(
-        object,
-        native,
-        buffer,
-        offset,
-        length,
-        length_tracking,
-        values,
-    );
+    install_view_slots(object, native, buffer, offset, length, length_tracking);
     Ok(())
 }
 
@@ -294,8 +284,9 @@ fn concrete_prototype(native: NativeFunction, env: &CallEnv) -> Option<ObjectRef
     }
 }
 
-/// Writes the internal slots and materializes the indexed element properties so
-/// ordinary `array[i]` reads resolve through the standard property path.
+/// Writes the internal slots and backing bytes. Integer-indexed reads,
+/// descriptors, and own-key enumeration are handled by typed-array exotic
+/// helpers, so elements are not duplicated into the ordinary property map.
 fn install_view(
     object: &ObjectRef,
     native: NativeFunction,
@@ -304,6 +295,33 @@ fn install_view(
     length: usize,
     length_tracking: bool,
     values: Vec<Value>,
+) {
+    install_view_slots(
+        object,
+        native,
+        buffer.clone(),
+        byte_offset,
+        length,
+        length_tracking,
+    );
+    // Persist element bytes into the buffer.
+    let element = bytes_per_element(native);
+    let mut bytes = array_buffer::array_buffer_bytes(&buffer);
+    for (index, value) in values.into_iter().enumerate() {
+        write_element(native, &mut bytes, byte_offset + index * element, &value);
+    }
+    array_buffer::set_array_buffer_bytes(&buffer, bytes);
+}
+
+/// Writes the internal slots for a typed-array view over an existing backing
+/// buffer without touching its bytes.
+fn install_view_slots(
+    object: &ObjectRef,
+    native: NativeFunction,
+    buffer: ObjectRef,
+    byte_offset: usize,
+    length: usize,
+    length_tracking: bool,
 ) {
     let name = typed_array_name(native);
     object.set_to_string_tag(name);
@@ -327,14 +345,6 @@ fn install_view(
         TYPED_ARRAY_LENGTH_TRACKING_PROPERTY.to_owned(),
         Property::non_enumerable(Value::Boolean(length_tracking)),
     );
-    // Persist element bytes into the buffer and materialize index properties.
-    let element = bytes_per_element(native);
-    let mut bytes = array_buffer::array_buffer_bytes(&buffer);
-    for (index, value) in values.into_iter().enumerate() {
-        write_element(native, &mut bytes, byte_offset + index * element, &value);
-        object.define_property(index.to_string(), Property::data(value, true, true, false));
-    }
-    array_buffer::set_array_buffer_bytes(&buffer, bytes);
 }
 
 // --- static methods (%TypedArray%.from / %TypedArray%.of) --------------------

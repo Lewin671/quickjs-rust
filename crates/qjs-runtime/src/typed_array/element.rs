@@ -3,7 +3,7 @@ use crate::CallEnv;
 use num_bigint::BigInt;
 
 use crate::{
-    NativeFunction, ObjectRef, Property, RuntimeError, Value, array_buffer, bigint,
+    NativeFunction, ObjectRef, RuntimeError, Value, array_buffer, bigint,
     object::PropertyDescriptor, to_number_with_env,
 };
 
@@ -79,19 +79,6 @@ pub(crate) fn zero_value(native: NativeFunction) -> Value {
 }
 
 // --- byte <-> element encoding ----------------------------------------------
-
-/// Reads `length` elements of `native` starting at byte `offset`.
-pub(crate) fn read_elements(
-    native: NativeFunction,
-    bytes: &[u8],
-    offset: usize,
-    length: usize,
-) -> Vec<Value> {
-    let element = bytes_per_element(native);
-    (0..length)
-        .map(|index| read_element(native, bytes, offset + index * element))
-        .collect()
-}
 
 pub(crate) fn read_element(native: NativeFunction, bytes: &[u8], byte_index: usize) -> Value {
     let element = bytes_per_element(native);
@@ -435,9 +422,8 @@ pub(crate) fn read_view_elements(object: &ObjectRef, start: usize, count: usize)
 }
 
 /// Writes the already-coerced `values` into the contiguous element range
-/// starting at `start`, persisting both the backing buffer and the materialized
-/// own properties so ordinary `array[i]` reads stay consistent. Coercion must
-/// happen first via [`coerce_element`]. Used by the write/order-family methods.
+/// starting at `start`, persisting the backing buffer. Coercion must happen
+/// first via [`coerce_element`]. Used by the write/order-family methods.
 ///
 /// The backing-buffer bytes are decoded once, mutated in place, and re-encoded
 /// once. This keeps fill/set/copyWithin/sort/reverse at O(n) total instead of
@@ -464,17 +450,13 @@ where
                     continue;
                 }
                 write_element(native, &mut bytes, base + index * element, &value);
-                object.define_property(index.to_string(), Property::data(value, true, true, false));
             }
             array_buffer::set_buffer_bytes(&buffer, bytes);
         }
         None => {
-            // Detached or buffer-less: keep the materialized properties in sync
-            // even though there is no backing storage to write through.
-            for (offset, value) in values.into_iter().enumerate() {
-                let index = start + offset;
-                object.define_property(index.to_string(), Property::data(value, true, true, false));
-            }
+            // Detached or buffer-less: consume the iterator so callers keep the
+            // same eager behavior, but do not create ordinary index properties.
+            for _ in values {}
         }
     }
 }
@@ -495,5 +477,4 @@ fn set_view_element(object: &ObjectRef, index: usize, value: Value) {
             write_element(native, bytes, byte_index, &value);
         });
     }
-    object.define_property(index.to_string(), Property::data(value, true, true, false));
 }

@@ -253,6 +253,13 @@ pub(crate) fn native_object_prototype_has_own_property(
         (Value::Object(object), key) if object.is_module_namespace_exotic() => Ok(Value::Boolean(
             value_own_property_descriptor(Value::Object(object), &key, env)?.is_some(),
         )),
+        (Value::Object(object), crate::PropertyKey::String(key))
+            if crate::typed_array::is_typed_array_object(&object) =>
+        {
+            Ok(Value::Boolean(
+                crate::typed_array::typed_array_own_property_descriptor(&object, &key).is_some(),
+            ))
+        }
         (Value::Object(object), crate::PropertyKey::String(key)) => {
             Ok(Value::Boolean(object.has_own_property(&key)))
         }

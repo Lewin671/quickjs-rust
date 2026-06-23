@@ -325,3 +325,17 @@ fn integer_index_read_fast_path_matches_spec() {
         Ok(Value::String("x".to_owned().into()))
     );
 }
+
+#[test]
+fn indexed_elements_are_observable_without_materialized_properties() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([7]); \
+             a.hasOwnProperty('0') + ':' \
+             + Object.prototype.propertyIsEnumerable.call(a, '0') + ':' \
+             + Object.getOwnPropertyDescriptor(a, '0').value + ':' \
+             + Reflect.ownKeys(a)[0];"
+        ),
+        Ok(Value::String("true:true:7:0".to_owned().into()))
+    );
+}

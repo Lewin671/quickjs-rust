@@ -16,10 +16,10 @@ mod ordering;
 pub(crate) use base64::*;
 pub(crate) use construct::{native_typed_array, native_typed_array_from, native_typed_array_of};
 pub(crate) use element::{
-    IndexedDefine, IndexedDelete, IndexedRead, IndexedWrite, define_indexed_element_value,
-    define_indexed_property_descriptor, delete_indexed_element, get_view_element,
-    indexed_element_value, integer_indexed_value, read_view_elements, set_indexed_element,
-    set_view_elements,
+    IndexedDefine, IndexedDelete, IndexedRead, IndexedWrite, canonical_numeric_index,
+    define_indexed_element_value, define_indexed_property_descriptor, delete_indexed_element,
+    get_view_element, indexed_element_value, integer_indexed_value, read_view_elements,
+    set_indexed_element, set_view_elements,
 };
 pub(crate) use iteration::*;
 pub(crate) use ordering::*;

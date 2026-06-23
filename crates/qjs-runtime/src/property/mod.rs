@@ -127,6 +127,13 @@ fn function_has_property(
 
 pub(crate) fn own_or_inherited_descriptor(value: Value, key: &str) -> Option<Property> {
     match value {
+        Value::Object(object) if crate::typed_array::is_typed_array_object(&object) => {
+            match crate::typed_array::typed_array_own_property_descriptor(&object, key) {
+                Some(property) => Some(property),
+                None if crate::typed_array::canonical_numeric_index(key).is_some() => None,
+                None => object.property(key),
+            }
+        }
         Value::Object(object) => object.property(key),
         Value::Map(map) => map.object().property(key),
         Value::Set(set) => set.object().property(key),

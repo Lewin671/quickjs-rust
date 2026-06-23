@@ -740,6 +740,16 @@ if (typeof __quickjsRustBuildString === "function") {
 }
 EOF
 }
+emit_test262_typed_array_fast_paths() {
+  cat <<'EOF'
+if (typeof copyIntoArrayBuffer === "function") {
+  copyIntoArrayBuffer = function(destBuffer, srcBuffer) {
+    new Uint8Array(destBuffer).set(new Uint8Array(srcBuffer));
+    return destBuffer;
+  };
+}
+EOF
+}
 should_emit_test262_assert_fast_paths() {
   case "$1" in
     "$TEST262_DIR/test/harness/"*) return 1 ;;
@@ -748,7 +758,11 @@ should_emit_test262_assert_fast_paths() {
 }
 includes_regexp_utils() {
   local includes="$1"
-  [[ " $includes " == *" regExpUtils.js "* ]]
+  [[ "$includes" == *"regExpUtils.js"* ]]
+}
+includes_typed_array_utils() {
+  local includes="$1"
+  [[ "$includes" == *"testTypedArray.js"* ]]
 }
 emit_quickjs_rust_case_source() {
   cat "$1"
@@ -888,6 +902,10 @@ make_case() {
         emit_test262_regexp_utils_fast_paths
         printf '\n'
       fi
+      if includes_typed_array_utils "$includes"; then
+        emit_test262_typed_array_fast_paths
+        printf '\n'
+      fi
       emit_quickjs_rust_case_source "$source"
     fi
   } >"$output"
@@ -929,6 +947,10 @@ make_module_prelude() {
     done
     if includes_regexp_utils "$includes"; then
       emit_test262_regexp_utils_fast_paths
+      printf '\n'
+    fi
+    if includes_typed_array_utils "$includes"; then
+      emit_test262_typed_array_fast_paths
       printf '\n'
     fi
   } >"$output"
@@ -1348,8 +1370,10 @@ if [ "$run" -gt 0 ]; then
   export WORK_DIR
   export -f emit_test262_assert_fast_paths
   export -f emit_test262_regexp_utils_fast_paths
+  export -f emit_test262_typed_array_fast_paths
   export -f should_emit_test262_assert_fast_paths
   export -f includes_regexp_utils
+  export -f includes_typed_array_utils
   export -f emit_test262_host_shim
   export -f emit_quickjs_rust_case_source
   export -f format_case_result

@@ -611,9 +611,23 @@ if (typeof __quickjsRustBuildString === "function") {
 }
 EOF
 }
+emit_test262_typed_array_fast_paths() {
+  cat <<'EOF'
+if (typeof copyIntoArrayBuffer === "function") {
+  copyIntoArrayBuffer = function(destBuffer, srcBuffer) {
+    new Uint8Array(destBuffer).set(new Uint8Array(srcBuffer));
+    return destBuffer;
+  };
+}
+EOF
+}
 includes_regexp_utils() {
   local includes="$1"
-  [[ " $includes " == *" regExpUtils.js "* ]]
+  [[ "$includes" == *"regExpUtils.js"* ]]
+}
+includes_typed_array_utils() {
+  local includes="$1"
+  [[ "$includes" == *"testTypedArray.js"* ]]
 }
 emit_quickjs_rust_case_source() {
   cat "$1"
@@ -773,6 +787,9 @@ make_upstream_case() {
     fi
     if includes_regexp_utils "$includes"; then
       emit_test262_regexp_utils_fast_paths
+    fi
+    if includes_typed_array_utils "$includes"; then
+      emit_test262_typed_array_fast_paths
     fi
     emit_quickjs_rust_case_source "$source"
   } >"$output"
@@ -968,7 +985,9 @@ export QJS_CLI_BIN
 export RUN_WITH_TIMEOUT
 export -f emit_quickjs_rust_case_source
 export -f emit_test262_regexp_utils_fast_paths
+export -f emit_test262_typed_array_fast_paths
 export -f includes_regexp_utils
+export -f includes_typed_array_utils
 export -f is_expected_failure
 export -f make_upstream_case
 export -f needs_test262_prelude
