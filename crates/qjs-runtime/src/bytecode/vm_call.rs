@@ -8,6 +8,8 @@ use super::ir::Bytecode;
 use super::util::stack_underflow;
 use super::vm::{Slot, Vm};
 
+const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
+
 impl Vm<'_> {
     pub(super) fn require_callable(&self) -> Result<(), RuntimeError> {
         let callee = self.stack.last().ok_or_else(stack_underflow)?;
@@ -116,6 +118,10 @@ impl Vm<'_> {
             env.env
                 .remove(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING);
         }
+        let restore_dynamic_realm_after_call = !matches!(&callee, Value::Function(function) if function.native == Some(NativeFunction::Eval));
+        let dynamic_realm_snapshot = restore_dynamic_realm_after_call
+            .then(|| self.marked_dynamic_realm_snapshot())
+            .flatten();
         let result = call_function(callee, this_value, arguments, &mut env.env, false);
         env.env.remove(crate::DIRECT_EVAL_BINDING);
         env.env.remove(crate::DIRECT_EVAL_STRICT_BINDING);
@@ -126,6 +132,9 @@ impl Vm<'_> {
             self.write_through_direct_eval_parameter_captures(&env.env, &env.injected);
         }
         self.apply_call_env(env);
+        if let Some(snapshot) = dynamic_realm_snapshot {
+            self.restore_marked_dynamic_realm(snapshot);
+        }
         // A closure created in this frame and invoked through the just-returned
         // call (directly or via a forwarding frame) writes back to this frame's
         // shared captured env. Refresh this frame's live captured locals from it
@@ -136,6 +145,51 @@ impl Vm<'_> {
             self.stack.push(result);
         }
         Ok(())
+    }
+
+    fn marked_dynamic_realm_snapshot(&self) -> Option<HashMap<String, Value>> {
+        let Some(Value::Object(global)) = self.env.get(DYNAMIC_FUNCTION_REALM_GLOBAL) else {
+            return None;
+        };
+        let Some(Value::Object(global_this)) = self.env.get(crate::GLOBAL_THIS_BINDING) else {
+            return None;
+        };
+        if !global.ptr_eq(&global_this) {
+            return None;
+        }
+        let mut snapshot = HashMap::new();
+        snapshot.insert(
+            DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
+            Value::Object(global.clone()),
+        );
+        snapshot.insert(
+            crate::GLOBAL_THIS_BINDING.to_owned(),
+            Value::Object(global.clone()),
+        );
+        snapshot.insert("globalThis".to_owned(), Value::Object(global.clone()));
+        snapshot.insert("this".to_owned(), Value::Object(global.clone()));
+        for name in global.own_property_names() {
+            if name.starts_with('\0') {
+                continue;
+            }
+            if let Some(property) = global.own_property(&name) {
+                snapshot.insert(name, property.value);
+            }
+        }
+        Some(snapshot)
+    }
+
+    fn restore_marked_dynamic_realm(&mut self, snapshot: HashMap<String, Value>) {
+        if let Some(Value::Object(global)) = snapshot.get(DYNAMIC_FUNCTION_REALM_GLOBAL) {
+            for name in global.own_property_names() {
+                if !snapshot.contains_key(&name) {
+                    self.env.remove(&name);
+                }
+            }
+        }
+        for (name, value) in snapshot {
+            self.env.insert(name, value);
+        }
     }
 
     pub(super) fn call_spread(&mut self) -> Result<(), RuntimeError> {

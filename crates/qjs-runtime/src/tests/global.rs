@@ -199,6 +199,87 @@ fn evaluates_global_this_binding() {
 }
 
 #[test]
+fn indirect_eval_uses_marked_dynamic_realm_global() {
+    assert_eq!(
+        eval(
+            "var __quickjsRustDynamicFunctionRealm; \
+             var other = Object.create(globalThis); \
+             other.eval = function(source) { \
+               var previousRealm = __quickjsRustDynamicFunctionRealm; \
+               __quickjsRustDynamicFunctionRealm = other; \
+               globalThis.__quickjsRustDynamicFunctionRealm = other; \
+               try { return (0, eval)(source); } \
+               finally { \
+                 __quickjsRustDynamicFunctionRealm = previousRealm; \
+                 globalThis.__quickjsRustDynamicFunctionRealm = previousRealm; \
+               } \
+             }; \
+             var otherEval = other.eval; \
+             other.value = 7; \
+             var read = otherEval('value'); \
+             otherEval('var x = 23;'); \
+             [read, typeof x, other.x].join(':');"
+        ),
+        Ok(Value::String("7:undefined:23".to_owned().into()))
+    );
+}
+
+#[test]
+fn indirect_eval_uses_marked_realm_for_primitive_prototypes() {
+    assert_eq!(
+        eval(
+            "var __quickjsRustDynamicFunctionRealm; \
+             var other = Object.create(globalThis); \
+             other.eval = function(source) { \
+               var previousRealm = __quickjsRustDynamicFunctionRealm; \
+               __quickjsRustDynamicFunctionRealm = other; \
+               globalThis.__quickjsRustDynamicFunctionRealm = other; \
+               try { return (0, eval)(source); } \
+               finally { \
+                 __quickjsRustDynamicFunctionRealm = previousRealm; \
+                 globalThis.__quickjsRustDynamicFunctionRealm = previousRealm; \
+               } \
+             }; \
+             other.Number = function Number() {}; \
+             other.Number.prototype = Object.create(Number.prototype); \
+             other.Number.prototype.test262 = 'number prototype'; \
+             other.value = 1; \
+             other.eval('value.test262');"
+        ),
+        Ok(Value::String("number prototype".to_owned().into()))
+    );
+}
+
+#[test]
+fn indirect_eval_uses_marked_realm_for_symbol_primitive_set() {
+    assert_eq!(
+        eval(
+            "var __quickjsRustDynamicFunctionRealm; \
+             var other = Object.create(globalThis); \
+             other.eval = function(source) { \
+               var previousRealm = __quickjsRustDynamicFunctionRealm; \
+               __quickjsRustDynamicFunctionRealm = other; \
+               globalThis.__quickjsRustDynamicFunctionRealm = other; \
+               try { return (0, eval)(source); } \
+               finally { \
+                 __quickjsRustDynamicFunctionRealm = previousRealm; \
+                 globalThis.__quickjsRustDynamicFunctionRealm = previousRealm; \
+               } \
+             }; \
+             var intrinsicSymbol = Symbol; \
+             other.Symbol = function Symbol(description) { return intrinsicSymbol(description); }; \
+             other.Symbol.prototype = Object.create(Symbol.prototype); \
+             var count = 0; \
+             var spy = new Proxy({}, { set: function() { count += 1; return true; } }); \
+             Object.setPrototypeOf(other.Symbol.prototype, spy); \
+             other.eval('Symbol().test262 = null;'); \
+             count;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+}
+
+#[test]
 fn exposes_print_host_global() {
     assert_eq!(
         eval("typeof print;"),

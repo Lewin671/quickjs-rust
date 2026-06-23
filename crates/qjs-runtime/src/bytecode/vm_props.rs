@@ -39,6 +39,9 @@ impl Vm<'_> {
         if !symbol::is_symbol_primitive(symbol_object) {
             return false;
         }
+        if matches!(key, crate::PropertyKey::String(_)) {
+            return false;
+        }
         let env = self.current_env();
         if property_set_uses_setter(object, key, &env) {
             return false;
@@ -47,7 +50,9 @@ impl Vm<'_> {
         // `property_set_uses_setter` cannot inspect; the assignment must still
         // be attempted so the trap observes it. Only a plain data write onto the
         // Symbol primitive is the silent no-op (strict TypeError).
-        !prototype_chain_has_proxy(symbol_object.prototype_slot())
+        !crate::constructor_named_prototype(&env, "Symbol").is_some_and(|prototype| {
+            prototype_chain_has_proxy(Some(crate::Prototype::Object(prototype)))
+        })
     }
 
     pub(super) fn is_global_object(&self, value: &Value) -> bool {
@@ -105,6 +110,12 @@ impl Vm<'_> {
     fn try_direct_get_string(&self, object: &Value, key: &str) -> Option<Value> {
         match object {
             Value::Object(object) => {
+                if symbol::is_symbol_primitive(object) {
+                    let env = self.current_env();
+                    return data_property_value(inherited_primitive_prototype_descriptor(
+                        &env, "Symbol", key,
+                    ));
+                }
                 if crate::typed_array::is_typed_array_object(object) {
                     match crate::typed_array::indexed_element_value(object, key) {
                         crate::typed_array::IndexedRead::Present(value) => return Some(*value),
@@ -176,27 +187,29 @@ impl Vm<'_> {
                 if let Some(value) = string::string_property(value, key) {
                     return Some(value);
                 }
+                let env = self.current_env();
                 data_property_value(inherited_primitive_prototype_descriptor(
-                    &self.realm_env(),
-                    "String",
-                    key,
+                    &env, "String", key,
                 ))
             }
-            Value::Number(_) => data_property_value(inherited_primitive_prototype_descriptor(
-                &self.realm_env(),
-                "Number",
-                key,
-            )),
-            Value::Boolean(_) => data_property_value(inherited_primitive_prototype_descriptor(
-                &self.realm_env(),
-                "Boolean",
-                key,
-            )),
-            Value::BigInt(_) => data_property_value(inherited_primitive_prototype_descriptor(
-                &self.realm_env(),
-                "BigInt",
-                key,
-            )),
+            Value::Number(_) => {
+                let env = self.current_env();
+                data_property_value(inherited_primitive_prototype_descriptor(
+                    &env, "Number", key,
+                ))
+            }
+            Value::Boolean(_) => {
+                let env = self.current_env();
+                data_property_value(inherited_primitive_prototype_descriptor(
+                    &env, "Boolean", key,
+                ))
+            }
+            Value::BigInt(_) => {
+                let env = self.current_env();
+                data_property_value(inherited_primitive_prototype_descriptor(
+                    &env, "BigInt", key,
+                ))
+            }
             // Proxy needs trap dispatch; Null/Undefined raise catchable errors.
             Value::Proxy(_) | Value::Null | Value::Undefined => None,
         }

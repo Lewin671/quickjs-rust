@@ -18,6 +18,9 @@ pub(crate) fn set_property(
 ) -> Result<bool, RuntimeError> {
     match object {
         Value::Object(object) => {
+            if crate::symbol::is_symbol_primitive(&object) {
+                return set_primitive_property("Symbol", Value::Object(object), key, value, env);
+            }
             // Integer-indexed writes on a typed array route through the
             // per-kind numeric conversion and the backing buffer
             // (IntegerIndexedElementSet) before the ordinary property path.
@@ -131,7 +134,7 @@ fn set_primitive_property(
     value: Value,
     env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
-    let Some(prototype) = crate::constructor_named_prototype(env, constructor_name) else {
+    let Some(prototype) = primitive_constructor_prototype(env, constructor_name) else {
         return Ok(false);
     };
     match ordinary_chain_property(&prototype, &key) {
@@ -147,6 +150,39 @@ fn set_primitive_property(
             SetStep::WriteData => Ok(false),
         },
     }
+}
+
+fn primitive_constructor_prototype(env: &CallEnv, constructor_name: &str) -> Option<ObjectRef> {
+    if constructor_name == "Symbol"
+        && let Some(prototype) = marked_global_constructor_prototype(env, "Symbol")
+    {
+        return Some(prototype);
+    }
+    crate::constructor_named_prototype(env, constructor_name)
+}
+
+fn marked_global_constructor_prototype(env: &CallEnv, constructor_name: &str) -> Option<ObjectRef> {
+    let global = env
+        .get("__quickjsRustDynamicFunctionRealm")
+        .and_then(|value| match value {
+            Value::Object(global) => Some(global),
+            _ => None,
+        })
+        .or_else(|| {
+            env.get(crate::GLOBAL_THIS_BINDING)
+                .and_then(|value| match value {
+                    Value::Object(global) => Some(global),
+                    _ => None,
+                })
+        })?;
+    let Some(Property {
+        value: Value::Function(constructor),
+        ..
+    }) = global.own_property(constructor_name)
+    else {
+        return None;
+    };
+    crate::function_prototype(&constructor)
 }
 
 pub(super) fn set_property_key(
@@ -385,6 +421,9 @@ fn property_for_set(object: &Value, key: &PropertyKey, env: &CallEnv) -> Option<
         return symbol_property_for_set(object, key, env);
     };
     match object {
+        Value::Object(object) if crate::symbol::is_symbol_primitive(object) => {
+            crate::inherited_primitive_prototype_descriptor(env, "Symbol", key)
+        }
         Value::Object(object) => object.property(key),
         Value::Function(function) => function_property_for_set(function, env, key),
         Value::Array(elements) => elements.property(key).or_else(|| {

@@ -539,10 +539,11 @@ var $262 = {
         configurable: true
       });
     }
+    var intrinsicSymbol = globalThis.Symbol;
     var crossRealmSymbol = function Symbol(description) {
-      return globalThis.Symbol(description);
+      return intrinsicSymbol(description);
     };
-    var crossRealmSymbolPrototype = Object.create(globalThis.Symbol.prototype);
+    var crossRealmSymbolPrototype = Object.create(intrinsicSymbol.prototype);
     Object.defineProperty(crossRealmSymbolPrototype, "constructor", {
       value: crossRealmSymbol,
       writable: true,
@@ -552,7 +553,7 @@ var $262 = {
     crossRealmSymbol.prototype = crossRealmSymbolPrototype;
     Object.defineProperty(crossRealmSymbol, "for", {
       value: function for_(key) {
-        return globalThis.Symbol.for(key);
+        return intrinsicSymbol.for(key);
       },
       writable: true,
       enumerable: false,
@@ -560,7 +561,7 @@ var $262 = {
     });
     Object.defineProperty(crossRealmSymbol, "keyFor", {
       value: function keyFor(symbol) {
-        return globalThis.Symbol.keyFor(symbol);
+        return intrinsicSymbol.keyFor(symbol);
       },
       writable: true,
       enumerable: false,
@@ -583,7 +584,7 @@ var $262 = {
       "dispose",
       "asyncDispose"
     ].forEach(function(name) {
-      var descriptor = Object.getOwnPropertyDescriptor(globalThis.Symbol, name);
+      var descriptor = Object.getOwnPropertyDescriptor(intrinsicSymbol, name);
       if (descriptor) {
         Object.defineProperty(crossRealmSymbol, name, descriptor);
       }

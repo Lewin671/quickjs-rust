@@ -12,6 +12,8 @@ use crate::{
     to_js_string_with_env, to_number_with_env,
 };
 
+const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
+
 pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
     env.insert_realm("NaN".to_owned(), Value::Number(f64::NAN));
     env.insert_realm("Infinity".to_owned(), Value::Number(f64::INFINITY));
@@ -249,7 +251,7 @@ pub(super) fn native_global_eval(
     let mut eval_env = if direct_eval {
         env.clone()
     } else {
-        env.indirect_eval_frame()
+        indirect_eval_frame(env)
     };
     let direct_function_eval = direct_eval && eval_env.get_local("this").is_some();
     let direct_parameter_eval = direct_function_eval
@@ -414,6 +416,53 @@ pub(super) fn native_global_eval(
         *env = strict_direct_writeback_env.unwrap_or(eval_env);
     }
     result.value
+}
+
+fn indirect_eval_frame(env: &CallEnv) -> CallEnv {
+    let mut eval_env = env.indirect_eval_frame();
+    let Some(global) = marked_dynamic_realm_global(env) else {
+        return eval_env;
+    };
+    eval_env.insert(
+        DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
+        Value::Object(global.clone()),
+    );
+    eval_env.insert(
+        GLOBAL_THIS_BINDING.to_owned(),
+        Value::Object(global.clone()),
+    );
+    eval_env.insert("globalThis".to_owned(), Value::Object(global.clone()));
+    eval_env.insert("this".to_owned(), Value::Object(global.clone()));
+    for name in global.own_property_names() {
+        if name.starts_with('\0') {
+            continue;
+        }
+        if let Some(property) = global.own_property(&name) {
+            eval_env.insert(name, property.value);
+        }
+    }
+    eval_env
+}
+
+fn marked_dynamic_realm_global(env: &CallEnv) -> Option<ObjectRef> {
+    env.get(DYNAMIC_FUNCTION_REALM_GLOBAL)
+        .and_then(object_value)
+        .or_else(|| {
+            env.get(GLOBAL_THIS_BINDING)
+                .and_then(object_value)
+                .and_then(|global_this| {
+                    global_this
+                        .own_property(DYNAMIC_FUNCTION_REALM_GLOBAL)
+                        .and_then(|property| object_value(property.value))
+                })
+        })
+}
+
+fn object_value(value: Value) -> Option<ObjectRef> {
+    match value {
+        Value::Object(object) => Some(object),
+        _ => None,
+    }
 }
 
 /// Host `$262.evalScript`: evaluates `source` as a global script in the current
@@ -593,6 +642,9 @@ fn validate_eval_global_lexical_bindings(
     });
     if let Some(global_this) = &global_this {
         for name in bytecode.global_lexical_names() {
+            if is_internal_binding_name(name) {
+                continue;
+            }
             if check_lexical_conflict
                 && has_global_lexical_binding(
                     env,
@@ -701,6 +753,9 @@ fn validate_sloppy_global_eval_declarations(
         return Ok(());
     };
     for name in bytecode.hoisted_local_names() {
+        if is_internal_binding_name(name) {
+            continue;
+        }
         if (caller_locals.contains(name)
             && !env.is_catch_binding(name)
             && !global_this.has_own_property(name))
@@ -715,6 +770,9 @@ fn validate_sloppy_global_eval_declarations(
         }
     }
     for name in function_names {
+        if is_internal_binding_name(name) {
+            continue;
+        }
         if !can_declare_global_function(&global_this, name) {
             return Err(RuntimeError {
                 thrown: None,
@@ -723,6 +781,9 @@ fn validate_sloppy_global_eval_declarations(
         }
     }
     for name in bytecode.hoisted_local_names() {
+        if is_internal_binding_name(name) {
+            continue;
+        }
         if function_names.contains(name) {
             continue;
         }
@@ -734,6 +795,10 @@ fn validate_sloppy_global_eval_declarations(
         }
     }
     Ok(())
+}
+
+fn is_internal_binding_name(name: &str) -> bool {
+    name.starts_with('\0')
 }
 
 fn has_global_lexical_binding(
@@ -834,12 +899,16 @@ fn create_eval_global_var_binding(env: &mut CallEnv, name: &str, value: Value) {
         _ => None,
     });
     if let Some(global_this) = global_this {
+        let dynamic_realm_global = is_marked_dynamic_realm_global(env, &global_this);
         if global_this.has_own_property(name) {
             global_this.set(name.to_owned(), value.clone());
             let value = global_this
                 .own_property(name)
                 .map(|property| property.value)
                 .unwrap_or(value);
+            if dynamic_realm_global {
+                return;
+            }
             env.insert_realm(name.to_owned(), value);
             return;
         }
@@ -847,6 +916,9 @@ fn create_eval_global_var_binding(env: &mut CallEnv, name: &str, value: Value) {
             name.to_owned(),
             Property::data(value.clone(), true, true, true),
         );
+        if dynamic_realm_global {
+            return;
+        }
     }
     env.insert_realm(name.to_owned(), value);
 }
@@ -880,6 +952,7 @@ fn create_eval_global_function_binding(env: &mut CallEnv, name: &str, value: Val
         _ => None,
     });
     if let Some(global_this) = global_this {
+        let dynamic_realm_global = is_marked_dynamic_realm_global(env, &global_this);
         let property = match global_this.own_property(name) {
             Some(existing) if !existing.configurable => {
                 let mut property = existing;
@@ -889,6 +962,9 @@ fn create_eval_global_function_binding(env: &mut CallEnv, name: &str, value: Val
             _ => Property::data(value.clone(), true, true, true),
         };
         global_this.define_property(name.to_owned(), property);
+        if dynamic_realm_global {
+            return;
+        }
     }
     env.insert_realm(name.to_owned(), value);
 }
@@ -918,6 +994,7 @@ fn define_eval_global_binding(env: &mut CallEnv, name: &str, value: Value) {
         _ => None,
     });
     if let Some(global_this) = global_this {
+        let dynamic_realm_global = is_marked_dynamic_realm_global(env, &global_this);
         if global_this.has_own_property(name) {
             global_this.set(name.to_owned(), value.clone());
         } else {
@@ -926,8 +1003,21 @@ fn define_eval_global_binding(env: &mut CallEnv, name: &str, value: Value) {
                 Property::data(value.clone(), true, true, true),
             );
         }
+        if dynamic_realm_global {
+            return;
+        }
     }
     env.insert_realm(name.to_owned(), value);
+}
+
+fn is_marked_dynamic_realm_global(env: &CallEnv, global_this: &ObjectRef) -> bool {
+    env.get_local(DYNAMIC_FUNCTION_REALM_GLOBAL)
+        .is_some_and(|value| matches!(value, Value::Object(global) if global.ptr_eq(global_this)))
+        || global_this
+            .own_property(DYNAMIC_FUNCTION_REALM_GLOBAL)
+            .is_some_and(|property| {
+                matches!(property.value, Value::Object(global) if global.ptr_eq(global_this))
+            })
 }
 
 pub(super) fn native_global_escape(
