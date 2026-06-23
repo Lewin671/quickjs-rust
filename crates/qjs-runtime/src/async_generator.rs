@@ -243,6 +243,7 @@ fn async_generator_object_prototype(function: &Function, env: &CallEnv) -> Optio
     if let Some(Value::Object(prototype)) = function
         .own_property("prototype")
         .map(|property| property.value)
+        && !symbol::is_symbol_primitive(&prototype)
     {
         return Some(prototype);
     }

@@ -450,6 +450,19 @@ fn prototype_chain_tags() {
     );
     assert_eq!(
         eval(
+            "var fn = async function* () {}; \
+             var AsyncGeneratorPrototype = Object.getPrototypeOf(fn.prototype); \
+             var values = [undefined, null, false, '', Symbol(), 1]; \
+             values.every(function(value) { \
+               fn.prototype = value; \
+               return Object.getPrototypeOf(fn()) === AsyncGeneratorPrototype; \
+             });"
+        )
+        .expect("eval"),
+        Value::Boolean(true)
+    );
+    assert_eq!(
+        eval(
             "async function* g() {} \
              g.constructor.prototype.prototype === Object.getPrototypeOf(g.prototype);"
         )
