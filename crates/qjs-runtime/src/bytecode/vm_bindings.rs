@@ -837,6 +837,7 @@ impl Vm<'_> {
         self.write_through_captured_slot(slot, &value);
         self.write_through_capture_writeback_slot(slot, &value);
         if self.bytecode.global_scope
+            && self.persist_global_lexicals
             && !hoisted
             && self
                 .bytecode

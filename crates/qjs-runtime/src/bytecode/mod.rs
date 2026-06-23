@@ -123,6 +123,7 @@ pub(crate) fn eval_function_bytecode(
     upvalues: Vec<crate::function::Upvalue>,
     with_stack: Vec<Value>,
     capture_writeback: Option<CaptureWriteback>,
+    persist_global_lexicals: bool,
 ) -> FunctionBytecodeResult<'_> {
     vm::eval_function_bytecode(
         bytecode,
@@ -131,6 +132,7 @@ pub(crate) fn eval_function_bytecode(
         upvalues,
         with_stack,
         capture_writeback,
+        persist_global_lexicals,
     )
 }
 
@@ -312,5 +314,29 @@ pub(crate) fn eval_bytecode_with_env(
     env: crate::CallEnv,
 ) -> FunctionBytecodeResult<'_> {
     let captured_env = Rc::new(RefCell::new(env.snapshot_locals()));
-    vm::eval_function_bytecode(bytecode, env, captured_env, Vec::new(), Vec::new(), None)
+    vm::eval_function_bytecode(
+        bytecode,
+        env,
+        captured_env,
+        Vec::new(),
+        Vec::new(),
+        None,
+        true,
+    )
+}
+
+pub(crate) fn eval_bytecode_with_env_ephemeral_global_lexicals(
+    bytecode: &Bytecode,
+    env: crate::CallEnv,
+) -> FunctionBytecodeResult<'_> {
+    let captured_env = Rc::new(RefCell::new(env.snapshot_locals()));
+    vm::eval_function_bytecode(
+        bytecode,
+        env,
+        captured_env,
+        Vec::new(),
+        Vec::new(),
+        None,
+        false,
+    )
 }

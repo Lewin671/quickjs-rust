@@ -4,7 +4,10 @@ use std::collections::HashSet;
 use crate::CallEnv;
 use crate::{
     Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    bytecode::{compile_direct_eval_script, eval_bytecode_with_env},
+    bytecode::{
+        compile_direct_eval_script, eval_bytecode_with_env,
+        eval_bytecode_with_env_ephemeral_global_lexicals,
+    },
     string::{string_code_units, string_from_code_unit},
     to_js_string_with_env, to_number_with_env,
 };
@@ -295,12 +298,12 @@ pub(super) fn native_global_eval(
     // `let`/`const`/`class` declarations never clash with an existing *lexical*
     // global binding (`let outside; eval('let outside;')` is two distinct
     // bindings). They must still not clash with a non-configurable global *var*
-    // binding, and an indirect eval — whose lexicals do go into the global
-    // lexical environment — is checked against both.
+    // binding. Indirect eval also gets a fresh declarative lexical environment,
+    // so its lexicals do not collide with or persist into global lexicals.
     if direct_function_eval {
         // A function-scope direct eval declares no global lexicals at all.
     } else {
-        validate_eval_global_lexical_bindings(&bytecode, &eval_env, false, !direct_eval)?;
+        validate_eval_global_lexical_bindings(&bytecode, &eval_env, false, false)?;
     }
     let caller_locals = eval_env.locals().keys().cloned().collect::<HashSet<_>>();
     let hoisted_names = bytecode
@@ -340,7 +343,11 @@ pub(super) fn native_global_eval(
         &caller_locals,
         eval_strict,
     );
-    let result = eval_bytecode_with_env(&bytecode, eval_env.clone());
+    let result = if direct_eval {
+        eval_bytecode_with_env(&bytecode, eval_env.clone())
+    } else {
+        eval_bytecode_with_env_ephemeral_global_lexicals(&bytecode, eval_env.clone())
+    };
     let writeback_names = hoisted_names
         .iter()
         .cloned()
@@ -387,6 +394,8 @@ pub(super) fn native_global_eval(
                 if hoisted_names.contains(name) {
                     update_direct_eval_captured_functions(&mut eval_env, name, value.clone());
                 }
+            } else if eval_strict && !direct_eval && hoisted_names.contains(name) {
+                continue;
             } else if hoisted_function_names.contains(name) {
                 create_eval_global_function_binding(&mut eval_env, name, value.clone());
             } else if hoisted_names.contains(name) {

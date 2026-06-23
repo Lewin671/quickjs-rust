@@ -235,6 +235,7 @@ pub(crate) fn call_function(
             function.upvalues.clone(),
             function.with_stack.clone(),
             activation_writeback,
+            true,
         );
         propagate_function_captures(
             &function,

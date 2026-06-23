@@ -109,6 +109,11 @@ impl Vm<'_> {
                     Value::Boolean(true),
                 );
             }
+        } else {
+            env.env.remove(crate::DIRECT_EVAL_BINDING);
+            env.env.remove(crate::DIRECT_EVAL_STRICT_BINDING);
+            env.env
+                .remove(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING);
         }
         let result = call_function(callee, this_value, arguments, &mut env.env, false);
         env.env.remove(crate::DIRECT_EVAL_BINDING);

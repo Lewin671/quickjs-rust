@@ -39,6 +39,7 @@ pub(super) fn eval_function_bytecode(
     upvalues: Vec<Upvalue>,
     with_stack: Vec<Value>,
     capture_writeback: Option<CaptureWriteback>,
+    persist_global_lexicals: bool,
 ) -> FunctionBytecodeResult<'_> {
     let mut vm = Vm::new_with_globals_captures_upvalues_and_with_stack(
         bytecode,
@@ -48,6 +49,7 @@ pub(super) fn eval_function_bytecode(
         with_stack,
     );
     vm.capture_writeback = capture_writeback;
+    vm.persist_global_lexicals = persist_global_lexicals;
     let value = vm.run();
     // A frame that neither creates closures nor holds any captured (`from_env`)
     // local never reads or writes the shared captured env beyond the realm
@@ -111,6 +113,10 @@ pub(super) struct Vm<'a> {
     /// Active `using` disposal scopes (innermost last); each block's resources,
     /// disposed LIFO when the scope exits via the block's implicit finally.
     pub(super) disposable_scopes: Vec<Vec<super::vm_dispose::DisposeResource>>,
+    /// Whether global-scope lexical declarations should become persistent
+    /// global lexical bindings. Indirect eval uses global-scope bytecode, but
+    /// its lexical environment is ephemeral.
+    pub(super) persist_global_lexicals: bool,
 }
 
 impl<'a> Vm<'a> {
@@ -226,6 +232,7 @@ impl<'a> Vm<'a> {
             array_prototype_cache: None,
             with_stack,
             disposable_scopes: Vec::new(),
+            persist_global_lexicals: true,
         }
     }
 

@@ -568,6 +568,47 @@ fn evaluates_indirect_eval_against_global_scope() {
         .is_err(),
         "indirect eval lexical binding must not leak into global scope"
     );
+    assert_eq!(
+        eval(
+            "let outside = 23; \
+             (0, eval)('let outside;'); \
+             (0, eval)('\"use strict\"; let outside;'); \
+             outside;"
+        ),
+        Ok(Value::Number(23.0))
+    );
+    assert_eq!(
+        eval(
+            "(0, eval)('let xNonStrict = 3;'); \
+             typeof xNonStrict + ':' + Object.prototype.hasOwnProperty.call(this, 'xNonStrict');"
+        ),
+        Ok(Value::String("undefined:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "(0, eval)('\"use strict\"; var strictIndirectVar = 88;'); \
+             typeof strictIndirectVar + ':' + Object.prototype.hasOwnProperty.call(this, 'strictIndirectVar');"
+        ),
+        Ok(Value::String("undefined:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "(0, eval)('\"use strict\"; function strictIndirectFn(){}'); \
+             typeof strictIndirectFn + ':' + Object.prototype.hasOwnProperty.call(this, 'strictIndirectFn');"
+        ),
+        Ok(Value::String("undefined:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var nestedIndirect = 'global'; \
+             function fn() { \
+               var nestedIndirect = 'local'; \
+               return eval('var indirect = eval; var nestedIndirect = \"eval\"; indirect(\"nestedIndirect\");'); \
+             } \
+             fn();"
+        ),
+        Ok(Value::String("global".to_owned().into()))
+    );
 }
 
 #[test]
