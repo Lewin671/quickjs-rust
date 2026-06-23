@@ -9,8 +9,9 @@ use crate::{
         eval_bytecode_with_env_ephemeral_global_lexicals,
     },
     string::{string_code_units, string_from_code_unit},
-    to_js_string_with_env, to_number_with_env,
+    to_js_string_with_env, to_length_with_env, to_number_with_env,
 };
+use crate::{PropertyKey, property_value, property_value_key};
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
@@ -100,6 +101,13 @@ pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
         1,
         NativeFunction::EvalScript,
     );
+    define_global_function(
+        env,
+        global_this,
+        "__quickjsRustBuildString",
+        1,
+        NativeFunction::Test262BuildString,
+    );
 }
 
 fn define_global_function(
@@ -162,6 +170,76 @@ pub(crate) fn native_test262_assert_same_value(
         thrown: None,
         message,
     })
+}
+
+pub(crate) fn native_test262_build_string(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let args = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let lone_code_points = property_value(args.clone(), "loneCodePoints", env)?;
+    let ranges = property_value(args, "ranges", env)?;
+    let mut result = String::new();
+    append_code_point_list(&mut result, lone_code_points, env)?;
+    let ranges_len = array_like_len(ranges.clone(), env)?;
+    for index in 0..ranges_len {
+        let range =
+            property_value_key(ranges.clone(), &PropertyKey::String(index.to_string()), env)?;
+        let start = code_point_from_value(
+            property_value_key(range.clone(), &PropertyKey::String("0".to_owned()), env)?,
+            env,
+        )?;
+        let end = code_point_from_value(
+            property_value_key(range, &PropertyKey::String("1".to_owned()), env)?,
+            env,
+        )?;
+        for code_point in start..=end {
+            push_code_point(&mut result, code_point);
+        }
+    }
+    Ok(Value::String(result.into()))
+}
+
+fn append_code_point_list(
+    result: &mut String,
+    values: Value,
+    env: &mut CallEnv,
+) -> Result<(), RuntimeError> {
+    let length = array_like_len(values.clone(), env)?;
+    for index in 0..length {
+        let value =
+            property_value_key(values.clone(), &PropertyKey::String(index.to_string()), env)?;
+        let code_point = code_point_from_value(value, env)?;
+        push_code_point(result, code_point);
+    }
+    Ok(())
+}
+
+fn array_like_len(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+    match value {
+        Value::Array(array) => Ok(array.len()),
+        value => to_length_with_env(property_value(value, "length", env)?, env),
+    }
+}
+
+fn code_point_from_value(value: Value, env: &mut CallEnv) -> Result<u32, RuntimeError> {
+    let number = to_number_with_env(value, env)?;
+    if !number.is_finite() || number < 0.0 || number > 0x10FFFF as f64 || number.trunc() != number {
+        return Err(RuntimeError {
+            thrown: None,
+            message:
+                "RangeError: String.fromCodePoint code point must be an integer in [0, 0x10FFFF]"
+                    .to_owned(),
+        });
+    }
+    Ok(number as u32)
+}
+
+fn push_code_point(result: &mut String, code_point: u32) {
+    match char::from_u32(code_point) {
+        Some(character) => result.push(character),
+        None => result.push_str(&string_from_code_unit(code_point as u16)),
+    }
 }
 
 pub(super) fn native_global_is_finite(

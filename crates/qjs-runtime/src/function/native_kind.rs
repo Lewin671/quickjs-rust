@@ -374,6 +374,7 @@ pub(crate) enum NativeFunction {
     GlobalIsFinite,
     GlobalIsNaN,
     Test262AssertSameValue,
+    Test262BuildString,
     Print,
     Function,
     FunctionPrototypeApply,

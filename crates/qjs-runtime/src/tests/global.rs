@@ -1214,3 +1214,24 @@ fn eval_script_runs_global_declaration_instantiation_checks() {
         Ok(Value::String("undefined:false".to_owned().into()))
     );
 }
+
+#[test]
+fn test262_build_string_host_helper_matches_regexp_utils_shape() {
+    assert_eq!(
+        eval(
+            "let value = __quickjsRustBuildString({ loneCodePoints: [65, 0x1F600], ranges: [[0x61, 0x63], [0xD800, 0xD800]] }); \
+             value.length + ':' + value.charCodeAt(0) + ':' + value.codePointAt(1) + ':' + value.charCodeAt(3) + ':' + value.charCodeAt(5) + ':' + value.charCodeAt(6);"
+        ),
+        Ok(Value::String("7:65:128512:97:99:55296".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let calls = []; \
+             let args = {}; \
+             Object.defineProperty(args, 'loneCodePoints', { get: function() { calls.push('lone'); return [66]; } }); \
+             Object.defineProperty(args, 'ranges', { get: function() { calls.push('ranges'); return [[67, 68]]; } }); \
+             __quickjsRustBuildString(args) + ':' + calls.join(',');"
+        ),
+        Ok(Value::String("BCD:lone,ranges".to_owned().into()))
+    );
+}

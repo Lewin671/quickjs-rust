@@ -733,11 +733,22 @@ emit_test262_assert_fast_paths() {
 assert.sameValue = __quickjsRustAssertSameValue;
 EOF
 }
+emit_test262_regexp_utils_fast_paths() {
+  cat <<'EOF'
+if (typeof __quickjsRustBuildString === "function") {
+  buildString = __quickjsRustBuildString;
+}
+EOF
+}
 should_emit_test262_assert_fast_paths() {
   case "$1" in
     "$TEST262_DIR/test/harness/"*) return 1 ;;
     *) return 0 ;;
   esac
+}
+includes_regexp_utils() {
+  local includes="$1"
+  [[ " $includes " == *" regExpUtils.js "* ]]
 }
 emit_quickjs_rust_case_source() {
   cat "$1"
@@ -873,6 +884,10 @@ make_case() {
         cat "$TEST262_DIR/harness/$include"
         printf '\n'
       done
+      if includes_regexp_utils "$includes"; then
+        emit_test262_regexp_utils_fast_paths
+        printf '\n'
+      fi
       emit_quickjs_rust_case_source "$source"
     fi
   } >"$output"
@@ -912,6 +927,10 @@ make_module_prelude() {
       cat "$TEST262_DIR/harness/$include"
       printf '\n'
     done
+    if includes_regexp_utils "$includes"; then
+      emit_test262_regexp_utils_fast_paths
+      printf '\n'
+    fi
   } >"$output"
 }
 rust_error_field() {
@@ -1328,7 +1347,9 @@ if [ "$run" -gt 0 ]; then
   export TIMEOUT_RETRIES
   export WORK_DIR
   export -f emit_test262_assert_fast_paths
+  export -f emit_test262_regexp_utils_fast_paths
   export -f should_emit_test262_assert_fast_paths
+  export -f includes_regexp_utils
   export -f emit_test262_host_shim
   export -f emit_quickjs_rust_case_source
   export -f format_case_result

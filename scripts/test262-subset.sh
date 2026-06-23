@@ -604,6 +604,17 @@ emit_test262_assert_fast_paths() {
 assert.sameValue = __quickjsRustAssertSameValue;
 EOF
 }
+emit_test262_regexp_utils_fast_paths() {
+  cat <<'EOF'
+if (typeof __quickjsRustBuildString === "function") {
+  buildString = __quickjsRustBuildString;
+}
+EOF
+}
+includes_regexp_utils() {
+  local includes="$1"
+  [[ " $includes " == *" regExpUtils.js "* ]]
+}
 emit_quickjs_rust_case_source() {
   cat "$1"
 }
@@ -759,6 +770,9 @@ make_upstream_case() {
     # adjacent files never merge lines.
     if [ "${#parts[@]}" -ne 0 ]; then
       awk 1 "${parts[@]}"
+    fi
+    if includes_regexp_utils "$includes"; then
+      emit_test262_regexp_utils_fast_paths
     fi
     emit_quickjs_rust_case_source "$source"
   } >"$output"
@@ -953,6 +967,8 @@ export PRELUDE_FILE
 export QJS_CLI_BIN
 export RUN_WITH_TIMEOUT
 export -f emit_quickjs_rust_case_source
+export -f emit_test262_regexp_utils_fast_paths
+export -f includes_regexp_utils
 export -f is_expected_failure
 export -f make_upstream_case
 export -f needs_test262_prelude
