@@ -11,6 +11,11 @@ rust-version.workspace = true
 name = "qjs"
 path = "src/main.rs"
 
+[features]
+# Forwards to `qjs-runtime/agents`: builds the CLI with the Test262 `$262.agent`
+# multi-agent harness and cross-thread Atomics support. Off by default.
+agents = ["qjs-runtime/agents"]
+
 [dependencies]
 qjs-runtime = { path = "../qjs-runtime" }
 

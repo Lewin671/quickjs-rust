@@ -7,6 +7,13 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[features]
+# Opt-in OS-thread support backing the Test262 `$262.agent` multi-agent harness
+# plus cross-thread SharedArrayBuffer / real Atomics.wait/notify. The
+# single-threaded core stays correct and unburdened with this feature off:
+# every threaded code path is gated behind `#[cfg(feature = "agents")]`.
+agents = []
+
 [dependencies]
 num-bigint = "0.4"
 num-traits = "0.2"

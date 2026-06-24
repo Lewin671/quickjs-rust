@@ -62,6 +62,11 @@ qjs_check_typed_array_tests() {
 
 qjs_check_stage "format" "$CARGO_BIN" fmt --all -- --check
 qjs_check_stage "clippy" "$CARGO_BIN" clippy --workspace --all-targets -- -D warnings
+# The opt-in `agents` feature (Test262 $262.agent multi-agent harness) compiles
+# extra OS-thread code paths that the default workspace build never touches.
+# Lint it explicitly so the gated code cannot bitrot.
+qjs_check_stage "clippy (agents)" \
+  "$CARGO_BIN" clippy -p qjs-runtime -p qjs-cli --features agents --all-targets -- -D warnings
 if [ "${QJS_CHECK_SPLIT_RUNTIME_TESTS:-0}" = "1" ]; then
   qjs_check_stage "non-runtime crate tests" \
     "$CARGO_BIN" test -p qjs-ast -p qjs-lexer -p qjs-parser -p qjs-cli
