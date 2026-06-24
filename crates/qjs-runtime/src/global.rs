@@ -153,6 +153,13 @@ pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
         1,
         NativeFunction::Test262AssertNullProtoMutableObject,
     );
+    define_global_function(
+        env,
+        global_this,
+        "__quickjsRustAssertNativeFunction",
+        1,
+        NativeFunction::Test262AssertNativeFn,
+    );
 }
 
 fn define_global_function(

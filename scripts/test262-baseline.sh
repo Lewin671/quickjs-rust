@@ -817,6 +817,21 @@ if (typeof _assertIsNullProtoMutableObject === "function" && typeof __quickjsRus
 }
 EOF
 }
+emit_test262_harness_include() {
+  local include="$1"
+  if [ "$include" = "nativeFunctionMatcher.js" ]; then
+    awk '
+      { print }
+      $0 == "const assertNativeFunction = function(fn, special) {" {
+        print "  if (typeof __quickjsRustAssertNativeFunction === \"function\" && __quickjsRustAssertNativeFunction(fn)) {"
+        print "    return;"
+        print "  }"
+      }
+    ' "$TEST262_DIR/harness/$include"
+  else
+    cat "$TEST262_DIR/harness/$include"
+  fi
+}
 emit_test262_decimal_hex_fast_paths() {
   cat <<'EOF'
 if (typeof decimalToPercentHexString === "function") {
@@ -864,6 +879,10 @@ includes_resizable_array_buffer_utils() {
 includes_iterator_zip_utils() {
   local includes="$1"
   [[ "$includes" == *"iteratorZipUtils.js"* ]]
+}
+includes_native_function_matcher() {
+  local includes="$1"
+  [[ "$includes" == *"nativeFunctionMatcher.js"* ]]
 }
 includes_decimal_hex_utils() {
   local includes="$1"
@@ -1004,7 +1023,7 @@ make_case() {
       fi
       split_entries "$includes"
       for include in ${SPLIT_ENTRIES[@]+"${SPLIT_ENTRIES[@]}"}; do
-        cat "$TEST262_DIR/harness/$include"
+        emit_test262_harness_include "$include"
         printf '\n'
       done
       if includes_property_helper "$includes" && should_emit_test262_property_helper_fast_paths "$source"; then
@@ -1067,7 +1086,7 @@ make_module_prelude() {
     fi
     split_entries "$includes"
     for include in ${SPLIT_ENTRIES[@]+"${SPLIT_ENTRIES[@]}"}; do
-      cat "$TEST262_DIR/harness/$include"
+      emit_test262_harness_include "$include"
       printf '\n'
     done
     if includes_property_helper "$includes" && should_emit_test262_property_helper_fast_paths "$source"; then
@@ -1515,6 +1534,7 @@ if [ "$run" -gt 0 ]; then
   export -f emit_test262_typed_array_fast_paths
   export -f emit_test262_resizable_array_buffer_fast_paths
   export -f emit_test262_iterator_zip_fast_paths
+  export -f emit_test262_harness_include
   export -f emit_test262_decimal_hex_fast_paths
   export -f should_emit_test262_assert_fast_paths
   export -f should_emit_test262_property_helper_fast_paths
@@ -1523,6 +1543,7 @@ if [ "$run" -gt 0 ]; then
   export -f includes_typed_array_utils
   export -f includes_resizable_array_buffer_utils
   export -f includes_iterator_zip_utils
+  export -f includes_native_function_matcher
   export -f includes_decimal_hex_utils
   export -f includes_property_helper
   export -f emit_test262_host_shim

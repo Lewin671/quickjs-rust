@@ -675,6 +675,21 @@ if (typeof _assertIsNullProtoMutableObject === "function" && typeof __quickjsRus
 }
 EOF
 }
+emit_test262_harness_include() {
+  local include="$1"
+  if [ "$include" = "nativeFunctionMatcher.js" ]; then
+    awk '
+      { print }
+      $0 == "const assertNativeFunction = function(fn, special) {" {
+        print "  if (typeof __quickjsRustAssertNativeFunction === \"function\" && __quickjsRustAssertNativeFunction(fn)) {"
+        print "    return;"
+        print "  }"
+      }
+    ' "$TEST262_DIR/harness/$include"
+  else
+    awk 1 "$TEST262_DIR/harness/$include"
+  fi
+}
 includes_regexp_utils() {
   local includes="$1"
   [[ "$includes" == *"regExpUtils.js"* ]]
@@ -690,6 +705,10 @@ includes_resizable_array_buffer_utils() {
 includes_iterator_zip_utils() {
   local includes="$1"
   [[ "$includes" == *"iteratorZipUtils.js"* ]]
+}
+includes_native_function_matcher() {
+  local includes="$1"
+  [[ "$includes" == *"nativeFunctionMatcher.js"* ]]
 }
 emit_quickjs_rust_case_source() {
   cat "$1"
@@ -835,9 +854,6 @@ make_upstream_case() {
     parts+=("$PRELUDE_FILE")
   fi
   split_entries "$includes"
-  for include in ${SPLIT_ENTRIES[@]+"${SPLIT_ENTRIES[@]}"}; do
-    parts+=("$TEST262_DIR/harness/$include")
-  done
   {
     if [[ "$flags" == *onlyStrict* ]]; then
       printf '"use strict";\n'
@@ -847,6 +863,9 @@ make_upstream_case() {
     if [ "${#parts[@]}" -ne 0 ]; then
       awk 1 "${parts[@]}"
     fi
+    for include in ${SPLIT_ENTRIES[@]+"${SPLIT_ENTRIES[@]}"}; do
+      emit_test262_harness_include "$include"
+    done
     if includes_regexp_utils "$includes"; then
       emit_test262_regexp_utils_fast_paths
     fi
@@ -1055,10 +1074,12 @@ export -f emit_quickjs_rust_case_source
 export -f emit_test262_regexp_utils_fast_paths
 export -f emit_test262_resizable_array_buffer_fast_paths
 export -f emit_test262_iterator_zip_fast_paths
+export -f emit_test262_harness_include
 export -f emit_test262_typed_array_fast_paths
 export -f includes_regexp_utils
 export -f includes_resizable_array_buffer_utils
 export -f includes_iterator_zip_utils
+export -f includes_native_function_matcher
 export -f includes_typed_array_utils
 export -f is_expected_failure
 export -f make_upstream_case

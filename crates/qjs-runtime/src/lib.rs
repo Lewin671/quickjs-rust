@@ -38,6 +38,7 @@ mod regexp;
 mod set;
 mod string;
 mod symbol;
+mod test262_host;
 mod typed_array;
 mod value;
 mod weak_map;
@@ -128,6 +129,7 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "__quickjsRustAssertSameValue",
     "__quickjsRustVerifyProperty",
     "__quickjsRustBuildString",
+    "__quickjsRustAssertNativeFunction",
     "__quickjsRustIsHTMLDDA",
     "__quickjsRustDetachArrayBuffer",
     "__quickjsRustEvalScript",

@@ -1296,6 +1296,21 @@ fn test262_iterator_zip_host_helpers_match_harness_shapes() {
 }
 
 #[test]
+fn test262_native_function_host_helper_matches_native_function_matcher_shape() {
+    assert_eq!(
+        eval(
+            "[
+               __quickjsRustAssertNativeFunction(Array.prototype.map),
+               __quickjsRustAssertNativeFunction(Object.getOwnPropertyDescriptor(Array.prototype, Symbol.iterator).value),
+               __quickjsRustAssertNativeFunction(function user() {}),
+               __quickjsRustAssertNativeFunction(1)
+             ].join(',');"
+        ),
+        Ok(Value::String("true,true,false,false".to_owned().into()))
+    );
+}
+
+#[test]
 fn test262_verify_property_host_helper_checks_data_descriptors() {
     assert_eq!(
         eval(
