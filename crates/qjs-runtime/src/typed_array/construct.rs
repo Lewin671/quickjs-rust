@@ -231,7 +231,8 @@ fn initialize_from_object(
             array::array_like_values_from_receiver(source.receiver, source.length, env)?
         }
         Value::Function(ref function)
-            if function.native_kind() == Some(NativeFunction::ArrayPrototypeValues) =>
+            if function.native_kind() == Some(NativeFunction::ArrayPrototypeValues)
+                && array::array_iterator_next_is_native(env) =>
         {
             match &source {
                 Value::Array(array) => match array.dense_argument_values(env) {

@@ -677,4 +677,20 @@ fn array_from_array_fast_path_preserves_iterator_observability() {
         ),
         Ok(Value::String("7,3".to_owned().into()))
     );
+    assert_eq!(
+        eval(
+            "let proto = Object.getPrototypeOf([].values()); \
+             let original = proto.next; \
+             let values = [1, 2, 3, 4]; \
+             proto.next = function() { \
+                 let done = values.length === 0; \
+                 return { value: values.pop(), done: done }; \
+             }; \
+             let out; \
+             try { out = Array.from([0]).join(); } \
+             finally { proto.next = original; } \
+             out;"
+        ),
+        Ok(Value::String("4,3,2,1".to_owned().into()))
+    );
 }

@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{ArrayRef, ObjectRef, RuntimeError, Value, property_value, to_length_with_env};
+use crate::{
+    ArrayRef, ObjectRef, RuntimeError, Value, function::NativeFunction, property_value,
+    to_length_with_env,
+};
 
 use super::array_like::array_like_receiver;
 use crate::CallEnv;
@@ -12,6 +15,26 @@ const ITERATOR_KIND: &str = "\0array_iterator_kind";
 const ITERATOR_KIND_KEY: &str = "key";
 const ITERATOR_KIND_VALUE: &str = "value";
 const ITERATOR_KIND_KEY_VALUE: &str = "key+value";
+
+pub(crate) fn array_iterator_next_is_native(env: &CallEnv) -> bool {
+    let Some(prototype) = crate::iterator::builtin_iterator_prototype(
+        env,
+        crate::iterator::BuiltinIteratorKind::Array,
+    ) else {
+        return false;
+    };
+    let Some(property) = prototype.own_property("next") else {
+        return false;
+    };
+    if property.accessor {
+        return false;
+    }
+    matches!(
+        property.value,
+        Value::Function(ref function)
+            if function.native_kind() == Some(NativeFunction::ArrayIteratorPrototypeNext)
+    )
+}
 
 pub(crate) fn native_array_prototype_entries(
     this_value: Value,

@@ -134,6 +134,22 @@ fn construct_from_array_observes_iterator_overrides_and_prototype_indices() {
         ),
         Ok(Value::String("7:3".to_owned().into()))
     );
+    assert_eq!(
+        eval(
+            "let proto = Object.getPrototypeOf([].values()); \
+             let original = proto.next; \
+             let values = [1, 2, 3, 4]; \
+             proto.next = function() { \
+                 let done = values.length === 0; \
+                 return { value: values.pop(), done: done }; \
+             }; \
+             let out; \
+             try { let a = new Uint8Array([0]); out = a.length + ':' + a[0] + ':' + a[1] + ':' + a[2] + ':' + a[3]; } \
+             finally { proto.next = original; } \
+             out;"
+        ),
+        Ok(Value::String("4:4:3:2:1".to_owned().into()))
+    );
 }
 
 #[test]

@@ -141,6 +141,7 @@ fn array_from_values(
         Value::Function(ref function)
             if mapping.is_none()
                 && function.native_kind() == Some(NativeFunction::ArrayPrototypeValues)
+                && super::iterator::array_iterator_next_is_native(env)
                 && is_native_array_constructor(constructor.as_ref()) =>
         {
             if let Value::Array(array) = &items
