@@ -176,6 +176,23 @@ pub fn eval_bytecode_with_module_resolver(
     vm_import::eval_bytecode_with_module_resolver(bytecode, referrer, resolver)
 }
 
+/// Evaluates script bytecode inside a Test262 `$262.agent` whose
+/// `AgentCanSuspend()` is `can_block` (see
+/// [`vm_import::eval_bytecode_with_module_resolver_in_agent`]).
+///
+/// # Errors
+///
+/// Returns runtime failures or malformed bytecode failures.
+#[cfg(feature = "agents")]
+pub fn eval_bytecode_with_module_resolver_in_agent(
+    bytecode: &Bytecode,
+    referrer: &str,
+    resolver: Box<dyn crate::ModuleResolver>,
+    can_block: bool,
+) -> Result<Value, RuntimeError> {
+    vm_import::eval_bytecode_with_module_resolver_in_agent(bytecode, referrer, resolver, can_block)
+}
+
 /// Script completion paired with its realm's pending microtask queue.
 ///
 /// Produced by [`eval_bytecode_keep_jobs`] for callers (the Test262 async

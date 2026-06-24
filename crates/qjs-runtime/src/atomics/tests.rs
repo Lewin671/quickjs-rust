@@ -1,5 +1,68 @@
 use crate::{Value, eval};
 
+/// Evaluates `source` in a Test262 `$262.agent` whose `AgentCanSuspend()` is
+/// `can_block`, mirroring the CLI's `--agent-cannot-block` mode.
+#[cfg(feature = "agents")]
+fn eval_in_agent(source: &str, can_block: bool) -> Result<Value, crate::EvalError> {
+    crate::eval_classified_with_resolver_in_agent(
+        source,
+        "<test>",
+        Box::new(crate::module::MapResolver::new()),
+        can_block,
+    )
+}
+
+#[cfg(feature = "agents")]
+#[test]
+fn atomics_wait_throws_when_agent_cannot_block() {
+    // CanBlockIsFalse: AgentCanSuspend() is false, so Atomics.wait throws a
+    // TypeError (sec-atomics.wait step 7) instead of returning a status string.
+    assert_eq!(
+        eval_in_agent(
+            "let a = new Int32Array(new SharedArrayBuffer(16)); \
+             try { Atomics.wait(a, 0, 0, 0); 'no throw'; } \
+             catch (e) { e instanceof TypeError ? 'TypeError' : 'other'; }",
+            false,
+        ),
+        Ok(Value::String("TypeError".to_owned().into()))
+    );
+}
+
+#[cfg(feature = "agents")]
+#[test]
+fn atomics_wait_throws_from_a_nested_user_frame_when_agent_cannot_block() {
+    // The CanBlockIsFalse cases call Atomics.wait inside `assert.throws`'s
+    // callback, two user frames below the script root; the agent context must
+    // survive the frame chain (it rides every CallEnv like the module host).
+    assert_eq!(
+        eval_in_agent(
+            "function outer(fn) { return fn(); } \
+             let a = new Int32Array(new SharedArrayBuffer(16)); \
+             outer(function () { \
+               try { Atomics.wait(a, 0, 0, 0); return 'no throw'; } \
+               catch (e) { return e instanceof TypeError ? 'TypeError' : 'other'; } \
+             });",
+            false,
+        ),
+        Ok(Value::String("TypeError".to_owned().into()))
+    );
+}
+
+#[cfg(feature = "agents")]
+#[test]
+fn atomics_wait_returns_status_when_agent_can_block() {
+    // With AgentCanSuspend() true and no other agent to notify, the single-agent
+    // wait still resolves to a status string rather than throwing.
+    assert_eq!(
+        eval_in_agent(
+            "let a = new Int32Array(new SharedArrayBuffer(16)); \
+             Atomics.wait(a, 0, 0, 0);",
+            true,
+        ),
+        Ok(Value::String("timed-out".to_owned().into()))
+    );
+}
+
 #[test]
 fn atomics_object_surface_and_lock_free() {
     assert_eq!(

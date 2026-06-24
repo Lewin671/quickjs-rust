@@ -88,6 +88,10 @@ pub(super) struct Vm<'a> {
     pub(super) realm: Realm,
     /// Dynamic-import host copied into every `CallEnv` this VM creates.
     pub(super) module_host: Option<crate::module::ModuleHostRef>,
+    /// Test262 `$262.agent` context stamped onto every `CallEnv` this VM builds
+    /// (via `attach_host`), so native `Atomics`/`$262.agent` hooks reach it.
+    #[cfg(feature = "agents")]
+    pub(super) agent_context: Option<crate::agent::AgentContextRef>,
     pub(super) captured_env: Rc<RefCell<HashMap<String, Value>>>,
     pub(super) captured_env_stack: Vec<Rc<RefCell<HashMap<String, Value>>>>,
     /// Per-iteration loop-variable names introduced by `fresh_iteration_scope`,
@@ -211,6 +215,8 @@ impl<'a> Vm<'a> {
     ) -> Self {
         let realm = env.realm_rc();
         let module_host = env.module_host();
+        #[cfg(feature = "agents")]
+        let agent_context = env.agent_context();
         let parameter_captured_envs = env.parameter_captured_envs().to_vec();
         let locals = Self::initial_slots(bytecode, &env);
         let local_upvalues = Self::initial_local_upvalues(bytecode, &locals, &upvalues);
@@ -224,6 +230,8 @@ impl<'a> Vm<'a> {
             env,
             realm,
             module_host,
+            #[cfg(feature = "agents")]
+            agent_context,
             captured_env,
             captured_env_stack: Vec::new(),
             captured_env_iteration_names: Vec::new(),

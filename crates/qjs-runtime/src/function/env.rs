@@ -87,6 +87,12 @@ pub(crate) struct CallEnv {
     /// Each entry points at the exporting module's shared lexical export cell
     /// and the local binding name that backs that export.
     module_imports: ModuleImports,
+    /// The Test262 `$262.agent` execution context for this thread's agent,
+    /// threaded like `module_host` so native `Atomics`/`$262.agent` hooks reach
+    /// it. `None` outside the agents harness. Gated so the default build's
+    /// struct layout and per-call clone cost are unchanged.
+    #[cfg(feature = "agents")]
+    agent_context: Option<crate::agent::AgentContextRef>,
 }
 
 impl std::fmt::Debug for CallEnv {
@@ -154,6 +160,8 @@ impl CallEnv {
             parameter_captured_envs: Vec::new(),
             module_host: None,
             module_imports: HashMap::new(),
+            #[cfg(feature = "agents")]
+            agent_context: None,
         }
     }
 
@@ -165,6 +173,19 @@ impl CallEnv {
     /// Installs (or replaces) the dynamic-import host on this environment.
     pub(crate) fn set_module_host(&mut self, host: crate::module::ModuleHostRef) {
         self.module_host = Some(host);
+    }
+
+    /// The Test262 `$262.agent` context for this thread's agent, if installed.
+    #[cfg(feature = "agents")]
+    pub(crate) fn agent_context(&self) -> Option<crate::agent::AgentContextRef> {
+        self.agent_context.clone()
+    }
+
+    /// Installs the `$262.agent` context on this environment. Threaded into
+    /// every frame the VM builds so native hooks reach it.
+    #[cfg(feature = "agents")]
+    pub(crate) fn set_agent_context(&mut self, context: crate::agent::AgentContextRef) {
+        self.agent_context = Some(context);
     }
 
     /// Installs a live module import binding.
@@ -224,6 +245,8 @@ impl CallEnv {
             parameter_captured_envs: Vec::new(),
             module_host: None,
             module_imports: HashMap::new(),
+            #[cfg(feature = "agents")]
+            agent_context: None,
         }
     }
 
@@ -248,6 +271,8 @@ impl CallEnv {
             parameter_captured_envs: Vec::new(),
             module_host: None,
             module_imports: HashMap::new(),
+            #[cfg(feature = "agents")]
+            agent_context: None,
         }
     }
 
@@ -270,6 +295,8 @@ impl CallEnv {
             parameter_captured_envs: Vec::new(),
             module_host: None,
             module_imports: HashMap::new(),
+            #[cfg(feature = "agents")]
+            agent_context: None,
         }
     }
 
@@ -540,6 +567,8 @@ impl CallEnv {
             parameter_captured_envs: self.parameter_captured_envs.clone(),
             module_host: self.module_host.clone(),
             module_imports: self.module_imports.clone(),
+            #[cfg(feature = "agents")]
+            agent_context: self.agent_context.clone(),
         }
     }
 

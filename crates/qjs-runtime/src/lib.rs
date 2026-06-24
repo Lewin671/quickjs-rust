@@ -2,6 +2,8 @@
 
 use qjs_parser::parse_script;
 
+#[cfg(feature = "agents")]
+mod agent;
 mod array;
 mod array_buffer;
 mod async_function;
@@ -279,6 +281,33 @@ pub fn eval_classified_with_resolver(
             message: error.message,
         }
     })
+}
+
+/// Evaluates *script*-goal source inside a Test262 `$262.agent` whose
+/// `AgentCanSuspend()` is `can_block`. With `can_block` false (the
+/// `CanBlockIsFalse` harness flag) `Atomics.wait` throws a `TypeError` instead
+/// of suspending. Otherwise identical to [`eval_classified_with_resolver`].
+///
+/// # Errors
+///
+/// Returns parser, bytecode compiler, or runtime failures with their stage.
+#[cfg(feature = "agents")]
+pub fn eval_classified_with_resolver_in_agent(
+    source: &str,
+    referrer: &str,
+    resolver: Box<dyn ModuleResolver>,
+    can_block: bool,
+) -> Result<Value, EvalError> {
+    let script = parse_script(source).map_err(|error| EvalError {
+        kind: EvalErrorKind::Parse,
+        message: error.message,
+    })?;
+    let bytecode = compile_script_classified(&script).map_err(compile_error_stage)?;
+    bytecode::eval_bytecode_with_module_resolver_in_agent(&bytecode, referrer, resolver, can_block)
+        .map_err(|error| EvalError {
+            kind: EvalErrorKind::Runtime,
+            message: error.message,
+        })
 }
 
 /// Maps a bytecode-compilation failure to its harness stage. Invalid regexp

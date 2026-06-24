@@ -67,6 +67,10 @@ qjs_check_stage "clippy" "$CARGO_BIN" clippy --workspace --all-targets -- -D war
 # Lint it explicitly so the gated code cannot bitrot.
 qjs_check_stage "clippy (agents)" \
   "$CARGO_BIN" clippy -p qjs-runtime -p qjs-cli --features agents --all-targets -- -D warnings
+# Run the agents-feature-only unit tests (Atomics/$262.agent behavior). The
+# default workspace test stage never compiles these, so exercise them here.
+qjs_check_stage "agents feature tests" \
+  "$CARGO_BIN" test -p qjs-runtime --features agents atomics::tests::atomics_wait
 if [ "${QJS_CHECK_SPLIT_RUNTIME_TESTS:-0}" = "1" ]; then
   qjs_check_stage "non-runtime crate tests" \
     "$CARGO_BIN" test -p qjs-ast -p qjs-lexer -p qjs-parser -p qjs-cli

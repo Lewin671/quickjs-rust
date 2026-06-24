@@ -27,6 +27,26 @@ pub(super) fn eval_bytecode_with_module_resolver(
     Ok(value)
 }
 
+/// Like [`eval_bytecode_with_module_resolver`], but installs a Test262
+/// `$262.agent` context whose `AgentCanSuspend()` is `can_block`. Used by the
+/// CLI's `--agent-cannot-block` mode so a `CanBlockIsFalse`-flagged case makes
+/// `Atomics.wait` throw a `TypeError`.
+#[cfg(feature = "agents")]
+pub(super) fn eval_bytecode_with_module_resolver_in_agent(
+    bytecode: &Bytecode,
+    referrer: &str,
+    resolver: Box<dyn ModuleResolver>,
+    can_block: bool,
+) -> Result<Value, RuntimeError> {
+    let mut vm = Vm::new(bytecode)?;
+    let host = crate::module::new_script_module_host(referrer, resolver, vm.realm.clone());
+    vm.module_host = Some(host);
+    vm.agent_context = Some(crate::agent::AgentContext::new(can_block));
+    let value = vm.run()?;
+    vm.drain_promise_jobs()?;
+    Ok(value)
+}
+
 impl Vm<'_> {
     /// Stamps this VM's dynamic-import host (if any) onto a freshly built
     /// `CallEnv` so the host survives across frame, nested-call, and
@@ -34,6 +54,10 @@ impl Vm<'_> {
     pub(super) fn attach_host(&self, mut env: CallEnv) -> CallEnv {
         if let Some(host) = &self.module_host {
             env.set_module_host(host.clone());
+        }
+        #[cfg(feature = "agents")]
+        if let Some(context) = &self.agent_context {
+            env.set_agent_context(context.clone());
         }
         env
     }

@@ -194,6 +194,21 @@ pub(crate) fn native_atomics_wait(
             }
         }
     };
+    // AgentCanSuspend(): a `CanBlockIsFalse`-flagged case runs in an agent whose
+    // `[[CanBlock]]` is false, so `Atomics.wait` must throw a TypeError rather
+    // than block. The check follows the spec order: after the typed-array,
+    // index, value, and timeout coercions above.
+    #[cfg(feature = "agents")]
+    if env
+        .agent_context()
+        .is_some_and(|context| !context.can_block)
+    {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Atomics.wait cannot be used in an agent that cannot be suspended"
+                .to_owned(),
+        });
+    }
     // This engine runs a single agent (no worker threads), so no other agent
     // can ever notify a waiter. Per the spec single-agent semantics: load the
     // current value; if it differs from the comparand return "not-equal";

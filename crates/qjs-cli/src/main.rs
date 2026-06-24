@@ -31,6 +31,11 @@ fn run() -> Result<(), CliError> {
     let mut test262_error_format = false;
     let mut module_mode = false;
     let mut prelude_path: Option<String> = None;
+    // Test262 `CanBlockIsFalse`: run the script in an agent whose
+    // `AgentCanSuspend()` is false, so `Atomics.wait` throws a TypeError. Parsed
+    // unconditionally (so the harness flag is never an "unknown argument"); it
+    // only changes behavior in the `agents`-feature build.
+    let mut agent_cannot_block = false;
     loop {
         match args.as_slice().first().map(String::as_str) {
             Some("--raw") => {
@@ -39,6 +44,10 @@ fn run() -> Result<(), CliError> {
             }
             Some("--error-format=test262") => {
                 test262_error_format = true;
+                args.next();
+            }
+            Some("--agent-cannot-block") => {
+                agent_cannot_block = true;
                 args.next();
             }
             Some("--module") => {
@@ -93,15 +102,13 @@ fn run() -> Result<(), CliError> {
     let source = with_script_args(&source, &script_args);
     // A script may use dynamic `import()`; install a filesystem-backed host so
     // those imports resolve relative to the script (or the cwd for `-e`).
+    let result = eval_script(&source, &referrer, agent_cannot_block);
     let value = if test262_error_format {
-        eval_classified_with_resolver(&source, &referrer, Box::new(FsResolver))
-            .map_err(format_test262_error)?
+        result.map_err(format_test262_error)?
     } else {
-        eval_classified_with_resolver(&source, &referrer, Box::new(FsResolver)).map_err(
-            |error| CliError {
-                message: error.message,
-            },
-        )?
+        result.map_err(|error| CliError {
+            message: error.message,
+        })?
     };
     if raw_output {
         print_raw(&value);
@@ -109,6 +116,24 @@ fn run() -> Result<(), CliError> {
         println!("{value:?}");
     }
     Ok(())
+}
+
+/// Evaluates script-goal `source`. When `agent_cannot_block` is set (Test262
+/// `CanBlockIsFalse`), the `agents`-feature build runs it in an agent whose
+/// `AgentCanSuspend()` is false so `Atomics.wait` throws; otherwise the flag is
+/// inert.
+fn eval_script(source: &str, referrer: &str, agent_cannot_block: bool) -> Result<Value, EvalError> {
+    #[cfg(feature = "agents")]
+    if agent_cannot_block {
+        return qjs_runtime::eval_classified_with_resolver_in_agent(
+            source,
+            referrer,
+            Box::new(FsResolver),
+            false,
+        );
+    }
+    let _ = agent_cannot_block;
+    eval_classified_with_resolver(source, referrer, Box::new(FsResolver))
 }
 
 /// Evaluates `file` under the Module goal. Relative specifiers resolve against
