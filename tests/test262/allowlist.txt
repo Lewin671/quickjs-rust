@@ -411,6 +411,11 @@ test/built-ins/DataView/return-abrupt-tonumber-byteoffset-symbol-sab.js
 test/built-ins/DataView/return-instance-sab.js
 test/built-ins/DataView/toindex-bytelength-sab.js
 test/built-ins/DataView/toindex-byteoffset-sab.js
+test/built-ins/TypedArrayConstructors/internals/Set/key-is-canonical-invalid-index-prototype-chain-set.js
+test/built-ins/TypedArrayConstructors/internals/Set/key-is-canonical-invalid-index-reflect-set.js
+test/built-ins/TypedArrayConstructors/internals/Set/key-is-out-of-bounds-receiver-is-not-object.js
+test/built-ins/TypedArrayConstructors/internals/Set/BigInt/key-is-canonical-invalid-index-prototype-chain-set.js
+test/built-ins/TypedArrayConstructors/internals/Set/BigInt/key-is-canonical-invalid-index-reflect-set.js
 test/built-ins/TypedArrayConstructors/of/BigInt/argument-number-value-throws.js
 test/built-ins/TypedArrayConstructors/of/BigInt/custom-ctor-does-not-instantiate-ta-throws.js
 test/built-ins/TypedArrayConstructors/of/BigInt/custom-ctor-returns-smaller-instance-throws.js

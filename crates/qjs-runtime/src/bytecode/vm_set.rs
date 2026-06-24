@@ -7,7 +7,7 @@ use crate::{
 
 use super::vm_props::{
     ProxyInChain, ordinary_chain_property, ordinary_chain_symbol_property,
-    prototype_chain_has_proxy,
+    prototype_chain_has_proxy, prototype_chain_has_typed_array,
 };
 
 pub(crate) fn set_property(
@@ -50,6 +50,21 @@ pub(crate) fn set_property(
                 define_array_length_value(&elements, value, env)
             } else {
                 let receiver = Value::Array(elements.clone());
+                // A typed array reachable as a prototype owns canonical numeric
+                // indices via its exotic [[Set]]; routing through the recursive
+                // OrdinarySet stops an invalid index before the array's own
+                // [[DefineOwnProperty]] creates an element.
+                if crate::typed_array::canonical_numeric_index(&key).is_some()
+                    && prototype_chain_has_typed_array(elements.prototype_slot_override().flatten())
+                {
+                    return crate::reflect::ordinary_set(
+                        Value::Array(elements.clone()),
+                        &PropertyKey::String(key),
+                        value,
+                        receiver,
+                        env,
+                    );
+                }
                 let property = match crate::array_own_property_descriptor(&elements, &key) {
                     Some(property) => Some(property),
                     None => {
@@ -384,6 +399,22 @@ fn ordinary_set_object(
     value: Value,
     env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
+    // A canonical numeric index whose chain reaches a typed array is governed by
+    // that array's exotic [[Set]] (an invalid index returns true without writing
+    // or consulting the prototype); the flat descriptor walk below would instead
+    // find an accessor further up the chain. Defer to the recursive OrdinarySet.
+    if crate::typed_array::canonical_numeric_index(&key).is_some()
+        && prototype_chain_has_typed_array(object.prototype_slot())
+    {
+        return crate::reflect::ordinary_set(
+            Value::Object(object.clone()),
+            &PropertyKey::String(key),
+            value,
+            receiver,
+            env,
+        );
+    }
+
     // Resolve the governing own/inherited descriptor with a single proxy-aware
     // walk. A Proxy in the chain defers to OrdinarySet so its `set` trap runs
     // against the original receiver.

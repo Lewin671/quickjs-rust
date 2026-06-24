@@ -402,6 +402,17 @@ pub(crate) fn delete_indexed_element(object: &ObjectRef, key: &str) -> IndexedDe
     IndexedDelete::Handled(valid_integer_index(object, number).is_none())
 }
 
+/// For the typed-array `[[Set]]` with a receiver: `Some(true)` if `key` is a
+/// CanonicalNumericIndexString that is a valid integer index of `object`,
+/// `Some(false)` if it is canonical but invalid (out of range, fractional,
+/// negative, or detached), and `None` if `key` is not a canonical numeric
+/// index. Per IntegerIndexedExoticObject `[[Set]]`, a canonical-but-invalid
+/// index returns `true` without writing or consulting the prototype/receiver.
+pub(crate) fn canonical_index_is_valid(object: &ObjectRef, key: &str) -> Option<bool> {
+    let number = canonical_numeric_index(key)?;
+    Some(valid_integer_index(object, number).is_some())
+}
+
 fn valid_integer_index(object: &ObjectRef, number: f64) -> Option<usize> {
     if super::typed_array_buffer_detached(object)
         || !number.is_finite()

@@ -40,14 +40,23 @@ pub(crate) fn ordinary_set(
         return crate::proxy::proxy_set(proxy.clone(), key, value, receiver, env);
     }
 
-    if let (Value::Object(object), PropertyKey::String(key), Value::Object(receiver_object)) =
-        (&target, key, &receiver)
-    {
-        if object.ptr_eq(receiver_object) && crate::typed_array::is_typed_array_object(object) {
-            if let crate::typed_array::IndexedWrite::Handled =
-                crate::typed_array::set_indexed_element(object, key, value.clone(), env)?
-            {
-                return Ok(true);
+    if let (Value::Object(object), PropertyKey::String(key)) = (&target, key) {
+        // Typed-array [[Set]] for a CanonicalNumericIndexString: when the
+        // receiver is the array itself, run IntegerIndexedElementSet; when the
+        // receiver differs (any type, including a primitive), a *valid* index
+        // falls through to OrdinarySet (which redirects to the receiver) but an
+        // *invalid* canonical index returns true without writing or consulting
+        // the prototype/receiver.
+        if crate::typed_array::is_typed_array_object(object) {
+            if let Some(index_valid) = crate::typed_array::canonical_index_is_valid(object, key) {
+                let same_receiver = matches!(&receiver, Value::Object(r) if object.ptr_eq(r));
+                if same_receiver {
+                    crate::typed_array::set_indexed_element(object, key, value.clone(), env)?;
+                    return Ok(true);
+                }
+                if !index_valid {
+                    return Ok(true);
+                }
             }
         }
     }

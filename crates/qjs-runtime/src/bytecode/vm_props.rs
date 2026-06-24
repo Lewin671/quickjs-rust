@@ -561,6 +561,28 @@ pub(super) fn prototype_chain_has_proxy(slot: Option<crate::Prototype>) -> bool 
     }
 }
 
+/// Whether any prototype reachable from `slot` is a typed array. A typed array
+/// in the chain owns canonical numeric indices through its exotic `[[Set]]`
+/// (an invalid index returns true without writing or consulting the rest of the
+/// chain), so an ordinary set must defer to the recursive OrdinarySet.
+pub(super) fn prototype_chain_has_typed_array(slot: Option<crate::Prototype>) -> bool {
+    let mut current = slot;
+    loop {
+        match current {
+            Some(crate::Prototype::Object(object)) => {
+                if crate::typed_array::is_typed_array_object(&object) {
+                    return true;
+                }
+                current = object.prototype_slot();
+            }
+            Some(crate::Prototype::Function(function)) => {
+                current = function.internal_prototype_slot().flatten();
+            }
+            Some(crate::Prototype::Proxy(_)) | None => return false,
+        }
+    }
+}
+
 /// Symbol-keyed counterpart to [`ordinary_chain_property`].
 pub(super) fn ordinary_chain_symbol_property(
     object: &ObjectRef,
