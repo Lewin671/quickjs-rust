@@ -22,6 +22,7 @@ test/language/statements/class/name-binding/const.js
 test/language/statements/class/static-init-await-binding-valid.js
 test/language/expressions/optional-chaining/eval-optional-call.js
 test/language/expressions/call/11.2.3-3_3.js
+test/language/expressions/object/computed-property-name-topropertykey-before-value-evaluation.js
 cases/date-symbol-to-primitive-basic.js
 cases/function-symbol-has-instance-basic.js
 cases/symbol-to-primitive-coercion-basic.js

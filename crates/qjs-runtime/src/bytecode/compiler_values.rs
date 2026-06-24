@@ -117,6 +117,12 @@ impl Compiler {
                 }
                 ObjectPropertyKey::Computed(expr) => {
                     self.compile_expr(expr)?;
+                    // ToPropertyKey is part of evaluating the PropertyName and
+                    // must run before the value (a computed key's `toString` is
+                    // observable before the value expression). The later
+                    // SetComputedFunctionName / DefineObjectProperty re-key is
+                    // idempotent on the resolved key.
+                    self.emit(Op::ToPropertyKey);
                     self.compile_expr(&property.value)?;
                     // A computed key names an anonymous function/accessor value
                     // via SetFunctionName (a Symbol key becomes "[description]").
