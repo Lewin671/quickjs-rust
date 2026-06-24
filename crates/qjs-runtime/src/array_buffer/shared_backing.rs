@@ -80,10 +80,17 @@ impl SharedBacking {
     /// Runs `f` over an immutable view of the bytes, then hands the lock to the
     /// next queued waiter (fair unlock) so a busy-looping agent cannot starve a
     /// writer on another thread.
+    ///
+    /// Reads are overwhelmingly the hot path of a JS `Atomics` spin
+    /// (`while (Atomics.load(...) === 0) {}` / `$262.agent.waitUntil`). Yielding
+    /// the timeslice after each read keeps such a spin cooperative: it stops the
+    /// agent pegging a core, which on an oversubscribed CI runner would starve
+    /// unrelated tests sharing the machine of CPU.
     pub(crate) fn with_bytes<T>(&self, f: impl FnOnce(&[u8]) -> T) -> T {
         let guard = self.inner.lock();
         let result = f(&guard.bytes);
         MutexGuard::unlock_fair(guard);
+        std::thread::yield_now();
         result
     }
 
