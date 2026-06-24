@@ -777,6 +777,37 @@ if (typeof ToNumbers === "function" && typeof __quickjsRustToNumbers === "functi
 }
 EOF
 }
+emit_test262_iterator_zip_fast_paths() {
+  cat <<'EOF'
+if (typeof assertIteratorResult === "function" && typeof __quickjsRustAssertIteratorResult === "function") {
+  var __quickjsRustOriginalAssertIteratorResult = assertIteratorResult;
+  assertIteratorResult = function(result, value, done, label) {
+    if (__quickjsRustAssertIteratorResult(result, value, done)) {
+      return;
+    }
+    return __quickjsRustOriginalAssertIteratorResult(result, value, done, label);
+  };
+}
+if (typeof assertIsPackedArray === "function" && typeof __quickjsRustAssertPackedArray === "function") {
+  var __quickjsRustOriginalAssertIsPackedArray = assertIsPackedArray;
+  assertIsPackedArray = function(array, label) {
+    if (__quickjsRustAssertPackedArray(array)) {
+      return;
+    }
+    return __quickjsRustOriginalAssertIsPackedArray(array, label);
+  };
+}
+if (typeof _assertIsNullProtoMutableObject === "function" && typeof __quickjsRustAssertNullProtoMutableObject === "function") {
+  var __quickjsRustOriginalAssertIsNullProtoMutableObject = _assertIsNullProtoMutableObject;
+  _assertIsNullProtoMutableObject = function(object, label) {
+    if (__quickjsRustAssertNullProtoMutableObject(object)) {
+      return;
+    }
+    return __quickjsRustOriginalAssertIsNullProtoMutableObject(object, label);
+  };
+}
+EOF
+}
 emit_test262_decimal_hex_fast_paths() {
   cat <<'EOF'
 if (typeof decimalToPercentHexString === "function") {
@@ -820,6 +851,10 @@ includes_typed_array_utils() {
 includes_resizable_array_buffer_utils() {
   local includes="$1"
   [[ "$includes" == *"resizableArrayBufferUtils.js"* ]]
+}
+includes_iterator_zip_utils() {
+  local includes="$1"
+  [[ "$includes" == *"iteratorZipUtils.js"* ]]
 }
 includes_decimal_hex_utils() {
   local includes="$1"
@@ -979,6 +1014,10 @@ make_case() {
         emit_test262_resizable_array_buffer_fast_paths
         printf '\n'
       fi
+      if includes_iterator_zip_utils "$includes"; then
+        emit_test262_iterator_zip_fast_paths
+        printf '\n'
+      fi
       if includes_decimal_hex_utils "$includes" && should_emit_test262_decimal_hex_fast_paths "$source"; then
         emit_test262_decimal_hex_fast_paths
         printf '\n'
@@ -1036,6 +1075,10 @@ make_module_prelude() {
     fi
     if includes_resizable_array_buffer_utils "$includes"; then
       emit_test262_resizable_array_buffer_fast_paths
+      printf '\n'
+    fi
+    if includes_iterator_zip_utils "$includes"; then
+      emit_test262_iterator_zip_fast_paths
       printf '\n'
     fi
     if includes_decimal_hex_utils "$includes" && should_emit_test262_decimal_hex_fast_paths "$source"; then
@@ -1462,6 +1505,7 @@ if [ "$run" -gt 0 ]; then
   export -f emit_test262_regexp_utils_fast_paths
   export -f emit_test262_typed_array_fast_paths
   export -f emit_test262_resizable_array_buffer_fast_paths
+  export -f emit_test262_iterator_zip_fast_paths
   export -f emit_test262_decimal_hex_fast_paths
   export -f should_emit_test262_assert_fast_paths
   export -f should_emit_test262_property_helper_fast_paths
@@ -1469,6 +1513,7 @@ if [ "$run" -gt 0 ]; then
   export -f includes_regexp_utils
   export -f includes_typed_array_utils
   export -f includes_resizable_array_buffer_utils
+  export -f includes_iterator_zip_utils
   export -f includes_decimal_hex_utils
   export -f includes_property_helper
   export -f emit_test262_host_shim

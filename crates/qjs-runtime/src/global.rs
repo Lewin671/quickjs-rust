@@ -125,6 +125,27 @@ pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
         1,
         NativeFunction::Test262ToNumbers,
     );
+    define_global_function(
+        env,
+        global_this,
+        "__quickjsRustAssertIteratorResult",
+        3,
+        NativeFunction::Test262AssertIteratorResult,
+    );
+    define_global_function(
+        env,
+        global_this,
+        "__quickjsRustAssertPackedArray",
+        1,
+        NativeFunction::Test262AssertPackedArray,
+    );
+    define_global_function(
+        env,
+        global_this,
+        "__quickjsRustAssertNullProtoMutableObject",
+        1,
+        NativeFunction::Test262AssertNullProtoMutableObject,
+    );
 }
 
 fn define_global_function(
@@ -312,6 +333,97 @@ pub(crate) fn native_test262_to_numbers(argument_values: &[Value]) -> Result<Val
         })
         .collect();
     Ok(Value::Array(ArrayRef::new(values)))
+}
+
+pub(crate) fn native_test262_assert_iterator_result(
+    argument_values: &[Value],
+    env: &CallEnv,
+) -> Result<Value, RuntimeError> {
+    let Some(Value::Object(object)) = argument_values.first() else {
+        return Ok(Value::Boolean(false));
+    };
+    let Some(expected_value) = argument_values.get(1) else {
+        return Ok(Value::Boolean(false));
+    };
+    let Some(Value::Boolean(expected_done)) = argument_values.get(2) else {
+        return Ok(Value::Boolean(false));
+    };
+    if !object_uses_default_object_prototype(object, env) || !object.is_extensible() {
+        return Ok(Value::Boolean(false));
+    }
+    if !object.own_property_symbols().is_empty()
+        || object.own_property_names() != ["value".to_owned(), "done".to_owned()]
+    {
+        return Ok(Value::Boolean(false));
+    }
+    let Some(value_property) = object.own_property("value") else {
+        return Ok(Value::Boolean(false));
+    };
+    let Some(done_property) = object.own_property("done") else {
+        return Ok(Value::Boolean(false));
+    };
+    if !is_default_enumerable_data_property(&value_property)
+        || !is_default_enumerable_data_property(&done_property)
+    {
+        return Ok(Value::Boolean(false));
+    }
+    let Value::Boolean(actual_done) = done_property.value else {
+        return Ok(Value::Boolean(false));
+    };
+    Ok(Value::Boolean(
+        value_property.value.same_value(expected_value) && actual_done == *expected_done,
+    ))
+}
+
+pub(crate) fn native_test262_assert_packed_array(
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let Some(Value::Array(array)) = argument_values.first() else {
+        return Ok(Value::Boolean(false));
+    };
+    if !array.is_extensible()
+        || !array.is_length_writable()
+        || !array.uses_default_prototype()
+        || !array.property_names().is_empty()
+        || !array.own_property_symbols().is_empty()
+    {
+        return Ok(Value::Boolean(false));
+    }
+    Ok(Value::Boolean(
+        (0..array.len()).all(|index| array.has_index(index)),
+    ))
+}
+
+pub(crate) fn native_test262_assert_null_proto_mutable_object(
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let Some(Value::Object(object)) = argument_values.first() else {
+        return Ok(Value::Boolean(false));
+    };
+    if object.prototype_slot().is_some()
+        || !object.is_extensible()
+        || !object.own_property_symbols().is_empty()
+    {
+        return Ok(Value::Boolean(false));
+    }
+    Ok(Value::Boolean(object.own_property_names().into_iter().all(
+        |key| {
+            object
+                .own_property(&key)
+                .is_some_and(|property| is_default_enumerable_data_property(&property))
+        },
+    )))
+}
+
+fn object_uses_default_object_prototype(object: &ObjectRef, env: &CallEnv) -> bool {
+    match (object.prototype(), crate::object_prototype(env)) {
+        (Some(actual), Some(expected)) => actual.ptr_eq(&expected),
+        _ => false,
+    }
+}
+
+fn is_default_enumerable_data_property(property: &Property) -> bool {
+    !property.accessor && property.writable && property.enumerable && property.configurable
 }
 
 fn optional_bool_descriptor_field(

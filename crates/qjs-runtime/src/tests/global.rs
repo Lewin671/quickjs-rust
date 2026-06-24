@@ -1270,6 +1270,28 @@ fn test262_to_numbers_host_helper_matches_resizable_array_buffer_utils_shape() {
 }
 
 #[test]
+fn test262_iterator_zip_host_helpers_match_harness_shapes() {
+    assert_eq!(
+        eval(
+            "let iter = Iterator.zip([[1, 2], ['a']]); \
+             let result = iter.next(); \
+             let array = result.value; \
+             let keyed = Iterator.zipKeyed({ a: [1], b: ['x'] }).next().value; \
+             [ \
+               __quickjsRustAssertIteratorResult(result, array, false), \
+               __quickjsRustAssertPackedArray(array), \
+               __quickjsRustAssertNullProtoMutableObject(keyed), \
+               __quickjsRustAssertPackedArray([, 1]), \
+               __quickjsRustAssertNullProtoMutableObject({ a: 1 }) \
+             ].join(',');"
+        ),
+        Ok(Value::String(
+            "true,true,true,false,false".to_owned().into()
+        ))
+    );
+}
+
+#[test]
 fn test262_verify_property_host_helper_checks_data_descriptors() {
     assert_eq!(
         eval(
