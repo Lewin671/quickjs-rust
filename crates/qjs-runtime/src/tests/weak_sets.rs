@@ -78,6 +78,19 @@ fn weak_set_constructor_uses_prototype_add_adder() {
         .is_err()
     );
     assert!(eval("WeakSet.prototype.add = null; new WeakSet([]);").is_err());
+    assert_eq!(
+        eval(
+            "let count = 0; \
+             let iterable = { [Symbol.iterator]: function() { return { \
+                 next: function() { return { value: null, done: false }; }, \
+                 return: function() { count = count + 1; return {}; } \
+             }; } }; \
+             WeakSet.prototype.add = function() { throw new Error('stop'); }; \
+             try { new WeakSet(iterable); } catch (_) {} \
+             count;"
+        ),
+        Ok(Value::Number(1.0))
+    );
 }
 
 #[test]

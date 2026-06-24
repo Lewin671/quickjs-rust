@@ -85,6 +85,17 @@ fn set_constructor_uses_prototype_add_adder() {
         )
         .is_err()
     );
+    assert_eval(
+        "let count = 0; \
+         let iterable = { [Symbol.iterator]: function() { return { \
+             next: function() { return { value: null, done: false }; }, \
+             return: function() { count = count + 1; return {}; } \
+         }; } }; \
+         Set.prototype.add = function() { throw new Error('stop'); }; \
+         try { new Set(iterable); } catch (_) {} \
+         count;",
+        Value::Number(1.0),
+    );
 }
 
 #[test]

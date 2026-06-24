@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, RuntimeError, SetRef, Value,
-    array::iterable_values_with_env, call_function, property_value, symbol,
+    array::for_each_iterable_value_with_env, call_function, property_value, symbol,
 };
 
 mod composition;
@@ -153,9 +153,10 @@ pub(crate) fn native_set(
                 message: "TypeError: Set constructor add adder must be callable".to_owned(),
             });
         }
-        for value in iterable_values_with_env(iterable, "Set constructor", env)? {
+        for_each_iterable_value_with_env(iterable, "Set constructor", env, |value, env| {
             call_function(adder.clone(), set_value.clone(), vec![value], env, false)?;
-        }
+            Ok(())
+        })?;
     }
     Ok(set_value)
 }

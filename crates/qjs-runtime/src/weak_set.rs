@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::CallEnv;
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value,
-    array::iterable_values_with_env, call_function, property_value, symbol,
+    array::for_each_iterable_value_with_env, call_function, property_value, symbol,
 };
 
 const WEAK_SET_ENTRIES: &str = "\0weak_set_entries";
@@ -87,9 +87,10 @@ pub(crate) fn native_weak_set(
                 message: "TypeError: WeakSet constructor add adder must be callable".to_owned(),
             });
         }
-        for value in iterable_values_with_env(iterable, "WeakSet constructor", env)? {
+        for_each_iterable_value_with_env(iterable, "WeakSet constructor", env, |value, env| {
             call_function(adder.clone(), weak_set.clone(), vec![value], env, false)?;
-        }
+            Ok(())
+        })?;
     }
 
     Ok(weak_set)
