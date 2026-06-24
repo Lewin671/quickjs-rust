@@ -85,6 +85,7 @@ impl Compiler {
         let next_slot = self.temp_local("for_await_next");
         let done_slot = self.temp_local("for_await_done");
         let value_slot = self.temp_local("for_await_value");
+        let body_active_slot = self.temp_local("for_await_body_active");
         let iterator = LoopIterator {
             iterator_slot,
             done_slot,
@@ -115,6 +116,12 @@ impl Compiler {
         });
 
         let loop_start = self.code.len();
+        // Awaiting/stepping the iterator and reading its result are outside the
+        // close region (spec steps b/f/h); only the binding+body sets
+        // `body_active` so the throw handler closes the iterator solely on a
+        // body completion. Reset it each iteration (including after `continue`).
+        self.emit(Op::LoadConst(false_slot));
+        self.emit(Op::StoreLocal(body_active_slot));
         // result = await iterator.next(); validate; extract value/done.
         self.emit(Op::LoadLocal(iterator_slot));
         self.emit(Op::LoadLocal(next_slot));
@@ -131,6 +138,9 @@ impl Compiler {
         if !iteration_slots.is_empty() {
             self.emit(Op::FreshIterationScope(iteration_slots.clone()));
         }
+        let true_slot = self.const_slot(Value::Boolean(true));
+        self.emit(Op::LoadConst(true_slot));
+        self.emit(Op::StoreLocal(body_active_slot));
         self.compile_for_of_iteration(left, value_slot, body, result_slot, iterator, &blocked)?;
         let context = self.pop_loop();
 
@@ -142,7 +152,14 @@ impl Compiler {
         self.emit(Op::Pop);
         self.emit(Op::ExitTry);
         let cleanup_slots = self.current_lexical_slots_for_names(&blocked);
-        self.emit_for_of_loop_completion(result_slot, iterator, &cleanup_slots, &context, enter);
+        self.emit_for_of_loop_completion(
+            result_slot,
+            iterator,
+            &cleanup_slots,
+            &context,
+            enter,
+            body_active_slot,
+        );
         self.patch_loop_continues(&context, loop_start);
         Ok(())
     }
@@ -243,6 +260,7 @@ impl Compiler {
         let next_slot = self.temp_local("for_of_next");
         let done_slot = self.temp_local("for_of_done");
         let value_slot = self.temp_local("for_of_value");
+        let body_active_slot = self.temp_local("for_of_body_active");
         let iterator = LoopIterator {
             iterator_slot,
             done_slot,
@@ -273,6 +291,11 @@ impl Compiler {
         });
 
         let loop_start = self.code.len();
+        // Stepping the iterator and reading its result lie outside the close
+        // region (spec steps b/f/h); only the binding+body sets `body_active`
+        // so a thrown next()/value is propagated without an extra IteratorClose.
+        self.emit(Op::LoadConst(false_slot));
+        self.emit(Op::StoreLocal(body_active_slot));
         self.emit(Op::LoadLocal(iterator_slot));
         self.emit(Op::LoadLocal(next_slot));
         self.emit(Op::IteratorStep { done_slot });
@@ -286,6 +309,9 @@ impl Compiler {
         if !iteration_slots.is_empty() {
             self.emit(Op::FreshIterationScope(iteration_slots.clone()));
         }
+        let true_slot = self.const_slot(Value::Boolean(true));
+        self.emit(Op::LoadConst(true_slot));
+        self.emit(Op::StoreLocal(body_active_slot));
         self.compile_for_of_iteration(left, value_slot, body, result_slot, iterator, &blocked)?;
         let context = self.pop_loop();
 
@@ -297,7 +323,14 @@ impl Compiler {
         self.emit(Op::Pop);
         self.emit(Op::ExitTry);
         let cleanup_slots = self.current_lexical_slots_for_names(&blocked);
-        self.emit_for_of_loop_completion(result_slot, iterator, &cleanup_slots, &context, enter);
+        self.emit_for_of_loop_completion(
+            result_slot,
+            iterator,
+            &cleanup_slots,
+            &context,
+            enter,
+            body_active_slot,
+        );
         self.patch_loop_continues(&context, loop_start);
         Ok(())
     }
@@ -379,6 +412,7 @@ impl Compiler {
         cleanup_slots: &[usize],
         context: &super::compiler::LoopContext,
         enter: usize,
+        body_active_slot: usize,
     ) {
         for slot in cleanup_slots {
             self.emit(Op::ClearLocal(*slot));
@@ -401,7 +435,23 @@ impl Compiler {
         let break_done = self.emit(Op::Jump(usize::MAX));
 
         let catch_target = self.code.len();
+        // Per ForIn/OfBodyEvaluation, IteratorClose runs only when the abrupt
+        // completion comes from the binding/body region (step k). Abrupt
+        // completions from awaiting/stepping the iterator or reading its
+        // result's `done`/`value` (the `?`-guarded steps b/f/h) propagate
+        // without closing — the iterator is already exhausted there. The body
+        // sets `body_active` true around that region so this throw handler only
+        // closes when a body completion is in flight.
+        self.emit(Op::LoadLocal(body_active_slot));
+        let skip_close = self.emit(Op::JumpIfFalse(usize::MAX));
+        self.emit(Op::Pop);
         self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, true);
+        let after_close = self.emit(Op::Jump(usize::MAX));
+        let skip_close_target = self.code.len();
+        self.patch_jump(skip_close, skip_close_target);
+        self.emit(Op::Pop);
+        let close_done = self.code.len();
+        self.patch_jump(after_close, close_done);
         if context.captured_env_scope {
             self.emit(Op::PopCapturedEnv);
         }
