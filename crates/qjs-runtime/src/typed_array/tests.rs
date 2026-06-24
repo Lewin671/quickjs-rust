@@ -112,6 +112,38 @@ fn construct_from_array_like_and_iterable() {
 }
 
 #[test]
+fn construct_from_array_like_rejects_excessive_length_before_index_reads() {
+    assert_eq!(
+        eval(
+            "let reads = 0; \
+             let source = { length: Math.pow(2, 53) }; \
+             Object.defineProperty(source, '0', { get() { reads++; throw new TypeError('index'); } }); \
+             let threw = false; \
+             try { new Uint8Array(source); } catch (e) { threw = e instanceof RangeError; } \
+             threw + ':' + reads;"
+        ),
+        Ok(Value::String("true:0".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let source = { length: Math.pow(2, 53), 0: 1n }; \
+             let threw = false; \
+             try { new BigInt64Array(source); } catch (e) { threw = e instanceof RangeError; } \
+             threw;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let source = { length: Math.pow(2, 53), [Symbol.iterator]: function() { return [7, 8][Symbol.iterator](); } }; \
+             let a = new Uint8Array(source); \
+             a.length + ':' + a[0] + ':' + a[1];"
+        ),
+        Ok(Value::String("2:7:8".to_owned().into()))
+    );
+}
+
+#[test]
 fn construct_from_typed_array_converts_elements() {
     assert_eq!(
         eval(

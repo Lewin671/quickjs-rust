@@ -7,10 +7,10 @@ use crate::{
 
 use super::element::write_element;
 use super::{
-    TYPED_ARRAY_BUFFER_PROPERTY, TYPED_ARRAY_BYTE_OFFSET_PROPERTY, TYPED_ARRAY_KIND_PROPERTY,
-    TYPED_ARRAY_LENGTH_PROPERTY, TYPED_ARRAY_LENGTH_TRACKING_PROPERTY, bytes_per_element,
-    coerce_element, is_big_int_kind, is_typed_array_object, to_typed_array_length,
-    typed_array_kind, typed_array_name,
+    MAX_TYPED_ARRAY_LENGTH, TYPED_ARRAY_BUFFER_PROPERTY, TYPED_ARRAY_BYTE_OFFSET_PROPERTY,
+    TYPED_ARRAY_KIND_PROPERTY, TYPED_ARRAY_LENGTH_PROPERTY, TYPED_ARRAY_LENGTH_TRACKING_PROPERTY,
+    bytes_per_element, coerce_element, is_big_int_kind, is_typed_array_object,
+    to_typed_array_length, typed_array_kind, typed_array_name,
 };
 use crate::CallEnv;
 
@@ -224,7 +224,11 @@ fn initialize_from_object(
 
     let raw_values = match iterator_method {
         Value::Undefined | Value::Null => {
-            array::array_like_values_with_env(source, "TypedArray", env)?
+            let source = array::array_like_length(source, "TypedArray", env)?;
+            if source.length > MAX_TYPED_ARRAY_LENGTH {
+                return Err(invalid_length_error());
+            }
+            array::array_like_values_from_receiver(source.receiver, source.length, env)?
         }
         Value::Function(_) => array::iterable_values_with_env(source, "TypedArray", env)?,
         _ => {
