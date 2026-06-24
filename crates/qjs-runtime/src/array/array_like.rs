@@ -155,7 +155,8 @@ pub(crate) fn array_like_values_from_receiver(
     env: &mut CallEnv,
 ) -> Result<Vec<Value>, RuntimeError> {
     match receiver {
-        Value::Object(_) | Value::Proxy(_) => (0..length)
+        Value::Object(object) => object_array_like_values(object, length, env),
+        Value::Proxy(_) => (0..length)
             .map(|index| property_value(receiver.clone(), &index.to_string(), env))
             .collect(),
         Value::Array(array) => Ok(array.to_vec()),
@@ -175,6 +176,27 @@ pub(crate) fn array_like_values_from_receiver(
             .collect()),
         _ => Ok(Vec::new()),
     }
+}
+
+fn object_array_like_values(
+    object: ObjectRef,
+    length: usize,
+    env: &mut CallEnv,
+) -> Result<Vec<Value>, RuntimeError> {
+    let receiver = Value::Object(object.clone());
+    let mut values = Vec::with_capacity(length);
+    for index in 0..length {
+        let key = index.to_string();
+        if let Some(property) = object.own_property(&key)
+            && !property.accessor
+            && property.get.is_none()
+        {
+            values.push(property.value);
+        } else {
+            values.push(property_value(receiver.clone(), &key, env)?);
+        }
+    }
+    Ok(values)
 }
 
 pub(super) fn array_like_receiver(value: Value, env: &CallEnv) -> Value {

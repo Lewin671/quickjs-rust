@@ -138,6 +138,18 @@ fn array_from_values(
                 env,
             )
         }
+        Value::Function(ref function)
+            if mapping.is_none()
+                && function.native_kind() == Some(NativeFunction::ArrayPrototypeValues)
+                && is_native_array_constructor(constructor.as_ref()) =>
+        {
+            if let Value::Array(array) = &items
+                && let Some(values) = array.dense_argument_values(env)
+            {
+                return Ok(Value::Array(ArrayRef::new(values)));
+            }
+            array_from_iterable_result(items, iterator_method, mapping, this_arg, constructor, env)
+        }
         Value::Function(_) => {
             array_from_iterable_result(items, iterator_method, mapping, this_arg, constructor, env)
         }
@@ -146,6 +158,13 @@ fn array_from_values(
             message: "Array.from iterator method is not callable".to_owned(),
         }),
     }
+}
+
+fn is_native_array_constructor(constructor: Option<&Value>) -> bool {
+    matches!(
+        constructor,
+        Some(Value::Function(function)) if function.native_kind() == Some(NativeFunction::Array)
+    )
 }
 
 fn array_from_array_like_result(

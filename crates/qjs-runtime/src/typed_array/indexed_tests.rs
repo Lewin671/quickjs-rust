@@ -27,6 +27,44 @@ fn indexed_write_routes_through_per_kind_conversion() {
 }
 
 #[test]
+fn numeric_index_loop_writes_through_backing_buffer() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array(4); let calls = 0; \
+             for (let i = 0; i < a.length; i++) { \
+               a[i] = { valueOf() { calls++; return i + 256; } }; \
+             } \
+             calls + ':' + Array.prototype.join.call(new Uint8Array(a.buffer));"
+        ),
+        Ok(Value::String("4:0,1,2,3".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array(1); a[3] = { valueOf() { return 9; } }; \
+             a[3] === undefined && a.length === 1;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn numeric_index_loops_observe_overridden_length_accessor() {
+    assert_eq!(
+        eval(
+            "let proto = Object.getPrototypeOf(Uint8Array.prototype); \
+             let descriptor = Object.getOwnPropertyDescriptor(proto, 'length'); \
+             let calls = 0; \
+             Object.defineProperty(proto, 'length', { get() { calls++; return 2; }, configurable: true }); \
+             let seen = 0; \
+             try { let a = new Uint8Array(4); for (let i = 0; i < a.length; i++) { seen++; } } \
+             finally { Object.defineProperty(proto, 'length', descriptor); } \
+             calls + ':' + seen;"
+        ),
+        Ok(Value::String("3:2".to_owned().into()))
+    );
+}
+
+#[test]
 fn reflect_set_typed_array_index_uses_receiver_define_semantics() {
     assert_eq!(
         eval(

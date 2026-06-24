@@ -1,8 +1,8 @@
 use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
-    GLOBAL_THIS_BINDING, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_prototype,
-    function_delete_own_property, function_delete_own_symbol_property,
+    GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
+    array_prototype, function_delete_own_property, function_delete_own_symbol_property,
     function_own_property_descriptor, function_own_property_names,
     function_prototype_chain_descriptor, inherited_primitive_prototype_descriptor, property_value,
     property_value_key, property_value_key_with_receiver, string, symbol, to_int32_number,
@@ -123,6 +123,11 @@ impl Vm<'_> {
                             return Some(Value::Undefined);
                         }
                         crate::typed_array::IndexedRead::NotIndexed => {}
+                    }
+                    if key == "length" && typed_array_default_length_accessor(object) {
+                        return Some(Value::Number(
+                            crate::typed_array::typed_array_length(object) as f64,
+                        ));
                     }
                 }
                 if object.is_module_namespace_exotic() {
@@ -492,6 +497,17 @@ fn data_property_value(property: Option<Property>) -> Option<Value> {
         Some(property) if property.get.is_some() || property.accessor => None,
         Some(property) => Some(property.value),
     }
+}
+
+fn typed_array_default_length_accessor(object: &ObjectRef) -> bool {
+    let Ok(Some(property)) = ordinary_chain_property(object, "length") else {
+        return false;
+    };
+    matches!(
+        property.get,
+        Some(Value::Function(ref getter))
+            if getter.native_kind() == Some(NativeFunction::TypedArrayPrototypeLength)
+    )
 }
 
 /// Signals that an inline [[Prototype]]-chain walk reached a Proxy. The VM fast

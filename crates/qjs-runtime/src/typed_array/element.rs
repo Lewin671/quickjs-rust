@@ -27,6 +27,10 @@ pub(crate) fn coerce_element(
     }
 
     let number = to_number_with_env(value, env)?;
+    Ok(coerce_number_element(native, number))
+}
+
+fn coerce_number_element(native: NativeFunction, number: f64) -> Value {
     let value = match native {
         NativeFunction::Uint8Array => modulo_integer(number, 256.0),
         NativeFunction::Int8Array => signed_integer(number, 8),
@@ -39,7 +43,7 @@ pub(crate) fn coerce_element(
         NativeFunction::Float64Array => number,
         _ => unreachable!("non-bigint typed array native expected"),
     };
-    Ok(Value::Number(value))
+    Value::Number(value)
 }
 
 fn coerce_big_int_element(
@@ -135,25 +139,31 @@ pub(crate) fn write_element(
     if byte_index + element > bytes.len() {
         return;
     }
-    let encoded = encode_element(native, value);
-    bytes[byte_index..byte_index + element].copy_from_slice(&encoded);
-}
-
-fn encode_element(native: NativeFunction, value: &Value) -> Vec<u8> {
     match native {
         NativeFunction::Uint8Array | NativeFunction::Uint8ClampedArray => {
-            vec![number_of(value) as u8]
+            bytes[byte_index] = number_of(value) as u8;
         }
-        NativeFunction::Int8Array => vec![(number_of(value) as i64 as i8) as u8],
-        NativeFunction::Uint16Array => (number_of(value) as i64 as u16).to_le_bytes().to_vec(),
-        NativeFunction::Int16Array => (number_of(value) as i64 as i16).to_le_bytes().to_vec(),
-        NativeFunction::Uint32Array => (number_of(value) as i64 as u32).to_le_bytes().to_vec(),
-        NativeFunction::Int32Array => (number_of(value) as i64 as i32).to_le_bytes().to_vec(),
-        NativeFunction::Float32Array => (number_of(value) as f32).to_le_bytes().to_vec(),
-        NativeFunction::Float64Array => number_of(value).to_le_bytes().to_vec(),
-        NativeFunction::BigInt64Array => big_int_of(value).to_le_bytes().to_vec(),
-        NativeFunction::BigUint64Array => (big_int_of(value) as u64).to_le_bytes().to_vec(),
-        _ => Vec::new(),
+        NativeFunction::Int8Array => {
+            bytes[byte_index] = (number_of(value) as i64 as i8) as u8;
+        }
+        NativeFunction::Uint16Array => bytes[byte_index..byte_index + element]
+            .copy_from_slice(&(number_of(value) as i64 as u16).to_le_bytes()),
+        NativeFunction::Int16Array => bytes[byte_index..byte_index + element]
+            .copy_from_slice(&(number_of(value) as i64 as i16).to_le_bytes()),
+        NativeFunction::Uint32Array => bytes[byte_index..byte_index + element]
+            .copy_from_slice(&(number_of(value) as i64 as u32).to_le_bytes()),
+        NativeFunction::Int32Array => bytes[byte_index..byte_index + element]
+            .copy_from_slice(&(number_of(value) as i64 as i32).to_le_bytes()),
+        NativeFunction::Float32Array => bytes[byte_index..byte_index + element]
+            .copy_from_slice(&(number_of(value) as f32).to_le_bytes()),
+        NativeFunction::Float64Array => {
+            bytes[byte_index..byte_index + element].copy_from_slice(&number_of(value).to_le_bytes())
+        }
+        NativeFunction::BigInt64Array => bytes[byte_index..byte_index + element]
+            .copy_from_slice(&big_int_of(value).to_le_bytes()),
+        NativeFunction::BigUint64Array => bytes[byte_index..byte_index + element]
+            .copy_from_slice(&(big_int_of(value) as u64).to_le_bytes()),
+        _ => {}
     }
 }
 
@@ -290,6 +300,47 @@ pub(crate) fn set_indexed_element(
 
     set_view_element(object, index, coerced);
     Ok(IndexedWrite::Handled)
+}
+
+/// IntegerIndexedElementSet by a `usize` index, skipping the string round-trip
+/// and canonical numeric index parse when the VM has already classified a
+/// numeric property key. Coercion still runs before detached/out-of-bounds
+/// checks so observable `valueOf` effects match the generic path.
+pub(crate) fn set_integer_indexed_element(
+    object: &ObjectRef,
+    index: usize,
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<(), RuntimeError> {
+    let native = typed_array_kind(object);
+    let coerced = coerce_element(native, value, env)?;
+    if super::typed_array_buffer_detached(object) || index >= typed_array_length(object) {
+        return Ok(());
+    }
+    set_view_element(object, index, coerced);
+    Ok(())
+}
+
+/// Attempts IntegerIndexedElementSet for primitive values that need no
+/// environment-backed coercion. Returning `false` means the caller must use the
+/// generic path so objects, strings, booleans, and cross-kind BigInt/Number
+/// errors keep their observable conversion behavior.
+pub(crate) fn try_set_integer_indexed_primitive_element(
+    object: &ObjectRef,
+    index: usize,
+    value: &Value,
+) -> bool {
+    let native = typed_array_kind(object);
+    let coerced = match (is_big_int_kind(native), value) {
+        (false, Value::Number(number)) => coerce_number_element(native, *number),
+        (true, Value::BigInt(big)) => Value::BigInt(wrap_big_int(native, big.clone())),
+        _ => return false,
+    };
+    if super::typed_array_buffer_detached(object) || index >= typed_array_length(object) {
+        return true;
+    }
+    set_view_element(object, index, coerced);
+    true
 }
 
 /// Defines the value descriptor used by OrdinarySet when a typed array is the

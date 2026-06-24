@@ -647,3 +647,34 @@ fn maps_array_from_iterables_during_consumption() {
     );
     assert!(eval("let source = {}; source[Symbol.iterator] = 1; Array.from(source);").is_err());
 }
+
+#[test]
+fn array_from_array_fast_path_preserves_iterator_observability() {
+    assert_eq!(
+        eval(
+            "let source = [1, 2]; let result = Array.from(source); result.length + ':' + result[0] + ':' + (result === source);"
+        ),
+        Ok(Value::String("2:1:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let original = Array.prototype[Symbol.iterator]; \
+             Array.prototype[Symbol.iterator] = function() { return original.call([9]); }; \
+             let out; \
+             try { out = Array.from([1, 2]).join(); } \
+             finally { Array.prototype[Symbol.iterator] = original; } \
+             out;"
+        ),
+        Ok(Value::String("9".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "Object.defineProperty(Array.prototype, '0', { get() { return 7; }, configurable: true }); \
+             let out; \
+             try { out = Array.from([, 3]).join(); } \
+             finally { delete Array.prototype[0]; } \
+             out;"
+        ),
+        Ok(Value::String("7,3".to_owned().into()))
+    );
+}

@@ -230,6 +230,17 @@ fn initialize_from_object(
             }
             array::array_like_values_from_receiver(source.receiver, source.length, env)?
         }
+        Value::Function(ref function)
+            if function.native_kind() == Some(NativeFunction::ArrayPrototypeValues) =>
+        {
+            match &source {
+                Value::Array(array) => match array.dense_argument_values(env) {
+                    Some(values) => values,
+                    None => array::iterable_values_with_env(source, "TypedArray", env)?,
+                },
+                _ => array::iterable_values_with_env(source, "TypedArray", env)?,
+            }
+        }
         Value::Function(_) => array::iterable_values_with_env(source, "TypedArray", env)?,
         _ => {
             return Err(RuntimeError {

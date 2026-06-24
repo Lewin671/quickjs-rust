@@ -112,6 +112,55 @@ fn construct_from_array_like_and_iterable() {
 }
 
 #[test]
+fn construct_from_array_observes_iterator_overrides_and_prototype_indices() {
+    assert_eq!(
+        eval(
+            "let original = Array.prototype[Symbol.iterator]; \
+             Array.prototype[Symbol.iterator] = function() { return original.call([9]); }; \
+             let out; \
+             try { let a = new Uint8Array([1, 2]); out = a.length + ':' + a[0]; } \
+             finally { Array.prototype[Symbol.iterator] = original; } \
+             out;"
+        ),
+        Ok(Value::String("1:9".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "Object.defineProperty(Array.prototype, '0', { get() { return 7; }, configurable: true }); \
+             let out; \
+             try { let a = new Uint8Array([, 3]); out = a[0] + ':' + a[1]; } \
+             finally { delete Array.prototype[0]; } \
+             out;"
+        ),
+        Ok(Value::String("7:3".to_owned().into()))
+    );
+}
+
+#[test]
+fn construct_from_array_like_observes_accessors_and_inherited_indices() {
+    assert_eq!(
+        eval(
+            "let calls = 0; \
+             let source = { length: 2, 1: 3 }; \
+             Object.defineProperty(source, '0', { get() { calls++; return 7; } }); \
+             let a = new Uint8Array(source); \
+             calls + ':' + a[0] + ':' + a[1];"
+        ),
+        Ok(Value::String("1:7:3".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let proto = { 0: 9 }; \
+             let source = { length: 2, 1: 4 }; \
+             Object.setPrototypeOf(source, proto); \
+             let a = new Uint8Array(source); \
+             a[0] + ':' + a[1];"
+        ),
+        Ok(Value::String("9:4".to_owned().into()))
+    );
+}
+
+#[test]
 fn construct_from_array_like_rejects_excessive_length_before_index_reads() {
     assert_eq!(
         eval(

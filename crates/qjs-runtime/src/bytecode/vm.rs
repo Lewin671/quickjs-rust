@@ -992,6 +992,28 @@ impl<'a> Vm<'a> {
                 return Ok(());
             }
         }
+        if let Value::Number(number) = &key_value
+            && let Some(index) = array_index_from_number(*number)
+            && let Some(Value::Object(object)) = self.stack.last()
+            && crate::typed_array::is_typed_array_object(object)
+        {
+            let object = object.clone();
+            if !crate::typed_array::try_set_integer_indexed_primitive_element(
+                &object, index, &value,
+            ) {
+                let mut env = self.current_env();
+                crate::typed_array::set_integer_indexed_element(
+                    &object,
+                    index,
+                    value.clone(),
+                    &mut env,
+                )?;
+                self.apply_env(env);
+            }
+            self.pop()?;
+            self.stack.push(value);
+            return Ok(());
+        }
         let key = self.coerce_property_key(key_value)?;
         let object = self.pop()?;
         if self.symbol_primitive_set_fails(&object, &key) {
