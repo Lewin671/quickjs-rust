@@ -4982,6 +4982,13 @@ test/annexB/language/eval-code/direct/global-switch-dflt-eval-global-existing-no
 test/annexB/language/eval-code/direct/global-switch-dflt-eval-global-init.js
 test/annexB/language/eval-code/direct/script-decl-lex-no-collision.js
 test/annexB/language/eval-code/indirect/global-block-decl-eval-global-skip-early-err-try.js
+test/annexB/language/expressions/assignmenttargettype/callexpression-as-for-in-lhs.js
+test/annexB/language/expressions/assignmenttargettype/callexpression-as-for-of-lhs.js
+test/annexB/language/expressions/assignmenttargettype/callexpression-in-compound-assignment.js
+test/annexB/language/expressions/assignmenttargettype/callexpression-in-postfix-update.js
+test/annexB/language/expressions/assignmenttargettype/callexpression-in-prefix-update.js
+test/annexB/language/expressions/assignmenttargettype/callexpression.js
+test/annexB/language/expressions/assignmenttargettype/cover-callexpression-and-asyncarrowhead.js
 test/annexB/language/global-code/block-decl-global-existing-global-init.js
 test/annexB/language/global-code/block-decl-global-existing-non-enumerable-global-init.js
 test/annexB/language/global-code/if-decl-else-decl-a-global-existing-global-init.js

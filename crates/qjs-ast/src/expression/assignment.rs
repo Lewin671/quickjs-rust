@@ -22,6 +22,16 @@ pub enum AssignmentTarget {
         /// Source span.
         span: Span,
     },
+    /// A function-call result as an assignment/update target (AnnexB sloppy-mode
+    /// web compatibility, e.g. `f() = x`, `f()++`). The call is evaluated and a
+    /// runtime ReferenceError is then thrown; strict mode rejects it at parse
+    /// time.
+    CallExpression {
+        /// The call expression to evaluate before throwing.
+        call: Box<Expr>,
+        /// Source span.
+        span: Span,
+    },
     /// An array destructuring assignment pattern.
     ArrayPattern {
         /// Elements in source order. `None` represents an elision.
@@ -93,6 +103,7 @@ impl AssignmentTarget {
         match self {
             Self::Identifier { span, .. }
             | Self::Member { span, .. }
+            | Self::CallExpression { span, .. }
             | Self::ArrayPattern { span, .. }
             | Self::ObjectPattern { span, .. } => *span,
         }

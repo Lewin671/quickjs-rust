@@ -570,6 +570,9 @@ impl Compiler {
                 self.emit(Op::LoadLocal(key_slot));
                 self.compile_assignment_pattern(target)?;
             }
+            ForInLeft::Target(AssignmentTarget::CallExpression { call, .. }) => {
+                self.compile_call_assignment_target(call)?;
+            }
         }
         Ok(())
     }

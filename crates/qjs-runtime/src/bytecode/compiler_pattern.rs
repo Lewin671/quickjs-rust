@@ -34,6 +34,9 @@ impl Compiler {
                 let reference = self.prepare_member_reference(target)?;
                 self.store_pattern_value(target, reference.as_ref())
             }
+            AssignmentTarget::CallExpression { call, .. } => {
+                self.compile_call_assignment_target(call)
+            }
             AssignmentTarget::ArrayPattern { elements, rest, .. } => {
                 let destructuring = self.begin_array_destructuring();
                 for element in elements {
@@ -197,6 +200,9 @@ impl Compiler {
             AssignmentTarget::ArrayPattern { .. } | AssignmentTarget::ObjectPattern { .. } => {
                 self.compile_assignment_pattern(target)
             }
+            AssignmentTarget::CallExpression { call, .. } => {
+                self.compile_call_assignment_target(call)
+            }
         }
     }
 
@@ -241,6 +247,7 @@ fn assignment_target_inferred_name(target: &AssignmentTarget) -> Option<&str> {
             ..
         } => None,
         AssignmentTarget::Member { .. }
+        | AssignmentTarget::CallExpression { .. }
         | AssignmentTarget::ArrayPattern { .. }
         | AssignmentTarget::ObjectPattern { .. } => None,
     }

@@ -421,6 +421,7 @@ fn call_argument_contains_private_name(argument: &CallArgument) -> bool {
 fn assignment_target_contains_private_name(target: &AssignmentTarget) -> bool {
     match target {
         AssignmentTarget::Identifier { .. } => false,
+        AssignmentTarget::CallExpression { call, .. } => expr_contains_private_name(call),
         AssignmentTarget::Member {
             object, property, ..
         } => {

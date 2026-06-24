@@ -233,6 +233,7 @@ pub(crate) fn var_kind(kind: &TokenKind) -> Option<VarKind> {
 pub(crate) fn assignment_target(
     expr: Expr,
     parenthesized: bool,
+    strict: bool,
 ) -> Result<AssignmentTarget, ParseError> {
     match expr {
         Expr::Identifier { name, span } => Ok(AssignmentTarget::Identifier {
@@ -249,6 +250,16 @@ pub(crate) fn assignment_target(
             property,
             span,
         }),
+        // AnnexB web compatibility: a CallExpression (`f()`, `async()`) is a
+        // valid assignment/update target in sloppy mode — it is evaluated and a
+        // runtime ReferenceError is thrown. Strict mode keeps the early error.
+        call @ Expr::Call { .. } if !strict => {
+            let span = call.span();
+            Ok(AssignmentTarget::CallExpression {
+                call: Box::new(call),
+                span,
+            })
+        }
         other => Err(ParseError {
             message: "invalid assignment target".to_owned(),
             span: other.span(),

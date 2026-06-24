@@ -121,7 +121,29 @@ impl Compiler {
                 self.emit(Op::LoadLocal(rhs_slot));
                 Ok(())
             }
+            AssignmentTarget::CallExpression { call, .. } => {
+                self.compile_call_assignment_target(call)
+            }
         }
+    }
+
+    /// AnnexB web compatibility: a function-call assignment/update target
+    /// evaluates the call (its side effects are observable) and then throws a
+    /// runtime ReferenceError, because the call result is not a Reference. The
+    /// right-hand side is never reached, so it is not compiled.
+    pub(super) fn compile_call_assignment_target(
+        &mut self,
+        call: &Expr,
+    ) -> Result<(), RuntimeError> {
+        self.compile_expr(call)?;
+        // Leave the (unreachable) call result on the stack so the net stack
+        // effect matches an ordinary assignment expression's value; the throw
+        // unwinds before it is observed, and a balanced depth keeps a directly
+        // enclosing `try` handler's stack restoration correct.
+        self.emit(Op::ThrowReferenceError(
+            "invalid assignment to a function call".to_owned(),
+        ));
+        Ok(())
     }
 
     pub(super) fn compile_compound_assign(
@@ -325,6 +347,9 @@ impl Compiler {
         op: AssignmentOp,
         value: &Expr,
     ) -> Result<(), RuntimeError> {
+        if let AssignmentTarget::CallExpression { call, .. } = target {
+            return self.compile_call_assignment_target(call);
+        }
         if let AssignmentTarget::Member {
             object,
             property: qjs_ast::MemberProperty::Private(name),
@@ -463,6 +488,9 @@ impl Compiler {
         op: UpdateOp,
         prefix: bool,
     ) -> Result<(), RuntimeError> {
+        if let AssignmentTarget::CallExpression { call, .. } = target {
+            return self.compile_call_assignment_target(call);
+        }
         if let AssignmentTarget::Member {
             object,
             property: qjs_ast::MemberProperty::Private(name),

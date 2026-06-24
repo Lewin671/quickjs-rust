@@ -64,7 +64,7 @@ impl Parser {
             return Ok(expr);
         };
 
-        let target = assignment_target(expr, lhs_parenthesized)?;
+        let target = assignment_target(expr, lhs_parenthesized, self.strict)?;
 
         // Strict mode: assigning to restricted identifiers (simple or
         // compound) is an early SyntaxError.
@@ -622,6 +622,7 @@ fn member_property_contains_yield(property: &MemberProperty) -> bool {
 fn assignment_target_contains_yield(target: &AssignmentTarget) -> bool {
     match target {
         AssignmentTarget::Identifier { .. } => false,
+        AssignmentTarget::CallExpression { call, .. } => expr_contains_yield(call),
         AssignmentTarget::Member {
             object, property, ..
         } => expr_contains_yield(object) || member_property_contains_yield(property),
