@@ -161,6 +161,10 @@ fn evaluates_string_sequence_builtins() {
         Ok(Value::String(::std::rc::Rc::new(String::new())))
     );
     assert_eq!(
+        eval("'a😀bc'.slice(1, 3) + ':' + 'a😀bc'.substr(1, 2) + ':' + 'a😀bc'.substring(3, 1);"),
+        Ok(Value::String("😀b:😀b:😀b".to_owned().into()))
+    );
+    assert_eq!(
         eval(
             "let caught = false; try { ''.repeat(Infinity); } catch (error) { caught = error instanceof RangeError; } caught;"
         ),

@@ -63,8 +63,7 @@ pub(crate) fn native_string_prototype_slice(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let chars: Vec<_> = value.chars().collect();
-    let length = chars.len();
+    let length = string_char_len(&value);
     let start = string_slice_index(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -80,9 +79,7 @@ pub(crate) fn native_string_prototype_slice(
     if end <= start {
         return Ok(Value::String(::std::rc::Rc::new(String::new())));
     }
-    Ok(Value::String(
-        chars[start..end].iter().collect::<String>().into(),
-    ))
+    Ok(Value::String(string_slice_chars(&value, start, end).into()))
 }
 
 pub(crate) fn native_string_prototype_split(
@@ -296,8 +293,7 @@ pub(crate) fn native_string_prototype_substr(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let chars: Vec<_> = value.chars().collect();
-    let length = chars.len();
+    let length = string_char_len(&value);
     let start = string_substr_start(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -310,10 +306,7 @@ pub(crate) fn native_string_prototype_substr(
         env,
     )?;
     Ok(Value::String(
-        chars[start..start + count]
-            .iter()
-            .collect::<String>()
-            .into(),
+        string_slice_chars(&value, start, start + count).into(),
     ))
 }
 
@@ -323,8 +316,7 @@ pub(crate) fn native_string_prototype_substring(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let chars: Vec<_> = value.chars().collect();
-    let length = chars.len();
+    let length = string_char_len(&value);
     let start = string_substring_index(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -342,9 +334,26 @@ pub(crate) fn native_string_prototype_substring(
     } else {
         (end, start)
     };
-    Ok(Value::String(
-        chars[from..to].iter().collect::<String>().into(),
-    ))
+    Ok(Value::String(string_slice_chars(&value, from, to).into()))
+}
+
+fn string_char_len(value: &str) -> usize {
+    if value.is_ascii() {
+        value.len()
+    } else {
+        value.chars().count()
+    }
+}
+
+fn string_slice_chars(value: &str, start: usize, end: usize) -> String {
+    if start >= end {
+        return String::new();
+    }
+    if value.is_ascii() {
+        value[start..end].to_owned()
+    } else {
+        value.chars().skip(start).take(end - start).collect()
+    }
 }
 
 fn string_substr_start(
