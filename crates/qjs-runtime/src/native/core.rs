@@ -38,6 +38,7 @@ pub(super) fn call_core_native(
         NativeFunction::Test262BuildString => {
             global::native_test262_build_string(argument_values, env)
         }
+        NativeFunction::Test262ToNumbers => global::native_test262_to_numbers(argument_values),
         NativeFunction::Print => global::native_global_print(argument_values, env),
         NativeFunction::IsHtmlDda => Ok(crate::html_dda::native_is_html_dda()),
         NativeFunction::BigInt => bigint::native_bigint(argument_values, is_construct, env),

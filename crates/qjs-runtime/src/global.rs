@@ -3,7 +3,8 @@ use std::collections::HashSet;
 
 use crate::CallEnv;
 use crate::{
-    Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, RuntimeError, Value,
+    ArrayRef, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, RuntimeError,
+    Value,
     bytecode::{
         compile_direct_eval_script, eval_bytecode_with_env,
         eval_bytecode_with_env_ephemeral_global_lexicals, set_object_property,
@@ -116,6 +117,13 @@ pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
         "__quickjsRustBuildString",
         1,
         NativeFunction::Test262BuildString,
+    );
+    define_global_function(
+        env,
+        global_this,
+        "__quickjsRustToNumbers",
+        1,
+        NativeFunction::Test262ToNumbers,
     );
 }
 
@@ -284,6 +292,26 @@ pub(crate) fn native_test262_verify_property(
     }
 
     Ok(Value::Boolean(true))
+}
+
+pub(crate) fn native_test262_to_numbers(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    use num_traits::ToPrimitive;
+
+    let Some(Value::Object(object)) = argument_values.first() else {
+        return Ok(Value::Undefined);
+    };
+    if !crate::typed_array::is_typed_array_object(object) {
+        return Ok(Value::Undefined);
+    }
+    let length = crate::typed_array::typed_array_length(object);
+    let values = crate::typed_array::read_view_elements(object, 0, length)
+        .into_iter()
+        .map(|value| match value {
+            Value::BigInt(big) => Value::Number(big.to_f64().unwrap_or(f64::NAN)),
+            value => value,
+        })
+        .collect();
+    Ok(Value::Array(ArrayRef::new(values)))
 }
 
 fn optional_bool_descriptor_field(

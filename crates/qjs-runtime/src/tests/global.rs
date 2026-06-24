@@ -1258,6 +1258,18 @@ fn test262_build_string_host_helper_matches_regexp_utils_shape() {
 }
 
 #[test]
+fn test262_to_numbers_host_helper_matches_resizable_array_buffer_utils_shape() {
+    assert_eq!(
+        eval(
+            "__quickjsRustToNumbers(new Uint8Array([1, 2, 255])).join(',') + ':' \
+             + __quickjsRustToNumbers(new BigInt64Array([3n, -4n])).join(',') + ':' \
+             + (__quickjsRustToNumbers([1, 2]) === undefined);"
+        ),
+        Ok(Value::String("1,2,255:3,-4:true".to_owned().into()))
+    );
+}
+
+#[test]
 fn test262_verify_property_host_helper_checks_data_descriptors() {
     assert_eq!(
         eval(

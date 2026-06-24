@@ -376,6 +376,7 @@ pub(crate) enum NativeFunction {
     Test262AssertSameValue,
     Test262VerifyProperty,
     Test262BuildString,
+    Test262ToNumbers,
     Print,
     Function,
     FunctionPrototypeApply,

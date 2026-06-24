@@ -621,6 +621,20 @@ if (typeof copyIntoArrayBuffer === "function") {
 }
 EOF
 }
+emit_test262_resizable_array_buffer_fast_paths() {
+  cat <<'EOF'
+if (typeof ToNumbers === "function" && typeof __quickjsRustToNumbers === "function") {
+  var __quickjsRustOriginalToNumbers = ToNumbers;
+  ToNumbers = function(array) {
+    var result = __quickjsRustToNumbers(array);
+    if (result !== undefined) {
+      return result;
+    }
+    return __quickjsRustOriginalToNumbers(array);
+  };
+}
+EOF
+}
 includes_regexp_utils() {
   local includes="$1"
   [[ "$includes" == *"regExpUtils.js"* ]]
@@ -628,6 +642,10 @@ includes_regexp_utils() {
 includes_typed_array_utils() {
   local includes="$1"
   [[ "$includes" == *"testTypedArray.js"* ]]
+}
+includes_resizable_array_buffer_utils() {
+  local includes="$1"
+  [[ "$includes" == *"resizableArrayBufferUtils.js"* ]]
 }
 emit_quickjs_rust_case_source() {
   cat "$1"
@@ -790,6 +808,9 @@ make_upstream_case() {
     fi
     if includes_typed_array_utils "$includes"; then
       emit_test262_typed_array_fast_paths
+    fi
+    if includes_resizable_array_buffer_utils "$includes"; then
+      emit_test262_resizable_array_buffer_fast_paths
     fi
     emit_quickjs_rust_case_source "$source"
   } >"$output"
@@ -985,8 +1006,10 @@ export QJS_CLI_BIN
 export RUN_WITH_TIMEOUT
 export -f emit_quickjs_rust_case_source
 export -f emit_test262_regexp_utils_fast_paths
+export -f emit_test262_resizable_array_buffer_fast_paths
 export -f emit_test262_typed_array_fast_paths
 export -f includes_regexp_utils
+export -f includes_resizable_array_buffer_utils
 export -f includes_typed_array_utils
 export -f is_expected_failure
 export -f make_upstream_case
