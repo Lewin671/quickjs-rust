@@ -5082,6 +5082,8 @@ test/language/statements/class/scope-static-meth-paramsbody-var-open.js
 test/language/statements/class/scope-static-setter-paramsbody-var-close.js
 test/language/statements/class/scope-static-setter-paramsbody-var-open.js
 test/language/statements/class/elements/intercalated-static-non-static-computed-fields.js
+test/language/statements/class/elements/syntax/valid/grammar-field-named-get-followed-by-generator-asi.js
+test/language/statements/class/elements/syntax/valid/grammar-field-named-set-followed-by-generator-asi.js
 test/language/types/number/S8.5_A10_T2.js
 test/language/types/number/S8.5_A4_T2.js
 test/language/literals/numeric/numeric-separators/numeric-separator-literal-bil-bd-nsl-bd.js

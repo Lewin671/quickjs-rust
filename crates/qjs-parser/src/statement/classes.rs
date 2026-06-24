@@ -285,7 +285,16 @@ impl Parser {
                 TokenKind::Identifier(name)
                     if !accessor_token.had_escape && (name == "get" || name == "set") =>
                 {
-                    if self.token_starts_member_after_modifier(1) {
+                    // An accessor's name is a PropertyName; a getter/setter can
+                    // never be a generator, so a following `*` means `get`/`set`
+                    // is itself the member name (`get \n *gen() {}` is a field
+                    // `get` plus a generator method, via ASI).
+                    if self.token_starts_member_after_modifier(1)
+                        && !matches!(
+                            self.peek_nth(1).map(|token| &token.kind),
+                            Some(TokenKind::Star)
+                        )
+                    {
                         self.advance();
                         Some(if name == "get" {
                             MethodKind::Getter
