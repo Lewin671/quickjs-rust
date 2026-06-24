@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{
     ArrayRef, PropertyKey, RuntimeError, Value, call_function, has_property_key, property_value,
     property_value_key, regexp, symbol, to_js_string_with_env, to_number_with_env,
@@ -62,8 +64,8 @@ pub(crate) fn native_string_prototype_slice(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let value = this_string_value(this_value, env)?;
-    let length = string_char_len(&value);
+    let value = string_sequence_value(this_value, env)?;
+    let length = string_char_len(value.as_str());
     let start = string_slice_index(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -79,7 +81,9 @@ pub(crate) fn native_string_prototype_slice(
     if end <= start {
         return Ok(Value::String(::std::rc::Rc::new(String::new())));
     }
-    Ok(Value::String(string_slice_chars(&value, start, end).into()))
+    Ok(Value::String(string_slice_chars(
+        &value, start, end, length,
+    )))
 }
 
 pub(crate) fn native_string_prototype_split(
@@ -292,8 +296,8 @@ pub(crate) fn native_string_prototype_substr(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let value = this_string_value(this_value, env)?;
-    let length = string_char_len(&value);
+    let value = string_sequence_value(this_value, env)?;
+    let length = string_char_len(value.as_str());
     let start = string_substr_start(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -305,9 +309,12 @@ pub(crate) fn native_string_prototype_substr(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    Ok(Value::String(
-        string_slice_chars(&value, start, start + count).into(),
-    ))
+    Ok(Value::String(string_slice_chars(
+        &value,
+        start,
+        start + count,
+        length,
+    )))
 }
 
 pub(crate) fn native_string_prototype_substring(
@@ -315,8 +322,8 @@ pub(crate) fn native_string_prototype_substring(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let value = this_string_value(this_value, env)?;
-    let length = string_char_len(&value);
+    let value = string_sequence_value(this_value, env)?;
+    let length = string_char_len(value.as_str());
     let start = string_substring_index(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -334,7 +341,31 @@ pub(crate) fn native_string_prototype_substring(
     } else {
         (end, start)
     };
-    Ok(Value::String(string_slice_chars(&value, from, to).into()))
+    Ok(Value::String(string_slice_chars(&value, from, to, length)))
+}
+
+enum StringSequenceValue {
+    Shared(Rc<String>),
+    Owned(String),
+}
+
+impl StringSequenceValue {
+    fn as_str(&self) -> &str {
+        match self {
+            Self::Shared(value) => value.as_str(),
+            Self::Owned(value) => value.as_str(),
+        }
+    }
+}
+
+fn string_sequence_value(
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<StringSequenceValue, RuntimeError> {
+    match value {
+        Value::String(value) => Ok(StringSequenceValue::Shared(value)),
+        value => this_string_value(value, env).map(StringSequenceValue::Owned),
+    }
 }
 
 fn string_char_len(value: &str) -> usize {
@@ -345,14 +376,26 @@ fn string_char_len(value: &str) -> usize {
     }
 }
 
-fn string_slice_chars(value: &str, start: usize, end: usize) -> String {
+fn string_slice_chars(
+    value: &StringSequenceValue,
+    start: usize,
+    end: usize,
+    length: usize,
+) -> Rc<String> {
     if start >= end {
-        return String::new();
+        return Rc::new(String::new());
     }
+    if start == 0
+        && end == length
+        && let StringSequenceValue::Shared(value) = value
+    {
+        return value.clone();
+    }
+    let value = value.as_str();
     if value.is_ascii() {
-        value[start..end].to_owned()
+        Rc::new(value[start..end].to_owned())
     } else {
-        value.chars().skip(start).take(end - start).collect()
+        Rc::new(value.chars().skip(start).take(end - start).collect())
     }
 }
 

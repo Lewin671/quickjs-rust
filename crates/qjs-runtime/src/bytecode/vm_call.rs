@@ -380,10 +380,50 @@ pub(super) fn try_fast_global_native_call(
             };
             crate::number::number_to_radix_string(*number, radix).map(|s| Value::String(s.into()))
         }
+        NativeFunction::StringPrototypeSlice
+        | NativeFunction::StringPrototypeSubstr
+        | NativeFunction::StringPrototypeSubstring => {
+            fast_string_sequence_native(native, this_value, arguments, realm_env)?
+        }
         NativeFunction::Test262AssertSameValue => {
             crate::global::native_test262_assert_same_value(arguments)
         }
         _ => return None,
+    };
+    Some(result)
+}
+
+fn fast_string_sequence_native(
+    native: NativeFunction,
+    this_value: &Value,
+    arguments: &[Value],
+    realm_env: &CallEnv,
+) -> Option<Result<Value, RuntimeError>> {
+    if !matches!(this_value, Value::String(_)) {
+        return None;
+    }
+    if !arguments
+        .iter()
+        .all(|value| matches!(value, Value::Number(_) | Value::Undefined))
+    {
+        return None;
+    }
+    let mut env = realm_env.clone();
+    let result = match native {
+        NativeFunction::StringPrototypeSlice => {
+            crate::string::native_string_prototype_slice(this_value.clone(), arguments, &mut env)
+        }
+        NativeFunction::StringPrototypeSubstr => {
+            crate::string::native_string_prototype_substr(this_value.clone(), arguments, &mut env)
+        }
+        NativeFunction::StringPrototypeSubstring => {
+            crate::string::native_string_prototype_substring(
+                this_value.clone(),
+                arguments,
+                &mut env,
+            )
+        }
+        _ => unreachable!("string sequence native fast path only accepts sequence natives"),
     };
     Some(result)
 }
