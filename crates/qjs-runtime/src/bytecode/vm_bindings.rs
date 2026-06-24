@@ -47,8 +47,12 @@ impl Vm<'_> {
             Op::ExitWith => {
                 self.with_stack.pop();
             }
-            Op::LoadIdentWith { name, slot } => {
-                let result = self.load_ident_with(&name, slot);
+            Op::LoadIdentWith {
+                name,
+                slot,
+                is_strict,
+            } => {
+                let result = self.load_ident_with(&name, slot, is_strict);
                 if let Some(value) = self.handle_runtime_result(result)? {
                     self.stack.push(value);
                 }
@@ -63,8 +67,9 @@ impl Vm<'_> {
                 name,
                 slot,
                 object_slot,
+                is_strict,
             } => {
-                let result = self.load_resolved_ident_with(&name, slot, object_slot);
+                let result = self.load_resolved_ident_with(&name, slot, object_slot, is_strict);
                 if let Some(value) = self.handle_runtime_result(result)? {
                     self.stack.push(value);
                 }
@@ -551,9 +556,24 @@ impl Vm<'_> {
         &mut self,
         name: &str,
         slot: Option<usize>,
+        is_strict: bool,
     ) -> Result<Value, RuntimeError> {
         if let Some(object) = self.with_binding_object(name)? {
             let mut env = self.current_env();
+            // GetBindingValue re-checks HasProperty (step 2) before the Get
+            // (step 4); the binding may have been deleted by the @@unscopables
+            // getter. A false result throws in strict mode and otherwise yields
+            // undefined for the loose with-binding.
+            if !has_property(object.clone(), &env, name)? {
+                self.apply_env(env);
+                if is_strict {
+                    return Err(RuntimeError {
+                        thrown: None,
+                        message: format!("ReferenceError: undefined identifier `{name}`"),
+                    });
+                }
+                return Ok(Value::Undefined);
+            }
             let value = get_property(object, name, &mut env)?;
             self.apply_env(env);
             return Ok(value);
@@ -573,6 +593,17 @@ impl Vm<'_> {
     ) -> Result<(), RuntimeError> {
         if let Some(object) = self.with_binding_object(name)? {
             let mut env = self.current_env();
+            // SetMutableBinding step 1 re-checks HasProperty (observable on a
+            // Proxy, and the binding may have been deleted by the @@unscopables
+            // getter). A false result throws only in strict mode; the Set in
+            // step 3 runs otherwise, recreating the property in sloppy mode.
+            if !has_property(object.clone(), &env, name)? && is_strict {
+                self.apply_env(env);
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!("ReferenceError: undefined identifier `{name}`"),
+                });
+            }
             set_property_key(
                 object,
                 PropertyKey::String(name.to_owned()),
@@ -607,6 +638,7 @@ impl Vm<'_> {
         name: &str,
         slot: Option<usize>,
         object_slot: usize,
+        is_strict: bool,
     ) -> Result<Value, RuntimeError> {
         match self.load_local(object_slot)? {
             Value::Undefined => match slot {
@@ -615,6 +647,18 @@ impl Vm<'_> {
             },
             object => {
                 let mut env = self.current_env();
+                // GetBindingValue re-checks HasProperty (step 2) before the Get;
+                // a false result throws in strict mode, else yields undefined.
+                if !has_property(object.clone(), &env, name)? {
+                    self.apply_env(env);
+                    if is_strict {
+                        return Err(RuntimeError {
+                            thrown: None,
+                            message: format!("ReferenceError: undefined identifier `{name}`"),
+                        });
+                    }
+                    return Ok(Value::Undefined);
+                }
                 let value = get_property(object, name, &mut env)?;
                 self.apply_env(env);
                 Ok(value)
@@ -642,7 +686,11 @@ impl Vm<'_> {
             },
             object => {
                 let mut env = self.current_env();
-                if is_strict && !has_property(object.clone(), &env, name)? {
+                // SetMutableBinding step 1: HasProperty always runs (observable
+                // on a Proxy); a false result throws only in strict mode, while
+                // the Set in step 3 still recreates the property in sloppy mode.
+                if !has_property(object.clone(), &env, name)? && is_strict {
+                    self.apply_env(env);
                     return Err(RuntimeError {
                         thrown: None,
                         message: format!("ReferenceError: undefined identifier `{name}`"),

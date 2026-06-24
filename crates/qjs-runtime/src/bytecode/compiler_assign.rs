@@ -251,11 +251,13 @@ impl Compiler {
                 name: name.to_owned(),
                 slot,
                 object_slot,
+                is_strict: self.strict,
             });
         } else if self.identifier_needs_with_resolution(slot) {
             self.emit(Op::LoadIdentWith {
                 name: name.to_owned(),
                 slot,
+                is_strict: self.strict,
             });
         } else if let Some(slot) = slot {
             self.emit(Op::LoadLocal(slot));

@@ -47,6 +47,11 @@ pub(super) enum Op {
     LoadIdentWith {
         name: String,
         slot: Option<usize>,
+        /// Strict-mode flag of the reading code: GetBindingValue throws a
+        /// ReferenceError (rather than yielding undefined) when the with-object
+        /// no longer has the binding. Compile-time because a nested strict
+        /// function reads a binding from an enclosing sloppy `with`.
+        is_strict: bool,
     },
     /// Resolves an identifier assignment target inside a `with` body before
     /// the RHS runs. Stores the selected with-object, or undefined when the
@@ -61,6 +66,7 @@ pub(super) enum Op {
         name: String,
         slot: Option<usize>,
         object_slot: usize,
+        is_strict: bool,
     },
     /// Stores to an identifier from inside a `with` body, mirroring
     /// `LoadIdentWith` resolution. `is_strict` selects strict vs sloppy global
@@ -1061,7 +1067,9 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
             Op::StoreLocalOrGlobalSloppy { name, .. } => {
                 names.insert(name.clone());
             }
-            Op::LoadIdentWith { name, slot: None }
+            Op::LoadIdentWith {
+                name, slot: None, ..
+            }
             | Op::ResolveIdentWith {
                 name, slot: None, ..
             }

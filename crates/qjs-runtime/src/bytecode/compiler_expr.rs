@@ -418,6 +418,7 @@ impl Compiler {
                     self.emit(Op::LoadIdentWith {
                         name: name.clone(),
                         slot,
+                        is_strict: self.strict,
                     });
                 } else if let Some(slot) = slot {
                     self.emit(Op::LoadLocal(slot));

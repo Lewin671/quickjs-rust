@@ -353,6 +353,7 @@ impl Compiler {
                     name: name.clone(),
                     slot,
                     object_slot,
+                    is_strict: self.strict,
                 });
                 if has_spread {
                     self.compile_argument_array(arguments)?;

@@ -371,7 +371,7 @@ impl<'a> Vm<'a> {
                     let result =
                         if self.direct_eval_with_stack && self.bytecode.local_is_from_env(slot) {
                             let name = self.bytecode.locals[slot].name.clone();
-                            self.load_ident_with(&name, Some(slot))
+                            self.load_ident_with(&name, Some(slot), self.bytecode.is_strict())
                         } else {
                             self.load_local(slot)
                         };
@@ -410,7 +410,7 @@ impl<'a> Vm<'a> {
                 }
                 Op::LoadGlobal(name) => {
                     let result = if self.direct_eval_with_stack {
-                        self.load_ident_with(&name, None)
+                        self.load_ident_with(&name, None, self.bytecode.is_strict())
                     } else {
                         self.load_global(&name)
                     };
