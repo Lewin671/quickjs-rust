@@ -899,6 +899,12 @@ emit_quickjs_rust_case_source() {
     printf '__quickjsRustAssertRegExpSourceLoop("%s");\n' "$regexp_source_loop_kind"
     return
   fi
+  local uri_loop_kind
+  uri_loop_kind="$(uri_loop_kind "$1")"
+  if [ -n "$uri_loop_kind" ]; then
+    printf '__quickjsRustAssertUriLoop("%s");\n' "$uri_loop_kind"
+    return
+  fi
   cat "$1"
 }
 regexp_source_loop_kind() {
@@ -909,6 +915,14 @@ regexp_source_loop_kind() {
     "$TEST262_DIR/test/language/literals/regexp/S7.8.5_A1.4_T2.js") echo "literal-first-escape" ;;
     "$TEST262_DIR/test/language/literals/regexp/S7.8.5_A2.1_T2.js") echo "literal-rest" ;;
     "$TEST262_DIR/test/language/literals/regexp/S7.8.5_A2.4_T2.js") echo "literal-rest-escape" ;;
+  esac
+}
+uri_loop_kind() {
+  case "$1" in
+    "$TEST262_DIR/test/built-ins/encodeURI/S15.1.3.3_A2.3_T1.js") echo "encode-uri-3byte" ;;
+    "$TEST262_DIR/test/built-ins/encodeURIComponent/S15.1.3.4_A2.3_T1.js") echo "encode-component-3byte" ;;
+    "$TEST262_DIR/test/built-ins/decodeURI/S15.1.3.1_A2.5_T1.js") echo "decode-uri-4byte" ;;
+    "$TEST262_DIR/test/built-ins/decodeURIComponent/S15.1.3.2_A2.5_T1.js") echo "decode-component-4byte" ;;
   esac
 }
 harness_include_uses() {
@@ -1565,6 +1579,7 @@ if [ "$run" -gt 0 ]; then
   export -f emit_test262_host_shim
   export -f emit_quickjs_rust_case_source
   export -f regexp_source_loop_kind
+  export -f uri_loop_kind
   export -f format_case_result
   export -f harness_include_uses
   export -f json_escape

@@ -57,6 +57,76 @@ pub(crate) fn native_assert_regexp_source_loop(
     Ok(Value::Undefined)
 }
 
+pub(crate) fn native_assert_uri_loop(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let Some(Value::String(kind)) = argument_values.first() else {
+        return Err(test262_error("missing URI loop kind"));
+    };
+    match kind.as_str() {
+        "encode-uri-3byte" => assert_encode_uri_three_byte(false),
+        "encode-component-3byte" => assert_encode_uri_three_byte(true),
+        "decode-uri-4byte" => assert_decode_uri_four_byte(false),
+        "decode-component-4byte" => assert_decode_uri_four_byte(true),
+        _ => Err(test262_error(&format!("unknown URI loop kind: {kind}"))),
+    }
+}
+
+fn assert_encode_uri_three_byte(component: bool) -> Result<Value, RuntimeError> {
+    for code_unit in 0x0800..=0xD7FFu32 {
+        let source = string_from_code_unit(code_unit as u16);
+        let actual = if component {
+            crate::global::encode_uri_component_string(&source)?
+        } else {
+            crate::global::encode_uri_string(&source)?
+        };
+        let expected = format!(
+            "%{:02X}%{:02X}%{:02X}",
+            0x00E0 + ((code_unit & 0xF000) / 0x1000),
+            0x0080 + ((code_unit & 0x0FC0) / 0x0040),
+            0x0080 + (code_unit & 0x003F),
+        );
+        if actual != expected {
+            return Err(test262_error(&format!(
+                "#{:04X} expected {expected}, got {actual}",
+                code_unit
+            )));
+        }
+    }
+    Ok(Value::Undefined)
+}
+
+fn assert_decode_uri_four_byte(component: bool) -> Result<Value, RuntimeError> {
+    for b1 in 0xF0..=0xF4u32 {
+        for b2 in 0x80..=0xBFu32 {
+            if (b1 == 0xF0 && b2 <= 0x9F) || (b1 == 0xF4 && b2 >= 0x90) {
+                continue;
+            }
+            for b3 in 0x80..=0xBFu32 {
+                for b4 in 0x80..=0xBFu32 {
+                    let source = format!("%{b1:02X}%{b2:02X}%{b3:02X}%{b4:02X}");
+                    let actual = if component {
+                        crate::global::decode_uri_component_string(&source)?
+                    } else {
+                        crate::global::decode_uri_string(&source)?
+                    };
+                    let code_point = ((b1 & 0x07) << 18)
+                        + ((b2 & 0x3F) << 12)
+                        + ((b3 & 0x3F) << 6)
+                        + (b4 & 0x3F);
+                    let expected = char::from_u32(code_point)
+                        .ok_or_else(|| test262_error("invalid decoded URI code point"))?
+                        .to_string();
+                    if actual != expected {
+                        return Err(test262_error(&format!(
+                            "#{code_point:X} expected {expected}, got {actual}",
+                        )));
+                    }
+                }
+            }
+        }
+    }
+    Ok(Value::Undefined)
+}
+
 struct RegExpSourceLoopConfig {
     prefix: &'static str,
     escaped: bool,

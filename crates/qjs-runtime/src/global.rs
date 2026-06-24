@@ -167,6 +167,13 @@ pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
         1,
         NativeFunction::Test262AssertRegExpSourceLoop,
     );
+    define_global_function(
+        env,
+        global_this,
+        "__quickjsRustAssertUriLoop",
+        1,
+        NativeFunction::Test262AssertUriLoop,
+    );
 }
 
 fn define_global_function(

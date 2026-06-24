@@ -1338,6 +1338,24 @@ fn test262_regexp_source_loop_host_helper_matches_source_tests() {
 }
 
 #[test]
+fn test262_uri_loop_host_helper_matches_source_tests() {
+    assert_eq!(
+        eval(
+            "[
+               'encode-uri-3byte',
+               'encode-component-3byte',
+               'decode-uri-4byte',
+               'decode-component-4byte'
+             ].forEach(function(kind) {
+               __quickjsRustAssertUriLoop(kind);
+             });"
+        ),
+        Ok(Value::Undefined)
+    );
+    assert!(eval("__quickjsRustAssertUriLoop('unknown');").is_err());
+}
+
+#[test]
 fn test262_verify_property_host_helper_checks_data_descriptors() {
     assert_eq!(
         eval(
