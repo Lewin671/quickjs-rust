@@ -450,6 +450,7 @@ test/built-ins/TypedArray/prototype/lastIndexOf/tointeger-fromindex.js
 test/built-ins/TypedArray/prototype/filter/speciesctor-destination-backed-by-immutable-buffer.js
 test/built-ins/TypedArray/prototype/map/speciesctor-resizable-buffer-grow.js
 test/built-ins/TypedArray/prototype/map/speciesctor-resizable-buffer-shrink.js
+test/built-ins/TypedArray/prototype/subarray/byteoffset-with-detached-buffer.js
 test/built-ins/TypedArray/prototype/subarray/resizable-buffer.js
 test/built-ins/TypedArray/prototype/subarray/result-byteOffset-from-out-of-bounds.js
 test/built-ins/TypedArray/prototype/toLocaleString/BigInt/return-abrupt-from-firstelement-tolocalestring.js

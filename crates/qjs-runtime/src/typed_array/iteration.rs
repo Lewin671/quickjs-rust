@@ -605,43 +605,6 @@ pub(crate) fn native_typed_array_prototype_slice(
     }
 }
 
-fn validate_subarray_range(
-    object: &ObjectRef,
-    start: usize,
-    count: usize,
-) -> Result<(), RuntimeError> {
-    let Some(buffer) = typed_array_buffer(object) else {
-        return Ok(());
-    };
-    let buffer_byte_length = array_buffer::buffer_bytes(&buffer).len();
-    let element = bytes_per_element(typed_array_kind(object));
-    let byte_start = typed_array_byte_offset(object)
-        .checked_add(
-            start
-                .checked_mul(element)
-                .ok_or_else(invalid_subarray_range_error)?,
-        )
-        .ok_or_else(invalid_subarray_range_error)?;
-    let byte_length = count
-        .checked_mul(element)
-        .ok_or_else(invalid_subarray_range_error)?;
-    if byte_start > buffer_byte_length
-        || byte_start
-            .checked_add(byte_length)
-            .is_none_or(|end| end > buffer_byte_length)
-    {
-        return Err(invalid_subarray_range_error());
-    }
-    Ok(())
-}
-
-fn invalid_subarray_range_error() -> RuntimeError {
-    RuntimeError {
-        thrown: None,
-        message: "RangeError: invalid typed array subarray range".to_owned(),
-    }
-}
-
 pub(crate) fn native_typed_array_prototype_subarray(
     this_value: Value,
     argument_values: &[Value],
@@ -666,13 +629,11 @@ pub(crate) fn native_typed_array_prototype_subarray(
     let end_argument = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     let end_is_undefined = matches!(end_argument, Value::Undefined);
     let end = relative_index(end_argument, length, length as i64, env)?;
-    let count = if start < end {
-        validate_subarray_range(&object, start, end - start)?;
-        end - start
-    } else {
-        validate_subarray_range(&object, start, 0)?;
-        0
-    };
+    // newLength = max(end - start, 0). subarray itself never range-checks the
+    // result against the buffer (start/end are already clamped to the source
+    // length); TypedArraySpeciesCreate validates when it builds over the buffer,
+    // so a buffer detached by a coercion side effect is the species' concern.
+    let count = end.saturating_sub(start);
     let byte_offset = typed_array_byte_offset(&object) + start * bytes_per_element(native);
     let buffer = typed_array_buffer(&object).ok_or_else(|| RuntimeError {
         thrown: None,
