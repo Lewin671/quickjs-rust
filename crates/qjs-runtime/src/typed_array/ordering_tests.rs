@@ -302,6 +302,30 @@ fn sort_default_is_numeric_and_stable() {
         eval("new Uint8Array([1, 2, 3]).sort((a, b) => b - a).join(',');"),
         Ok(Value::String("3,2,1".to_owned().into()))
     );
+    // Stability matters for equal comparator buckets and should not require a
+    // quadratic number of comparator calls.
+    assert_eq!(
+        eval(
+            "let xs = Array.from({ length: 128 }, (_, i) => 127 - i); \
+             let a = new Uint8Array(xs); \
+             a.sort((left, right) => ((left / 4) | 0) - ((right / 4) | 0)); \
+             a.slice(0, 8).join(',') + '|' + a.slice(120).join(',');"
+        ),
+        Ok(Value::String(
+            "3,2,1,0,7,6,5,4|123,122,121,120,127,126,125,124"
+                .to_owned()
+                .into()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; \
+             let a = new Uint8Array([5, 4, 3, 2, 1]); \
+             try { a.sort(() => { calls++; throw new Error('stop'); }); } catch (_) {} \
+             calls + ':' + a.join(',');"
+        ),
+        Ok(Value::String("1:5,4,3,2,1".to_owned().into()))
+    );
 }
 
 #[test]

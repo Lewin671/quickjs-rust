@@ -269,19 +269,49 @@ fn sort_values(
     comparator: Option<&Function>,
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
-    // Insertion sort keeps stability and lets the comparator observe values
-    // left-to-right (matching the array implementation in this codebase).
-    for index in 1..values.len() {
-        let mut candidate = index;
-        while candidate > 0
-            && compare(&values[candidate], &values[candidate - 1], comparator, env)?
-                == Ordering::Less
-        {
-            values.swap(candidate, candidate - 1);
-            candidate -= 1;
+    if values.len() < 2 {
+        return Ok(());
+    }
+    let sorted = merge_sort_values(values.to_vec(), comparator, env)?;
+    values.clone_from_slice(&sorted);
+    Ok(())
+}
+
+fn merge_sort_values(
+    mut values: Vec<Value>,
+    comparator: Option<&Function>,
+    env: &mut CallEnv,
+) -> Result<Vec<Value>, RuntimeError> {
+    if values.len() < 2 {
+        return Ok(values);
+    }
+    let right = values.split_off(values.len() / 2);
+    let left = merge_sort_values(values, comparator, env)?;
+    let right = merge_sort_values(right, comparator, env)?;
+    merge_sorted_values(left, right, comparator, env)
+}
+
+fn merge_sorted_values(
+    left: Vec<Value>,
+    right: Vec<Value>,
+    comparator: Option<&Function>,
+    env: &mut CallEnv,
+) -> Result<Vec<Value>, RuntimeError> {
+    let mut merged = Vec::with_capacity(left.len() + right.len());
+    let mut left = left.into_iter().peekable();
+    let mut right = right.into_iter().peekable();
+
+    while left.peek().is_some() && right.peek().is_some() {
+        let order = compare(left.peek().unwrap(), right.peek().unwrap(), comparator, env)?;
+        if order == Ordering::Greater {
+            merged.push(right.next().unwrap());
+        } else {
+            merged.push(left.next().unwrap());
         }
     }
-    Ok(())
+    merged.extend(left);
+    merged.extend(right);
+    Ok(merged)
 }
 
 fn compare(
