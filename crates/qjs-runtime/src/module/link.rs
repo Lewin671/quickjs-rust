@@ -429,6 +429,22 @@ impl ModuleGraph {
         let module = &self.modules[key];
         for local in &module.record.local_exports {
             if local.export_name == name {
+                // `export {x}` where `x` is itself imported (`import {x} from "m";
+                // export {x}`) re-exports the original binding: resolve through
+                // the import so a binding re-exported along two `export *` paths
+                // compares equal to itself instead of looking ambiguous.
+                if let Some(import) = module
+                    .record
+                    .import_entries
+                    .iter()
+                    .find(|import| import.local_name == local.local_name)
+                {
+                    let target = self.resolved(key, &import.module_request.cache_key());
+                    return match &import.import_name {
+                        ImportName::Namespace => Ok(Some((target, NAMESPACE_BINDING.to_owned()))),
+                        ImportName::Named(inner) => self.resolve_export(&target, inner, visited),
+                    };
+                }
                 return Ok(Some((key.to_owned(), name.to_owned())));
             }
         }
