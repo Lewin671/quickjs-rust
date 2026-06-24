@@ -22,6 +22,8 @@ pub(crate) use element::{
     set_indexed_element, set_integer_indexed_element, set_view_elements,
     try_set_integer_indexed_primitive_element,
 };
+#[cfg(feature = "agents")]
+pub(crate) use element::{read_element, write_element};
 pub(crate) use iteration::*;
 pub(crate) use ordering::*;
 

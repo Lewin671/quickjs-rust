@@ -15,7 +15,7 @@ pub(crate) use shared::{
     from_backing as shared_array_buffer_from_backing,
 };
 #[cfg(feature = "agents")]
-pub(crate) use shared_backing::{SharedBacking, SharedBackingRef};
+pub(crate) use shared_backing::{SharedBacking, SharedBackingRef, WaitOutcome};
 
 mod shared;
 pub(crate) use shared::{

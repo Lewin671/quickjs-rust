@@ -122,6 +122,101 @@ fn worker_agents_report_in_fifo_order() {
 
 #[cfg(feature = "agents")]
 #[test]
+fn atomics_add_is_atomic_across_agents() {
+    // Each of three workers does Atomics.add(counter, +1). The read-modify-write
+    // must be atomic under the shared backing lock; a non-atomic load+store would
+    // lose updates and leave a value below 3 (this regressed a hang where the
+    // main agent spun forever on a counter that never reached the agent count).
+    assert_eq!(
+        eval_in_main_agent(
+            "var i32a = new Int32Array(new SharedArrayBuffer(8)); \
+             for (var k = 0; k < 3; k++) { \
+               $262.agent.start(`\
+                 $262.agent.receiveBroadcast(function (sab) { \
+                   var w = new Int32Array(sab); \
+                   Atomics.add(w, 0, 1); \
+                   $262.agent.report('done'); \
+                   $262.agent.leaving(); \
+                 }); \
+               `); \
+             } \
+             $262.agent.broadcast(i32a.buffer); \
+             for (var k = 0; k < 3; k++) { \
+               var r = $262.agent.getReport(); \
+               while (r === null) { $262.agent.sleep(1); r = $262.agent.getReport(); } \
+             } \
+             Atomics.load(i32a, 0);"
+        ),
+        Ok(Value::Number(3.0))
+    );
+}
+
+#[cfg(feature = "agents")]
+#[test]
+fn atomics_wait_returns_not_equal_when_value_mismatches() {
+    // A real backing is present, but the stored value (0) differs from the
+    // comparand (999), so the wait returns immediately without blocking.
+    assert_eq!(
+        eval_in_main_agent(
+            "var i32a = new Int32Array(new SharedArrayBuffer(8)); Atomics.wait(i32a, 0, 999);"
+        ),
+        Ok(Value::String("not-equal".to_owned().into()))
+    );
+}
+
+#[cfg(feature = "agents")]
+#[test]
+fn atomics_wait_times_out_in_a_worker_without_notify() {
+    // A worker waits with a short timeout and no agent notifies it, so the wait
+    // reports "timed-out".
+    assert_eq!(
+        eval_in_main_agent(
+            "var i32a = new Int32Array(new SharedArrayBuffer(8)); \
+             $262.agent.start(`\
+               $262.agent.receiveBroadcast(function (sab) { \
+                 var w = new Int32Array(sab); \
+                 $262.agent.report(Atomics.wait(w, 0, 0, 50)); \
+                 $262.agent.leaving(); \
+               }); \
+             `); \
+             $262.agent.broadcast(i32a.buffer); \
+             var report = $262.agent.getReport(); \
+             while (report === null) { $262.agent.sleep(1); report = $262.agent.getReport(); } \
+             report;"
+        ),
+        Ok(Value::String("timed-out".to_owned().into()))
+    );
+}
+
+#[cfg(feature = "agents")]
+#[test]
+fn atomics_notify_wakes_a_waiting_worker() {
+    // A worker blocks indefinitely on Atomics.wait; the main agent retries
+    // Atomics.notify until exactly one waiter is parked and woken, and the
+    // worker reports "ok".
+    assert_eq!(
+        eval_in_main_agent(
+            "var i32a = new Int32Array(new SharedArrayBuffer(8)); \
+             $262.agent.start(`\
+               $262.agent.receiveBroadcast(function (sab) { \
+                 var w = new Int32Array(sab); \
+                 $262.agent.report(Atomics.wait(w, 0, 0)); \
+                 $262.agent.leaving(); \
+               }); \
+             `); \
+             $262.agent.broadcast(i32a.buffer); \
+             var woken = 0; \
+             while ((woken = Atomics.notify(i32a, 0, 1)) === 0) { $262.agent.sleep(1); } \
+             var report = $262.agent.getReport(); \
+             while (report === null) { $262.agent.sleep(1); report = $262.agent.getReport(); } \
+             woken + ':' + report;"
+        ),
+        Ok(Value::String("1:ok".to_owned().into()))
+    );
+}
+
+#[cfg(feature = "agents")]
+#[test]
 fn shared_array_buffer_round_trips_through_the_cross_thread_backing() {
     // With the agents feature on, SharedArrayBuffer bytes live in the Arc-shared
     // backing rather than `internal_bytes`; element reads, writes, and growable

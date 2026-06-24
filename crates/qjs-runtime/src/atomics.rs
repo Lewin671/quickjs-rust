@@ -123,14 +123,15 @@ pub(crate) fn native_atomics_notify(
             message: "RangeError: Atomics index is out of range".to_owned(),
         });
     }
-    let _count = match argument_values.get(2) {
-        None | Some(Value::Undefined) => f64::INFINITY,
+    // ToIntegerOrInfinity(count) clamped to [0, +∞]; `None` means "wake all".
+    let count = match argument_values.get(2) {
+        None | Some(Value::Undefined) => None,
         Some(value) => {
             let number = to_number_with_env(value.clone(), env)?;
-            if number.is_nan() {
-                0.0
+            if number == f64::INFINITY {
+                None
             } else {
-                number.trunc().max(0.0)
+                Some(number.trunc().max(0.0) as usize)
             }
         }
     };
@@ -140,6 +141,15 @@ pub(crate) fn native_atomics_notify(
     if !crate::array_buffer::is_shared_array_buffer_object(&buffer) {
         return Ok(Value::Number(0.0));
     }
+    // With a real cross-thread backing, wake up to `count` agents waiting on this
+    // location; without (single agent), there are never any waiters.
+    #[cfg(feature = "agents")]
+    if let Some(backing) = buffer.shared_backing() {
+        let width = typed_array::bytes_per_element(kind);
+        let byte_offset = typed_array::typed_array_byte_offset(&object) + index * width;
+        return Ok(Value::Number(backing.notify(byte_offset, count) as f64));
+    }
+    let _ = count;
     Ok(Value::Number(0.0))
 }
 
@@ -209,18 +219,37 @@ pub(crate) fn native_atomics_wait(
                 .to_owned(),
         });
     }
-    // This engine runs a single agent (no worker threads), so no other agent
-    // can ever notify a waiter. Per the spec single-agent semantics: load the
-    // current value; if it differs from the comparand return "not-equal";
-    // otherwise the wait reaches its timeout (we need not actually block, since
-    // `timeout` is only an upper bound and no notifier can exist) → "timed-out".
+    // With a real cross-thread backing (agents harness), block on it: compare
+    // the value and park atomically, returning when another agent notifies this
+    // waiter or the timeout elapses.
+    #[cfg(feature = "agents")]
+    if let Some(backing) = buffer.shared_backing() {
+        let width = typed_array::bytes_per_element(kind);
+        let byte_offset = typed_array::typed_array_byte_offset(&object) + index * width;
+        let duration = if timeout.is_finite() {
+            Some(std::time::Duration::from_secs_f64(timeout / 1000.0))
+        } else {
+            None
+        };
+        let comparand = value.clone();
+        let outcome = backing.wait(byte_offset, duration, |bytes| {
+            atomic_values_equal(
+                &typed_array::read_element(kind, bytes, byte_offset),
+                &comparand,
+            )
+        });
+        let result = match outcome {
+            crate::array_buffer::WaitOutcome::NotEqual => "not-equal",
+            crate::array_buffer::WaitOutcome::Ok => "ok",
+            crate::array_buffer::WaitOutcome::TimedOut => "timed-out",
+        };
+        return Ok(Value::String(result.to_owned().into()));
+    }
+    // Single-agent fallback (no worker threads can notify a waiter): if the value
+    // matches, the wait reaches its timeout — "timed-out"; otherwise "not-equal".
     let _ = timeout;
     let current = typed_array::get_view_element(&object, index);
-    let equal = match (&current, &value) {
-        (Value::Number(current), Value::Number(value)) => current == value,
-        (Value::BigInt(current), Value::BigInt(value)) => current == value,
-        _ => false,
-    };
+    let equal = atomic_values_equal(&current, &value);
     let result = if equal { "timed-out" } else { "not-equal" };
     Ok(Value::String(result.to_owned().into()))
 }
@@ -236,10 +265,35 @@ pub(crate) fn native_atomics_read_modify_write(
         argument_values.get(2).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
+    // On a shared buffer the read-modify-write must be atomic: do it under one
+    // backing lock so a concurrent agent cannot interleave and lose the update.
+    #[cfg(feature = "agents")]
+    if let Some((backing, byte_offset)) = shared_backing_and_offset(&access) {
+        return Ok(backing.with_bytes_mut(|bytes| {
+            let old = typed_array::read_element(access.kind, bytes, byte_offset);
+            let new_value = apply_atomic_op(access.kind, &old, &value, op);
+            typed_array::write_element(access.kind, bytes, byte_offset, &new_value);
+            old
+        }));
+    }
     let old = typed_array::get_view_element(&access.object, access.index);
     let new_value = apply_atomic_op(access.kind, &old, &value, op);
     typed_array::set_view_elements(&access.object, access.index, [new_value]);
     Ok(old)
+}
+
+/// The shared backing and absolute byte offset of an atomic access, when the
+/// view is over a cross-thread `SharedArrayBuffer` (agents harness). Used to
+/// make read-modify-write atomic under a single lock.
+#[cfg(feature = "agents")]
+fn shared_backing_and_offset(
+    access: &AtomicAccess,
+) -> Option<(crate::array_buffer::SharedBackingRef, usize)> {
+    let buffer = typed_array::typed_array_buffer(&access.object)?;
+    let backing = buffer.shared_backing()?;
+    let width = typed_array::bytes_per_element(access.kind);
+    let byte_offset = typed_array::typed_array_byte_offset(&access.object) + access.index * width;
+    Some((backing, byte_offset))
 }
 
 pub(crate) fn native_atomics_compare_exchange(
@@ -257,6 +311,18 @@ pub(crate) fn native_atomics_compare_exchange(
         argument_values.get(3).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
+    // Atomic compare-exchange on a shared buffer: read, compare, and conditional
+    // write under one backing lock so the value cannot change in between.
+    #[cfg(feature = "agents")]
+    if let Some((backing, byte_offset)) = shared_backing_and_offset(&access) {
+        return Ok(backing.with_bytes_mut(|bytes| {
+            let old = typed_array::read_element(access.kind, bytes, byte_offset);
+            if atomic_values_equal(&old, &expected) {
+                typed_array::write_element(access.kind, bytes, byte_offset, &replacement);
+            }
+            old
+        }));
+    }
     let old = typed_array::get_view_element(&access.object, access.index);
     if atomic_values_equal(&old, &expected) {
         typed_array::set_view_elements(&access.object, access.index, [replacement]);

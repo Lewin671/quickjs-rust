@@ -12,11 +12,15 @@ rust-version.workspace = true
 # plus cross-thread SharedArrayBuffer / real Atomics.wait/notify. The
 # single-threaded core stays correct and unburdened with this feature off:
 # every threaded code path is gated behind `#[cfg(feature = "agents")]`.
-agents = []
+# Pulls in `parking_lot` for a fair lock on shared memory: a JS `Atomics`
+# busy-loop would otherwise starve a writer on another agent thread under the
+# platform's non-fair `std::sync::Mutex`.
+agents = ["dep:parking_lot"]
 
 [dependencies]
 num-bigint = "0.4"
 num-traits = "0.2"
+parking_lot = { version = "0.12", optional = true }
 qjs-ast = { path = "../qjs-ast" }
 qjs-parser = { path = "../qjs-parser" }
 qjs-unicode = { path = "../qjs-unicode" }
