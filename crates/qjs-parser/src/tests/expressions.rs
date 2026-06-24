@@ -305,6 +305,24 @@ fn rejects_invalid_assignment_target() {
     let error = parse_script("(1 + 2) = 3;").expect_err("assignment target should fail");
     assert_eq!(error.message, "invalid assignment target");
 }
+
+#[test]
+fn sloppy_call_target_allowed_for_simple_and_compound_not_logical() {
+    // AnnexB web-compat: a CallExpression is a valid sloppy assignment/update
+    // target for `=`, compound `op=`, and update operators (the runtime then
+    // throws a ReferenceError).
+    for source in ["f() = 1;", "f() += 1;", "f() **= 1;", "f()++;", "--f();"] {
+        parse_script(source)
+            .unwrap_or_else(|error| panic!("`{source}` should parse in sloppy mode: {error:?}"));
+    }
+    // Logical assignment requires a ~simple~ target, so a call LHS is an early
+    // SyntaxError even in sloppy mode.
+    for source in ["f() &&= 1;", "f() ||= 1;", "f() ??= 1;"] {
+        let error = parse_script(source)
+            .expect_err("logical assignment to a call expression should be a parse error");
+        assert_eq!(error.message, "invalid assignment target");
+    }
+}
 #[test]
 fn parses_unary_before_multiplicative() {
     let script = parse_script("-1 * !false;").expect("source should parse");

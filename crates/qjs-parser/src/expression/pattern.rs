@@ -75,7 +75,7 @@ impl Parser {
             .tokens
             .get(self.cursor.saturating_sub(1))
             .is_some_and(|token| token.kind == TokenKind::RightParen);
-        let target = assignment_target(expr, parenthesized, self.strict)?;
+        let target = assignment_target(expr, parenthesized, self.strict, true)?;
         // Strict mode: `eval` and `arguments` are not valid simple assignment
         // targets, including inside a destructuring pattern.
         if self.strict

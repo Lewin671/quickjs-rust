@@ -234,6 +234,7 @@ pub(crate) fn assignment_target(
     expr: Expr,
     parenthesized: bool,
     strict: bool,
+    allow_call_target: bool,
 ) -> Result<AssignmentTarget, ParseError> {
     match expr {
         Expr::Identifier { name, span } => Ok(AssignmentTarget::Identifier {
@@ -253,7 +254,11 @@ pub(crate) fn assignment_target(
         // AnnexB web compatibility: a CallExpression (`f()`, `async()`) is a
         // valid assignment/update target in sloppy mode — it is evaluated and a
         // runtime ReferenceError is thrown. Strict mode keeps the early error.
-        call @ Expr::Call { .. } if !strict => {
+        // The relaxation reaches simple `=`, compound `op=`, update, and
+        // for-in/of targets (AssignmentTargetType ~web-compat~), but not logical
+        // assignment (`&&=`/`||=`/`??=`), which requires a ~simple~ target and so
+        // stays an early SyntaxError even in sloppy mode.
+        call @ Expr::Call { .. } if !strict && allow_call_target => {
             let span = call.span();
             Ok(AssignmentTarget::CallExpression {
                 call: Box::new(call),

@@ -64,7 +64,16 @@ impl Parser {
             return Ok(expr);
         };
 
-        let target = assignment_target(expr, lhs_parenthesized, self.strict)?;
+        // Logical assignment (`&&=`/`||=`/`??=`) requires a ~simple~ target, so a
+        // function-call LHS is an early SyntaxError even in sloppy mode; simple
+        // and compound assignment accept the AnnexB ~web-compat~ call target.
+        let allow_call_target = !matches!(
+            op,
+            AssignmentOp::LogicalAndAssign
+                | AssignmentOp::LogicalOrAssign
+                | AssignmentOp::NullishAssign
+        );
+        let target = assignment_target(expr, lhs_parenthesized, self.strict, allow_call_target)?;
 
         // Strict mode: assigning to restricted identifiers (simple or
         // compound) is an early SyntaxError.
