@@ -632,6 +632,18 @@ fn code_point_from_value(value: Value, env: &mut CallEnv) -> Result<u32, Runtime
 }
 
 fn push_code_point(result: &mut String, code_point: u32) {
+    // Keep real private-use scalars distinct from the internal lone-surrogate
+    // sentinel range, which also starts at U+F0000.
+    if (0xF0000..0xF0800).contains(&code_point) {
+        let mut buffer = [0u16; 2];
+        for code_unit in char::from_u32(code_point)
+            .unwrap_or(char::REPLACEMENT_CHARACTER)
+            .encode_utf16(&mut buffer)
+        {
+            result.push_str(&string_from_code_unit(*code_unit));
+        }
+        return;
+    }
     match char::from_u32(code_point) {
         Some(character) => result.push(character),
         None => result.push_str(&string_from_code_unit(code_point as u16)),

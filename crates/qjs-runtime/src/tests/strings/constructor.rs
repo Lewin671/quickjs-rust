@@ -58,6 +58,13 @@ fn evaluates_string_constructor_and_statics() {
         Ok(Value::String("4:65:55357:56832:67".to_owned().into()))
     );
     assert_eq!(
+        eval(
+            "let value = String.fromCodePoint(0xF0000); \
+             value.length + ':' + value.codePointAt(0) + ':' + /^\\p{Private_Use}$/u.test(value) + ':' + /^\\p{Surrogate}$/u.test(value);"
+        ),
+        Ok(Value::String("2:983040:true:false".to_owned().into()))
+    );
+    assert_eq!(
         eval("String.fromCodePoint();"),
         Ok(Value::String(::std::rc::Rc::new(String::new())))
     );

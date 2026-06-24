@@ -143,6 +143,19 @@ fn from_code_point_range_error() -> RuntimeError {
 /// code point routes through the code-unit path so lone surrogates keep their
 /// sentinel escaping; anything else is a `char` pushed directly.
 fn push_code_point(result: &mut String, code_point: u32) {
+    // The internal lone-surrogate sentinels live at U+F0000..U+F07FF. Real
+    // scalar values in that range must use UTF-16 code units or they become
+    // indistinguishable from escaped surrogate code units.
+    if (0xF0000..0xF0800).contains(&code_point) {
+        let mut buffer = [0u16; 2];
+        for code_unit in char::from_u32(code_point)
+            .unwrap_or(char::REPLACEMENT_CHARACTER)
+            .encode_utf16(&mut buffer)
+        {
+            result.push_str(&string_from_code_unit(*code_unit));
+        }
+        return;
+    }
     // A non-surrogate code point (BMP or supplementary) is a real scalar value
     // and pushes as a `char`. Lone surrogates have no scalar value, so they keep
     // the sentinel escaping the code-unit helper applies.

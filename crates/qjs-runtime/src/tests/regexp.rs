@@ -936,6 +936,10 @@ fn evaluates_regexp_exec_and_test_sticky_last_index() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(r#"let re = /^\p{Surrogate}+$/u; re.test('\uD800') + ':' + re.test('A');"#),
+        Ok(Value::String("true:false".to_owned().into()))
+    );
 }
 
 #[test]

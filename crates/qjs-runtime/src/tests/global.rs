@@ -1255,6 +1255,13 @@ fn test262_build_string_host_helper_matches_regexp_utils_shape() {
         ),
         Ok(Value::String("BCD:lone,ranges".to_owned().into()))
     );
+    assert_eq!(
+        eval(
+            "let value = __quickjsRustBuildString({ loneCodePoints: [], ranges: [[0xF0000, 0xF0000]] }); \
+             value.length + ':' + value.codePointAt(0) + ':' + /^\\p{Private_Use}$/u.test(value) + ':' + /^\\p{Surrogate}$/u.test(value);"
+        ),
+        Ok(Value::String("2:983040:true:false".to_owned().into()))
+    );
 }
 
 #[test]

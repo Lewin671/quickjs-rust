@@ -15,9 +15,9 @@ mod tests;
 
 use classes::class_match;
 use escapes::{
-    ParsedEscape, PropertyCache, char_code_unit, chars_equal, control_letter_escape, hex_escape,
-    is_trailing_surrogate_position, legacy_octal_escape, regexp_control_escape, regexp_whitespace,
-    regexp_word_char, unicode_escape,
+    ParsedEscape, ParsedPropertyEscape, PropertyCache, char_code_unit, chars_equal,
+    control_letter_escape, hex_escape, is_trailing_surrogate_position, legacy_octal_escape,
+    property_escape, regexp_control_escape, regexp_whitespace, regexp_word_char, unicode_escape,
 };
 use fast_scan::{repeat_simple_atom, simple_atom_matcher};
 use groups::{
@@ -131,6 +131,18 @@ fn regexp_match(
 ) -> Option<RegexpMatch> {
     let source = normalized_regexp_source(source);
     let pattern: Vec<_> = source.chars().collect();
+    let options = MatchOptions {
+        ignore_case,
+        unicode,
+        dot_all,
+        multiline,
+        reverse_captures: false,
+    };
+    if let Some(match_result) =
+        match_anchored_property_repetition(&pattern, input, start_index, options)
+    {
+        return Some(match_result);
+    }
     let text: Vec<_> = if unicode {
         input.chars().collect()
     } else {
@@ -144,13 +156,6 @@ fn regexp_match(
     }
     let group_indices = capture_group_indices(&pattern);
     let properties = PropertyCache::build(&pattern);
-    let options = MatchOptions {
-        ignore_case,
-        unicode,
-        dot_all,
-        multiline,
-        reverse_captures: false,
-    };
     let starts: Vec<_> = if exact_start {
         vec![start_index]
     } else {
@@ -186,6 +191,63 @@ fn regexp_match(
                 captures: state.captures,
             })
     })
+}
+
+fn match_anchored_property_repetition(
+    pattern: &[char],
+    input: &str,
+    start_index: usize,
+    options: MatchOptions,
+) -> Option<RegexpMatch> {
+    if start_index != 0 || options.ignore_case || !options.unicode || options.multiline {
+        return None;
+    }
+    let escape = anchored_property_repetition_escape(pattern)?;
+    let mut chars = input.chars().peekable();
+    let mut index = 0;
+    let mut matched = false;
+    while let Some(first) = chars.next() {
+        let mut code_point = u32::from(first);
+        index += 1;
+        if let Some(first_unit) = surrogate_escape_code_unit(first) {
+            code_point = u32::from(first_unit);
+            if (0xD800..=0xDBFF).contains(&first_unit)
+                && let Some(second_unit) = chars
+                    .peek()
+                    .and_then(|value| surrogate_escape_code_unit(*value))
+                && (0xDC00..=0xDFFF).contains(&second_unit)
+            {
+                chars.next();
+                index += 1;
+                code_point =
+                    0x10000 + ((u32::from(first_unit) - 0xD800) << 10) + u32::from(second_unit)
+                        - 0xDC00;
+            }
+        }
+        if escape.set.contains(code_point) == escape.negated {
+            return None;
+        }
+        matched = true;
+    }
+    matched.then_some(RegexpMatch {
+        start: 0,
+        end: index,
+        captures: Vec::new(),
+    })
+}
+
+fn anchored_property_repetition_escape(pattern: &[char]) -> Option<ParsedPropertyEscape> {
+    if pattern.first() != Some(&'^') {
+        return None;
+    }
+    let escape = property_escape(pattern, 1)?;
+    if pattern.get(escape.next_pc) == Some(&'+')
+        && pattern.get(escape.next_pc + 1) == Some(&'$')
+        && escape.next_pc + 2 == pattern.len()
+    {
+        return Some(escape);
+    }
+    None
 }
 
 fn capture_group_indices(pattern: &[char]) -> HashMap<usize, usize> {

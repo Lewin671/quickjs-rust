@@ -405,8 +405,73 @@ pub(crate) fn native_regexp_prototype_test(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let result = native_regexp_prototype_exec(this_value, argument_values, env)?;
-    Ok(Value::Boolean(!matches!(result, Value::Null)))
+    let Value::Object(object) = this_value.clone() else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RegExp.prototype.exec requires an object receiver".to_owned(),
+        });
+    };
+    let source =
+        regexp_string_data(&object, REGEXP_SOURCE_PROPERTY).ok_or_else(|| RuntimeError {
+            thrown: None,
+            message: "RegExp.prototype.exec requires a RegExp receiver".to_owned(),
+        })?;
+    let input = to_js_string_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
+    let global = regexp_flags_contains(&object, 'g');
+    let sticky = regexp_flags_contains(&object, 'y');
+    let ignore_case = regexp_flags_contains(&object, 'i');
+    let unicode = regexp_flags_contains(&object, 'u');
+    let dot_all = regexp_flags_contains(&object, 's');
+    let multiline = regexp_flags_contains(&object, 'm');
+    let stateful = global || sticky;
+    let last_index = regexp_last_index(&this_value, env)?;
+    let start_code_unit = if stateful { last_index } else { 0 };
+    let start = if unicode {
+        char_index_from_code_unit_index(&input, start_code_unit)
+    } else {
+        start_code_unit
+    };
+
+    let match_result = if sticky {
+        matcher::regexp_match_at(
+            &source,
+            &input,
+            start,
+            ignore_case,
+            unicode,
+            dot_all,
+            multiline,
+        )
+    } else {
+        matcher::regexp_match_range(
+            &source,
+            &input,
+            start,
+            ignore_case,
+            unicode,
+            dot_all,
+            multiline,
+        )
+    };
+
+    let Some(match_result) = match_result else {
+        if stateful {
+            regexp_set_last_index_object(&object, 0, env)?;
+        }
+        return Ok(Value::Boolean(false));
+    };
+    if stateful {
+        let last_index = if unicode {
+            code_unit_index_for_char_index(&input, match_result.end)
+        } else {
+            match_result.end
+        };
+        regexp_set_last_index_object(&object, last_index, env)?;
+    }
+    Ok(Value::Boolean(true))
 }
 
 pub(crate) fn native_regexp_prototype_source(
