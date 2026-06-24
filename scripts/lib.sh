@@ -82,12 +82,18 @@ qjs_build_cli_bin() {
     return 0
   fi
   local profile="${QJS_CLI_PROFILE:-debug}"
+  # QJS_AGENTS=1 builds the CLI with the Test262 `$262.agent` multi-agent harness
+  # (OS threads, cross-thread SharedArrayBuffer, real Atomics.wait/notify).
+  local features=()
+  if [ -n "${QJS_AGENTS:-}" ]; then
+    features=(--features agents)
+  fi
   case "$profile" in
     debug)
-      "$cargo_bin" build -q -p qjs-cli >&2
+      "$cargo_bin" build -q -p qjs-cli ${features[@]+"${features[@]}"} >&2
       ;;
     release)
-      "$cargo_bin" build -q --release -p qjs-cli >&2
+      "$cargo_bin" build -q --release -p qjs-cli ${features[@]+"${features[@]}"} >&2
       ;;
     *)
       echo "error: QJS_CLI_PROFILE must be debug or release: $profile" >&2

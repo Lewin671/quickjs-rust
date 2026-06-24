@@ -227,11 +227,30 @@ skip_reason() {
     *_FIXTURE.js) echo "fixture"; return ;;
     test/intl402/*|test/staging/intl402/*) echo "intl402"; return ;;
   esac
-  if needs_agent_harness "$TEST262_DIR/$rel" "$flags" "$includes"; then echo "agent"; return; fi
+  # With QJS_AGENTS=1 the engine is built with the `agents` feature and runs the
+  # $262.agent multi-agent harness for real, so agent-flagged cases are no longer
+  # skipped (run_case_worker passes `--agent`). Without it they are skipped.
+  if needs_agent_harness "$TEST262_DIR/$rel" "$flags" "$includes"; then
+    if [ -z "${QJS_AGENTS:-}" ]; then echo "agent"; return; fi
+  fi
   if [ -n "$includes" ] && ! rust_includes_supported "$includes"; then
     echo "includes"
   else
     echo ""
+  fi
+}
+
+# Echoes the qjs-cli flags for running `file` as a Test262 agent under
+# QJS_AGENTS=1: `--agent` for any $262.agent / atomicsHelper case, plus
+# `--agent-cannot-block` for the `CanBlockIsFalse` flag. Empty otherwise.
+rust_agent_cli_flags() {
+  local file="$1" flags="$2" includes="$3"
+  [ -n "${QJS_AGENTS:-}" ] || return 0
+  needs_agent_harness "$file" "$flags" "$includes" || return 0
+  if [[ "$flags" == *CanBlockIsFalse* ]]; then
+    printf '%s' "--agent --agent-cannot-block"
+  else
+    printf '%s' "--agent"
   fi
 }
 rust_includes_supported() {
@@ -259,6 +278,19 @@ var __quickjsRustDynamicFunctionRealm;
 var $262 = {
   IsHTMLDDA: __quickjsRustIsHTMLDDA,
   detachArrayBuffer: __quickjsRustDetachArrayBuffer,
+  // The $262.agent multi-agent harness primitives exist only in the
+  // `agents`-feature build; `typeof` guards keep this shim valid in the default
+  // build (where agent-flagged cases are skipped anyway).
+  agent: (typeof __quickjsRustAgentStart === 'function') ? {
+    start: __quickjsRustAgentStart,
+    broadcast: __quickjsRustAgentBroadcast,
+    getReport: __quickjsRustAgentGetReport,
+    report: __quickjsRustAgentReport,
+    sleep: __quickjsRustAgentSleep,
+    monotonicNow: __quickjsRustAgentMonotonicNow,
+    receiveBroadcast: __quickjsRustAgentReceiveBroadcast,
+    leaving: __quickjsRustAgentLeaving,
+  } : undefined,
   evalScript: function(source) {
     return (typeof __quickjsRustEvalScript === 'function') ? __quickjsRustEvalScript(source) : (0, eval)(source);
   },
@@ -1211,8 +1243,15 @@ rust_negative_matches() {
 run_engine_case() {
   local engine="$1" temp="$2" source="$3"
   local negative_phase="${4:-}" negative_type="${5:-}" is_async="${6:-}"
-  local module_prelude="${7:-}"
-  local output status first_line attempt
+  local module_prelude="${7:-}" agent_flags="${8:-}"
+  local output status first_line attempt timeout_seconds
+
+  # Agent cases use $262.agent.timeouts.huge (10s); give them headroom over the
+  # ordinary per-case budget so a legitimate wait is not killed as a timeout.
+  timeout_seconds="$CASE_TIMEOUT_SECONDS"
+  if [ -n "$agent_flags" ] && [ "$timeout_seconds" -lt 20 ]; then
+    timeout_seconds=20
+  fi
 
   attempt=0
   while :; do
@@ -1223,9 +1262,9 @@ run_engine_case() {
           # Module-flagged case: run the test file under the Module goal with the
           # harness includes installed as a script prelude. The engine reads the
           # original test file so relative imports resolve against its directory.
-          output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" --error-format=test262 --module --prelude "$module_prelude" "$source" 2>&1)"
+          output="$("$RUN_WITH_TIMEOUT" "$timeout_seconds" "$QJS_CLI_BIN" --error-format=test262 --module --prelude "$module_prelude" "$source" 2>&1)"
         else
-          output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" --error-format=test262 "$temp" 2>&1)"
+          output="$("$RUN_WITH_TIMEOUT" "$timeout_seconds" "$QJS_CLI_BIN" --error-format=test262 $agent_flags "$temp" 2>&1)"
         fi
         ;;
       quickjs-ng) output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QUICKJS_NG_RUNNER" -c "$QUICKJS_NG_CONF" -t 1 -f "$source" 2>&1)" ;;
@@ -1346,7 +1385,9 @@ run_case_worker() {
     if [ -n "$rust_skip_reason" ]; then
       rust_result="skipped"
     else
-      rust_result="$(run_engine_case quickjs-rust "$temp" "$file" "$negative_phase" "$negative_type" "$is_async" "$module_prelude")"
+      local agent_flags
+      agent_flags="$(rust_agent_cli_flags "$file" "$flags" "$includes")"
+      rust_result="$(run_engine_case quickjs-rust "$temp" "$file" "$negative_phase" "$negative_type" "$is_async" "$module_prelude" "$agent_flags")"
     fi
   fi
   if [ "$ENGINE" = "quickjs-ng" ] || [ "$ENGINE" = "both" ]; then
@@ -1624,6 +1665,7 @@ if [ "$run" -gt 0 ]; then
   export -f result_kind
   export -f run_case_worker
   export -f run_engine_case
+  export -f rust_agent_cli_flags
   export -f rust_error_field
   export -f rust_negative_matches
   export -f split_entries
