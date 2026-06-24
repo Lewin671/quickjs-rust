@@ -35,7 +35,10 @@ jobs:
         run: ./scripts/check-ci.sh
 
       - name: Build qjs-cli coverage artifact binary
-        run: cargo build -q --release -p qjs-cli
+        # Built with the `agents` feature so the Test262 coverage run can execute
+        # the $262.agent multi-agent Atomics cases (QJS_AGENTS=1). The feature is
+        # purely additive; default behavior is unchanged unless --agent is passed.
+        run: cargo build -q --release -p qjs-cli --features agents
 
       - name: Upload qjs-cli artifact
         uses: actions/upload-artifact@v6

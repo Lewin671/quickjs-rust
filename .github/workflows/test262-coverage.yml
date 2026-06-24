@@ -203,11 +203,17 @@ jobs:
 
       - name: Build quickjs-rust once
         if: steps.qjs-cli-artifact.outcome != 'success'
-        run: cargo build -q --release -p qjs-cli
+        # The `agents` feature backs the $262.agent multi-agent Atomics cases the
+        # coverage run executes (QJS_AGENTS=1). Matches the CI artifact build.
+        run: cargo build -q --release -p qjs-cli --features agents
 
       - name: Run full Test262 coverage shard
         env:
           TEST262_TIMEOUT_RETRIES: 1
+          # Run the $262.agent multi-agent Atomics cases for real (OS threads,
+          # cross-thread SharedArrayBuffer, Atomics.wait/notify) instead of
+          # reporting them as not-run. The CLI is built with --features agents.
+          QJS_AGENTS: 1
         run: |
           mkdir -p coverage
           status=0
