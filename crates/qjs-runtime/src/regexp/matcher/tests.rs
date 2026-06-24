@@ -255,6 +255,15 @@ fn lazy_quantifiers_try_shorter_matches_first() {
 }
 
 #[test]
+fn nested_lazy_quantified_groups_prune_duplicate_states() {
+    let input = "<html>\n<body onXXX=\"alert(event.type);\">\n<p>Kibology for all</p>\n<p>All for Kibology</p>\n</body>\n</html>";
+    let matched =
+        regexp_match_range(r"<body.*>((.*\n?)*?)<\/body>", input, 0, true, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (7, 96));
+    assert_eq!(matched.captures, vec![Some((40, 89)), Some((65, 89))]);
+}
+
+#[test]
 fn quantified_groups_preserve_atom_order_and_clear_skipped_captures() {
     let matched =
         regexp_match_range("(aa|aabaac|ba|b|c)*", "aabaac", 0, false, false, false).unwrap();

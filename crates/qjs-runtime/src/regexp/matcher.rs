@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::string::{
     advance_string_index, string_code_units, string_from_code_unit, surrogate_escape_code_unit,
@@ -1345,12 +1345,16 @@ fn repeat_atom_from(
         Accept(MatchState, usize),
     }
     let mut stack = vec![Work::Expand(state, count)];
+    let mut expanded = HashSet::new();
     while let Some(work) = stack.pop() {
         match work {
             Work::Accept(state, count) => {
                 results.push(repeat_accept_state(state, count, &repeat.atom_captures));
             }
             Work::Expand(state, count) => {
+                if !expanded.insert((state.index, count, state.captures.clone())) {
+                    continue;
+                }
                 if repeat.quantifier.greedy {
                     // Defer this frame's own accept until after its children.
                     stack.push(Work::Accept(state.clone(), count));
@@ -1377,6 +1381,7 @@ fn repeat_atom_from(
                         (next_state.index != state.index).then_some(next_state)
                     })
                     .collect();
+                    dedup_match_states(&mut children);
                     // Process children in order: push in reverse so the first
                     // child is on top of the stack.
                     children.reverse();
@@ -1387,6 +1392,11 @@ fn repeat_atom_from(
             }
         }
     }
+}
+
+fn dedup_match_states(states: &mut Vec<MatchState>) {
+    let mut seen = HashSet::new();
+    states.retain(|state| seen.insert((state.index, state.captures.clone())));
 }
 
 fn repeat_accept_state(mut state: MatchState, count: usize, atom_captures: &[usize]) -> MatchState {
