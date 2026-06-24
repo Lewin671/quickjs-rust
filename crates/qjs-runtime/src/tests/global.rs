@@ -1364,6 +1364,55 @@ fn test262_regexp_whitespace_loop_host_helper_matches_source_test() {
 }
 
 #[test]
+fn test262_string_substr_number_loop_host_helper_matches_source_test() {
+    assert_eq!(
+        eval("__quickjsRustAssertStringSubstrNumberLoop();"),
+        Ok(Value::Undefined)
+    );
+}
+
+#[test]
+fn test262_array_buffer_slice_to_immutable_argument_coercion_host_helper_matches_source_test() {
+    assert_eq!(
+        eval("__quickjsRustAssertArrayBufferSliceToImmutableArgumentCoercion();"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval(
+            r#"
+            var calls = [];
+            var start = {
+              valueOf() { calls.push("start.valueOf"); return {}; },
+              toString() { calls.push("start.toString"); return "1"; }
+            };
+            var end = {
+              valueOf() { calls.push("end.valueOf"); return {}; },
+              toString() { calls.push("end.toString"); return "4"; }
+            };
+            var source = new ArrayBuffer(8);
+            var view = new Uint8Array(source);
+            for (var i = 0; i < 8; i++) view[i] = i + 1;
+            var dest = source.sliceToImmutable(start, end);
+            dest.byteLength === 3 &&
+              dest.immutable === true &&
+              new Uint8Array(dest)[0] === 2 &&
+              new Uint8Array(dest)[2] === 4 &&
+              calls.join(",") === "start.valueOf,start.toString,end.valueOf,end.toString";
+            "#,
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn test262_line_comment_unicode_loop_host_helper_matches_source_test() {
+    assert_eq!(
+        eval("__quickjsRustAssertLineCommentUnicodeLoop();"),
+        Ok(Value::Undefined)
+    );
+}
+
+#[test]
 fn test262_verify_property_host_helper_checks_data_descriptors() {
     assert_eq!(
         eval(

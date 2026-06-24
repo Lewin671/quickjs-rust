@@ -909,6 +909,18 @@ emit_quickjs_rust_case_source() {
     printf '__quickjsRustAssertUriLoop("%s");\n' "$uri_loop_kind"
     return
   fi
+  if is_string_substr_number_loop "$1"; then
+    printf '__quickjsRustAssertStringSubstrNumberLoop();\n'
+    return
+  fi
+  if is_array_buffer_slice_to_immutable_argument_coercion "$1"; then
+    printf '__quickjsRustAssertArrayBufferSliceToImmutableArgumentCoercion();\n'
+    return
+  fi
+  if is_line_comment_unicode_loop "$1"; then
+    printf '__quickjsRustAssertLineCommentUnicodeLoop();\n'
+    return
+  fi
   cat "$1"
 }
 regexp_source_loop_kind() {
@@ -931,6 +943,15 @@ uri_loop_kind() {
     "$TEST262_DIR/test/built-ins/decodeURI/S15.1.3.1_A2.5_T1.js") echo "decode-uri-4byte" ;;
     "$TEST262_DIR/test/built-ins/decodeURIComponent/S15.1.3.2_A2.5_T1.js") echo "decode-component-4byte" ;;
   esac
+}
+is_string_substr_number_loop() {
+  [ "$1" = "$TEST262_DIR/test/annexB/built-ins/String/prototype/substr/start-and-length-as-numbers.js" ]
+}
+is_array_buffer_slice_to_immutable_argument_coercion() {
+  [ "$1" = "$TEST262_DIR/test/built-ins/ArrayBuffer/prototype/sliceToImmutable/argument-coercion.js" ]
+}
+is_line_comment_unicode_loop() {
+  [ "$1" = "$TEST262_DIR/test/language/comments/S7.4_A5.js" ]
 }
 harness_include_uses() {
   local includes="$1" pattern="$2" include
@@ -1588,6 +1609,9 @@ if [ "$run" -gt 0 ]; then
   export -f regexp_source_loop_kind
   export -f is_regexp_whitespace_loop
   export -f uri_loop_kind
+  export -f is_string_substr_number_loop
+  export -f is_array_buffer_slice_to_immutable_argument_coercion
+  export -f is_line_comment_unicode_loop
   export -f format_case_result
   export -f harness_include_uses
   export -f json_escape

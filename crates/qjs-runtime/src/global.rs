@@ -181,6 +181,27 @@ pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
         1,
         NativeFunction::Test262AssertUriLoop,
     );
+    define_global_function(
+        env,
+        global_this,
+        "__quickjsRustAssertStringSubstrNumberLoop",
+        0,
+        NativeFunction::Test262AssertStringSubstrNumberLoop,
+    );
+    define_global_function(
+        env,
+        global_this,
+        "__quickjsRustAssertArrayBufferSliceToImmutableArgumentCoercion",
+        0,
+        NativeFunction::Test262AssertArrayBufferSliceToImmutableArgumentCoercion,
+    );
+    define_global_function(
+        env,
+        global_this,
+        "__quickjsRustAssertLineCommentUnicodeLoop",
+        0,
+        NativeFunction::Test262AssertLineCommentUnicodeLoop,
+    );
 }
 
 fn define_global_function(
