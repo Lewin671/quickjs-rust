@@ -193,6 +193,13 @@ pub struct ObjectRef {
     /// helpers store their records here so advancement does not round-trip
     /// through observable-looking property storage.
     iterator_zip_state: Rc<RefCell<Option<crate::iterator::ZipState>>>,
+    /// Cross-thread backing for a `SharedArrayBuffer` under the Test262
+    /// `$262.agent` harness. When present, the buffer's bytes live in this
+    /// `Arc`-shared store (so a worker agent on another OS thread observes the
+    /// same memory) instead of `internal_bytes`. Gated so the default build's
+    /// object layout is unchanged.
+    #[cfg(feature = "agents")]
+    shared_backing: Rc<RefCell<Option<crate::array_buffer::SharedBackingRef>>>,
 }
 
 impl fmt::Debug for ObjectRef {
@@ -258,6 +265,8 @@ impl ObjectRef {
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
             internal_bytes: Rc::new(RefCell::new(None)),
             iterator_zip_state: Rc::new(RefCell::new(None)),
+            #[cfg(feature = "agents")]
+            shared_backing: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -317,6 +326,19 @@ impl ObjectRef {
         f: impl FnOnce(&mut Vec<u8>) -> T,
     ) -> Option<T> {
         self.internal_bytes.borrow_mut().as_mut().map(f)
+    }
+
+    /// The cross-thread `SharedArrayBuffer` backing for this object, if one was
+    /// installed (agents harness only).
+    #[cfg(feature = "agents")]
+    pub(crate) fn shared_backing(&self) -> Option<crate::array_buffer::SharedBackingRef> {
+        self.shared_backing.borrow().clone()
+    }
+
+    /// Installs the cross-thread `SharedArrayBuffer` backing for this object.
+    #[cfg(feature = "agents")]
+    pub(crate) fn set_shared_backing(&self, backing: crate::array_buffer::SharedBackingRef) {
+        *self.shared_backing.borrow_mut() = Some(backing);
     }
 
     pub(crate) fn set_iterator_zip_state(&self, state: crate::iterator::ZipState) {

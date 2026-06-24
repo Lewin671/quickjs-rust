@@ -7,6 +7,11 @@ use crate::{
     to_number_with_env,
 };
 
+#[cfg(feature = "agents")]
+mod shared_backing;
+#[cfg(feature = "agents")]
+pub(crate) use shared_backing::{SharedBacking, SharedBackingRef};
+
 mod shared;
 pub(crate) use shared::{
     buffer_bytes as shared_array_buffer_bytes, install_shared_array_buffer,
@@ -674,6 +679,12 @@ pub(crate) fn buffer_bytes(object: &ObjectRef) -> Vec<u8> {
 
 pub(crate) fn with_buffer_bytes<T>(object: &ObjectRef, f: impl FnOnce(&[u8]) -> T) -> T {
     if is_shared_array_buffer_object(object) {
+        // A SharedArrayBuffer created under the agents harness keeps its bytes in
+        // the cross-thread backing; read them under its lock.
+        #[cfg(feature = "agents")]
+        if let Some(backing) = object.shared_backing() {
+            return backing.with_bytes(f);
+        }
         object.with_internal_bytes(|bytes| match bytes {
             Some(bytes) => f(bytes),
             None => {
@@ -707,6 +718,12 @@ pub(crate) fn mutate_array_buffer_bytes<T>(
     object: &ObjectRef,
     f: impl FnOnce(&mut Vec<u8>) -> T,
 ) -> Option<T> {
+    // A SharedArrayBuffer under the agents harness mutates its cross-thread
+    // backing in place (single-element typed-array and Atomics writes).
+    #[cfg(feature = "agents")]
+    if let Some(backing) = object.shared_backing() {
+        return Some(backing.with_bytes_mut(f));
+    }
     object.with_internal_bytes_mut(f)
 }
 

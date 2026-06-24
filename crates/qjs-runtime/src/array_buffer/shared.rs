@@ -240,6 +240,12 @@ pub(crate) fn native_shared_array_buffer_prototype_slice(
 }
 
 fn define_data(object: &ObjectRef, bytes: Vec<u8>) {
+    // Under the agents harness a SharedArrayBuffer's bytes live in the
+    // cross-thread backing so worker agents share one memory region; otherwise
+    // they live in the per-object `internal_bytes` slot.
+    #[cfg(feature = "agents")]
+    object.set_shared_backing(crate::array_buffer::SharedBacking::new(bytes));
+    #[cfg(not(feature = "agents"))]
     object.set_internal_bytes(bytes);
     object.define_property(
         SHARED_ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
@@ -256,6 +262,13 @@ fn define_max_byte_length(object: &ObjectRef, max_byte_length: usize) {
 }
 
 pub(crate) fn set_bytes(object: &ObjectRef, bytes: Vec<u8>) {
+    #[cfg(feature = "agents")]
+    if let Some(backing) = object.shared_backing() {
+        backing.set(bytes);
+    } else {
+        object.set_internal_bytes(bytes);
+    }
+    #[cfg(not(feature = "agents"))]
     object.set_internal_bytes(bytes);
     object.define_property(
         SHARED_ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
@@ -264,6 +277,10 @@ pub(crate) fn set_bytes(object: &ObjectRef, bytes: Vec<u8>) {
 }
 
 pub(crate) fn buffer_bytes(object: &ObjectRef) -> Vec<u8> {
+    #[cfg(feature = "agents")]
+    if let Some(backing) = object.shared_backing() {
+        return backing.snapshot();
+    }
     object.internal_bytes().unwrap_or_default()
 }
 

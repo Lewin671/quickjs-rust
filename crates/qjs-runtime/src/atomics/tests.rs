@@ -50,6 +50,25 @@ fn atomics_wait_throws_from_a_nested_user_frame_when_agent_cannot_block() {
 
 #[cfg(feature = "agents")]
 #[test]
+fn shared_array_buffer_round_trips_through_the_cross_thread_backing() {
+    // With the agents feature on, SharedArrayBuffer bytes live in the Arc-shared
+    // backing rather than `internal_bytes`; element reads, writes, and growable
+    // `grow` must round-trip through it identically.
+    assert_eq!(
+        eval(
+            "let sab = new SharedArrayBuffer(8, { maxByteLength: 16 }); \
+             let a = new Int32Array(sab); \
+             a[0] = 42; a[1] = -7; \
+             sab.grow(16); \
+             let b = new Int32Array(sab); \
+             [b.length, b[0], b[1], sab.byteLength, sab.growable].join(',');"
+        ),
+        Ok(Value::String("4,42,-7,16,true".to_owned().into()))
+    );
+}
+
+#[cfg(feature = "agents")]
+#[test]
 fn atomics_wait_returns_status_when_agent_can_block() {
     // With AgentCanSuspend() true and no other agent to notify, the single-agent
     // wait still resolves to a status string rather than throwing.

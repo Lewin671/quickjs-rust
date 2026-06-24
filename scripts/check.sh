@@ -70,7 +70,7 @@ qjs_check_stage "clippy (agents)" \
 # Run the agents-feature-only unit tests (Atomics/$262.agent behavior). The
 # default workspace test stage never compiles these, so exercise them here.
 qjs_check_stage "agents feature tests" \
-  "$CARGO_BIN" test -p qjs-runtime --features agents atomics::tests::atomics_wait
+  "$CARGO_BIN" test -p qjs-runtime --features agents atomics::
 if [ "${QJS_CHECK_SPLIT_RUNTIME_TESTS:-0}" = "1" ]; then
   qjs_check_stage "non-runtime crate tests" \
     "$CARGO_BIN" test -p qjs-ast -p qjs-lexer -p qjs-parser -p qjs-cli
