@@ -214,6 +214,13 @@ jobs:
           # cross-thread SharedArrayBuffer, Atomics.wait/notify) instead of
           # reporting them as not-run. The CLI is built with --features agents.
           QJS_AGENTS: 1
+          # The agents run additionally executes 61 multi-threaded Atomics cases
+          # in the shared parallel pool; their threads add CPU contention that can
+          # push an unrelated, already-slow case (general call-overhead bound, not
+          # agents overhead — measured identical in both builds) past the default
+          # 10s budget on a 2-core runner. Give the whole run headroom. The real
+          # call-perf fix is the env-model rewrite tracked separately.
+          TEST262_CASE_TIMEOUT_SECONDS: 20
         run: |
           mkdir -p coverage
           status=0
