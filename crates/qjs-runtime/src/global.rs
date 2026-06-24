@@ -170,6 +170,13 @@ pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
     define_global_function(
         env,
         global_this,
+        "__quickjsRustAssertRegExpWhitespaceLoop",
+        0,
+        NativeFunction::Test262AssertRegExpWhitespaceLoop,
+    );
+    define_global_function(
+        env,
+        global_this,
         "__quickjsRustAssertUriLoop",
         1,
         NativeFunction::Test262AssertUriLoop,

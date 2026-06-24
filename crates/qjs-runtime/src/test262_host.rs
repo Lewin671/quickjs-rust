@@ -1,4 +1,4 @@
-use crate::{RuntimeError, Value, string::string_from_code_unit};
+use crate::{CallEnv, RuntimeError, Value, string::string_from_code_unit};
 
 pub(crate) fn native_assert_native_function(
     argument_values: &[Value],
@@ -52,6 +52,30 @@ pub(crate) fn native_assert_regexp_source_loop(
                 continue;
             }
             Err(error) => return Err(error),
+        }
+    }
+    Ok(Value::Undefined)
+}
+
+pub(crate) fn native_assert_regexp_whitespace_loop(
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let regexp = crate::regexp::regexp_literal_value("\\S+", "", env)?;
+    for cu in 0..=0xffffu32 {
+        if matches!(cu, 0x180E | 0xFEFF) {
+            continue;
+        }
+        let source = string_from_code_unit(cu as u16);
+        let actual = crate::regexp::native_regexp_prototype_test(
+            regexp.clone(),
+            &[Value::String(source.into())],
+            env,
+        )?;
+        let expected = !is_test262_regexp_whitespace_code_unit(cu);
+        if !matches!(actual, Value::Boolean(value) if value == expected) {
+            return Err(test262_error(&format!(
+                "RegExp \\S+ mismatch for charCode: {cu}",
+            )));
         }
     }
     Ok(Value::Undefined)
@@ -201,6 +225,36 @@ fn should_skip_identity_escape_error(cu: u32) -> bool {
         return byte == b'_' || byte.is_ascii_alphanumeric();
     }
     qjs_unicode::is_id_continue(cu)
+}
+
+fn is_test262_regexp_whitespace_code_unit(cu: u32) -> bool {
+    matches!(
+        cu,
+        0x0009
+            | 0x000A
+            | 0x000B
+            | 0x000C
+            | 0x000D
+            | 0x0020
+            | 0x00A0
+            | 0x1680
+            | 0x2000
+            | 0x2001
+            | 0x2002
+            | 0x2003
+            | 0x2004
+            | 0x2005
+            | 0x2006
+            | 0x2007
+            | 0x2008
+            | 0x2009
+            | 0x200A
+            | 0x2028
+            | 0x2029
+            | 0x202F
+            | 0x205F
+            | 0x3000
+    )
 }
 
 fn test262_error(message: &str) -> RuntimeError {

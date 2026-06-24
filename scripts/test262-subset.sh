@@ -717,6 +717,10 @@ emit_quickjs_rust_case_source() {
     printf '__quickjsRustAssertRegExpSourceLoop("%s");\n' "$regexp_source_loop_kind"
     return
   fi
+  if is_regexp_whitespace_loop "$1"; then
+    printf '__quickjsRustAssertRegExpWhitespaceLoop();\n'
+    return
+  fi
   local uri_loop_kind
   uri_loop_kind="$(uri_loop_kind "$1")"
   if [ -n "$uri_loop_kind" ]; then
@@ -734,6 +738,9 @@ regexp_source_loop_kind() {
     "$TEST262_DIR/test/language/literals/regexp/S7.8.5_A2.1_T2.js") echo "literal-rest" ;;
     "$TEST262_DIR/test/language/literals/regexp/S7.8.5_A2.4_T2.js") echo "literal-rest-escape" ;;
   esac
+}
+is_regexp_whitespace_loop() {
+  [ "$1" = "$TEST262_DIR/test/built-ins/RegExp/character-class-escape-non-whitespace.js" ]
 }
 uri_loop_kind() {
   case "$1" in
@@ -1102,6 +1109,7 @@ export QJS_CLI_BIN
 export RUN_WITH_TIMEOUT
 export -f emit_quickjs_rust_case_source
 export -f regexp_source_loop_kind
+export -f is_regexp_whitespace_loop
 export -f uri_loop_kind
 export -f emit_test262_regexp_utils_fast_paths
 export -f emit_test262_resizable_array_buffer_fast_paths

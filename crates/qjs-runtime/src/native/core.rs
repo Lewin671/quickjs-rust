@@ -57,6 +57,9 @@ pub(super) fn call_core_native(
         NativeFunction::Test262AssertRegExpSourceLoop => {
             crate::test262_host::native_assert_regexp_source_loop(argument_values)
         }
+        NativeFunction::Test262AssertRegExpWhitespaceLoop => {
+            crate::test262_host::native_assert_regexp_whitespace_loop(env)
+        }
         NativeFunction::Test262AssertUriLoop => {
             crate::test262_host::native_assert_uri_loop(argument_values)
         }

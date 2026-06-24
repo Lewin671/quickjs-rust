@@ -1356,6 +1356,14 @@ fn test262_uri_loop_host_helper_matches_source_tests() {
 }
 
 #[test]
+fn test262_regexp_whitespace_loop_host_helper_matches_source_test() {
+    assert_eq!(
+        eval("__quickjsRustAssertRegExpWhitespaceLoop();"),
+        Ok(Value::Undefined)
+    );
+}
+
+#[test]
 fn test262_verify_property_host_helper_checks_data_descriptors() {
     assert_eq!(
         eval(
