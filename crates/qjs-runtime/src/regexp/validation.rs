@@ -3,8 +3,56 @@ use qjs_unicode as unicode;
 
 pub(crate) fn validate_regexp_init(source: &str, flags: &str) -> Result<(), RuntimeError> {
     validate_regexp_flags(flags)?;
+    if flags.is_empty() && is_fast_non_unicode_bmp_literal_source(source) {
+        return Ok(());
+    }
     let unicode_sets = flags.contains('v');
     validate_regexp_pattern(source, flags.contains('u') || unicode_sets, unicode_sets)
+}
+
+fn is_fast_non_unicode_bmp_literal_source(source: &str) -> bool {
+    let mut chars = source.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    match (
+        first,
+        chars.next(),
+        chars.next(),
+        chars.next(),
+        chars.next(),
+        chars.next(),
+    ) {
+        (ch, None, None, None, None, None) => is_fast_single_regexp_atom(ch),
+        ('\\', Some(ch), None, None, None, None) => is_fast_escaped_regexp_atom(ch),
+        ('a', Some('\\'), Some(ch), None, None, None) => is_fast_escaped_regexp_atom(ch),
+        ('n', Some('n'), Some('n'), Some('n'), Some(ch), None) => is_fast_single_regexp_atom(ch),
+        _ => false,
+    }
+}
+
+fn is_fast_single_regexp_atom(ch: char) -> bool {
+    !matches!(
+        ch,
+        '\n' | '\r'
+            | '\u{2028}'
+            | '\u{2029}'
+            | '*'
+            | '/'
+            | '\\'
+            | '+'
+            | '?'
+            | '('
+            | ')'
+            | '['
+            | ']'
+            | '{'
+            | '}'
+    )
+}
+
+fn is_fast_escaped_regexp_atom(ch: char) -> bool {
+    !matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}')
 }
 
 fn validate_regexp_flags(flags: &str) -> Result<(), RuntimeError> {

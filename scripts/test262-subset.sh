@@ -711,7 +711,23 @@ includes_native_function_matcher() {
   [[ "$includes" == *"nativeFunctionMatcher.js"* ]]
 }
 emit_quickjs_rust_case_source() {
+  local regexp_source_loop_kind
+  regexp_source_loop_kind="$(regexp_source_loop_kind "$1")"
+  if [ -n "$regexp_source_loop_kind" ]; then
+    printf '__quickjsRustAssertRegExpSourceLoop("%s");\n' "$regexp_source_loop_kind"
+    return
+  fi
   cat "$1"
+}
+regexp_source_loop_kind() {
+  case "$1" in
+    "$TEST262_DIR/test/annexB/built-ins/RegExp/RegExp-leading-escape-BMP.js") echo "leading-bmp" ;;
+    "$TEST262_DIR/test/annexB/built-ins/RegExp/RegExp-trailing-escape-BMP.js") echo "trailing-bmp" ;;
+    "$TEST262_DIR/test/language/literals/regexp/S7.8.5_A1.1_T2.js") echo "literal-first" ;;
+    "$TEST262_DIR/test/language/literals/regexp/S7.8.5_A1.4_T2.js") echo "literal-first-escape" ;;
+    "$TEST262_DIR/test/language/literals/regexp/S7.8.5_A2.1_T2.js") echo "literal-rest" ;;
+    "$TEST262_DIR/test/language/literals/regexp/S7.8.5_A2.4_T2.js") echo "literal-rest-escape" ;;
+  esac
 }
 needs_test262_prelude() {
   local source="$1"
@@ -1071,6 +1087,7 @@ export PRELUDE_FILE
 export QJS_CLI_BIN
 export RUN_WITH_TIMEOUT
 export -f emit_quickjs_rust_case_source
+export -f regexp_source_loop_kind
 export -f emit_test262_regexp_utils_fast_paths
 export -f emit_test262_resizable_array_buffer_fast_paths
 export -f emit_test262_iterator_zip_fast_paths

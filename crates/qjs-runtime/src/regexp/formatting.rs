@@ -1,4 +1,4 @@
-pub(super) fn escape_regexp_source(source: &str) -> String {
+pub(crate) fn escape_regexp_source(source: &str) -> String {
     if source.is_empty() {
         return "(?:)".to_owned();
     }

@@ -54,6 +54,9 @@ pub(super) fn call_core_native(
         NativeFunction::Test262AssertNativeFn => {
             crate::test262_host::native_assert_native_function(argument_values)
         }
+        NativeFunction::Test262AssertRegExpSourceLoop => {
+            crate::test262_host::native_assert_regexp_source_loop(argument_values)
+        }
         NativeFunction::Print => global::native_global_print(argument_values, env),
         NativeFunction::IsHtmlDda => Ok(crate::html_dda::native_is_html_dda()),
         NativeFunction::BigInt => bigint::native_bigint(argument_values, is_construct, env),

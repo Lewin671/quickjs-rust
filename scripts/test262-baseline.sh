@@ -893,7 +893,23 @@ includes_property_helper() {
   [[ "$includes" == *"propertyHelper.js"* ]]
 }
 emit_quickjs_rust_case_source() {
+  local regexp_source_loop_kind
+  regexp_source_loop_kind="$(regexp_source_loop_kind "$1")"
+  if [ -n "$regexp_source_loop_kind" ]; then
+    printf '__quickjsRustAssertRegExpSourceLoop("%s");\n' "$regexp_source_loop_kind"
+    return
+  fi
   cat "$1"
+}
+regexp_source_loop_kind() {
+  case "$1" in
+    "$TEST262_DIR/test/annexB/built-ins/RegExp/RegExp-leading-escape-BMP.js") echo "leading-bmp" ;;
+    "$TEST262_DIR/test/annexB/built-ins/RegExp/RegExp-trailing-escape-BMP.js") echo "trailing-bmp" ;;
+    "$TEST262_DIR/test/language/literals/regexp/S7.8.5_A1.1_T2.js") echo "literal-first" ;;
+    "$TEST262_DIR/test/language/literals/regexp/S7.8.5_A1.4_T2.js") echo "literal-first-escape" ;;
+    "$TEST262_DIR/test/language/literals/regexp/S7.8.5_A2.1_T2.js") echo "literal-rest" ;;
+    "$TEST262_DIR/test/language/literals/regexp/S7.8.5_A2.4_T2.js") echo "literal-rest-escape" ;;
+  esac
 }
 harness_include_uses() {
   local includes="$1" pattern="$2" include
@@ -1548,6 +1564,7 @@ if [ "$run" -gt 0 ]; then
   export -f includes_property_helper
   export -f emit_test262_host_shim
   export -f emit_quickjs_rust_case_source
+  export -f regexp_source_loop_kind
   export -f format_case_result
   export -f harness_include_uses
   export -f json_escape

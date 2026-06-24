@@ -382,6 +382,7 @@ pub(crate) enum NativeFunction {
     Test262AssertPackedArray,
     Test262AssertNullProtoMutableObject,
     Test262AssertNativeFn,
+    Test262AssertRegExpSourceLoop,
     Print,
     Function,
     FunctionPrototypeApply,

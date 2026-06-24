@@ -20,7 +20,8 @@ mod validation;
 
 use crate::CallEnv;
 pub(crate) use escape::native_regexp_escape;
-use formatting::{canonical_regexp_flags, escape_regexp_source};
+use formatting::canonical_regexp_flags;
+pub(crate) use formatting::escape_regexp_source;
 pub(crate) use match_all::{native_regexp_prototype_match_all, native_regexp_string_iterator_next};
 pub(crate) use symbol_match::native_regexp_prototype_match;
 pub(crate) use symbol_replace::native_regexp_prototype_replace;

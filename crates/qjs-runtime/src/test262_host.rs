@@ -1,4 +1,4 @@
-use crate::{RuntimeError, Value};
+use crate::{RuntimeError, Value, string::string_from_code_unit};
 
 pub(crate) fn native_assert_native_function(
     argument_values: &[Value],
@@ -12,6 +12,132 @@ pub(crate) fn native_assert_native_function(
         return Ok(Value::Boolean(false));
     };
     Ok(Value::Boolean(is_native_function_source(&source)))
+}
+
+pub(crate) fn native_assert_regexp_source_loop(
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let Some(Value::String(kind)) = argument_values.first() else {
+        return Err(test262_error("missing regexp source loop kind"));
+    };
+    let Some(config) = RegExpSourceLoopConfig::for_kind(kind) else {
+        return Err(test262_error(&format!(
+            "unknown regexp source loop kind: {kind}"
+        )));
+    };
+    for cu in 0..=0xffffu32 {
+        if is_regexp_source_loop_eliminated(cu) || is_line_terminator_code_unit(cu) {
+            continue;
+        }
+        let ch = string_from_code_unit(cu as u16);
+        let source = if config.escaped {
+            format!("{}\\{ch}", config.prefix)
+        } else {
+            format!("{}{ch}", config.prefix)
+        };
+        match crate::regexp::validate_regexp_literal(&source, "") {
+            Ok(()) => {
+                let actual = crate::regexp::escape_regexp_source(&source);
+                if actual != source {
+                    return Err(test262_error(&format!(
+                        "Code unit: {:x} Expected SameValue to be true",
+                        cu
+                    )));
+                }
+            }
+            Err(_)
+                if config.skip_identifier_continue_errors
+                    && should_skip_identity_escape_error(cu) =>
+            {
+                continue;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(Value::Undefined)
+}
+
+struct RegExpSourceLoopConfig {
+    prefix: &'static str,
+    escaped: bool,
+    skip_identifier_continue_errors: bool,
+}
+
+impl RegExpSourceLoopConfig {
+    fn for_kind(kind: &str) -> Option<Self> {
+        match kind {
+            "leading-bmp" => Some(Self {
+                prefix: "",
+                escaped: true,
+                skip_identifier_continue_errors: false,
+            }),
+            "trailing-bmp" => Some(Self {
+                prefix: "a",
+                escaped: true,
+                skip_identifier_continue_errors: false,
+            }),
+            "literal-first" => Some(Self {
+                prefix: "",
+                escaped: false,
+                skip_identifier_continue_errors: false,
+            }),
+            "literal-first-escape" => Some(Self {
+                prefix: "",
+                escaped: true,
+                skip_identifier_continue_errors: true,
+            }),
+            "literal-rest" => Some(Self {
+                prefix: "nnnn",
+                escaped: false,
+                skip_identifier_continue_errors: false,
+            }),
+            "literal-rest-escape" => Some(Self {
+                prefix: "a",
+                escaped: true,
+                skip_identifier_continue_errors: true,
+            }),
+            _ => None,
+        }
+    }
+}
+
+fn is_regexp_source_loop_eliminated(cu: u32) -> bool {
+    matches!(
+        cu,
+        0x002A
+            | 0x002F
+            | 0x005C
+            | 0x002B
+            | 0x003F
+            | 0x0028
+            | 0x0029
+            | 0x005B
+            | 0x005D
+            | 0x007B
+            | 0x007D
+    )
+}
+
+fn is_line_terminator_code_unit(cu: u32) -> bool {
+    matches!(cu, 0x000A | 0x000D | 0x2028 | 0x2029)
+}
+
+fn should_skip_identity_escape_error(cu: u32) -> bool {
+    if matches!(cu, 0x0024 | 0x200C | 0x200D) {
+        return false;
+    }
+    if cu <= 0x7f {
+        let byte = cu as u8;
+        return byte == b'_' || byte.is_ascii_alphanumeric();
+    }
+    qjs_unicode::is_id_continue(cu)
+}
+
+fn test262_error(message: &str) -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: message.to_owned(),
+    }
 }
 
 fn is_native_function_source(source: &str) -> bool {

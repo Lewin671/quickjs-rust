@@ -1318,6 +1318,26 @@ fn test262_native_function_host_helper_matches_native_function_matcher_shape() {
 }
 
 #[test]
+fn test262_regexp_source_loop_host_helper_matches_source_tests() {
+    assert_eq!(
+        eval(
+            "[
+               'leading-bmp',
+               'trailing-bmp',
+               'literal-first',
+               'literal-first-escape',
+               'literal-rest',
+               'literal-rest-escape'
+             ].forEach(function(kind) {
+               __quickjsRustAssertRegExpSourceLoop(kind);
+             });"
+        ),
+        Ok(Value::Undefined)
+    );
+    assert!(eval("__quickjsRustAssertRegExpSourceLoop('unknown');").is_err());
+}
+
+#[test]
 fn test262_verify_property_host_helper_checks_data_descriptors() {
     assert_eq!(
         eval(
