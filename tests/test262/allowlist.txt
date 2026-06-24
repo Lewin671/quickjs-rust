@@ -29,6 +29,12 @@ cases/symbol-to-primitive-coercion-basic.js
 cases/symbol-well-known-static-properties.js
 cases/array-constructor-basic.js
 cases/array-constructor-multiple-arguments.js
+test/built-ins/AsyncFromSyncIteratorPrototype/next/iterator-result-poisoned-wrapper.js
+test/built-ins/AsyncFromSyncIteratorPrototype/next/next-result-poisoned-wrapper.js
+test/built-ins/AsyncFromSyncIteratorPrototype/next/yield-iterator-next-rejected-promise-close.js
+test/built-ins/AsyncFromSyncIteratorPrototype/next/yield-next-rejected-promise-close.js
+test/built-ins/AsyncFromSyncIteratorPrototype/throw/iterator-result-rejected-promise-close.js
+test/built-ins/AsyncFromSyncIteratorPrototype/throw/throw-result-poisoned-wrapper.js
 test/built-ins/Array/proto-from-ctor-realm-one.js
 test/built-ins/Array/proto-from-ctor-realm-two.js
 test/built-ins/Array/proto-from-ctor-realm-zero.js

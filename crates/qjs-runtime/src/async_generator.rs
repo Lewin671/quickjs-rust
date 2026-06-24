@@ -48,6 +48,8 @@ const SYNC_ITERATOR_NEXT: &str = "\0SyncIteratorNext";
 /// value await reaction.
 const WRAP_PROMISE: &str = "\0WrapPromise";
 const WRAP_DONE: &str = "\0WrapDone";
+const WRAP_SYNC_ITERATOR: &str = "\0WrapSyncIterator";
+const WRAP_CLOSE_ON_REJECTION: &str = "\0WrapCloseOnRejection";
 
 /// How a pending async-generator request was requested.
 #[derive(Clone)]
@@ -891,6 +893,9 @@ fn async_from_sync_method(
     }
 
     let sync_arguments = argument_values.to_vec();
+    // Keep the sync iterator for a possible AsyncIteratorClose on an abrupt
+    // value-wrapping below; the call consumes its own clone.
+    let sync_iterator_for_close = sync_iterator.clone();
     let outcome = call_function(method, sync_iterator, sync_arguments, env, false);
     let result = match outcome {
         Ok(result) => result,
@@ -934,6 +939,14 @@ fn async_from_sync_method(
         }
     };
 
+    // closeOnRejection is true for `next` and `throw` (not `return`): when the
+    // value-wrapping is abrupt or the awaited value rejects, the sync iterator is
+    // closed. `done` true never closes (the iterator already finished).
+    let close_on_rejection = matches!(
+        native,
+        NativeFunction::AsyncFromSyncIteratorNext | NativeFunction::AsyncFromSyncIteratorThrow
+    ) && !done;
+
     // AsyncFromSyncIteratorContinuation performs PromiseResolve before await.
     // If that throws, the wrapper promise is rejected immediately rather than
     // after an additional await-rejection job.
@@ -942,36 +955,52 @@ fn async_from_sync_method(
         Ok(Value::Object(promise)) => promise,
         Ok(_) => return Value::Object(capability),
         Err(error) => {
-            promise::reject_promise_capability(
-                &capability,
-                crate::error::runtime_error_to_value(error, env),
-                env,
-            );
+            let reason = crate::error::runtime_error_to_value(error, env);
+            // AsyncFromSyncIteratorContinuation step 6: an abrupt value-wrapping
+            // with closeOnRejection closes the sync iterator. The original error
+            // wins over the close outcome (IteratorClose with a throw).
+            if close_on_rejection {
+                let _ = close_sync_iterator(&sync_iterator_for_close, env);
+            }
+            promise::reject_promise_capability(&capability, reason, env);
             return Value::Object(capability);
         }
     };
 
     // Await the value, then resolve the wrapper promise with `{ value, done }`.
+    // The rejection reaction closes the sync iterator first when closeOnRejection.
     let on_fulfilled = value_await_reaction(
         NativeFunction::AsyncFromSyncIteratorValueFulfilled,
         &capability,
         done,
+        None,
     );
     let on_rejected = value_await_reaction(
         NativeFunction::AsyncFromSyncIteratorValueRejected,
         &capability,
         done,
+        close_on_rejection.then_some(&sync_iterator_for_close),
     );
     promise::perform_await_on_promise(value_wrapper, on_fulfilled, on_rejected, env);
     Value::Object(capability)
 }
 
 /// Builds an async-from-sync value-await reaction carrying the wrapper promise
-/// and the recorded `done` flag.
-fn value_await_reaction(native: NativeFunction, capability: &ObjectRef, done: bool) -> Value {
+/// and the recorded `done` flag. `close_sync` (the rejection reaction only)
+/// carries the sync iterator to close when the awaited value rejects.
+fn value_await_reaction(
+    native: NativeFunction,
+    capability: &ObjectRef,
+    done: bool,
+    close_sync: Option<&Value>,
+) -> Value {
     let mut function = Function::new_native(None, 1, native, false);
     function.insert_env(WRAP_PROMISE.to_owned(), Value::Object(capability.clone()));
     function.insert_env(WRAP_DONE.to_owned(), Value::Boolean(done));
+    if let Some(sync_iterator) = close_sync {
+        function.insert_env(WRAP_SYNC_ITERATOR.to_owned(), sync_iterator.clone());
+        function.insert_env(WRAP_CLOSE_ON_REJECTION.to_owned(), Value::Boolean(true));
+    }
     Value::Function(function)
 }
 
@@ -980,6 +1009,15 @@ fn async_from_sync_value_rejected(function: &Function, reason: Value, env: &mut 
         return;
     };
     let capability = capability.clone();
+    // When the awaited value rejects under closeOnRejection, close the sync
+    // iterator before rejecting; the original rejection reason is preserved.
+    if matches!(
+        function.env.get(WRAP_CLOSE_ON_REJECTION),
+        Some(Value::Boolean(true))
+    ) && let Some(sync_iterator) = function.env.get(WRAP_SYNC_ITERATOR).cloned()
+    {
+        let _ = close_sync_iterator(&sync_iterator, env);
+    }
     promise::reject_promise_capability(&capability, reason, env);
 }
 
