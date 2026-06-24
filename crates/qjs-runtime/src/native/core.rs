@@ -39,6 +39,9 @@ pub(super) fn call_core_native(
             global::native_test262_build_string(argument_values, env)
         }
         NativeFunction::Test262ToNumbers => global::native_test262_to_numbers(argument_values),
+        NativeFunction::Test262CompareArray => {
+            global::native_test262_compare_array(argument_values, env)
+        }
         NativeFunction::Test262AssertIteratorResult => {
             global::native_test262_assert_iterator_result(argument_values, env)
         }

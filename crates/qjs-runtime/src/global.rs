@@ -128,6 +128,13 @@ pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
     define_global_function(
         env,
         global_this,
+        "__quickjsRustCompareArray",
+        2,
+        NativeFunction::Test262CompareArray,
+    );
+    define_global_function(
+        env,
+        global_this,
         "__quickjsRustAssertIteratorResult",
         3,
         NativeFunction::Test262AssertIteratorResult,
@@ -333,6 +340,30 @@ pub(crate) fn native_test262_to_numbers(argument_values: &[Value]) -> Result<Val
         })
         .collect();
     Ok(Value::Array(ArrayRef::new(values)))
+}
+
+pub(crate) fn native_test262_compare_array(
+    argument_values: &[Value],
+    env: &CallEnv,
+) -> Result<Value, RuntimeError> {
+    let (Some(Value::Array(actual)), Some(Value::Array(expected))) =
+        (argument_values.first(), argument_values.get(1))
+    else {
+        return Ok(Value::Boolean(false));
+    };
+    let Some(actual_values) = actual.dense_argument_values(env) else {
+        return Ok(Value::Boolean(false));
+    };
+    let Some(expected_values) = expected.dense_argument_values(env) else {
+        return Ok(Value::Boolean(false));
+    };
+    Ok(Value::Boolean(
+        actual_values.len() == expected_values.len()
+            && actual_values
+                .iter()
+                .zip(expected_values.iter())
+                .all(|(actual, expected)| actual.same_value(expected)),
+    ))
 }
 
 pub(crate) fn native_test262_assert_iterator_result(

@@ -633,6 +633,15 @@ if (typeof ToNumbers === "function" && typeof __quickjsRustToNumbers === "functi
     return __quickjsRustOriginalToNumbers(array);
   };
 }
+if (typeof assert === "object" && typeof assert.compareArray === "function" && typeof __quickjsRustCompareArray === "function") {
+  var __quickjsRustOriginalCompareArray = assert.compareArray;
+  assert.compareArray = function(actual, expected, message) {
+    if (__quickjsRustCompareArray(actual, expected)) {
+      return;
+    }
+    return __quickjsRustOriginalCompareArray(actual, expected, message);
+  };
+}
 EOF
 }
 emit_test262_iterator_zip_fast_paths() {

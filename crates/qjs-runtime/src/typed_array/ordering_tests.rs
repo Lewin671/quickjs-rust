@@ -49,6 +49,18 @@ fn set_from_array_like_and_typed_array() {
 }
 
 #[test]
+fn set_from_dense_primitive_array_batches_writes() {
+    assert_eq!(
+        eval(
+            "let a = new BigInt64Array(4); \
+             a.set([1n, 2n], 1); \
+             Array.from(a).join(',');"
+        ),
+        Ok(Value::String("0,1,2,0".to_owned().into()))
+    );
+}
+
+#[test]
 fn set_from_resizable_typed_array_validates_source_bounds() {
     assert_eq!(
         eval(

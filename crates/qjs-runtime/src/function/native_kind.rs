@@ -377,6 +377,7 @@ pub(crate) enum NativeFunction {
     Test262VerifyProperty,
     Test262BuildString,
     Test262ToNumbers,
+    Test262CompareArray,
     Test262AssertIteratorResult,
     Test262AssertPackedArray,
     Test262AssertNullProtoMutableObject,

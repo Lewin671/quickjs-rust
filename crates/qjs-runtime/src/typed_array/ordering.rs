@@ -104,6 +104,21 @@ fn set_from_array_like(
     offset: usize,
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
+    if let Some(values) = dense_primitive_array_values(&source, native, env) {
+        if offset
+            .checked_add(values.len())
+            .is_none_or(|end| end > length)
+        {
+            return Err(range_error("source is too large"));
+        }
+        let mut coerced = Vec::with_capacity(values.len());
+        for value in values {
+            coerced.push(coerce_element(native, value, env)?);
+        }
+        set_view_elements(object, offset, coerced);
+        return Ok(());
+    }
+
     let source = array::array_like_length(source, "TypedArray.prototype.set", env)?;
     if offset
         .checked_add(source.length)
@@ -117,6 +132,26 @@ fn set_from_array_like(
         set_view_elements(object, offset + index, [coerced]);
     }
     Ok(())
+}
+
+fn dense_primitive_array_values(
+    source: &Value,
+    native: NativeFunction,
+    env: &CallEnv,
+) -> Option<Vec<Value>> {
+    let Value::Array(array) = source else {
+        return None;
+    };
+    let values = array.dense_argument_values(env)?;
+    if values.is_empty() {
+        return Some(values);
+    }
+    let compatible = if is_big_int_kind(native) {
+        values.iter().all(|value| matches!(value, Value::BigInt(_)))
+    } else {
+        values.iter().all(|value| matches!(value, Value::Number(_)))
+    };
+    compatible.then_some(values)
 }
 
 // --- fill -------------------------------------------------------------------

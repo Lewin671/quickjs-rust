@@ -1263,9 +1263,13 @@ fn test262_to_numbers_host_helper_matches_resizable_array_buffer_utils_shape() {
         eval(
             "__quickjsRustToNumbers(new Uint8Array([1, 2, 255])).join(',') + ':' \
              + __quickjsRustToNumbers(new BigInt64Array([3n, -4n])).join(',') + ':' \
-             + (__quickjsRustToNumbers([1, 2]) === undefined);"
+             + (__quickjsRustToNumbers([1, 2]) === undefined) + ':' \
+             + __quickjsRustCompareArray([1, NaN], [1, NaN]) + ':' \
+             + __quickjsRustCompareArray([1], [2]);"
         ),
-        Ok(Value::String("1,2,255:3,-4:true".to_owned().into()))
+        Ok(Value::String(
+            "1,2,255:3,-4:true:true:false".to_owned().into()
+        ))
     );
 }
 
