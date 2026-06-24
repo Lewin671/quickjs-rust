@@ -202,6 +202,43 @@ pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
         0,
         NativeFunction::Test262AssertLineCommentUnicodeLoop,
     );
+    #[cfg(feature = "agents")]
+    install_agent_globals(env, global_this);
+}
+
+/// Installs the native `$262.agent` primitive globals in every realm (main
+/// agent and each worker). The host shim and worker prelude reference these by
+/// name to build the `$262.agent` object.
+#[cfg(feature = "agents")]
+fn install_agent_globals(env: &mut CallEnv, global_this: &Value) {
+    for (key, length, native) in [
+        ("__quickjsRustAgentStart", 1, NativeFunction::AgentStart),
+        (
+            "__quickjsRustAgentBroadcast",
+            1,
+            NativeFunction::AgentBroadcast,
+        ),
+        (
+            "__quickjsRustAgentGetReport",
+            0,
+            NativeFunction::AgentGetReport,
+        ),
+        ("__quickjsRustAgentReport", 1, NativeFunction::AgentReport),
+        ("__quickjsRustAgentSleep", 1, NativeFunction::AgentSleep),
+        (
+            "__quickjsRustAgentMonotonicNow",
+            0,
+            NativeFunction::AgentMonotonicNow,
+        ),
+        (
+            "__quickjsRustAgentReceiveBroadcast",
+            1,
+            NativeFunction::AgentReceiveBroadcast,
+        ),
+        ("__quickjsRustAgentLeaving", 0, NativeFunction::AgentLeaving),
+    ] {
+        define_global_function(env, global_this, key, length, native);
+    }
 }
 
 fn define_global_function(

@@ -10,6 +10,11 @@ use crate::{
 #[cfg(feature = "agents")]
 mod shared_backing;
 #[cfg(feature = "agents")]
+pub(crate) use shared::{
+    backing_parts as shared_array_buffer_backing_parts,
+    from_backing as shared_array_buffer_from_backing,
+};
+#[cfg(feature = "agents")]
 pub(crate) use shared_backing::{SharedBacking, SharedBackingRef};
 
 mod shared;

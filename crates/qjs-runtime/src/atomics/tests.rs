@@ -48,6 +48,78 @@ fn atomics_wait_throws_from_a_nested_user_frame_when_agent_cannot_block() {
     );
 }
 
+/// JS that builds `$262.agent` from the native primitive globals, mirroring the
+/// host shim so a test running through `eval_in_agent` can drive worker agents.
+#[cfg(feature = "agents")]
+const AGENT_PRELUDE: &str = "var $262 = { agent: {\
+ start: __quickjsRustAgentStart,\
+ broadcast: __quickjsRustAgentBroadcast,\
+ getReport: __quickjsRustAgentGetReport,\
+ report: __quickjsRustAgentReport,\
+ sleep: __quickjsRustAgentSleep,\
+ monotonicNow: __quickjsRustAgentMonotonicNow,\
+ receiveBroadcast: __quickjsRustAgentReceiveBroadcast,\
+ leaving: __quickjsRustAgentLeaving,\
+} };\n";
+
+#[cfg(feature = "agents")]
+fn eval_in_main_agent(source: &str) -> Result<Value, crate::EvalError> {
+    eval_in_agent(&format!("{AGENT_PRELUDE}{source}"), true)
+}
+
+#[cfg(feature = "agents")]
+#[test]
+fn worker_agent_shares_memory_and_reports_back() {
+    // A worker on its own OS thread receives the broadcast SharedArrayBuffer,
+    // writes to it via Atomics.store, and reports; the main agent reads the
+    // report and observes the worker's write through the shared backing.
+    assert_eq!(
+        eval_in_main_agent(
+            "var i32a = new Int32Array(new SharedArrayBuffer(8)); \
+             $262.agent.start(`\
+               $262.agent.receiveBroadcast(function (sab) { \
+                 var w = new Int32Array(sab); \
+                 Atomics.store(w, 0, 42); \
+                 $262.agent.report('done'); \
+                 $262.agent.leaving(); \
+               }); \
+             `); \
+             $262.agent.broadcast(i32a.buffer); \
+             var report = $262.agent.getReport(); \
+             while (report === null) { $262.agent.sleep(1); report = $262.agent.getReport(); } \
+             report + ':' + Atomics.load(i32a, 0);"
+        ),
+        Ok(Value::String("done:42".to_owned().into()))
+    );
+}
+
+#[cfg(feature = "agents")]
+#[test]
+fn worker_agents_report_in_fifo_order() {
+    // Two workers each report once; getReport drains them in arrival order.
+    assert_eq!(
+        eval_in_main_agent(
+            "var i32a = new Int32Array(new SharedArrayBuffer(8)); \
+             function startWorker(id) { \
+               $262.agent.start(`\
+                 $262.agent.receiveBroadcast(function (sab) { \
+                   var w = new Int32Array(sab); \
+                   Atomics.add(w, 0, 1); \
+                   $262.agent.report(String(${id})); \
+                   $262.agent.leaving(); \
+                 }); \
+               `); \
+             } \
+             startWorker(1); \
+             $262.agent.broadcast(i32a.buffer); \
+             var first = $262.agent.getReport(); \
+             while (first === null) { $262.agent.sleep(1); first = $262.agent.getReport(); } \
+             first + ':' + Atomics.load(i32a, 0);"
+        ),
+        Ok(Value::String("1:1".to_owned().into()))
+    );
+}
+
 #[cfg(feature = "agents")]
 #[test]
 fn shared_array_buffer_round_trips_through_the_cross_thread_backing() {

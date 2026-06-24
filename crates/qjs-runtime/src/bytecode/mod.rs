@@ -193,6 +193,20 @@ pub fn eval_bytecode_with_module_resolver_in_agent(
     vm_import::eval_bytecode_with_module_resolver_in_agent(bytecode, referrer, resolver, can_block)
 }
 
+/// Evaluates a worker agent's script bytecode with `context` installed (see
+/// [`vm_import::eval_bytecode_in_agent_context`]).
+///
+/// # Errors
+///
+/// Returns runtime failures or malformed bytecode failures.
+#[cfg(feature = "agents")]
+pub fn eval_bytecode_in_agent_context(
+    bytecode: &Bytecode,
+    context: crate::agent::AgentContextRef,
+) -> Result<Value, RuntimeError> {
+    vm_import::eval_bytecode_in_agent_context(bytecode, context)
+}
+
 /// Script completion paired with its realm's pending microtask queue.
 ///
 /// Produced by [`eval_bytecode_keep_jobs`] for callers (the Test262 async

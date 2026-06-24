@@ -284,6 +284,41 @@ pub(crate) fn buffer_bytes(object: &ObjectRef) -> Vec<u8> {
     object.internal_bytes().unwrap_or_default()
 }
 
+/// The cross-thread backing and resizable maximum of a `SharedArrayBuffer`, for
+/// `$262.agent.broadcast`. Returns `None` for a non-shared or backing-less
+/// object.
+#[cfg(feature = "agents")]
+pub(crate) fn backing_parts(
+    object: &ObjectRef,
+) -> Option<(crate::array_buffer::SharedBackingRef, Option<usize>)> {
+    let backing = object.shared_backing()?;
+    Some((backing, max_byte_length(object)))
+}
+
+/// Builds a `SharedArrayBuffer` in `env`'s realm that wraps an existing shared
+/// `backing` (received over a broadcast), so a worker agent observes the same
+/// memory the main agent shared. `max` makes the buffer growable.
+#[cfg(feature = "agents")]
+pub(crate) fn from_backing(
+    env: &CallEnv,
+    backing: crate::array_buffer::SharedBackingRef,
+    max: Option<usize>,
+) -> ObjectRef {
+    let constructor = env.get("SharedArrayBuffer").unwrap_or(Value::Undefined);
+    let prototype = crate::constructor_prototype(&constructor, env);
+    let object = ObjectRef::with_prototype(HashMap::new(), prototype);
+    object.set_shared_backing(backing);
+    object.define_property(
+        SHARED_ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
+        Property::non_enumerable(Value::String(::std::rc::Rc::new(String::new()))),
+    );
+    object.set_to_string_tag("SharedArrayBuffer");
+    if let Some(max) = max {
+        define_max_byte_length(&object, max);
+    }
+    object
+}
+
 fn max_byte_length(object: &ObjectRef) -> Option<usize> {
     match object.own_property(SHARED_ARRAY_BUFFER_MAX_BYTE_LENGTH_PROPERTY) {
         Some(Property {

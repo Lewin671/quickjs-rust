@@ -310,6 +310,25 @@ pub fn eval_classified_with_resolver_in_agent(
         })
 }
 
+/// Evaluates a Test262 worker-agent source string (`$262.agent.start(src)`)
+/// with `context` — its shared cluster and broadcast inbox — installed. Runs on
+/// the worker's own OS thread.
+#[cfg(feature = "agents")]
+pub(crate) fn eval_worker_source(
+    source: &str,
+    context: crate::agent::AgentContextRef,
+) -> Result<Value, EvalError> {
+    let script = parse_script(source).map_err(|error| EvalError {
+        kind: EvalErrorKind::Parse,
+        message: error.message,
+    })?;
+    let bytecode = compile_script_classified(&script).map_err(compile_error_stage)?;
+    bytecode::eval_bytecode_in_agent_context(&bytecode, context).map_err(|error| EvalError {
+        kind: EvalErrorKind::Runtime,
+        message: error.message,
+    })
+}
+
 /// Maps a bytecode-compilation failure to its harness stage. Invalid regexp
 /// literals (`/pattern/flags`) are parse-phase errors; every other compiler
 /// rejection is an early error.

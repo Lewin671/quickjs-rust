@@ -41,7 +41,23 @@ pub(super) fn eval_bytecode_with_module_resolver_in_agent(
     let mut vm = Vm::new(bytecode)?;
     let host = crate::module::new_script_module_host(referrer, resolver, vm.realm.clone());
     vm.module_host = Some(host);
-    vm.agent_context = Some(crate::agent::AgentContext::new(can_block));
+    vm.agent_context = Some(crate::agent::AgentContext::main(can_block));
+    let value = vm.run()?;
+    vm.drain_promise_jobs()?;
+    Ok(value)
+}
+
+/// Evaluates a worker agent's script bytecode with `context` installed (its
+/// shared cluster and broadcast inbox), draining the promise job queue. Runs on
+/// the worker's own OS thread; it has no module host (worker sources do not use
+/// dynamic `import()`).
+#[cfg(feature = "agents")]
+pub(super) fn eval_bytecode_in_agent_context(
+    bytecode: &Bytecode,
+    context: crate::agent::AgentContextRef,
+) -> Result<Value, RuntimeError> {
+    let mut vm = Vm::new(bytecode)?;
+    vm.agent_context = Some(context);
     let value = vm.run()?;
     vm.drain_promise_jobs()?;
     Ok(value)

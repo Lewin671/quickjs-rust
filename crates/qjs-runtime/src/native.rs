@@ -1,3 +1,5 @@
+#[cfg(feature = "agents")]
+mod agent;
 mod array_buffers;
 mod arrays;
 mod atomics;
@@ -98,6 +100,11 @@ pub(crate) fn call_native_function(
     }
 
     if let Some(value) = atomics::call_atomics_native(native, &argument_values, env)? {
+        return Ok(value);
+    }
+
+    #[cfg(feature = "agents")]
+    if let Some(value) = agent::call_agent_native(native, &argument_values, env)? {
         return Ok(value);
     }
 

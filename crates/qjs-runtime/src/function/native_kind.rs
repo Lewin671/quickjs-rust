@@ -85,6 +85,23 @@ pub(crate) enum NativeFunction {
     AtomicsSub,
     AtomicsWait,
     AtomicsXor,
+    // Test262 `$262.agent` multi-agent harness primitives (agents feature only).
+    #[cfg(feature = "agents")]
+    AgentStart,
+    #[cfg(feature = "agents")]
+    AgentBroadcast,
+    #[cfg(feature = "agents")]
+    AgentGetReport,
+    #[cfg(feature = "agents")]
+    AgentReport,
+    #[cfg(feature = "agents")]
+    AgentSleep,
+    #[cfg(feature = "agents")]
+    AgentMonotonicNow,
+    #[cfg(feature = "agents")]
+    AgentReceiveBroadcast,
+    #[cfg(feature = "agents")]
+    AgentLeaving,
     TypedArray,
     // %TypedArray% static methods.
     TypedArrayFrom,
