@@ -307,9 +307,44 @@ fn sort_values(
     if values.len() < 2 {
         return Ok(());
     }
+    if let Some(function) = comparator {
+        if values_are_sorted(values, function, env)? {
+            return Ok(());
+        }
+        if values_are_strictly_reversed(values, function, env)? {
+            values.reverse();
+            return Ok(());
+        }
+    }
     let sorted = merge_sort_values(values.to_vec(), comparator, env)?;
     values.clone_from_slice(&sorted);
     Ok(())
+}
+
+fn values_are_sorted(
+    values: &[Value],
+    comparator: &Function,
+    env: &mut CallEnv,
+) -> Result<bool, RuntimeError> {
+    for window in values.windows(2) {
+        if compare(&window[0], &window[1], Some(comparator), env)? == Ordering::Greater {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn values_are_strictly_reversed(
+    values: &[Value],
+    comparator: &Function,
+    env: &mut CallEnv,
+) -> Result<bool, RuntimeError> {
+    for window in values.windows(2) {
+        if compare(&window[0], &window[1], Some(comparator), env)? != Ordering::Greater {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 fn merge_sort_values(

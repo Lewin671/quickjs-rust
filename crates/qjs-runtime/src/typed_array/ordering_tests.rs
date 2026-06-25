@@ -352,6 +352,28 @@ fn sort_default_is_numeric_and_stable() {
 }
 
 #[test]
+fn sort_fast_paths_ordered_comparator_inputs() {
+    assert_eq!(
+        eval(
+            "let calls = 0; \
+             let a = new Int32Array([1, 2, 3, 4, 5]); \
+             a.sort((x, y) => { calls++; return x - y; }); \
+             calls + ':' + a.join(',');"
+        ),
+        Ok(Value::String("4:1,2,3,4,5".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; \
+             let a = new Int32Array([5, 4, 3, 2, 1]); \
+             a.sort((x, y) => { calls++; return x - y; }); \
+             calls + ':' + a.join(',');"
+        ),
+        Ok(Value::String("5:1,2,3,4,5".to_owned().into()))
+    );
+}
+
+#[test]
 fn to_sorted_copies_and_with_replaces() {
     assert_eq!(
         eval(
