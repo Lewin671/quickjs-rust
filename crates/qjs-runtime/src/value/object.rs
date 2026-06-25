@@ -513,6 +513,15 @@ impl ObjectRef {
         self.define_property(key, Property::non_enumerable(value));
     }
 
+    pub(crate) fn set_internal_non_enumerable(&self, key: &str, value: Value) {
+        let mut properties = self.properties.borrow_mut();
+        if let Some(property) = properties.get_mut(key) {
+            property.value = value;
+            return;
+        }
+        properties.insert(key.to_owned(), Property::non_enumerable(value));
+    }
+
     /// Whether the object `prototype` appears as a function prototype anywhere
     /// in this object's chain. Used by `isPrototypeOf`/`instanceof` to walk past
     /// a function sitting mid-chain.

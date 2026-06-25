@@ -9,7 +9,7 @@ use crate::{
 };
 
 pub(super) fn define_date_value(object: &ObjectRef, value: f64) {
-    object.define_non_enumerable(DATE_VALUE_PROPERTY.to_owned(), Value::Number(value));
+    object.set_internal_non_enumerable(DATE_VALUE_PROPERTY, Value::Number(value));
 }
 
 pub(crate) fn is_date_object(object: &ObjectRef) -> bool {

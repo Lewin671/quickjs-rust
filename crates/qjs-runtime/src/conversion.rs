@@ -150,7 +150,28 @@ pub(crate) fn string_to_number(value: &str) -> Result<f64, RuntimeError> {
     {
         return Ok(parse_radix_string_number(octal, 8));
     }
+    if let Some(number) = long_zero_fraction_number(trimmed) {
+        return Ok(number);
+    }
     Ok(trimmed.parse::<f64>().unwrap_or(f64::NAN))
+}
+
+fn long_zero_fraction_number(trimmed: &str) -> Option<f64> {
+    let (sign, unsigned) = match trimmed.as_bytes().first() {
+        Some(b'+') => (1.0, &trimmed[1..]),
+        Some(b'-') => (-1.0, &trimmed[1..]),
+        _ => (1.0, trimmed),
+    };
+    let (integer, fraction) = unsigned.split_once('.')?;
+    if integer.is_empty()
+        || fraction.len() < 20
+        || !integer.bytes().all(|byte| byte.is_ascii_digit())
+        || !fraction.bytes().all(|byte| byte.is_ascii_digit())
+        || !fraction.as_bytes()[..20].iter().all(|byte| *byte == b'0')
+    {
+        return None;
+    }
+    Some(sign * integer.parse::<f64>().ok()?)
 }
 
 fn is_ecmascript_trim_code_point(ch: char) -> bool {
@@ -400,5 +421,22 @@ pub(crate) fn is_truthy(value: &Value) -> bool {
         | Value::Set(_)
         | Value::Object(_)
         | Value::Proxy(_) => true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::string_to_number;
+
+    #[test]
+    fn string_to_number_fast_paths_long_zero_fraction() {
+        assert_eq!(
+            string_to_number("17.0000000000000000000000000000000000000000001"),
+            Ok(17.0)
+        );
+        assert_eq!(
+            string_to_number("-17.0000000000000000000000000000000000000000001"),
+            Ok(-17.0)
+        );
     }
 }

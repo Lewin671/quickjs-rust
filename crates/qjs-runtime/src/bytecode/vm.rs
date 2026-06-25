@@ -1072,6 +1072,20 @@ impl<'a> Vm<'a> {
         callee: Value,
         arguments: Vec<Value>,
     ) -> Result<(), RuntimeError> {
+        if let [Value::Number(date_value)] = arguments.as_slice()
+            && matches!(
+                &callee,
+                Value::Function(function) if function.native_kind() == Some(crate::NativeFunction::Date)
+            )
+        {
+            let mut env = self.realm_env();
+            let result =
+                crate::date::fast_construct_date_from_number(callee.clone(), *date_value, &mut env);
+            if let Some(result) = self.handle_call_result(result)? {
+                self.stack.push(result);
+            }
+            return Ok(());
+        }
         let mut env = self.call_env(&callee);
         let result = construct_function(callee.clone(), callee, arguments, &mut env.env);
         self.apply_call_env(env);

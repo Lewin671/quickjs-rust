@@ -1,6 +1,8 @@
 use crate::CallEnv;
+use std::collections::HashMap;
+
 use crate::{
-    Function, PreferredType, RuntimeError, Value,
+    Function, ObjectRef, PreferredType, RuntimeError, Value,
     date::{
         MS_PER_DAY,
         value::{
@@ -8,7 +10,7 @@ use crate::{
             parse_date_string, time_clip, time_from_components,
         },
     },
-    to_number_with_env, to_primitive_with_hint,
+    object_prototype, property_value, to_number_with_env, to_primitive_with_hint,
 };
 
 pub(crate) fn native_date(
@@ -32,6 +34,20 @@ pub(crate) fn native_date(
     };
     let date_value = construct_date_value(argument_values, env)?;
     define_date_value(&object, date_value);
+    Ok(Value::Object(object))
+}
+
+pub(crate) fn fast_construct_date_from_number(
+    constructor: Value,
+    date_value: f64,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let prototype = match property_value(constructor, "prototype", env)? {
+        Value::Object(prototype) => Some(prototype),
+        _ => object_prototype(env),
+    };
+    let object = ObjectRef::with_prototype(HashMap::new(), prototype);
+    define_date_value(&object, time_clip(date_value));
     Ok(Value::Object(object))
 }
 

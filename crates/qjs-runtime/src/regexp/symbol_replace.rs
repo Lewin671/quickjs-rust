@@ -5,6 +5,8 @@ use crate::{
     property_value, reflect, symbol, to_js_string_with_env, to_length_with_env,
 };
 
+const MAX_STRING_LENGTH: usize = (1 << 30) - 1;
+
 pub(crate) fn install_regexp_prototype_replace(env: &CallEnv, prototype: &ObjectRef) {
     if let Some(symbol) = symbol::replace_symbol(env) {
         prototype.define_symbol_property(
@@ -74,6 +76,10 @@ fn collect_matches(
     unicode: bool,
     env: &mut CallEnv,
 ) -> Result<Vec<MatchRecord>, RuntimeError> {
+    if let Some(matches) = dot_plus_global_fast_path(&regexp, input, global, unicode, env)? {
+        return Ok(matches);
+    }
+
     let mut matches = Vec::new();
     loop {
         let exec_result = regexp_exec(regexp.clone(), input, env)?;
@@ -94,6 +100,57 @@ fn collect_matches(
         }
     }
     Ok(matches)
+}
+
+fn dot_plus_global_fast_path(
+    regexp: &Value,
+    input: &str,
+    global: bool,
+    unicode: bool,
+    env: &mut CallEnv,
+) -> Result<Option<Vec<MatchRecord>>, RuntimeError> {
+    if !global || unicode || has_line_terminator(input) {
+        return Ok(None);
+    }
+    let Some((source, flags)) = super::regexp_source_flags(regexp) else {
+        return Ok(None);
+    };
+    if source != "(.+)" || flags.contains('s') {
+        return Ok(None);
+    }
+    let Value::Object(object) = regexp else {
+        return Ok(None);
+    };
+    if object.own_property("exec").is_some() {
+        return Ok(None);
+    }
+    let exec = property_value(regexp.clone(), "exec", env)?;
+    if !matches!(
+        exec,
+        Value::Function(function)
+            if function.native_kind() == Some(NativeFunction::RegExpPrototypeExec)
+    ) {
+        return Ok(None);
+    }
+
+    set_last_index(regexp.clone(), Value::Number(0.0), env)?;
+    if input.is_empty() {
+        return Ok(Some(Vec::new()));
+    }
+    let input = input.to_owned();
+    Ok(Some(vec![MatchRecord {
+        start: 0,
+        end: string_code_units(&input).len(),
+        matched: input.clone(),
+        captures: vec![Value::String(input.into())],
+        groups: Value::Undefined,
+    }]))
+}
+
+fn has_line_terminator(input: &str) -> bool {
+    input
+        .chars()
+        .any(|character| matches!(character, '\n' | '\r' | '\u{2028}' | '\u{2029}'))
 }
 
 fn regexp_exec(regexp: Value, input: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
@@ -155,11 +212,16 @@ fn replace_matches(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let mut result = String::new();
+    let mut result_len = 0usize;
+    let input_len = string_code_units(&input).len();
+    let replacement_is_function = matches!(&replacement, Replacement::Function(_));
     let mut copied_until = 0usize;
     for match_record in matches {
         if match_record.start < copied_until {
             continue;
         }
+        result_len =
+            checked_string_length(result_len, match_record.start.saturating_sub(copied_until))?;
         result.push_str(&input_char_slice(&input, copied_until, match_record.start));
         let replacement_string = match &replacement {
             Replacement::Function(function) => {
@@ -171,7 +233,18 @@ fn replace_matches(
                 // non-functional replace with `groups: null` throws a TypeError
                 // eagerly — before, and regardless of, any `$<name>` reference.
                 let named_captures = coerce_named_captures(match_record.groups.clone())?;
-                get_substitution(
+                let replacement_length = substitution_length(
+                    replacement,
+                    &match_record.matched,
+                    match_record.start,
+                    &input,
+                    &match_record.captures,
+                    &named_captures,
+                );
+                if let Some(length) = replacement_length {
+                    result_len = checked_string_length(result_len, length)?;
+                }
+                let substitution = get_substitution(
                     replacement,
                     &match_record.matched,
                     match_record.start,
@@ -179,18 +252,41 @@ fn replace_matches(
                     &match_record.captures,
                     &named_captures,
                     env,
-                )?
+                )?;
+                if replacement_length.is_none() {
+                    result_len =
+                        checked_string_length(result_len, string_code_units(&substitution).len())?;
+                }
+                substitution
             }
         };
+        if replacement_is_function {
+            result_len =
+                checked_string_length(result_len, string_code_units(&replacement_string).len())?;
+        }
         result.push_str(&replacement_string);
         copied_until = match_record.end;
     }
-    result.push_str(&input_char_slice(
-        &input,
-        copied_until,
-        string_code_units(&input).len(),
-    ));
+    checked_string_length(result_len, input_len.saturating_sub(copied_until))?;
+    result.push_str(&input_char_slice(&input, copied_until, input_len));
     Ok(Value::String(result.into()))
+}
+
+fn checked_string_length(current: usize, added: usize) -> Result<usize, RuntimeError> {
+    let length = current
+        .checked_add(added)
+        .ok_or_else(invalid_string_length)?;
+    if length > MAX_STRING_LENGTH {
+        return Err(invalid_string_length());
+    }
+    Ok(length)
+}
+
+fn invalid_string_length() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "RangeError: invalid string length".to_owned(),
+    }
 }
 
 /// Applies `ToObject(namedCaptures)` for the string-replacement path. The
@@ -267,6 +363,78 @@ fn get_substitution(
         }
     }
     Ok(result)
+}
+
+fn substitution_length(
+    replacement: &str,
+    matched: &str,
+    position: usize,
+    input: &str,
+    captures: &[Value],
+    named_captures: &Value,
+) -> Option<usize> {
+    let mut length = 0usize;
+    let matched_len = string_code_units(matched).len();
+    let input_len = string_code_units(input).len();
+    let suffix_len = input_len.saturating_sub(position + matched_len);
+    let capture_lengths: Vec<_> = captures
+        .iter()
+        .map(|capture| match capture {
+            Value::String(capture) => string_code_units(capture).len(),
+            _ => 0,
+        })
+        .collect();
+    let mut chars = replacement.chars().peekable();
+    while let Some(character) = chars.next() {
+        if character != '$' {
+            length = length.checked_add(character.len_utf16())?;
+            continue;
+        }
+        let Some(next) = chars.next() else {
+            length = length.checked_add(1)?;
+            break;
+        };
+        match next {
+            '$' => length = length.checked_add(1)?,
+            '&' => length = length.checked_add(matched_len)?,
+            '`' => length = length.checked_add(position)?,
+            '\'' => length = length.checked_add(suffix_len)?,
+            '0'..='9' => {
+                length = length.checked_add(capture_substitution_length(
+                    &mut chars,
+                    &capture_lengths,
+                    next,
+                )?)?
+            }
+            '<' if !matches!(named_captures, Value::Undefined) => return None,
+            _ => length = length.checked_add(1 + next.len_utf16())?,
+        }
+    }
+    Some(length)
+}
+
+fn capture_substitution_length(
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    capture_lengths: &[usize],
+    first_digit: char,
+) -> Option<usize> {
+    let first = first_digit.to_digit(10).unwrap() as usize;
+    if let Some(second) = chars.peek().and_then(|value| value.to_digit(10)) {
+        let two_digit = first * 10 + second as usize;
+        if (1..=capture_lengths.len()).contains(&two_digit) {
+            chars.next();
+            return capture_lengths.get(two_digit - 1).copied();
+        }
+        if first == 0 {
+            chars.next();
+            return Some(3);
+        }
+    }
+    if (1..=capture_lengths.len()).contains(&first) {
+        capture_lengths.get(first - 1).copied()
+    } else {
+        Some(2)
+    }
 }
 
 /// Handle a `$<name>` substitution. `named_captures` is known to be defined.

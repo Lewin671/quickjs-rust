@@ -4,7 +4,7 @@ use num_bigint::BigInt;
 
 use crate::{
     NativeFunction, ObjectRef, RuntimeError, Value, array_buffer, bigint,
-    object::PropertyDescriptor, to_number_with_env,
+    object::PropertyDescriptor, string_to_number, to_number_with_env,
 };
 
 use super::{
@@ -323,8 +323,8 @@ pub(crate) fn set_integer_indexed_element(
 
 /// Attempts IntegerIndexedElementSet for primitive values that need no
 /// environment-backed coercion. Returning `false` means the caller must use the
-/// generic path so objects, strings, booleans, and cross-kind BigInt/Number
-/// errors keep their observable conversion behavior.
+/// generic path so objects and cross-kind BigInt/Number errors keep their
+/// observable conversion behavior.
 pub(crate) fn try_set_integer_indexed_primitive_element(
     object: &ObjectRef,
     index: usize,
@@ -333,6 +333,15 @@ pub(crate) fn try_set_integer_indexed_primitive_element(
     let native = typed_array_kind(object);
     let coerced = match (is_big_int_kind(native), value) {
         (false, Value::Number(number)) => coerce_number_element(native, *number),
+        (false, Value::Boolean(value)) => coerce_number_element(native, f64::from(*value)),
+        (false, Value::Null) => coerce_number_element(native, 0.0),
+        (false, Value::Undefined) => coerce_number_element(native, f64::NAN),
+        (false, Value::String(value)) => {
+            let Ok(number) = string_to_number(value) else {
+                return false;
+            };
+            coerce_number_element(native, number)
+        }
         (true, Value::BigInt(big)) => Value::BigInt(wrap_big_int(native, big.clone())),
         _ => return false,
     };

@@ -12,10 +12,12 @@ mod substitution;
 mod symbol_method;
 use crate::CallEnv;
 use errors::{replace_all_regexp_flags_error, string_method_null_error};
-use substitution::get_substitution;
+use substitution::{get_substitution, substitution_length};
 use symbol_method::{
     symbol_match_all_method, symbol_match_method, symbol_replace_method, symbol_search_method,
 };
+
+use super::MAX_STRING_LENGTH;
 
 pub(crate) fn native_string_prototype_ends_with(
     this_value: Value,
@@ -521,30 +523,86 @@ fn replace_matches(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let mut result = String::new();
+    let mut result_len = 0usize;
+    let input_len = input.chars().count();
+    let replacement_is_function = matches!(&replacement, Replacement::Function(_));
+    if let Replacement::String(replacement) = &replacement
+        && !replacement.contains('$')
+    {
+        preflight_literal_replacement_length(input_len, &matches, replacement)?;
+    }
     let mut copied_until = 0usize;
     for string_match in matches {
+        let prefix_len = string_match.start.saturating_sub(copied_until);
+        result_len = checked_string_length(result_len, prefix_len)?;
         result.push_str(&input_char_slice(&input, copied_until, string_match.start));
         let replacement_string = match &replacement {
             Replacement::Function(function) => {
                 functional_replacement((**function).clone(), &string_match, input.clone(), env)?
             }
-            Replacement::String(replacement) => get_substitution(
-                replacement,
-                &string_match.matched,
-                string_match.start,
-                &input,
-                &string_match.captures,
-            ),
+            Replacement::String(replacement) => {
+                let length = substitution_length(
+                    replacement,
+                    &string_match.matched,
+                    string_match.start,
+                    &input,
+                    &string_match.captures,
+                )
+                .ok_or_else(invalid_string_length)?;
+                result_len = checked_string_length(result_len, length)?;
+                get_substitution(
+                    replacement,
+                    &string_match.matched,
+                    string_match.start,
+                    &input,
+                    &string_match.captures,
+                )
+            }
         };
+        if replacement_is_function {
+            result_len = checked_string_length(result_len, replacement_string.chars().count())?;
+        }
         result.push_str(&replacement_string);
         copied_until = string_match.end;
     }
-    result.push_str(&input_char_slice(
-        &input,
-        copied_until,
-        input.chars().count(),
-    ));
+    checked_string_length(result_len, input_len.saturating_sub(copied_until))?;
+    result.push_str(&input_char_slice(&input, copied_until, input_len));
     Ok(Value::String(result.into()))
+}
+
+fn checked_string_length(current: usize, added: usize) -> Result<usize, RuntimeError> {
+    let length = current
+        .checked_add(added)
+        .ok_or_else(invalid_string_length)?;
+    if length > MAX_STRING_LENGTH {
+        return Err(invalid_string_length());
+    }
+    Ok(length)
+}
+
+fn preflight_literal_replacement_length(
+    input_len: usize,
+    matches: &[StringMatch],
+    replacement: &str,
+) -> Result<(), RuntimeError> {
+    let replacement_len = replacement.chars().count();
+    let matched_len = matches.iter().try_fold(0usize, |sum, string_match| {
+        sum.checked_add(string_match.end.saturating_sub(string_match.start))
+    });
+    let matched_len = matched_len.ok_or_else(invalid_string_length)?;
+    let kept_len = input_len.saturating_sub(matched_len);
+    let replaced_len = replacement_len
+        .checked_mul(matches.len())
+        .ok_or_else(invalid_string_length)?;
+    checked_string_length(kept_len, replaced_len)?;
+    Ok(())
+}
+
+fn invalid_string_length() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "RangeError: invalid string length".to_owned(),
+    }
 }
 
 fn functional_replacement(

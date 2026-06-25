@@ -14,7 +14,10 @@ pub(crate) use accessors::{
     native_date_prototype_get_utc_month, native_date_prototype_get_utc_seconds,
     native_date_prototype_get_year, native_date_prototype_value_of,
 };
-pub(crate) use constructor::{native_date, native_date_now, native_date_parse, native_date_utc};
+pub(crate) use constructor::{
+    fast_construct_date_from_number, native_date, native_date_now, native_date_parse,
+    native_date_utc,
+};
 pub(crate) use format::{
     native_date_prototype_to_date_string, native_date_prototype_to_iso_string,
     native_date_prototype_to_json, native_date_prototype_to_primitive,

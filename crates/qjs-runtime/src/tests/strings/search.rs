@@ -209,6 +209,18 @@ fn evaluates_string_search_builtins() {
         eval("'asdf'.replace(new RegExp(undefined, 'g'), '1');"),
         Ok(Value::String("1a1s1d1f1".to_owned().into()))
     );
+    assert!(
+        eval(
+            "let x = '1'.repeat(1 << 20); let rep = '$1'.repeat(1 << 16); x.replace(/(.+)/g, rep);"
+        )
+        .is_err()
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; let re = /(.+)/g; re.exec = function() { calls = calls + 1; return null; }; 'abc'.replace(re, '$1') + ':' + calls;"
+        ),
+        Ok(Value::String("abc:1".to_owned().into()))
+    );
     assert_eq!(
         eval(
             "let d = Object.getOwnPropertyDescriptor(String.prototype, 'replace'); (d.value === String.prototype.replace) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"

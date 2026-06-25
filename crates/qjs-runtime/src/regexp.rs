@@ -694,6 +694,15 @@ fn regexp_string_data(object: &ObjectRef, key: &str) -> Option<String> {
     }
 }
 
+pub(crate) fn regexp_source_flags(value: &Value) -> Option<(String, String)> {
+    let Value::Object(object) = value else {
+        return None;
+    };
+    let source = regexp_string_data(object, REGEXP_SOURCE_PROPERTY)?;
+    let flags = regexp_string_data(object, REGEXP_FLAGS_PROPERTY)?;
+    Some((source, flags))
+}
+
 pub(crate) fn regexp_is_global(value: &Value) -> bool {
     let Value::Object(object) = value else {
         return false;

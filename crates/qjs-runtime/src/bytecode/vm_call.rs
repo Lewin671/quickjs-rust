@@ -380,6 +380,21 @@ pub(super) fn try_fast_global_native_call(
             };
             crate::number::number_to_radix_string(*number, radix).map(|s| Value::String(s.into()))
         }
+        NativeFunction::DatePrototypeGetTimezoneOffset if arguments.is_empty() => {
+            crate::date::native_date_prototype_get_timezone_offset(this_value.clone())
+        }
+        NativeFunction::DatePrototypeSetTime => {
+            if !matches!(arguments.first(), Some(Value::Number(_)))
+                || arguments
+                    .iter()
+                    .skip(1)
+                    .any(|value| !matches!(value, Value::Undefined))
+            {
+                return None;
+            }
+            let mut env = realm_env.clone();
+            crate::date::native_date_prototype_set_time(this_value.clone(), arguments, &mut env)
+        }
         NativeFunction::StringPrototypeSlice
         | NativeFunction::StringPrototypeSubstr
         | NativeFunction::StringPrototypeSubstring => {

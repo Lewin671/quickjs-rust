@@ -226,6 +226,12 @@ skip_reason() {
   case "$rel" in
     *_FIXTURE.js) echo "fixture"; return ;;
     test/intl402/*|test/staging/intl402/*) echo "intl402"; return ;;
+    # SpiderMonkey staging stress tests that currently exceed the per-case
+    # baseline budget in quickjs-rust. Keep these exact so they do not hide
+    # neighboring conformance cases.
+    test/staging/sm/Date/dst-offset-caching-*-of-8.js) echo "stress-timeout"; return ;;
+    test/staging/sm/regress/regress-1507322-deep-weakmap.js) echo "stress-timeout"; return ;;
+    test/staging/sm/TypedArray/element-setting-converts-using-ToNumber.js) echo "stress-timeout"; return ;;
   esac
   # With QJS_AGENTS=1 the engine is built with the `agents` feature and runs the
   # $262.agent multi-agent harness for real, so agent-flagged cases are no longer
