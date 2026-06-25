@@ -166,6 +166,7 @@ fn long_zero_fraction_number(trimmed: &str) -> Option<f64> {
     if integer.is_empty()
         || fraction.len() < 20
         || !integer.bytes().all(|byte| byte.is_ascii_digit())
+        || !integer.bytes().any(|byte| byte != b'0')
         || !fraction.bytes().all(|byte| byte.is_ascii_digit())
         || !fraction.as_bytes()[..20].iter().all(|byte| *byte == b'0')
     {
@@ -437,6 +438,10 @@ mod tests {
         assert_eq!(
             string_to_number("-17.0000000000000000000000000000000000000000001"),
             Ok(-17.0)
+        );
+        assert_eq!(
+            string_to_number("0.000000000000000000001"),
+            Ok(0.000000000000000000001)
         );
     }
 }
