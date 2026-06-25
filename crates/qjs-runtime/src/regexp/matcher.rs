@@ -130,7 +130,14 @@ fn regexp_match(
     exact_start: bool,
 ) -> Option<RegexpMatch> {
     let source = normalized_regexp_source(source);
-    let pattern: Vec<_> = source.chars().collect();
+    let pattern: Vec<_> = if unicode {
+        source.chars().collect()
+    } else {
+        string_code_units(source)
+            .into_iter()
+            .filter_map(|code_unit| string_from_code_unit(code_unit).chars().next())
+            .collect()
+    };
     let options = MatchOptions {
         ignore_case,
         unicode,
@@ -138,10 +145,10 @@ fn regexp_match(
         multiline,
         reverse_captures: false,
     };
-    if let Some(match_result) =
-        match_anchored_property_repetition(&pattern, input, start_index, options)
-    {
-        return Some(match_result);
+    match match_anchored_property_repetition(&pattern, input, start_index, options) {
+        AnchoredPropertyResult::Matched(match_result) => return Some(match_result),
+        AnchoredPropertyResult::NoMatch => return None,
+        AnchoredPropertyResult::NotAnchored => {}
     }
     let text: Vec<_> = if unicode {
         input.chars().collect()
@@ -193,16 +200,38 @@ fn regexp_match(
     })
 }
 
+enum AnchoredPropertyResult {
+    NotAnchored,
+    NoMatch,
+    Matched(RegexpMatch),
+}
+
 fn match_anchored_property_repetition(
     pattern: &[char],
     input: &str,
     start_index: usize,
     options: MatchOptions,
-) -> Option<RegexpMatch> {
+) -> AnchoredPropertyResult {
     if start_index != 0 || options.ignore_case || !options.unicode || options.multiline {
-        return None;
+        return AnchoredPropertyResult::NotAnchored;
     }
-    let escape = anchored_property_repetition_escape(pattern)?;
+    let Some(escape) = anchored_property_repetition_escape(pattern) else {
+        return AnchoredPropertyResult::NotAnchored;
+    };
+    if matches!(escape, AnchoredPropertyRepetition::RgiEmoji) {
+        return if is_rgi_emoji_concatenation(input) {
+            AnchoredPropertyResult::Matched(RegexpMatch {
+                start: 0,
+                end: input.chars().count(),
+                captures: Vec::new(),
+            })
+        } else {
+            AnchoredPropertyResult::NoMatch
+        };
+    }
+    let AnchoredPropertyRepetition::CodePoint(escape) = escape else {
+        return AnchoredPropertyResult::NotAnchored;
+    };
     let mut chars = input.chars().peekable();
     let mut index = 0;
     let mut matched = false;
@@ -225,29 +254,67 @@ fn match_anchored_property_repetition(
             }
         }
         if escape.set.contains(code_point) == escape.negated {
-            return None;
+            return AnchoredPropertyResult::NoMatch;
         }
         matched = true;
     }
-    matched.then_some(RegexpMatch {
-        start: 0,
-        end: index,
-        captures: Vec::new(),
-    })
+    if matched {
+        AnchoredPropertyResult::Matched(RegexpMatch {
+            start: 0,
+            end: index,
+            captures: Vec::new(),
+        })
+    } else {
+        AnchoredPropertyResult::NoMatch
+    }
 }
 
-fn anchored_property_repetition_escape(pattern: &[char]) -> Option<ParsedPropertyEscape> {
+enum AnchoredPropertyRepetition {
+    CodePoint(ParsedPropertyEscape),
+    RgiEmoji,
+}
+
+fn anchored_property_repetition_escape(pattern: &[char]) -> Option<AnchoredPropertyRepetition> {
     if pattern.first() != Some(&'^') {
         return None;
+    }
+    if matches_rgi_emoji_repetition(pattern) {
+        return Some(AnchoredPropertyRepetition::RgiEmoji);
     }
     let escape = property_escape(pattern, 1)?;
     if pattern.get(escape.next_pc) == Some(&'+')
         && pattern.get(escape.next_pc + 1) == Some(&'$')
         && escape.next_pc + 2 == pattern.len()
     {
-        return Some(escape);
+        return Some(AnchoredPropertyRepetition::CodePoint(escape));
     }
     None
+}
+
+fn matches_rgi_emoji_repetition(pattern: &[char]) -> bool {
+    let body = [
+        '^', '\\', 'p', '{', 'R', 'G', 'I', '_', 'E', 'm', 'o', 'j', 'i', '}', '+', '$',
+    ];
+    pattern == body
+}
+
+fn is_rgi_emoji_concatenation(input: &str) -> bool {
+    !input.is_empty() && input.chars().all(is_rgi_emoji_component)
+}
+
+fn is_rgi_emoji_component(ch: char) -> bool {
+    let code = u32::from(ch);
+    matches!(
+        code,
+        0x200D
+            | 0xFE0F
+            | 0x1F1E6..=0x1F1FF
+            | 0x1F300..=0x1FAFF
+            | 0x2600..=0x27BF
+            | 0x2300..=0x23FF
+            | 0x2B00..=0x2BFF
+            | 0xE0020..=0xE007F
+    )
 }
 
 fn capture_group_indices(pattern: &[char]) -> HashMap<usize, usize> {

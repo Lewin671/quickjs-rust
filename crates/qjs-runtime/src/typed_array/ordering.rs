@@ -230,7 +230,7 @@ pub(crate) fn native_typed_array_prototype_reverse(
     _argument_values: &[Value],
     _env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let (object, length) = validate_typed_array(&this_value)?;
+    let (object, length) = validate_typed_array_write(&this_value)?;
     let mut values: Vec<Value> = read_view_elements(&object, 0, length);
     values.reverse();
     set_view_elements(&object, 0, values);

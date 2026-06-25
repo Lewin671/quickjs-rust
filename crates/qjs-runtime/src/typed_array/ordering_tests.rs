@@ -296,6 +296,17 @@ fn reverse_in_place_and_to_reversed_copies() {
 }
 
 #[test]
+fn reverse_rejects_immutable_buffer() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array(new ArrayBuffer(4).transferToImmutable()); \
+             try { a.reverse(); } catch (e) { (e instanceof TypeError) + ':' + a.join(','); }"
+        ),
+        Ok(Value::String("true:0,0,0,0".to_owned().into()))
+    );
+}
+
+#[test]
 fn sort_default_is_numeric_and_stable() {
     // Default ordering is numeric, not the string ordering used by Array.
     assert_eq!(

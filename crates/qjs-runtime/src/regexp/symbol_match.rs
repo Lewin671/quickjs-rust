@@ -41,7 +41,7 @@ pub(crate) fn native_regexp_prototype_match(
         return regexp_exec(this_value, &input, env);
     }
 
-    let unicode = flags.contains('u');
+    let unicode = flags.contains('u') || flags.contains('v');
     set_last_index(this_value.clone(), Value::Number(0.0), env)?;
     global_match(this_value, &input, unicode, env)
 }

@@ -17,6 +17,12 @@ pub(super) struct ArrayDestructuring {
     enter: usize,
 }
 
+struct PreparedBindingTarget {
+    name: String,
+    slot: Option<usize>,
+    object_slot: usize,
+}
+
 impl Compiler {
     pub(super) fn resolve_var_initializer_with_target(
         &mut self,
@@ -63,14 +69,35 @@ impl Compiler {
         pattern: &BindingPattern,
         kind: VarKind,
     ) -> Result<(), RuntimeError> {
+        self.compile_binding_initializer_with_target(pattern, kind, None)
+    }
+
+    fn compile_binding_initializer_with_target(
+        &mut self,
+        pattern: &BindingPattern,
+        kind: VarKind,
+        prepared: Option<PreparedBindingTarget>,
+    ) -> Result<(), RuntimeError> {
         match pattern {
             BindingPattern::Identifier { name, .. } => {
-                let slot = self.declare_var_kind_slot(name, kind);
-                self.emit_store_var_initializer(slot, name, kind);
+                if let Some(prepared) = prepared {
+                    self.emit(Op::StoreResolvedIdentWith {
+                        name: prepared.name,
+                        slot: prepared.slot,
+                        object_slot: prepared.object_slot,
+                        is_strict: self.strict,
+                    });
+                } else {
+                    let slot = self.declare_var_kind_slot(name, kind);
+                    self.emit_store_var_initializer(slot, name, kind);
+                }
             }
             BindingPattern::Array { elements, rest, .. } => {
                 let destructuring = self.begin_array_destructuring();
                 for element in elements {
+                    let prepared = element
+                        .as_ref()
+                        .and_then(|element| self.prepare_binding_target(&element.binding, kind));
                     self.emit_iterator_step(&destructuring);
                     let Some(element) = element else {
                         self.emit(Op::Pop);
@@ -80,11 +107,12 @@ impl Compiler {
                         element.default.as_ref(),
                         binding_inferred_name(&element.binding),
                     )?;
-                    self.compile_binding_initializer(&element.binding, kind)?;
+                    self.compile_binding_initializer_with_target(&element.binding, kind, prepared)?;
                 }
                 if let Some(rest) = rest {
+                    let prepared = self.prepare_binding_target(rest, kind);
                     self.emit_iterator_rest(&destructuring);
-                    self.compile_binding_initializer(rest, kind)?;
+                    self.compile_binding_initializer_with_target(rest, kind, prepared)?;
                 }
                 self.end_array_destructuring(&destructuring);
             }
@@ -98,6 +126,7 @@ impl Compiler {
                 for property in properties {
                     let exclusion = self.compile_object_binding_key(&property.key)?;
                     excluded.push(exclusion);
+                    let prepared = self.prepare_binding_target(&property.binding, kind);
                     self.emit(Op::LoadLocal(source_slot));
                     self.load_object_binding_key(&property.key, &excluded);
                     self.emit(Op::GetProp);
@@ -105,16 +134,51 @@ impl Compiler {
                         property.default.as_ref(),
                         binding_inferred_name(&property.binding),
                     )?;
-                    self.compile_binding_initializer(&property.binding, kind)?;
+                    self.compile_binding_initializer_with_target(
+                        &property.binding,
+                        kind,
+                        prepared,
+                    )?;
                 }
                 if let Some(rest) = rest {
+                    let prepared = self.prepare_binding_target(rest, kind);
                     self.emit(Op::LoadLocal(source_slot));
                     self.emit(Op::ObjectRestExcluding { excluded });
-                    self.compile_binding_initializer(rest, kind)?;
+                    self.compile_binding_initializer_with_target(rest, kind, prepared)?;
                 }
             }
         }
         Ok(())
+    }
+
+    fn prepare_binding_target(
+        &mut self,
+        pattern: &BindingPattern,
+        kind: VarKind,
+    ) -> Option<PreparedBindingTarget> {
+        if kind != VarKind::Var || !self.inside_current_with() {
+            return None;
+        }
+        let BindingPattern::Identifier { name, .. } = pattern else {
+            return None;
+        };
+        let declared_slot = self.declare_var_kind_slot(name, kind);
+        let slot = if self.global_scope {
+            None
+        } else {
+            self.resolve_local_slot(name).or(Some(declared_slot))
+        };
+        let object_slot = self.temp_local("with_binding_target_object");
+        self.emit(Op::ResolveIdentWith {
+            name: name.clone(),
+            slot,
+            object_slot,
+        });
+        Some(PreparedBindingTarget {
+            name: name.clone(),
+            slot,
+            object_slot,
+        })
     }
 
     fn compile_object_binding_key(

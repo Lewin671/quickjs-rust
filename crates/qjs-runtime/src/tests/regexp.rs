@@ -1257,3 +1257,37 @@ fn named_group_unicode_escapes_decode_to_property_key() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn unicode_sets_flag_uses_unicode_matching_mode() {
+    assert_eq!(
+        eval(r#"/\p{Script=Han}/v.exec("𠮷a")[0];"#),
+        Ok(Value::String("𠮷".to_owned().into()))
+    );
+    assert_eq!(
+        eval(r#"/./v.exec("𠮷")[0];"#),
+        Ok(Value::String("𠮷".to_owned().into()))
+    );
+    assert_eq!(
+        eval(r#""𠮷a𠮷".replace(/𠮷/gv, "x");"#),
+        Ok(Value::String("xax".to_owned().into()))
+    );
+}
+
+#[test]
+fn non_unicode_astral_literal_matches_code_units() {
+    assert_eq!(eval(r#"/𠮷/.test("𠮷");"#), Ok(Value::Boolean(true)));
+    assert_eq!(eval(r#""𠮷".search(/𠮷/);"#), Ok(Value::Number(0.0)));
+}
+
+#[test]
+fn unicode_sets_rgi_emoji_repetition_fast_path() {
+    assert_eq!(
+        eval(r#"/^\p{RGI_Emoji}+$/v.test("🪉🪏🪽");"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(r#"/^\p{RGI_Emoji}+$/v.test("👨🏻‍🐰‍👨🏼");"#),
+        Ok(Value::Boolean(true))
+    );
+}

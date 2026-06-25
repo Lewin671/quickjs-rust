@@ -47,7 +47,7 @@ pub(crate) fn native_regexp_prototype_match_all(
     let constructor = super::regexp_species_constructor(this_value.clone(), env)?;
     let flags = to_js_string_with_env(property_value(this_value.clone(), "flags", env)?, env)?;
     let global = flags.contains('g');
-    let unicode = flags.contains('u');
+    let unicode = flags.contains('u') || flags.contains('v');
     let matcher = construct_function(
         constructor.clone(),
         constructor,

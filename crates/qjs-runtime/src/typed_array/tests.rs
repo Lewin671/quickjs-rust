@@ -446,6 +446,38 @@ fn typed_array_from_iterable_array_like_and_mapfn() {
     );
 }
 
+#[test]
+fn typed_array_from_and_of_reject_immutable_constructor_result_before_writes() {
+    assert_eq!(
+        eval(
+            "let calls = []; \
+             let custom = new Uint8Array(new ArrayBuffer(2).transferToImmutable()); \
+             function C(len) { calls.push('construct(' + len + ')'); return custom; } \
+             let source = { \
+               get length() { calls.push('get length'); return 1; }, \
+               get 0() { calls.push('get 0'); return 8; } \
+             }; \
+             Object.defineProperty(source, Symbol.iterator, { get() { calls.push('get iterator'); return undefined; } }); \
+             try { Uint8Array.from.call(C, source, function(v) { calls.push('map'); return v; }); } catch (e) {} \
+             calls.join(',');"
+        ),
+        Ok(Value::String(
+            "get iterator,get length,construct(1)".to_owned().into()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "let calls = []; \
+             let custom = new Uint8Array(new ArrayBuffer(2).transferToImmutable()); \
+             function C(len) { calls.push('construct(' + len + ')'); return custom; } \
+             let value = { valueOf() { calls.push('valueOf'); return 1; } }; \
+             try { Uint8Array.of.call(C, value, value); } catch (e) {} \
+             calls.join(',');"
+        ),
+        Ok(Value::String("construct(2)".to_owned().into()))
+    );
+}
+
 // --- Accessors and brand checks ----------------------------------------------
 
 #[test]

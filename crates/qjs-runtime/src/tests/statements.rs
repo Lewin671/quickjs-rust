@@ -347,6 +347,39 @@ fn evaluates_variable_declaration_destructuring() {
 }
 
 #[test]
+fn var_destructuring_resolves_with_binding_before_value_read() {
+    assert_eq!(
+        eval(
+            "var log = [];
+             var sourceKey = { toString: function() { log.push('sourceKey'); return 'p'; } };
+             var source = {
+               get p() {
+                 log.push('get source');
+                 return undefined;
+               }
+             };
+             var env = new Proxy({}, {
+               has: function(_target, key) {
+                 log.push('binding::' + key);
+                 return false;
+               }
+             });
+             var defaultValue = 0;
+             var varTarget;
+             with (env) {
+               var { [sourceKey]: varTarget = defaultValue } = source;
+             }
+             log.join(',');"
+        ),
+        Ok(Value::String(
+            "binding::source,binding::sourceKey,sourceKey,binding::varTarget,get source,binding::defaultValue"
+                .to_owned()
+                .into()
+        ))
+    );
+}
+
+#[test]
 fn evaluates_variable_declaration_rest_destructuring() {
     assert_eq!(
         eval("let [first, ...others] = [1, 2, 3]; first + ':' + others.join('|');"),

@@ -10,29 +10,25 @@
 mod aliases;
 mod tables;
 
+use std::sync::OnceLock;
+
 /// A resolved property escape: a sorted, non-overlapping set of code-point
 /// ranges, optionally negated for `\P{...}`.
 ///
 /// `Copy` so callers can resolve a property once at match setup and cheaply
 /// carry the static range slice through the per-character matching loop.
 #[derive(Clone, Copy)]
-pub struct PropertySet {
-    ranges: &'static [(u32, u32)],
+pub enum PropertySet {
+    Ranges(&'static [(u32, u32)]),
+    ScriptUnknown,
 }
 
 impl PropertySet {
     pub fn contains(&self, code_point: u32) -> bool {
-        self.ranges
-            .binary_search_by(|&(start, end)| {
-                if code_point < start {
-                    std::cmp::Ordering::Greater
-                } else if code_point > end {
-                    std::cmp::Ordering::Less
-                } else {
-                    std::cmp::Ordering::Equal
-                }
-            })
-            .is_ok()
+        match self {
+            Self::Ranges(ranges) => ranges_contain(ranges, code_point),
+            Self::ScriptUnknown => script_unknown_contains(code_point),
+        }
     }
 }
 
@@ -41,24 +37,27 @@ impl PropertySet {
 /// Returns `None` when the body is not a valid Unicode property expression, in
 /// which case the regular expression is a SyntaxError.
 pub fn resolve_property(body: &str) -> Option<PropertySet> {
-    let ranges = if let Some((name, value)) = body.split_once('=') {
-        resolve_property_value(name, value)?
+    if let Some((name, value)) = body.split_once('=') {
+        resolve_property_value(name, value)
     } else {
-        resolve_lone(body)?
-    };
-    Some(PropertySet { ranges })
+        resolve_lone(body).map(PropertySet::Ranges)
+    }
 }
 
-fn resolve_property_value(name: &str, value: &str) -> Option<&'static [(u32, u32)]> {
+fn resolve_property_value(name: &str, value: &str) -> Option<PropertySet> {
     // No loose matching: names/values must not carry surrounding whitespace.
     if has_extra_whitespace(name) || has_extra_whitespace(value) || value.is_empty() {
         return None;
     }
     match canonical_property_name(name) {
-        "General_Category" => gc_value_ranges(value),
+        "General_Category" => gc_value_ranges(value).map(PropertySet::Ranges),
         "Script" => {
             let canon = aliases::script_value_alias(value)?;
-            tables::script_ranges(canon)
+            if canon == "Unknown" {
+                Some(PropertySet::ScriptUnknown)
+            } else {
+                tables::script_ranges(canon).map(PropertySet::Ranges)
+            }
         }
         "Script_Extensions" => {
             // The `scx_*` tables store the complete Script_Extensions set for
@@ -67,7 +66,11 @@ fn resolve_property_value(name: &str, value: &str) -> Option<&'static [(u32, u32
             // `Common`/`Inherited` the points reassigned to specific scripts
             // are removed. Resolution is therefore a single table lookup.
             let canon = aliases::script_value_alias(value)?;
-            tables::script_ext_ranges(canon)
+            if canon == "Unknown" {
+                Some(PropertySet::ScriptUnknown)
+            } else {
+                tables::script_ext_ranges(canon).map(PropertySet::Ranges)
+            }
         }
         _ => None,
     }
@@ -142,6 +145,16 @@ fn ranges_contain(ranges: &[(u32, u32)], code_point: u32) -> bool {
             }
         })
         .is_ok()
+}
+
+fn script_unknown_contains(code_point: u32) -> bool {
+    static CN: OnceLock<&'static [(u32, u32)]> = OnceLock::new();
+    static CO: OnceLock<&'static [(u32, u32)]> = OnceLock::new();
+    let cn = *CN.get_or_init(|| tables::gc_ranges("Cn").expect("Cn table must exist"));
+    let co = *CO.get_or_init(|| tables::gc_ranges("Co").expect("Co table must exist"));
+    (0xD800..=0xDFFF).contains(&code_point)
+        || ranges_contain(cn, code_point)
+        || ranges_contain(co, code_point)
 }
 
 #[cfg(test)]

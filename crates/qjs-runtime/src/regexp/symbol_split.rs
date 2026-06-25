@@ -102,7 +102,7 @@ fn split_regexp_clone(value: Value, env: &mut CallEnv) -> Result<(Value, bool), 
     let constructor = super::regexp_species_constructor(value.clone(), env)?;
     let _ = super::regexp_is_regexp_with_env(value.clone(), env)?;
     let flags = to_js_string_with_env(property_value(value.clone(), "flags", env)?, env)?;
-    let unicode_matching = flags.contains('u');
+    let unicode_matching = flags.contains('u') || flags.contains('v');
     let mut split_flags = flags;
     if !split_flags.contains('y') {
         split_flags.push('y');

@@ -442,6 +442,19 @@ fn slice_uses_species_constructor() {
 }
 
 #[test]
+fn slice_same_buffer_species_copies_element_by_element() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([10, 20, 30, 40, 50, 60]); \
+             a.constructor = {}; \
+             a.constructor[Symbol.species] = function() { return new Uint8Array(a.buffer, 2); }; \
+             a.slice(1, 4).join(',');"
+        ),
+        Ok(Value::String("20,20,20,60".to_owned().into()))
+    );
+}
+
+#[test]
 fn slice_rejects_invalid_species_result() {
     assert!(
         eval(

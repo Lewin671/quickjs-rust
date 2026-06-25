@@ -89,11 +89,31 @@ pub(crate) fn iterable_values_with_env(
     Ok(values)
 }
 
+pub(crate) fn iterable_values_from_method_with_env(
+    value: Value,
+    iterator_method: Value,
+    context: &str,
+    env: &mut CallEnv,
+) -> Result<Vec<Value>, RuntimeError> {
+    let mut values = Vec::new();
+    for_each_iterable_value_from_method_with_env(
+        value,
+        iterator_method,
+        context,
+        env,
+        |value, _| {
+            values.push(value);
+            Ok(())
+        },
+    )?;
+    Ok(values)
+}
+
 pub(crate) fn for_each_iterable_value_with_env<F>(
     value: Value,
     context: &str,
     env: &mut CallEnv,
-    mut visit: F,
+    visit: F,
 ) -> Result<(), RuntimeError>
 where
     F: FnMut(Value, &mut CallEnv) -> Result<(), RuntimeError>,
@@ -106,6 +126,19 @@ where
     };
     let iterator_method =
         property_value_key(value.clone(), &PropertyKey::Symbol(iterator_symbol), env)?;
+    for_each_iterable_value_from_method_with_env(value, iterator_method, context, env, visit)
+}
+
+fn for_each_iterable_value_from_method_with_env<F>(
+    value: Value,
+    iterator_method: Value,
+    context: &str,
+    env: &mut CallEnv,
+    mut visit: F,
+) -> Result<(), RuntimeError>
+where
+    F: FnMut(Value, &mut CallEnv) -> Result<(), RuntimeError>,
+{
     if !matches!(iterator_method, Value::Function(_)) {
         return Err(RuntimeError {
             thrown: None,

@@ -119,7 +119,7 @@ fn validate_pattern_range(
                     }
                 }
                 if unicode && matches!(pattern[index + 1], 'p' | 'P') {
-                    let end = validate_property_escape(pattern, index)?;
+                    let end = validate_property_escape(pattern, index, unicode_sets)?;
                     index = end;
                     has_atom = true;
                     continue;
@@ -307,7 +307,9 @@ fn validate_class_ranges(
                 index = next;
                 continue;
             }
-            if unicode && let Some(set_end) = unicode_class_set_escape_end(pattern, index)? {
+            if unicode
+                && let Some(set_end) = unicode_class_set_escape_end(pattern, index, unicode_sets)?
+            {
                 if pattern.get(set_end) == Some(&'-') && set_end + 1 < end {
                     return Err(regexp_syntax_error("invalid regular expression pattern"));
                 }
@@ -323,7 +325,7 @@ fn validate_class_ranges(
                 && pattern.get(escape_end) == Some(&'-')
                 && escape_end + 1 < end
                 && pattern.get(escape_end + 1) == Some(&'\\')
-                && unicode_class_set_escape_end(pattern, escape_end + 1)?.is_some()
+                && unicode_class_set_escape_end(pattern, escape_end + 1, unicode_sets)?.is_some()
             {
                 return Err(regexp_syntax_error("invalid regular expression pattern"));
             }
@@ -343,7 +345,7 @@ fn validate_class_ranges(
         if index + 2 < end && pattern[index + 1] == '-' {
             if unicode
                 && pattern[index + 2] == '\\'
-                && unicode_class_set_escape_end(pattern, index + 2)?.is_some()
+                && unicode_class_set_escape_end(pattern, index + 2, unicode_sets)?.is_some()
             {
                 return Err(regexp_syntax_error("invalid regular expression pattern"));
             }
@@ -426,10 +428,11 @@ fn validate_unicode_decimal_escape(
 fn unicode_class_set_escape_end(
     pattern: &[char],
     start: usize,
+    unicode_sets: bool,
 ) -> Result<Option<usize>, RuntimeError> {
     match pattern.get(start + 1) {
         Some('d' | 'D' | 's' | 'S' | 'w' | 'W') => Ok(Some(start + 2)),
-        Some('p' | 'P') => validate_property_escape(pattern, start).map(Some),
+        Some('p' | 'P') => validate_property_escape(pattern, start, unicode_sets).map(Some),
         _ => Ok(None),
     }
 }
@@ -437,7 +440,11 @@ fn unicode_class_set_escape_end(
 /// Validate a `\p{...}` / `\P{...}` Unicode property escape (unicode mode).
 /// `start` points at the backslash. Returns the index just past the closing
 /// brace, or a SyntaxError when the body is not a valid property expression.
-fn validate_property_escape(pattern: &[char], start: usize) -> Result<usize, RuntimeError> {
+fn validate_property_escape(
+    pattern: &[char],
+    start: usize,
+    unicode_sets: bool,
+) -> Result<usize, RuntimeError> {
     if pattern.get(start + 2) != Some(&'{') {
         return Err(regexp_syntax_error("invalid regular expression pattern"));
     }
@@ -445,6 +452,9 @@ fn validate_property_escape(pattern: &[char], start: usize) -> Result<usize, Run
         return Err(regexp_syntax_error("invalid regular expression pattern"));
     };
     let body: String = pattern[start + 3..close].iter().collect();
+    if unicode_sets && pattern.get(start + 1) == Some(&'p') && body == "RGI_Emoji" {
+        return Ok(close + 1);
+    }
     if unicode::resolve_property(&body).is_none() {
         return Err(regexp_syntax_error("invalid regular expression pattern"));
     }

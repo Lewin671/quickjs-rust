@@ -374,7 +374,7 @@ pub(crate) fn native_typed_array_of(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let length = argument_values.len();
-    let result = typed_array_create(this_value, length, env)?;
+    let result = typed_array_create(this_value, length, true, env)?;
     for (index, value) in argument_values.iter().enumerate() {
         set_result_element(&result, index, value.clone(), env)?;
     }
@@ -406,41 +406,67 @@ pub(crate) fn native_typed_array_from(
         }
     };
 
-    // Collect the source values: iterable via Symbol.iterator, else array-like.
+    // Iterable sources are collected before construction; array-like sources
+    // construct after LengthOfArrayLike and before indexed element reads.
     let iterator_method = match crate::symbol::iterator_symbol(env) {
         Some(symbol) => {
             crate::property_value_key(source.clone(), &crate::PropertyKey::Symbol(symbol), env)?
         }
         None => Value::Undefined,
     };
-    let raw_values = if matches!(iterator_method, Value::Function(_)) {
-        crate::array::iterable_values_with_env(source, "TypedArray.from", env)?
+    if matches!(iterator_method, Value::Function(_)) {
+        let raw_values = crate::array::iterable_values_from_method_with_env(
+            source,
+            iterator_method,
+            "TypedArray.from",
+            env,
+        )?;
+        let length = raw_values.len();
+        let result = typed_array_create(this_value, length, true, env)?;
+        for (index, value) in raw_values.into_iter().enumerate() {
+            let value =
+                mapped_typed_array_from_value(value, index, mapping, &map_fn, &this_arg, env)?;
+            set_result_element(&result, index, value, env)?;
+        }
+        Ok(result)
     } else {
-        crate::array::array_like_values_with_env(source, "TypedArray.from", env)?
-    };
-
-    let length = raw_values.len();
-    let result = typed_array_create(this_value, length, env)?;
-    for (index, value) in raw_values.into_iter().enumerate() {
-        let value = if mapping {
-            crate::call_function(
-                map_fn.clone(),
-                this_arg.clone(),
-                vec![value, Value::Number(index as f64)],
-                env,
-                false,
-            )?
-        } else {
-            value
-        };
-        set_result_element(&result, index, value, env)?;
+        let source = crate::array::array_like_length(source, "TypedArray.from", env)?;
+        let result = typed_array_create(this_value, source.length, true, env)?;
+        for index in 0..source.length {
+            let value = property_value(source.receiver.clone(), &index.to_string(), env)?;
+            let value =
+                mapped_typed_array_from_value(value, index, mapping, &map_fn, &this_arg, env)?;
+            set_result_element(&result, index, value, env)?;
+        }
+        Ok(result)
     }
-    Ok(result)
+}
+
+fn mapped_typed_array_from_value(
+    value: Value,
+    index: usize,
+    mapping: bool,
+    map_fn: &Value,
+    this_arg: &Value,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    if mapping {
+        crate::call_function(
+            map_fn.clone(),
+            this_arg.clone(),
+            vec![value, Value::Number(index as f64)],
+            env,
+            false,
+        )
+    } else {
+        Ok(value)
+    }
 }
 
 fn typed_array_create(
     constructor: Value,
     length: usize,
+    reject_immutable_buffer: bool,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     crate::ensure_constructor(&constructor)?;
@@ -450,7 +476,16 @@ fn typed_array_create(
         vec![Value::Number(length as f64)],
         env,
     )?;
-    let (_, actual_length) = super::validate_typed_array(&result)?;
+    let (object, actual_length) = super::validate_typed_array(&result)?;
+    if reject_immutable_buffer
+        && super::typed_array_buffer(&object)
+            .is_some_and(|buffer| array_buffer::is_immutable(&buffer))
+    {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: ArrayBuffer is immutable".to_owned(),
+        });
+    }
     if actual_length < length {
         return Err(RuntimeError {
             thrown: None,

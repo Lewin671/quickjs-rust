@@ -321,7 +321,7 @@ pub(crate) fn native_regexp_prototype_exec(
     let global = regexp_flags_contains(&object, 'g');
     let sticky = regexp_flags_contains(&object, 'y');
     let ignore_case = regexp_flags_contains(&object, 'i');
-    let unicode = regexp_flags_contains(&object, 'u');
+    let unicode = regexp_flags_contains(&object, 'u') || regexp_flags_contains(&object, 'v');
     let dot_all = regexp_flags_contains(&object, 's');
     let multiline = regexp_flags_contains(&object, 'm');
     let has_indices = regexp_flags_contains(&object, 'd');
@@ -424,7 +424,7 @@ pub(crate) fn native_regexp_prototype_test(
     let global = regexp_flags_contains(&object, 'g');
     let sticky = regexp_flags_contains(&object, 'y');
     let ignore_case = regexp_flags_contains(&object, 'i');
-    let unicode = regexp_flags_contains(&object, 'u');
+    let unicode = regexp_flags_contains(&object, 'u') || regexp_flags_contains(&object, 'v');
     let dot_all = regexp_flags_contains(&object, 's');
     let multiline = regexp_flags_contains(&object, 'm');
     let stateful = global || sticky;

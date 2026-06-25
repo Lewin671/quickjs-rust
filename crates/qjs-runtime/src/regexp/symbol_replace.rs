@@ -45,7 +45,7 @@ pub(crate) fn native_regexp_prototype_replace(
 
     let flags = to_js_string_with_env(property_value(this_value.clone(), "flags", env)?, env)?;
     let global = flags.contains('g');
-    let unicode = flags.contains('u');
+    let unicode = flags.contains('u') || flags.contains('v');
     if global {
         set_last_index(this_value.clone(), Value::Number(0.0), env)?;
     }

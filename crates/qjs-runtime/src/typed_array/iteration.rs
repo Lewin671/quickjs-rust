@@ -9,12 +9,12 @@ use crate::{
     to_js_string_with_env, to_number_with_env,
 };
 
-use super::element::{get_view_element, read_view_elements};
+use super::element::{get_view_element, read_view_elements, set_view_elements};
 use super::{
     bytes_per_element, typed_array_buffer, typed_array_buffer_detached, typed_array_byte_offset,
     typed_array_is_length_tracking, typed_array_is_out_of_bounds, typed_array_kind,
     typed_array_length, typed_array_receiver, typed_array_species_create,
-    typed_array_species_create_with_args, validate_typed_array,
+    typed_array_species_create_read, typed_array_species_create_with_args, validate_typed_array,
 };
 use crate::CallEnv;
 
@@ -588,20 +588,52 @@ pub(crate) fn native_typed_array_prototype_slice(
         env,
     )?;
     let count = end.saturating_sub(start);
-    let (result, _result_object) = typed_array_species_create(&object, count, env)?;
+    let (result, result_object) = typed_array_species_create_read(&object, count, env)?;
+    let overlaps_same_type = slice_uses_overlapping_same_type_buffer(&object, &result_object);
+    if !overlaps_same_type
+        && typed_array_buffer(&result_object)
+            .is_some_and(|buffer| array_buffer::is_immutable(&buffer))
+    {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: ArrayBuffer is immutable".to_owned(),
+        });
+    }
     if count > 0 {
         if super::typed_array_buffer_detached(&object) || typed_array_is_out_of_bounds(&object) {
             return Err(array_buffer::detached_error());
         }
-        for (index, value) in read_view_elements(&object, start, count)
-            .into_iter()
-            .enumerate()
-        {
-            crate::bytecode::set_object_property(result.clone(), index.to_string(), value, env)?;
+        if overlaps_same_type {
+            for index in 0..count {
+                let value = get_view_element(&object, start + index);
+                set_view_elements(&result_object, index, [value]);
+            }
+        } else {
+            for (index, value) in read_view_elements(&object, start, count)
+                .into_iter()
+                .enumerate()
+            {
+                crate::bytecode::set_object_property(
+                    result.clone(),
+                    index.to_string(),
+                    value,
+                    env,
+                )?;
+            }
         }
         Ok(result)
     } else {
         Ok(result)
+    }
+}
+
+fn slice_uses_overlapping_same_type_buffer(source: &ObjectRef, target: &ObjectRef) -> bool {
+    if typed_array_kind(source) != typed_array_kind(target) {
+        return false;
+    }
+    match (typed_array_buffer(source), typed_array_buffer(target)) {
+        (Some(source_buffer), Some(target_buffer)) => source_buffer.ptr_eq(&target_buffer),
+        _ => false,
     }
 }
 

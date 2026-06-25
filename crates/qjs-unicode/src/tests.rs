@@ -51,6 +51,17 @@ fn scripts_and_extensions() {
 }
 
 #[test]
+fn unknown_script_covers_unassigned_private_use_and_surrogates() {
+    assert!(matches("Script=Unknown", 0x038B)); // unassigned
+    assert!(matches("Script=Zzzz", 0xE000)); // private-use
+    assert!(matches("sc=Unknown", 0xD800)); // surrogate
+    assert!(matches("Script_Extensions=Unknown", 0x038B));
+    assert!(matches("scx=Zzzz", 0xE000));
+    assert!(!matches("Script=Unknown", 0x41));
+    assert!(!matches("Script_Extensions=Unknown", 0x41));
+}
+
+#[test]
 fn rejects_invalid() {
     // Loose matching (surrounding whitespace) is not allowed.
     assert!(resolve_property(" ASCII ").is_none());
