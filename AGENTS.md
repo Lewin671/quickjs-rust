@@ -8,11 +8,17 @@ Do not duplicate agent workflow there.
 ## Prime Directive
 
 Build a Rust-native JavaScript engine toward two converging goals: **100%
-Test262 conformance** and **production-grade performance**. Work incrementally,
-preserve subsystem boundaries, and make each change verifiable with focused
-tests — but no longer cap the design at "small and safe by default." When a
-correctness or performance ceiling is structural, the right change is to lift
-the structure, not to add another heuristic around it.
+Test262 conformance** and **production-grade performance**. The default
+language target is the latest ratified ECMAScript standard, ECMA-262 16th
+edition, June 2025 (ECMAScript 2025 / ES2025), anchored to
+`tc39/ecma262@es2025`. Test262 has no edition-specific stable tag; use the
+pinned `third_party/test262` commit as executable coverage and classify newer
+living-draft or Stage 3+ cases as future-work inputs unless a task explicitly
+opts into them. Work incrementally, preserve subsystem boundaries, and make
+each change verifiable with focused tests — but no longer cap the design at
+"small and safe by default." When a correctness or performance ceiling is
+structural, the right change is to lift the structure, not to add another
+heuristic around it.
 
 The keystone of both goals is the **environment / binding model**. The current
 per-frame `HashMap<String, Value>` snapshot plus capture-writeback heuristics is

@@ -8,6 +8,15 @@ Known structural risks in this operating model are recorded in
 
 ## Baseline
 
+The repository's default ECMAScript conformance baseline is the latest
+ratified standard, ECMA-262 16th edition, June 2025 (ECMAScript 2025 / ES2025).
+Use the `tc39/ecma262@es2025` specification tag as the normative text anchor.
+Test262 has no edition-specific stable tag, so use the pinned
+`third_party/test262` commit for executable coverage and the pinned QuickJS-NG
+build for differential behavior. TC39 living-draft and Stage 3+ Test262 cases
+remain valid campaign inputs, but do not redefine the default baseline until
+the corresponding ECMAScript edition is ratified and this document is updated.
+
 `main` is the stable integration branch. Before starting parallel work:
 
 ```sh

@@ -74,7 +74,7 @@ gaps: `TypedArray` 2,027, `ArrayBuffer` 263, `DataView` 188 — concentrated in
       via big-endian `to_be_bytes` with a reversal for little-endian.
       `test/built-ins/DataView` moved from 0 to 369 passing (--all scan). The
       remaining failures are out of this slice: `getFloat16`/`setFloat16` (38,
-      Float16 proposal), `*-sab.js` (SharedArrayBuffer), `resizable-array-buffer`
+      ES2025 Float16), `*-sab.js` (SharedArrayBuffer), `resizable-array-buffer`
       cases, and `detached-buffer` cases that need a JS-facing
       `$DETACHBUFFER`/detach hook in `ArrayBuffer` (tracked for S1/S5); the
       DataView-side detach guards are already in place.

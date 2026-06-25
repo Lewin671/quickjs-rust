@@ -8,10 +8,17 @@
 **A JavaScript engine written from scratch in safe Rust.**
 
 `quickjs-rust` is not a binding, wrapper, or translation of QuickJS. It is a
-Rust-native lexer, parser, bytecode compiler, and virtual machine that uses
+Rust-native lexer, parser, bytecode compiler, and virtual machine targeting the
+latest ratified ECMAScript standard: ECMA-262 16th edition, June 2025
+(ECMAScript 2025 / ES2025), corresponding to the `tc39/ecma262@es2025`
+specification tag. It uses
 [QuickJS-NG](https://github.com/quickjs-ng/quickjs) purely as a behavioral
 reference, with the long-term goal of QuickJS-class embeddability,
-correctness, and performance — without a C runtime underneath.
+correctness, and performance — without a C runtime underneath. TC39's living
+draft is tracked as future-work input, not as the default conformance baseline.
+Test262 itself does not publish edition-specific stable tags, so the repository
+pins a concrete Test262 commit and interprets results through the ES2025 target
+plus the QuickJS-NG comparison configuration.
 
 ```text
 source text → lexer → parser → AST → bytecode compiler → bytecode VM → CLI / tests
@@ -20,9 +27,10 @@ source text → lexer → parser → AST → bytecode compiler → bytecode VM �
 ## Highlights
 
 - **100% safe Rust.** `unsafe` is forbidden across the entire workspace.
-- **Conformance-driven.** 18,252 official [Test262](https://github.com/tc39/test262)
-  cases pass today (June 2026, of the 42,672 in the comparison configuration),
-  measured per commit in CI and tracked as a burndown trend in
+- **Conformance-driven.** 42,656 official [Test262](https://github.com/tc39/test262)
+  cases pass today (June 2026, of the 42,672-case QuickJS-NG comparison
+  configuration), with zero actionable gaps against the pinned reference in the
+  latest recorded scan. Results are measured per commit in CI and tracked in
   [`docs/conformance/burndown.jsonl`](docs/conformance/burndown.jsonl).
 - **Differential testing.** Behavior is continuously compared against a pinned
   QuickJS-NG build, and an automated gap finder ranks the next areas to fix.
@@ -67,13 +75,19 @@ The engine executes a substantial JavaScript subset end to end — every
 supported feature flows through the real pipeline (lexer → parser → bytecode →
 VM), never through parser-only or runtime-only shortcuts.
 
-**Working today:** closures and arrow functions, template literals,
-`for`/`for...of`/`while` loops, `try`/`catch` with real error types, regular
-expressions, and a growing standard library (`Object`, `Array` iteration
-methods, `String`, `Math`, `JSON`, ...).
+**Working today:** closures, lexical bindings, classes and private names,
+generators, async functions, top-level `await`, modules and dynamic `import()`,
+regular expressions, promises, typed arrays and buffers, Atomics/Test262 agent
+support, explicit resource-management syntax and core disposal semantics, and a
+large standard-library surface (`Object`, `Array`, `Map`, `Set`, `String`,
+`Math`, `JSON`, `Promise`, iterator helpers, ...).
 
-**Not yet:** classes, `async`/`await`, generators, and modules. Conformance work is intentionally incremental; the Test262 burndown
-above is the honest scoreboard.
+**Still in progress:** production performance work, the slot-indexed
+environment/upvalue-cell rewrite, remaining edge-case parity outside the
+QuickJS-NG comparison baseline, and larger follow-up campaigns such as full
+Temporal coverage, wider explicit resource-management disposal coverage, and
+future TC39 draft features. Conformance work is intentionally incremental; the
+Test262 burndown above is the honest scoreboard.
 
 ## Workspace
 

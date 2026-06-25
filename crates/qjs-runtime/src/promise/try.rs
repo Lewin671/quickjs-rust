@@ -3,7 +3,7 @@ use crate::{Function, RuntimeError, Value, call_function};
 use super::capability::{self, new_promise_capability};
 use crate::CallEnv;
 
-/// `Promise.try` (ES2026 proposal): builds a capability from the `this`
+/// `Promise.try` (ES2025): builds a capability from the `this`
 /// constructor, runs the callback synchronously, and resolves/rejects the
 /// capability with its outcome.
 pub(crate) fn native_promise_try(

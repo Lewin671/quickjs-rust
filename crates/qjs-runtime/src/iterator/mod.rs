@@ -2,7 +2,7 @@
 //! global constructor, `Iterator.from`, and the iterator helper methods
 //! (`map`/`filter`/`take`/`drop`/`flatMap` plus the eager
 //! `reduce`/`toArray`/`forEach`/`some`/`every`/`find`) from the ES2025 Iterator
-//! Helpers proposal (27.1).
+//! Helpers additions (27.1).
 //!
 //! `%Iterator.prototype%` is the shared root of every built-in iterator: array,
 //! string, map, set, and generator iterators all inherit from it, so the

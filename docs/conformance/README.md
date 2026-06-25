@@ -1,5 +1,13 @@
 # Conformance Burndown
 
+The default language target is the latest ratified ECMAScript standard:
+ECMA-262 16th edition, June 2025 (ECMAScript 2025 / ES2025), anchored to the
+`tc39/ecma262@es2025` specification tag. Test262 has no edition-specific stable
+tag, so the pinned Test262 corpus may contain newer Stage 3+ or living-draft
+material; those cases are tracked as future-work campaigns unless they are
+already part of the ES2025 baseline or the pinned QuickJS-NG comparison
+configuration.
+
 `burndown.jsonl` is the append-only time series of full Test262 comparison
 scans against the pinned QuickJS-NG reference. One line per recorded scan,
 schema version 1:
