@@ -1,11 +1,15 @@
 [package]
 name = "qjs-unicode"
 version = "0.1.0"
-description = "Unicode property tables shared by quickjs-rust lexer and runtime."
+description = "Unicode property tables for quickjs-rust parsing and runtime semantics."
 edition.workspace = true
 license.workspace = true
+homepage.workspace = true
 repository.workspace = true
+readme.workspace = true
 rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 

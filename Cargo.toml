@@ -12,8 +12,12 @@ resolver = "2"
 [workspace.package]
 edition = "2024"
 license = "MIT"
+homepage = "https://github.com/Lewin671/quickjs-rust"
 repository = "https://github.com/Lewin671/quickjs-rust"
+readme = "README.md"
 rust-version = "1.85"
+keywords = ["javascript", "ecmascript", "quickjs", "runtime", "vm"]
+categories = ["compilers", "parser-implementations"]
 
 # `deny` (not `forbid`) so audited optimizations can opt in per-module with an
 # explicit `#[allow(unsafe_code)]` + `// SAFETY:` comment. See AGENTS.md.

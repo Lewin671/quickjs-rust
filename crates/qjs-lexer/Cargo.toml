@@ -1,11 +1,15 @@
 [package]
 name = "qjs-lexer"
 version = "0.1.0"
-description = "Span-preserving JavaScript lexer for quickjs-rust."
+description = "Span-preserving ECMAScript lexer for quickjs-rust."
 edition.workspace = true
 license.workspace = true
+homepage.workspace = true
 repository.workspace = true
+readme.workspace = true
 rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 qjs-ast = { path = "../qjs-ast" }

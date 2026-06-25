@@ -1,11 +1,15 @@
 [package]
 name = "qjs-parser"
 version = "0.1.0"
-description = "JavaScript parser that builds quickjs-rust AST nodes from lexer tokens."
+description = "Span-preserving ECMAScript parser for quickjs-rust."
 edition.workspace = true
 license.workspace = true
+homepage.workspace = true
 repository.workspace = true
+readme.workspace = true
 rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 qjs-ast = { path = "../qjs-ast" }

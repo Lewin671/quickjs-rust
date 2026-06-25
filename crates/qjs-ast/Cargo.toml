@@ -1,11 +1,15 @@
 [package]
 name = "qjs-ast"
 version = "0.1.0"
-description = "Shared JavaScript AST and source span types for quickjs-rust."
+description = "Span-preserving ECMAScript AST types for quickjs-rust."
 edition.workspace = true
 license.workspace = true
+homepage.workspace = true
 repository.workspace = true
+readme.workspace = true
 rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [lints]
 workspace = true

@@ -1,11 +1,15 @@
 [package]
 name = "qjs-runtime"
 version = "0.1.0"
-description = "JavaScript bytecode runtime and virtual machine for quickjs-rust."
+description = "Rust-native ECMAScript bytecode runtime and virtual machine."
 edition.workspace = true
 license.workspace = true
+homepage.workspace = true
 repository.workspace = true
+readme.workspace = true
 rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [features]
 # Opt-in OS-thread support backing the Test262 `$262.agent` multi-agent harness

@@ -1,11 +1,15 @@
 [package]
 name = "qjs-cli"
 version = "0.1.0"
-description = "Command-line entry point for the quickjs-rust engine."
+description = "Command-line shell for the quickjs-rust ECMAScript runtime."
 edition.workspace = true
 license.workspace = true
+homepage.workspace = true
 repository.workspace = true
+readme.workspace = true
 rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [[bin]]
 name = "qjs"
