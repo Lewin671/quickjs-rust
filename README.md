@@ -22,17 +22,13 @@ against the ES2025 target and a pinned
 
 ## Conformance
 
-Conformance is measured continuously with Test262 and differential checks
-against QuickJS-NG.
+Conformance is tracked with pinned Test262 inputs and differential checks
+against QuickJS-NG. CI runs Rust checks, QuickJS-NG comparison smoke tests,
+curated Test262 subsets, and a sharded full Test262 coverage workflow.
 
-- The latest recorded full scan reports zero actionable gaps against the pinned
-  QuickJS-NG comparison baseline.
-- In that scan, quickjs-rust passes 42,656 / 42,672 configured Test262 cases;
-  the remaining configured failures are also non-passing in QuickJS-NG.
-- Full-scan burndown entries are recorded under
-  [`docs/conformance/burndown.jsonl`](docs/conformance/burndown.jsonl).
-- CI runs Rust checks, QuickJS-NG comparison smoke tests, curated Test262
-  subsets, and a sharded full Test262 coverage workflow.
+Full-scan snapshots are recorded under
+[`docs/conformance/burndown.jsonl`](docs/conformance/burndown.jsonl), including
+the current pass counts and comparison details.
 
 Active work is focused on production engineering and deeper specification
 coverage: performance, the slot-indexed environment/upvalue-cell model,
