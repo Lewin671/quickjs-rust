@@ -52,8 +52,6 @@ The runtime supports:
 - Structured lexer, parser, compile, and runtime errors. Tokens and syntax
   nodes preserve byte-offset spans for diagnostics.
 
-The workspace denies Rust `unsafe` code by default.
-
 ## Getting Started
 
 Prebuilt `qjs-rust` CLI binaries are attached to
