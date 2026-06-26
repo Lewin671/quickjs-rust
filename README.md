@@ -20,7 +20,7 @@ tags; this repository therefore pins a concrete Test262 commit and evaluates it
 against the ES2025 target and a pinned
 [QuickJS-NG](https://github.com/quickjs-ng/quickjs) comparison baseline.
 
-## Conformance
+## ECMAScript Conformance
 
 Conformance is tracked with pinned Test262 inputs and differential checks
 against QuickJS-NG. CI runs Rust checks, QuickJS-NG comparison smoke tests,
