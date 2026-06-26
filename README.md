@@ -68,19 +68,8 @@ macOS and Linux on x86_64 and arm64. Install the latest release with:
 curl -fsSL https://raw.githubusercontent.com/Lewin671/quickjs-rust/main/install.sh | sh
 ```
 
-Rerun the same command to update an existing installation, or make the intent
-explicit:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/Lewin671/quickjs-rust/main/install.sh | sh -s -- --upgrade
-```
-
-To install a specific version or choose another destination:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/Lewin671/quickjs-rust/main/install.sh | sh -s -- --version v0.1.0-preview.4
-curl -fsSL https://raw.githubusercontent.com/Lewin671/quickjs-rust/main/install.sh | sh -s -- --dir /usr/local/bin
-```
+Run the installer again to update an existing installation; use
+`sh -s -- --help` for version and destination options.
 
 Then run:
 
