@@ -11,6 +11,26 @@ use qjs_runtime::{
     eval_classified_with_resolver, eval_module_with_prelude,
 };
 
+const USAGE: &str = "usage: qjs [--raw] [--error-format=test262] [--module [--prelude <file>]] (-e <source> | <file> [script-arg...])";
+
+const HELP: &str = "\
+quickjs-rust command-line host
+
+Usage:
+  qjs [--raw] [--error-format=test262] (-e <source> | <file> [script-arg...])
+  qjs [--raw] [--error-format=test262] --module [--prelude <file>] <module.mjs>
+
+Options:
+  -e <source>                 Evaluate source text as a script
+  --module                    Evaluate the input file as an ECMAScript module
+  --prelude <file>            Evaluate a script prelude before a module
+  --raw                       Print JavaScript string values without Rust debug formatting
+  --error-format=test262      Print harness-friendly error metadata
+  --agent                     Enable the Test262 $262.agent harness in agents builds
+  --agent-cannot-block        Make AgentCanSuspend() false in agents builds
+  -h, --help                  Show this help text
+";
+
 fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
@@ -45,6 +65,10 @@ fn run() -> Result<(), CliError> {
                 raw_output = true;
                 args.next();
             }
+            Some("-h" | "--help") => {
+                println!("{HELP}");
+                return Ok(());
+            }
             Some("--error-format=test262") => {
                 test262_error_format = true;
                 args.next();
@@ -74,9 +98,7 @@ fn run() -> Result<(), CliError> {
 
     let Some(first) = args.next() else {
         return Err(CliError {
-            message:
-                "usage: qjs [--raw] [--error-format=test262] [--module [--prelude <file>]] (-e <source> | <file> [script-arg...])"
-                    .to_owned(),
+            message: USAGE.to_owned(),
         });
     };
 

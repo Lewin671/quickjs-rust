@@ -25,8 +25,10 @@ against the ES2025 target and a pinned
 Conformance is measured continuously with Test262 and differential checks
 against QuickJS-NG.
 
-- 42,672 / 42,672 configured Test262 cases pass in the latest CI coverage scan.
-- The current QuickJS-NG comparison baseline reports zero actionable gaps.
+- The latest recorded full scan reports zero actionable gaps against the pinned
+  QuickJS-NG comparison baseline.
+- In that scan, quickjs-rust passes 42,656 / 42,672 configured Test262 cases;
+  the remaining configured failures are also non-passing in QuickJS-NG.
 - Full-scan burndown entries are recorded under
   [`docs/conformance/burndown.jsonl`](docs/conformance/burndown.jsonl).
 - CI runs Rust checks, QuickJS-NG comparison smoke tests, curated Test262
@@ -70,6 +72,8 @@ Use the CLI for scripts, modules, or direct evaluation:
 
 ```sh
 cargo run -p qjs-cli -- --raw -e 'JSON.stringify([1, 2, 3].toReversed())'
+# [3,2,1]
+cargo run -p qjs-cli -- --help
 cargo run -p qjs-cli -- --module path/to/module.mjs
 cargo run -p qjs-cli -- path/to/script.js
 ```

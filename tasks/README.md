@@ -21,7 +21,8 @@ follow-ups.
 Campaigns decompose the broad features that the quickwins gap strategy
 intentionally de-prioritizes. Sizes are QuickJS-NG-passing Test262 cases
 measured at commit `3e7feb0` (2026-06-09 full scan); recheck against the
-latest `docs/conformance/burndown.jsonl` entry before starting new work.
+latest `docs/conformance/burndown.jsonl` entry before starting new work. This
+table is historical planning input, not the current pass/fail status.
 
 | Task | Campaign | Unlocks (approx.) | Mostly blocked as |
 | --- | --- | ---: | --- |
