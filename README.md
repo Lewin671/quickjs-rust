@@ -62,12 +62,24 @@ The workspace denies Rust `unsafe` code by default.
 
 Prebuilt `qjs-rust` CLI binaries are attached to
 [GitHub Releases](https://github.com/Lewin671/quickjs-rust/releases) for
-macOS and Linux on x86_64 and arm64. Download the archive for your platform,
-unpack it, and run:
+macOS and Linux on x86_64 and arm64. Install or update the latest release with:
 
 ```sh
-./qjs-rust --version
-./qjs-rust --raw -e 'JSON.stringify([1, 2, 3].toReversed())'
+curl -fsSL https://raw.githubusercontent.com/Lewin671/quickjs-rust/main/install.sh | sh
+```
+
+To install a specific version or choose another destination:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Lewin671/quickjs-rust/main/install.sh | sh -s -- --version v0.1.0-preview.3
+curl -fsSL https://raw.githubusercontent.com/Lewin671/quickjs-rust/main/install.sh | sh -s -- --dir /usr/local/bin
+```
+
+Then run:
+
+```sh
+qjs-rust --version
+qjs-rust --raw -e 'JSON.stringify([1, 2, 3].toReversed())'
 # [3,2,1]
 ```
 
