@@ -2,6 +2,7 @@
 
 use std::{
     env, fs,
+    io::{self, BufRead, IsTerminal, Write},
     path::{Path, PathBuf},
     process::ExitCode,
 };
@@ -13,7 +14,7 @@ use qjs_runtime::{
 
 fn usage(command: &str) -> String {
     format!(
-        "usage: {command} [--raw] [--error-format=test262] [--module [--prelude <file>]] (-e <source> | <file> [script-arg...])"
+        "usage: {command} [--raw] [--error-format=test262] [--interactive] | {command} [--raw] [--error-format=test262] [--module [--prelude <file>]] (-e <source> | <file> [script-arg...])"
     )
 }
 
@@ -23,11 +24,13 @@ fn help(command: &str) -> String {
 quickjs-rust command-line host
 
 Usage:
+  {command} [--raw] [--error-format=test262] [--interactive]
   {command} [--raw] [--error-format=test262] (-e <source> | <file> [script-arg...])
   {command} [--raw] [--error-format=test262] --module [--prelude <file>] <module.mjs>
 
 Options:
   -e <source>                 Evaluate source text as a script
+  -i, --interactive, --repl   Start an interactive shell
   --module                    Evaluate the input file as an ECMAScript module
   --prelude <file>            Evaluate a script prelude before a module
   --raw                       Print JavaScript string values without Rust debug formatting
@@ -50,6 +53,7 @@ fn main() -> ExitCode {
     }
 }
 
+#[derive(Debug)]
 struct CliError {
     message: String,
 }
@@ -60,6 +64,7 @@ fn run() -> Result<(), CliError> {
     let mut raw_output = false;
     let mut test262_error_format = false;
     let mut module_mode = false;
+    let mut interactive_mode = false;
     let mut prelude_path: Option<String> = None;
     // Test262 `$262.agent` harness: `--agent` runs the script as the main agent
     // (its `$262.agent.*` primitives become available); `--agent-cannot-block`
@@ -87,6 +92,10 @@ fn run() -> Result<(), CliError> {
                 test262_error_format = true;
                 args.next();
             }
+            Some("-i" | "--interactive" | "--repl") => {
+                interactive_mode = true;
+                args.next();
+            }
             Some("--agent") => {
                 agent_mode = true;
                 args.next();
@@ -110,10 +119,42 @@ fn run() -> Result<(), CliError> {
         }
     }
 
+    if interactive_mode {
+        if module_mode {
+            return Err(CliError {
+                message: "--interactive cannot be combined with --module".to_owned(),
+            });
+        }
+        if prelude_path.is_some() {
+            return Err(CliError {
+                message: "--interactive cannot be combined with --prelude".to_owned(),
+            });
+        }
+        if !args.as_slice().is_empty() {
+            return Err(CliError {
+                message: "--interactive does not accept a file or -e source".to_owned(),
+            });
+        }
+        return run_repl(
+            raw_output,
+            test262_error_format,
+            agent_mode,
+            agent_cannot_block,
+        );
+    }
+
     let Some(first) = args.next() else {
-        return Err(CliError {
-            message: usage(&command),
-        });
+        if module_mode {
+            return Err(CliError {
+                message: usage(&command),
+            });
+        }
+        return run_repl(
+            raw_output,
+            test262_error_format,
+            agent_mode,
+            agent_cannot_block,
+        );
     };
 
     if module_mode {
@@ -154,11 +195,7 @@ fn run() -> Result<(), CliError> {
             message: error.message,
         })?
     };
-    if raw_output {
-        print_raw(&value);
-    } else {
-        println!("{value:?}");
-    }
+    println!("{}", format_value(&value, raw_output));
     Ok(())
 }
 
@@ -194,6 +231,97 @@ fn eval_script(
     }
     let _ = (agent_mode, agent_cannot_block);
     eval_classified_with_resolver(source, referrer, Box::new(FsResolver))
+}
+
+fn run_repl(
+    raw_output: bool,
+    test262_error_format: bool,
+    agent_mode: bool,
+    agent_cannot_block: bool,
+) -> Result<(), CliError> {
+    let stdin = io::stdin();
+    let stdout = io::stdout();
+    let prompts = stdin.is_terminal() && stdout.is_terminal();
+    let mut input = stdin.lock();
+    let mut output = stdout.lock();
+    run_repl_with_io(
+        &mut input,
+        &mut output,
+        prompts,
+        raw_output,
+        test262_error_format,
+        agent_mode,
+        agent_cannot_block,
+    )
+}
+
+fn run_repl_with_io<R: BufRead, W: Write>(
+    input: &mut R,
+    output: &mut W,
+    prompts: bool,
+    raw_output: bool,
+    test262_error_format: bool,
+    agent_mode: bool,
+    agent_cannot_block: bool,
+) -> Result<(), CliError> {
+    let referrer = env::current_dir()
+        .map(|dir| dir.join("<repl>").to_string_lossy().into_owned())
+        .unwrap_or_else(|_| "<repl>".to_owned());
+    let script_args = ["<repl>".to_owned()];
+    let mut history: Vec<String> = Vec::new();
+    let mut line = String::new();
+
+    loop {
+        if prompts {
+            write!(output, "qjs> ").map_err(io_error)?;
+            output.flush().map_err(io_error)?;
+        }
+
+        line.clear();
+        let bytes = input.read_line(&mut line).map_err(io_error)?;
+        if bytes == 0 {
+            break;
+        }
+
+        let line_source = line.trim_end_matches(['\n', '\r']);
+        let command = line_source.trim();
+        if command.is_empty() {
+            continue;
+        }
+        if matches!(command, ".exit" | ".quit") {
+            break;
+        }
+
+        let mut source = String::new();
+        for entry in &history {
+            source.push_str(entry);
+            source.push('\n');
+        }
+        source.push_str(line_source);
+        let source = with_script_args(&source, &script_args);
+        let result = eval_script(&source, &referrer, agent_mode, agent_cannot_block);
+        match result {
+            Ok(value) => {
+                history.push(line_source.to_owned());
+                writeln!(output, "{}", format_value(&value, raw_output)).map_err(io_error)?;
+            }
+            Err(error) if test262_error_format => {
+                let error = format_test262_error(error);
+                writeln!(output, "error: {}", error.message).map_err(io_error)?;
+            }
+            Err(error) => {
+                writeln!(output, "error: {}", error.message).map_err(io_error)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn io_error(error: io::Error) -> CliError {
+    CliError {
+        message: error.to_string(),
+    }
 }
 
 /// Evaluates `file` under the Module goal. Relative specifiers resolve against
@@ -460,22 +588,27 @@ fn escape_js_string(value: &str) -> String {
     escaped
 }
 
-fn print_raw(value: &Value) {
+fn format_value(value: &Value, raw_output: bool) -> String {
+    if !raw_output {
+        return format!("{value:?}");
+    }
     match value {
-        Value::String(value) => println!("{value}"),
-        Value::Number(value) => println!("{value}"),
-        Value::Boolean(value) => println!("{value}"),
-        Value::Null => println!("null"),
-        Value::Undefined => println!("undefined"),
-        _ => println!("{value:?}"),
+        Value::String(value) => value.to_string(),
+        Value::Number(value) => value.to_string(),
+        Value::Boolean(value) => value.to_string(),
+        Value::Null => "null".to_owned(),
+        Value::Undefined => "undefined".to_owned(),
+        _ => format!("{value:?}"),
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
     use qjs_runtime::{EvalError, EvalErrorKind};
 
-    use super::{format_test262_error, with_script_args};
+    use super::{format_test262_error, run_repl_with_io, with_script_args};
 
     #[test]
     fn inserts_script_args_after_use_strict_directive() {
@@ -566,5 +699,40 @@ mod tests {
             test262.message,
             "kind=runtime type=Test262Error message=throw statement executed: Test262Error"
         );
+    }
+
+    #[test]
+    fn repl_evaluates_lines_until_exit_command() {
+        let mut input = Cursor::new("1 + 2\n'hello'\n.exit\n");
+        let mut output = Vec::new();
+
+        run_repl_with_io(&mut input, &mut output, false, true, false, false, false)
+            .expect("repl should evaluate input");
+
+        assert_eq!(String::from_utf8(output).unwrap(), "3\nhello\n");
+    }
+
+    #[test]
+    fn repl_reports_errors_and_continues() {
+        let mut input = Cursor::new("missingName\n1 + 1\n.quit\n");
+        let mut output = Vec::new();
+
+        run_repl_with_io(&mut input, &mut output, false, true, false, false, false)
+            .expect("repl should keep reading after evaluation errors");
+
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains("error:"));
+        assert!(output.ends_with("2\n"));
+    }
+
+    #[test]
+    fn repl_keeps_successful_input_history() {
+        let mut input = Cursor::new("let answer = 41\nanswer + 1\n.quit\n");
+        let mut output = Vec::new();
+
+        run_repl_with_io(&mut input, &mut output, false, true, false, false, false)
+            .expect("repl should evaluate later input with earlier declarations");
+
+        assert_eq!(String::from_utf8(output).unwrap(), "undefined\n42\n");
     }
 }

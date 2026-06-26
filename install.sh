@@ -11,10 +11,12 @@ usage() {
 Install the qjs-rust CLI from GitHub Releases.
 
 Usage:
-  install.sh [--version <tag>] [--dir <path>]
+  install.sh [--upgrade] [--version <tag>] [--dir <path>]
 
 Options:
-  --version <tag>  Release tag to install, for example v0.1.0-preview.3.
+  --upgrade       Install the selected release over any existing qjs-rust binary.
+                  This is the default behavior, so rerunning the script updates it.
+  --version <tag>  Release tag to install, for example v0.1.0-preview.4.
                    Defaults to the latest GitHub release.
   --dir <path>     Installation directory. Defaults to $HOME/.local/bin.
   -h, --help       Show this help.
@@ -35,6 +37,9 @@ need_cmd() {
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --upgrade|--update)
+      shift
+      ;;
     --version)
       [ "$#" -ge 2 ] || die "--version requires a value"
       version="$2"
@@ -121,7 +126,7 @@ mkdir -p "$install_dir"
 cp "$tmp_dir/$artifact/$bin_name" "$install_dir/$bin_name"
 chmod +x "$install_dir/$bin_name"
 
-printf 'Installed %s to %s\n' "$bin_name" "$install_dir/$bin_name"
+printf 'Installed or updated %s at %s\n' "$bin_name" "$install_dir/$bin_name"
 "$install_dir/$bin_name" --version
 
 case ":$PATH:" in

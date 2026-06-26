@@ -62,16 +62,23 @@ The workspace denies Rust `unsafe` code by default.
 
 Prebuilt `qjs-rust` CLI binaries are attached to
 [GitHub Releases](https://github.com/Lewin671/quickjs-rust/releases) for
-macOS and Linux on x86_64 and arm64. Install or update the latest release with:
+macOS and Linux on x86_64 and arm64. Install the latest release with:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Lewin671/quickjs-rust/main/install.sh | sh
 ```
 
+Rerun the same command to update an existing installation, or make the intent
+explicit:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Lewin671/quickjs-rust/main/install.sh | sh -s -- --upgrade
+```
+
 To install a specific version or choose another destination:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Lewin671/quickjs-rust/main/install.sh | sh -s -- --version v0.1.0-preview.3
+curl -fsSL https://raw.githubusercontent.com/Lewin671/quickjs-rust/main/install.sh | sh -s -- --version v0.1.0-preview.4
 curl -fsSL https://raw.githubusercontent.com/Lewin671/quickjs-rust/main/install.sh | sh -s -- --dir /usr/local/bin
 ```
 
@@ -81,6 +88,7 @@ Then run:
 qjs-rust --version
 qjs-rust --raw -e 'JSON.stringify([1, 2, 3].toReversed())'
 # [3,2,1]
+qjs-rust
 ```
 
 For source builds, install Rust with [`rustup`](https://rustup.rs), then:
@@ -97,6 +105,7 @@ Use the CLI for scripts, modules, or direct evaluation:
 cargo run -p qjs-cli -- --raw -e 'JSON.stringify([1, 2, 3].toReversed())'
 # [3,2,1]
 cargo run -p qjs-cli -- --help
+cargo run -p qjs-cli -- --interactive
 cargo run -p qjs-cli -- --module path/to/module.mjs
 cargo run -p qjs-cli -- path/to/script.js
 ```
