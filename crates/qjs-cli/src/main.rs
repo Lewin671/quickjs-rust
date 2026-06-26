@@ -11,14 +11,20 @@ use qjs_runtime::{
     eval_classified_with_resolver, eval_module_with_prelude,
 };
 
-const USAGE: &str = "usage: qjs [--raw] [--error-format=test262] [--module [--prelude <file>]] (-e <source> | <file> [script-arg...])";
+fn usage(command: &str) -> String {
+    format!(
+        "usage: {command} [--raw] [--error-format=test262] [--module [--prelude <file>]] (-e <source> | <file> [script-arg...])"
+    )
+}
 
-const HELP: &str = "\
+fn help(command: &str) -> String {
+    format!(
+        "\
 quickjs-rust command-line host
 
 Usage:
-  qjs [--raw] [--error-format=test262] (-e <source> | <file> [script-arg...])
-  qjs [--raw] [--error-format=test262] --module [--prelude <file>] <module.mjs>
+  {command} [--raw] [--error-format=test262] (-e <source> | <file> [script-arg...])
+  {command} [--raw] [--error-format=test262] --module [--prelude <file>] <module.mjs>
 
 Options:
   -e <source>                 Evaluate source text as a script
@@ -29,7 +35,10 @@ Options:
   --agent                     Enable the Test262 $262.agent harness in agents builds
   --agent-cannot-block        Make AgentCanSuspend() false in agents builds
   -h, --help                  Show this help text
-";
+  -V, --version               Show the CLI version
+"
+    )
+}
 
 fn main() -> ExitCode {
     match run() {
@@ -46,6 +55,7 @@ struct CliError {
 }
 
 fn run() -> Result<(), CliError> {
+    let command = command_name();
     let mut args = env::args().skip(1).collect::<Vec<_>>().into_iter();
     let mut raw_output = false;
     let mut test262_error_format = false;
@@ -66,7 +76,11 @@ fn run() -> Result<(), CliError> {
                 args.next();
             }
             Some("-h" | "--help") => {
-                println!("{HELP}");
+                print!("{}", help(&command));
+                return Ok(());
+            }
+            Some("-V" | "--version") => {
+                println!("{command} {}", env!("CARGO_PKG_VERSION"));
                 return Ok(());
             }
             Some("--error-format=test262") => {
@@ -98,7 +112,7 @@ fn run() -> Result<(), CliError> {
 
     let Some(first) = args.next() else {
         return Err(CliError {
-            message: USAGE.to_owned(),
+            message: usage(&command),
         });
     };
 
@@ -146,6 +160,17 @@ fn run() -> Result<(), CliError> {
         println!("{value:?}");
     }
     Ok(())
+}
+
+fn command_name() -> String {
+    env::args()
+        .next()
+        .and_then(|arg| {
+            Path::new(&arg)
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        })
+        .unwrap_or_else(|| "qjs".to_owned())
 }
 
 /// Evaluates script-goal `source`. When `agent_mode` is set (Test262

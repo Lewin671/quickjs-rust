@@ -60,7 +60,18 @@ The workspace denies Rust `unsafe` code by default.
 
 ## Getting Started
 
-Install Rust with [`rustup`](https://rustup.rs), then:
+Prebuilt `qjs-rust` CLI binaries are attached to
+[GitHub Releases](https://github.com/Lewin671/quickjs-rust/releases) for
+macOS and Linux on x86_64 and arm64. Download the archive for your platform,
+unpack it, and run:
+
+```sh
+./qjs-rust --version
+./qjs-rust --raw -e 'JSON.stringify([1, 2, 3].toReversed())'
+# [3,2,1]
+```
+
+For source builds, install Rust with [`rustup`](https://rustup.rs), then:
 
 ```sh
 git clone --recurse-submodules https://github.com/Lewin671/quickjs-rust.git
