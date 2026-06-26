@@ -23,12 +23,20 @@ jobs:
         include:
           - artifact: qjs-rust-x86_64-unknown-linux-gnu
             runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            smoke: true
           - artifact: qjs-rust-aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            smoke: true
           - artifact: qjs-rust-x86_64-apple-darwin
-            runner: macos-13
+            runner: macos-14
+            target: x86_64-apple-darwin
+            smoke: false
           - artifact: qjs-rust-aarch64-apple-darwin
             runner: macos-14
+            target: aarch64-apple-darwin
+            smoke: true
 
     steps:
       - name: Checkout
@@ -40,10 +48,13 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
 
+      - name: Install Rust target
+        run: rustup target add ${{ matrix.target }}
+
       - name: Build CLI
         # Release binaries include the optional agents feature so the standalone
         # CLI has the same Atomics/$262.agent support as the conformance runner.
-        run: cargo build --locked --release -p qjs-cli --features agents
+        run: cargo build --locked --release -p qjs-cli --features agents --target ${{ matrix.target }}
 
       - name: Package CLI
         shell: bash
@@ -51,18 +62,26 @@ jobs:
           set -euo pipefail
           package="${{ matrix.artifact }}"
           mkdir -p "dist/$package"
-          cp target/release/qjs "dist/$package/qjs-rust"
+          cp "target/${{ matrix.target }}/release/qjs" "dist/$package/qjs-rust"
           chmod +x "dist/$package/qjs-rust"
           cp README.md LICENSE "dist/$package/"
           tar -C dist -czf "dist/$package.tar.gz" "$package"
 
       - name: Smoke test packaged binary
+        if: ${{ matrix.smoke }}
         shell: bash
         run: |
           set -euo pipefail
           "dist/${{ matrix.artifact }}/qjs-rust" --version
           actual="$("dist/${{ matrix.artifact }}/qjs-rust" --raw -e '1 + 2')"
           test "$actual" = "3"
+
+      - name: Inspect cross-built binary
+        if: ${{ !matrix.smoke }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          file "dist/${{ matrix.artifact }}/qjs-rust"
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v6
