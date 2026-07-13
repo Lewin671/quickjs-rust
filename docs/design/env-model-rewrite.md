@@ -1,6 +1,6 @@
 # Environment / Binding Model Rewrite
 
-Status: active migration; S1-S3 landed. Implementation tracked by
+Status: active migration; S1-S4 landed. Implementation tracked by
 `tasks/T016-environment-model-rewrite.md`. This rewrite is the
 keystone named in `AGENTS.md`: it is the shared root of the remaining
 closure/`eval`/method capture-staleness failures *and* the per-call allocation
@@ -52,8 +52,9 @@ References verified 2026-06-21 against `crates/qjs-runtime`.
    heuristics, any uncovered path can desync. Before S2-S3 this included stale
    declaring frames, class-inner-name collisions (M2), and per-iteration
    captures; those now use shared slot cells. The remaining migration targets
-   are generator snapshot re-import/writeback and dynamic `eval`/`with` name
-   resolution.
+   are the remaining non-cell legacy environment paths plus dynamic `eval`/
+   `with` name resolution. Generator/async suspension and function parameters/
+   `var` captures use shared cells as of S4.
 2. **Performance.** Every call rebuilds a `HashMap<String, Value>` of locals and
    clones caller bindings into it (`with_frame_locals`, `function_capture_env`).
    Under nested-call load this is the dominant cost and the source of the ~536
@@ -169,8 +170,19 @@ one.
   new cell at the first C-style `for` iteration boundary when required and at
   every loop back-edge. The module namespace map has a marked cell-write bridge
   that is intentionally deleted with the old model in S5.
-- **S4 — Generators/async + parameter-scope captures.** Move `upvalues` into
-  the suspended frame; delete the per-step generator write-back.
+- **S4 — Generators/async + parameter/function-scope captures (complete).**
+  Captured parameters and body `var`/function declarations are parent-local
+  cells, while actual received captures alone consume incoming upvalue slots.
+  Suspended frames retain both `upvalues` and `local_upvalues`; the generic
+  per-step capture refresh/write-back passes are gone. The temporary dynamic
+  Function marked-realm compatibility path synchronizes existing global
+  properties at their write sites and preserves call-frame bindings across
+  generator resumes. TLA modules explicitly mark their temporary live-export
+  cell bridge, and the literal string-append fast path refreshes its source from
+  a received cell before in-place mutation. The broader name-keyed compatibility
+  structures remain only for S5/S6 migration paths; in particular, direct-eval
+  source still deopts dynamically introduced/deletable function-level bindings
+  to the legacy name bridge until S6 supplies the explicit name-to-cell map.
 - **S5 — Delete the old model.** Remove `Function.env`/`captured_env`/
   `capture_writeback`, the `vm_capture.rs` refresh family, the `CallEnv` locals
   HashMap, and `with_frame_locals` cloning. This is the slice that realizes the

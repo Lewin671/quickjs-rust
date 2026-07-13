@@ -714,6 +714,25 @@ fn function_env(
         &function.local_names,
         &captured_env,
     );
+    // Indexed upvalues are already live shared cells. Keep their compatibility
+    // snapshot in the frame env for dynamic-name consumers, but never register
+    // them for the legacy caller/name writeback path: a same-named caller
+    // binding can be a different lexical or function-environment cell.
+    for name in bytecode.received_upvalue_names() {
+        let keeps_legacy_lexical_bridge = function
+            .capture_writeback
+            .as_ref()
+            .is_some_and(|writeback| writeback.targets_name(name));
+        if !keeps_legacy_lexical_bridge {
+            function_capture_names.retain(|capture| capture != name);
+            if !protected_capture_names
+                .iter()
+                .any(|protected| protected == name)
+            {
+                protected_capture_names.push(name.to_owned());
+            }
+        }
+    }
     if let Some(name) = &function.immutable_env_binding
         && !protected_capture_names
             .iter()
@@ -909,11 +928,27 @@ fn function_env(
 }
 
 fn insert_marked_call_realm(function: &Function, local_env: &mut HashMap<String, Value>) {
-    let Some(crate::Property {
-        value: Value::Object(global),
-        ..
-    }) = function.own_property(DYNAMIC_FUNCTION_REALM_GLOBAL)
-    else {
+    let global = function
+        .own_property(DYNAMIC_FUNCTION_REALM_GLOBAL)
+        .and_then(|property| match property.value {
+            Value::Object(global) => Some(global),
+            _ => None,
+        })
+        .or_else(|| match function.env.get(DYNAMIC_FUNCTION_REALM_GLOBAL) {
+            Some(Value::Object(global)) => Some(global.clone()),
+            _ => None,
+        })
+        .or_else(|| {
+            match function
+                .captured_env
+                .borrow()
+                .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
+            {
+                Some(Value::Object(global)) => Some(global.clone()),
+                _ => None,
+            }
+        });
+    let Some(global) = global else {
         return;
     };
     local_env.insert(

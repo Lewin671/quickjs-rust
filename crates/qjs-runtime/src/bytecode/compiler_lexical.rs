@@ -170,7 +170,7 @@ impl Compiler {
             {
                 continue;
             }
-            if let Some(slot) = self.resolve_active_lexical_slot(name)
+            if let Some(slot) = self.resolve_active_capture_slot(name)
                 && !captures
                     .iter()
                     .any(|capture: &LexicalCapture| capture.slot == slot)
@@ -208,6 +208,19 @@ impl Compiler {
             .iter()
             .rev()
             .find_map(|scope| scope.get(name).copied())
+    }
+
+    /// Resolves bindings that have moved onto shared cells through T016 S4.
+    /// Lexical scopes win over same-named function-environment bindings;
+    /// parameters and body `var`/function declarations are otherwise
+    /// capturable even though they live in `local_slots` rather than
+    /// `lexical_scopes`. Global `var` bindings deliberately stay realm-backed.
+    fn resolve_active_capture_slot(&self, name: &str) -> Option<usize> {
+        self.resolve_active_lexical_slot(name).or_else(|| {
+            (!self.global_scope && !self.direct_eval_source)
+                .then(|| self.resolve_local_slot(name))
+                .flatten()
+        })
     }
 }
 
@@ -453,6 +466,7 @@ pub(super) fn function_param_names(params: &FunctionParams) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::{ir::Op, upvalue_resolver};
     use super::*;
 
     #[test]
@@ -466,5 +480,112 @@ mod tests {
         assert_ne!(outer, inner);
         assert_eq!(compiler.locals[outer].name, "value");
         assert_eq!(compiler.locals[inner].name, "value");
+    }
+
+    #[test]
+    fn nested_function_captures_parent_parameter_by_slot() {
+        let script = qjs_parser::parse_script(
+            "function outer(value) { return function read() { return value; }; }",
+        )
+        .expect("source should parse");
+        let top = super::super::compiler::compile_script(&script).expect("source should compile");
+        let outer = top
+            .code
+            .iter()
+            .find_map(|op| match op {
+                Op::NewFunction {
+                    name: Some(name),
+                    bytecode,
+                    ..
+                } if name == "outer" => Some(bytecode),
+                _ => None,
+            })
+            .expect("outer function should be emitted");
+        let parameter_slot = outer
+            .local_slot("value")
+            .expect("outer parameter should have a slot");
+        assert!(outer.local_is_parameter(parameter_slot));
+
+        let captures = outer
+            .code
+            .iter()
+            .find_map(|op| match op {
+                Op::NewFunction {
+                    name: Some(name),
+                    lexical_captures,
+                    ..
+                } if name == "read" => Some(lexical_captures),
+                _ => None,
+            })
+            .expect("nested function should be emitted");
+        assert_eq!(captures, &vec![("value".to_owned(), parameter_slot)]);
+        assert_eq!(
+            upvalue_resolver::resolve_upvalues(outer).cell_slots,
+            vec![parameter_slot]
+        );
+    }
+
+    #[test]
+    fn nested_function_captures_parent_var_by_slot() {
+        let script = qjs_parser::parse_script(
+            "function outer() { var value = 1; return function read() { return value; }; }",
+        )
+        .expect("source should parse");
+        let top = super::super::compiler::compile_script(&script).expect("source should compile");
+        let outer = top
+            .code
+            .iter()
+            .find_map(|op| match op {
+                Op::NewFunction {
+                    name: Some(name),
+                    bytecode,
+                    ..
+                } if name == "outer" => Some(bytecode),
+                _ => None,
+            })
+            .expect("outer function should be emitted");
+        let var_slot = outer
+            .local_slot("value")
+            .expect("outer var should have a slot");
+        assert!(outer.local_is_body_hoist_only(var_slot));
+
+        let captures = outer
+            .code
+            .iter()
+            .find_map(|op| match op {
+                Op::NewFunction {
+                    name: Some(name),
+                    lexical_captures,
+                    ..
+                } if name == "read" => Some(lexical_captures),
+                _ => None,
+            })
+            .expect("nested function should be emitted");
+        assert_eq!(captures, &vec![("value".to_owned(), var_slot)]);
+        assert_eq!(
+            upvalue_resolver::resolve_upvalues(outer).cell_slots,
+            vec![var_slot]
+        );
+    }
+
+    #[test]
+    fn direct_eval_var_capture_stays_on_the_dynamic_name_bridge() {
+        let script = qjs_parser::parse_script("var value = 1; function read() { return value; }")
+            .expect("source should parse");
+        let bytecode = super::super::compiler::compile_direct_eval_script(&script, false)
+            .expect("direct eval source should compile");
+        let captures = bytecode
+            .code
+            .iter()
+            .find_map(|op| match op {
+                Op::NewFunction {
+                    name: Some(name),
+                    lexical_captures,
+                    ..
+                } if name == "read" => Some(lexical_captures),
+                _ => None,
+            })
+            .expect("nested function should be emitted");
+        assert!(captures.is_empty());
     }
 }

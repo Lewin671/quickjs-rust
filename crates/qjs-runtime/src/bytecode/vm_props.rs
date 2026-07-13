@@ -10,6 +10,8 @@ use crate::{
 };
 
 use super::vm::Vm;
+
+const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 use super::vm_set::property_set_uses_setter;
 use crate::CallEnv;
 
@@ -310,6 +312,7 @@ impl Vm<'_> {
                 }
             }
             self.write_through_captured(&name, value);
+            self.sync_marked_dynamic_global(&name);
             return Ok(());
         }
         // Reject writes to non-writable global properties (e.g. NaN, Infinity,
@@ -348,8 +351,9 @@ impl Vm<'_> {
                 self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
                 && global_this.has_own_property(&name)
             {
-                global_this.set(name, value);
+                global_this.set(name.clone(), value);
             }
+            self.sync_marked_dynamic_global(&name);
             return Ok(());
         }
         if !self.realm.borrow().contains_key(&name) && self.global_this_property(&name).is_none() {
@@ -368,8 +372,9 @@ impl Vm<'_> {
         if let Some(global_this) = global_this
             && global_this.has_own_property(&name)
         {
-            global_this.set(name, value);
+            global_this.set(name.clone(), value);
         }
+        self.sync_marked_dynamic_global(&name);
         Ok(())
     }
 
@@ -422,6 +427,7 @@ impl Vm<'_> {
                 }
             }
             self.write_through_captured(&name, value);
+            self.sync_marked_dynamic_global(&name);
             return Ok(());
         }
         // Silently reject writes to non-writable global properties (e.g. NaN,
@@ -456,8 +462,9 @@ impl Vm<'_> {
                 self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
                 && global_this.has_own_property(&name)
             {
-                global_this.set(name, value);
+                global_this.set(name.clone(), value);
             }
+            self.sync_marked_dynamic_global(&name);
             return Ok(());
         }
         self.invalidate_array_prototype_cache(&name);
@@ -471,8 +478,9 @@ impl Vm<'_> {
             if let Some(global_this) = global_this
                 && global_this.has_own_property(&name)
             {
-                global_this.set(name, value);
+                global_this.set(name.clone(), value);
             }
+            self.sync_marked_dynamic_global(&name);
             return Ok(());
         }
         let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
@@ -484,7 +492,27 @@ impl Vm<'_> {
         }
         self.realm.borrow_mut().insert(name.clone(), value.clone());
         self.write_through_captured(&name, value);
+        self.sync_marked_dynamic_global(&name);
         Ok(())
+    }
+
+    /// Dynamic Function constructors can be evaluated against an explicitly
+    /// marked realm object while the engine's intrinsic realm remains shared.
+    /// Keep that object's existing globals live at the write site; generator
+    /// suspension no longer performs a later name-based writeback pass.
+    pub(super) fn sync_marked_dynamic_global(&self, name: &str) {
+        let Some(Value::Object(global)) = self.env.get(DYNAMIC_FUNCTION_REALM_GLOBAL) else {
+            return;
+        };
+        let Some(Value::Object(global_this)) = self.env.get(GLOBAL_THIS_BINDING) else {
+            return;
+        };
+        if !global.ptr_eq(&global_this) || !global.has_own_property(name) {
+            return;
+        }
+        if let Some(value) = self.env.get(name) {
+            global.set(name.to_owned(), value);
+        }
     }
 }
 

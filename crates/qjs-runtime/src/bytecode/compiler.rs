@@ -27,6 +27,11 @@ pub(super) struct Compiler {
     pub(super) next_template_site: usize,
     pub(super) strict: bool,
     pub(super) global_scope: bool,
+    /// Direct-eval source can introduce/delete function-environment `var` and
+    /// Annex B bindings dynamically. Until T016 S6 supplies its name-to-cell
+    /// deopt map, keep that binding class on the legacy dynamic-name bridge;
+    /// ordinary lexical captures remain slot/cell based.
+    pub(super) direct_eval_source: bool,
     /// Names of `var`/function declarations hoisted at global script scope.
     /// They live in the realm (and on `globalThis`), not frame slots, so
     /// closures, direct eval, and promise jobs all observe one binding.
@@ -112,6 +117,7 @@ impl Default for Compiler {
             next_template_site: 0,
             strict: false,
             global_scope: true,
+            direct_eval_source: false,
             global_hoisted: std::collections::HashSet::new(),
             annex_b_blocked_function_names: Vec::new(),
             with_depth: 0,
@@ -139,6 +145,7 @@ pub(super) fn compile_direct_eval_script(
     let mut compiler = Compiler {
         global_scope: false,
         strict,
+        direct_eval_source: true,
         ..Compiler::default()
     };
     compiler.compile_eval_into(script)

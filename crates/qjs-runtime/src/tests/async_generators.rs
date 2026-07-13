@@ -142,11 +142,11 @@ fn for_await_of_lexical_head_captures_fresh_binding_per_iteration() {
 #[test]
 fn async_generator_write_to_outer_let_after_await_propagates() {
     // An async generator body that resumes after an `await` runs in a later
-    // microtask whose caller env is not the defining frame. A write it makes to
-    // an outer `let` binding past that suspension must still reach the cell the
-    // outer closures read — without the generator's `CaptureWriteback` the write
-    // stayed local and the observer saw the stale value. This is the root of the
-    // whole `for await`/async-generator destructuring counter-update cluster.
+    // microtask whose caller env is not the defining frame. The suspended frame
+    // must retain the shared upvalue cell, so a write past that suspension is
+    // immediately visible to outer closures without a per-resume name-based
+    // writeback pass. This is the root of the whole `for await`/async-generator
+    // destructuring counter-update cluster.
     assert_eq!(
         eval_log(
             "var o = []; let count = 0; \
@@ -164,6 +164,26 @@ fn async_generator_write_to_outer_let_after_await_propagates() {
              g().next().then(() => { o.push(iterCount); }); o;"
         ),
         "3"
+    );
+}
+
+#[test]
+fn suspended_async_generator_keeps_parameter_and_var_capture_cells() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             async function* g(value) { \
+               var local = 1; \
+               function read() { return value + ':' + local; } \
+               yield read(); \
+               await 0; \
+               value += 1; local += 1; \
+               yield read(); \
+             } \
+             async function run() { for await (const value of g(3)) o.push(value); } \
+             run(); o;"
+        ),
+        "3:1,4:2"
     );
 }
 

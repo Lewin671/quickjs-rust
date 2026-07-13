@@ -145,12 +145,12 @@ Same machinery, different driver (`crates/qjs-runtime/src/async_function.rs`):
 1. Reentrancy: `gen.next()` called from inside the running body must hit the
    `Executing` status check before any `RefCell::borrow_mut` — panics on
    user input are forbidden. Use take/replace, never nested borrows.
-2. Env staleness across suspensions: this engine copies envs in/out per
-   call. Refresh imported captures from `function.captured_env` at resume
-   start and write back after each step, always excluding
-   `is_internal_binding_name` names — otherwise a resume can clobber a
-   caller's in-flight `\0`-temporaries (the bug class d100347 fixed for
-   calls).
+2. Env staleness across suspensions: resolved captures are shared `Upvalue`
+   cells retained by the suspended frame, so resume performs no generic
+   name-based capture refresh/write-back. The remaining dynamic caller refresh
+   path must exclude every `is_call_frame_binding` plus internal temporaries;
+   otherwise a resume can replace the generator's own `globalThis`, `this`, or
+   other frame-only state with the resuming caller's value.
 3. Iterator close interplay: `for-of` abrupt exit emits `Op::IteratorClose`
    (`compiler_control.rs:181`), which calls the generator's `return` — that
    must run the frame's `finally` blocks via `return_value`, and a `yield`

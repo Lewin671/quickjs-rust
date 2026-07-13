@@ -15,7 +15,7 @@ use crate::{
 
 use super::ir::Bytecode;
 use super::vm::Vm;
-use super::vm_generator::{GeneratorStart, GeneratorState};
+use super::vm_generator::{CaptureWriteback, GeneratorStart, GeneratorState};
 use super::{ModuleEvaluation, ModuleLiveExports};
 
 /// Evaluates a prelude *script* against the shared graph `realm` before any
@@ -185,6 +185,25 @@ fn eval_async_module_body(
         }
     }
     let captured_env = live_exports.bindings;
+    // TLA bodies run through the generator suspension machinery. Mark their
+    // live-export map as the temporary cell-value bridge so closures created by
+    // the suspended module write received upvalue cells through immediately;
+    // the generic per-step generator name writeback is intentionally gone.
+    let capture_writeback = Some(CaptureWriteback {
+        target: Rc::clone(&captured_env),
+        names: bytecode
+            .local_names()
+            .filter(|name| {
+                bytecode
+                    .local_slot(name)
+                    .is_some_and(|slot| !bytecode.local_is_body_hoist_only(slot))
+            })
+            .map(str::to_owned)
+            .collect(),
+        aliases: Vec::new(),
+        parent: None,
+        syncs_cell_values: true,
+    });
     let function_env = env.clone();
     let context = ObjectRef::new(HashMap::new());
     *context.generator_state().borrow_mut() =
@@ -196,7 +215,7 @@ fn eval_async_module_body(
             with_stack: Vec::new(),
             immutable_function_name: None,
             refresh_captured_slots_on_resume: false,
-            capture_writeback: None,
+            capture_writeback,
         })));
 
     let result_promise = crate::async_function::drive_async_module(&context, &mut env);

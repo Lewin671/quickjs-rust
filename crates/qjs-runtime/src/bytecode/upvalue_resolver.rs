@@ -27,8 +27,10 @@
 //! This pass covers `Op::NewFunction` captures. Class method captures attach
 //! parent slots lazily when `Op::NewClass` executes, through the same
 //! `captured_upvalues_for_function` path; they do not contribute to this
-//! frame-entry plan. `var`-channel captures remain realm-backed until that
-//! channel moves onto cells, as documented in the design doc.
+//! frame-entry plan. Function-scope parameter and `var` captures are
+//! parent-local cells; only globals remain realm-backed. Dynamic name exposure
+//! is handled separately by the direct-eval/`with` deopt path documented in the
+//! design doc.
 
 use super::ir::{Bytecode, Local, Op};
 
@@ -85,7 +87,7 @@ fn resolve_from_parts(locals: &[Local], children: &[&[(String, usize)]]) -> Upva
     let upvalue_slots: Vec<usize> = locals
         .iter()
         .enumerate()
-        .filter(|(_, local)| local.from_env)
+        .filter(|(_, local)| local.is_received_upvalue())
         .map(|(slot, _)| slot)
         .collect();
     let upvalue_index = |slot: usize| -> u16 {
@@ -103,7 +105,7 @@ fn resolve_from_parts(locals: &[Local], children: &[&[(String, usize)]]) -> Upva
         let mut sources = Vec::with_capacity(captures.len());
         for (_storage_name, slot) in *captures {
             let slot = *slot;
-            if locals.get(slot).is_some_and(|local| local.from_env) {
+            if locals.get(slot).is_some_and(Local::is_received_upvalue) {
                 sources.push(UpvalueSource::ParentUpvalue(upvalue_index(slot)));
             } else {
                 if !cell_slots.contains(&slot) {
@@ -136,6 +138,19 @@ mod tests {
             catch_binding: false,
             mutable: true,
             from_env,
+            sloppy_global_fallback: false,
+        }
+    }
+
+    fn parameter(name: &str) -> Local {
+        Local {
+            name: name.to_owned(),
+            hoisted: true,
+            hoisted_function: false,
+            parameter: true,
+            catch_binding: false,
+            mutable: true,
+            from_env: true,
             sloppy_global_fallback: false,
         }
     }
@@ -228,5 +243,18 @@ mod tests {
         let locals = [local("x", false)];
         let plan = resolve_from_parts(&locals, &[]);
         assert_eq!(plan, UpvaluePlan::default());
+    }
+
+    #[test]
+    fn captured_parameter_is_a_parent_local_cell_not_a_received_upvalue() {
+        let locals = [parameter("value")];
+        let child = [cap("value", 0)];
+        let plan = resolve_from_parts(&locals, &[&child]);
+        assert_eq!(plan.upvalue_slots, Vec::<usize>::new());
+        assert_eq!(plan.cell_slots, vec![0]);
+        assert_eq!(
+            plan.child_sources,
+            vec![vec![UpvalueSource::ParentLocal(0)]]
+        );
     }
 }

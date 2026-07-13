@@ -133,6 +133,23 @@ fn yields_values_in_sequence() {
 }
 
 #[test]
+fn suspended_generator_keeps_parameter_and_var_capture_cells() {
+    assert_eq!(
+        string(
+            "function* g(value) { \
+               var local = 1; \
+               function read() { return value + ':' + local; } \
+               yield read(); \
+               value += 1; local += 1; \
+               yield read(); \
+             } \
+             let it = g(3); it.next().value + ',' + it.next().value;"
+        ),
+        "3:1,4:2"
+    );
+}
+
+#[test]
 fn first_next_argument_is_ignored() {
     // The argument to the first `next` cannot be observed by the body.
     assert_eq!(

@@ -155,6 +155,25 @@ fn await_resume_observes_sibling_closure_capture_writes() {
 }
 
 #[test]
+fn suspended_async_function_keeps_parameter_and_var_capture_cells() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             async function f(value) { \
+               var local = 1; \
+               function read() { return value + ':' + local; } \
+               o.push(read()); \
+               await 0; \
+               value += 1; local += 1; \
+               o.push(read()); \
+             } \
+             f(3); o;"
+        ),
+        "3:1,4:2"
+    );
+}
+
+#[test]
 fn async_function_with_global_this_unscopables_updates_outer_lexical() {
     assert_eq!(
         eval(

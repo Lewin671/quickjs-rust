@@ -384,7 +384,7 @@ fn write_parent_capture_values(
     write_parent_capture_values(writeback.parent.as_deref(), result);
 }
 
-pub(super) fn is_call_frame_binding(name: &str) -> bool {
+pub(crate) fn is_call_frame_binding(name: &str) -> bool {
     matches!(
         name,
         GLOBAL_THIS_BINDING

@@ -29,6 +29,7 @@ pub(crate) use arguments::{native_mapped_argument_get, native_mapped_argument_se
 pub(crate) use call::{
     call_function, construct_function, ensure_constructor, initialize_instance_fields,
 };
+pub(crate) use captures::is_call_frame_binding;
 #[allow(unused_imports)]
 pub(crate) use env::{CallEnv, ModuleImports, Realm};
 pub(crate) use install::install_function;

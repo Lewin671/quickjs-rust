@@ -82,9 +82,22 @@ regression (no half-finished cutover).
     generic mangled-key mechanism and covered M2 class inner-name capture plus
     the C-style `for(;;)` CreatePerIterationEnvironment split between the
     initializer binding and per-iteration copies.
-- [ ] **S4 — Generators/async + parameter-scope captures.** Suspended frame
-  owns `upvalues: Vec<Upvalue>`; delete the per-step generator capture
-  write-back (risk #2 in `docs/design/generator-suspension.md`).
+- [x] **S4 — Generators/async + parameter/function-scope captures.** Parameters
+  and body `var`/function declarations captured by a nested function are now
+  classified as parent-local cells; only true received captures occupy the
+  incoming upvalue vector. Generator, async-function, and async-generator
+  snapshots retain `upvalues` plus the declaring frame's `local_upvalues`, so
+  suspension preserves cell identity. The per-step generic capture refresh and
+  write-back passes are deleted. Dynamic Function constructors with an explicit
+  marked realm synchronize existing global properties at the write site, and
+  generator caller-refresh paths exclude all call-frame bindings. The literal
+  string-append fast path reads received cells before mutating, and TLA modules
+  explicitly retain the temporary live-export cell bridge. Direct-eval source
+  keeps dynamically introduced/deletable function-level bindings on the legacy
+  name bridge until S6, while its ordinary block lexicals retain the S3 cell
+  bridge. Gate: focused resolver/compiler, closure, module, generator,
+  async-function, and async-generator suites pass, including new parameter +
+  `var` capture tests across suspension.
 - [ ] **S5 — Delete the old model.** Remove `Function.env`/`captured_env`/
   `capture_writeback`, the `vm_capture.rs` refresh family,
   `write_through_capture_writeback_slot`, and the `CallEnv` locals HashMap +

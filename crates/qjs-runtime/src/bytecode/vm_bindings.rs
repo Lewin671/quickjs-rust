@@ -190,7 +190,7 @@ impl Vm<'_> {
         let mut next_received = 0;
         let mut local_upvalues = vec![None; bytecode.locals.len()];
         for (slot, local) in bytecode.locals.iter().enumerate() {
-            if local.from_env {
+            if local.is_received_upvalue() {
                 if let Some(upvalue) = upvalues.get(next_received) {
                     local_upvalues[slot] = Some(upvalue.clone());
                 }
@@ -202,7 +202,7 @@ impl Vm<'_> {
             let Some(local) = bytecode.locals.get(slot) else {
                 continue;
             };
-            if local.hoisted || local.parameter || local.from_env {
+            if local.is_received_upvalue() {
                 continue;
             }
             let value = _locals
@@ -456,6 +456,7 @@ impl Vm<'_> {
         if self.env.locals().contains_key(&name) {
             self.env.insert(name.clone(), value.clone());
             self.write_through_captured(&name, value);
+            self.sync_marked_dynamic_global(&name);
             return Ok(());
         }
         self.invalidate_array_prototype_cache(&name);
@@ -472,8 +473,9 @@ impl Vm<'_> {
             if let Some(global_this) = global_this
                 && global_this.has_own_property(&name)
             {
-                global_this.set(name, value);
+                global_this.set(name.clone(), value);
             }
+            self.sync_marked_dynamic_global(&name);
             return Ok(());
         }
         let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
@@ -488,6 +490,7 @@ impl Vm<'_> {
             self.env.insert(name.clone(), value.clone());
         }
         self.write_through_captured(&name, value);
+        self.sync_marked_dynamic_global(&name);
         Ok(())
     }
 

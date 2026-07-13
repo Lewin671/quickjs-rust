@@ -37,15 +37,23 @@ impl Vm<'_> {
                 thrown: None,
                 message: "bytecode local index out of bounds".to_owned(),
             })?;
-        let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
-            thrown: None,
-            message: "bytecode local index out of bounds".to_owned(),
-        })?;
         if !local_meta.mutable {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
+        }
+        // The append opcode mutates the local string in place as a fast path.
+        // A received capture's authoritative value is its shared cell, not the
+        // compatibility slot snapshot left from function entry; refresh that
+        // one slot before taking the mutable string reference.
+        let shared_value = self.upvalue_slot_value(slot);
+        let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
+            thrown: None,
+            message: "bytecode local index out of bounds".to_owned(),
+        })?;
+        if let Some(value) = shared_value {
+            *local = Some(value);
         }
         let Some(value) = local else {
             return Err(RuntimeError {

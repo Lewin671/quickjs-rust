@@ -135,6 +135,26 @@ fn captured_lexical_cell_is_shared_by_parent_and_sibling_closures() {
 }
 
 #[test]
+fn sibling_string_appends_read_the_latest_shared_cell_value() {
+    // Literal `+=` uses a dedicated in-place append opcode. Its source must be
+    // the received upvalue cell rather than each closure's entry-time slot
+    // snapshot, or successive sibling writes collapse to the final suffix.
+    assert_eq!(
+        eval(
+            "function outer() {
+                 let log = '';
+                 function first() { log += 'a'; }
+                 function second() { log += 'b'; }
+                 first(); second();
+                 return log;
+             }
+             outer();"
+        ),
+        Ok(Value::String("ab".to_owned().into()))
+    );
+}
+
+#[test]
 fn captured_const_read_uses_the_shared_lexical_cell() {
     assert_eq!(
         eval(

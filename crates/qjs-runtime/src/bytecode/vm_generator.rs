@@ -69,6 +69,18 @@ impl CaptureWriteback {
                 .as_deref()
                 .is_some_and(CaptureWriteback::syncs_cell_values)
     }
+
+    pub(crate) fn targets_name(&self, name: &str) -> bool {
+        self.names.iter().any(|candidate| candidate == name)
+            || self
+                .aliases
+                .iter()
+                .any(|(source, target)| source == name || target == name)
+            || self
+                .parent
+                .as_deref()
+                .is_some_and(|parent| parent.targets_name(name))
+    }
 }
 
 /// A snapshot of a generator body's VM state, taken at a `yield`.
@@ -158,8 +170,8 @@ impl Vm<'_> {
         let names: Vec<String> = caller_env.locals().keys().cloned().collect();
         for name in names {
             if crate::function::is_internal_binding_name(&name)
-                || name == "this"
-                || name == "arguments"
+                || crate::function::is_call_frame_binding(&name)
+                || name == DYNAMIC_FUNCTION_REALM_GLOBAL
             {
                 continue;
             }
@@ -186,8 +198,8 @@ impl Vm<'_> {
             // `this` (and `arguments`) belong to the generator's own frame,
             // never to the resuming caller; internal bindings likewise.
             if crate::function::is_internal_binding_name(name)
-                || name == "this"
-                || name == "arguments"
+                || crate::function::is_call_frame_binding(name)
+                || name == DYNAMIC_FUNCTION_REALM_GLOBAL
             {
                 continue;
             }
@@ -226,88 +238,6 @@ impl Vm<'_> {
                 && let Some(local) = self.locals.get_mut(slot)
             {
                 *local = Some(value.clone());
-            }
-        }
-    }
-
-    /// Refreshes shared bindings captured from an enclosing function. Async
-    /// functions may suspend while sibling closures mutate those bindings; the
-    /// writeback target is the shared cell those sibling closures update.
-    fn refresh_from_capture_writeback(&mut self, writeback: Option<&CaptureWriteback>) {
-        let Some(writeback) = writeback else {
-            return;
-        };
-        self.refresh_one_capture_writeback(writeback);
-        self.refresh_from_capture_writeback(writeback.parent.as_deref());
-    }
-
-    fn refresh_one_capture_writeback(&mut self, writeback: &CaptureWriteback) {
-        let target = writeback.target.borrow();
-        for name in &writeback.names {
-            if let Some(value) = target.get(name) {
-                self.refresh_capture_slot(name, value);
-            }
-        }
-        for (source_name, target_name) in &writeback.aliases {
-            if let Some(value) = target.get(target_name) {
-                self.refresh_capture_slot(source_name, value);
-            }
-        }
-    }
-
-    fn refresh_capture_slot(&mut self, name: &str, value: &Value) {
-        if let Some(slot) = self.bytecode.local_slot(name)
-            && let Some(local) = self.locals.get_mut(slot)
-        {
-            *local = Some(value.clone());
-        }
-        if self.env.locals().contains_key(name) {
-            self.env.insert(name.to_owned(), value.clone());
-        }
-    }
-
-    /// Writes this activation's current captured binding values back into the
-    /// closure environment it was called from. Ordinary functions do this at
-    /// return in `function::call`; async functions complete later through the
-    /// generator driver, so the write-back has to travel with the resumable
-    /// state.
-    fn write_back_function_captures(&self, writeback: Option<&CaptureWriteback>) {
-        let Some(writeback) = writeback else {
-            return;
-        };
-        self.write_back_one_function_capture(writeback);
-        self.write_back_function_captures(writeback.parent.as_deref());
-    }
-
-    fn write_back_one_function_capture(&self, writeback: &CaptureWriteback) {
-        let realm_global = writeback
-            .target
-            .borrow()
-            .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
-            .and_then(|value| match value {
-                Value::Object(object) => Some(object.clone()),
-                _ => None,
-            });
-        let mut target = writeback.target.borrow_mut();
-        for name in &writeback.names {
-            if !self.bytecode.writes_binding(name) {
-                continue;
-            }
-            if crate::function::is_internal_binding_name(name)
-                || matches!(
-                    name.as_str(),
-                    crate::GLOBAL_THIS_BINDING | "this" | "arguments"
-                )
-            {
-                continue;
-            }
-            if let Some(value) = self.binding_value(name) {
-                target.insert(name.clone(), value.clone());
-                if let Some(global) = &realm_global
-                    && global.has_own_property(name)
-                {
-                    global.define_property(name.clone(), crate::Property::enumerable(value));
-                }
             }
         }
     }
@@ -392,7 +322,6 @@ pub(crate) fn start_suspended_at_body(
     vm.refresh_from_caller(caller_env);
     let result = vm.run_completion();
     vm.propagate_to_caller(caller_env);
-    vm.write_back_function_captures(capture_writeback.as_ref());
     refresh_activation_captures_from_realm(&mut vm);
     match result {
         // Suspended exactly at the prologue boundary: capture the body-start
@@ -421,7 +350,8 @@ fn refresh_activation_captures_from_realm(vm: &mut Vm<'_>) {
     let names: Vec<String> = vm.captured_env.borrow().keys().cloned().collect();
     for name in names {
         if crate::function::is_internal_binding_name(&name)
-            || matches!(name.as_str(), "this" | "arguments")
+            || crate::function::is_call_frame_binding(&name)
+            || name == DYNAMIC_FUNCTION_REALM_GLOBAL
             || vm.env.is_immutable_function_name(&name)
         {
             continue;
@@ -561,7 +491,6 @@ fn run_from_yield(
     if snapshot.refresh_captured_slots_on_resume {
         refresh_activation_captures_from_realm(&mut vm);
         vm.refresh_from_captured_env();
-        vm.refresh_from_capture_writeback(capture_writeback.as_ref());
     }
     vm.refresh_from_caller(caller_env);
     let refresh_captured_slots_on_resume = snapshot.refresh_captured_slots_on_resume;
@@ -698,7 +627,6 @@ fn run_from_yield(
         {
             Ok(Some(returned)) => {
                 vm.propagate_to_caller(caller_env);
-                vm.write_back_function_captures(capture_writeback.as_ref());
                 let outcome = if return_already_awaited {
                     GeneratorOutcome::ReturnAlreadyAwaited(returned)
                 } else {
@@ -713,7 +641,6 @@ fn run_from_yield(
     if let Err(error) = started {
         // The injected throw/return had no handler: the generator is done.
         vm.propagate_to_caller(caller_env);
-        vm.write_back_function_captures(capture_writeback.as_ref());
         return Err(error);
     }
     let result = vm.run_completion();
@@ -739,9 +666,9 @@ fn run_from_yield(
 }
 
 /// Maps a body run result to a generator state transition and outcome,
-/// capturing a fresh snapshot on `yield`. Before returning, the body's writes
-/// to bindings it shares with the resuming caller propagate back, mirroring the
-/// caller-binding write-back ordinary function calls perform.
+/// capturing a fresh snapshot on `yield`. Shared captures already point at the
+/// same indexed cells held by their declaring frames, so suspension needs no
+/// name-based capture write-back.
 fn drive(
     result: Result<Completion, RuntimeError>,
     vm: Vm<'_>,
@@ -751,7 +678,6 @@ fn drive(
     capture_writeback: Option<CaptureWriteback>,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     vm.propagate_to_caller(caller_env);
-    vm.write_back_function_captures(capture_writeback.as_ref());
     match result {
         Ok(Completion::Yield(value)) => {
             let snapshot = vm.into_snapshot(
@@ -868,7 +794,6 @@ fn drive_with_return_already_awaited(
     match result {
         Ok(Completion::Return(value)) => {
             vm.propagate_to_caller(caller_env);
-            vm.write_back_function_captures(capture_writeback.as_ref());
             Ok((
                 GeneratorState::Completed,
                 GeneratorOutcome::ReturnAlreadyAwaited(value),

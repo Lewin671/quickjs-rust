@@ -42,11 +42,11 @@ impl Vm<'_> {
             .bytecode
             .locals
             .get(slot)
-            .is_some_and(|local| local.from_env)
+            .is_some_and(|local| local.is_received_upvalue())
         {
             let index = self.bytecode.locals[..slot]
                 .iter()
-                .filter(|local| local.from_env)
+                .filter(|local| local.is_received_upvalue())
                 .count();
             if let Some(upvalue) = self.upvalues.get(index) {
                 return upvalue.clone();
@@ -341,6 +341,28 @@ impl Vm<'_> {
             || parent
                 .as_deref()
                 .is_some_and(CaptureWriteback::syncs_cell_values);
+        if !syncs_cell_values {
+            let cell_only_names = lexical_captures
+                .iter()
+                .filter(|(_, slot)| {
+                    self.bytecode.local_is_parameter(*slot)
+                        || self.bytecode.local_is_body_hoist_only(*slot)
+                })
+                .map(|(name, _)| name)
+                .collect::<Vec<_>>();
+            names.retain(|name| {
+                bytecode
+                    .local_slot(name)
+                    .is_none_or(|slot| !bytecode.local_is_received_upvalue(slot))
+                    || !cell_only_names.contains(&name)
+            });
+            aliases.retain(|(source_name, _)| {
+                bytecode
+                    .local_slot(source_name)
+                    .is_none_or(|slot| !bytecode.local_is_received_upvalue(slot))
+                    || !cell_only_names.contains(&source_name)
+            });
+        }
         (!names.is_empty() || !aliases.is_empty()).then(|| CaptureWriteback {
             target: self.captured_env.clone(),
             names,

@@ -555,6 +555,16 @@ pub(super) struct Local {
     pub(super) sloppy_global_fallback: bool,
 }
 
+impl Local {
+    /// Whether this slot is an outer binding received through
+    /// `Function.upvalues`. Function parameters and body `var` bindings are
+    /// also seeded from `CallEnv` today, so `from_env` alone is not sufficient
+    /// to identify an indexed upvalue.
+    pub(super) fn is_received_upvalue(&self) -> bool {
+        self.from_env && !self.parameter && !self.hoisted
+    }
+}
+
 /// Compiled bytecode for a script.
 #[derive(Clone, Debug)]
 pub struct Bytecode {
@@ -805,6 +815,19 @@ impl Bytecode {
 
     pub(crate) fn local_is_from_env(&self, slot: usize) -> bool {
         self.locals.get(slot).is_some_and(|local| local.from_env)
+    }
+
+    pub(crate) fn local_is_received_upvalue(&self, slot: usize) -> bool {
+        self.locals
+            .get(slot)
+            .is_some_and(Local::is_received_upvalue)
+    }
+
+    pub(crate) fn received_upvalue_names(&self) -> impl Iterator<Item = &str> {
+        self.locals
+            .iter()
+            .filter(|local| local.is_received_upvalue())
+            .map(|local| local.name.as_str())
     }
 
     /// Whether the body can create a nested closure, class, generator, or async
