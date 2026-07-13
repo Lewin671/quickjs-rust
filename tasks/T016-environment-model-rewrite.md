@@ -34,7 +34,7 @@ Each slice is one reviewable unit. Verify with the slice's focused command and
 `./scripts/check.sh` + `./scripts/compare-qjs.sh` before push; revert on any
 regression (no half-finished cutover).
 
-- [~] **S1 — Upvalue type + resolver classification (no behavior change).**
+- [x] **S1 — Upvalue type + resolver classification (no behavior change).**
   - [x] `function::upvalue::Upvalue` shared-cell type (commit "Add Upvalue
     shared-cell type", unit-tested for shared-write visibility + `ptr_eq`).
   - [x] `bytecode::upvalue_resolver`: pure classification (cell slots, received
@@ -50,13 +50,16 @@ regression (no half-finished cutover).
     caller-binding copy is not the dominant term); the ~70µs is distributed
     across the per-call `HashMap`/`Vec`/`String` allocation in
     `function::call::function_env` + `CallEnv` construction + `Vm` setup.
-  - Re-scoped: `Op::LoadUpvalue`/`StoreUpvalue`/cell-slot ops move to **S2**,
-    where they gain a real executor (`Vm.upvalues` field) instead of dead
-    unreachable arms. The off-by-default flag lands with S2's first wiring.
-- [ ] **S2 — Cells for the simplest captured `let`/`const`** (non-shadowing,
-  one nested closure, read+write). Flip only this class end-to-end. Gate: the
-  T014 counter-callback repro and `closure_state` tests pass with the flag on
-  for this class; nothing else regresses.
+  - Re-scoped: rather than add distinct `LoadUpvalue`/`StoreUpvalue` ops, S2
+    folded cell access into the existing local ops through
+    `Vm.local_upvalues`, the alternative explicitly allowed by the design.
+- [x] **S2 — Cells for the simplest captured `let`/`const`** (non-shadowing,
+  one nested closure, read+write). `Function.upvalues` carries the shared cells
+  into the callee frame; `load_local` reads the cell first and `store_local`
+  updates it, so the declaring frame and sibling closures observe one binding.
+  The legacy name-keyed environment remains as the coexistence path for binding
+  classes removed by S3-S6. Gate: the T014 counter-callback repro and focused
+  parent/sibling lexical-cell tests in `closure_state` pass.
 - [ ] **S3 — Shadowing + nested/multiple closures + per-iteration loop cells.**
   Delete `\0lexical:<name>:<slot>` mangling for cell slots; per-iteration
   `let`/`const` allocate a fresh cell at the loop back-edge. Gate: M2

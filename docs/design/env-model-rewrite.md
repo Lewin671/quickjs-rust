@@ -1,7 +1,7 @@
 # Environment / Binding Model Rewrite
 
-Status: proposed design, 2026-06-21. Implementation tracked by
-`tasks/T016-environment-model-rewrite.md` (slices S1+). This rewrite is the
+Status: active migration; S1-S2 landed. Implementation tracked by
+`tasks/T016-environment-model-rewrite.md`. This rewrite is the
 keystone named in `AGENTS.md`: it is the shared root of the remaining
 closure/`eval`/method capture-staleness failures *and* the per-call allocation
 cost, and it subsumes `tasks/T014-var-closure-binding-staleness.md` and
@@ -150,16 +150,19 @@ cases are the safety net. Slices are ordered so the engine stays green at each
 step; the name-keyed model and the cell model coexist until S5 deletes the old
 one.
 
-- **S1 — Upvalue type + resolver classification (no behavior change).** Add
-  `Upvalue`, the `UpvalueSource`/cell-slot resolver output, and the new ops, but
-  keep emitting the old capture path; gate the new path behind an internal
-  flag, off by default. Land the benchmark harness for the call path
-  (baseline numbers for T011).
+- **S1 — Upvalue type + resolver classification (complete).** Add
+  `Upvalue` and the `UpvalueSource`/cell-slot resolver output without changing
+  behavior. Land the benchmark harness for the call path (baseline numbers for
+  T011). S2 subsequently chose the design's side-vector representation, so the
+  existing local ops dispatch through `Vm.local_upvalues` instead of adding
+  distinct upvalue opcodes.
 - **S2 — Cell slots for the simplest case: a captured non-shadowing `let`/
-  `const` read+written by one nested function.** Switch only this class to
-  cells end-to-end; everything else stays on the old path. Gate: the T014
-  counter-callback idiom and `closure_state` tests go green with the new path
-  on for this class.
+  `const` read+written by one nested function (complete).** The implementation
+  uses `Vm.local_upvalues` alongside bare local slots: closure creation shares
+  the parent's cell through `Function.upvalues`, child `from_env` slots attach
+  that cell at frame entry, and local loads/stores read/write it directly. The
+  old name-keyed data remains only as a coexistence path until S3-S6 remove the
+  remaining binding classes and dynamic-scope fallback.
 - **S3 — Shadowing + multiple/nested closures + per-iteration loop cells.**
   Delete `\0lexical` mangling for cell slots; cover M2 (class-method inner
   name) and per-iteration `let`. Gate: the M2 and per-iteration Test262 slices.

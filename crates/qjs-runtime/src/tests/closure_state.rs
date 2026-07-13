@@ -113,6 +113,42 @@ fn nested_closures_capture_live_outer_bindings() {
 }
 
 #[test]
+fn captured_lexical_cell_is_shared_by_parent_and_sibling_closures() {
+    // T016 S2: the declaring frame and both children must address one shared
+    // lexical cell. Exercise writes in both directions so a creation-time
+    // snapshot cannot accidentally satisfy the test.
+    assert_eq!(
+        eval(
+            "function outer() {
+                 let value = 1;
+                 const read = function () { return value; };
+                 const write = function (next) { value = next; return value; };
+                 value = 2;
+                 const afterParentWrite = read();
+                 write(3);
+                 return afterParentWrite + ':' + value + ':' + read();
+             }
+             outer();"
+        ),
+        Ok(Value::String("2:3:3".to_owned().into()))
+    );
+}
+
+#[test]
+fn captured_const_read_uses_the_shared_lexical_cell() {
+    assert_eq!(
+        eval(
+            "function outer() {
+                 const value = 42;
+                 return function () { return value; };
+             }
+             outer()();"
+        ),
+        Ok(Value::Number(42.0))
+    );
+}
+
+#[test]
 fn captured_rest_parameter_shadows_same_named_caller_rest_parameter() {
     assert_eq!(
         eval(
