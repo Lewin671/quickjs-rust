@@ -579,11 +579,15 @@ impl Vm<'_> {
         let parent = self.capture_writeback.as_ref().and_then(|writeback| {
             super::vm_capture::filtered_parent_writeback(writeback, &parent_names)
         });
+        let syncs_cell_values = parent
+            .as_deref()
+            .is_some_and(CaptureWriteback::syncs_cell_values);
         (!names.is_empty()).then(|| CaptureWriteback {
             target: self.captured_env.clone(),
             names,
             aliases: Vec::new(),
             parent,
+            syncs_cell_values,
         })
     }
 

@@ -22,13 +22,13 @@
 //!   parent that must be boxed into a fresh cell at frame entry — the child
 //!   sources it as [`UpvalueSource::ParentLocal`].
 //!
-//! ## S1 scope
+//! ## Resolution scope
 //!
-//! This pass covers `Op::NewFunction` captures (the S2 target: ordinary nested
-//! `let`/`const` closures). `Op::NewClass` method captures (the M2 cluster) are
-//! folded in at S3, and `var`-channel captures (realm-backed) are handled when
-//! that channel moves onto cells; both are out of scope here and documented in
-//! the design doc.
+//! This pass covers `Op::NewFunction` captures. Class method captures attach
+//! parent slots lazily when `Op::NewClass` executes, through the same
+//! `captured_upvalues_for_function` path; they do not contribute to this
+//! frame-entry plan. `var`-channel captures remain realm-backed until that
+//! channel moves onto cells, as documented in the design doc.
 
 use super::ir::{Bytecode, Local, Op};
 

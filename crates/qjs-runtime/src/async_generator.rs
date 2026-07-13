@@ -1069,12 +1069,16 @@ pub(crate) fn call_async_generator_function(
         }
     }
     let parent_writeback = function.capture_writeback.clone().map(Box::new);
+    let syncs_cell_values = parent_writeback
+        .as_deref()
+        .is_some_and(crate::bytecode::CaptureWriteback::syncs_cell_values);
     let capture_writeback = (!capture_names.is_empty() || parent_writeback.is_some()).then(|| {
         crate::bytecode::CaptureWriteback {
             target: Rc::clone(&function.captured_env),
             names: capture_names,
             aliases: Vec::new(),
             parent: parent_writeback,
+            syncs_cell_values,
         }
     });
     make_async_generator_object(

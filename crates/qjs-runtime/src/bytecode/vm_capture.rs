@@ -337,12 +337,26 @@ impl Vm<'_> {
             .capture_writeback
             .as_ref()
             .and_then(|writeback| filtered_parent_writeback(writeback, &parent_names));
+        let syncs_cell_values = self.module_live_binding_frame()
+            || parent
+                .as_deref()
+                .is_some_and(CaptureWriteback::syncs_cell_values);
         (!names.is_empty() || !aliases.is_empty()).then(|| CaptureWriteback {
             target: self.captured_env.clone(),
             names,
             aliases,
             parent,
+            syncs_cell_values,
         })
+    }
+
+    fn module_live_binding_frame(&self) -> bool {
+        self.module_host.is_some()
+            && !self.bytecode.global_scope
+            && !self
+                .env
+                .locals()
+                .contains_key(crate::DIRECT_EVAL_FUNCTION_CONTEXT_BINDING)
     }
 
     fn push_capture_writeback_write_names(
@@ -599,6 +613,7 @@ pub(super) fn filtered_parent_writeback(
             names,
             aliases,
             parent,
+            syncs_cell_values: writeback.syncs_cell_values,
         })
     })
 }

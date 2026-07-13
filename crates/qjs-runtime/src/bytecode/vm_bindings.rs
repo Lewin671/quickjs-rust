@@ -857,12 +857,6 @@ impl Vm<'_> {
             thrown: None,
             message: "bytecode local index out of bounds".to_owned(),
         })?;
-        if !mutable && local.is_some() {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: assignment to constant variable".to_owned(),
-            });
-        }
         let upvalue_initialized = self
             .local_upvalues
             .get(slot)
@@ -874,6 +868,12 @@ impl Vm<'_> {
                     Value::Function(function) if function.is_uninitialized_lexical_marker()
                 )
             });
+        if !mutable && (local.is_some() || upvalue_initialized) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: assignment to constant variable".to_owned(),
+            });
+        }
         if (local.is_some() || upvalue_initialized) && immutable_env_binding {
             return Err(RuntimeError {
                 thrown: None,
@@ -881,14 +881,33 @@ impl Vm<'_> {
             });
         }
         *local = Some(value.clone());
-        if let Some(upvalue) = self.local_upvalues.get(slot).and_then(Option::as_ref) {
-            upvalue.set(value.clone());
+        let uses_shared_cell =
+            if let Some(upvalue) = self.local_upvalues.get(slot).and_then(Option::as_ref) {
+                upvalue.set(value.clone());
+                true
+            } else {
+                false
+            };
+        if !uses_shared_cell {
+            // Binding classes not migrated to cells still use the coexistence
+            // snapshot/writeback path. A cell-backed lexical must not also write
+            // by name: same-named shadowed bindings are distinct slots/cells.
+            self.write_through_captured_slot(slot, &value);
+            self.write_through_capture_writeback_slot(slot, &value);
+        } else if !from_env {
+            // A declaring frame still mirrors its own cell into the coexistence
+            // map for module live exports and not-yet-migrated consumers. A
+            // received upvalue must never take this name-keyed path: its parent
+            // binding is already updated through the shared cell, and a
+            // same-named outer binding can be a different cell.
+            self.write_through_captured_slot(slot, &value);
+        } else if self
+            .capture_writeback
+            .as_ref()
+            .is_some_and(super::CaptureWriteback::syncs_cell_values)
+        {
+            self.write_through_capture_writeback_slot(slot, &value);
         }
-        // A closure created in this frame shares its captured-binding snapshot
-        // through `captured_env`; keep a captured copy of this slot current so
-        // later calls of that closure observe the new value.
-        self.write_through_captured_slot(slot, &value);
-        self.write_through_capture_writeback_slot(slot, &value);
         if self.bytecode.global_scope
             && self.persist_global_lexicals
             && !hoisted
@@ -907,16 +926,17 @@ impl Vm<'_> {
                 self.env.mark_immutable_lexical_binding(name);
             }
         }
-        if from_env || self.bytecode.local_is_body_hoist_only(slot) {
+        if !uses_shared_cell && (from_env || self.bytecode.local_is_body_hoist_only(slot)) {
             let name = self.bytecode.locals[slot].name.clone();
             if self.env.locals().contains_key(&name) {
                 self.env.insert(name, value.clone());
             }
         }
-        let syncs_global_var = (from_env && !hoisted)
-            || (self.bytecode.global_scope
-                && self.bytecode.local_is_body_hoist_only(slot)
-                && !is_compiler_temporary(&self.bytecode.locals[slot].name));
+        let syncs_global_var = !uses_shared_cell
+            && ((from_env && !hoisted)
+                || (self.bytecode.global_scope
+                    && self.bytecode.local_is_body_hoist_only(slot)
+                    && !is_compiler_temporary(&self.bytecode.locals[slot].name)));
         // Resolve `globalThis` into a local first so the `self.realm` borrow is
         // released before the body re-borrows it mutably (an `if let` chain
         // would otherwise hold the immutable borrow across the body and panic on
@@ -1320,21 +1340,24 @@ impl Vm<'_> {
         }
     }
 
-    /// Whether some *other* active local slot is a block-lexical that shadows
-    /// the plain identifier `name` (its storage name unmangles to `name`). Used
-    /// to detect that a plain-name env entry is really the alias of an inner
-    /// shadowing binding (see `apply_env`), not a write to the outer slot
-    /// `resolved_slot`.
-    fn active_shadowing_lexical_slot(&self, name: &str, resolved_slot: usize) -> bool {
+    /// Resolves a dynamic environment name to the innermost currently-active
+    /// frame slot. Static bytecode is already slot-indexed; this reverse lookup
+    /// is only for `CallEnv` round-trips used by direct eval and native calls.
+    /// Later slots correspond to inner lexical declarations, so searching in
+    /// reverse preserves shadowing without encoding slot identity in the name.
+    fn active_local_slot_for_env_name(&self, name: &str) -> Option<usize> {
         self.bytecode
             .locals
             .iter()
             .enumerate()
-            .any(|(slot, local)| {
-                slot != resolved_slot
-                    && self.locals.get(slot).is_some_and(Option::is_some)
-                    && super::vm::unmangle_lexical_storage_name(&local.name) == Some(name)
+            .rev()
+            .find(|(slot, local)| {
+                local.name == name
+                    && (self.locals.get(*slot).is_some_and(Option::is_some)
+                        || self.local_upvalues.get(*slot).is_some_and(Option::is_some))
             })
+            .map(|(slot, _)| slot)
+            .or_else(|| self.bytecode.local_slot(name))
     }
 
     pub(super) fn apply_env(&mut self, env: CallEnv) {
@@ -1355,20 +1378,7 @@ impl Vm<'_> {
                 self.env.insert(name, value);
                 continue;
             }
-            if let Some(index) = self.bytecode.local_slot(&name) {
-                // `frame_call_env` also exposes an active shadowing block-lexical
-                // (stored under a mangled `\0lexical:<name>:<slot>` key) under its
-                // plain source name, so a direct eval resolves the innermost
-                // binding. That plain-name alias must not be written back: it
-                // resolves to the OUTER same-named slot, so writing it would
-                // clobber the shadowed outer binding (and its captured cell) with
-                // the inner value. The inner binding rides back through its own
-                // mangled entry, so skip the alias entirely.
-                if super::vm::unmangle_lexical_storage_name(&name).is_none()
-                    && self.active_shadowing_lexical_slot(&name, index)
-                {
-                    continue;
-                }
+            if let Some(index) = self.active_local_slot_for_env_name(&name) {
                 if self.in_parameter_prologue() && direct_parameter_eval_vars.contains(&name) {
                     self.env.insert(name, value);
                     continue;
@@ -1590,16 +1600,9 @@ impl Vm<'_> {
         let mut iteration_names = Vec::with_capacity(slots.len());
         for &slot in slots {
             if let Some(name) = self.bytecode.local_name_at(slot) {
-                // A loop variable that shadows an outer binding is stored under a
-                // mangled name (`\0lexical:x:N`), but a write to it can reach
-                // `propagate_captured_write_to_parents` under the *plain* name
-                // (e.g. an `apply_env` round-trip after the iterator `next()`
-                // call resolves the binding by its source identifier). Record
-                // both spellings so the per-iteration write is never propagated
-                // to an enclosing captured cell of the shadowed outer binding.
-                if let Some(plain) = super::vm::unmangle_lexical_storage_name(name) {
-                    iteration_names.push(plain.to_owned());
-                }
+                // The source name is sufficient: per-iteration identity lives in
+                // the fresh Upvalue below, while this legacy name list only keeps
+                // coexistence writeback from reaching a shadowed outer binding.
                 iteration_names.push(name.to_owned());
                 if let Some(Some(value)) = self.locals.get(slot) {
                     new_env.insert(name.to_owned(), value.clone());

@@ -115,12 +115,16 @@ pub(crate) fn call_async_function(
         }
     }
     let parent_writeback = function.capture_writeback.clone().map(Box::new);
+    let syncs_cell_values = parent_writeback
+        .as_deref()
+        .is_some_and(CaptureWriteback::syncs_cell_values);
     let capture_writeback =
         (!capture_names.is_empty() || parent_writeback.is_some()).then(|| CaptureWriteback {
             target: Rc::clone(&function.captured_env),
             names: capture_names,
             aliases: Vec::new(),
             parent: parent_writeback,
+            syncs_cell_values,
         });
     let context = ObjectRef::new(HashMap::new());
     *context.generator_state().borrow_mut() =

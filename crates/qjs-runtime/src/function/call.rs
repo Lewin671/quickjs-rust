@@ -155,6 +155,10 @@ pub(crate) fn call_function(
                     names: function_env.function_capture_names,
                     aliases: Vec::new(),
                     parent: None,
+                    syncs_cell_values: function
+                        .capture_writeback
+                        .as_ref()
+                        .is_some_and(crate::bytecode::CaptureWriteback::syncs_cell_values),
                 }
             });
             return crate::generator::make_generator_object(
@@ -229,6 +233,10 @@ pub(crate) fn call_function(
                 names: function_env.function_capture_names.clone(),
                 aliases: Vec::new(),
                 parent: function.capture_writeback.clone().map(Box::new),
+                syncs_cell_values: function
+                    .capture_writeback
+                    .as_ref()
+                    .is_some_and(crate::bytecode::CaptureWriteback::syncs_cell_values),
             }
         });
         let result = eval_function_bytecode(

@@ -60,20 +60,28 @@ regression (no half-finished cutover).
   The legacy name-keyed environment remains as the coexistence path for binding
   classes removed by S3-S6. Gate: the T014 counter-callback repro and focused
   parent/sibling lexical-cell tests in `closure_state` pass.
-- [ ] **S3 — Shadowing + nested/multiple closures + per-iteration loop cells.**
-  Delete `\0lexical:<name>:<slot>` mangling for cell slots; per-iteration
-  `let`/`const` allocate a fresh cell at the loop back-edge. Gate: M2
-  class-method-inner-name and per-iteration Test262 slices.
+- [x] **S3 — Shadowing + nested/multiple closures + per-iteration loop cells.**
+  Generic lexical bindings now retain their source names; distinct slot and
+  `Upvalue` identities replace `\0lexical:<name>:<slot>` mangling. Dynamic
+  `CallEnv` round-trips select the innermost active same-named slot. A received
+  cell no longer also takes the legacy name-based writeback/global-sync path,
+  preventing shadowed bindings from aliasing; module namespace live exports
+  retain an explicitly marked bridge until S5. `FreshIterationScope` replaces
+  each captured loop-head cell from the current value at the first iteration
+  boundary and every back-edge. Gate: exact Test262 `statements/for` and
+  `statements/class` scans report zero actionable gaps; focused shadowing,
+  class inner-name, Annex B, module-live-binding, and C-style `for` cell tests
+  pass.
   - Note (2026-06-22, commit c84162c3): the **per-iteration shadowing leak** that
     this slice targets — a `for (let x of/in …)` head whose `x` shadows an outer
     `let x` writing the inner value back onto the outer slot/cell — was fixed
     *contained* in the current name-keyed model (the inner binding rides under its
     mangled key; `apply_env` skips the plain-name alias when a shadowing lexical
     is active, and the per-iteration write-skip records both spellings). So this
-    leak no longer needs the cell migration. Still S3-only: M2 class-method
-    inner-name capture, and the C-style `for(;;)` per-iteration *copy*
-    (CreatePerIterationEnvironment — distinct init binding vs per-iteration
-    copies).
+    leak no longer needs the cell migration. S3 subsequently removed the
+    generic mangled-key mechanism and covered M2 class inner-name capture plus
+    the C-style `for(;;)` CreatePerIterationEnvironment split between the
+    initializer binding and per-iteration copies.
 - [ ] **S4 — Generators/async + parameter-scope captures.** Suspended frame
   owns `upvalues: Vec<Upvalue>`; delete the per-step generator capture
   write-back (risk #2 in `docs/design/generator-suspension.md`).

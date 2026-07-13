@@ -17,8 +17,7 @@ pub(super) struct LexicalCapture {
 
 impl Compiler {
     pub(super) fn declare_lexical_slot(&mut self, name: &str, mutable: bool) -> usize {
-        let storage_name = self.lexical_storage_name(name);
-        self.declare_lexical_slot_with_storage_name(name, &storage_name, mutable)
+        self.declare_lexical_slot_with_storage_name(name, name, mutable)
     }
 
     pub(super) fn declare_lexical_slot_with_storage_name(
@@ -209,22 +208,6 @@ impl Compiler {
             .iter()
             .rev()
             .find_map(|scope| scope.get(name).copied())
-    }
-
-    fn lexical_storage_name(&self, name: &str) -> String {
-        if self
-            .lexical_scopes
-            .iter()
-            .rev()
-            .skip(1)
-            .any(|scope| scope.contains_key(name))
-            || self.local_slots.contains_key(name)
-            || self.locals.iter().any(|local| local.name == name)
-        {
-            format!("\0lexical:{}:{}", name, self.locals.len())
-        } else {
-            name.to_owned()
-        }
     }
 }
 
@@ -466,4 +449,22 @@ pub(super) fn function_param_names(params: &FunctionParams) -> Vec<String> {
         names.push("arguments".to_owned());
     }
     names
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shadowed_lexicals_keep_source_names_and_distinct_slots() {
+        let mut compiler = Compiler::function_compiler(false, false);
+        let outer = compiler.declare_lexical_slot("value", true);
+        let inner = compiler
+            .with_lexical_scope(|compiler| Ok(compiler.declare_lexical_slot("value", true)))
+            .expect("nested lexical declaration should compile");
+
+        assert_ne!(outer, inner);
+        assert_eq!(compiler.locals[outer].name, "value");
+        assert_eq!(compiler.locals[inner].name, "value");
+    }
 }

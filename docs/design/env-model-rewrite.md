@@ -1,6 +1,6 @@
 # Environment / Binding Model Rewrite
 
-Status: active migration; S1-S2 landed. Implementation tracked by
+Status: active migration; S1-S3 landed. Implementation tracked by
 `tasks/T016-environment-model-rewrite.md`. This rewrite is the
 keystone named in `AGENTS.md`: it is the shared root of the remaining
 closure/`eval`/method capture-staleness failures *and* the per-call allocation
@@ -39,23 +39,21 @@ References verified 2026-06-21 against `crates/qjs-runtime`.
   plus `write_through_capture_writeback_slot` (`vm_bindings.rs:204`). Blast
   radius today: ~55 `captured_env` sites and ~23 `capture_writeback` sites
   across 12 files.
-- Names that shadow an outer binding are stored under a mangled key
-  `\0lexical:<name>:<slot>` (`compiler_lexical.rs:208` `lexical_storage_name`);
-  the refresh/eval paths must unmangle these (`vm.rs` `unmangle_lexical_storage_name`),
-  and several known failures (M2 class-method capture, direct-`eval` capture)
-  come from a path that resolves the plain name and misses the mangled slot.
+- Before S3, names that shadowed an outer binding were stored under a mangled
+  key `\0lexical:<name>:<slot>` and refresh/eval paths had to recover the source
+  name. S3 removed that generic encoding: ordinary bytecode remains slot-indexed,
+  while the temporary dynamic `CallEnv` bridge resolves a source name to the
+  innermost active slot. Direct-eval cell exposure is completed in S6.
 
 ### Why this is the root of two problem classes
 
 1. **Correctness (capture staleness).** Because a binding lives in three places
    (frame slot, snapshot `env`, shared `captured_env`) kept in sync by
-   heuristics, any path the heuristics do not cover desyncs: a sibling/forwarded
-   closure writes the cell but the declaring frame reads its stale slot
-   (T014, fixed only for the leaf case), a class method stores its inner name
-   under a plain key while the constructor uses the mangled key (M2), a
-   per-iteration `let` is captured by value instead of by fresh cell,
-   generators re-import a stale snapshot on resume, and a direct `eval` resolves
-   a free name dynamically but the capturing closure does not.
+   heuristics, any uncovered path can desync. Before S2-S3 this included stale
+   declaring frames, class-inner-name collisions (M2), and per-iteration
+   captures; those now use shared slot cells. The remaining migration targets
+   are generator snapshot re-import/writeback and dynamic `eval`/`with` name
+   resolution.
 2. **Performance.** Every call rebuilds a `HashMap<String, Value>` of locals and
    clones caller bindings into it (`with_frame_locals`, `function_capture_env`).
    Under nested-call load this is the dominant cost and the source of the ~536
@@ -108,7 +106,7 @@ observe every write with zero refresh passes.
   (the spec's per-iteration environment) — a new cell allocation at the loop
   back-edge, which is exactly the correct semantics and removes the
   `compiler_control.rs` per-iteration captured-env juggling.
-- The `\0lexical:<name>:<slot>` mangling (`compiler_lexical.rs:208`) is **deleted**:
+- The `\0lexical:<name>:<slot>` mangling is **deleted**:
   shadowing is now expressed by distinct slot indices, so name collisions cannot
   occur and the unmangling paths in `vm.rs` go away.
 - `with` and direct `eval` (the two dynamic-scope escape hatches) keep a
@@ -163,9 +161,14 @@ one.
   that cell at frame entry, and local loads/stores read/write it directly. The
   old name-keyed data remains only as a coexistence path until S3-S6 remove the
   remaining binding classes and dynamic-scope fallback.
-- **S3 — Shadowing + multiple/nested closures + per-iteration loop cells.**
-  Delete `\0lexical` mangling for cell slots; cover M2 (class-method inner
-  name) and per-iteration `let`. Gate: the M2 and per-iteration Test262 slices.
+- **S3 — Shadowing + multiple/nested closures + per-iteration loop cells
+  (complete).** Generic lexicals keep source names and use slot/cell identity;
+  dynamic name round-trips select the innermost active slot. Cell-backed
+  received bindings bypass the legacy name writeback path, including the M2
+  class-inner-name/Annex B collision cases. `FreshIterationScope` installs a
+  new cell at the first C-style `for` iteration boundary when required and at
+  every loop back-edge. The module namespace map has a marked cell-write bridge
+  that is intentionally deleted with the old model in S5.
 - **S4 — Generators/async + parameter-scope captures.** Move `upvalues` into
   the suspended frame; delete the per-step generator write-back.
 - **S5 — Delete the old model.** Remove `Function.env`/`captured_env`/

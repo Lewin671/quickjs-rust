@@ -488,10 +488,8 @@ fn for_of_loop_variable_shadowing_outer_does_not_leak_into_the_outer_binding() {
     // A `for (let x of …)` head whose `x` shadows an outer `let x` must not write
     // the per-iteration value back onto the outer binding — neither its frame
     // slot (read directly after the loop) nor an outer cell a closure created
-    // before the loop captured. The leak came from two name-keyed round-trips:
-    // `apply_env` after the iterator `next()` call aliased the mangled loop slot
-    // under the plain name, and the captured-write propagation skip listed only
-    // the mangled storage name.
+    // before the loop captured. The bindings now share a source name but retain
+    // distinct slot and Upvalue identities throughout the loop.
     assert_eq!(
         eval(
             "function f() { \
@@ -565,5 +563,45 @@ fn for_of_let_body_write_to_distinct_outer_does_not_disturb_loop_variable() {
              seen + ':' + total;"
         ),
         Ok(Value::String("123:6".to_owned().into()))
+    );
+}
+
+#[test]
+fn shadowed_lexical_closures_keep_distinct_shared_cells() {
+    assert_eq!(
+        eval(
+            "function make() { \
+               let value = 'outer'; \
+               let readOuter = function() { return value; }; \
+               let readInner, writeInner; \
+               { \
+                 let value = 'inner'; \
+                 readInner = function() { return value; }; \
+                 writeInner = function(next) { value = next; }; \
+               } \
+               writeInner('changed'); \
+               return readOuter() + ':' + readInner() + ':' + value; \
+             } \
+             make();"
+        ),
+        Ok(Value::String("outer:changed:outer".to_owned().into()))
+    );
+}
+
+#[test]
+fn for_let_head_allocates_a_cell_after_the_initializer_and_each_back_edge() {
+    assert_eq!(
+        eval(
+            "var initializerProbe; \
+             var iterationProbes = []; \
+             for (let index = 0, ignored = initializerProbe = () => index; \
+                  index < 3; \
+                  index++) { \
+               iterationProbes.push(() => index); \
+             } \
+             initializerProbe() + ':' + \
+               iterationProbes.map(function(probe) { return probe(); }).join(',');"
+        ),
+        Ok(Value::String("0:0,1,2".to_owned().into()))
     );
 }

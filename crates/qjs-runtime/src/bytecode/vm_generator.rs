@@ -55,6 +55,20 @@ pub(crate) struct CaptureWriteback {
     pub(crate) names: Vec<String>,
     pub(crate) aliases: Vec<(String, String)>,
     pub(crate) parent: Option<Box<CaptureWriteback>>,
+    /// Temporary S3-S4 bridge for module namespace live bindings. Ordinary
+    /// lexical cells never write back by name; module exports still use the
+    /// legacy live-binding map until S5 removes it.
+    pub(crate) syncs_cell_values: bool,
+}
+
+impl CaptureWriteback {
+    pub(crate) fn syncs_cell_values(&self) -> bool {
+        self.syncs_cell_values
+            || self
+                .parent
+                .as_deref()
+                .is_some_and(CaptureWriteback::syncs_cell_values)
+    }
 }
 
 /// A snapshot of a generator body's VM state, taken at a `yield`.
