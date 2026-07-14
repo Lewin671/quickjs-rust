@@ -11,7 +11,8 @@ Usage: ./scripts/performance-preview.sh \
   --candidate-source <path> --base-source <path> \
   --candidate-sha <full-sha> --base-sha <full-sha> \
   --candidate-repo <https-github-clone-url> \
-  --base-repo <https-github-clone-url> [--output <directory>]
+  --base-repo <https-github-clone-url> [--output <directory>] \
+  [--build-cache-root <directory>]
 EOF
 }
 
@@ -23,10 +24,11 @@ BASE_REVISION=""
 CANDIDATE_REPO=""
 BASE_REPO=""
 OUTPUT=""
+BUILD_CACHE_ROOT=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --harness-mode|--candidate-source|--base-source|--candidate-sha|--base-sha|--candidate-repo|--base-repo|--output)
+    --harness-mode|--candidate-source|--base-source|--candidate-sha|--base-sha|--candidate-repo|--base-repo|--output|--build-cache-root)
       if [ "$#" -lt 2 ]; then
         echo "error: $1 requires a value" >&2
         exit 2
@@ -42,6 +44,7 @@ while [ "$#" -gt 0 ]; do
     --candidate-repo) CANDIDATE_REPO="$2"; shift 2 ;;
     --base-repo) BASE_REPO="$2"; shift 2 ;;
     --output) OUTPUT="$2"; shift 2 ;;
+    --build-cache-root) BUILD_CACHE_ROOT="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "error: unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -69,6 +72,8 @@ canonical_path() {
 CANDIDATE_SOURCE="$(canonical_path "$CANDIDATE_SOURCE")"
 BASE_SOURCE="$(canonical_path "$BASE_SOURCE")"
 OUTPUT="$(canonical_path "$OUTPUT")"
+[ -n "$BUILD_CACHE_ROOT" ] || BUILD_CACHE_ROOT="$(dirname "$OUTPUT")/build-cache"
+BUILD_CACHE_ROOT="$(canonical_path "$BUILD_CACHE_ROOT")"
 case "$HARNESS_MODE" in
   base_owned_harness)
     [ "$HARNESS_ROOT" = "$BASE_SOURCE" ] || {
@@ -91,6 +96,10 @@ case "$OUTPUT" in
   "$OUTPUT_OWNER"/target/*) ;;
   *) echo "error: --output must stay under the selected harness target directory" >&2; exit 2 ;;
 esac
+case "$BUILD_CACHE_ROOT" in
+  "$OUTPUT_OWNER"/target/*) ;;
+  *) echo "error: --build-cache-root must stay under the selected harness target directory" >&2; exit 2 ;;
+esac
 if [ -e "$OUTPUT" ]; then
   [ -d "$OUTPUT" ] || { echo "error: output exists and is not a directory" >&2; exit 2; }
   unexpected="$(find "$OUTPUT" -mindepth 1 -maxdepth 1 ! -name summary.md ! -name status.json -print -quit)"
@@ -100,6 +109,7 @@ if [ -e "$OUTPUT" ]; then
 fi
 
 BUILD_ROOT="$(dirname "$OUTPUT")/build"
+BUILD_CACHE_PLAN="$(dirname "$OUTPUT")/build-cache-plan"
 QUICKJS_SOURCE="$HARNESS_ROOT/third_party/quickjs-ng"
 MANIFEST="$HARNESS_ROOT/benchmarks/.hosted-preview-${CANDIDATE_REVISION:0:12}-${BASE_REVISION:0:12}-$$.json"
 REFERENCE_REPO="$(cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview reference \
@@ -178,8 +188,9 @@ fi
 verify_source "$QUICKJS_SOURCE" "$REFERENCE_REVISION"
 
 CURRENT_PHASE="toolchain_validation"
-candidate_rust="$(cd "$CANDIDATE_SOURCE" && rustc -vV)"
-base_rust="$(cd "$BASE_SOURCE" && rustc -vV)"
+RUSTC_COMMAND="${CARGO_BUILD_RUSTC:-${RUSTC:-rustc}}"
+candidate_rust="$(cd "$CANDIDATE_SOURCE" && "$RUSTC_COMMAND" -vV)"
+base_rust="$(cd "$BASE_SOURCE" && "$RUSTC_COMMAND" -vV)"
 candidate_cargo="$(cd "$CANDIDATE_SOURCE" && cargo -V)"
 base_cargo="$(cd "$BASE_SOURCE" && cargo -V)"
 if [ "$candidate_rust" != "$base_rust" ] || [ "$candidate_cargo" != "$base_cargo" ]; then
@@ -189,37 +200,88 @@ fi
 RUST_TARGET="$(printf '%s\n' "$candidate_rust" | sed -n 's/^host: //p')"
 [ -n "$RUST_TARGET" ] || { echo "error: rustc did not report a host target" >&2; exit 2; }
 RUST_TOOLCHAIN="$(printf '%s\n' "$candidate_rust" | paste -sd ';' -); $candidate_cargo"
-RUST_FLAGS="-Ctarget-cpu=generic"
-CARGO_ARGS=(
-  --locked --release -p qjs-cli
-  --config=profile.release.opt-level=3
-  --config=profile.release.debug=false
-  --config=profile.release.debug-assertions=false
-  --config=profile.release.overflow-checks=false
-  --config=profile.release.lto=false
-  --config=profile.release.codegen-units=16
-  '--config=profile.release.panic="unwind"'
-  --config=profile.release.incremental=false
-  '--config=profile.release.strip="none"'
-)
+CURRENT_PHASE="cache_identity"
+(cd "$HARNESS_ROOT" && python3 -m tools.benchmark.build_cache plan \
+  --candidate-source "$CANDIDATE_SOURCE" --base-source "$BASE_SOURCE" \
+  --manifest benchmarks/manifest.json --output-dir "$BUILD_CACHE_PLAN")
+CANDIDATE_CACHE_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["key_sha256"])' "$BUILD_CACHE_PLAN/candidate.json")"
+BASE_CACHE_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["key_sha256"])' "$BUILD_CACHE_PLAN/base.json")"
+QUICKJS_CACHE_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["key_sha256"])' "$BUILD_CACHE_PLAN/quickjs-ng.json")"
+CANDIDATE_CACHE_ENTRY="$BUILD_CACHE_ROOT/rust/$CANDIDATE_CACHE_KEY"
+BASE_CACHE_ENTRY="$BUILD_CACHE_ROOT/rust/$BASE_CACHE_KEY"
+QUICKJS_CACHE_ENTRY="$BUILD_CACHE_ROOT/quickjs-ng/$QUICKJS_CACHE_KEY"
+mkdir -p "$BUILD_ROOT/binaries"
+
+RUST_FLAGS="$(cd "$HARNESS_ROOT" && python3 -m tools.benchmark.build_cache recipe \
+  --kind rust --field environment --name CARGO_ENCODED_RUSTFLAGS)"
+RUST_INCREMENTAL="$(cd "$HARNESS_ROOT" && python3 -m tools.benchmark.build_cache recipe \
+  --kind rust --field environment --name CARGO_INCREMENTAL)"
+CARGO_ARGS=()
+while IFS= read -r argument; do CARGO_ARGS+=("$argument"); done \
+  < <(cd "$HARNESS_ROOT" && python3 -m tools.benchmark.build_cache recipe \
+    --kind rust --field cargo_args)
+[ "${#CARGO_ARGS[@]}" -gt 0 ] || { echo "error: empty hosted Rust build recipe" >&2; exit 2; }
 build_rust() {
   source="$1"
   target_dir="$2"
   (cd "$source" && \
     CARGO_TARGET_DIR="$target_dir" \
     CARGO_BUILD_TARGET="$RUST_TARGET" \
-    CARGO_INCREMENTAL=0 \
+    CARGO_INCREMENTAL="$RUST_INCREMENTAL" \
     CARGO_ENCODED_RUSTFLAGS="$RUST_FLAGS" \
     cargo build "${CARGO_ARGS[@]}")
 }
+materialize_cache() {
+  (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.build_cache materialize \
+    --entry "$1" --spec "$2" --output "$3")
+}
+store_cache() {
+  (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.build_cache store \
+    --entry "$1" --spec "$2" --binary "$3")
+}
+store_and_materialize_cache() {
+  entry="$1"; spec="$2"; built_binary="$3"; output_binary="$4"
+  if store_cache "$entry" "$spec" "$built_binary"; then
+    materialize_cache "$entry" "$spec" "$output_binary"
+  else
+    echo "warning: rebuilt executable is usable but local cache storage was unsafe; continuing without saving it" >&2
+    temporary_binary="$output_binary.rebuilt.$$"
+    cp "$built_binary" "$temporary_binary"
+    chmod 755 "$temporary_binary"
+    mv -f "$temporary_binary" "$output_binary"
+  fi
+}
+CANDIDATE_BINARY="$BUILD_ROOT/binaries/candidate-qjs"
+BASE_BINARY="$BUILD_ROOT/binaries/base-qjs"
+QUICKJS_BINARY="$BUILD_ROOT/binaries/quickjs-ng-qjs"
 CURRENT_PHASE="build_candidate"
-build_rust "$CANDIDATE_SOURCE" "$BUILD_ROOT/candidate-target"
+if materialize_cache "$CANDIDATE_CACHE_ENTRY" "$BUILD_CACHE_PLAN/candidate.json" "$CANDIDATE_BINARY"; then
+  CANDIDATE_CACHE_STATUS="hit"
+  echo "performance build cache: candidate hit ($CANDIDATE_CACHE_KEY)"
+else
+  status="$?"; [ "$status" -eq 10 ] || exit "$status"
+  CANDIDATE_CACHE_STATUS="rebuilt"
+  echo "performance build cache: candidate miss/rebuild ($CANDIDATE_CACHE_KEY)"
+  build_rust "$CANDIDATE_SOURCE" "$BUILD_ROOT/candidate-target"
+  built="$BUILD_ROOT/candidate-target/$RUST_TARGET/release/qjs"
+  verify_source "$CANDIDATE_SOURCE" "$CANDIDATE_REVISION"
+  store_and_materialize_cache "$CANDIDATE_CACHE_ENTRY" "$BUILD_CACHE_PLAN/candidate.json" "$built" "$CANDIDATE_BINARY"
+fi
 verify_source "$CANDIDATE_SOURCE" "$CANDIDATE_REVISION"
 CURRENT_PHASE="build_base"
-build_rust "$BASE_SOURCE" "$BUILD_ROOT/base-target"
+if materialize_cache "$BASE_CACHE_ENTRY" "$BUILD_CACHE_PLAN/base.json" "$BASE_BINARY"; then
+  BASE_CACHE_STATUS="hit"
+  echo "performance build cache: base hit ($BASE_CACHE_KEY)"
+else
+  status="$?"; [ "$status" -eq 10 ] || exit "$status"
+  BASE_CACHE_STATUS="rebuilt"
+  echo "performance build cache: base miss/rebuild ($BASE_CACHE_KEY)"
+  build_rust "$BASE_SOURCE" "$BUILD_ROOT/base-target"
+  built="$BUILD_ROOT/base-target/$RUST_TARGET/release/qjs"
+  verify_source "$BASE_SOURCE" "$BASE_REVISION"
+  store_and_materialize_cache "$BASE_CACHE_ENTRY" "$BUILD_CACHE_PLAN/base.json" "$built" "$BASE_BINARY"
+fi
 verify_source "$BASE_SOURCE" "$BASE_REVISION"
-CANDIDATE_BINARY="$BUILD_ROOT/candidate-target/$RUST_TARGET/release/qjs"
-BASE_BINARY="$BUILD_ROOT/base-target/$RUST_TARGET/release/qjs"
 
 CURRENT_PHASE="build_quickjs_ng"
 QUICKJS_CC="$(command -v cc)"
@@ -227,12 +289,49 @@ QUICKJS_TOOLCHAIN="$(printf '%s; %s; %s' \
   "$("$QUICKJS_CC" --version | sed -n '1p')" \
   "$(cmake --version | sed -n '1p')" "$(make --version | sed -n '1p')")"
 QUICKJS_TARGET="$("$QUICKJS_CC" -dumpmachine)"
-make -C "$QUICKJS_SOURCE" "CC=$QUICKJS_CC" BUILD_TYPE=Release all
+QUICKJS_MAKE_ARGS=()
+while IFS= read -r argument; do QUICKJS_MAKE_ARGS+=("$argument"); done \
+  < <(cd "$HARNESS_ROOT" && python3 -m tools.benchmark.build_cache recipe \
+    --kind quickjs --field make_args)
+[ "${#QUICKJS_MAKE_ARGS[@]}" -gt 0 ] || { echo "error: empty hosted QuickJS-NG build recipe" >&2; exit 2; }
+if materialize_cache "$QUICKJS_CACHE_ENTRY" "$BUILD_CACHE_PLAN/quickjs-ng.json" "$QUICKJS_BINARY"; then
+  QUICKJS_CACHE_STATUS="hit"
+  echo "performance build cache: QuickJS-NG hit ($QUICKJS_CACHE_KEY)"
+else
+  status="$?"; [ "$status" -eq 10 ] || exit "$status"
+  QUICKJS_CACHE_STATUS="rebuilt"
+  echo "performance build cache: QuickJS-NG miss/rebuild ($QUICKJS_CACHE_KEY)"
+  make -C "$QUICKJS_SOURCE" "CC=$QUICKJS_CC" "${QUICKJS_MAKE_ARGS[@]}"
+  built="$QUICKJS_SOURCE/build/qjs"
+  verify_source "$QUICKJS_SOURCE" "$REFERENCE_REVISION"
+  store_and_materialize_cache "$QUICKJS_CACHE_ENTRY" "$BUILD_CACHE_PLAN/quickjs-ng.json" "$built" "$QUICKJS_BINARY"
+fi
 verify_source "$QUICKJS_SOURCE" "$REFERENCE_REVISION"
-QUICKJS_BINARY="$QUICKJS_SOURCE/build/qjs"
 for binary in "$CANDIDATE_BINARY" "$BASE_BINARY" "$QUICKJS_BINARY"; do
   [ -x "$binary" ] || { echo "error: expected executable was not built: $binary" >&2; exit 2; }
 done
+python3 - "$OUTPUT/build-cache.json" \
+  "$CANDIDATE_CACHE_KEY" "$CANDIDATE_CACHE_STATUS" \
+  "$BASE_CACHE_KEY" "$BASE_CACHE_STATUS" \
+  "$QUICKJS_CACHE_KEY" "$QUICKJS_CACHE_STATUS" <<'PY'
+import json
+import pathlib
+import sys
+
+roles = ("candidate", "base", "quickjs-ng")
+values = sys.argv[2:]
+payload = {
+    "schema_version": 1,
+    "scope": "build_executables_only_measurements_always_fresh",
+    "roles": {
+        role: {"key_sha256": values[index * 2], "status": values[index * 2 + 1]}
+        for index, role in enumerate(roles)
+    },
+}
+pathlib.Path(sys.argv[1]).write_text(
+    json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+)
+PY
 
 CURRENT_PHASE="receipt_preparation"
 PROFILE_PLATFORM="$(uname -s)-$(uname -m)"

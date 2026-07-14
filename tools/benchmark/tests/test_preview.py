@@ -167,8 +167,10 @@ class PreviewPreparationTests(unittest.TestCase):
         for value in (
             "--harness-mode", "--candidate-source", "--base-source",
             BASE_MODE, PUSH_MODE, "verify-source",
-            "CARGO_ENCODED_RUSTFLAGS", "profile.release.lto=false",
-            'make -C "$QUICKJS_SOURCE" "CC=$QUICKJS_CC" BUILD_TYPE=Release all',
+            "CARGO_ENCODED_RUSTFLAGS", "--kind rust --field cargo_args",
+            'make -C "$QUICKJS_SOURCE" "CC=$QUICKJS_CC" "${QUICKJS_MAKE_ARGS[@]}"',
+            "tools.benchmark.build_cache plan", "tools.benchmark.build_cache materialize",
+            "tools.benchmark.build_cache store", "build-cache.json",
             "--manifest \"$MANIFEST\" --blocks 3", "--candidate-receipt",
             "--base-receipt", "--quickjs-ng-receipt", "--state pending",
             "--state failed", "--status-output", 'cp "$MANIFEST" "$OUTPUT/manifest.json"',
@@ -183,6 +185,28 @@ class PreviewPreparationTests(unittest.TestCase):
         self.assertGreaterEqual(script.count('verify_source "$CANDIDATE_SOURCE"'), 3)
         self.assertGreaterEqual(script.count('verify_source "$BASE_SOURCE"'), 3)
         self.assertGreaterEqual(script.count('verify_source "$QUICKJS_SOURCE"'), 2)
+        for build_marker, verify_marker, store_marker in (
+            (
+                'build_rust "$CANDIDATE_SOURCE"',
+                'verify_source "$CANDIDATE_SOURCE" "$CANDIDATE_REVISION"',
+                'store_and_materialize_cache "$CANDIDATE_CACHE_ENTRY"',
+            ),
+            (
+                'build_rust "$BASE_SOURCE"',
+                'verify_source "$BASE_SOURCE" "$BASE_REVISION"',
+                'store_and_materialize_cache "$BASE_CACHE_ENTRY"',
+            ),
+            (
+                'make -C "$QUICKJS_SOURCE"',
+                'verify_source "$QUICKJS_SOURCE" "$REFERENCE_REVISION"',
+                'store_and_materialize_cache "$QUICKJS_CACHE_ENTRY"',
+            ),
+        ):
+            build_index = script.index(build_marker, script.index("miss/rebuild"))
+            self.assertLess(
+                script.index(verify_marker, build_index),
+                script.index(store_marker, build_index),
+            )
         self.assertLess(
             script.index('CURRENT_PHASE="post_measure_validation"'),
             script.index('CURRENT_PHASE="summary"'),

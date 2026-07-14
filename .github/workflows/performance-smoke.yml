@@ -104,6 +104,41 @@ jobs:
           ./scripts/performance-policy-audit.sh
           ./scripts/external-corpus-audit.sh
 
+      - name: Compute exact executable cache identities
+        id: build-cache-plan
+        run: |
+          python3 -m tools.benchmark.build_cache plan \
+            --candidate-source "$GITHUB_WORKSPACE/target/performance-preview/candidate-source" \
+            --base-source "$GITHUB_WORKSPACE" \
+            --manifest benchmarks/manifest.json \
+            --output-dir "$GITHUB_WORKSPACE/target/performance-preview/build-cache-plan" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Restore candidate executable cache (read-only)
+        id: candidate-cache
+        uses: actions/cache/restore@v5
+        continue-on-error: true
+        with:
+          path: target/performance-preview/build-cache/rust/${{ steps.build-cache-plan.outputs.candidate-key }}
+          key: performance-preview-rust-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-cache-plan.outputs.candidate-key }}
+
+      - name: Restore distinct base executable cache (read-only)
+        if: steps.build-cache-plan.outputs.base-key != steps.build-cache-plan.outputs.candidate-key
+        id: base-cache
+        uses: actions/cache/restore@v5
+        continue-on-error: true
+        with:
+          path: target/performance-preview/build-cache/rust/${{ steps.build-cache-plan.outputs.base-key }}
+          key: performance-preview-rust-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-cache-plan.outputs.base-key }}
+
+      - name: Restore QuickJS-NG executable cache (read-only)
+        id: quickjs-cache
+        uses: actions/cache/restore@v5
+        continue-on-error: true
+        with:
+          path: target/performance-preview/build-cache/quickjs-ng/${{ steps.build-cache-plan.outputs.quickjs-key }}
+          key: performance-preview-quickjs-ng-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-cache-plan.outputs.quickjs-key }}
+
       - name: Build and measure three pinned engines
         timeout-minutes: 35
         run: |
@@ -115,7 +150,8 @@ jobs:
             --base-sha "$PR_BASE_SHA" \
             --candidate-repo "$PR_HEAD_CLONE_URL" \
             --base-repo "$PR_BASE_CLONE_URL" \
-            --output "$EVIDENCE_DIR"
+            --output "$EVIDENCE_DIR" \
+            --build-cache-root "$GITHUB_WORKSPACE/target/performance-preview/build-cache"
 
       - name: Publish complete or durable failure summary
         if: always()
@@ -225,6 +261,41 @@ jobs:
           ./scripts/performance-policy-audit.sh
           ./scripts/external-corpus-audit.sh
 
+      - name: Compute exact executable cache identities
+        id: build-cache-plan
+        run: |
+          python3 -m tools.benchmark.build_cache plan \
+            --candidate-source "$GITHUB_WORKSPACE" \
+            --base-source "$GITHUB_WORKSPACE/target/performance-preview/base-source" \
+            --manifest benchmarks/manifest.json \
+            --output-dir "$GITHUB_WORKSPACE/target/performance-preview/build-cache-plan" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Restore candidate executable cache
+        id: candidate-cache
+        uses: actions/cache/restore@v5
+        continue-on-error: true
+        with:
+          path: target/performance-preview/build-cache/rust/${{ steps.build-cache-plan.outputs.candidate-key }}
+          key: performance-preview-rust-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-cache-plan.outputs.candidate-key }}
+
+      - name: Restore distinct base executable cache
+        if: steps.build-cache-plan.outputs.base-key != steps.build-cache-plan.outputs.candidate-key
+        id: base-cache
+        uses: actions/cache/restore@v5
+        continue-on-error: true
+        with:
+          path: target/performance-preview/build-cache/rust/${{ steps.build-cache-plan.outputs.base-key }}
+          key: performance-preview-rust-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-cache-plan.outputs.base-key }}
+
+      - name: Restore QuickJS-NG executable cache
+        id: quickjs-cache
+        uses: actions/cache/restore@v5
+        continue-on-error: true
+        with:
+          path: target/performance-preview/build-cache/quickjs-ng/${{ steps.build-cache-plan.outputs.quickjs-key }}
+          key: performance-preview-quickjs-ng-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-cache-plan.outputs.quickjs-key }}
+
       - name: Build and measure three pinned engines
         timeout-minutes: 35
         run: |
@@ -236,7 +307,78 @@ jobs:
             --base-sha "$PUSH_BEFORE_SHA" \
             --candidate-repo "$PUSH_CLONE_URL" \
             --base-repo "$PUSH_CLONE_URL" \
-            --output "$EVIDENCE_DIR"
+            --output "$EVIDENCE_DIR" \
+            --build-cache-root "$GITHUB_WORKSPACE/target/performance-preview/build-cache"
+
+      - name: Revalidate candidate executable cache for trusted save
+        if: always() && !cancelled()
+        id: candidate-cache-ready
+        run: |
+          ready=false
+          if python3 -m tools.benchmark.build_cache ready \
+            --entry "target/performance-preview/build-cache/rust/${{ steps.build-cache-plan.outputs.candidate-key }}" \
+            --spec "target/performance-preview/build-cache-plan/candidate.json"; then
+            ready=true
+          fi
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+
+      - name: Revalidate base executable cache for trusted save
+        if: always() && !cancelled()
+        id: base-cache-ready
+        run: |
+          ready=false
+          if python3 -m tools.benchmark.build_cache ready \
+            --entry "target/performance-preview/build-cache/rust/${{ steps.build-cache-plan.outputs.base-key }}" \
+            --spec "target/performance-preview/build-cache-plan/base.json"; then
+            ready=true
+          fi
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+
+      - name: Revalidate QuickJS-NG executable cache for trusted save
+        if: always() && !cancelled()
+        id: quickjs-cache-ready
+        run: |
+          ready=false
+          if python3 -m tools.benchmark.build_cache ready \
+            --entry "target/performance-preview/build-cache/quickjs-ng/${{ steps.build-cache-plan.outputs.quickjs-key }}" \
+            --spec "target/performance-preview/build-cache-plan/quickjs-ng.json"; then
+            ready=true
+          fi
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+
+      - name: Save candidate executable cache from trusted main
+        if: >-
+          always() && !cancelled() &&
+          steps.candidate-cache-ready.outputs.ready == 'true' &&
+          steps.candidate-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        continue-on-error: true
+        with:
+          path: target/performance-preview/build-cache/rust/${{ steps.build-cache-plan.outputs.candidate-key }}
+          key: performance-preview-rust-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-cache-plan.outputs.candidate-key }}
+
+      - name: Save distinct base executable cache from trusted main
+        if: >-
+          always() && !cancelled() &&
+          steps.base-cache-ready.outputs.ready == 'true' &&
+          steps.build-cache-plan.outputs.base-key != steps.build-cache-plan.outputs.candidate-key &&
+          steps.base-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        continue-on-error: true
+        with:
+          path: target/performance-preview/build-cache/rust/${{ steps.build-cache-plan.outputs.base-key }}
+          key: performance-preview-rust-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-cache-plan.outputs.base-key }}
+
+      - name: Save QuickJS-NG executable cache from trusted main
+        if: >-
+          always() && !cancelled() &&
+          steps.quickjs-cache-ready.outputs.ready == 'true' &&
+          steps.quickjs-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        continue-on-error: true
+        with:
+          path: target/performance-preview/build-cache/quickjs-ng/${{ steps.build-cache-plan.outputs.quickjs-key }}
+          key: performance-preview-quickjs-ng-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-cache-plan.outputs.quickjs-key }}
 
       - name: Publish complete or durable failure summary
         if: always()

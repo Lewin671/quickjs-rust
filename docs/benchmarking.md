@@ -597,7 +597,38 @@ runs, while each main push gets a distinct workflow-run-bound concurrency group 
 push is canceled by a later one.
 
 `scripts/performance-preview.sh` initializes only the manifest-pinned
-QuickJS-NG revision and builds all three engines on one `ubuntu-latest` host.
+QuickJS-NG revision and prepares all three engines on one `ubuntu-latest` host.
+The workflow restores compact content-addressed caches containing only final
+candidate/base `qjs` and fixed-revision QuickJS-NG executables. Benchmark rows,
+receipts, reports, summaries, and conclusions are never cached: every run makes
+fresh receipts bound to the current candidate/base revisions and validated
+binary digests, then repeats all measurement and evidence generation.
+
+Rust keys bind tracked workspace manifests, the lock/toolchain files, the full
+`crates/` tree, hosted image identity, OS release/kernel/libc, actual
+Rust/Cargo/compiler/linker paths, versions and executable digests, every
+effective build-affecting Cargo/Rust/C/linker environment value, target, and
+the exact hosted release recipe. Documentation- and workflow-only edits do
+not force compilation. QuickJS-NG keys bind its fixed repository/revision,
+OS/architecture, compiler target, actual C/CMake/Make identities, relevant
+build environment, and make recipe. Candidate and base share the Rust content
+namespace, so identical build inputs reuse one binary across roles/revisions.
+
+Restored executables are untrusted input. Exact-key metadata, input identity,
+regular executable mode, size, and SHA-256 must validate before use; missing or
+invalid entries rebuild. Logs and artifact `build-cache.json` expose each
+role's hit/rebuild status and key. `pull_request_target` uses exact restore-only
+actions and cannot save candidate-influenced state. Only a trusted `main` push
+may save new immutable executable caches; prefix restores are not used. Before
+storing a rebuilt miss locally, the orchestrator revalidates that role's source tree
+immediately after compilation, so a build that dirties tracked provenance
+cannot create a ready entry. Before a remote save, an always-run step
+independently revalidates each atomically stored
+entry. Thus a valid build can be reused even when later hosted
+measurement/report health fails, while partial or malformed entries are never
+saved. Cache backend restore/save errors are non-fatal: they degrade to
+rebuild/no-save without changing benchmark failure semantics.
+
 It rejects repository Cargo config overrides, forces the recorded Cargo release
 profile and generic CPU flags, and verifies that every source tree remains at
 the requested clean revision before and after builds and again after
