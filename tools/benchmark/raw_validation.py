@@ -7,6 +7,7 @@ import json
 import statistics
 from collections import defaultdict
 from dataclasses import dataclass
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +33,7 @@ from .raw_contract import (
     validate_sample_common,
     validate_success,
 )
-from .schema import Manifest
+from .schema import Manifest, next_calibration_iterations
 
 
 @dataclass(frozen=True)
@@ -126,11 +127,8 @@ def _replay_setup(
             return failed(row, reason, None)
         startup_durations.append(row["duration_ns"])
 
-    startup_ns = statistics.median(startup_durations)
-    target_ns = max(
-        case.min_window_ms * 1_000_000,
-        int(startup_ns / case.startup_max_fraction),
-    )
+    startup_ns = int(statistics.median(startup_durations))
+    target_ns = case.calibration_target_ns(startup_ns)
     expected_iterations = case.initial_iterations
     while True:
         row, reason = take("calibration", expected_iterations)
@@ -143,12 +141,11 @@ def _replay_setup(
         if reached:
             formal_iterations = expected_iterations
             break
-        scale = max(
-            2,
-            min(16, int(target_ns / max(1, row["duration_ns"])) + 1),
-        )
-        expected_iterations = min(
-            case.max_iterations, expected_iterations * scale
+        expected_iterations = next_calibration_iterations(
+            expected_iterations,
+            target_ns,
+            row["duration_ns"],
+            case.max_iterations,
         )
 
     for _ in range(case.warmup_runs):
@@ -395,7 +392,8 @@ def validate_run(input_path: Path, manifest: Manifest) -> ValidatedRun:
                         continue
                     timing_good = (
                         row["duration_ns"] >= case.min_window_ms * 1_000_000
-                        and startup_ns / row["duration_ns"] <= case.startup_max_fraction
+                        and Fraction(startup_ns, row["duration_ns"])
+                        <= case.startup_max_fraction
                     )
                     if timing_good != (row["quality"] == "eligible"):
                         raise ReportError(

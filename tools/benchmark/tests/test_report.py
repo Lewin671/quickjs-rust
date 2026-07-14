@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import shutil
+import statistics
 import subprocess
 import tempfile
 import unittest
@@ -71,7 +72,7 @@ class ReportTests(unittest.TestCase):
         )
         return replace(engine, receipt=receipt)
 
-    def _complete_rows(self, blocks: int = 2) -> list[dict]:
+    def _complete_rows(self, blocks: int = 2, startup_ns: int = 1_000_000) -> list[dict]:
         engines = [self._engine(role) for role in ("candidate", "base", "quickjs-ng")]
         per_op = {"candidate": 120, "base": 100, "quickjs-ng": 150}
         case_by_id = {case.id: case for case in self.manifest.cases}
@@ -86,7 +87,7 @@ class ReportTests(unittest.TestCase):
             case = case_by_id[argv[-2]]
             iterations = int(argv[-1])
             operations = case.expected_operations(iterations)
-            duration = 1_000_000 if iterations == 0 else per_op[role] * operations
+            duration = startup_ns if iterations == 0 else per_op[role] * operations
             return ProcessResult(
                 started_at="2026-01-01T00:00:00+00:00",
                 duration_ns=duration,
@@ -203,15 +204,7 @@ class ReportTests(unittest.TestCase):
                 )
 
     def test_timing_quality_is_recomputed_at_both_boundaries(self) -> None:
-        rows = self._complete_rows()
-        startup_rows = [
-            row for row in rows
-            if row.get("phase") == "startup"
-            and row["role"] == "candidate"
-            and row["case_id"] == "plain_function_call"
-        ]
-        for row in startup_rows:
-            row["duration_ns"] = 5_000_000
+        rows = self._complete_rows(startup_ns=5_000_000)
         measurement = next(
             row for row in rows
             if row.get("phase") == "measurement"
@@ -227,15 +220,7 @@ class ReportTests(unittest.TestCase):
         with self.assertRaisesRegex(ReportError, "timing quality mismatch"):
             self._build_report()
 
-        rows = self._complete_rows()
-        startup_rows = [
-            row for row in rows
-            if row.get("phase") == "startup"
-            and row["role"] == "candidate"
-            and row["case_id"] == "plain_function_call"
-        ]
-        for row in startup_rows:
-            row["duration_ns"] = 5_000_001
+        rows = self._complete_rows(startup_ns=5_000_001)
         measurement = next(
             row for row in rows
             if row.get("phase") == "measurement"
@@ -567,6 +552,34 @@ class ReportTests(unittest.TestCase):
         rows[-1]["coverage"]["common"] -= 1
         self._write_rows(rows)
         with self.assertRaisesRegex(ReportError, "diagnostic state mismatch"):
+            self._build_report()
+
+    def test_raw_replay_requires_safety_adjusted_calibration_target(self) -> None:
+        rows = self._complete_rows()
+        role = "candidate"
+        case_id = "plain_function_call"
+        calibration = [
+            row for row in rows
+            if row.get("phase") == "calibration" and row["role"] == role
+            and row["case_id"] == case_id
+        ]
+        self.assertGreaterEqual(len(calibration), 2)
+        old_last, adjusted_last = calibration[-2:]
+        case = next(case for case in self.manifest.cases if case.id == case_id)
+        startup = [
+            row["duration_ns"] for row in rows
+            if row.get("phase") == "startup" and row["role"] == role
+            and row["case_id"] == case_id
+        ]
+        old_target = max(
+            case.min_window_ms * 1_000_000,
+            statistics.median(startup) / case.startup_max_fraction,
+        )
+        self.assertGreaterEqual(old_last["duration_ns"], old_target)
+        self.assertLess(old_last["duration_ns"], case.calibration_target_ns(int(statistics.median(startup))))
+        rows.remove(adjusted_last)
+        self._write_rows(rows)
+        with self.assertRaisesRegex(ReportError, "expected calibration, got warmup"):
             self._build_report()
 
     def test_each_reachable_diagnostic_failure_phase_is_accepted(self) -> None:

@@ -305,7 +305,7 @@ def validate_success(row: dict[str, Any], case: Any, where: str) -> None:
     iterations = integer(row["iterations"], f"{where}.iterations")
     operations = integer(row["operations"], f"{where}.operations")
     integer(row["checksum"], f"{where}.checksum")
-    number(row["duration_ns"], f"{where}.duration_ns", positive=True)
+    integer(row["duration_ns"], f"{where}.duration_ns", minimum=1)
     if (
         operations != case.expected_operations(iterations)
         or row["checksum"] != case.expected_checksum(iterations)

@@ -24,7 +24,7 @@
       "tools/benchmark/schema.py",
       "tools/benchmark/snapshots.py"
     ],
-    "aggregate_sha256": "b1e954078e0288ac109a7fd618e1d30cd7746777ba8f28ddc1c28a31ab2fc499"
+    "aggregate_sha256": "67eee418bcb19a1ea45813f109b5fdcb0058393528052aeaa6657f1ca2d99bac"
   },
   "reference_engine": {
     "identity": "quickjs-ng",

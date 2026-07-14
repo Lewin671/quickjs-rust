@@ -22,7 +22,7 @@
       "tools/benchmark/schema.py",
       "tools/benchmark/snapshots.py"
     ],
-    "aggregate_sha256": "985d39b1e091206eff03849937add6f30cc64f5743fe6f865a8124422eb1bac9"
+    "aggregate_sha256": "5301d69ae51dec230e0288d5a9afbedc96bb9391708aa0267ba02b2c60ab49fd"
   },
   "reference_engine": {
     "identity": "quickjs-ng",
@@ -73,6 +73,7 @@
         "max_iterations": 20000000,
         "min_window_ms": 500,
         "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
         "warmup_runs": 1,
         "timeout_seconds": 30
       }
@@ -90,6 +91,7 @@
         "max_iterations": 20000000,
         "min_window_ms": 500,
         "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
         "warmup_runs": 1,
         "timeout_seconds": 30
       }
@@ -107,6 +109,7 @@
         "max_iterations": 20000000,
         "min_window_ms": 500,
         "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
         "warmup_runs": 1,
         "timeout_seconds": 30
       }
@@ -124,6 +127,7 @@
         "max_iterations": 20000000,
         "min_window_ms": 500,
         "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
         "warmup_runs": 1,
         "timeout_seconds": 30
       }
@@ -141,6 +145,7 @@
         "max_iterations": 20000000,
         "min_window_ms": 500,
         "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
         "warmup_runs": 1,
         "timeout_seconds": 30
       }
@@ -158,6 +163,7 @@
         "max_iterations": 20000000,
         "min_window_ms": 500,
         "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
         "warmup_runs": 1,
         "timeout_seconds": 30
       }
@@ -175,6 +181,7 @@
         "max_iterations": 20000000,
         "min_window_ms": 500,
         "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
         "warmup_runs": 1,
         "timeout_seconds": 30
       }

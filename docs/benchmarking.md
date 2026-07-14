@@ -56,7 +56,27 @@ metric is **amortized black-box throughput**, including startup, parsing,
 realm/setup, execution, and shutdown. It is not VM-only execution time.
 
 For each engine/case, the runner measures zero-iteration startup/setup, then
-calibrates the iteration count until both conditions can hold:
+calibrates the iteration count against a safety-adjusted target. The target is
+`ceil(max(min_window_ns, median_startup_ns / startup_max_fraction) *
+calibration_safety_factor)`. The checked-in hosted manifest sets the explicit
+factor to 1.25, leaving enough headroom for a formal block to run up to 20%
+shorter than the calibration target before it crosses the evidence boundary.
+This comfortably covers the roughly 8% hosted-runner variation that exposed
+the previous boundary condition. The factor is schema-bounded to 1 through 4;
+both ratio fields allow at most 18 significant digits and 18 decimal places,
+and JSON decimals are parsed directly into exact fractions without an
+intermediate binary float. Round-up-to-integer nanoseconds makes runner and
+raw-evidence replay deterministic.
+
+When a calibration sample is short of the target, the next iteration count is
+`ceil(iterations * target_ns / duration_ns)`. Progress is always at least one
+iteration, a single step is capped at 16x, and the manifest's `max_iterations`
+is the final cap. Runner execution and raw validation call the same integer-only
+progression helper, so proportional scaling cannot drift between production
+and replay.
+
+The safety factor changes only when calibration stops. Formal measurement
+eligibility is unchanged and still requires both conditions:
 
 - the outer window is at least the manifest's 500 ms minimum; and
 - median startup/setup is at most 1% of the outer window.

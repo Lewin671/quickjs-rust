@@ -7,6 +7,7 @@ import platform
 import statistics
 import subprocess
 from collections import defaultdict
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, TextIO
 from uuid import uuid4
@@ -15,7 +16,7 @@ from .adapters import Engine, probe_version
 from .planning import measurement_plan
 from .process import ProcessResult, run_process
 from .records import parse_result
-from .schema import Case, Manifest, sha256_file
+from .schema import Case, Manifest, next_calibration_iterations, sha256_file
 from .snapshots import SnapshotStore
 
 def _runner_repo_metadata(root: Path) -> dict[str, Any]:
@@ -288,7 +289,8 @@ class BenchmarkRun:
             self.failed = True
         elif startup_ns is not None and (
             result.duration_ns < case.min_window_ms * 1_000_000
-            or startup_ns / max(1, result.duration_ns) > case.startup_max_fraction
+            or Fraction(startup_ns, max(1, result.duration_ns))
+            > case.startup_max_fraction
         ):
             quality = "timer_limited"
         if phase == "measurement" and status == "ok" and quality == "eligible":
@@ -342,7 +344,7 @@ class BenchmarkRun:
                 return False
             startup_durations.append(result.duration_ns)
         startup_ns = int(statistics.median(startup_durations))
-        target_ns = max(case.min_window_ms * 1_000_000, int(startup_ns / case.startup_max_fraction))
+        target_ns = case.calibration_target_ns(startup_ns)
         iterations = case.initial_iterations
         while True:
             result, status, _quality = self._sample(
@@ -352,8 +354,9 @@ class BenchmarkRun:
                 return False
             if result.duration_ns >= target_ns or iterations >= case.max_iterations:
                 break
-            scale = max(2, min(16, int(target_ns / max(1, result.duration_ns)) + 1))
-            iterations = min(case.max_iterations, iterations * scale)
+            iterations = next_calibration_iterations(
+                iterations, target_ns, result.duration_ns, case.max_iterations
+            )
         for _ in range(case.warmup_runs):
             _result, status, _quality = self._sample(
                 engine, case, iterations, "warmup", None, None, "diagnostic"
