@@ -66,6 +66,15 @@ Campaign working rules:
 
 ## Performance
 
+- `T017-performance-benchmark-system.md` — versioned candidate/base/QuickJS-NG
+  black-box benchmark platform. M0-M4 landed, including independent throughput,
+  resource lanes, and diagnostic public-boundary Criterion lifecycle benches;
+  M5 governance now records five blocked source-pinned candidates and two
+  excluded evidence-backed decisions in a deny-only v1 registry; future
+  admission requires a separately reviewed v2 audit bundle before any gate.
+  CI layering is smoke-only on hosted runners; deny-only M6/M7 policy
+  infrastructure is ready, while fixed-hardware A/A calibration and every
+  performance gate remain intentionally incomplete and disabled.
 - `T011-call-performance.md` — **subsumed by T016.** Cut per-call
   environment-cloning cost. The leaf-call activation-snapshot clone landed; the
   remaining per-call locals-map clone is deleted by T016 S5, which unblocks the

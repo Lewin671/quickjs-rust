@@ -1,0 +1,183 @@
+{
+  "schema_version": 4,
+  "series": {
+    "id": "core-black-box-v4",
+    "suite_id": "quickjs-rust-t016-first-party-micro@quickjs-ng-f7830186-v4"
+  },
+  "lane": { "id": "throughput/wall_ns_per_operation" },
+  "protocol": {
+    "id": "quickjs-measurement-protocol-v4",
+    "files": [
+      "benchmarks/workloads/core-micro.js",
+      "scripts/benchmark.sh",
+      "tools/__init__.py",
+      "tools/benchmark/__init__.py",
+      "tools/benchmark/__main__.py",
+      "tools/benchmark/adapters.py",
+      "tools/benchmark/planning.py",
+      "tools/benchmark/process.py",
+      "tools/benchmark/receipts.py",
+      "tools/benchmark/records.py",
+      "tools/benchmark/runner.py",
+      "tools/benchmark/schema.py",
+      "tools/benchmark/snapshots.py"
+    ],
+    "aggregate_sha256": "985d39b1e091206eff03849937add6f30cc64f5743fe6f865a8124422eb1bac9"
+  },
+  "reference_engine": {
+    "identity": "quickjs-ng",
+    "source_repo": "https://github.com/quickjs-ng/quickjs.git",
+    "revision": "f7830186043e4488f2998759d60a514faf07cbc9"
+  },
+  "profile": {
+    "id": "macos-arm64-release-v1",
+    "platform": "macos-arm64"
+  },
+  "build_recipes": [
+    {
+      "engine_identity": "qjs-rust",
+      "build_mode": "release",
+      "toolchain": "rustc 1.95.0 (59807616e 2026-04-14); cargo 1.95.0 (f2d3ce0bd 2026-03-21); LLVM 22.1.2",
+      "target": "aarch64-apple-darwin",
+      "features": [],
+      "flags": [],
+      "lto": "off",
+      "strip": "none",
+      "allocator": "system",
+      "host_features": "target-default"
+    },
+    {
+      "engine_identity": "quickjs-ng",
+      "build_mode": "release",
+      "toolchain": "Homebrew clang version 21.1.8",
+      "target": "arm64-apple-darwin25.5.0",
+      "features": [],
+      "flags": ["-DCMAKE_BUILD_TYPE=Release", "-DBUILD_QJS_LIBC=ON"],
+      "lto": "off",
+      "strip": "none",
+      "allocator": "system",
+      "host_features": "target-default"
+    }
+  ],
+  "cases": [
+    {
+      "id": "plain_function_call",
+      "family": "call",
+      "critical": true,
+      "workload": "benchmarks/workloads/core-micro.js",
+      "workload_sha256": "93faf3d83568b89e2e2eab603294cddcca8af067cc013d787d1bd8f4887f736f",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "triangular", "factor": 1 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 20000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "method_call",
+      "family": "call",
+      "critical": true,
+      "workload": "benchmarks/workloads/core-micro.js",
+      "workload_sha256": "93faf3d83568b89e2e2eab603294cddcca8af067cc013d787d1bd8f4887f736f",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "triangular", "factor": 1 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 20000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "captured_read",
+      "family": "binding",
+      "critical": true,
+      "workload": "benchmarks/workloads/core-micro.js",
+      "workload_sha256": "93faf3d83568b89e2e2eab603294cddcca8af067cc013d787d1bd8f4887f736f",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "zero_based_triangular_plus_linear", "factor": 7 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 20000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "captured_write",
+      "family": "binding",
+      "critical": true,
+      "workload": "benchmarks/workloads/core-micro.js",
+      "workload_sha256": "93faf3d83568b89e2e2eab603294cddcca8af067cc013d787d1bd8f4887f736f",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "triangular", "factor": 1 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 20000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "many_locals_call",
+      "family": "binding",
+      "critical": true,
+      "workload": "benchmarks/workloads/core-micro.js",
+      "workload_sha256": "93faf3d83568b89e2e2eab603294cddcca8af067cc013d787d1bd8f4887f736f",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "zero_based_triangular_plus_linear", "factor": 136 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 20000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "property_read",
+      "family": "property",
+      "critical": true,
+      "workload": "benchmarks/workloads/core-micro.js",
+      "workload_sha256": "93faf3d83568b89e2e2eab603294cddcca8af067cc013d787d1bd8f4887f736f",
+      "operations_per_iteration": 3,
+      "checksum": { "model": "linear", "factor": 6 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 20000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "array_read",
+      "family": "array",
+      "critical": true,
+      "workload": "benchmarks/workloads/core-micro.js",
+      "workload_sha256": "93faf3d83568b89e2e2eab603294cddcca8af067cc013d787d1bd8f4887f736f",
+      "operations_per_iteration": 4,
+      "checksum": { "model": "linear", "factor": 10 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 20000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    }
+  ]
+}

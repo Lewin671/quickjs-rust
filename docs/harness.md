@@ -151,6 +151,75 @@ Run additional checks when relevant:
 ./scripts/microbench.sh
 ```
 
+For performance changes, `scripts/microbench.sh` is only a fast diagnostic.
+Use the versioned black-box runner for reviewable evidence, with engine builds
+kept outside the measurement process:
+
+```sh
+cargo build --release -p qjs-cli
+./scripts/benchmark.sh --candidate target/release/qjs --blocks 1 \
+  --case plain_function_call \
+  --output target/benchmarks/single-role-smoke.jsonl
+./scripts/lifecycle-bench.sh --quick
+```
+
+The black-box command is a local single-role smoke only; it cannot be passed to
+the three-role report tool. Report-grade evidence requires the full frozen
+portfolio, all three binaries, clean recipe-matching receipts, and an explicit
+new output path:
+
+```sh
+./scripts/benchmark.sh \
+  --candidate /path/to/candidate/qjs \
+  --candidate-receipt /path/to/candidate-receipt.json \
+  --base /path/to/base/qjs \
+  --base-receipt /path/to/base-receipt.json \
+  --quickjs-ng /path/to/quickjs-ng/qjs \
+  --quickjs-ng-receipt /path/to/quickjs-ng-receipt.json \
+  --blocks 30 --seed 20250713 \
+  --output target/benchmarks/report-grade-run.jsonl
+./scripts/benchmark-report.sh --analysis-manifest benchmarks/analysis.json \
+  --input target/benchmarks/report-grade-run.jsonl \
+  --output target/benchmarks/report-grade-report.json
+```
+
+The production experiment contract, profile/series identity, QuickJS-NG
+comparison ordering, and external-corpus admission rules are in
+`docs/benchmarking.md`.
+
+`scripts/external-corpus-audit.sh` validates the deny-only external-corpus v1
+registry without fetching or executing anything. `--registry <path>` performs
+structural validation of custom input and cannot be combined with
+`--require-admitted <id>`. The latter consults only the checked-in trust root
+and always fails because v1 cannot represent admission. The registry has five
+blocked source-pinned candidates and two excluded evidence-backed decisions;
+it is governance metadata, not a benchmark result or performance claim. Real
+admission requires a separately reviewed, content-hashed v2 audit bundle.
+
+`scripts/performance-policy-audit.sh` validates the checked-in deny-only CI
+policy and cross-checks the four current benchmark protocol hashes plus the
+external registry state. `--require-gate nightly|release|pr_sentinel` always
+fails in v1. `--policy <path>` only validates custom structure and is mutually
+exclusive with gate requirements. The hosted
+`.github/workflows/performance-smoke.yml` executes only the exact audits,
+throughput/resource dry runs, and `lifecycle-bench.sh --quick --list`; it is not
+timing evidence. Its exact path, full bytes, and SHA-256 are bound by the
+policy validator, so adding any trigger, job, step, action, or command fails the
+audit. Fixed-hardware qualification, A/A calibration, a noise
+envelope, and the PR false-positive budget remain future reviewed work.
+
+The lifecycle command is a Rust-native parser/compiler diagnostic. Its normal
+mode uses the frozen Criterion configuration and writes standard artifacts
+under `target/criterion`; `--quick` is only a smoke, forced to
+`target/criterion-smoke` with baseline output discarded. The wrapper rejects
+all options except positional filters, the documented exact long display/run
+flags, exact `-v`/`-n`/`-h`, and equals-only `--color`/`--format` values. It
+never runs as part of `check.sh`, is not compared with QuickJS-NG, and is not a
+CI threshold. Fixture v1 length and FNV-1a drift sentinels fail closed; content
+changes require a v2 ID. Output destruction is deferred outside timing. The
+realm-construction boundary is absent until the engine naturally exposes a
+production public API.
+
 `scripts/find-qjsng-gaps.sh` is the first-choice entrypoint for discovering
 behavior supported by the pinned QuickJS-NG reference but not yet supported by
 quickjs-rust. It runs `scripts/test262-baseline.sh --engine both`, stores the

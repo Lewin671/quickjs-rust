@@ -30,5 +30,15 @@ qjs-parser = { path = "../qjs-parser" }
 qjs-unicode = { path = "../qjs-unicode" }
 unicode-normalization = "0.1"
 
+[dev-dependencies]
+# Criterion 0.8.2 requires Rust 1.86, while this workspace supports Rust 1.85.
+# Pin the last compatible line and keep only the libtest-compatible bench
+# harness; charting, HTML, and Rayon are unnecessary for lifecycle diagnostics.
+criterion = { version = "=0.7.0", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "lifecycle"
+harness = false
+
 [lints]
 workspace = true

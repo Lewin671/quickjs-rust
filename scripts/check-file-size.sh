@@ -74,4 +74,8 @@ check_limit "Rust test" 2000 '*.rs' include '^(.*/)?crates/.*/src/tests/'
 
 check_limit "repository script" 2000 '*.sh'
 
+check_limit "Python source" 800 '*.py' exclude '/tests/'
+
+check_limit "Python test" 1200 '*.py' include '/tests/'
+
 exit "$status"

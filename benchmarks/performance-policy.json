@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "policy_id": "quickjs-performance-policy-v1",
+  "claim_eligible": false,
+  "protocols": {
+    "throughput_measurement": {
+      "manifest_path": "benchmarks/manifest.json",
+      "protocol_id": "quickjs-measurement-protocol-v4",
+      "protocol_sha256": "985d39b1e091206eff03849937add6f30cc64f5743fe6f865a8124422eb1bac9"
+    },
+    "throughput_analysis": {
+      "manifest_path": "benchmarks/analysis.json",
+      "protocol_id": "quickjs-analysis-protocol-v2",
+      "protocol_sha256": "f7f3a5cf3063436af76830812239a714ec84a561ee81dcc7e40cf8d711903144"
+    },
+    "resource_measurement": {
+      "manifest_path": "benchmarks/resources.json",
+      "protocol_id": "quickjs-resource-measurement-protocol-v1",
+      "protocol_sha256": "b1e954078e0288ac109a7fd618e1d30cd7746777ba8f28ddc1c28a31ab2fc499"
+    },
+    "resource_analysis": {
+      "manifest_path": "benchmarks/resource-analysis.json",
+      "protocol_id": "quickjs-resource-analysis-protocol-v1",
+      "protocol_sha256": "cdd05009988efe62ce59a8357aaca1d2d932887861875fc17e13ebc4f0252aa4"
+    }
+  },
+  "external_corpora": {
+    "registry_path": "benchmarks/external-corpora.json",
+    "registry_id": "quickjs-external-corpora-v1",
+    "required_admitted_count": 0,
+    "required_claim_eligible": false
+  },
+  "hosted_pr": {
+    "tier": "smoke_only",
+    "provider": "github-hosted",
+    "provider_url": "https://docs.github.com/actions/using-github-hosted-runners/about-github-hosted-runners",
+    "runner": "ubuntu-latest",
+    "workflow_path": ".github/workflows/performance-smoke.yml",
+    "workflow_sha256": "dfc015c81420de1fb1200a4227fd6b7eb24fcb836301b02e02d9aa8f0408211a",
+    "gate": false,
+    "upload_timing_evidence": false,
+    "exact_smoke_commands": [
+      "./scripts/performance-policy-audit.sh",
+      "./scripts/external-corpus-audit.sh",
+      "./scripts/benchmark.sh --dry-run --blocks 1 --case plain_function_call",
+      "./scripts/resource-benchmark.sh --lane fresh --dry-run",
+      "./scripts/lifecycle-bench.sh --quick --list"
+    ]
+  },
+  "fixed_hardware": {
+    "configured": false,
+    "hardware_fingerprint": null
+  },
+  "gates": {
+    "nightly": {
+      "enabled": false,
+      "activation_prerequisites": {
+        "minimum_independent_aa_shadow_reports": 20,
+        "aa_shadow_requirements": [
+          "content_hashed",
+          "randomized_order",
+          "same_binary"
+        ],
+        "required_artifacts": [
+          "noise_envelope",
+          "qualified_fixed_hardware_fingerprint"
+        ],
+        "required_protocol_sha256": {
+          "throughput_measurement": "985d39b1e091206eff03849937add6f30cc64f5743fe6f865a8124422eb1bac9",
+          "throughput_analysis": "f7f3a5cf3063436af76830812239a714ec84a561ee81dcc7e40cf8d711903144",
+          "resource_measurement": "b1e954078e0288ac109a7fd618e1d30cd7746777ba8f28ddc1c28a31ab2fc499",
+          "resource_analysis": "cdd05009988efe62ce59a8357aaca1d2d932887861875fc17e13ebc4f0252aa4"
+        }
+      }
+    },
+    "release": {
+      "enabled": false,
+      "activation_prerequisites": {
+        "minimum_independent_aa_shadow_reports": 20,
+        "aa_shadow_requirements": [
+          "content_hashed",
+          "randomized_order",
+          "same_binary"
+        ],
+        "required_artifacts": [
+          "noise_envelope",
+          "qualified_fixed_hardware_fingerprint"
+        ],
+        "required_protocol_sha256": {
+          "throughput_measurement": "985d39b1e091206eff03849937add6f30cc64f5743fe6f865a8124422eb1bac9",
+          "throughput_analysis": "f7f3a5cf3063436af76830812239a714ec84a561ee81dcc7e40cf8d711903144",
+          "resource_measurement": "b1e954078e0288ac109a7fd618e1d30cd7746777ba8f28ddc1c28a31ab2fc499",
+          "resource_analysis": "cdd05009988efe62ce59a8357aaca1d2d932887861875fc17e13ebc4f0252aa4"
+        }
+      }
+    },
+    "pr_sentinel": {
+      "enabled": false,
+      "activation_prerequisites": {
+        "minimum_independent_aa_shadow_reports": 30,
+        "aa_shadow_requirements": [
+          "content_hashed",
+          "randomized_order",
+          "same_binary"
+        ],
+        "required_artifacts": [
+          "false_positive_budget",
+          "noise_envelope",
+          "qualified_fixed_hardware_fingerprint"
+        ],
+        "required_protocol_sha256": {
+          "throughput_measurement": "985d39b1e091206eff03849937add6f30cc64f5743fe6f865a8124422eb1bac9",
+          "throughput_analysis": "f7f3a5cf3063436af76830812239a714ec84a561ee81dcc7e40cf8d711903144",
+          "resource_measurement": "b1e954078e0288ac109a7fd618e1d30cd7746777ba8f28ddc1c28a31ab2fc499",
+          "resource_analysis": "cdd05009988efe62ce59a8357aaca1d2d932887861875fc17e13ebc4f0252aa4"
+        }
+      }
+    }
+  },
+  "evidence_entries": []
+}

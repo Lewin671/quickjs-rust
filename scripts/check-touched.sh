@@ -83,6 +83,7 @@ touches_lexer=0
 touches_ast=0
 touches_cli=0
 touches_test262_config=0
+touches_benchmark=0
 test262_filters=()
 
 add_filter() {
@@ -143,6 +144,9 @@ while IFS= read -r path; do
     crates/qjs-lexer/*) touches_lexer=1 ;;
     crates/qjs-ast/*) touches_ast=1 ;;
     crates/qjs-cli/*) touches_cli=1 ;;
+    benchmarks/*|tools/__init__.py|tools/benchmark/*|scripts/benchmark*.sh|scripts/resource-benchmark*.sh|scripts/lifecycle-bench.sh|scripts/external-corpus-audit.sh|scripts/performance-policy-audit.sh|.github/workflows/performance-smoke.yml)
+      touches_benchmark=1
+      ;;
   esac
 
   add_common_filters_for_path "$path"
@@ -172,6 +176,10 @@ fi
 if [ "$has_rust" -eq 1 ] || [ "$has_cargo" -eq 1 ] || [ "$has_scripts" -eq 1 ]; then
   run_cmd "$CARGO_BIN" fmt --all -- --check
   run_cmd "$CARGO_BIN" clippy --workspace --all-targets -- -D warnings
+fi
+
+if [ "$has_rust" -eq 1 ] || [ "$has_cargo" -eq 1 ] || [ "$has_scripts" -eq 1 ] \
+  || [ "$touches_benchmark" -eq 1 ]; then
   run_cmd "$ROOT_DIR/scripts/check-file-size.sh"
 fi
 
@@ -183,6 +191,18 @@ else
   [ "$touches_parser" -eq 1 ] && run_cmd "$CARGO_BIN" test -p qjs-parser -q
   [ "$touches_cli" -eq 1 ] && run_cmd "$CARGO_BIN" test -p qjs-cli -q
   [ "$touches_runtime" -eq 1 ] && run_cmd "$CARGO_BIN" test -p qjs-runtime -q
+fi
+
+if [ "$touches_benchmark" -eq 1 ]; then
+  run_cmd env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR" \
+    python3 -m unittest discover -s "$ROOT_DIR/tools/benchmark/tests" -v
+  run_cmd bash -n \
+    "$ROOT_DIR/scripts/benchmark.sh" "$ROOT_DIR/scripts/benchmark-report.sh" \
+    "$ROOT_DIR/scripts/resource-benchmark.sh" \
+    "$ROOT_DIR/scripts/resource-benchmark-report.sh" \
+    "$ROOT_DIR/scripts/lifecycle-bench.sh" \
+    "$ROOT_DIR/scripts/external-corpus-audit.sh" \
+    "$ROOT_DIR/scripts/performance-policy-audit.sh"
 fi
 
 if [ "$touches_test262_config" -eq 1 ]; then

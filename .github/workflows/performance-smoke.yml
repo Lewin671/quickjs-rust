@@ -1,0 +1,49 @@
+name: Performance Smoke (No Claims or Gates)
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'agent/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-smoke-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+# GitHub-hosted runners are variable smoke infrastructure. This workflow never
+# creates timing evidence, compares results, applies a threshold, or makes a
+# performance claim. Fixed-hardware calibration and all gates remain disabled.
+jobs:
+  hosted-smoke-only:
+    name: Hosted smoke only - no performance claim or gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout without benchmark corpora
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Audit deny-only performance policy
+        run: ./scripts/performance-policy-audit.sh
+
+      - name: Audit deny-only external corpus registry
+        run: ./scripts/external-corpus-audit.sh
+
+      - name: Validate throughput dry-run plan
+        run: ./scripts/benchmark.sh --dry-run --blocks 1 --case plain_function_call
+
+      - name: Validate fresh-process resource dry-run plan
+        run: ./scripts/resource-benchmark.sh --lane fresh --dry-run
+
+      - name: List six lifecycle diagnostics without measuring
+        run: ./scripts/lifecycle-bench.sh --quick --list
