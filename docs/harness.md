@@ -217,6 +217,22 @@ failed runs still publish a status summary and any available provenance, but
 no ratio conclusion. Phase status identifies the failed build/measurement/
 summary stage, and even pre-orchestrator failure creates Markdown and JSON
 evidence. There is no threshold or gate.
+
+The hosted workflow restores exact-key, content-addressed final engine
+executables to avoid recompiling unchanged Rust inputs and the fixed QuickJS-NG
+revision. Candidate/base share the Rust content namespace. Keys cover tracked
+Cargo/workspace/crate inputs, hosted image, OS release/kernel/libc, targets,
+actual compiler/linker paths, identities and digests, all effective
+build-affecting environment, and exact recipes; QuickJS-NG also binds its pin.
+Every entry is revalidated against metadata, executable mode,
+size, and SHA-256 or rebuilt. Cache misses revalidate clean source immediately
+after compilation and before atomic storage. PR-target runs restore only; trusted `main` pushes
+independently revalidate and can save completed entries even after a later
+measurement/report failure. Cache-service errors degrade to rebuild/no-save.
+Measurements, receipts, reports,
+summaries, and artifacts always regenerate, with provenance in
+`build-cache.json`.
+
 Fixed-hardware qualification, A/A calibration, a noise envelope, and the PR
 false-positive budget remain future reviewed work.
 

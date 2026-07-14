@@ -43,12 +43,14 @@
       "scripts/external-corpus-audit.sh",
       "scripts/performance-policy-audit.sh",
       "scripts/performance-preview.sh",
+      "tools/benchmark/build_cache.py",
+      "tools/benchmark/build_cache_identity.py",
       "tools/benchmark/external_corpora.py",
       "tools/benchmark/hosted_preview.py",
       "tools/benchmark/performance_policy.py",
       "tools/benchmark/preview.py"
     ],
-    "aggregate_sha256": "e208a25b1dbb4ccbbdbfc579783441c31285cc72980cdcedf35cfe5da6af5a2a"
+    "aggregate_sha256": "23cdaf13aa6dae34bc5e09a3b7202370137a2d59e8ae5345e5e22ace89d5672a"
   },
   "hosted_pr": {
     "tier": "informational_preview",
@@ -58,7 +60,7 @@
     "provider_url": "https://docs.github.com/actions/using-github-hosted-runners/about-github-hosted-runners",
     "runner": "ubuntu-latest",
     "workflow_path": ".github/workflows/performance-smoke.yml",
-    "workflow_sha256": "7961a2e9b65f5e6d3efe8fc63b116281bfe1bebc39624004a68b4bf0acc0ee17",
+    "workflow_sha256": "bb7dec5bd7febd64d62d269027aac3acc4992ef3da0b5bb98aad0b31e111ef06",
     "gate": false,
     "slowdown_threshold": null,
     "upload_timing_evidence": true,

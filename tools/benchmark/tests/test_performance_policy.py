@@ -481,12 +481,35 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertIn("timeout-minutes: 35", workflow)
         self.assertIn("$GITHUB_STEP_SUMMARY", workflow)
         self.assertIn("actions/upload-artifact@v6", workflow)
+        self.assertEqual(workflow.count("uses: actions/cache/restore@v5"), 6)
+        self.assertEqual(workflow.count("uses: actions/cache/save@v5"), 3)
+        self.assertEqual(workflow.count("continue-on-error: true"), 9)
+        self.assertNotIn("restore-keys:", workflow)
+        base_job = workflow.split("  base-owned-preview:", 1)[1].split(
+            "  main-push-preview:", 1
+        )[0]
+        main_job = workflow.split("  main-push-preview:", 1)[1].split(
+            "  fork-preview-unsupported:", 1
+        )[0]
+        self.assertIn("actions/cache/restore@v5", base_job)
+        self.assertNotIn("actions/cache/save@v5", base_job)
+        self.assertIn("actions/cache/save@v5", main_job)
+        self.assertIn("Save candidate executable cache from trusted main", main_job)
+        self.assertEqual(main_job.count("tools.benchmark.build_cache ready"), 3)
+        self.assertGreaterEqual(main_job.count("always() && !cancelled()"), 6)
+        self.assertLess(
+            main_job.index("Build and measure three pinned engines"),
+            main_job.index("Revalidate candidate executable cache for trusted save"),
+        )
+        self.assertLess(
+            main_job.index("Save QuickJS-NG executable cache from trusted main"),
+            main_job.index("Publish complete or durable failure summary"),
+        )
         self.assertGreaterEqual(workflow.count("if: always()"), 4)
         self.assertIn("retention-days: 14", workflow)
         self.assertEqual(workflow.count("if-no-files-found: error"), 2)
         self.assertGreaterEqual(workflow.count('mkdir -p "$EVIDENCE_DIR"'), 4)
         self.assertIn("tools.benchmark.hosted_preview publish", workflow)
-        self.assertNotIn("continue-on-error", workflow)
         self.assertNotIn("pull-requests: write", workflow)
         self.assertNotIn("secrets.", workflow)
         self.assertNotIn("threshold", workflow.lower())

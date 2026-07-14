@@ -79,7 +79,7 @@ each script is for.
   `--policy` input is structural only; checked-in-only `--require-gate` always
   fails for `nightly`, `release`, and `pr_sentinel` in v2. It neither calibrates
   hardware nor runs or enables a performance gate.
-- `performance-preview.sh`: From a policy-selected harness, builds the candidate
+- `performance-preview.sh`: From a policy-selected harness, prepares the candidate
   SHA, explicit base SHA, and manifest-pinned QuickJS-NG on one shared host.
   Same-repository PRs use a base-owned `pull_request_target` harness; every
   `main` push (merge or direct) uses `github.event.after` as the head-owned
@@ -92,7 +92,15 @@ each script is for.
   renders Markdown/JSON summaries. Ratios require strict 3/3 valid-block,
   non-claim, linearity-pass health. Pending/failure status includes the active
   phase and remains publishable without a ratio conclusion. It is informational
-  and non-gating, and is not a malicious candidate sandbox.
+  and non-gating, and is not a malicious candidate sandbox. Exact content keys
+  may reuse validated final engine executables; candidate/base share one Rust
+  namespace and the pinned QuickJS-NG binary normally hits. Invalid entries
+  rebuild. Keys include hosted image/runtime/libc plus effective compiler and
+  linker identities/environment. PR-target runs restore only; trusted `main`
+  pushes independently revalidate and may save completed entries even when a
+  later noisy measurement fails. Cache-service errors degrade to rebuild or
+  no-save, and benchmark measurements/evidence always rerun. `build-cache.json` records
+  per-role provenance.
 - `lifecycle-bench.sh`: Runs the dev-only Criterion parser/compiler lifecycle
   diagnostics through public Rust APIs. Pass `--quick` for a smoke run; without
   it the frozen Criterion sampling configuration applies. Quick mode uses an
