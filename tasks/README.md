@@ -73,9 +73,10 @@ Campaign working rules:
   excluded evidence-backed decisions in a deny-only v1 registry; future
   admission requires a separately reviewed v2 audit bundle before any gate.
   Hosted same-repository PRs now publish strict three-block informational
-  previews from a base-owned `pull_request_target` harness, with one PR #126 /
-  exact-base / exact-head-ref `pull_request` bootstrap, complete provenance, and phase-aware durable failure
-  status; fork previews are unsupported and fail-closed M6/M7 policy infrastructure is ready,
+  previews from a base-owned `pull_request_target` harness, while every `main`
+  push uses the after revision as head-owned harness/candidate and the before
+  revision as base. Both paths retain complete provenance and phase-aware
+  durable failure status; fork previews are unsupported and fail-closed M6/M7 policy infrastructure is ready,
   while fixed-hardware A/A calibration and every performance gate remain
   intentionally incomplete and disabled.
 - `T011-call-performance.md` — **subsumed by T016.** Cut per-call

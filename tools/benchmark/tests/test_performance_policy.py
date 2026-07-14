@@ -27,11 +27,10 @@ from tools.benchmark.performance_policy import (
 )
 from tools.benchmark.hosted_preview import (
     BASE_MODE,
-    BOOTSTRAP_BASE_SHA,
-    BOOTSTRAP_HEAD_REF,
-    BOOTSTRAP_MODE,
-    BOOTSTRAP_PR_NUMBER,
     HOSTED_BASE_REF,
+    HOSTED_PUSH_REF,
+    PUSH_INTEGRITY_SCOPE,
+    PUSH_MODE,
 )
 
 
@@ -108,8 +107,9 @@ class PerformancePolicyTests(unittest.TestCase):
         )
         self.assertEqual(policy.workflow_sha256, EXPECTED_WORKFLOW_SHA256)
         self.assertEqual(policy.hosted_base_ref, HOSTED_BASE_REF)
-        self.assertEqual(policy.bootstrap_pr_number, BOOTSTRAP_PR_NUMBER)
-        self.assertEqual(policy.bootstrap_head_ref, BOOTSTRAP_HEAD_REF)
+        self.assertEqual(policy.hosted_push_ref, HOSTED_PUSH_REF)
+        self.assertEqual(policy.hosted_push_mode, PUSH_MODE)
+        self.assertEqual(policy.hosted_push_integrity_scope, PUSH_INTEGRITY_SCOPE)
         self.assertEqual(hashlib.sha256(WORKFLOW.read_bytes()).hexdigest(), EXPECTED_WORKFLOW_SHA256)
         validate_workflow_bytes(policy, WORKFLOW.read_bytes())
         self.assertEqual(set(policy.protocols), set(PROTOCOL_KEYS))
@@ -167,14 +167,15 @@ class PerformancePolicyTests(unittest.TestCase):
             data["hosted_pr"][field] = value
             mutations.append((data, message))
         for field, value in (
-            ("default_mode", "candidate_owned_harness"),
+            ("pr_mode", "candidate_owned_harness"),
             ("malicious_candidate_resistant", True),
             ("forks_supported", True),
             ("base_ref", "release"),
-            ("bootstrap_base_sha", "a" * 40),
-            ("bootstrap_pr_number", 125),
-            ("bootstrap_head_ref", "agent/other"),
-            ("bootstrap_condition", "always"),
+            ("push_mode", "candidate_owned_harness"),
+            ("push_event", "pull_request"),
+            ("push_ref", "refs/heads/release"),
+            ("push_comparison", "after_vs_quickjs_only"),
+            ("push_harness_owner", "event_before_base"),
         ):
             data = copy.deepcopy(self.data)
             data["hosted_pr"]["harness"][field] = value
@@ -431,11 +432,11 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("name: Performance Preview (Informational, Non-Gating)", workflow)
-        self.assertIn("pull_request:", workflow)
         self.assertIn("pull_request_target:", workflow)
+        self.assertIn("push:", workflow)
         self.assertEqual(workflow.count("branches: [main]"), 2)
         self.assertNotIn("workflow_dispatch:", workflow)
-        self.assertNotIn("push:", workflow)
+        self.assertNotIn("\n  pull_request:\n", workflow)
         self.assertNotIn("schedule:", workflow)
         self.assertEqual(workflow.count("runs-on: ubuntu-latest"), 3)
         self.assertNotIn("self-hosted", workflow)
@@ -444,31 +445,34 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertIn("repository: ${{ github.event.pull_request.head.repo.full_name }}", workflow)
         self.assertIn("ref: ${{ github.event.pull_request.head.sha }}", workflow)
         self.assertIn("path: target/performance-preview/candidate-source", workflow)
+        self.assertIn("repository: ${{ github.repository }}", workflow)
+        self.assertIn("ref: ${{ github.event.after }}", workflow)
+        self.assertIn("repository: ${{ github.event.repository.full_name }}", workflow)
+        self.assertIn("ref: ${{ github.event.before }}", workflow)
+        self.assertIn("path: target/performance-preview/base-source", workflow)
         self.assertEqual(workflow.count("fetch-depth: 1"), 4)
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn("submodules: false", workflow)
         self.assertIn(BASE_MODE, workflow)
-        self.assertIn(BOOTSTRAP_MODE, workflow)
-        self.assertIn(BOOTSTRAP_BASE_SHA, workflow)
-        self.assertIn(f"github.event.pull_request.number == {BOOTSTRAP_PR_NUMBER}", workflow)
-        self.assertIn(
-            f"github.event.pull_request.head.ref == '{BOOTSTRAP_HEAD_REF}'", workflow
-        )
-        self.assertEqual(workflow.count("PR_BASE_REF: ${{ github.event.pull_request.base.ref }}"), 2)
-        self.assertEqual(workflow.count("PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}"), 2)
-        self.assertEqual(workflow.count('--base-ref "$PR_BASE_REF"'), 2)
-        self.assertEqual(workflow.count('--pr-number "$PR_NUMBER"'), 2)
-        self.assertEqual(workflow.count('--head-ref "$PR_HEAD_REF"'), 2)
+        self.assertIn(PUSH_MODE, workflow)
+        self.assertNotIn("bootstrap", workflow.lower())
+        self.assertEqual(workflow.count("PR_BASE_REF: ${{ github.event.pull_request.base.ref }}"), 1)
+        self.assertEqual(workflow.count("PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}"), 1)
+        self.assertEqual(workflow.count('--base-ref "$PR_BASE_REF"'), 1)
+        self.assertEqual(workflow.count('--pr-number "$PR_NUMBER"'), 1)
+        self.assertEqual(workflow.count('--head-ref "$PR_HEAD_REF"'), 1)
+        self.assertIn("PUSH_BEFORE_SHA: ${{ github.event.before }}", workflow)
+        self.assertIn("PUSH_AFTER_SHA: ${{ github.event.after }}", workflow)
+        self.assertIn("PUSH_WORKFLOW_SHA: ${{ github.sha }}", workflow)
+        self.assertIn('--before-sha "$PUSH_BEFORE_SHA"', workflow)
+        self.assertIn('--after-sha "$PUSH_AFTER_SHA"', workflow)
+        self.assertIn('--workflow-sha "$PUSH_WORKFLOW_SHA"', workflow)
         self.assertIn("fork-preview-unsupported", workflow)
-        self.assertIn("github.event_name }}-${{ github.event.pull_request.number", workflow)
+        self.assertIn("github.event.pull_request.number || github.run_id", workflow)
         self.assertIn("github.event_name == 'pull_request_target'", workflow)
-        self.assertIn("github.event_name == 'pull_request'", workflow)
+        self.assertIn("github.event_name == 'push'", workflow)
         self.assertIn("uses: ./.github/actions/setup-rust", workflow)
-        self.assertIn(
-            "uses: ./target/performance-preview/candidate-source/.github/actions/setup-rust",
-            workflow,
-        )
-        self.assertIn("source-root: target/performance-preview/candidate-source", workflow)
+        self.assertNotIn("candidate-source/.github/actions/setup-rust", workflow)
         self.assertEqual(workflow.count("PYTHONDONTWRITEBYTECODE: '1'"), 2)
         self.assertIn("source-root:", setup_action)
         self.assertIn("working-directory: ${{ inputs.source-root }}", setup_action)
@@ -502,7 +506,7 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
             original + b"\n",
             original.replace(b"submodules: false", b"submodules: true"),
             original.replace(b"retention-days: 14", b"retention-days: 90"),
-            original.replace(b"pull_request:", b"push:"),
+            original.replace(b"pull_request_target:", b"pull_request:"),
         )
         for value in mutations:
             with self.assertRaisesRegex(PerformancePolicyError, "bytes differ"):

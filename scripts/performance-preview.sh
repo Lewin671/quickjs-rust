@@ -7,7 +7,7 @@ export PYTHONDONTWRITEBYTECODE=1
 usage() {
   cat <<'EOF'
 Usage: ./scripts/performance-preview.sh \
-  --harness-mode <base_owned_harness|bootstrap_same_repo_candidate_harness> \
+  --harness-mode <base_owned_harness|main_push_head_owned_harness> \
   --candidate-source <path> --base-source <path> \
   --candidate-sha <full-sha> --base-sha <full-sha> \
   --candidate-repo <https-github-clone-url> \
@@ -69,25 +69,27 @@ canonical_path() {
 CANDIDATE_SOURCE="$(canonical_path "$CANDIDATE_SOURCE")"
 BASE_SOURCE="$(canonical_path "$BASE_SOURCE")"
 OUTPUT="$(canonical_path "$OUTPUT")"
-case "$OUTPUT" in
-  "$BASE_SOURCE"/target/*) ;;
-  *) echo "error: --output must stay under the base source target directory" >&2; exit 2 ;;
-esac
 case "$HARNESS_MODE" in
   base_owned_harness)
     [ "$HARNESS_ROOT" = "$BASE_SOURCE" ] || {
       echo "error: base-owned harness must execute from the base source" >&2; exit 2;
     }
+    OUTPUT_OWNER="$BASE_SOURCE"
     ;;
-  bootstrap_same_repo_candidate_harness)
+  main_push_head_owned_harness)
     [ "$HARNESS_ROOT" = "$CANDIDATE_SOURCE" ] || {
-      echo "error: bootstrap harness must execute from the candidate source" >&2; exit 2;
+      echo "error: main-push harness must execute from the candidate source" >&2; exit 2;
     }
     [ "$CANDIDATE_REPO" = "$BASE_REPO" ] || {
-      echo "error: fork PR cannot use candidate-harness bootstrap fallback" >&2; exit 2;
+      echo "error: main-push candidate and base repositories must match" >&2; exit 2;
     }
+    OUTPUT_OWNER="$CANDIDATE_SOURCE"
     ;;
   *) echo "error: invalid harness mode" >&2; exit 2 ;;
+esac
+case "$OUTPUT" in
+  "$OUTPUT_OWNER"/target/*) ;;
+  *) echo "error: --output must stay under the selected harness target directory" >&2; exit 2 ;;
 esac
 if [ -e "$OUTPUT" ]; then
   [ -d "$OUTPUT" ] || { echo "error: output exists and is not a directory" >&2; exit 2; }

@@ -48,7 +48,7 @@
       "tools/benchmark/performance_policy.py",
       "tools/benchmark/preview.py"
     ],
-    "aggregate_sha256": "f4b451bce2c081c78c3ca9fd4a1ac63dbe1813ef71690e0fe46d7ea43164e7a7"
+    "aggregate_sha256": "e208a25b1dbb4ccbbdbfc579783441c31285cc72980cdcedf35cfe5da6af5a2a"
   },
   "hosted_pr": {
     "tier": "informational_preview",
@@ -58,7 +58,7 @@
     "provider_url": "https://docs.github.com/actions/using-github-hosted-runners/about-github-hosted-runners",
     "runner": "ubuntu-latest",
     "workflow_path": ".github/workflows/performance-smoke.yml",
-    "workflow_sha256": "b2e9ad6c5bedc4c32cee73a3c5ddf135b77ef2c0532a99480aa3ab19e436c10b",
+    "workflow_sha256": "7961a2e9b65f5e6d3efe8fc63b116281bfe1bebc39624004a68b4bf0acc0ee17",
     "gate": false,
     "slowdown_threshold": null,
     "upload_timing_evidence": true,
@@ -68,20 +68,19 @@
     "roles": ["candidate", "base", "quickjs-ng"],
     "artifact_retention_days": 14,
     "harness": {
-      "default_mode": "base_owned_harness",
-      "long_term_event": "pull_request_target",
-      "integrity_scope": "cooperative_same_repository_pull_request",
+      "pr_mode": "base_owned_harness",
+      "pr_event": "pull_request_target",
+      "pr_integrity_scope": "cooperative_same_repository_pull_request",
       "candidate_role": "benchmark_subject_with_shared_runner_permissions",
       "malicious_candidate_resistant": false,
       "forks_supported": false,
-      "bootstrap_mode": "bootstrap_same_repo_candidate_harness",
       "base_ref": "main",
-      "bootstrap_event": "pull_request",
-      "bootstrap_base_sha": "d8ac450f92b4a773250310d5f91835cd47d39a98",
-      "bootstrap_pr_number": 126,
-      "bootstrap_head_ref": "agent/performance-benchmark-system/root",
-      "bootstrap_condition": "same_repository_main_and_exact_transition_identity",
-      "transition_cleanup": "remove_pull_request_bootstrap_immediately_after_pr_126_merge",
+      "push_mode": "main_push_head_owned_harness",
+      "push_event": "push",
+      "push_ref": "refs/heads/main",
+      "push_integrity_scope": "trusted_main_push",
+      "push_comparison": "event_after_candidate_vs_event_before_base",
+      "push_harness_owner": "event_after_candidate",
       "fixed_hardware_claim_scope": "trusted_merged_commits_only"
     }
   },

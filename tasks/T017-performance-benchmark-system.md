@@ -64,10 +64,10 @@ execution, validated raw JSONL, and failure/timeout records without dependencies
   requires a separately reviewed v2 content-hashed audit bundle.
 - [x] CI policy infrastructure provides a fail-closed v2 policy and hosted
   informational preview. Its long-term `pull_request_target` path uses the
-  base-owned workflow/setup/harness for cooperative same-repository PRs. One
-  `pull_request` bootstrap is allowed only for PR #126 from
-  `agent/performance-benchmark-system/root` into `main` at exact base
-  `d8ac450f92b4a773250310d5f91835cd47d39a98`; forks are unsupported. Candidate
+  base-owned workflow/setup/harness for cooperative same-repository PRs. Every
+  `main` push, whether a merge or direct push, uses the after revision as a
+  head-owned harness/candidate and the before revision as base, with fail-closed
+  event/ref/repository/SHA admission; forks are unsupported. Candidate
   build/execution shares the runner and is explicitly not an adversarial
   sandbox. It
   builds explicit head/base/pinned-reference SHAs, stores three-block
@@ -78,9 +78,9 @@ execution, validated raw JSONL, and failure/timeout records without dependencies
 - [ ] M6 establishes fixed-hardware A/A shadow baselines.
 - [ ] M7 enables fixed-hardware nightly/release gates and, if justified,
   self-hosted PR sentinels.
-- [ ] Immediately after PR #126 merges, remove the `pull_request` trigger,
-  bootstrap job, bootstrap constants/tests/docs, and retain only the long-term
-  `pull_request_target` workflow.
+- [x] Removed the one-time PR #126 bootstrap trigger/job/constants/tests/docs;
+  the long-term hosted workflow now contains only `pull_request_target` and
+  `push` to `main` paths.
 
 ## Verification
 
@@ -139,12 +139,11 @@ and a case manifest with source hashes.
 
 CI layering is ready without claiming M6 or M7 completion. GitHub-hosted CI now
 publishes an informational three-block preview for the full seven-case,
-three-role portfolio from base-owned harness code, including dynamic
-provenance, raw evidence, deterministic report, and Step Summary. During
-initial introduction only, same-repository PR #126 from
-`agent/performance-benchmark-system/root` into `main` at exact base
-`d8ac450f92b4a773250310d5f91835cd47d39a98` can bootstrap the candidate
-harness; forks are unsupported. Failed or timed-out runs retain phase-aware
+three-role portfolio, including dynamic provenance, raw evidence,
+deterministic report, and Step Summary. Same-repository PRs use the base-owned
+`pull_request_target` harness; every `main` update uses the after revision as a
+head-owned harness/candidate and the before revision as base. Forks are
+unsupported. Failed or timed-out runs retain phase-aware
 status and any available evidence without a ratio conclusion. This cooperative
 scope does not resist malicious candidate code. The fail-closed performance policy has no
 fixed-hardware fingerprint or claim evidence and keeps nightly, release, and
@@ -153,7 +152,7 @@ qualified fingerprint, 20 independent content-hashed same-binary randomized
 A/A reports for nightly/release (30 for PR), a protocol-bound noise envelope,
 and an additional demonstrated false-positive budget for the PR sentinel.
 The validator binds the aggregate hosted-implementation SHA-256 and direct
-QuickJS-NG pin; focused executable contract tests also freeze dual-event
-admission, exact bootstrap transition, setup-action selection, explicit head/base selection,
+QuickJS-NG pin; focused executable contract tests also freeze PR and main-push
+admission, push event/ref/repository/SHA checks, setup-action selection, explicit head/base selection,
 strict healthy summary requirements, always-run summary/artifact production,
 14-day retention, and the absence of thresholds, write permissions, or secrets.

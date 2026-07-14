@@ -14,7 +14,12 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from .hosted_preview import BASE_MODE, BOOTSTRAP_MODE
+from .hosted_preview import (
+    BASE_MODE,
+    PR_INTEGRITY_SCOPE,
+    PUSH_INTEGRITY_SCOPE,
+    PUSH_MODE,
+)
 from .schema import ManifestError, load_manifest, sha256_file
 
 
@@ -34,8 +39,16 @@ RUST_BUILD_FLAGS = (
     "--config=profile.release.incremental=false",
     "--config=profile.release.strip=\"none\"",
 )
-HARNESS_MODES = (BASE_MODE, BOOTSTRAP_MODE)
-INTEGRITY_SCOPE = "cooperative_same_repository_pull_request"
+HARNESS_MODES = (BASE_MODE, PUSH_MODE)
+
+
+def _integrity_scope(harness_mode: str) -> str:
+    return {
+        BASE_MODE: PR_INTEGRITY_SCOPE,
+        PUSH_MODE: PUSH_INTEGRITY_SCOPE,
+    }[harness_mode]
+
+
 _GITHUB_CLONE_URL = re.compile(
     r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\.git\Z"
 )
@@ -451,7 +464,7 @@ def summarize(
         f"- Health: {status}; block health: non_claim; linearity: pass",
         f"- Valid blocks: `{valid_blocks}/3`",
         f"- Harness ownership mode: `{harness_mode}` at `{harness_revision}`",
-        f"- Integrity scope: `{INTEGRITY_SCOPE}`",
+        f"- Integrity scope: `{_integrity_scope(harness_mode)}`",
         "- Security boundary: candidate build/execution is not sandboxed; artifacts do not resist a malicious candidate",
         f"- Profile: `{profile_id}`",
         "- Portfolio: `7/7 cases`, roles: `candidate/base/quickjs-ng`",
@@ -470,7 +483,7 @@ def summarize(
         "valid_blocks": valid_blocks,
         "requested_blocks": 3,
         "harness": {"mode": harness_mode, "revision": harness_revision},
-        "integrity_scope": INTEGRITY_SCOPE,
+        "integrity_scope": _integrity_scope(harness_mode),
         "malicious_candidate_resistant": False,
         "engines": engines,
         "comparisons": {result["label"]: result for result in results},
@@ -516,7 +529,7 @@ def status(args: argparse.Namespace) -> None:
         f"> {escape_markdown(args.message)}", "",
         f"- Failure phase: `{escape_markdown(payload['phase'])}`",
         f"- Harness ownership mode: `{mode}` at `{payload['harness']['revision']}`",
-        f"- Integrity scope: `{INTEGRITY_SCOPE}`", "",
+        f"- Integrity scope: `{_integrity_scope(mode)}`", "",
     ])
     output = args.output_dir.expanduser().resolve()
     _write_replace(output / "status.json", _json_bytes(payload))

@@ -80,11 +80,12 @@ each script is for.
   fails for `nightly`, `release`, and `pr_sentinel` in v2. It neither calibrates
   hardware nor runs or enables a performance gate.
 - `performance-preview.sh`: From a policy-selected harness, builds the candidate
-  head, explicit PR base SHA, and manifest-pinned QuickJS-NG on one shared host.
-  The long-term same-repository path is base-owned `pull_request_target`; the
-  only candidate-harness bootstrap is PR #126 from
-  `agent/performance-benchmark-system/root` into `main` at exact base
-  `d8ac450f92b4a773250310d5f91835cd47d39a98`. Forks are unsupported. The script
+  SHA, explicit base SHA, and manifest-pinned QuickJS-NG on one shared host.
+  Same-repository PRs use a base-owned `pull_request_target` harness; every
+  `main` push (merge or direct) uses `github.event.after` as the head-owned
+  harness/candidate and `github.event.before` as the base. Fork PRs are
+  unsupported, and push admission fail-closes on event/ref/repository/SHA
+  mismatches. The script
   clears GitHub command/token channels, verifies clean sources before and after
   builds and measurement, reruns audits after measurement, emits truthful dynamic
   receipts/manifest, runs all seven throughput cases for three blocks, and

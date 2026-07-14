@@ -23,11 +23,9 @@ from tools.benchmark.preview import (
 )
 from tools.benchmark.hosted_preview import (
     BASE_MODE,
-    BOOTSTRAP_BASE_SHA,
-    BOOTSTRAP_HEAD_REF,
-    BOOTSTRAP_MODE,
-    BOOTSTRAP_PR_NUMBER,
     HOSTED_BASE_REF,
+    HOSTED_PUSH_REF,
+    PUSH_MODE,
 )
 from tools.benchmark.receipts import load_receipt
 from tools.benchmark.schema import load_manifest, sha256_file
@@ -115,6 +113,19 @@ class PreviewSummaryTests(unittest.TestCase):
                 self.assertEqual(machine["state"], "success")
                 self.assertIn("non-gating", markdown)
 
+    def test_main_push_summary_binds_harness_candidate_and_base_revisions(self) -> None:
+        markdown, machine = summarize(
+            report(), harness_mode=PUSH_MODE, harness_revision="1" * 40
+        )
+        self.assertEqual(machine["harness"], {
+            "mode": PUSH_MODE,
+            "revision": "1" * 40,
+        })
+        self.assertEqual(machine["engines"]["candidate"]["source_revision"], "1" * 40)
+        self.assertEqual(machine["engines"]["base"]["source_revision"], "2" * 40)
+        self.assertEqual(machine["integrity_scope"], "trusted_main_push")
+        self.assertIn(PUSH_MODE, markdown)
+
     def test_invalid_health_or_missing_comparison_never_emits_direction(self) -> None:
         attacks = []
         for section, field, value in (
@@ -155,7 +166,7 @@ class PreviewPreparationTests(unittest.TestCase):
         script = (ROOT / "scripts/performance-preview.sh").read_text(encoding="utf-8")
         for value in (
             "--harness-mode", "--candidate-source", "--base-source",
-            BASE_MODE, BOOTSTRAP_MODE, "verify-source",
+            BASE_MODE, PUSH_MODE, "verify-source",
             "CARGO_ENCODED_RUSTFLAGS", "profile.release.lto=false",
             'make -C "$QUICKJS_SOURCE" "CC=$QUICKJS_CC" BUILD_TYPE=Release all',
             "--manifest \"$MANIFEST\" --blocks 3", "--candidate-receipt",
@@ -294,8 +305,8 @@ class HostedPreviewControlTests(unittest.TestCase):
     def _admit(
         self, event_name: str, head: str, base: str, base_sha: str,
         *, base_ref: str = HOSTED_BASE_REF,
-        pr_number: int = BOOTSTRAP_PR_NUMBER,
-        head_ref: str = BOOTSTRAP_HEAD_REF,
+        pr_number: int = 126,
+        head_ref: str = "feature/performance-change",
     ) -> dict[str, object]:
         result = subprocess.run(
             [
@@ -310,16 +321,25 @@ class HostedPreviewControlTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
 
-    def test_executable_admission_transition_contract(self) -> None:
+    def _admit_push(
+        self, *, event_name: str = "push", repository: str = "example/quickjs-rust",
+        event_repository: str = "example/quickjs-rust", ref: str = HOSTED_PUSH_REF,
+        before_sha: str = "1" * 40, after_sha: str = "2" * 40,
+        workflow_sha: str = "2" * 40,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                sys.executable, "-m", "tools.benchmark.hosted_preview", "admit-push",
+                "--event-name", event_name, "--repository", repository,
+                "--event-repository", event_repository, "--ref", ref,
+                "--before-sha", before_sha, "--after-sha", after_sha,
+                "--workflow-sha", workflow_sha, "--require-mode", PUSH_MODE,
+            ],
+            cwd=ROOT, capture_output=True, text=True, timeout=10, check=False,
+        )
+
+    def test_executable_pr_admission_contract(self) -> None:
         same = "example/quickjs-rust"
-        bootstrap = self._admit("pull_request", same, same, BOOTSTRAP_BASE_SHA)
-        self.assertTrue(bootstrap["run"])
-        self.assertEqual(bootstrap["mode"], BOOTSTRAP_MODE)
-
-        closed = self._admit("pull_request", same, same, "a" * 40)
-        self.assertFalse(closed["run"])
-        self.assertEqual(closed["reason"], "bootstrap_base_sha_mismatch")
-
         long_term = self._admit("pull_request_target", same, same, "a" * 40)
         self.assertTrue(long_term["run"])
         self.assertEqual(long_term["mode"], BASE_MODE)
@@ -334,18 +354,43 @@ class HostedPreviewControlTests(unittest.TestCase):
         self.assertFalse(non_main["run"])
         self.assertEqual(non_main["reason"], "base_branch_unsupported")
 
-        wrong_pr = self._admit(
-            "pull_request", same, same, BOOTSTRAP_BASE_SHA, pr_number=125
-        )
-        self.assertFalse(wrong_pr["run"])
-        self.assertEqual(wrong_pr["reason"], "bootstrap_pr_number_mismatch")
+    def test_main_push_admission_succeeds_and_fail_closed_inputs_fail(self) -> None:
+        admitted = self._admit_push()
+        self.assertEqual(admitted.returncode, 0, admitted.stderr)
+        payload = json.loads(admitted.stdout)
+        self.assertTrue(payload["run"])
+        self.assertEqual(payload["mode"], PUSH_MODE)
+        for name, arguments, reason in (
+            ("ref", {"ref": "refs/heads/release"}, "push_ref_unsupported"),
+            ("repository", {"event_repository": "other/repo"}, "push_repository_mismatch"),
+            ("zero-before", {"before_sha": "0" * 40}, "zero_before_sha"),
+            ("zero-after", {"after_sha": "0" * 40}, "zero_after_sha"),
+            ("workflow-sha", {"workflow_sha": "3" * 40}, "workflow_sha_mismatch"),
+            (
+                "unchanged",
+                {"before_sha": "2" * 40, "after_sha": "2" * 40,
+                 "workflow_sha": "2" * 40},
+                "unchanged_push_sha",
+            ),
+        ):
+            with self.subTest(name=name):
+                rejected = self._admit_push(**arguments)
+                self.assertEqual(rejected.returncode, 2)
+                self.assertIn(reason, rejected.stderr)
 
-        wrong_head = self._admit(
-            "pull_request", same, same, BOOTSTRAP_BASE_SHA,
-            head_ref="agent/performance-benchmark-system/other",
-        )
-        self.assertFalse(wrong_head["run"])
-        self.assertEqual(wrong_head["reason"], "bootstrap_head_ref_mismatch")
+    def test_main_push_rejects_wrong_event_and_malformed_sha(self) -> None:
+        wrong_event = self._admit_push(event_name="pull_request_target")
+        self.assertEqual(wrong_event.returncode, 2)
+        self.assertIn("event name: expected push", wrong_event.stderr)
+        for name, arguments, label in (
+            ("before", {"before_sha": "not-a-sha"}, "before SHA"),
+            ("after", {"after_sha": "not-a-sha"}, "after SHA"),
+            ("workflow", {"workflow_sha": "not-a-sha"}, "workflow SHA"),
+        ):
+            with self.subTest(name=name):
+                malformed = self._admit_push(**arguments)
+                self.assertEqual(malformed.returncode, 2)
+                self.assertIn(label, malformed.stderr)
 
     def test_shell_env_passes_hostile_head_ref_as_literal_cli_argument(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
@@ -365,12 +410,12 @@ class HostedPreviewControlTests(unittest.TestCase):
             environment = {
                 "PATH": os.environ["PATH"],
                 "PYTHONPATH": str(ROOT),
-                "PREVIEW_EVENT_NAME": "pull_request",
+                "PREVIEW_EVENT_NAME": "pull_request_target",
                 "PR_HEAD_REPOSITORY": "example/repo",
                 "PR_BASE_REPOSITORY": "example/repo",
-                "PR_BASE_SHA": BOOTSTRAP_BASE_SHA,
+                "PR_BASE_SHA": "a" * 40,
                 "PR_BASE_REF": HOSTED_BASE_REF,
-                "PR_NUMBER": str(BOOTSTRAP_PR_NUMBER),
+                "PR_NUMBER": "126",
                 "PR_HEAD_REF": hostile_ref,
             }
             result = subprocess.run(

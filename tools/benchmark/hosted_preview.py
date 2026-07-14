@@ -13,12 +13,12 @@ from pathlib import Path
 from typing import Any
 
 
-BOOTSTRAP_BASE_SHA = "d8ac450f92b4a773250310d5f91835cd47d39a98"
-BOOTSTRAP_PR_NUMBER = 126
-BOOTSTRAP_HEAD_REF = "agent/performance-benchmark-system/root"
 HOSTED_BASE_REF = "main"
+HOSTED_PUSH_REF = "refs/heads/main"
 BASE_MODE = "base_owned_harness"
-BOOTSTRAP_MODE = "bootstrap_same_repo_candidate_harness"
+PUSH_MODE = "main_push_head_owned_harness"
+PR_INTEGRITY_SCOPE = "cooperative_same_repository_pull_request"
+PUSH_INTEGRITY_SCOPE = "trusted_main_push"
 _REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z")
 _REVISION = re.compile(r"[0-9a-f]{40}\Z")
 
@@ -36,7 +36,22 @@ class Admission:
     integrity_scope: str
 
 
-def decide_admission(
+def _repository(value: str, label: str) -> None:
+    if not _REPOSITORY.fullmatch(value):
+        raise HostedPreviewError(f"{label}: expected owner/name")
+
+
+def _revision(value: str, label: str) -> None:
+    if not _REVISION.fullmatch(value):
+        raise HostedPreviewError(f"{label}: expected full lowercase revision")
+
+
+def _ref(value: str, label: str) -> None:
+    if not value or value.strip() != value or any(character.isspace() for character in value):
+        raise HostedPreviewError(f"{label}: expected a non-empty ref without whitespace")
+
+
+def decide_pr_admission(
     event_name: str,
     head_repository: str,
     base_repository: str,
@@ -45,35 +60,61 @@ def decide_admission(
     pr_number: int,
     head_ref: str,
 ) -> Admission:
-    """Return the frozen transition decision for one PR event."""
+    """Return the long-term base-owned decision for one PR event."""
     for value, label in (
         (head_repository, "head repository"), (base_repository, "base repository")
     ):
-        if not _REPOSITORY.fullmatch(value):
-            raise HostedPreviewError(f"{label}: expected owner/name")
-    if not _REVISION.fullmatch(base_sha):
-        raise HostedPreviewError("base SHA: expected full lowercase revision")
+        _repository(value, label)
+    _revision(base_sha, "base SHA")
     if type(pr_number) is not int or pr_number < 1:
         raise HostedPreviewError("PR number: expected positive integer")
     for value, label in ((base_ref, "base ref"), (head_ref, "head ref")):
-        if not value or value.strip() != value or any(character.isspace() for character in value):
-            raise HostedPreviewError(f"{label}: expected a non-empty ref without whitespace")
-    scope = "cooperative_same_repository_pull_request"
+        _ref(value, label)
+    if event_name != "pull_request_target":
+        raise HostedPreviewError("event name: expected pull_request_target")
+    scope = PR_INTEGRITY_SCOPE
     if base_ref != HOSTED_BASE_REF:
         return Admission(False, None, "base_branch_unsupported", event_name, scope)
     if head_repository != base_repository:
         return Admission(False, None, "fork_preview_unsupported", event_name, scope)
-    if event_name == "pull_request_target":
-        return Admission(True, BASE_MODE, "base_owned_long_term_path", event_name, scope)
-    if event_name == "pull_request":
-        if base_sha != BOOTSTRAP_BASE_SHA:
-            return Admission(False, None, "bootstrap_base_sha_mismatch", event_name, scope)
-        if pr_number != BOOTSTRAP_PR_NUMBER:
-            return Admission(False, None, "bootstrap_pr_number_mismatch", event_name, scope)
-        if head_ref != BOOTSTRAP_HEAD_REF:
-            return Admission(False, None, "bootstrap_head_ref_mismatch", event_name, scope)
-        return Admission(True, BOOTSTRAP_MODE, "exact_transition_bootstrap", event_name, scope)
-    raise HostedPreviewError("event name: expected pull_request or pull_request_target")
+    return Admission(True, BASE_MODE, "base_owned_long_term_path", event_name, scope)
+
+
+def decide_push_admission(
+    event_name: str,
+    repository: str,
+    event_repository: str,
+    ref: str,
+    before_sha: str,
+    after_sha: str,
+    workflow_sha: str,
+) -> Admission:
+    """Return the fail-closed head-owned decision for one main push."""
+    _repository(repository, "workflow repository")
+    _repository(event_repository, "event repository")
+    _ref(ref, "push ref")
+    for value, label in (
+        (before_sha, "before SHA"),
+        (after_sha, "after SHA"),
+        (workflow_sha, "workflow SHA"),
+    ):
+        _revision(value, label)
+    if event_name != "push":
+        raise HostedPreviewError("event name: expected push")
+    scope = PUSH_INTEGRITY_SCOPE
+    if ref != HOSTED_PUSH_REF:
+        return Admission(False, None, "push_ref_unsupported", event_name, scope)
+    if repository != event_repository:
+        return Admission(False, None, "push_repository_mismatch", event_name, scope)
+    if before_sha == "0" * 40:
+        return Admission(False, None, "zero_before_sha", event_name, scope)
+    if after_sha == "0" * 40:
+        return Admission(False, None, "zero_after_sha", event_name, scope)
+    if after_sha != workflow_sha:
+        return Admission(False, None, "workflow_sha_mismatch", event_name, scope)
+    if before_sha == after_sha:
+        return Admission(False, None, "unchanged_push_sha", event_name, scope)
+    return Admission(True, PUSH_MODE, "trusted_main_push", event_name, scope)
 
 
 def _write_replace(path: Path, content: bytes) -> None:
@@ -149,10 +190,24 @@ def publish_or_fallback(
         handle.write(rendered)
 
 
-def _admit(args: argparse.Namespace) -> None:
-    admission = decide_admission(
+def _admit_pr(args: argparse.Namespace) -> None:
+    admission = decide_pr_admission(
         args.event_name, args.head_repository, args.base_repository, args.base_sha,
         args.base_ref, args.pr_number, args.head_ref,
+    )
+    if args.require_mode is not None and (
+        not admission.run or admission.mode != args.require_mode
+    ):
+        raise HostedPreviewError(
+            f"event is not admitted as {args.require_mode}: {admission.reason}"
+        )
+    print(json.dumps(asdict(admission), sort_keys=True, separators=(",", ":")))
+
+
+def _admit_push(args: argparse.Namespace) -> None:
+    admission = decide_push_admission(
+        args.event_name, args.repository, args.event_repository, args.ref,
+        args.before_sha, args.after_sha, args.workflow_sha,
     )
     if args.require_mode is not None and (
         not admission.run or admission.mode != args.require_mode
@@ -174,7 +229,7 @@ def _parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     admit = commands.add_parser("admit")
     admit.add_argument(
-        "--event-name", choices=("pull_request", "pull_request_target"), required=True
+        "--event-name", choices=("pull_request_target",), required=True
     )
     admit.add_argument("--head-repository", required=True)
     admit.add_argument("--base-repository", required=True)
@@ -182,8 +237,18 @@ def _parser() -> argparse.ArgumentParser:
     admit.add_argument("--base-ref", required=True)
     admit.add_argument("--pr-number", type=int, required=True)
     admit.add_argument("--head-ref", required=True)
-    admit.add_argument("--require-mode", choices=(BASE_MODE, BOOTSTRAP_MODE))
-    admit.set_defaults(function=_admit)
+    admit.add_argument("--require-mode", choices=(BASE_MODE,))
+    admit.set_defaults(function=_admit_pr)
+    admit_push = commands.add_parser("admit-push")
+    admit_push.add_argument("--event-name", required=True)
+    admit_push.add_argument("--repository", required=True)
+    admit_push.add_argument("--event-repository", required=True)
+    admit_push.add_argument("--ref", required=True)
+    admit_push.add_argument("--before-sha", required=True)
+    admit_push.add_argument("--after-sha", required=True)
+    admit_push.add_argument("--workflow-sha", required=True)
+    admit_push.add_argument("--require-mode", choices=(PUSH_MODE,))
+    admit_push.set_defaults(function=_admit_push)
     publish = commands.add_parser("publish")
     publish.add_argument("--output-dir", type=Path, required=True)
     publish.add_argument("--step-summary", type=Path, required=True)
