@@ -154,11 +154,9 @@ pub(super) fn call_core_native(
         NativeFunction::FunctionPrototypeToString => {
             crate::function::native_function_prototype_to_string(this_value)
         }
-        NativeFunction::MappedArgumentGet => {
-            crate::function::native_mapped_argument_get(argument_values, env)
-        }
+        NativeFunction::MappedArgumentGet => crate::function::native_mapped_argument_get(function),
         NativeFunction::MappedArgumentSet => {
-            crate::function::native_mapped_argument_set(argument_values, env)
+            crate::function::native_mapped_argument_set(function, argument_values)
         }
         NativeFunction::ThrowTypeError => crate::function::native_throw_type_error(),
         NativeFunction::RealmThrowTypeError => {

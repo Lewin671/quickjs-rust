@@ -625,7 +625,7 @@ fn array_from_async_reject_value(state: &ObjectRef, reason: Value, env: &mut Cal
 
 fn array_from_async_reaction(native: NativeFunction, state: &ObjectRef) -> Value {
     let mut function = Function::new_native(None, 1, native, false);
-    function.insert_env(
+    function.insert_native_context(
         ARRAY_FROM_ASYNC_STATE.to_owned(),
         Value::Object(state.clone()),
     );
@@ -635,7 +635,7 @@ fn array_from_async_reaction(native: NativeFunction, state: &ObjectRef) -> Value
 const ARRAY_FROM_ASYNC_STATE: &str = "\0ArrayFromAsyncState";
 
 fn array_from_async_state(function: &Function) -> Result<ObjectRef, RuntimeError> {
-    match function.env.get(ARRAY_FROM_ASYNC_STATE) {
+    match function.native_context.get(ARRAY_FROM_ASYNC_STATE) {
         Some(Value::Object(state)) => Ok(state.clone()),
         _ => Err(RuntimeError {
             thrown: None,

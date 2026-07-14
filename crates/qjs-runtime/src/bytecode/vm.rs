@@ -1,29 +1,24 @@
 use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
-use super::vm_call::{insert_scope_call_bindings, user_bytecode_function};
-use super::vm_generator::CaptureWriteback;
+use super::vm_call::user_bytecode_function;
 use super::vm_iter::DelegateStep;
 use super::vm_props::{array_index_from_number, get_property_key};
 use super::vm_result::{Completion, FunctionBytecodeResult, ResumeMode};
 use super::vm_set::set_property_key;
 use super::vm_try::TryFrame;
 use crate::{
-    Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, NEW_TARGET_BINDING, ObjectRef, PropertyKey,
-    RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value, construct_function,
-    function::{CallEnv, CompiledUserFunction, Realm, Upvalue},
+    Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, ObjectRef, PropertyKey, RuntimeError,
+    SUPER_CONSTRUCTOR_BINDING, Value, construct_function,
+    function::{CallEnv, CompiledUserFunction, DynamicBindings, Realm, Upvalue, new_realm},
     initialize_builtins, is_truthy, to_js_string_with_env, to_property_key_value,
 };
 use std::{
-    cell::RefCell,
     collections::{HashMap, HashSet},
     rc::Rc,
 };
 pub(super) type Slot = Option<Value>;
 pub(super) struct VmCallEnv {
     pub(super) env: CallEnv,
-    pub(super) binding_names: Option<Vec<String>>,
-    /// Injected caller bindings; only changed values write back.
-    pub(super) injected: HashMap<String, Value>,
 }
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
     let mut vm = Vm::new(bytecode)?;
@@ -35,44 +30,25 @@ pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> 
 pub(super) fn eval_function_bytecode(
     bytecode: &Bytecode,
     env: CallEnv,
-    captured_env: Rc<RefCell<HashMap<String, Value>>>,
     upvalues: Vec<Upvalue>,
     with_stack: Vec<Value>,
-    capture_writeback: Option<CaptureWriteback>,
     persist_global_lexicals: bool,
 ) -> FunctionBytecodeResult<'_> {
     let direct_eval_with_stack = !env.direct_eval_with_stack().is_empty();
-    let mut vm = Vm::new_with_globals_captures_upvalues_and_with_stack(
-        bytecode,
-        env,
-        captured_env,
-        upvalues,
-        with_stack,
-    );
-    vm.capture_writeback = capture_writeback;
+    let mut vm = Vm::new_with_globals_upvalues_and_with_stack(bytecode, env, upvalues, with_stack);
     vm.persist_global_lexicals = persist_global_lexicals;
+    // Ordinary functions created inside `with` are compiled with explicit
+    // with-aware ops for free names; their own slot-indexed locals remain
+    // closer than the retained object environment. Only direct-eval bytecode
+    // needs generic load/store ops redirected through the caller's with stack.
     vm.direct_eval_with_stack = direct_eval_with_stack;
     let value = vm.run();
-    // A frame that neither creates closures nor holds any captured (`from_env`)
-    // local never reads or writes the shared captured env beyond the realm
-    // intrinsics seeded into it, so the per-call refresh and the result clone —
-    // each O(captured-env size), ~48 intrinsic entries — are pure overhead on
-    // the hot leaf-call path. `result.captured_env` is only consulted by
-    // `FunctionBytecodeResult::binding` as a fallback for captured names, which
-    // such a frame never propagates.
-    let interacts_with_captures = bytecode.creates_closures() || bytecode.has_from_env_locals();
-    let result_captured_env = if interacts_with_captures {
-        vm.refresh_live_locals_from_captured_env();
-        vm.captured_env.borrow().clone()
-    } else {
-        HashMap::new()
-    };
     FunctionBytecodeResult {
         value,
         bytecode,
         env: vm.env,
         locals: vm.locals,
-        captured_env: result_captured_env,
+        local_upvalues: vm.local_upvalues,
         sloppy_global_names: vm.sloppy_global_names,
     }
 }
@@ -92,16 +68,6 @@ pub(super) struct Vm<'a> {
     /// (via `attach_host`), so native `Atomics`/`$262.agent` hooks reach it.
     #[cfg(feature = "agents")]
     pub(super) agent_context: Option<crate::agent::AgentContextRef>,
-    pub(super) captured_env: Rc<RefCell<HashMap<String, Value>>>,
-    pub(super) captured_env_stack: Vec<Rc<RefCell<HashMap<String, Value>>>>,
-    /// Per-iteration loop-variable names introduced by `fresh_iteration_scope`,
-    /// aligned with `captured_env_stack`. These bindings are fresh each
-    /// iteration (and may shadow an outer binding of the same name), so a write
-    /// to one must never propagate to an enclosing captured env — see
-    /// `propagate_captured_write_to_parents`.
-    pub(super) captured_env_iteration_names: Vec<Vec<String>>,
-    pub(super) parameter_captured_envs: Vec<Rc<RefCell<HashMap<String, Value>>>>,
-    pub(super) capture_writeback: Option<CaptureWriteback>,
     pub(super) sloppy_global_names: Vec<String>,
     pub(super) try_stack: Vec<TryFrame>,
     pub(super) pending_throw: Option<Value>,
@@ -141,31 +107,18 @@ impl<'a> Vm<'a> {
         // runs against a `CallEnv` over it and writes intrinsics straight to the
         // shared cell (`insert_realm`), so no install-vs-runtime signature split
         // is needed.
-        let realm: Realm = Rc::new(RefCell::new(globals));
+        let realm: Realm = new_realm(globals);
         let mut env = CallEnv::new(Rc::clone(&realm));
         initialize_builtins(&mut env, &global_this);
         {
             let mut globals = realm.borrow_mut();
             Self::initialize_script_global_bindings(bytecode, &mut globals)?;
         }
-        // The script frame captures nothing: its `var`/function bindings live
-        // in the shared realm, so closures read them through the realm cell
-        // instead of a creation-time snapshot (which would freeze hoisted
-        // bindings at `undefined`).
-        let captured_env = Rc::new(RefCell::new(HashMap::new()));
-        Ok(Self::new_with_globals_and_captures(
-            bytecode,
-            env,
-            captured_env,
-        ))
+        Ok(Self::new_with_globals(bytecode, env))
     }
 
-    pub(super) fn new_with_globals_and_captures(
-        bytecode: &'a Bytecode,
-        env: CallEnv,
-        captured_env: Rc<RefCell<HashMap<String, Value>>>,
-    ) -> Self {
-        Self::new_with_globals_captures_and_with_stack(bytecode, env, captured_env, Vec::new())
+    pub(super) fn new_with_globals(bytecode: &'a Bytecode, env: CallEnv) -> Self {
+        Self::new_with_globals_and_with_stack(bytecode, env, Vec::new())
     }
 
     fn persist_global_lexical_bindings(&mut self) {
@@ -191,35 +144,31 @@ impl<'a> Vm<'a> {
         }
     }
 
-    pub(super) fn new_with_globals_captures_and_with_stack(
+    pub(super) fn new_with_globals_and_with_stack(
         bytecode: &'a Bytecode,
         env: CallEnv,
-        captured_env: Rc<RefCell<HashMap<String, Value>>>,
         with_stack: Vec<Value>,
     ) -> Self {
-        Self::new_with_globals_captures_upvalues_and_with_stack(
-            bytecode,
-            env,
-            captured_env,
-            Vec::new(),
-            with_stack,
-        )
+        Self::new_with_globals_upvalues_and_with_stack(bytecode, env, Vec::new(), with_stack)
     }
 
-    pub(super) fn new_with_globals_captures_upvalues_and_with_stack(
+    pub(super) fn new_with_globals_upvalues_and_with_stack(
         bytecode: &'a Bytecode,
-        env: CallEnv,
-        captured_env: Rc<RefCell<HashMap<String, Value>>>,
+        mut env: CallEnv,
         upvalues: Vec<Upvalue>,
         with_stack: Vec<Value>,
     ) -> Self {
+        if (bytecode.contains_direct_eval() || bytecode.contains_with())
+            && env.deopt_bindings().is_none()
+        {
+            env.set_deopt_bindings(DynamicBindings::new());
+        }
         let realm = env.realm_rc();
         let module_host = env.module_host();
         #[cfg(feature = "agents")]
         let agent_context = env.agent_context();
-        let parameter_captured_envs = env.parameter_captured_envs().to_vec();
         let locals = Self::initial_slots(bytecode, &env);
-        let local_upvalues = Self::initial_local_upvalues(bytecode, &locals, &upvalues);
+        let local_upvalues = Self::initial_local_upvalues(bytecode, &locals, &upvalues, &env);
         Self {
             bytecode,
             ip: 0,
@@ -232,11 +181,6 @@ impl<'a> Vm<'a> {
             module_host,
             #[cfg(feature = "agents")]
             agent_context,
-            captured_env,
-            captured_env_stack: Vec::new(),
-            captured_env_iteration_names: Vec::new(),
-            parameter_captured_envs,
-            capture_writeback: None,
             sloppy_global_names: Vec::new(),
             try_stack: Vec::new(),
             pending_throw: None,
@@ -254,8 +198,19 @@ impl<'a> Vm<'a> {
 
     /// Builds a `CallEnv` over the shared realm with this frame's live slots.
     pub(super) fn frame_call_env(&self) -> CallEnv {
-        let mut locals = self.env.snapshot_locals();
+        let deopt_bindings = self.frame_deopt_bindings();
+        let mut env = self.attach_host(self.env.fork_current_frame_values());
         for index in 0..self.locals.len() {
+            if self.bytecode.local_is_sloppy_global_fallback(index)
+                || (self.bytecode.is_global_scope()
+                    && self.bytecode.local_is_body_hoist_only(index)
+                    && self
+                        .bytecode
+                        .local_name_at(index)
+                        .is_some_and(|name| !super::vm_bindings::is_compiler_temporary(name)))
+            {
+                continue;
+            }
             if let Some(value) = self.local_slot_value(index) {
                 let name = self.bytecode.locals[index].name.clone();
                 // Slots are emitted in lexical declaration order. Inserting every
@@ -263,10 +218,27 @@ impl<'a> Vm<'a> {
                 // shadowing binding replace the outer entry, while an exited
                 // block's cleared slot never wins. Slot identity, not a mangled
                 // name, remains authoritative for ordinary bytecode access.
-                locals.insert(name, value);
+                env.insert(name, value);
             }
         }
-        let mut env = self.attach_host(self.env.with_current_frame_locals(locals));
+        for (index, upvalue) in self.local_upvalues.iter().enumerate() {
+            let Some(upvalue) = upvalue else { continue };
+            if self.bytecode.local_is_sloppy_global_fallback(index)
+                || (self.bytecode.is_global_scope()
+                    && self.bytecode.local_is_body_hoist_only(index)
+                    && self
+                        .bytecode
+                        .local_name_at(index)
+                        .is_some_and(|name| !super::vm_bindings::is_compiler_temporary(name)))
+            {
+                continue;
+            }
+            if self.locals.get(index).is_some_and(Option::is_some)
+                || self.bytecode.locals[index].is_received_upvalue()
+            {
+                env.insert_frame_cell(self.bytecode.locals[index].name.clone(), upvalue.clone());
+            }
+        }
         for (index, slot) in self.locals.iter().enumerate() {
             if slot.is_some() && self.bytecode.locals[index].catch_binding {
                 env.mark_catch_binding(self.bytecode.locals[index].name.clone());
@@ -291,12 +263,32 @@ impl<'a> Vm<'a> {
             }
         }
         env.set_private_environment(self.current_private_environment());
-        env.set_activation_captured_env(Rc::clone(&self.captured_env));
-        if let Some(source) = self.env.captured_binding_source_env() {
-            env.set_captured_binding_source_env(Rc::clone(source));
+        if let Some(bindings) = deopt_bindings {
+            env.set_deopt_bindings(bindings);
         }
-        env.set_parameter_captured_envs(self.parameter_captured_envs.clone());
         env
+    }
+
+    pub(super) fn frame_deopt_bindings(&self) -> Option<DynamicBindings> {
+        let bindings = self.env.deopt_bindings()?.clone();
+        for (slot, local) in self.bytecode.locals.iter().enumerate() {
+            if local.sloppy_global_fallback
+                || (self.bytecode.is_global_scope()
+                    && self.bytecode.local_is_body_hoist_only(slot)
+                    && !super::vm_bindings::is_compiler_temporary(&local.name))
+            {
+                continue;
+            }
+            if self.locals.get(slot).is_none_or(Option::is_none)
+                && !(self.in_parameter_prologue() && local.from_env)
+            {
+                continue;
+            }
+            if let Some(upvalue) = self.local_upvalues.get(slot).and_then(Option::as_ref) {
+                bindings.insert_cell(local.name.clone(), upvalue.clone());
+            }
+        }
+        Some(bindings)
     }
 
     /// A shared-realm `CallEnv` with empty frame locals.
@@ -580,61 +572,31 @@ impl<'a> Vm<'a> {
                     is_async,
                     source_text,
                 } => {
-                    let (mut env, mut global_capture_names) =
-                        self.function_capture_env_with_global_names(&bytecode, &local_names);
-                    if is_generator {
-                        global_capture_names.clear();
-                    }
-                    self.insert_lexical_captures(&mut env, &lexical_captures);
-                    let capture_writeback = self.capture_writeback_for_bytecode(
-                        &bytecode,
-                        &local_names,
-                        &lexical_captures,
-                    );
                     let (home_object, super_constructor) = if lexical_this {
                         let home_object = self.env.get(HOME_OBJECT_BINDING);
                         let mut super_constructor = self.env.get(SUPER_CONSTRUCTOR_BINDING);
-                        if self.load_global("this").is_err() {
-                            self.captured_env.borrow_mut().insert(
-                                "this".to_owned(),
-                                Value::Function(Function::uninitialized_lexical_marker()),
-                            );
-                            if super_constructor.is_none() {
-                                super_constructor = Some(Value::Undefined);
-                            }
-                            env.insert(
-                                "this".to_owned(),
-                                Value::Function(Function::uninitialized_lexical_marker()),
-                            );
-                        }
-                        if let Some(new_target) = self.env.get(NEW_TARGET_BINDING) {
-                            env.insert(NEW_TARGET_BINDING.to_owned(), new_target);
+                        if self.load_global("this").is_err() && super_constructor.is_none() {
+                            super_constructor = Some(Value::Undefined);
                         }
                         (home_object, super_constructor)
                     } else {
                         (None, None)
                     };
-                    self.refresh_captured_env(&env);
-                    let in_parameter_prologue = self.in_parameter_prologue();
-                    let captured_env = if in_parameter_prologue {
-                        Rc::new(RefCell::new(env.clone()))
-                    } else {
-                        self.captured_env.clone()
-                    };
-                    if in_parameter_prologue {
-                        self.parameter_captured_envs.push(Rc::clone(&captured_env));
-                    }
                     let upvalues =
                         self.captured_upvalues_for_function(&bytecode, &lexical_captures);
                     let immutable_env_binding =
                         self.captured_immutable_function_name(&bytecode, &local_names);
-                    let function = Function::new_user_compiled(CompiledUserFunction {
+                    let immutable_env_value = immutable_env_binding
+                        .as_deref()
+                        .and_then(|name| self.env.get(name));
+                    let deopt_bindings = self.frame_deopt_bindings();
+                    let mut function = Function::new_user_compiled(CompiledUserFunction {
                         name,
                         has_name_binding,
                         immutable_name_binding,
                         immutable_env_binding,
                         params: Rc::new(params),
-                        env,
+                        realm: Rc::clone(&self.realm),
                         module_host: self.module_host.clone(),
                         module_imports: self.env.module_imports(),
                         bytecode,
@@ -647,15 +609,22 @@ impl<'a> Vm<'a> {
                         is_async,
                         is_class_constructor: false,
                         is_derived_constructor: false,
-                        is_field_initializer: false,
+                        is_field_initializer: lexical_this
+                            && matches!(
+                                self.env.get(crate::FIELD_INITIALIZER_EVAL_BINDING),
+                                Some(Value::Boolean(true))
+                            ),
                         home_object,
                         super_constructor,
-                        captured_env,
+                        deopt_bindings,
                         with_stack: self.with_stack.clone(),
-                        capture_writeback,
-                        global_capture_names,
                         upvalues,
                     });
+                    if lexical_this {
+                        function.lexical_new_target =
+                            self.env.get(crate::NEW_TARGET_BINDING).map(Upvalue::new);
+                    }
+                    function.immutable_env_value = immutable_env_value.map(Upvalue::new);
                     function.set_source_text(source_text);
                     self.capture_private_environment(&function);
                     if is_generator && is_async {
@@ -809,8 +778,6 @@ impl<'a> Vm<'a> {
                     self.abrupt_jump(target)?;
                 }
                 Op::FreshIterationScope(ref slots) => self.fresh_iteration_scope(slots),
-                Op::PushCapturedEnv => self.push_captured_env(),
-                Op::PopCapturedEnv => self.pop_captured_env(),
                 Op::JumpIfFalse(target) => {
                     if !is_truthy(self.stack.last().ok_or_else(stack_underflow)?) {
                         self.ip = target;
@@ -859,6 +826,7 @@ impl<'a> Vm<'a> {
                     });
                 }
                 Op::FunctionPrologueEnd => {
+                    self.enter_body_deopt_scope();
                     if self.stop_at_prologue {
                         self.stop_at_prologue = false;
                         return Ok(Completion::PrologueEnd);
@@ -1042,7 +1010,7 @@ impl<'a> Vm<'a> {
             && let crate::PropertyKey::String(key) = key
         {
             self.invalidate_array_prototype_cache(&key);
-            self.realm.borrow_mut().insert(key, value.clone());
+            self.env.insert_realm(key, value.clone());
         }
         self.stack.push(value);
         Ok(())
@@ -1110,162 +1078,18 @@ impl<'a> Vm<'a> {
     }
 
     pub(super) fn call_env(&self, callee: &Value) -> VmCallEnv {
-        if let Some(function) = user_bytecode_function(callee) {
-            let mut locals = HashMap::new();
-            let mut binding_names = Vec::new();
-            if let Some(bytecode) = &function.bytecode {
-                self.insert_referenced_call_bindings(
-                    &mut locals,
-                    &mut binding_names,
-                    bytecode,
-                    &function.local_names,
-                );
-                if function.lexical_this && bytecode.contains_super_call() {
-                    self.insert_lexical_super_call_this(&mut locals, &mut binding_names);
-                }
-                if bytecode.requires_scope_call_bindings() {
-                    insert_scope_call_bindings(
-                        &mut locals,
-                        &mut binding_names,
-                        self.bytecode,
-                        &self.locals,
-                        &function.local_names,
-                    );
-                }
-            }
-            let injected = locals.clone();
-            let mut env = self.attach_host(self.env.with_current_frame_locals(locals));
-            env.set_activation_captured_env(Rc::clone(&self.captured_env));
-            if let Some(source) = self.env.captured_binding_source_env() {
-                env.set_captured_binding_source_env(Rc::clone(source));
-            }
-            env.set_parameter_captured_envs(self.parameter_captured_envs.clone());
-            return VmCallEnv {
-                injected,
-                env,
-                binding_names: Some(binding_names),
-            };
-        }
-        if let Some((env, injected, binding_names)) =
-            super::vm_call::call_forwarding_native_env(callee, self.current_env())
-        {
-            return VmCallEnv {
-                injected,
-                env,
-                binding_names: Some(binding_names),
-            };
+        if user_bytecode_function(callee).is_some() {
+            let env = self.attach_host(self.env.new_function_frame());
+            return VmCallEnv { env };
         }
         VmCallEnv {
             env: self.current_env(),
-            binding_names: None,
-            injected: HashMap::new(),
         }
-    }
-
-    fn insert_referenced_call_bindings(
-        &self,
-        locals: &mut HashMap<String, Value>,
-        binding_names: &mut Vec<String>,
-        function_bytecode: &Bytecode,
-        function_local_names: &[String],
-    ) {
-        let mut referenced_names = function_bytecode.referenced_global_names();
-        referenced_names.extend(function_bytecode.written_binding_names());
-        referenced_names.sort();
-        referenced_names.dedup();
-        for name in referenced_names {
-            let declared_local = function_bytecode.local_slot(&name).is_some_and(|slot| {
-                function_bytecode.local_is_body_hoist_only(slot)
-                    || function_bytecode.local_is_parameter(slot)
-            });
-            if !declared_local {
-                self.insert_call_binding(locals, binding_names, &name);
-            }
-        }
-        for name in function_bytecode.sloppy_global_assignment_names() {
-            insert_missing_binding_name(binding_names, name);
-        }
-        for name in function_bytecode.local_names() {
-            if !function_local_names.iter().any(|local| local == name) {
-                self.insert_call_binding(locals, binding_names, name);
-            }
-        }
-    }
-    fn insert_call_binding(
-        &self,
-        locals: &mut HashMap<String, Value>,
-        binding_names: &mut Vec<String>,
-        name: &str,
-    ) {
-        if crate::function::is_internal_binding_name(name) {
-            return;
-        }
-        let value = self
-            .current_local_binding(name)
-            .cloned()
-            .or_else(|| self.env.locals().get(name).cloned());
-        if let Some(value) = value {
-            locals.insert(name.to_owned(), value);
-            if !binding_names.iter().any(|existing| existing == name) {
-                binding_names.push(name.to_owned());
-            }
-        }
-    }
-
-    fn insert_lexical_super_call_this(
-        &self,
-        locals: &mut HashMap<String, Value>,
-        binding_names: &mut Vec<String>,
-    ) {
-        let value = self
-            .current_local_binding("this")
-            .cloned()
-            .or_else(|| self.env.locals().get("this").cloned())
-            .unwrap_or_else(|| Value::Function(Function::uninitialized_lexical_marker()));
-        locals.insert("this".to_owned(), value);
-        insert_missing_binding_name(binding_names, "this");
     }
 
     pub(super) fn apply_call_env(&mut self, env: VmCallEnv) {
-        if let Some(binding_names) = env.binding_names {
-            self.apply_selected_env(env.env, &binding_names, &env.injected);
-        } else {
-            self.apply_env(env.env);
-        }
+        self.apply_env(env.env);
         self.refresh_realm_backed_locals_from_realm();
-        if !self.bytecode.global_scope {
-            return;
-        }
-        let captured = self.captured_env.borrow();
-        if captured.is_empty() {
-            return;
-        }
-        for (name, value) in captured.iter() {
-            if matches!(
-                value,
-                Value::Function(function) if function.is_uninitialized_lexical_marker()
-            ) {
-                continue;
-            }
-            if let Some(index) = self.bytecode.local_slot(name) {
-                let value = if self.bytecode.global_scope
-                    && self.bytecode.local_is_body_hoist_only(index)
-                    && !super::vm_bindings::is_compiler_temporary(name)
-                {
-                    self.global_this_property(name)
-                        .unwrap_or_else(|| value.clone())
-                } else {
-                    value.clone()
-                };
-                let Some(slot) = self.locals.get_mut(index) else {
-                    continue;
-                };
-                if slot.is_none() && !self.bytecode.local_is_body_hoist_only(index) {
-                    continue;
-                }
-                *slot = Some(value);
-            }
-        }
     }
 
     fn refresh_realm_backed_locals_from_realm(&mut self) {
@@ -1283,14 +1107,17 @@ impl<'a> Vm<'a> {
             {
                 continue;
             }
-            let Some(value) = self
-                .global_this_property(name)
-                .or_else(|| self.realm.borrow().get(name).cloned())
-            else {
+            let value = if let Some(value) = self.realm.borrow().get(name).cloned() {
+                value
+            } else if let Some(property) = self.global_this_own_property(name)
+                && !property.is_accessor()
+            {
+                property.value
+            } else {
                 continue;
             };
             self.locals[index] = Some(value.clone());
-            self.write_through_captured(name, value);
+            self.write_through_module_live_binding(name, value);
         }
     }
 
@@ -1310,11 +1137,5 @@ impl<'a> Vm<'a> {
         let references_name = bytecode.local_slot(name).is_some()
             || bytecode.global_names().iter().any(|global| global == name);
         references_name.then(|| name.to_owned())
-    }
-}
-
-pub(super) fn insert_missing_binding_name(binding_names: &mut Vec<String>, name: &str) {
-    if !binding_names.iter().any(|existing| existing == name) {
-        binding_names.push(name.to_owned());
     }
 }

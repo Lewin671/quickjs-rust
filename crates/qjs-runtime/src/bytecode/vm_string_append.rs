@@ -79,10 +79,10 @@ impl Vm<'_> {
         if let Some(upvalue) = self.local_upvalues.get(slot).and_then(Option::as_ref) {
             upvalue.set(result.clone());
         }
-        self.write_through_captured(&local_meta.name, result.clone());
+        self.write_through_module_live_binding(&local_meta.name, result.clone());
         if local_meta.from_env || self.bytecode.local_is_body_hoist_only(slot) {
             let name = local_meta.name.clone();
-            if self.env.locals().contains_key(&name) {
+            if self.env.has_local_binding(&name) {
                 self.env.insert(name, result.clone());
             }
         }
@@ -116,7 +116,7 @@ impl Vm<'_> {
         suffix: &str,
         is_strict: bool,
     ) -> Result<Value, RuntimeError> {
-        if self.env.locals().contains_key(name) {
+        if self.env.has_local_binding(name) {
             return self.append_string_literal_global_via_store(name, suffix, is_strict);
         }
         {
@@ -136,7 +136,7 @@ impl Vm<'_> {
                             result.clone()
                         });
                 }
-                self.write_through_captured(name, result.clone());
+                self.write_through_module_live_binding(name, result.clone());
                 return Ok(result);
             }
         }

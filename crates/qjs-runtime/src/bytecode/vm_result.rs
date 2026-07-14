@@ -1,6 +1,7 @@
-use std::collections::HashMap;
-
-use crate::{RuntimeError, Value, function::CallEnv};
+use crate::{
+    RuntimeError, Value,
+    function::{CallEnv, Upvalue},
+};
 
 use super::ir::Bytecode;
 
@@ -9,7 +10,7 @@ pub(crate) struct FunctionBytecodeResult<'a> {
     pub(super) bytecode: &'a Bytecode,
     pub(super) env: CallEnv,
     pub(super) locals: Vec<Option<Value>>,
-    pub(super) captured_env: HashMap<String, Value>,
+    pub(super) local_upvalues: Vec<Option<Upvalue>>,
     pub(crate) sloppy_global_names: Vec<String>,
 }
 
@@ -70,19 +71,42 @@ impl FunctionBytecodeResult<'_> {
     pub(crate) fn frame_binding(&self, name: &str) -> Option<Value> {
         self.bytecode
             .local_slot(name)
-            .and_then(|index| self.locals.get(index))
-            .and_then(Option::as_ref)
-            .cloned()
+            .and_then(|index| {
+                self.locals.get(index).and_then(Option::as_ref)?;
+                self.local_upvalues
+                    .get(index)
+                    .and_then(Option::as_ref)
+                    .map(Upvalue::get)
+                    .or_else(|| self.locals.get(index).and_then(Option::as_ref).cloned())
+            })
+            .or_else(|| self.env.get_local(name))
+    }
+
+    pub(crate) fn frame_cell_binding(&self, name: &str) -> Option<Value> {
+        self.bytecode
+            .local_slot(name)
+            .and_then(|index| {
+                self.local_upvalues
+                    .get(index)
+                    .and_then(Option::as_ref)
+                    .map(Upvalue::get)
+                    .or_else(|| self.locals.get(index).and_then(Option::as_ref).cloned())
+            })
+            .filter(|value| !value.is_uninitialized_lexical_marker())
             .or_else(|| self.env.get_local(name))
     }
 
     pub(crate) fn binding(&self, name: &str) -> Option<Value> {
         self.bytecode
             .local_slot(name)
-            .and_then(|index| self.locals.get(index))
-            .and_then(Option::as_ref)
-            .cloned()
-            .or_else(|| self.captured_env.get(name).cloned())
+            .and_then(|index| {
+                self.locals.get(index).and_then(Option::as_ref)?;
+                self.local_upvalues
+                    .get(index)
+                    .and_then(Option::as_ref)
+                    .map(Upvalue::get)
+                    .or_else(|| self.locals.get(index).and_then(Option::as_ref).cloned())
+            })
             .or_else(|| self.env.get(name))
     }
 }

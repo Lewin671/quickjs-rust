@@ -1,8 +1,8 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{
     Function, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_as_object_prototype,
-    function::{CompiledUserFunction, InstanceFieldInitializer},
+    function::{CompiledUserFunction, InstanceFieldInitializer, Upvalue},
     function_prototype, object, object_prototype, property_value,
     symbol::symbol_function_name_description,
     to_property_key_value,
@@ -11,9 +11,8 @@ use crate::{
     call_function, construct_function, property_value_key_with_receiver, value_prototype_slot,
 };
 
-use super::CaptureWriteback;
 use super::ir::{
-    Bytecode, ClassComputedKeyDef, ClassConstructorDef, ClassElementDef, ClassFieldDef,
+    ClassComputedKeyDef, ClassConstructorDef, ClassElementDef, ClassFieldDef,
     ClassFieldInitializerDef, ClassMemberKeyDef, ClassMethodDef, ClassMethodKind,
     ClassStaticBlockDef,
 };
@@ -61,26 +60,25 @@ impl Vm<'_> {
             None => object_prototype(&self.env).map(crate::Prototype::Object),
         };
 
-        let (mut constructor_env, constructor_global_capture_names) = self
-            .function_capture_env_with_global_names(
-                &constructor.bytecode,
-                &constructor.local_names,
-            );
-        self.insert_lexical_captures(&mut constructor_env, &constructor.lexical_captures);
-        self.refresh_captured_env(&constructor_env);
-        let constructor_captured = Rc::new(RefCell::new(constructor_env.clone()));
         let super_constructor = match &heritage {
             Some(ClassHeritage::Parent(parent)) => Some(parent.constructor.clone()),
             Some(ClassHeritage::Null) => function_prototype_value(&self.env),
             _ => None,
         };
+        let class_name_upvalue =
+            name.map(|_| Upvalue::new(Value::Function(Function::uninitialized_lexical_marker())));
+        let constructor_upvalues = self.captured_upvalues_for_function_with_override(
+            &constructor.bytecode,
+            &constructor.lexical_captures,
+            name.zip(class_name_upvalue.as_ref()),
+        );
         let constructor_function = Function::new_user_compiled(CompiledUserFunction {
             name: constructor.name.clone(),
             has_name_binding: false,
             immutable_name_binding: false,
             immutable_env_binding: name.map(str::to_owned),
             params: std::rc::Rc::new(constructor.params.clone()),
-            env: constructor_env,
+            realm: Rc::clone(&self.realm),
             module_host: self.module_host.clone(),
             module_imports: self.env.module_imports(),
             bytecode: constructor.bytecode.clone(),
@@ -96,16 +94,13 @@ impl Vm<'_> {
             is_field_initializer: false,
             home_object: None,
             super_constructor: super_constructor.clone(),
-            captured_env: constructor_captured,
+            deopt_bindings: self.frame_deopt_bindings(),
             with_stack: self.with_stack.clone(),
-            capture_writeback: self.class_member_capture_writeback(
-                &constructor.bytecode,
-                &constructor.local_names,
-                name,
-            ),
-            global_capture_names: constructor_global_capture_names,
-            upvalues: Vec::new(),
+            upvalues: constructor_upvalues,
         });
+        if let Some(upvalue) = &class_name_upvalue {
+            upvalue.set(Value::Function(constructor_function.clone()));
+        }
 
         // Static-side inheritance: a subclass constructor inherits the parent
         // constructor's static members through its [[Prototype]], which is the
@@ -234,61 +229,14 @@ impl Vm<'_> {
                         value,
                         &mut self.realm_env(),
                     )?;
-                    self.refresh_instance_field_captures(&constructor_function);
                 }
                 PendingStaticItem::Block(block) => {
                     self.run_static_block(block, &constructor_function, name)?;
-                    self.refresh_instance_field_captures(&constructor_function);
                 }
             }
         }
-
-        // Seed the constructor's own captured env with the inner class binding.
-        bind_class_inner_name(
-            &mut constructor_function.captured_env.borrow_mut(),
-            name,
-            &constructor_function,
-        );
 
         Ok(Value::Function(constructor_function))
-    }
-
-    fn refresh_instance_field_captures(&self, constructor_function: &Function) {
-        for element in constructor_function.instance_elements().iter() {
-            match element {
-                crate::function::InstanceElementInitializer::PublicField(field) => {
-                    if let Some(initializer) = &field.initializer {
-                        self.refresh_function_captures(initializer);
-                    }
-                }
-                crate::function::InstanceElementInitializer::PrivateElement(private) => {
-                    if let Some(field) = &private.field_initializer {
-                        if let Some(initializer) = &field.initializer {
-                            self.refresh_function_captures(initializer);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn refresh_function_captures(&self, function: &Function) {
-        let names = function
-            .captured_env
-            .borrow()
-            .keys()
-            .cloned()
-            .collect::<Vec<_>>();
-        let mut captured = function.captured_env.borrow_mut();
-        for name in names {
-            if let Some(value) = self
-                .current_local_binding(&name)
-                .cloned()
-                .or_else(|| self.env.locals().get(&name).cloned())
-            {
-                captured.insert(name, value);
-            }
-        }
     }
 
     fn pop_precomputed_class_keys(
@@ -331,18 +279,17 @@ impl Vm<'_> {
                 }
                 ClassComputedKeyDef::Deferred {
                     local_names,
+                    lexical_captures,
                     bytecode,
                 } => {
-                    let (mut key_env, key_global_capture_names) =
-                        self.function_capture_env_with_global_names(bytecode, local_names);
-                    bind_class_inner_name(&mut key_env, name, constructor_function);
+                    let class_upvalue = class_inner_upvalue(constructor_function, name);
                     let thunk = Function::new_user_compiled(CompiledUserFunction {
                         name: None,
                         has_name_binding: false,
                         immutable_name_binding: false,
                         immutable_env_binding: name.map(str::to_owned),
                         params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
-                        env: key_env.clone(),
+                        realm: Rc::clone(&self.realm),
                         module_host: self.module_host.clone(),
                         module_imports: self.env.module_imports(),
                         bytecode: bytecode.clone(),
@@ -358,15 +305,13 @@ impl Vm<'_> {
                         is_field_initializer: false,
                         home_object: Some(Value::Function(constructor_function.clone())),
                         super_constructor: None,
-                        captured_env: Rc::new(RefCell::new(key_env)),
+                        deopt_bindings: self.frame_deopt_bindings(),
                         with_stack: self.with_stack.clone(),
-                        capture_writeback: self.class_member_capture_writeback(
+                        upvalues: self.captured_upvalues_for_function_with_override(
                             bytecode,
-                            local_names,
-                            name,
+                            lexical_captures,
+                            name.zip(class_upvalue.as_ref()),
                         ),
-                        global_capture_names: key_global_capture_names,
-                        upvalues: Vec::new(),
                     });
                     let this_value = self.env.get("this").unwrap_or(Value::Undefined);
                     let value = self.run_field_initializer(&thunk, this_value)?;
@@ -390,19 +335,6 @@ impl Vm<'_> {
         constructor_function: &Function,
         name: Option<&str>,
     ) -> Result<(), RuntimeError> {
-        let (mut method_env, method_global_capture_names) = if method.is_generator {
-            (
-                self.function_capture_env_without_global_names(
-                    &method.bytecode,
-                    &method.local_names,
-                ),
-                Vec::new(),
-            )
-        } else {
-            self.function_capture_env_with_global_names(&method.bytecode, &method.local_names)
-        };
-        self.insert_lexical_captures(&mut method_env, &method.lexical_captures);
-        bind_class_inner_name(&mut method_env, name, constructor_function);
         // A method's home object resolves `super.x`: instance methods and
         // accessors use the prototype; static members use the constructor.
         let home_object = if method.is_static {
@@ -410,13 +342,14 @@ impl Vm<'_> {
         } else {
             Value::Object(prototype.clone())
         };
+        let class_upvalue = class_inner_upvalue(constructor_function, name);
         let method_function = Function::new_user_compiled(CompiledUserFunction {
             name: class_method_function_name(method, &key),
             has_name_binding: false,
             immutable_name_binding: false,
             immutable_env_binding: name.map(str::to_owned),
             params: std::rc::Rc::new(method.params.clone()),
-            env: method_env.clone(),
+            realm: Rc::clone(&self.realm),
             module_host: self.module_host.clone(),
             module_imports: self.env.module_imports(),
             bytecode: method.bytecode.clone(),
@@ -432,16 +365,13 @@ impl Vm<'_> {
             is_field_initializer: false,
             home_object: Some(home_object.clone()),
             super_constructor: None,
-            captured_env: Rc::new(RefCell::new(method_env)),
+            deopt_bindings: self.frame_deopt_bindings(),
             with_stack: self.with_stack.clone(),
-            capture_writeback: self.class_member_capture_writeback(
+            upvalues: self.captured_upvalues_for_function_with_override(
                 &method.bytecode,
-                &method.local_names,
-                name,
+                &method.lexical_captures,
+                name.zip(class_upvalue.as_ref()),
             ),
-            global_capture_names: method_global_capture_names,
-            upvalues: self
-                .captured_upvalues_for_function(&method.bytecode, &method.lexical_captures),
         });
         method_function.set_source_text(method.source_text.clone());
         if method.is_generator && method.is_async {
@@ -494,7 +424,7 @@ impl Vm<'_> {
     /// `this` bound at call time; its home object resolves `super.x` (instance
     /// fields use the prototype, static fields the constructor).
     fn build_field_initializer(
-        &self,
+        &mut self,
         field: &ClassFieldDef,
         prototype: &ObjectRef,
         constructor_function: &Function,
@@ -502,23 +432,22 @@ impl Vm<'_> {
     ) -> Option<Function> {
         let ClassFieldInitializerDef {
             local_names,
+            lexical_captures,
             bytecode,
         } = field.initializer.as_ref()?;
-        let (mut field_env, field_global_capture_names) =
-            self.function_capture_env_with_global_names(bytecode, local_names);
-        bind_class_inner_name(&mut field_env, name, constructor_function);
         let home_object = if field.is_static {
             Value::Function(constructor_function.clone())
         } else {
             Value::Object(prototype.clone())
         };
+        let class_upvalue = class_inner_upvalue(constructor_function, name);
         Some(Function::new_user_compiled(CompiledUserFunction {
             name: None,
             has_name_binding: false,
             immutable_name_binding: false,
             immutable_env_binding: name.map(str::to_owned),
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
-            env: field_env.clone(),
+            realm: Rc::clone(&self.realm),
             module_host: self.module_host.clone(),
             module_imports: self.env.module_imports(),
             bytecode: bytecode.clone(),
@@ -534,81 +463,14 @@ impl Vm<'_> {
             is_field_initializer: true,
             home_object: Some(home_object),
             super_constructor: None,
-            captured_env: Rc::new(RefCell::new(field_env)),
+            deopt_bindings: self.frame_deopt_bindings(),
             with_stack: self.with_stack.clone(),
-            capture_writeback: self.class_member_capture_writeback(bytecode, local_names, name),
-            global_capture_names: field_global_capture_names,
-            upvalues: Vec::new(),
+            upvalues: self.captured_upvalues_for_function_with_override(
+                bytecode,
+                lexical_captures,
+                name.zip(class_upvalue.as_ref()),
+            ),
         }))
-    }
-
-    pub(super) fn class_member_capture_writeback(
-        &self,
-        bytecode: &Bytecode,
-        local_names: &[String],
-        class_inner_name: Option<&str>,
-    ) -> Option<CaptureWriteback> {
-        let mut names = Vec::new();
-        for name in bytecode.global_names() {
-            self.push_member_capture_name(&mut names, name, class_inner_name);
-        }
-        for name in bytecode.local_names() {
-            if local_names
-                .binary_search_by(|local| local.as_str().cmp(name))
-                .is_err()
-            {
-                self.push_member_capture_name(&mut names, name, class_inner_name);
-            }
-        }
-        for name in bytecode.closure_written_binding_names() {
-            self.push_member_capture_name(&mut names, &name, class_inner_name);
-        }
-        for name in bytecode.closure_referenced_global_names() {
-            self.push_member_capture_name(&mut names, &name, class_inner_name);
-        }
-        let parent_names = names
-            .iter()
-            .filter(|name| {
-                self.bytecode.local_slot(name).is_none_or(|slot| {
-                    !(self.bytecode.local_is_body_hoist_only(slot)
-                        || self.bytecode.local_is_parameter(slot))
-                })
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-        let parent = self.capture_writeback.as_ref().and_then(|writeback| {
-            super::vm_capture::filtered_parent_writeback(writeback, &parent_names)
-        });
-        let syncs_cell_values = parent
-            .as_deref()
-            .is_some_and(CaptureWriteback::syncs_cell_values);
-        (!names.is_empty()).then(|| CaptureWriteback {
-            target: self.captured_env.clone(),
-            names,
-            aliases: Vec::new(),
-            parent,
-            syncs_cell_values,
-        })
-    }
-
-    fn push_member_capture_name(
-        &self,
-        names: &mut Vec<String>,
-        name: &str,
-        class_inner_name: Option<&str>,
-    ) {
-        if crate::function::is_internal_binding_name(name) {
-            return;
-        }
-        if Some(name) == class_inner_name {
-            return;
-        }
-        if self.current_local_binding(name).is_none() && !self.env.locals().contains_key(name) {
-            return;
-        }
-        if !names.iter().any(|existing| existing == name) {
-            names.push(name.to_owned());
-        }
     }
 
     /// Runs a `static { ... }` block at class definition: builds a parameterless
@@ -622,18 +484,17 @@ impl Vm<'_> {
     ) -> Result<(), RuntimeError> {
         let ClassStaticBlockDef {
             local_names,
+            lexical_captures,
             bytecode,
         } = block;
-        let (mut block_env, block_global_capture_names) =
-            self.function_capture_env_with_global_names(bytecode, local_names);
-        bind_class_inner_name(&mut block_env, name, constructor_function);
+        let class_upvalue = class_inner_upvalue(constructor_function, name);
         let thunk = Function::new_user_compiled(CompiledUserFunction {
             name: None,
             has_name_binding: false,
             immutable_name_binding: false,
             immutable_env_binding: name.map(str::to_owned),
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
-            env: block_env.clone(),
+            realm: Rc::clone(&self.realm),
             module_host: self.module_host.clone(),
             module_imports: self.env.module_imports(),
             bytecode: bytecode.clone(),
@@ -649,11 +510,13 @@ impl Vm<'_> {
             is_field_initializer: false,
             home_object: Some(Value::Function(constructor_function.clone())),
             super_constructor: None,
-            captured_env: Rc::new(RefCell::new(block_env)),
+            deopt_bindings: self.frame_deopt_bindings(),
             with_stack: self.with_stack.clone(),
-            capture_writeback: self.class_member_capture_writeback(bytecode, local_names, name),
-            global_capture_names: block_global_capture_names,
-            upvalues: Vec::new(),
+            upvalues: self.captured_upvalues_for_function_with_override(
+                bytecode,
+                lexical_captures,
+                name.zip(class_upvalue.as_ref()),
+            ),
         });
         self.run_field_initializer(&thunk, Value::Function(constructor_function.clone()))?;
         Ok(())
@@ -674,9 +537,7 @@ impl Vm<'_> {
             &mut env,
             false,
         );
-        self.refresh_call_env_from_captured_env(&mut env);
         self.apply_env(env);
-        self.refresh_locals_from_captured_env();
         result
     }
 
@@ -794,8 +655,11 @@ impl Vm<'_> {
     pub(super) fn super_call(&mut self, arguments: Vec<Value>) -> Result<(), RuntimeError> {
         let result = self.super_call_inner(arguments);
         if let Some(this_value) = self.handle_runtime_result(result)? {
+            if let Some(slot) = self.bytecode.local_slot("this") {
+                self.store_local(slot, this_value.clone())?;
+            }
             self.env.insert("this".to_owned(), this_value.clone());
-            self.write_through_captured("this", this_value.clone());
+            self.write_through_module_live_binding("this", this_value.clone());
             // The instance fields of the derived class initialize immediately
             // after `super(...)` binds `this`, before the rest of the body.
             let field_result = self.initialize_derived_instance_fields(&this_value);
@@ -843,7 +707,7 @@ impl Vm<'_> {
         let value = result?;
         // A repeated `super(...)` still performs the parent construction after
         // argument evaluation, then fails while trying to initialize `this`.
-        if self.env.locals().contains_key("this") {
+        if self.env.has_local_binding("this") {
             return Err(RuntimeError {
                 thrown: None,
                 message: "ReferenceError: super constructor may only be called once".to_owned(),
@@ -1038,14 +902,18 @@ pub(crate) fn install_field_value(
     Ok(())
 }
 
-fn bind_class_inner_name(
-    env: &mut HashMap<String, Value>,
-    name: Option<&str>,
-    constructor: &Function,
-) {
-    if let Some(name) = name {
-        env.insert(name.to_owned(), Value::Function(constructor.clone()));
-    }
+pub(super) fn class_inner_upvalue(constructor: &Function, name: Option<&str>) -> Option<Upvalue> {
+    let name = name?;
+    constructor
+        .bytecode
+        .as_ref()
+        .and_then(|bytecode| {
+            bytecode
+                .received_upvalue_names()
+                .zip(&constructor.upvalues)
+                .find_map(|(candidate, upvalue)| (candidate == name).then(|| upvalue.clone()))
+        })
+        .or_else(|| Some(Upvalue::new(Value::Function(constructor.clone()))))
 }
 
 /// Merges a new accessor descriptor with any existing accessor for the same

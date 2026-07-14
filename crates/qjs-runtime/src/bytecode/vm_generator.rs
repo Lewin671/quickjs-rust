@@ -9,7 +9,7 @@
 //! injected return/throw completion) at the yield point, and runs until the
 //! next `Op::Yield`, an ordinary return, or an unwound abrupt completion.
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::rc::Rc;
 
 use crate::{ObjectRef, RuntimeError, Value};
 
@@ -19,8 +19,6 @@ use super::vm_dispose::DisposeResource;
 use super::vm_result::Completion;
 use super::vm_try::TryFrame;
 use crate::CallEnv;
-
-const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
 /// The lifecycle state of a generator object (ES2023 27.5.3 [[GeneratorState]]).
 pub(crate) enum GeneratorState {
@@ -39,48 +37,9 @@ pub(crate) enum GeneratorState {
 pub(crate) struct GeneratorStart {
     pub(crate) bytecode: Rc<Bytecode>,
     pub(crate) env: CallEnv,
-    pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
     pub(crate) upvalues: Vec<crate::function::Upvalue>,
     pub(crate) with_stack: Vec<Value>,
     pub(crate) immutable_function_name: Option<String>,
-    pub(crate) refresh_captured_slots_on_resume: bool,
-    pub(crate) capture_writeback: Option<CaptureWriteback>,
-}
-
-/// The original closure capture cell an async activation must update when it
-/// mutates bindings captured from an enclosing function.
-#[derive(Clone)]
-pub(crate) struct CaptureWriteback {
-    pub(crate) target: Rc<RefCell<HashMap<String, Value>>>,
-    pub(crate) names: Vec<String>,
-    pub(crate) aliases: Vec<(String, String)>,
-    pub(crate) parent: Option<Box<CaptureWriteback>>,
-    /// Temporary S3-S4 bridge for module namespace live bindings. Ordinary
-    /// lexical cells never write back by name; module exports still use the
-    /// legacy live-binding map until S5 removes it.
-    pub(crate) syncs_cell_values: bool,
-}
-
-impl CaptureWriteback {
-    pub(crate) fn syncs_cell_values(&self) -> bool {
-        self.syncs_cell_values
-            || self
-                .parent
-                .as_deref()
-                .is_some_and(CaptureWriteback::syncs_cell_values)
-    }
-
-    pub(crate) fn targets_name(&self, name: &str) -> bool {
-        self.names.iter().any(|candidate| candidate == name)
-            || self
-                .aliases
-                .iter()
-                .any(|(source, target)| source == name || target == name)
-            || self
-                .parent
-                .as_deref()
-                .is_some_and(|parent| parent.targets_name(name))
-    }
 }
 
 /// A snapshot of a generator body's VM state, taken at a `yield`.
@@ -92,11 +51,8 @@ pub(crate) struct GeneratorSnapshot {
     local_upvalues: Vec<Option<crate::function::Upvalue>>,
     upvalues: Vec<crate::function::Upvalue>,
     env: CallEnv,
-    captured_env: Rc<RefCell<HashMap<String, Value>>>,
     with_stack: Vec<Value>,
     immutable_function_name: Option<String>,
-    refresh_captured_slots_on_resume: bool,
-    capture_writeback: Option<CaptureWriteback>,
     sloppy_global_names: Vec<String>,
     try_stack: Vec<TryFrame>,
     disposable_scopes: Vec<Vec<DisposeResource>>,
@@ -162,106 +118,11 @@ pub(crate) fn is_suspended_at_plain_yield(generator: &ObjectRef) -> bool {
 }
 
 impl Vm<'_> {
-    /// Propagates the body's final values for bindings it shares with the
-    /// resuming caller back into the caller's environment, so a generator that
-    /// mutates an outer `let`/`var` is observed by the resuming frame. Mirrors
-    /// the caller-binding write-back performed for ordinary function calls.
-    fn propagate_to_caller(&self, caller_env: &mut CallEnv) {
-        let names: Vec<String> = caller_env.locals().keys().cloned().collect();
-        for name in names {
-            if crate::function::is_internal_binding_name(&name)
-                || crate::function::is_call_frame_binding(&name)
-                || name == DYNAMIC_FUNCTION_REALM_GLOBAL
-            {
-                continue;
-            }
-            if let Some(value) = self.binding_value(&name)
-                && let Some(slot) = caller_env.get_local_mut(&name)
-            {
-                *slot = value;
-            }
-        }
-    }
-
-    /// Refreshes the body's view of bindings it shares with the resuming
-    /// caller. A generator captures its environment when the generator function
-    /// is called, but it resumes later — the caller may have reassigned shared
-    /// bindings in between (`var it = g()` itself is the common case), so the
-    /// captured snapshot is stale by the time the body runs. Without this
-    /// refresh the post-run write-back would clobber the caller's current
-    /// values with the stale ones.
-    fn refresh_from_caller(&mut self, caller_env: &CallEnv) {
-        // The realm is shared by `Rc`, so realm bindings are already live in the
-        // body; only the caller's frame *locals* need to be mirrored into the
-        // body's own frame-local layer.
-        for (name, value) in caller_env.locals() {
-            // `this` (and `arguments`) belong to the generator's own frame,
-            // never to the resuming caller; internal bindings likewise.
-            if crate::function::is_internal_binding_name(name)
-                || crate::function::is_call_frame_binding(name)
-                || name == DYNAMIC_FUNCTION_REALM_GLOBAL
-            {
-                continue;
-            }
-            if self.env.locals().contains_key(&format!(
-                "{}{}",
-                crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
-                name
-            )) {
-                continue;
-            }
-            if self.env.is_immutable_function_name(name)
-                || matches!(
-                    (self.env.locals().get(name), self.captured_env.borrow().get(name)),
-                    (Some(Value::Function(local)), Some(Value::Function(captured)))
-                        if local == captured
-                )
-            {
-                continue;
-            }
-            if self.env.locals().contains_key(name) {
-                self.env.insert(name.clone(), value.clone());
-            }
-        }
-    }
-
-    /// Refreshes this resumed VM from the shared capture cell. A suspended
-    /// async/generator body keeps its own slot snapshot, but closures created by
-    /// that body share `captured_env` and may run while the body is suspended
-    /// (for example, a thenable's `then` callback during `await`). Pull those
-    /// writes back before execution resumes so the snapshot does not roll them
-    /// back.
-    fn refresh_from_captured_env(&mut self) {
-        let captured = self.captured_env.borrow();
-        for (name, value) in captured.iter() {
-            if let Some(slot) = self.bytecode.local_slot(name)
-                && let Some(local) = self.locals.get_mut(slot)
-            {
-                *local = Some(value.clone());
-            }
-        }
-    }
-
-    /// Reads a binding by name from the body's current locals (preferred) or
-    /// frame environment.
-    fn binding_value(&self, name: &str) -> Option<Value> {
-        if let Some(index) = self.bytecode.local_slot(name) {
-            match self.locals.get(index) {
-                Some(Some(value)) => return Some(value.clone()),
-                Some(None) if !self.bytecode.local_is_body_hoist_only(index) => return None,
-                _ => {}
-            }
-        }
-        self.env.get(name)
-    }
-
     /// Captures the running generator body's state at a `yield`.
     fn into_snapshot(
         self,
         bytecode: Rc<Bytecode>,
         suspension: SuspensionKind,
-        refresh_captured_slots_on_resume: bool,
-        capture_writeback: Option<CaptureWriteback>,
     ) -> GeneratorSnapshot {
         let immutable_function_name = self.env.immutable_function_name().map(str::to_owned);
         GeneratorSnapshot {
@@ -272,11 +133,8 @@ impl Vm<'_> {
             local_upvalues: self.local_upvalues,
             upvalues: self.upvalues,
             env: self.env,
-            captured_env: self.captured_env,
             with_stack: self.with_stack,
             immutable_function_name,
-            refresh_captured_slots_on_resume,
-            capture_writeback,
             sloppy_global_names: self.sloppy_global_names,
             try_stack: self.try_stack,
             disposable_scopes: self.disposable_scopes,
@@ -295,45 +153,27 @@ impl Vm<'_> {
 /// observable, instead of on the first `next`.
 pub(crate) fn start_suspended_at_body(
     start: GeneratorStart,
-    caller_env: &mut CallEnv,
+    _caller_env: &mut CallEnv,
 ) -> Result<GeneratorState, RuntimeError> {
     let GeneratorStart {
         bytecode,
         env,
-        captured_env,
         upvalues,
         with_stack,
         immutable_function_name,
-        refresh_captured_slots_on_resume,
-        capture_writeback,
     } = start;
-    let mut vm = Vm::new_with_globals_captures_upvalues_and_with_stack(
-        &bytecode,
-        env,
-        captured_env,
-        upvalues,
-        with_stack,
-    );
+    let mut vm = Vm::new_with_globals_upvalues_and_with_stack(&bytecode, env, upvalues, with_stack);
     if let Some(name) = immutable_function_name {
         vm.env.set_immutable_function_name(name);
     }
-    vm.capture_writeback = capture_writeback.clone();
     vm.stop_at_prologue = true;
-    vm.refresh_from_caller(caller_env);
     let result = vm.run_completion();
-    vm.propagate_to_caller(caller_env);
-    refresh_activation_captures_from_realm(&mut vm);
     match result {
         // Suspended exactly at the prologue boundary: capture the body-start
         // state for the first resume.
-        Ok(Completion::PrologueEnd) => {
-            Ok(GeneratorState::SuspendedYield(Box::new(vm.into_snapshot(
-                bytecode.clone(),
-                SuspensionKind::Ordinary,
-                refresh_captured_slots_on_resume,
-                capture_writeback,
-            ))))
-        }
+        Ok(Completion::PrologueEnd) => Ok(GeneratorState::SuspendedYield(Box::new(
+            vm.into_snapshot(bytecode.clone(), SuspensionKind::Ordinary),
+        ))),
         // A function with no executable prologue suspension (should not happen,
         // since every compiled function emits the marker) — treat a clean return
         // as an empty body that has already finished is wrong here, so surface a
@@ -346,137 +186,42 @@ pub(crate) fn start_suspended_at_body(
     }
 }
 
-fn refresh_activation_captures_from_realm(vm: &mut Vm<'_>) {
-    let names: Vec<String> = vm.captured_env.borrow().keys().cloned().collect();
-    for name in names {
-        if crate::function::is_internal_binding_name(&name)
-            || crate::function::is_call_frame_binding(&name)
-            || name == DYNAMIC_FUNCTION_REALM_GLOBAL
-            || vm.env.is_immutable_function_name(&name)
-        {
-            continue;
-        }
-        if let Some(value) = direct_eval_parameter_capture_value(vm, &name) {
-            vm.captured_env
-                .borrow_mut()
-                .insert(name.clone(), value.clone());
-            if let Some(slot) = vm.bytecode.local_slot(&name)
-                && let Some(local) = vm.locals.get_mut(slot)
-            {
-                *local = Some(value.clone());
-            }
-            if vm.env.locals().contains_key(&name) {
-                vm.env.insert(name, value);
-            }
-            continue;
-        }
-        if vm.bytecode.local_slot(&name).is_some_and(|slot| {
-            vm.bytecode.local_is_parameter(slot) || vm.bytecode.local_is_body_hoist_only(slot)
-        }) {
-            continue;
-        }
-        if vm.env.locals().contains_key(&format!(
-            "{}{}",
-            crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
-            name
-        )) {
-            continue;
-        }
-        if let (Some(Value::Function(local_function)), Some(Value::Function(captured_function))) = (
-            vm.env.locals().get(&name),
-            vm.captured_env.borrow().get(&name),
-        ) && local_function == captured_function
-        {
-            continue;
-        }
-        let Some(value) = vm.realm.borrow().get(&name).cloned() else {
-            continue;
-        };
-        vm.captured_env
-            .borrow_mut()
-            .insert(name.clone(), value.clone());
-        if let Some(slot) = vm.bytecode.local_slot(&name)
-            && let Some(local) = vm.locals.get_mut(slot)
-        {
-            *local = Some(value.clone());
-        }
-        if vm.env.locals().contains_key(&name) {
-            vm.env.insert(name, value);
-        }
-    }
-}
-
-fn direct_eval_parameter_capture_value(vm: &Vm<'_>, name: &str) -> Option<Value> {
-    let marker_name = format!(
-        "{}{}",
-        crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
-        name
-    );
-    vm.parameter_captured_envs.iter().find_map(|captured_env| {
-        let captured_env = captured_env.borrow();
-        captured_env
-            .contains_key(&marker_name)
-            .then(|| captured_env.get(name).cloned())
-            .flatten()
-    })
-}
-
 /// Drives a generator from `SuspendedStart`: builds the body VM and runs it.
 fn run_from_start(
     start: GeneratorStart,
-    caller_env: &mut CallEnv,
+    _caller_env: &mut CallEnv,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     let GeneratorStart {
         bytecode,
         env,
-        captured_env,
         upvalues,
         with_stack,
         immutable_function_name,
-        refresh_captured_slots_on_resume,
-        capture_writeback,
     } = start;
-    let mut vm = Vm::new_with_globals_captures_upvalues_and_with_stack(
-        &bytecode,
-        env,
-        captured_env,
-        upvalues,
-        with_stack,
-    );
+    let mut vm = Vm::new_with_globals_upvalues_and_with_stack(&bytecode, env, upvalues, with_stack);
     if let Some(name) = immutable_function_name {
         vm.env.set_immutable_function_name(name);
     }
-    vm.capture_writeback = capture_writeback.clone();
-    vm.refresh_from_caller(caller_env);
     let result = vm.run_completion();
-    drive(
-        result,
-        vm,
-        &bytecode,
-        caller_env,
-        refresh_captured_slots_on_resume,
-        capture_writeback,
-    )
+    drive(result, vm, &bytecode)
 }
 
 /// Resumes a generator suspended at a `yield`, delivering `resume`.
 fn run_from_yield(
     snapshot: GeneratorSnapshot,
     resume: Resume,
-    caller_env: &mut CallEnv,
+    _caller_env: &mut CallEnv,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     let bytecode = snapshot.bytecode.clone();
-    let mut vm = Vm::new_with_globals_captures_upvalues_and_with_stack(
+    let mut vm = Vm::new_with_globals_upvalues_and_with_stack(
         &bytecode,
         snapshot.env,
-        snapshot.captured_env,
         snapshot.upvalues,
         snapshot.with_stack,
     );
     if let Some(name) = snapshot.immutable_function_name {
         vm.env.set_immutable_function_name(name);
     }
-    vm.capture_writeback = snapshot.capture_writeback.clone();
     vm.ip = snapshot.ip;
     vm.stack = snapshot.stack;
     vm.locals = snapshot.locals;
@@ -487,13 +232,6 @@ fn run_from_yield(
     vm.pending_jump = snapshot.pending_jump;
     vm.try_stack = snapshot.try_stack;
     vm.disposable_scopes = snapshot.disposable_scopes;
-    let capture_writeback = snapshot.capture_writeback;
-    if snapshot.refresh_captured_slots_on_resume {
-        refresh_activation_captures_from_realm(&mut vm);
-        vm.refresh_from_captured_env();
-    }
-    vm.refresh_from_caller(caller_env);
-    let refresh_captured_slots_on_resume = snapshot.refresh_captured_slots_on_resume;
 
     // A suspension inside a `yield*` forwards the resume to the inner iterator:
     // the re-entered `Op::YieldDelegate` reads `resume_mode` and decides how to
@@ -506,12 +244,8 @@ fn run_from_yield(
                 Resume::Return(value)
                     if matches!(snapshot.suspension, SuspensionKind::DelegateYieldAsync) =>
                 {
-                    let snapshot = vm.into_snapshot(
-                        bytecode.clone(),
-                        SuspensionKind::DelegateYieldReturnAwait,
-                        refresh_captured_slots_on_resume,
-                        capture_writeback,
-                    );
+                    let snapshot = vm
+                        .into_snapshot(bytecode.clone(), SuspensionKind::DelegateYieldReturnAwait);
                     return Ok((
                         GeneratorState::SuspendedYield(Box::new(snapshot)),
                         GeneratorOutcome::Await(value),
@@ -523,14 +257,7 @@ fn run_from_yield(
                 Resume::Throw(value) => super::vm_result::ResumeMode::Throw(value),
             });
             let result = vm.run_completion();
-            return drive(
-                result,
-                vm,
-                &bytecode,
-                caller_env,
-                refresh_captured_slots_on_resume,
-                capture_writeback,
-            );
+            return drive(result, vm, &bytecode);
         }
         SuspensionKind::DelegateAwait => {
             vm.resume_mode = Some(match resume {
@@ -541,14 +268,7 @@ fn run_from_yield(
                 }
             });
             let result = vm.run_completion();
-            return drive(
-                result,
-                vm,
-                &bytecode,
-                caller_env,
-                refresh_captured_slots_on_resume,
-                capture_writeback,
-            );
+            return drive(result, vm, &bytecode);
         }
         SuspensionKind::DelegateYieldReturnAwait => {
             vm.resume_mode = Some(match resume {
@@ -561,14 +281,7 @@ fn run_from_yield(
                 }
             });
             let result = vm.run_completion();
-            return drive(
-                result,
-                vm,
-                &bytecode,
-                caller_env,
-                refresh_captured_slots_on_resume,
-                capture_writeback,
-            );
+            return drive(result, vm, &bytecode);
         }
         SuspensionKind::DelegateAwaitReturn => {
             vm.resume_mode = Some(match resume {
@@ -579,14 +292,7 @@ fn run_from_yield(
                 }
             });
             let result = vm.run_completion();
-            return drive(
-                result,
-                vm,
-                &bytecode,
-                caller_env,
-                refresh_captured_slots_on_resume,
-                capture_writeback,
-            );
+            return drive(result, vm, &bytecode);
         }
         SuspensionKind::DelegateAwaitReturnValue => {
             vm.resume_mode = Some(match resume {
@@ -599,14 +305,7 @@ fn run_from_yield(
                 }
             });
             let result = vm.run_completion();
-            return drive_with_return_already_awaited(
-                result,
-                vm,
-                &bytecode,
-                caller_env,
-                refresh_captured_slots_on_resume,
-                capture_writeback,
-            );
+            return drive_with_return_already_awaited(result, vm, &bytecode);
         }
         SuspensionKind::Ordinary => {}
     }
@@ -626,7 +325,6 @@ fn run_from_yield(
         Resume::Return(value) | Resume::ReturnAlreadyAwaited(value) => match vm.return_value(value)
         {
             Ok(Some(returned)) => {
-                vm.propagate_to_caller(caller_env);
                 let outcome = if return_already_awaited {
                     GeneratorOutcome::ReturnAlreadyAwaited(returned)
                 } else {
@@ -638,30 +336,13 @@ fn run_from_yield(
             Err(error) => Err(error),
         },
     };
-    if let Err(error) = started {
-        // The injected throw/return had no handler: the generator is done.
-        vm.propagate_to_caller(caller_env);
-        return Err(error);
-    }
+    // An injected throw/return with no handler completes the generator.
+    started?;
     let result = vm.run_completion();
     if return_already_awaited {
-        drive_with_return_already_awaited(
-            result,
-            vm,
-            &bytecode,
-            caller_env,
-            refresh_captured_slots_on_resume,
-            capture_writeback,
-        )
+        drive_with_return_already_awaited(result, vm, &bytecode)
     } else {
-        drive(
-            result,
-            vm,
-            &bytecode,
-            caller_env,
-            refresh_captured_slots_on_resume,
-            capture_writeback,
-        )
+        drive(result, vm, &bytecode)
     }
 }
 
@@ -673,19 +354,10 @@ fn drive(
     result: Result<Completion, RuntimeError>,
     vm: Vm<'_>,
     bytecode: &Rc<Bytecode>,
-    caller_env: &mut CallEnv,
-    refresh_captured_slots_on_resume: bool,
-    capture_writeback: Option<CaptureWriteback>,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
-    vm.propagate_to_caller(caller_env);
     match result {
         Ok(Completion::Yield(value)) => {
-            let snapshot = vm.into_snapshot(
-                bytecode.clone(),
-                SuspensionKind::Ordinary,
-                refresh_captured_slots_on_resume,
-                capture_writeback,
-            );
+            let snapshot = vm.into_snapshot(bytecode.clone(), SuspensionKind::Ordinary);
             Ok((
                 GeneratorState::SuspendedYield(Box::new(snapshot)),
                 GeneratorOutcome::Yield(value),
@@ -696,12 +368,7 @@ fn drive(
             // delivers the fulfillment value (or injects a throw) at the await
             // site. Only the outcome tag differs, so the driver routes the
             // suspension to a promise reaction instead of to a consumer.
-            let snapshot = vm.into_snapshot(
-                bytecode.clone(),
-                SuspensionKind::Ordinary,
-                refresh_captured_slots_on_resume,
-                capture_writeback,
-            );
+            let snapshot = vm.into_snapshot(bytecode.clone(), SuspensionKind::Ordinary);
             Ok((
                 GeneratorState::SuspendedYield(Box::new(snapshot)),
                 GeneratorOutcome::Await(value),
@@ -710,60 +377,36 @@ fn drive(
         Ok(Completion::YieldDelegate(value)) => {
             // Suspended inside a `yield*`: the yielded value is the inner
             // iterator's result object, returned to the outer caller unwrapped.
-            let snapshot = vm.into_snapshot(
-                bytecode.clone(),
-                SuspensionKind::DelegateYield,
-                refresh_captured_slots_on_resume,
-                capture_writeback,
-            );
+            let snapshot = vm.into_snapshot(bytecode.clone(), SuspensionKind::DelegateYield);
             Ok((
                 GeneratorState::SuspendedYield(Box::new(snapshot)),
                 GeneratorOutcome::YieldDelegate(value),
             ))
         }
         Ok(Completion::YieldDelegateAsync(value)) => {
-            let snapshot = vm.into_snapshot(
-                bytecode.clone(),
-                SuspensionKind::DelegateYieldAsync,
-                refresh_captured_slots_on_resume,
-                capture_writeback,
-            );
+            let snapshot = vm.into_snapshot(bytecode.clone(), SuspensionKind::DelegateYieldAsync);
             Ok((
                 GeneratorState::SuspendedYield(Box::new(snapshot)),
                 GeneratorOutcome::YieldDelegate(value),
             ))
         }
         Ok(Completion::YieldDelegateAwait(value)) => {
-            let snapshot = vm.into_snapshot(
-                bytecode.clone(),
-                SuspensionKind::DelegateAwait,
-                refresh_captured_slots_on_resume,
-                capture_writeback,
-            );
+            let snapshot = vm.into_snapshot(bytecode.clone(), SuspensionKind::DelegateAwait);
             Ok((
                 GeneratorState::SuspendedYield(Box::new(snapshot)),
                 GeneratorOutcome::Await(value),
             ))
         }
         Ok(Completion::YieldDelegateAwaitReturn(value)) => {
-            let snapshot = vm.into_snapshot(
-                bytecode.clone(),
-                SuspensionKind::DelegateAwaitReturn,
-                refresh_captured_slots_on_resume,
-                capture_writeback,
-            );
+            let snapshot = vm.into_snapshot(bytecode.clone(), SuspensionKind::DelegateAwaitReturn);
             Ok((
                 GeneratorState::SuspendedYield(Box::new(snapshot)),
                 GeneratorOutcome::Await(value),
             ))
         }
         Ok(Completion::YieldDelegateAwaitReturnValue(value)) => {
-            let snapshot = vm.into_snapshot(
-                bytecode.clone(),
-                SuspensionKind::DelegateAwaitReturnValue,
-                refresh_captured_slots_on_resume,
-                capture_writeback,
-            );
+            let snapshot =
+                vm.into_snapshot(bytecode.clone(), SuspensionKind::DelegateAwaitReturnValue);
             Ok((
                 GeneratorState::SuspendedYield(Box::new(snapshot)),
                 GeneratorOutcome::Await(value),
@@ -787,26 +430,13 @@ fn drive_with_return_already_awaited(
     result: Result<Completion, RuntimeError>,
     vm: Vm<'_>,
     bytecode: &Rc<Bytecode>,
-    caller_env: &mut CallEnv,
-    refresh_captured_slots_on_resume: bool,
-    capture_writeback: Option<CaptureWriteback>,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     match result {
-        Ok(Completion::Return(value)) => {
-            vm.propagate_to_caller(caller_env);
-            Ok((
-                GeneratorState::Completed,
-                GeneratorOutcome::ReturnAlreadyAwaited(value),
-            ))
-        }
-        other => drive(
-            other,
-            vm,
-            bytecode,
-            caller_env,
-            refresh_captured_slots_on_resume,
-            capture_writeback,
-        ),
+        Ok(Completion::Return(value)) => Ok((
+            GeneratorState::Completed,
+            GeneratorOutcome::ReturnAlreadyAwaited(value),
+        )),
+        other => drive(other, vm, bytecode),
     }
 }
 

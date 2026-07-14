@@ -616,6 +616,15 @@ fn evaluates_direct_eval_annex_b_function_bindings_in_function_frames() {
 fn eval_annex_b_function_declarations_capture_block_scoped_binding() {
     assert_eq!(
         eval(
+            "{ function existingAnnexB() { return 'first'; } } \
+             var before = existingAnnexB(); \
+             eval('{ function existingAnnexB() { return \\\"second\\\"; } }'); \
+             before + ':' + existingAnnexB();"
+        ),
+        Ok(Value::String("first:second".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
             "var initialBV, currentBV; \
              eval('{ function f() { initialBV = f; f = 123; currentBV = f; return \"decl\"; } }'); \
              f(); \
@@ -686,6 +695,16 @@ fn sloppy_direct_eval_allows_annex_b_catch_parameter_redeclarations() {
 
 #[test]
 fn evaluates_indirect_eval_against_global_scope() {
+    assert_eq!(
+        eval(
+            "var nonStrict, strict; let inherited = 'global'; \
+             { let inherited = 'block'; \
+               nonStrict = (0, eval)('inherited'); \
+               strict = (0, eval)('\\\"use strict\\\"; inherited'); } \
+             nonStrict + ':' + strict;"
+        ),
+        Ok(Value::String("global:global".to_owned().into()))
+    );
     assert_eq!(
         eval(
             "let local = 1; \

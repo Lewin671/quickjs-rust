@@ -1,46 +1,366 @@
 //! The call-frame environment view threaded through the runtime.
 //!
-//! Historically every builtin and every call boundary received a fully
-//! materialized `HashMap<String, Value>` holding the realm intrinsics, the true
-//! globals, and the frame's own locals, rebuilt by cloning on each call. That
-//! clone dominated call cost (see `tasks/T011-call-performance.md`).
+//! Ordinary JavaScript bindings do not live here: bytecode frames keep
+//! slot-indexed values and captured slots share indexed [`Upvalue`] cells.
+//! [`CallEnv`] carries only the cross-call runtime context that is still
+//! naturally name-addressed:
 //!
-//! [`CallEnv`] replaces that flat map with a two-layer view:
+//! - `realm` is shared into every frame. It owns intrinsics, true global
+//!   bindings, and the lazily allocated cells for captured globals, so global
+//!   writes are immediately visible without copying or write-back.
+//! - `frame_bindings` is a small cell vector for call metadata and native or
+//!   dynamic compatibility consumers. Ordinary user-function setup inserts
+//!   directly into it and never builds a per-call locals `HashMap`.
+//! - `deopt_bindings` is the explicit name-to-cell map allocated only for
+//!   direct `eval`, `with`, or a dynamic scope inherited from them.
 //!
-//! - `realm`: an `Rc<RefCell<HashMap>>` shared by `Rc::clone` into every frame.
-//!   It owns the runtime intrinsics and the script's true global bindings.
-//!   Sharing the cell means a reassigned builtin (`Array = X`) is visible
-//!   everywhere for free, and a sloppy-mode global write is seen by every frame
-//!   without a write-back scan.
-//! - `locals`: the current frame's own bindings — `this`, `arguments`,
-//!   parameters, captured closure variables, and caller-scope bindings the
-//!   callee references. Only this layer is cloned per call.
-//!
-//! Reads check `locals` first, then take a *short* `realm` borrow and clone the
-//! value out. A borrow is never held across a call back into user code
+//! Reads take only short borrows and clone values out. A borrow is never held
+//! across a call back into user code
 //! (getters, setters, Proxy traps, `valueOf`/`toString`, iterators): callers
 //! copy the needed value out, drop the borrow, then call.
 
 use std::{
-    cell::RefCell,
+    cell::{Ref, RefCell, RefMut},
     collections::{HashMap, HashSet},
+    fmt,
+    ops::Deref,
     rc::Rc,
 };
 
-use crate::{Function, Value, private::PrivateEnvironment};
+use crate::{Function, ObjectRef, Value, function::Upvalue, private::PrivateEnvironment};
 
-/// The shared realm binding table: intrinsics plus the script's true globals.
-pub(crate) type Realm = Rc<RefCell<HashMap<String, Value>>>;
+/// Shared realm state: intrinsics, true globals, and captured-global cells.
+pub(crate) struct RealmState {
+    bindings: RefCell<HashMap<String, Value>>,
+    binding_cells: DynamicBindings,
+}
+
+impl RealmState {
+    fn new(bindings: HashMap<String, Value>) -> Self {
+        Self {
+            bindings: RefCell::new(bindings),
+            binding_cells: DynamicBindings::new(),
+        }
+    }
+
+    pub(crate) fn borrow(&self) -> Ref<'_, HashMap<String, Value>> {
+        self.bindings.borrow()
+    }
+
+    pub(crate) fn borrow_mut(&self) -> RefMut<'_, HashMap<String, Value>> {
+        self.bindings.borrow_mut()
+    }
+}
+
+impl fmt::Debug for RealmState {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RealmState")
+            .field("bindings", &self.bindings.borrow())
+            .finish_non_exhaustive()
+    }
+}
+
+pub(crate) type Realm = Rc<RealmState>;
+
+pub(crate) fn new_realm(bindings: HashMap<String, Value>) -> Realm {
+    Rc::new(RealmState::new(bindings))
+}
 pub(crate) type GlobalLexicalBindings = Rc<RefCell<HashSet<String>>>;
 pub(crate) type GlobalLexicalValues = Rc<RefCell<HashMap<String, Value>>>;
 pub(crate) type ImmutableLexicalBindings = Rc<RefCell<HashSet<String>>>;
-pub(crate) type ModuleImports = HashMap<String, (Realm, String)>;
+pub(crate) type ModuleImports = HashMap<String, (DynamicBindings, String)>;
 
-/// A two-layer environment view: a shared realm cell plus this frame's locals.
+#[derive(Default)]
+struct FrameBindings(RefCell<Vec<(String, Upvalue)>>);
+
+impl Clone for FrameBindings {
+    fn clone(&self) -> Self {
+        Self(RefCell::new(self.0.borrow().clone()))
+    }
+}
+
+impl FrameBindings {
+    fn from_values(values: HashMap<String, Value>) -> Self {
+        Self(RefCell::new(
+            values
+                .into_iter()
+                .map(|(name, value)| (name, Upvalue::new(value)))
+                .collect(),
+        ))
+    }
+
+    fn get(&self, name: &str) -> Option<Value> {
+        self.0
+            .borrow()
+            .iter()
+            .rev()
+            .find(|(candidate, _)| candidate == name)
+            .map(|(_, value)| value.get())
+    }
+
+    fn cell(&self, name: &str) -> Option<Upvalue> {
+        self.0
+            .borrow()
+            .iter()
+            .rev()
+            .find(|(candidate, _)| candidate == name)
+            .map(|(_, value)| value.clone())
+    }
+
+    fn contains_key(&self, name: &str) -> bool {
+        self.0
+            .borrow()
+            .iter()
+            .any(|(candidate, _)| candidate == name)
+    }
+
+    fn insert(&self, name: String, value: Value) -> Option<Value> {
+        let mut bindings = self.0.borrow_mut();
+        if let Some((_, existing)) = bindings
+            .iter_mut()
+            .rev()
+            .find(|(candidate, _)| candidate == &name)
+        {
+            let previous = existing.get();
+            existing.set(value);
+            return Some(previous);
+        }
+        bindings.push((name, Upvalue::new(value)));
+        None
+    }
+
+    fn insert_cell(&self, name: String, value: Upvalue) {
+        let mut bindings = self.0.borrow_mut();
+        if let Some((_, existing)) = bindings
+            .iter_mut()
+            .rev()
+            .find(|(candidate, _)| candidate == &name)
+        {
+            *existing = value;
+            return;
+        }
+        bindings.push((name, value));
+    }
+
+    fn push(&self, name: String, value: Value) {
+        self.0.borrow_mut().push((name, Upvalue::new(value)));
+    }
+
+    fn set(&self, name: &str, value: Value) -> bool {
+        let mut bindings = self.0.borrow_mut();
+        let Some((_, existing)) = bindings
+            .iter_mut()
+            .rev()
+            .find(|(candidate, _)| candidate == name)
+        else {
+            return false;
+        };
+        existing.set(value);
+        true
+    }
+
+    fn remove(&self, name: &str) -> Option<Value> {
+        let mut bindings = self.0.borrow_mut();
+        let index = bindings
+            .iter()
+            .rposition(|(candidate, _)| candidate == name)?;
+        Some(bindings.remove(index).1.get())
+    }
+
+    fn replace_value(&self, expected: &Value, replacement: &Value) {
+        for (_, value) in self.0.borrow().iter() {
+            if value.get() == *expected {
+                value.set(replacement.clone());
+            }
+        }
+    }
+
+    fn snapshot(&self) -> HashMap<String, Value> {
+        self.0
+            .borrow()
+            .iter()
+            .map(|(name, value)| (name.clone(), value.get()))
+            .collect()
+    }
+
+    fn fork_values(&self) -> Self {
+        Self(RefCell::new(
+            self.0
+                .borrow()
+                .iter()
+                .map(|(name, value)| (name.clone(), Upvalue::new(value.get())))
+                .collect(),
+        ))
+    }
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct DynamicBindings(Rc<RefCell<HashMap<String, Upvalue>>>);
+
+impl DynamicBindings {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    pub(crate) fn from_values(values: HashMap<String, Value>) -> Self {
+        Self(Rc::new(RefCell::new(
+            values
+                .into_iter()
+                .map(|(name, value)| (name, Upvalue::new(value)))
+                .collect(),
+        )))
+    }
+
+    pub(crate) fn fork_cells(&self) -> Self {
+        Self(Rc::new(RefCell::new(self.0.borrow().clone())))
+    }
+
+    pub(crate) fn borrow(&self) -> BindingSnapshot {
+        BindingSnapshot(self.snapshot())
+    }
+
+    pub(crate) fn borrow_mut(&self) -> DynamicBindingsMut<'_> {
+        DynamicBindingsMut {
+            bindings: self,
+            values: self.snapshot(),
+        }
+    }
+
+    pub(crate) fn get(&self, name: &str) -> Option<Value> {
+        self.0.borrow().get(name).map(Upvalue::get)
+    }
+
+    pub(crate) fn cell(&self, name: &str) -> Option<Upvalue> {
+        self.0.borrow().get(name).cloned()
+    }
+
+    pub(crate) fn insert(&self, name: String, value: Value) -> Option<Value> {
+        let mut bindings = self.0.borrow_mut();
+        if let Some(binding) = bindings.get(&name) {
+            let previous = binding.get();
+            binding.set(value);
+            return Some(previous);
+        }
+        bindings.insert(name, Upvalue::new(value));
+        None
+    }
+
+    pub(crate) fn insert_cell(&self, name: String, upvalue: Upvalue) {
+        self.0.borrow_mut().insert(name, upvalue);
+    }
+
+    pub(crate) fn set(&self, name: &str, value: Value) -> bool {
+        let Some(binding) = self.cell(name) else {
+            return false;
+        };
+        binding.set(value);
+        true
+    }
+
+    pub(crate) fn remove(&self, name: &str) -> Option<Value> {
+        self.0
+            .borrow_mut()
+            .remove(name)
+            .map(|binding| binding.get())
+    }
+
+    pub(crate) fn remove_cell_if(&self, name: &str, expected: &Upvalue) -> bool {
+        let mut bindings = self.0.borrow_mut();
+        let matches = bindings
+            .get(name)
+            .is_some_and(|binding| binding.ptr_eq(expected));
+        if matches {
+            bindings.remove(name);
+        }
+        matches
+    }
+
+    pub(crate) fn contains_key(&self, name: &str) -> bool {
+        self.0.borrow().contains_key(name)
+    }
+
+    pub(crate) fn snapshot(&self) -> HashMap<String, Value> {
+        self.0
+            .borrow()
+            .iter()
+            .map(|(name, binding)| (name.clone(), binding.get()))
+            .collect()
+    }
+
+    pub(crate) fn names(&self) -> Vec<String> {
+        self.0.borrow().keys().cloned().collect()
+    }
+
+    pub(crate) fn cells(&self) -> Vec<(String, Upvalue)> {
+        self.0
+            .borrow()
+            .iter()
+            .map(|(name, binding)| (name.clone(), binding.clone()))
+            .collect()
+    }
+}
+
+/// Owned compatibility view for the few dynamic-name consumers that still
+/// need to enumerate a frame. The authoritative storage is a name-to-cell map;
+/// this value snapshot never participates in binding identity or write-back.
+pub(crate) struct BindingSnapshot(HashMap<String, Value>);
+
+pub(crate) struct DynamicBindingsMut<'a> {
+    bindings: &'a DynamicBindings,
+    values: HashMap<String, Value>,
+}
+
+impl Deref for DynamicBindingsMut<'_> {
+    type Target = HashMap<String, Value>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.values
+    }
+}
+
+impl std::ops::DerefMut for DynamicBindingsMut<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.values
+    }
+}
+
+impl Drop for DynamicBindingsMut<'_> {
+    fn drop(&mut self) {
+        let retained = self.values.keys().cloned().collect::<HashSet<_>>();
+        for name in self.bindings.names() {
+            if !retained.contains(&name) {
+                self.bindings.remove(&name);
+            }
+        }
+        for (name, value) in &self.values {
+            self.bindings.insert(name.clone(), value.clone());
+        }
+    }
+}
+
+impl Deref for BindingSnapshot {
+    type Target = HashMap<String, Value>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl IntoIterator for BindingSnapshot {
+    type Item = (String, Value);
+    type IntoIter = std::collections::hash_map::IntoIter<String, Value>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+/// Cross-call runtime context: shared realm metadata plus a small frame view.
 ///
-/// Cloning a `CallEnv` shares the realm by `Rc::clone` and copies only the
-/// (small) frame locals, so a per-call clone no longer copies the realm.
-#[derive(Clone)]
+/// Bytecode lexical bindings remain in VM slots/upvalue cells. Cloning this
+/// value shares the realm and explicit deopt cells; it copies only the small
+/// compatibility frame vector.
 #[allow(dead_code)]
 pub(crate) struct CallEnv {
     realm: Realm,
@@ -48,7 +368,8 @@ pub(crate) struct CallEnv {
     global_lexical_values: GlobalLexicalValues,
     expose_global_lexical_values: bool,
     immutable_lexical_bindings: ImmutableLexicalBindings,
-    locals: HashMap<String, Value>,
+    frame_bindings: FrameBindings,
+    deopt_bindings: Option<DynamicBindings>,
     catch_bindings: HashSet<String>,
     /// The immutable name binding of a named function expression, for this
     /// frame only. Assigning to it is a silent no-op in sloppy mode and a
@@ -67,16 +388,6 @@ pub(crate) struct CallEnv {
     /// intentionally not part of ordinary function environments; the VM sets it
     /// only while invoking the intrinsic eval function as a direct eval.
     direct_eval_with_stack: Vec<Value>,
-    /// The activation captured-env cell for the frame that produced this view.
-    /// User callbacks use it to distinguish same-activation closure write-back
-    /// from an unrelated caller's same-named local binding.
-    activation_captured_env: Option<Rc<RefCell<HashMap<String, Value>>>>,
-    /// The captured-env cell that supplied this frame's closure bindings.
-    /// Sibling closures called through an intermediate user frame compare
-    /// against this source so they can still write through shared outer
-    /// bindings.
-    captured_binding_source_env: Option<Rc<RefCell<HashMap<String, Value>>>>,
-    parameter_captured_envs: Vec<Rc<RefCell<HashMap<String, Value>>>>,
     /// The realm's dynamic-import host (module graph + resolver + active
     /// referrer), shared by `Rc::clone` into every frame and the job queue so a
     /// dynamic `import()` reached at any depth can load and cache modules. `None`
@@ -87,12 +398,44 @@ pub(crate) struct CallEnv {
     /// Each entry points at the exporting module's shared lexical export cell
     /// and the local binding name that backs that export.
     module_imports: ModuleImports,
+    /// Exported bindings of the currently executing module body. This is set
+    /// only on the module frame (and its suspended TLA continuation), so an
+    /// ordinary nested function with a same-named local cannot accidentally
+    /// reuse a module export cell.
+    module_live_bindings: Option<DynamicBindings>,
     /// The Test262 `$262.agent` execution context for this thread's agent,
     /// threaded like `module_host` so native `Atomics`/`$262.agent` hooks reach
     /// it. `None` outside the agents harness. Gated so the default build's
     /// struct layout and per-call clone cost are unchanged.
     #[cfg(feature = "agents")]
     agent_context: Option<crate::agent::AgentContextRef>,
+}
+
+impl Clone for CallEnv {
+    fn clone(&self) -> Self {
+        Self {
+            realm: Rc::clone(&self.realm),
+            global_lexical_bindings: Rc::clone(&self.global_lexical_bindings),
+            global_lexical_values: Rc::clone(&self.global_lexical_values),
+            expose_global_lexical_values: self.expose_global_lexical_values,
+            immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
+            // A cloned execution view is an isolated dynamic environment. The
+            // cells themselves are shared only when a direct-eval/with deopt
+            // path explicitly requests that identity.
+            frame_bindings: self.frame_bindings.clone(),
+            deopt_bindings: self.deopt_bindings.clone(),
+            catch_bindings: self.catch_bindings.clone(),
+            immutable_function_name: self.immutable_function_name.clone(),
+            direct_eval_var_conflicts: self.direct_eval_var_conflicts.clone(),
+            private_environment: self.private_environment.clone(),
+            direct_eval_with_stack: self.direct_eval_with_stack.clone(),
+            module_host: self.module_host.clone(),
+            module_imports: self.module_imports.clone(),
+            module_live_bindings: self.module_live_bindings.clone(),
+            #[cfg(feature = "agents")]
+            agent_context: self.agent_context.clone(),
+        }
+    }
 }
 
 impl std::fmt::Debug for CallEnv {
@@ -115,30 +458,18 @@ impl std::fmt::Debug for CallEnv {
                 "immutable_lexical_bindings",
                 &self.immutable_lexical_bindings.borrow().len(),
             )
-            .field("locals", &self.locals)
+            .field("frame_bindings", &self.snapshot_locals())
+            .field("deopt_bindings", &self.deopt_bindings.is_some())
             .field("catch_bindings", &self.catch_bindings)
             .field("direct_eval_var_conflicts", &self.direct_eval_var_conflicts)
             .field("direct_eval_with_stack", &self.direct_eval_with_stack.len())
             .field("module_host", &self.module_host.is_some())
-            .field(
-                "activation_captured_env",
-                &self.activation_captured_env.is_some(),
-            )
-            .field(
-                "captured_binding_source_env",
-                &self.captured_binding_source_env.is_some(),
-            )
-            .field(
-                "parameter_captured_envs",
-                &self.parameter_captured_envs.len(),
-            )
             .field("module_imports", &self.module_imports.keys())
+            .field("module_live_bindings", &self.module_live_bindings.is_some())
             .finish()
     }
 }
 
-// The realm-cell migration (tasks/T011-call-performance.md) wires these in
-// across the crate; until then the foundation type is intentionally unused.
 #[allow(dead_code)]
 impl CallEnv {
     /// Builds an environment over `realm` with empty locals.
@@ -149,17 +480,16 @@ impl CallEnv {
             global_lexical_values: Rc::new(RefCell::new(HashMap::new())),
             expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
-            locals: HashMap::new(),
+            frame_bindings: FrameBindings::default(),
+            deopt_bindings: None,
             catch_bindings: HashSet::new(),
             immutable_function_name: None,
             direct_eval_var_conflicts: HashSet::new(),
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
-            activation_captured_env: None,
-            captured_binding_source_env: None,
-            parameter_captured_envs: Vec::new(),
             module_host: None,
             module_imports: HashMap::new(),
+            module_live_bindings: None,
             #[cfg(feature = "agents")]
             agent_context: None,
         }
@@ -192,7 +522,7 @@ impl CallEnv {
     pub(crate) fn set_module_import(
         &mut self,
         local_name: String,
-        exported_bindings: Realm,
+        exported_bindings: DynamicBindings,
         exported_local_name: String,
     ) {
         self.module_imports
@@ -204,11 +534,17 @@ impl CallEnv {
         let (bindings, exported_local_name) = self.module_imports.get(local_name)?;
         Some(
             bindings
-                .borrow()
                 .get(exported_local_name)
-                .cloned()
                 .unwrap_or_else(|| Value::Function(Function::uninitialized_lexical_marker())),
         )
+    }
+
+    /// Returns the exporter's shared cell backing a live module import.
+    /// Capturing an import must retain this identity instead of boxing the
+    /// value currently observed by the importing module frame.
+    pub(crate) fn module_import_cell(&self, local_name: &str) -> Option<Upvalue> {
+        let (bindings, exported_local_name) = self.module_imports.get(local_name)?;
+        bindings.cell(exported_local_name)
     }
 
     pub(crate) fn has_module_import(&self, local_name: &str) -> bool {
@@ -223,54 +559,62 @@ impl CallEnv {
         self.module_imports = imports;
     }
 
+    pub(crate) fn set_module_live_bindings(&mut self, bindings: DynamicBindings) {
+        self.module_live_bindings = Some(bindings);
+    }
+
+    pub(crate) fn module_live_binding_cell(&self, name: &str) -> Option<Upvalue> {
+        self.module_live_bindings
+            .as_ref()
+            .and_then(|bindings| bindings.cell(name))
+    }
+
     /// Builds a standalone environment over a fresh, empty realm. Used by the
     /// no-context conversion helpers (`to_js_string`, `array_like_values`,
     /// `parse_json_text`) that run without a live VM; intrinsic lookups simply
     /// return `None`, matching the prior empty-`HashMap` behavior.
     pub(crate) fn detached() -> Self {
         Self {
-            realm: Rc::new(RefCell::new(HashMap::new())),
+            realm: new_realm(HashMap::new()),
             global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             global_lexical_values: Rc::new(RefCell::new(HashMap::new())),
             expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
-            locals: HashMap::new(),
+            frame_bindings: FrameBindings::default(),
+            deopt_bindings: None,
             catch_bindings: HashSet::new(),
             immutable_function_name: None,
             direct_eval_var_conflicts: HashSet::new(),
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
-            activation_captured_env: None,
-            captured_binding_source_env: None,
-            parameter_captured_envs: Vec::new(),
             module_host: None,
             module_imports: HashMap::new(),
+            module_live_bindings: None,
             #[cfg(feature = "agents")]
             agent_context: None,
         }
     }
 
-    /// Wraps an owned flat map as a detached environment: the whole map becomes
-    /// the realm layer with empty locals. Used by capture-env paths (function
-    /// creation env, snapshots) that still carry a flat `HashMap`.
+    /// Wraps an owned flat map as a detached realm with no frame bindings.
+    /// Used by native/dynamic compatibility entry points that receive an owned
+    /// map rather than a live VM realm.
     pub(crate) fn from_map(map: HashMap<String, Value>) -> Self {
         Self {
-            realm: Rc::new(RefCell::new(map)),
+            realm: new_realm(map),
             global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             global_lexical_values: Rc::new(RefCell::new(HashMap::new())),
             expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
-            locals: HashMap::new(),
+            frame_bindings: FrameBindings::default(),
+            deopt_bindings: None,
             catch_bindings: HashSet::new(),
             immutable_function_name: None,
             direct_eval_var_conflicts: HashSet::new(),
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
-            activation_captured_env: None,
-            captured_binding_source_env: None,
-            parameter_captured_envs: Vec::new(),
             module_host: None,
             module_imports: HashMap::new(),
+            module_live_bindings: None,
             #[cfg(feature = "agents")]
             agent_context: None,
         }
@@ -284,17 +628,16 @@ impl CallEnv {
             global_lexical_values: Rc::new(RefCell::new(HashMap::new())),
             expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
-            locals,
+            frame_bindings: FrameBindings::from_values(locals),
+            deopt_bindings: None,
             catch_bindings: HashSet::new(),
             immutable_function_name: None,
             direct_eval_var_conflicts: HashSet::new(),
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
-            activation_captured_env: None,
-            captured_binding_source_env: None,
-            parameter_captured_envs: Vec::new(),
             module_host: None,
             module_imports: HashMap::new(),
+            module_live_bindings: None,
             #[cfg(feature = "agents")]
             agent_context: None,
         }
@@ -312,7 +655,32 @@ impl CallEnv {
 
     /// Builds an empty frame that shares this environment's realm metadata.
     pub(crate) fn empty_frame(&self) -> Self {
-        self.with_frame_locals(HashMap::new())
+        self.new_function_frame()
+    }
+
+    /// Builds a new ordinary function frame over the same shared realm. Frame
+    /// bindings are inserted directly into the small cell vector by the call
+    /// setup path, avoiding an intermediate name-keyed `HashMap` allocation.
+    pub(crate) fn new_function_frame(&self) -> Self {
+        Self {
+            realm: Rc::clone(&self.realm),
+            global_lexical_bindings: Rc::clone(&self.global_lexical_bindings),
+            global_lexical_values: Rc::clone(&self.global_lexical_values),
+            expose_global_lexical_values: false,
+            immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
+            frame_bindings: FrameBindings::default(),
+            deopt_bindings: None,
+            catch_bindings: self.catch_bindings.clone(),
+            immutable_function_name: None,
+            direct_eval_var_conflicts: self.direct_eval_var_conflicts.clone(),
+            private_environment: self.private_environment.clone(),
+            direct_eval_with_stack: self.direct_eval_with_stack.clone(),
+            module_host: self.module_host.clone(),
+            module_imports: self.module_imports.clone(),
+            module_live_bindings: None,
+            #[cfg(feature = "agents")]
+            agent_context: self.agent_context.clone(),
+        }
     }
 
     /// Builds an indirect-eval global frame. It has no caller locals, but it
@@ -384,9 +752,9 @@ impl CallEnv {
         self.direct_eval_var_conflicts.contains(name)
     }
 
-    /// This frame's own locals layer.
-    pub(crate) fn locals(&self) -> &HashMap<String, Value> {
-        &self.locals
+    /// Owned compatibility snapshot for the few dynamic-name consumers.
+    pub(crate) fn binding_snapshot(&self) -> BindingSnapshot {
+        BindingSnapshot(self.snapshot_locals())
     }
 
     /// Returns the lexical private-name environment for this frame, if any.
@@ -407,70 +775,60 @@ impl CallEnv {
         self.direct_eval_with_stack.clone()
     }
 
-    /// Installs the activation captured-env identity for this frame.
-    pub(crate) fn set_activation_captured_env(&mut self, env: Rc<RefCell<HashMap<String, Value>>>) {
-        self.activation_captured_env = Some(env);
+    pub(crate) fn set_deopt_bindings(&mut self, bindings: DynamicBindings) {
+        self.deopt_bindings = Some(bindings);
     }
 
-    /// Returns the activation captured-env identity for this frame, if known.
-    pub(crate) fn activation_captured_env(&self) -> Option<&Rc<RefCell<HashMap<String, Value>>>> {
-        self.activation_captured_env.as_ref()
+    pub(crate) fn deopt_bindings(&self) -> Option<&DynamicBindings> {
+        self.deopt_bindings.as_ref()
     }
 
-    /// Installs the captured-env cell that supplied this frame's closure
-    /// bindings.
-    pub(crate) fn set_captured_binding_source_env(
-        &mut self,
-        env: Rc<RefCell<HashMap<String, Value>>>,
-    ) {
-        self.captured_binding_source_env = Some(env);
-    }
-
-    /// Returns the captured-env cell that supplied this frame's closure
-    /// bindings, if known.
-    pub(crate) fn captured_binding_source_env(
-        &self,
-    ) -> Option<&Rc<RefCell<HashMap<String, Value>>>> {
-        self.captured_binding_source_env.as_ref()
-    }
-
-    pub(crate) fn set_parameter_captured_envs(
-        &mut self,
-        envs: Vec<Rc<RefCell<HashMap<String, Value>>>>,
-    ) {
-        self.parameter_captured_envs = envs;
-    }
-
-    pub(crate) fn parameter_captured_envs(&self) -> &[Rc<RefCell<HashMap<String, Value>>>] {
-        &self.parameter_captured_envs
-    }
-
-    pub(crate) fn captures_binding(&self, name: &str) -> bool {
-        self.activation_captured_env
+    pub(crate) fn fork_deopt_bindings(&mut self) {
+        self.deopt_bindings = self
+            .deopt_bindings
             .as_ref()
-            .is_some_and(|activation| activation.borrow().contains_key(name))
-            || self
-                .captured_binding_source_env
-                .as_ref()
-                .is_some_and(|source| source.borrow().contains_key(name))
+            .map(DynamicBindings::fork_cells);
+    }
+
+    pub(crate) fn remove_deopt_binding(&mut self, name: &str) {
+        if let Some(bindings) = &self.deopt_bindings {
+            bindings.remove(name);
+        }
+    }
+
+    pub(crate) fn remove_deopt_cell_if(&mut self, name: &str, expected: &Upvalue) {
+        if let Some(bindings) = &self.deopt_bindings {
+            bindings.remove_cell_if(name, expected);
+        }
+    }
+
+    pub(crate) fn remove_frame_binding(&mut self, name: &str) {
+        self.frame_bindings.remove(name);
     }
 
     /// This frame's own locals layer, mutably.
-    pub(crate) fn locals_mut(&mut self) -> &mut HashMap<String, Value> {
-        &mut self.locals
+    pub(crate) fn replace_local_value(&self, expected: &Value, replacement: &Value) {
+        self.frame_bindings.replace_value(expected, replacement);
     }
 
-    /// Consumes the view, returning the frame locals.
-    pub(crate) fn into_locals(self) -> HashMap<String, Value> {
-        self.locals
+    /// Consumes the view, returning a dynamic-name value snapshot.
+    pub(crate) fn into_binding_snapshot(self) -> HashMap<String, Value> {
+        self.snapshot_locals()
     }
 
     /// Looks up `name`: frame locals first, then a short realm borrow. Returns
     /// an owned value because a value behind the realm `RefCell` cannot be
     /// handed out by reference.
     pub(crate) fn get(&self, name: &str) -> Option<Value> {
-        if let Some(value) = self.locals.get(name) {
-            return Some(value.clone());
+        if let Some(value) = self.frame_bindings.get(name) {
+            return Some(value);
+        }
+        if let Some(value) = self
+            .deopt_bindings
+            .as_ref()
+            .and_then(|bindings| bindings.get(name))
+        {
+            return Some(value);
         }
         if let Some(value) = self.realm.borrow().get(name).cloned() {
             return Some(value);
@@ -486,22 +844,108 @@ impl CallEnv {
         self.realm.borrow().get(name).cloned()
     }
 
+    /// Returns the one shared cell for a captured realm binding, creating it
+    /// lazily from the realm's current value on first capture.
+    pub(crate) fn realm_binding_cell(&self, name: &str) -> Option<Upvalue> {
+        let value = self.realm.borrow().get(name).cloned()?;
+        if let Some(cell) = self.realm.binding_cells.cell(name) {
+            return Some(cell);
+        }
+        let cell = Upvalue::new(value);
+        self.realm
+            .binding_cells
+            .insert_cell(name.to_owned(), cell.clone());
+        Some(cell)
+    }
+
+    pub(crate) fn remove_realm(&self, name: &str) -> Option<Value> {
+        let removed = self.realm.borrow_mut().remove(name);
+        if let Some(cell) = self.realm.binding_cells.cell(name) {
+            cell.set(Value::Function(Function::uninitialized_lexical_marker()));
+        }
+        removed
+    }
+
+    pub(crate) fn is_realm_binding_cell(&self, name: &str, cell: &Upvalue) -> bool {
+        self.realm
+            .binding_cells
+            .cell(name)
+            .is_some_and(|candidate| candidate.ptr_eq(cell))
+    }
+
     /// True if `name` is bound in either layer.
     pub(crate) fn contains_key(&self, name: &str) -> bool {
-        self.locals.contains_key(name) || self.realm.borrow().contains_key(name)
+        self.frame_bindings.contains_key(name)
+            || self
+                .deopt_bindings
+                .as_ref()
+                .is_some_and(|bindings| bindings.contains_key(name))
+            || self.realm.borrow().contains_key(name)
     }
 
     /// Inserts a frame-local binding (`this`, params, captures, caller-scope
     /// bindings). The VM write-back routes these to real locals-or-globals via
     /// `local_slot`. Realm/global definitions use [`CallEnv::insert_realm`].
     pub(crate) fn insert(&mut self, name: String, value: Value) -> Option<Value> {
-        self.locals.insert(name, value)
+        if let Some(bindings) = &self.deopt_bindings
+            && bindings.contains_key(&name)
+        {
+            return bindings.insert(name, value);
+        }
+        self.frame_bindings.insert(name, value)
+    }
+
+    /// Inserts into the explicit dynamic-name environment, creating a binding
+    /// there when direct eval introduces a new function-scope `var`.
+    pub(crate) fn insert_deopt(&mut self, name: String, value: Value) -> Option<Value> {
+        if let Some(bindings) = &self.deopt_bindings {
+            return bindings.insert(name, value);
+        }
+        self.frame_bindings.insert(name, value)
+    }
+
+    /// Inserts into this execution frame even when an outer deopt environment
+    /// has a same-named binding. Strict eval declarations use their own frame.
+    pub(crate) fn insert_frame(&mut self, name: String, value: Value) -> Option<Value> {
+        self.frame_bindings.push(name, value);
+        None
+    }
+
+    /// Installs an existing VM slot cell in this frame view. Native operations
+    /// and callbacks then observe the same binding identity as bytecode, so no
+    /// value snapshot can overwrite a callback's update on return.
+    pub(crate) fn insert_frame_cell(&self, name: String, value: Upvalue) {
+        self.frame_bindings.insert_cell(name, value);
     }
 
     /// Inserts directly into the shared realm cell (builtin install and global
     /// definition). Visible to every frame sharing the realm.
     pub(crate) fn insert_realm(&self, name: String, value: Value) -> Option<Value> {
+        if let Some(cell) = self.realm.binding_cells.cell(&name) {
+            cell.set(value.clone());
+        }
         self.realm.borrow_mut().insert(name, value)
+    }
+
+    /// Mirrors a data-property definition on this realm's global object into
+    /// the realm value table and any already-captured global cell.
+    pub(crate) fn sync_realm_global_object_property(&self, object: &ObjectRef, name: &str) {
+        let is_global_object = self
+            .realm
+            .borrow()
+            .get(crate::GLOBAL_THIS_BINDING)
+            .is_some_and(|global| global.same_value(&Value::Object(object.clone())));
+        if !is_global_object || !self.realm.borrow().contains_key(name) {
+            return;
+        }
+        let Some(property) = object.own_property(name) else {
+            return;
+        };
+        if property.is_accessor() {
+            self.remove_realm(name);
+        } else {
+            self.insert_realm(name.to_owned(), property.value);
+        }
     }
 
     /// Defines `name` in the shared realm only if it is not already bound there.
@@ -517,67 +961,89 @@ impl CallEnv {
 
     /// Removes a frame-local binding.
     pub(crate) fn remove(&mut self, name: &str) -> Option<Value> {
-        self.locals.remove(name)
+        if let Some(bindings) = &self.deopt_bindings
+            && bindings.contains_key(name)
+        {
+            return bindings.remove(name);
+        }
+        self.frame_bindings.remove(name)
     }
 
     /// Mutates an existing frame-local binding in place, if present.
     pub(crate) fn get_local(&self, name: &str) -> Option<Value> {
-        self.locals.get(name).cloned()
+        self.frame_bindings.get(name).or_else(|| {
+            self.deopt_bindings
+                .as_ref()
+                .and_then(|bindings| bindings.get(name))
+        })
     }
 
-    pub(crate) fn get_local_mut(&mut self, name: &str) -> Option<&mut Value> {
-        self.locals.get_mut(name)
+    pub(crate) fn has_frame_binding(&self, name: &str) -> bool {
+        self.frame_bindings.contains_key(name)
+    }
+
+    pub(crate) fn has_local_binding(&self, name: &str) -> bool {
+        self.frame_bindings.contains_key(name)
+            || self
+                .deopt_bindings
+                .as_ref()
+                .is_some_and(|bindings| bindings.contains_key(name))
+    }
+
+    pub(crate) fn frame_binding_cell(&self, name: &str) -> Option<Upvalue> {
+        self.frame_bindings.cell(name)
+    }
+
+    pub(crate) fn set_local(&self, name: &str, value: Value) -> bool {
+        self.frame_bindings.set(name, value.clone())
+            || self
+                .deopt_bindings
+                .as_ref()
+                .is_some_and(|bindings| bindings.set(name, value))
     }
 
     /// A snapshot of just the frame locals layer.
     pub(crate) fn snapshot_locals(&self) -> HashMap<String, Value> {
-        self.locals.clone()
+        let mut locals = self
+            .deopt_bindings
+            .as_ref()
+            .map_or_else(HashMap::new, DynamicBindings::snapshot);
+        locals.extend(self.frame_bindings.snapshot());
+        locals
     }
 
-    /// A fully materialized map merging the shared realm and this frame's
-    /// locals (locals shadow realm). Used by the legacy generator/async capture
-    /// paths that still snapshot a flat `HashMap`; prefer keeping the realm
-    /// shared where possible.
+    /// A cold compatibility snapshot merging the realm and frame view.
+    /// Lexical binding identity never depends on this materialized map.
     pub(crate) fn to_flat_map(&self) -> HashMap<String, Value> {
         let mut map = self.realm.borrow().clone();
-        for (name, value) in &self.locals {
-            map.insert(name.clone(), value.clone());
+        for (name, value) in self.snapshot_locals() {
+            map.insert(name, value);
         }
         map
     }
 
-    /// Builds a `CallEnv` over the same realm, replacing the locals layer.
-    pub(crate) fn with_frame_locals(&self, locals: HashMap<String, Value>) -> Self {
+    /// Builds an isolated dynamic view of this execution frame without a
+    /// name-keyed intermediate map. Explicit direct-eval/with cells are added
+    /// by the VM after it overlays live slot values.
+    pub(crate) fn fork_current_frame_values(&self) -> Self {
         Self {
             realm: Rc::clone(&self.realm),
             global_lexical_bindings: Rc::clone(&self.global_lexical_bindings),
             global_lexical_values: Rc::clone(&self.global_lexical_values),
             expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
-            locals,
+            frame_bindings: self.frame_bindings.fork_values(),
+            deopt_bindings: None,
             catch_bindings: self.catch_bindings.clone(),
-            // A new call frame's function-name binding is set explicitly by
-            // function_env for the callee; it is never inherited from the caller.
-            immutable_function_name: None,
+            immutable_function_name: self.immutable_function_name.clone(),
             direct_eval_var_conflicts: self.direct_eval_var_conflicts.clone(),
             private_environment: self.private_environment.clone(),
             direct_eval_with_stack: self.direct_eval_with_stack.clone(),
-            activation_captured_env: self.activation_captured_env.clone(),
-            captured_binding_source_env: self.captured_binding_source_env.clone(),
-            parameter_captured_envs: self.parameter_captured_envs.clone(),
             module_host: self.module_host.clone(),
             module_imports: self.module_imports.clone(),
+            module_live_bindings: self.module_live_bindings.clone(),
             #[cfg(feature = "agents")]
             agent_context: self.agent_context.clone(),
         }
-    }
-
-    /// Builds a new view over the current execution frame. Unlike a new
-    /// ordinary function call frame, this preserves the named-function-expression
-    /// immutable name marker for direct eval and lexical arrow calls.
-    pub(crate) fn with_current_frame_locals(&self, locals: HashMap<String, Value>) -> Self {
-        let mut env = self.with_frame_locals(locals);
-        env.immutable_function_name = self.immutable_function_name.clone();
-        env
     }
 }

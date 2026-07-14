@@ -123,7 +123,6 @@ impl Vm<'_> {
             false,
         );
         self.apply_call_env(call_env);
-        self.refresh_shared_captured_locals_after_call();
         let result = result?;
         if !is_iterator_result_object(&result) {
             return Err(RuntimeError {
@@ -154,7 +153,6 @@ impl Vm<'_> {
         let mut env = self.current_env();
         let result = iterator_rest_values(&iterator, &next, &mut env);
         self.apply_env(env);
-        self.refresh_shared_captured_locals_after_call();
         if let Some(values) = self.handle_runtime_result(result)? {
             self.stack.push(Value::Array(ArrayRef::new(values)));
         }

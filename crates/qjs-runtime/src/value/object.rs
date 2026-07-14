@@ -6,11 +6,11 @@ use std::{
 };
 
 use crate::private::{PrivateEnvironment, PrivateStorage};
-use crate::{Function, RuntimeError, proxy::ProxyRef};
+use crate::{Function, RuntimeError, function::DynamicBindings, proxy::ProxyRef};
 
 use super::{Property, Value};
 
-type NamespaceBindingCell = Rc<RefCell<HashMap<String, Value>>>;
+type NamespaceBindingCell = DynamicBindings;
 type NamespaceAliasMap = HashMap<String, (NamespaceBindingCell, String)>;
 
 #[derive(Clone)]
@@ -29,9 +29,9 @@ impl ModuleNamespaceBindings {
 
     fn value_for_export(&self, export_name: &str) -> Option<Value> {
         if let Some((lexical, binding_name)) = self.aliases.get(export_name) {
-            return lexical.borrow().get(binding_name).cloned();
+            return lexical.get(binding_name);
         }
-        self.lexical.borrow().get(export_name).cloned()
+        self.lexical.get(export_name)
     }
 }
 

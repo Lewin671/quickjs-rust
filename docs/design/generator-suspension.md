@@ -1,6 +1,6 @@
 # Generator and Async Suspension Design
 
-Status: approved design, 2026-06-09. Implementation tracked by
+Status: implemented; original design approved 2026-06-09. Implementation tracked by
 `tasks/T010-generators-iteration-campaign.md` (slices S1-S4) and
 `tasks/T007-async-foundation-campaign.md` (slice S5+). Keep this document in
 sync as slices land.
@@ -12,18 +12,15 @@ sync as slices land.
   (`crates/qjs-runtime/src/function/call.rs`) -> `eval_function_bytecode` ->
   fresh `Vm` runs to completion. There is no shared frame stack to unwind,
   which makes suspension easy: a frame is just the `Vm` field set.
-- Frame state = `ip: usize`, `stack: Vec<Value>`, `locals:
-  Vec<Option<Value>>`, `globals: HashMap<String,Value>` (the function-local
-  env for function frames), `captured_env: Rc<RefCell<HashMap>>`,
-  `sloppy_global_names`, `try_stack: Vec<TryFrame>`,
-  `pending_throw/pending_return`. All owned, all `Clone`-able; `bytecode` is
-  the only borrow, and `Function` already owns it as `Rc<Bytecode>`.
+- Frame state = `ip`, value stack, dense slot-indexed `locals`, sparse
+  `local_upvalues`, received indexed `upvalues`, `CallEnv`, retained
+  `with_stack`, disposable/try stacks, and pending abrupt completions. All are
+  owned; `bytecode` is the only borrow, and `Function` owns it as
+  `Rc<Bytecode>`.
 - Completion plumbing: `Op::Return` -> `return_value()` (runs finally blocks
-  via `try_stack`), `throw_value()` walks `try_stack`
-  (`bytecode/vm_try.rs`). Cross-frame env import/export with write-back
-  happens in `function/call.rs` (`function_env`,
-  `propagate_function_captures`, `propagate_caller_bindings`); NUL-prefixed
-  internals are excluded (commit d100347).
+  via `try_stack`), and `throw_value()` walks `try_stack`
+  (`bytecode/vm_try.rs`). Captured bindings are shared `Upvalue` cells, so
+  suspension and cross-frame calls require no capture refresh/writeback pass.
 - Promise job queue already exists and is drained deterministically after
   script evaluation: `promise/jobs.rs::drain_promise_jobs`, called from
   `eval_bytecode` (`vm.rs:34`). The array-iterator pattern
@@ -36,9 +33,10 @@ Heap-allocate the frame as a new struct inside the bytecode module (it needs
 `pub(super)` types `TryFrame`, `Op`):
 
 - New file `crates/qjs-runtime/src/bytecode/vm_generator.rs`:
-  - `pub(crate) struct GeneratorFrame { bytecode: Rc<Bytecode>, ip, stack,
-    locals, globals, captured_env, sloppy_global_names, try_stack,
-    pending_throw, pending_return }` — exactly the `Vm` fields, owned.
+  - `GeneratorStart` retains the not-yet-run bytecode, `CallEnv`, received
+    upvalues, with stack, and immutable function name. `GeneratorSnapshot`
+    additionally owns `ip`, stack, locals, local/received upvalues, try and
+    disposable stacks, pending completions, and suspension kind.
   - `pub(crate) enum GeneratorStatus { SuspendedStart, SuspendedYield,
     Executing, Completed }`
   - `pub(crate) struct GeneratorState { status, frame:
@@ -89,14 +87,13 @@ Heap-allocate the frame as a new struct inside the bytecode module (it needs
 New file `crates/qjs-runtime/src/generator.rs` (+ prototype install in
 `builtins.rs`):
 
-- `call_function` (`function/call.rs:55`): if `function.kind == Generator`,
-  build the env via the existing `function_env`, run a fresh `Vm` to
+- `call_function`: if `function.kind == Generator`, build the slot/cell call
+  frame, run a fresh `Vm` to
   `Suspend(InitialYield)`, capture into `GeneratorFrame`, wrap in an
   `ObjectRef` with prototype `%GeneratorPrototype%` (object with native
   `next`/`return`/`throw` + `Symbol.iterator` returning `this` — same
-  install idiom as `array/iterator.rs`). Skip `propagate_caller_bindings`
-  write-back of body locals (body hasn't run); record `function` +
-  `function_capture_names` in `GeneratorState` for later write-back.
+  install idiom as `array/iterator.rs`). The body has not run yet; its shared
+  upvalue cells already provide the required binding identity.
 - `NativeFunction::{GeneratorNext, GeneratorReturn, GeneratorThrow}`
   dispatched in `native.rs`. Each: read `InternalSlot::Generator`; if
   `Executing` -> TypeError (never `RefCell` double-borrow — take the frame
@@ -104,12 +101,12 @@ New file `crates/qjs-runtime/src/generator.rs` (+ prototype install in
   `{value: undefined, done: true}` (or rethrow/return per spec); if
   `SuspendedStart` and completion is `throw/return` -> complete without
   running the body.
-- Resume drives `resume_generator_frame`. `StepResult::Yield(v)` ->
+- Resume drives `resume_generator`. `GeneratorOutcome::Yield(v)` ->
   `{value: v, done: false}`, status `SuspendedYield`. `StepResult::Done(v)`
   -> `{value: v, done: true}`, status `Completed`, frame dropped. Error ->
   `Completed` + propagate. After every step, run the
-  `propagate_function_captures` logic against the frame's locals/globals so
-  closure-visible mutations stay coherent; skip `is_internal_binding_name`.
+  no generic environment propagation is needed because snapshots retain the
+  same local/received cells used by nested closures.
 - `yield*`: on `Suspend(YieldStar, iterable)`, the driver (Rust, in
   `generator.rs`) gets the iterator and stores it in
   `GeneratorState.delegate`. While a delegate is set, `next/throw/return`
@@ -131,9 +128,9 @@ Same machinery, different driver (`crates/qjs-runtime/src/async_function.rs`):
   `pub(crate) fn perform_promise_then(promise, on_fulfilled, on_rejected,
   env)` from `promise.rs`). Run the frame; on `Suspend(Await, v)`: resolve
   `v` to a promise (`native_promise_resolve` logic), attach
-  `NativeFunction::AsyncResumeFulfilled/Rejected` handlers whose
-  `Function.env` carries `\0AsyncFrame` -> the state-holder `ObjectRef`
-  (reusing the `InternalSlot` slot) and `\0AsyncPromise`. Handlers resume
+  `NativeFunction::AsyncFunctionAwaitFulfilled/Rejected` handlers whose
+  native context carries the state-holder `ObjectRef` and result promise.
+  Handlers resume
   with `Next(value)`/`Throw(reason)` and loop to the next await. On
   `Return(v)` -> `resolve_promise(outer, v)`; on error ->
   `settle_promise(outer, rejected)`.

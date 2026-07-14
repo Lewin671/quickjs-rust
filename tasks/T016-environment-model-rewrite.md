@@ -20,13 +20,13 @@ It also targets the M2 class-method capture, per-iteration `let`, generator
 resume-capture, and direct-`eval` capture failure clusters, which share the same
 root.
 
-## Why a campaign (not a drive-by)
+## Why this was a campaign (not a drive-by)
 
-Blast radius is ~90 call sites across 12 files in `bytecode/**` and
-`function/**`, against ~42k passing cases. The only safe path is flag-gated
-coexistence: the old name-keyed model and the new cell model run side by side,
-and each binding *class* flips to cells independently with its own gate, until
-the final slice deletes the old model. See the design doc for the structural map.
+Blast radius was ~90 call sites across `bytecode/**` and `function/**`, against
+~42k passing cases. S1-S4 kept the old name-keyed model and the cell model in
+controlled coexistence while each binding class moved independently. S5 then
+deleted the old representation, and S6 retained name lookup only as an explicit
+dynamic-scope deoptimization. See the design doc for the final structural map.
 
 ## Slices
 
@@ -98,13 +98,24 @@ regression (no half-finished cutover).
   bridge. Gate: focused resolver/compiler, closure, module, generator,
   async-function, and async-generator suites pass, including new parameter +
   `var` capture tests across suspension.
-- [ ] **S5 — Delete the old model.** Remove `Function.env`/`captured_env`/
-  `capture_writeback`, the `vm_capture.rs` refresh family,
-  `write_through_capture_writeback_slot`, and the `CallEnv` locals HashMap +
-  `with_frame_locals` clone. Realizes the T011 win; record a burndown entry and
-  re-measure the benchmark.
-- [ ] **S6 — direct-`eval` / `with` deopt on cells.** Name→cell deopt map gated
-  on `contains_direct_eval`/`with`; close the eval-capture failures.
+- [x] **S5 — Delete the old model.** `Function.env`/`captured_env`/
+  `capture_writeback`, `function/captures.rs`, the VM refresh/writeback family,
+  captured-environment loop ops, caller-local forwarding, and
+  `with_frame_locals`/`with_current_frame_locals` are gone. Bytecode functions
+  carry a typed shared realm and indexed cells; ordinary calls build a fresh
+  frame directly without allocating a locals `HashMap`. Five final
+  post-cutover runs give stable medians of 6.84 us for `function_call` and
+  4.88 us for `closure_call`, versus 0.122 us for both in QuickJS-NG. This is
+  90.2%/93.0% faster than the original ~70 us baseline and 41.7%/50.0% faster
+  than the later 11.72/9.77 us pre-cutover measurements.
+- [x] **S6 — direct-`eval` / `with` deopt on cells.** Frames containing direct
+  eval or `with` allocate an explicit shared name→`Upvalue` map and register
+  live frame cells in it; ordinary frames do not. Focused closure/eval/with
+  tests pass, and exact scans of `test/language/eval-code/direct` and
+  `test/language/statements/with` both report zero actionable gaps, failures,
+  or timeouts. A retained `with` object environment resolves only free names;
+  the called function's own slot-indexed locals remain closer in the scope
+  chain.
 
 ## Scope
 
@@ -118,12 +129,13 @@ regression (no half-finished cutover).
 
 ## Acceptance criteria
 
-- Each slice's gate passes; the engine is green at every slice boundary.
-- After S5: the per-call locals HashMap clone is gone, the call benchmark
-  improves measurably, and a full `--exact --all` burndown shows
-  `actionable_gap` and the timeout bucket down, with no previously-passing case
-  lost.
-- After S3/S6: the M2, per-iteration, and eval-capture clusters pass.
+- [x] Each slice's gate passes; the engine is green at every slice boundary.
+- [x] After S5: the per-call locals HashMap clone is gone, the call benchmark
+  improves measurably, and a complete `--exact --all` scan has no
+  QuickJS-NG-pass/quickjs-rust-fail cases. The final scan has 20 excluded slow
+  timeouts and 61 `$262.agent` harness not-run cases; neither bucket contains a
+  T016 engine failure.
+- [x] After S3/S6: the M2, per-iteration, and eval-capture clusters pass.
 
 ## Verification
 
@@ -135,6 +147,12 @@ cargo run -p qjs-cli -- -e 'var c=9; function inc(){c++;} function f(){c=0;inc()
 ./scripts/find-qjsng-gaps.sh --exact --all --filter test/language
 ./scripts/test262-burndown.sh --report <dir>   # after S5 full scan
 ```
+
+Final exact scan (`target/test262-gaps/all-20260714-053539-93994`): 53,572
+total, 42,672 configured; quickjs-rust 42,591 pass / 0 fail / 20 timeout / 61
+not run. QuickJS-NG-pass/quickjs-rust-fail is 0. The 20 timeouts are excluded
+slow cases and the 61 not-run cases require the `$262.agent` harness, so they
+remain explicitly unclaimed rather than being counted as passing.
 
 ## Notes
 

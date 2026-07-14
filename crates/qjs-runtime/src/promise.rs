@@ -69,7 +69,7 @@ pub(crate) fn install_promise(env: &mut CallEnv, global_this: &Value, object_pro
     let promise_function = Function::new_native(Some("Promise"), 1, NativeFunction::Promise, true);
     let mut promise_then =
         Function::new_native(Some("then"), 2, NativeFunction::PromisePrototypeThen, false);
-    promise_then.insert_env(
+    promise_then.insert_native_context(
         PROMISE_PROTOTYPE.to_owned(),
         Value::Object(promise_prototype.clone()),
     );
@@ -79,7 +79,7 @@ pub(crate) fn install_promise(env: &mut CallEnv, global_this: &Value, object_pro
         NativeFunction::PromisePrototypeCatch,
         false,
     );
-    promise_catch.insert_env(
+    promise_catch.insert_native_context(
         PROMISE_PROTOTYPE.to_owned(),
         Value::Object(promise_prototype.clone()),
     );
@@ -89,7 +89,7 @@ pub(crate) fn install_promise(env: &mut CallEnv, global_this: &Value, object_pro
         NativeFunction::PromisePrototypeFinally,
         false,
     );
-    promise_finally.insert_env(
+    promise_finally.insert_native_context(
         PROMISE_PROTOTYPE.to_owned(),
         Value::Object(promise_prototype.clone()),
     );
@@ -125,7 +125,7 @@ pub(crate) fn install_promise(env: &mut CallEnv, global_this: &Value, object_pro
         &object_prototype,
     );
     if let Some(aggregate_error) = env.get("AggregateError") {
-        promise_any.insert_env(PROMISE_AGGREGATE_ERROR.to_owned(), aggregate_error);
+        promise_any.insert_native_context(PROMISE_AGGREGATE_ERROR.to_owned(), aggregate_error);
     }
     define_promise_static(&promise_function, "any", promise_any);
 
@@ -166,11 +166,11 @@ fn promise_static_function(
     object_prototype: &ObjectRef,
 ) -> Function {
     let mut function = Function::new_native(Some(name), length, native, false);
-    function.insert_env(
+    function.insert_native_context(
         PROMISE_OBJECT_PROTOTYPE.to_owned(),
         Value::Object(object_prototype.clone()),
     );
-    function.insert_env(
+    function.insert_native_context(
         PROMISE_PROTOTYPE.to_owned(),
         Value::Object(promise_prototype.clone()),
     );
@@ -368,7 +368,7 @@ fn species_constructor_of(
 /// SpeciesConstructor and NewPromiseCapability fallbacks.
 fn default_promise_constructor(promise_function: &Function, env: &CallEnv) -> Value {
     if let Some(prototype) = promise_function
-        .env
+        .native_context
         .get(PROMISE_PROTOTYPE)
         .and_then(|value| match value {
             Value::Object(prototype) => Some(prototype),
@@ -463,7 +463,7 @@ pub(crate) fn native_promise_finally_value_thunk(
     function: &Function,
 ) -> Result<Value, RuntimeError> {
     Ok(function
-        .env
+        .native_context
         .get(PROMISE_FINALLY_VALUE)
         .cloned()
         .unwrap_or(Value::Undefined))
@@ -474,7 +474,7 @@ pub(crate) fn native_promise_finally_thrower_thunk(
     function: &Function,
 ) -> Result<Value, RuntimeError> {
     let reason = function
-        .env
+        .native_context
         .get(PROMISE_FINALLY_VALUE)
         .cloned()
         .unwrap_or(Value::Undefined);
@@ -877,21 +877,21 @@ fn resolve_promise(object: &ObjectRef, value: Value, env: &mut CallEnv) {
 fn resolving_function_pair(promise: Value) -> (Value, Value) {
     let already_resolved = Value::Object(ObjectRef::new(HashMap::new()));
     let mut resolve = Function::new_native(None, 1, NativeFunction::PromiseResolveFunction, false);
-    resolve.insert_env(PROMISE_TARGET.to_owned(), promise.clone());
-    resolve.insert_env(
+    resolve.insert_native_context(PROMISE_TARGET.to_owned(), promise.clone());
+    resolve.insert_native_context(
         PROMISE_ALREADY_RESOLVED.to_owned(),
         already_resolved.clone(),
     );
     let mut reject = Function::new_native(None, 1, NativeFunction::PromiseRejectFunction, false);
-    reject.insert_env(PROMISE_TARGET.to_owned(), promise);
-    reject.insert_env(PROMISE_ALREADY_RESOLVED.to_owned(), already_resolved);
+    reject.insert_native_context(PROMISE_TARGET.to_owned(), promise);
+    reject.insert_native_context(PROMISE_ALREADY_RESOLVED.to_owned(), already_resolved);
     (Value::Function(resolve), Value::Function(reject))
 }
 
 /// Reads-and-sets the shared single-settlement guard on a resolving function,
 /// returning whether it had already fired.
 fn resolving_function_already_resolved(function: &Function) -> bool {
-    let Some(Value::Object(cell)) = function.env.get(PROMISE_ALREADY_RESOLVED) else {
+    let Some(Value::Object(cell)) = function.native_context.get(PROMISE_ALREADY_RESOLVED) else {
         return false;
     };
     if cell.own_property("resolved").is_some() {
@@ -905,21 +905,21 @@ fn resolving_function_already_resolved(function: &Function) -> bool {
 /// `onFinally` handler and the species constructor `C`.
 fn finally_reaction_function(native: NativeFunction, handler: Value, constructor: Value) -> Value {
     let mut function = Function::new_native(None, 1, native, false);
-    function.insert_env(PROMISE_FINALLY_HANDLER.to_owned(), handler);
-    function.insert_env(PROMISE_FINALLY_CONSTRUCTOR.to_owned(), constructor);
+    function.insert_native_context(PROMISE_FINALLY_HANDLER.to_owned(), handler);
+    function.insert_native_context(PROMISE_FINALLY_CONSTRUCTOR.to_owned(), constructor);
     Value::Function(function)
 }
 
 /// Builds an anonymous value/thrower thunk capturing the original outcome.
 fn finally_thunk(native: NativeFunction, value: Value) -> Value {
     let mut function = Function::new_native(None, 0, native, false);
-    function.insert_env(PROMISE_FINALLY_VALUE.to_owned(), value);
+    function.insert_native_context(PROMISE_FINALLY_VALUE.to_owned(), value);
     Value::Function(function)
 }
 
 fn finally_constructor(function: &Function) -> Value {
     function
-        .env
+        .native_context
         .get(PROMISE_FINALLY_CONSTRUCTOR)
         .cloned()
         .unwrap_or(Value::Undefined)
@@ -927,7 +927,7 @@ fn finally_constructor(function: &Function) -> Value {
 
 fn call_finally_handler(function: &Function, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     let handler = function
-        .env
+        .native_context
         .get(PROMISE_FINALLY_HANDLER)
         .cloned()
         .unwrap_or(Value::Undefined);
@@ -944,7 +944,7 @@ fn call_promise_then(
 }
 
 fn promise_from_resolving_function(function: &Function) -> Result<ObjectRef, RuntimeError> {
-    match function.env.get(PROMISE_TARGET).cloned() {
+    match function.native_context.get(PROMISE_TARGET).cloned() {
         Some(Value::Object(object)) if is_promise_object(&object) => Ok(object),
         _ => Err(RuntimeError {
             thrown: None,

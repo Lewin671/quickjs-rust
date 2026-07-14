@@ -164,6 +164,14 @@ impl Compiler {
             )
             .chain(function_bytecode.local_names())
         {
+            // Compiler temporaries are owned by the function whose prologue or
+            // body created them. In particular, nested rest/default-parameter
+            // functions can both have a `\0\0rest_argument` snapshot; capturing
+            // the parent's same-named temporary makes the inner prologue read
+            // the outer argument array and corrupts every later upvalue.
+            if name.starts_with("\0\0") {
+                continue;
+            }
             if function_local_names
                 .binary_search_by(|local| local.as_str().cmp(name))
                 .is_ok()
@@ -181,6 +189,27 @@ impl Compiler {
                     slot,
                 });
             }
+        }
+        // Lexical `this` and every `super` operation use the surrounding
+        // `this` binding implicitly, so they may have no identifier load/store
+        // for the ordinary name scan above to discover. Arrow functions omit
+        // `this` from `function_local_names`; force that outer slot into their
+        // received-upvalue plan. Ordinary methods/constructors retain their own
+        // `this` local and do not enter this branch.
+        if function_bytecode.uses_lexical_this()
+            && function_local_names
+                .binary_search_by(|local| local.as_str().cmp("this"))
+                .is_err()
+            && let Some(slot) = self.resolve_active_capture_slot("this")
+            && !captures
+                .iter()
+                .any(|capture: &LexicalCapture| capture.slot == slot)
+        {
+            captures.push(LexicalCapture {
+                name: "this".to_owned(),
+                storage_name: self.locals[slot].name.clone(),
+                slot,
+            });
         }
         captures
     }
@@ -254,16 +283,6 @@ pub(super) fn for_in_left_lexical_names(left: &ForInLeft) -> Vec<String> {
         } => binding.names(),
         ForInLeft::VarDecl { .. } | ForInLeft::Target(_) => Vec::new(),
     }
-}
-
-pub(super) fn is_lexical_for_in_left(left: &ForInLeft) -> bool {
-    matches!(
-        left,
-        ForInLeft::VarDecl {
-            kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
-            ..
-        }
-    )
 }
 
 pub(super) fn switch_lexical_declared_names(cases: &[SwitchCase], strict: bool) -> Vec<String> {
@@ -569,7 +588,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_eval_var_capture_stays_on_the_dynamic_name_bridge() {
+    fn direct_eval_var_capture_uses_the_name_to_cell_deopt_path() {
         let script = qjs_parser::parse_script("var value = 1; function read() { return value; }")
             .expect("source should parse");
         let bytecode = super::super::compiler::compile_direct_eval_script(&script, false)

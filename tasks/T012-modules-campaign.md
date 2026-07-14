@@ -99,9 +99,10 @@ pass/fail signal.
       promise machinery (`drive_async_module`), draining the job queue so each
       `await` resumes and the module settles before its dependents run
       (16.2.1.5.3 AsyncModuleExecution, acyclic common path). A rejected
-      top-level await fails `eval_module`/the import promise. Lexical (`let`/
-      `const`) exports settle through the shared `captured_env` cell; `var`/
-      `function` exports live in the realm. Probe
+      top-level await fails `eval_module`/the import promise. All top-level
+      module bindings use the module's shared cells; imports attach to the
+      exporting module's cell, and hoisted functions reuse those identities
+      across declaration instantiation and body evaluation. Probe
       `test/language/module-code/top-level-await` rose from 7/100 to 69/100.
       KNOWN GAPs (residue): a top-level `await` of a *dynamic* `import()` is not
       drained inside the body (the module graph is borrowed during static

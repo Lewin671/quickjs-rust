@@ -203,6 +203,24 @@ fn with_captured_by_function_does_not_capture_function_var_initializers() {
 }
 
 #[test]
+fn function_created_in_with_resolves_object_before_captured_outer_slot() {
+    assert_eq!(
+        eval(
+            "function objectWins() {
+               var a = { a: 10 };
+               with (a) { return () => a; }
+             }
+             function outerFallback() {
+               var a = 7;
+               with ({}) { return () => a; }
+             }
+             objectWins()() + ':' + outerFallback()();"
+        ),
+        Ok(Value::String("10:7".to_owned().into()))
+    );
+}
+
+#[test]
 fn with_update_expression_uses_resolved_unscopables_binding_once() {
     assert_eq!(
         eval(

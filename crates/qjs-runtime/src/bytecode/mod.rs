@@ -1,6 +1,6 @@
 //! Bytecode compiler and stack VM for the runtime's fast path.
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 mod compiler;
 mod compiler_assign;
@@ -47,8 +47,8 @@ use crate::{RuntimeError, Value};
 pub use ir::Bytecode;
 pub(crate) use vm_class::install_field_value;
 pub(crate) use vm_generator::{
-    CaptureWriteback, GeneratorOutcome, GeneratorStart, GeneratorState, Resume,
-    is_suspended_at_plain_yield, resume_generator, start_suspended_at_body,
+    GeneratorOutcome, GeneratorStart, GeneratorState, Resume, is_suspended_at_plain_yield,
+    resume_generator, start_suspended_at_body,
 };
 pub(crate) use vm_iter::sync_iterator_for_value;
 pub(crate) use vm_private::apply_instance_private_element;
@@ -119,21 +119,11 @@ pub(crate) fn compile_function_body_with_kind(
 pub(crate) fn eval_function_bytecode(
     bytecode: &Bytecode,
     env: crate::CallEnv,
-    captured_env: Rc<RefCell<HashMap<String, Value>>>,
     upvalues: Vec<crate::function::Upvalue>,
     with_stack: Vec<Value>,
-    capture_writeback: Option<CaptureWriteback>,
     persist_global_lexicals: bool,
 ) -> FunctionBytecodeResult<'_> {
-    vm::eval_function_bytecode(
-        bytecode,
-        env,
-        captured_env,
-        upvalues,
-        with_stack,
-        capture_writeback,
-        persist_global_lexicals,
-    )
+    vm::eval_function_bytecode(bytecode, env, upvalues, with_stack, persist_global_lexicals)
 }
 
 /// Compiles and evaluates source text through the bytecode VM.
@@ -253,20 +243,20 @@ pub(crate) type ModuleRealm = crate::function::Realm;
 
 pub(crate) struct ModuleEvaluation {
     pub(crate) env: crate::CallEnv,
-    pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    pub(crate) live_bindings: crate::function::DynamicBindings,
     pub(crate) async_result_promise: Option<crate::ObjectRef>,
 }
 
 pub(crate) struct ModuleLiveExports {
     pub(crate) names: Vec<String>,
-    pub(crate) bindings: Rc<RefCell<HashMap<String, Value>>>,
+    pub(crate) bindings: crate::function::DynamicBindings,
     pub(crate) seed_tdz_markers: bool,
     pub(crate) imports: Vec<ModuleLiveImport>,
 }
 
 pub(crate) struct ModuleLiveImport {
     pub(crate) local_name: String,
-    pub(crate) bindings: Rc<RefCell<HashMap<String, Value>>>,
+    pub(crate) bindings: crate::function::DynamicBindings,
     pub(crate) binding_name: String,
 }
 
@@ -344,32 +334,14 @@ pub(crate) fn eval_bytecode_with_env(
     bytecode: &Bytecode,
     env: crate::CallEnv,
 ) -> FunctionBytecodeResult<'_> {
-    let captured_env = Rc::new(RefCell::new(env.snapshot_locals()));
     let with_stack = env.direct_eval_with_stack();
-    vm::eval_function_bytecode(
-        bytecode,
-        env,
-        captured_env,
-        Vec::new(),
-        with_stack,
-        None,
-        true,
-    )
+    vm::eval_function_bytecode(bytecode, env, Vec::new(), with_stack, true)
 }
 
 pub(crate) fn eval_bytecode_with_env_ephemeral_global_lexicals(
     bytecode: &Bytecode,
     env: crate::CallEnv,
 ) -> FunctionBytecodeResult<'_> {
-    let captured_env = Rc::new(RefCell::new(env.snapshot_locals()));
     let with_stack = env.direct_eval_with_stack();
-    vm::eval_function_bytecode(
-        bytecode,
-        env,
-        captured_env,
-        Vec::new(),
-        with_stack,
-        None,
-        false,
-    )
+    vm::eval_function_bytecode(bytecode, env, Vec::new(), with_stack, false)
 }

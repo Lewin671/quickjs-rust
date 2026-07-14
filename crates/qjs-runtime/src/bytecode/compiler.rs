@@ -28,9 +28,8 @@ pub(super) struct Compiler {
     pub(super) strict: bool,
     pub(super) global_scope: bool,
     /// Direct-eval source can introduce/delete function-environment `var` and
-    /// Annex B bindings dynamically. Until T016 S6 supplies its name-to-cell
-    /// deopt map, keep that binding class on the legacy dynamic-name bridge;
-    /// ordinary lexical captures remain slot/cell based.
+    /// Annex B bindings dynamically. These declarations use the explicit
+    /// name-to-cell deopt map; ordinary lexical captures remain slot-indexed.
     pub(super) direct_eval_source: bool,
     /// Names of `var`/function declarations hoisted at global script scope.
     /// They live in the realm (and on `globalThis`), not frame slots, so
@@ -89,7 +88,6 @@ pub(super) struct LoopContext {
     breaks: Vec<usize>,
     continues: Vec<usize>,
     iterator: Option<LoopIterator>,
-    pub(super) captured_env_scope: bool,
     /// The compiler's `with_depth` when this loop was entered. A break or
     /// continue targeting it must close every `with` scope opened since.
     with_depth: usize,
@@ -162,15 +160,7 @@ pub(super) fn compile_module(script: &Script) -> Result<Bytecode, RuntimeError> 
         global_scope: false,
         ..Compiler::default()
     };
-    let bytecode = compiler.compile_eval_into(script)?;
-    if bytecode.contains_top_level_await() {
-        let mut compiler = Compiler {
-            strict: true,
-            ..Compiler::default()
-        };
-        return compiler.compile_into(script);
-    }
-    Ok(bytecode)
+    compiler.compile_into_with_hoists(script, false)
 }
 
 pub(super) fn compile_module_function_hoists(script: &Script) -> Result<Bytecode, RuntimeError> {
@@ -261,6 +251,14 @@ impl Compiler {
     }
 
     fn compile_into(&mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
+        self.compile_into_with_hoists(script, true)
+    }
+
+    fn compile_into_with_hoists(
+        &mut self,
+        script: &Script,
+        instantiate_hoisted_functions: bool,
+    ) -> Result<Bytecode, RuntimeError> {
         self.source = script.source.clone();
         self.strict = self.strict || is_strict_function_body(&script.body);
         self.collect_hoisted_locals(&script.body, false);
@@ -268,7 +266,9 @@ impl Compiler {
         let blocked = lexical_declared_names(&script.body);
         let global_lexical_names = blocked.clone();
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
-            compiler.compile_hoisted_function_decls(&script.body)?;
+            if instantiate_hoisted_functions {
+                compiler.compile_hoisted_function_decls(&script.body)?;
+            }
             compiler.compile_script_statement_list(&script.body)?;
             Ok(())
         })?;
@@ -277,32 +277,14 @@ impl Compiler {
             std::mem::take(&mut self.constants),
             std::mem::take(&mut self.locals),
             std::mem::take(&mut self.code),
-            true,
+            self.global_scope,
             global_lexical_names,
             self.strict,
         ))
     }
 
     fn compile_eval_into(&mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
-        self.source = script.source.clone();
-        self.strict = self.strict || is_strict_function_body(&script.body);
-        self.collect_hoisted_locals(&script.body, false);
-        self.predeclare_current_scope_lexicals(&script.body);
-        let blocked = lexical_declared_names(&script.body);
-        self.with_annex_b_blocked_function_names(&blocked, |compiler| {
-            compiler.compile_hoisted_function_decls(&script.body)?;
-            compiler.compile_script_statement_list(&script.body)?;
-            Ok(())
-        })?;
-        self.code.push(Op::Return);
-        Ok(Bytecode::with_scope_global_lexical_names_and_strict(
-            std::mem::take(&mut self.constants),
-            std::mem::take(&mut self.locals),
-            std::mem::take(&mut self.code),
-            false,
-            blocked,
-            self.strict,
-        ))
+        self.compile_into_with_hoists(script, true)
     }
 
     pub(super) fn compile_function(
@@ -513,6 +495,16 @@ impl Compiler {
         slot
     }
 
+    /// Materializes an own `this`/`arguments` slot so a nested arrow can
+    /// capture it. The declaring function receives the value from call setup,
+    /// not from its parent's indexed-upvalue vector; the arrow's corresponding
+    /// captured slot is independently marked `from_env` when it is recompiled.
+    pub(super) fn own_call_frame_slot(&mut self, name: &str) -> usize {
+        let slot = self.local_slot(name, false);
+        self.locals[slot].from_env = false;
+        slot
+    }
+
     fn hoisted_function_slot(&mut self, name: &str) -> usize {
         let slot = self.local_slot(name, true);
         self.locals[slot].hoisted_function = true;
@@ -631,12 +623,6 @@ impl Compiler {
             .expect("loop context should be balanced")
     }
 
-    pub(super) fn mark_loop_captured_env_scope(&mut self) {
-        if let Some(context) = self.loop_stack.last_mut() {
-            context.captured_env_scope = true;
-        }
-    }
-
     pub(super) fn compile_break(&mut self, label: Option<&str>) -> Result<(), RuntimeError> {
         let Some(index) = self.break_context_index(label) else {
             return Err(RuntimeError {
@@ -699,13 +685,6 @@ impl Compiler {
             self.emit(Op::ExitTry);
             self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, false);
         }
-        let env_scope_count = self.loop_stack[target_index + 1..]
-            .iter()
-            .filter(|context| context.captured_env_scope)
-            .count();
-        for _ in 0..env_scope_count {
-            self.emit(Op::PopCapturedEnv);
-        }
     }
 
     /// Closes every live for-of iterator before a `return` leaves the
@@ -719,14 +698,6 @@ impl Compiler {
         for iterator in iterators.into_iter().rev() {
             self.emit(Op::ExitTry);
             self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, false);
-        }
-        let env_scope_count = self
-            .loop_stack
-            .iter()
-            .filter(|context| context.captured_env_scope)
-            .count();
-        for _ in 0..env_scope_count {
-            self.emit(Op::PopCapturedEnv);
         }
     }
 
@@ -838,9 +809,6 @@ impl Compiler {
         context: &LoopContext,
     ) -> usize {
         if cleanup_slots.is_empty() {
-            if context.captured_env_scope {
-                self.emit(Op::PopCapturedEnv);
-            }
             self.emit(Op::LoadLocal(result_slot));
             let done = self.code.len();
             self.patch_loop_breaks(context, done);
@@ -850,18 +818,12 @@ impl Compiler {
         for slot in cleanup_slots {
             self.emit(Op::ClearLocal(*slot));
         }
-        if context.captured_env_scope {
-            self.emit(Op::PopCapturedEnv);
-        }
         self.emit(Op::LoadLocal(result_slot));
         let normal_done = self.emit(Op::Jump(usize::MAX));
 
         let break_cleanup = self.code.len();
         for slot in cleanup_slots {
             self.emit(Op::ClearLocal(*slot));
-        }
-        if context.captured_env_scope {
-            self.emit(Op::PopCapturedEnv);
         }
         let break_done = self.emit(Op::Jump(usize::MAX));
 
@@ -1133,7 +1095,9 @@ impl Compiler {
     }
 
     pub(super) fn identifier_needs_with_resolution(&self, slot: Option<usize>) -> bool {
-        self.inside_current_with() || (slot.is_none() && self.inside_with())
+        self.inside_current_with()
+            || (self.inside_with()
+                && slot.is_none_or(|slot| self.locals[slot].is_received_upvalue()))
     }
 
     fn compile_labelled(&mut self, label: &str, body: &Stmt) -> Result<(), RuntimeError> {

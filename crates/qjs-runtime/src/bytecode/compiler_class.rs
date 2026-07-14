@@ -81,7 +81,7 @@ impl Compiler {
             };
             if let ClassMemberKey::Computed(expr) = key {
                 if expr_contains_private_name(expr) {
-                    computed_keys.push(compile_computed_key(name, expr)?);
+                    computed_keys.push(self.compile_computed_key(name, expr)?);
                 } else {
                     self.compile_expr(expr)?;
                     self.emit(Op::ToPropertyKey);
@@ -206,8 +206,11 @@ impl Compiler {
                     }));
                 }
                 ClassElement::Field(field) => {
-                    let initializer =
-                        compile_field_initializer(name, field.initializer.as_ref(), &field.key)?;
+                    let initializer = self.compile_field_initializer(
+                        name,
+                        field.initializer.as_ref(),
+                        &field.key,
+                    )?;
                     if let ClassMemberKey::Private(private_name) = &field.key {
                         let private_element = ClassPrivateElementDef::Field {
                             name: private_name.clone(),
@@ -226,9 +229,9 @@ impl Compiler {
                     }));
                 }
                 ClassElement::StaticBlock(block) => {
-                    elements.push(ClassElementDef::StaticBlock(compile_static_block(
-                        name, block,
-                    )?));
+                    elements.push(ClassElementDef::StaticBlock(
+                        self.compile_static_block(name, block)?,
+                    ));
                 }
             }
         }
@@ -283,29 +286,58 @@ fn skip_js_trivia(source: &str, mut index: usize) -> usize {
     index
 }
 
-fn compile_computed_key(
-    class_name: Option<&str>,
-    expr: &Expr,
-) -> Result<ClassComputedKeyDef, RuntimeError> {
-    let params = FunctionParams::positional(Vec::new());
-    let body = vec![Stmt::Return {
-        argument: Some(expr.clone()),
-        span: expr.span(),
-    }];
-    let local_names = collect_function_local_names(None, &params, &body, true);
-    let bytecode = compile_class_function_body_with_captures(
-        class_name,
-        &params,
-        &body,
-        &local_names,
-        false,
-        false,
-        &[],
-    )?;
-    Ok(ClassComputedKeyDef::Deferred {
-        local_names,
-        bytecode: Rc::new(bytecode),
-    })
+impl Compiler {
+    fn compile_computed_key(
+        &self,
+        class_name: Option<&str>,
+        expr: &Expr,
+    ) -> Result<ClassComputedKeyDef, RuntimeError> {
+        let params = FunctionParams::positional(Vec::new());
+        let body = vec![Stmt::Return {
+            argument: Some(expr.clone()),
+            span: expr.span(),
+        }];
+        let local_names = collect_function_local_names(None, &params, &body, true);
+        let mut bytecode = compile_class_function_body_with_captures(
+            class_name,
+            &params,
+            &body,
+            &local_names,
+            false,
+            false,
+            &[],
+        )?;
+        let mut lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
+        lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
+        if !lexical_captures.is_empty() {
+            let captured = lexical_captures
+                .iter()
+                .map(|capture| {
+                    (
+                        capture.name.as_str(),
+                        capture.storage_name.as_str(),
+                        self.locals[capture.slot].mutable,
+                    )
+                })
+                .collect::<Vec<_>>();
+            bytecode = compile_class_function_body_with_captures(
+                class_name,
+                &params,
+                &body,
+                &local_names,
+                false,
+                false,
+                &captured,
+            )?;
+            lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
+            lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
+        }
+        Ok(ClassComputedKeyDef::Deferred {
+            local_names,
+            lexical_captures: runtime_lexical_captures(lexical_captures),
+            bytecode: Rc::new(bytecode),
+        })
+    }
 }
 
 fn compile_member_key(key: &ClassMemberKey) -> (ClassMemberKeyDef, Option<String>) {
@@ -466,54 +498,113 @@ fn assignment_target_contains_private_name(target: &AssignmentTarget) -> bool {
 /// name (a literal or private key), an anonymous function/class initializer
 /// takes that name via NamedEvaluation; computed-key fields keep the empty
 /// name.
-fn compile_field_initializer(
-    class_name: Option<&str>,
-    initializer: Option<&Expr>,
-    key: &ClassMemberKey,
-) -> Result<Option<ClassFieldInitializerDef>, RuntimeError> {
-    let Some(expr) = initializer else {
-        return Ok(None);
-    };
-    let params = FunctionParams::positional(Vec::new());
-    let inferred_name = match key {
-        ClassMemberKey::Literal(name) => Some(name.clone()),
-        ClassMemberKey::Private(name) => Some(format!("#{name}")),
-        ClassMemberKey::Computed(_) => None,
-    };
-    let body = vec![Stmt::Return {
-        argument: Some(expr.clone()),
-        span: expr.span(),
-    }];
-    let local_names = collect_function_local_names(None, &params, &body, true);
-    let bytecode =
-        compile_class_field_initializer(class_name, expr, inferred_name.as_deref(), &local_names)?;
-    Ok(Some(ClassFieldInitializerDef {
-        local_names,
-        bytecode: Rc::new(bytecode),
-    }))
-}
+impl Compiler {
+    fn compile_field_initializer(
+        &self,
+        class_name: Option<&str>,
+        initializer: Option<&Expr>,
+        key: &ClassMemberKey,
+    ) -> Result<Option<ClassFieldInitializerDef>, RuntimeError> {
+        let Some(expr) = initializer else {
+            return Ok(None);
+        };
+        let params = FunctionParams::positional(Vec::new());
+        let inferred_name = match key {
+            ClassMemberKey::Literal(name) => Some(name.clone()),
+            ClassMemberKey::Private(name) => Some(format!("#{name}")),
+            ClassMemberKey::Computed(_) => None,
+        };
+        let body = vec![Stmt::Return {
+            argument: Some(expr.clone()),
+            span: expr.span(),
+        }];
+        let local_names = collect_function_local_names(None, &params, &body, true);
+        let mut bytecode = compile_class_field_initializer(
+            class_name,
+            expr,
+            inferred_name.as_deref(),
+            &local_names,
+            &[],
+        )?;
+        let mut lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
+        lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
+        if !lexical_captures.is_empty() {
+            let captured = lexical_captures
+                .iter()
+                .map(|capture| {
+                    (
+                        capture.name.as_str(),
+                        capture.storage_name.as_str(),
+                        self.locals[capture.slot].mutable,
+                    )
+                })
+                .collect::<Vec<_>>();
+            bytecode = compile_class_field_initializer(
+                class_name,
+                expr,
+                inferred_name.as_deref(),
+                &local_names,
+                &captured,
+            )?;
+            lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
+            lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
+        }
+        Ok(Some(ClassFieldInitializerDef {
+            local_names,
+            lexical_captures: runtime_lexical_captures(lexical_captures),
+            bytecode: Rc::new(bytecode),
+        }))
+    }
 
-/// Compiles a `static { ... }` block into a parameterless strict thunk run at
-/// class definition with `this` = the constructor.
-fn compile_static_block(
-    class_name: Option<&str>,
-    block: &qjs_ast::StaticBlock,
-) -> Result<ClassStaticBlockDef, RuntimeError> {
-    let params = FunctionParams::positional(Vec::new());
-    let local_names = collect_function_local_names(None, &params, &block.body, true);
-    let bytecode = compile_class_function_body_with_captures(
-        class_name,
-        &params,
-        &block.body,
-        &local_names,
-        false,
-        false,
-        &[],
-    )?;
-    Ok(ClassStaticBlockDef {
-        local_names,
-        bytecode: Rc::new(bytecode),
-    })
+    /// Compiles a `static { ... }` block into a parameterless strict thunk run at
+    /// class definition with `this` = the constructor.
+    fn compile_static_block(
+        &self,
+        class_name: Option<&str>,
+        block: &qjs_ast::StaticBlock,
+    ) -> Result<ClassStaticBlockDef, RuntimeError> {
+        let params = FunctionParams::positional(Vec::new());
+        let local_names = collect_function_local_names(None, &params, &block.body, true);
+        let mut bytecode = compile_class_function_body_with_captures(
+            class_name,
+            &params,
+            &block.body,
+            &local_names,
+            false,
+            false,
+            &[],
+        )?;
+        let mut lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
+        lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
+        if !lexical_captures.is_empty() {
+            let captured = lexical_captures
+                .iter()
+                .map(|capture| {
+                    (
+                        capture.name.as_str(),
+                        capture.storage_name.as_str(),
+                        self.locals[capture.slot].mutable,
+                    )
+                })
+                .collect::<Vec<_>>();
+            bytecode = compile_class_function_body_with_captures(
+                class_name,
+                &params,
+                &block.body,
+                &local_names,
+                false,
+                false,
+                &captured,
+            )?;
+            lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
+            lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
+        }
+        Ok(ClassStaticBlockDef {
+            local_names,
+            lexical_captures: runtime_lexical_captures(lexical_captures),
+            bytecode: Rc::new(bytecode),
+        })
+    }
 }
 
 fn runtime_lexical_captures(captures: Vec<LexicalCapture>) -> Vec<(String, usize)> {
@@ -600,8 +691,12 @@ fn compile_class_field_initializer(
     init: &Expr,
     inferred_name: Option<&str>,
     local_names: &[String],
+    captured_lexicals: &[(&str, &str, bool)],
 ) -> Result<super::ir::Bytecode, RuntimeError> {
     let mut compiler = Compiler::strict_function_compiler();
+    for (name, storage_name, mutable) in captured_lexicals {
+        compiler.declare_captured_lexical_slot_with_storage_name(name, storage_name, *mutable);
+    }
     if let Some(name) = class_name
         && local_names
             .binary_search_by(|local| local.as_str().cmp(name))

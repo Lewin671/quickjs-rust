@@ -187,11 +187,11 @@ fn define_regexp_accessor(
     native: NativeFunction,
 ) {
     let mut getter = Function::new_native(Some(&format!("get {name}")), 0, native, false);
-    getter.insert_env(
+    getter.insert_native_context(
         REGEXP_PROTOTYPE_BINDING.to_owned(),
         Value::Object(prototype.clone()),
     );
-    getter.insert_env(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
+    getter.insert_native_context(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
     prototype.define_property(
         name.to_owned(),
         Property::accessor(Some(Value::Function(getter)), None, false, true),
@@ -593,7 +593,7 @@ fn is_regexp_prototype_value_for_accessor(
     let Value::Object(object) = value else {
         return false;
     };
-    if let Some(Value::Object(prototype)) = function.env.get(REGEXP_PROTOTYPE_BINDING) {
+    if let Some(Value::Object(prototype)) = function.native_context.get(REGEXP_PROTOTYPE_BINDING) {
         return object.ptr_eq(prototype);
     }
     is_regexp_prototype_value(value, env)
@@ -608,9 +608,9 @@ fn regexp_receiver_error(function: &Function) -> RuntimeError {
 }
 
 fn regexp_receiver_error_value(function: &Function, message: &str) -> Option<Value> {
-    let constructor = match function.env.get("TypeError").cloned() {
+    let constructor = match function.native_context.get("TypeError").cloned() {
         Some(value) => Some(value),
-        None => match function.env.get(GLOBAL_THIS_BINDING) {
+        None => match function.native_context.get(GLOBAL_THIS_BINDING) {
             Some(Value::Object(global_this)) => global_this.get("TypeError"),
             _ => None,
         },
@@ -618,7 +618,7 @@ fn regexp_receiver_error_value(function: &Function, message: &str) -> Option<Val
     let Value::Function(constructor) = constructor? else {
         return None;
     };
-    let mut env = CallEnv::from_map((*function.env).clone());
+    let mut env = CallEnv::from_map((*function.native_context).clone());
     error::native_error(
         &constructor,
         Value::Undefined,

@@ -1149,6 +1149,27 @@ fn dynamic_import_then_runs_after_current_job() {
 }
 
 #[test]
+fn module_body_reuses_the_instantiated_hoisted_function_object() {
+    let main = "import { observed } from 'a';\n\
+                export const value = observed();\n\
+                export function shared() {}";
+    let namespace = run(
+        main,
+        &[
+            (
+                "a",
+                "import { shared } from 'main';\n\
+                 shared.marker = 42;\n\
+                 export function observed() { return shared.marker; }",
+            ),
+            ("main", main),
+        ],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export(&namespace, "value"), Value::Number(42.0));
+}
+
+#[test]
 fn dynamic_import_in_script_resolves_namespace() {
     // A dynamic import works under the Script goal too, against an in-memory
     // resolver, with the namespace recorded through a shared exported array.
@@ -1291,6 +1312,18 @@ fn top_level_await_exports_awaited_value() {
         &[],
     )
     .expect("graph evaluates");
+    assert_eq!(export(&namespace, "value"), Value::Number(42.0));
+}
+
+#[test]
+fn top_level_await_body_reuses_instantiated_function_binding() {
+    let namespace = run(
+        "export function fn() { return 42; }
+         await function fn() { return 111; };
+         export const value = fn();",
+        &[],
+    )
+    .expect("module evaluates");
     assert_eq!(export(&namespace, "value"), Value::Number(42.0));
 }
 

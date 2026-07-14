@@ -15,7 +15,7 @@
 //! `{ value, done: true }`; an exception rejects the pending request and
 //! completes the generator.
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 use crate::CallEnv;
 use crate::{
@@ -533,7 +533,7 @@ fn schedule_return_await(generator: &ObjectRef, value: Value, env: &mut CallEnv)
 /// Builds a reaction native carrying the async generator object.
 fn reaction(native: NativeFunction, generator: &ObjectRef) -> Value {
     let mut function = Function::new_native(None, 1, native, false);
-    function.insert_env(ASYNC_GEN.to_owned(), Value::Object(generator.clone()));
+    function.insert_native_context(ASYNC_GEN.to_owned(), Value::Object(generator.clone()));
     Value::Function(function)
 }
 
@@ -549,7 +549,7 @@ pub(crate) fn call_async_generator_reaction(
     match native {
         NativeFunction::AsyncGeneratorAwaitFulfilled
         | NativeFunction::AsyncGeneratorAwaitRejected => {
-            let Some(Value::Object(generator)) = function.env.get(ASYNC_GEN) else {
+            let Some(Value::Object(generator)) = function.native_context.get(ASYNC_GEN) else {
                 return Ok(None);
             };
             let generator = generator.clone();
@@ -562,7 +562,7 @@ pub(crate) fn call_async_generator_reaction(
             Ok(Some(Value::Undefined))
         }
         NativeFunction::AsyncGeneratorYieldFulfilled => {
-            let Some(Value::Object(generator)) = function.env.get(ASYNC_GEN) else {
+            let Some(Value::Object(generator)) = function.native_context.get(ASYNC_GEN) else {
                 return Ok(None);
             };
             let generator = generator.clone();
@@ -574,7 +574,7 @@ pub(crate) fn call_async_generator_reaction(
             Ok(Some(Value::Undefined))
         }
         NativeFunction::AsyncGeneratorYieldRejected => {
-            let Some(Value::Object(generator)) = function.env.get(ASYNC_GEN) else {
+            let Some(Value::Object(generator)) = function.native_context.get(ASYNC_GEN) else {
                 return Ok(None);
             };
             let generator = generator.clone();
@@ -583,7 +583,7 @@ pub(crate) fn call_async_generator_reaction(
             Ok(Some(Value::Undefined))
         }
         NativeFunction::AsyncGeneratorReturnResumeFulfilled => {
-            let Some(Value::Object(generator)) = function.env.get(ASYNC_GEN) else {
+            let Some(Value::Object(generator)) = function.native_context.get(ASYNC_GEN) else {
                 return Ok(None);
             };
             let generator = generator.clone();
@@ -591,7 +591,7 @@ pub(crate) fn call_async_generator_reaction(
             Ok(Some(Value::Undefined))
         }
         NativeFunction::AsyncGeneratorReturnResumeRejected => {
-            let Some(Value::Object(generator)) = function.env.get(ASYNC_GEN) else {
+            let Some(Value::Object(generator)) = function.native_context.get(ASYNC_GEN) else {
                 return Ok(None);
             };
             let generator = generator.clone();
@@ -599,7 +599,7 @@ pub(crate) fn call_async_generator_reaction(
             Ok(Some(Value::Undefined))
         }
         NativeFunction::AsyncGeneratorReturnFulfilled => {
-            let Some(Value::Object(generator)) = function.env.get(ASYNC_GEN) else {
+            let Some(Value::Object(generator)) = function.native_context.get(ASYNC_GEN) else {
                 return Ok(None);
             };
             let generator = generator.clone();
@@ -609,7 +609,7 @@ pub(crate) fn call_async_generator_reaction(
             Ok(Some(Value::Undefined))
         }
         NativeFunction::AsyncGeneratorReturnRejected => {
-            let Some(Value::Object(generator)) = function.env.get(ASYNC_GEN) else {
+            let Some(Value::Object(generator)) = function.native_context.get(ASYNC_GEN) else {
                 return Ok(None);
             };
             let generator = generator.clone();
@@ -773,9 +773,9 @@ pub(crate) fn create_async_from_sync_iterator(
         ("throw", NativeFunction::AsyncFromSyncIteratorThrow),
     ] {
         let mut method = Function::new_native(Some(name), 1, native, false);
-        method.insert_env(SYNC_ITERATOR.to_owned(), sync_iterator.clone());
+        method.insert_native_context(SYNC_ITERATOR.to_owned(), sync_iterator.clone());
         if matches!(native, NativeFunction::AsyncFromSyncIteratorNext) {
-            method.insert_env(SYNC_ITERATOR_NEXT.to_owned(), next.clone());
+            method.insert_native_context(SYNC_ITERATOR_NEXT.to_owned(), next.clone());
         }
         wrapper.define_non_enumerable(name.to_owned(), Value::Function(method));
     }
@@ -832,7 +832,7 @@ fn async_from_sync_method(
 ) -> Value {
     let argument = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let capability = promise::new_pending_promise(env);
-    let Some(sync_iterator) = function.env.get(SYNC_ITERATOR).cloned() else {
+    let Some(sync_iterator) = function.native_context.get(SYNC_ITERATOR).cloned() else {
         let reason = not_an_async_generator_value(env);
         promise::reject_promise_capability(&capability, reason, env);
         return Value::Object(capability);
@@ -847,7 +847,7 @@ fn async_from_sync_method(
 
     let method = if matches!(native, NativeFunction::AsyncFromSyncIteratorNext) {
         function
-            .env
+            .native_context
             .get(SYNC_ITERATOR_NEXT)
             .cloned()
             .unwrap_or(Value::Undefined)
@@ -995,26 +995,26 @@ fn value_await_reaction(
     close_sync: Option<&Value>,
 ) -> Value {
     let mut function = Function::new_native(None, 1, native, false);
-    function.insert_env(WRAP_PROMISE.to_owned(), Value::Object(capability.clone()));
-    function.insert_env(WRAP_DONE.to_owned(), Value::Boolean(done));
+    function.insert_native_context(WRAP_PROMISE.to_owned(), Value::Object(capability.clone()));
+    function.insert_native_context(WRAP_DONE.to_owned(), Value::Boolean(done));
     if let Some(sync_iterator) = close_sync {
-        function.insert_env(WRAP_SYNC_ITERATOR.to_owned(), sync_iterator.clone());
-        function.insert_env(WRAP_CLOSE_ON_REJECTION.to_owned(), Value::Boolean(true));
+        function.insert_native_context(WRAP_SYNC_ITERATOR.to_owned(), sync_iterator.clone());
+        function.insert_native_context(WRAP_CLOSE_ON_REJECTION.to_owned(), Value::Boolean(true));
     }
     Value::Function(function)
 }
 
 fn async_from_sync_value_rejected(function: &Function, reason: Value, env: &mut CallEnv) {
-    let Some(Value::Object(capability)) = function.env.get(WRAP_PROMISE) else {
+    let Some(Value::Object(capability)) = function.native_context.get(WRAP_PROMISE) else {
         return;
     };
     let capability = capability.clone();
     // When the awaited value rejects under closeOnRejection, close the sync
     // iterator before rejecting; the original rejection reason is preserved.
     if matches!(
-        function.env.get(WRAP_CLOSE_ON_REJECTION),
+        function.native_context.get(WRAP_CLOSE_ON_REJECTION),
         Some(Value::Boolean(true))
-    ) && let Some(sync_iterator) = function.env.get(WRAP_SYNC_ITERATOR).cloned()
+    ) && let Some(sync_iterator) = function.native_context.get(WRAP_SYNC_ITERATOR).cloned()
     {
         let _ = close_sync_iterator(&sync_iterator, env);
     }
@@ -1022,9 +1022,10 @@ fn async_from_sync_value_rejected(function: &Function, reason: Value, env: &mut 
 }
 
 fn async_from_sync_value_fulfilled(function: &Function, value: Value, env: &mut CallEnv) {
-    let (Some(Value::Object(capability)), Some(Value::Boolean(done))) =
-        (function.env.get(WRAP_PROMISE), function.env.get(WRAP_DONE))
-    else {
+    let (Some(Value::Object(capability)), Some(Value::Boolean(done))) = (
+        function.native_context.get(WRAP_PROMISE),
+        function.native_context.get(WRAP_DONE),
+    ) else {
         return;
     };
     let capability = capability.clone();
@@ -1038,55 +1039,17 @@ fn async_from_sync_value_fulfilled(function: &Function, value: Value, env: &mut 
 pub(crate) fn call_async_generator_function(
     function: &Function,
     function_env: CallEnv,
-    function_capture_names: Vec<String>,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let bytecode = function
         .bytecode
         .clone()
         .expect("async generator has a bytecode body");
-    let captured = Rc::new(RefCell::new(function_env.snapshot_locals()));
-    // Mirror `call_async_function`: a body that writes an outer-captured binding
-    // after an `await`/`yield` resumes in a later microtask whose caller env is
-    // not the defining frame, so the write only reaches the cell its outer
-    // closures read through this `CaptureWriteback`. Without it, `let c`-style
-    // outer bindings assigned past the first suspension stay stale (the entire
-    // async-generator `for await`/destructuring counter-update test cluster).
-    let mut capture_names = function_capture_names;
-    {
-        let captured_env = function.captured_env.borrow();
-        for name in captured_env.keys() {
-            if crate::function::is_internal_binding_name(name)
-                || matches!(name.as_str(), "this" | "arguments")
-            {
-                continue;
-            }
-            if bytecode.local_slot(name).is_some()
-                && !capture_names.iter().any(|existing| existing == name)
-            {
-                capture_names.push(name.clone());
-            }
-        }
-    }
-    let parent_writeback = function.capture_writeback.clone().map(Box::new);
-    let syncs_cell_values = parent_writeback
-        .as_deref()
-        .is_some_and(crate::bytecode::CaptureWriteback::syncs_cell_values);
-    let capture_writeback = (!capture_names.is_empty() || parent_writeback.is_some()).then(|| {
-        crate::bytecode::CaptureWriteback {
-            target: Rc::clone(&function.captured_env),
-            names: capture_names,
-            aliases: Vec::new(),
-            parent: parent_writeback,
-            syncs_cell_values,
-        }
-    });
     make_async_generator_object(
         function,
         GeneratorStart {
             bytecode,
             env: function_env,
-            captured_env: captured,
             upvalues: function.upvalues.clone(),
             with_stack: function.with_stack.clone(),
             immutable_function_name: function
@@ -1094,8 +1057,6 @@ pub(crate) fn call_async_generator_function(
                 .then(|| function.name.clone())
                 .flatten()
                 .or_else(|| function.immutable_env_binding.clone()),
-            refresh_captured_slots_on_resume: true,
-            capture_writeback,
         },
         env,
     )

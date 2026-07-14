@@ -1,6 +1,4 @@
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
 
 use crate::{
     GLOBAL_THIS_BINDING, Property, PropertyKey, RuntimeError, Value,
@@ -21,6 +19,49 @@ use super::{
 };
 
 impl Vm<'_> {
+    pub(super) fn enter_body_deopt_scope(&mut self) {
+        let Some(parameter_bindings) = self.env.deopt_bindings().cloned() else {
+            return;
+        };
+        let split_slots = self
+            .bytecode
+            .locals
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, local)| {
+                let marker = format!(
+                    "{}{}",
+                    crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
+                    local.name
+                );
+                (local.hoisted && !local.parameter && parameter_bindings.contains_key(&marker))
+                    .then_some(slot)
+            })
+            .collect::<Vec<_>>();
+        if split_slots.is_empty() {
+            return;
+        }
+        let body_bindings = crate::function::DynamicBindings::new();
+        for (name, upvalue) in parameter_bindings.cells() {
+            if split_slots
+                .iter()
+                .any(|slot| self.bytecode.locals[*slot].name == name)
+            {
+                continue;
+            }
+            body_bindings.insert_cell(name, upvalue);
+        }
+        for slot in split_slots {
+            let name = self.bytecode.locals[slot].name.clone();
+            let value = Value::Undefined;
+            let upvalue = Upvalue::new(value.clone());
+            self.locals[slot] = Some(value);
+            self.local_upvalues[slot] = Some(upvalue.clone());
+            body_bindings.insert_cell(name, upvalue);
+        }
+        self.env.set_deopt_bindings(body_bindings);
+    }
+
     /// Executes a `with`-related opcode: scope push/pop and the with-aware
     /// identifier load/store/typeof. Centralizing the stack interaction here
     /// keeps the main bytecode loop terse.
@@ -162,6 +203,15 @@ impl Vm<'_> {
                 // the shared cell instead of a frozen copy.
                 if local.hoisted && bytecode.global_scope {
                     None
+                } else if !local.from_env
+                    && crate::function::is_call_frame_binding(&local.name)
+                    && let Some(value) = env.get_local(&local.name)
+                {
+                    // A declaring function's materialized `this`/`arguments`
+                    // slot is seeded by call setup. It is deliberately not an
+                    // indexed upvalue; a nested arrow captures the resulting
+                    // local cell as an ordinary ParentLocal source.
+                    Some(value)
                 } else if local.from_env
                     && let Some(value) = env.get_local(&local.name)
                     && !matches!(
@@ -172,6 +222,17 @@ impl Vm<'_> {
                     // Only a binding the caller passed in the frame's locals
                     // layer seeds a from_env slot; realm globals stay in the
                     // shared cell so closures observe live values.
+                    Some(value)
+                } else if local.from_env
+                    && !local.hoisted
+                    && !crate::function::is_call_frame_binding(&local.name)
+                    && let Some(value) = env.get_realm(&local.name)
+                {
+                    // A script-level `var`/function binding is realm-backed,
+                    // not an incoming lexical upvalue. Seed the compatibility
+                    // slot from the live realm; stores below synchronize the
+                    // global object and realm rather than creating a closure
+                    // snapshot.
                     Some(value)
                 } else if local.hoisted {
                     Some(Value::Undefined)
@@ -186,23 +247,118 @@ impl Vm<'_> {
         bytecode: &Bytecode,
         _locals: &[Slot],
         upvalues: &[Upvalue],
+        env: &CallEnv,
     ) -> Vec<Option<Upvalue>> {
         let mut next_received = 0;
         let mut local_upvalues = vec![None; bytecode.locals.len()];
+        let direct_eval_frame = matches!(
+            env.get_local(crate::DIRECT_EVAL_BINDING),
+            Some(Value::Boolean(true))
+        );
         for (slot, local) in bytecode.locals.iter().enumerate() {
+            if let Some(upvalue) = env.module_import_cell(&local.name) {
+                local_upvalues[slot] = Some(upvalue);
+                if local.is_received_upvalue() {
+                    next_received += 1;
+                }
+                continue;
+            }
+            if local.sloppy_global_fallback {
+                local_upvalues[slot] = env.realm_binding_cell(&local.name);
+                continue;
+            }
             if local.is_received_upvalue() {
                 if let Some(upvalue) = upvalues.get(next_received) {
                     local_upvalues[slot] = Some(upvalue.clone());
+                } else if env.deopt_bindings().is_some() {
+                    local_upvalues[slot] = env
+                        .deopt_bindings()
+                        .and_then(|bindings| bindings.cell(&local.name))
+                        .or_else(|| env.frame_binding_cell(&local.name));
                 }
                 next_received += 1;
             }
         }
         let plan = super::upvalue_resolver::resolve_upvalues(bytecode);
-        for slot in plan.cell_slots {
+        let mut cell_slots = plan.cell_slots;
+        if bytecode.needs_arguments_object() {
+            cell_slots.extend(
+                bytecode
+                    .locals
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(slot, local)| local.parameter.then_some(slot)),
+            );
+        }
+        if bytecode.contains_direct_eval()
+            || bytecode.contains_with()
+            || env.deopt_bindings().is_some()
+        {
+            cell_slots.extend(
+                bytecode
+                    .locals
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(slot, local)| {
+                        (!(local.sloppy_global_fallback || bytecode.global_scope && local.hoisted))
+                            .then_some(slot)
+                    }),
+            );
+            cell_slots.sort_unstable();
+            cell_slots.dedup();
+        }
+        cell_slots.extend(
+            bytecode
+                .locals
+                .iter()
+                .enumerate()
+                .filter_map(|(slot, local)| {
+                    (bytecode.local_slot(&local.name) == Some(slot)
+                        && env.module_live_binding_cell(&local.name).is_some())
+                    .then_some(slot)
+                }),
+        );
+        cell_slots.sort_unstable();
+        cell_slots.dedup();
+        for slot in cell_slots {
             let Some(local) = bytecode.locals.get(slot) else {
                 continue;
             };
             if local.is_received_upvalue() {
+                continue;
+            }
+            if bytecode.global_scope
+                && local.hoisted
+                && let Some(upvalue) = env.realm_binding_cell(&local.name)
+            {
+                local_upvalues[slot] = Some(upvalue);
+                continue;
+            }
+            if local.parameter
+                && bytecode.needs_arguments_object()
+                && let Some(upvalue) = env.frame_binding_cell(&local.name)
+            {
+                local_upvalues[slot] = Some(upvalue);
+                continue;
+            }
+            if bytecode.local_slot(&local.name) == Some(slot)
+                && let Some(upvalue) = env.module_live_binding_cell(&local.name)
+            {
+                local_upvalues[slot] = Some(upvalue);
+                continue;
+            }
+            if direct_eval_frame
+                && local.hoisted
+                && !bytecode
+                    .global_lexical_names()
+                    .iter()
+                    .any(|name| name == &local.name)
+                && !env.has_frame_binding(&local.name)
+                && let Some(upvalue) = env
+                    .deopt_bindings()
+                    .and_then(|bindings| bindings.cell(&local.name))
+            {
+                local_upvalues[slot] = Some(upvalue);
                 continue;
             }
             let value = _locals
@@ -217,99 +373,25 @@ impl Vm<'_> {
         local_upvalues
     }
 
-    /// Keeps the frame's shared `captured_env` copy of a slot binding current
-    /// when the slot changes, so closures sharing the Rc observe the update.
-    pub(super) fn write_through_captured(&self, name: &str, value: Value) {
-        {
-            let mut captured = self.captured_env.borrow_mut();
-            if captured.is_empty() {
-                return;
-            }
-            if let Some(slot_value) = captured.get_mut(name) {
-                *slot_value = value.clone();
-            }
+    /// Keeps a module's exported binding cell current for name-based writes.
+    pub(super) fn write_through_module_live_binding(&self, name: &str, value: Value) {
+        if let Some(binding) = self.env.module_live_binding_cell(name) {
+            binding.set(value);
         }
-        self.propagate_captured_write_to_parents(name, &value);
     }
 
-    /// Slot-addressed `write_through_captured`: resolves the binding name from
-    /// the slot metadata only when a closure actually shares this frame's
-    /// captured env, so the common no-capture local write skips the name hash
-    /// and the value clone entirely.
-    pub(super) fn write_through_captured_slot(&self, slot: usize, value: &Value) {
-        let mut captured = self.captured_env.borrow_mut();
-        if captured.is_empty() {
-            return;
-        }
+    /// Slot-addressed module live-binding update.
+    pub(super) fn write_through_module_live_binding_slot(&self, slot: usize, value: &Value) {
         if let Some(name) = self.bytecode.locals.get(slot).map(|local| &local.name) {
-            if let Some(slot_value) = captured.get_mut(name) {
-                *slot_value = value.clone();
-            }
-            let name = name.clone();
-            drop(captured);
-            self.propagate_captured_write_to_parents(&name, value);
-        }
-    }
-
-    /// Propagates a captured-binding write to any enclosing captured
-    /// environment that already holds the same name. A `for (let x of …)`
-    /// loop body runs under a fresh per-iteration captured env (see
-    /// [`fresh_iteration_scope`]), which is a disconnected snapshot of the
-    /// outer env. Without this, a closure created *before* the loop — and
-    /// therefore holding the original outer cell — never observes a write the
-    /// loop body makes to an outer binding (e.g. a callback that pushes into an
-    /// outer array that the loop reassigns each iteration). The per-iteration
-    /// loop variable is fresh and absent from the parent cells, so it is not
-    /// propagated; only genuinely-outer bindings are.
-    fn propagate_captured_write_to_parents(&self, name: &str, value: &Value) {
-        if self.captured_env_stack.is_empty() {
-            return;
-        }
-        // A per-iteration loop variable is a fresh binding each iteration and
-        // may shadow an outer binding of the same name; its write must stay
-        // local to the current iteration env, never reaching the enclosing
-        // captured cells.
-        if self
-            .captured_env_iteration_names
-            .iter()
-            .any(|names| names.iter().any(|candidate| candidate == name))
-        {
-            return;
-        }
-        for parent in &self.captured_env_stack {
-            if Rc::ptr_eq(parent, &self.captured_env) {
-                continue;
-            }
-            if let Some(slot_value) = parent.borrow_mut().get_mut(name) {
-                *slot_value = value.clone();
-            }
-        }
-    }
-
-    fn write_through_capture_writeback_slot(&self, slot: usize, value: &Value) {
-        let Some(writeback) = &self.capture_writeback else {
-            return;
-        };
-        let Some(name) = self.bytecode.locals.get(slot).map(|local| &local.name) else {
-            return;
-        };
-        fn writeback_name(writeback: &super::CaptureWriteback, name: &str, value: &Value) {
+            // Module live bindings describe the module's top-level declaration
+            // slot. A nested lexical may reuse the same source name but owns a
+            // distinct cell and must never update the export by coincidence.
+            if self.bytecode.local_slot(name) == Some(slot)
+                && let Some(binding) = self.env.module_live_binding_cell(name)
             {
-                let mut target = writeback.target.borrow_mut();
-                if writeback.names.iter().any(|candidate| candidate == name) {
-                    target.insert(name.to_owned(), value.clone());
-                }
-                for (source_name, target_name) in &writeback.aliases {
-                    if source_name == name {
-                        target.insert(target_name.clone(), value.clone());
-                    }
-                }
-            }
-            if let Some(parent) = writeback.parent.as_deref() {
-                writeback_name(parent, name, value);
+                binding.set(value.clone());
             }
         }
-        writeback_name(writeback, name, value);
     }
 
     pub(super) fn load_global(&mut self, name: &str) -> Result<Value, RuntimeError> {
@@ -321,14 +403,10 @@ impl Vm<'_> {
             if let Some(value) = self.env.get_local(name) {
                 return Ok(value);
             }
-            if !self
-                .env
-                .locals()
-                .contains_key(crate::SUPER_CONSTRUCTOR_BINDING)
+            if !self.env.has_local_binding(crate::SUPER_CONSTRUCTOR_BINDING)
                 && !self
                     .env
-                    .locals()
-                    .contains_key(crate::ACTIVE_CONSTRUCTOR_BINDING)
+                    .has_local_binding(crate::ACTIVE_CONSTRUCTOR_BINDING)
                 && let Some(value) = self.env.get(name)
             {
                 return Ok(value);
@@ -344,13 +422,18 @@ impl Vm<'_> {
         {
             return Ok(value);
         }
-        if !self.bytecode.global_scope
+        let deoptimized_sloppy_global = if !self.bytecode.global_scope
             && let Some(slot) = self.bytecode.local_slot(name)
             && self.bytecode.local_is_sloppy_global_fallback(slot)
-            && let Some(value) = self.locals.get(slot).and_then(Option::as_ref)
+            && let Some(value) = self.local_slot_value(slot)
         {
-            return Ok(value.clone());
-        }
+            if !value.is_uninitialized_lexical_marker() {
+                return Ok(value);
+            }
+            true
+        } else {
+            false
+        };
         if let Some(value) = self.env.module_import_value(name) {
             if value.is_uninitialized_lexical_marker() {
                 return Err(RuntimeError {
@@ -373,7 +456,10 @@ impl Vm<'_> {
         // over); check that first, then the shared realm, then a property
         // created directly on `globalThis` (`this.x = 1` and realm bindings
         // share one global namespace).
-        if let Some(value) = self.env.get(name) {
+        // Reconfiguring a captured sloppy global into an accessor detaches its
+        // realm cell. The frame still owns that now-invalidated cell, so skip
+        // its marker and resolve the accessor on `globalThis` below.
+        if !deoptimized_sloppy_global && let Some(value) = self.env.get(name) {
             if matches!(
                 &value,
                 Value::Function(function) if function.is_uninitialized_lexical_marker()
@@ -453,19 +539,19 @@ impl Vm<'_> {
         {
             return Ok(());
         }
-        if self.env.locals().contains_key(&name) {
+        if self.env.has_local_binding(&name) {
             self.env.insert(name.clone(), value.clone());
-            self.write_through_captured(&name, value);
+            self.write_through_module_live_binding(&name, value);
             self.sync_marked_dynamic_global(&name);
             return Ok(());
         }
         self.invalidate_array_prototype_cache(&name);
         if self.realm.borrow().contains_key(&name) {
-            self.realm.borrow_mut().insert(name.clone(), value.clone());
-            if self.env.locals().contains_key(&name) {
+            self.env.insert_realm(name.clone(), value.clone());
+            if self.env.has_local_binding(&name) {
                 self.env.insert(name.clone(), value.clone());
             }
-            self.write_through_captured(&name, value.clone());
+            self.write_through_module_live_binding(&name, value.clone());
             let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
                 Some(Value::Object(global_this)) => Some(global_this.clone()),
                 _ => None,
@@ -485,11 +571,11 @@ impl Vm<'_> {
         if let Some(global_this) = global_this {
             global_this.set(name.clone(), value.clone());
         }
-        self.realm.borrow_mut().insert(name.clone(), value.clone());
-        if self.env.locals().contains_key(&name) {
+        self.env.insert_realm(name.clone(), value.clone());
+        if self.env.has_local_binding(&name) {
             self.env.insert(name.clone(), value.clone());
         }
-        self.write_through_captured(&name, value);
+        self.write_through_module_live_binding(&name, value);
         self.sync_marked_dynamic_global(&name);
         Ok(())
     }
@@ -749,7 +835,21 @@ impl Vm<'_> {
         Ok(Value::String(typeof_value(value).into()))
     }
 
-    pub(super) fn load_local(&self, slot: usize) -> Result<Value, RuntimeError> {
+    pub(super) fn load_local(&mut self, slot: usize) -> Result<Value, RuntimeError> {
+        if let Some(cell) = self.local_upvalues.get(slot).and_then(Option::as_ref)
+            && let Some(local) = self.bytecode.locals.get(slot)
+            && self.env.is_realm_binding_cell(&local.name, cell)
+            && !self.realm.borrow().contains_key(&local.name)
+        {
+            let name = local.name.clone();
+            if let Some(value) = self.global_this_own_value(&name)? {
+                return Ok(value);
+            }
+            return Err(RuntimeError {
+                thrown: None,
+                message: format!("ReferenceError: undefined identifier `{name}`"),
+            });
+        }
         if let Some(value) = self.upvalue_slot_value(slot) {
             return self.checked_local_value(slot, value);
         }
@@ -798,6 +898,9 @@ impl Vm<'_> {
             &value,
             Value::Function(function) if function.is_uninitialized_lexical_marker()
         ) {
+            if is_compiler_temporary(&self.bytecode.locals[slot].name) {
+                return Ok(Value::Undefined);
+            }
             return Err(RuntimeError {
                 thrown: None,
                 message: format!(
@@ -844,7 +947,8 @@ impl Vm<'_> {
                 local_meta.from_env,
                 local_meta.hoisted,
                 self.env.has_module_import(&local_meta.name),
-                !local_meta.parameter
+                local_meta.from_env
+                    && !local_meta.parameter
                     && !local_meta.hoisted
                     && (self.env.is_immutable_lexical_binding(&local_meta.name)
                         || self.env.is_immutable_function_name(&local_meta.name)),
@@ -895,25 +999,19 @@ impl Vm<'_> {
             // Binding classes not migrated to cells still use the coexistence
             // snapshot/writeback path. A cell-backed lexical must not also write
             // by name: same-named shadowed bindings are distinct slots/cells.
-            self.write_through_captured_slot(slot, &value);
-            self.write_through_capture_writeback_slot(slot, &value);
+            self.write_through_module_live_binding_slot(slot, &value);
         } else if !from_env {
             // A declaring frame still mirrors its own cell into the coexistence
             // map for module live exports and not-yet-migrated consumers. A
             // received upvalue must never take this name-keyed path: its parent
             // binding is already updated through the shared cell, and a
             // same-named outer binding can be a different cell.
-            self.write_through_captured_slot(slot, &value);
-        } else if self
-            .capture_writeback
-            .as_ref()
-            .is_some_and(super::CaptureWriteback::syncs_cell_values)
-        {
-            self.write_through_capture_writeback_slot(slot, &value);
+            self.write_through_module_live_binding_slot(slot, &value);
         }
         if self.bytecode.global_scope
             && self.persist_global_lexicals
             && !hoisted
+            && self.bytecode.local_slot(&self.bytecode.locals[slot].name) == Some(slot)
             && self
                 .bytecode
                 .global_lexical_names()
@@ -931,15 +1029,22 @@ impl Vm<'_> {
         }
         if !uses_shared_cell && (from_env || self.bytecode.local_is_body_hoist_only(slot)) {
             let name = self.bytecode.locals[slot].name.clone();
-            if self.env.locals().contains_key(&name) {
+            if self.env.has_local_binding(&name) {
                 self.env.insert(name, value.clone());
             }
         }
-        let syncs_global_var = !uses_shared_cell
-            && ((from_env && !hoisted)
-                || (self.bytecode.global_scope
-                    && self.bytecode.local_is_body_hoist_only(slot)
-                    && !is_compiler_temporary(&self.bytecode.locals[slot].name)));
+        let shared_realm_cell = self
+            .local_upvalues
+            .get(slot)
+            .and_then(Option::as_ref)
+            .is_some_and(|cell| {
+                self.env
+                    .is_realm_binding_cell(&self.bytecode.locals[slot].name, cell)
+            });
+        let syncs_global_var = (from_env && !hoisted && (!uses_shared_cell || shared_realm_cell))
+            || (self.bytecode.global_scope
+                && self.bytecode.local_is_body_hoist_only(slot)
+                && !is_compiler_temporary(&self.bytecode.locals[slot].name));
         // Resolve `globalThis` into a local first so the `self.realm` borrow is
         // released before the body re-borrows it mutably (an `if let` chain
         // would otherwise hold the immutable borrow across the body and panic on
@@ -958,9 +1063,9 @@ impl Vm<'_> {
             let name = self.bytecode.locals[slot].name.clone();
             global_this.set(name.clone(), value.clone());
             if self.realm.borrow().contains_key(&name) {
-                self.realm.borrow_mut().insert(name.clone(), value.clone());
+                self.env.insert_realm(name.clone(), value.clone());
             }
-            if self.env.locals().contains_key(&name) {
+            if self.env.has_local_binding(&name) {
                 self.env.insert(name, value);
             }
         }
@@ -1051,20 +1156,6 @@ impl Vm<'_> {
                     }
                     return Ok(());
                 }
-                if self.capture_writeback_targets_name(&name)
-                    && !self.has_realm_or_global_this_binding(&name)
-                {
-                    if self.env.locals().contains_key(&name) {
-                        self.env.insert(name.clone(), value.clone());
-                    }
-                    self.write_through_captured(&name, value.clone());
-                    if let Some(source) = self.env.captured_binding_source_env()
-                        && source.borrow().contains_key(&name)
-                    {
-                        source.borrow_mut().insert(name, value);
-                    }
-                    return Ok(());
-                }
                 self.store_global_sloppy(name.clone(), value)?;
                 self.record_sloppy_global_name(&name);
                 let global_value = self.load_global(&name)?;
@@ -1083,6 +1174,16 @@ impl Vm<'_> {
     }
 
     pub(super) fn clear_local(&mut self, slot: usize) -> Result<(), RuntimeError> {
+        let deactivated_cell = self
+            .local_upvalues
+            .get(slot)
+            .and_then(Option::as_ref)
+            .cloned();
+        let deactivates_lexical = self
+            .bytecode
+            .locals
+            .get(slot)
+            .is_some_and(|local| !local.hoisted);
         let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
             thrown: None,
             message: "bytecode local index out of bounds".to_owned(),
@@ -1104,6 +1205,9 @@ impl Vm<'_> {
             )));
         }
         if let Some(name) = self.bytecode.local_name_at(slot) {
+            if deactivates_lexical && let Some(cell) = &deactivated_cell {
+                self.env.remove_deopt_cell_if(name, cell);
+            }
             if self
                 .bytecode
                 .locals
@@ -1137,12 +1241,12 @@ impl Vm<'_> {
                 .map(|property| property.value)
                 .unwrap_or(value);
             self.invalidate_array_prototype_cache(&name);
-            self.realm.borrow_mut().insert(name.clone(), value.clone());
-            if self.env.locals().contains_key(&name) {
+            self.env.insert_realm(name.clone(), value.clone());
+            if self.env.has_local_binding(&name) {
                 self.env.insert(name.clone(), value.clone());
             }
             self.clear_global_var_local(&name);
-            self.write_through_captured(&name, value);
+            self.write_through_module_live_binding(&name, value);
             return Ok(());
         }
         global_this.define_property(
@@ -1150,12 +1254,12 @@ impl Vm<'_> {
             Property::data(value.clone(), true, true, false),
         );
         self.invalidate_array_prototype_cache(&name);
-        self.realm.borrow_mut().insert(name.clone(), value.clone());
-        if self.env.locals().contains_key(&name) {
+        self.env.insert_realm(name.clone(), value.clone());
+        if self.env.has_local_binding(&name) {
             self.env.insert(name.clone(), value.clone());
         }
         self.clear_global_var_local(&name);
-        self.write_through_captured(&name, value);
+        self.write_through_module_live_binding(&name, value);
         Ok(())
     }
 
@@ -1172,177 +1276,6 @@ impl Vm<'_> {
             *local = None;
         }
     }
-    pub(super) fn apply_selected_env(
-        &mut self,
-        env: CallEnv,
-        binding_names: &[String],
-        injected: &HashMap<String, Value>,
-    ) {
-        for name in binding_names {
-            if is_compiler_temporary(name) || is_call_frame_binding(name) {
-                continue;
-            }
-            let Some(value) = env.get(name) else {
-                continue;
-            };
-            if injected.get(name) != Some(&value) {
-                self.write_through_parameter_captured_envs(name, &value);
-            }
-            // An injected caller binding the callee never modified must not
-            // write back: a newer value may have arrived through the shared
-            // captured_env while this call was in flight.
-            if injected.get(name) == Some(&value) {
-                if let Some(index) = self.bytecode.local_slot(name)
-                    && let Some(current) = self.locals[index].clone()
-                    && Some(&current) != injected.get(name)
-                {
-                    self.write_through_captured(name, current.clone());
-                    if self.env.locals().contains_key(name) {
-                        self.env.insert(name.clone(), current);
-                    }
-                    continue;
-                }
-                let captured = self
-                    .captured_env
-                    .borrow()
-                    .get(name)
-                    .cloned()
-                    .or_else(|| env.get_realm(name));
-                if let Some(captured) = captured
-                    && Some(&captured) != injected.get(name)
-                {
-                    if let Some(index) = self.bytecode.local_slot(name) {
-                        if self.should_skip_global_shadow_writeback(index, name, &captured) {
-                            continue;
-                        }
-                        self.locals[index] = Some(captured.clone());
-                    } else if self.env.locals().contains_key(name) {
-                        self.env.insert(name.clone(), captured.clone());
-                    }
-                    self.write_through_captured(name, captured);
-                }
-                continue;
-            }
-            if let Some(index) = self.bytecode.local_slot(name) {
-                if self.should_skip_global_shadow_writeback(index, name, &value) {
-                    continue;
-                }
-                self.locals[index] = Some(value.clone());
-                self.write_through_captured(name, value);
-                if self.env.locals().contains_key(name) {
-                    let value = self.locals[index]
-                        .as_ref()
-                        .expect("slot was just assigned")
-                        .clone();
-                    self.env.insert(name.clone(), value);
-                }
-                if !self.env.locals().contains_key(name)
-                    && !self.has_captured_binding(name)
-                    && env.realm_contains(name)
-                {
-                    let value = self.locals[index]
-                        .as_ref()
-                        .expect("slot was just assigned")
-                        .clone();
-                    env.insert_realm(name.clone(), value);
-                }
-            } else if self.env.locals().contains_key(name) {
-                // A caller-scope binding this frame itself carries in its
-                // locals layer (e.g. an outer `let` riding through nested
-                // calls): keep it current so it propagates further out.
-                self.env.insert(name.clone(), value.clone());
-                self.write_through_captured(name, value);
-            } else if name == "this"
-                && self
-                    .env
-                    .locals()
-                    .contains_key(crate::SUPER_CONSTRUCTOR_BINDING)
-            {
-                self.env.insert(name.clone(), value);
-            } else if !self.has_captured_binding(name) && env.realm_contains(name) {
-                env.insert_realm(name.clone(), value);
-            }
-        }
-        self.refresh_derived_constructor_this_from_captured();
-    }
-
-    fn should_skip_global_shadow_writeback(&self, index: usize, name: &str, value: &Value) -> bool {
-        self.global_this_property(name).as_ref() == Some(value)
-            && self.locals.get(index).and_then(Option::as_ref) != Some(value)
-    }
-
-    fn has_captured_binding(&self, name: &str) -> bool {
-        self.captured_env.borrow().contains_key(name)
-            || self
-                .env
-                .captured_binding_source_env()
-                .is_some_and(|source| source.borrow().contains_key(name))
-    }
-
-    pub(super) fn capture_writeback_targets_name(&self, name: &str) -> bool {
-        fn writeback_contains(writeback: &super::CaptureWriteback, name: &str) -> bool {
-            writeback.names.iter().any(|candidate| candidate == name)
-                || writeback
-                    .aliases
-                    .iter()
-                    .any(|(source, target)| source == name || target == name)
-                || writeback
-                    .parent
-                    .as_deref()
-                    .is_some_and(|parent| writeback_contains(parent, name))
-        }
-
-        self.capture_writeback
-            .as_ref()
-            .is_some_and(|writeback| writeback_contains(writeback, name))
-    }
-
-    pub(super) fn write_through_direct_eval_parameter_captures(
-        &self,
-        env: &CallEnv,
-        injected: &HashMap<String, Value>,
-    ) {
-        for name in env.locals().keys() {
-            let Some(source_name) =
-                name.strip_prefix(crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX)
-            else {
-                continue;
-            };
-            let Some(value) = env.get(source_name) else {
-                continue;
-            };
-            self.captured_env
-                .borrow_mut()
-                .insert(source_name.to_owned(), value.clone());
-            self.captured_env
-                .borrow_mut()
-                .insert(name.clone(), Value::Boolean(true));
-            for captured_env in &self.parameter_captured_envs {
-                let mut captured_env = captured_env.borrow_mut();
-                captured_env.insert(source_name.to_owned(), value.clone());
-                captured_env.insert(name.clone(), Value::Boolean(true));
-            }
-        }
-        for (name, value) in env.locals() {
-            if injected.get(name) == Some(value) {
-                continue;
-            }
-            self.write_through_parameter_captured_envs(name, value);
-        }
-    }
-
-    fn write_through_parameter_captured_envs(&self, name: &str, value: &Value) {
-        if self.env.is_immutable_function_name(name) {
-            return;
-        }
-        for captured_env in &self.parameter_captured_envs {
-            let mut captured_env = captured_env.borrow_mut();
-            if captured_env.contains_key(name) {
-                captured_env.insert(name.to_owned(), value.clone());
-            }
-        }
-    }
-
     /// Resolves a dynamic environment name to the innermost currently-active
     /// frame slot. Static bytecode is already slot-indexed; this reverse lookup
     /// is only for `CallEnv` round-trips used by direct eval and native calls.
@@ -1368,7 +1301,24 @@ impl Vm<'_> {
         // Write each non-realm local back to its slot, to the frame's own
         // internal/caller-scope binding layer, or (for a genuinely new binding)
         // to the shared realm.
-        let locals = env.into_locals();
+        let direct_parameter_eval_values = env
+            .deopt_bindings()
+            .map(|bindings| {
+                bindings
+                    .names()
+                    .into_iter()
+                    .filter_map(|name| {
+                        name.strip_prefix(crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX)
+                            .and_then(|parameter| {
+                                bindings
+                                    .get(parameter)
+                                    .map(|value| (parameter.to_owned(), value))
+                            })
+                    })
+                    .collect::<HashMap<_, _>>()
+            })
+            .unwrap_or_default();
+        let locals = env.into_binding_snapshot();
         let direct_parameter_eval_vars = locals
             .keys()
             .filter_map(|name| {
@@ -1376,21 +1326,34 @@ impl Vm<'_> {
                     .map(str::to_owned)
             })
             .collect::<HashSet<_>>();
-        for (name, value) in locals {
+        for (name, mut value) in locals {
             if name.starts_with(crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX) {
-                self.env.insert(name, value);
+                self.env.insert_deopt(name, value);
+                continue;
+            }
+            if self.in_parameter_prologue() && direct_parameter_eval_vars.contains(&name) {
+                if let Some(parameter_value) = direct_parameter_eval_values.get(&name) {
+                    value = parameter_value.clone();
+                }
+                if let Some(parameter_var_slot) = self.active_local_slot_for_env_name(&name) {
+                    if let Some(local) = self.locals.get_mut(parameter_var_slot) {
+                        *local = Some(value.clone());
+                    }
+                    if let Some(upvalue) = self
+                        .local_upvalues
+                        .get(parameter_var_slot)
+                        .and_then(Option::as_ref)
+                    {
+                        upvalue.set(value.clone());
+                    }
+                }
+                self.env.insert_deopt(name, value);
                 continue;
             }
             if let Some(index) = self.active_local_slot_for_env_name(&name) {
-                if self.in_parameter_prologue() && direct_parameter_eval_vars.contains(&name) {
-                    self.env.insert(name, value);
-                    continue;
-                }
                 if self.in_parameter_prologue()
                     && !self.bytecode.local_is_parameter(index)
-                    && (is_call_frame_binding(&name)
-                        || !self.bytecode.local_is_from_env(index)
-                        || !self.captured_env.borrow().contains_key(&name))
+                    && (is_call_frame_binding(&name) || !self.bytecode.local_is_from_env(index))
                 {
                     self.env.insert(name, value);
                     continue;
@@ -1416,17 +1379,28 @@ impl Vm<'_> {
                         continue;
                     }
                     self.locals[index] = Some(value.clone());
-                    self.write_through_captured(&name, value.clone());
-                    if self.bytecode.global_scope && self.realm.borrow().contains_key(&name) {
-                        self.realm.borrow_mut().insert(name, value);
+                    if let Some(upvalue) = self.local_upvalues.get(index).and_then(Option::as_ref) {
+                        upvalue.set(value.clone());
+                    }
+                    self.write_through_module_live_binding(&name, value.clone());
+                    let realm_backed_slot = (self.bytecode.global_scope
+                        && self.bytecode.local_is_body_hoist_only(index)
+                        && !is_compiler_temporary(&name))
+                        || self
+                            .local_upvalues
+                            .get(index)
+                            .and_then(Option::as_ref)
+                            .is_some_and(|cell| self.env.is_realm_binding_cell(&name, cell));
+                    if realm_backed_slot && self.realm.borrow().contains_key(&name) {
+                        self.env.insert_realm(name, value);
                     } else if syncs_global_this {
                         self.sync_global_this_own_property(&name, value);
                     }
-                } else if self.env.locals().contains_key(&name) {
+                } else if self.env.has_local_binding(&name) {
                     self.env.insert(name.clone(), value.clone());
-                    self.write_through_captured(&name, value);
+                    self.write_through_module_live_binding(&name, value);
                 }
-            } else if self.env.locals().contains_key(&name)
+            } else if self.env.has_local_binding(&name)
                 || (self.in_parameter_prologue()
                     && !is_call_frame_binding(&name)
                     && !is_compiler_temporary(&name))
@@ -1439,7 +1413,6 @@ impl Vm<'_> {
                 self.env.insert(name, value);
             }
         }
-        self.refresh_derived_constructor_this_from_captured();
     }
 
     fn sync_global_this_own_property(&self, name: &str, value: Value) {
@@ -1450,7 +1423,7 @@ impl Vm<'_> {
         };
         if global_this.has_own_property(name) {
             global_this.set(name.to_owned(), value.clone());
-            self.realm.borrow_mut().insert(name.to_owned(), value);
+            self.env.insert_realm(name.to_owned(), value);
         }
     }
 
@@ -1458,36 +1431,7 @@ impl Vm<'_> {
         let Some(global_value) = self.global_this_property(name) else {
             return false;
         };
-        self.captured_env
-            .borrow()
-            .get(name)
-            .or_else(|| self.env.locals().get(name))
-            == Some(&global_value)
-    }
-
-    fn refresh_derived_constructor_this_from_captured(&mut self) {
-        if self.env.locals().contains_key("this")
-            || (!self
-                .env
-                .locals()
-                .contains_key(crate::SUPER_CONSTRUCTOR_BINDING)
-                && !self
-                    .env
-                    .locals()
-                    .contains_key(crate::ACTIVE_CONSTRUCTOR_BINDING))
-        {
-            return;
-        }
-        let Some(value) = self.captured_env.borrow().get("this").cloned() else {
-            return;
-        };
-        if matches!(
-            &value,
-            Value::Function(function) if function.is_uninitialized_lexical_marker()
-        ) {
-            return;
-        }
-        self.env.insert("this".to_owned(), value);
+        self.env.get_local(name) == Some(global_value)
     }
 
     /// `delete identifier` in non-strict mode (sloppy): attempts to delete the
@@ -1508,8 +1452,8 @@ impl Vm<'_> {
                 if self.locals[slot].is_some() {
                     if self.bytecode.local_is_eval_deletable(slot) {
                         self.locals[slot] = None;
+                        self.local_upvalues[slot] = None;
                         self.env.remove(name);
-                        self.captured_env.borrow_mut().remove(name);
                         return true;
                     }
                     return false;
@@ -1538,11 +1482,14 @@ impl Vm<'_> {
         }
         let deleted = global_this.delete_own_property(name);
         if deleted {
-            self.realm.borrow_mut().remove(name);
+            self.env.remove_realm(name);
             // Clear the cached local slot if the sloppy global was mirrored there.
             if let Some(slot) = self.bytecode.local_slot(name) {
                 if let Some(local) = self.locals.get_mut(slot) {
                     *local = None;
+                }
+                if let Some(upvalue) = self.local_upvalues.get_mut(slot) {
+                    *upvalue = None;
                 }
             }
         }
@@ -1592,25 +1539,9 @@ impl Vm<'_> {
         }
     }
 
-    /// Creates a fresh captured-environment cell for per-iteration loop
-    /// bindings. The new cell is seeded from the current local slot values,
-    /// making it an independent snapshot. Closures created after this point
-    /// capture from the new cell; closures from previous iterations retain
-    /// their old cell. Write-through from the loop body still targets the
-    /// new cell, which is fine since it belongs to THIS iteration's closures.
+    /// Replaces each captured loop binding with a fresh per-iteration cell.
     pub(super) fn fresh_iteration_scope(&mut self, slots: &[usize]) {
-        let mut new_env = self.captured_env.borrow().clone();
-        let mut iteration_names = Vec::with_capacity(slots.len());
         for &slot in slots {
-            if let Some(name) = self.bytecode.local_name_at(slot) {
-                // The source name is sufficient: per-iteration identity lives in
-                // the fresh Upvalue below, while this legacy name list only keeps
-                // coexistence writeback from reaching a shadowed outer binding.
-                iteration_names.push(name.to_owned());
-                if let Some(Some(value)) = self.locals.get(slot) {
-                    new_env.insert(name.to_owned(), value.clone());
-                }
-            }
             if let Some(upvalue) = self.local_upvalues.get_mut(slot)
                 && upvalue.is_some()
             {
@@ -1625,26 +1556,6 @@ impl Vm<'_> {
                 *upvalue = Some(Upvalue::new(value));
             }
         }
-        // Record these as per-iteration bindings for the enclosing loop so a
-        // write to one never leaks to an outer captured env that may hold a
-        // shadowed binding of the same name (preserves the loop variable's
-        // per-iteration identity and TDZ).
-        if let Some(top) = self.captured_env_iteration_names.last_mut() {
-            *top = iteration_names;
-        }
-        self.captured_env = Rc::new(RefCell::new(new_env));
-    }
-
-    pub(super) fn push_captured_env(&mut self) {
-        self.captured_env_stack.push(Rc::clone(&self.captured_env));
-        self.captured_env_iteration_names.push(Vec::new());
-    }
-
-    pub(super) fn pop_captured_env(&mut self) {
-        if let Some(env) = self.captured_env_stack.pop() {
-            self.captured_env = env;
-        }
-        self.captured_env_iteration_names.pop();
     }
 
     pub(super) fn drain_promise_jobs(&mut self) -> Result<(), RuntimeError> {

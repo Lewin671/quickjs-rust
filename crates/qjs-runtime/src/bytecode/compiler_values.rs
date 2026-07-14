@@ -500,16 +500,13 @@ impl Compiler {
         } else {
             name
         };
-        let local_names = collect_function_local_names(
-            if is_anonymous_default_export {
-                None
-            } else {
-                Some(name)
-            },
-            params,
-            body,
-            true,
-        );
+        // A FunctionDeclaration's name belongs to the surrounding declaration
+        // environment. References from its body must therefore capture that
+        // outer binding (which is also what makes an exported declaration a
+        // live binding), rather than creating a separate function-name cell.
+        // Named FunctionExpressions pass their name here instead and retain
+        // their distinct inner immutable binding.
+        let local_names = collect_function_local_names(None, params, body, true);
         let (bytecode, lexical_captures) = self.compile_nested_function_body(
             params,
             body,
@@ -520,7 +517,7 @@ impl Compiler {
         )?;
         self.emit(Op::NewFunction {
             name: Some(function_name.to_owned()),
-            has_name_binding: !is_anonymous_default_export,
+            has_name_binding: false,
             immutable_name_binding: false,
             params: params.clone(),
             local_names,

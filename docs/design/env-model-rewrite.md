@@ -1,212 +1,201 @@
 # Environment / Binding Model Rewrite
 
-Status: active migration; S1-S4 landed. Implementation tracked by
-`tasks/T016-environment-model-rewrite.md`. This rewrite is the
-keystone named in `AGENTS.md`: it is the shared root of the remaining
-closure/`eval`/method capture-staleness failures *and* the per-call allocation
-cost, and it subsumes `tasks/T014-var-closure-binding-staleness.md` and
-`tasks/T011-call-performance.md`. Keep this document in sync as slices land.
+Status: complete through S6. The final exact all-case comparison reports zero
+QuickJS-NG-pass/quickjs-rust-fail cases; campaign verification is recorded in
+`tasks/T016-environment-model-rewrite.md`.
 
-## How the binding model works today (relevant facts)
+T016 is the environment-model keystone named in `AGENTS.md`. It replaces the
+old snapshot-and-writeback closure representation with one shared cell per
+captured binding. The same rewrite also removes the per-user-call locals
+`HashMap` that dominated T011 call cost.
 
-References verified 2026-06-21 against `crates/qjs-runtime`.
+## Completed representation
 
-- `Value` (`value/mod.rs:23`) is an enum; `Function`, `Array`, `Object`,
-  `Proxy`, `Map`, `Set` hold `Rc`/`Rc<RefCell<…>>`. There is no boxed-binding
-  variant.
-- A frame's locals are slot-indexed already: `Vm.locals: Vec<Slot>` where
-  `Slot = Option<Value>` (`bytecode/vm.rs:56`), seeded by
-  `initial_slots` (`bytecode/vm_bindings.rs:146`). Reads/writes use
-  `Op::LoadLocal(slot)` / `Op::StoreLocal(slot)` (`vm_bindings.rs:593`, `:648`).
-- Captured bindings, however, are **name-keyed and snapshot-based**:
-  - `Function.env: HashMap<String, Value>` (`function/value.rs`) is a
-    creation-time snapshot built by `function_capture_env`
-    (`bytecode/vm_capture.rs:19`).
-  - `Function.captured_env: Rc<RefCell<HashMap<String, Value>>>` is a cell
-    *shared* between sibling closures created in the same frame, so a write by
-    one is seen by another (`vm_capture.rs:235` `refresh_captured_env`).
-  - `Function.capture_writeback: Option<CaptureWriteback>`
-    (`bytecode/vm_generator.rs:51`: `{ target, names, aliases, parent }`) is a
-    heuristic descriptor that propagates a closure's writes back up to the
-    declaring frame's cell, with a `parent` chain for nesting.
-  - `CallEnv.locals: HashMap<String, Value>` (`function/env.rs:44`) is the
-    name-keyed env layer rebuilt per call by `with_frame_locals`
-    (`env.rs:464`).
-- Keeping the snapshot, the shared cell, and the slot copy coherent requires a
-  family of refresh passes in `vm_capture.rs`: `refresh_captured_env`,
-  `refresh_locals_from_captured_env`, `refresh_live_locals_from_captured_env`,
-  `refresh_shared_captured_locals_after_call`, `refresh_call_env_from_captured_env`,
-  plus `write_through_capture_writeback_slot` (`vm_bindings.rs:204`). Blast
-  radius today: ~55 `captured_env` sites and ~23 `capture_writeback` sites
-  across 12 files.
-- Before S3, names that shadowed an outer binding were stored under a mangled
-  key `\0lexical:<name>:<slot>` and refresh/eval paths had to recover the source
-  name. S3 removed that generic encoding: ordinary bytecode remains slot-indexed,
-  while the temporary dynamic `CallEnv` bridge resolves a source name to the
-  innermost active slot. Direct-eval cell exposure is completed in S6.
+### Frame locals and captured bindings
 
-### Why this is the root of two problem classes
+- `Vm.locals` remains the dense `Vec<Option<Value>>` fast path for ordinary
+  non-captured locals.
+- `Vm.local_upvalues: Vec<Option<Upvalue>>` is a parallel sparse side vector.
+  A slot classified as captured owns one `Upvalue = Rc<RefCell<Value>>`; local
+  loads and stores use that cell instead of the bare value.
+- `Function.upvalues: Vec<Upvalue>` holds a closure's received cells by
+  compiler-assigned index. `UpvalueSource::ParentLocal(slot)` and
+  `UpvalueSource::ParentUpvalue(index)` describe how a child receives each
+  cell when it is created.
+- A callee's received binding is attached to its local slot during frame
+  initialization. The declaring frame, sibling closures, nested closures, and
+  suspended continuations therefore read and write the same cell directly.
+- Captured `for`/`for-in`/`for-of` lexical bindings receive a fresh cell at
+  each specification-required per-iteration environment boundary.
 
-1. **Correctness (capture staleness).** Because a binding lives in three places
-   (frame slot, snapshot `env`, shared `captured_env`) kept in sync by
-   heuristics, any uncovered path can desync. Before S2-S3 this included stale
-   declaring frames, class-inner-name collisions (M2), and per-iteration
-   captures; those now use shared slot cells. The remaining migration targets
-   are the remaining non-cell legacy environment paths plus dynamic `eval`/
-   `with` name resolution. Generator/async suspension and function parameters/
-   `var` captures use shared cells as of S4.
-2. **Performance.** Every call rebuilds a `HashMap<String, Value>` of locals and
-   clones caller bindings into it (`with_frame_locals`, `function_capture_env`).
-   Under nested-call load this is the dominant cost and the source of the ~536
-   `TypedArray/*` timeouts (T011).
+The resolver and VM use slot/upvalue identity, not encoded binding names.
+Shadowed names are distinct slots and cells, so class inner names, Annex B
+bindings, and nested same-named lexicals cannot alias accidentally.
 
-A single mechanism — a **shared cell per captured binding, resolved by index** —
-removes all three storage copies and every refresh/writeback heuristic at once.
+### Function and realm state
 
-## Target model: slot-indexed locals + indexed upvalue cells
+Bytecode functions store a typed shared `Realm` plus indexed upvalues. Their
+opaque native-context map is empty; it remains only for native functions that
+need closure-like host state. Bound functions inherit the target's creation
+realm. Dynamic Function constructors create a detached realm from the required
+dynamic scope snapshot.
 
-The standard closure representation (Lua upvalues, V8 context slots, QuickJS
-`var_ref`). One concept replaces the snapshot + cell + writeback trio.
+Named function expressions have one narrow extra cell,
+`immutable_env_value`, for the immutable self-name when that outer binding is
+not represented as a normal received upvalue. This preserves self-reference in
+nested closures and generators without restoring a general name snapshot.
 
-- `type Upvalue = Rc<RefCell<Value>>` — one heap cell per *captured* binding.
-  (Stays `Rc<RefCell<…>>` until the GC slice of the perf track lands; the public
-  shape is `Upvalue`, so the backing store can change without touching call
-  sites.)
-- A local slot the compiler proves is captured by some inner closure is a
-  **cell slot**: `Slot` becomes
-  `enum Slot { Empty, Value(Value), Cell(Upvalue) }` (or the declaring frame
-  keeps `Vec<Option<Upvalue>>` for the captured subset alongside the existing
-  `Vec<Option<Value>>` for the non-captured majority — decided in S1 by
-  benchmark; most slots are never captured and must stay a bare `Value`).
-- A `Function` stores `upvalues: Vec<Upvalue>` — the cells it closed over,
-  indexed by a compile-time **upvalue index**, *not* a name. `Function.env`,
-  `Function.captured_env`, and `Function.capture_writeback` are deleted.
-- New ops: `Op::LoadUpvalue(u16)`, `Op::StoreUpvalue(u16)` for closure access to
-  a captured outer binding; `Op::LoadCellLocal(slot)`/`Op::StoreCellLocal(slot)`
-  (or fold into `LoadLocal` via the `Slot::Cell` arm) for the declaring frame's
-  access to its own boxed local. `Op::NewFunction` carries
-  `upvalue_sources: Vec<UpvalueSource>` where
-  `enum UpvalueSource { ParentLocal(slot), ParentUpvalue(u16) }` — at closure
-  creation the VM reads each source from the *current* frame (its cell slot or
-  its own upvalue vector) and pushes the shared `Rc` into the new function's
-  `upvalues`. No names, no HashMap, no snapshot.
+Captured script-global `var` and function bindings use the lazily allocated
+`RealmState.binding_cells` table. Closures receive those cells by upvalue index,
+and global-object/realm writes synchronize an existing cell. Sloppy
+global-fallback slots attach the same cell, so a caller observes a nested
+callee's global write immediately instead of retaining a frame snapshot.
+Accessor redefinition, deletion, or replacement with an incompatible data
+descriptor invalidates the corresponding cached global cell. Hoisted
+non-global locals and call-frame bindings are excluded, so
+derived-constructor `this`, parameters, and local declarations do not fall
+through to unrelated realm values.
 
-Reads/writes of a captured binding now go straight through the one shared cell,
-so siblings, forwarded calls, generators-on-resume, and the declaring frame all
-observe every write with zero refresh passes.
+Arrow functions capture lexical `this`, `arguments`, and `new.target` through
+explicit slots/cells. The declaring ordinary function materializes its own
+call-frame slots first; those slots are not incoming upvalues, which keeps
+same-named globals from shifting positional upvalue indices.
 
-## Compiler changes (`qjs-parser` unaffected; AST unchanged)
+Sloppy simple functions with a mapped `arguments` object likewise attach
+parameter slots to the exact cells held by the mapped index accessors. A
+nested helper reading `arguments[0]` therefore sees the current parameter
+without caller-name forwarding.
 
-- Resolver pass (extends the existing scope analysis that already produces
-  `lexical_captures`): classify every binding as **plain** (never captured) or
-  **cell** (captured by ≥1 nested function). Assign cell slots and, per nested
-  function, an ordered `upvalue_sources` list. This replaces
-  `closure_referenced_global_names` / `closure_written_binding_names` /
-  `lexical_captures` (`bytecode/ir.rs`, `compiler_lexical.rs`).
-- Per-iteration `let`/`const` in loops: emit a fresh cell per iteration
-  (the spec's per-iteration environment) — a new cell allocation at the loop
-  back-edge, which is exactly the correct semantics and removes the
-  `compiler_control.rs` per-iteration captured-env juggling.
-- The `\0lexical:<name>:<slot>` mangling is **deleted**:
-  shadowing is now expressed by distinct slot indices, so name collisions cannot
-  occur and the unmangling paths in `vm.rs` go away.
-- `with` and direct `eval` (the two dynamic-scope escape hatches) keep a
-  name-keyed fallback: a function containing a direct `eval` is compiled in a
-  "deopt" mode where its captured bindings are *also* exposed by name (the cells
-  are registered in a name→cell map handed to the eval'd code). This is the one
-  place a name map survives, and it is gated on `bytecode.contains_direct_eval`.
+### Call environment
 
-## VM changes
+`CallEnv` is no longer the authoritative storage for ordinary lexical
+bindings. It carries:
 
-- `Vm.captured_env`, `Vm.captured_env_stack`, `Vm.parameter_captured_envs`,
-  `Vm.capture_writeback` are deleted. A frame gains `upvalues: Vec<Upvalue>`
-  (its own closed-over cells, moved in from `Function.upvalues` at entry).
-- `initial_slots` (`vm_bindings.rs:146`) allocates an `Upvalue` cell for each
-  cell slot (seeded `Undefined` or the hoisted value); plain slots stay bare.
-- The entire refresh/writeback family in `vm_capture.rs` and
-  `write_through_capture_writeback_slot` in `vm_bindings.rs` is removed.
-- `Op::NewFunction` handler (`vm.rs:471`): build `upvalues` by reading each
-  `UpvalueSource` from the current frame; drop `function_capture_env`,
-  `insert_lexical_captures`, `capture_writeback_for_bytecode`,
-  `refresh_captured_env`.
-- `CallEnv` (`function/env.rs`) keeps only what is genuinely cross-call and
-  not a local: realm handle, global-lexical/immutable sets, private
-  environment, module host/imports, catch bindings. Its `locals: HashMap` and
-  the `activation_captured_env` / `captured_binding_source_env` /
-  `parameter_captured_envs` fields are removed; `with_frame_locals` no longer
-  clones a per-call locals map — the perf win.
-- Generators/async (`vm_generator.rs`, `async_function.rs`): a suspended frame
-  already owns its `locals`; it now also owns its `upvalues: Vec<Upvalue>`.
-  Because cells are shared `Rc`, resume sees caller writes for free — the
-  per-step capture write-back the generator design called out (risk #2 there)
-  is deleted.
+- the shared realm and global lexical metadata;
+- private/module/host context;
+- a small `FrameBindings` cell vector used by call metadata, native builtins,
+  and cold dynamic compatibility paths;
+- an optional `DynamicBindings` name-to-cell map for dynamic scope;
 
-## Migration / slice plan (each slice = one reviewable unit, gated)
+The realm binding-cell table belongs to the shared `RealmState`, not to
+`CallEnv`. Consequently every call view in a realm sees the same captured
+global cell without carrying another per-frame field.
 
-Every slice runs `./scripts/check.sh` and `./scripts/compare-qjs.sh` before
-push (runtime semantics), and reverts on any regression — the ~42k passing
-cases are the safety net. Slices are ordered so the engine stays green at each
-step; the name-keyed model and the cell model coexist until S5 deletes the old
-one.
+Ordinary user calls create an empty function frame and insert required call
+metadata directly into the small vector. They do not allocate a per-call
+locals `HashMap`, copy caller locals, refresh a captured snapshot, or write
+callee values back to a caller map. Cold consumers may request an owned
+`BindingSnapshot`, but snapshots do not participate in lexical identity.
 
-- **S1 — Upvalue type + resolver classification (complete).** Add
-  `Upvalue` and the `UpvalueSource`/cell-slot resolver output without changing
-  behavior. Land the benchmark harness for the call path (baseline numbers for
-  T011). S2 subsequently chose the design's side-vector representation, so the
-  existing local ops dispatch through `Vm.local_upvalues` instead of adding
-  distinct upvalue opcodes.
-- **S2 — Cell slots for the simplest case: a captured non-shadowing `let`/
-  `const` read+written by one nested function (complete).** The implementation
-  uses `Vm.local_upvalues` alongside bare local slots: closure creation shares
-  the parent's cell through `Function.upvalues`, child `from_env` slots attach
-  that cell at frame entry, and local loads/stores read/write it directly. The
-  old name-keyed data remains only as a coexistence path until S3-S6 remove the
-  remaining binding classes and dynamic-scope fallback.
-- **S3 — Shadowing + multiple/nested closures + per-iteration loop cells
-  (complete).** Generic lexicals keep source names and use slot/cell identity;
-  dynamic name round-trips select the innermost active slot. Cell-backed
-  received bindings bypass the legacy name writeback path, including the M2
-  class-inner-name/Annex B collision cases. `FreshIterationScope` installs a
-  new cell at the first C-style `for` iteration boundary when required and at
-  every loop back-edge. The module namespace map has a marked cell-write bridge
-  that is intentionally deleted with the old model in S5.
-- **S4 — Generators/async + parameter/function-scope captures (complete).**
-  Captured parameters and body `var`/function declarations are parent-local
-  cells, while actual received captures alone consume incoming upvalue slots.
-  Suspended frames retain both `upvalues` and `local_upvalues`; the generic
-  per-step capture refresh/write-back passes are gone. The temporary dynamic
-  Function marked-realm compatibility path synchronizes existing global
-  properties at their write sites and preserves call-frame bindings across
-  generator resumes. TLA modules explicitly mark their temporary live-export
-  cell bridge, and the literal string-append fast path refreshes its source from
-  a received cell before in-place mutation. The broader name-keyed compatibility
-  structures remain only for S5/S6 migration paths; in particular, direct-eval
-  source still deopts dynamically introduced/deletable function-level bindings
-  to the legacy name bridge until S6 supplies the explicit name-to-cell map.
-- **S5 — Delete the old model.** Remove `Function.env`/`captured_env`/
-  `capture_writeback`, the `vm_capture.rs` refresh family, the `CallEnv` locals
-  HashMap, and `with_frame_locals` cloning. This is the slice that realizes the
-  T011 perf win; record a burndown entry and re-measure the call benchmark.
-- **S6 — direct-`eval` / `with` deopt path on cells.** Replace the dynamic
-  name resolution with the name→cell deopt map; close the eval-capture failures.
+### Direct `eval` and `with`
 
-## Risks
+Direct `eval` and `with` are the only ordinary-language paths that require a
+per-frame runtime name map. Bytecode caches `contains_direct_eval` and
+`contains_with`; only those frames, or frames inheriting such a dynamic scope,
+install the deopt `DynamicBindings = Rc<RefCell<HashMap<String, Upvalue>>>`.
+The realm's separate lazy global-cell table is shared across calls and does not
+materialize a frame-local environment.
 
-1. **Blast radius.** ~90 sites across 12 files. Mitigation: the flag-gated
-   coexistence (S1–S4) so each class flips independently with its own gate;
-   never a big-bang cutover.
-2. **Cell-slot over/under-classification.** A binding wrongly classified plain
-   that is actually captured → stale; wrongly classified cell → a needless
-   allocation. The resolver must be conservative-correct (capture ⇒ cell) and
-   is the single highest-value thing to unit-test directly (S1).
-3. **Rc cycles.** A cell holding a `Function` that holds the same cell leaks
-   under `Rc`. This is the existing engine behavior, made more uniform here; the
-   GC slice on the perf track (separate, post-S5) is what actually collects it.
-   Document, do not block on it.
-4. **`with`/`eval` dynamic scope.** The one place names must survive; keep it
-   explicitly gated on `contains_direct_eval`/`with` so the fast path never pays
-   for a name map (S6).
-5. **`arguments`, `this`, `new.target` and other call-frame internals** must
-   stay frame-local and never become cells unless actually captured by an arrow
-   — the current `is_call_frame_binding` guard logic moves into the resolver's
-   classification.
+The VM registers live local cells in the deopt map. Eval-created bindings and
+with fallback assignments therefore resolve by name while still updating the
+exact same cell used by compiled slot access. A function retained from a
+`with` body keeps the object-environment stack, but its own local slots stay
+closer than that stack; only free names use with-aware bytecode. Fast-path
+functions pay no name-map allocation cost.
+
+### Suspension and modules
+
+Generator, async-function, async-generator, and top-level-await snapshots retain
+both `upvalues` and `local_upvalues`. Resuming a frame preserves cell identity;
+there is no per-step capture refresh or writeback.
+
+Module declaration instantiation creates cells for every top-level module
+binding, including unexported bindings captured by a hoisted function. The
+body frame reuses those cells and does not recreate the already-instantiated
+function object. Imports attach directly to the exporting module's cell, while
+each module retains one shared host so declaration instantiation, the body,
+nested functions, and dynamic imports observe one `import.meta` identity.
+
+This explicit module cell graph is a live-binding mechanism, not a closure
+snapshot compatibility path. Module writes are limited to the canonical
+top-level slot identity so a nested same-named lexical cannot overwrite an
+export cell.
+
+Compiler-owned `\0\0` temporary slots never participate in lexical capture.
+This prevents nested rest/default-parameter functions from aliasing an outer
+function's same-named prologue temporary.
+
+## Removed model
+
+Before T016, one logical binding could exist simultaneously in a VM slot,
+`Function.env`, a shared name-keyed `captured_env`, and a
+`CaptureWriteback` chain. Correctness depended on refresh/writeback passes
+covering every call, closure creation, loop, generator, async, class, and eval
+path. User calls also rebuilt a `HashMap<String, Value>` through
+`function_env`/`with_frame_locals`.
+
+S5 deleted:
+
+- `Function.env`, `Function.captured_env`, and `CaptureWriteback`;
+- the `function/captures.rs` snapshot/writeback implementation;
+- the VM captured-environment stack and refresh/writeback family;
+- `PushCapturedEnv`/`PopCapturedEnv` loop operations;
+- `CallEnv`'s locals `HashMap`, caller-local forwarding, and
+  `with_frame_locals`/`with_current_frame_locals` cloning;
+- bytecode-function copies of runtime intrinsics in native context.
+
+S6 replaced the remaining direct-eval/with compatibility bridge with the
+explicit gated name-to-cell map described above.
+
+## Slice history
+
+- **S1:** introduced `Upvalue`, resolver classification, indexed
+  `UpvalueSource`, and call microbenchmarks.
+- **S2:** switched the simplest captured lexical bindings to shared cells.
+- **S3:** covered shadowing, sibling/nested closures, class names, and fresh
+  per-iteration cells; removed generic lexical-name mangling.
+- **S4:** covered parameters, `var`/function declarations, generators, async
+  functions/generators, and top-level-await suspension.
+- **S5:** cut over functions/calls/realms completely and deleted the old
+  capture/writeback model.
+- **S6:** installed the gated direct-eval/with name-to-cell deoptimization
+  path.
+
+## Performance result
+
+The S1 baseline measured a user function call at about 70 us versus about
+0.12 us in QuickJS-NG. A later pre-cutover measurement was 11.72 us for
+`function_call` and 9.77 us for `closure_call`. Five final post-cutover runs
+produced stable medians of 6.84 us and 4.88 us respectively, versus 0.122 us
+for both in QuickJS-NG.
+
+That is about 90.2%/93.0% faster than the original 70 us baseline and
+41.7%/50.0% faster than the later pre-cutover measurements. The remaining
+roughly 56x/40x gap is outside T016 and requires profiling-driven
+VM/allocation work rather than another environment snapshot heuristic.
+
+## Final conformance result
+
+The final `./scripts/find-qjsng-gaps.sh --exact --all` scan is recorded at
+`target/test262-gaps/all-20260714-053539-93994`:
+
+- 53,572 total Test262 cases and 42,672 configured cases;
+- quickjs-rust: 42,591 pass, 0 fail, 20 timeout, 61 not run;
+- QuickJS-NG-pass/quickjs-rust-fail: **0**;
+- all 20 timeouts are already classified as excluded slow cases;
+- all 61 not-run cases require the Test262 `$262.agent` harness and are not
+  environment-model engine failures.
+
+This closes T016's engine-difference queue without claiming that the excluded
+timeouts or unexecuted agent cases have passed Test262.
+
+## Remaining structural risks
+
+1. `Rc` cycles remain possible when a cell contains a function that owns the
+   same cell. The planned tracing GC/arena work must collect these cycles.
+2. `DynamicBindings` is intentionally more expensive. Any new use must be
+   justified by genuinely dynamic name resolution and remain gated away from
+   ordinary calls.
+3. Call-frame internals such as `this`, `arguments`, and `new.target` must stay
+   frame-local unless compiler analysis proves that a nested arrow captures
+   them.

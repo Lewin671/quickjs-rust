@@ -7,9 +7,9 @@
 //! mirroring the instantiation/evaluation state machine of ECMAScript 16.2.1.5
 //! (`Unlinked` -> `Linking` -> `Linked` -> `Evaluating` -> `Evaluated`).
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
-use crate::{ModuleNamespaceBindings, RuntimeError, Value, bytecode};
+use crate::{ModuleNamespaceBindings, RuntimeError, Value, bytecode, function::DynamicBindings};
 
 use super::namespace::{empty_namespace, populate_namespace};
 use super::records::{
@@ -68,9 +68,12 @@ struct Module {
     exports: HashMap<String, Value>,
     /// Live lexical binding storage shared with closures created by this
     /// module body. Export reads consult this before falling back to the realm.
-    live_lexical: Rc<RefCell<HashMap<String, Value>>>,
+    live_lexical: DynamicBindings,
     /// Cached namespace object, built lazily.
     namespace: Option<Value>,
+    /// Shared by declaration instantiation and body evaluation so this
+    /// module's dynamic-import referrer and `import.meta` identity are stable.
+    module_host: Option<super::host::ModuleHostRef>,
     /// Result promise for a top-level-await body whose dynamic import jobs may
     /// settle after static graph evaluation releases its borrow.
     async_result_promise: Option<crate::ObjectRef>,
@@ -247,8 +250,9 @@ impl ModuleGraph {
                 function_hoists_instantiated: false,
                 resolved_requests: HashMap::new(),
                 exports: HashMap::new(),
-                live_lexical: Rc::new(RefCell::new(HashMap::new())),
+                live_lexical: DynamicBindings::new(),
                 namespace: None,
+                module_host: None,
                 async_result_promise: None,
                 static_evaluation: false,
             },
@@ -351,8 +355,9 @@ impl ModuleGraph {
                 function_hoists_instantiated: true,
                 resolved_requests: HashMap::new(),
                 exports,
-                live_lexical: Rc::new(RefCell::new(live)),
+                live_lexical: DynamicBindings::from_values(live),
                 namespace: None,
+                module_host: None,
                 async_result_promise: None,
                 static_evaluation: false,
             },
@@ -544,14 +549,28 @@ impl ModuleGraph {
             let module = &self.modules[key];
             bytecode::compile_module_function_hoists(&module.record.body)?
         };
-        let live_names: Vec<String> = self.modules[key]
+        // Function declarations are instantiated in this separate frame, but
+        // every module-local binding they capture must be the same cell later
+        // used by the body frame. Seed all top-level module bindings here, not
+        // only exported names. Imports are already backed by the exporting
+        // module's cells and must not be replaced with importer-owned cells.
+        let import_names = self.modules[key]
             .record
-            .local_exports
+            .import_entries
             .iter()
-            .map(|export| export.local_name.clone())
+            .map(|import| import.local_name.as_str())
+            .collect::<std::collections::HashSet<_>>();
+        let live_names: Vec<String> = compiled
+            .local_names()
+            .filter(|name| !import_names.contains(name))
+            .map(str::to_owned)
             .collect();
         let live_bindings = self.modules[key].live_lexical.clone();
-        let seed_tdz_markers = self.needs_module_live_tdz_seed(key);
+        // ModuleDeclarationInstantiation creates every lexical binding in its
+        // TDZ before any body executes. A hoisted function and the later body
+        // frame can therefore attach to the same cell even for an unexported
+        // or immutable module local.
+        let seed_tdz_markers = true;
         let live_imports = self.import_live_bindings(key);
         let live_exports = bytecode::ModuleLiveExports {
             names: live_names,
@@ -559,10 +578,7 @@ impl ModuleGraph {
             seed_tdz_markers,
             imports: live_imports,
         };
-        let host = self
-            .host_graph
-            .as_ref()
-            .map(|graph| super::host::ModuleHost::new(graph.clone(), key.to_owned()).into_ref());
+        let host = self.module_host(key);
         bytecode::eval_module_function_hoists(&compiled, &self.realm, host, live_exports)?;
         self.modules
             .get_mut(key)
@@ -595,22 +611,19 @@ impl ModuleGraph {
             imports: live_imports,
         };
         bytecode::seed_module_live_bindings(&compiled, &live_exports);
-        let host = self
-            .host_graph
-            .as_ref()
-            .map(|graph| super::host::ModuleHost::new(graph.clone(), key.to_owned()).into_ref());
+        let host = self.module_host(key);
         let evaluation =
             bytecode::eval_module_body(&compiled, &self.realm, imports, host, live_exports, drain)?;
         {
-            let mut live = evaluation.captured_env.borrow_mut();
-            for (name, value) in evaluation.env.locals() {
+            let mut live = evaluation.live_bindings.borrow_mut();
+            for (name, value) in evaluation.env.binding_snapshot() {
                 live.entry(name.clone()).or_insert_with(|| value.clone());
             }
         }
         // Snapshot exported binding values from the module's frame environment.
         let export_pairs = self.collect_export_values(key, &evaluation.env)?;
         {
-            let mut live = evaluation.captured_env.borrow_mut();
+            let mut live = evaluation.live_bindings.borrow_mut();
             for local in &self.modules[key].record.local_exports {
                 if let Some((_, value)) = export_pairs
                     .iter()
@@ -621,10 +634,23 @@ impl ModuleGraph {
             }
         }
         let module = self.modules.get_mut(key).expect("module exists");
-        module.live_lexical = evaluation.captured_env;
+        module.live_lexical = evaluation.live_bindings;
         module.async_result_promise = evaluation.async_result_promise;
         module.exports = export_pairs.into_iter().collect();
         Ok(())
+    }
+
+    fn module_host(&mut self, key: &str) -> Option<super::host::ModuleHostRef> {
+        if let Some(host) = self.modules[key].module_host.clone() {
+            return Some(host);
+        }
+        let graph = self.host_graph.clone()?;
+        let host = super::host::ModuleHost::new(graph, key.to_owned()).into_ref();
+        self.modules
+            .get_mut(key)
+            .expect("module exists")
+            .module_host = Some(host.clone());
+        Some(host)
     }
 
     pub(super) fn async_module_rejection(&self) -> Option<String> {
@@ -685,7 +711,7 @@ impl ModuleGraph {
                 bindings.insert(NAMESPACE_BINDING.to_owned(), self.namespace(&target));
                 imports.push(bytecode::ModuleLiveImport {
                     local_name: entry.local_name,
-                    bindings: Rc::new(RefCell::new(bindings)),
+                    bindings: DynamicBindings::from_values(bindings),
                     binding_name: NAMESPACE_BINDING.to_owned(),
                 });
                 continue;

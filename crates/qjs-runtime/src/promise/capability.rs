@@ -62,7 +62,7 @@ pub(crate) fn new_promise_capability(
         NativeFunction::PromiseGetCapabilitiesExecutor,
         false,
     );
-    executor.insert_env(CAPABILITY_RECORD.to_owned(), Value::Object(record.clone()));
+    executor.insert_native_context(CAPABILITY_RECORD.to_owned(), Value::Object(record.clone()));
 
     let promise = construct_function(c.clone(), c.clone(), vec![Value::Function(executor)], env)?;
 
@@ -95,7 +95,8 @@ pub(crate) fn native_get_capabilities_executor(
     argument_values: &[Value],
     _env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let Some(Value::Object(record)) = function.env.get(CAPABILITY_RECORD).cloned() else {
+    let Some(Value::Object(record)) = function.native_context.get(CAPABILITY_RECORD).cloned()
+    else {
         return Err(RuntimeError {
             thrown: None,
             message: "Promise capability executor is missing its record".to_owned(),

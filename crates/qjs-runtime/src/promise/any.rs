@@ -20,7 +20,10 @@ pub(crate) fn native_promise_any(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let aggregate_error = function.env.get(PROMISE_AGGREGATE_ERROR).cloned();
+    let aggregate_error = function
+        .native_context
+        .get(PROMISE_AGGREGATE_ERROR)
+        .cloned();
     let handler = AnyHandler {
         errors: ArrayRef::new(Vec::new()),
         remaining: perform::new_remaining(1),
@@ -48,25 +51,27 @@ impl ElementHandler for AnyHandler {
         let already_called = ObjectRef::new(HashMap::new());
         let mut on_rejected =
             Function::new_native(None, 1, NativeFunction::PromiseAnyRejectElement, false);
-        on_rejected.insert_env(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
-        on_rejected.insert_env(
+        on_rejected
+            .insert_native_context(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
+        on_rejected.insert_native_context(
             PROMISE_ALL_VALUES.to_owned(),
             Value::Array(self.errors.clone()),
         );
-        on_rejected.insert_env(
+        on_rejected.insert_native_context(
             PROMISE_ALL_REMAINING.to_owned(),
             Value::Object(self.remaining.clone()),
         );
-        on_rejected.insert_env(
+        on_rejected.insert_native_context(
             PROMISE_ALL_ALREADY_CALLED.to_owned(),
             Value::Object(already_called),
         );
-        on_rejected.insert_env(
+        on_rejected.insert_native_context(
             PROMISE_ALL_CAPABILITY_RESOLVE.to_owned(),
             capability.reject.clone(),
         );
         if let Some(aggregate_error) = &self.aggregate_error {
-            on_rejected.insert_env(PROMISE_AGGREGATE_ERROR.to_owned(), aggregate_error.clone());
+            on_rejected
+                .insert_native_context(PROMISE_AGGREGATE_ERROR.to_owned(), aggregate_error.clone());
         }
 
         // onFulfilled is the capability's resolve: the first fulfilment wins.
@@ -98,7 +103,7 @@ pub(crate) fn native_promise_any_reject_element(
     if already_called(function) {
         return Ok(Value::Undefined);
     }
-    let index = match function.env.get(PROMISE_ALL_INDEX) {
+    let index = match function.native_context.get(PROMISE_ALL_INDEX) {
         Some(Value::Number(index)) if *index >= 0.0 => *index as usize,
         _ => {
             return Err(RuntimeError {
@@ -107,7 +112,7 @@ pub(crate) fn native_promise_any_reject_element(
             });
         }
     };
-    let errors = match function.env.get(PROMISE_ALL_VALUES).cloned() {
+    let errors = match function.native_context.get(PROMISE_ALL_VALUES).cloned() {
         Some(Value::Array(errors)) => errors,
         _ => {
             return Err(RuntimeError {
@@ -116,7 +121,7 @@ pub(crate) fn native_promise_any_reject_element(
             });
         }
     };
-    let remaining = match function.env.get(PROMISE_ALL_REMAINING).cloned() {
+    let remaining = match function.native_context.get(PROMISE_ALL_REMAINING).cloned() {
         Some(Value::Object(remaining)) => remaining,
         _ => {
             return Err(RuntimeError {
@@ -129,10 +134,13 @@ pub(crate) fn native_promise_any_reject_element(
     let reason = argument_values.first().cloned().unwrap_or(Value::Undefined);
     errors.set(index, reason);
     if perform::decrement_remaining(&remaining) == 0.0 {
-        let aggregate = function.env.get(PROMISE_AGGREGATE_ERROR).cloned();
+        let aggregate = function
+            .native_context
+            .get(PROMISE_AGGREGATE_ERROR)
+            .cloned();
         let error = build_aggregate_error(aggregate, &errors, env);
         let reject = function
-            .env
+            .native_context
             .get(PROMISE_ALL_CAPABILITY_RESOLVE)
             .cloned()
             .unwrap_or(Value::Undefined);

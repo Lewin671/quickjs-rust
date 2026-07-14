@@ -310,16 +310,12 @@ pub(super) enum Op {
     /// target, and transfers control to the finally block. EndFinally then
     /// resumes the jump.
     AbruptJump(usize),
-    /// Creates a fresh captured-environment cell for per-iteration bindings in
+    /// Creates fresh upvalue cells for per-iteration bindings in
     /// `for (let/const ...)` loops. Closures created after this point capture
     /// independent copies of the listed slots, so each iteration has its own
     /// binding.
     FreshIterationScope(Vec<usize>),
-    /// Saves the current closure capture cell before a loop starts installing
-    /// per-iteration capture cells.
-    PushCapturedEnv,
-    /// Restores the capture cell saved by `PushCapturedEnv`.
-    PopCapturedEnv,
+    /// Starts a try frame after loop setup.
     EnterTry {
         catch: Option<usize>,
         finally: Option<usize>,
@@ -430,6 +426,7 @@ pub(super) enum ClassElementDef {
 #[derive(Clone, Debug)]
 pub(super) struct ClassStaticBlockDef {
     pub(super) local_names: Vec<String>,
+    pub(super) lexical_captures: Vec<(String, usize)>,
     pub(super) bytecode: Rc<Bytecode>,
 }
 
@@ -470,6 +467,7 @@ pub(super) enum ClassComputedKeyDef {
     Precomputed,
     Deferred {
         local_names: Vec<String>,
+        lexical_captures: Vec<(String, usize)>,
         bytecode: Rc<Bytecode>,
     },
 }
@@ -509,6 +507,7 @@ pub(super) struct ClassFieldDef {
 #[derive(Clone, Debug)]
 pub(super) struct ClassFieldInitializerDef {
     pub(super) local_names: Vec<String>,
+    pub(super) lexical_captures: Vec<(String, usize)>,
     pub(super) bytecode: Rc<Bytecode>,
 }
 
@@ -599,10 +598,8 @@ pub struct Bytecode {
     cached_writes_binding_set: HashSet<String>,
     cached_creates_closures: bool,
     cached_needs_arguments_object: bool,
-    /// Whether any local is a captured (`from_env`) binding. When false, the
-    /// frame neither receives nor needs capture write-back, so the per-call
-    /// captured-env refresh and the result's captured-env clone can be skipped.
-    cached_has_from_env_locals: bool,
+    cached_contains_direct_eval: bool,
+    cached_contains_with: bool,
 }
 
 impl Bytecode {
@@ -662,7 +659,8 @@ impl Bytecode {
             cached_writes_binding_set: HashSet::new(),
             cached_creates_closures: false,
             cached_needs_arguments_object: false,
-            cached_has_from_env_locals: false,
+            cached_contains_direct_eval: false,
+            cached_contains_with: false,
         };
         // Order matters: closure/arguments metadata reads the simpler caches
         // (written-binding names, creates-closures) computed just above. Nested
@@ -676,7 +674,16 @@ impl Bytecode {
         bytecode.cached_writes_binding_set = bytecode.compute_writes_binding_set();
         bytecode.cached_creates_closures = bytecode.compute_creates_closures();
         bytecode.cached_needs_arguments_object = bytecode.compute_needs_arguments_object();
-        bytecode.cached_has_from_env_locals = bytecode.locals.iter().any(|local| local.from_env);
+        bytecode.cached_contains_direct_eval = bytecode.code.iter().any(|op| {
+            matches!(
+                op,
+                Op::CallDirectEval { .. } | Op::CallDirectEvalSpread { .. }
+            )
+        });
+        bytecode.cached_contains_with = bytecode
+            .code
+            .iter()
+            .any(|op| matches!(op, Op::EnterWith | Op::ExitWith));
         bytecode
     }
 
@@ -754,6 +761,21 @@ impl Bytecode {
         self.locals.iter().map(|local| local.name.as_str())
     }
 
+    pub(crate) fn eval_lexical_local_names(&self) -> impl Iterator<Item = &str> {
+        self.locals
+            .iter()
+            .filter(|local| {
+                !local.hoisted
+                    && !local.sloppy_global_fallback
+                    && !local.name.starts_with('\0')
+                    && !self
+                        .locals
+                        .iter()
+                        .any(|candidate| candidate.hoisted && candidate.name == local.name)
+            })
+            .map(|local| local.name.as_str())
+    }
+
     pub(crate) fn hoisted_local_names(&self) -> impl Iterator<Item = &str> {
         self.locals
             .iter()
@@ -817,12 +839,6 @@ impl Bytecode {
         self.locals.get(slot).is_some_and(|local| local.from_env)
     }
 
-    pub(crate) fn local_is_received_upvalue(&self, slot: usize) -> bool {
-        self.locals
-            .get(slot)
-            .is_some_and(Local::is_received_upvalue)
-    }
-
     pub(crate) fn received_upvalue_names(&self) -> impl Iterator<Item = &str> {
         self.locals
             .iter()
@@ -831,18 +847,9 @@ impl Bytecode {
     }
 
     /// Whether the body can create a nested closure, class, generator, or async
-    /// function whose activation snapshot reads the per-call captured-env Rc. When
-    /// false, the activation captured env is never read, so the caller can skip
-    /// cloning the whole frame env into it.
+    /// function. Used when deciding whether an `arguments` object is observable.
     pub(crate) fn creates_closures(&self) -> bool {
         self.cached_creates_closures
-    }
-
-    /// Whether any local is a captured (`from_env`) binding. When false, the
-    /// frame holds no captured locals to refresh from or write back to the
-    /// shared captured env.
-    pub(crate) fn has_from_env_locals(&self) -> bool {
-        self.cached_has_from_env_locals
     }
 
     fn compute_creates_closures(&self) -> bool {
@@ -859,10 +866,30 @@ impl Bytecode {
         self.code.iter().any(|op| matches!(op, Op::Await))
     }
 
-    pub(crate) fn contains_super_call(&self) -> bool {
-        self.code
-            .iter()
-            .any(|op| matches!(op, Op::SuperCall(_) | Op::SuperCallSpread))
+    pub(crate) fn uses_lexical_this(&self) -> bool {
+        self.code.iter().any(|op| {
+            matches!(
+                op,
+                Op::LoadGlobal(name) if name == "this"
+            ) || matches!(
+                op,
+                Op::SuperCall(_)
+                    | Op::SuperCallSpread
+                    | Op::SuperGet { .. }
+                    | Op::SuperReference
+                    | Op::SuperGetComputed
+                    | Op::SuperSet { .. }
+                    | Op::SuperSetComputed { .. }
+            )
+        })
+    }
+
+    pub(crate) fn contains_direct_eval(&self) -> bool {
+        self.cached_contains_direct_eval
+    }
+
+    pub(crate) fn contains_with(&self) -> bool {
+        self.cached_contains_with
     }
 
     pub(crate) fn needs_arguments_object(&self) -> bool {
@@ -906,32 +933,6 @@ impl Bytecode {
             })
     }
 
-    pub(crate) fn requires_scope_call_bindings(&self) -> bool {
-        self.code.iter().any(|op| {
-            matches!(
-                op,
-                Op::Call(_)
-                    | Op::CallDirectEval { .. }
-                    | Op::CallSpread
-                    | Op::CallDirectEvalSpread { .. }
-                    | Op::New(_)
-                    | Op::NewSpread
-                    | Op::NewFunction { .. }
-                    | Op::NewClass { .. }
-                    | Op::SuperCall(_)
-                    | Op::SuperCallSpread
-                    | Op::SuperMethod { .. }
-                    | Op::SuperMethodComputed
-                    | Op::CallResolved(_)
-                    | Op::CallResolvedSpread
-                    | Op::StoreGlobalStrict(_)
-                    | Op::StoreGlobalSloppy(_)
-                    | Op::StoreLocalOrGlobalSloppy { .. }
-            )
-            || matches!(op, Op::StoreLocal(slot) | Op::AssignLocal(slot) if self.locals.get(*slot).is_some_and(|local| local.from_env))
-        })
-    }
-
     pub(crate) fn writes_binding(&self, binding_name: &str) -> bool {
         self.cached_writes_binding_set.contains(binding_name)
     }
@@ -970,12 +971,6 @@ impl Bytecode {
             }
         }
         set
-    }
-
-    pub(crate) fn sloppy_global_fallback_binding(&self, binding_name: &str) -> bool {
-        self.locals
-            .iter()
-            .any(|local| local.name == binding_name && local.sloppy_global_fallback)
     }
 }
 

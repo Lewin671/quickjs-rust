@@ -6,8 +6,7 @@ use crate::{RuntimeError, Value};
 
 use super::compiler::{Compiler, LoopIterator};
 use super::compiler_lexical::{
-    for_in_left_lexical_names, is_lexical_for_in_left, switch_annex_b_blocked_names,
-    switch_lexical_declared_bindings,
+    for_in_left_lexical_names, switch_annex_b_blocked_names, switch_lexical_declared_bindings,
 };
 use super::ir::Op;
 
@@ -104,10 +103,6 @@ impl Compiler {
         let false_slot = self.const_slot(Value::Boolean(false));
         self.emit(Op::LoadConst(false_slot));
         self.emit(Op::StoreLocal(done_slot));
-        let has_iteration_scope = is_lexical_for_in_left(left);
-        if has_iteration_scope {
-            self.emit(Op::PushCapturedEnv);
-        }
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
@@ -188,10 +183,6 @@ impl Compiler {
         self.emit_number(0.0);
         self.emit(Op::StoreLocal(index_slot));
         let blocked = for_in_left_lexical_names(left);
-        let has_iteration_scope = is_lexical_for_in_left(left);
-        if has_iteration_scope {
-            self.emit(Op::PushCapturedEnv);
-        }
         let iteration_slots = self.for_in_left_iteration_slots(left);
 
         let loop_start = self.code.len();
@@ -219,9 +210,6 @@ impl Compiler {
 
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.push_loop(result_slot);
-            if has_iteration_scope {
-                compiler.mark_loop_captured_env_scope();
-            }
             compiler.compile_stmt(body)?;
             compiler.emit(Op::StoreLocal(result_slot));
             Ok(())
@@ -279,10 +267,6 @@ impl Compiler {
         let false_slot = self.const_slot(Value::Boolean(false));
         self.emit(Op::LoadConst(false_slot));
         self.emit(Op::StoreLocal(done_slot));
-        let has_iteration_scope = is_lexical_for_in_left(left);
-        if has_iteration_scope {
-            self.emit(Op::PushCapturedEnv);
-        }
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
@@ -346,9 +330,6 @@ impl Compiler {
     ) -> Result<(), RuntimeError> {
         self.with_annex_b_blocked_function_names(blocked, |compiler| {
             compiler.push_loop_with_iterator(result_slot, iterator);
-            if is_lexical_for_in_left(left) {
-                compiler.mark_loop_captured_env_scope();
-            }
             if for_in_left_has_disposal(left) {
                 compiler.compile_for_of_iteration_with_disposal(
                     left,
@@ -417,9 +398,6 @@ impl Compiler {
         for slot in cleanup_slots {
             self.emit(Op::ClearLocal(*slot));
         }
-        if context.captured_env_scope {
-            self.emit(Op::PopCapturedEnv);
-        }
         self.emit(Op::LoadLocal(result_slot));
         let normal_done = self.emit(Op::Jump(usize::MAX));
 
@@ -428,9 +406,6 @@ impl Compiler {
         self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, false);
         for slot in cleanup_slots {
             self.emit(Op::ClearLocal(*slot));
-        }
-        if context.captured_env_scope {
-            self.emit(Op::PopCapturedEnv);
         }
         let break_done = self.emit(Op::Jump(usize::MAX));
 
@@ -452,9 +427,6 @@ impl Compiler {
         self.emit(Op::Pop);
         let close_done = self.code.len();
         self.patch_jump(after_close, close_done);
-        if context.captured_env_scope {
-            self.emit(Op::PopCapturedEnv);
-        }
         self.emit(Op::Throw);
 
         let done = self.code.len();

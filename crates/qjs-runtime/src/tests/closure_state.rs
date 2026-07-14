@@ -2,9 +2,8 @@ use crate::{Value, eval};
 
 #[test]
 fn nested_closures_capture_live_outer_bindings() {
-    // The activation captured-env snapshot is only materialized when a body
-    // creates a closure. These cases keep closure capture correct across the
-    // leaf-call fast path: a counter closure must see and mutate its captured
+    // These cases keep shared-cell closure capture correct across the leaf-call
+    // fast path: a counter closure must see and mutate its captured
     // binding, and closures created after intervening leaf calls must still
     // capture the current value of an outer binding.
     assert_eq!(
@@ -206,7 +205,7 @@ fn object_to_string_uses_callee_rest_capture_not_caller_rest_parameter() {
 }
 
 #[test]
-fn object_to_string_preserves_captured_writeback_side_effects() {
+fn object_to_string_preserves_shared_cell_side_effects() {
     assert_eq!(
         eval(
             "var value = 0;
@@ -483,12 +482,133 @@ fn arrow_created_after_direct_eval_reads_updated_global_fallback() {
 }
 
 #[test]
+fn direct_eval_and_closures_share_the_same_local_cell() {
+    assert_eq!(
+        eval(
+            "function outer() {
+               let value = 1;
+               const before = () => value;
+               eval('value = 2');
+               const after = () => value;
+               after();
+               value = 3;
+               return before() + ':' + after() + ':' + value;
+             }
+             outer();"
+        ),
+        Ok(Value::String("3:3:3".to_owned().into()))
+    );
+}
+
+#[test]
+fn sibling_calls_share_a_captured_global_var_cell() {
+    assert_eq!(
+        eval(
+            "var count = 0; \
+             function increment() { count++; } \
+             function readAfterCall() { count = 0; increment(); return count; } \
+             readAfterCall();"
+        ),
+        Ok(Value::Number(1.0))
+    );
+}
+
+#[test]
+fn global_descriptor_write_updates_a_captured_global_var_cell() {
+    assert_eq!(
+        eval(
+            "var value = 0; \
+             function read() { return value; } \
+             Object.defineProperty(globalThis, 'value', { value: 3 }); \
+             read();"
+        ),
+        Ok(Value::Number(3.0))
+    );
+}
+
+#[test]
+fn deleting_a_sloppy_global_invalidates_its_cached_cell() {
+    assert_eq!(
+        eval(
+            "leaked = 1; \
+             function read() { return typeof leaked; } \
+             var before = read(); \
+             delete leaked; \
+             before + ':' + read();"
+        ),
+        Ok(Value::String("number:undefined".to_owned().into()))
+    );
+}
+
+#[test]
+fn global_accessor_definition_deopts_a_cached_sloppy_global_cell() {
+    assert_eq!(
+        eval(
+            "exposed = 1; \
+             function read() { return exposed; } \
+             var before = read(); \
+             Object.defineProperty(globalThis, 'exposed', { \
+                 get: function() { return 5; }, configurable: true \
+             }); \
+             before + ':' + read();"
+        ),
+        Ok(Value::String("1:5".to_owned().into()))
+    );
+}
+
+#[test]
+fn closure_created_inside_with_resolves_the_retained_with_object() {
+    assert_eq!(
+        eval(
+            "function read() { \
+               var object = { value: 10 }; \
+               with (object) { return () => value; } \
+             } \
+             read()();"
+        ),
+        Ok(Value::Number(10.0))
+    );
+}
+
+#[test]
+fn native_calls_do_not_write_a_shadowing_catch_cell_into_the_realm() {
+    assert_eq!(
+        eval(
+            "var before = function() { return value; }; \
+             var parameter; \
+             var value = 'outside'; \
+             try { throw ['inside']; } \
+             catch ([value, unused = parameter = function() { return value; }]) {} \
+             value + ':' + before() + ':' + parameter();"
+        ),
+        Ok(Value::String("outside:outside:inside".to_owned().into()))
+    );
+}
+
+#[test]
+fn with_fallback_assignment_updates_the_outer_local_cell() {
+    assert_eq!(
+        eval(
+            "function outer() {
+               let value = 1;
+               const read = () => value;
+               const scope = {};
+               with (scope) { value = 2; }
+               return read() + ':' + value + ':' + ('value' in scope);
+             }
+             outer();"
+        ),
+        Ok(Value::String("2:2:false".to_owned().into()))
+    );
+}
+
+#[test]
 fn for_of_let_body_write_reaches_outer_closure() {
     // A closure created BEFORE a `for (let … of …)` loop captures an outer
     // binding. The loop body reassigns that binding each iteration and then
     // invokes the closure (here through a native `Array.prototype` callback).
-    // The per-iteration captured env is a fresh snapshot, but writes to the
-    // genuinely-outer binding must still reach the pre-loop closure rather than
+    // Each iteration gets fresh cells, but writes to the genuinely-outer
+    // binding must still reach the pre-loop closure rather than
     // leaving it on the stale `let values;` value (TypedArray/Array
     // resizable-buffer-mid-iteration cluster).
     assert_eq!(
@@ -546,9 +666,8 @@ fn for_of_loop_variable_shadowing_outer_does_not_leak_into_the_outer_binding() {
 
 #[test]
 fn call_env_tdz_alias_does_not_clobber_initialized_for_of_binding() {
-    // A later closure capture of a same-named `for-of` binding can leave a TDZ
-    // alias in a temporary call environment. Writing that environment back must
-    // not overwrite the already-initialized binding used by an earlier loop.
+    // A later closure capture of a same-named `for-of` binding must not make
+    // the earlier loop resolve through that distinct binding's TDZ cell.
     assert_eq!(
         eval(
             "function touch(value) { return String(value); } \

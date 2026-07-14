@@ -25,7 +25,11 @@ pub(crate) fn native_promise_with_resolvers(
 }
 
 fn object_prototype(function: &Function) -> Option<ObjectRef> {
-    match function.env.get(PROMISE_OBJECT_PROTOTYPE).cloned() {
+    match function
+        .native_context
+        .get(PROMISE_OBJECT_PROTOTYPE)
+        .cloned()
+    {
         Some(Value::Object(prototype)) => Some(prototype),
         _ => None,
     }

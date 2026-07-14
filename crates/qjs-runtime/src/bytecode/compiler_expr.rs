@@ -506,9 +506,12 @@ impl Compiler {
             } => {
                 let source_text = self.function_source_text(*span);
                 let is_strict = self.strict || is_strict_function_body(body);
-                let local_names =
+                let mut local_names =
                     collect_function_local_names(name.as_ref(), params, body, !lexical_arguments);
-                let (bytecode, lexical_captures) = self.compile_nested_function_body(
+                if *lexical_arguments && !self.global_scope {
+                    self.own_call_frame_slot("arguments");
+                }
+                let (mut bytecode, mut lexical_captures) = self.compile_nested_function_body(
                     params,
                     body,
                     is_strict,
@@ -516,6 +519,18 @@ impl Compiler {
                     *is_async,
                     &local_names,
                 )?;
+                if *lexical_this && bytecode.uses_lexical_this() && !self.global_scope {
+                    self.own_call_frame_slot("this");
+                    local_names.retain(|name| name != "this");
+                    (bytecode, lexical_captures) = self.compile_nested_function_body(
+                        params,
+                        body,
+                        is_strict,
+                        *is_generator,
+                        *is_async,
+                        &local_names,
+                    )?;
+                }
                 self.emit(Op::NewFunction {
                     name: name.clone(),
                     has_name_binding: name.is_some(),
@@ -661,9 +676,12 @@ impl Compiler {
             } => {
                 let source_text = self.function_source_text(*span);
                 let is_strict = self.strict || is_strict_function_body(body);
-                let local_names =
+                let mut local_names =
                     collect_function_local_names(None, params, body, !lexical_arguments);
-                let (bytecode, lexical_captures) = self.compile_nested_function_body(
+                if *lexical_arguments && !self.global_scope {
+                    self.own_call_frame_slot("arguments");
+                }
+                let (mut bytecode, mut lexical_captures) = self.compile_nested_function_body(
                     params,
                     body,
                     is_strict,
@@ -671,6 +689,18 @@ impl Compiler {
                     *is_async,
                     &local_names,
                 )?;
+                if *lexical_this && bytecode.uses_lexical_this() && !self.global_scope {
+                    self.own_call_frame_slot("this");
+                    local_names.retain(|name| name != "this");
+                    (bytecode, lexical_captures) = self.compile_nested_function_body(
+                        params,
+                        body,
+                        is_strict,
+                        *is_generator,
+                        *is_async,
+                        &local_names,
+                    )?;
+                }
                 self.emit(Op::NewFunction {
                     name: Some(name.to_owned()),
                     has_name_binding: false,
@@ -717,8 +747,11 @@ impl Compiler {
         };
         let source_text = self.function_source_text(*span);
         let is_strict = self.strict || is_strict_function_body(body);
-        let local_names = collect_function_local_names(None, params, body, !lexical_arguments);
-        let (bytecode, lexical_captures) = self.compile_nested_function_body(
+        let mut local_names = collect_function_local_names(None, params, body, !lexical_arguments);
+        if *lexical_arguments && !self.global_scope {
+            self.own_call_frame_slot("arguments");
+        }
+        let (mut bytecode, mut lexical_captures) = self.compile_nested_function_body(
             params,
             body,
             is_strict,
@@ -726,6 +759,18 @@ impl Compiler {
             *is_async,
             &local_names,
         )?;
+        if *lexical_this && bytecode.uses_lexical_this() && !self.global_scope {
+            self.own_call_frame_slot("this");
+            local_names.retain(|name| name != "this");
+            (bytecode, lexical_captures) = self.compile_nested_function_body(
+                params,
+                body,
+                is_strict,
+                *is_generator,
+                *is_async,
+                &local_names,
+            )?;
+        }
         self.emit(Op::NewFunction {
             name: Some(display_name.to_owned()),
             has_name_binding: false,

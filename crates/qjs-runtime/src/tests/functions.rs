@@ -792,6 +792,25 @@ fn evaluates_function_declarations_and_calls() {
 }
 
 #[test]
+fn arrow_captures_new_target_at_creation() {
+    assert_eq!(
+        eval(
+            "var calls = 0; \
+             function F() { \
+               if ((() => new.target)() === F) calls++; \
+               return () => new.target; \
+             } \
+             var plain = F(); \
+             var constructed; \
+             function Capture() { constructed = F.call(this); } \
+             Reflect.construct(F, [], F); \
+             calls + ':' + (plain() === undefined);"
+        ),
+        Ok(Value::String("1:true".to_owned().into()))
+    );
+}
+
+#[test]
 fn evaluates_spread_call_arguments() {
     assert_eq!(
         eval(
@@ -845,6 +864,23 @@ fn evaluates_sloppy_undeclared_global_assignment() {
 fn evaluates_arrow_functions_with_lexical_this() {
     assert_eq!(
         eval(
+            "var same = __quickjsRustAssertSameValue; \
+             class C { \
+               *#m() { return 42; } \
+               get ref() { return this.#m; } \
+               constructor() { \
+                 same(this.#m, (() => this)().#m); \
+                 var result = this.#m().next(); \
+               } \
+             } \
+             var instance = new C(); \
+             var result = instance.ref().next(); \
+             result.value;"
+        ),
+        Ok(Value::Number(42.0))
+    );
+    assert_eq!(
+        eval(
             "this.marker = 'global'; let receiver = { marker: 'receiver' }; let read = () => this.marker; read.call(receiver);"
         ),
         Ok(Value::String("global".to_owned().into()))
@@ -871,6 +907,18 @@ fn evaluates_arrow_functions_with_lexical_this() {
 
 #[test]
 fn evaluates_arrow_functions_with_lexical_arguments() {
+    assert_eq!(
+        eval(
+            "function outer(...outerValues) { \
+               let marker = 1; \
+               return function inner(...innerValues) { \
+                 return marker + ':' + innerValues[0] + ':' + outerValues[0]; \
+               }; \
+             } \
+             outer('outer')('inner');"
+        ),
+        Ok(Value::String("1:inner:outer".to_owned().into()))
+    );
     assert_eq!(
         eval(
             "function outer() { let args = arguments; let read = () => arguments; return read() === args; } outer(1, 2);"

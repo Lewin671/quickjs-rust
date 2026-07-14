@@ -308,11 +308,10 @@ fn is_object_like(value: &Value) -> bool {
 }
 
 fn sync_to_primitive_method_env(env: &mut CallEnv, method_env: &CallEnv) {
-    for (name, value) in method_env.locals() {
-        if let Some(binding) = env.get_local_mut(name) {
-            *binding = value.clone();
-        } else if env.realm_contains(name) {
-            env.insert_realm(name.clone(), value.clone());
+    for (name, value) in method_env.binding_snapshot() {
+        if env.set_local(&name, value.clone()) {
+        } else if env.realm_contains(&name) {
+            env.insert_realm(name, value);
         }
     }
 }
@@ -320,9 +319,10 @@ fn sync_to_primitive_method_env(env: &mut CallEnv, method_env: &CallEnv) {
 fn to_primitive_method_env(method: &Value, env: &CallEnv) -> CallEnv {
     let mut method_env = env.clone();
     if let Value::Function(function) = method {
-        let captured_env = function.captured_env.borrow();
-        let mut captured_names = function.env.keys().cloned().collect::<Vec<_>>();
-        captured_names.extend(captured_env.keys().cloned());
+        let mut captured_names = function.native_context.keys().cloned().collect::<Vec<_>>();
+        if let Some(bytecode) = &function.bytecode {
+            captured_names.extend(bytecode.received_upvalue_names().map(str::to_owned));
+        }
         captured_names.sort();
         captured_names.dedup();
         for name in captured_names {
@@ -333,8 +333,17 @@ fn to_primitive_method_env(method: &Value, env: &CallEnv) -> CallEnv {
             {
                 continue;
             }
-            let captured_value = captured_env.get(&name).or_else(|| function.env.get(&name));
-            if env.get_local(&name).as_ref() != captured_value {
+            let captured_value = function
+                .bytecode
+                .as_ref()
+                .and_then(|bytecode| {
+                    bytecode
+                        .received_upvalue_names()
+                        .zip(&function.upvalues)
+                        .find_map(|(candidate, upvalue)| (candidate == name).then(|| upvalue.get()))
+                })
+                .or_else(|| function.native_context.get(&name).cloned());
+            if env.get_local(&name) != captured_value {
                 method_env.remove(&name);
             }
         }

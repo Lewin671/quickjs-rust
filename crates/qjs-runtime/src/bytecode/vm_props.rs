@@ -302,7 +302,7 @@ impl Vm<'_> {
                 && !super::vm_bindings::is_compiler_temporary(&name)
             {
                 if self.realm.borrow().contains_key(&name) {
-                    self.realm.borrow_mut().insert(name.clone(), value.clone());
+                    self.env.insert_realm(name.clone(), value.clone());
                 }
                 if let Some(Value::Object(global_this)) =
                     self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
@@ -311,7 +311,7 @@ impl Vm<'_> {
                     global_this.set(name.clone(), value.clone());
                 }
             }
-            self.write_through_captured(&name, value);
+            self.write_through_module_live_binding(&name, value);
             self.sync_marked_dynamic_global(&name);
             return Ok(());
         }
@@ -326,26 +326,11 @@ impl Vm<'_> {
                 });
             }
         }
-        if self.env.locals().contains_key(&name) {
+        if self.env.has_local_binding(&name) {
             self.env.insert(name.clone(), value.clone());
-            self.write_through_captured(&name, value.clone());
-            if let Some(source) = self.env.captured_binding_source_env()
-                && source.borrow().contains_key(&name)
-            {
-                source.borrow_mut().insert(name.clone(), value.clone());
-            }
+            self.write_through_module_live_binding(&name, value.clone());
             if self.realm.borrow().contains_key(&name) {
-                let should_update_realm = self.env.module_host().is_some()
-                    || self.global_this_property(&name).is_none()
-                    || self.bytecode.local_slot(&name).is_some_and(|slot| {
-                        self.bytecode.global_scope
-                            && self.bytecode.local_is_body_hoist_only(slot)
-                            && !super::vm_bindings::is_compiler_temporary(&name)
-                    })
-                    || !self.capture_writeback_targets_name(&name);
-                if should_update_realm {
-                    self.realm.borrow_mut().insert(name.clone(), value.clone());
-                }
+                self.env.insert_realm(name.clone(), value.clone());
             }
             if let Some(Value::Object(global_this)) =
                 self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
@@ -363,8 +348,8 @@ impl Vm<'_> {
             });
         }
         self.invalidate_array_prototype_cache(&name);
-        self.realm.borrow_mut().insert(name.clone(), value.clone());
-        self.write_through_captured(&name, value.clone());
+        self.env.insert_realm(name.clone(), value.clone());
+        self.write_through_module_live_binding(&name, value.clone());
         let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
             Some(Value::Object(global_this)) => Some(global_this.clone()),
             _ => None,
@@ -417,7 +402,7 @@ impl Vm<'_> {
                 && !super::vm_bindings::is_compiler_temporary(&name)
             {
                 if self.realm.borrow().contains_key(&name) {
-                    self.realm.borrow_mut().insert(name.clone(), value.clone());
+                    self.env.insert_realm(name.clone(), value.clone());
                 }
                 if let Some(Value::Object(global_this)) =
                     self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
@@ -426,7 +411,7 @@ impl Vm<'_> {
                     global_this.set(name.clone(), value.clone());
                 }
             }
-            self.write_through_captured(&name, value);
+            self.write_through_module_live_binding(&name, value);
             self.sync_marked_dynamic_global(&name);
             return Ok(());
         }
@@ -437,26 +422,11 @@ impl Vm<'_> {
                 return Ok(());
             }
         }
-        if self.env.locals().contains_key(&name) {
+        if self.env.has_local_binding(&name) {
             self.env.insert(name.clone(), value.clone());
-            self.write_through_captured(&name, value.clone());
-            if let Some(source) = self.env.captured_binding_source_env()
-                && source.borrow().contains_key(&name)
-            {
-                source.borrow_mut().insert(name.clone(), value.clone());
-            }
+            self.write_through_module_live_binding(&name, value.clone());
             if self.realm.borrow().contains_key(&name) {
-                let should_update_realm = self.env.module_host().is_some()
-                    || self.global_this_property(&name).is_none()
-                    || self.bytecode.local_slot(&name).is_some_and(|slot| {
-                        self.bytecode.global_scope
-                            && self.bytecode.local_is_body_hoist_only(slot)
-                            && !super::vm_bindings::is_compiler_temporary(&name)
-                    })
-                    || !self.capture_writeback_targets_name(&name);
-                if should_update_realm {
-                    self.realm.borrow_mut().insert(name.clone(), value.clone());
-                }
+                self.env.insert_realm(name.clone(), value.clone());
             }
             if let Some(Value::Object(global_this)) =
                 self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
@@ -469,8 +439,8 @@ impl Vm<'_> {
         }
         self.invalidate_array_prototype_cache(&name);
         if self.realm.borrow().contains_key(&name) {
-            self.realm.borrow_mut().insert(name.clone(), value.clone());
-            self.write_through_captured(&name, value.clone());
+            self.env.insert_realm(name.clone(), value.clone());
+            self.write_through_module_live_binding(&name, value.clone());
             let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
                 Some(Value::Object(global_this)) => Some(global_this.clone()),
                 _ => None,
@@ -490,8 +460,8 @@ impl Vm<'_> {
         if let Some(global_this) = global_this {
             global_this.set(name.clone(), value.clone());
         }
-        self.realm.borrow_mut().insert(name.clone(), value.clone());
-        self.write_through_captured(&name, value);
+        self.env.insert_realm(name.clone(), value.clone());
+        self.write_through_module_live_binding(&name, value);
         self.sync_marked_dynamic_global(&name);
         Ok(())
     }

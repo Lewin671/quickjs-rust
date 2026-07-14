@@ -1,7 +1,7 @@
 //! VM support for private class names: installing private elements when a class
 //! is built, and the `GetPrivate`/`SetPrivate`/`PrivateIn` operations.
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc};
 
 use crate::CallEnv;
 
@@ -156,25 +156,19 @@ impl Vm<'_> {
         constructor_function: &Function,
         name: Option<&str>,
     ) -> Value {
-        let mut method_env = if def.is_generator {
-            self.function_capture_env_without_global_names(&def.bytecode, &def.local_names)
-        } else {
-            self.function_capture_env(&def.bytecode, &def.local_names)
-        };
-        self.insert_lexical_captures(&mut method_env, &def.lexical_captures);
-        bind_inner_name(&mut method_env, name, constructor_function);
         let home_object = if is_static {
             Value::Function(constructor_function.clone())
         } else {
             Value::Object(prototype.clone())
         };
+        let class_upvalue = super::vm_class::class_inner_upvalue(constructor_function, name);
         let function = Function::new_user_compiled(CompiledUserFunction {
             name: class_method_function_name_with_base(def.method_kind, def.name.clone()),
             has_name_binding: false,
             immutable_name_binding: false,
             immutable_env_binding: name.map(str::to_owned),
             params: std::rc::Rc::new(def.params.clone()),
-            env: method_env.clone(),
+            realm: Rc::clone(&self.realm),
             module_host: self.module_host.clone(),
             module_imports: self.env.module_imports(),
             bytecode: def.bytecode.clone(),
@@ -190,15 +184,13 @@ impl Vm<'_> {
             is_field_initializer: false,
             home_object: Some(home_object),
             super_constructor: None,
-            captured_env: Rc::new(RefCell::new(method_env)),
+            deopt_bindings: self.frame_deopt_bindings(),
             with_stack: self.with_stack.clone(),
-            capture_writeback: self.class_member_capture_writeback(
+            upvalues: self.captured_upvalues_for_function_with_override(
                 &def.bytecode,
-                &def.local_names,
-                name,
+                &def.lexical_captures,
+                name.zip(class_upvalue.as_ref()),
             ),
-            global_capture_names: Vec::new(),
-            upvalues: self.captured_upvalues_for_function(&def.bytecode, &def.lexical_captures),
         });
         function.set_source_text(def.source_text.clone());
         if def.is_generator && def.is_async {
@@ -214,28 +206,26 @@ impl Vm<'_> {
     /// Builds the initializer thunk for a private field, mirroring public-field
     /// thunks: parameterless, strict, with the right home object.
     pub(super) fn build_private_field_thunk(
-        &self,
+        &mut self,
         definition: &super::ir::ClassFieldInitializerDef,
         is_static: bool,
         prototype: &ObjectRef,
         constructor_function: &Function,
         name: Option<&str>,
     ) -> Function {
-        let mut field_env =
-            self.function_capture_env(&definition.bytecode, &definition.local_names);
-        bind_inner_name(&mut field_env, name, constructor_function);
         let home_object = if is_static {
             Value::Function(constructor_function.clone())
         } else {
             Value::Object(prototype.clone())
         };
+        let class_upvalue = super::vm_class::class_inner_upvalue(constructor_function, name);
         Function::new_user_compiled(CompiledUserFunction {
             name: None,
             has_name_binding: false,
             immutable_name_binding: false,
             immutable_env_binding: name.map(str::to_owned),
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
-            env: field_env.clone(),
+            realm: Rc::clone(&self.realm),
             module_host: self.module_host.clone(),
             module_imports: self.env.module_imports(),
             bytecode: definition.bytecode.clone(),
@@ -251,20 +241,18 @@ impl Vm<'_> {
             is_field_initializer: true,
             home_object: Some(home_object),
             super_constructor: None,
-            captured_env: Rc::new(RefCell::new(field_env)),
+            deopt_bindings: self.frame_deopt_bindings(),
             with_stack: self.with_stack.clone(),
-            capture_writeback: self.class_member_capture_writeback(
+            upvalues: self.captured_upvalues_for_function_with_override(
                 &definition.bytecode,
-                &definition.local_names,
-                name,
+                &definition.lexical_captures,
+                name.zip(class_upvalue.as_ref()),
             ),
-            global_capture_names: Vec::new(),
-            upvalues: Vec::new(),
         })
     }
 
     pub(super) fn queue_instance_private_element(
-        &self,
+        &mut self,
         element: &ClassPrivateElementDef,
         prototype: &ObjectRef,
         constructor_function: &Function,
@@ -350,9 +338,7 @@ impl Vm<'_> {
             &mut env,
             false,
         );
-        self.refresh_call_env_from_captured_env(&mut env);
         self.apply_env(env);
-        self.refresh_locals_from_captured_env();
         result
     }
 
@@ -619,15 +605,5 @@ fn foreign_private_error(name: &str, type_error_prototype: Option<&ObjectRef>) -
     RuntimeError {
         thrown: None,
         message,
-    }
-}
-
-fn bind_inner_name(
-    env: &mut std::collections::HashMap<String, Value>,
-    name: Option<&str>,
-    constructor: &Function,
-) {
-    if let Some(name) = name {
-        env.insert(name.to_owned(), Value::Function(constructor.clone()));
     }
 }

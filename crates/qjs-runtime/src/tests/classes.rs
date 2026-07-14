@@ -587,7 +587,7 @@ fn override_delegates_to_super_method() {
 }
 
 #[test]
-fn method_capture_writeback_updates_loop_scoped_caller_binding() {
+fn method_shared_upvalue_updates_loop_scoped_binding() {
     assert_eq!(
         eval(
             "let called = 0; class C { m() { called += 1; } } for (const value of [0]) { called = 0; new C().m(); } called;"

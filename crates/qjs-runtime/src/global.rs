@@ -829,6 +829,9 @@ pub(super) fn native_global_eval(
     } else {
         indirect_eval_frame(env)
     };
+    if direct_eval {
+        eval_env.fork_deopt_bindings();
+    }
     let direct_function_eval = direct_eval && eval_env.get_local("this").is_some();
     let direct_parameter_eval = direct_function_eval
         && matches!(
@@ -883,13 +886,21 @@ pub(super) fn native_global_eval(
     } else {
         validate_eval_global_lexical_bindings(&bytecode, &eval_env, false, false)?;
     }
-    let caller_locals = eval_env.locals().keys().cloned().collect::<HashSet<_>>();
+    let caller_locals = eval_env
+        .binding_snapshot()
+        .keys()
+        .cloned()
+        .collect::<HashSet<_>>();
     let hoisted_names = bytecode
         .hoisted_local_names()
         .map(str::to_owned)
         .collect::<HashSet<_>>();
     let hoisted_function_names = bytecode
         .hoisted_function_names()
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let eval_lexical_names = bytecode
+        .eval_lexical_local_names()
         .map(str::to_owned)
         .collect::<HashSet<_>>();
     if !direct_function_eval && !eval_strict {
@@ -921,11 +932,7 @@ pub(super) fn native_global_eval(
         &caller_locals,
         eval_strict,
     );
-    let result = if direct_eval {
-        eval_bytecode_with_env(&bytecode, eval_env.clone())
-    } else {
-        eval_bytecode_with_env_ephemeral_global_lexicals(&bytecode, eval_env.clone())
-    };
+    let result = eval_bytecode_with_env_ephemeral_global_lexicals(&bytecode, eval_env.clone());
     let writeback_names = hoisted_names
         .iter()
         .cloned()
@@ -933,6 +940,9 @@ pub(super) fn native_global_eval(
         .collect::<HashSet<_>>();
     for name in writeback_names {
         let name = name.as_str();
+        if eval_lexical_names.contains(name) {
+            continue;
+        }
         let binding = if direct_function_eval && hoisted_names.contains(name) {
             result.frame_binding(name).or_else(|| result.binding(name))
         } else {
@@ -952,8 +962,8 @@ pub(super) fn native_global_eval(
                 continue;
             }
             if direct_parameter_eval && hoisted_names.contains(name) && !eval_strict {
-                eval_env.insert(name.to_owned(), value.clone());
-                eval_env.insert(
+                eval_env.insert_deopt(name.to_owned(), value.clone());
+                eval_env.insert_deopt(
                     format!(
                         "{}{}",
                         crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
@@ -966,9 +976,22 @@ pub(super) fn native_global_eval(
                 // A caller frame binding (an outer `let`/`var` the eval'd code
                 // assigned): write it back through the frame so the caller's
                 // slot sees the update.
-                eval_env.insert(name.to_owned(), value.clone());
+                // At global scope the native eval call can also carry an
+                // existing realm var through its dynamic frame view. Annex B
+                // block functions update that variable binding at evaluation
+                // time; route it to the shared realm cell and global property
+                // instead of leaving the new function in the ephemeral view.
+                if !direct_function_eval && eval_env.realm_contains(name) {
+                    create_eval_global_var_binding(&mut eval_env, name, value.clone());
+                } else {
+                    eval_env.insert(name.to_owned(), value.clone());
+                }
             } else if direct_function_eval {
-                eval_env.insert(name.to_owned(), value.clone());
+                if hoisted_names.contains(name) {
+                    eval_env.insert_deopt(name.to_owned(), value.clone());
+                } else {
+                    eval_env.insert(name.to_owned(), value.clone());
+                }
                 if hoisted_names.contains(name) {
                     update_direct_eval_captured_functions(&mut eval_env, name, value.clone());
                 }
@@ -1314,19 +1337,8 @@ fn validate_eval_global_lexical_bindings(
 }
 
 fn update_direct_eval_captured_functions(env: &mut CallEnv, name: &str, value: Value) {
-    for local_value in env.locals_mut().values_mut() {
-        update_function_captured_binding(local_value, name, value.clone());
-    }
-    if let Some(captured_env) = env.activation_captured_env() {
-        let mut captured_env = captured_env.borrow_mut();
-        for captured_value in captured_env.values_mut() {
-            update_function_captured_binding(captured_value, name, value.clone());
-        }
-    }
-    for captured_env in env.parameter_captured_envs() {
-        captured_env
-            .borrow_mut()
-            .insert(name.to_owned(), value.clone());
+    for (_, mut local_value) in env.binding_snapshot() {
+        update_function_captured_binding(&mut local_value, name, value.clone());
     }
 }
 
@@ -1337,25 +1349,20 @@ fn update_direct_eval_parameter_captured_functions(env: &mut CallEnv, name: &str
         name
     );
     update_direct_eval_captured_functions(env, name, value.clone());
-    if let Some(captured_env) = env.activation_captured_env() {
-        let mut captured_env = captured_env.borrow_mut();
-        captured_env.insert(name.to_owned(), value);
-        captured_env.insert(marker_name.clone(), Value::Boolean(true));
-    }
-    for captured_env in env.parameter_captured_envs() {
-        captured_env
-            .borrow_mut()
-            .insert(marker_name.clone(), Value::Boolean(true));
-    }
+    let _ = (marker_name, value);
 }
 
 fn update_function_captured_binding(value: &mut Value, name: &str, replacement: Value) {
     let Value::Function(function) = value else {
         return;
     };
-    let mut captured = function.captured_env.borrow_mut();
-    if captured.contains_key(name) {
-        captured.insert(name.to_owned(), replacement);
+    if let Some(bytecode) = &function.bytecode
+        && let Some((_, upvalue)) = bytecode
+            .received_upvalue_names()
+            .zip(&function.upvalues)
+            .find(|(candidate, _)| *candidate == name)
+    {
+        upvalue.set(replacement);
     }
 }
 
@@ -1450,8 +1457,7 @@ fn has_global_lexical_binding(
     !global_this.has_own_property(name)
         && (env.is_global_lexical_binding(name)
             || env.realm_contains(name)
-            || (include_captured_global_lexicals
-                && (env.locals().contains_key(name) || env.captures_binding(name))))
+            || (include_captured_global_lexicals && env.has_local_binding(name)))
 }
 
 fn can_declare_global_var(global_this: &ObjectRef, name: &str) -> bool {
@@ -1473,7 +1479,7 @@ fn initialize_direct_eval_bindings(
     caller_locals: &HashSet<String>,
     eval_strict: bool,
 ) {
-    if !env.locals().contains_key("this")
+    if !env.has_local_binding("this")
         && let Some(value) = env.get("this")
     {
         env.insert("this".to_owned(), value);
@@ -1483,12 +1489,12 @@ fn initialize_direct_eval_bindings(
             continue;
         }
         if eval_strict {
-            env.insert(name.to_owned(), Value::Undefined);
+            env.insert_frame(name.to_owned(), Value::Undefined);
             continue;
         }
         if direct_function_eval {
-            if direct_parameter_eval || !env.locals().contains_key(name) {
-                env.insert(name.to_owned(), Value::Undefined);
+            if direct_parameter_eval || !env.has_local_binding(name) {
+                env.insert_deopt(name.to_owned(), Value::Undefined);
             }
             continue;
         }
@@ -1510,7 +1516,7 @@ fn initialize_direct_eval_bindings(
 }
 
 fn initialize_eval_script_bindings(bytecode: &crate::bytecode::Bytecode, env: &mut CallEnv) {
-    if !env.locals().contains_key("this")
+    if !env.has_local_binding("this")
         && let Some(value) = env.get("this")
     {
         env.insert("this".to_owned(), value);

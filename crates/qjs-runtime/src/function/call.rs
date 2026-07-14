@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{
     ArrayRef, Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING, DIRECT_EVAL_FUNCTION_CONTEXT_BINDING,
@@ -10,13 +10,7 @@ use crate::{
 
 use super::{
     CROSS_REALM_TYPE_ERROR_PROTOTYPE, CallEnv, InstanceElementInitializer,
-    arguments::arguments_object,
-    captures::{
-        caller_capture_matches_existing, caller_global_this_has_own_property,
-        captured_global_this_has_own_property, is_call_frame_binding, propagate_function_captures,
-        refresh_class_constructor_captures_from_caller, sync_global_var_captures,
-    },
-    function_call_this, is_internal_binding_name, parameter_binding_name,
+    arguments::arguments_object, function_call_this, parameter_binding_name,
     rest_parameter_binding_name,
 };
 
@@ -113,9 +107,6 @@ pub(crate) fn call_function(
         );
     }
     if let Some(bytecode) = &function.bytecode {
-        if function.is_class_constructor {
-            refresh_class_constructor_captures_from_caller(&function, env);
-        }
         if function.is_generator && function.is_async {
             let function_env = function_env(
                 &function,
@@ -129,7 +120,6 @@ pub(crate) fn call_function(
             return crate::async_generator::call_async_generator_function(
                 &function,
                 function_env.env,
-                function_env.function_capture_names,
                 env,
             );
         }
@@ -148,25 +138,11 @@ pub(crate) fn call_function(
                 env,
                 is_construct,
             );
-            let activation_captured_env = Rc::new(RefCell::new(function_env.env.snapshot_locals()));
-            let capture_writeback = (!function_env.function_capture_names.is_empty()).then(|| {
-                crate::bytecode::CaptureWriteback {
-                    target: Rc::clone(&function.captured_env),
-                    names: function_env.function_capture_names,
-                    aliases: Vec::new(),
-                    parent: None,
-                    syncs_cell_values: function
-                        .capture_writeback
-                        .as_ref()
-                        .is_some_and(crate::bytecode::CaptureWriteback::syncs_cell_values),
-                }
-            });
             return crate::generator::make_generator_object(
                 &function,
                 crate::bytecode::GeneratorStart {
                     bytecode: bytecode.clone(),
                     env: function_env.env,
-                    captured_env: activation_captured_env,
                     upvalues: function.upvalues.clone(),
                     with_stack: function.with_stack.clone(),
                     immutable_function_name: function
@@ -174,8 +150,6 @@ pub(crate) fn call_function(
                         .then(|| function.name.clone())
                         .flatten()
                         .or_else(|| function.immutable_env_binding.clone()),
-                    refresh_captured_slots_on_resume: true,
-                    capture_writeback,
                 },
                 env,
             );
@@ -198,7 +172,6 @@ pub(crate) fn call_function(
             return Ok(crate::async_function::call_async_function(
                 &function,
                 function_env.env,
-                function_env.function_capture_names,
                 env,
             ));
         }
@@ -218,46 +191,13 @@ pub(crate) fn call_function(
             is_construct,
         );
         let immutable_name_caller_value = immutable_name_caller_value(&function, env);
-        // The activation captured env is only ever read when the body creates a
-        // nested closure or class (those ops snapshot it into the new function's
-        // `captured_env`). A body that creates none never reads it, so skip
-        // cloning the whole frame env into it on every leaf call.
-        let activation_captured_env = if bytecode.creates_closures() {
-            Rc::new(RefCell::new(function_env.env.snapshot_locals()))
-        } else {
-            Rc::new(RefCell::new(HashMap::new()))
-        };
-        let activation_writeback = (!function_env.function_capture_names.is_empty()).then(|| {
-            crate::bytecode::CaptureWriteback {
-                target: Rc::clone(&function.captured_env),
-                names: function_env.function_capture_names.clone(),
-                aliases: Vec::new(),
-                parent: function.capture_writeback.clone().map(Box::new),
-                syncs_cell_values: function
-                    .capture_writeback
-                    .as_ref()
-                    .is_some_and(crate::bytecode::CaptureWriteback::syncs_cell_values),
-            }
-        });
         let result = eval_function_bytecode(
             bytecode,
             function_env.env,
-            activation_captured_env,
             function.upvalues.clone(),
             function.with_stack.clone(),
-            activation_writeback,
             true,
         );
-        propagate_function_captures(
-            &function,
-            bytecode,
-            &function_env.function_capture_names,
-            env,
-            &result,
-        );
-        propagate_lexical_super_this(&function, bytecode, &result);
-        propagate_caller_bindings(env, &function_env.caller_binding_names, &result);
-        sync_global_var_captures(&function, bytecode, env);
         restore_immutable_name_caller_value(&function, env, immutable_name_caller_value);
         // A derived constructor implicitly returns its (super-bound) `this`
         // when the body does not return an object, and it is a ReferenceError
@@ -298,14 +238,7 @@ fn immutable_name_caller_value(function: &Function, env: &CallEnv) -> Option<(St
     if !function.immutable_name_binding {
         return None;
     }
-    env.captured_binding_source_env()
-        .and_then(|source| source.borrow().get(name).cloned())
-        .or_else(|| {
-            env.activation_captured_env()
-                .and_then(|source| source.borrow().get(name).cloned())
-        })
-        .or_else(|| env.get(name))
-        .map(|value| (name.clone(), value))
+    env.get(name).map(|value| (name.clone(), value))
 }
 
 fn restore_immutable_name_caller_value(
@@ -319,19 +252,7 @@ fn restore_immutable_name_caller_value(
     let Some((name, value)) = saved else {
         return;
     };
-    if let Some(source) = env.captured_binding_source_env()
-        && source.borrow().contains_key(&name)
-    {
-        source.borrow_mut().insert(name.clone(), value.clone());
-    }
-    if let Some(source) = env.activation_captured_env()
-        && source.borrow().contains_key(&name)
-    {
-        source.borrow_mut().insert(name.clone(), value.clone());
-    }
-    if let Some(binding) = env.get_local_mut(&name) {
-        *binding = value.clone();
-    }
+    env.set_local(&name, value.clone());
     if env.realm_contains(&name) {
         env.insert_realm(name, value);
     }
@@ -347,69 +268,35 @@ pub(crate) fn initialize_instance_fields(
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     let elements = function.instance_elements();
-    for (index, element) in elements.iter().enumerate() {
+    for element in elements.iter() {
         match element {
             InstanceElementInitializer::PublicField(field) => {
                 let value = match &field.initializer {
-                    Some(thunk) => {
-                        let value = call_function(
-                            Value::Function(thunk.clone()),
-                            this_value.clone(),
-                            Vec::new(),
-                            env,
-                            false,
-                        )?;
-                        refresh_later_field_initializer_captures(&elements[index + 1..], thunk);
-                        value
-                    }
+                    Some(thunk) => call_function(
+                        Value::Function(thunk.clone()),
+                        this_value.clone(),
+                        Vec::new(),
+                        env,
+                        false,
+                    )?,
                     None => Value::Undefined,
                 };
                 crate::bytecode::install_field_value(this_value, field.key.clone(), value, env)?;
             }
             InstanceElementInitializer::PrivateElement(private) => {
-                let initializer = private
-                    .field_initializer
-                    .as_ref()
-                    .and_then(|field| field.initializer.as_ref());
                 crate::bytecode::apply_instance_private_element(
                     function, this_value, private, env,
                 )?;
-                if let Some(thunk) = initializer {
-                    refresh_later_field_initializer_captures(&elements[index + 1..], thunk);
-                }
             }
         }
     }
     Ok(())
 }
 
-fn refresh_later_field_initializer_captures(
-    elements: &[InstanceElementInitializer],
-    source: &Function,
-) {
-    let source_env = source.captured_env.borrow();
-    for element in elements {
-        let target = match element {
-            InstanceElementInitializer::PublicField(field) => field.initializer.as_ref(),
-            InstanceElementInitializer::PrivateElement(private) => private
-                .field_initializer
-                .as_ref()
-                .and_then(|field| field.initializer.as_ref()),
-        };
-        let Some(target) = target else { continue };
-        let mut target_env = target.captured_env.borrow_mut();
-        for (name, value) in source_env.iter() {
-            if target_env.contains_key(name) {
-                target_env.insert(name.clone(), value.clone());
-            }
-        }
-    }
-}
-
 fn finish_derived_construct(
     result: crate::bytecode::FunctionBytecodeResult<'_>,
 ) -> Result<Value, RuntimeError> {
-    let bound_this = result.frame_binding("this");
+    let bound_this = result.frame_cell_binding("this");
     let value = result.value?;
     match value {
         // A Symbol (or BigInt) primitive is represented as an object reference
@@ -689,8 +576,6 @@ fn not_constructor_error() -> RuntimeError {
 
 struct FunctionCallEnv {
     env: CallEnv,
-    function_capture_names: Vec<String>,
-    caller_binding_names: Vec<String>,
 }
 
 fn function_env(
@@ -702,117 +587,40 @@ fn function_env(
     env: &CallEnv,
     is_construct: bool,
 ) -> FunctionCallEnv {
-    let captured_env = function.captured_env.borrow();
-    let lexical_this = captured_env.get("this").cloned();
-    let lexical_field_initializer = captured_env.get(FIELD_INITIALIZER_EVAL_BINDING).cloned();
-    let mut local_env = HashMap::with_capacity(
-        captured_env.len() + function.params.binding_count() + argument_values.len() + 3,
-    );
-    let (mut function_capture_names, mut protected_capture_names) = insert_function_captures(
-        &mut local_env,
-        bytecode,
-        &function.local_names,
-        &captured_env,
-    );
-    // Indexed upvalues are already live shared cells. Keep their compatibility
-    // snapshot in the frame env for dynamic-name consumers, but never register
-    // them for the legacy caller/name writeback path: a same-named caller
-    // binding can be a different lexical or function-environment cell.
-    for name in bytecode.received_upvalue_names() {
-        let keeps_legacy_lexical_bridge = function
-            .capture_writeback
-            .as_ref()
-            .is_some_and(|writeback| writeback.targets_name(name));
-        if !keeps_legacy_lexical_bridge {
-            function_capture_names.retain(|capture| capture != name);
-            if !protected_capture_names
-                .iter()
-                .any(|protected| protected == name)
-            {
-                protected_capture_names.push(name.to_owned());
-            }
-        }
-    }
-    if let Some(name) = &function.immutable_env_binding
-        && !protected_capture_names
-            .iter()
-            .any(|protected| protected == name)
-    {
-        protected_capture_names.push(name.clone());
-    }
-    drop(captured_env);
-    refresh_written_global_captures_from_caller(
-        &function.captured_env,
-        &mut local_env,
-        bytecode,
-        &function.global_capture_names,
-        &protected_capture_names,
-        env,
-    );
-    let caller_shares_capture_source = env
-        .captured_binding_source_env()
-        .is_some_and(|source| Rc::ptr_eq(source, &function.captured_env));
-    let mut caller_binding_names = Vec::new();
-    insert_caller_bytecode_bindings(
-        &mut local_env,
-        &mut caller_binding_names,
-        CallerBindingContext {
-            bytecode,
-            function_local_names: &function.local_names,
-            protected_capture_names: &protected_capture_names,
-            env,
-            caller_shares_capture_source,
-            callee: &callee,
-        },
-    );
-    insert_caller_scope_bindings(
-        &mut local_env,
-        &mut caller_binding_names,
-        &function.local_names,
-        env,
-    );
-    if let Some(writeback) = &function.capture_writeback {
-        if !function.is_field_initializer
-            && !function.is_class_constructor
-            && !function.lexical_this
-            && !Rc::ptr_eq(&function.captured_env, &writeback.target)
-        {
-            refresh_writeback_captures_from_caller(&mut local_env, writeback, env);
-        } else if let Some(parent) = writeback.parent.as_deref() {
-            refresh_writeback_captures_from_caller(&mut local_env, parent, env);
-        }
-    }
+    let lexical_this = received_upvalue_value(function, bytecode, "this");
+    let lexical_field_initializer =
+        received_upvalue_value(function, bytecode, FIELD_INITIALIZER_EVAL_BINDING);
+    let mut frame_env = env.new_function_frame();
     if function.has_name_binding
         && let Some(name) = &function.name
         && !function_name_is_shadowed_by_body_var(function, bytecode, name)
     {
-        local_env.insert(name.clone(), callee.clone());
+        frame_env.insert(name.clone(), callee.clone());
     }
     // A derived class constructor needs its own constructor value at hand so
     // that `super(...)` can initialize the instance fields once `this` exists.
     if function.is_class_constructor && function.is_derived_constructor && is_construct {
-        local_env.insert(crate::ACTIVE_CONSTRUCTOR_BINDING.to_owned(), callee.clone());
+        frame_env.insert(crate::ACTIVE_CONSTRUCTOR_BINDING.to_owned(), callee.clone());
     }
     if function.is_field_initializer {
-        local_env.insert(
+        frame_env.insert(
             FIELD_INITIALIZER_EVAL_BINDING.to_owned(),
             Value::Boolean(true),
         );
     } else if function.lexical_this
         && let Some(field_initializer) = lexical_field_initializer
     {
-        local_env.insert(FIELD_INITIALIZER_EVAL_BINDING.to_owned(), field_initializer);
+        frame_env.insert(FIELD_INITIALIZER_EVAL_BINDING.to_owned(), field_initializer);
     }
-    insert_super_bindings(&mut local_env, function, env, is_construct);
+    insert_super_bindings(&mut frame_env, function, env, is_construct);
     // A derived-class constructor leaves `this` uninitialized (a TDZ): reading
     // `this` before `super(...)` is a ReferenceError, and `super(...)` binds
     // it. Every other function gets its `this` here.
     if function.is_derived_constructor && is_construct {
-        local_env.remove("this");
+        frame_env.remove_frame_binding("this");
     } else if function.lexical_this {
-        let caller_has_derived_this_tdz =
-            env.locals().contains_key(crate::SUPER_CONSTRUCTOR_BINDING)
-                || env.locals().contains_key(crate::ACTIVE_CONSTRUCTOR_BINDING);
+        let caller_has_derived_this_tdz = env.has_local_binding(crate::SUPER_CONSTRUCTOR_BINDING)
+            || env.has_local_binding(crate::ACTIVE_CONSTRUCTOR_BINDING);
         let inherited_this = if caller_has_derived_this_tdz {
             env.get_local("this")
         } else {
@@ -825,15 +633,15 @@ fn function_env(
                 &this_value,
                 Value::Function(function) if function.is_uninitialized_lexical_marker()
             ) {
-                local_env.remove("this");
+                frame_env.remove_frame_binding("this");
             } else {
-                local_env.insert("this".to_owned(), this_value);
+                frame_env.insert("this".to_owned(), this_value);
             }
         }
     } else {
         let this_env_storage = callee_this_realm_env(function, env);
         let this_env = this_env_storage.as_ref().unwrap_or(env);
-        local_env.insert(
+        frame_env.insert(
             "this".to_owned(),
             function_call_this(Some(this_value), this_env, function.is_strict),
         );
@@ -843,7 +651,7 @@ fn function_env(
             .get(index)
             .cloned()
             .unwrap_or(Value::Undefined);
-        local_env.insert(parameter_binding_name(&element.binding, index), value);
+        frame_env.insert(parameter_binding_name(&element.binding, index), value);
     }
     let parameter_names = function.params.names();
     let parameter_shadows_arguments = parameter_names.iter().any(|name| name == "arguments");
@@ -851,9 +659,9 @@ fn function_env(
         && !parameter_shadows_arguments
         && bytecode.needs_arguments_object();
     if has_own_arguments_object {
-        local_env.insert(
+        frame_env.insert(
             "arguments".to_owned(),
-            arguments_object(function, argument_values, env),
+            arguments_object(function, argument_values, &frame_env),
         );
     }
     if let Some(rest) = &function.params.rest {
@@ -862,43 +670,31 @@ fn function_env(
             .skip(function.params.positional.len())
             .cloned()
             .collect();
-        local_env.insert(
+        frame_env.insert(
             rest_parameter_binding_name(rest),
             Value::Array(ArrayRef::new(values)),
         );
     }
     if has_own_arguments_object || parameter_shadows_arguments {
-        local_env.insert(
+        frame_env.insert(
             DIRECT_EVAL_ARGUMENTS_BINDING.to_owned(),
             Value::Boolean(true),
         );
     }
     if !function.lexical_this || function.is_field_initializer {
-        local_env.insert(
+        frame_env.insert(
             DIRECT_EVAL_FUNCTION_CONTEXT_BINDING.to_owned(),
             Value::Boolean(true),
         );
     }
-    if function.immutable_name_binding
-        && let Some(name) = &function.name
-    {
-        function_capture_names.retain(|capture| capture != name);
-        caller_binding_names.retain(|binding| binding != name);
-    }
     if let Some(name) = &function.immutable_env_binding {
-        let captured_value = function
-            .env
-            .get(name)
-            .cloned()
-            .or_else(|| function.captured_env.borrow().get(name).cloned());
+        let captured_value = received_upvalue_value(function, bytecode, name)
+            .or_else(|| function.immutable_env_value.as_ref().map(|cell| cell.get()));
         if let Some(value) = captured_value {
-            local_env.insert(name.clone(), value);
+            frame_env.insert(name.clone(), value);
         }
-        function_capture_names.retain(|capture| capture != name);
-        caller_binding_names.retain(|binding| binding != name);
     }
-    insert_marked_call_realm(function, &mut local_env);
-    let mut frame_env = env.with_frame_locals(local_env);
+    insert_marked_call_realm(function, &mut frame_env);
     if function.immutable_name_binding
         && let Some(name) = &function.name
     {
@@ -915,34 +711,31 @@ fn function_env(
     }
     frame_env.set_module_imports(function.module_imports.clone());
     frame_env.set_private_environment(function_private_environment(function));
-    if let Some(writeback) = &function.capture_writeback {
-        frame_env.set_captured_binding_source_env(Rc::clone(&writeback.target));
-    } else {
-        frame_env.set_captured_binding_source_env(Rc::clone(&function.captured_env));
+    if let Some(bindings) = &function.deopt_bindings {
+        frame_env.set_deopt_bindings(bindings.clone());
     }
-    FunctionCallEnv {
-        env: frame_env,
-        function_capture_names,
-        caller_binding_names,
-    }
+    FunctionCallEnv { env: frame_env }
 }
 
-fn insert_marked_call_realm(function: &Function, local_env: &mut HashMap<String, Value>) {
+fn received_upvalue_value(function: &Function, bytecode: &Bytecode, name: &str) -> Option<Value> {
+    bytecode
+        .received_upvalue_names()
+        .zip(&function.upvalues)
+        .find_map(|(candidate, upvalue)| (candidate == name).then(|| upvalue.get()))
+}
+
+fn insert_marked_call_realm(function: &Function, frame_env: &mut CallEnv) {
     let global = function
         .own_property(DYNAMIC_FUNCTION_REALM_GLOBAL)
         .and_then(|property| match property.value {
             Value::Object(global) => Some(global),
             _ => None,
         })
-        .or_else(|| match function.env.get(DYNAMIC_FUNCTION_REALM_GLOBAL) {
-            Some(Value::Object(global)) => Some(global.clone()),
-            _ => None,
-        })
         .or_else(|| {
             match function
-                .captured_env
-                .borrow()
-                .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
+                .realm
+                .as_ref()
+                .and_then(|realm| realm.borrow().get(DYNAMIC_FUNCTION_REALM_GLOBAL).cloned())
             {
                 Some(Value::Object(global)) => Some(global.clone()),
                 _ => None,
@@ -951,17 +744,17 @@ fn insert_marked_call_realm(function: &Function, local_env: &mut HashMap<String,
     let Some(global) = global else {
         return;
     };
-    local_env.insert(
+    frame_env.insert(
         DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
         Value::Object(global.clone()),
     );
-    local_env.insert(
+    frame_env.insert(
         GLOBAL_THIS_BINDING.to_owned(),
         Value::Object(global.clone()),
     );
     for name in global.own_property_names() {
         if let Some(property) = global.own_property(&name) {
-            local_env.insert(name, property.value);
+            frame_env.insert(name, property.value);
         }
     }
 }
@@ -981,86 +774,15 @@ fn callee_this_realm_env(function: &Function, caller_env: &CallEnv) -> Option<Ca
     if function.is_strict {
         return None;
     }
-    let captured = function.captured_env.borrow();
-    let captured_global = captured.get(GLOBAL_THIS_BINDING)?;
+    let realm = function.realm.as_ref()?;
+    let captured_global = realm.borrow().get(GLOBAL_THIS_BINDING)?.clone();
     if caller_env
         .get(GLOBAL_THIS_BINDING)
-        .is_some_and(|caller_global| caller_global.same_value(captured_global))
+        .is_some_and(|caller_global| caller_global.same_value(&captured_global))
     {
         return None;
     }
-    Some(CallEnv::from_map(captured.clone()))
-}
-
-fn refresh_writeback_captures_from_caller(
-    local_env: &mut HashMap<String, Value>,
-    writeback: &crate::bytecode::CaptureWriteback,
-    caller_env: &CallEnv,
-) {
-    for name in &writeback.names {
-        if let Some(value) = caller_env
-            .captured_binding_source_env()
-            .and_then(|source| source.borrow().get(name).cloned())
-            .or_else(|| caller_env.get(name))
-        {
-            local_env.insert(name.clone(), value);
-        }
-    }
-    for (source_name, target_name) in &writeback.aliases {
-        if let Some(value) = caller_env
-            .get(target_name)
-            .or_else(|| caller_env.get(source_name))
-        {
-            local_env.insert(source_name.clone(), value);
-        }
-    }
-    if let Some(parent) = writeback.parent.as_deref() {
-        refresh_writeback_captures_from_caller(local_env, parent, caller_env);
-    }
-}
-
-fn refresh_written_global_captures_from_caller(
-    captured_env: &Rc<RefCell<HashMap<String, Value>>>,
-    local_env: &mut HashMap<String, Value>,
-    bytecode: &Bytecode,
-    global_capture_names: &[String],
-    protected_capture_names: &[String],
-    caller_env: &CallEnv,
-) {
-    let written_names = bytecode.closure_written_binding_names();
-    let names = local_env.keys().cloned().collect::<Vec<_>>();
-    for name in names {
-        let is_written_capture = written_names.iter().any(|written| written == &name);
-        let is_global_capture = global_capture_names
-            .iter()
-            .any(|global_capture| global_capture == &name);
-        if protected_capture_names
-            .iter()
-            .any(|protected| protected == &name)
-            || (!is_written_capture && !is_global_capture)
-            || !captured_global_this_has_own_property(captured_env, &name)
-            || !caller_global_this_has_own_property(caller_env, &name)
-        {
-            continue;
-        }
-        let value = if is_global_capture && !is_written_capture {
-            caller_global_this_value(caller_env, &name)
-                .or_else(|| caller_env.get_realm(&name))
-                .or_else(|| caller_env.get(&name))
-        } else {
-            caller_env.get(&name)
-        };
-        if let Some(value) = value {
-            local_env.insert(name, value);
-        }
-    }
-}
-
-fn caller_global_this_value(caller_env: &CallEnv, name: &str) -> Option<Value> {
-    match caller_env.get(GLOBAL_THIS_BINDING) {
-        Some(Value::Object(global)) => global.own_property(name).map(|property| property.value),
-        _ => None,
-    }
+    Some(CallEnv::new(Rc::clone(realm)))
 }
 
 /// Installs the per-frame `super` and `new.target` bindings. A method or
@@ -1068,7 +790,7 @@ fn caller_global_this_value(caller_env: &CallEnv, name: &str) -> Option<Value> {
 /// constructing) `new.target`; an arrow inherits all three from the enclosing
 /// frame's environment so `super` and `new.target` work lexically inside it.
 fn insert_super_bindings(
-    local_env: &mut HashMap<String, Value>,
+    frame_env: &mut CallEnv,
     function: &Function,
     caller_env: &CallEnv,
     is_construct: bool,
@@ -1078,36 +800,30 @@ fn insert_super_bindings(
     // Methods/constructors use their own home object and parent constructor;
     // arrows inherit both from the enclosing frame so `super` works lexically.
     if let Some(home) = function.home_object.borrow().clone() {
-        local_env.insert(HOME_OBJECT_BINDING.to_owned(), home);
+        frame_env.insert(HOME_OBJECT_BINDING.to_owned(), home);
     } else if function.lexical_this
         && let Some(home) = caller_env.get(HOME_OBJECT_BINDING)
     {
-        local_env.insert(HOME_OBJECT_BINDING.to_owned(), home);
+        frame_env.insert(HOME_OBJECT_BINDING.to_owned(), home);
     }
 
     if let Some(super_constructor) = function.super_constructor.borrow().clone() {
-        local_env.insert(SUPER_CONSTRUCTOR_BINDING.to_owned(), super_constructor);
+        frame_env.insert(SUPER_CONSTRUCTOR_BINDING.to_owned(), super_constructor);
     } else if function.lexical_this
         && let Some(super_constructor) = caller_env.get(SUPER_CONSTRUCTOR_BINDING)
     {
-        local_env.insert(SUPER_CONSTRUCTOR_BINDING.to_owned(), super_constructor);
+        frame_env.insert(SUPER_CONSTRUCTOR_BINDING.to_owned(), super_constructor);
     }
 
     // `new.target` reaches a constructor frame from `construct_function` (which
     // writes it into the call env). Arrows inherit it lexically; ordinary
     // calls see `new.target` undefined.
-    if (is_construct || function.lexical_this)
-        && let Some(new_target) = caller_env.get(NEW_TARGET_BINDING)
-    {
-        local_env.insert(NEW_TARGET_BINDING.to_owned(), new_target);
-    } else if function.lexical_this
-        && let Some(new_target) = function
-            .captured_env
-            .borrow()
-            .get(NEW_TARGET_BINDING)
-            .cloned()
-    {
-        local_env.insert(NEW_TARGET_BINDING.to_owned(), new_target);
+    if function.lexical_this {
+        if let Some(new_target) = &function.lexical_new_target {
+            frame_env.insert(NEW_TARGET_BINDING.to_owned(), new_target.get());
+        }
+    } else if is_construct && let Some(new_target) = caller_env.get(NEW_TARGET_BINDING) {
+        frame_env.insert(NEW_TARGET_BINDING.to_owned(), new_target);
     }
 }
 
@@ -1119,431 +835,5 @@ fn function_private_environment(function: &Function) -> Option<PrivateEnvironmen
         Some(Value::Object(object)) => object.private_environment(),
         Some(Value::Function(function)) => function.private_environment(),
         _ => None,
-    }
-}
-
-fn insert_function_captures(
-    local_env: &mut HashMap<String, Value>,
-    bytecode: &Bytecode,
-    function_local_names: &[String],
-    function_env: &HashMap<String, Value>,
-) -> (Vec<String>, Vec<String>) {
-    let mut writeback_names = Vec::new();
-    let mut protected_names = Vec::new();
-    let mut names = bytecode.closure_referenced_global_names();
-    names.extend(bytecode.closure_written_binding_names());
-    names.extend(bytecode.global_names().iter().cloned());
-    names.sort();
-    names.dedup();
-    let written_names = bytecode.written_binding_names();
-    let global_names = bytecode.global_names();
-    for name in names {
-        if function_local_names.iter().any(|local| local == &name) {
-            continue;
-        }
-        let is_written = written_names.iter().any(|written| written == &name);
-        let is_global_name = global_names.iter().any(|global| global == &name);
-        let skips_immutable_slot = is_written || is_global_name;
-        insert_function_capture(
-            local_env,
-            &mut writeback_names,
-            &mut protected_names,
-            bytecode,
-            function_env,
-            &name,
-            skips_immutable_slot,
-        );
-    }
-    for name in bytecode.local_names() {
-        if !function_local_names.iter().any(|local| local == name) {
-            let is_written = written_names.iter().any(|written| written == name);
-            let is_global_name = global_names.iter().any(|global| global == name);
-            let skips_immutable_slot = is_written || is_global_name;
-            insert_function_capture(
-                local_env,
-                &mut writeback_names,
-                &mut protected_names,
-                bytecode,
-                function_env,
-                name,
-                skips_immutable_slot,
-            );
-        }
-    }
-    (writeback_names, protected_names)
-}
-
-fn insert_function_capture(
-    local_env: &mut HashMap<String, Value>,
-    writeback_names: &mut Vec<String>,
-    protected_names: &mut Vec<String>,
-    bytecode: &Bytecode,
-    function_env: &HashMap<String, Value>,
-    name: &str,
-    skips_immutable_slot: bool,
-) {
-    if is_internal_binding_name(name) {
-        return;
-    }
-    if let Some(value) = function_env.get(name) {
-        if skips_immutable_slot
-            && bytecode
-                .local_slot(name)
-                .is_some_and(|slot| !bytecode.local_is_mutable(slot))
-            && *value == Value::Undefined
-        {
-            return;
-        }
-        local_env.insert(name.to_owned(), value.clone());
-        let is_immutable_capture = bytecode
-            .local_slot(name)
-            .is_some_and(|slot| !bytecode.local_is_mutable(slot));
-        if is_immutable_capture {
-            if !protected_names.iter().any(|existing| existing == name) {
-                protected_names.push(name.to_owned());
-            }
-        } else {
-            if !writeback_names.iter().any(|existing| existing == name) {
-                writeback_names.push(name.to_owned());
-            }
-        }
-        let marker_name = format!(
-            "{}{}",
-            crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
-            name
-        );
-        if function_env.contains_key(&marker_name)
-            && !protected_names.iter().any(|existing| existing == name)
-        {
-            protected_names.push(name.to_owned());
-        }
-    }
-}
-
-fn insert_caller_bytecode_bindings(
-    local_env: &mut HashMap<String, Value>,
-    caller_binding_names: &mut Vec<String>,
-    context: CallerBindingContext<'_>,
-) {
-    let CallerBindingContext {
-        bytecode,
-        function_local_names,
-        protected_capture_names,
-        env,
-        caller_shares_capture_source,
-        callee,
-    } = context;
-    for name in bytecode.global_names() {
-        let is_protected_capture = protected_capture_names
-            .iter()
-            .any(|protected| protected == name);
-        let write_back_to_caller = !function_local_names.iter().any(|local| local == name);
-        let existing_capture_matches_caller = caller_capture_matches_existing(
-            local_env,
-            env,
-            name,
-            caller_shares_capture_source,
-            caller_local_match_is_writeback_target(callee, env, name),
-            callee,
-        );
-        register_existing_caller_capture_writeback(
-            local_env,
-            caller_binding_names,
-            env,
-            name,
-            ExistingCallerCaptureWriteback {
-                write_back_to_caller,
-                existing_capture_matches_caller,
-                caller_shares_capture_source,
-                allow_current_value_mismatch: !is_protected_capture && callee_is_method(callee),
-                callee,
-            },
-        );
-        insert_caller_binding(
-            local_env,
-            caller_binding_names,
-            env,
-            name,
-            write_back_to_caller,
-            !is_protected_capture
-                && existing_capture_matches_caller
-                && ((caller_shares_capture_source
-                    && bytecode.sloppy_global_fallback_binding(name))
-                    || (bytecode.local_slot(name).is_none()
-                        && ((env.module_host().is_some() && env.realm_contains(name))
-                            || (bytecode.writes_binding(name) && env.realm_contains(name))
-                            || env
-                                .captured_binding_source_env()
-                                .is_some_and(|source| source.borrow().contains_key(name))))),
-        );
-    }
-    for name in bytecode.sloppy_global_assignment_names() {
-        if env.realm_contains(name) && !env.captures_binding(name) {
-            insert_missing_caller_binding_name(caller_binding_names, name);
-        }
-    }
-    for name in bytecode.local_names() {
-        if !function_local_names.iter().any(|local| local == name) {
-            let is_protected_capture = protected_capture_names
-                .iter()
-                .any(|protected| protected == name);
-            let from_env = bytecode
-                .local_slot(name)
-                .is_some_and(|slot| bytecode.local_is_from_env(slot));
-            let existing_capture_matches_caller = caller_capture_matches_existing(
-                local_env,
-                env,
-                name,
-                caller_shares_capture_source,
-                caller_local_match_is_writeback_target(callee, env, name),
-                callee,
-            );
-            register_existing_caller_capture_writeback(
-                local_env,
-                caller_binding_names,
-                env,
-                name,
-                ExistingCallerCaptureWriteback {
-                    write_back_to_caller: true,
-                    existing_capture_matches_caller,
-                    caller_shares_capture_source,
-                    allow_current_value_mismatch: !is_protected_capture && callee_is_method(callee),
-                    callee,
-                },
-            );
-            let allow_live_env_override = from_env
-                && !is_protected_capture
-                && existing_capture_matches_caller
-                && (env.module_host().is_some()
-                    || (bytecode.writes_binding(name)
-                        && caller_global_this_has_own_property(env, name)));
-            insert_caller_binding(
-                local_env,
-                caller_binding_names,
-                env,
-                name,
-                true,
-                allow_live_env_override,
-            );
-        }
-    }
-}
-
-fn register_existing_caller_capture_writeback(
-    local_env: &HashMap<String, Value>,
-    caller_binding_names: &mut Vec<String>,
-    env: &CallEnv,
-    name: &str,
-    registration: ExistingCallerCaptureWriteback<'_>,
-) {
-    if registration.write_back_to_caller
-        && registration.existing_capture_matches_caller
-        && (registration.caller_shares_capture_source
-            || callee_capture_writeback_targets_caller(registration.callee, env, name)
-            || callee_capture_writeback_aliases_name(registration.callee, name)
-            || callee_is_method(registration.callee))
-        && local_env.contains_key(name)
-        && (registration.allow_current_value_mismatch
-            || env.locals().get(name) == local_env.get(name))
-    {
-        insert_missing_caller_binding_name(caller_binding_names, name);
-    }
-}
-
-fn caller_local_match_is_writeback_target(callee: &Value, env: &CallEnv, name: &str) -> bool {
-    callee_capture_writeback_targets_caller(callee, env, name)
-        || callee_capture_writeback_aliases_name(callee, name)
-}
-
-struct ExistingCallerCaptureWriteback<'a> {
-    write_back_to_caller: bool,
-    existing_capture_matches_caller: bool,
-    caller_shares_capture_source: bool,
-    allow_current_value_mismatch: bool,
-    callee: &'a Value,
-}
-
-fn callee_capture_writeback_aliases_name(callee: &Value, name: &str) -> bool {
-    let Value::Function(function) = callee else {
-        return false;
-    };
-    function
-        .capture_writeback
-        .as_ref()
-        .is_some_and(|writeback| capture_writeback_aliases_name(writeback, name))
-}
-
-fn capture_writeback_aliases_name(
-    writeback: &crate::bytecode::CaptureWriteback,
-    name: &str,
-) -> bool {
-    writeback
-        .aliases
-        .iter()
-        .any(|(source, target)| source == name || target == name)
-        || writeback
-            .parent
-            .as_deref()
-            .is_some_and(|parent| capture_writeback_aliases_name(parent, name))
-}
-
-fn callee_is_method(callee: &Value) -> bool {
-    matches!(
-        callee,
-        Value::Function(function) if function.home_object.borrow().is_some()
-    )
-}
-
-fn callee_capture_writeback_targets_caller(callee: &Value, env: &CallEnv, name: &str) -> bool {
-    let Value::Function(function) = callee else {
-        return false;
-    };
-    function
-        .capture_writeback
-        .as_ref()
-        .is_some_and(|writeback| capture_writeback_targets_env(writeback, env, name))
-}
-
-fn capture_writeback_targets_env(
-    writeback: &crate::bytecode::CaptureWriteback,
-    env: &CallEnv,
-    name: &str,
-) -> bool {
-    let contains_name = writeback.names.iter().any(|candidate| candidate == name)
-        || writeback
-            .aliases
-            .iter()
-            .any(|(source, target)| source == name || target == name);
-    let targets_env = env
-        .activation_captured_env()
-        .is_some_and(|activation| Rc::ptr_eq(activation, &writeback.target))
-        || env
-            .captured_binding_source_env()
-            .is_some_and(|source| Rc::ptr_eq(source, &writeback.target));
-    (contains_name && targets_env)
-        || writeback
-            .parent
-            .as_deref()
-            .is_some_and(|parent| capture_writeback_targets_env(parent, env, name))
-}
-
-struct CallerBindingContext<'a> {
-    bytecode: &'a Bytecode,
-    function_local_names: &'a [String],
-    protected_capture_names: &'a [String],
-    env: &'a CallEnv,
-    caller_shares_capture_source: bool,
-    callee: &'a Value,
-}
-
-fn insert_caller_binding(
-    local_env: &mut HashMap<String, Value>,
-    caller_binding_names: &mut Vec<String>,
-    env: &CallEnv,
-    name: &str,
-    write_back_to_caller: bool,
-    allow_existing_override: bool,
-) {
-    if is_internal_binding_name(name) {
-        return;
-    }
-    if local_env.contains_key(name) && !allow_existing_override {
-        if write_back_to_caller && caller_global_this_has_own_property(env, name) {
-            insert_missing_caller_binding_name(caller_binding_names, name);
-        }
-        return;
-    }
-    if let Some(value) = env.locals().get(name) {
-        local_env.insert(name.to_owned(), value.clone());
-        if write_back_to_caller {
-            insert_missing_caller_binding_name(caller_binding_names, name);
-        }
-    } else if allow_existing_override && let Some(value) = env.get_realm(name) {
-        local_env.insert(name.to_owned(), value);
-    } else if allow_existing_override
-        && let Some(source) = env.captured_binding_source_env()
-        && let Some(value) = source.borrow().get(name).cloned()
-    {
-        local_env.insert(name.to_owned(), value);
-    }
-}
-
-fn insert_missing_caller_binding_name(caller_binding_names: &mut Vec<String>, name: &str) {
-    if !caller_binding_names.iter().any(|existing| existing == name) {
-        caller_binding_names.push(name.to_owned());
-    }
-}
-
-fn insert_caller_scope_bindings(
-    local_env: &mut HashMap<String, Value>,
-    caller_binding_names: &mut Vec<String>,
-    function_local_names: &[String],
-    env: &CallEnv,
-) {
-    // Iterate only the caller's frame locals; realm bindings are shared and need
-    // no per-frame copy. The O(50)-per-key intrinsic scan is gone.
-    let names: Vec<String> = env.locals().keys().cloned().collect();
-    for name in names {
-        if is_call_frame_binding(&name) || function_local_names.iter().any(|local| local == &name) {
-            continue;
-        }
-        insert_caller_binding(local_env, caller_binding_names, env, &name, true, false);
-    }
-}
-
-fn propagate_caller_bindings(
-    env: &mut CallEnv,
-    caller_binding_names: &[String],
-    result: &crate::bytecode::FunctionBytecodeResult<'_>,
-) {
-    for name in caller_binding_names {
-        if !is_call_frame_binding(name)
-            && let Some(final_value) = result.binding(name)
-        {
-            if let Some(binding) = env.get_local_mut(name) {
-                *binding = final_value;
-            } else if env.realm_contains(name) {
-                env.insert_realm(name.clone(), final_value);
-            }
-        }
-    }
-    // Sloppy-mode global creation: a new binding the callee introduced is
-    // written to the shared realm so the caller (and every frame) sees it.
-    for name in &result.sloppy_global_names {
-        if !is_call_frame_binding(name)
-            && !env.contains_key(name)
-            && let Some(final_value) = result.binding(name)
-        {
-            env.insert_realm(name.clone(), final_value);
-        }
-    }
-}
-
-fn propagate_lexical_super_this(
-    function: &Function,
-    bytecode: &Bytecode,
-    result: &crate::bytecode::FunctionBytecodeResult<'_>,
-) {
-    if !function.lexical_this || !bytecode.contains_super_call() {
-        return;
-    }
-    let Some(this_value) = result.frame_binding("this") else {
-        return;
-    };
-    if matches!(
-        &this_value,
-        Value::Function(function) if function.is_uninitialized_lexical_marker()
-    ) {
-        return;
-    }
-    function
-        .captured_env
-        .borrow_mut()
-        .insert("this".to_owned(), this_value.clone());
-    if let Some(writeback) = &function.capture_writeback {
-        writeback
-            .target
-            .borrow_mut()
-            .insert("this".to_owned(), this_value);
     }
 }

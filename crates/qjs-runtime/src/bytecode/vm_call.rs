@@ -4,9 +4,8 @@ use crate::{
     CallEnv, Function, NativeFunction, RuntimeError, Value, call_function, to_int32_number,
 };
 
-use super::ir::Bytecode;
 use super::util::stack_underflow;
-use super::vm::{Slot, Vm};
+use super::vm::Vm;
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
@@ -130,19 +129,10 @@ impl Vm<'_> {
         env.env
             .remove(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING);
         env.env.set_direct_eval_with_stack(Vec::new());
-        if effective_direct_eval {
-            self.write_through_direct_eval_parameter_captures(&env.env, &env.injected);
-        }
         self.apply_call_env(env);
         if let Some(snapshot) = dynamic_realm_snapshot {
             self.restore_marked_dynamic_realm(snapshot);
         }
-        // A closure created in this frame and invoked through the just-returned
-        // call (directly or via a forwarding frame) writes back to this frame's
-        // shared captured env. Refresh this frame's live captured locals from it
-        // so a later read in this frame observes that write instead of a stale
-        // pre-call snapshot.
-        self.refresh_shared_captured_locals_after_call();
         if let Some(result) = self.handle_call_result(result)? {
             self.stack.push(result);
         }
@@ -254,41 +244,6 @@ pub(super) fn native_error_message(message: &str) -> (&'static str, String) {
         }
     }
     ("TypeError", message.to_owned())
-}
-
-pub(super) fn insert_scope_call_bindings(
-    env: &mut HashMap<String, Value>,
-    binding_names: &mut Vec<String>,
-    bytecode: &Bytecode,
-    locals: &[Slot],
-    function_local_names: &[String],
-) {
-    // Only the caller's live frame slots ride into the callee; realm bindings
-    // are visible through the shared cell and copying them would give the
-    // callee a frozen snapshot that masks later realm writes.
-    for (index, local) in bytecode.locals.iter().enumerate() {
-        if function_local_names
-            .binary_search_by(|name| name.as_str().cmp(&local.name))
-            .is_ok()
-        {
-            continue;
-        }
-        if let Some(Some(value)) = locals.get(index) {
-            insert_binding(env, binding_names, &local.name, value);
-        }
-    }
-}
-
-pub(super) fn call_forwarding_native_env(
-    callee: &Value,
-    env: CallEnv,
-) -> Option<(CallEnv, HashMap<String, Value>, Vec<String>)> {
-    if !is_call_forwarding_native(callee) {
-        return None;
-    }
-    let locals = env.locals().clone();
-    let binding_names = locals.keys().cloned().collect();
-    Some((env, locals, binding_names))
 }
 
 pub(super) fn try_fast_global_native_call(
@@ -443,20 +398,6 @@ fn fast_string_sequence_native(
     Some(result)
 }
 
-fn is_call_forwarding_native(callee: &Value) -> bool {
-    let Value::Function(function) = callee else {
-        return false;
-    };
-    matches!(
-        function.native,
-        Some(
-            crate::NativeFunction::FunctionPrototypeApply
-                | crate::NativeFunction::FunctionPrototypeCall
-                | crate::NativeFunction::ReflectApply
-        )
-    )
-}
-
 fn fast_string_from_char_code_numbers(arguments: &[Value]) -> String {
     let mut result = String::with_capacity(arguments.len());
     for value in arguments {
@@ -514,19 +455,4 @@ fn fast_string_from_char_code_primitives(
         crate::string::push_code_unit(&mut result, code_unit);
     }
     Some(Ok(result))
-}
-
-fn insert_binding(
-    env: &mut HashMap<String, Value>,
-    binding_names: &mut Vec<String>,
-    name: &str,
-    value: &Value,
-) {
-    if crate::function::is_internal_binding_name(name) {
-        return;
-    }
-    env.entry(name.to_owned()).or_insert_with(|| value.clone());
-    if !binding_names.iter().any(|existing| existing == name) {
-        binding_names.push(name.to_owned());
-    }
 }

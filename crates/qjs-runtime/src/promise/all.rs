@@ -44,20 +44,21 @@ impl ElementHandler for AllHandler {
         let already_called = ObjectRef::new(HashMap::new());
         let mut on_fulfilled =
             Function::new_native(None, 1, NativeFunction::PromiseAllResolveElement, false);
-        on_fulfilled.insert_env(
+        on_fulfilled.insert_native_context(
             PROMISE_ALL_CAPABILITY_RESOLVE.to_owned(),
             capability.resolve.clone(),
         );
-        on_fulfilled.insert_env(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
-        on_fulfilled.insert_env(
+        on_fulfilled
+            .insert_native_context(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
+        on_fulfilled.insert_native_context(
             PROMISE_ALL_VALUES.to_owned(),
             Value::Array(self.values.clone()),
         );
-        on_fulfilled.insert_env(
+        on_fulfilled.insert_native_context(
             PROMISE_ALL_REMAINING.to_owned(),
             Value::Object(self.remaining.clone()),
         );
-        on_fulfilled.insert_env(
+        on_fulfilled.insert_native_context(
             PROMISE_ALL_ALREADY_CALLED.to_owned(),
             Value::Object(already_called),
         );
@@ -95,7 +96,7 @@ pub(crate) fn native_promise_all_resolve_element(
     if already_called(function) {
         return Ok(Value::Undefined);
     }
-    let index = match function.env.get(PROMISE_ALL_INDEX) {
+    let index = match function.native_context.get(PROMISE_ALL_INDEX) {
         Some(Value::Number(index)) if *index >= 0.0 => *index as usize,
         _ => {
             return Err(RuntimeError {
@@ -104,7 +105,7 @@ pub(crate) fn native_promise_all_resolve_element(
             });
         }
     };
-    let values = match function.env.get(PROMISE_ALL_VALUES).cloned() {
+    let values = match function.native_context.get(PROMISE_ALL_VALUES).cloned() {
         Some(Value::Array(values)) => values,
         _ => {
             return Err(RuntimeError {
@@ -113,7 +114,7 @@ pub(crate) fn native_promise_all_resolve_element(
             });
         }
     };
-    let remaining = match function.env.get(PROMISE_ALL_REMAINING).cloned() {
+    let remaining = match function.native_context.get(PROMISE_ALL_REMAINING).cloned() {
         Some(Value::Object(remaining)) => remaining,
         _ => {
             return Err(RuntimeError {
@@ -127,7 +128,7 @@ pub(crate) fn native_promise_all_resolve_element(
     values.set(index, value);
     if perform::decrement_remaining(&remaining) == 0.0 {
         let resolve = function
-            .env
+            .native_context
             .get(PROMISE_ALL_CAPABILITY_RESOLVE)
             .cloned()
             .unwrap_or(Value::Undefined);
@@ -144,7 +145,7 @@ pub(crate) fn native_promise_all_resolve_element(
 
 /// Reads-and-sets the single-call guard, returning whether it was already set.
 pub(super) fn already_called(function: &Function) -> bool {
-    let Some(Value::Object(cell)) = function.env.get(PROMISE_ALL_ALREADY_CALLED) else {
+    let Some(Value::Object(cell)) = function.native_context.get(PROMISE_ALL_ALREADY_CALLED) else {
         return false;
     };
     if cell.own_property("called").is_some() {

@@ -228,6 +228,24 @@ fn mapped_arguments_nonconfigurable_descriptor_stays_mapped() {
 }
 
 #[test]
+fn mapped_arguments_keeps_parameter_cell_across_nested_descriptor_helper() {
+    assert_eq!(
+        eval(
+            "function readDescriptorValue(object) { \
+                 return Object.getOwnPropertyDescriptor(object, '0').value; \
+             } \
+             function test(a) { \
+                 Object.defineProperty(arguments, '0', { configurable: false }); \
+                 a = 2; \
+                 return readDescriptorValue(arguments) + ':' + arguments[0]; \
+             } \
+             test(1);"
+        ),
+        Ok(Value::String("2:2".to_owned().into()))
+    );
+}
+
+#[test]
 fn mapped_arguments_nonwritable_descriptor_removes_mapping() {
     assert_eq!(
         eval(

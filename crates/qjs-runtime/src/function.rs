@@ -1,6 +1,5 @@
 mod arguments;
 mod call;
-mod captures;
 mod env;
 mod install;
 mod local_names;
@@ -29,13 +28,28 @@ pub(crate) use arguments::{native_mapped_argument_get, native_mapped_argument_se
 pub(crate) use call::{
     call_function, construct_function, ensure_constructor, initialize_instance_fields,
 };
-pub(crate) use captures::is_call_frame_binding;
+pub(crate) fn is_call_frame_binding(name: &str) -> bool {
+    matches!(
+        name,
+        crate::GLOBAL_THIS_BINDING
+            | crate::DIRECT_EVAL_STRICT_BINDING
+            | crate::DIRECT_EVAL_ARGUMENTS_BINDING
+            | crate::DIRECT_EVAL_FUNCTION_CONTEXT_BINDING
+            | crate::FIELD_INITIALIZER_EVAL_BINDING
+            | crate::HOME_OBJECT_BINDING
+            | crate::NEW_TARGET_BINDING
+            | crate::SUPER_CONSTRUCTOR_BINDING
+            | crate::ACTIVE_CONSTRUCTOR_BINDING
+            | "this"
+            | "arguments"
+    )
+}
 #[allow(unused_imports)]
-pub(crate) use env::{CallEnv, ModuleImports, Realm};
+pub(crate) use env::{CallEnv, DynamicBindings, ModuleImports, Realm, new_realm};
 pub(crate) use install::install_function;
 pub(crate) use local_names::{
-    collect_function_local_names, is_internal_binding_name, parameter_argument_binding_name,
-    parameter_binding_name, rest_parameter_argument_binding_name, rest_parameter_binding_name,
+    collect_function_local_names, parameter_argument_binding_name, parameter_binding_name,
+    rest_parameter_argument_binding_name, rest_parameter_binding_name,
 };
 pub(crate) use native_kind::NativeFunction;
 pub(crate) use prototype::{

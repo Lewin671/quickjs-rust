@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc};
 
 use qjs_ast::Stmt;
 use qjs_parser::parse_dynamic_function_script;
@@ -220,7 +220,7 @@ fn build_dynamic_function(
         immutable_name_binding: false,
         immutable_env_binding: None,
         params: Rc::new(params),
-        env: env_snapshot.clone(),
+        realm: super::env::new_realm(env_snapshot),
         module_host: None,
         module_imports: HashMap::new(),
         bytecode: Rc::new(bytecode),
@@ -236,10 +236,8 @@ fn build_dynamic_function(
         is_field_initializer: false,
         home_object: None,
         super_constructor: None,
-        captured_env: Rc::new(RefCell::new(env_snapshot)),
+        deopt_bindings: None,
         with_stack: Vec::new(),
-        capture_writeback: None,
-        global_capture_names: Vec::new(),
         upvalues: Vec::new(),
     });
     Ok(created)

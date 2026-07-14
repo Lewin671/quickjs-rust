@@ -2,16 +2,6 @@ use std::collections::HashSet;
 
 use qjs_ast::{BindingPattern, ForInLeft, ForInit, FunctionParams, Stmt};
 
-/// Returns true for compiler-internal binding names that must never cross
-/// call frames (destructuring temporaries and raw pattern-argument slots).
-///
-/// Frame-local temporaries use a double-NUL prefix. Single-NUL names are
-/// runtime singletons (for example the symbol registry binding) that must
-/// keep flowing between frames.
-pub(crate) fn is_internal_binding_name(name: &str) -> bool {
-    name.starts_with("\u{0}\u{0}")
-}
-
 /// Returns the call-frame binding name for a positional parameter.
 ///
 /// Plain identifier parameters bind under their own name; destructured

@@ -108,17 +108,17 @@ fn element_function(
     capability: &PromiseCapability,
 ) -> Function {
     let mut function = Function::new_native(None, 1, native, false);
-    function.insert_env(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
-    function.insert_env(PROMISE_ALL_VALUES.to_owned(), Value::Array(values.clone()));
-    function.insert_env(
+    function.insert_native_context(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
+    function.insert_native_context(PROMISE_ALL_VALUES.to_owned(), Value::Array(values.clone()));
+    function.insert_native_context(
         PROMISE_ALL_REMAINING.to_owned(),
         Value::Object(remaining.clone()),
     );
-    function.insert_env(
+    function.insert_native_context(
         PROMISE_ALL_ALREADY_CALLED.to_owned(),
         Value::Object(already_called.clone()),
     );
-    function.insert_env(
+    function.insert_native_context(
         PROMISE_ALL_CAPABILITY_RESOLVE.to_owned(),
         capability.resolve.clone(),
     );
@@ -134,7 +134,7 @@ fn settle_element(
     if already_called(function) {
         return Ok(Value::Undefined);
     }
-    let index = match function.env.get(PROMISE_ALL_INDEX) {
+    let index = match function.native_context.get(PROMISE_ALL_INDEX) {
         Some(Value::Number(index)) if *index >= 0.0 => *index as usize,
         _ => {
             return Err(RuntimeError {
@@ -143,7 +143,7 @@ fn settle_element(
             });
         }
     };
-    let values = match function.env.get(PROMISE_ALL_VALUES).cloned() {
+    let values = match function.native_context.get(PROMISE_ALL_VALUES).cloned() {
         Some(Value::Array(values)) => values,
         _ => {
             return Err(RuntimeError {
@@ -152,7 +152,7 @@ fn settle_element(
             });
         }
     };
-    let remaining = match function.env.get(PROMISE_ALL_REMAINING).cloned() {
+    let remaining = match function.native_context.get(PROMISE_ALL_REMAINING).cloned() {
         Some(Value::Object(remaining)) => remaining,
         _ => {
             return Err(RuntimeError {
@@ -166,7 +166,7 @@ fn settle_element(
     values.set(index, settled_result_object(state, settled_value, env));
     if perform::decrement_remaining(&remaining) == 0.0 {
         let resolve = function
-            .env
+            .native_context
             .get(PROMISE_ALL_CAPABILITY_RESOLVE)
             .cloned()
             .unwrap_or(Value::Undefined);

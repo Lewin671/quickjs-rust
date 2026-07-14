@@ -197,7 +197,8 @@ pub(crate) fn define_property_descriptor_on_value_key(
             {
                 set_mapped_argument_value(&mapped_argument, value, env)?;
             }
-            object.define_property(key, property);
+            object.define_property(key.clone(), property);
+            env.sync_realm_global_object_property(object, &key);
             Ok(true)
         }
         Value::Map(map) => {
@@ -367,6 +368,9 @@ fn is_mapped_argument_accessor(value: &Value, native: NativeFunction) -> bool {
     let Value::Function(function) = value else {
         return false;
     };
+    if function.native == Some(native) {
+        return true;
+    }
     let Some(bound) = function.bound.as_ref() else {
         return false;
     };
@@ -693,7 +697,8 @@ pub(crate) fn define_property_on_value_key(
             {
                 return Ok(false);
             }
-            object.define_property(key, descriptor);
+            object.define_property(key.clone(), descriptor);
+            env.sync_realm_global_object_property(object, &key);
             Ok(true)
         }
         Value::Map(map) => {

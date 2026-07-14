@@ -8,11 +8,11 @@ use std::{
 use qjs_ast::{FunctionParams, Stmt};
 
 use crate::CallEnv;
-use crate::function::{ModuleImports, Upvalue};
+use crate::function::{DynamicBindings, ModuleImports, Realm, Upvalue};
 use crate::module::ModuleHostRef;
 use crate::{
     Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, Value,
-    bytecode::{CaptureWriteback, compile_function_body},
+    bytecode::compile_function_body,
     function::{collect_function_local_names, is_strict_function_body},
     object_prototype,
 };
@@ -75,25 +75,28 @@ pub struct Function {
     /// An immutable binding supplied through the captured environment rather
     /// than the function's own name, currently used for class inner names.
     pub(crate) immutable_env_binding: Option<String>,
+    /// Value for the rare immutable outer name that is not represented by a
+    /// compiler-generated received-upvalue slot (notably the self binding of a
+    /// named function expression referenced only by a nested function).
+    pub(crate) immutable_env_value: Option<Upvalue>,
     /// Parameter names. Held behind `Rc` so the frequent `Function` value
     /// clones (every property read, capture sync, and call setup) only bump a
     /// refcount instead of deep-cloning the parameter AST, which dominated call
     /// cost (`tasks/T011-call-performance.md`). Parameters are immutable after
     /// the function is created.
     pub params: Rc<FunctionParams>,
-    /// Environment captured when the function was created. Held behind `Rc` so
-    /// the frequent `Function` value clones (every call clones the callee, plus
-    /// property reads and capture syncs) bump a refcount instead of deep-cloning
-    /// this map — which for a user function holds the ~48 realm intrinsics and
-    /// dominated the leaf-call path. Mutated only when building a native
-    /// reaction's state, via `Rc::make_mut` on the freshly, uniquely-held `Rc`.
-    pub env: Rc<HashMap<String, Value>>,
-    pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    /// Opaque state carried by native closure-like functions (promise
+    /// reactions, async helpers, RegExp accessors, ...). User bytecode functions
+    /// keep this empty: lexical captures live in indexed [`Upvalue`] cells and
+    /// globals live in the shared `realm` cell below.
+    pub(crate) native_context: Rc<HashMap<String, Value>>,
+    /// The creation realm of a user bytecode function. Native functions keep
+    /// `None` and receive their active realm through `CallEnv`.
+    pub(crate) realm: Option<Realm>,
+    pub(crate) deopt_bindings: Option<DynamicBindings>,
     pub(crate) module_host: Option<ModuleHostRef>,
     pub(crate) module_imports: ModuleImports,
     pub(crate) with_stack: Vec<Value>,
-    pub(crate) capture_writeback: Option<CaptureWriteback>,
-    pub(crate) global_capture_names: Vec<String>,
     pub(crate) upvalues: Vec<Upvalue>,
     pub(crate) local_names: Vec<String>,
     pub(crate) bytecode: Option<Rc<Bytecode>>,
@@ -102,6 +105,10 @@ pub struct Function {
     pub(crate) is_strict: bool,
     pub(crate) lexical_this: bool,
     pub(crate) lexical_arguments: bool,
+    /// `new.target` captured when an arrow is created. Unlike `this` and
+    /// `arguments`, bytecode reads this through a dedicated opcode, so it is
+    /// retained explicitly rather than as an ordinary received upvalue.
+    pub(crate) lexical_new_target: Option<Upvalue>,
     /// Whether this is a generator function (`function*` / `*m()`), which
     /// returns a generator object when called instead of running its body.
     pub(crate) is_generator: bool,
@@ -167,7 +174,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) immutable_name_binding: bool,
     pub(crate) immutable_env_binding: Option<String>,
     pub(crate) params: Rc<FunctionParams>,
-    pub(crate) env: HashMap<String, Value>,
+    pub(crate) realm: Realm,
     pub(crate) module_host: Option<ModuleHostRef>,
     pub(crate) module_imports: ModuleImports,
     pub(crate) bytecode: Rc<Bytecode>,
@@ -183,10 +190,8 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) is_field_initializer: bool,
     pub(crate) home_object: Option<Value>,
     pub(crate) super_constructor: Option<Value>,
-    pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    pub(crate) deopt_bindings: Option<DynamicBindings>,
     pub(crate) with_stack: Vec<Value>,
-    pub(crate) capture_writeback: Option<CaptureWriteback>,
-    pub(crate) global_capture_names: Vec<String>,
     pub(crate) upvalues: Vec<Upvalue>,
 }
 
@@ -218,8 +223,8 @@ impl Function {
     /// Inserts a binding into the function's creation environment. Used to seed
     /// a freshly created native reaction's captured state; `Rc::make_mut` is
     /// cheap here because the `Rc` is uniquely held immediately after creation.
-    pub(crate) fn insert_env(&mut self, key: String, value: Value) {
-        Rc::make_mut(&mut self.env).insert(key, value);
+    pub(crate) fn insert_native_context(&mut self, key: String, value: Value) {
+        Rc::make_mut(&mut self.native_context).insert(key, value);
     }
 
     pub(crate) fn new_user(
@@ -272,9 +277,10 @@ impl Function {
         constructable: bool,
         lexical_bindings: LexicalBindings,
     ) -> Result<Self, crate::RuntimeError> {
+        let realm = super::env::new_realm(env);
         let prototype = ObjectRef::with_prototype(
             HashMap::new(),
-            object_prototype(&crate::CallEnv::from_map(env.clone())),
+            object_prototype(&crate::CallEnv::new(Rc::clone(&realm))),
         );
         let local_names = collect_function_local_names(
             name.as_ref(),
@@ -287,20 +293,19 @@ impl Function {
             Some(bytecode) => bytecode,
             None => Rc::new(compile_function_body(&params, &body)?),
         };
-        let captured_env = Rc::new(RefCell::new(env.clone()));
         let function = Self {
             has_name_binding: name.is_some(),
             immutable_name_binding: false,
             immutable_env_binding: None,
+            immutable_env_value: None,
             name,
             params: Rc::new(params),
-            env: Rc::new(env),
-            captured_env,
+            native_context: Rc::new(HashMap::new()),
+            realm: Some(realm),
+            deopt_bindings: None,
             module_host: None,
             module_imports: HashMap::new(),
             with_stack: Vec::new(),
-            capture_writeback: None,
-            global_capture_names: Vec::new(),
             upvalues: Vec::new(),
             local_names,
             bytecode: Some(bytecode),
@@ -309,6 +314,7 @@ impl Function {
             is_strict,
             lexical_this: lexical_bindings.this,
             lexical_arguments: lexical_bindings.arguments,
+            lexical_new_target: None,
             is_generator: false,
             is_async: false,
             is_class_constructor: false,
@@ -351,7 +357,7 @@ impl Function {
             immutable_name_binding,
             immutable_env_binding,
             params,
-            env,
+            realm,
             module_host,
             module_imports,
             bytecode,
@@ -367,29 +373,27 @@ impl Function {
             is_field_initializer,
             home_object,
             super_constructor,
-            captured_env,
+            deopt_bindings,
             with_stack,
-            capture_writeback,
-            global_capture_names,
             upvalues,
         } = compiled;
         let prototype = ObjectRef::with_prototype(
             HashMap::new(),
-            object_prototype(&crate::CallEnv::from_map(env.clone())),
+            object_prototype(&crate::CallEnv::new(Rc::clone(&realm))),
         );
         let function = Self {
             has_name_binding,
             immutable_name_binding,
             immutable_env_binding,
+            immutable_env_value: None,
             name,
             params,
-            env: Rc::new(env),
-            captured_env,
+            native_context: Rc::new(HashMap::new()),
+            realm: Some(realm),
+            deopt_bindings,
             module_host,
             module_imports,
             with_stack,
-            capture_writeback,
-            global_capture_names,
             upvalues,
             local_names,
             bytecode: Some(bytecode),
@@ -398,6 +402,7 @@ impl Function {
             is_strict,
             lexical_this,
             lexical_arguments,
+            lexical_new_target: None,
             is_generator,
             is_async,
             is_class_constructor,
@@ -500,14 +505,17 @@ impl Function {
             has_name_binding: false,
             immutable_name_binding: false,
             immutable_env_binding: None,
+            immutable_env_value: None,
             params: Rc::new(FunctionParams::positional(vec![String::new(); length])),
-            env: Rc::new(HashMap::new()),
-            captured_env: Rc::new(RefCell::new(HashMap::new())),
+            native_context: Rc::new(HashMap::new()),
+            realm: match &target {
+                Value::Function(function) => function.realm.clone(),
+                _ => None,
+            },
+            deopt_bindings: None,
             module_host: None,
             module_imports: HashMap::new(),
             with_stack: Vec::new(),
-            capture_writeback: None,
-            global_capture_names: Vec::new(),
             upvalues: Vec::new(),
             local_names: Vec::new(),
             bytecode: None,
@@ -516,6 +524,7 @@ impl Function {
             is_strict: false,
             lexical_this: false,
             lexical_arguments: false,
+            lexical_new_target: None,
             is_generator: false,
             is_async: false,
             is_class_constructor: false,
@@ -552,20 +561,19 @@ impl Function {
         constructable: bool,
     ) -> Self {
         let prototype = ObjectRef::new(HashMap::new());
-        let captured_env = Rc::new(RefCell::new(env.clone()));
         let function = Self {
             has_name_binding: false,
             immutable_name_binding: false,
             immutable_env_binding: None,
+            immutable_env_value: None,
             name,
             params: Rc::new(FunctionParams::positional(params)),
-            env: Rc::new(env),
-            captured_env,
+            native_context: Rc::new(env),
+            realm: None,
+            deopt_bindings: None,
             module_host: None,
             module_imports: HashMap::new(),
             with_stack: Vec::new(),
-            capture_writeback: None,
-            global_capture_names: Vec::new(),
             upvalues: Vec::new(),
             local_names: Vec::new(),
             bytecode: None,
@@ -574,6 +582,7 @@ impl Function {
             is_strict: false,
             lexical_this: false,
             lexical_arguments: false,
+            lexical_new_target: None,
             is_generator: false,
             is_async: false,
             is_class_constructor: false,
@@ -820,7 +829,8 @@ impl Function {
     /// intrinsic cannot be resolved (for example a native function with no
     /// captured globals).
     pub(crate) fn effective_internal_prototype(&self) -> Option<Prototype> {
-        self.effective_internal_prototype_with_env(&crate::CallEnv::from_map((*self.env).clone()))
+        let env = self.creation_env();
+        self.effective_internal_prototype_with_env(&env)
     }
 
     fn effective_internal_prototype_with_env(&self, env: &CallEnv) -> Option<Prototype> {
@@ -834,7 +844,15 @@ impl Function {
     /// string-keyed property. Used when a function sits inside another value's
     /// prototype chain.
     pub(crate) fn chain_property(&self, key: &str) -> Option<Property> {
-        self.chain_property_with_env(key, &crate::CallEnv::from_map((*self.env).clone()))
+        let env = self.creation_env();
+        self.chain_property_with_env(key, &env)
+    }
+
+    fn creation_env(&self) -> crate::CallEnv {
+        self.realm.as_ref().map_or_else(
+            || crate::CallEnv::from_map((*self.native_context).clone()),
+            |realm| crate::CallEnv::new(Rc::clone(realm)),
+        )
     }
 
     pub(crate) fn chain_property_with_env(&self, key: &str, env: &CallEnv) -> Option<Property> {

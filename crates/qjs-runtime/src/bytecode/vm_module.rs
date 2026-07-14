@@ -6,16 +6,17 @@
 //! distinct from any script realm, so module code never leaks names to the
 //! process-wide `globalThis` used by [`crate::eval`].
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{
-    Function, GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value, function::CallEnv,
-    function::Realm, initialize_builtins,
+    Function, GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value,
+    function::{CallEnv, DynamicBindings, Realm, new_realm},
+    initialize_builtins,
 };
 
 use super::ir::Bytecode;
 use super::vm::Vm;
-use super::vm_generator::{CaptureWriteback, GeneratorStart, GeneratorState};
+use super::vm_generator::{GeneratorStart, GeneratorState};
 use super::{ModuleEvaluation, ModuleLiveExports};
 
 /// Evaluates a prelude *script* against the shared graph `realm` before any
@@ -31,8 +32,7 @@ pub(super) fn eval_prelude_script(bytecode: &Bytecode, realm: &Realm) -> Result<
         Vm::initialize_script_global_bindings(bytecode, &mut globals)?;
     }
     let env = CallEnv::new(Rc::clone(realm));
-    let captured_env = Rc::new(RefCell::new(HashMap::new()));
-    let mut vm = Vm::new_with_globals_and_captures(bytecode, env, captured_env);
+    let mut vm = Vm::new_with_globals(bytecode, env);
     vm.run()?;
     vm.drain_promise_jobs()?;
     Ok(())
@@ -46,7 +46,7 @@ pub(super) fn new_module_realm() -> Realm {
     globals.insert("this".to_owned(), Value::Undefined);
     globals.insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
     globals.insert("undefined".to_owned(), Value::Undefined);
-    let realm: Realm = Rc::new(RefCell::new(globals));
+    let realm: Realm = new_realm(globals);
     let mut env = CallEnv::new(Rc::clone(&realm));
     initialize_builtins(&mut env, &global_this);
     realm
@@ -56,11 +56,9 @@ pub(super) fn new_module_realm() -> Realm {
 /// as module-scope bindings first. Returns the module's frame environment so
 /// the linker can read its exports.
 ///
-/// Synchronous module bodies keep top-level declarations in the module frame
-/// and shared captured-env cell, so they do not become `globalThis` properties.
-/// Top-level-await bodies temporarily keep the older global-scope lowering so
-/// the async module driver can read settled exports until it grows a fuller
-/// module-environment model.
+/// Synchronous and top-level-await module bodies keep top-level declarations
+/// in the module frame and shared module cells, so they do not become
+/// `globalThis` properties.
 pub(super) fn eval_module_body(
     bytecode: &Bytecode,
     realm: &Realm,
@@ -71,7 +69,7 @@ pub(super) fn eval_module_body(
 ) -> Result<ModuleEvaluation, RuntimeError> {
     {
         let mut globals = realm.borrow_mut();
-        if bytecode.is_global_scope() || bytecode.contains_top_level_await() {
+        if bytecode.is_global_scope() {
             Vm::initialize_script_global_bindings(bytecode, &mut globals)?;
         }
         for (name, value) in imports {
@@ -99,7 +97,9 @@ pub(super) fn eval_module_body(
         live_exports.names,
         live_exports.seed_tdz_markers,
     );
-    let mut vm = Vm::new_with_globals_and_captures(bytecode, env, live_exports.bindings);
+    env.set_module_live_bindings(live_exports.bindings.clone());
+    let live_bindings = live_exports.bindings;
+    let mut vm = Vm::new_with_globals(bytecode, env);
     vm.run()?;
     // The dynamic-import path defers job draining to the outer queue loop so the
     // module graph (borrowed while this body runs) is not re-borrowed by a
@@ -109,7 +109,7 @@ pub(super) fn eval_module_body(
     }
     Ok(ModuleEvaluation {
         env: vm.current_env(),
-        captured_env: vm.captured_env.clone(),
+        live_bindings,
         async_result_promise: None,
     })
 }
@@ -133,7 +133,8 @@ pub(super) fn eval_module_function_hoists(
         live_exports.names,
         live_exports.seed_tdz_markers,
     );
-    let mut vm = Vm::new_with_globals_and_captures(bytecode, env, live_exports.bindings);
+    env.set_module_live_bindings(live_exports.bindings.clone());
+    let mut vm = Vm::new_with_globals(bytecode, env);
     vm.run()?;
     Ok(())
 }
@@ -146,10 +147,9 @@ pub(super) fn eval_module_function_hoists(
 /// that settles during this pass is surfaced as a `RuntimeError` (carrying the
 /// rejection reason) so the linker propagates it to the caller / import promise.
 ///
-/// The body's top-level `var`/`function` bindings live in the shared realm and
-/// its top-level `let`/`const` bindings write through to the shared
-/// `captured_env` cell (see `Vm::store_local`); the returned `CallEnv` merges
-/// both so the linker reads every export after the module has settled.
+/// Every top-level module binding writes through to the shared module cells
+/// (see `Vm::store_local`); the returned `CallEnv` exposes their settled values
+/// so the linker can collect exports after the module has settled.
 ///
 fn eval_async_module_body(
     bytecode: &Bytecode,
@@ -161,17 +161,15 @@ fn eval_async_module_body(
     for import in live_exports.imports {
         env.set_module_import(import.local_name, import.bindings, import.binding_name);
     }
-    // Seed the shared captured-env cell with every top-level local name so each
-    // `store_local` (notably a `let`/`const` export written after an `await`
-    // resumes) writes through to it; the linker reads these settled lexical
-    // exports back after the module's promise settles. `var`/`function` exports
-    // live in the realm and are read from there.
+    // Seed the shared live-binding cell map with every top-level local name so
+    // each `store_local` after an `await` resumes writes through to it.
     seed_live_bindings(
         &live_exports.bindings,
         bytecode,
         live_exports.names,
         live_exports.seed_tdz_markers,
     );
+    env.set_module_live_bindings(live_exports.bindings.clone());
     {
         let mut captured = live_exports.bindings.borrow_mut();
         for name in bytecode.local_names().filter(|name| {
@@ -184,38 +182,16 @@ fn eval_async_module_body(
                 .or_insert_with(|| Value::Function(Function::uninitialized_lexical_marker()));
         }
     }
-    let captured_env = live_exports.bindings;
-    // TLA bodies run through the generator suspension machinery. Mark their
-    // live-export map as the temporary cell-value bridge so closures created by
-    // the suspended module write received upvalue cells through immediately;
-    // the generic per-step generator name writeback is intentionally gone.
-    let capture_writeback = Some(CaptureWriteback {
-        target: Rc::clone(&captured_env),
-        names: bytecode
-            .local_names()
-            .filter(|name| {
-                bytecode
-                    .local_slot(name)
-                    .is_some_and(|slot| !bytecode.local_is_body_hoist_only(slot))
-            })
-            .map(str::to_owned)
-            .collect(),
-        aliases: Vec::new(),
-        parent: None,
-        syncs_cell_values: true,
-    });
+    let live_bindings = live_exports.bindings;
     let function_env = env.clone();
     let context = ObjectRef::new(HashMap::new());
     *context.generator_state().borrow_mut() =
         Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {
             bytecode: Rc::new(bytecode.clone()),
             env: function_env,
-            captured_env: Rc::clone(&captured_env),
             upvalues: Vec::new(),
             with_stack: Vec::new(),
             immutable_function_name: None,
-            refresh_captured_slots_on_resume: false,
-            capture_writeback,
         })));
 
     let result_promise = crate::async_function::drive_async_module(&context, &mut env);
@@ -232,27 +208,23 @@ fn eval_async_module_body(
             message: "module top-level await rejected".to_owned(),
         });
     }
-    // Materialize the settled module frame: realm bindings (var/function) plus
-    // the captured lexical slots (let/const) written through during evaluation.
-    // A top-level `var`/`function` export lives in the realm and must be read
-    // from there, so drop any captured local that shadows a realm binding (the
-    // seed leaves it `Undefined`); the remaining captured locals are the
-    // module's lexical exports.
-    let locals: HashMap<String, Value> = captured_env
+    // Materialize the settled module frame from the shared cells retained by
+    // the suspended VM. Module bindings may shadow realm intrinsics, so no
+    // name-based realm filtering is valid here.
+    let locals: HashMap<String, Value> = live_bindings
         .borrow()
         .iter()
-        .filter(|(name, _)| !realm.borrow().contains_key(name.as_str()))
         .map(|(name, value)| (name.clone(), value.clone()))
         .collect();
     Ok(ModuleEvaluation {
         env: CallEnv::with_locals(realm, locals),
-        captured_env,
+        live_bindings,
         async_result_promise: Some(result_promise),
     })
 }
 
 pub(super) fn seed_live_bindings(
-    live_bindings: &Rc<RefCell<HashMap<String, Value>>>,
+    live_bindings: &DynamicBindings,
     bytecode: &Bytecode,
     names: Vec<String>,
     seed_tdz_markers: bool,

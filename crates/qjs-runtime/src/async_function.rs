@@ -13,15 +13,12 @@
 //! functions that carry that object plus the result promise in their captured
 //! environment and call back into the driver.
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    bytecode::{
-        CaptureWriteback, GeneratorOutcome, GeneratorStart, GeneratorState, Resume,
-        resume_generator,
-    },
+    bytecode::{GeneratorOutcome, GeneratorStart, GeneratorState, Resume, resume_generator},
     function_constructor_as_prototype_slot, function_intrinsic_prototype_slot, promise, symbol,
 };
 
@@ -90,48 +87,17 @@ pub(crate) fn async_function_prototype(env: &CallEnv) -> Option<ObjectRef> {
 pub(crate) fn call_async_function(
     function: &Function,
     function_env: CallEnv,
-    function_capture_names: Vec<String>,
     env: &mut CallEnv,
 ) -> Value {
     let bytecode = function
         .bytecode
         .clone()
         .expect("async function has a bytecode body");
-    let captured = Rc::new(RefCell::new(function_env.snapshot_locals()));
-    let mut capture_names = function_capture_names;
-    {
-        let captured = function.captured_env.borrow();
-        for name in captured.keys() {
-            if crate::function::is_internal_binding_name(name)
-                || matches!(name.as_str(), "this" | "arguments")
-            {
-                continue;
-            }
-            if bytecode.local_slot(name).is_some()
-                && !capture_names.iter().any(|existing| existing == name)
-            {
-                capture_names.push(name.clone());
-            }
-        }
-    }
-    let parent_writeback = function.capture_writeback.clone().map(Box::new);
-    let syncs_cell_values = parent_writeback
-        .as_deref()
-        .is_some_and(CaptureWriteback::syncs_cell_values);
-    let capture_writeback =
-        (!capture_names.is_empty() || parent_writeback.is_some()).then(|| CaptureWriteback {
-            target: Rc::clone(&function.captured_env),
-            names: capture_names,
-            aliases: Vec::new(),
-            parent: parent_writeback,
-            syncs_cell_values,
-        });
     let context = ObjectRef::new(HashMap::new());
     *context.generator_state().borrow_mut() =
         Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {
             bytecode,
             env: function_env,
-            captured_env: captured,
             upvalues: function.upvalues.clone(),
             with_stack: function.with_stack.clone(),
             immutable_function_name: function
@@ -139,8 +105,6 @@ pub(crate) fn call_async_function(
                 .then(|| function.name.clone())
                 .flatten()
                 .or_else(|| function.immutable_env_binding.clone()),
-            refresh_captured_slots_on_resume: true,
-            capture_writeback,
         })));
 
     let result_promise = promise::new_pending_promise(env);
@@ -223,8 +187,8 @@ fn await_reaction(
     result_promise: &ObjectRef,
 ) -> Value {
     let mut function = Function::new_native(None, 1, native, false);
-    function.insert_env(ASYNC_CONTEXT.to_owned(), Value::Object(context.clone()));
-    function.insert_env(
+    function.insert_native_context(ASYNC_CONTEXT.to_owned(), Value::Object(context.clone()));
+    function.insert_native_context(
         ASYNC_RESULT_PROMISE.to_owned(),
         Value::Object(result_promise.clone()),
     );
@@ -240,8 +204,8 @@ pub(crate) fn call_async_await_native(
     env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     let (Some(Value::Object(context)), Some(Value::Object(result_promise))) = (
-        function.env.get(ASYNC_CONTEXT),
-        function.env.get(ASYNC_RESULT_PROMISE),
+        function.native_context.get(ASYNC_CONTEXT),
+        function.native_context.get(ASYNC_RESULT_PROMISE),
     ) else {
         return Ok(None);
     };
