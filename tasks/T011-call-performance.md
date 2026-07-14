@@ -195,8 +195,34 @@ also avoids allocating when the VM clones an instruction for dispatch. An exact
 five-block comparison against `ce7e25cc` with seed `20250803` measured 0.876x
 overall (12.35% lower wall ns/op). `property_read` was 0.566x and `method_call`
 was 0.727x; five unrelated cases remained near the baseline, from 0.976x to
-1.011x. This is an exploratory dirty-source result; use the post-commit
-Performance Preview for the provenance-backed decision.
+1.011x. The Performance Preview at `992e7ed63d248414055c247027e31fc0ab1373ab`
+confirmed and strengthened the direction on hosted Linux at 0.8335x overall
+(16.65% lower wall ns/op), with a 95% confidence interval of [0.8167x,
+0.8392x]. All seven cases improved: `property_read` was 0.556x and
+`method_call` was 0.720x. The resulting candidate/QuickJS-NG ratio fell from
+53.5414x to 45.0203x; `property_read` remains the largest individual gap at
+62.4767x.
+
+Two follow-up attempts did not meet the overall retention threshold. Fusing a
+local load with `GetPropNamed` measured 0.988x for `property_read` but 1.003x
+overall in a three-block run, so the extra bytecode operation was discarded.
+Reading an own ordinary data value before cloning its full descriptor reproduced
+a 0.949x `property_read` ratio in an independent five-block run, but the other
+cases offset it and the overall ratio was only 0.999x. That experiment was also
+discarded rather than accepting a case-specific win with no portfolio progress.
+
+The VM dispatch loop previously cloned the complete `Op` before executing every
+instruction. That made even scalar local loads, jumps, and arithmetic clone the
+largest enum representation, including reference-count traffic for embedded
+data. Dispatch now borrows the current instruction directly and clones owned
+fields only in handlers that actually consume them, such as function creation
+and try-scope setup. An exact three-block comparison against
+`992e7ed63d248414055c247027e31fc0ab1373ab` with seed `20250807` measured
+0.776x overall, with all seven critical cases improved. An independent
+five-block run with seed `20250808` confirmed 0.779x overall (22.1% lower wall
+ns/op): `array_read` was 0.709x, `property_read` was 0.745x, and the five call
+and binding cases ranged from 0.751x to 0.817x. These are local dirty-source
+measurements and require post-commit Performance Preview confirmation.
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
