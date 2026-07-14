@@ -487,8 +487,11 @@ gating, run same-binary A/A shadows to set a noise ceiling. The report now
 implements the frozen 30-to-60 and portfolio-whole-block health interpretation,
 but does not turn health into a regression or superiority claim.
 
-Hosted PR runners are smoke-only. Stable regression evidence belongs on a
-fixed self-hosted sentinel for performance-sensitive PRs and fixed nightly or
+Hosted PR runners produce visible, informational previews: three-block ratios
+for candidate/base and candidate/QuickJS-NG with raw evidence and deterministic
+reports. Their variable hardware makes them non-gating and ineligible for a
+performance claim. Stable regression evidence still belongs on a fixed
+self-hosted sentinel for performance-sensitive PRs and fixed nightly or
 release hardware for the full portfolio. A macOS claim needs dedicated Mac
 hardware; other hosts are supporting evidence only.
 
@@ -547,7 +550,7 @@ Admission tiers:
 
 ## CI Layering and Gate Activation
 
-`benchmarks/performance-policy.json` is a deny-only v1 policy. Validate the
+`benchmarks/performance-policy.json` is a fail-closed v2 policy. Validate the
 checked-in trust root from any working directory with:
 
 ```sh
@@ -555,26 +558,80 @@ checked-in trust root from any working directory with:
 ./scripts/performance-policy-audit.sh --require-gate nightly
 ```
 
-The audit cross-checks all four current measurement/analysis protocol hashes
-and requires the external-corpus registry to remain non-claim and zero-admitted.
+The audit cross-checks all four current measurement/analysis protocol hashes,
+the pinned QuickJS-NG repository/revision, and an aggregate hash over the full
+hosted control/audit chain: workflow, Rust setup action, preview orchestrator,
+renderer, admission/failure-evidence helper, both audit wrappers and both audit
+validators, plus the external-corpus registry. It also requires that registry
+to remain non-claim and zero-admitted.
 It reports `claim_eligible=false`, no fixed hardware, no evidence entries, and
 all `nightly`, `release`, and `pr_sentinel` gates disabled. Every
 `--require-gate` request therefore exits 2. A custom `--policy` is structural
 input only and cannot be combined with `--require-gate`.
 
-`.github/workflows/performance-smoke.yml` is the only performance-specific
-hosted workflow. It runs on GitHub-hosted `ubuntu-latest` for pull requests,
-pushes to `main` and `agent/**`, and manual dispatch. It audits both deny-only
-policies, validates throughput and resource dry-run plans, and lists the six
-Criterion lifecycle IDs in isolated quick mode. It checks out no submodules,
-runs no timed comparison, uploads no timing artifact, applies no threshold,
-and is neither evidence nor a performance gate.
-The policy also binds the workflow path and SHA-256, while the validator owns
-the complete expected workflow bytes. Any extra trigger, job, step, action,
-multiline command, artifact upload, or submodule setting changes the bytes and
-fails the checked-in audit before CI can treat the workflow as allowed smoke.
+`.github/workflows/performance-smoke.yml` declares both `pull_request` and
+`pull_request_target`, both filtered to base branch `main`. The long-term job
+runs only on `pull_request_target` for a same-repository PR targeting `main`.
+GitHub therefore obtains the workflow from the base, the
+checked-out PR base supplies `base_owned_harness`, and the nested PR head is the
+benchmark subject. Fork previews are explicitly unsupported and skipped. This
+is an integrity boundary for cooperative same-repository PRs, not a malicious
+code sandbox: candidate compilation/execution shares the runner, and a hosted
+artifact is not designed to resist a malicious candidate.
 
-Gate activation is future v2 work, in this order:
+There is one exact transition exception. `pull_request` may run
+`bootstrap_same_repo_candidate_harness` only for PR #126 from head ref
+`agent/performance-benchmark-system/root` into `main`, in the same repository,
+whose base is `d8ac450f92b4a773250310d5f91835cd47d39a98`. The head SHA may advance.
+That job uses the nested candidate's setup action and harness. Any other branch,
+PR number, head ref, or base SHA is rejected by the executable admission
+contract. Event names are part of the concurrency
+key, so the transition event cannot cancel the long-term base-owned event.
+Both modes and their harness revisions are recorded in evidence.
+
+Immediately after PR #126 merges, remove the `pull_request` trigger, bootstrap
+job, bootstrap constants, transition tests, and transition-only documentation.
+The retained long-term workflow must then expose only `pull_request_target`.
+
+`scripts/performance-preview.sh` initializes only the manifest-pinned
+QuickJS-NG revision and builds all three engines on one `ubuntu-latest` host.
+It rejects repository Cargo config overrides, forces the recorded Cargo release
+profile and generic CPU flags, and verifies that every source tree remains at
+the requested clean revision before and after builds and again after
+measurement. Allocator selection for all engines is recorded as
+source-controlled and not independently verified. Before candidate build or
+execution, the orchestrator removes GitHub command-file, runtime-token, and
+OIDC-token environment variables. After measurement it revalidates all three
+source trees and reruns both selected-harness audits before summary generation.
+These checks limit accidental or cooperative drift; they do not turn candidate
+code into an adversarial sandbox. The script generates a Linux-hosted dynamic manifest and three
+verified receipts bound to the actual source SHAs, binary hashes, toolchains,
+targets, and build flags. It then runs the complete seven-case portfolio for
+three blocks, validates raw JSONL, and creates the deterministic report.
+
+The measurement step is bounded below the 45-minute job timeout. A pending
+summary/status is written before setup/audit and replaced on success or
+failure. Failure status records the active phase, including candidate/base/
+QuickJS-NG build, measurement, post-measure validation, and summary. The
+always-run publisher creates fallback Markdown and machine-readable status even
+for a pre-orchestrator failure; artifact absence is an error. Available
+raw/report/manifest/receipt/status evidence is retained for 14 days.
+
+The Step Summary defines ratio as candidate wall ns/op divided by comparator:
+above 1 means higher ns/op and below 1 means lower ns/op. It shows both overall
+ratios, 95% CIs, direction/percentage, valid blocks, and health. A success
+summary is emitted only for the expected non-claim report: overall
+`inconclusive`, block health `non_claim`, linearity `pass`, all three blocks
+valid, and both candidate comparisons present. A higher ratio never fails the
+job; missing, malformed, incomplete, or unhealthy comparison evidence does and
+does not receive a ratio conclusion. The output is informational, non-gating,
+and not a fixed-hardware claim. The policy freezes the aggregate hosted
+implementation hash, direct QuickJS-NG pin, three roles, seven cases, three
+blocks, artifact retention, no threshold, no gate, and claim ineligibility.
+Any future fixed-hardware claim or gate is scoped to trusted merged commits,
+not hosted PR artifacts.
+
+Gate activation remains future work, in this order:
 
 1. Qualify and content-hash a fixed-hardware fingerprint.
 2. Produce at least 20 independent same-binary, randomized-order A/A shadow
@@ -582,8 +639,8 @@ Gate activation is future v2 work, in this order:
    report content hashes.
 3. Freeze a noise envelope bound to the current four protocol hashes.
 4. Demonstrate and freeze a false-positive budget before any PR sentinel.
-5. Review a v2 content-hashed evidence bundle and only then consider enabling
-   one gate. A policy field or hosted smoke result cannot substitute for that
+5. Review a content-hashed evidence bundle and only then consider enabling
+   one gate. A policy field or hosted preview result cannot substitute for that
    evidence.
 
 ## Roadmap

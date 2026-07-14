@@ -144,7 +144,7 @@ while IFS= read -r path; do
     crates/qjs-lexer/*) touches_lexer=1 ;;
     crates/qjs-ast/*) touches_ast=1 ;;
     crates/qjs-cli/*) touches_cli=1 ;;
-    benchmarks/*|tools/__init__.py|tools/benchmark/*|scripts/benchmark*.sh|scripts/resource-benchmark*.sh|scripts/lifecycle-bench.sh|scripts/external-corpus-audit.sh|scripts/performance-policy-audit.sh|.github/workflows/performance-smoke.yml)
+    benchmarks/*|tools/__init__.py|tools/benchmark/*|scripts/benchmark*.sh|scripts/resource-benchmark*.sh|scripts/lifecycle-bench.sh|scripts/external-corpus-audit.sh|scripts/performance-policy-audit.sh|scripts/performance-preview.sh|.github/workflows/performance-smoke.yml)
       touches_benchmark=1
       ;;
   esac
@@ -202,7 +202,8 @@ if [ "$touches_benchmark" -eq 1 ]; then
     "$ROOT_DIR/scripts/resource-benchmark-report.sh" \
     "$ROOT_DIR/scripts/lifecycle-bench.sh" \
     "$ROOT_DIR/scripts/external-corpus-audit.sh" \
-    "$ROOT_DIR/scripts/performance-policy-audit.sh"
+    "$ROOT_DIR/scripts/performance-policy-audit.sh" \
+    "$ROOT_DIR/scripts/performance-preview.sh"
 fi
 
 if [ "$touches_test262_config" -eq 1 ]; then

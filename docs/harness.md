@@ -196,17 +196,27 @@ blocked source-pinned candidates and two excluded evidence-backed decisions;
 it is governance metadata, not a benchmark result or performance claim. Real
 admission requires a separately reviewed, content-hashed v2 audit bundle.
 
-`scripts/performance-policy-audit.sh` validates the checked-in deny-only CI
-policy and cross-checks the four current benchmark protocol hashes plus the
-external registry state. `--require-gate nightly|release|pr_sentinel` always
-fails in v1. `--policy <path>` only validates custom structure and is mutually
+`scripts/performance-policy-audit.sh` validates the checked-in fail-closed CI
+policy and cross-checks the four current benchmark protocol hashes, direct
+QuickJS-NG pin, full control/audit-chain aggregate hash, and external registry
+state. `--require-gate nightly|release|pr_sentinel` always
+fails in v2. `--policy <path>` only validates custom structure and is mutually
 exclusive with gate requirements. The hosted
-`.github/workflows/performance-smoke.yml` executes only the exact audits,
-throughput/resource dry runs, and `lifecycle-bench.sh --quick --list`; it is not
-timing evidence. Its exact path, full bytes, and SHA-256 are bound by the
-policy validator, so adding any trigger, job, step, action, or command fails the
-audit. Fixed-hardware qualification, A/A calibration, a noise
-envelope, and the PR false-positive budget remain future reviewed work.
+`.github/workflows/performance-smoke.yml` runs `performance-preview.sh` for the
+explicit PR head/base SHAs and pinned QuickJS-NG. The long-term
+`pull_request_target` path uses the base-owned workflow, setup action, and
+harness for same-repository PRs targeting `main`. The sole bootstrap exception
+is PR #126 from `agent/performance-benchmark-system/root` into `main` at exact
+base `d8ac450f92b4a773250310d5f91835cd47d39a98`, also same-repository, and uses the
+nested candidate setup action/harness. Fork preview is unsupported. This is a
+cooperative integrity scope, not a malicious candidate sandbox. It publishes ratios
+only after a strict three-block, seven-case non-claim health check. Pending or
+failed runs still publish a status summary and any available provenance, but
+no ratio conclusion. Phase status identifies the failed build/measurement/
+summary stage, and even pre-orchestrator failure creates Markdown and JSON
+evidence. There is no threshold or gate.
+Fixed-hardware qualification, A/A calibration, a noise envelope, and the PR
+false-positive budget remain future reviewed work.
 
 The lifecycle command is a Rust-native parser/compiler diagnostic. Its normal
 mode uses the frozen Criterion configuration and writes standard artifacts

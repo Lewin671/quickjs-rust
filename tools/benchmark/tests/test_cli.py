@@ -27,6 +27,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("scripts/lifecycle-bench.sh", benchmark_case.group(0))
         self.assertIn("scripts/external-corpus-audit.sh", benchmark_case.group(0))
         self.assertIn("scripts/performance-policy-audit.sh", benchmark_case.group(0))
+        self.assertIn("scripts/performance-preview.sh", benchmark_case.group(0))
         self.assertIn(".github/workflows/performance-smoke.yml", benchmark_case.group(0))
 
     def test_benchmark_shells_are_in_syntax_gate(self) -> None:
@@ -37,6 +38,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("lifecycle-bench.sh", script)
             self.assertIn("external-corpus-audit.sh", script)
             self.assertIn("performance-policy-audit.sh", script)
+            self.assertIn("performance-preview.sh", script)
 
     def test_benchmark_python_touched_gate_runs_size_guard_without_cargo(self) -> None:
         script = (ROOT / "scripts/check-touched.sh").read_text(encoding="utf-8")

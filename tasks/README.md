@@ -72,9 +72,12 @@ Campaign working rules:
   M5 governance now records five blocked source-pinned candidates and two
   excluded evidence-backed decisions in a deny-only v1 registry; future
   admission requires a separately reviewed v2 audit bundle before any gate.
-  CI layering is smoke-only on hosted runners; deny-only M6/M7 policy
-  infrastructure is ready, while fixed-hardware A/A calibration and every
-  performance gate remain intentionally incomplete and disabled.
+  Hosted same-repository PRs now publish strict three-block informational
+  previews from a base-owned `pull_request_target` harness, with one PR #126 /
+  exact-base / exact-head-ref `pull_request` bootstrap, complete provenance, and phase-aware durable failure
+  status; fork previews are unsupported and fail-closed M6/M7 policy infrastructure is ready,
+  while fixed-hardware A/A calibration and every performance gate remain
+  intentionally incomplete and disabled.
 - `T011-call-performance.md` — **subsumed by T016.** Cut per-call
   environment-cloning cost. The leaf-call activation-snapshot clone landed; the
   remaining per-call locals-map clone is deleted by T016 S5, which unblocks the

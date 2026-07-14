@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "policy_id": "quickjs-performance-policy-v1",
+  "schema_version": 2,
+  "policy_id": "quickjs-performance-policy-v2",
   "claim_eligible": false,
   "protocols": {
     "throughput_measurement": {
@@ -30,22 +30,60 @@
     "required_admitted_count": 0,
     "required_claim_eligible": false
   },
+  "reference_engine": {
+    "identity": "quickjs-ng",
+    "source_repo": "https://github.com/quickjs-ng/quickjs.git",
+    "revision": "f7830186043e4488f2998759d60a514faf07cbc9"
+  },
+  "hosted_implementation": {
+    "files": [
+      ".github/actions/setup-rust/action.yml",
+      ".github/workflows/performance-smoke.yml",
+      "benchmarks/external-corpora.json",
+      "scripts/external-corpus-audit.sh",
+      "scripts/performance-policy-audit.sh",
+      "scripts/performance-preview.sh",
+      "tools/benchmark/external_corpora.py",
+      "tools/benchmark/hosted_preview.py",
+      "tools/benchmark/performance_policy.py",
+      "tools/benchmark/preview.py"
+    ],
+    "aggregate_sha256": "e8fc4785e109ad12f63a55f98414a2bb56472b6e3de2ab2953592020ef3b3bfa"
+  },
   "hosted_pr": {
-    "tier": "smoke_only",
+    "tier": "informational_preview",
+    "evidence_class": "informational",
+    "claim_eligible": false,
     "provider": "github-hosted",
     "provider_url": "https://docs.github.com/actions/using-github-hosted-runners/about-github-hosted-runners",
     "runner": "ubuntu-latest",
     "workflow_path": ".github/workflows/performance-smoke.yml",
-    "workflow_sha256": "dfc015c81420de1fb1200a4227fd6b7eb24fcb836301b02e02d9aa8f0408211a",
+    "workflow_sha256": "61e6308348865cd2a5106801b8742041bd33fadee2c4fe1c6e53cf39f9582fad",
     "gate": false,
-    "upload_timing_evidence": false,
-    "exact_smoke_commands": [
-      "./scripts/performance-policy-audit.sh",
-      "./scripts/external-corpus-audit.sh",
-      "./scripts/benchmark.sh --dry-run --blocks 1 --case plain_function_call",
-      "./scripts/resource-benchmark.sh --lane fresh --dry-run",
-      "./scripts/lifecycle-bench.sh --quick --list"
-    ]
+    "slowdown_threshold": null,
+    "upload_timing_evidence": true,
+    "orchestrator_path": "scripts/performance-preview.sh",
+    "portfolio": "complete-seven-case",
+    "blocks": 3,
+    "roles": ["candidate", "base", "quickjs-ng"],
+    "artifact_retention_days": 14,
+    "harness": {
+      "default_mode": "base_owned_harness",
+      "long_term_event": "pull_request_target",
+      "integrity_scope": "cooperative_same_repository_pull_request",
+      "candidate_role": "benchmark_subject_with_shared_runner_permissions",
+      "malicious_candidate_resistant": false,
+      "forks_supported": false,
+      "bootstrap_mode": "bootstrap_same_repo_candidate_harness",
+      "base_ref": "main",
+      "bootstrap_event": "pull_request",
+      "bootstrap_base_sha": "d8ac450f92b4a773250310d5f91835cd47d39a98",
+      "bootstrap_pr_number": 126,
+      "bootstrap_head_ref": "agent/performance-benchmark-system/root",
+      "bootstrap_condition": "same_repository_main_and_exact_transition_identity",
+      "transition_cleanup": "remove_pull_request_bootstrap_immediately_after_pr_126_merge",
+      "fixed_hardware_claim_scope": "trusted_merged_commits_only"
+    }
   },
   "fixed_hardware": {
     "configured": false,

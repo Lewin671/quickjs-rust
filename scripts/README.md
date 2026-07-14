@@ -73,11 +73,25 @@ each script is for.
   structural only and cannot be combined with it. The script never downloads,
   initializes submodules, runs a corpus, or creates performance evidence.
 - `performance-policy-audit.sh`: Validates the checked-in deny-only CI policy,
-  current protocol hashes, and zero-admitted external-registry state. Custom
+  current protocol hashes, direct QuickJS-NG pin, aggregate hosted workflow /
+  setup / orchestrator / renderer / admission / audit-chain hash, and zero-admitted
+  external-registry state. Custom
   `--policy` input is structural only; checked-in-only `--require-gate` always
-  fails for `nightly`, `release`, and `pr_sentinel` in v1. It neither calibrates
-  hardware nor runs or enables a performance gate. The checked-in audit binds
-  the complete hosted-smoke workflow bytes and SHA-256, not a text heuristic.
+  fails for `nightly`, `release`, and `pr_sentinel` in v2. It neither calibrates
+  hardware nor runs or enables a performance gate.
+- `performance-preview.sh`: From a policy-selected harness, builds the candidate
+  head, explicit PR base SHA, and manifest-pinned QuickJS-NG on one shared host.
+  The long-term same-repository path is base-owned `pull_request_target`; the
+  only candidate-harness bootstrap is PR #126 from
+  `agent/performance-benchmark-system/root` into `main` at exact base
+  `d8ac450f92b4a773250310d5f91835cd47d39a98`. Forks are unsupported. The script
+  clears GitHub command/token channels, verifies clean sources before and after
+  builds and measurement, reruns audits after measurement, emits truthful dynamic
+  receipts/manifest, runs all seven throughput cases for three blocks, and
+  renders Markdown/JSON summaries. Ratios require strict 3/3 valid-block,
+  non-claim, linearity-pass health. Pending/failure status includes the active
+  phase and remains publishable without a ratio conclusion. It is informational
+  and non-gating, and is not a malicious candidate sandbox.
 - `lifecycle-bench.sh`: Runs the dev-only Criterion parser/compiler lifecycle
   diagnostics through public Rust APIs. Pass `--quick` for a smoke run; without
   it the frozen Criterion sampling configuration applies. Quick mode uses an

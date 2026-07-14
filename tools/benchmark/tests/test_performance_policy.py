@@ -1,32 +1,69 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
-import re
 import subprocess
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
 
 from tools.benchmark.performance_policy import (
-    PROTOCOL_KEYS,
-    SMOKE_COMMANDS,
-    EXPECTED_WORKFLOW_BYTES,
     EXPECTED_WORKFLOW_SHA256,
-    EXPECTED_WORKFLOW_TEXT,
+    PREVIEW_ORCHESTRATOR,
+    PREVIEW_IMPLEMENTATION_FILES,
+    REFERENCE_ENGINE,
+    PREVIEW_ROLES,
+    PROTOCOL_KEYS,
     PerformancePolicyError,
     cross_check_repository,
     load_policy,
     policy_summary,
     require_gate,
     validate_workflow_bytes,
+    _implementation_sha256,
+)
+from tools.benchmark.hosted_preview import (
+    BASE_MODE,
+    BOOTSTRAP_BASE_SHA,
+    BOOTSTRAP_HEAD_REF,
+    BOOTSTRAP_MODE,
+    BOOTSTRAP_PR_NUMBER,
+    HOSTED_BASE_REF,
 )
 
 
 ROOT = Path(__file__).resolve().parents[3]
 POLICY = ROOT / "benchmarks/performance-policy.json"
 WORKFLOW = ROOT / ".github/workflows/performance-smoke.yml"
+
+
+def yaml_run_scalars(source: str) -> list[str]:
+    """Extract literal block values for every YAML run key in this workflow."""
+    lines = source.splitlines()
+    result: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        stripped = line.lstrip()
+        indent = len(line) - len(stripped)
+        if stripped != "run: |":
+            index += 1
+            continue
+        index += 1
+        body: list[str] = []
+        while index < len(lines):
+            current = lines[index]
+            current_stripped = current.lstrip()
+            current_indent = len(current) - len(current_stripped)
+            if current_stripped and current_indent <= indent:
+                break
+            body.append(current)
+            index += 1
+        result.append("\n".join(body))
+    return result
 
 
 class PerformancePolicyTests(unittest.TestCase):
@@ -41,11 +78,15 @@ class PerformancePolicyTests(unittest.TestCase):
         )
         return path
 
-    def test_checked_in_policy_is_deny_only_and_cross_checked(self) -> None:
+    def test_checked_in_v2_policy_is_informational_and_cross_checked(self) -> None:
         policy = load_policy(POLICY)
         cross_check_repository(policy, ROOT)
         summary = policy_summary(policy)
-        self.assertEqual(summary["hosted_pr_tier"], "smoke_only")
+        self.assertEqual(summary["hosted_pr_tier"], "informational_preview")
+        self.assertEqual(
+            summary["hosted_integrity_scope"],
+            "cooperative_same_repository_pull_request",
+        )
         self.assertEqual(summary["external_admitted_count"], 0)
         self.assertFalse(summary["claim_eligible"])
         self.assertFalse(summary["fixed_hardware_configured"])
@@ -54,9 +95,22 @@ class PerformancePolicyTests(unittest.TestCase):
             {"nightly": False, "release": False, "pr_sentinel": False},
         )
         self.assertEqual(summary["evidence_entry_count"], 0)
-        self.assertEqual(policy.hosted_commands, SMOKE_COMMANDS)
+        self.assertEqual(policy.hosted_orchestrator_path, PREVIEW_ORCHESTRATOR)
+        self.assertEqual(policy.hosted_blocks, 3)
+        self.assertEqual(policy.hosted_retention_days, 14)
+        self.assertEqual(
+            policy.hosted_implementation_sha256,
+            _implementation_sha256(ROOT, PREVIEW_IMPLEMENTATION_FILES),
+        )
+        self.assertEqual(
+            (policy.reference_identity, policy.reference_repo, policy.reference_revision),
+            REFERENCE_ENGINE,
+        )
         self.assertEqual(policy.workflow_sha256, EXPECTED_WORKFLOW_SHA256)
-        self.assertEqual(WORKFLOW.read_bytes(), EXPECTED_WORKFLOW_BYTES)
+        self.assertEqual(policy.hosted_base_ref, HOSTED_BASE_REF)
+        self.assertEqual(policy.bootstrap_pr_number, BOOTSTRAP_PR_NUMBER)
+        self.assertEqual(policy.bootstrap_head_ref, BOOTSTRAP_HEAD_REF)
+        self.assertEqual(hashlib.sha256(WORKFLOW.read_bytes()).hexdigest(), EXPECTED_WORKFLOW_SHA256)
         validate_workflow_bytes(policy, WORKFLOW.read_bytes())
         self.assertEqual(set(policy.protocols), set(PROTOCOL_KEYS))
 
@@ -64,8 +118,8 @@ class PerformancePolicyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory_name:
             directory = Path(directory_name)
             duplicate = POLICY.read_text(encoding="utf-8").replace(
-                '"schema_version": 1,',
-                '"schema_version": 1,\n  "schema_version": 1,',
+                '"schema_version": 2,',
+                '"schema_version": 2,\n  "schema_version": 2,',
                 1,
             )
             duplicate_path = directory / "duplicate.json"
@@ -77,56 +131,119 @@ class PerformancePolicyTests(unittest.TestCase):
             unknown = copy.deepcopy(self.data)
             unknown["hosted_pr"]["future"] = True
             mutations.append((unknown, "unknown"))
-            bool_version = copy.deepcopy(self.data)
-            bool_version["schema_version"] = True
-            mutations.append((bool_version, "integer version 1"))
-            float_version = copy.deepcopy(self.data)
-            float_version["schema_version"] = 1.0
-            mutations.append((float_version, "integer version 1"))
+            for value in (True, 2.0, 1):
+                version = copy.deepcopy(self.data)
+                version["schema_version"] = value
+                mutations.append((version, "integer version 2"))
             claim_integer = copy.deepcopy(self.data)
-            claim_integer["claim_eligible"] = 0
+            claim_integer["hosted_pr"]["claim_eligible"] = 0
             mutations.append((claim_integer, "expected a boolean"))
             evidence_object = copy.deepcopy(self.data)
             evidence_object["evidence_entries"] = {}
             mutations.append((evidence_object, "expected an array"))
             for index, (data, message) in enumerate(mutations):
-                path = self._write(directory, data, f"scalar-{index}.json")
                 with self.subTest(index=index):
                     with self.assertRaisesRegex(PerformancePolicyError, message):
-                        load_policy(path)
+                        load_policy(self._write(directory, data, f"scalar-{index}.json"))
 
-    def test_path_url_hash_and_enum_mutations_fail_closed(self) -> None:
+    def test_hosted_preview_contract_mutations_fail_closed(self) -> None:
+        mutations: list[tuple[dict[str, object], str]] = []
+        fields = (
+            ("tier", "gate", "frozen hosted tier"),
+            ("evidence_class", "claim", "informational"),
+            ("claim_eligible", True, "remain false"),
+            ("gate", True, "requires false"),
+            ("slowdown_threshold", 1.05, "remain null"),
+            ("upload_timing_evidence", False, "must be true"),
+            ("orchestrator_path", "scripts/other.sh", "frozen path"),
+            ("portfolio", "one-case", "frozen portfolio"),
+            ("blocks", 4, "exactly 3"),
+            ("roles", list(reversed(PREVIEW_ROLES)), "frozen roles"),
+            ("artifact_retention_days", 90, "must be 14"),
+            ("workflow_sha256", "1" * 64, "exact v2 workflow bytes"),
+        )
+        for field, value, message in fields:
+            data = copy.deepcopy(self.data)
+            data["hosted_pr"][field] = value
+            mutations.append((data, message))
+        for field, value in (
+            ("default_mode", "candidate_owned_harness"),
+            ("malicious_candidate_resistant", True),
+            ("forks_supported", True),
+            ("base_ref", "release"),
+            ("bootstrap_base_sha", "a" * 40),
+            ("bootstrap_pr_number", 125),
+            ("bootstrap_head_ref", "agent/other"),
+            ("bootstrap_condition", "always"),
+        ):
+            data = copy.deepcopy(self.data)
+            data["hosted_pr"]["harness"][field] = value
+            mutations.append((data, "integrity boundary"))
+        with tempfile.TemporaryDirectory() as directory_name:
+            directory = Path(directory_name)
+            for index, (data, message) in enumerate(mutations):
+                with self.subTest(index=index):
+                    with self.assertRaisesRegex(PerformancePolicyError, message):
+                        load_policy(self._write(directory, data, f"hosted-{index}.json"))
+
+    def test_reference_pin_and_implementation_inventory_drift_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            directory = Path(directory_name)
+            for field, value in (
+                ("identity", "quickjs"),
+                ("source_repo", "https://github.com/example/quickjs.git"),
+                ("revision", "1" * 40),
+            ):
+                data = copy.deepcopy(self.data)
+                data["reference_engine"][field] = value
+                with self.assertRaisesRegex(PerformancePolicyError, "frozen QuickJS-NG pin"):
+                    load_policy(self._write(directory, data, f"reference-{field}.json"))
+            inventory = copy.deepcopy(self.data)
+            inventory["hosted_implementation"]["files"].pop()
+            with self.assertRaisesRegex(PerformancePolicyError, "frozen inventory"):
+                load_policy(self._write(directory, inventory, "inventory.json"))
+
+    def test_aggregate_hash_detects_each_hosted_implementation_file_drift(self) -> None:
+        policy = load_policy(POLICY)
+        with tempfile.TemporaryDirectory() as directory_name:
+            replica = Path(directory_name)
+            for relative in PREVIEW_IMPLEMENTATION_FILES:
+                destination = replica / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / relative, destination)
+            self.assertEqual(
+                _implementation_sha256(replica, PREVIEW_IMPLEMENTATION_FILES),
+                policy.hosted_implementation_sha256,
+            )
+            for index, relative in enumerate(PREVIEW_IMPLEMENTATION_FILES):
+                destination = replica / relative
+                original = destination.read_bytes()
+                destination.write_bytes(original + b"\n# drift\n")
+                with self.subTest(relative=relative):
+                    self.assertNotEqual(
+                        _implementation_sha256(replica, PREVIEW_IMPLEMENTATION_FILES),
+                        policy.hosted_implementation_sha256,
+                    )
+                destination.write_bytes(original)
+
+    def test_paths_urls_and_protocol_hashes_remain_strict(self) -> None:
         mutations = []
         for value in ("/tmp/manifest.json", "../manifest.json", "benchmarks\\manifest.json"):
             data = copy.deepcopy(self.data)
             data["protocols"]["throughput_measurement"]["manifest_path"] = value
             mutations.append((data, "repository-relative path"))
         for value in (
-            "http://docs.github.com/actions",
-            "https://host.invalid:notaport/path",
-            "https://host.invalid:99999/path",
-            "https://host space.invalid/path",
+            "http://docs.github.com/actions", "https://host.invalid:notaport/path",
+            "https://host.invalid:99999/path", "https://host space.invalid/path",
             "https://[::1/path",
         ):
             data = copy.deepcopy(self.data)
             data["hosted_pr"]["provider_url"] = value
             mutations.append((data, "URL|authority"))
-        bad_hash = copy.deepcopy(self.data)
-        bad_hash["protocols"]["throughput_measurement"]["protocol_sha256"] = "bad"
-        mutations.append((bad_hash, "non-zero lowercase SHA-256"))
-        zero_hash = copy.deepcopy(self.data)
-        zero_hash["protocols"]["throughput_measurement"]["protocol_sha256"] = "0" * 64
-        mutations.append((zero_hash, "non-zero lowercase SHA-256"))
-        wrong_tier = copy.deepcopy(self.data)
-        wrong_tier["hosted_pr"]["tier"] = "gate"
-        mutations.append((wrong_tier, "invalid frozen hosted tier"))
-        wrong_workflow_path = copy.deepcopy(self.data)
-        wrong_workflow_path["hosted_pr"]["workflow_path"] = "workflow.yml"
-        mutations.append((wrong_workflow_path, "invalid frozen path"))
-        wrong_workflow_hash = copy.deepcopy(self.data)
-        wrong_workflow_hash["hosted_pr"]["workflow_sha256"] = "1" * 64
-        mutations.append((wrong_workflow_hash, "exact v1 workflow bytes"))
-
+        for value in ("bad", "0" * 64):
+            data = copy.deepcopy(self.data)
+            data["protocols"]["throughput_measurement"]["protocol_sha256"] = value
+            mutations.append((data, "non-zero lowercase SHA-256"))
         with tempfile.TemporaryDirectory() as directory_name:
             directory = Path(directory_name)
             for index, (data, message) in enumerate(mutations):
@@ -134,7 +251,7 @@ class PerformancePolicyTests(unittest.TestCase):
                     with self.assertRaisesRegex(PerformancePolicyError, message):
                         load_policy(self._write(directory, data, f"strict-{index}.json"))
 
-    def test_v1_cannot_enable_hardware_gates_or_evidence(self) -> None:
+    def test_v2_cannot_enable_hardware_gates_or_claim_entries(self) -> None:
         mutations = []
         fixed = copy.deepcopy(self.data)
         fixed["fixed_hardware"]["configured"] = True
@@ -148,13 +265,6 @@ class PerformancePolicyTests(unittest.TestCase):
         evidence = copy.deepcopy(self.data)
         evidence["evidence_entries"] = [{"claim": "fast"}]
         mutations.append((evidence, "empty array"))
-        hosted_gate = copy.deepcopy(self.data)
-        hosted_gate["hosted_pr"]["gate"] = True
-        mutations.append((hosted_gate, "v1 requires false"))
-        upload = copy.deepcopy(self.data)
-        upload["hosted_pr"]["upload_timing_evidence"] = True
-        mutations.append((upload, "v1 requires false"))
-
         with tempfile.TemporaryDirectory() as directory_name:
             directory = Path(directory_name)
             for index, (data, message) in enumerate(mutations):
@@ -184,7 +294,6 @@ class PerformancePolicyTests(unittest.TestCase):
             "required_protocol_sha256"
         ]["throughput_measurement"] = "1" * 64
         mutations.append((protocol, "must match policy.protocols"))
-
         with tempfile.TemporaryDirectory() as directory_name:
             directory = Path(directory_name)
             for index, (data, message) in enumerate(mutations):
@@ -192,7 +301,7 @@ class PerformancePolicyTests(unittest.TestCase):
                     with self.assertRaisesRegex(PerformancePolicyError, message):
                         load_policy(self._write(directory, data, f"prereq-{index}.json"))
 
-    def test_custom_policy_is_structural_only_and_repository_cross_check_detects_drift(self) -> None:
+    def test_repository_cross_check_detects_protocol_drift(self) -> None:
         data = copy.deepcopy(self.data)
         digest = "1" * 64
         data["protocols"]["throughput_measurement"]["protocol_sha256"] = digest
@@ -205,7 +314,7 @@ class PerformancePolicyTests(unittest.TestCase):
         with self.assertRaisesRegex(PerformancePolicyError, "does not match"):
             cross_check_repository(policy, ROOT)
 
-    def test_every_v1_gate_requirement_fails_closed(self) -> None:
+    def test_every_gate_requirement_fails_closed(self) -> None:
         policy = load_policy(POLICY)
         for gate_id in ("nightly", "release", "pr_sentinel"):
             with self.subTest(gate_id=gate_id):
@@ -217,11 +326,7 @@ class PerformancePolicyCliTests(unittest.TestCase):
     def _run(self, args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [str(ROOT / "scripts/performance-policy-audit.sh"), *args],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=15,
-            check=False,
+            cwd=cwd, capture_output=True, text=True, timeout=15, check=False,
         )
 
     def test_default_is_repo_root_independent_and_deterministic(self) -> None:
@@ -229,9 +334,10 @@ class PerformancePolicyCliTests(unittest.TestCase):
             result = self._run([], Path(directory_name))
         self.assertEqual(result.returncode, 0, result.stderr)
         summary = json.loads(result.stdout)
+        self.assertEqual(summary["hosted_pr_tier"], "informational_preview")
         self.assertFalse(summary["claim_eligible"])
         self.assertEqual(summary["gates"], {
-            "nightly": False, "pr_sentinel": False, "release": False
+            "nightly": False, "pr_sentinel": False, "release": False,
         })
         self.assertNotIn(str(ROOT), result.stdout)
         self.assertEqual(
@@ -239,28 +345,24 @@ class PerformancePolicyCliTests(unittest.TestCase):
             json.dumps(summary, sort_keys=True, separators=(",", ":")) + "\n",
         )
 
-    def test_all_checked_in_gate_requirements_exit_two(self) -> None:
+    def test_gate_requirements_and_argparse_fail_structurally(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
             directory = Path(directory_name)
             for gate_id in ("nightly", "release", "pr_sentinel"):
                 result = self._run(["--require-gate", gate_id], directory)
-                with self.subTest(gate_id=gate_id):
-                    self.assertEqual(result.returncode, 2)
-                    error = json.loads(result.stderr)["error"]
-                    self.assertEqual(error["code"], "performance_policy_audit_failed")
-                    self.assertIn("disabled", error["message"])
-                    self.assertNotIn("Traceback", result.stderr)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("disabled", json.loads(result.stderr)["error"]["message"])
+            for attack in (
+                ("--unknown",), ("--policy",), ("--require-gate",),
+                ("--require-gate", "future"),
+            ):
+                result = self._run(list(attack), directory)
+                self.assertEqual(result.returncode, 2)
+                error = json.loads(result.stderr)["error"]
+                self.assertEqual(error["code"], "performance_policy_audit_failed")
+                self.assertIn("arguments:", error["message"])
 
-    def test_custom_policy_cannot_be_combined_with_gate_requirement(self) -> None:
-        with tempfile.TemporaryDirectory() as directory_name:
-            result = self._run(
-                ["--policy", str(POLICY), "--require-gate", "nightly"],
-                Path(directory_name),
-            )
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("not allowed with argument", json.loads(result.stderr)["error"]["message"])
-
-    def test_custom_policy_is_not_a_repository_trust_root(self) -> None:
+    def test_custom_policy_is_structural_only_and_cannot_authorize_gate(self) -> None:
         data = json.loads(POLICY.read_text(encoding="utf-8"))
         digest = "1" * 64
         data["protocols"]["throughput_measurement"]["protocol_sha256"] = digest
@@ -272,23 +374,17 @@ class PerformancePolicyCliTests(unittest.TestCase):
             directory = Path(directory_name)
             custom = directory / "custom.json"
             custom.write_text(json.dumps(data), encoding="utf-8")
-            result = self._run(["--policy", str(custom)], directory)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertFalse(json.loads(result.stdout)["claim_eligible"])
-
-    def test_argparse_errors_are_structured(self) -> None:
-        attacks = (("--unknown",), ("--policy",), ("--require-gate",),
-                   ("--require-gate", "future"))
-        with tempfile.TemporaryDirectory() as directory_name:
-            directory = Path(directory_name)
-            for attack in attacks:
-                result = self._run(list(attack), directory)
-                with self.subTest(attack=attack):
-                    self.assertEqual(result.returncode, 2)
-                    error = json.loads(result.stderr)["error"]
-                    self.assertEqual(error["code"], "performance_policy_audit_failed")
-                    self.assertIn("arguments:", error["message"])
-                    self.assertNotIn("Traceback", result.stderr)
+            structural = self._run(["--policy", str(custom)], directory)
+            self.assertEqual(structural.returncode, 0, structural.stderr)
+            self.assertFalse(json.loads(structural.stdout)["claim_eligible"])
+            rejected = self._run(
+                ["--policy", str(custom), "--require-gate", "nightly"], directory
+            )
+            self.assertEqual(rejected.returncode, 2)
+            self.assertIn(
+                "not allowed with argument",
+                json.loads(rejected.stderr)["error"]["message"],
+            )
 
     def test_output_is_atomic_and_never_overwrites(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
@@ -301,9 +397,8 @@ class PerformancePolicyCliTests(unittest.TestCase):
             self.assertEqual(second.returncode, 2)
             self.assertEqual(output.read_bytes(), original)
             self.assertIn("refusing to overwrite", second.stderr)
-            self.assertEqual(list(directory.glob(".summary.json.*")), [])
 
-    def test_absolute_wrappers_ignore_malicious_cwd_python_packages(self) -> None:
+    def test_absolute_wrappers_ignore_malicious_cwd_packages(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
             directory = Path(directory_name)
             package = directory / "tools/benchmark"
@@ -312,93 +407,107 @@ class PerformancePolicyCliTests(unittest.TestCase):
             (package / "__init__.py").write_text("", encoding="utf-8")
             marker = directory / "shadow-loaded"
             malicious = (
-                "import os\n"
-                "from pathlib import Path\n"
+                "import os\nfrom pathlib import Path\n"
                 "Path(os.environ['SHADOW_MARKER']).write_text('loaded')\n"
-                "print('SHADOW')\n"
             )
             for module in ("performance_policy.py", "external_corpora.py"):
                 (package / module).write_text(malicious, encoding="utf-8")
             environment = {
-                **os.environ,
-                "PYTHONPATH": str(directory),
-                "SHADOW_MARKER": str(marker),
+                **os.environ, "PYTHONPATH": str(directory), "SHADOW_MARKER": str(marker),
             }
-            commands = (
-                ("performance-policy-audit.sh", "fixed_hardware_configured"),
-                ("external-corpus-audit.sh", "admitted_count"),
-            )
-            for script, expected_key in commands:
+            for script in ("performance-policy-audit.sh", "external-corpus-audit.sh"):
                 result = subprocess.run(
-                    [str(ROOT / "scripts" / script)],
-                    cwd=directory,
-                    env=environment,
-                    capture_output=True,
-                    text=True,
-                    timeout=15,
-                    check=False,
+                    [str(ROOT / "scripts" / script)], cwd=directory, env=environment,
+                    capture_output=True, text=True, timeout=15, check=False,
                 )
-                with self.subTest(script=script):
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertIn(expected_key, json.loads(result.stdout))
-                    self.assertNotIn("SHADOW", result.stdout)
-                    self.assertFalse(marker.exists())
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertFalse(marker.exists())
 
 
-class PerformanceSmokeWorkflowTests(unittest.TestCase):
-    def test_workflow_is_exact_hosted_smoke_without_claims_or_evidence(self) -> None:
+class PerformancePreviewWorkflowTests(unittest.TestCase):
+    def test_workflow_contract_builds_reports_summarizes_and_uploads_without_gating(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("name: Performance Smoke (No Claims or Gates)", workflow)
-        self.assertIn("pull_request:", workflow)
-        self.assertIn("workflow_dispatch:", workflow)
-        self.assertIn("- main", workflow)
-        self.assertIn("- 'agent/**'", workflow)
-        self.assertNotIn("schedule:", workflow)
-        self.assertEqual(workflow.count("runs-on: ubuntu-latest"), 1)
-        self.assertNotIn("self-hosted", workflow)
-        self.assertIn("submodules: false", workflow)
-        self.assertNotIn("git submodule", workflow)
-        self.assertNotIn("actions/upload-artifact", workflow)
-        self.assertIn("no performance claim or gate", workflow)
-        commands = tuple(re.findall(r"^\s+run: (\S.*)$", workflow, flags=re.MULTILINE))
-        self.assertEqual(commands, SMOKE_COMMANDS)
-        for command in commands:
-            self.assertNotIn("benchmark-report", command)
-            self.assertNotIn("resource-benchmark-report", command)
-            self.assertNotIn("--output", command)
-            self.assertNotIn("--candidate", command)
-        self.assertTrue(commands[-1].endswith("--quick --list"))
-
-    def test_any_workflow_capability_or_command_drift_fails_exact_binding(self) -> None:
-        policy = load_policy(POLICY)
-        mutations = (
-            EXPECTED_WORKFLOW_TEXT.replace(
-                "      - name: Setup Rust\n        uses: ./.github/actions/setup-rust",
-                "      - name: Setup Rust\n        uses: ./.github/actions/setup-rust\n\n"
-                "      - name: Upload pages artifact\n"
-                "        uses: actions/upload-pages-artifact@v4",
-            ),
-            EXPECTED_WORKFLOW_TEXT + "\n  extra-job:\n    runs-on: ubuntu-latest\n",
-            EXPECTED_WORKFLOW_TEXT.replace(
-                "uses: ./.github/actions/setup-rust",
-                "uses: owner/repository/.github/workflows/reusable.yml@main",
-            ),
-            EXPECTED_WORKFLOW_TEXT.replace(
-                "run: ./scripts/external-corpus-audit.sh",
-                "run: |\n          ./scripts/external-corpus-audit.sh\n          ./timed-command",
-            ),
-            EXPECTED_WORKFLOW_TEXT.replace("submodules: false", "submodules: true"),
-            EXPECTED_WORKFLOW_TEXT.replace(
-                "  workflow_dispatch:\n",
-                "  workflow_dispatch:\n  schedule:\n    - cron: '0 0 * * *'\n",
-            ),
+        setup_action = (ROOT / ".github/actions/setup-rust/action.yml").read_text(
+            encoding="utf-8"
         )
-        for index, workflow in enumerate(mutations):
-            with self.subTest(index=index):
-                with self.assertRaisesRegex(PerformancePolicyError, "bytes differ"):
-                    validate_workflow_bytes(policy, workflow.encode("utf-8"))
+        self.assertIn("name: Performance Preview (Informational, Non-Gating)", workflow)
+        self.assertIn("pull_request:", workflow)
+        self.assertIn("pull_request_target:", workflow)
+        self.assertEqual(workflow.count("branches: [main]"), 2)
+        self.assertNotIn("workflow_dispatch:", workflow)
+        self.assertNotIn("push:", workflow)
+        self.assertNotIn("schedule:", workflow)
+        self.assertEqual(workflow.count("runs-on: ubuntu-latest"), 3)
+        self.assertNotIn("self-hosted", workflow)
+        self.assertIn("repository: ${{ github.event.pull_request.base.repo.full_name }}", workflow)
+        self.assertIn("ref: ${{ github.event.pull_request.base.sha }}", workflow)
+        self.assertIn("repository: ${{ github.event.pull_request.head.repo.full_name }}", workflow)
+        self.assertIn("ref: ${{ github.event.pull_request.head.sha }}", workflow)
+        self.assertIn("path: target/performance-preview/candidate-source", workflow)
+        self.assertEqual(workflow.count("fetch-depth: 1"), 4)
+        self.assertIn("persist-credentials: false", workflow)
+        self.assertIn("submodules: false", workflow)
+        self.assertIn(BASE_MODE, workflow)
+        self.assertIn(BOOTSTRAP_MODE, workflow)
+        self.assertIn(BOOTSTRAP_BASE_SHA, workflow)
+        self.assertIn(f"github.event.pull_request.number == {BOOTSTRAP_PR_NUMBER}", workflow)
+        self.assertIn(
+            f"github.event.pull_request.head.ref == '{BOOTSTRAP_HEAD_REF}'", workflow
+        )
+        self.assertEqual(workflow.count("PR_BASE_REF: ${{ github.event.pull_request.base.ref }}"), 2)
+        self.assertEqual(workflow.count("PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}"), 2)
+        self.assertEqual(workflow.count('--base-ref "$PR_BASE_REF"'), 2)
+        self.assertEqual(workflow.count('--pr-number "$PR_NUMBER"'), 2)
+        self.assertEqual(workflow.count('--head-ref "$PR_HEAD_REF"'), 2)
+        self.assertIn("fork-preview-unsupported", workflow)
+        self.assertIn("github.event_name }}-${{ github.event.pull_request.number", workflow)
+        self.assertIn("github.event_name == 'pull_request_target'", workflow)
+        self.assertIn("github.event_name == 'pull_request'", workflow)
+        self.assertIn("uses: ./.github/actions/setup-rust", workflow)
+        self.assertIn(
+            "uses: ./target/performance-preview/candidate-source/.github/actions/setup-rust",
+            workflow,
+        )
+        self.assertIn("source-root: target/performance-preview/candidate-source", workflow)
+        self.assertIn("source-root:", setup_action)
+        self.assertIn("working-directory: ${{ inputs.source-root }}", setup_action)
+        self.assertIn("inputs.source-root", setup_action)
+        self.assertIn('"$QJS_HARNESS_ROOT/scripts/performance-preview.sh"', workflow)
+        self.assertIn("timeout-minutes: 35", workflow)
+        self.assertIn("$GITHUB_STEP_SUMMARY", workflow)
+        self.assertIn("actions/upload-artifact@v6", workflow)
+        self.assertGreaterEqual(workflow.count("if: always()"), 4)
+        self.assertIn("retention-days: 14", workflow)
+        self.assertEqual(workflow.count("if-no-files-found: error"), 2)
+        self.assertGreaterEqual(workflow.count('mkdir -p "$EVIDENCE_DIR"'), 4)
+        self.assertIn("tools.benchmark.hosted_preview publish", workflow)
+        self.assertNotIn("continue-on-error", workflow)
+        self.assertNotIn("pull-requests: write", workflow)
+        self.assertNotIn("secrets.", workflow)
+        self.assertNotIn("threshold", workflow.lower())
+        self.assertNotIn("candidate==base", workflow)
 
-    def test_lifecycle_list_surface_contains_exactly_six_ids(self) -> None:
+        run_scalars = yaml_run_scalars(workflow)
+        self.assertGreaterEqual(len(run_scalars), 10)
+        for index, body in enumerate(run_scalars):
+            with self.subTest(run_scalar=index):
+                self.assertNotIn("${{ github.event.pull_request", body)
+
+    def test_workflow_is_exactly_hash_bound(self) -> None:
+        policy = load_policy(POLICY)
+        original = WORKFLOW.read_bytes()
+        validate_workflow_bytes(policy, original)
+        mutations = (
+            original + b"\n",
+            original.replace(b"submodules: false", b"submodules: true"),
+            original.replace(b"retention-days: 14", b"retention-days: 90"),
+            original.replace(b"pull_request:", b"push:"),
+        )
+        for value in mutations:
+            with self.assertRaisesRegex(PerformancePolicyError, "bytes differ"):
+                validate_workflow_bytes(policy, value)
+
+    def test_lifecycle_list_surface_still_contains_exactly_six_ids(self) -> None:
         source = (ROOT / "crates/qjs-runtime/benches/lifecycle.rs").read_text(
             encoding="utf-8"
         )

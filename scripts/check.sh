@@ -97,7 +97,8 @@ qjs_check_stage "benchmark shell syntax" \
     "$ROOT_DIR/scripts/resource-benchmark-report.sh" \
     "$ROOT_DIR/scripts/lifecycle-bench.sh" \
     "$ROOT_DIR/scripts/external-corpus-audit.sh" \
-    "$ROOT_DIR/scripts/performance-policy-audit.sh"
+    "$ROOT_DIR/scripts/performance-policy-audit.sh" \
+    "$ROOT_DIR/scripts/performance-preview.sh"
 qjs_check_stage "file-size guard" "$ROOT_DIR/scripts/check-file-size.sh"
 # Run the allowlisted Test262 subset so local checks gate the same suite CI
 # runs; skip with QJS_CHECK_SKIP_TEST262=1 for doc-only or scripted loops.

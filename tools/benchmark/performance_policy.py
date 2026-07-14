@@ -1,4 +1,4 @@
-"""Deny-only v1 policy for hosted performance smoke and future gates."""
+"""Fail-closed v2 policy for hosted informational evidence and future gates."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import ipaddress
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -17,6 +18,14 @@ from urllib.parse import urlparse
 
 from .analysis_schema import load_analysis_manifest
 from .external_corpora import load_registry, registry_summary
+from .hosted_preview import (
+    BASE_MODE,
+    BOOTSTRAP_BASE_SHA,
+    BOOTSTRAP_HEAD_REF,
+    BOOTSTRAP_MODE,
+    BOOTSTRAP_PR_NUMBER,
+    HOSTED_BASE_REF,
+)
 from .resource_analysis_schema import load_resource_analysis
 from .resource_schema import load_resource_manifest
 from .schema import load_manifest
@@ -46,65 +55,28 @@ PROTOCOL_SHAPES = {
         "benchmarks/resource-analysis.json", "quickjs-resource-analysis-protocol-v1"
     ),
 }
-SMOKE_COMMANDS = (
-    "./scripts/performance-policy-audit.sh",
-    "./scripts/external-corpus-audit.sh",
-    "./scripts/benchmark.sh --dry-run --blocks 1 --case plain_function_call",
-    "./scripts/resource-benchmark.sh --lane fresh --dry-run",
-    "./scripts/lifecycle-bench.sh --quick --list",
+EXPECTED_WORKFLOW_SHA256 = "61e6308348865cd2a5106801b8742041bd33fadee2c4fe1c6e53cf39f9582fad"
+PREVIEW_ORCHESTRATOR = "scripts/performance-preview.sh"
+PREVIEW_ROLES = ("candidate", "base", "quickjs-ng")
+PREVIEW_IMPLEMENTATION_FILES = (
+    ".github/actions/setup-rust/action.yml",
+    ".github/workflows/performance-smoke.yml",
+    "benchmarks/external-corpora.json",
+    "scripts/external-corpus-audit.sh",
+    "scripts/performance-policy-audit.sh",
+    "scripts/performance-preview.sh",
+    "tools/benchmark/external_corpora.py",
+    "tools/benchmark/hosted_preview.py",
+    "tools/benchmark/performance_policy.py",
+    "tools/benchmark/preview.py",
 )
-EXPECTED_WORKFLOW_TEXT = """name: Performance Smoke (No Claims or Gates)
-
-on:
-  pull_request:
-  push:
-    branches:
-      - main
-      - 'agent/**'
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: performance-smoke-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
-
-# GitHub-hosted runners are variable smoke infrastructure. This workflow never
-# creates timing evidence, compares results, applies a threshold, or makes a
-# performance claim. Fixed-hardware calibration and all gates remain disabled.
-jobs:
-  hosted-smoke-only:
-    name: Hosted smoke only - no performance claim or gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout without benchmark corpora
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
-          submodules: false
-
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-
-      - name: Audit deny-only performance policy
-        run: ./scripts/performance-policy-audit.sh
-
-      - name: Audit deny-only external corpus registry
-        run: ./scripts/external-corpus-audit.sh
-
-      - name: Validate throughput dry-run plan
-        run: ./scripts/benchmark.sh --dry-run --blocks 1 --case plain_function_call
-
-      - name: Validate fresh-process resource dry-run plan
-        run: ./scripts/resource-benchmark.sh --lane fresh --dry-run
-
-      - name: List six lifecycle diagnostics without measuring
-        run: ./scripts/lifecycle-bench.sh --quick --list
-"""
-EXPECTED_WORKFLOW_BYTES = EXPECTED_WORKFLOW_TEXT.encode("utf-8")
-EXPECTED_WORKFLOW_SHA256 = hashlib.sha256(EXPECTED_WORKFLOW_BYTES).hexdigest()
+INTEGRITY_SCOPE = "cooperative_same_repository_pull_request"
+TRANSITION_CLEANUP = "remove_pull_request_bootstrap_immediately_after_pr_126_merge"
+REFERENCE_ENGINE = (
+    "quickjs-ng",
+    "https://github.com/quickjs-ng/quickjs.git",
+    "f7830186043e4488f2998759d60a514faf07cbc9",
+)
 AA_REQUIREMENTS = ("content_hashed", "randomized_order", "same_binary")
 BASE_ARTIFACTS = ("noise_envelope", "qualified_fixed_hardware_fingerprint")
 PR_ARTIFACTS = (
@@ -271,7 +243,19 @@ class PerformancePolicy:
     protocols: dict[str, ProtocolBinding]
     external_registry_path: str
     external_registry_id: str
-    hosted_commands: tuple[str, ...]
+    hosted_tier: str
+    hosted_orchestrator_path: str
+    hosted_blocks: int
+    hosted_retention_days: int
+    hosted_implementation_sha256: str
+    hosted_integrity_scope: str
+    hosted_base_ref: str
+    bootstrap_base_sha: str
+    bootstrap_pr_number: int
+    bootstrap_head_ref: str
+    reference_identity: str
+    reference_repo: str
+    reference_revision: str
     workflow_path: str
     workflow_sha256: str
     fixed_hardware_configured: bool
@@ -298,6 +282,23 @@ def _protocols(data: Any) -> dict[str, ProtocolBinding]:
     return result
 
 
+def _implementation_sha256(root: Path, files: tuple[str, ...]) -> str:
+    digest = hashlib.sha256()
+    for relative in files:
+        path = root / relative
+        try:
+            content_hash = hashlib.sha256(path.read_bytes()).digest()
+        except OSError as error:
+            raise PerformancePolicyError(
+                f"cannot hash hosted implementation file {relative}: {error}"
+            ) from error
+        digest.update(relative.encode())
+        digest.update(b"\0")
+        digest.update(content_hash)
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
 def _protocol_hashes(data: Any, protocols: dict[str, ProtocolBinding], where: str) -> None:
     item = _object(data, where)
     _keys(item, set(PROTOCOL_KEYS), where)
@@ -317,7 +318,7 @@ def _gates(data: Any, protocols: dict[str, ProtocolBinding]) -> dict[str, GatePo
         _keys(item, {"enabled", "activation_prerequisites"}, where)
         enabled = _boolean(item["enabled"], f"{where}.enabled")
         if enabled:
-            raise PerformancePolicyError(f"{where}.enabled: v1 is deny-only and requires false")
+            raise PerformancePolicyError(f"{where}.enabled: v2 is deny-only and requires false")
         prerequisites = _object(
             item["activation_prerequisites"], f"{where}.activation_prerequisites"
         )
@@ -372,22 +373,46 @@ def load_policy(path: Path) -> PerformancePolicy:
         root,
         {
             "schema_version", "policy_id", "claim_eligible", "protocols",
-            "external_corpora", "hosted_pr", "fixed_hardware", "gates",
-            "evidence_entries",
+            "external_corpora", "reference_engine", "hosted_implementation",
+            "hosted_pr", "fixed_hardware", "gates", "evidence_entries",
         },
         "policy",
     )
-    if type(root["schema_version"]) is not int or root["schema_version"] != 1:
-        raise PerformancePolicyError("policy.schema_version: only integer version 1 is supported")
+    if type(root["schema_version"]) is not int or root["schema_version"] != 2:
+        raise PerformancePolicyError("policy.schema_version: only integer version 2 is supported")
     policy_id = _string(root["policy_id"], "policy.policy_id")
-    if policy_id != "quickjs-performance-policy-v1":
+    if policy_id != "quickjs-performance-policy-v2":
         raise PerformancePolicyError(
-            "policy.policy_id: version 1 requires quickjs-performance-policy-v1"
+            "policy.policy_id: version 2 requires quickjs-performance-policy-v2"
         )
     claim_eligible = _boolean(root["claim_eligible"], "policy.claim_eligible")
     if claim_eligible:
-        raise PerformancePolicyError("policy.claim_eligible: v1 requires false")
+        raise PerformancePolicyError("policy.claim_eligible: v2 requires false")
     protocols = _protocols(root["protocols"])
+
+    reference = _object(root["reference_engine"], "policy.reference_engine")
+    _keys(reference, {"identity", "source_repo", "revision"}, "policy.reference_engine")
+    reference_values = (
+        _string(reference["identity"], "policy.reference_engine.identity"),
+        _url(reference["source_repo"], "policy.reference_engine.source_repo"),
+        _string(reference["revision"], "policy.reference_engine.revision"),
+    )
+    if reference_values != REFERENCE_ENGINE:
+        raise PerformancePolicyError("policy.reference_engine: invalid frozen QuickJS-NG pin")
+
+    implementation = _object(
+        root["hosted_implementation"], "policy.hosted_implementation"
+    )
+    _keys(implementation, {"files", "aggregate_sha256"}, "policy.hosted_implementation")
+    implementation_files = _strings(
+        implementation["files"], "policy.hosted_implementation.files"
+    )
+    if implementation_files != PREVIEW_IMPLEMENTATION_FILES:
+        raise PerformancePolicyError("policy.hosted_implementation.files: invalid frozen inventory")
+    implementation_sha256 = _sha256(
+        implementation["aggregate_sha256"],
+        "policy.hosted_implementation.aggregate_sha256",
+    )
 
     external = _object(root["external_corpora"], "policy.external_corpora")
     _keys(
@@ -405,20 +430,21 @@ def load_policy(path: Path) -> PerformancePolicy:
         external["required_admitted_count"],
         "policy.external_corpora.required_admitted_count",
     ) != 0:
-        raise PerformancePolicyError("policy.external_corpora.required_admitted_count: v1 requires 0")
+        raise PerformancePolicyError("policy.external_corpora.required_admitted_count: v2 requires 0")
     if _boolean(
         external["required_claim_eligible"],
         "policy.external_corpora.required_claim_eligible",
     ):
-        raise PerformancePolicyError("policy.external_corpora.required_claim_eligible: v1 requires false")
+        raise PerformancePolicyError("policy.external_corpora.required_claim_eligible: v2 requires false")
 
     hosted = _object(root["hosted_pr"], "policy.hosted_pr")
     _keys(
         hosted,
         {
-            "tier", "provider", "provider_url", "runner", "gate",
-            "workflow_path", "workflow_sha256", "upload_timing_evidence",
-            "exact_smoke_commands",
+            "tier", "evidence_class", "claim_eligible", "provider", "provider_url",
+            "runner", "gate", "slowdown_threshold", "workflow_path",
+            "workflow_sha256", "upload_timing_evidence", "orchestrator_path",
+            "portfolio", "blocks", "roles", "artifact_retention_days", "harness",
         },
         "policy.hosted_pr",
     )
@@ -427,8 +453,12 @@ def load_policy(path: Path) -> PerformancePolicy:
         _string(hosted["provider"], "policy.hosted_pr.provider"),
         _string(hosted["runner"], "policy.hosted_pr.runner"),
     )
-    if hosted_shape != ("smoke_only", "github-hosted", "ubuntu-latest"):
+    if hosted_shape != ("informational_preview", "github-hosted", "ubuntu-latest"):
         raise PerformancePolicyError("policy.hosted_pr: invalid frozen hosted tier")
+    if _string(hosted["evidence_class"], "policy.hosted_pr.evidence_class") != "informational":
+        raise PerformancePolicyError("policy.hosted_pr.evidence_class: must be informational")
+    if _boolean(hosted["claim_eligible"], "policy.hosted_pr.claim_eligible"):
+        raise PerformancePolicyError("policy.hosted_pr.claim_eligible: must remain false")
     provider_url = _url(hosted["provider_url"], "policy.hosted_pr.provider_url")
     if provider_url != (
         "https://docs.github.com/actions/using-github-hosted-runners/"
@@ -443,41 +473,114 @@ def load_policy(path: Path) -> PerformancePolicy:
     )
     if workflow_sha256 != EXPECTED_WORKFLOW_SHA256:
         raise PerformancePolicyError(
-            "policy.hosted_pr.workflow_sha256: must match the exact v1 workflow bytes"
+            "policy.hosted_pr.workflow_sha256: must match the exact v2 workflow bytes"
         )
     if _boolean(hosted["gate"], "policy.hosted_pr.gate"):
-        raise PerformancePolicyError("policy.hosted_pr.gate: v1 requires false")
-    if _boolean(
+        raise PerformancePolicyError("policy.hosted_pr.gate: v2 requires false")
+    if hosted["slowdown_threshold"] is not None:
+        raise PerformancePolicyError("policy.hosted_pr.slowdown_threshold: must remain null")
+    if not _boolean(
         hosted["upload_timing_evidence"], "policy.hosted_pr.upload_timing_evidence"
     ):
-        raise PerformancePolicyError(
-            "policy.hosted_pr.upload_timing_evidence: v1 requires false"
-        )
-    commands = _strings(hosted["exact_smoke_commands"], "policy.hosted_pr.exact_smoke_commands")
-    if commands != SMOKE_COMMANDS:
-        raise PerformancePolicyError("policy.hosted_pr.exact_smoke_commands: invalid frozen commands")
+        raise PerformancePolicyError("policy.hosted_pr.upload_timing_evidence: must be true")
+    orchestrator = _path(hosted["orchestrator_path"], "policy.hosted_pr.orchestrator_path")
+    if orchestrator != PREVIEW_ORCHESTRATOR:
+        raise PerformancePolicyError("policy.hosted_pr.orchestrator_path: invalid frozen path")
+    if _string(hosted["portfolio"], "policy.hosted_pr.portfolio") != "complete-seven-case":
+        raise PerformancePolicyError("policy.hosted_pr.portfolio: invalid frozen portfolio")
+    blocks = _integer(hosted["blocks"], "policy.hosted_pr.blocks", 1)
+    if blocks != 3:
+        raise PerformancePolicyError("policy.hosted_pr.blocks: hosted preview requires exactly 3")
+    roles = _strings(hosted["roles"], "policy.hosted_pr.roles")
+    if roles != PREVIEW_ROLES:
+        raise PerformancePolicyError("policy.hosted_pr.roles: invalid frozen roles")
+    retention = _integer(
+        hosted["artifact_retention_days"], "policy.hosted_pr.artifact_retention_days", 1
+    )
+    if retention != 14:
+        raise PerformancePolicyError("policy.hosted_pr.artifact_retention_days: must be 14")
+    harness = _object(hosted["harness"], "policy.hosted_pr.harness")
+    _keys(
+        harness,
+        {
+            "default_mode", "long_term_event", "integrity_scope", "candidate_role",
+            "malicious_candidate_resistant", "forks_supported", "bootstrap_mode",
+            "base_ref", "bootstrap_event", "bootstrap_base_sha",
+            "bootstrap_pr_number", "bootstrap_head_ref", "bootstrap_condition",
+            "transition_cleanup", "fixed_hardware_claim_scope",
+        },
+        "policy.hosted_pr.harness",
+    )
+    harness_shape = (
+        _string(harness["default_mode"], "policy.hosted_pr.harness.default_mode"),
+        _string(harness["long_term_event"], "policy.hosted_pr.harness.long_term_event"),
+        _string(harness["integrity_scope"], "policy.hosted_pr.harness.integrity_scope"),
+        _string(harness["candidate_role"], "policy.hosted_pr.harness.candidate_role"),
+        _boolean(
+            harness["malicious_candidate_resistant"],
+            "policy.hosted_pr.harness.malicious_candidate_resistant",
+        ),
+        _boolean(harness["forks_supported"], "policy.hosted_pr.harness.forks_supported"),
+        _string(harness["bootstrap_mode"], "policy.hosted_pr.harness.bootstrap_mode"),
+        _string(harness["base_ref"], "policy.hosted_pr.harness.base_ref"),
+        _string(harness["bootstrap_event"], "policy.hosted_pr.harness.bootstrap_event"),
+        _string(harness["bootstrap_base_sha"], "policy.hosted_pr.harness.bootstrap_base_sha"),
+        _integer(
+            harness["bootstrap_pr_number"],
+            "policy.hosted_pr.harness.bootstrap_pr_number", 1,
+        ),
+        _string(harness["bootstrap_head_ref"], "policy.hosted_pr.harness.bootstrap_head_ref"),
+        _string(harness["bootstrap_condition"], "policy.hosted_pr.harness.bootstrap_condition"),
+        _string(harness["transition_cleanup"], "policy.hosted_pr.harness.transition_cleanup"),
+        _string(
+            harness["fixed_hardware_claim_scope"],
+            "policy.hosted_pr.harness.fixed_hardware_claim_scope",
+        ),
+    )
+    if harness_shape != (
+        BASE_MODE, "pull_request_target", INTEGRITY_SCOPE,
+        "benchmark_subject_with_shared_runner_permissions", False, False,
+        BOOTSTRAP_MODE, HOSTED_BASE_REF, "pull_request", BOOTSTRAP_BASE_SHA,
+        BOOTSTRAP_PR_NUMBER, BOOTSTRAP_HEAD_REF,
+        "same_repository_main_and_exact_transition_identity",
+        TRANSITION_CLEANUP,
+        "trusted_merged_commits_only",
+    ):
+        raise PerformancePolicyError("policy.hosted_pr.harness: invalid frozen integrity boundary")
 
     hardware = _object(root["fixed_hardware"], "policy.fixed_hardware")
     _keys(hardware, {"configured", "hardware_fingerprint"}, "policy.fixed_hardware")
     configured = _boolean(hardware["configured"], "policy.fixed_hardware.configured")
     if configured or hardware["hardware_fingerprint"] is not None:
         raise PerformancePolicyError(
-            "policy.fixed_hardware: v1 requires configured=false and null fingerprint"
+            "policy.fixed_hardware: v2 requires configured=false and null fingerprint"
         )
     gates = _gates(root["gates"], protocols)
     evidence = tuple(_array(root["evidence_entries"], "policy.evidence_entries"))
     if evidence:
-        raise PerformancePolicyError("policy.evidence_entries: v1 requires an empty array")
+        raise PerformancePolicyError("policy.evidence_entries: v2 requires an empty array")
     return PerformancePolicy(
         path=path,
         sha256=hashlib.sha256(raw).hexdigest(),
-        schema_version=1,
+        schema_version=2,
         policy_id=policy_id,
         claim_eligible=claim_eligible,
         protocols=protocols,
         external_registry_path=external_path,
         external_registry_id=external_id,
-        hosted_commands=commands,
+        hosted_tier="informational_preview",
+        hosted_orchestrator_path=orchestrator,
+        hosted_blocks=blocks,
+        hosted_retention_days=retention,
+        hosted_implementation_sha256=implementation_sha256,
+        hosted_integrity_scope=INTEGRITY_SCOPE,
+        hosted_base_ref=HOSTED_BASE_REF,
+        bootstrap_base_sha=BOOTSTRAP_BASE_SHA,
+        bootstrap_pr_number=BOOTSTRAP_PR_NUMBER,
+        bootstrap_head_ref=BOOTSTRAP_HEAD_REF,
+        reference_identity=reference_values[0],
+        reference_repo=reference_values[1],
+        reference_revision=reference_values[2],
         workflow_path=workflow_path,
         workflow_sha256=workflow_sha256,
         fixed_hardware_configured=configured,
@@ -488,11 +591,9 @@ def load_policy(path: Path) -> PerformancePolicy:
 
 
 def validate_workflow_bytes(policy: PerformancePolicy, raw: bytes) -> None:
-    if raw != EXPECTED_WORKFLOW_BYTES:
-        raise PerformancePolicyError(
-            "policy.hosted_pr.workflow: bytes differ from the exact v1 workflow"
-        )
     digest = hashlib.sha256(raw).hexdigest()
+    if digest != EXPECTED_WORKFLOW_SHA256:
+        raise PerformancePolicyError("policy.hosted_pr.workflow: bytes differ from exact v2 workflow")
     if digest != policy.workflow_sha256:
         raise PerformancePolicyError(
             "policy.hosted_pr.workflow_sha256: current workflow hash mismatch"
@@ -524,6 +625,32 @@ def cross_check_repository(policy: PerformancePolicy, root: Path) -> None:
                 raise PerformancePolicyError(
                     f"policy.protocols.{key}: does not match current repository protocol"
                 )
+        manifest_reference = (
+            measurement.reference_identity,
+            measurement.reference_repo,
+            measurement.reference_revision,
+        )
+        policy_reference = (
+            policy.reference_identity, policy.reference_repo, policy.reference_revision,
+        )
+        if manifest_reference != policy_reference:
+            raise PerformancePolicyError(
+                "policy.reference_engine: does not match measurement manifest"
+            )
+        gitlink = subprocess.run(
+            ["git", "-C", str(root), "ls-tree", "HEAD", "third_party/quickjs-ng"],
+            capture_output=True, text=True, timeout=10, check=False,
+        )
+        fields = gitlink.stdout.split()
+        if gitlink.returncode != 0 or len(fields) < 3 or fields[2] != policy.reference_revision:
+            raise PerformancePolicyError(
+                "policy.reference_engine: does not match QuickJS-NG gitlink"
+            )
+        actual_implementation = _implementation_sha256(root, PREVIEW_IMPLEMENTATION_FILES)
+        if actual_implementation != policy.hosted_implementation_sha256:
+            raise PerformancePolicyError(
+                "policy.hosted_implementation.aggregate_sha256: implementation drift"
+            )
         registry = load_registry(root / policy.external_registry_path)
         external_summary = registry_summary(registry)
         if (
@@ -546,7 +673,7 @@ def require_gate(policy: PerformancePolicy, gate_id: str) -> NoReturn:
     if gate is None:
         raise PerformancePolicyError(f"unknown performance gate {gate_id!r}")
     raise PerformancePolicyError(
-        f"performance gate {gate_id!r} is disabled by deny-only policy v1"
+        f"performance gate {gate_id!r} is disabled by deny-only policy v2"
     )
 
 
@@ -557,7 +684,8 @@ def policy_summary(policy: PerformancePolicy) -> dict[str, Any]:
         "external_admitted_count": 0,
         "fixed_hardware_configured": False,
         "gates": {gate_id: False for gate_id in ("nightly", "release", "pr_sentinel")},
-        "hosted_pr_tier": "smoke_only",
+        "hosted_pr_tier": policy.hosted_tier,
+        "hosted_integrity_scope": policy.hosted_integrity_scope,
         "policy_id": policy.policy_id,
         "policy_sha256": policy.sha256,
         "schema_version": policy.schema_version,

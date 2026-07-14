@@ -62,13 +62,25 @@ execution, validated raw JSONL, and failure/timeout records without dependencies
 - [x] M5 provides a strict deny-only external-corpus v1 registry and a
   fail-closed audit command. V1 cannot represent admission; each future corpus
   requires a separately reviewed v2 content-hashed audit bundle.
-- [x] CI policy infrastructure provides a deny-only v1 policy and hosted
-  smoke-only workflow. It cross-checks current protocols but cannot configure
-  fixed hardware, store evidence, enable gates, or make claims. The policy
-  binds the workflow's exact path, bytes, and SHA-256.
+- [x] CI policy infrastructure provides a fail-closed v2 policy and hosted
+  informational preview. Its long-term `pull_request_target` path uses the
+  base-owned workflow/setup/harness for cooperative same-repository PRs. One
+  `pull_request` bootstrap is allowed only for PR #126 from
+  `agent/performance-benchmark-system/root` into `main` at exact base
+  `d8ac450f92b4a773250310d5f91835cd47d39a98`; forks are unsupported. Candidate
+  build/execution shares the runner and is explicitly not an adversarial
+  sandbox. It
+  builds explicit head/base/pinned-reference SHAs, stores three-block
+  raw/report/provenance or durable failure status, and renders ratios only for
+  strict healthy non-claim reports. It cannot configure fixed hardware, apply
+  thresholds, enable gates, or make claims. The policy binds an aggregate hash
+  over the full hosted control/audit chain plus the direct QuickJS-NG pin.
 - [ ] M6 establishes fixed-hardware A/A shadow baselines.
 - [ ] M7 enables fixed-hardware nightly/release gates and, if justified,
   self-hosted PR sentinels.
+- [ ] Immediately after PR #126 merges, remove the `pull_request` trigger,
+  bootstrap job, bootstrap constants/tests/docs, and retain only the long-term
+  `pull_request_target` workflow.
 
 ## Verification
 
@@ -77,7 +89,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/benchmark/tests 
 bash -n scripts/benchmark.sh scripts/benchmark-report.sh \
   scripts/resource-benchmark.sh scripts/resource-benchmark-report.sh \
   scripts/lifecycle-bench.sh scripts/external-corpus-audit.sh \
-  scripts/performance-policy-audit.sh
+  scripts/performance-policy-audit.sh scripts/performance-preview.sh
 ./scripts/external-corpus-audit.sh
 ./scripts/performance-policy-audit.sh
 ./scripts/benchmark.sh --dry-run --blocks 3 --case plain_function_call
@@ -125,13 +137,23 @@ must bind a content-hashed audit bundle covering source-pin evidence, per-file
 licenses and NOTICE, a repository-owned adapter, a neutral timing protocol,
 and a case manifest with source hashes.
 
-CI layering is ready without claiming M6 or M7 completion. GitHub-hosted CI is
-smoke-only: policy audits, dry-run plans, and listing six lifecycle IDs. The
-deny-only performance policy has no fixed-hardware fingerprint or evidence and
-keeps nightly, release, and PR-sentinel gates disabled. Activation requires a
+CI layering is ready without claiming M6 or M7 completion. GitHub-hosted CI now
+publishes an informational three-block preview for the full seven-case,
+three-role portfolio from base-owned harness code, including dynamic
+provenance, raw evidence, deterministic report, and Step Summary. During
+initial introduction only, same-repository PR #126 from
+`agent/performance-benchmark-system/root` into `main` at exact base
+`d8ac450f92b4a773250310d5f91835cd47d39a98` can bootstrap the candidate
+harness; forks are unsupported. Failed or timed-out runs retain phase-aware
+status and any available evidence without a ratio conclusion. This cooperative
+scope does not resist malicious candidate code. The fail-closed performance policy has no
+fixed-hardware fingerprint or claim evidence and keeps nightly, release, and
+PR-sentinel gates disabled. Activation requires a
 qualified fingerprint, 20 independent content-hashed same-binary randomized
 A/A reports for nightly/release (30 for PR), a protocol-bound noise envelope,
 and an additional demonstrated false-positive budget for the PR sentinel.
-The validator compares the hosted workflow byte-for-byte with its allowed v1
-definition and policy hash; extra triggers, jobs, actions, uploads, or commands
-are rejected rather than inferred safe from selected text fragments.
+The validator binds the aggregate hosted-implementation SHA-256 and direct
+QuickJS-NG pin; focused executable contract tests also freeze dual-event
+admission, exact bootstrap transition, setup-action selection, explicit head/base selection,
+strict healthy summary requirements, always-run summary/artifact production,
+14-day retention, and the absence of thresholds, write permissions, or secrets.

@@ -2,6 +2,10 @@ name: Setup Rust with cache
 description: Install the pinned Rust toolchain and restore the shared build cache.
 
 inputs:
+  source-root:
+    description: Workspace-relative checkout whose Rust toolchain and lockfile apply.
+    required: false
+    default: '.'
   save-cache:
     description: Also save the cache at job end. Enable in exactly one job per
       pipeline so parallel jobs do not race on the same key.
@@ -14,6 +18,7 @@ runs:
     - name: Install Rust toolchain
       shell: bash
       run: rustup show
+      working-directory: ${{ inputs.source-root }}
 
     - name: Restore and save Rust build cache
       if: inputs.save-cache == 'true'
@@ -23,8 +28,9 @@ runs:
           ~/.cargo/git/db
           ~/.cargo/registry/cache
           ~/.cargo/registry/index
-          target
-        key: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          ${{ inputs.source-root }}/target
+        key: >-
+          rust-${{ runner.os }}-${{ hashFiles(format('{0}/rust-toolchain.toml', inputs.source-root), format('{0}/Cargo.lock', inputs.source-root)) }}
         restore-keys: |
           rust-${{ runner.os }}-
 
@@ -36,7 +42,8 @@ runs:
           ~/.cargo/git/db
           ~/.cargo/registry/cache
           ~/.cargo/registry/index
-          target
-        key: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          ${{ inputs.source-root }}/target
+        key: >-
+          rust-${{ runner.os }}-${{ hashFiles(format('{0}/rust-toolchain.toml', inputs.source-root), format('{0}/Cargo.lock', inputs.source-root)) }}
         restore-keys: |
           rust-${{ runner.os }}-
