@@ -1,8 +1,8 @@
 # Environment / Binding Model Rewrite
 
-Status: complete through S6. The final exact all-case comparison reports zero
-QuickJS-NG-pass/quickjs-rust-fail cases; campaign verification is recorded in
-`tasks/T016-environment-model-rewrite.md`.
+Status: complete through S6. The authoritative CI aggregate reports every
+configured case passing and zero QuickJS-NG-pass/quickjs-rust-fail cases;
+campaign verification is recorded in `tasks/T016-environment-model-rewrite.md`.
 
 T016 is the environment-model keystone named in `AGENTS.md`. It replaces the
 old snapshot-and-writeback closure representation with one shared cell per
@@ -176,18 +176,20 @@ VM/allocation work rather than another environment snapshot heuristic.
 
 ## Final conformance result
 
-The final `./scripts/find-qjsng-gaps.sh --exact --all` scan is recorded at
-`target/test262-gaps/all-20260714-053539-93994`:
+The authoritative 16-shard `Test262 Coverage` aggregate for commit `cc4a8d2d`
+reports:
 
 - 53,572 total Test262 cases and 42,672 configured cases;
-- quickjs-rust: 42,591 pass, 0 fail, 20 timeout, 61 not run;
+- quickjs-rust: **42,672 pass, 0 fail, 0 timeout, 0 not run**;
 - QuickJS-NG-pass/quickjs-rust-fail: **0**;
-- all 20 timeouts are already classified as excluded slow cases;
-- all 61 not-run cases require the Test262 `$262.agent` harness and are not
-  environment-model engine failures.
+- QuickJS-NG-pass/quickjs-rust-timeout or not-run: **0**.
 
-This closes T016's engine-difference queue without claiming that the excluded
-timeouts or unexecuted agent cases have passed Test262.
+The preceding local `./scripts/find-qjsng-gaps.sh --exact --all` report at
+`target/test262-gaps/all-20260714-053539-93994` had already established zero
+engine failures, but classified 20 slow cases as excluded timeouts and left 61
+`$262.agent` cases unexecuted. CI's enabled harness ran those remaining cases
+successfully. The CI artifact is the source of truth for the completed
+campaign.
 
 ## Remaining structural risks
 

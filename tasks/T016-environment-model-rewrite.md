@@ -131,10 +131,8 @@ regression (no half-finished cutover).
 
 - [x] Each slice's gate passes; the engine is green at every slice boundary.
 - [x] After S5: the per-call locals HashMap clone is gone, the call benchmark
-  improves measurably, and a complete `--exact --all` scan has no
-  QuickJS-NG-pass/quickjs-rust-fail cases. The final scan has 20 excluded slow
-  timeouts and 61 `$262.agent` harness not-run cases; neither bucket contains a
-  T016 engine failure.
+  improves measurably, and the authoritative CI aggregate has no
+  QuickJS-NG-pass/quickjs-rust-fail cases, timeouts, or not-run cases.
 - [x] After S3/S6: the M2, per-iteration, and eval-capture clusters pass.
 
 ## Verification
@@ -148,11 +146,12 @@ cargo run -p qjs-cli -- -e 'var c=9; function inc(){c++;} function f(){c=0;inc()
 ./scripts/test262-burndown.sh --report <dir>   # after S5 full scan
 ```
 
-Final exact scan (`target/test262-gaps/all-20260714-053539-93994`): 53,572
-total, 42,672 configured; quickjs-rust 42,591 pass / 0 fail / 20 timeout / 61
-not run. QuickJS-NG-pass/quickjs-rust-fail is 0. The 20 timeouts are excluded
-slow cases and the 61 not-run cases require the `$262.agent` harness, so they
-remain explicitly unclaimed rather than being counted as passing.
+Final local exact scan (`target/test262-gaps/all-20260714-053539-93994`):
+53,572 total, 42,672 configured; quickjs-rust 42,591 pass / 0 fail / 20
+excluded slow timeout / 61 `$262.agent` not run, with zero
+QuickJS-NG-pass/quickjs-rust-fail cases. The authoritative 16-shard CI aggregate
+for `cc4a8d2d` enabled the remaining harness support and reports 42,672 pass /
+0 fail / 0 timeout / 0 not run. That CI artifact is the final campaign result.
 
 ## Notes
 
