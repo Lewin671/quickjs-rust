@@ -93,7 +93,21 @@ independent five-block confirmation with seed `20250715` measured 0.887x
 (11.3% lower wall ns/op). All seven critical cases improved in the confirmation:
 `method_call` was 0.868x, `property_read` was 0.873x, and even the least-improved
 `array_read` case was 0.923x. These are exploratory dirty-source measurements;
-use the post-commit Performance Preview for provenance-backed reporting.
+use the post-commit Performance Preview for provenance-backed reporting. The
+preview at `715c830f2c4223b6745355eeec46cdac0cba6f48` confirmed the direction on
+hosted Linux at 0.8193x overall (18.07% lower wall ns/op), with a 95% confidence
+interval of [0.8193x, 0.8327x]. All seven cases improved, and the resulting
+candidate/QuickJS-NG overall ratio was 67.2446x. The job remained informational
+and health was inconclusive because it used only three variable-host blocks.
+
+Starting from `715c830f2c4223b6745355eeec46cdac0cba6f48`, applying the same
+single-handle layout to `ArrayRef` removed nine reference-count updates per
+array clone and reduced the largest `Value` variant again. A three-block local
+run measured 0.827x candidate/base overall; an independent five-block run with
+seed `20250717` confirmed 0.833x (16.7% lower wall ns/op). Every critical case
+improved: `array_read` was 0.748x, `many_locals_call` was 0.813x, and the
+least-improved `property_read` case was still 0.874x. These are exploratory
+dirty-source measurements pending the post-commit Performance Preview.
 
 At commit `18be69650953106355d425fd64412a13c384c648`:
 
