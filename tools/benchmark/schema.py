@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from decimal import Decimal, DecimalException
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -50,10 +52,53 @@ def _integer(value: Any, where: str, minimum: int = 0) -> int:
     return value
 
 
-def _number(value: Any, where: str, minimum: float = 0.0) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < minimum:
-        raise ManifestError(f"{where}: expected number >= {minimum}")
-    return float(value)
+def _bounded_fraction(
+    value: Any,
+    where: str,
+    *,
+    minimum: Decimal,
+    maximum: Decimal,
+    minimum_inclusive: bool,
+) -> Fraction:
+    if isinstance(value, bool) or not isinstance(value, (int, Decimal)):
+        raise ManifestError(f"{where}: expected a JSON number")
+    decimal_value = Decimal(value)
+    if not decimal_value.is_finite():
+        raise ManifestError(
+            f"{where}: expected finite {minimum} "
+            f"{'<=' if minimum_inclusive else '<'} value <= {maximum}"
+        )
+    minimum_valid = (
+        decimal_value >= minimum if minimum_inclusive else decimal_value > minimum
+    )
+    if not minimum_valid or decimal_value > maximum:
+        operator = "<=" if minimum_inclusive else "<"
+        raise ManifestError(
+            f"{where}: expected finite {minimum} {operator} value <= {maximum}"
+        )
+    _sign, digits, exponent = decimal_value.as_tuple()
+    if len(digits) > 18 or exponent < -18:
+        raise ManifestError(
+            f"{where}: expected at most 18 significant digits and 18 decimal places"
+        )
+    try:
+        return Fraction(decimal_value)
+    except (OverflowError, ValueError, ZeroDivisionError) as error:
+        raise ManifestError(f"{where}: invalid exact decimal value") from error
+
+
+CALIBRATION_MAX_GROWTH = 16
+
+
+def next_calibration_iterations(
+    iterations: int, target_ns: int, duration_ns: int, max_iterations: int
+) -> int:
+    """Scale iterations proportionally, rounding up with bounded strict progress."""
+    if not 0 < iterations < max_iterations or target_ns <= 0 or duration_ns <= 0:
+        raise ValueError("invalid calibration progression inputs")
+    proportional = (iterations * target_ns + duration_ns - 1) // duration_ns
+    next_iterations = max(iterations + 1, proportional)
+    return min(max_iterations, iterations * CALIBRATION_MAX_GROWTH, next_iterations)
 
 
 def sha256_file(path: Path) -> str:
@@ -97,9 +142,19 @@ class Case:
     initial_iterations: int
     max_iterations: int
     min_window_ms: int
-    startup_max_fraction: float
+    startup_max_fraction: Fraction
+    calibration_safety_factor: Fraction
     warmup_runs: int
     timeout_seconds: int
+
+    def calibration_target_ns(self, startup_ns: int) -> int:
+        """Return the safety-adjusted calibration target, rounded up to integer ns."""
+        eligibility_target = max(
+            Fraction(self.min_window_ms * 1_000_000),
+            Fraction(startup_ns) / self.startup_max_fraction,
+        )
+        target = eligibility_target * self.calibration_safety_factor
+        return (target.numerator + target.denominator - 1) // target.denominator
 
     def expected_operations(self, iterations: int) -> int:
         return iterations * self.operations_per_iteration
@@ -171,8 +226,11 @@ def load_manifest(path: Path) -> Manifest:
             raw,
             object_pairs_hook=_unique_object,
             parse_constant=_reject_json_constant,
+            parse_float=Decimal,
         )
-    except (OSError, json.JSONDecodeError) as error:
+    except ManifestError:
+        raise
+    except (OSError, ValueError, DecimalException) as error:
         raise ManifestError(f"cannot read manifest {path}: {error}") from error
     if not isinstance(data, dict):
         raise ManifestError("manifest: expected an object")
@@ -333,7 +391,8 @@ def load_manifest(path: Path) -> Manifest:
             raise ManifestError(f"{where}.measurement: expected an object")
         measurement_fields = {
             "initial_iterations", "max_iterations", "min_window_ms",
-            "startup_max_fraction", "warmup_runs", "timeout_seconds",
+            "startup_max_fraction", "calibration_safety_factor", "warmup_runs",
+            "timeout_seconds",
         }
         _keys(measurement, measurement_fields, f"{where}.measurement")
         initial = _integer(measurement["initial_iterations"], f"{where}.measurement.initial_iterations", 1)
@@ -344,11 +403,20 @@ def load_manifest(path: Path) -> Manifest:
             raise ManifestError(
                 f"{where}.measurement.max_iterations: must be >= 2 for exact N/2N diagnostics"
             )
-        startup_fraction = _number(
-            measurement["startup_max_fraction"], f"{where}.measurement.startup_max_fraction"
+        startup_fraction = _bounded_fraction(
+            measurement["startup_max_fraction"],
+            f"{where}.measurement.startup_max_fraction",
+            minimum=Decimal("0"),
+            maximum=Decimal("0.1"),
+            minimum_inclusive=False,
         )
-        if not 0 < startup_fraction <= 0.1:
-            raise ManifestError(f"{where}.measurement.startup_max_fraction: expected 0 < value <= 0.1")
+        calibration_safety_factor = _bounded_fraction(
+            measurement["calibration_safety_factor"],
+            f"{where}.measurement.calibration_safety_factor",
+            minimum=Decimal("1"),
+            maximum=Decimal("4"),
+            minimum_inclusive=True,
+        )
         cases.append(Case(
             id=case_id,
             family=_string(item["family"], f"{where}.family"),
@@ -364,6 +432,7 @@ def load_manifest(path: Path) -> Manifest:
             max_iterations=maximum,
             min_window_ms=_integer(measurement["min_window_ms"], f"{where}.measurement.min_window_ms", 1),
             startup_max_fraction=startup_fraction,
+            calibration_safety_factor=calibration_safety_factor,
             warmup_runs=_integer(measurement["warmup_runs"], f"{where}.measurement.warmup_runs"),
             timeout_seconds=_integer(measurement["timeout_seconds"], f"{where}.measurement.timeout_seconds", 1),
         ))

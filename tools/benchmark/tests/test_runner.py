@@ -7,6 +7,7 @@ import tempfile
 import time
 import unittest
 from dataclasses import replace
+from fractions import Fraction
 from pathlib import Path
 from unittest import mock
 
@@ -325,7 +326,7 @@ class RunnerTests(unittest.TestCase):
         manifest = load_manifest(ROOT / "benchmarks/manifest.json")
         case = replace(
             manifest.cases[0], initial_iterations=1, max_iterations=8,
-            min_window_ms=1, startup_max_fraction=0.1, warmup_runs=1,
+            min_window_ms=1, startup_max_fraction=Fraction(1, 10), warmup_runs=1,
         )
         output = io.StringIO()
         run = BenchmarkRun(manifest, [engine], [case], 1, 1, JsonlWriter(output), ROOT)
@@ -348,12 +349,64 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(twice["iterations"], n["iterations"] * 2)
         self.assertFalse(n["measurement_eligible"])
 
+    def test_calibration_safety_factor_selects_a_larger_iteration_count(self) -> None:
+        engine = self._engine("raise SystemExit(1)\n")
+        manifest = load_manifest(ROOT / "benchmarks/manifest.json")
+
+        def calibrate(factor: Fraction) -> tuple[int, list[int]]:
+            case = replace(
+                manifest.cases[0], initial_iterations=100, max_iterations=1_000,
+                min_window_ms=1, startup_max_fraction=Fraction(1, 10),
+                calibration_safety_factor=factor, warmup_runs=0,
+            )
+            output = io.StringIO()
+            run = BenchmarkRun(manifest, [engine], [case], 1, 1, JsonlWriter(output), ROOT)
+            self.addCleanup(run.close)
+
+            def successful(argv: list[str], _timeout: float) -> ProcessResult:
+                iterations = int(argv[-1])
+                duration = 1_000_000 if iterations == 0 else 110_000 * iterations
+                return self._valid_result(case, iterations, duration_ns=duration)
+
+            with mock.patch("tools.benchmark.runner.run_process", side_effect=successful):
+                self.assertTrue(run._calibrate(engine, case))
+            rows = [json.loads(line) for line in output.getvalue().splitlines()]
+            calibration = [row["iterations"] for row in rows if row["phase"] == "calibration"]
+            return run.iterations[(engine.role, case.id)], calibration
+
+        self.assertEqual(calibrate(Fraction(1)), (100, [100]))
+        self.assertEqual(calibrate(Fraction(5, 4)), (114, [100, 114]))
+
+    def test_calibration_headroom_does_not_relax_measurement_eligibility(self) -> None:
+        engine = self._engine("raise SystemExit(1)\n")
+        manifest = load_manifest(ROOT / "benchmarks/manifest.json")
+        case = replace(
+            manifest.cases[0], min_window_ms=1,
+            startup_max_fraction=Fraction(1, 10),
+            calibration_safety_factor=Fraction(5, 4),
+        )
+        output = io.StringIO()
+        run = BenchmarkRun(manifest, [engine], [case], 2, 1, JsonlWriter(output), ROOT)
+        self.addCleanup(run.close)
+        results = [
+            self._valid_result(case, 1, duration_ns=9_999_999),
+            self._valid_result(case, 1, duration_ns=10_000_000),
+        ]
+        with mock.patch("tools.benchmark.runner.run_process", side_effect=results):
+            run._sample(engine, case, 1, "measurement", 0, 0, "eligible", startup_ns=1_000_000)
+            run._sample(engine, case, 1, "measurement", 1, 0, "eligible", startup_ns=1_000_000)
+        rows = [json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertEqual([row["quality"] for row in rows], ["timer_limited", "eligible"])
+        self.assertEqual(
+            [row["measurement_eligible"] for row in rows], [False, True]
+        )
+
     def test_failed_linearity_is_durable_and_prevents_complete_input(self) -> None:
         engine = self._engine("raise SystemExit(1)\n")
         manifest = load_manifest(ROOT / "benchmarks/manifest.json")
         case = replace(
             manifest.cases[0], initial_iterations=1, max_iterations=8,
-            min_window_ms=1, startup_max_fraction=0.1, warmup_runs=1,
+            min_window_ms=1, startup_max_fraction=Fraction(1, 10), warmup_runs=1,
         )
         output = io.StringIO()
         run = BenchmarkRun(manifest, [engine], [case], 1, 1, JsonlWriter(output), ROOT)
@@ -505,7 +558,8 @@ class RunnerTests(unittest.TestCase):
         cases = [
             replace(
                 case, initial_iterations=1, max_iterations=1, min_window_ms=1,
-                startup_max_fraction=0.1, warmup_runs=0, timeout_seconds=1,
+                startup_max_fraction=Fraction(1, 10), warmup_runs=0,
+                timeout_seconds=1,
             )
             for case in manifest.cases
         ]

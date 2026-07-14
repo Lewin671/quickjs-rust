@@ -4,9 +4,16 @@ import json
 import hashlib
 import tempfile
 import unittest
+from dataclasses import replace
+from fractions import Fraction
 from pathlib import Path
 
-from tools.benchmark.schema import ManifestError, load_manifest, sha256_file
+from tools.benchmark.schema import (
+    ManifestError,
+    load_manifest,
+    next_calibration_iterations,
+    sha256_file,
+)
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -44,6 +51,27 @@ class ManifestTests(unittest.TestCase):
             ),
         )
         self.assertTrue(all(sha256_file(case.workload) == case.workload_sha256 for case in manifest.cases))
+        self.assertTrue(
+            all(case.calibration_safety_factor == Fraction(5, 4) for case in manifest.cases)
+        )
+
+    def test_calibration_target_applies_factor_and_rounds_up(self) -> None:
+        case = load_manifest(ROOT / "benchmarks/manifest.json").cases[0]
+        case = replace(
+            case,
+            min_window_ms=1,
+            startup_max_fraction=Fraction(3, 10),
+            calibration_safety_factor=Fraction(11, 10),
+        )
+        self.assertEqual(case.calibration_target_ns(1_000_000), 3_666_667)
+
+    def test_calibration_progression_is_proportional_monotonic_and_capped(self) -> None:
+        self.assertEqual(
+            next_calibration_iterations(100, 12_500_000, 11_000_000, 1_000),
+            114,
+        )
+        self.assertEqual(next_calibration_iterations(100, 10**30, 1, 10_000), 1_600)
+        self.assertEqual(next_calibration_iterations(100, 10**30, 1, 113), 113)
 
     def _temporary_manifest(self) -> tuple[tempfile.TemporaryDirectory[str], Path, dict]:
         temporary = tempfile.TemporaryDirectory()
@@ -97,7 +125,8 @@ class ManifestTests(unittest.TestCase):
                 "checksum": {"model": "linear", "factor": 1},
                 "measurement": {
                     "initial_iterations": 1, "max_iterations": 2, "min_window_ms": 1,
-                    "startup_max_fraction": 0.01, "warmup_runs": 0, "timeout_seconds": 1,
+                    "startup_max_fraction": 0.01, "calibration_safety_factor": 1.25,
+                    "warmup_runs": 0, "timeout_seconds": 1,
                 },
             }],
         }
@@ -110,6 +139,78 @@ class ManifestTests(unittest.TestCase):
         data["surprise"] = True
         path.write_text(json.dumps(data), encoding="utf-8")
         with self.assertRaisesRegex(ManifestError, "unknown"):
+            load_manifest(path)
+
+    def test_calibration_safety_factor_is_required_and_bounded(self) -> None:
+        temporary, path, data = self._temporary_manifest()
+        self.addCleanup(temporary.cleanup)
+        del data["cases"][0]["measurement"]["calibration_safety_factor"]
+        path.write_text(json.dumps(data), encoding="utf-8")
+        with self.assertRaisesRegex(ManifestError, "missing.*calibration_safety_factor"):
+            load_manifest(path)
+
+        data["cases"][0]["measurement"]["calibration_safety_factor"] = 0.99
+        path.write_text(json.dumps(data), encoding="utf-8")
+        with self.assertRaisesRegex(ManifestError, "1 <= value <= 4"):
+            load_manifest(path)
+
+        data["cases"][0]["measurement"]["calibration_safety_factor"] = 4.01
+        path.write_text(json.dumps(data), encoding="utf-8")
+        with self.assertRaisesRegex(ManifestError, "1 <= value <= 4"):
+            load_manifest(path)
+
+        data["cases"][0]["measurement"]["calibration_safety_factor"] = 1e309
+        path.write_text(json.dumps(data), encoding="utf-8")
+        with self.assertRaisesRegex(ManifestError, "non-standard numeric constant"):
+            load_manifest(path)
+
+    def test_exact_decimal_bounds_do_not_round_through_float(self) -> None:
+        temporary, path, data = self._temporary_manifest()
+        self.addCleanup(temporary.cleanup)
+        encoded = json.dumps(data)
+        path.write_text(
+            encoded.replace(
+                '"calibration_safety_factor": 1.25',
+                '"calibration_safety_factor": 0.99999999999999999',
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ManifestError, "1 <= value <= 4"):
+            load_manifest(path)
+
+        path.write_text(
+            encoded.replace(
+                '"startup_max_fraction": 0.01',
+                '"startup_max_fraction": 0.10000000000000001',
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ManifestError, "0 < value <= 0.1"):
+            load_manifest(path)
+
+    def test_extreme_numbers_fail_as_manifest_errors(self) -> None:
+        temporary, path, data = self._temporary_manifest()
+        self.addCleanup(temporary.cleanup)
+        data["cases"][0]["measurement"]["calibration_safety_factor"] = 10**1000
+        path.write_text(json.dumps(data), encoding="utf-8")
+        with self.assertRaisesRegex(ManifestError, "1 <= value <= 4"):
+            load_manifest(path)
+
+        data["cases"][0]["measurement"]["calibration_safety_factor"] = 1.25
+        encoded = json.dumps(data).replace(
+            '"calibration_safety_factor": 1.25',
+            '"calibration_safety_factor": 1e308',
+        )
+        path.write_text(encoded, encoding="utf-8")
+        with self.assertRaisesRegex(ManifestError, "1 <= value <= 4"):
+            load_manifest(path)
+
+        encoded = json.dumps(data).replace(
+            '"calibration_safety_factor": 1.25',
+            '"calibration_safety_factor": 1e99999999999999999999',
+        )
+        path.write_text(encoded, encoding="utf-8")
+        with self.assertRaisesRegex(ManifestError, "cannot read manifest"):
             load_manifest(path)
 
     def test_duplicate_json_key_fails_closed(self) -> None:
