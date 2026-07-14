@@ -77,7 +77,23 @@ candidate/base runs reproduced a 0.969x geometric-mean ratio (3.1% lower wall
 ns/op). The five-block confirmation used seed `20250714`; all seven critical
 cases improved or stayed effectively flat, with `method_call` at 0.937x and
 `property_read` at 0.900x. This was also exploratory dirty-source evidence;
-the post-commit Performance Preview remains the provenance-backed result.
+the post-commit Performance Preview remains the provenance-backed result. That
+preview ran successfully at `a95962d64754a17cf58d1076f25fc1d31273c289`, but
+its variable GitHub-hosted Linux runner measured 1.0225x overall with a 95%
+confidence interval of [1.0153x, 1.0261x] and classified health as
+inconclusive. The hosted direction therefore disagreed with both local runs;
+retain both results rather than treating the three-block hosted preview as a
+fixed-hardware claim.
+
+Starting from `a95962d64754a17cf58d1076f25fc1d31273c289`, wrapping the many
+independent `ObjectRef` storage cells in one shared handle made each object
+clone a single reference-count update and reduced the largest `Value` variant.
+A three-block local run measured a 0.884x candidate/base geometric mean; an
+independent five-block confirmation with seed `20250715` measured 0.887x
+(11.3% lower wall ns/op). All seven critical cases improved in the confirmation:
+`method_call` was 0.868x, `property_read` was 0.873x, and even the least-improved
+`array_read` case was 0.923x. These are exploratory dirty-source measurements;
+use the post-commit Performance Preview for provenance-backed reporting.
 
 At commit `18be69650953106355d425fd64412a13c384c648`:
 

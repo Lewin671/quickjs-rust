@@ -157,7 +157,9 @@ impl Prototype {
 
 /// Object storage reference.
 #[derive(Clone)]
-pub struct ObjectRef {
+pub struct ObjectRef(Rc<ObjectData>);
+
+struct ObjectData {
     properties: Rc<RefCell<HashMap<String, Property>>>,
     property_order: Rc<RefCell<Vec<String>>>,
     /// Count of own string keys that parse as array indices. Maintained as keys
@@ -206,15 +208,21 @@ impl fmt::Debug for ObjectRef {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("ObjectRef")
-            .field("properties", &self.properties.borrow().len())
-            .field("symbol_properties", &self.symbol_properties.borrow().len())
-            .field("has_prototype", &self.prototype.borrow().is_some())
-            .field("to_string_tag", &self.to_string_tag.borrow())
-            .field("raw_json", &self.raw_json.get())
-            .field("array_prototype_exotic", &self.array_prototype_exotic.get())
+            .field("properties", &self.0.properties.borrow().len())
+            .field(
+                "symbol_properties",
+                &self.0.symbol_properties.borrow().len(),
+            )
+            .field("has_prototype", &self.0.prototype.borrow().is_some())
+            .field("to_string_tag", &self.0.to_string_tag.borrow())
+            .field("raw_json", &self.0.raw_json.get())
+            .field(
+                "array_prototype_exotic",
+                &self.0.array_prototype_exotic.get(),
+            )
             .field(
                 "immutable_prototype_exotic",
-                &self.immutable_prototype_exotic.get(),
+                &self.0.immutable_prototype_exotic.get(),
             )
             .finish()
     }
@@ -242,7 +250,7 @@ impl ObjectRef {
             .iter()
             .filter(|key| is_array_index_key(key))
             .count();
-        Self {
+        Self(Rc::new(ObjectData {
             properties: Rc::new(RefCell::new(
                 properties
                     .into_iter()
@@ -267,13 +275,13 @@ impl ObjectRef {
             iterator_zip_state: Rc::new(RefCell::new(None)),
             #[cfg(feature = "agents")]
             shared_backing: Rc::new(RefCell::new(None)),
-        }
+        }))
     }
 
     /// The generator [[GeneratorState]] cell for this object. Non-generator
     /// objects hold `None`; generator objects store their resumable state here.
     pub(crate) fn generator_state(&self) -> &Rc<RefCell<Option<crate::bytecode::GeneratorState>>> {
-        &self.generator_state
+        &self.0.generator_state
     }
 
     /// The async-generator internal-state cell for this object. Ordinary objects
@@ -282,12 +290,13 @@ impl ObjectRef {
     pub(crate) fn async_generator_state(
         &self,
     ) -> &Rc<RefCell<Option<crate::async_generator::AsyncGeneratorInternal>>> {
-        &self.async_generator_state
+        &self.0.async_generator_state
     }
 
     /// Returns the object's private-name storage, creating it on first use.
     pub(crate) fn private_storage(&self) -> PrivateStorage {
-        self.private_state
+        self.0
+            .private_state
             .borrow_mut()
             .storage
             .get_or_insert_with(PrivateStorage::new)
@@ -296,105 +305,107 @@ impl ObjectRef {
 
     /// Sets the private environment carried by a class prototype object.
     pub(crate) fn set_private_environment(&self, environment: PrivateEnvironment) {
-        self.private_state.borrow_mut().environment = Some(environment);
+        self.0.private_state.borrow_mut().environment = Some(environment);
     }
 
     /// Returns the private environment carried by this object, if any.
     pub(crate) fn private_environment(&self) -> Option<PrivateEnvironment> {
-        self.private_state.borrow().environment.clone()
+        self.0.private_state.borrow().environment.clone()
     }
 
     pub(crate) fn internal_bytes(&self) -> Option<Vec<u8>> {
-        self.internal_bytes.borrow().clone()
+        self.0.internal_bytes.borrow().clone()
     }
 
     pub(crate) fn with_internal_bytes<T>(&self, f: impl FnOnce(Option<&[u8]>) -> T) -> T {
-        let bytes = self.internal_bytes.borrow();
+        let bytes = self.0.internal_bytes.borrow();
         f(bytes.as_deref())
     }
 
     pub(crate) fn set_internal_bytes(&self, bytes: Vec<u8>) {
-        *self.internal_bytes.borrow_mut() = Some(bytes);
+        *self.0.internal_bytes.borrow_mut() = Some(bytes);
     }
 
     pub(crate) fn clear_internal_bytes(&self) {
-        *self.internal_bytes.borrow_mut() = None;
+        *self.0.internal_bytes.borrow_mut() = None;
     }
 
     pub(crate) fn with_internal_bytes_mut<T>(
         &self,
         f: impl FnOnce(&mut Vec<u8>) -> T,
     ) -> Option<T> {
-        self.internal_bytes.borrow_mut().as_mut().map(f)
+        self.0.internal_bytes.borrow_mut().as_mut().map(f)
     }
 
     /// The cross-thread `SharedArrayBuffer` backing for this object, if one was
     /// installed (agents harness only).
     #[cfg(feature = "agents")]
     pub(crate) fn shared_backing(&self) -> Option<crate::array_buffer::SharedBackingRef> {
-        self.shared_backing.borrow().clone()
+        self.0.shared_backing.borrow().clone()
     }
 
     /// Installs the cross-thread `SharedArrayBuffer` backing for this object.
     #[cfg(feature = "agents")]
     pub(crate) fn set_shared_backing(&self, backing: crate::array_buffer::SharedBackingRef) {
-        *self.shared_backing.borrow_mut() = Some(backing);
+        *self.0.shared_backing.borrow_mut() = Some(backing);
     }
 
     pub(crate) fn set_iterator_zip_state(&self, state: crate::iterator::ZipState) {
-        *self.iterator_zip_state.borrow_mut() = Some(state);
+        *self.0.iterator_zip_state.borrow_mut() = Some(state);
     }
 
     pub(crate) fn with_iterator_zip_state_mut<T>(
         &self,
         f: impl FnOnce(&mut crate::iterator::ZipState) -> T,
     ) -> Option<T> {
-        self.iterator_zip_state.borrow_mut().as_mut().map(f)
+        self.0.iterator_zip_state.borrow_mut().as_mut().map(f)
     }
 
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.properties, &other.properties)
+        Rc::ptr_eq(&self.0, &other.0)
     }
 
     pub(crate) fn mark_raw_json(&self) {
-        self.raw_json.set(true);
+        self.0.raw_json.set(true);
     }
 
     pub(crate) fn is_raw_json(&self) -> bool {
-        self.raw_json.get()
+        self.0.raw_json.get()
     }
 
     pub(crate) fn mark_array_prototype_exotic(&self) {
-        self.array_prototype_exotic.set(true);
+        self.0.array_prototype_exotic.set(true);
     }
 
     pub(crate) fn is_array_prototype_exotic(&self) -> bool {
-        self.array_prototype_exotic.get()
+        self.0.array_prototype_exotic.get()
     }
 
     pub(crate) fn mark_immutable_prototype_exotic(&self) {
-        self.immutable_prototype_exotic.set(true);
+        self.0.immutable_prototype_exotic.set(true);
     }
 
     pub(crate) fn mark_module_namespace_exotic(&self) {
-        self.module_namespace_exotic.set(true);
+        self.0.module_namespace_exotic.set(true);
     }
 
     pub(crate) fn is_module_namespace_exotic(&self) -> bool {
-        self.module_namespace_exotic.get()
+        self.0.module_namespace_exotic.get()
     }
 
     pub(crate) fn set_module_namespace_bindings(&self, bindings: ModuleNamespaceBindings) {
-        *self.module_namespace_bindings.borrow_mut() = Some(bindings);
+        *self.0.module_namespace_bindings.borrow_mut() = Some(bindings);
     }
 
     pub(crate) fn get(&self, key: &str) -> Option<Value> {
-        self.properties
+        self.0
+            .properties
             .borrow()
             .get(key)
             .map(|property| property.value.clone())
             .or_else(|| {
-                self.prototype
+                self.0
+                    .prototype
                     .borrow()
                     .as_ref()
                     .and_then(|proto| proto.get(key))
@@ -402,8 +413,9 @@ impl ObjectRef {
     }
 
     pub(crate) fn property(&self, key: &str) -> Option<Property> {
-        self.properties.borrow().get(key).cloned().or_else(|| {
-            self.prototype
+        self.0.properties.borrow().get(key).cloned().or_else(|| {
+            self.0
+                .prototype
                 .borrow()
                 .as_ref()
                 .and_then(|proto| proto.property(key))
@@ -415,12 +427,13 @@ impl ObjectRef {
     /// property cannot intercept an index store with an inherited accessor or a
     /// non-writable data property.
     pub(crate) fn has_own_index_property(&self) -> bool {
-        self.index_property_count.get() > 0
+        self.0.index_property_count.get() > 0
     }
 
     pub(crate) fn symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
         self.own_symbol_property(symbol).or_else(|| {
-            self.prototype
+            self.0
+                .prototype
                 .borrow()
                 .as_ref()
                 .and_then(|proto| proto.symbol_property(symbol))
@@ -430,17 +443,17 @@ impl ObjectRef {
     /// The raw [[Prototype]] slot, distinguishing object and function
     /// prototypes.
     pub(crate) fn prototype_slot(&self) -> Option<Prototype> {
-        self.prototype.borrow().clone()
+        self.0.prototype.borrow().clone()
     }
 
     pub(crate) fn set_prototype_slot(&self, prototype: Option<Prototype>) -> Result<(), ()> {
-        if same_prototype_slot(self.prototype.borrow().as_ref(), prototype.as_ref()) {
+        if same_prototype_slot(self.0.prototype.borrow().as_ref(), prototype.as_ref()) {
             return Ok(());
         }
-        if self.immutable_prototype_exotic.get() {
+        if self.0.immutable_prototype_exotic.get() {
             return Err(());
         }
-        if !self.extensible.get() {
+        if !self.0.extensible.get() {
             return Err(());
         }
         if prototype
@@ -449,22 +462,22 @@ impl ObjectRef {
         {
             return Err(());
         }
-        *self.prototype.borrow_mut() = prototype;
+        *self.0.prototype.borrow_mut() = prototype;
         Ok(())
     }
 
     pub(crate) fn set(&self, key: String, value: Value) {
-        let mut properties = self.properties.borrow_mut();
+        let mut properties = self.0.properties.borrow_mut();
         if let Some(property) = properties.get_mut(&key) {
             if property.writable {
                 property.value = value;
             }
             return;
         }
-        if !self.extensible.get() {
+        if !self.0.extensible.get() {
             return;
         }
-        if self.array_prototype_exotic.get()
+        if self.0.array_prototype_exotic.get()
             && let Some(index) = array_index_property_key(&key)
             && let Some(length_property) = properties.get_mut("length")
             && length_property.writable
@@ -478,27 +491,29 @@ impl ObjectRef {
             }
         }
         if is_array_index_key(&key) {
-            self.index_property_count
-                .set(self.index_property_count.get() + 1);
+            self.0
+                .index_property_count
+                .set(self.0.index_property_count.get() + 1);
         }
-        self.property_order.borrow_mut().push(key.clone());
+        self.0.property_order.borrow_mut().push(key.clone());
         properties.insert(key, Property::enumerable(value));
     }
 
     pub(crate) fn define_property(&self, key: String, property: Property) {
-        let mut properties = self.properties.borrow_mut();
+        let mut properties = self.0.properties.borrow_mut();
         if !properties.contains_key(&key) {
             if is_array_index_key(&key) {
-                self.index_property_count
-                    .set(self.index_property_count.get() + 1);
+                self.0
+                    .index_property_count
+                    .set(self.0.index_property_count.get() + 1);
             }
-            self.property_order.borrow_mut().push(key.clone());
+            self.0.property_order.borrow_mut().push(key.clone());
         }
         properties.insert(key, property);
     }
 
     pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
-        let mut properties = self.symbol_properties.borrow_mut();
+        let mut properties = self.0.symbol_properties.borrow_mut();
         if let Some((_, existing)) = properties
             .iter_mut()
             .find(|(existing_symbol, _)| existing_symbol.ptr_eq(&symbol))
@@ -514,7 +529,7 @@ impl ObjectRef {
     }
 
     pub(crate) fn set_internal_non_enumerable(&self, key: &str, value: Value) {
-        let mut properties = self.properties.borrow_mut();
+        let mut properties = self.0.properties.borrow_mut();
         if let Some(property) = properties.get_mut(key) {
             property.value = value;
             return;
@@ -526,36 +541,37 @@ impl ObjectRef {
     /// in this object's chain. Used by `isPrototypeOf`/`instanceof` to walk past
     /// a function sitting mid-chain.
     pub(crate) fn has_own_property(&self, key: &str) -> bool {
-        self.properties.borrow().contains_key(key)
+        self.0.properties.borrow().contains_key(key)
     }
 
     pub(crate) fn has_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
-        self.symbol_properties
+        self.0
+            .symbol_properties
             .borrow()
             .iter()
             .any(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
     }
 
     pub(crate) fn is_extensible(&self) -> bool {
-        self.extensible.get()
+        self.0.extensible.get()
     }
 
     pub(crate) fn prevent_extensions(&self) {
-        self.extensible.set(false);
+        self.0.extensible.set(false);
     }
 
     pub(crate) fn seal(&self) {
         self.prevent_extensions();
-        for property in self.properties.borrow_mut().values_mut() {
+        for property in self.0.properties.borrow_mut().values_mut() {
             property.make_non_configurable();
         }
-        for (_, property) in self.symbol_properties.borrow_mut().iter_mut() {
+        for (_, property) in self.0.symbol_properties.borrow_mut().iter_mut() {
             property.make_non_configurable();
         }
     }
 
     pub(crate) fn append_string_property(&self, key: &str, suffix: &str) -> Option<Value> {
-        let mut properties = self.properties.borrow_mut();
+        let mut properties = self.0.properties.borrow_mut();
         let property = properties.get_mut(key)?;
         if !property.writable || property.accessor {
             return None;
@@ -568,13 +584,15 @@ impl ObjectRef {
     }
 
     pub(crate) fn is_sealed(&self) -> bool {
-        !self.extensible.get()
+        !self.0.extensible.get()
             && self
+                .0
                 .properties
                 .borrow()
                 .values()
                 .all(|property| !property.configurable)
             && self
+                .0
                 .symbol_properties
                 .borrow()
                 .iter()
@@ -583,22 +601,24 @@ impl ObjectRef {
 
     pub(crate) fn freeze(&self) {
         self.prevent_extensions();
-        for property in self.properties.borrow_mut().values_mut() {
+        for property in self.0.properties.borrow_mut().values_mut() {
             property.freeze_data();
         }
-        for (_, property) in self.symbol_properties.borrow_mut().iter_mut() {
+        for (_, property) in self.0.symbol_properties.borrow_mut().iter_mut() {
             property.freeze_data();
         }
     }
 
     pub(crate) fn is_frozen(&self) -> bool {
-        !self.extensible.get()
+        !self.0.extensible.get()
             && self
+                .0
                 .properties
                 .borrow()
                 .values()
                 .all(|property| !property.configurable && !property.writable)
             && self
+                .0
                 .symbol_properties
                 .borrow()
                 .iter()
@@ -606,9 +626,9 @@ impl ObjectRef {
     }
 
     pub(crate) fn own_property(&self, key: &str) -> Option<Property> {
-        let mut property = self.properties.borrow().get(key).cloned()?;
-        if self.module_namespace_exotic.get()
-            && let Some(bindings) = self.module_namespace_bindings.borrow().as_ref()
+        let mut property = self.0.properties.borrow().get(key).cloned()?;
+        if self.0.module_namespace_exotic.get()
+            && let Some(bindings) = self.0.module_namespace_bindings.borrow().as_ref()
             && let Some(value) = bindings.value_for_export(key)
         {
             property.value = value.clone();
@@ -620,14 +640,14 @@ impl ObjectRef {
         &self,
         key: &str,
     ) -> Result<Option<Property>, RuntimeError> {
-        if !self.module_namespace_exotic.get() {
+        if !self.0.module_namespace_exotic.get() {
             return Ok(None);
         }
-        let mut property = match self.properties.borrow().get(key).cloned() {
+        let mut property = match self.0.properties.borrow().get(key).cloned() {
             Some(property) => property,
             None => return Ok(None),
         };
-        if let Some(bindings) = self.module_namespace_bindings.borrow().as_ref()
+        if let Some(bindings) = self.0.module_namespace_bindings.borrow().as_ref()
             && let Some(value) = bindings.value_for_export(key)
         {
             if value.is_uninitialized_lexical_marker() {
@@ -642,7 +662,8 @@ impl ObjectRef {
     }
 
     pub(crate) fn own_symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
-        self.symbol_properties
+        self.0
+            .symbol_properties
             .borrow()
             .iter()
             .find(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
@@ -650,7 +671,7 @@ impl ObjectRef {
     }
 
     pub(crate) fn delete_own_property(&self, key: &str) -> bool {
-        let mut properties = self.properties.borrow_mut();
+        let mut properties = self.0.properties.borrow_mut();
         if properties
             .get(key)
             .is_some_and(|property| !property.configurable)
@@ -659,17 +680,19 @@ impl ObjectRef {
         }
         let removed = properties.remove(key);
         if removed.is_some() && is_array_index_key(key) {
-            self.index_property_count
-                .set(self.index_property_count.get().saturating_sub(1));
+            self.0
+                .index_property_count
+                .set(self.0.index_property_count.get().saturating_sub(1));
         }
-        self.property_order
+        self.0
+            .property_order
             .borrow_mut()
             .retain(|existing| existing != key);
         true
     }
 
     pub(crate) fn delete_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
-        let mut properties = self.symbol_properties.borrow_mut();
+        let mut properties = self.0.symbol_properties.borrow_mut();
         let Some(index) = properties
             .iter()
             .position(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
@@ -692,9 +715,9 @@ impl ObjectRef {
     }
 
     fn ordered_property_names(&self, include: impl Fn(&Property) -> bool) -> Vec<String> {
-        let properties = self.properties.borrow();
-        let order = self.property_order.borrow();
-        if self.index_property_count.get() == 0 {
+        let properties = self.0.properties.borrow();
+        let order = self.0.property_order.borrow();
+        if self.0.index_property_count.get() == 0 {
             return order
                 .iter()
                 .filter_map(|key| {
@@ -736,7 +759,8 @@ impl ObjectRef {
     }
 
     pub(crate) fn own_property_symbols(&self) -> Vec<ObjectRef> {
-        self.symbol_properties
+        self.0
+            .symbol_properties
             .borrow()
             .iter()
             .map(|(symbol, _)| symbol.clone())
@@ -746,7 +770,8 @@ impl ObjectRef {
     /// The [[Prototype]] as an object, or `None` if absent or a function. Use
     /// [`ObjectRef::prototype_slot`] when the function case matters.
     pub(crate) fn prototype(&self) -> Option<ObjectRef> {
-        self.prototype
+        self.0
+            .prototype
             .borrow()
             .as_ref()
             .and_then(Prototype::as_object)
@@ -757,8 +782,9 @@ impl ObjectRef {
     }
 
     pub(crate) fn to_string_tag(&self) -> Option<String> {
-        self.to_string_tag.borrow().clone().or_else(|| {
-            self.prototype
+        self.0.to_string_tag.borrow().clone().or_else(|| {
+            self.0
+                .prototype
                 .borrow()
                 .as_ref()
                 .and_then(Prototype::to_string_tag)
@@ -766,7 +792,7 @@ impl ObjectRef {
     }
 
     pub(crate) fn set_to_string_tag(&self, tag: &str) {
-        *self.to_string_tag.borrow_mut() = Some(tag.to_owned());
+        *self.0.to_string_tag.borrow_mut() = Some(tag.to_owned());
     }
 }
 
@@ -790,4 +816,24 @@ fn array_index_property_key(key: &str) -> Option<u32> {
 
 fn is_array_index_key(key: &str) -> bool {
     array_index_property_key(key).is_some()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, mem, rc::Rc};
+
+    use super::{ObjectData, ObjectRef};
+
+    #[test]
+    fn cloned_object_is_a_pointer_sized_shared_handle() {
+        let object = ObjectRef::new(HashMap::new());
+        let cloned = object.clone();
+
+        assert!(Rc::ptr_eq(&object.0, &cloned.0));
+        assert!(object.ptr_eq(&cloned));
+        assert_eq!(
+            mem::size_of::<ObjectRef>(),
+            mem::size_of::<Rc<ObjectData>>()
+        );
+    }
 }
