@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "series": {
+    "id": "core-resource-black-box-v1",
+    "suite_id": "quickjs-rust-t017-resources@quickjs-ng-f7830186-v1"
+  },
+  "protocol": {
+    "id": "quickjs-resource-measurement-protocol-v1",
+    "files": [
+      "benchmarks/workloads/resource-probe.js",
+      "scripts/resource-benchmark.sh",
+      "tools/__init__.py",
+      "tools/benchmark/__init__.py",
+      "tools/benchmark/adapters.py",
+      "tools/benchmark/planning.py",
+      "tools/benchmark/process.py",
+      "tools/benchmark/receipts.py",
+      "tools/benchmark/records.py",
+      "tools/benchmark/resource_cli.py",
+      "tools/benchmark/resource_process.py",
+      "tools/benchmark/resource_runner.py",
+      "tools/benchmark/resource_schema.py",
+      "tools/benchmark/resource_wall_process.py",
+      "tools/benchmark/schema.py",
+      "tools/benchmark/snapshots.py"
+    ],
+    "aggregate_sha256": "b1e954078e0288ac109a7fd618e1d30cd7746777ba8f28ddc1c28a31ab2fc499"
+  },
+  "reference_engine": {
+    "identity": "quickjs-ng",
+    "source_repo": "https://github.com/quickjs-ng/quickjs.git",
+    "revision": "f7830186043e4488f2998759d60a514faf07cbc9"
+  },
+  "profile": {
+    "id": "macos-arm64-release-v1",
+    "platform": "darwin",
+    "machine": "arm64",
+    "rss_raw_unit": "bytes"
+  },
+  "build_recipes": [
+    {
+      "engine_identity": "qjs-rust",
+      "build_mode": "release",
+      "toolchain": "rustc 1.95.0 (59807616e 2026-04-14); cargo 1.95.0 (f2d3ce0bd 2026-03-21); LLVM 22.1.2",
+      "target": "aarch64-apple-darwin",
+      "features": [],
+      "flags": [],
+      "lto": "off",
+      "strip": "none",
+      "allocator": "system",
+      "host_features": "target-default"
+    },
+    {
+      "engine_identity": "quickjs-ng",
+      "build_mode": "release",
+      "toolchain": "Homebrew clang version 21.1.8",
+      "target": "arm64-apple-darwin25.5.0",
+      "features": [],
+      "flags": ["-DCMAKE_BUILD_TYPE=Release", "-DBUILD_QJS_LIBC=ON"],
+      "lto": "off",
+      "strip": "none",
+      "allocator": "system",
+      "host_features": "target-default"
+    }
+  ],
+  "lanes": [
+    {
+      "id": "binary_size/bytes",
+      "kind": "static",
+      "unit": "bytes",
+      "metric": "binary_size",
+      "initial_blocks": 1,
+      "max_blocks": 1,
+      "seed": 20250713,
+      "case": null
+    },
+    {
+      "id": "fresh_process_latency/wall_ns_per_process",
+      "kind": "dynamic",
+      "unit": "nanoseconds",
+      "metric": "outer_wall_time",
+      "initial_blocks": 30,
+      "max_blocks": 60,
+      "seed": 20250713,
+      "case": {
+        "id": "fresh_process_probe",
+        "family": "process",
+        "workload": "benchmarks/workloads/resource-probe.js",
+        "workload_sha256": "2000c942ff334d8c44143ca3500583e8d86c92d663901b735c4f75c6d13ff833",
+        "iterations": 1,
+        "operations": 1,
+        "checksum_factor": 7,
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "id": "peak_rss/bytes",
+      "kind": "dynamic",
+      "unit": "bytes",
+      "metric": "peak_rss",
+      "initial_blocks": 30,
+      "max_blocks": 60,
+      "seed": 20250713,
+      "case": {
+        "id": "peak_rss_probe",
+        "family": "memory",
+        "workload": "benchmarks/workloads/resource-probe.js",
+        "workload_sha256": "2000c942ff334d8c44143ca3500583e8d86c92d663901b735c4f75c6d13ff833",
+        "iterations": 32768,
+        "operations": 32768,
+        "checksum_factor": 3,
+        "timeout_seconds": 10
+      }
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "id": "quickjs-benchmark-analysis-v2",
+  "compatible_measurement": {
+    "schema_version": 4,
+    "protocol_id": "quickjs-measurement-protocol-v4"
+  },
+  "protocol": {
+    "id": "quickjs-analysis-protocol-v2",
+    "files": [
+      "scripts/benchmark-report.sh",
+      "tools/__init__.py",
+      "tools/benchmark/__init__.py",
+      "tools/benchmark/analysis.py",
+      "tools/benchmark/analysis_schema.py",
+      "tools/benchmark/artifact.py",
+      "tools/benchmark/health.py",
+      "tools/benchmark/planning.py",
+      "tools/benchmark/raw_contract.py",
+      "tools/benchmark/raw_validation.py",
+      "tools/benchmark/receipts.py",
+      "tools/benchmark/records.py",
+      "tools/benchmark/report.py",
+      "tools/benchmark/schema.py",
+      "tools/benchmark/statistics.py"
+    ],
+    "aggregate_sha256": "f7f3a5cf3063436af76830812239a714ec84a561ee81dcc7e40cf8d711903144"
+  },
+  "bootstrap": {
+    "samples": 20000,
+    "seed": 20250713,
+    "confidence": 0.95
+  },
+  "linearity": {
+    "normalized_per_op_lower": 0.85,
+    "normalized_per_op_upper": 1.15
+  },
+  "health": {
+    "initial_blocks": 30,
+    "extension_blocks": 30,
+    "max_blocks": 60,
+    "max_relative_half_width": 0.03,
+    "max_invalid_block_fraction": 0.10,
+    "block_invalidation": "portfolio-whole-block",
+    "outlier_policy": "retain",
+    "retry_policy": "never"
+  }
+}

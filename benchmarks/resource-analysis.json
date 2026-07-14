@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "id": "quickjs-resource-analysis-v1",
+  "compatible_measurement": {
+    "schema_version": 1,
+    "protocol_id": "quickjs-resource-measurement-protocol-v1"
+  },
+  "protocol": {
+    "id": "quickjs-resource-analysis-protocol-v1",
+    "files": [
+      "scripts/resource-benchmark-report.sh",
+      "tools/__init__.py",
+      "tools/benchmark/__init__.py",
+      "tools/benchmark/planning.py",
+      "tools/benchmark/receipts.py",
+      "tools/benchmark/records.py",
+      "tools/benchmark/resource_analysis.py",
+      "tools/benchmark/resource_analysis_schema.py",
+      "tools/benchmark/resource_artifact.py",
+      "tools/benchmark/resource_process.py",
+      "tools/benchmark/resource_report.py",
+      "tools/benchmark/resource_schema.py",
+      "tools/benchmark/resource_validation.py",
+      "tools/benchmark/schema.py",
+      "tools/benchmark/statistics.py"
+    ],
+    "aggregate_sha256": "cdd05009988efe62ce59a8357aaca1d2d932887861875fc17e13ebc4f0252aa4"
+  },
+  "bootstrap": {
+    "samples": 20000,
+    "seed": 20250713,
+    "confidence": 0.95
+  },
+  "health": {
+    "initial_blocks": 30,
+    "extension_blocks": 30,
+    "max_blocks": 60,
+    "max_relative_half_width": 0.03,
+    "max_invalid_block_fraction": 0.10,
+    "block_invalidation": "lane-whole-block",
+    "outlier_policy": "retain",
+    "retry_policy": "never"
+  }
+}

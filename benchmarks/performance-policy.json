@@ -1,0 +1,159 @@
+{
+  "schema_version": 2,
+  "policy_id": "quickjs-performance-policy-v2",
+  "claim_eligible": false,
+  "protocols": {
+    "throughput_measurement": {
+      "manifest_path": "benchmarks/manifest.json",
+      "protocol_id": "quickjs-measurement-protocol-v4",
+      "protocol_sha256": "985d39b1e091206eff03849937add6f30cc64f5743fe6f865a8124422eb1bac9"
+    },
+    "throughput_analysis": {
+      "manifest_path": "benchmarks/analysis.json",
+      "protocol_id": "quickjs-analysis-protocol-v2",
+      "protocol_sha256": "f7f3a5cf3063436af76830812239a714ec84a561ee81dcc7e40cf8d711903144"
+    },
+    "resource_measurement": {
+      "manifest_path": "benchmarks/resources.json",
+      "protocol_id": "quickjs-resource-measurement-protocol-v1",
+      "protocol_sha256": "b1e954078e0288ac109a7fd618e1d30cd7746777ba8f28ddc1c28a31ab2fc499"
+    },
+    "resource_analysis": {
+      "manifest_path": "benchmarks/resource-analysis.json",
+      "protocol_id": "quickjs-resource-analysis-protocol-v1",
+      "protocol_sha256": "cdd05009988efe62ce59a8357aaca1d2d932887861875fc17e13ebc4f0252aa4"
+    }
+  },
+  "external_corpora": {
+    "registry_path": "benchmarks/external-corpora.json",
+    "registry_id": "quickjs-external-corpora-v1",
+    "required_admitted_count": 0,
+    "required_claim_eligible": false
+  },
+  "reference_engine": {
+    "identity": "quickjs-ng",
+    "source_repo": "https://github.com/quickjs-ng/quickjs.git",
+    "revision": "f7830186043e4488f2998759d60a514faf07cbc9"
+  },
+  "hosted_implementation": {
+    "files": [
+      ".github/actions/setup-rust/action.yml",
+      ".github/workflows/performance-smoke.yml",
+      "benchmarks/external-corpora.json",
+      "scripts/external-corpus-audit.sh",
+      "scripts/performance-policy-audit.sh",
+      "scripts/performance-preview.sh",
+      "tools/benchmark/external_corpora.py",
+      "tools/benchmark/hosted_preview.py",
+      "tools/benchmark/performance_policy.py",
+      "tools/benchmark/preview.py"
+    ],
+    "aggregate_sha256": "f4b451bce2c081c78c3ca9fd4a1ac63dbe1813ef71690e0fe46d7ea43164e7a7"
+  },
+  "hosted_pr": {
+    "tier": "informational_preview",
+    "evidence_class": "informational",
+    "claim_eligible": false,
+    "provider": "github-hosted",
+    "provider_url": "https://docs.github.com/actions/using-github-hosted-runners/about-github-hosted-runners",
+    "runner": "ubuntu-latest",
+    "workflow_path": ".github/workflows/performance-smoke.yml",
+    "workflow_sha256": "b2e9ad6c5bedc4c32cee73a3c5ddf135b77ef2c0532a99480aa3ab19e436c10b",
+    "gate": false,
+    "slowdown_threshold": null,
+    "upload_timing_evidence": true,
+    "orchestrator_path": "scripts/performance-preview.sh",
+    "portfolio": "complete-seven-case",
+    "blocks": 3,
+    "roles": ["candidate", "base", "quickjs-ng"],
+    "artifact_retention_days": 14,
+    "harness": {
+      "default_mode": "base_owned_harness",
+      "long_term_event": "pull_request_target",
+      "integrity_scope": "cooperative_same_repository_pull_request",
+      "candidate_role": "benchmark_subject_with_shared_runner_permissions",
+      "malicious_candidate_resistant": false,
+      "forks_supported": false,
+      "bootstrap_mode": "bootstrap_same_repo_candidate_harness",
+      "base_ref": "main",
+      "bootstrap_event": "pull_request",
+      "bootstrap_base_sha": "d8ac450f92b4a773250310d5f91835cd47d39a98",
+      "bootstrap_pr_number": 126,
+      "bootstrap_head_ref": "agent/performance-benchmark-system/root",
+      "bootstrap_condition": "same_repository_main_and_exact_transition_identity",
+      "transition_cleanup": "remove_pull_request_bootstrap_immediately_after_pr_126_merge",
+      "fixed_hardware_claim_scope": "trusted_merged_commits_only"
+    }
+  },
+  "fixed_hardware": {
+    "configured": false,
+    "hardware_fingerprint": null
+  },
+  "gates": {
+    "nightly": {
+      "enabled": false,
+      "activation_prerequisites": {
+        "minimum_independent_aa_shadow_reports": 20,
+        "aa_shadow_requirements": [
+          "content_hashed",
+          "randomized_order",
+          "same_binary"
+        ],
+        "required_artifacts": [
+          "noise_envelope",
+          "qualified_fixed_hardware_fingerprint"
+        ],
+        "required_protocol_sha256": {
+          "throughput_measurement": "985d39b1e091206eff03849937add6f30cc64f5743fe6f865a8124422eb1bac9",
+          "throughput_analysis": "f7f3a5cf3063436af76830812239a714ec84a561ee81dcc7e40cf8d711903144",
+          "resource_measurement": "b1e954078e0288ac109a7fd618e1d30cd7746777ba8f28ddc1c28a31ab2fc499",
+          "resource_analysis": "cdd05009988efe62ce59a8357aaca1d2d932887861875fc17e13ebc4f0252aa4"
+        }
+      }
+    },
+    "release": {
+      "enabled": false,
+      "activation_prerequisites": {
+        "minimum_independent_aa_shadow_reports": 20,
+        "aa_shadow_requirements": [
+          "content_hashed",
+          "randomized_order",
+          "same_binary"
+        ],
+        "required_artifacts": [
+          "noise_envelope",
+          "qualified_fixed_hardware_fingerprint"
+        ],
+        "required_protocol_sha256": {
+          "throughput_measurement": "985d39b1e091206eff03849937add6f30cc64f5743fe6f865a8124422eb1bac9",
+          "throughput_analysis": "f7f3a5cf3063436af76830812239a714ec84a561ee81dcc7e40cf8d711903144",
+          "resource_measurement": "b1e954078e0288ac109a7fd618e1d30cd7746777ba8f28ddc1c28a31ab2fc499",
+          "resource_analysis": "cdd05009988efe62ce59a8357aaca1d2d932887861875fc17e13ebc4f0252aa4"
+        }
+      }
+    },
+    "pr_sentinel": {
+      "enabled": false,
+      "activation_prerequisites": {
+        "minimum_independent_aa_shadow_reports": 30,
+        "aa_shadow_requirements": [
+          "content_hashed",
+          "randomized_order",
+          "same_binary"
+        ],
+        "required_artifacts": [
+          "false_positive_budget",
+          "noise_envelope",
+          "qualified_fixed_hardware_fingerprint"
+        ],
+        "required_protocol_sha256": {
+          "throughput_measurement": "985d39b1e091206eff03849937add6f30cc64f5743fe6f865a8124422eb1bac9",
+          "throughput_analysis": "f7f3a5cf3063436af76830812239a714ec84a561ee81dcc7e40cf8d711903144",
+          "resource_measurement": "b1e954078e0288ac109a7fd618e1d30cd7746777ba8f28ddc1c28a31ab2fc499",
+          "resource_analysis": "cdd05009988efe62ce59a8357aaca1d2d932887861875fc17e13ebc4f0252aa4"
+        }
+      }
+    }
+  },
+  "evidence_entries": []
+}

@@ -8,14 +8,15 @@ each script is for.
 ## Daily Checks
 
 - `check.sh`: Standard project gate: formatting, clippy, workspace tests, and
-  file-size limits.
+  benchmark-tool tests, file-size limits, and the Test262 subset.
 - `check-ci.sh`: Local parity wrapper for the GitHub Actions `check` job. It
   runs `check.sh` with serialized, split runtime tests and skips Test262
   because the workflow owns that in a dedicated job.
 - `check-touched.sh`: Change-aware fast gate for AI iteration and pre-commit.
   Use `--staged --explain` before committing, or `--base <ref> --explain` to
   validate a branch slice. It runs relevant crate tests and focused Test262
-  allowlist filters when touched paths imply a semantic area.
+  allowlist filters when touched paths imply a semantic area, plus benchmark
+  unit tests when the manifest, protocol tools, or benchmark entrypoint change.
 - `compare-qjs.sh`: Runs `tests/fixtures/compare-qjs/` fixtures against both
   quickjs-rust and the pinned QuickJS-NG reference.
 - `find-qjsng-gaps.sh`: First agent entrypoint for conformance work. Wraps
@@ -52,8 +53,55 @@ each script is for.
 
 - `bootstrap.sh`: Initializes submodules and prefetches crates for a fresh
   checkout.
-- `microbench.sh`: Runs the QuickJS microbenchmark subset, optionally against
-  QuickJS-NG.
+- `benchmark.sh`: Runs the versioned, externally timed benchmark manifest
+  against explicit candidate/base/QuickJS-NG binaries and writes traceable raw
+  JSONL. It never builds or downloads; see `docs/benchmarking.md`.
+- `benchmark-report.sh`: Strictly validates one physically complete three-role
+  raw plan, including durable failure states, and atomically writes a
+  deterministic M3 statistics/whole-block-health report. It never emits a
+  performance gate claim. Measurement and analysis manifests are independently
+  versioned; use `--analysis-manifest` to select analysis policy.
+- `resource-benchmark.sh`: Selects exactly one independently versioned M3
+  resource lane (`fresh`, `rss`, or `size`) and writes fail-closed raw JSONL.
+  It snapshots inputs but never builds, downloads, or touches QuickJS-NG.
+- `resource-benchmark-report.sh`: Revalidates a complete resource physical
+  plan and atomically writes a path-independent report under the independent
+  resource analysis contract. Reports remain non-claim evidence through M6.
+- `external-corpus-audit.sh`: Strictly validates the deny-only external-corpus
+  v1 registry from any working directory. `--require-admitted <id>` consults
+  only the checked-in registry and always fails; custom `--registry` input is
+  structural only and cannot be combined with it. The script never downloads,
+  initializes submodules, runs a corpus, or creates performance evidence.
+- `performance-policy-audit.sh`: Validates the checked-in deny-only CI policy,
+  current protocol hashes, direct QuickJS-NG pin, aggregate hosted workflow /
+  setup / orchestrator / renderer / admission / audit-chain hash, and zero-admitted
+  external-registry state. Custom
+  `--policy` input is structural only; checked-in-only `--require-gate` always
+  fails for `nightly`, `release`, and `pr_sentinel` in v2. It neither calibrates
+  hardware nor runs or enables a performance gate.
+- `performance-preview.sh`: From a policy-selected harness, builds the candidate
+  head, explicit PR base SHA, and manifest-pinned QuickJS-NG on one shared host.
+  The long-term same-repository path is base-owned `pull_request_target`; the
+  only candidate-harness bootstrap is PR #126 from
+  `agent/performance-benchmark-system/root` into `main` at exact base
+  `d8ac450f92b4a773250310d5f91835cd47d39a98`. Forks are unsupported. The script
+  clears GitHub command/token channels, verifies clean sources before and after
+  builds and measurement, reruns audits after measurement, emits truthful dynamic
+  receipts/manifest, runs all seven throughput cases for three blocks, and
+  renders Markdown/JSON summaries. Ratios require strict 3/3 valid-block,
+  non-claim, linearity-pass health. Pending/failure status includes the active
+  phase and remains publishable without a ratio conclusion. It is informational
+  and non-gating, and is not a malicious candidate sandbox.
+- `lifecycle-bench.sh`: Runs the dev-only Criterion parser/compiler lifecycle
+  diagnostics through public Rust APIs. Pass `--quick` for a smoke run; without
+  it the frozen Criterion sampling configuration applies. Quick mode uses an
+  isolated discarded baseline. A fail-closed option allowlist accepts filters
+  and documented display/run flags; every other option or short cluster is
+  rejected. These results do not enter the QuickJS-NG comparison protocol or a
+  CI threshold.
+- `microbench.sh`: Runs the legacy QuickJS microbenchmark subset, optionally
+  against QuickJS-NG. Its internal millisecond timer is a quick probe, not a
+  gate or claim source.
 - `source-size-report.sh`: Reports large first-party files; `--vendor` scans
   pinned upstream files instead.
 
@@ -68,6 +116,7 @@ each script is for.
 
 - `lib.sh`: Shared helpers (cargo resolution, QuickJS-NG build, qjs-cli
   build, timeout wrapper check) sourced by the other scripts.
-- `check-file-size.sh`: Enforces file-size limits; called by `check.sh`.
+- `check-file-size.sh`: Enforces reviewability limits for first-party Rust,
+  Python (800 source / 1200 test lines), and shell files; called by `check.sh`.
 - `run-with-timeout.sh`: Runs a command with a timeout; shared by comparison,
   benchmark, and Test262 scripts.

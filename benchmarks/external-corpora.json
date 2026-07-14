@@ -1,0 +1,337 @@
+{
+  "schema_version": 1,
+  "registry_id": "quickjs-external-corpora-v1",
+  "claim_eligible": false,
+  "corpora": [
+    {
+      "id": "jetstream3",
+      "name": "JetStream 3",
+      "source": {
+        "url": "https://github.com/WebKit/JetStream",
+        "revision": "b7babdf323e64e69bd2f6c376189c15825f5c73a"
+      },
+      "decision": "blocked",
+      "intended_use": "Exploratory shell-only per-case evidence from an explicitly named JavaScript subset, never an official JetStream score.",
+      "license_audit": {
+        "status": "pending",
+        "per_file_inventory": {
+          "status": "pending",
+          "entries": []
+        },
+        "notice": {
+          "status": "pending",
+          "sha256": null,
+          "evidence_urls": []
+        }
+      },
+      "capability_audit": {
+        "status": "pending",
+        "requirements": [
+          "Classify every selected case as JavaScript, WebAssembly, browser, or unsupported.",
+          "Prove that cli.js selection does not silently skip required harness capabilities."
+        ],
+        "adapter": null
+      },
+      "timing_audit": {
+        "status": "pending",
+        "neutral_referee": null,
+        "phase_boundary": null
+      },
+      "expected_cases": {
+        "status": "pending",
+        "cases": []
+      },
+      "blockers": [
+        "The suite mixes JavaScript, WebAssembly, and multiple workload classes.",
+        "No neutral shell subset, phase boundary, or complete expected-case inventory has been audited."
+      ],
+      "reason": "A future subset may be useful, but it must not be represented as an official JetStream 3 score.",
+      "evidence_urls": [
+        "https://github.com/WebKit/JetStream/commit/b7babdf323e64e69bd2f6c376189c15825f5c73a",
+        "https://browserbench.org/JetStream/"
+      ]
+    },
+    {
+      "id": "kraken-1.1",
+      "name": "Kraken 1.1",
+      "source": {
+        "url": "https://github.com/mozilla/krakenbenchmark.mozilla.org",
+        "revision": "0112a237e0f3f87a465fd2d04ac9674c27595d76"
+      },
+      "decision": "blocked",
+      "intended_use": "Historical per-case shell evidence using a repository-owned neutral referee.",
+      "license_audit": {
+        "status": "pending",
+        "per_file_inventory": {
+          "status": "pending",
+          "entries": []
+        },
+        "notice": {
+          "status": "pending",
+          "sha256": null,
+          "evidence_urls": []
+        }
+      },
+      "capability_audit": {
+        "status": "pending",
+        "requirements": [
+          "Inventory shell globals and browser shims used by every selected case.",
+          "Exclude cases whose semantics cannot be supplied identically to every engine."
+        ],
+        "adapter": null
+      },
+      "timing_audit": {
+        "status": "pending",
+        "neutral_referee": null,
+        "phase_boundary": null
+      },
+      "expected_cases": {
+        "status": "pending",
+        "cases": []
+      },
+      "blockers": [
+        "Per-file licensing and NOTICE obligations are not inventoried.",
+        "The neutral timing and phase-boundary port is not audited."
+      ],
+      "reason": "The historical workload is eligible for review only as named per-case evidence, not as a pooled modern-engine headline.",
+      "evidence_urls": [
+        "https://github.com/mozilla/krakenbenchmark.mozilla.org/commit/0112a237e0f3f87a465fd2d04ac9674c27595d76",
+        "https://wiki.mozilla.org/Performance/Kraken"
+      ]
+    },
+    {
+      "id": "octane",
+      "name": "Octane",
+      "source": {
+        "url": "https://github.com/chromium/octane",
+        "revision": null
+      },
+      "decision": "excluded",
+      "intended_use": "Historical context only; it is not an admission candidate or runner input.",
+      "license_audit": {
+        "status": "pending",
+        "per_file_inventory": {
+          "status": "pending",
+          "entries": []
+        },
+        "notice": {
+          "status": "pending",
+          "sha256": null,
+          "evidence_urls": []
+        }
+      },
+      "capability_audit": {
+        "status": "pending",
+        "requirements": [
+          "No capability audit is scheduled while the retired suite remains excluded."
+        ],
+        "adapter": null
+      },
+      "timing_audit": {
+        "status": "pending",
+        "neutral_referee": null,
+        "phase_boundary": null
+      },
+      "expected_cases": {
+        "status": "pending",
+        "cases": []
+      },
+      "blockers": [
+        "The suite was retired by its publisher because optimizing for it no longer represented real-world JavaScript performance."
+      ],
+      "reason": "Publisher retirement makes Octane unsuitable for long-term benchmark governance.",
+      "evidence_urls": [
+        "https://v8.dev/blog/retiring-octane"
+      ]
+    },
+    {
+      "id": "quickjs-ng-bench-v8",
+      "name": "QuickJS-NG V8 Benchmark Suite v7 Port",
+      "source": {
+        "url": "https://github.com/quickjs-ng/benchmarks",
+        "revision": "147c9c51efd6ba36ef5e80214946d21f81856bf8"
+      },
+      "decision": "blocked",
+      "intended_use": "Named per-case throughput evidence from bench-v8 under an independent repository-owned referee.",
+      "license_audit": {
+        "status": "pending",
+        "per_file_inventory": {
+          "status": "pending",
+          "entries": []
+        },
+        "notice": {
+          "status": "pending",
+          "sha256": null,
+          "evidence_urls": []
+        }
+      },
+      "capability_audit": {
+        "status": "pending",
+        "requirements": [
+          "Inventory load, print, timing, and other QuickJS shell dependencies per case.",
+          "Prove that one neutral adapter supplies identical harness semantics to all engines."
+        ],
+        "adapter": null
+      },
+      "timing_audit": {
+        "status": "pending",
+        "neutral_referee": null,
+        "phase_boundary": null
+      },
+      "expected_cases": {
+        "status": "pending",
+        "cases": []
+      },
+      "blockers": [
+        "Per-workload licensing and NOTICE obligations are not inventoried.",
+        "The upstream runner, including its Node benchmark.js path, is opponent-owned and cannot serve as the neutral referee."
+      ],
+      "reason": "The corpus may be useful after it is separated from the QuickJS-NG runner and independently audited.",
+      "evidence_urls": [
+        "https://github.com/quickjs-ng/benchmarks/commit/147c9c51efd6ba36ef5e80214946d21f81856bf8"
+      ]
+    },
+    {
+      "id": "quickjs-ng-web-tooling",
+      "name": "QuickJS-NG Web Tooling Benchmark",
+      "source": {
+        "url": "https://github.com/quickjs-ng/web-tooling-benchmark",
+        "revision": "a0b6a350b8840a16ea4d6cff58b0345eed934652"
+      },
+      "decision": "blocked",
+      "intended_use": "Whole-program web-tooling shell evidence after neutral capability and phase-boundary audits.",
+      "license_audit": {
+        "status": "pending",
+        "per_file_inventory": {
+          "status": "pending",
+          "entries": []
+        },
+        "notice": {
+          "status": "pending",
+          "sha256": null,
+          "evidence_urls": []
+        }
+      },
+      "capability_audit": {
+        "status": "pending",
+        "requirements": [
+          "Provide equivalent stack policy without relying on qjs --stack-size.",
+          "Provide equivalent script-mode semantics without relying on qjs --script."
+        ],
+        "adapter": null
+      },
+      "timing_audit": {
+        "status": "pending",
+        "neutral_referee": null,
+        "phase_boundary": null
+      },
+      "expected_cases": {
+        "status": "pending",
+        "cases": []
+      },
+      "blockers": [
+        "The documented invocation requires qjs --stack-size 2048 --script dist/cli.js, which qjs-rust does not expose.",
+        "Per-file licensing, expected cases, and neutral timing boundaries are not audited."
+      ],
+      "reason": "Running the upstream invocation today would compare shell capabilities and configuration, not only engine performance.",
+      "evidence_urls": [
+        "https://github.com/quickjs-ng/web-tooling-benchmark/commit/a0b6a350b8840a16ea4d6cff58b0345eed934652",
+        "https://github.com/quickjs-ng/web-tooling-benchmark"
+      ]
+    },
+    {
+      "id": "speedometer",
+      "name": "Speedometer",
+      "source": {
+        "url": "https://github.com/WebKit/Speedometer",
+        "revision": "d580beea58cb88eec37404324c4fe58832255730"
+      },
+      "decision": "excluded",
+      "intended_use": "Browser end-to-end context only; it is not an admission candidate or shell runner input.",
+      "license_audit": {
+        "status": "pending",
+        "per_file_inventory": {
+          "status": "pending",
+          "entries": []
+        },
+        "notice": {
+          "status": "pending",
+          "sha256": null,
+          "evidence_urls": []
+        }
+      },
+      "capability_audit": {
+        "status": "pending",
+        "requirements": [
+          "A browser DOM, rendering pipeline, event loop, and web application harness are outside the qjs shell comparison boundary."
+        ],
+        "adapter": null
+      },
+      "timing_audit": {
+        "status": "pending",
+        "neutral_referee": null,
+        "phase_boundary": null
+      },
+      "expected_cases": {
+        "status": "pending",
+        "cases": []
+      },
+      "blockers": [
+        "Speedometer measures browser end-to-end web application responsiveness, including DOM and asynchronous phases."
+      ],
+      "reason": "Its system boundary does not match a pure JavaScript shell engine comparison.",
+      "evidence_urls": [
+        "https://github.com/WebKit/Speedometer/commit/d580beea58cb88eec37404324c4fe58832255730",
+        "https://browserbench.org/Speedometer/"
+      ]
+    },
+    {
+      "id": "sunspider-1.0",
+      "name": "SunSpider 1.0",
+      "source": {
+        "url": "https://github.com/WebKit/WebKit",
+        "revision": "c3b0e52db623f0dea86b977f08a9ba766770cf8d"
+      },
+      "decision": "blocked",
+      "intended_use": "Preferred first external v2 audit candidate for historical per-case shell evidence under a neutral referee.",
+      "license_audit": {
+        "status": "pending",
+        "per_file_inventory": {
+          "status": "pending",
+          "entries": []
+        },
+        "notice": {
+          "status": "pending",
+          "sha256": null,
+          "evidence_urls": []
+        }
+      },
+      "capability_audit": {
+        "status": "pending",
+        "requirements": [
+          "Inventory shell globals and case setup required by PerformanceTests/SunSpider.",
+          "Run every selected case through one repository-owned adapter."
+        ],
+        "adapter": null
+      },
+      "timing_audit": {
+        "status": "pending",
+        "neutral_referee": null,
+        "phase_boundary": null
+      },
+      "expected_cases": {
+        "status": "pending",
+        "cases": []
+      },
+      "blockers": [
+        "Per-file license inventory and NOTICE disposition are not complete.",
+        "Expected cases and the neutral phase boundary are not frozen."
+      ],
+      "reason": "SunSpider has the clearest small shell-oriented boundary and is the preferred next v2 review after license and NOTICE closure.",
+      "evidence_urls": [
+        "https://github.com/WebKit/WebKit/commit/c3b0e52db623f0dea86b977f08a9ba766770cf8d",
+        "https://www.webkit.org/perf/sunspider/sunspider.html"
+      ]
+    }
+  ]
+}

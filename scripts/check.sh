@@ -87,6 +87,18 @@ if [ "${QJS_CHECK_SPLIT_RUNTIME_TESTS:-0}" = "1" ]; then
 else
   qjs_check_stage "workspace tests" "$CARGO_BIN" test --workspace
 fi
+qjs_check_stage "benchmark tool tests" \
+  env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR" \
+  python3 -m unittest discover -s "$ROOT_DIR/tools/benchmark/tests" -v
+qjs_check_stage "benchmark shell syntax" \
+  bash -n \
+    "$ROOT_DIR/scripts/benchmark.sh" "$ROOT_DIR/scripts/benchmark-report.sh" \
+    "$ROOT_DIR/scripts/resource-benchmark.sh" \
+    "$ROOT_DIR/scripts/resource-benchmark-report.sh" \
+    "$ROOT_DIR/scripts/lifecycle-bench.sh" \
+    "$ROOT_DIR/scripts/external-corpus-audit.sh" \
+    "$ROOT_DIR/scripts/performance-policy-audit.sh" \
+    "$ROOT_DIR/scripts/performance-preview.sh"
 qjs_check_stage "file-size guard" "$ROOT_DIR/scripts/check-file-size.sh"
 # Run the allowlisted Test262 subset so local checks gate the same suite CI
 # runs; skip with QJS_CHECK_SKIP_TEST262=1 for doc-only or scripted loops.
