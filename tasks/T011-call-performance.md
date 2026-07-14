@@ -70,6 +70,15 @@ The exploratory candidate was built with the frozen hosted-preview Rust recipe
 but had no clean-source receipt; use the post-commit Performance Preview artifact
 for provenance-backed reporting.
 
+At commit `9c48b0e4b5165d83700e1afab41b38fe6effd5cc`, the next local optimization
+kept uncaptured `FrameBindings` values inline and promoted them to shared
+`Upvalue` cells only when binding identity was requested. Two same-recipe
+candidate/base runs reproduced a 0.969x geometric-mean ratio (3.1% lower wall
+ns/op). The five-block confirmation used seed `20250714`; all seven critical
+cases improved or stayed effectively flat, with `method_call` at 0.937x and
+`property_read` at 0.900x. This was also exploratory dirty-source evidence;
+the post-commit Performance Preview remains the provenance-backed result.
+
 At commit `18be69650953106355d425fd64412a13c384c648`:
 
 - Latest CI and Test262 Coverage are green.

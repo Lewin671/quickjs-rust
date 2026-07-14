@@ -71,8 +71,34 @@ pub(crate) type GlobalLexicalValues = Rc<RefCell<HashMap<String, Value>>>;
 pub(crate) type ImmutableLexicalBindings = Rc<RefCell<HashSet<String>>>;
 pub(crate) type ModuleImports = HashMap<String, (DynamicBindings, String)>;
 
+#[derive(Clone)]
+enum FrameBindingValue {
+    Direct(Value),
+    Cell(Upvalue),
+}
+
+impl FrameBindingValue {
+    fn get(&self) -> Value {
+        match self {
+            Self::Direct(value) => value.clone(),
+            Self::Cell(value) => value.get(),
+        }
+    }
+
+    fn set(&mut self, value: Value) -> Value {
+        match self {
+            Self::Direct(existing) => std::mem::replace(existing, value),
+            Self::Cell(existing) => {
+                let previous = existing.get();
+                existing.set(value);
+                previous
+            }
+        }
+    }
+}
+
 #[derive(Default)]
-struct FrameBindings(RefCell<Vec<(String, Upvalue)>>);
+struct FrameBindings(RefCell<Vec<(String, FrameBindingValue)>>);
 
 impl Clone for FrameBindings {
     fn clone(&self) -> Self {
@@ -85,7 +111,7 @@ impl FrameBindings {
         Self(RefCell::new(
             values
                 .into_iter()
-                .map(|(name, value)| (name, Upvalue::new(value)))
+                .map(|(name, value)| (name, FrameBindingValue::Direct(value)))
                 .collect(),
         ))
     }
@@ -100,12 +126,21 @@ impl FrameBindings {
     }
 
     fn cell(&self, name: &str) -> Option<Upvalue> {
-        self.0
-            .borrow()
+        let mut bindings = self.0.borrow_mut();
+        let index = bindings
             .iter()
-            .rev()
-            .find(|(candidate, _)| candidate == name)
-            .map(|(_, value)| value.clone())
+            .rposition(|(candidate, _)| candidate == name)?;
+        match &mut bindings[index].1 {
+            FrameBindingValue::Direct(value) => {
+                let cell = Upvalue::new(value.clone());
+                // Replace only after cloning the direct value so promotion
+                // preserves the exact binding value and future identity.
+                let promoted = cell.clone();
+                bindings[index].1 = FrameBindingValue::Cell(cell);
+                Some(promoted)
+            }
+            FrameBindingValue::Cell(value) => Some(value.clone()),
+        }
     }
 
     fn contains_key(&self, name: &str) -> bool {
@@ -122,11 +157,9 @@ impl FrameBindings {
             .rev()
             .find(|(candidate, _)| candidate == &name)
         {
-            let previous = existing.get();
-            existing.set(value);
-            return Some(previous);
+            return Some(existing.set(value));
         }
-        bindings.push((name, Upvalue::new(value)));
+        bindings.push((name, FrameBindingValue::Direct(value)));
         None
     }
 
@@ -137,14 +170,16 @@ impl FrameBindings {
             .rev()
             .find(|(candidate, _)| candidate == &name)
         {
-            *existing = value;
+            *existing = FrameBindingValue::Cell(value);
             return;
         }
-        bindings.push((name, value));
+        bindings.push((name, FrameBindingValue::Cell(value)));
     }
 
     fn push(&self, name: String, value: Value) {
-        self.0.borrow_mut().push((name, Upvalue::new(value)));
+        self.0
+            .borrow_mut()
+            .push((name, FrameBindingValue::Direct(value)));
     }
 
     fn set(&self, name: &str, value: Value) -> bool {
@@ -169,7 +204,7 @@ impl FrameBindings {
     }
 
     fn replace_value(&self, expected: &Value, replacement: &Value) {
-        for (_, value) in self.0.borrow().iter() {
+        for (_, value) in self.0.borrow_mut().iter_mut() {
             if value.get() == *expected {
                 value.set(replacement.clone());
             }
@@ -189,7 +224,7 @@ impl FrameBindings {
             self.0
                 .borrow()
                 .iter()
-                .map(|(name, value)| (name.clone(), Upvalue::new(value.get())))
+                .map(|(name, value)| (name.clone(), FrameBindingValue::Direct(value.get())))
                 .collect(),
         ))
     }
@@ -1045,5 +1080,30 @@ impl CallEnv {
             #[cfg(feature = "agents")]
             agent_context: self.agent_context.clone(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FrameBindingValue, FrameBindings};
+    use crate::Value;
+
+    #[test]
+    fn frame_binding_promotes_to_a_cell_only_when_identity_is_requested() {
+        let bindings = FrameBindings::default();
+        bindings.insert("value".to_owned(), Value::Number(1.0));
+        assert!(matches!(
+            &bindings.0.borrow()[0].1,
+            FrameBindingValue::Direct(Value::Number(1.0))
+        ));
+
+        let cell = bindings.cell("value").expect("binding should promote");
+        assert!(matches!(
+            &bindings.0.borrow()[0].1,
+            FrameBindingValue::Cell(_)
+        ));
+        cell.set(Value::Number(2.0));
+        assert!(matches!(bindings.get("value"), Some(Value::Number(2.0))));
+        assert!(cell.ptr_eq(&bindings.cell("value").expect("cell is stable")));
     }
 }
