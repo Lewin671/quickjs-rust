@@ -308,11 +308,17 @@ def verify_source(args: argparse.Namespace) -> None:
     except (OSError, subprocess.TimeoutExpired) as error:
         raise PreviewError(f"cannot inspect source repository {source}: {error}") from error
     if head.returncode != 0 or head.stdout.strip() != expected:
-        raise PreviewError(f"source repository does not match expected revision {expected}")
+        raise PreviewError(
+            f"source repository {source} does not match expected revision {expected}"
+        )
     if status.returncode != 0:
-        raise PreviewError(f"cannot inspect source cleanliness: {status.stderr.strip()}")
+        raise PreviewError(
+            f"cannot inspect source cleanliness for {source}: {status.stderr.strip()}"
+        )
     if status.stdout:
-        raise PreviewError("source repository is dirty after build")
+        raise PreviewError(
+            f"source repository {source} is dirty after build: {status.stdout.strip()}"
+        )
 
 
 def escape_markdown(value: str) -> str:

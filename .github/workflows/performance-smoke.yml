@@ -27,6 +27,7 @@ jobs:
       QJS_HARNESS_ROOT: ${{ github.workspace }}
       QJS_HARNESS_MODE: base_owned_harness
       EVIDENCE_DIR: ${{ github.workspace }}/target/performance-preview/evidence
+      PYTHONDONTWRITEBYTECODE: '1'
       PREVIEW_EVENT_NAME: ${{ github.event_name }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
@@ -154,6 +155,7 @@ jobs:
       QJS_HARNESS_ROOT: ${{ github.workspace }}/target/performance-preview/candidate-source
       QJS_HARNESS_MODE: bootstrap_same_repo_candidate_harness
       EVIDENCE_DIR: ${{ github.workspace }}/target/performance-preview/evidence
+      PYTHONDONTWRITEBYTECODE: '1'
       PREVIEW_EVENT_NAME: ${{ github.event_name }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       PR_BASE_REF: ${{ github.event.pull_request.base.ref }}

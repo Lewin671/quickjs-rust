@@ -469,6 +469,7 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
             workflow,
         )
         self.assertIn("source-root: target/performance-preview/candidate-source", workflow)
+        self.assertEqual(workflow.count("PYTHONDONTWRITEBYTECODE: '1'"), 2)
         self.assertIn("source-root:", setup_action)
         self.assertIn("working-directory: ${{ inputs.source-root }}", setup_action)
         self.assertIn("inputs.source-root", setup_action)

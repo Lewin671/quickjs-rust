@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -196,8 +197,20 @@ class PreviewPreparationTests(unittest.TestCase):
             verify_source(args)
             # Mock a build script that wrongly rewrites tracked source.
             subprocess.run(["sh", "-c", "printf dirty > tracked.txt"], cwd=source, check=True)
-            with self.assertRaisesRegex(PreviewError, "dirty after build"):
+            with self.assertRaisesRegex(
+                PreviewError, f"{re.escape(str(source))}.*dirty after build"
+            ):
                 verify_source(args)
+            result = subprocess.run(
+                [
+                    sys.executable, "-m", "tools.benchmark.preview", "verify-source",
+                    "--source", str(source), "--revision", revision,
+                ],
+                cwd=ROOT, capture_output=True, text=True, timeout=10, check=False,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertIn(str(source), result.stderr)
+            self.assertIn("tracked.txt", result.stderr)
 
     def test_repository_urls_reject_option_and_markdown_attacks(self) -> None:
         self.assertEqual(
