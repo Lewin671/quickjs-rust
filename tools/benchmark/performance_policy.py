@@ -20,11 +20,11 @@ from .analysis_schema import load_analysis_manifest
 from .external_corpora import load_registry, registry_summary
 from .hosted_preview import (
     BASE_MODE,
-    BOOTSTRAP_BASE_SHA,
-    BOOTSTRAP_HEAD_REF,
-    BOOTSTRAP_MODE,
-    BOOTSTRAP_PR_NUMBER,
     HOSTED_BASE_REF,
+    HOSTED_PUSH_REF,
+    PR_INTEGRITY_SCOPE,
+    PUSH_INTEGRITY_SCOPE,
+    PUSH_MODE,
 )
 from .resource_analysis_schema import load_resource_analysis
 from .resource_schema import load_resource_manifest
@@ -55,7 +55,7 @@ PROTOCOL_SHAPES = {
         "benchmarks/resource-analysis.json", "quickjs-resource-analysis-protocol-v1"
     ),
 }
-EXPECTED_WORKFLOW_SHA256 = "b2e9ad6c5bedc4c32cee73a3c5ddf135b77ef2c0532a99480aa3ab19e436c10b"
+EXPECTED_WORKFLOW_SHA256 = "7961a2e9b65f5e6d3efe8fc63b116281bfe1bebc39624004a68b4bf0acc0ee17"
 PREVIEW_ORCHESTRATOR = "scripts/performance-preview.sh"
 PREVIEW_ROLES = ("candidate", "base", "quickjs-ng")
 PREVIEW_IMPLEMENTATION_FILES = (
@@ -70,8 +70,6 @@ PREVIEW_IMPLEMENTATION_FILES = (
     "tools/benchmark/performance_policy.py",
     "tools/benchmark/preview.py",
 )
-INTEGRITY_SCOPE = "cooperative_same_repository_pull_request"
-TRANSITION_CLEANUP = "remove_pull_request_bootstrap_immediately_after_pr_126_merge"
 REFERENCE_ENGINE = (
     "quickjs-ng",
     "https://github.com/quickjs-ng/quickjs.git",
@@ -249,10 +247,10 @@ class PerformancePolicy:
     hosted_retention_days: int
     hosted_implementation_sha256: str
     hosted_integrity_scope: str
+    hosted_push_integrity_scope: str
     hosted_base_ref: str
-    bootstrap_base_sha: str
-    bootstrap_pr_number: int
-    bootstrap_head_ref: str
+    hosted_push_ref: str
+    hosted_push_mode: str
     reference_identity: str
     reference_repo: str
     reference_revision: str
@@ -503,47 +501,44 @@ def load_policy(path: Path) -> PerformancePolicy:
     _keys(
         harness,
         {
-            "default_mode", "long_term_event", "integrity_scope", "candidate_role",
-            "malicious_candidate_resistant", "forks_supported", "bootstrap_mode",
-            "base_ref", "bootstrap_event", "bootstrap_base_sha",
-            "bootstrap_pr_number", "bootstrap_head_ref", "bootstrap_condition",
-            "transition_cleanup", "fixed_hardware_claim_scope",
+            "pr_mode", "pr_event", "pr_integrity_scope", "candidate_role",
+            "malicious_candidate_resistant", "forks_supported", "base_ref",
+            "push_mode", "push_event", "push_ref", "push_integrity_scope",
+            "push_comparison", "push_harness_owner", "fixed_hardware_claim_scope",
         },
         "policy.hosted_pr.harness",
     )
     harness_shape = (
-        _string(harness["default_mode"], "policy.hosted_pr.harness.default_mode"),
-        _string(harness["long_term_event"], "policy.hosted_pr.harness.long_term_event"),
-        _string(harness["integrity_scope"], "policy.hosted_pr.harness.integrity_scope"),
+        _string(harness["pr_mode"], "policy.hosted_pr.harness.pr_mode"),
+        _string(harness["pr_event"], "policy.hosted_pr.harness.pr_event"),
+        _string(harness["pr_integrity_scope"], "policy.hosted_pr.harness.pr_integrity_scope"),
         _string(harness["candidate_role"], "policy.hosted_pr.harness.candidate_role"),
         _boolean(
             harness["malicious_candidate_resistant"],
             "policy.hosted_pr.harness.malicious_candidate_resistant",
         ),
         _boolean(harness["forks_supported"], "policy.hosted_pr.harness.forks_supported"),
-        _string(harness["bootstrap_mode"], "policy.hosted_pr.harness.bootstrap_mode"),
         _string(harness["base_ref"], "policy.hosted_pr.harness.base_ref"),
-        _string(harness["bootstrap_event"], "policy.hosted_pr.harness.bootstrap_event"),
-        _string(harness["bootstrap_base_sha"], "policy.hosted_pr.harness.bootstrap_base_sha"),
-        _integer(
-            harness["bootstrap_pr_number"],
-            "policy.hosted_pr.harness.bootstrap_pr_number", 1,
+        _string(harness["push_mode"], "policy.hosted_pr.harness.push_mode"),
+        _string(harness["push_event"], "policy.hosted_pr.harness.push_event"),
+        _string(harness["push_ref"], "policy.hosted_pr.harness.push_ref"),
+        _string(
+            harness["push_integrity_scope"],
+            "policy.hosted_pr.harness.push_integrity_scope",
         ),
-        _string(harness["bootstrap_head_ref"], "policy.hosted_pr.harness.bootstrap_head_ref"),
-        _string(harness["bootstrap_condition"], "policy.hosted_pr.harness.bootstrap_condition"),
-        _string(harness["transition_cleanup"], "policy.hosted_pr.harness.transition_cleanup"),
+        _string(harness["push_comparison"], "policy.hosted_pr.harness.push_comparison"),
+        _string(harness["push_harness_owner"], "policy.hosted_pr.harness.push_harness_owner"),
         _string(
             harness["fixed_hardware_claim_scope"],
             "policy.hosted_pr.harness.fixed_hardware_claim_scope",
         ),
     )
     if harness_shape != (
-        BASE_MODE, "pull_request_target", INTEGRITY_SCOPE,
+        BASE_MODE, "pull_request_target", PR_INTEGRITY_SCOPE,
         "benchmark_subject_with_shared_runner_permissions", False, False,
-        BOOTSTRAP_MODE, HOSTED_BASE_REF, "pull_request", BOOTSTRAP_BASE_SHA,
-        BOOTSTRAP_PR_NUMBER, BOOTSTRAP_HEAD_REF,
-        "same_repository_main_and_exact_transition_identity",
-        TRANSITION_CLEANUP,
+        HOSTED_BASE_REF, PUSH_MODE, "push", HOSTED_PUSH_REF,
+        PUSH_INTEGRITY_SCOPE, "event_after_candidate_vs_event_before_base",
+        "event_after_candidate",
         "trusted_merged_commits_only",
     ):
         raise PerformancePolicyError("policy.hosted_pr.harness: invalid frozen integrity boundary")
@@ -573,11 +568,11 @@ def load_policy(path: Path) -> PerformancePolicy:
         hosted_blocks=blocks,
         hosted_retention_days=retention,
         hosted_implementation_sha256=implementation_sha256,
-        hosted_integrity_scope=INTEGRITY_SCOPE,
+        hosted_integrity_scope=PR_INTEGRITY_SCOPE,
+        hosted_push_integrity_scope=PUSH_INTEGRITY_SCOPE,
         hosted_base_ref=HOSTED_BASE_REF,
-        bootstrap_base_sha=BOOTSTRAP_BASE_SHA,
-        bootstrap_pr_number=BOOTSTRAP_PR_NUMBER,
-        bootstrap_head_ref=BOOTSTRAP_HEAD_REF,
+        hosted_push_ref=HOSTED_PUSH_REF,
+        hosted_push_mode=PUSH_MODE,
         reference_identity=reference_values[0],
         reference_repo=reference_values[1],
         reference_revision=reference_values[2],

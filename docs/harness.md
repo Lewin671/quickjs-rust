@@ -202,13 +202,15 @@ QuickJS-NG pin, full control/audit-chain aggregate hash, and external registry
 state. `--require-gate nightly|release|pr_sentinel` always
 fails in v2. `--policy <path>` only validates custom structure and is mutually
 exclusive with gate requirements. The hosted
-`.github/workflows/performance-smoke.yml` runs `performance-preview.sh` for the
-explicit PR head/base SHAs and pinned QuickJS-NG. The long-term
-`pull_request_target` path uses the base-owned workflow, setup action, and
-harness for same-repository PRs targeting `main`. The sole bootstrap exception
-is PR #126 from `agent/performance-benchmark-system/root` into `main` at exact
-base `d8ac450f92b4a773250310d5f91835cd47d39a98`, also same-repository, and uses the
-nested candidate setup action/harness. Fork preview is unsupported. This is a
+`.github/workflows/performance-smoke.yml` runs `performance-preview.sh` for
+explicit candidate/base SHAs and pinned QuickJS-NG. Its `pull_request_target`
+path uses the base-owned workflow, setup action, and harness for
+same-repository PRs targeting `main`; fork preview is unsupported. Its `push`
+path runs for every `main` update, including merges and direct pushes, using
+`github.event.after` as the head-owned harness/candidate and
+`github.event.before` as the base. Push admission rejects the wrong event, ref,
+repository, malformed or zero SHAs, or an after SHA different from
+`github.sha`. Both paths use read-only permissions without secrets. This is a
 cooperative integrity scope, not a malicious candidate sandbox. It publishes ratios
 only after a strict three-block, seven-case non-claim health check. Pending or
 failed runs still publish a status summary and any available provenance, but

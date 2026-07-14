@@ -569,29 +569,32 @@ all `nightly`, `release`, and `pr_sentinel` gates disabled. Every
 `--require-gate` request therefore exits 2. A custom `--policy` is structural
 input only and cannot be combined with `--require-gate`.
 
-`.github/workflows/performance-smoke.yml` declares both `pull_request` and
-`pull_request_target`, both filtered to base branch `main`. The long-term job
-runs only on `pull_request_target` for a same-repository PR targeting `main`.
-GitHub therefore obtains the workflow from the base, the
-checked-out PR base supplies `base_owned_harness`, and the nested PR head is the
-benchmark subject. Fork previews are explicitly unsupported and skipped. This
-is an integrity boundary for cooperative same-repository PRs, not a malicious
-code sandbox: candidate compilation/execution shares the runner, and a hosted
-artifact is not designed to resist a malicious candidate.
+`.github/workflows/performance-smoke.yml` declares `pull_request_target` and
+`push`, both filtered to `main`. For a same-repository PR targeting `main`, the
+base-owned workflow, setup action, and `base_owned_harness` compare the explicit
+PR head SHA against the explicit PR base SHA. Fork previews are explicitly
+unsupported and skipped. This is an integrity boundary for cooperative
+same-repository PRs, not a malicious code sandbox: candidate compilation and
+execution share the runner, and a hosted artifact is not designed to resist a
+malicious candidate.
 
-There is one exact transition exception. `pull_request` may run
-`bootstrap_same_repo_candidate_harness` only for PR #126 from head ref
-`agent/performance-benchmark-system/root` into `main`, in the same repository,
-whose base is `d8ac450f92b4a773250310d5f91835cd47d39a98`. The head SHA may advance.
-That job uses the nested candidate's setup action and harness. Any other branch,
-PR number, head ref, or base SHA is rejected by the executable admission
-contract. Event names are part of the concurrency
-key, so the transition event cannot cancel the long-term base-owned event.
-Both modes and their harness revisions are recorded in evidence.
+Every push to `main` also runs one actual three-engine comparison. A merge
+creates that push naturally, so there is no separate merge-event run; a direct
+push follows the same path. The pushed `github.event.after` revision owns the
+workflow, setup action, and `main_push_head_owned_harness`, and is both harness
+and candidate. `github.event.before` is checked out as the base. Executable
+admission requires event `push`, ref `refs/heads/main`, matching workflow/event
+repository identities, full lowercase before/after/workflow SHAs, a non-zero
+before and after, and `github.sha == github.event.after`; unchanged or malformed
+identities fail closed. The after-owned harness is necessary because the first
+before revision predating this path cannot implement it.
 
-Immediately after PR #126 merges, remove the `pull_request` trigger, bootstrap
-job, bootstrap constants, transition tests, and transition-only documentation.
-The retained long-term workflow must then expose only `pull_request_target`.
+Both paths use read-only contents permission, no secrets, no write permission,
+no slowdown threshold, and no performance gate. Harness mode/revision plus the
+candidate, base, and pinned QuickJS-NG revisions are recorded in pending,
+failure, and successful provenance. PR numbers isolate and supersede stale PR
+runs, while each main push gets a distinct workflow-run-bound concurrency group so no
+push is canceled by a later one.
 
 `scripts/performance-preview.sh` initializes only the manifest-pinned
 QuickJS-NG revision and builds all three engines on one `ubuntu-latest` host.

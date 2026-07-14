@@ -1,7 +1,7 @@
 name: Performance Preview (Informational, Non-Gating)
 
 on:
-  pull_request:
+  push:
     branches: [main]
   pull_request_target:
     branches: [main]
@@ -9,10 +9,10 @@ on:
 permissions:
   contents: read
 
-# The transition event and long-term base-owned event must never cancel each
-# other. Candidate build/execution is limited to cooperative same-repo PRs.
+# Keep only the latest run for one PR; give each main push its own run-bound
+# group so rapid pushes still produce one run each.
 concurrency:
-  group: performance-preview-${{ github.event_name }}-${{ github.event.pull_request.number }}
+  group: performance-preview-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -141,66 +141,57 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  bootstrap-preview:
-    name: Exact one-time candidate-harness bootstrap
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
-      github.event.pull_request.base.sha == 'd8ac450f92b4a773250310d5f91835cd47d39a98' &&
-      github.event.pull_request.number == 126 &&
-      github.event.pull_request.head.ref == 'agent/performance-benchmark-system/root'
+  main-push-preview:
+    name: Head-owned preview - trusted main push
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      QJS_HARNESS_ROOT: ${{ github.workspace }}/target/performance-preview/candidate-source
-      QJS_HARNESS_MODE: bootstrap_same_repo_candidate_harness
+      QJS_HARNESS_ROOT: ${{ github.workspace }}
+      QJS_HARNESS_MODE: main_push_head_owned_harness
       EVIDENCE_DIR: ${{ github.workspace }}/target/performance-preview/evidence
       PYTHONDONTWRITEBYTECODE: '1'
       PREVIEW_EVENT_NAME: ${{ github.event_name }}
-      PR_NUMBER: ${{ github.event.pull_request.number }}
-      PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
-      PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
-      PR_BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
-      PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-      PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-      PR_BASE_CLONE_URL: ${{ github.event.pull_request.base.repo.clone_url }}
-      PR_HEAD_CLONE_URL: ${{ github.event.pull_request.head.repo.clone_url }}
+      PUSH_REPOSITORY: ${{ github.repository }}
+      PUSH_EVENT_REPOSITORY: ${{ github.event.repository.full_name }}
+      PUSH_REF: ${{ github.ref }}
+      PUSH_BEFORE_SHA: ${{ github.event.before }}
+      PUSH_AFTER_SHA: ${{ github.event.after }}
+      PUSH_WORKFLOW_SHA: ${{ github.sha }}
+      PUSH_CLONE_URL: ${{ github.event.repository.clone_url }}
     steps:
-      - name: Checkout exact transition base as comparison source
+      - name: Checkout explicit push after SHA as head-owned harness and candidate
         uses: actions/checkout@v6
         with:
-          repository: ${{ github.event.pull_request.base.repo.full_name }}
-          ref: ${{ github.event.pull_request.base.sha }}
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.after }}
           fetch-depth: 1
           persist-credentials: false
           submodules: false
 
-      - name: Checkout candidate as one-time bootstrap harness and benchmark subject
+      - name: Checkout explicit push before SHA as comparison source
         uses: actions/checkout@v6
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.sha }}
-          path: target/performance-preview/candidate-source
+          repository: ${{ github.event.repository.full_name }}
+          ref: ${{ github.event.before }}
+          path: target/performance-preview/base-source
           fetch-depth: 1
           persist-credentials: false
           submodules: false
 
-      - name: Admit exact one-time bootstrap transition
-        working-directory: target/performance-preview/candidate-source
+      - name: Admit exact trusted main push
         run: |
-          python3 -m tools.benchmark.hosted_preview admit \
+          python3 -m tools.benchmark.hosted_preview admit-push \
             --event-name "$PREVIEW_EVENT_NAME" \
-            --head-repository "$PR_HEAD_REPOSITORY" \
-            --base-repository "$PR_BASE_REPOSITORY" \
-            --base-sha "$PR_BASE_SHA" \
-            --base-ref "$PR_BASE_REF" \
-            --pr-number "$PR_NUMBER" \
-            --head-ref "$PR_HEAD_REF" \
-            --require-mode bootstrap_same_repo_candidate_harness
+            --repository "$PUSH_REPOSITORY" \
+            --event-repository "$PUSH_EVENT_REPOSITORY" \
+            --ref "$PUSH_REF" \
+            --before-sha "$PUSH_BEFORE_SHA" \
+            --after-sha "$PUSH_AFTER_SHA" \
+            --workflow-sha "$PUSH_WORKFLOW_SHA" \
+            --require-mode main_push_head_owned_harness
 
       - name: Initialize pending evidence before setup and audit
-        working-directory: target/performance-preview/candidate-source
         run: |
           mkdir -p "$EVIDENCE_DIR"
           reference_revision="$(python3 -m tools.benchmark.preview reference \
@@ -208,30 +199,29 @@ jobs:
           python3 -m tools.benchmark.preview status \
             --state pending --phase pre_setup --output-dir "$EVIDENCE_DIR" \
             --harness-mode "$QJS_HARNESS_MODE" \
-            --harness-revision "$PR_HEAD_SHA" \
-            --candidate-revision "$PR_HEAD_SHA" \
-            --base-revision "$PR_BASE_SHA" \
+            --harness-revision "$PUSH_AFTER_SHA" \
+            --candidate-revision "$PUSH_AFTER_SHA" \
+            --base-revision "$PUSH_BEFORE_SHA" \
             --reference-revision "$reference_revision" \
             --message "setup or audit has not completed; no performance conclusion is available"
 
-      - name: Setup Rust from nested candidate bootstrap harness
-        uses: ./target/performance-preview/candidate-source/.github/actions/setup-rust
+      - name: Setup Rust from trusted main push harness
+        uses: ./.github/actions/setup-rust
         with:
-          source-root: target/performance-preview/candidate-source
+          source-root: .
 
-      - name: Audit candidate bootstrap harness policy
-        working-directory: target/performance-preview/candidate-source
+      - name: Audit trusted main push harness policy
         run: |
           reference_revision="$(python3 -m tools.benchmark.preview reference \
             --manifest benchmarks/manifest.json --field revision)"
           python3 -m tools.benchmark.preview status \
             --state pending --phase audit --output-dir "$EVIDENCE_DIR" \
             --harness-mode "$QJS_HARNESS_MODE" \
-            --harness-revision "$PR_HEAD_SHA" \
-            --candidate-revision "$PR_HEAD_SHA" \
-            --base-revision "$PR_BASE_SHA" \
+            --harness-revision "$PUSH_AFTER_SHA" \
+            --candidate-revision "$PUSH_AFTER_SHA" \
+            --base-revision "$PUSH_BEFORE_SHA" \
             --reference-revision "$reference_revision" \
-            --message "selected candidate bootstrap harness audits have not completed"
+            --message "selected trusted main push harness audits have not completed"
           ./scripts/performance-policy-audit.sh
           ./scripts/external-corpus-audit.sh
 
@@ -240,12 +230,12 @@ jobs:
         run: |
           "$QJS_HARNESS_ROOT/scripts/performance-preview.sh" \
             --harness-mode "$QJS_HARNESS_MODE" \
-            --candidate-source "$GITHUB_WORKSPACE/target/performance-preview/candidate-source" \
-            --base-source "$GITHUB_WORKSPACE" \
-            --candidate-sha "$PR_HEAD_SHA" \
-            --base-sha "$PR_BASE_SHA" \
-            --candidate-repo "$PR_HEAD_CLONE_URL" \
-            --base-repo "$PR_BASE_CLONE_URL" \
+            --candidate-source "$GITHUB_WORKSPACE" \
+            --base-source "$GITHUB_WORKSPACE/target/performance-preview/base-source" \
+            --candidate-sha "$PUSH_AFTER_SHA" \
+            --base-sha "$PUSH_BEFORE_SHA" \
+            --candidate-repo "$PUSH_CLONE_URL" \
+            --base-repo "$PUSH_CLONE_URL" \
             --output "$EVIDENCE_DIR"
 
       - name: Publish complete or durable failure summary
@@ -254,9 +244,9 @@ jobs:
         run: |
           mkdir -p "$EVIDENCE_DIR"
           if [ -f "$QJS_HARNESS_ROOT/tools/benchmark/hosted_preview.py" ]; then
-            (cd "$QJS_HARNESS_ROOT" && python3 -m tools.benchmark.hosted_preview publish \
+            python3 -m tools.benchmark.hosted_preview publish \
               --output-dir "$EVIDENCE_DIR" --step-summary "$GITHUB_STEP_SUMMARY" \
-              --job-status "${{ job.status }}")
+              --job-status "${{ job.status }}"
           else
             printf '%s\n' '{"classification":"no_performance_conclusion","message":"checkout failed before evidence initialization","phase":"pre_orchestrator","schema_version":1,"state":"failed"}' > "$EVIDENCE_DIR/status.json"
             printf '%s\n' '## Performance Preview Failed' '' '> **No performance conclusion was produced.**' '> Checkout failed before evidence initialization.' '' '- Failure phase: `pre_orchestrator`' > "$EVIDENCE_DIR/summary.md"
