@@ -910,6 +910,18 @@ fn evaluates_arrow_functions_with_lexical_this() {
 }
 
 #[test]
+fn direct_eval_keeps_function_context_in_leaf_calls() {
+    assert_eq!(
+        eval(
+            "let receiver = { marker: 7 }; \
+             function direct() { return eval('this.marker'); } \
+             direct.call(receiver);"
+        ),
+        Ok(Value::Number(7.0))
+    );
+}
+
+#[test]
 fn evaluates_arrow_functions_with_lexical_arguments() {
     assert_eq!(
         eval(

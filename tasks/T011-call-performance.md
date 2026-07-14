@@ -140,12 +140,30 @@ run. An independent five-block run with seed `20250722` reproduced 0.991x
 overall (0.9% lower wall ns/op). Six paired case effects improved; the sole
 exception was `method_call` at 1.009x, although its candidate absolute median
 was also slightly lower than base. Treat this as a small allocation-path gain,
-not a broad performance step, pending post-commit hosted evidence.
+not a broad performance step. The Performance Preview at
+`b8414ba46b3e0c5e63c94f47627f439bb63ab220` measured 1.008x overall with a
+95% confidence interval of [0.997x, 1.017x], so the hosted result was neutral
+and did not confirm the local direction. The resulting candidate/QuickJS-NG
+overall ratio was 54.1772x.
+
+The next retained slice stopped materializing the internal direct-eval function
+context marker for leaf functions whose bytecode contains neither direct eval
+nor nested closure creation. A three-block local run measured 0.983x overall
+with all seven critical cases improved. An independent five-block run with seed
+`20250726` confirmed 0.984x overall (1.6% lower wall ns/op): six cases improved,
+led by `property_read` at 0.946x, while `array_read` regressed to 1.025x. These
+are exploratory dirty-source measurements pending the post-commit Performance
+Preview.
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment
 was discarded rather than committed.
+
+Precomputing whether bytecode parameters shadow `arguments` also failed the
+retention threshold: its three-block run was 0.995x overall, but an independent
+five-block run reversed to 1.003x and slowed four cases. That experiment was
+discarded rather than committed.
 
 At commit `18be69650953106355d425fd64412a13c384c648`:
 

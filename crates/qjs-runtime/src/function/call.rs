@@ -686,7 +686,13 @@ fn function_env(
             Value::Boolean(true),
         );
     }
-    if !function.lexical_this || function.is_field_initializer {
+    // The marker is only observable to direct eval in this frame or to a
+    // lexically nested function (notably an arrow) that inherits its function
+    // context. Leaf functions without eval can avoid allocating the internal
+    // binding on every call.
+    if (!function.lexical_this || function.is_field_initializer)
+        && (bytecode.contains_direct_eval() || bytecode.creates_closures())
+    {
         frame_env.insert(
             DIRECT_EVAL_FUNCTION_CONTEXT_BINDING.to_owned(),
             Value::Boolean(true),
