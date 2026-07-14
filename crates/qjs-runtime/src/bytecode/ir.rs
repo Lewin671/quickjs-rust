@@ -600,6 +600,7 @@ pub struct Bytecode {
     cached_needs_arguments_object: bool,
     cached_contains_direct_eval: bool,
     cached_contains_with: bool,
+    cached_contains_super_operation: bool,
 }
 
 impl Bytecode {
@@ -661,6 +662,7 @@ impl Bytecode {
             cached_needs_arguments_object: false,
             cached_contains_direct_eval: false,
             cached_contains_with: false,
+            cached_contains_super_operation: false,
         };
         // Order matters: closure/arguments metadata reads the simpler caches
         // (written-binding names, creates-closures) computed just above. Nested
@@ -684,6 +686,20 @@ impl Bytecode {
             .code
             .iter()
             .any(|op| matches!(op, Op::EnterWith | Op::ExitWith));
+        bytecode.cached_contains_super_operation = bytecode.code.iter().any(|op| {
+            matches!(
+                op,
+                Op::SuperCall(_)
+                    | Op::SuperCallSpread
+                    | Op::SuperGet { .. }
+                    | Op::SuperReference
+                    | Op::SuperGetComputed
+                    | Op::SuperSet { .. }
+                    | Op::SuperSetComputed { .. }
+                    | Op::SuperMethod { .. }
+                    | Op::SuperMethodComputed
+            )
+        });
         bytecode
     }
 
@@ -890,6 +906,10 @@ impl Bytecode {
 
     pub(crate) fn contains_with(&self) -> bool {
         self.cached_contains_with
+    }
+
+    pub(crate) fn contains_super_operation(&self) -> bool {
+        self.cached_contains_super_operation
     }
 
     pub(crate) fn needs_arguments_object(&self) -> bool {

@@ -5,9 +5,15 @@ use qjs_ast::{BindingPattern, FunctionParams};
 use crate::{
     ArrayRef, Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING, DIRECT_EVAL_FUNCTION_CONTEXT_BINDING,
     FIELD_INITIALIZER_EVAL_BINDING, Function, GLOBAL_THIS_BINDING, NEW_TARGET_BINDING,
-    NativeFunction, ObjectRef, RuntimeError, Value, bytecode::eval_function_bytecode,
-    function_prototype, native::call_native_function, object_prototype,
-    private::PrivateEnvironment, symbol,
+    NativeFunction, ObjectRef, RuntimeError, Value,
+    bytecode::{
+        DirectCallSlots, eval_function_bytecode, eval_function_bytecode_with_direct_call_slots,
+    },
+    function_prototype,
+    native::call_native_function,
+    object_prototype,
+    private::PrivateEnvironment,
+    symbol,
 };
 
 use super::{
@@ -193,13 +199,28 @@ pub(crate) fn call_function(
             is_construct,
         );
         let immutable_name_caller_value = immutable_name_caller_value(&function, env);
-        let result = eval_function_bytecode(
-            bytecode,
-            function_env.env,
-            function.upvalues.clone(),
-            function.with_stack.clone(),
-            true,
-        );
+        let FunctionCallEnv {
+            env: call_env,
+            direct_call_slots,
+        } = function_env;
+        let result = if let Some(direct_call_slots) = direct_call_slots {
+            eval_function_bytecode_with_direct_call_slots(
+                bytecode,
+                call_env,
+                function.upvalues.clone(),
+                function.with_stack.clone(),
+                true,
+                direct_call_slots,
+            )
+        } else {
+            eval_function_bytecode(
+                bytecode,
+                call_env,
+                function.upvalues.clone(),
+                function.with_stack.clone(),
+                true,
+            )
+        };
         restore_immutable_name_caller_value(&function, env, immutable_name_caller_value);
         // A derived constructor implicitly returns its (super-bound) `this`
         // when the body does not return an object, and it is a ReferenceError
@@ -576,27 +597,34 @@ fn not_constructor_error() -> RuntimeError {
     }
 }
 
-struct FunctionCallEnv {
+struct FunctionCallEnv<'a> {
     env: CallEnv,
+    direct_call_slots: Option<DirectCallSlots<'a>>,
 }
 
-fn function_env(
-    function: &Function,
+fn function_env<'a>(
+    function: &'a Function,
     bytecode: &Bytecode,
     callee: Value,
     this_value: Value,
-    argument_values: &[Value],
+    argument_values: &'a [Value],
     env: &CallEnv,
     is_construct: bool,
-) -> FunctionCallEnv {
+) -> FunctionCallEnv<'a> {
+    let use_direct_call_slots = can_seed_direct_leaf_call(function, bytecode, is_construct);
     let lexical_this = received_upvalue_value(function, bytecode, "this");
     let lexical_field_initializer =
         received_upvalue_value(function, bytecode, FIELD_INITIALIZER_EVAL_BINDING);
     // Ordinary calls materialize `this`, each positional parameter, and a
     // small number of internal context bindings. Reserve that hot-path shape
     // up front instead of growing the frame binding vector several times.
-    let frame_binding_capacity = function.params.positional.len().saturating_add(4);
+    let frame_binding_capacity = if use_direct_call_slots {
+        0
+    } else {
+        function.params.positional.len().saturating_add(4)
+    };
     let mut frame_env = env.new_function_frame_with_capacity(frame_binding_capacity);
+    let mut direct_this_value = None;
     if function.has_name_binding
         && let Some(name) = &function.name
         && !function_name_is_shadowed_by_body_var(function, bytecode, name)
@@ -647,19 +675,24 @@ fn function_env(
     } else {
         let this_env_storage = callee_this_realm_env(function, env);
         let this_env = this_env_storage.as_ref().unwrap_or(env);
-        frame_env.insert(
-            "this".to_owned(),
-            function_call_this(Some(this_value), this_env, function.is_strict),
-        );
+        let call_this = function_call_this(Some(this_value), this_env, function.is_strict);
+        if use_direct_call_slots {
+            direct_this_value = Some(call_this);
+        } else {
+            frame_env.insert("this".to_owned(), call_this);
+        }
     }
-    for (index, element) in function.params.positional.iter().enumerate() {
-        let value = argument_values
-            .get(index)
-            .cloned()
-            .unwrap_or(Value::Undefined);
-        frame_env.insert(parameter_binding_name(&element.binding, index), value);
+    if !use_direct_call_slots {
+        for (index, element) in function.params.positional.iter().enumerate() {
+            let value = argument_values
+                .get(index)
+                .cloned()
+                .unwrap_or(Value::Undefined);
+            frame_env.insert(parameter_binding_name(&element.binding, index), value);
+        }
     }
-    let parameter_shadows_arguments = parameter_list_contains_name(&function.params, "arguments");
+    let parameter_shadows_arguments =
+        !use_direct_call_slots && parameter_list_contains_name(&function.params, "arguments");
     let has_own_arguments_object = !function.lexical_arguments
         && !parameter_shadows_arguments
         && bytecode.needs_arguments_object();
@@ -725,7 +758,36 @@ fn function_env(
     if let Some(bindings) = &function.deopt_bindings {
         frame_env.set_deopt_bindings(bindings.clone());
     }
-    FunctionCallEnv { env: frame_env }
+    let direct_call_slots = use_direct_call_slots.then(|| DirectCallSlots {
+        this_value: direct_this_value.expect("direct leaf calls always bind this"),
+        params: &function.params,
+        arguments: argument_values,
+    });
+    FunctionCallEnv {
+        env: frame_env,
+        direct_call_slots,
+    }
+}
+
+fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode, is_construct: bool) -> bool {
+    !is_construct
+        && !function.lexical_this
+        && !function.lexical_arguments
+        && !function.is_generator
+        && !function.is_async
+        && !function.is_class_constructor
+        && !function.is_field_initializer
+        && !function.has_name_binding
+        && !function.immutable_name_binding
+        && function.immutable_env_binding.is_none()
+        && function.deopt_bindings.is_none()
+        && function.with_stack.is_empty()
+        && function.params.is_simple()
+        && !bytecode.needs_arguments_object()
+        && !bytecode.contains_direct_eval()
+        && !bytecode.contains_with()
+        && !bytecode.contains_super_operation()
+        && !bytecode.creates_closures()
 }
 
 fn parameter_list_contains_name(params: &FunctionParams, expected: &str) -> bool {

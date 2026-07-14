@@ -922,6 +922,20 @@ fn direct_eval_keeps_function_context_in_leaf_calls() {
 }
 
 #[test]
+fn leaf_calls_seed_this_parameters_and_received_upvalues_without_named_bindings() {
+    assert_eq!(
+        eval(
+            "let outer = 5; \
+             function leaf(first, missing) { \
+               return (this.marker + first + outer) + ':' + typeof missing; \
+             } \
+             leaf.call({ marker: 2 }, 3);"
+        ),
+        Ok(Value::String("10:undefined".to_owned().into()))
+    );
+}
+
+#[test]
 fn evaluates_arrow_functions_with_lexical_arguments() {
     assert_eq!(
         eval(

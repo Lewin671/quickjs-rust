@@ -1,4 +1,3 @@
-use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
 use super::vm_call::user_bytecode_function;
 use super::vm_iter::DelegateStep;
@@ -6,6 +5,10 @@ use super::vm_props::{array_index_from_number, get_property_key};
 use super::vm_result::{Completion, FunctionBytecodeResult, ResumeMode};
 use super::vm_set::set_property_key;
 use super::vm_try::TryFrame;
+use super::{
+    DirectCallSlots,
+    ir::{Bytecode, Op},
+};
 use crate::{
     Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, ObjectRef, PropertyKey, RuntimeError,
     SUPER_CONSTRUCTOR_BINDING, Value, construct_function,
@@ -27,15 +30,22 @@ pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> 
     vm.drain_promise_jobs()?;
     Ok(value)
 }
-pub(super) fn eval_function_bytecode(
-    bytecode: &Bytecode,
+pub(super) fn eval_function_bytecode<'a>(
+    bytecode: &'a Bytecode,
     env: CallEnv,
     upvalues: Vec<Upvalue>,
     with_stack: Vec<Value>,
     persist_global_lexicals: bool,
-) -> FunctionBytecodeResult<'_> {
+    direct_call_slots: Option<DirectCallSlots<'_>>,
+) -> FunctionBytecodeResult<'a> {
     let direct_eval_with_stack = !env.direct_eval_with_stack().is_empty();
-    let mut vm = Vm::new_with_globals_upvalues_and_with_stack(bytecode, env, upvalues, with_stack);
+    let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
+        bytecode,
+        env,
+        upvalues,
+        with_stack,
+        direct_call_slots,
+    );
     vm.persist_global_lexicals = persist_global_lexicals;
     // Ordinary functions created inside `with` are compiled with explicit
     // with-aware ops for free names; their own slot-indexed locals remain
@@ -61,6 +71,10 @@ pub(super) struct Vm<'a> {
     pub(super) upvalues: Vec<Upvalue>,
     /// Shared realm plus this frame's internal/caller-scope bindings.
     pub(super) env: CallEnv,
+    /// Ordinary leaf calls can keep their receiver here instead of
+    /// materializing a name-keyed frame binding. Functions that compile an
+    /// own `this` local store it in `locals` and leave this empty.
+    pub(super) direct_this: Option<Value>,
     pub(super) realm: Realm,
     /// Dynamic-import host copied into every `CallEnv` this VM creates.
     pub(super) module_host: Option<crate::module::ModuleHostRef>,
@@ -154,9 +168,21 @@ impl<'a> Vm<'a> {
 
     pub(super) fn new_with_globals_upvalues_and_with_stack(
         bytecode: &'a Bytecode,
+        env: CallEnv,
+        upvalues: Vec<Upvalue>,
+        with_stack: Vec<Value>,
+    ) -> Self {
+        Self::new_with_globals_upvalues_with_stack_and_direct_call_slots(
+            bytecode, env, upvalues, with_stack, None,
+        )
+    }
+
+    fn new_with_globals_upvalues_with_stack_and_direct_call_slots(
+        bytecode: &'a Bytecode,
         mut env: CallEnv,
         upvalues: Vec<Upvalue>,
         with_stack: Vec<Value>,
+        direct_call_slots: Option<DirectCallSlots<'_>>,
     ) -> Self {
         if (bytecode.contains_direct_eval() || bytecode.contains_with())
             && env.deopt_bindings().is_none()
@@ -167,7 +193,10 @@ impl<'a> Vm<'a> {
         let module_host = env.module_host();
         #[cfg(feature = "agents")]
         let agent_context = env.agent_context();
-        let locals = Self::initial_slots(bytecode, &env);
+        let mut locals = Self::initial_slots(bytecode, &env);
+        let direct_this = direct_call_slots.and_then(|direct_call_slots| {
+            Self::seed_direct_call_slots(bytecode, &mut locals, direct_call_slots)
+        });
         let local_upvalues = Self::initial_local_upvalues(bytecode, &locals, &upvalues, &env);
         Self {
             bytecode,
@@ -177,6 +206,7 @@ impl<'a> Vm<'a> {
             local_upvalues,
             upvalues,
             env,
+            direct_this,
             realm,
             module_host,
             #[cfg(feature = "agents")]
@@ -194,6 +224,34 @@ impl<'a> Vm<'a> {
             disposable_scopes: Vec::new(),
             persist_global_lexicals: true,
         }
+    }
+
+    fn seed_direct_call_slots(
+        bytecode: &Bytecode,
+        locals: &mut [Slot],
+        direct_call_slots: DirectCallSlots<'_>,
+    ) -> Option<Value> {
+        let direct_this = if let Some(slot) = bytecode.local_slot("this") {
+            locals[slot] = Some(direct_call_slots.this_value);
+            None
+        } else {
+            Some(direct_call_slots.this_value)
+        };
+        for (index, element) in direct_call_slots.params.positional.iter().enumerate() {
+            let qjs_ast::BindingPattern::Identifier { name, .. } = &element.binding else {
+                debug_assert!(false, "direct call slots require simple parameters");
+                continue;
+            };
+            let value = direct_call_slots
+                .arguments
+                .get(index)
+                .cloned()
+                .unwrap_or(Value::Undefined);
+            if let Some(slot) = bytecode.local_slot(name) {
+                locals[slot] = Some(value);
+            }
+        }
+        direct_this
     }
 
     /// Builds a `CallEnv` over the shared realm with this frame's live slots.

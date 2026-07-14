@@ -151,9 +151,26 @@ context marker for leaf functions whose bytecode contains neither direct eval
 nor nested closure creation. A three-block local run measured 0.983x overall
 with all seven critical cases improved. An independent five-block run with seed
 `20250726` confirmed 0.984x overall (1.6% lower wall ns/op): six cases improved,
-led by `property_read` at 0.946x, while `array_read` regressed to 1.025x. These
-are exploratory dirty-source measurements pending the post-commit Performance
-Preview.
+led by `property_read` at 0.946x, while `array_read` regressed to 1.025x. The
+Performance Preview at `bd3f03ea` contradicted those local results: hosted Linux
+measured 1.0384x overall with a 95% confidence interval of [1.0358x, 1.0515x],
+a real 3.84% regression, and the resulting candidate/QuickJS-NG ratio worsened
+to 56.4006x. Do not retain this slice by itself.
+
+Building on that slice, ordinary synchronous leaf functions with simple
+parameters can seed `this` and positional parameters directly into VM local
+slots instead of first constructing name-keyed frame bindings and then copying
+them into slots. The semantic guard excludes constructors, lexical
+`this`/`arguments`, generators, async functions, classes, direct eval, `with`,
+closures, `super` operations, deoptimized bindings, and arguments-object users.
+Against `bd3f03ea`,
+three- and five-block local runs measured 0.981x and 0.984x overall. More
+importantly, a five-block net comparison against the pre-regression
+`b8414ba4` baseline with seed `20250729` measured 0.969x overall, with all seven
+cases improving: `plain_function_call` was 0.983x, `many_locals_call` was
+0.975x, and `property_read` was 0.871x. These remain exploratory dirty-source
+measurements. Retain the combined direction only if the post-commit Performance
+Preview also offsets the hosted regression above; otherwise revert both slices.
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed

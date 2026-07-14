@@ -400,6 +400,9 @@ impl Vm<'_> {
         // the environment chain instead, while derived constructors without a
         // completed `super(...)` stay in their `this` TDZ.
         if name == "this" && !self.bytecode.global_scope {
+            if let Some(value) = &self.direct_this {
+                return Ok(value.clone());
+            }
             if let Some(value) = self.env.get_local(name) {
                 return Ok(value);
             }

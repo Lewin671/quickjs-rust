@@ -123,7 +123,38 @@ pub(crate) fn eval_function_bytecode(
     with_stack: Vec<Value>,
     persist_global_lexicals: bool,
 ) -> FunctionBytecodeResult<'_> {
-    vm::eval_function_bytecode(bytecode, env, upvalues, with_stack, persist_global_lexicals)
+    vm::eval_function_bytecode(
+        bytecode,
+        env,
+        upvalues,
+        with_stack,
+        persist_global_lexicals,
+        None,
+    )
+}
+
+pub(crate) struct DirectCallSlots<'a> {
+    pub(crate) this_value: Value,
+    pub(crate) params: &'a qjs_ast::FunctionParams,
+    pub(crate) arguments: &'a [Value],
+}
+
+pub(crate) fn eval_function_bytecode_with_direct_call_slots<'a>(
+    bytecode: &'a Bytecode,
+    env: crate::CallEnv,
+    upvalues: Vec<crate::function::Upvalue>,
+    with_stack: Vec<Value>,
+    persist_global_lexicals: bool,
+    direct_call_slots: DirectCallSlots<'_>,
+) -> FunctionBytecodeResult<'a> {
+    vm::eval_function_bytecode(
+        bytecode,
+        env,
+        upvalues,
+        with_stack,
+        persist_global_lexicals,
+        Some(direct_call_slots),
+    )
 }
 
 /// Compiles and evaluates source text through the bytecode VM.
@@ -335,7 +366,7 @@ pub(crate) fn eval_bytecode_with_env(
     env: crate::CallEnv,
 ) -> FunctionBytecodeResult<'_> {
     let with_stack = env.direct_eval_with_stack();
-    vm::eval_function_bytecode(bytecode, env, Vec::new(), with_stack, true)
+    vm::eval_function_bytecode(bytecode, env, Vec::new(), with_stack, true, None)
 }
 
 pub(crate) fn eval_bytecode_with_env_ephemeral_global_lexicals(
@@ -343,5 +374,5 @@ pub(crate) fn eval_bytecode_with_env_ephemeral_global_lexicals(
     env: crate::CallEnv,
 ) -> FunctionBytecodeResult<'_> {
     let with_stack = env.direct_eval_with_stack();
-    vm::eval_function_bytecode(bytecode, env, Vec::new(), with_stack, false)
+    vm::eval_function_bytecode(bytecode, env, Vec::new(), with_stack, false, None)
 }
