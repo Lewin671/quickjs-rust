@@ -125,7 +125,22 @@ ns/op): `plain_function_call` was 0.920x, `captured_read` was 0.915x,
 `captured_write` was 0.967x, `many_locals_call` was 0.978x, and `method_call`
 was 0.981x. `property_read` was 0.991x and `array_read` was 1.009x, so the
 non-call cases stayed effectively flat. These remain exploratory dirty-source
-measurements pending the post-commit Performance Preview.
+measurements. The Performance Preview at
+`5f2e65385f56787e3e7ac8005c2780b49c46c42c` confirmed the direction on hosted
+Linux at 0.9496x overall (5.04% lower wall ns/op), with a 95% confidence
+interval of [0.9411x, 0.9587x]. All seven cases improved, and the resulting
+candidate/QuickJS-NG overall ratio was 54.7519x. The first attempt was rejected
+when the base `array_read` linearity probe reached 1.1628x; the single rerun
+passed all linearity probes and produced the reported artifact.
+
+Starting from that parameter-scan change, reserving the ordinary call frame's
+short binding vector before inserting `this`, positional parameters, and
+internal context markers measured 0.992x candidate/base in a three-block local
+run. An independent five-block run with seed `20250722` reproduced 0.991x
+overall (0.9% lower wall ns/op). Six paired case effects improved; the sole
+exception was `method_call` at 1.009x, although its candidate absolute median
+was also slightly lower than base. Treat this as a small allocation-path gain,
+not a broad performance step, pending post-commit hosted evidence.
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed

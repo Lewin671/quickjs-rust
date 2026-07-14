@@ -592,7 +592,11 @@ fn function_env(
     let lexical_this = received_upvalue_value(function, bytecode, "this");
     let lexical_field_initializer =
         received_upvalue_value(function, bytecode, FIELD_INITIALIZER_EVAL_BINDING);
-    let mut frame_env = env.new_function_frame();
+    // Ordinary calls materialize `this`, each positional parameter, and a
+    // small number of internal context bindings. Reserve that hot-path shape
+    // up front instead of growing the frame binding vector several times.
+    let frame_binding_capacity = function.params.positional.len().saturating_add(4);
+    let mut frame_env = env.new_function_frame_with_capacity(frame_binding_capacity);
     if function.has_name_binding
         && let Some(name) = &function.name
         && !function_name_is_shadowed_by_body_var(function, bytecode, name)

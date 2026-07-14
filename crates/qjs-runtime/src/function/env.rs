@@ -107,6 +107,10 @@ impl Clone for FrameBindings {
 }
 
 impl FrameBindings {
+    fn with_capacity(capacity: usize) -> Self {
+        Self(RefCell::new(Vec::with_capacity(capacity)))
+    }
+
     fn from_values(values: HashMap<String, Value>) -> Self {
         Self(RefCell::new(
             values
@@ -697,13 +701,19 @@ impl CallEnv {
     /// bindings are inserted directly into the small cell vector by the call
     /// setup path, avoiding an intermediate name-keyed `HashMap` allocation.
     pub(crate) fn new_function_frame(&self) -> Self {
+        self.new_function_frame_with_capacity(0)
+    }
+
+    /// Builds a function frame with room for the bindings its call prologue
+    /// will materialize, avoiding repeated small-vector growth on hot calls.
+    pub(crate) fn new_function_frame_with_capacity(&self, capacity: usize) -> Self {
         Self {
             realm: Rc::clone(&self.realm),
             global_lexical_bindings: Rc::clone(&self.global_lexical_bindings),
             global_lexical_values: Rc::clone(&self.global_lexical_values),
             expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
-            frame_bindings: FrameBindings::default(),
+            frame_bindings: FrameBindings::with_capacity(capacity),
             deopt_bindings: None,
             catch_bindings: self.catch_bindings.clone(),
             immutable_function_name: None,
