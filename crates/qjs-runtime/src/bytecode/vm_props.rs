@@ -109,7 +109,7 @@ impl Vm<'_> {
         }
     }
 
-    fn try_direct_get_string(&self, object: &Value, key: &str) -> Option<Value> {
+    pub(super) fn try_direct_get_string(&self, object: &Value, key: &str) -> Option<Value> {
         match object {
             Value::Object(object) => {
                 if symbol::is_symbol_primitive(object) {

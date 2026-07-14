@@ -568,8 +568,7 @@ impl Compiler {
                     return Ok(());
                 }
                 self.compile_expr(object)?;
-                self.compile_member_key(property)?;
-                self.emit(Op::GetProp);
+                self.compile_member_get(property)?;
                 Ok(())
             }
             Expr::OptionalMember { .. } | Expr::OptionalCall { .. } => {
@@ -938,8 +937,7 @@ impl Compiler {
         if let qjs_ast::MemberProperty::Private(name) = property {
             self.emit(Op::GetPrivate(name.clone()));
         } else {
-            self.compile_member_key(property)?;
-            self.emit(Op::GetProp);
+            self.compile_member_get(property)?;
         }
         self.compile_optional_resolved_call(call_optional, arguments, end_jumps)
     }
@@ -1081,8 +1079,7 @@ impl Compiler {
         if let qjs_ast::MemberProperty::Private(name) = property {
             self.emit(Op::GetPrivate(name.clone()));
         } else {
-            self.compile_member_key(property)?;
-            self.emit(Op::GetProp);
+            self.compile_member_get(property)?;
         }
         Ok(())
     }
@@ -1172,8 +1169,7 @@ impl Compiler {
         {
             self.compile_expr(object)?;
             self.emit(Op::Dup);
-            self.compile_member_key(property)?;
-            self.emit(Op::GetProp);
+            self.compile_member_get(property)?;
             self.emit(Op::RequireCallable);
             self.emit(Op::NewTemplateObject {
                 site,

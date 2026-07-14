@@ -1,7 +1,7 @@
 use super::util::{stack_underflow, typeof_value};
 use super::vm_call::user_bytecode_function;
 use super::vm_iter::DelegateStep;
-use super::vm_props::{array_index_from_number, get_property_key};
+use super::vm_props::{array_index_from_number, get_property, get_property_key};
 use super::vm_result::{Completion, FunctionBytecodeResult, ResumeMode};
 use super::vm_set::set_property_key;
 use super::vm_try::TryFrame;
@@ -558,6 +558,10 @@ impl<'a> Vm<'a> {
                 Op::CopyObjectSpread => self.copy_object_spread()?,
                 Op::EnumerateKeys => self.enumerate_keys()?,
                 Op::ForInKeyIsEnumerable => self.for_in_key_is_enumerable()?,
+                Op::GetPropNamed(key) => {
+                    let result = self.get_named_prop(&key);
+                    self.handle_runtime_result(result)?;
+                }
                 Op::GetIterator => self.get_iterator()?,
                 Op::GetAsyncIterator => self.get_async_iterator()?,
                 Op::AsyncIteratorComplete { done_slot } => {
@@ -984,6 +988,33 @@ impl<'a> Vm<'a> {
         } else {
             let mut env = self.current_env();
             let value = get_property_key(object, &key, &mut env)?;
+            self.apply_env(env);
+            value
+        };
+        self.stack.push(value);
+        Ok(())
+    }
+
+    fn get_named_prop(&mut self, key: &str) -> Result<(), RuntimeError> {
+        let object = self.pop()?;
+        if matches!(object, Value::Null | Value::Undefined) {
+            let object_name = if matches!(object, Value::Null) {
+                "null"
+            } else {
+                "undefined"
+            };
+            return Err(RuntimeError {
+                thrown: None,
+                message: format!(
+                    "TypeError: Cannot read properties of {object_name} (reading '{key}')"
+                ),
+            });
+        }
+        let value = if let Some(value) = self.try_direct_get_string(&object, key) {
+            value
+        } else {
+            let mut env = self.current_env();
+            let value = get_property(object, key, &mut env)?;
             self.apply_env(env);
             value
         };

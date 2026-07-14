@@ -175,6 +175,19 @@ impl Compiler {
         }
     }
 
+    pub(super) fn compile_member_get(
+        &mut self,
+        property: &MemberProperty,
+    ) -> Result<(), RuntimeError> {
+        if let MemberProperty::Named(name) = property {
+            self.emit(Op::GetPropNamed(Rc::from(name.as_str())));
+            return Ok(());
+        }
+        self.compile_member_key(property)?;
+        self.emit(Op::GetProp);
+        Ok(())
+    }
+
     pub(super) fn compile_delete(&mut self, argument: &Expr) -> Result<(), RuntimeError> {
         match argument {
             Expr::Member {
@@ -315,8 +328,7 @@ impl Compiler {
         {
             self.compile_expr(object)?;
             self.emit(Op::Dup);
-            self.compile_member_key(property)?;
-            self.emit(Op::GetProp);
+            self.compile_member_get(property)?;
             if has_spread {
                 self.compile_argument_array(arguments)?;
                 self.emit(Op::CallResolvedSpread);
@@ -642,4 +654,35 @@ fn is_anonymous_function_definition(expr: &Expr) -> bool {
         expr,
         Expr::Function { name: None, .. } | Expr::Class { name: None, .. }
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{compiler, ir::Op};
+
+    #[test]
+    fn static_member_reads_use_named_property_op() {
+        let script = qjs_parser::parse_script(
+            "let object = { value: 1 }; let key = 'value'; object.value; object[key];",
+        )
+        .expect("source should parse");
+        let bytecode = compiler::compile_script(&script).expect("source should compile");
+
+        assert_eq!(
+            bytecode
+                .code
+                .iter()
+                .filter(|op| matches!(op, Op::GetPropNamed(name) if name.as_ref() == "value"))
+                .count(),
+            1
+        );
+        assert_eq!(
+            bytecode
+                .code
+                .iter()
+                .filter(|op| matches!(op, Op::GetProp))
+                .count(),
+            1
+        );
+    }
 }

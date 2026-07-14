@@ -172,6 +172,32 @@ cases improving: `plain_function_call` was 0.983x, `many_locals_call` was
 measurements. Retain the combined direction only if the post-commit Performance
 Preview also offsets the hosted regression above; otherwise revert both slices.
 
+The Performance Preview at `ce7e25cc555ce1698be7bf8913ba8c12adf8e177`
+measured 0.9851x overall against `bd3f03ea`, with a 95% confidence interval of
+[0.9781x, 1.0012x]. The interval crossed 1.0, so this is not an isolated hosted
+performance claim. However, the resulting candidate/QuickJS-NG ratio fell from
+the pre-regression `b8414ba4` preview's 54.1772x to 53.5414x, which offsets the
+intermediate hosted regression and satisfies the pre-set retention rule for the
+combined context-marker/direct-slot change.
+
+Removing the per-field shared handles inside `ObjectData` was also tested: an
+`ObjectRef` already owns the whole record behind one shared handle, so the inner
+handles appeared redundant. A three-block same-machine run instead measured
+1.010x overall and 1.006x for `property_read`; the experiment was discarded.
+
+The next local slice specializes statically named member reads in bytecode.
+Previously `object.name` loaded a string `Value`, pushed it as a second operand,
+then converted it back into an owned property-key `String` on every execution.
+`GetPropNamed` embeds the immutable key in bytecode and dispatches directly to
+the existing ordinary-object fast path, while computed properties retain the
+generic observable `ToPropertyKey` path. Storing the embedded key as `Rc<str>`
+also avoids allocating when the VM clones an instruction for dispatch. An exact
+five-block comparison against `ce7e25cc` with seed `20250803` measured 0.876x
+overall (12.35% lower wall ns/op). `property_read` was 0.566x and `method_call`
+was 0.727x; five unrelated cases remained near the baseline, from 0.976x to
+1.011x. This is an exploratory dirty-source result; use the post-commit
+Performance Preview for the provenance-backed decision.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment

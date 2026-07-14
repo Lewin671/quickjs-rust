@@ -126,6 +126,9 @@ pub(super) enum Op {
     CopyObjectSpread,
     EnumerateKeys,
     ForInKeyIsEnumerable,
+    /// Reads a statically named string property without materializing the key
+    /// as an operand-stack value or allocating an owned string at runtime.
+    GetPropNamed(Rc<str>),
     /// Replaces an iterable on the stack with its iterator object.
     GetIterator,
     /// Replaces an iterable on the stack with its async iterator object,
