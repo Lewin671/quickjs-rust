@@ -1,5 +1,7 @@
 use std::{collections::HashMap, rc::Rc};
 
+use qjs_ast::{BindingPattern, FunctionParams};
+
 use crate::{
     ArrayRef, Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING, DIRECT_EVAL_FUNCTION_CONTEXT_BINDING,
     FIELD_INITIALIZER_EVAL_BINDING, Function, GLOBAL_THIS_BINDING, NEW_TARGET_BINDING,
@@ -653,8 +655,7 @@ fn function_env(
             .unwrap_or(Value::Undefined);
         frame_env.insert(parameter_binding_name(&element.binding, index), value);
     }
-    let parameter_names = function.params.names();
-    let parameter_shadows_arguments = parameter_names.iter().any(|name| name == "arguments");
+    let parameter_shadows_arguments = parameter_list_contains_name(&function.params, "arguments");
     let has_own_arguments_object = !function.lexical_arguments
         && !parameter_shadows_arguments
         && bytecode.needs_arguments_object();
@@ -715,6 +716,42 @@ fn function_env(
         frame_env.set_deopt_bindings(bindings.clone());
     }
     FunctionCallEnv { env: frame_env }
+}
+
+fn parameter_list_contains_name(params: &FunctionParams, expected: &str) -> bool {
+    params
+        .positional
+        .iter()
+        .any(|element| binding_contains_name(&element.binding, expected))
+        || params
+            .rest
+            .as_deref()
+            .is_some_and(|binding| binding_contains_name(binding, expected))
+}
+
+fn binding_contains_name(binding: &BindingPattern, expected: &str) -> bool {
+    match binding {
+        BindingPattern::Identifier { name, .. } => name == expected,
+        BindingPattern::Array { elements, rest, .. } => {
+            elements
+                .iter()
+                .flatten()
+                .any(|element| binding_contains_name(&element.binding, expected))
+                || rest
+                    .as_deref()
+                    .is_some_and(|binding| binding_contains_name(binding, expected))
+        }
+        BindingPattern::Object {
+            properties, rest, ..
+        } => {
+            properties
+                .iter()
+                .any(|property| binding_contains_name(&property.binding, expected))
+                || rest
+                    .as_deref()
+                    .is_some_and(|binding| binding_contains_name(binding, expected))
+        }
+    }
 }
 
 fn received_upvalue_value(function: &Function, bytecode: &Bytecode, name: &str) -> Option<Value> {

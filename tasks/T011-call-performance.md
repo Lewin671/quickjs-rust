@@ -107,7 +107,30 @@ run measured 0.827x candidate/base overall; an independent five-block run with
 seed `20250717` confirmed 0.833x (16.7% lower wall ns/op). Every critical case
 improved: `array_read` was 0.748x, `many_locals_call` was 0.813x, and the
 least-improved `property_read` case was still 0.874x. These are exploratory
-dirty-source measurements pending the post-commit Performance Preview.
+dirty-source measurements. The Performance Preview at
+`1b5373d06f08e2d32315ed3febb044485907f9a5` confirmed the direction on hosted
+Linux at 0.8414x overall (15.86% lower wall ns/op), with a 95% confidence
+interval of [0.8339x, 0.8487x]. All seven cases improved, and the resulting
+candidate/QuickJS-NG overall ratio was 56.2095x. The first attempt was rejected
+when the QuickJS-NG `method_call` linearity probe exceeded its health threshold;
+the automatic rerun passed linearity and produced the reported artifact.
+
+Sampling the resulting plain-call workload identified
+`FunctionParams::names()` in every ordinary function entry: it rebuilt two
+vectors and cloned all parameter names merely to detect an `arguments`
+parameter. Replacing that allocation with a borrowed recursive binding-pattern
+scan measured 0.960x candidate/base in a three-block local run. An independent
+five-block run with seed `20250720` confirmed 0.965x overall (3.5% lower wall
+ns/op): `plain_function_call` was 0.920x, `captured_read` was 0.915x,
+`captured_write` was 0.967x, `many_locals_call` was 0.978x, and `method_call`
+was 0.981x. `property_read` was 0.991x and `array_read` was 1.009x, so the
+non-call cases stayed effectively flat. These remain exploratory dirty-source
+measurements pending the post-commit Performance Preview.
+
+An alternative attempt to store immutable BigInts behind shared handles did
+reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
+the seven-case geometric mean to 1.022x and slowed six cases. That experiment
+was discarded rather than committed.
 
 At commit `18be69650953106355d425fd64412a13c384c648`:
 

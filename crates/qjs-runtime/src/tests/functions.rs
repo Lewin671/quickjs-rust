@@ -49,6 +49,10 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::String("undefined".to_owned().into()))
     );
     assert_eq!(
+        eval("function shadow({ arguments }) { return arguments; } shadow({ arguments: 42 });"),
+        Ok(Value::Number(42.0))
+    );
+    assert_eq!(
         eval(
             "var after; eval('if (true) function f() { return \"declaration\"; } else function _f() {} after = f;'); after();"
         ),
