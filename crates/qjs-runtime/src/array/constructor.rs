@@ -685,10 +685,7 @@ fn promise_constructor(env: &CallEnv) -> Result<Value, RuntimeError> {
 
 fn array_from_constructor(value: Value) -> Option<Value> {
     match &value {
-        Value::Function(Function {
-            constructable: true,
-            ..
-        }) => Some(value),
+        Value::Function(function) if function.constructable => Some(value),
         _ => None,
     }
 }

@@ -38,6 +38,8 @@ replaced by `CallEnv` (`crates/qjs-runtime/src/function/env.rs`):
 
 Related landed performance work:
 
+- `Function` values are shared `Rc` handles, so operand-stack, property, capture,
+  and argument clones no longer copy the function's vectors and maps.
 - Leaf function calls skip activation captured-env snapshots when the body
   cannot create nested closures/classes.
 - Prototype-chain data-property gets use VM fast paths for ordinary reads.
@@ -47,6 +49,26 @@ Related landed performance work:
   rebuilding a frame env at every function return.
 
 ## Current Evidence
+
+At the `b320d151295cd6d306e8f1760199c11996698365` baseline, a local macOS arm64
+three-block run of `core-black-box-v4` measured an 86.57x candidate/QuickJS-NG
+geometric-mean ratio. A same-machine exploratory run after changing `Function`
+to a shared handle measured 0.732x candidate/base (26.8% lower wall ns/op) and
+62.91x candidate/QuickJS-NG. Every critical case improved:
+
+| Case | candidate/base |
+| --- | ---: |
+| `plain_function_call` | 0.716x |
+| `method_call` | 0.729x |
+| `captured_read` | 0.721x |
+| `captured_write` | 0.723x |
+| `many_locals_call` | 0.691x |
+| `property_read` | 0.768x |
+| `array_read` | 0.782x |
+
+The exploratory candidate was built with the frozen hosted-preview Rust recipe
+but had no clean-source receipt; use the post-commit Performance Preview artifact
+for provenance-backed reporting.
 
 At commit `18be69650953106355d425fd64412a13c384c648`:
 

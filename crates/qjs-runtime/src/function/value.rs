@@ -2,6 +2,7 @@ use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
     fmt,
+    ops::{Deref, DerefMut},
     rc::Rc,
 };
 
@@ -58,9 +59,22 @@ pub(crate) struct PrivateFieldInit {
     pub(crate) initializer: Option<Function>,
 }
 
-/// User-defined or native function value.
+/// Cheap shared handle to a user-defined or native function value.
+///
+/// Functions are copied through the operand stack, environments, properties,
+/// and argument vectors on every call. Keeping the object behind one shared
+/// allocation makes those copies reference-count bumps instead of repeatedly
+/// cloning the function's vectors and maps. Mutable construction still uses
+/// `DerefMut`; the existing shared object-property cells preserve identity when
+/// a freshly built function has already installed its prototype back-reference.
 #[derive(Clone)]
-pub struct Function {
+pub struct Function(Rc<FunctionData>);
+
+/// Storage behind [`Function`]. Public only because it is the target of the
+/// handle's public `Deref` implementation; the runtime does not re-export it.
+#[doc(hidden)]
+#[derive(Clone)]
+pub struct FunctionData {
     /// Optional internal function name.
     pub name: Option<String>,
     /// Whether `name` also creates the function body's internal name binding.
@@ -158,6 +172,20 @@ pub struct Function {
     /// compiled script's source), or `None` to use the `[native code]` form.
     /// Shared across clones; set just after a user function is created.
     source_text: Rc<RefCell<Option<Rc<str>>>>,
+}
+
+impl Deref for Function {
+    type Target = FunctionData;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Function {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        Rc::make_mut(&mut self.0)
+    }
 }
 
 /// Bound function internal slots.
@@ -293,7 +321,7 @@ impl Function {
             Some(bytecode) => bytecode,
             None => Rc::new(compile_function_body(&params, &body)?),
         };
-        let function = Self {
+        let function = Self(Rc::new(FunctionData {
             has_name_binding: name.is_some(),
             immutable_name_binding: false,
             immutable_env_binding: None,
@@ -333,7 +361,7 @@ impl Function {
             internal_prototype: Rc::new(RefCell::new(None)),
             source_text: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
-        };
+        }));
         function.define_length_property();
         function.define_name_property();
         if constructable {
@@ -381,7 +409,7 @@ impl Function {
             HashMap::new(),
             object_prototype(&crate::CallEnv::new(Rc::clone(&realm))),
         );
-        let function = Self {
+        let function = Self(Rc::new(FunctionData {
             has_name_binding,
             immutable_name_binding,
             immutable_env_binding,
@@ -421,7 +449,7 @@ impl Function {
             internal_prototype: Rc::new(RefCell::new(None)),
             source_text: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
-        };
+        }));
         function.define_length_property();
         function.define_name_property();
         // Class constructors receive their `prototype` wiring from the class
@@ -500,7 +528,7 @@ impl Function {
             _ => false,
         };
         let name = bound_function_name(&target);
-        let function = Self {
+        let function = Self(Rc::new(FunctionData {
             name: Some(name),
             has_name_binding: false,
             immutable_name_binding: false,
@@ -547,7 +575,7 @@ impl Function {
             internal_prototype: Rc::new(RefCell::new(None)),
             source_text: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
-        };
+        }));
         function.define_length_property();
         function.define_name_property();
         function
@@ -561,7 +589,7 @@ impl Function {
         constructable: bool,
     ) -> Self {
         let prototype = ObjectRef::new(HashMap::new());
-        let function = Self {
+        let function = Self(Rc::new(FunctionData {
             has_name_binding: false,
             immutable_name_binding: false,
             immutable_env_binding: None,
@@ -601,7 +629,7 @@ impl Function {
             internal_prototype: Rc::new(RefCell::new(None)),
             source_text: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
-        };
+        }));
         function.define_length_property();
         function.define_name_property();
         if constructable {
@@ -1102,4 +1130,30 @@ fn array_index_property_key(key: &str) -> Option<u32> {
     key.parse::<u32>()
         .ok()
         .filter(|index| *index < u32::MAX && index.to_string() == key)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{mem, rc::Rc};
+
+    use super::{Function, FunctionData};
+    use crate::NativeFunction;
+
+    #[test]
+    fn cloning_function_reuses_the_backing_allocation() {
+        let function = Function::new_native(
+            Some("shared"),
+            0,
+            NativeFunction::UninitializedLexical,
+            false,
+        );
+        let cloned = function.clone();
+
+        assert!(Rc::ptr_eq(&function.0, &cloned.0));
+        assert!(function.ptr_eq(&cloned));
+        assert_eq!(
+            mem::size_of::<Function>(),
+            mem::size_of::<Rc<FunctionData>>()
+        );
+    }
 }

@@ -72,7 +72,7 @@ fn object_constructor_name(object: &crate::ObjectRef) -> Option<String> {
     let Some(Value::Function(function)) = object.get("constructor") else {
         return None;
     };
-    function.name.filter(|name| !name.is_empty())
+    function.name.clone().filter(|name| !name.is_empty())
 }
 
 pub(crate) fn to_number_with_env(value: Value, env: &mut CallEnv) -> Result<f64, RuntimeError> {
