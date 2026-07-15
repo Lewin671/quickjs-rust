@@ -132,10 +132,6 @@ pub struct FunctionData {
     pub(crate) local_names: Vec<String>,
     pub(crate) bytecode: Option<Rc<Bytecode>>,
     pub(crate) native: Option<NativeFunction>,
-    /// Immutable ordinary-call eligibility for the slot-backed direct-leaf
-    /// path. Construction computes this once from the function and bytecode
-    /// shape; debug call sites recompute it to catch predicate drift.
-    pub(crate) direct_leaf_eligible: bool,
     pub(crate) constructable: bool,
     pub(crate) is_strict: bool,
     pub(crate) lexical_this: bool,
@@ -268,33 +264,6 @@ impl fmt::Debug for Function {
     }
 }
 
-impl FunctionData {
-    pub(crate) fn compute_direct_leaf_eligible(&self) -> bool {
-        let Some(bytecode) = &self.bytecode else {
-            return false;
-        };
-        self.native.is_none()
-            && self.bound.is_none()
-            && !self.lexical_this
-            && !self.lexical_arguments
-            && !self.is_generator
-            && !self.is_async
-            && !self.is_class_constructor
-            && !self.is_field_initializer
-            && !self.has_name_binding
-            && !self.immutable_name_binding
-            && self.immutable_env_binding.is_none()
-            && self.deopt_bindings.is_none()
-            && self.with_stack.is_empty()
-            && self.params.is_simple()
-            && !bytecode.needs_arguments_object()
-            && !bytecode.contains_direct_eval()
-            && !bytecode.contains_with()
-            && !bytecode.contains_super_operation()
-            && !bytecode.creates_closures()
-    }
-}
-
 impl Function {
     /// Inserts a binding into the function's creation environment. Used to seed
     /// a freshly created native reaction's captured state; `Rc::make_mut` is
@@ -370,7 +339,7 @@ impl Function {
             Some(bytecode) => bytecode,
             None => Rc::new(compile_function_body(&params, &body)?),
         };
-        let mut data = FunctionData {
+        let function = Self(Rc::new(FunctionData {
             has_name_binding: name.is_some(),
             immutable_name_binding: false,
             immutable_env_binding: None,
@@ -389,7 +358,6 @@ impl Function {
             local_names,
             bytecode: Some(bytecode),
             native: None,
-            direct_leaf_eligible: false,
             constructable,
             is_strict,
             lexical_this: lexical_bindings.this,
@@ -413,9 +381,7 @@ impl Function {
             internal_prototype: Rc::new(RefCell::new(None)),
             source_text: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
-        };
-        data.direct_leaf_eligible = data.compute_direct_leaf_eligible();
-        let function = Self(Rc::new(data));
+        }));
         function.define_length_property();
         function.define_name_property();
         if constructable {
@@ -464,7 +430,7 @@ impl Function {
             HashMap::new(),
             object_prototype(&crate::CallEnv::new(Rc::clone(&realm))),
         );
-        let mut data = FunctionData {
+        let function = Self(Rc::new(FunctionData {
             has_name_binding,
             immutable_name_binding,
             immutable_env_binding,
@@ -483,7 +449,6 @@ impl Function {
             local_names,
             bytecode: Some(bytecode),
             native: None,
-            direct_leaf_eligible: false,
             constructable,
             is_strict,
             lexical_this,
@@ -507,9 +472,7 @@ impl Function {
             internal_prototype: Rc::new(RefCell::new(None)),
             source_text: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
-        };
-        data.direct_leaf_eligible = data.compute_direct_leaf_eligible();
-        let function = Self(Rc::new(data));
+        }));
         function.define_length_property();
         function.define_name_property();
         // Class constructors receive their `prototype` wiring from the class
@@ -588,7 +551,7 @@ impl Function {
             _ => false,
         };
         let name = bound_function_name(&target);
-        let mut data = FunctionData {
+        let function = Self(Rc::new(FunctionData {
             name: Some(name),
             has_name_binding: false,
             immutable_name_binding: false,
@@ -613,7 +576,6 @@ impl Function {
             local_names: Vec::new(),
             bytecode: None,
             native: None,
-            direct_leaf_eligible: false,
             constructable,
             is_strict: false,
             lexical_this: false,
@@ -641,9 +603,7 @@ impl Function {
             internal_prototype: Rc::new(RefCell::new(None)),
             source_text: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
-        };
-        data.direct_leaf_eligible = data.compute_direct_leaf_eligible();
-        let function = Self(Rc::new(data));
+        }));
         function.define_length_property();
         function.define_name_property();
         function
@@ -657,7 +617,7 @@ impl Function {
         constructable: bool,
     ) -> Self {
         let prototype = ObjectRef::new(HashMap::new());
-        let mut data = FunctionData {
+        let function = Self(Rc::new(FunctionData {
             has_name_binding: false,
             immutable_name_binding: false,
             immutable_env_binding: None,
@@ -676,7 +636,6 @@ impl Function {
             local_names: Vec::new(),
             bytecode: None,
             native,
-            direct_leaf_eligible: false,
             constructable,
             is_strict: false,
             lexical_this: false,
@@ -700,9 +659,7 @@ impl Function {
             internal_prototype: Rc::new(RefCell::new(None)),
             source_text: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
-        };
-        data.direct_leaf_eligible = data.compute_direct_leaf_eligible();
-        let function = Self(Rc::new(data));
+        }));
         function.define_length_property();
         function.define_name_property();
         if constructable {
@@ -1235,7 +1192,7 @@ mod tests {
     use std::{mem, rc::Rc};
 
     use super::{Function, FunctionData};
-    use crate::{NativeFunction, Value, eval, function::is_direct_leaf_function};
+    use crate::NativeFunction;
 
     #[test]
     fn cloning_function_reuses_the_backing_allocation() {
@@ -1253,40 +1210,5 @@ mod tests {
             mem::size_of::<Function>(),
             mem::size_of::<Rc<FunctionData>>()
         );
-    }
-
-    #[test]
-    fn direct_leaf_eligibility_is_cached_when_functions_are_created() {
-        let leaf = eval("(function (value) { return value + 1; });")
-            .expect("leaf function should evaluate");
-        let Value::Function(leaf_function) = &leaf else {
-            panic!("expected a function");
-        };
-        assert!(leaf_function.direct_leaf_eligible);
-        assert_eq!(
-            leaf_function.direct_leaf_eligible,
-            leaf_function.compute_direct_leaf_eligible()
-        );
-        assert!(is_direct_leaf_function(&leaf));
-
-        let arguments_user = eval("(function () { return arguments.length; });")
-            .expect("arguments function should evaluate");
-        let Value::Function(arguments_function) = &arguments_user else {
-            panic!("expected a function");
-        };
-        assert!(!arguments_function.direct_leaf_eligible);
-        assert_eq!(
-            arguments_function.direct_leaf_eligible,
-            arguments_function.compute_direct_leaf_eligible()
-        );
-        assert!(!is_direct_leaf_function(&arguments_user));
-
-        let native = Value::Function(Function::new_native(
-            Some("native"),
-            0,
-            NativeFunction::UninitializedLexical,
-            false,
-        ));
-        assert!(!is_direct_leaf_function(&native));
     }
 }

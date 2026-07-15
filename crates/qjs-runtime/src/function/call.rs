@@ -286,7 +286,10 @@ pub(crate) fn is_direct_leaf_function(callee: &Value) -> bool {
     let Value::Function(function) = callee else {
         return false;
     };
-    function.direct_leaf_eligible
+    function
+        .bytecode
+        .as_ref()
+        .is_some_and(|bytecode| can_seed_direct_leaf_call(function, bytecode, false))
 }
 
 fn class_constructor_call_error(function: &Function) -> RuntimeError {
@@ -870,18 +873,24 @@ fn function_env<'a>(
 }
 
 fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode, is_construct: bool) -> bool {
-    debug_assert!(std::ptr::eq(
-        bytecode,
-        function
-            .bytecode
-            .as_deref()
-            .expect("bytecode call requires function bytecode")
-    ));
-    debug_assert_eq!(
-        function.direct_leaf_eligible,
-        function.compute_direct_leaf_eligible()
-    );
-    !is_construct && function.direct_leaf_eligible
+    !is_construct
+        && !function.lexical_this
+        && !function.lexical_arguments
+        && !function.is_generator
+        && !function.is_async
+        && !function.is_class_constructor
+        && !function.is_field_initializer
+        && !function.has_name_binding
+        && !function.immutable_name_binding
+        && function.immutable_env_binding.is_none()
+        && function.deopt_bindings.is_none()
+        && function.with_stack.is_empty()
+        && function.params.is_simple()
+        && !bytecode.needs_arguments_object()
+        && !bytecode.contains_direct_eval()
+        && !bytecode.contains_with()
+        && !bytecode.contains_super_operation()
+        && !bytecode.creates_closures()
 }
 
 fn parameter_list_contains_name(params: &FunctionParams, expected: &str) -> bool {
