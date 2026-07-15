@@ -1,5 +1,6 @@
 use qjs_ast::{BinaryOp, UnaryOp};
 
+use crate::value::OwnDataPropertyRead;
 use crate::{
     GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
     array_prototype, function_delete_own_property, function_delete_own_symbol_property,
@@ -135,24 +136,30 @@ impl Vm<'_> {
                 if object.is_module_namespace_exotic() {
                     return None;
                 }
-                match ordinary_chain_property(object, key) {
+                match ordinary_chain_data_value(object, key) {
                     Err(ProxyInChain) => None,
-                    Ok(property) => data_property_value(property).or_else(|| {
+                    Ok(DirectPropertyRead::Data(value)) => Some(value),
+                    Ok(DirectPropertyRead::Missing) => Some(Value::Undefined),
+                    Ok(DirectPropertyRead::NeedsSlowPath) => {
                         crate::regexp::default_regexp_source_accessor_value(
                             object,
                             key,
                             &self.realm_env(),
                         )
-                    }),
+                    }
                 }
             }
-            Value::Map(map) => match ordinary_chain_property(&map.object(), key) {
+            Value::Map(map) => match ordinary_chain_data_value(&map.object(), key) {
                 Err(ProxyInChain) => None,
-                Ok(property) => data_property_value(property),
+                Ok(DirectPropertyRead::Data(value)) => Some(value),
+                Ok(DirectPropertyRead::Missing) => Some(Value::Undefined),
+                Ok(DirectPropertyRead::NeedsSlowPath) => None,
             },
-            Value::Set(set) => match ordinary_chain_property(&set.object(), key) {
+            Value::Set(set) => match ordinary_chain_data_value(&set.object(), key) {
                 Err(ProxyInChain) => None,
-                Ok(property) => data_property_value(property),
+                Ok(DirectPropertyRead::Data(value)) => Some(value),
+                Ok(DirectPropertyRead::Missing) => Some(Value::Undefined),
+                Ok(DirectPropertyRead::NeedsSlowPath) => None,
             },
             Value::Array(elements) => {
                 if key == "length" {
@@ -512,6 +519,55 @@ fn typed_array_default_length_accessor(object: &ObjectRef) -> bool {
 /// paths cannot dispatch a Proxy's trap, so the caller defers to the slow path
 /// where the proxy-aware `get`/`set` semantics live.
 pub(super) struct ProxyInChain;
+
+enum DirectPropertyRead {
+    Missing,
+    Data(Value),
+    NeedsSlowPath,
+}
+
+fn direct_property_read(property: Property) -> DirectPropertyRead {
+    if property.get.is_some() || property.accessor {
+        DirectPropertyRead::NeedsSlowPath
+    } else {
+        DirectPropertyRead::Data(property.value)
+    }
+}
+
+/// Walks an ordinary object's string-keyed prototype chain for the VM get fast
+/// path. Ordinary data properties copy only their value from the HashMap;
+/// accessors and other observable special cases signal a slow-path fallback.
+fn ordinary_chain_data_value(
+    object: &ObjectRef,
+    key: &str,
+) -> Result<DirectPropertyRead, ProxyInChain> {
+    let mut current = object.clone();
+    loop {
+        if crate::typed_array::is_typed_array_object(&current)
+            && let Some(property) =
+                crate::typed_array::typed_array_own_property_descriptor(&current, key)
+        {
+            return Ok(direct_property_read(property));
+        }
+        match current.own_data_property_read(key) {
+            OwnDataPropertyRead::Data(value) => return Ok(DirectPropertyRead::Data(value)),
+            OwnDataPropertyRead::NeedsSlowPath => {
+                return Ok(DirectPropertyRead::NeedsSlowPath);
+            }
+            OwnDataPropertyRead::Missing => {}
+        }
+        match current.prototype_slot() {
+            Some(crate::Prototype::Object(next)) => current = next,
+            Some(crate::Prototype::Function(function)) => {
+                return Ok(function
+                    .chain_property(key)
+                    .map_or(DirectPropertyRead::Missing, direct_property_read));
+            }
+            Some(crate::Prototype::Proxy(_)) => return Err(ProxyInChain),
+            None => return Ok(DirectPropertyRead::Missing),
+        }
+    }
+}
 
 /// Walks `object`'s own property then its [[Prototype]] chain for `key`,
 /// matching `ObjectRef::property` for an all-ordinary chain. Returns

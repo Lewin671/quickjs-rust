@@ -267,8 +267,30 @@ comparison against `ecff7f88` with seed `20250817` contained all 70 expected
 measurement samples and measured 0.9745x overall (2.55% lower wall ns/op).
 `property_read` improved to 0.842x and `method_call` to 0.979x; the other five
 cases stayed between 0.998x and 1.013x. These are exploratory local binaries
-without provenance receipts; require the post-commit Performance Preview for
-the provenance-backed result.
+without provenance receipts. The post-commit Performance Preview at
+`bee0303937bc889320c2ea782ea0bf379aa676e1` produced no performance conclusion:
+the first attempt had two timer-limited QuickJS-NG `property_read` blocks, and
+the single rerun failed QuickJS-NG `array_read` linearity at 1.2105x. The rerun's
+otherwise complete measurements pointed in the same direction at 0.9613x
+candidate/base overall and 0.8803x for `property_read`, but health was invalid,
+so these ratios are diagnostics rather than a provenance-backed result. CI and
+the full Test262 Coverage workflow were green at this commit.
+
+The next property-read profile put `ObjectRef::own_property` descriptor cloning
+on the dominant ordinary-object path. The VM now probes each ordinary object's
+string-keyed property table once and, for a plain data property, clones only its
+`Value`; accessor descriptors, module namespace objects, Proxy chains, and
+typed-array exotic descriptors retain the existing observable fallback paths.
+Unlike the earlier discarded own-data experiment, this does not probe the same
+HashMap a second time before cloning a descriptor. A three-block local run with
+seed `20250818` measured 0.9849x candidate/base overall and 0.9443x for
+`property_read`. An independent five-block confirmation with seed `20250819`
+contained all 70 expected measurements and completed at 0.9784x overall (2.16%
+lower wall ns/op): `property_read` was 0.9429x, `many_locals_call` 0.9538x,
+`captured_write` 0.9773x, `method_call` 0.9832x, `captured_read` 0.9909x, and
+`plain_function_call` 0.9951x. The unrelated `array_read` case was 1.0073x.
+These remain exploratory dirty-source binaries without provenance receipts;
+require the post-commit Performance Preview for a hosted confirmation.
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed

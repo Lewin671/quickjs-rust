@@ -477,6 +477,28 @@ fn evaluates_objects_arrays_members_and_calls_with_bytecode() {
 }
 
 #[test]
+fn named_get_fast_path_preserves_observable_prototype_fallbacks() {
+    assert_eq!(
+        eval_bytecode_source(
+            "let proto = { inherited: 3 }; let object = Object.create(proto); object.own = 2; object.own + object.inherited;"
+        ),
+        Ok(Value::Number(5.0))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "let hits = 0; let proto = { get value() { hits++; return this.marker; } }; let object = Object.create(proto); object.marker = 7; object.value + ':' + hits;"
+        ),
+        Ok(Value::String("7:1".to_owned().into()))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "let proto = new Proxy({}, { get(target, key, receiver) { return key === 'value' && receiver.marker; } }); let object = Object.create(proto); object.marker = 9; object.value;"
+        ),
+        Ok(Value::Number(9.0))
+    );
+}
+
+#[test]
 fn seeds_bytecode_function_env_from_referenced_caller_bindings() {
     assert_eq!(
         eval_bytecode_source("let value = 1; function read() { return value; } value = 2; read();"),

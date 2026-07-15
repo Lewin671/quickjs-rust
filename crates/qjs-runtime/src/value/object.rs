@@ -13,6 +13,15 @@ use super::{Property, Value};
 type NamespaceBindingCell = DynamicBindings;
 type NamespaceAliasMap = HashMap<String, (NamespaceBindingCell, String)>;
 
+/// Result of probing one ordinary object's string-keyed storage for the VM
+/// direct-get path. A data hit clones only its value; descriptors that need
+/// observable accessor or module-namespace behavior stay on the slow path.
+pub(crate) enum OwnDataPropertyRead {
+    Missing,
+    Data(Value),
+    NeedsSlowPath,
+}
+
 #[derive(Clone)]
 pub(crate) struct ModuleNamespaceBindings {
     lexical: NamespaceBindingCell,
@@ -647,6 +656,20 @@ impl ObjectRef {
             property.value = value.clone();
         }
         Some(property)
+    }
+
+    pub(crate) fn own_data_property_read(&self, key: &str) -> OwnDataPropertyRead {
+        if self.0.module_namespace_exotic.get() {
+            return OwnDataPropertyRead::NeedsSlowPath;
+        }
+        let properties = self.0.properties.borrow();
+        match properties.get(key) {
+            None => OwnDataPropertyRead::Missing,
+            Some(property) if property.get.is_some() || property.accessor => {
+                OwnDataPropertyRead::NeedsSlowPath
+            }
+            Some(property) => OwnDataPropertyRead::Data(property.value.clone()),
+        }
     }
 
     pub(crate) fn module_namespace_export_property(
