@@ -362,8 +362,32 @@ overall (10.08% lower wall ns/op), with all seven cases improved: `array_read`
 0.8261x, `property_read` 0.8443x, `many_locals_call` 0.9174x,
 `plain_function_call` 0.9192x, `method_call` 0.9264x, `captured_write` 0.9287x,
 and `captured_read` 0.9391x. These are exploratory local binaries without
-provenance receipts; use the post-commit Performance Preview for hosted
-evidence.
+provenance receipts. The Performance Preview at
+`0b7305015c63c785ac6657689188932543154951` confirmed 0.8951x overall on
+hosted Linux, with a 95% confidence interval of [0.8849x, 0.9003x]. All seven
+hosted cases improved: `array_read` 0.7830x, `property_read` 0.8572x,
+`many_locals_call` 0.8978x, `method_call` 0.9307x, `plain_function_call`
+0.9321x, `captured_write` 0.9382x, and `captured_read` 0.9388x. The resulting
+candidate/QuickJS-NG ratio fell to 19.6484x. The preview remained informational
+and health was inconclusive because three variable-host blocks did not satisfy
+the frozen precision policy. CI and the full Test262 Coverage workflow were
+green at this commit.
+
+The next sample made the ordinary `load_local` and `store_local` function
+boundaries visible after their binding-authority checks became simple bit
+tests. Their short authoritative-slot prefixes now inline into VM consumers,
+while captured, dynamic-scope, module, global, and immutable-binding behavior
+remains in explicit non-inlined slow functions. Splitting `assign_local` as
+well was rejected because it regressed the captured-write case by 1.3% without
+improving the portfolio. The retained load/store pair measured 0.9882x overall
+in a three-block comparison. An independent five-block confirmation with seed
+`20250903` contained all 70 expected measurements and completed at 0.9893x
+overall (1.07% lower wall ns/op): `array_read` was 0.9613x, `property_read`
+0.9843x, `method_call` 0.9879x, `many_locals_call` 0.9928x, `captured_read`
+0.9972x, and `plain_function_call` 0.9996x. `captured_write` was 1.0024x, a
+0.24% local regression within the run's noise. These are exploratory local
+binaries without provenance receipts; use the post-commit Performance Preview
+for hosted evidence.
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed

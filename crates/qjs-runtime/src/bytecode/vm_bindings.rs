@@ -863,6 +863,7 @@ impl Vm<'_> {
         Ok(Value::String(typeof_value(value).into()))
     }
 
+    #[inline]
     pub(super) fn load_local(&mut self, slot: usize) -> Result<Value, RuntimeError> {
         if self.slot_is_authoritative(slot) {
             return match self.locals.get(slot) {
@@ -880,6 +881,11 @@ impl Vm<'_> {
                 }),
             };
         }
+        self.load_local_slow(slot)
+    }
+
+    #[inline(never)]
+    fn load_local_slow(&mut self, slot: usize) -> Result<Value, RuntimeError> {
         if let Some(cell) = self.local_upvalues.get(slot).and_then(Option::as_ref)
             && let Some(local) = self.bytecode.locals.get(slot)
             && self.env.is_realm_binding_cell(&local.name, cell)
@@ -976,6 +982,7 @@ impl Vm<'_> {
         }
     }
 
+    #[inline]
     pub(super) fn store_local(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
         if self.slot_is_authoritative(slot)
             && self
@@ -987,6 +994,11 @@ impl Vm<'_> {
             self.locals[slot] = Some(value);
             return Ok(());
         }
+        self.store_local_slow(slot, value)
+    }
+
+    #[inline(never)]
+    fn store_local_slow(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
         // Read only the `Copy` slot metadata up front so the hot local write
         // never clones the `Local` (its owned `name` would be a heap
         // allocation on every assignment); the binding name is resolved by
