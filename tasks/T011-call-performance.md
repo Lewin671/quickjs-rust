@@ -909,6 +909,21 @@ affected cases improved: `many_locals_call` was 0.9034x,
 without provenance receipts; use the post-commit Performance Preview for
 hosted evidence.
 
+The numeric executor still rediscovered the parameter and received-upvalue
+slot indices on every call, even though the immutable local table fixes both
+sets at bytecode construction. `Bytecode` now caches these compact slot lists
+once and the executor indexes its scratch frame directly. Duplicate sloppy
+parameters, whose source positions intentionally alias one local slot, fail the
+one-to-one guard and retain the general VM path. A three-block comparison with
+seed `20251026` measured 0.9819x overall. An independent five-block comparison
+with seed `20251027` contained all 70 expected measurements and reproduced
+0.9801x overall (1.99% lower wall ns/op). All five affected cases improved:
+`many_locals_call` was 0.9589x, `captured_write` 0.9677x, `method_call`
+0.9699x, `plain_function_call` 0.9740x, and `captured_read` 0.9785x. The
+unrelated cases were `property_read` 1.0039x and `array_read` 1.0084x. These
+are exploratory local binaries without provenance receipts; use the
+post-commit Performance Preview for hosted evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment

@@ -868,6 +868,14 @@ fn numeric_leaf_preserves_direct_arithmetic_and_comparisons() {
 }
 
 #[test]
+fn numeric_leaf_falls_back_for_duplicate_parameter_slots() {
+    assert_eq!(
+        eval("function duplicate(value, value) { return value + 1; } duplicate(2, 4);"),
+        Ok(Value::Number(5.0))
+    );
+}
+
+#[test]
 fn numeric_leaf_commits_captured_writes_before_later_fallbacks() {
     assert_eq!(
         eval(

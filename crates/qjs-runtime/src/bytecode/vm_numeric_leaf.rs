@@ -1,4 +1,4 @@
-use qjs_ast::{BinaryOp, BindingPattern, FunctionParams, UpdateOp};
+use qjs_ast::{BinaryOp, FunctionParams, UpdateOp};
 
 use crate::{Value, function::Upvalue};
 
@@ -67,11 +67,10 @@ pub(crate) fn try_eval_numeric_leaf(
         }
     }
 
-    for (index, element) in params.positional.iter().enumerate() {
-        let BindingPattern::Identifier { name, .. } = &element.binding else {
-            return None;
-        };
-        let slot = local_slot(bytecode, name)?;
+    if bytecode.parameter_slots().len() != params.positional.len() {
+        return None;
+    }
+    for (index, &slot) in bytecode.parameter_slots().iter().enumerate() {
         locals[slot] = match arguments.get(index) {
             Some(value) => FastValue::from_value(value)?,
             None => FastValue::Undefined,
@@ -79,15 +78,17 @@ pub(crate) fn try_eval_numeric_leaf(
     }
 
     let mut upvalue_slots = [NO_UPVALUE; MAX_FAST_LOCALS];
-    let mut received_count = 0;
-    for (name, upvalue) in bytecode.received_upvalue_names().zip(upvalues) {
-        let slot = local_slot(bytecode, name)?;
+    if bytecode.received_upvalue_slots().len() != upvalues.len() {
+        return None;
+    }
+    for (received_count, (&slot, upvalue)) in bytecode
+        .received_upvalue_slots()
+        .iter()
+        .zip(upvalues)
+        .enumerate()
+    {
         locals[slot] = FastValue::from_value(&upvalue.get())?;
         upvalue_slots[slot] = received_count;
-        received_count += 1;
-    }
-    if received_count != upvalues.len() {
-        return None;
     }
 
     let mut assigned_upvalues = [false; MAX_FAST_LOCALS];
@@ -190,10 +191,6 @@ fn push(
 fn pop(stack: &[FastValue; MAX_FAST_STACK], stack_len: &mut usize) -> Option<FastValue> {
     *stack_len = stack_len.checked_sub(1)?;
     stack.get(*stack_len).copied()
-}
-
-fn local_slot(bytecode: &Bytecode, name: &str) -> Option<usize> {
-    bytecode.locals.iter().position(|local| local.name == name)
 }
 
 fn direct_number_binary(left: f64, op: BinaryOp, right: f64) -> Option<FastValue> {

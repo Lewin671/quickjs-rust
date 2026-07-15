@@ -573,6 +573,8 @@ pub struct Bytecode {
     pub(super) constants: Vec<Value>,
     pub(super) locals: Vec<Local>,
     local_slots: HashMap<String, usize>,
+    parameter_slots: Vec<usize>,
+    received_upvalue_slots: Vec<usize>,
     global_names: Vec<String>,
     global_lexical_names: Vec<String>,
     sloppy_global_assignment_names: Vec<String>,
@@ -646,9 +648,21 @@ impl Bytecode {
         global_lexical_names: Vec<String>,
         strict: bool,
     ) -> Self {
+        let parameter_slots = locals
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, local)| local.parameter.then_some(slot))
+            .collect();
+        let received_upvalue_slots = locals
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, local)| local.is_received_upvalue().then_some(slot))
+            .collect();
         let mut bytecode = Self {
             constants,
             local_slots: collect_local_slots(&locals),
+            parameter_slots,
+            received_upvalue_slots,
             locals,
             global_names: collect_global_names(&code),
             global_lexical_names,
@@ -818,6 +832,14 @@ impl Bytecode {
 
     pub(crate) fn local_slot(&self, name: &str) -> Option<usize> {
         self.local_slots.get(name).copied()
+    }
+
+    pub(super) fn parameter_slots(&self) -> &[usize] {
+        &self.parameter_slots
+    }
+
+    pub(super) fn received_upvalue_slots(&self) -> &[usize] {
+        &self.received_upvalue_slots
     }
 
     pub(crate) fn local_name_at(&self, slot: usize) -> Option<&str> {
