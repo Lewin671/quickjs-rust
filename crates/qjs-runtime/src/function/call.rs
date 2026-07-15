@@ -123,7 +123,7 @@ pub(crate) fn call_function(
                 this_value,
                 &argument_values,
                 env,
-                FunctionEnvKind::General { is_construct },
+                is_construct,
             );
             return crate::async_generator::call_async_generator_function(
                 function,
@@ -144,7 +144,7 @@ pub(crate) fn call_function(
                 this_value,
                 &argument_values,
                 env,
-                FunctionEnvKind::General { is_construct },
+                is_construct,
             );
             return crate::generator::make_generator_object(
                 function,
@@ -175,7 +175,7 @@ pub(crate) fn call_function(
                 this_value,
                 &argument_values,
                 env,
-                FunctionEnvKind::General { is_construct },
+                is_construct,
             );
             return Ok(crate::async_function::call_async_function(
                 function,
@@ -196,7 +196,7 @@ pub(crate) fn call_function(
             this_value,
             &argument_values,
             env,
-            FunctionEnvKind::General { is_construct },
+            is_construct,
         );
         let immutable_name_caller_value = immutable_name_caller_value(function, env);
         let FunctionCallEnv {
@@ -261,15 +261,7 @@ pub(crate) fn call_direct_leaf_function(
     let FunctionCallEnv {
         env: mut call_env,
         direct_call_slots,
-    } = function_env(
-        function,
-        bytecode,
-        &callee,
-        this_value,
-        &argument_values,
-        env,
-        FunctionEnvKind::GuardedDirectLeaf,
-    );
+    } = direct_leaf_function_env(function, bytecode, this_value, &argument_values, env);
     if call_env.module_host().is_none()
         && let Some(host) = module_host
     {
@@ -666,9 +658,40 @@ struct FunctionCallEnv<'a> {
     direct_call_slots: Option<DirectCallSlots<'a>>,
 }
 
-enum FunctionEnvKind {
-    General { is_construct: bool },
-    GuardedDirectLeaf,
+fn direct_leaf_function_env<'a>(
+    function: &'a Function,
+    bytecode: &Bytecode,
+    this_value: Value,
+    argument_values: &'a [Value],
+    env: &CallEnv,
+) -> FunctionCallEnv<'a> {
+    debug_assert!(can_seed_direct_leaf_call(function, bytecode, false));
+    let mut frame_env = env.new_direct_leaf_function_frame();
+    let direct_this_value = if bytecode.uses_lexical_this() {
+        let this_env_storage = callee_this_realm_env(function, env);
+        let this_env = this_env_storage.as_ref().unwrap_or(env);
+        Some(function_call_this(
+            Some(this_value),
+            this_env,
+            function.is_strict,
+        ))
+    } else {
+        None
+    };
+    insert_marked_call_realm(function, &mut frame_env);
+    if let Some(host) = function.module_host.clone() {
+        frame_env.set_module_host(host);
+    }
+    frame_env.set_module_imports(function.module_imports.clone());
+    frame_env.set_private_environment(function_private_environment(function));
+    FunctionCallEnv {
+        env: frame_env,
+        direct_call_slots: Some(DirectCallSlots {
+            this_value: direct_this_value,
+            params: &function.params,
+            arguments: argument_values,
+        }),
+    }
 }
 
 fn function_env<'a>(
@@ -678,18 +701,9 @@ fn function_env<'a>(
     this_value: Value,
     argument_values: &'a [Value],
     env: &CallEnv,
-    kind: FunctionEnvKind,
+    is_construct: bool,
 ) -> FunctionCallEnv<'a> {
-    let (is_construct, use_direct_call_slots) = match kind {
-        FunctionEnvKind::General { is_construct } => (
-            is_construct,
-            can_seed_direct_leaf_call(function, bytecode, is_construct),
-        ),
-        FunctionEnvKind::GuardedDirectLeaf => {
-            debug_assert!(can_seed_direct_leaf_call(function, bytecode, false));
-            (false, true)
-        }
-    };
+    let use_direct_call_slots = can_seed_direct_leaf_call(function, bytecode, is_construct);
     let lexical_this = received_upvalue_value(function, bytecode, "this");
     let lexical_field_initializer =
         received_upvalue_value(function, bytecode, FIELD_INITIALIZER_EVAL_BINDING);

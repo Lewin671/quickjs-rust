@@ -658,6 +658,35 @@ overall (1.72% lower wall ns/op). All five call and binding cases improved:
 provenance receipts; use the post-commit Performance Preview for hosted
 evidence.
 
+The post-commit Performance Preview at
+`2840537ee9479aaf38047a2b83c4d62d32df5f47` confirmed a larger 0.9570x
+overall improvement on hosted Linux (4.30% lower wall ns/op), with a 95%
+confidence interval of [0.9423x, 0.9636x]. The five affected hosted cases all
+improved: `captured_read` was 0.9135x, `plain_function_call` 0.9241x,
+`captured_write` 0.9260x, `method_call` 0.9580x, and `many_locals_call`
+0.9778x. The unrelated cases were `property_read` 0.9967x and `array_read`
+1.0071x. All 21 linearity probes passed and all three requested blocks were
+valid; the informational three-block cohort's precision policy remained
+inconclusive. The same run measured 14.4507x candidate/QuickJS-NG overall,
+making this the latest confirmed hosted baseline. CI was green and the full
+Test262 Coverage workflow was green at this commit.
+
+With the direct-leaf predicate now authoritative, the next profile showed that
+guarded calls still traversed the general `function_env` prologue and all of
+its already-excluded constructor, name-binding, arguments, eval, and closure
+branches. Direct leaf calls now use a dedicated prologue that retains the
+observable dynamic-Function realm, module host/imports, private environment,
+optional `this`, and parameter slots, while general calls keep the full path.
+A three-block comparison with seed `20251002` measured 0.9964x overall. An
+independent five-block comparison with seed `20251003` contained all 70
+expected measurements and reproduced 0.9943x overall (0.57% lower wall
+ns/op). All five call and binding cases improved: `many_locals_call` was
+0.9843x, `method_call` 0.9858x, `captured_read` 0.9917x,
+`plain_function_call` 0.9941x, and `captured_write` 0.9949x. The unrelated
+cases were `array_read` 1.0048x and `property_read` 1.0049x. These are
+exploratory local binaries without provenance receipts; use the post-commit
+Performance Preview for hosted evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment
