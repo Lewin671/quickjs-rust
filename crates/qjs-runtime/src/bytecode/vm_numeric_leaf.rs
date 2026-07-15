@@ -71,7 +71,7 @@ pub(crate) fn try_eval_numeric_leaf(
         let BindingPattern::Identifier { name, .. } = &element.binding else {
             return None;
         };
-        let slot = bytecode.local_slot(name)?;
+        let slot = local_slot(bytecode, name)?;
         locals[slot] = match arguments.get(index) {
             Some(value) => FastValue::from_value(value)?,
             None => FastValue::Undefined,
@@ -81,7 +81,7 @@ pub(crate) fn try_eval_numeric_leaf(
     let mut upvalue_slots = [NO_UPVALUE; MAX_FAST_LOCALS];
     let mut received_count = 0;
     for (name, upvalue) in bytecode.received_upvalue_names().zip(upvalues) {
-        let slot = bytecode.local_slot(name)?;
+        let slot = local_slot(bytecode, name)?;
         locals[slot] = FastValue::from_value(&upvalue.get())?;
         upvalue_slots[slot] = received_count;
         received_count += 1;
@@ -191,4 +191,8 @@ fn push(
 fn pop(stack: &[FastValue; MAX_FAST_STACK], stack_len: &mut usize) -> Option<FastValue> {
     *stack_len = stack_len.checked_sub(1)?;
     stack.get(*stack_len).copied()
+}
+
+fn local_slot(bytecode: &Bytecode, name: &str) -> Option<usize> {
+    bytecode.locals.iter().position(|local| local.name == name)
 }
