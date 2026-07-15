@@ -542,6 +542,34 @@ cases stayed neutral: `array_read` was 1.0021x and `property_read` 1.0045x.
 These are exploratory local binaries without provenance receipts; use the
 post-commit Performance Preview for hosted evidence.
 
+The post-commit Performance Preview at
+`a249e726734a46c4c17192eb9a94880ad0db6873` confirmed the direct-leaf VM
+bypass on hosted Linux at 0.9021x overall (9.79% lower wall ns/op), with a 95%
+confidence interval of [0.8989x, 0.9065x]. The five affected hosted cases were
+`captured_read` 0.8200x, `captured_write` 0.8468x,
+`plain_function_call` 0.8418x, `method_call` 0.8579x, and
+`many_locals_call` 0.9317x. The two untouched cases measured `array_read`
+1.0173x and `property_read` 1.0226x. All 21 linearity probes passed and all
+three requested blocks were valid; the informational three-block cohort's
+precision policy remained inconclusive. The same run measured 16.0050x
+candidate/QuickJS-NG overall. CI and the full Test262 Coverage workflow were
+green at this commit, which is the new hosted baseline.
+
+Profiling that baseline found that every user-bytecode VM call still eagerly
+constructed a cloned realm environment solely to probe a native-only fast
+path before reaching direct-leaf dispatch. The VM now constructs that
+environment only when the callee is actually native; fallback behavior for
+native functions remains unchanged. A three-block comparison with seed
+`20250922` measured 0.9643x overall. An independent five-block comparison with
+seed `20250923` contained all 70 expected measurements and reproduced 0.9592x
+overall (4.08% lower wall ns/op). The five affected cases all improved:
+`method_call` was 0.9244x, `plain_function_call` 0.9351x,
+`captured_read` 0.9377x, `captured_write` 0.9409x, and
+`many_locals_call` 0.9719x. The two unaffected cases stayed neutral:
+`property_read` was 1.0014x and `array_read` 1.0063x. These are exploratory
+local binaries without provenance receipts; use the post-commit Performance
+Preview for hosted evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment

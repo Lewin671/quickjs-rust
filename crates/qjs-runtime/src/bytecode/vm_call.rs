@@ -68,13 +68,16 @@ impl Vm<'_> {
         direct_eval: bool,
         direct_eval_strict: bool,
     ) -> Result<(), RuntimeError> {
-        if let Some(result) =
-            try_fast_global_native_call(&callee, &this_value, &arguments, &self.realm_env())
-        {
-            if let Some(value) = self.handle_runtime_result(result)? {
-                self.stack.push(value);
+        if matches!(&callee, Value::Function(function) if function.native.is_some()) {
+            let realm_env = self.realm_env();
+            if let Some(result) =
+                try_fast_global_native_call(&callee, &this_value, &arguments, &realm_env)
+            {
+                if let Some(value) = self.handle_runtime_result(result)? {
+                    self.stack.push(value);
+                }
+                return Ok(());
             }
-            return Ok(());
         }
         // `fn.apply(this, denseArray)` for a self-contained native target reads
         // its arguments straight out of the array and needs nothing from the
