@@ -244,7 +244,7 @@ pub(crate) fn call_function(
 pub(crate) fn call_direct_leaf_function(
     callee: Value,
     this_value: Value,
-    argument_values: Vec<Value>,
+    argument_values: &[Value],
     env: &CallEnv,
     module_host: Option<crate::module::ModuleHostRef>,
     #[cfg(feature = "agents")] agent_context: Option<crate::agent::AgentContextRef>,
@@ -259,7 +259,7 @@ pub(crate) fn call_direct_leaf_function(
     let FunctionCallEnv {
         env: mut call_env,
         direct_call_slots,
-    } = direct_leaf_function_env(function, bytecode, this_value, &argument_values, env);
+    } = direct_leaf_function_env(function, bytecode, this_value, argument_values, env);
     if call_env.module_host().is_none()
         && let Some(host) = module_host
     {

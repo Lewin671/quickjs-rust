@@ -798,6 +798,34 @@ ns/op). `captured_read` improved to 0.9527x, `captured_write` to 0.9591x, and
 `array_read` 1.0070x. These are exploratory local binaries without provenance
 receipts; use the post-commit Performance Preview for hosted evidence.
 
+The post-commit Performance Preview at
+`f53f2a6a9308b207619d4c7e640106d1308b7baf` measured 0.9916x overall on
+hosted Linux, with a 95% confidence interval of [0.9837x, 1.0052x]. The point
+estimate agrees with the local improvement, but the interval crosses 1.0, so
+the hosted result is inconclusive rather than confirmed. The hosted affected
+cases were `many_locals_call` 0.9642x, `captured_write` 0.9777x,
+`captured_read` 0.9818x, `plain_function_call` 0.9998x, and `method_call`
+1.0123x. The unrelated cases were `property_read` 1.0008x and `array_read`
+1.0054x. The same run measured 12.5427x candidate/QuickJS-NG overall. CI was
+green; the informational Performance Preview workflow exited nonzero because
+its final health assertion expected an inconclusive classification, not
+because its measurements detected a statistically supported regression.
+
+The bytecode call opcodes still allocated and populated a `Vec<Value>` before
+discovering that a direct-leaf call had zero or one argument. Calls with at
+most one argument now recognize the guarded direct-leaf callee while its
+operands are still on the VM stack and borrow the optional popped argument
+directly. General calls and direct-leaf calls with two or more arguments keep
+the existing vector path. A three-block comparison with seed `20251017`
+measured 0.9720x overall. An independent five-block comparison with seed
+`20251018` contained all 70 expected measurements and reproduced 0.9695x
+overall (3.05% lower wall ns/op). The affected cases improved consistently:
+`captured_read` was 0.9382x, `plain_function_call` 0.9395x, `method_call`
+0.9418x, `many_locals_call` 0.9700x, and `captured_write` 0.9836x. The
+unrelated cases were `property_read` 1.0064x and `array_read` 1.0097x. These
+are exploratory local binaries without provenance receipts; use the
+post-commit Performance Preview for hosted evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment

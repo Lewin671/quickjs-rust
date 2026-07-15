@@ -26,6 +26,19 @@ impl Vm<'_> {
     }
 
     pub(super) fn call(&mut self, argc: usize) -> Result<(), RuntimeError> {
+        let direct_leaf = argc <= 1
+            && self
+                .stack
+                .len()
+                .checked_sub(argc + 1)
+                .and_then(|index| self.stack.get(index))
+                .is_some_and(is_direct_leaf_function);
+        if direct_leaf {
+            let argument = if argc == 1 { Some(self.pop()?) } else { None };
+            let callee = self.pop()?;
+            let arguments = argument.as_slice();
+            return self.call_direct_leaf_callee(callee, Value::Undefined, arguments);
+        }
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
         self.call_callee(callee, Value::Undefined, arguments)
@@ -101,19 +114,7 @@ impl Vm<'_> {
             return Ok(());
         }
         if !direct_eval && is_direct_leaf_function(&callee) {
-            let result = call_direct_leaf_function(
-                callee,
-                this_value,
-                arguments,
-                &self.env,
-                self.module_host.clone(),
-                #[cfg(feature = "agents")]
-                self.agent_context.clone(),
-            );
-            if let Some(value) = self.handle_call_result(result)? {
-                self.stack.push(value);
-            }
-            return Ok(());
+            return self.call_direct_leaf_callee(callee, this_value, &arguments);
         }
         let effective_direct_eval = direct_eval
             && matches!(&callee, Value::Function(function) if function.native == Some(NativeFunction::Eval));
@@ -219,6 +220,20 @@ impl Vm<'_> {
     /// Calls a pre-resolved callee whose receiver and callee are already on the
     /// stack as `[receiver, callee, args...]`.
     pub(super) fn call_resolved(&mut self, argc: usize) -> Result<(), RuntimeError> {
+        let direct_leaf = argc <= 1
+            && self
+                .stack
+                .len()
+                .checked_sub(argc + 1)
+                .and_then(|index| self.stack.get(index))
+                .is_some_and(is_direct_leaf_function);
+        if direct_leaf {
+            let argument = if argc == 1 { Some(self.pop()?) } else { None };
+            let callee = self.pop()?;
+            let this_value = self.pop()?;
+            let arguments = argument.as_slice();
+            return self.call_direct_leaf_callee(callee, this_value, arguments);
+        }
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
         let this_value = self.pop()?;
@@ -230,6 +245,27 @@ impl Vm<'_> {
         let callee = self.pop()?;
         let this_value = self.pop()?;
         self.call_callee(callee, this_value, arguments)
+    }
+
+    fn call_direct_leaf_callee(
+        &mut self,
+        callee: Value,
+        this_value: Value,
+        arguments: &[Value],
+    ) -> Result<(), RuntimeError> {
+        let result = call_direct_leaf_function(
+            callee,
+            this_value,
+            arguments,
+            &self.env,
+            self.module_host.clone(),
+            #[cfg(feature = "agents")]
+            self.agent_context.clone(),
+        );
+        if let Some(value) = self.handle_call_result(result)? {
+            self.stack.push(value);
+        }
+        Ok(())
     }
 }
 
