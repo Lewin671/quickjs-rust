@@ -672,7 +672,7 @@ pub(crate) fn function_call_this(this_arg: Option<Value>, env: &CallEnv, is_stri
     let this_value = this_arg.unwrap_or(Value::Undefined);
     match this_value {
         Value::Null | Value::Undefined if !is_strict => {
-            env.get(GLOBAL_THIS_BINDING).unwrap_or(Value::Undefined)
+            env.global_this().unwrap_or(Value::Undefined)
         }
         Value::String(_) | Value::Number(_) | Value::Boolean(_) | Value::BigInt(_)
             if !is_strict =>

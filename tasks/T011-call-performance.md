@@ -466,7 +466,7 @@ confirmed 0.9707x overall on hosted Linux, with a 95% confidence interval of
 resulting candidate/QuickJS-NG ratio was 17.9810x. All linearity probes passed
 and all three measurement blocks were valid; the preview remained an
 informational `non_claim` because variable-host precision was inconclusive.
-CI was green at this commit.
+CI and the full Test262 Coverage workflow were green at this commit.
 
 The next profile showed `CallEnv::new_function_frame_with_capacity` as the
 largest named call-setup cost. Even the already restricted direct-leaf path
@@ -482,8 +482,35 @@ lower wall ns/op). All five affected call/binding cases improved:
 `many_locals_call` 0.9907x, `plain_function_call` 0.9905x, and `method_call`
 0.9910x. The two untouched cases measured `array_read` 1.0064x and
 `property_read` 1.0083x. These are exploratory local binaries without
-provenance receipts; use the post-commit Performance Preview for hosted
-evidence.
+provenance receipts. The post-commit Performance Preview at
+`acb9282db1005fbf6c4a12855658d715b65de22f` confirmed 0.9891x overall on
+hosted Linux, with a 95% confidence interval of [0.9818x, 0.9911x]. The five
+affected cases all remained below 1.0: `captured_write` was 0.9701x,
+`captured_read` 0.9831x, `plain_function_call` 0.9844x,
+`many_locals_call` 0.9866x, and `method_call` 0.9971x. `array_read` was neutral
+at 1.0001x and `property_read` measured 1.0031x in the three variable-host
+blocks. The resulting candidate/QuickJS-NG ratio was 18.1565x. All linearity
+probes passed and all three measurement blocks were valid; the preview remained
+an informational `non_claim` because variable-host precision was inconclusive.
+CI and the full Test262 Coverage workflow were green at this commit.
+
+The following profile still showed hashing below `function_call_this`: every
+sloppy call with a nullish receiver re-read the same private
+`\0global_this` realm-map entry, even though that internal identity is fixed
+when the realm is created. `RealmState` now caches the internal global-this
+slot directly, and sloppy-this conversion plus the cross-realm identity guard
+read that slot without hashing its private string key. Replacing the public
+`globalThis` property still does not replace the realm's internal global-this
+identity, covered by a focused regression test. A three-block comparison with
+seed `20250916` measured 0.9814x overall. An independent five-block comparison
+with seed `20250917` contained all 70 expected measurements and reproduced
+0.9951x overall. The four cases that exercise this nullish-receiver path were
+all below 1.0 in the confirmation: `many_locals_call` was 0.9778x,
+`captured_read` 0.9879x, `plain_function_call` 0.9935x, and
+`captured_write` 0.9966x. The unrelated cases measured `array_read` 0.9913x,
+`property_read` 1.0071x, and `method_call` 1.0119x. These are exploratory local
+binaries without provenance receipts; use the post-commit Performance Preview
+for hosted evidence.
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed

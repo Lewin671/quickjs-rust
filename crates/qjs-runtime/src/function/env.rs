@@ -33,13 +33,16 @@ use crate::{Function, ObjectRef, Value, function::Upvalue, private::PrivateEnvir
 pub(crate) struct RealmState {
     bindings: RefCell<HashMap<String, Value>>,
     binding_cells: DynamicBindings,
+    global_this: Option<Value>,
 }
 
 impl RealmState {
     fn new(bindings: HashMap<String, Value>) -> Self {
+        let global_this = bindings.get(crate::GLOBAL_THIS_BINDING).cloned();
         Self {
             bindings: RefCell::new(bindings),
             binding_cells: DynamicBindings::new(),
+            global_this,
         }
     }
 
@@ -49,6 +52,10 @@ impl RealmState {
 
     pub(crate) fn borrow_mut(&self) -> RefMut<'_, HashMap<String, Value>> {
         self.bindings.borrow_mut()
+    }
+
+    pub(crate) fn global_this(&self) -> Option<Value> {
+        self.global_this.clone()
     }
 }
 
@@ -914,6 +921,13 @@ impl CallEnv {
     /// Looks up `name` in the shared realm layer only.
     pub(crate) fn get_realm(&self, name: &str) -> Option<Value> {
         self.realm.borrow().get(name).cloned()
+    }
+
+    /// Returns the realm's internal global-this slot without hashing its
+    /// private string key. The slot is fixed when a realm is created; writes
+    /// to the public `globalThis` property do not replace this identity.
+    pub(crate) fn global_this(&self) -> Option<Value> {
+        self.realm.global_this()
     }
 
     /// Returns the one shared cell for a captured realm binding, creating it

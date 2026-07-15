@@ -883,9 +883,9 @@ fn callee_this_realm_env(function: &Function, caller_env: &CallEnv) -> Option<Ca
     if Rc::ptr_eq(realm, caller_env.realm()) {
         return None;
     }
-    let captured_global = realm.borrow().get(GLOBAL_THIS_BINDING)?.clone();
+    let captured_global = realm.global_this()?;
     if caller_env
-        .get(GLOBAL_THIS_BINDING)
+        .global_this()
         .is_some_and(|caller_global| caller_global.same_value(&captured_global))
     {
         return None;

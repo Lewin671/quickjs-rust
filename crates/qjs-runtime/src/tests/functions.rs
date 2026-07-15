@@ -796,6 +796,19 @@ fn evaluates_function_declarations_and_calls() {
 }
 
 #[test]
+fn sloppy_function_this_keeps_internal_global_identity() {
+    assert_eq!(
+        eval(
+            "var originalGlobal = this; \
+             globalThis = { replacement: true }; \
+             function getThis() { return this; } \
+             getThis() === originalGlobal && getThis() !== globalThis;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn direct_leaf_call_does_not_inherit_caller_catch_binding() {
     assert_eq!(
         eval(
