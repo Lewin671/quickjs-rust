@@ -1,4 +1,30 @@
-use crate::{Value, eval};
+use std::collections::HashMap;
+
+use crate::{ObjectRef, Value, eval};
+
+#[test]
+fn symbol_brand_is_independent_of_string_properties() {
+    let fake = ObjectRef::new(HashMap::from([(
+        "\0SymbolData".to_owned(),
+        Value::Boolean(true),
+    )]));
+    assert!(!crate::symbol::is_symbol_object(&fake));
+    assert!(!crate::symbol::is_symbol_primitive(&fake));
+
+    let Ok(Value::Object(primitive)) = eval("Symbol('id');") else {
+        panic!("expected a symbol primitive");
+    };
+    primitive.define_non_enumerable("\0SymbolBoxed".to_owned(), Value::Boolean(true));
+    assert!(crate::symbol::is_symbol_object(&primitive));
+    assert!(crate::symbol::is_symbol_primitive(&primitive));
+
+    let Ok(Value::Object(boxed)) = eval("Object(Symbol('id'));") else {
+        panic!("expected a boxed symbol");
+    };
+    boxed.delete_own_property("\0SymbolBoxed");
+    assert!(crate::symbol::is_symbol_object(&boxed));
+    assert!(!crate::symbol::is_symbol_primitive(&boxed));
+}
 
 #[test]
 fn evaluates_symbol_prototype_builtins() {

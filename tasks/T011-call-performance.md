@@ -290,7 +290,29 @@ lower wall ns/op): `property_read` was 0.9429x, `many_locals_call` 0.9538x,
 `captured_write` 0.9773x, `method_call` 0.9832x, `captured_read` 0.9909x, and
 `plain_function_call` 0.9951x. The unrelated `array_read` case was 1.0073x.
 These remain exploratory dirty-source binaries without provenance receipts;
-require the post-commit Performance Preview for a hosted confirmation.
+the post-commit Performance Preview at
+`1d266237348e2878d1088ba3717a0684dfdce850` confirmed the focused
+`property_read` direction at 0.9417x, but measured 1.0142x overall with a 95%
+confidence interval of [1.0091x, 1.0190x]. The other hosted cases ranged from
+0.9957x for `captured_read` to 1.0487x for `many_locals_call`, so the hosted
+portfolio direction contradicted both local runs. The preview was informational
+and health was inconclusive because its three blocks did not satisfy the frozen
+precision policy. The resulting candidate/QuickJS-NG ratio was 24.2364x. CI
+and the full Test262 Coverage workflow were green at this commit.
+
+The next profile showed that ordinary named reads still called
+`is_symbol_primitive` before the TypedArray check, and Symbol identity used up
+to two NUL-prefixed string-property probes. Primitive and boxed Symbol identity
+now live in a dedicated internal brand cell, so ordinary objects reject this
+path without hashing and string properties can neither forge nor erase the
+brand. A three-block local comparison against `1d266237` with seed `20250820`
+measured 0.9867x candidate/base overall. An independent five-block confirmation
+with seed `20250821` contained all 70 expected measurements and completed at
+0.9852x overall (1.48% lower wall ns/op): `property_read` was 0.9434x,
+`method_call` 0.9727x, `captured_read` 0.9871x, and the other four cases stayed
+between 0.9956x and 1.0003x. These are exploratory local binaries without
+provenance receipts; require the post-commit Performance Preview for a hosted
+confirmation.
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed

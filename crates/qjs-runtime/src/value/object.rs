@@ -168,6 +168,13 @@ impl Prototype {
 #[derive(Clone)]
 pub struct ObjectRef(Rc<ObjectData>);
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SymbolBrand {
+    None,
+    Primitive,
+    Boxed,
+}
+
 struct ObjectData {
     properties: Rc<RefCell<HashMap<String, Property>>>,
     property_order: Rc<RefCell<Vec<String>>>,
@@ -186,6 +193,10 @@ struct ObjectData {
     /// outside string-keyed property storage so ordinary property reads can
     /// reject the integer-indexed exotic path without a HashMap probe.
     typed_array_exotic: Cell<bool>,
+    /// Whether this object carries the Symbol [[SymbolData]] internal slot.
+    /// Keep the primitive/boxed distinction outside string-keyed storage so
+    /// ubiquitous symbol checks do not probe the property HashMap.
+    symbol_brand: Cell<SymbolBrand>,
     immutable_prototype_exotic: Rc<Cell<bool>>,
     module_namespace_exotic: Rc<Cell<bool>>,
     module_namespace_bindings: Rc<RefCell<Option<ModuleNamespaceBindings>>>,
@@ -279,6 +290,7 @@ impl ObjectRef {
             raw_json: Rc::new(Cell::new(false)),
             array_prototype_exotic: Rc::new(Cell::new(false)),
             typed_array_exotic: Cell::new(false),
+            symbol_brand: Cell::new(SymbolBrand::None),
             immutable_prototype_exotic: Rc::new(Cell::new(false)),
             module_namespace_exotic: Rc::new(Cell::new(false)),
             module_namespace_bindings: Rc::new(RefCell::new(None)),
@@ -401,6 +413,22 @@ impl ObjectRef {
 
     pub(crate) fn is_typed_array_exotic(&self) -> bool {
         self.0.typed_array_exotic.get()
+    }
+
+    pub(crate) fn mark_symbol_primitive(&self) {
+        self.0.symbol_brand.set(SymbolBrand::Primitive);
+    }
+
+    pub(crate) fn mark_symbol_boxed(&self) {
+        self.0.symbol_brand.set(SymbolBrand::Boxed);
+    }
+
+    pub(crate) fn is_symbol_object(&self) -> bool {
+        self.0.symbol_brand.get() != SymbolBrand::None
+    }
+
+    pub(crate) fn is_symbol_primitive(&self) -> bool {
+        self.0.symbol_brand.get() == SymbolBrand::Primitive
     }
 
     pub(crate) fn mark_immutable_prototype_exotic(&self) {

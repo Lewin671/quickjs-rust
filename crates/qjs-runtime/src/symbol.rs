@@ -6,9 +6,7 @@ use crate::{
     to_js_string_with_env,
 };
 
-const SYMBOL_DATA_PROPERTY: &str = "\0SymbolData";
 const SYMBOL_DESCRIPTION_PROPERTY: &str = "\0SymbolDescription";
-const SYMBOL_BOXED_PROPERTY: &str = "\0SymbolBoxed";
 const SYMBOL_WRAPPED_PROPERTY: &str = "\0SymbolWrapped";
 pub(crate) const SYMBOL_REGISTRY_BINDING: &str = "\0SymbolRegistry";
 const WELL_KNOWN_SYMBOL_NAMES: &[&str] = &[
@@ -204,11 +202,11 @@ pub(crate) fn native_symbol_key_for(
 }
 
 pub(crate) fn is_symbol_object(object: &ObjectRef) -> bool {
-    object.own_property(SYMBOL_DATA_PROPERTY).is_some()
+    object.is_symbol_object()
 }
 
 pub(crate) fn is_symbol_primitive(object: &ObjectRef) -> bool {
-    is_symbol_object(object) && object.own_property(SYMBOL_BOXED_PROPERTY).is_none()
+    object.is_symbol_primitive()
 }
 
 pub(crate) fn is_registered_symbol(object: &ObjectRef, env: &CallEnv) -> bool {
@@ -226,7 +224,7 @@ pub(crate) fn is_registered_symbol(object: &ObjectRef, env: &CallEnv) -> bool {
 pub(crate) fn boxed_symbol(object: &ObjectRef, env: &CallEnv) -> Value {
     let description = symbol_description(object);
     let boxed = symbol_object(symbol_prototype(env), description);
-    boxed.define_non_enumerable(SYMBOL_BOXED_PROPERTY.to_owned(), Value::Boolean(true));
+    boxed.mark_symbol_boxed();
     boxed.define_non_enumerable(
         SYMBOL_WRAPPED_PROPERTY.to_owned(),
         Value::Object(object.clone()),
@@ -473,7 +471,7 @@ fn symbol_method_error() -> RuntimeError {
 
 fn symbol_object(prototype: Option<ObjectRef>, description: Value) -> ObjectRef {
     let object = ObjectRef::with_prototype(HashMap::new(), prototype);
-    object.define_non_enumerable(SYMBOL_DATA_PROPERTY.to_owned(), Value::Boolean(true));
+    object.mark_symbol_primitive();
     object.define_non_enumerable(SYMBOL_DESCRIPTION_PROPERTY.to_owned(), description);
     object
 }
