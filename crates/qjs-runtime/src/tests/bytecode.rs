@@ -499,6 +499,25 @@ fn named_get_fast_path_preserves_observable_prototype_fallbacks() {
 }
 
 #[test]
+fn named_get_cache_tracks_receiver_identity_and_property_mutations() {
+    assert_eq!(
+        eval_bytecode_source(
+            "function read(object) { return object.value; } \
+             let first = { value: 1 }; let out = '' + read(first); \
+             first.value = 2; out += ':' + read(first); \
+             let hits = 0; Object.defineProperty(first, 'value', { configurable: true, get: function() { hits++; return 3; } }); \
+             out += ':' + read(first) + ':' + read(first) + ':' + hits; \
+             let second = { value: 4 }; out += ':' + read(second); \
+             second.value = null; out += ':' + read(second); \
+             delete second.value; out += ':' + read(second); out;"
+        ),
+        Ok(Value::String(
+            "1:2:3:3:2:4:null:undefined".to_owned().into()
+        ))
+    );
+}
+
+#[test]
 fn seeds_bytecode_function_env_from_referenced_caller_bindings() {
     assert_eq!(
         eval_bytecode_source("let value = 1; function read() { return value; } value = 2; read();"),

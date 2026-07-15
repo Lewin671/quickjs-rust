@@ -180,7 +180,10 @@ impl Compiler {
         property: &MemberProperty,
     ) -> Result<(), RuntimeError> {
         if let MemberProperty::Named(name) = property {
-            self.emit(Op::GetPropNamed(Rc::from(name.as_str())));
+            self.emit(Op::GetPropNamed {
+                key: Rc::from(name.as_str()),
+                cache: Default::default(),
+            });
             return Ok(());
         }
         self.compile_member_key(property)?;
@@ -672,7 +675,9 @@ mod tests {
             bytecode
                 .code
                 .iter()
-                .filter(|op| matches!(op, Op::GetPropNamed(name) if name.as_ref() == "value"))
+                .filter(|op| {
+                    matches!(op, Op::GetPropNamed { key, .. } if key.as_ref() == "value")
+                })
                 .count(),
             1
         );

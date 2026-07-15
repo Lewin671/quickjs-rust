@@ -6,7 +6,63 @@ use std::{
 
 use qjs_ast::{BinaryOp, FunctionParams, ObjectPropertyKind, UnaryOp, UpdateOp};
 
-use crate::Value;
+use crate::{ObjectRef, Value, value::ObjectWeakRef};
+
+#[derive(Clone, Debug, Default)]
+pub(super) struct NamedPropertyCache(Rc<RefCell<Option<NamedPropertyCacheEntry>>>);
+
+#[derive(Clone, Debug)]
+struct NamedPropertyCacheEntry {
+    object: ObjectWeakRef,
+    revision: u64,
+    value: CachedPrimitive,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum CachedPrimitive {
+    Undefined,
+    Null,
+    Boolean(bool),
+    Number(f64),
+}
+
+impl NamedPropertyCache {
+    pub(super) fn get(&self, object: &ObjectRef) -> Option<Value> {
+        let entry = self.0.borrow();
+        let entry = entry.as_ref()?;
+        if !entry.object.ptr_eq(object) || entry.revision != object.property_revision() {
+            return None;
+        }
+        Some(match entry.value {
+            CachedPrimitive::Undefined => Value::Undefined,
+            CachedPrimitive::Null => Value::Null,
+            CachedPrimitive::Boolean(value) => Value::Boolean(value),
+            CachedPrimitive::Number(value) => Value::Number(value),
+        })
+    }
+
+    pub(super) fn update(&self, object: &ObjectRef, value: &Value) {
+        let value = match value {
+            Value::Undefined => CachedPrimitive::Undefined,
+            Value::Null => CachedPrimitive::Null,
+            Value::Boolean(value) => CachedPrimitive::Boolean(*value),
+            Value::Number(value) => CachedPrimitive::Number(*value),
+            _ => {
+                self.clear();
+                return;
+            }
+        };
+        self.0.replace(Some(NamedPropertyCacheEntry {
+            object: object.downgrade(),
+            revision: object.property_revision(),
+            value,
+        }));
+    }
+
+    pub(super) fn clear(&self) {
+        self.0.replace(None);
+    }
+}
 
 #[derive(Clone, Debug)]
 pub(super) enum Op {
@@ -128,7 +184,10 @@ pub(super) enum Op {
     ForInKeyIsEnumerable,
     /// Reads a statically named string property without materializing the key
     /// as an operand-stack value or allocating an owned string at runtime.
-    GetPropNamed(Rc<str>),
+    GetPropNamed {
+        key: Rc<str>,
+        cache: NamedPropertyCache,
+    },
     /// Replaces an iterable on the stack with its iterator object.
     GetIterator,
     /// Replaces an iterable on the stack with its async iterator object,

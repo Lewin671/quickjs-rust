@@ -986,6 +986,33 @@ lower wall ns/op). `many_locals_call` improved to 0.9544x,
 five-block run. These are exploratory local binaries without provenance
 receipts; use the post-commit Performance Preview for hosted evidence.
 
+The post-commit Performance Preview at
+`413c99b1eafb59fb85d3c72abfdd7975451f7190` measured 0.9946x overall on
+hosted Linux, with a 95% confidence interval of [0.9876x, 1.0024x]. The point
+estimate agrees with the local improvement, but the interval crosses 1.0, so
+the hosted result remains directional rather than confirmed. The hosted cases
+were `plain_function_call` 0.9816x, `method_call` 0.9828x,
+`captured_write` 0.9891x, `array_read` 0.9950x, `many_locals_call` 0.9985x,
+`captured_read` 1.0003x, and `property_read` 1.0152x. All 21 linearity probes
+passed, all three requested blocks were valid, and CI and Test262 Coverage
+were green. The same run reduced candidate/QuickJS-NG overall to 7.5057x.
+
+Sampling the remaining `property_read` gap showed every `GetPropNamed`
+repeating the same object-property HashMap lookup and prototype checks. Named
+get bytecode now keeps a monomorphic cache for an own immediate primitive
+value, guarded by weak receiver identity and a property revision bumped by
+writes, definitions, and deletes. Getter, Proxy, exotic, inherited, and
+heap-owning values retain the uncached path, and the weak receiver does not
+extend object lifetime. A three-block comparison with seed `20251109` measured
+0.9593x overall. An independent five-block comparison with seed `20251111`
+contained all 70 expected measurements and reproduced 0.9614x overall (3.86%
+lower wall ns/op). `property_read` improved to 0.7566x (24.34% lower wall
+ns/op); the other cases remained near neutral: `method_call` 0.9814x,
+`array_read` 0.9970x, `captured_write` 0.9996x, `many_locals_call` 1.0051x,
+`plain_function_call` 1.0092x, and `captured_read` 1.0117x. These are
+exploratory local binaries without provenance receipts; use the post-commit
+Performance Preview for hosted evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment

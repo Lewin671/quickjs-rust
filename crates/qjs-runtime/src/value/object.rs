@@ -2,7 +2,7 @@ use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
     fmt,
-    rc::Rc,
+    rc::{Rc, Weak},
 };
 
 use crate::private::{PrivateEnvironment, PrivateStorage};
@@ -168,6 +168,15 @@ impl Prototype {
 #[derive(Clone)]
 pub struct ObjectRef(Rc<ObjectData>);
 
+#[derive(Clone)]
+pub(crate) struct ObjectWeakRef(Weak<ObjectData>);
+
+impl fmt::Debug for ObjectWeakRef {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("ObjectWeakRef(..)")
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SymbolBrand {
     None,
@@ -177,6 +186,9 @@ enum SymbolBrand {
 
 struct ObjectData {
     properties: Rc<RefCell<HashMap<String, Property>>>,
+    /// Invalidates monomorphic named-read caches whenever an own string
+    /// property's descriptor or value changes.
+    property_revision: Cell<u64>,
     property_order: Rc<RefCell<Vec<String>>>,
     /// Count of own string keys that parse as array indices. Maintained as keys
     /// are added and removed so `has_own_index_property` is an O(1) check; this
@@ -281,6 +293,7 @@ impl ObjectRef {
                     .map(|(key, value)| (key, Property::enumerable(value)))
                     .collect(),
             )),
+            property_revision: Cell::new(0),
             property_order: Rc::new(RefCell::new(property_order)),
             index_property_count: Rc::new(Cell::new(index_property_count)),
             symbol_properties: Rc::new(RefCell::new(Vec::new())),
@@ -389,6 +402,20 @@ impl ObjectRef {
 
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
+    }
+
+    pub(crate) fn downgrade(&self) -> ObjectWeakRef {
+        ObjectWeakRef(Rc::downgrade(&self.0))
+    }
+
+    pub(crate) fn property_revision(&self) -> u64 {
+        self.0.property_revision.get()
+    }
+
+    fn bump_property_revision(&self) {
+        self.0
+            .property_revision
+            .set(self.0.property_revision.get().wrapping_add(1));
     }
 
     pub(crate) fn mark_raw_json(&self) {
@@ -521,6 +548,7 @@ impl ObjectRef {
         if let Some(property) = properties.get_mut(&key) {
             if property.writable {
                 property.value = value;
+                self.bump_property_revision();
             }
             return;
         }
@@ -547,6 +575,7 @@ impl ObjectRef {
         }
         self.0.property_order.borrow_mut().push(key.clone());
         properties.insert(key, Property::enumerable(value));
+        self.bump_property_revision();
     }
 
     pub(crate) fn define_property(&self, key: String, property: Property) {
@@ -560,6 +589,7 @@ impl ObjectRef {
             self.0.property_order.borrow_mut().push(key.clone());
         }
         properties.insert(key, property);
+        self.bump_property_revision();
     }
 
     pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
@@ -582,9 +612,11 @@ impl ObjectRef {
         let mut properties = self.0.properties.borrow_mut();
         if let Some(property) = properties.get_mut(key) {
             property.value = value;
+            self.bump_property_revision();
             return;
         }
         properties.insert(key.to_owned(), Property::non_enumerable(value));
+        self.bump_property_revision();
     }
 
     /// Whether the object `prototype` appears as a function prototype anywhere
@@ -630,6 +662,7 @@ impl ObjectRef {
             return None;
         };
         std::rc::Rc::make_mut(string).push_str(suffix);
+        self.bump_property_revision();
         Some(Value::String(string.clone()))
     }
 
@@ -743,6 +776,9 @@ impl ObjectRef {
             return false;
         }
         let removed = properties.remove(key);
+        if removed.is_some() {
+            self.bump_property_revision();
+        }
         if removed.is_some() && is_array_index_key(key) {
             self.0
                 .index_property_count
@@ -857,6 +893,12 @@ impl ObjectRef {
 
     pub(crate) fn set_to_string_tag(&self, tag: &str) {
         *self.0.to_string_tag.borrow_mut() = Some(tag.to_owned());
+    }
+}
+
+impl ObjectWeakRef {
+    pub(crate) fn ptr_eq(&self, object: &ObjectRef) -> bool {
+        self.0.as_ptr() == Rc::as_ptr(&object.0)
     }
 }
 

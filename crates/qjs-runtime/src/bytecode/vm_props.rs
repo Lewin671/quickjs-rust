@@ -13,6 +13,7 @@ use crate::{
 use super::vm::Vm;
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
+use super::ir::NamedPropertyCache;
 use super::vm_set::property_set_uses_setter;
 use crate::CallEnv;
 
@@ -226,6 +227,38 @@ impl Vm<'_> {
             }
             // Proxy needs trap dispatch; Null/Undefined raise catchable errors.
             Value::Proxy(_) | Value::Null | Value::Undefined => None,
+        }
+    }
+
+    pub(super) fn try_cached_get_string(
+        &self,
+        object: &Value,
+        key: &str,
+        cache: &NamedPropertyCache,
+    ) -> Option<Value> {
+        let Value::Object(object_ref) = object else {
+            cache.clear();
+            return self.try_direct_get_string(object, key);
+        };
+        if symbol::is_symbol_primitive(object_ref)
+            || crate::typed_array::is_typed_array_object(object_ref)
+            || object_ref.is_module_namespace_exotic()
+        {
+            cache.clear();
+            return self.try_direct_get_string(object, key);
+        }
+        if let Some(value) = cache.get(object_ref) {
+            return Some(value);
+        }
+        match object_ref.own_data_property_read(key) {
+            OwnDataPropertyRead::Data(value) => {
+                cache.update(object_ref, &value);
+                Some(value)
+            }
+            OwnDataPropertyRead::Missing | OwnDataPropertyRead::NeedsSlowPath => {
+                cache.clear();
+                self.try_direct_get_string(object, key)
+            }
         }
     }
 

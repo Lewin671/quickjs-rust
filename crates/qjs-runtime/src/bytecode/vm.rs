@@ -7,7 +7,7 @@ use super::vm_set::set_property_key;
 use super::vm_try::TryFrame;
 use super::{
     DirectCallSlots,
-    ir::{Bytecode, Op},
+    ir::{Bytecode, NamedPropertyCache, Op},
 };
 use crate::{
     Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, ObjectRef, PropertyKey, RuntimeError,
@@ -624,8 +624,8 @@ impl<'a> Vm<'a> {
                 Op::CopyObjectSpread => self.copy_object_spread()?,
                 Op::EnumerateKeys => self.enumerate_keys()?,
                 Op::ForInKeyIsEnumerable => self.for_in_key_is_enumerable()?,
-                Op::GetPropNamed(key) => {
-                    let result = self.get_named_prop(key);
+                Op::GetPropNamed { key, cache } => {
+                    let result = self.get_named_prop(key, cache);
                     self.handle_runtime_result(result)?;
                 }
                 Op::GetIterator => self.get_iterator()?,
@@ -1067,7 +1067,11 @@ impl<'a> Vm<'a> {
         Ok(())
     }
 
-    fn get_named_prop(&mut self, key: &str) -> Result<(), RuntimeError> {
+    fn get_named_prop(
+        &mut self,
+        key: &str,
+        cache: &NamedPropertyCache,
+    ) -> Result<(), RuntimeError> {
         let object = self.pop()?;
         if matches!(object, Value::Null | Value::Undefined) {
             let object_name = if matches!(object, Value::Null) {
@@ -1082,7 +1086,7 @@ impl<'a> Vm<'a> {
                 ),
             });
         }
-        let value = if let Some(value) = self.try_direct_get_string(&object, key) {
+        let value = if let Some(value) = self.try_cached_get_string(&object, key, cache) {
             value
         } else {
             let mut env = self.current_env();
