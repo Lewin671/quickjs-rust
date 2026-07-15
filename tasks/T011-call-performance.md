@@ -1116,6 +1116,36 @@ lower wall ns/op). `many_locals_call` improved to 0.8339x and
 binaries without provenance receipts; use the post-commit Performance Preview
 for hosted evidence.
 
+The post-commit Performance Preview at
+`17f700978d360642f59ae7b94b367eaa46e08cd9` confirmed the compact numeric
+leaf plan at 0.9795x overall on hosted Linux (2.05% lower wall ns/op), with a
+95% confidence interval of [0.9745x, 0.9872x]. `captured_write` improved to
+0.9265x and `many_locals_call` to 0.9344x. `array_read`,
+`plain_function_call`, and `property_read` were also below 1.0; only
+`captured_read` and `method_call` had point estimates above 1.0, with the
+former crossing 1.0 and the latter measured imprecisely. The successful rerun
+had 3/3 valid blocks and all 21 linearity probes passed. The first attempt was
+invalid solely because the fixed QuickJS-NG `array_read` linearity probe was an
+outlier; its candidate/base result was independently below 1.0. CI and Test262
+Coverage were green. The successful run measured candidate/QuickJS-NG at
+6.8489x overall, ranging from 2.9398x for `many_locals_call` to 12.0835x for
+`property_read`.
+
+Direct-leaf eligibility depends only on immutable function and bytecode shape,
+but the hot VM call path still rechecked its full set of function flags,
+parameter shape, and bytecode metadata on every invocation. Function creation
+now caches that predicate once; release dispatch reads one boolean, while debug
+call setup recomputes and asserts the predicate to catch future drift. A
+three-block comparison with seed `20251159` measured 0.9940x overall. An
+independent five-block comparison with seed `20251161` contained all 70
+expected measurements and reproduced 0.9890x overall (1.10% lower wall ns/op).
+The affected cases were `captured_read` 0.9722x, `method_call` 0.9837x,
+`plain_function_call` 0.9847x, `captured_write` 0.9884x, and
+`many_locals_call` 1.0090x. The unrelated cases were `array_read` 0.9801x and
+`property_read` 1.0057x. These are exploratory local binaries without
+provenance receipts; use the post-commit Performance Preview for hosted
+evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment
