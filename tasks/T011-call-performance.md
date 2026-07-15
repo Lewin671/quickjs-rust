@@ -426,6 +426,35 @@ reproduced 0.9576x overall (4.24% lower wall ns/op): `captured_write` was
 0.9295x, `plain_function_call` 0.9305x, `method_call` 0.9333x,
 `captured_read` 0.9375x, and `many_locals_call` 0.9707x. The two non-call cases
 were neutral: `array_read` 1.0019x and `property_read` 1.0031x. These are
+exploratory local binaries without provenance receipts. The post-commit
+Performance Preview at `6eb791f30122b413ce13fc22f3054e9a8729d572`
+confirmed a larger 0.9605x overall improvement on hosted Linux, with a 95%
+confidence interval of [0.9602x, 0.9704x]. The call cases improved most:
+`method_call` was 0.9182x and `plain_function_call` was 0.9183x;
+`captured_read` was 0.9275x, `captured_write` 0.9729x, and
+`many_locals_call` 0.9839x. The two non-call cases were neutral within their
+confidence intervals: `array_read` 1.0015x and `property_read` 1.0057x. The
+resulting candidate/QuickJS-NG ratio was 19.4039x. All three linearity probes
+passed and all three measurement blocks were valid; the preview remained an
+informational `non_claim` because variable-host precision was inconclusive.
+CI and the full Test262 Coverage workflow were green at this commit.
+
+The next plain-call profile still attributed substantial samples to string
+hashing while setting up ordinary function frames. Dynamic `Function`
+constructors mark their synthetic realm once, before compiling the resulting
+function, but every subsequent call re-read the same hidden realm-map key.
+`FunctionData` now caches the marked realm's global object at function
+creation; ordinary functions store `None`, so their call path avoids both the
+realm lookup and the marked-function override probe. A mutation-maintained bit
+preserves the existing post-creation function-property override without making
+ordinary calls hash the hidden property name. A three-block comparison of the
+final semantics-correct implementation measured 0.9678x overall. An independent
+five-block confirmation with seed `20250913` contained all 70 expected
+measurements and reproduced 0.9680x overall (3.20% lower wall ns/op), with all
+seven case ratios below 1.0: `method_call` was 0.9394x,
+`plain_function_call` 0.9531x, `captured_read` 0.9544x,
+`captured_write` 0.9577x, and `many_locals_call` 0.9877x. The two non-call cases
+remained neutral: `property_read` 0.9911x and `array_read` 0.9946x. These are
 exploratory local binaries without provenance receipts; use the post-commit
 Performance Preview for hosted evidence.
 

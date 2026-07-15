@@ -489,6 +489,39 @@ fn private_brand_error_uses_marked_function_call_realm() {
 }
 
 #[test]
+fn marked_function_call_realm_tracks_property_updates() {
+    assert_eq!(
+        eval(
+            "let realmTypeErrorPrototype = {};
+             function RealmTypeError() {}
+             RealmTypeError.prototype = realmTypeErrorPrototype;
+             let realmGlobal = { TypeError: RealmTypeError };
+             let factory = Function(`
+               return class C {
+                 #m() { return 1; }
+                 access(other) { return other.#m(); }
+               }
+             `);
+             function usesMarkedRealm(C) {
+               let c = new C();
+               try { c.access({}); return false; } catch (error) {
+                 return Object.getPrototypeOf(error) === realmTypeErrorPrototype;
+               }
+             }
+             factory.__quickjsRustDynamicFunctionRealm = realmGlobal;
+             let assignmentMarked = usesMarkedRealm(factory());
+             factory.__quickjsRustDynamicFunctionRealm = undefined;
+             let assignmentCleared = !usesMarkedRealm(factory());
+             factory.__quickjsRustDynamicFunctionRealm = realmGlobal;
+             delete factory.__quickjsRustDynamicFunctionRealm;
+             let deletionCleared = !usesMarkedRealm(factory());
+             assignmentMarked && assignmentCleared && deletionCleared;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn nested_class_resolves_outer_private_name() {
     assert_eq!(
         eval(

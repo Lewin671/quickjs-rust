@@ -18,6 +18,15 @@ use crate::{
     object_prototype,
 };
 
+const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
+
+fn dynamic_function_realm_global(realm: &Realm) -> Option<ObjectRef> {
+    match realm.borrow().get(DYNAMIC_FUNCTION_REALM_GLOBAL) {
+        Some(Value::Object(global)) => Some(global.clone()),
+        _ => None,
+    }
+}
+
 /// A compiled instance-field initializer attached to a class constructor. It
 /// runs at construction time with `this` bound to the new instance.
 #[derive(Clone)]
@@ -107,6 +116,14 @@ pub struct FunctionData {
     /// The creation realm of a user bytecode function. Native functions keep
     /// `None` and receive their active realm through `CallEnv`.
     pub(crate) realm: Option<Realm>,
+    /// Cached internal global for functions created by a cross-realm dynamic
+    /// Function constructor. Ordinary user functions keep this empty, avoiding
+    /// hidden string-property and realm-map lookups on every call.
+    pub(crate) dynamic_function_realm_global: Option<ObjectRef>,
+    /// Whether this function currently has an own object-valued override for
+    /// the internal dynamic-realm marker. Property mutation keeps this bit in
+    /// sync so ordinary calls need not hash the hidden property name.
+    pub(crate) has_dynamic_function_realm_override: Cell<bool>,
     pub(crate) deopt_bindings: Option<DynamicBindings>,
     pub(crate) module_host: Option<ModuleHostRef>,
     pub(crate) module_imports: ModuleImports,
@@ -306,6 +323,7 @@ impl Function {
         lexical_bindings: LexicalBindings,
     ) -> Result<Self, crate::RuntimeError> {
         let realm = super::env::new_realm(env);
+        let dynamic_function_realm_global = dynamic_function_realm_global(&realm);
         let prototype = ObjectRef::with_prototype(
             HashMap::new(),
             object_prototype(&crate::CallEnv::new(Rc::clone(&realm))),
@@ -330,6 +348,8 @@ impl Function {
             params: Rc::new(params),
             native_context: Rc::new(HashMap::new()),
             realm: Some(realm),
+            dynamic_function_realm_global,
+            has_dynamic_function_realm_override: Cell::new(false),
             deopt_bindings: None,
             module_host: None,
             module_imports: HashMap::new(),
@@ -405,6 +425,7 @@ impl Function {
             with_stack,
             upvalues,
         } = compiled;
+        let dynamic_function_realm_global = dynamic_function_realm_global(&realm);
         let prototype = ObjectRef::with_prototype(
             HashMap::new(),
             object_prototype(&crate::CallEnv::new(Rc::clone(&realm))),
@@ -418,6 +439,8 @@ impl Function {
             params,
             native_context: Rc::new(HashMap::new()),
             realm: Some(realm),
+            dynamic_function_realm_global,
+            has_dynamic_function_realm_override: Cell::new(false),
             deopt_bindings,
             module_host,
             module_imports,
@@ -540,6 +563,11 @@ impl Function {
                 Value::Function(function) => function.realm.clone(),
                 _ => None,
             },
+            dynamic_function_realm_global: match &target {
+                Value::Function(function) => function.dynamic_function_realm_global.clone(),
+                _ => None,
+            },
+            has_dynamic_function_realm_override: Cell::new(false),
             deopt_bindings: None,
             module_host: None,
             module_imports: HashMap::new(),
@@ -598,6 +626,8 @@ impl Function {
             params: Rc::new(FunctionParams::positional(params)),
             native_context: Rc::new(env),
             realm: None,
+            dynamic_function_realm_global: None,
+            has_dynamic_function_realm_override: Cell::new(false),
             deopt_bindings: None,
             module_host: None,
             module_imports: HashMap::new(),
@@ -742,13 +772,17 @@ impl Function {
             if property.writable {
                 property.value = value;
             }
+            drop(properties);
+            self.refresh_dynamic_function_realm_override(&key);
             return;
         }
         if !self.extensible.get() {
             return;
         }
         self.property_order.borrow_mut().push(key.clone());
-        properties.insert(key, Property::enumerable(value));
+        properties.insert(key.clone(), Property::enumerable(value));
+        drop(properties);
+        self.refresh_dynamic_function_realm_override(&key);
     }
 
     pub(crate) fn define_property(&self, key: String, property: Property) {
@@ -756,7 +790,21 @@ impl Function {
         if !properties.contains_key(&key) {
             self.property_order.borrow_mut().push(key.clone());
         }
-        properties.insert(key, property);
+        properties.insert(key.clone(), property);
+        drop(properties);
+        self.refresh_dynamic_function_realm_override(&key);
+    }
+
+    fn refresh_dynamic_function_realm_override(&self, key: &str) {
+        if key != DYNAMIC_FUNCTION_REALM_GLOBAL {
+            return;
+        }
+        self.has_dynamic_function_realm_override.set(
+            self.properties
+                .borrow()
+                .get(key)
+                .is_some_and(|property| matches!(&property.value, Value::Object(_))),
+        );
     }
 
     pub(crate) fn own_property(&self, key: &str) -> Option<Property> {
@@ -822,6 +870,10 @@ impl Function {
             return false;
         }
         properties.remove(key);
+        drop(properties);
+        if key == DYNAMIC_FUNCTION_REALM_GLOBAL {
+            self.has_dynamic_function_realm_override.set(false);
+        }
         self.property_order
             .borrow_mut()
             .retain(|existing| existing != key);
@@ -833,6 +885,9 @@ impl Function {
     /// the generic builder added (e.g. `Proxy` has no own `prototype`).
     pub(crate) fn remove_own_property_unchecked(&self, key: &str) {
         self.properties.borrow_mut().remove(key);
+        if key == DYNAMIC_FUNCTION_REALM_GLOBAL {
+            self.has_dynamic_function_realm_override.set(false);
+        }
         self.property_order
             .borrow_mut()
             .retain(|existing| existing != key);

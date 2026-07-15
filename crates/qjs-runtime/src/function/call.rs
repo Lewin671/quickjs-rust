@@ -834,23 +834,20 @@ fn received_upvalue_value(function: &Function, bytecode: &Bytecode, name: &str) 
 }
 
 fn insert_marked_call_realm(function: &Function, frame_env: &mut CallEnv) {
-    let global = function
-        .own_property(DYNAMIC_FUNCTION_REALM_GLOBAL)
-        .and_then(|property| match property.value {
-            Value::Object(global) => Some(global),
-            _ => None,
-        })
-        .or_else(|| {
-            match function
-                .realm
-                .as_ref()
-                .and_then(|realm| realm.borrow().get(DYNAMIC_FUNCTION_REALM_GLOBAL).cloned())
-            {
-                Some(Value::Object(global)) => Some(global.clone()),
+    let cached_global = function.dynamic_function_realm_global.as_ref();
+    let has_override = function.has_dynamic_function_realm_override.get();
+    if cached_global.is_none() && !has_override {
+        return;
+    }
+    let own_global = has_override.then(|| {
+        function
+            .own_property(DYNAMIC_FUNCTION_REALM_GLOBAL)
+            .and_then(|property| match property.value {
+                Value::Object(global) => Some(global),
                 _ => None,
-            }
-        });
-    let Some(global) = global else {
+            })
+    });
+    let Some(global) = own_global.flatten().or_else(|| cached_global.cloned()) else {
         return;
     };
     frame_env.insert(
