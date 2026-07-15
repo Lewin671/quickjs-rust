@@ -851,6 +851,23 @@ fn numeric_leaf_falls_back_for_coercion_without_duplicate_effects() {
 }
 
 #[test]
+fn numeric_leaf_preserves_direct_arithmetic_and_comparisons() {
+    assert_eq!(
+        eval(
+            "function sub(a, b) { return a - b; } \
+             function mul(a, b) { return a * b; } \
+             function div(a, b) { return a / b; } \
+             function rem(a, b) { return a % b; } \
+             function lt(a, b) { return a < b; } \
+             function strictEq(a, b) { return a === b; } \
+             sub(7, 2) + ':' + mul(3, 4) + ':' + div(9, 2) + ':' + \
+               rem(9, 4) + ':' + lt(2, 3) + ':' + strictEq(NaN, NaN);"
+        ),
+        Ok(Value::String("5:12:4.5:1:true:false".to_owned().into()))
+    );
+}
+
+#[test]
 fn numeric_leaf_commits_captured_writes_before_later_fallbacks() {
     assert_eq!(
         eval(

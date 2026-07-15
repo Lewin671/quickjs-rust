@@ -881,6 +881,34 @@ with seed `20251022` contained all 70 expected measurements and reproduced
 0.9961x. These are exploratory local binaries without provenance receipts;
 use the post-commit Performance Preview for hosted evidence.
 
+The post-commit Performance Preview at
+`d88ec915215cfcb7e3a8f64305f3af67196c982d` measured 0.9895x overall on
+hosted Linux, with a 95% confidence interval of [0.9799x, 1.0031x]. The point
+estimate agrees with the local improvement, but the interval crosses 1.0, so
+the hosted result is directional rather than confirmed. The hosted affected
+cases were `captured_read` 0.9277x, `method_call` 0.9686x,
+`plain_function_call` 0.9696x, `captured_write` 0.9721x, and
+`many_locals_call` 1.0207x. The unrelated cases were `property_read` 1.0300x
+and `array_read` 1.0430x. All 21 linearity probes passed, all three requested
+blocks were valid, and CI and Test262 Coverage were green. The same run reduced
+candidate/QuickJS-NG overall from 8.5696x to 8.2719x.
+
+Sampling the resulting executor showed that numeric binary operations still
+round-tripped already-unboxed operands through temporary `Value` objects and
+the general VM helper. The numeric leaf path now evaluates the primitive
+arithmetic and comparison operations directly as `f64` or boolean scratch
+values; less common numeric operators continue to use the existing helper, and
+unsupported semantics still fall back transactionally. A three-block
+comparison with seed `20251023` measured 0.9722x overall. An independent
+five-block comparison with seed `20251024` contained all 70 expected
+measurements and reproduced 0.9699x overall (3.01% lower wall ns/op). All five
+affected cases improved: `many_locals_call` was 0.9034x,
+`plain_function_call` 0.9612x, `captured_write` 0.9715x, `captured_read`
+0.9761x, and `method_call` 0.9823x. The unrelated cases were `array_read`
+0.9962x and `property_read` 1.0017x. These are exploratory local binaries
+without provenance receipts; use the post-commit Performance Preview for
+hosted evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment

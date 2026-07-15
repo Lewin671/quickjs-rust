@@ -1,4 +1,4 @@
-use qjs_ast::{BindingPattern, FunctionParams, UpdateOp};
+use qjs_ast::{BinaryOp, BindingPattern, FunctionParams, UpdateOp};
 
 use crate::{Value, function::Upvalue};
 
@@ -153,8 +153,7 @@ pub(crate) fn try_eval_numeric_leaf(
                 let (FastValue::Number(left), FastValue::Number(right)) = (left, right) else {
                     return None;
                 };
-                let value = fast_number_binary(&Value::Number(left), *op, &Value::Number(right))?;
-                let value = FastValue::from_value(&value)?;
+                let value = direct_number_binary(left, *op, right)?;
                 push(&mut stack, &mut stack_len, value)?;
             }
             Op::Return => {
@@ -195,4 +194,25 @@ fn pop(stack: &[FastValue; MAX_FAST_STACK], stack_len: &mut usize) -> Option<Fas
 
 fn local_slot(bytecode: &Bytecode, name: &str) -> Option<usize> {
     bytecode.locals.iter().position(|local| local.name == name)
+}
+
+fn direct_number_binary(left: f64, op: BinaryOp, right: f64) -> Option<FastValue> {
+    let value = match op {
+        BinaryOp::Add => FastValue::Number(left + right),
+        BinaryOp::Sub => FastValue::Number(left - right),
+        BinaryOp::Mul => FastValue::Number(left * right),
+        BinaryOp::Div => FastValue::Number(left / right),
+        BinaryOp::Rem => FastValue::Number(left % right),
+        BinaryOp::Eq | BinaryOp::StrictEq => FastValue::Boolean(left == right),
+        BinaryOp::Ne | BinaryOp::StrictNe => FastValue::Boolean(left != right),
+        BinaryOp::Lt => FastValue::Boolean(left < right),
+        BinaryOp::Le => FastValue::Boolean(left <= right),
+        BinaryOp::Gt => FastValue::Boolean(left > right),
+        BinaryOp::Ge => FastValue::Boolean(left >= right),
+        _ => {
+            let value = fast_number_binary(&Value::Number(left), op, &Value::Number(right))?;
+            FastValue::from_value(&value)?
+        }
+    };
+    Some(value)
 }
