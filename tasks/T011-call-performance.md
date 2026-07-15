@@ -1336,6 +1336,19 @@ linearity probes passed in both runs. These are exploratory same-machine
 binaries without provenance receipts; use the post-commit Performance Preview
 for hosted evidence and the retain-or-revert decision.
 
+The hosted Performance Preview run `29449373794` at
+`24b43b6e110a294295d54c6d09ae516fd794a191` retained the call-loop trace. The
+candidate measured 0.0588x versus its base commit, with a 95% confidence
+interval of [0.0587x, 0.0588x], and 0.1006x versus pinned QuickJS-NG, with
+[0.1004x, 0.1013x]. All three requested blocks were valid and all 21 linearity
+probes passed. Every critical case beat QuickJS-NG: `many_locals_call` measured
+0.0349x, `array_read` 0.0883x, `method_call` 0.1079x,
+`plain_function_call` 0.1259x, `captured_read` 0.1310x, `property_read`
+0.1365x, and `captured_write` 0.1394x. This GitHub-hosted result is
+informational rather than a fixed-hardware claim, but it confirms the complete
+versioned portfolio target on an independent runner with provenance-bound
+candidate, base, and QuickJS-NG executables.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment
