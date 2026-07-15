@@ -1013,6 +1013,32 @@ ns/op); the other cases remained near neutral: `method_call` 0.9814x,
 exploratory local binaries without provenance receipts; use the post-commit
 Performance Preview for hosted evidence.
 
+The post-commit Performance Preview at
+`b43df11ff2693aa290d01a0255579d61244a1e6a` confirmed a 0.9844x overall
+improvement on hosted Linux (1.56% lower wall ns/op), with a 95% confidence
+interval of [0.9775x, 0.9890x]. `property_read` improved to 0.8730x while the
+other hosted cases ranged from 0.9874x to 1.0305x. All 21 linearity probes
+passed, all three requested blocks were valid, and CI was green. The preview
+remained informational because its three-block cohort is non-claim and the
+critical-family precision limit was exceeded. The same run reduced
+candidate/QuickJS-NG overall from 7.5057x to 7.3769x.
+
+Computed numeric-literal member reads still materialized a number constant on
+the operand stack and rediscovered its array-index form on every execution.
+The compiler now emits a dedicated index-get op for valid array-index literals.
+Dense arrays and typed arrays consume the immediate index directly; holes,
+custom prototypes, ordinary objects, accessors, Proxies, and other receivers
+retain the generic property path through the canonical decimal key. A
+three-block comparison with seed `20251113` measured 0.9446x overall. An
+independent five-block comparison with seed `20251117` contained all 70
+expected measurements and reproduced 0.9440x overall (5.60% lower wall ns/op).
+`array_read` improved to 0.8816x (11.84% lower wall ns/op); the other cases also
+measured below 1.0 in that run: `property_read` 0.9248x, `captured_read`
+0.9427x, `captured_write` 0.9487x, `plain_function_call` 0.9576x,
+`method_call` 0.9735x, and `many_locals_call` 0.9831x. These are exploratory
+local binaries without provenance receipts; use the post-commit Performance
+Preview for hosted evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment

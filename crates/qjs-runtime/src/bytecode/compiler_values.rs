@@ -13,7 +13,8 @@ use crate::{
 
 use super::compiler::Compiler;
 use super::ir::{ArrayElementKind, ComputedNameKind, ObjectPropertyMeta, Op};
-use super::util::unsupported_stmt;
+use super::util::{parse_number_literal, unsupported_stmt};
+use super::vm_props::array_index_from_number;
 
 impl Compiler {
     pub(super) fn compile_hoisted_function_decls(
@@ -179,12 +180,24 @@ impl Compiler {
         &mut self,
         property: &MemberProperty,
     ) -> Result<(), RuntimeError> {
-        if let MemberProperty::Named(name) = property {
-            self.emit(Op::GetPropNamed {
-                key: Rc::from(name.as_str()),
-                cache: Default::default(),
-            });
-            return Ok(());
+        match property {
+            MemberProperty::Named(name) => {
+                self.emit(Op::GetPropNamed {
+                    key: Rc::from(name.as_str()),
+                    cache: Default::default(),
+                });
+                return Ok(());
+            }
+            MemberProperty::Computed(expr) => {
+                if let Expr::Literal(Literal::Number { raw, .. }) = expr.as_ref() {
+                    let number = parse_number_literal(raw)?;
+                    if let Some(index) = array_index_from_number(number) {
+                        self.emit(Op::GetPropIndex(index));
+                        return Ok(());
+                    }
+                }
+            }
+            MemberProperty::Private(_) => {}
         }
         self.compile_member_key(property)?;
         self.emit(Op::GetProp);
@@ -688,6 +701,32 @@ mod tests {
                 .filter(|op| matches!(op, Op::GetProp))
                 .count(),
             1
+        );
+    }
+
+    #[test]
+    fn numeric_literal_member_reads_use_index_property_op() {
+        let script = qjs_parser::parse_script(
+            "let value = [1]; value[0]; value[0x1]; value[1.5]; value[-0]; value[key];",
+        )
+        .expect("source should parse");
+        let bytecode = compiler::compile_script(&script).expect("source should compile");
+
+        assert_eq!(
+            bytecode
+                .code
+                .iter()
+                .filter(|op| matches!(op, Op::GetPropIndex(0 | 1)))
+                .count(),
+            2
+        );
+        assert_eq!(
+            bytecode
+                .code
+                .iter()
+                .filter(|op| matches!(op, Op::GetProp))
+                .count(),
+            3
         );
     }
 }

@@ -188,6 +188,11 @@ pub(super) enum Op {
         key: Rc<str>,
         cache: NamedPropertyCache,
     },
+    /// Reads a computed numeric-literal property without materializing the
+    /// number as an operand-stack value. Dense arrays and typed arrays can use
+    /// the index directly; every other receiver retains ordinary property-get
+    /// semantics through the canonical decimal string key.
+    GetPropIndex(usize),
     /// Replaces an iterable on the stack with its iterator object.
     GetIterator,
     /// Replaces an iterable on the stack with its async iterator object,

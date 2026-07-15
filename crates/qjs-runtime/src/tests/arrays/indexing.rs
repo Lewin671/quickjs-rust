@@ -85,6 +85,32 @@ fn evaluates_array_member_access() {
     );
 }
 
+#[test]
+fn numeric_literal_index_reads_preserve_generic_property_semantics() {
+    assert_eq!(
+        eval(
+            "let hits = []; \
+             let ordinary = Object.create({ 0: 17 }); \
+             let accessor = {}; Object.defineProperty(accessor, '1', { get: function() { hits.push('get'); return 23; } }); \
+             let proxy = new Proxy({ 2: 31 }, { get: function(target, key, receiver) { hits.push(key); return Reflect.get(target, key, receiver); } }); \
+             ordinary[0] + ':' + accessor[1] + ':' + proxy[2] + ':' + hits.join(',');"
+        ),
+        Ok(Value::String("17:23:31:get,2".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "Array.prototype[1] = 41; let holey = [, ,]; \
+             let custom = [7]; Object.setPrototypeOf(custom, { 1: 43 }); \
+             holey[1] + ':' + custom[0] + ':' + custom[1];"
+        ),
+        Ok(Value::String("41:7:43".to_owned().into()))
+    );
+    assert_eq!(
+        eval("let values = new Uint8Array([5, 9]); values[0] + ':' + values[1] + ':' + values[2];"),
+        Ok(Value::String("5:9:undefined".to_owned().into()))
+    );
+}
+
 /// The dense `array[i] = x` fast path must stay observably identical to a
 /// generic property set: it has to honor an inherited indexed setter on
 /// `Array.prototype`, resume direct storage once that setter is removed, and

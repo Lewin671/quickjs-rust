@@ -628,6 +628,10 @@ impl<'a> Vm<'a> {
                     let result = self.get_named_prop(key, cache);
                     self.handle_runtime_result(result)?;
                 }
+                Op::GetPropIndex(index) => {
+                    let result = self.get_index_prop(*index);
+                    self.handle_runtime_result(result)?;
+                }
                 Op::GetIterator => self.get_iterator()?,
                 Op::GetAsyncIterator => self.get_async_iterator()?,
                 Op::AsyncIteratorComplete { done_slot } => {
@@ -1091,6 +1095,48 @@ impl<'a> Vm<'a> {
         } else {
             let mut env = self.current_env();
             let value = get_property(object, key, &mut env)?;
+            self.apply_env(env);
+            value
+        };
+        self.stack.push(value);
+        Ok(())
+    }
+
+    fn get_index_prop(&mut self, index: usize) -> Result<(), RuntimeError> {
+        let object = self.pop()?;
+        if matches!(object, Value::Null | Value::Undefined) {
+            let object_name = if matches!(object, Value::Null) {
+                "null"
+            } else {
+                "undefined"
+            };
+            return Err(RuntimeError {
+                thrown: None,
+                message: format!(
+                    "TypeError: Cannot read properties of {object_name} (reading '{index}')"
+                ),
+            });
+        }
+        if let Value::Array(elements) = &object
+            && let Some(value) = elements.direct_dense_index_value(index)
+        {
+            self.stack.push(value);
+            return Ok(());
+        }
+        if let Value::Object(object) = &object
+            && crate::typed_array::is_typed_array_object(object)
+        {
+            let value = crate::typed_array::integer_indexed_value(object, index);
+            self.stack.push(value);
+            return Ok(());
+        }
+
+        let key = PropertyKey::String(index.to_string());
+        let value = if let Some(value) = self.try_direct_get(&object, &key) {
+            value
+        } else {
+            let mut env = self.current_env();
+            let value = get_property_key(object, &key, &mut env)?;
             self.apply_env(env);
             value
         };
