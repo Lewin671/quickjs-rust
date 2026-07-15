@@ -68,6 +68,10 @@ pub(super) struct Vm<'a> {
     pub(super) stack: Vec<Value>,
     pub(super) locals: Vec<Slot>,
     pub(super) local_upvalues: Vec<Option<Upvalue>>,
+    /// Inline per-slot cache for frames where indexed storage is the sole
+    /// binding authority. The common first 128 slots require no allocation;
+    /// larger slot indices conservatively use the full binding path.
+    pub(super) authoritative_slots: u128,
     pub(super) upvalues: Vec<Upvalue>,
     /// Shared realm plus this frame's internal/caller-scope bindings.
     pub(super) env: CallEnv,
@@ -198,12 +202,15 @@ impl<'a> Vm<'a> {
             Self::seed_direct_call_slots(bytecode, &mut locals, direct_call_slots)
         });
         let local_upvalues = Self::initial_local_upvalues(bytecode, &locals, &upvalues, &env);
+        let authoritative_slots =
+            Self::initial_authoritative_slots(bytecode, &local_upvalues, &env);
         Self {
             bytecode,
             ip: 0,
             stack: Vec::with_capacity(64),
             locals,
             local_upvalues,
+            authoritative_slots,
             upvalues,
             env,
             direct_this,

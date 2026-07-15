@@ -373,6 +373,31 @@ impl Vm<'_> {
         local_upvalues
     }
 
+    pub(super) fn initial_authoritative_slots(
+        bytecode: &Bytecode,
+        local_upvalues: &[Option<Upvalue>],
+        env: &CallEnv,
+    ) -> u128 {
+        bytecode
+            .locals
+            .iter()
+            .enumerate()
+            .take(u128::BITS as usize)
+            .filter_map(|(slot, local)| {
+                (!bytecode.global_scope
+                    && !local.sloppy_global_fallback
+                    && local_upvalues.get(slot).is_some_and(Option::is_none)
+                    && env.slot_is_authoritative(&local.name))
+                .then_some(1_u128 << slot)
+            })
+            .fold(0, |slots, slot| slots | slot)
+    }
+
+    pub(super) fn refresh_authoritative_slots(&mut self) {
+        self.authoritative_slots =
+            Self::initial_authoritative_slots(self.bytecode, &self.local_upvalues, &self.env);
+    }
+
     /// Keeps a module's exported binding cell current for name-based writes.
     pub(super) fn write_through_module_live_binding(&self, name: &str, value: Value) {
         if let Some(binding) = self.env.module_live_binding_cell(name) {
@@ -1166,13 +1191,7 @@ impl Vm<'_> {
     /// indexed local. Captures, dynamic scope, modules, globals, and sloppy
     /// fallback bindings all retain the full synchronization path.
     fn slot_is_authoritative(&self, slot: usize) -> bool {
-        let Some(local) = self.bytecode.locals.get(slot) else {
-            return false;
-        };
-        !self.bytecode.global_scope
-            && !local.sloppy_global_fallback
-            && self.local_upvalues.get(slot).is_some_and(Option::is_none)
-            && self.env.slot_is_authoritative(&local.name)
+        slot < u128::BITS as usize && self.authoritative_slots & (1_u128 << slot) != 0
     }
 
     pub(super) fn store_local_or_global_sloppy(

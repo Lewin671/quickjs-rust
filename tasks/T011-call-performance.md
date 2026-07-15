@@ -311,8 +311,33 @@ with seed `20250821` contained all 70 expected measurements and completed at
 0.9852x overall (1.48% lower wall ns/op): `property_read` was 0.9434x,
 `method_call` 0.9727x, `captured_read` 0.9871x, and the other four cases stayed
 between 0.9956x and 1.0003x. These are exploratory local binaries without
-provenance receipts; require the post-commit Performance Preview for a hosted
-confirmation.
+provenance receipts. The Performance Preview at
+`f3f565f6671d0fc477ab57c573b446e931d45d6e` confirmed the direction on hosted
+Linux at 0.9834x overall, with a 95% confidence interval of [0.9663x, 0.9898x].
+All cases except `many_locals_call` at 1.0026x improved; `property_read` was
+0.9516x and `array_read` was 0.9702x. The resulting candidate/QuickJS-NG ratio
+was 23.8918x. The preview remained informational and health was inconclusive
+because three variable-host blocks did not satisfy the frozen precision policy.
+CI and the full Test262 Coverage workflow were green at this commit.
+
+The next profile showed that ordinary local loads and stores recomputed the
+same binding-authority predicate on every bytecode operation, including frame,
+module, immutable-name, and dynamic-scope checks that normally stay unchanged
+for the frame's lifetime. The VM now precomputes authority for its common first
+128 local slots in an inline bit mask, without a per-call allocation. Slots
+beyond that range conservatively retain the full path, and creating an upvalue
+clears the corresponding bit; generator setup and resume refresh the mask when
+their environment or captured-slot state changes. A first `Vec<bool>` prototype
+proved the loop benefit but regressed call cases by 2.5%-3.2% due to its frame
+allocation, so it was discarded. The zero-allocation mask measured 0.9680x
+overall in a three-block comparison. An independent five-block confirmation
+with seed `20250824` contained all 70 expected measurements and completed at
+0.9699x overall (3.01% lower wall ns/op), with all seven cases improved:
+`property_read` 0.9369x, `array_read` 0.9403x, `method_call` 0.9679x,
+`plain_function_call` 0.9808x, `captured_write` 0.9841x,
+`many_locals_call` 0.9884x, and `captured_read` 0.9927x. These are exploratory
+local binaries without provenance receipts; use the post-commit Performance
+Preview for hosted evidence.
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed

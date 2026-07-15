@@ -553,6 +553,28 @@ fn seeds_bytecode_function_env_from_referenced_caller_bindings() {
 }
 
 #[test]
+fn cached_authoritative_slots_preserve_dynamic_and_captured_bindings() {
+    assert_eq!(
+        eval_bytecode_source(
+            "function updateWithEval() { let value = 1; eval('value = 2'); return value; } updateWithEval();"
+        ),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "function make() { let value = 1; let read = function() { return value; }; value = 3; return read; } make()();"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "let generator = (function* named() { let value = 1; yield value; value = 2; return value; })(); generator.next().value + ':' + generator.next().value;"
+        ),
+        Ok(Value::String("1:2".to_owned().into()))
+    );
+}
+
+#[test]
 fn reports_unsupported_bytecode_surface() {
     let error = eval_bytecode_source("break;").expect_err("top-level break must not compile");
     assert_eq!(error.message, "`break` has no target");

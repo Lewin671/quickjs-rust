@@ -165,6 +165,7 @@ pub(crate) fn start_suspended_at_body(
     let mut vm = Vm::new_with_globals_upvalues_and_with_stack(&bytecode, env, upvalues, with_stack);
     if let Some(name) = immutable_function_name {
         vm.env.set_immutable_function_name(name);
+        vm.refresh_authoritative_slots();
     }
     vm.stop_at_prologue = true;
     let result = vm.run_completion();
@@ -201,6 +202,7 @@ fn run_from_start(
     let mut vm = Vm::new_with_globals_upvalues_and_with_stack(&bytecode, env, upvalues, with_stack);
     if let Some(name) = immutable_function_name {
         vm.env.set_immutable_function_name(name);
+        vm.refresh_authoritative_slots();
     }
     let result = vm.run_completion();
     drive(result, vm, &bytecode)
@@ -226,6 +228,7 @@ fn run_from_yield(
     vm.stack = snapshot.stack;
     vm.locals = snapshot.locals;
     vm.local_upvalues = snapshot.local_upvalues;
+    vm.refresh_authoritative_slots();
     vm.sloppy_global_names = snapshot.sloppy_global_names;
     vm.pending_throw = snapshot.pending_throw;
     vm.pending_return = snapshot.pending_return;

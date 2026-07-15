@@ -110,6 +110,9 @@ impl Vm<'_> {
         if let Some(local_upvalue) = self.local_upvalues.get_mut(slot) {
             *local_upvalue = Some(upvalue.clone());
         }
+        if slot < u128::BITS as usize {
+            self.authoritative_slots &= !(1_u128 << slot);
+        }
         upvalue
     }
 
