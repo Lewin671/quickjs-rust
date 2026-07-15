@@ -1193,6 +1193,37 @@ seven point estimates improved: `array_read` 0.9669x, `captured_read` 0.9701x,
 exploratory same-machine binaries without provenance receipts; use the
 post-commit Performance Preview for hosted evidence.
 
+The successful Performance Preview rerun at
+`c1989cccbc6562415bde589425a4101d96a8d954` measured the primitive local-copy
+change at 0.9898x overall, with a 95% confidence interval of [0.9889x,
+1.0411x]. The interval crossed 1.0 after a noisy `many_locals_call` block, so
+the hosted result is neutral rather than a supported improvement or
+regression. Five case point estimates improved; `array_read` was 1.0094x and
+`many_locals_call` was 1.0078x. The rerun had 3/3 valid blocks and all 21
+linearity probes passed; the first attempt was invalid solely because the
+fixed QuickJS-NG `array_read` probe measured 1.1673x. The successful run
+measured candidate/QuickJS-NG at 7.0678x overall. CI was green.
+
+The same primitive-copy specialization also applies to `Op::Dup`, which is
+used after high-frequency compound assignments to preserve the resulting
+value. Number, Boolean, Null, and Undefined now copy their inline payloads
+directly, while every reference-bearing value retains the derived clone path.
+A three-block comparison with seed `20251197` measured 0.9821x overall, with a
+95% confidence interval of [0.9800x, 0.9855x]. An independent five-block
+comparison with seed `20251201` contained all 70 expected measurements and
+reproduced 0.9788x overall (2.12% lower wall ns/op), with a 95% confidence
+interval of [0.9787x, 0.9818x]. All seven point estimates improved:
+`array_read` 0.9680x, `property_read` 0.9704x, `method_call` 0.9785x,
+`plain_function_call` 0.9817x, `captured_write` 0.9817x, `captured_read`
+0.9823x, and `many_locals_call` 0.9892x. These are exploratory same-machine
+binaries without provenance receipts; use the post-commit Performance Preview
+for hosted evidence.
+
+Moving the named-property cache's immutable local-slot metadata outside its
+`RefCell` borrow was rejected. A three-block run measured 0.9996x overall with
+a 95% confidence interval of [0.9953x, 1.0004x], while `method_call` and
+`captured_read` regressed. The experiment was reverted without a commit.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment
