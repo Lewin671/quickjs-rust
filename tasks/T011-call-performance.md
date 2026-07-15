@@ -687,6 +687,34 @@ cases were `array_read` 1.0048x and `property_read` 1.0049x. These are
 exploratory local binaries without provenance receipts; use the post-commit
 Performance Preview for hosted evidence.
 
+The post-commit Performance Preview at
+`0d6bd8f24308097f740bea10c77c7b38c2f6b386` confirmed a 0.9832x overall
+improvement on hosted Linux (1.68% lower wall ns/op), with a 95% confidence
+interval of [0.9790x, 0.9900x]. The affected hosted cases were
+`method_call` 0.9630x, `captured_read` 0.9664x, `captured_write` 0.9687x,
+`plain_function_call` 0.9825x, and `many_locals_call` 0.9878x. The unrelated
+cases were `array_read` 1.0078x and `property_read` 1.0074x. All 21 linearity
+probes passed and all three requested blocks were valid; the informational
+three-block cohort's precision policy remained inconclusive. The same run
+measured 14.0830x candidate/QuickJS-NG overall, making this the latest
+confirmed hosted baseline. CI and the full Test262 Coverage workflow were
+green at this commit.
+
+The direct-leaf frame still initialized every local through the general
+environment lookup path before authoritative parameter, `this`, and upvalue
+slots replaced those results. Direct-leaf bytecode now initializes hoisted
+locals directly to `undefined` and lexical locals to the uninitialized state;
+the general VM path remains unchanged. A three-block comparison with seed
+`20251004` measured 0.9772x overall. An independent five-block comparison
+with seed `20251005` contained all 70 expected measurements and reproduced
+0.9837x overall (1.63% lower wall ns/op). Four affected cases improved:
+`many_locals_call` was 0.9666x, `captured_write` 0.9681x,
+`captured_read` 0.9741x, and `method_call` 0.9806x;
+`plain_function_call` was neutral at 1.0005x. The unrelated cases were
+`array_read` 0.9979x and `property_read` 0.9990x. These are exploratory local
+binaries without provenance receipts; use the post-commit Performance Preview
+for hosted evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment

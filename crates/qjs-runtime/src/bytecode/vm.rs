@@ -197,7 +197,11 @@ impl<'a> Vm<'a> {
         let module_host = env.module_host();
         #[cfg(feature = "agents")]
         let agent_context = env.agent_context();
-        let mut locals = Self::initial_slots(bytecode, &env);
+        let mut locals = if direct_call_slots.is_some() {
+            Self::initial_direct_call_slots(bytecode)
+        } else {
+            Self::initial_slots(bytecode, &env)
+        };
         let direct_this = direct_call_slots.and_then(|direct_call_slots| {
             Self::seed_direct_call_slots(bytecode, &mut locals, direct_call_slots)
         });
@@ -263,6 +267,14 @@ impl<'a> Vm<'a> {
             }
         }
         direct_this
+    }
+
+    fn initial_direct_call_slots(bytecode: &Bytecode) -> Vec<Slot> {
+        bytecode
+            .locals
+            .iter()
+            .map(|local| local.hoisted.then_some(Value::Undefined))
+            .collect()
     }
 
     /// Builds a `CallEnv` over the shared realm with this frame's live slots.
