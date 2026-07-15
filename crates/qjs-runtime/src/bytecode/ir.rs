@@ -9,7 +9,13 @@ use qjs_ast::{BinaryOp, FunctionParams, ObjectPropertyKind, UnaryOp, UpdateOp};
 use crate::{ObjectRef, Value, value::ObjectWeakRef};
 
 #[derive(Clone, Debug, Default)]
-pub(super) struct NamedPropertyCache(Rc<RefCell<Option<NamedPropertyCacheEntry>>>);
+pub(super) struct NamedPropertyCache(Rc<RefCell<NamedPropertyCacheState>>);
+
+#[derive(Clone, Debug, Default)]
+struct NamedPropertyCacheState {
+    entry: Option<NamedPropertyCacheEntry>,
+    local_slot: Option<usize>,
+}
 
 #[derive(Clone, Debug)]
 struct NamedPropertyCacheEntry {
@@ -27,9 +33,20 @@ enum CachedPrimitive {
 }
 
 impl NamedPropertyCache {
+    pub(super) fn for_local(slot: usize) -> Self {
+        Self(Rc::new(RefCell::new(NamedPropertyCacheState {
+            entry: None,
+            local_slot: Some(slot),
+        })))
+    }
+
+    pub(super) fn local_slot(&self) -> Option<usize> {
+        self.0.borrow().local_slot
+    }
+
     pub(super) fn get(&self, object: &ObjectRef) -> Option<Value> {
-        let entry = self.0.borrow();
-        let entry = entry.as_ref()?;
+        let state = self.0.borrow();
+        let entry = state.entry.as_ref()?;
         if !entry.object.ptr_eq(object) || entry.revision != object.property_revision() {
             return None;
         }
@@ -52,15 +69,15 @@ impl NamedPropertyCache {
                 return;
             }
         };
-        self.0.replace(Some(NamedPropertyCacheEntry {
+        self.0.borrow_mut().entry = Some(NamedPropertyCacheEntry {
             object: object.downgrade(),
             revision: object.property_revision(),
             value,
-        }));
+        });
     }
 
     pub(super) fn clear(&self) {
-        self.0.replace(None);
+        self.0.borrow_mut().entry = None;
     }
 }
 
@@ -191,7 +208,8 @@ pub(super) enum Op {
     /// Reads a computed numeric-literal property without materializing the
     /// number as an operand-stack value. Dense arrays and typed arrays can use
     /// the index directly; every other receiver retains ordinary property-get
-    /// semantics through the canonical decimal string key.
+    /// semantics through the canonical decimal string key. On 64-bit hosts,
+    /// the upper 32 bits may encode a fused local receiver slot.
     GetPropIndex(usize),
     /// Replaces an iterable on the stack with its iterator object.
     GetIterator,

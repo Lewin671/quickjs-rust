@@ -1076,7 +1076,25 @@ impl<'a> Vm<'a> {
         key: &str,
         cache: &NamedPropertyCache,
     ) -> Result<(), RuntimeError> {
-        let object = self.pop()?;
+        let object = if let Some(slot) = cache.local_slot() {
+            let direct_eval_lookup =
+                self.direct_eval_with_stack && self.bytecode.local_is_from_env(slot);
+            if self.slot_is_authoritative(slot)
+                && !direct_eval_lookup
+                && let Some(Some(object)) = self.locals.get(slot)
+                && !matches!(
+                    object,
+                    Value::Function(function) if function.is_uninitialized_lexical_marker()
+                )
+                && let Some(value) = self.try_cached_get_string(object, key, cache)
+            {
+                self.stack.push(value);
+                return Ok(());
+            }
+            self.load_local(slot)?
+        } else {
+            self.pop()?
+        };
         if matches!(object, Value::Null | Value::Undefined) {
             let object_name = if matches!(object, Value::Null) {
                 "null"
@@ -1102,8 +1120,39 @@ impl<'a> Vm<'a> {
         Ok(())
     }
 
-    fn get_index_prop(&mut self, index: usize) -> Result<(), RuntimeError> {
-        let object = self.pop()?;
+    fn get_index_prop(&mut self, encoded_index: usize) -> Result<(), RuntimeError> {
+        let (index, local_slot) = if usize::BITS > u32::BITS {
+            let encoded_slot = encoded_index >> u32::BITS;
+            (
+                encoded_index & u32::MAX as usize,
+                encoded_slot.checked_sub(1),
+            )
+        } else {
+            (encoded_index, None)
+        };
+        let object = if let Some(slot) = local_slot {
+            let direct_eval_lookup =
+                self.direct_eval_with_stack && self.bytecode.local_is_from_env(slot);
+            if self.slot_is_authoritative(slot)
+                && !direct_eval_lookup
+                && let Some(Some(object)) = self.locals.get(slot)
+            {
+                let value = match object {
+                    Value::Array(elements) => elements.direct_dense_index_value(index),
+                    Value::Object(object) if crate::typed_array::is_typed_array_object(object) => {
+                        Some(crate::typed_array::integer_indexed_value(object, index))
+                    }
+                    _ => None,
+                };
+                if let Some(value) = value {
+                    self.stack.push(value);
+                    return Ok(());
+                }
+            }
+            self.load_local(slot)?
+        } else {
+            self.pop()?
+        };
         if matches!(object, Value::Null | Value::Undefined) {
             let object_name = if matches!(object, Value::Null) {
                 "null"

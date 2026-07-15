@@ -1202,7 +1202,7 @@ impl Vm<'_> {
     /// True when this frame has no name-addressed state that can supersede the
     /// indexed local. Captures, dynamic scope, modules, globals, and sloppy
     /// fallback bindings all retain the full synchronization path.
-    fn slot_is_authoritative(&self, slot: usize) -> bool {
+    pub(super) fn slot_is_authoritative(&self, slot: usize) -> bool {
         slot < u128::BITS as usize && self.authoritative_slots & (1_u128 << slot) != 0
     }
 

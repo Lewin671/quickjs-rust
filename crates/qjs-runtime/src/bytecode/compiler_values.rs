@@ -182,9 +182,16 @@ impl Compiler {
     ) -> Result<(), RuntimeError> {
         match property {
             MemberProperty::Named(name) => {
+                let cache = if let Some(Op::LoadLocal(slot)) = self.code.last() {
+                    let slot = *slot;
+                    self.code.pop();
+                    super::ir::NamedPropertyCache::for_local(slot)
+                } else {
+                    Default::default()
+                };
                 self.emit(Op::GetPropNamed {
                     key: Rc::from(name.as_str()),
-                    cache: Default::default(),
+                    cache,
                 });
                 return Ok(());
             }
@@ -192,7 +199,22 @@ impl Compiler {
                 if let Expr::Literal(Literal::Number { raw, .. }) = expr.as_ref() {
                     let number = parse_number_literal(raw)?;
                     if let Some(index) = array_index_from_number(number) {
-                        self.emit(Op::GetPropIndex(index));
+                        // Array indices occupy at most 32 bits. On wider hosts,
+                        // keep a fused local slot in the existing operand's
+                        // upper half so the hot `Op` layout stays unchanged.
+                        let encoded = if usize::BITS > u32::BITS
+                            && let Some(Op::LoadLocal(slot)) = self.code.last()
+                            && let Some(encoded) = slot
+                                .checked_add(1)
+                                .and_then(|slot| slot.checked_shl(u32::BITS))
+                                .map(|slot| slot | index)
+                        {
+                            self.code.pop();
+                            encoded
+                        } else {
+                            index
+                        };
+                        self.emit(Op::GetPropIndex(encoded));
                         return Ok(());
                     }
                 }
@@ -679,7 +701,7 @@ mod tests {
     #[test]
     fn static_member_reads_use_named_property_op() {
         let script = qjs_parser::parse_script(
-            "let object = { value: 1 }; let key = 'value'; object.value; object[key];",
+            "let object = { value: 1 }; let key = 'value'; object.value; ({ value: 2 }).value; object[key];",
         )
         .expect("source should parse");
         let bytecode = compiler::compile_script(&script).expect("source should compile");
@@ -689,7 +711,17 @@ mod tests {
                 .code
                 .iter()
                 .filter(|op| {
-                    matches!(op, Op::GetPropNamed { key, .. } if key.as_ref() == "value")
+                    matches!(op, Op::GetPropNamed { key, cache } if key.as_ref() == "value" && cache.local_slot().is_some())
+                })
+                .count(),
+            1
+        );
+        assert_eq!(
+            bytecode
+                .code
+                .iter()
+                .filter(|op| {
+                    matches!(op, Op::GetPropNamed { key, cache } if key.as_ref() == "value" && cache.local_slot().is_none())
                 })
                 .count(),
             1
@@ -716,10 +748,24 @@ mod tests {
             bytecode
                 .code
                 .iter()
-                .filter(|op| matches!(op, Op::GetPropIndex(0 | 1)))
+                .filter(|op| {
+                    matches!(op, Op::GetPropIndex(encoded) if encoded & u32::MAX as usize <= 1)
+                })
                 .count(),
             2
         );
+        if usize::BITS > u32::BITS {
+            assert_eq!(
+                bytecode
+                    .code
+                    .iter()
+                    .filter(
+                        |op| matches!(op, Op::GetPropIndex(encoded) if encoded >> u32::BITS != 0)
+                    )
+                    .count(),
+                2
+            );
+        }
         assert_eq!(
             bytecode
                 .code

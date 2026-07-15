@@ -518,6 +518,28 @@ fn named_get_cache_tracks_receiver_identity_and_property_mutations() {
 }
 
 #[test]
+fn fused_local_gets_observe_dynamic_binding_updates() {
+    assert_eq!(
+        eval_bytecode_source(
+            "function readNamed() { let object = { value: 1 }; eval('object = { value: 2 }'); return object.value; } \
+             function readIndex() { let values = [3]; eval('values = [4]'); return values[0]; } \
+             readNamed() + ':' + readIndex();"
+        ),
+        Ok(Value::String("2:4".to_owned().into()))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "function outer() { \
+                 let object = { value: 5 }; let values = [7]; \
+                 function replace() { object = { value: 6 }; values = [8]; } \
+                 replace(); return object.value + ':' + values[0]; \
+             } outer();"
+        ),
+        Ok(Value::String("6:8".to_owned().into()))
+    );
+}
+
+#[test]
 fn seeds_bytecode_function_env_from_referenced_caller_bindings() {
     assert_eq!(
         eval_bytecode_source("let value = 1; function read() { return value; } value = 2; read();"),

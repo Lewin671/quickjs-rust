@@ -1039,6 +1039,48 @@ measured below 1.0 in that run: `property_read` 0.9248x, `captured_read`
 local binaries without provenance receipts; use the post-commit Performance
 Preview for hosted evidence.
 
+The post-commit Performance Preview at
+`655f68a04dc99572c03bf64d67b9fc64fe8e6854` measured 0.9992x overall on
+hosted Linux, with a 95% confidence interval of [0.9921x, 1.0023x]. The
+interval crosses 1.0, so the hosted result is neutral rather than confirmation
+of the larger local direction. The hosted cases were `array_read` 0.9925x,
+`many_locals_call` 0.9926x, `plain_function_call` 0.9963x,
+`captured_read` 1.0014x, `property_read` 1.0031x, `method_call` 1.0033x, and
+`captured_write` 1.0053x. All 21 linearity probes passed and all three
+requested blocks were valid. The same run measured candidate/QuickJS-NG at
+7.3369x overall, ranging from 3.1031x for `many_locals_call` to 14.2618x for
+`property_read`.
+
+Several attempts to alter the large bytecode dispatch representation were
+discarded. Boxing the cold `NewFunction` and `NewClass` payloads reduced `Op`
+from 216 to 80 bytes but regressed a three-block run to 1.0392x overall,
+including `many_locals_call` at 1.1796x. Outlining only `NewFunction` without
+changing `Op` size still measured 1.0169x overall. Fusing local receiver loads
+into two new property-get variants improved `array_read` and `property_read`
+but regressed unrelated calls and measured 1.0114x overall. Reusing the
+existing variants with an added optional local-slot field reduced that result
+to 1.0041x overall, but still slowed the unrelated call cases by roughly
+0.8-4.4%. These results show that this interpreter's generated dispatch layout
+is sensitive even when the source-level change is cold or the executable gets
+smaller; none of these representations was retained.
+
+The retained local-receiver fusion instead leaves the `Op` variants, fields,
+and main VM match unchanged. Named gets store the fused slot in the existing
+cache sidecar. On 64-bit targets, literal-index gets pack it into the unused
+upper half of the existing `usize` operand; 32-bit targets conservatively keep
+the ordinary load. Authoritative local receivers can therefore be borrowed for
+the cache or dense-index hit, while captures, direct eval, uninitialized
+lexicals, accessors, Proxies, exotic objects, and other misses use the existing
+synchronized fallback. A three-block comparison with seed `20251137` measured
+0.9680x overall. An independent five-block comparison with seed `20251141`
+contained all 70 expected measurements and reproduced 0.9701x overall (2.99%
+lower wall ns/op). `array_read` improved to 0.8818x and `property_read` to
+0.9178x. The unrelated cases stayed near neutral: `many_locals_call` 0.9847x,
+`method_call` 0.9969x, `plain_function_call` 1.0042x, `captured_read` 1.0061x,
+and `captured_write` 1.0075x. These are exploratory local binaries without
+provenance receipts; use the post-commit Performance Preview for hosted
+evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment
