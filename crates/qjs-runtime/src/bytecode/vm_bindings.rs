@@ -863,7 +863,7 @@ impl Vm<'_> {
         Ok(Value::String(typeof_value(value).into()))
     }
 
-    #[inline]
+    #[inline(always)]
     pub(super) fn load_local(&mut self, slot: usize) -> Result<Value, RuntimeError> {
         if self.slot_is_authoritative(slot) {
             return match self.locals.get(slot) {
@@ -982,7 +982,7 @@ impl Vm<'_> {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub(super) fn store_local(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
         if self.slot_is_authoritative(slot)
             && self

@@ -386,8 +386,28 @@ overall (1.07% lower wall ns/op): `array_read` was 0.9613x, `property_read`
 0.9843x, `method_call` 0.9879x, `many_locals_call` 0.9928x, `captured_read`
 0.9972x, and `plain_function_call` 0.9996x. `captured_write` was 1.0024x, a
 0.24% local regression within the run's noise. These are exploratory local
-binaries without provenance receipts; use the post-commit Performance Preview
-for hosted evidence.
+binaries without provenance receipts. The Performance Preview at
+`6c60830fc293a74f48af05bede4fcdca696f1b6c` confirmed 0.9850x overall on
+hosted Linux, with a 95% confidence interval of [0.9816x, 0.9860x]. Six hosted
+case ratios were below 1.0: `plain_function_call` 0.9583x, `property_read`
+0.9714x, `captured_write` 0.9786x, `array_read` 0.9845x, `many_locals_call`
+0.9949x, and `captured_read` 0.9917x. `method_call` measured 1.0166x in the
+three variable-host blocks. The resulting candidate/QuickJS-NG ratio was
+19.9338x. The preview remained informational and health was inconclusive; CI
+and the full Test262 Coverage workflow were green at this commit.
+
+The compiler did not honor the ordinary `#[inline]` hint for the now-small
+load/store prefixes: a follow-up profile still attributed about 7.5% of top-of-
+stack samples to those two call boundaries. Requiring those prefixes to inline
+removed both symbols from the same property-read profile while preserving the
+explicit non-inlined slow functions. A three-block comparison measured 0.9846x
+overall with all seven cases improved. An independent five-block confirmation
+with seed `20250905` contained all 70 expected measurements and reproduced
+0.9843x overall (1.57% lower wall ns/op): `array_read` was 0.9650x,
+`property_read` 0.9727x, `many_locals_call` 0.9837x, `captured_write` 0.9899x,
+`method_call` 0.9901x, `captured_read` 0.9938x, and `plain_function_call`
+0.9954x. These are exploratory local binaries without provenance receipts;
+use the post-commit Performance Preview for hosted evidence.
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
