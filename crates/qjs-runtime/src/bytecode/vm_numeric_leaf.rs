@@ -58,8 +58,32 @@ enum FastOp {
 #[derive(Clone, Debug)]
 pub(super) struct NumericLeafPlan {
     ops: Vec<FastOp>,
+    shortcut: Option<NumericLeafShortcut>,
     hoisted_slots: u32,
     writes_received_upvalues: bool,
+}
+
+#[derive(Clone, Debug)]
+enum NumericLeafShortcut {
+    ArgumentConstChain {
+        argument_index: usize,
+        operations: Vec<(BinaryOp, f64)>,
+    },
+    ArgumentUpvalueBinary {
+        argument_index: usize,
+        upvalue_index: usize,
+        op: BinaryOp,
+    },
+    UpvalueArgumentBinary {
+        upvalue_index: usize,
+        argument_index: usize,
+        op: BinaryOp,
+    },
+    UpdateUpvalueConstReturn {
+        upvalue_index: usize,
+        op: BinaryOp,
+        right: f64,
+    },
 }
 
 impl NumericLeafPlan {
@@ -224,8 +248,10 @@ impl NumericLeafPlan {
                     if compact_terminal_upvalue_update(&mut ops) {
                         writes_received_upvalues = false;
                     }
+                    let shortcut = NumericLeafShortcut::compile(&ops, bytecode);
                     return Some(Self {
                         ops,
+                        shortcut,
                         hoisted_slots,
                         writes_received_upvalues,
                     });
@@ -235,6 +261,154 @@ impl NumericLeafPlan {
         }
         None
     }
+}
+
+impl NumericLeafShortcut {
+    fn compile(ops: &[FastOp], bytecode: &Bytecode) -> Option<Self> {
+        // Function prologues can leave primitive constants below the eventual
+        // return value. They are side-effect free and never consumed by these
+        // terminal shapes, so exclude that dead prefix from recognition.
+        let core = &ops[ops
+            .iter()
+            .position(|op| !matches!(op, FastOp::LoadConst(_)))?..];
+        if let [FastOp::LoadLocal(slot), middle @ .., FastOp::Return] = core
+            && let Some(argument_index) = parameter_index(bytecode, *slot)
+            && !middle.is_empty()
+            && middle
+                .iter()
+                .all(|op| matches!(op, FastOp::BinaryConstRight(_, _)))
+        {
+            let operations = middle
+                .iter()
+                .map(|op| match op {
+                    FastOp::BinaryConstRight(op, right) => (*op, *right),
+                    _ => unreachable!("guarded constant-chain operation"),
+                })
+                .collect();
+            return Some(Self::ArgumentConstChain {
+                argument_index,
+                operations,
+            });
+        }
+        if let [
+            FastOp::LoadLocal(left),
+            FastOp::LoadLocal(right),
+            FastOp::Binary(op),
+            FastOp::Return,
+        ] = core
+        {
+            if let (Some(argument_index), Some(upvalue_index)) = (
+                parameter_index(bytecode, *left),
+                upvalue_index(bytecode, *right),
+            ) {
+                return Some(Self::ArgumentUpvalueBinary {
+                    argument_index,
+                    upvalue_index,
+                    op: *op,
+                });
+            }
+            if let (Some(upvalue_index), Some(argument_index)) = (
+                upvalue_index(bytecode, *left),
+                parameter_index(bytecode, *right),
+            ) {
+                return Some(Self::UpvalueArgumentBinary {
+                    upvalue_index,
+                    argument_index,
+                    op: *op,
+                });
+            }
+        }
+        if let [
+            FastOp::UpdateUpvalueConstReturn {
+                upvalue_index,
+                op,
+                right,
+                ..
+            },
+        ] = core
+        {
+            return Some(Self::UpdateUpvalueConstReturn {
+                upvalue_index: *upvalue_index,
+                op: *op,
+                right: *right,
+            });
+        }
+        None
+    }
+
+    fn eval(&self, arguments: &[Value], upvalues: &[Upvalue]) -> Option<Value> {
+        let argument_number = |index: usize| -> Option<f64> {
+            match arguments.get(index)? {
+                Value::Number(value) => Some(*value),
+                _ => None,
+            }
+        };
+        let upvalue_number = |index: usize| -> Option<f64> {
+            upvalues.get(index)?.with_value(|value| match value {
+                Value::Number(value) => Some(*value),
+                _ => None,
+            })
+        };
+        match self {
+            Self::ArgumentConstChain {
+                argument_index,
+                operations,
+            } => {
+                let mut value = FastValue::Number(argument_number(*argument_index)?);
+                for (op, right) in operations {
+                    let FastValue::Number(left) = value else {
+                        return None;
+                    };
+                    value = direct_number_binary(left, *op, *right)?;
+                }
+                value.into_value()
+            }
+            Self::ArgumentUpvalueBinary {
+                argument_index,
+                upvalue_index,
+                op,
+            } => direct_number_binary(
+                argument_number(*argument_index)?,
+                *op,
+                upvalue_number(*upvalue_index)?,
+            )?
+            .into_value(),
+            Self::UpvalueArgumentBinary {
+                upvalue_index,
+                argument_index,
+                op,
+            } => direct_number_binary(
+                upvalue_number(*upvalue_index)?,
+                *op,
+                argument_number(*argument_index)?,
+            )?
+            .into_value(),
+            Self::UpdateUpvalueConstReturn {
+                upvalue_index,
+                op,
+                right,
+            } => {
+                let value = direct_number_binary(upvalue_number(*upvalue_index)?, *op, *right)?
+                    .into_value()?;
+                upvalues.get(*upvalue_index)?.set(value.clone());
+                Some(value)
+            }
+        }
+    }
+}
+
+fn parameter_index(bytecode: &Bytecode, slot: usize) -> Option<usize> {
+    bytecode
+        .parameter_slots()
+        .iter()
+        .position(|candidate| *candidate == slot)
+}
+
+fn upvalue_index(bytecode: &Bytecode, slot: usize) -> Option<usize> {
+    bytecode
+        .received_upvalue_slots()
+        .iter()
+        .position(|candidate| *candidate == slot)
 }
 
 impl FastValue {
@@ -277,6 +451,16 @@ pub(crate) fn try_eval_numeric_leaf(
         return try_eval_numeric_leaf_bytecode(bytecode, params, arguments, upvalues);
     }
 
+    if bytecode.parameter_slots().len() == params.positional.len()
+        && bytecode.received_upvalue_slots().len() == upvalues.len()
+        && let Some(value) = plan
+            .shortcut
+            .as_ref()
+            .and_then(|shortcut| shortcut.eval(arguments, upvalues))
+    {
+        return Some(value);
+    }
+
     let mut locals = [FastValue::Uninitialized; MAX_FAST_LOCALS];
     let mut hoisted_slots = plan.hoisted_slots;
     while hoisted_slots != 0 {
@@ -300,7 +484,7 @@ pub(crate) fn try_eval_numeric_leaf(
         return None;
     }
     for (&slot, upvalue) in received_upvalue_slots.iter().zip(upvalues) {
-        locals[slot] = FastValue::from_value(&upvalue.get())?;
+        locals[slot] = upvalue.with_value(FastValue::from_value)?;
     }
 
     let mut assigned_upvalues = 0_u32;
@@ -429,7 +613,7 @@ fn try_eval_numeric_leaf_bytecode(
         return None;
     }
     for (&slot, upvalue) in received_upvalue_slots.iter().zip(upvalues) {
-        locals[slot] = FastValue::from_value(&upvalue.get())?;
+        locals[slot] = upvalue.with_value(FastValue::from_value)?;
     }
 
     let mut assigned_upvalues = 0_u32;
@@ -651,6 +835,16 @@ mod tests {
             "unexpected materialized setup in {:#?}",
             plan.ops
         );
+        assert!(
+            matches!(
+                plan.shortcut,
+                Some(NumericLeafShortcut::ArgumentConstChain {
+                    argument_index: 0,
+                    ..
+                })
+            ),
+            "unexpected plan: {plan:#?}"
+        );
     }
 
     #[test]
@@ -685,6 +879,48 @@ mod tests {
                 op: BinaryOp::Add,
                 right: 1.0,
             }]
+        ));
+        assert!(matches!(
+            plan.shortcut,
+            Some(NumericLeafShortcut::UpdateUpvalueConstReturn {
+                upvalue_index: 0,
+                op: BinaryOp::Add,
+                right: 1.0,
+            })
+        ));
+    }
+
+    #[test]
+    fn captured_reader_plan_uses_argument_upvalue_shortcut() {
+        let script = qjs_parser::parse_script(
+            "function make() { var captured = 7; return function(value) { return value + captured; }; }",
+        )
+        .expect("source should parse");
+        let script_bytecode = compiler::compile_script(&script).expect("source should compile");
+        let outer = script_bytecode
+            .code
+            .iter()
+            .find_map(|op| match op {
+                Op::NewFunction { bytecode, .. } => Some(bytecode),
+                _ => None,
+            })
+            .expect("outer function should be compiled");
+        let inner = outer
+            .code
+            .iter()
+            .find_map(|op| match op {
+                Op::NewFunction { bytecode, .. } => Some(bytecode),
+                _ => None,
+            })
+            .expect("inner function should be compiled");
+        let plan = NumericLeafPlan::compile(inner).expect("reader should be admitted");
+        assert!(matches!(
+            plan.shortcut,
+            Some(NumericLeafShortcut::ArgumentUpvalueBinary {
+                argument_index: 0,
+                upvalue_index: 0,
+                op: BinaryOp::Add,
+            })
         ));
     }
 }

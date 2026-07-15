@@ -44,6 +44,13 @@ impl Upvalue {
         self.0.borrow().clone()
     }
 
+    /// Borrows the current value for a read that can copy only the payload it
+    /// needs. This avoids an otherwise unnecessary reference-count update when
+    /// a guarded fast path merely classifies or extracts an inline primitive.
+    pub(crate) fn with_value<R>(&self, read: impl FnOnce(&Value) -> R) -> R {
+        read(&self.0.borrow())
+    }
+
     /// Overwrites the cell's value; visible through every handle to this cell.
     pub(crate) fn set(&self, value: Value) {
         *self.0.borrow_mut() = value;
@@ -93,6 +100,17 @@ mod tests {
         // The declaring frame observes the closure's write — the whole point of
         // a shared cell vs. the old snapshot model.
         assert!(matches!(declaring.get(), Value::Number(n) if n == 42.0));
+    }
+
+    #[test]
+    fn with_value_reads_without_changing_the_cell() {
+        let cell = Upvalue::new(Value::Number(42.0));
+        let number = cell.with_value(|value| match value {
+            Value::Number(number) => Some(*number),
+            _ => None,
+        });
+        assert_eq!(number, Some(42.0));
+        assert!(matches!(cell.get(), Value::Number(number) if number == 42.0));
     }
 
     #[test]
