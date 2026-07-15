@@ -32,6 +32,7 @@ mod vm_jobs;
 mod vm_literals;
 mod vm_module;
 mod vm_numeric_leaf;
+mod vm_numeric_loop;
 mod vm_ops;
 mod vm_private;
 mod vm_props;

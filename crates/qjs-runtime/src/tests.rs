@@ -26,6 +26,7 @@ mod math;
 mod modules;
 mod named_evaluation;
 mod numbers;
+mod numeric_loops;
 mod objects;
 mod parameters;
 mod private_names;

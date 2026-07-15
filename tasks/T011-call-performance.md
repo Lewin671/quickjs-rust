@@ -1249,6 +1249,43 @@ cases were neutral at 0.9929x and 1.0011x. All 21 linearity probes passed in
 both runs. These are exploratory same-machine binaries without provenance
 receipts; use the post-commit Performance Preview for hosted evidence.
 
+The hosted Performance Preview at
+`b26efffd495cde87aa27d0c7fcb27d2d02ec2775` confirmed the direct numeric-leaf
+shapes at 0.9198x overall (8.02% lower wall ns/op), with a 95% confidence
+interval of [0.9140x, 0.9353x]. All seven hosted point estimates improved:
+`many_locals_call` was 0.7694x, `captured_read` 0.8906x,
+`plain_function_call` 0.9267x, `method_call` 0.9394x,
+`captured_write` 0.9457x, `property_read` 0.9887x, and `array_read` 0.9985x.
+All 21 linearity probes passed and all 3 requested blocks were valid. The same
+run reduced candidate/QuickJS-NG from 6.5543x to 6.0006x overall.
+
+The remaining property and array profiles were dominated by the general VM
+dispatching the same pure numeric counted-loop skeleton. Bytecode now lazily
+recognizes loops whose test is an authoritative numeric `counter < limit`,
+whose update is the compiler's ordinary numeric increment, and whose body only
+adds stable own-data numeric properties or dense numeric array elements into
+one authoritative accumulator. The first iteration always runs through the
+ordinary VM, warming and validating property caches; accessors, inherited
+properties, Proxies, holes, non-numeric values, captured slots, and dynamic
+scope all reject the trace. A first implementation incorrectly required an
+empty operand stack, so the compiler's harmless completion-value prefix caused
+every backedge to miss and regressed three blocks to 1.0294x overall. Removing
+that over-guard made the trace execute while preserving the untouched stack
+prefix. Because the accelerated cases then finished below the frozen 500 ms
+window at the old 20M cap, their manifest-only `max_iterations` capacity was
+raised to 160M; the workload, operation counts, checksums, measurement window,
+and per-role independent calibration are unchanged.
+
+The corrected three-block comparison with seed `20251231` contained all 63
+expected measurements and measured 0.3418x overall, with a 95% confidence
+interval of [0.3406x, 0.3436x]. An independent five-block run with seed
+`20260103` contained all 105 expected measurements and reproduced 0.3422x
+overall (65.78% lower wall ns/op), with [0.3414x, 0.3483x]. `property_read`
+improved to 0.0243x and `array_read` to 0.0226x; the other five cases stayed
+near neutral from 0.9917x to 1.0059x. All 21 linearity probes passed in both
+runs. These are exploratory same-machine binaries without provenance receipts;
+use the post-commit Performance Preview for hosted evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment
