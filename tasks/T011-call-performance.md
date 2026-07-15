@@ -1167,6 +1167,32 @@ estimates improved: `property_read` 0.9634x, `array_read` 0.9680x,
 exploratory same-machine binaries without provenance receipts; use the
 post-commit Performance Preview for hosted evidence.
 
+The successful Performance Preview rerun at
+`60e85da9605fea6f5c6deb429a69f80b7d66c8af` confirmed the local-slot fast paths
+at 0.9781x overall on hosted Linux (2.19% lower wall ns/op), with a 95%
+confidence interval of [0.9732x, 0.9852x]. All seven point estimates improved,
+from `captured_read` at 0.9989x through `property_read` at 0.9434x. The rerun
+had 3/3 valid blocks and all 21 linearity probes passed; the first attempt was
+invalid because base `captured_write` and QuickJS-NG `array_read` were
+linearity outliers. The successful run measured candidate/QuickJS-NG at
+6.7003x overall, ranging from 2.9209x for `many_locals_call` to 11.2085x for
+`property_read`. CI was green.
+
+Sampling also showed that authoritative local reads still entered the general
+derived `Value::clone` implementation even for inline primitive values. Local
+loads now copy Number, Boolean, Null, and Undefined payloads directly and keep
+the existing clone path for every reference-bearing value. This changes no
+bytecode representation or binding semantics. A three-block comparison with
+seed `20251179` measured 0.9735x overall, with a 95% confidence interval of
+[0.9691x, 0.9740x]. An independent five-block comparison with seed `20251183`
+contained all 70 expected measurements and reproduced 0.9767x overall (2.33%
+lower wall ns/op), with a 95% confidence interval of [0.9664x, 0.9812x]. All
+seven point estimates improved: `array_read` 0.9669x, `captured_read` 0.9701x,
+`property_read` 0.9734x, `plain_function_call` 0.9763x, `captured_write`
+0.9822x, `method_call` 0.9838x, and `many_locals_call` 0.9846x. These are
+exploratory same-machine binaries without provenance receipts; use the
+post-commit Performance Preview for hosted evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment

@@ -867,7 +867,7 @@ impl Vm<'_> {
     pub(super) fn load_local(&mut self, slot: usize) -> Result<Value, RuntimeError> {
         if self.slot_is_authoritative(slot) {
             return match self.locals.get(slot) {
-                Some(Some(value)) => self.checked_local_value(slot, value.clone()),
+                Some(Some(value)) => self.checked_local_value(slot, clone_local_value(value)),
                 Some(None) => Err(RuntimeError {
                     thrown: None,
                     message: format!(
@@ -1695,6 +1695,17 @@ impl Vm<'_> {
         crate::promise::drain_promise_jobs(&mut env)?;
         self.apply_env(env);
         Ok(())
+    }
+}
+
+#[inline(always)]
+fn clone_local_value(value: &Value) -> Value {
+    match value {
+        Value::Number(value) => Value::Number(*value),
+        Value::Boolean(value) => Value::Boolean(*value),
+        Value::Null => Value::Null,
+        Value::Undefined => Value::Undefined,
+        value => value.clone(),
     }
 }
 
