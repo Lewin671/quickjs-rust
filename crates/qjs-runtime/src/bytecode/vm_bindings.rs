@@ -943,23 +943,27 @@ impl Vm<'_> {
             .map(Upvalue::get)
     }
 
+    #[inline(always)]
     fn checked_local_value(&self, slot: usize, value: Value) -> Result<Value, RuntimeError> {
-        if matches!(
-            &value,
-            Value::Function(function) if function.is_uninitialized_lexical_marker()
-        ) {
-            if is_compiler_temporary(&self.bytecode.locals[slot].name) {
-                return Ok(Value::Undefined);
-            }
-            return Err(RuntimeError {
-                thrown: None,
-                message: format!(
-                    "ReferenceError: undefined identifier `{}`",
-                    self.bytecode.locals[slot].name
-                ),
-            });
+        if !value.is_uninitialized_lexical_marker() {
+            return Ok(value);
         }
-        Ok(value)
+        self.uninitialized_local_value(slot)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn uninitialized_local_value(&self, slot: usize) -> Result<Value, RuntimeError> {
+        if is_compiler_temporary(&self.bytecode.locals[slot].name) {
+            return Ok(Value::Undefined);
+        }
+        Err(RuntimeError {
+            thrown: None,
+            message: format!(
+                "ReferenceError: undefined identifier `{}`",
+                self.bytecode.locals[slot].name
+            ),
+        })
     }
 
     pub(super) fn load_local_or_undefined(&self, slot: usize) -> Result<Value, RuntimeError> {
@@ -1138,7 +1142,25 @@ impl Vm<'_> {
         Ok(())
     }
 
+    #[inline(always)]
     pub(super) fn assign_local(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
+        if self.slot_is_authoritative(slot)
+            && self
+                .bytecode
+                .locals
+                .get(slot)
+                .is_some_and(|local| local.mutable)
+            && let Some(Some(local)) = self.locals.get_mut(slot)
+            && !local.is_uninitialized_lexical_marker()
+        {
+            *local = value;
+            return Ok(());
+        }
+        self.assign_local_slow(slot, value)
+    }
+
+    #[inline(never)]
+    fn assign_local_slow(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
         if self.slot_is_authoritative(slot)
             && self
                 .bytecode
@@ -1202,6 +1224,7 @@ impl Vm<'_> {
     /// True when this frame has no name-addressed state that can supersede the
     /// indexed local. Captures, dynamic scope, modules, globals, and sloppy
     /// fallback bindings all retain the full synchronization path.
+    #[inline(always)]
     pub(super) fn slot_is_authoritative(&self, slot: usize) -> bool {
         slot < u128::BITS as usize && self.authoritative_slots & (1_u128 << slot) != 0
     }

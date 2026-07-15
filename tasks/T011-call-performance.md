@@ -1137,6 +1137,36 @@ All 21 linearity probes passed, all three blocks were valid, and CI was green,
 so this was a supported performance regression rather than invalid evidence.
 The eligibility cache was reverted.
 
+The revert Performance Preview at
+`2849a2520f973598602fcc1ad75814ddc65e6599` had 3/3 valid measurement blocks,
+but one candidate `property_read` linearity probe measured 1.4808x, outside the
+frozen [0.85x, 1.15x] bounds. The other 20 probes passed, CI and Test262
+Coverage were green, and the preview correctly produced no performance
+conclusion from the invalid health result.
+
+Fusing local compound assignment into a new `Op` variant was also rejected.
+Although it removed two dispatches from the common `checksum += value` shape,
+the changed dispatch layout regressed a three-block run with seed `20251167`
+to 1.0171x overall, with a 95% confidence interval of [1.0146x, 1.0187x].
+Only `property_read` improved, to 0.9944x; the call cases regressed by roughly
+1.0-4.6%. The experiment was reverted without a commit.
+
+Sampling instead showed authoritative local reads and assignments repeatedly
+entering small out-of-line validation helpers. The retained change keeps the
+`Op` representation unchanged: ordinary initialized mutable-slot assignment
+and successful TDZ validation are now inline, while uninitialized bindings and
+the existing captured/global synchronization logic are outlined as cold or
+non-inline slow paths. A three-block comparison with seed `20251171` measured
+0.9844x overall, with a 95% confidence interval of [0.9751x, 0.9876x]. An
+independent five-block comparison with seed `20251173` contained all 105
+expected measurements and reproduced 0.9752x overall (2.48% lower wall ns/op),
+with a 95% confidence interval of [0.9731x, 0.9861x]. All seven case point
+estimates improved: `property_read` 0.9634x, `array_read` 0.9680x,
+`captured_read` 0.9703x, `plain_function_call` 0.9773x, `captured_write`
+0.9789x, `method_call` 0.9838x, and `many_locals_call` 0.9845x. These are
+exploratory same-machine binaries without provenance receipts; use the
+post-commit Performance Preview for hosted evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment
