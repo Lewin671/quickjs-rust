@@ -827,32 +827,6 @@ are exploratory local binaries without provenance receipts; use the
 post-commit Performance Preview for hosted evidence.
 
 The post-commit Performance Preview at
-`f081ab172823bbb3265bc44bc415c3324166ce96` confirmed a 0.9729x overall
-improvement on hosted Linux (2.71% lower wall ns/op), with a 95% confidence
-interval of [0.9700x, 0.9825x]. All seven hosted cases improved:
-`many_locals_call` was 0.9218x, `captured_read` 0.9574x,
-`plain_function_call` 0.9709x, `captured_write` 0.9824x, `method_call`
-0.9861x, `property_read` 0.9968x, and `array_read` 0.9973x. All 21 linearity
-probes passed, all three requested blocks were valid, and CI and Test262
-Coverage were green. The same run reduced candidate/QuickJS-NG overall from
-the prior valid preview's 8.2719x to 7.6917x.
-
-The fixed numeric scratch stack was provisioned for 64 values even though the
-admitted leaf bodies normally peak at two or three. Its initialization became
-visible after the name scans disappeared. The stack now holds 16 values;
-deeper numeric expression trees fail the bounded push and transactionally use
-the general VM, preserving semantics without carrying the cold capacity on
-every call. A three-block comparison with seed `20251028` measured 0.9793x
-overall. An independent five-block comparison with seed `20251029` contained
-all 70 expected measurements and reproduced 0.9804x overall (1.96% lower wall
-ns/op). The five affected cases improved: `captured_read` was 0.9534x,
-`captured_write` 0.9690x, `plain_function_call` 0.9782x, `method_call`
-0.9787x, and `many_locals_call` 0.9840x. The unrelated cases were effectively
-neutral at `property_read` 0.9999x and `array_read` 1.0004x. These are
-exploratory local binaries without provenance receipts; use the post-commit
-Performance Preview for hosted evidence.
-
-The post-commit Performance Preview at
 `3170a7d5caf59a67770d9c568ac7de20a089f42d` measured 0.9928x overall on
 hosted Linux, with a 95% confidence interval of [0.9928x, 1.0034x]. The point
 estimate agrees with the local improvement, but the interval crosses 1.0, so
@@ -958,6 +932,59 @@ with seed `20251027` contained all 70 expected measurements and reproduced
 unrelated cases were `property_read` 1.0039x and `array_read` 1.0084x. These
 are exploratory local binaries without provenance receipts; use the
 post-commit Performance Preview for hosted evidence.
+
+The post-commit Performance Preview at
+`f081ab172823bbb3265bc44bc415c3324166ce96` confirmed a 0.9729x overall
+improvement on hosted Linux (2.71% lower wall ns/op), with a 95% confidence
+interval of [0.9700x, 0.9825x]. All seven hosted cases improved:
+`many_locals_call` was 0.9218x, `captured_read` 0.9574x,
+`plain_function_call` 0.9709x, `captured_write` 0.9824x, `method_call`
+0.9861x, `property_read` 0.9968x, and `array_read` 0.9973x. All 21 linearity
+probes passed, all three requested blocks were valid, and CI and Test262
+Coverage were green. The same run reduced candidate/QuickJS-NG overall from
+the prior valid preview's 8.2719x to 7.6917x.
+
+The fixed numeric scratch stack was provisioned for 64 values even though the
+admitted leaf bodies normally peak at two or three. Its initialization became
+visible after the name scans disappeared. The stack now holds 16 values;
+deeper numeric expression trees fail the bounded push and transactionally use
+the general VM, preserving semantics without carrying the cold capacity on
+every call. A three-block comparison with seed `20251028` measured 0.9793x
+overall. An independent five-block comparison with seed `20251029` contained
+all 70 expected measurements and reproduced 0.9804x overall (1.96% lower wall
+ns/op). The five affected cases improved: `captured_read` was 0.9534x,
+`captured_write` 0.9690x, `plain_function_call` 0.9782x, `method_call`
+0.9787x, and `many_locals_call` 0.9840x. The unrelated cases were effectively
+neutral at `property_read` 0.9999x and `array_read` 1.0004x. These are
+exploratory local binaries without provenance receipts; use the post-commit
+Performance Preview for hosted evidence.
+
+The post-commit three-block Performance Preview at
+`02bafba004a9e15b73aa2dc06a9f1c4acff1b341` measured 0.9908x overall on
+hosted Linux (0.92% lower wall ns/op), with a 95% confidence interval of
+[0.9789x, 0.9914x]. The hosted cases were `plain_function_call` 0.9701x,
+`captured_read` 0.9697x, `captured_write` 0.9742x, `method_call` 0.9755x,
+`array_read` 1.0082x, `property_read` 1.0070x, and `many_locals_call` 1.0328x.
+All 21 linearity probes passed and all three requested blocks were valid. The
+overall interval supports the direction, but this informational preview is a
+non-claim cohort and its critical-family precision exceeded the standard 3%
+width limit, so protocol health remains inconclusive. CI and Test262 Coverage
+were green. The same run reduced candidate/QuickJS-NG overall to 7.5500x.
+
+The numeric leaf executor also initialized two 32-entry arrays on every call
+to map local slots back to received upvalues and remember writes. It now uses
+the bytecode's cached received-slot list directly and records committed writes
+in a 32-bit mask. Functions without captures avoid both fixed arrays; captured
+writes scan only their small received-slot list and still commit only after a
+supported return. A three-block comparison with seed `20251031` measured
+0.9815x overall. An independent five-block comparison with seed `20251101`
+contained all 70 expected measurements and reproduced 0.9902x overall (0.98%
+lower wall ns/op). `many_locals_call` improved to 0.9544x,
+`plain_function_call` to 0.9879x, `method_call` to 0.9872x,
+`captured_read` to 0.9880x, and `captured_write` to 0.9847x. The unrelated
+`array_read` and `property_read` cases measured 1.0072x and 1.0232x in the
+five-block run. These are exploratory local binaries without provenance
+receipts; use the post-commit Performance Preview for hosted evidence.
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed

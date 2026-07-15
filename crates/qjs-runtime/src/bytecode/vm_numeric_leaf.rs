@@ -9,7 +9,6 @@ use super::{
 
 const MAX_FAST_LOCALS: usize = 32;
 const MAX_FAST_STACK: usize = 16;
-const NO_UPVALUE: usize = usize::MAX;
 
 #[derive(Clone, Copy)]
 enum FastValue {
@@ -77,21 +76,15 @@ pub(crate) fn try_eval_numeric_leaf(
         };
     }
 
-    let mut upvalue_slots = [NO_UPVALUE; MAX_FAST_LOCALS];
-    if bytecode.received_upvalue_slots().len() != upvalues.len() {
+    let received_upvalue_slots = bytecode.received_upvalue_slots();
+    if received_upvalue_slots.len() != upvalues.len() {
         return None;
     }
-    for (received_count, (&slot, upvalue)) in bytecode
-        .received_upvalue_slots()
-        .iter()
-        .zip(upvalues)
-        .enumerate()
-    {
+    for (&slot, upvalue) in received_upvalue_slots.iter().zip(upvalues) {
         locals[slot] = FastValue::from_value(&upvalue.get())?;
-        upvalue_slots[slot] = received_count;
     }
 
-    let mut assigned_upvalues = [false; MAX_FAST_LOCALS];
+    let mut assigned_upvalues = 0_u32;
     let mut stack = [FastValue::Uninitialized; MAX_FAST_STACK];
     let mut stack_len = 0;
 
@@ -122,8 +115,11 @@ pub(crate) fn try_eval_numeric_leaf(
                 }
                 let value = pop(&stack, &mut stack_len)?;
                 *locals.get_mut(*slot)? = value;
-                if upvalue_slots[*slot] != NO_UPVALUE {
-                    assigned_upvalues[*slot] = true;
+                if let Some(index) = received_upvalue_slots
+                    .iter()
+                    .position(|received_slot| received_slot == slot)
+                {
+                    assigned_upvalues |= 1 << index;
                 }
             }
             Op::Dup => {
@@ -163,11 +159,10 @@ pub(crate) fn try_eval_numeric_leaf(
                 } else {
                     pop(&stack, &mut stack_len)?
                 };
-                for slot in 0..bytecode.locals.len() {
-                    if !assigned_upvalues[slot] {
+                for (index, &slot) in received_upvalue_slots.iter().enumerate() {
+                    if assigned_upvalues & (1 << index) == 0 {
                         continue;
                     }
-                    let index = upvalue_slots[slot];
                     upvalues.get(index)?.set(locals[slot].into_value()?);
                 }
                 return value.into_value();
