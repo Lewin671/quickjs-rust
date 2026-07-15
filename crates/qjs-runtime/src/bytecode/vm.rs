@@ -288,15 +288,11 @@ impl<'a> Vm<'a> {
         env: &CallEnv,
     ) -> Vec<Option<Upvalue>> {
         let mut next_received = 0;
-        let has_module_imports = env.has_module_imports();
         bytecode
             .locals
             .iter()
             .map(|local| {
-                if has_module_imports
-                    && local.from_env
-                    && let Some(upvalue) = env.module_import_cell(&local.name)
-                {
+                if let Some(upvalue) = env.module_import_cell(&local.name) {
                     if local.is_received_upvalue() {
                         next_received += 1;
                     }

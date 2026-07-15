@@ -770,6 +770,19 @@ ns/op). `many_locals_call` improved to 0.9695x, `method_call` to 0.9904x,
 without provenance receipts; use the post-commit Performance Preview for
 hosted evidence.
 
+The post-commit Performance Preview at
+`a6db47633bc59ee41f8006b45ce805633c77e149` rejected that local result on
+hosted Linux: candidate/base was 1.0135x (1.35% higher wall ns/op), with a 95%
+confidence interval of [1.0018x, 1.0158x]. `method_call` regressed to 1.0402x,
+`captured_write` to 1.0315x, `plain_function_call` to 1.0238x,
+`property_read` to 1.0214x, and `captured_read` to 1.0136x; only
+`many_locals_call` 0.9825x and `array_read` 0.9829x improved. The same run
+measured 12.5696x candidate/QuickJS-NG overall. All 21 linearity probes, CI,
+and the full Test262 Coverage workflow were green, so this was a performance
+rejection rather than invalid evidence or a correctness failure. The import
+probe optimization was reverted; `178e5a4f` remains the latest confirmed
+hosted performance baseline.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment

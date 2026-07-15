@@ -597,10 +597,6 @@ impl CallEnv {
         self.module_imports.contains_key(local_name)
     }
 
-    pub(crate) fn has_module_imports(&self) -> bool {
-        !self.module_imports.is_empty()
-    }
-
     pub(crate) fn module_imports(&self) -> ModuleImports {
         self.module_imports.clone()
     }
