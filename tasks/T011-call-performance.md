@@ -455,8 +455,35 @@ seven case ratios below 1.0: `method_call` was 0.9394x,
 `plain_function_call` 0.9531x, `captured_read` 0.9544x,
 `captured_write` 0.9577x, and `many_locals_call` 0.9877x. The two non-call cases
 remained neutral: `property_read` 0.9911x and `array_read` 0.9946x. These are
-exploratory local binaries without provenance receipts; use the post-commit
-Performance Preview for hosted evidence.
+exploratory local binaries without provenance receipts. The post-commit
+Performance Preview at `0a3fb27c6486cf11b8f91deec05947fed0987648`
+confirmed 0.9707x overall on hosted Linux, with a 95% confidence interval of
+[0.9646x, 0.9707x]. The call and captured-binding cases improved:
+`plain_function_call` was 0.9446x, `captured_read` 0.9475x,
+`captured_write` 0.9524x, `method_call` 0.9572x, and
+`many_locals_call` 0.9858x. `array_read` was neutral at 1.0017x and
+`property_read` measured 1.0082x in the three variable-host blocks. The
+resulting candidate/QuickJS-NG ratio was 17.9810x. All linearity probes passed
+and all three measurement blocks were valid; the preview remained an
+informational `non_claim` because variable-host precision was inconclusive.
+CI was green at this commit.
+
+The next profile showed `CallEnv::new_function_frame_with_capacity` as the
+largest named call-setup cost. Even the already restricted direct-leaf path
+cloned the caller's catch names, direct-eval conflict set, private environment,
+with stack, and module imports, although its contract excludes dynamic scope
+and function-owned private/module state replaces those fields before execution.
+Direct-leaf calls now start those transient fields empty while retaining shared
+realm, module-host, and agent context. A three-block comparison measured
+0.9958x overall. An independent five-block confirmation with seed `20250915`
+contained all 70 expected measurements and reproduced 0.9944x overall (0.56%
+lower wall ns/op). All five affected call/binding cases improved:
+`captured_write` was 0.9839x, `captured_read` 0.9904x,
+`many_locals_call` 0.9907x, `plain_function_call` 0.9905x, and `method_call`
+0.9910x. The two untouched cases measured `array_read` 1.0064x and
+`property_read` 1.0083x. These are exploratory local binaries without
+provenance receipts; use the post-commit Performance Preview for hosted
+evidence.
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed

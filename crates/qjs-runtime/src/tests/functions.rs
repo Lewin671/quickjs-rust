@@ -796,6 +796,18 @@ fn evaluates_function_declarations_and_calls() {
 }
 
 #[test]
+fn direct_leaf_call_does_not_inherit_caller_catch_binding() {
+    assert_eq!(
+        eval(
+            "var error = 'global';
+             function readError() { return error; }
+             try { throw 'caught'; } catch (error) { readError(); }"
+        ),
+        Ok(Value::String("global".to_owned().into()))
+    );
+}
+
+#[test]
 fn arrow_captures_new_target_at_creation() {
     assert_eq!(
         eval(

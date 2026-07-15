@@ -728,6 +728,33 @@ impl CallEnv {
         }
     }
 
+    /// Builds the minimal context for an ordinary leaf function whose call
+    /// contract excludes direct eval, `with`, closures, and special lexical
+    /// bindings. Function-owned private and module state is installed by the
+    /// caller after construction, so copying the caller's transient maps here
+    /// would only allocate them before immediately replacing them.
+    pub(crate) fn new_direct_leaf_function_frame(&self) -> Self {
+        Self {
+            realm: Rc::clone(&self.realm),
+            global_lexical_bindings: Rc::clone(&self.global_lexical_bindings),
+            global_lexical_values: Rc::clone(&self.global_lexical_values),
+            expose_global_lexical_values: false,
+            immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
+            frame_bindings: FrameBindings::default(),
+            deopt_bindings: None,
+            catch_bindings: HashSet::new(),
+            immutable_function_name: None,
+            direct_eval_var_conflicts: HashSet::new(),
+            private_environment: None,
+            direct_eval_with_stack: Vec::new(),
+            module_host: self.module_host.clone(),
+            module_imports: HashMap::new(),
+            module_live_bindings: None,
+            #[cfg(feature = "agents")]
+            agent_context: self.agent_context.clone(),
+        }
+    }
+
     /// Builds an indirect-eval global frame. It has no caller locals, but it
     /// can read Script top-level lexical bindings through the global lexical
     /// environment instead of the global object.

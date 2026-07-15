@@ -618,12 +618,11 @@ fn function_env<'a>(
     // Ordinary calls materialize `this`, each positional parameter, and a
     // small number of internal context bindings. Reserve that hot-path shape
     // up front instead of growing the frame binding vector several times.
-    let frame_binding_capacity = if use_direct_call_slots {
-        0
+    let mut frame_env = if use_direct_call_slots {
+        env.new_direct_leaf_function_frame()
     } else {
-        function.params.positional.len().saturating_add(4)
+        env.new_function_frame_with_capacity(function.params.positional.len().saturating_add(4))
     };
-    let mut frame_env = env.new_function_frame_with_capacity(frame_binding_capacity);
     let mut direct_this_value = None;
     if function.has_name_binding
         && let Some(name) = &function.name
