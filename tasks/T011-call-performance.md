@@ -407,7 +407,27 @@ with seed `20250905` contained all 70 expected measurements and reproduced
 `property_read` 0.9727x, `many_locals_call` 0.9837x, `captured_write` 0.9899x,
 `method_call` 0.9901x, `captured_read` 0.9938x, and `plain_function_call`
 0.9954x. These are exploratory local binaries without provenance receipts;
-use the post-commit Performance Preview for hosted evidence.
+use the post-commit Performance Preview for hosted evidence. That preview at
+`94de171dab6598f8bc82f6280f56f37d7e7966c3` produced a 0.9859x
+candidate/base ratio and a 19.1159x candidate/QuickJS-NG ratio, but its
+QuickJS-NG `method_call` linearity check was 0.7477x, outside the frozen
+0.85..1.15 bounds. Overall health was therefore invalid and the workflow
+correctly failed; do not treat either ratio as a valid hosted baseline. CI and
+the full Test262 Coverage workflow were green at this commit.
+
+The subsequent plain-call profile showed that a non-strict function created in
+the active realm still hashed `globalThis` in both the function and caller
+environments on every call merely to prove that the two realms were identical.
+The common same-`Realm` case now returns immediately on shared-handle identity;
+genuinely cross-realm calls retain the existing global-object identity check.
+A three-block comparison measured 0.9560x overall. An independent five-block
+confirmation with seed `20250907` contained all 70 expected measurements and
+reproduced 0.9576x overall (4.24% lower wall ns/op): `captured_write` was
+0.9295x, `plain_function_call` 0.9305x, `method_call` 0.9333x,
+`captured_read` 0.9375x, and `many_locals_call` 0.9707x. The two non-call cases
+were neutral: `array_read` 1.0019x and `property_read` 1.0031x. These are
+exploratory local binaries without provenance receipts; use the post-commit
+Performance Preview for hosted evidence.
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed

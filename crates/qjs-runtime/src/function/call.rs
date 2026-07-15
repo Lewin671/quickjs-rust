@@ -884,6 +884,9 @@ fn callee_this_realm_env(function: &Function, caller_env: &CallEnv) -> Option<Ca
         return None;
     }
     let realm = function.realm.as_ref()?;
+    if Rc::ptr_eq(realm, caller_env.realm()) {
+        return None;
+    }
     let captured_global = realm.borrow().get(GLOBAL_THIS_BINDING)?.clone();
     if caller_env
         .get(GLOBAL_THIS_BINDING)
