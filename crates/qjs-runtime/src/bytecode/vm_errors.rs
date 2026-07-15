@@ -11,13 +11,25 @@ impl Vm<'_> {
         self.handle_runtime_result(result)
     }
 
+    #[inline]
     pub(super) fn handle_runtime_result<T>(
         &mut self,
         result: Result<T, RuntimeError>,
     ) -> Result<Option<T>, RuntimeError> {
         match result {
             Ok(value) => Ok(Some(value)),
-            Err(error) if self.should_rethrow_js_error(&error) => {
+            Err(error) => {
+                self.handle_runtime_error(error)?;
+                Ok(None)
+            }
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn handle_runtime_error(&mut self, error: RuntimeError) -> Result<(), RuntimeError> {
+        match error {
+            error if self.should_rethrow_js_error(&error) => {
                 let value = error.thrown.as_deref().cloned().unwrap_or_else(|| {
                     Value::String(
                         error
@@ -28,14 +40,14 @@ impl Vm<'_> {
                     )
                 });
                 self.throw_value(value)?;
-                Ok(None)
+                Ok(())
             }
-            Err(error) if self.should_throw_native_error(&error) => {
+            error if self.should_throw_native_error(&error) => {
                 let value = self.native_error_value(&error.message)?;
                 self.throw_value(value)?;
-                Ok(None)
+                Ok(())
             }
-            Err(error) => Err(error),
+            error => Err(error),
         }
     }
 

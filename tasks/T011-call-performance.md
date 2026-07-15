@@ -336,8 +336,34 @@ with seed `20250824` contained all 70 expected measurements and completed at
 `property_read` 0.9369x, `array_read` 0.9403x, `method_call` 0.9679x,
 `plain_function_call` 0.9808x, `captured_write` 0.9841x,
 `many_locals_call` 0.9884x, and `captured_read` 0.9927x. These are exploratory
-local binaries without provenance receipts; use the post-commit Performance
-Preview for hosted evidence.
+local binaries without provenance receipts. The Performance Preview at
+`b6d3dbbb3d2bd8aaee9f28d0be6626aa6040b9ce` confirmed a larger 0.9581x
+overall improvement on hosted Linux, with a 95% confidence interval of
+[0.9486x, 0.9691x]. All seven hosted cases improved: `array_read` 0.9267x,
+`property_read` 0.9288x, `method_call` 0.9545x, `plain_function_call` 0.9607x,
+`captured_read` 0.9736x, `many_locals_call` 0.9803x, and `captured_write`
+0.9839x. The resulting candidate/QuickJS-NG ratio fell to 22.2481x. The
+preview remained informational and health was inconclusive because three
+variable-host blocks did not satisfy the frozen precision policy. CI and the
+full Test262 Coverage workflow were green at this commit.
+
+Sampling that binary showed that successful local loads, stores, and
+assignments still entered the generic runtime-error conversion helper on every
+operation; its two result monomorphizations accounted for roughly 9% of the
+property-read sample. The helper now inlines only the successful `Result` match
+and delegates errors to one cold, non-inlined function, preserving throw and
+native-error conversion while keeping that code out of the VM dispatch loop. A
+plain whole-function inline experiment measured only 0.9968x overall and
+regressed two call cases because it copied the error machinery into the loop,
+so it was discarded. The hot/cold split measured 0.9032x overall in a
+three-block comparison. An independent five-block confirmation with seed
+`20250827` contained all 70 expected measurements and completed at 0.8992x
+overall (10.08% lower wall ns/op), with all seven cases improved: `array_read`
+0.8261x, `property_read` 0.8443x, `many_locals_call` 0.9174x,
+`plain_function_call` 0.9192x, `method_call` 0.9264x, `captured_write` 0.9287x,
+and `captured_read` 0.9391x. These are exploratory local binaries without
+provenance receipts; use the post-commit Performance Preview for hosted
+evidence.
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
