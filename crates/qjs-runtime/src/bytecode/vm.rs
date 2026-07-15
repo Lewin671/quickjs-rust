@@ -605,11 +605,7 @@ impl<'a> Vm<'a> {
                     self.pop()?;
                 }
                 Op::Dup => {
-                    let value = self
-                        .stack
-                        .last()
-                        .map(clone_stack_value)
-                        .ok_or_else(stack_underflow)?;
+                    let value = self.stack.last().cloned().ok_or_else(stack_underflow)?;
                     self.stack.push(value);
                 }
                 Op::NewArray { elements } => self.new_array(elements)?,
@@ -1401,16 +1397,5 @@ impl<'a> Vm<'a> {
         let references_name = bytecode.local_slot(name).is_some()
             || bytecode.global_names().iter().any(|global| global == name);
         references_name.then(|| name.to_owned())
-    }
-}
-
-#[inline(always)]
-fn clone_stack_value(value: &Value) -> Value {
-    match value {
-        Value::Number(value) => Value::Number(*value),
-        Value::Boolean(value) => Value::Boolean(*value),
-        Value::Null => Value::Null,
-        Value::Undefined => Value::Undefined,
-        value => value.clone(),
     }
 }

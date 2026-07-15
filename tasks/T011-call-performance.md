@@ -1204,25 +1204,25 @@ linearity probes passed; the first attempt was invalid solely because the
 fixed QuickJS-NG `array_read` probe measured 1.1673x. The successful run
 measured candidate/QuickJS-NG at 7.0678x overall. CI was green.
 
-The same primitive-copy specialization also applies to `Op::Dup`, which is
-used after high-frequency compound assignments to preserve the resulting
-value. Number, Boolean, Null, and Undefined now copy their inline payloads
-directly, while every reference-bearing value retains the derived clone path.
-A three-block comparison with seed `20251197` measured 0.9821x overall, with a
-95% confidence interval of [0.9800x, 0.9855x]. An independent five-block
-comparison with seed `20251201` contained all 70 expected measurements and
-reproduced 0.9788x overall (2.12% lower wall ns/op), with a 95% confidence
-interval of [0.9787x, 0.9818x]. All seven point estimates improved:
-`array_read` 0.9680x, `property_read` 0.9704x, `method_call` 0.9785x,
-`plain_function_call` 0.9817x, `captured_write` 0.9817x, `captured_read`
-0.9823x, and `many_locals_call` 0.9892x. These are exploratory same-machine
-binaries without provenance receipts; use the post-commit Performance Preview
-for hosted evidence.
+Specializing primitive copies for `Op::Dup` was rejected by hosted evidence.
+The local three-block run measured 0.9821x overall with a 95% confidence
+interval of [0.9800x, 0.9855x], and an independent five-block run measured
+0.9788x with [0.9787x, 0.9818x]; all seven local point estimates improved.
+However, the valid Performance Preview at
+`214075c922fd52e8fea9cd4e9c6eaec16bd18105` measured 1.0121x overall with a
+95% confidence interval of [1.0077x, 1.0137x], a supported 1.21% regression.
+`captured_write` was the sole hosted improvement at 0.9598x; the other cases
+ranged from `many_locals_call` at 0.9987x to `captured_read` at 1.0381x. All
+21 linearity probes passed and all 3 requested blocks were valid, so the
+change was reverted despite the repeatable local direction.
 
-Moving the named-property cache's immutable local-slot metadata outside its
-`RefCell` borrow was rejected. A three-block run measured 0.9996x overall with
-a 95% confidence interval of [0.9953x, 1.0004x], while `method_call` and
-`captured_read` regressed. The experiment was reverted without a commit.
+Three nearby micro-optimizations were also rejected without commits. Moving
+the named-property cache's immutable local-slot metadata outside its `RefCell`
+borrow measured 0.9996x overall with [0.9953x, 1.0004x] and regressed
+`method_call` and `captured_read`. Special-casing primitive destruction for
+`Op::Pop` measured 1.0000x with [0.9988x, 1.0010x] and regressed `array_read`.
+Forcing `fast_number_binary` inline regressed all seven cases and measured
+1.0159x overall with [1.0144x, 1.0233x].
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
