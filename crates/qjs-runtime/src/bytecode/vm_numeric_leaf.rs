@@ -1,6 +1,9 @@
 use qjs_ast::{BinaryOp, FunctionParams, UpdateOp};
 
-use crate::{Value, function::Upvalue};
+use crate::{
+    Function, Value,
+    function::{Upvalue, is_direct_leaf_function},
+};
 
 use super::{
     ir::{Bytecode, Op},
@@ -81,6 +84,33 @@ enum NumericLeafShortcut {
     },
     UpdateUpvalueConstReturn {
         upvalue_index: usize,
+        op: BinaryOp,
+        right: f64,
+    },
+}
+
+/// A numeric leaf call reduced to scalar state for a counted-loop trace.
+///
+/// Read-only captures are snapshotted because the admitted loop body contains
+/// no other observable operation. A compact captured update keeps its scalar
+/// value locally and commits the shared cell after the loop; callers reject
+/// cells owned by the active frame before constructing this plan.
+#[derive(Clone, Debug)]
+pub(super) enum NumericLoopCall {
+    ArgumentAddConstants {
+        constants: Vec<f64>,
+    },
+    ArgumentConstChain {
+        operations: Vec<(BinaryOp, f64)>,
+    },
+    ArgumentCapturedBinary {
+        captured: f64,
+        op: BinaryOp,
+        argument_left: bool,
+    },
+    UpdateCapturedConstReturn {
+        upvalue: Upvalue,
+        value: f64,
         op: BinaryOp,
         right: f64,
     },
@@ -393,6 +423,154 @@ impl NumericLeafShortcut {
                 upvalues.get(*upvalue_index)?.set(value.clone());
                 Some(value)
             }
+        }
+    }
+}
+
+impl NumericLoopCall {
+    pub(super) fn prepare(
+        function: &Function,
+        argument_count: usize,
+        caller_cells: &[Option<Upvalue>],
+    ) -> Option<Self> {
+        if argument_count > 1 || !is_direct_leaf_function(&Value::Function(function.clone())) {
+            return None;
+        }
+        let bytecode = function.bytecode.as_ref()?;
+        if bytecode.parameter_slots().len() != function.params.positional.len()
+            || bytecode.received_upvalue_slots().len() != function.upvalues.len()
+        {
+            return None;
+        }
+        let shortcut = bytecode
+            .numeric_leaf_plan
+            .get_or_init(|| NumericLeafPlan::compile(bytecode))
+            .as_ref()?
+            .shortcut
+            .as_ref()?;
+        let captured_number = |index: usize| -> Option<f64> {
+            function
+                .upvalues
+                .get(index)?
+                .with_value(|value| match value {
+                    Value::Number(value) => Some(*value),
+                    _ => None,
+                })
+        };
+        match shortcut {
+            NumericLeafShortcut::ArgumentConstChain {
+                argument_index,
+                operations,
+            } if *argument_index < argument_count
+                && operations
+                    .iter()
+                    .all(|(op, right)| number_binary(0.0, *op, *right).is_some()) =>
+            {
+                if operations.iter().all(|(op, _)| *op == BinaryOp::Add) {
+                    Some(Self::ArgumentAddConstants {
+                        constants: operations.iter().map(|(_, right)| *right).collect(),
+                    })
+                } else {
+                    Some(Self::ArgumentConstChain {
+                        operations: operations.clone(),
+                    })
+                }
+            }
+            NumericLeafShortcut::ArgumentUpvalueBinary {
+                argument_index,
+                upvalue_index,
+                op,
+            } if *argument_index < argument_count => {
+                let captured = captured_number(*upvalue_index)?;
+                number_binary(0.0, *op, captured)?;
+                Some(Self::ArgumentCapturedBinary {
+                    captured,
+                    op: *op,
+                    argument_left: true,
+                })
+            }
+            NumericLeafShortcut::UpvalueArgumentBinary {
+                upvalue_index,
+                argument_index,
+                op,
+            } if *argument_index < argument_count => {
+                let captured = captured_number(*upvalue_index)?;
+                number_binary(captured, *op, 0.0)?;
+                Some(Self::ArgumentCapturedBinary {
+                    captured,
+                    op: *op,
+                    argument_left: false,
+                })
+            }
+            NumericLeafShortcut::UpdateUpvalueConstReturn {
+                upvalue_index,
+                op,
+                right,
+            } if argument_count == 0 => {
+                let upvalue = function.upvalues.get(*upvalue_index)?.clone();
+                if caller_cells
+                    .iter()
+                    .flatten()
+                    .any(|caller| caller.ptr_eq(&upvalue))
+                {
+                    return None;
+                }
+                let value = captured_number(*upvalue_index)?;
+                number_binary(value, *op, *right)?;
+                Some(Self::UpdateCapturedConstReturn {
+                    upvalue,
+                    value,
+                    op: *op,
+                    right: *right,
+                })
+            }
+            _ => None,
+        }
+    }
+
+    pub(super) fn eval(&mut self, argument: Option<f64>) -> f64 {
+        match self {
+            Self::ArgumentAddConstants { constants } => {
+                let mut value = argument.expect("validated numeric loop argument");
+                for constant in constants {
+                    value += *constant;
+                }
+                value
+            }
+            Self::ArgumentConstChain { operations } => {
+                let mut value = argument.expect("validated numeric loop argument");
+                for (op, right) in operations {
+                    value = number_binary(value, *op, *right)
+                        .expect("validated numeric-result shortcut");
+                }
+                value
+            }
+            Self::ArgumentCapturedBinary {
+                captured,
+                op,
+                argument_left,
+            } => {
+                let argument = argument.expect("validated numeric loop argument");
+                let (left, right) = if *argument_left {
+                    (argument, *captured)
+                } else {
+                    (*captured, argument)
+                };
+                number_binary(left, *op, right).expect("validated numeric-result shortcut")
+            }
+            Self::UpdateCapturedConstReturn {
+                value, op, right, ..
+            } => {
+                *value =
+                    number_binary(*value, *op, *right).expect("validated numeric-result shortcut");
+                *value
+            }
+        }
+    }
+
+    pub(super) fn commit(self) {
+        if let Self::UpdateCapturedConstReturn { upvalue, value, .. } = self {
+            upvalue.set(Value::Number(value));
         }
     }
 }
@@ -797,6 +975,13 @@ fn direct_number_binary(left: f64, op: BinaryOp, right: f64) -> Option<FastValue
         }
     };
     Some(value)
+}
+
+fn number_binary(left: f64, op: BinaryOp, right: f64) -> Option<f64> {
+    match direct_number_binary(left, op, right)? {
+        FastValue::Number(value) => Some(value),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

@@ -204,30 +204,35 @@ class ReportTests(unittest.TestCase):
                 )
 
     def test_timing_quality_is_recomputed_at_both_boundaries(self) -> None:
-        rows = self._complete_rows(startup_ns=5_000_000)
+        case = next(
+            case for case in self.manifest.cases if case.id == "plain_function_call"
+        )
+        minimum_duration = case.min_window_ms * 1_000_000
+        startup_boundary = int(minimum_duration * case.startup_max_fraction)
+        rows = self._complete_rows(startup_ns=startup_boundary)
         measurement = next(
             row for row in rows
             if row.get("phase") == "measurement"
             and row["role"] == "candidate"
             and row["case_id"] == "plain_function_call"
         )
-        measurement["duration_ns"] = 500_000_000
+        measurement["duration_ns"] = minimum_duration
         self._write_rows(rows)
         self.assertTrue(self._build_report()["coverage"]["comparison_input_complete"])
 
-        measurement["duration_ns"] = 499_999_999
+        measurement["duration_ns"] = minimum_duration - 1
         self._write_rows(rows)
         with self.assertRaisesRegex(ReportError, "timing quality mismatch"):
             self._build_report()
 
-        rows = self._complete_rows(startup_ns=5_000_001)
+        rows = self._complete_rows(startup_ns=startup_boundary + 1)
         measurement = next(
             row for row in rows
             if row.get("phase") == "measurement"
             and row["role"] == "candidate"
             and row["case_id"] == "plain_function_call"
         )
-        measurement["duration_ns"] = 500_000_000
+        measurement["duration_ns"] = minimum_duration
         self._write_rows(rows)
         with self.assertRaisesRegex(ReportError, "timing quality mismatch"):
             self._build_report()
@@ -374,9 +379,13 @@ class ReportTests(unittest.TestCase):
     def test_timer_limited_is_durable_and_identity_mismatch_fails_closed(self) -> None:
         rows = self._complete_rows()
         measurement = next(row for row in rows if row.get("phase") == "measurement")
+        case = next(
+            case for case in self.manifest.cases
+            if case.id == measurement["case_id"]
+        )
         measurement["measurement_eligible"] = False
         measurement["quality"] = "timer_limited"
-        measurement["duration_ns"] = 499_999_999
+        measurement["duration_ns"] = case.min_window_ms * 1_000_000 - 1
         role = measurement["role"]
         rows[-1]["comparison_input_complete"] = False
         rows[-1]["coverage"]["measured_by_role"][role] -= 1
@@ -575,8 +584,10 @@ class ReportTests(unittest.TestCase):
             case.min_window_ms * 1_000_000,
             statistics.median(startup) / case.startup_max_fraction,
         )
-        self.assertGreaterEqual(old_last["duration_ns"], old_target)
-        self.assertLess(old_last["duration_ns"], case.calibration_target_ns(int(statistics.median(startup))))
+        adjusted_target = case.calibration_target_ns(int(statistics.median(startup)))
+        self.assertLess(old_target, adjusted_target)
+        self.assertLess(old_last["duration_ns"], adjusted_target)
+        self.assertGreaterEqual(adjusted_last["duration_ns"], adjusted_target)
         rows.remove(adjusted_last)
         self._write_rows(rows)
         with self.assertRaisesRegex(ReportError, "expected calibration, got warmup"):

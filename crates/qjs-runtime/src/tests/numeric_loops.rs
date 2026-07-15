@@ -61,3 +61,56 @@ fn falls_back_for_coerced_limits_and_sparse_arrays() {
         Ok(Value::String("3:NaN".to_owned().into()))
     );
 }
+
+#[test]
+fn accumulates_numeric_global_local_method_and_stateful_calls() {
+    assert_eq!(
+        eval(
+            "function leaf(x) { return x + 1; } \
+             function globalCall(n) { var sum = 0; for (var i = 0; i < n; i++) sum += leaf(i); return sum; } \
+             function makeReader() { var captured = 3; return function(x) { return x + captured; }; } \
+             function localCall(n) { var f = makeReader(); var sum = 0; for (var i = 0; i < n; i++) sum += f(i); return sum; } \
+             function methodCall(n) { var object = { f: function(x) { return x + 2; } }; var sum = 0; for (var i = 0; i < n; i++) sum += object.f(i); return sum; } \
+             function makeWriter() { var captured = 0; return function() { captured += 1; return captured; }; } \
+             function statefulCall(n) { var f = makeWriter(); var sum = 0; for (var i = 0; i < n; i++) sum += f(); return sum + ':' + f(); } \
+             globalCall(6) + ':' + localCall(6) + ':' + methodCall(6) + ':' + statefulCall(6);"
+        ),
+        Ok(Value::String("21:33:27:21:7".to_owned().into()))
+    );
+}
+
+#[test]
+fn call_loop_trace_falls_back_for_observable_and_non_numeric_callees() {
+    assert_eq!(
+        eval(
+            "var gets = 0; \
+             function accessorCall(n) { \
+               var object = { get f() { gets++; return function(x) { return x + 1; }; } }; \
+               var sum = 0; for (var i = 0; i < n; i++) sum += object.f(i); return sum; \
+             } \
+             function booleanCall(n) { \
+               var f = function(x) { return x < 2; }; var sum = 0; \
+               for (var i = 0; i < n; i++) sum += f(i); return sum; \
+             } \
+             accessorCall(4) + ':' + gets + ':' + booleanCall(4);"
+        ),
+        Ok(Value::String("10:4:2".to_owned().into()))
+    );
+}
+
+#[test]
+fn call_loop_trace_rejects_captured_writes_into_the_caller_frame() {
+    assert_eq!(
+        eval(
+            "function shrinkingLimit(n) { \
+               var limit = n; \
+               var shrink = function() { limit -= 1; return 1; }; \
+               var sum = 0; \
+               for (var i = 0; i < limit; i++) sum += shrink(); \
+               return sum + ':' + limit; \
+             } \
+             shrinkingLimit(6);"
+        ),
+        Ok(Value::String("3:3".to_owned().into()))
+    );
+}

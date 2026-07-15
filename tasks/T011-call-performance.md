@@ -1286,6 +1286,56 @@ near neutral from 0.9917x to 1.0059x. All 21 linearity probes passed in both
 runs. These are exploratory same-machine binaries without provenance receipts;
 use the post-commit Performance Preview for hosted evidence.
 
+The hosted Performance Preview at
+`0abc3ac5a880fe9cbfd318bd7aa1683a80c1d2f7` confirmed the stable-read loop
+trace at 0.2888x overall (71.12% lower wall ns/op), with a 95% confidence
+interval of [0.2885x, 0.2907x]. All 21 linearity probes passed and all three
+requested blocks were valid. `property_read` and `array_read` fell to 0.0129x
+and 0.0125x versus the previous commit; the five call cases stayed between
+0.9999x and 1.0185x. The same hosted run reduced candidate/QuickJS-NG to
+1.7725x overall. The two traced read cases were already faster than QuickJS-NG
+at 0.1475x and 0.0909x respectively, leaving the call loops as the remaining
+critical portfolio bottleneck.
+
+The next candidate extends the same counted-loop trace to a single numeric
+leaf call term. It recognizes the compiler's global, local closure, and
+resolved own-data method call shapes, then reduces an admitted leaf to scalar
+parameter/constant or parameter/capture arithmetic. A terminal captured update
+keeps ordered numeric state in the trace and commits its shared cell at loop
+exit only after proving that the cell is not owned by the active caller frame.
+Accessors, inherited methods, Proxies, native or non-leaf functions,
+non-numeric results, multiple call terms, dynamic scope, and caller-cell writes
+fall back before the trace performs work. Read-only loop limits may come from a
+compatibility cell, which is necessary for a loop that creates its method
+function inline; every counter, accumulator, and compiler result slot written
+by the trace must remain authoritative. All-add parameter/constant chains keep
+their source operation order while avoiding per-operation opcode dispatch.
+
+Acceleration made the original 20M call-case calibration caps too short. The
+triangular checksum cases now cap at 120M, below the exact-integer ceiling for
+their ordered JavaScript sums; the method and plain-call windows use a 250 ms
+minimum and allow startup to occupy at most 4% of the measured interval. The
+many-local case uses the same 120M exact-checksum cap, a 450 ms minimum, and a
+1.5% startup bound. `property_read` has a linear checksum and raises capacity
+from 160M to 240M instead. Workload source, checksum definitions, operation
+counts, independent per-role calibration, and timed code are unchanged. The
+relaxed startup fraction is conservative for the accelerated candidate because
+process startup remains included in its measured wall time.
+
+The final three-block comparison with seed `20260115` contained all 63 expected
+measurements and measured 0.05010x versus the previous commit, with a bootstrap
+95% interval of [0.05001x, 0.05020x]. Against QuickJS-NG it measured 0.06474x,
+with [0.06463x, 0.06485x]. An independent five-block run with seed `20260117`
+contained all 105 expected measurements and reproduced 0.05010x versus the
+previous commit, with [0.04996x, 0.05026x], and 0.06449x versus QuickJS-NG,
+with [0.06419x, 0.06478x]. Every case beat QuickJS-NG in the five-block run:
+`many_locals_call` measured 0.02565x, `method_call` 0.04788x,
+`plain_function_call` 0.05158x, `array_read` 0.05821x, `property_read`
+0.09071x, `captured_read` 0.11647x, and `captured_write` 0.11910x. All 21
+linearity probes passed in both runs. These are exploratory same-machine
+binaries without provenance receipts; use the post-commit Performance Preview
+for hosted evidence and the retain-or-revert decision.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment

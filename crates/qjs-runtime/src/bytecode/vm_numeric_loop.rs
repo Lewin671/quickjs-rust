@@ -1,10 +1,11 @@
 use qjs_ast::{BinaryOp, UpdateOp};
 
-use crate::Value;
+use crate::{Value, value::OwnDataPropertyRead};
 
 use super::{
     ir::{Bytecode, NamedPropertyCache, Op},
     vm::Vm,
+    vm_numeric_leaf::NumericLoopCall,
 };
 
 #[derive(Clone, Debug)]
@@ -16,6 +17,28 @@ enum NumericLoopTerm {
     DenseIndex {
         receiver_slot: usize,
         index: usize,
+    },
+    GlobalCall {
+        name: String,
+        argument_count: usize,
+    },
+    LocalCall {
+        callee_slot: usize,
+        argument_count: usize,
+    },
+    MethodCall {
+        receiver_slot: usize,
+        key: std::rc::Rc<str>,
+        argument_count: usize,
+    },
+}
+
+#[derive(Clone, Debug)]
+enum PreparedNumericLoopTerm {
+    Stable(f64),
+    Call {
+        call: NumericLoopCall,
+        takes_counter: bool,
     },
 }
 
@@ -112,9 +135,11 @@ impl NumericLoopPlan {
         let mut accumulator_slot = None;
         let mut terms = Vec::new();
         while cursor < tail {
+            let Op::LoadLocal(term_accumulator_slot) = code.get(cursor)? else {
+                return None;
+            };
+            let (term, suffix) = NumericLoopTerm::compile(code, cursor + 1, *counter_slot)?;
             let (
-                Op::LoadLocal(term_accumulator_slot),
-                read,
                 Op::Binary(BinaryOp::Add),
                 Op::Dup,
                 Op::AssignLocal(assigned_accumulator_slot),
@@ -122,14 +147,12 @@ impl NumericLoopPlan {
                 Op::StoreLocal(term_block_result_slot),
                 Op::StoreLocal(term_loop_result_slot),
             ) = (
-                code.get(cursor)?,
-                code.get(cursor + 1)?,
-                code.get(cursor + 2)?,
-                code.get(cursor + 3)?,
-                code.get(cursor + 4)?,
-                code.get(cursor + 5)?,
-                code.get(cursor + 6)?,
-                code.get(cursor + 7)?,
+                code.get(suffix)?,
+                code.get(suffix + 1)?,
+                code.get(suffix + 2)?,
+                code.get(suffix + 3)?,
+                code.get(suffix + 4)?,
+                code.get(suffix + 5)?,
             )
             else {
                 return None;
@@ -142,10 +165,13 @@ impl NumericLoopPlan {
                 return None;
             }
             accumulator_slot = Some(*term_accumulator_slot);
-            terms.push(NumericLoopTerm::compile(read)?);
-            cursor += 8;
+            terms.push(term);
+            cursor = suffix + 6;
         }
-        if cursor != tail || terms.is_empty() {
+        if cursor != tail
+            || terms.is_empty()
+            || terms.len() > 1 && terms.iter().any(NumericLoopTerm::is_call)
+        {
             return None;
         }
 
@@ -168,7 +194,6 @@ impl NumericLoopPlan {
         }
         let required_slots = [
             self.counter_slot,
-            self.limit_slot,
             self.accumulator_slot,
             self.block_result_slot,
             self.loop_result_slot,
@@ -182,26 +207,28 @@ impl NumericLoopPlan {
         let Some(mut counter) = local_number(vm, self.counter_slot) else {
             return false;
         };
-        let Some(limit) = local_number(vm, self.limit_slot) else {
+        let Some(limit) = local_number_read(vm, self.limit_slot) else {
             return false;
         };
         let Some(mut accumulator) = local_number(vm, self.accumulator_slot) else {
             return false;
         };
-        let Some(terms) = self
-            .terms
-            .iter()
-            .map(|term| term.number(vm))
-            .collect::<Option<Vec<_>>>()
-        else {
-            return false;
-        };
+        let mut terms = Vec::with_capacity(self.terms.len());
+        for term in &self.terms {
+            let Some(term) = term.prepare(vm) else {
+                return false;
+            };
+            terms.push(term);
+        }
 
         while counter < limit {
-            for term in &terms {
-                accumulator += term;
+            for term in &mut terms {
+                accumulator += term.eval(counter);
             }
             counter += 1.0;
+        }
+        for term in terms {
+            term.commit();
         }
 
         set_local_number(vm, self.counter_slot, counter);
@@ -217,24 +244,106 @@ impl NumericLoopPlan {
 }
 
 impl NumericLoopTerm {
-    fn compile(op: &Op) -> Option<Self> {
-        match op {
-            Op::GetPropNamed { cache, .. } => Some(Self::NamedProperty {
-                receiver_slot: cache.local_slot()?,
-                cache: cache.clone(),
-            }),
+    fn compile(code: &[Op], cursor: usize, counter_slot: usize) -> Option<(Self, usize)> {
+        match code.get(cursor)? {
+            Op::GetPropNamed { cache, .. } => Some((
+                Self::NamedProperty {
+                    receiver_slot: cache.local_slot()?,
+                    cache: cache.clone(),
+                },
+                cursor + 1,
+            )),
             Op::GetPropIndex(encoded) if usize::BITS > u32::BITS => {
                 let receiver_slot = (encoded >> u32::BITS).checked_sub(1)?;
-                Some(Self::DenseIndex {
-                    receiver_slot,
-                    index: encoded & u32::MAX as usize,
-                })
+                Some((
+                    Self::DenseIndex {
+                        receiver_slot,
+                        index: encoded & u32::MAX as usize,
+                    },
+                    cursor + 1,
+                ))
             }
+            Op::LoadGlobal(name) => match (code.get(cursor + 1)?, code.get(cursor + 2)?) {
+                (Op::LoadLocal(argument_slot), Op::Call(1)) if *argument_slot == counter_slot => {
+                    Some((
+                        Self::GlobalCall {
+                            name: name.clone(),
+                            argument_count: 1,
+                        },
+                        cursor + 3,
+                    ))
+                }
+                (Op::Call(0), _) => Some((
+                    Self::GlobalCall {
+                        name: name.clone(),
+                        argument_count: 0,
+                    },
+                    cursor + 2,
+                )),
+                _ => None,
+            },
+            Op::LoadLocal(receiver_slot)
+                if matches!(code.get(cursor + 1), Some(Op::Dup))
+                    && matches!(code.get(cursor + 2), Some(Op::GetPropNamed { .. })) =>
+            {
+                let Op::GetPropNamed { key, .. } = code.get(cursor + 2)? else {
+                    unreachable!("guarded named method read");
+                };
+                match (code.get(cursor + 3)?, code.get(cursor + 4)?) {
+                    (Op::LoadLocal(argument_slot), Op::CallResolved(1))
+                        if *argument_slot == counter_slot =>
+                    {
+                        Some((
+                            Self::MethodCall {
+                                receiver_slot: *receiver_slot,
+                                key: key.clone(),
+                                argument_count: 1,
+                            },
+                            cursor + 5,
+                        ))
+                    }
+                    (Op::CallResolved(0), _) => Some((
+                        Self::MethodCall {
+                            receiver_slot: *receiver_slot,
+                            key: key.clone(),
+                            argument_count: 0,
+                        },
+                        cursor + 4,
+                    )),
+                    _ => None,
+                }
+            }
+            Op::LoadLocal(callee_slot) => match (code.get(cursor + 1)?, code.get(cursor + 2)?) {
+                (Op::LoadLocal(argument_slot), Op::Call(1)) if *argument_slot == counter_slot => {
+                    Some((
+                        Self::LocalCall {
+                            callee_slot: *callee_slot,
+                            argument_count: 1,
+                        },
+                        cursor + 3,
+                    ))
+                }
+                (Op::Call(0), _) => Some((
+                    Self::LocalCall {
+                        callee_slot: *callee_slot,
+                        argument_count: 0,
+                    },
+                    cursor + 2,
+                )),
+                _ => None,
+            },
             _ => None,
         }
     }
 
-    fn number(&self, vm: &Vm<'_>) -> Option<f64> {
+    fn is_call(&self) -> bool {
+        matches!(
+            self,
+            Self::GlobalCall { .. } | Self::LocalCall { .. } | Self::MethodCall { .. }
+        )
+    }
+
+    fn prepare(&self, vm: &mut Vm<'_>) -> Option<PreparedNumericLoopTerm> {
         match self {
             Self::NamedProperty {
                 receiver_slot,
@@ -247,7 +356,7 @@ impl NumericLoopTerm {
                     return None;
                 };
                 match cache.get(object)? {
-                    Value::Number(value) => Some(value),
+                    Value::Number(value) => Some(PreparedNumericLoopTerm::Stable(value)),
                     _ => None,
                 }
             }
@@ -262,10 +371,78 @@ impl NumericLoopTerm {
                     return None;
                 };
                 match array.direct_dense_index_value(*index)? {
-                    Value::Number(value) => Some(value),
+                    Value::Number(value) => Some(PreparedNumericLoopTerm::Stable(value)),
                     _ => None,
                 }
             }
+            Self::GlobalCall {
+                name,
+                argument_count,
+            } => {
+                let Value::Function(function) = vm.env.get(name)? else {
+                    return None;
+                };
+                Self::prepare_call(function, *argument_count, vm)
+            }
+            Self::LocalCall {
+                callee_slot,
+                argument_count,
+            } => {
+                if !vm.slot_is_authoritative(*callee_slot) {
+                    return None;
+                }
+                let Some(Some(Value::Function(function))) = vm.locals.get(*callee_slot) else {
+                    return None;
+                };
+                Self::prepare_call(function.clone(), *argument_count, vm)
+            }
+            Self::MethodCall {
+                receiver_slot,
+                key,
+                argument_count,
+            } => {
+                if !vm.slot_is_authoritative(*receiver_slot) {
+                    return None;
+                }
+                let Some(Some(Value::Object(object))) = vm.locals.get(*receiver_slot) else {
+                    return None;
+                };
+                let OwnDataPropertyRead::Data(Value::Function(function)) =
+                    object.own_data_property_read(key)
+                else {
+                    return None;
+                };
+                Self::prepare_call(function, *argument_count, vm)
+            }
+        }
+    }
+
+    fn prepare_call(
+        function: crate::Function,
+        argument_count: usize,
+        vm: &Vm<'_>,
+    ) -> Option<PreparedNumericLoopTerm> {
+        Some(PreparedNumericLoopTerm::Call {
+            call: NumericLoopCall::prepare(&function, argument_count, &vm.local_upvalues)?,
+            takes_counter: argument_count == 1,
+        })
+    }
+}
+
+impl PreparedNumericLoopTerm {
+    fn eval(&mut self, counter: f64) -> f64 {
+        match self {
+            Self::Stable(value) => *value,
+            Self::Call {
+                call,
+                takes_counter,
+            } => call.eval(takes_counter.then_some(counter)),
+        }
+    }
+
+    fn commit(self) {
+        if let Self::Call { call, .. } = self {
+            call.commit();
         }
     }
 }
@@ -282,6 +459,13 @@ pub(super) fn try_run_numeric_loop(vm: &mut Vm<'_>, header: usize, backedge: usi
 fn local_number(vm: &Vm<'_>, slot: usize) -> Option<f64> {
     match vm.locals.get(slot)? {
         Some(Value::Number(value)) => Some(*value),
+        _ => None,
+    }
+}
+
+fn local_number_read(vm: &Vm<'_>, slot: usize) -> Option<f64> {
+    match vm.local_slot_value(slot)? {
+        Value::Number(value) => Some(value),
         _ => None,
     }
 }
@@ -329,10 +513,24 @@ mod tests {
     }
 
     #[test]
-    fn rejects_loop_bodies_with_observable_calls() {
+    fn leaves_callable_admission_to_runtime_guards() {
         let bytecode = nested_function(
             "function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s += Number(i); } return s; }",
         );
-        assert!(NumericLoopPlan::compile_all(&bytecode).is_empty());
+        assert_eq!(NumericLoopPlan::compile_all(&bytecode).len(), 1);
+    }
+
+    #[test]
+    fn recognizes_numeric_global_local_and_method_calls() {
+        for source in [
+            "function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s += leaf(i); } return s; }",
+            "function sum(n) { var f = makeLeaf(); var s = 0; for (var i = 0; i < n; i++) { s += f(i); } return s; }",
+            "function sum(n) { var o = { f: leaf }; var s = 0; for (var i = 0; i < n; i++) { s += o.f(i); } return s; }",
+            "function runMethodCall(iterations) { var receiver = { addOne: function (value) { return value + 1; } }; var checksum = 0; for (var i = 0; i < iterations; i++) { checksum += receiver.addOne(i); } return { operations: iterations, checksum: checksum }; }",
+            "function sum(n) { var f = makeWriter(); var s = 0; for (var i = 0; i < n; i++) { s += f(); } return s; }",
+        ] {
+            let bytecode = nested_function(source);
+            assert_eq!(NumericLoopPlan::compile_all(&bytecode).len(), 1, "{source}");
+        }
     }
 }
