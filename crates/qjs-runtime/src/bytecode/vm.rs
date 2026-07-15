@@ -197,7 +197,8 @@ impl<'a> Vm<'a> {
         let module_host = env.module_host();
         #[cfg(feature = "agents")]
         let agent_context = env.agent_context();
-        let mut locals = if direct_call_slots.is_some() {
+        let is_direct_call = direct_call_slots.is_some();
+        let mut locals = if is_direct_call {
             Self::initial_direct_call_slots(bytecode)
         } else {
             Self::initial_slots(bytecode, &env)
@@ -205,7 +206,11 @@ impl<'a> Vm<'a> {
         let direct_this = direct_call_slots.and_then(|direct_call_slots| {
             Self::seed_direct_call_slots(bytecode, &mut locals, direct_call_slots)
         });
-        let local_upvalues = Self::initial_local_upvalues(bytecode, &locals, &upvalues, &env);
+        let local_upvalues = if is_direct_call {
+            Self::initial_direct_local_upvalues(bytecode, &upvalues, &env)
+        } else {
+            Self::initial_local_upvalues(bytecode, &locals, &upvalues, &env)
+        };
         let authoritative_slots =
             Self::initial_authoritative_slots(bytecode, &local_upvalues, &env);
         Self {
@@ -274,6 +279,35 @@ impl<'a> Vm<'a> {
             .locals
             .iter()
             .map(|local| local.hoisted.then_some(Value::Undefined))
+            .collect()
+    }
+
+    fn initial_direct_local_upvalues(
+        bytecode: &Bytecode,
+        upvalues: &[Upvalue],
+        env: &CallEnv,
+    ) -> Vec<Option<Upvalue>> {
+        let mut next_received = 0;
+        bytecode
+            .locals
+            .iter()
+            .map(|local| {
+                if let Some(upvalue) = env.module_import_cell(&local.name) {
+                    if local.is_received_upvalue() {
+                        next_received += 1;
+                    }
+                    return Some(upvalue);
+                }
+                if local.sloppy_global_fallback {
+                    return env.realm_binding_cell(&local.name);
+                }
+                if local.is_received_upvalue() {
+                    let upvalue = upvalues.get(next_received).cloned();
+                    next_received += 1;
+                    return upvalue;
+                }
+                None
+            })
             .collect()
     }
 
