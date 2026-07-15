@@ -1,5 +1,5 @@
 use std::{
-    cell::RefCell,
+    cell::{OnceCell, RefCell},
     collections::{BTreeSet, HashMap, HashSet},
     rc::Rc,
 };
@@ -671,6 +671,7 @@ pub struct Bytecode {
     /// declaration instantiation environment.
     strict: bool,
     pub(super) code: Vec<Op>,
+    pub(super) numeric_leaf_plan: OnceCell<Option<super::vm_numeric_leaf::NumericLeafPlan>>,
     pub(super) template_objects: RefCell<HashMap<usize, Value>>,
     /// Per-call metadata precomputed once at construction. Each of these used to
     /// be recomputed on every call by recursively walking `code` (and nested
@@ -753,6 +754,7 @@ impl Bytecode {
             global_scope,
             strict,
             code,
+            numeric_leaf_plan: OnceCell::new(),
             template_objects: RefCell::new(HashMap::new()),
             cached_closure_referenced_global_names: Vec::new(),
             cached_written_binding_names: Vec::new(),

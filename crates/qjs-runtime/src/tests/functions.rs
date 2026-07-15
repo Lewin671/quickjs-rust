@@ -868,6 +868,28 @@ fn numeric_leaf_preserves_direct_arithmetic_and_comparisons() {
 }
 
 #[test]
+fn numeric_leaf_plan_preserves_rounding_and_terminal_update_fallbacks() {
+    assert_eq!(
+        eval(
+            "function ordered(value) { var add = 1, sub = 1; return value + add - sub; } \
+             ordered(9007199254740992);"
+        ),
+        Ok(Value::Number(9007199254740991.0))
+    );
+    assert_eq!(
+        eval(
+            "function make(initial) { \
+               var captured = initial; \
+               return function() { captured += 1; return captured; }; \
+             } \
+             var number = make(0), string = make('x'), boolean = make(true); \
+             number() + ':' + number() + ':' + string() + ':' + string() + ':' + boolean();"
+        ),
+        Ok(Value::String("1:2:x1:x11:2".to_owned().into()))
+    );
+}
+
+#[test]
 fn numeric_leaf_falls_back_for_duplicate_parameter_slots() {
     assert_eq!(
         eval("function duplicate(value, value) { return value + 1; } duplicate(2, 4);"),

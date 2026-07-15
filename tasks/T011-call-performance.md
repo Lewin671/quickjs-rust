@@ -1081,6 +1081,41 @@ and `captured_write` 1.0075x. These are exploratory local binaries without
 provenance receipts; use the post-commit Performance Preview for hosted
 evidence.
 
+The post-commit Performance Preview at
+`ab036f65eae61d205ffb3405e760ad04c05434ae` confirmed a 0.9389x overall
+improvement on hosted Linux (6.11% lower wall ns/op), with a 95% confidence
+interval of [0.9246x, 0.9496x]. `array_read` improved to 0.7890x and
+`property_read` to 0.7973x. The other cases ranged from `captured_read` at
+0.9932x to `plain_function_call` at 1.0158x. All 21 linearity probes passed,
+all three requested blocks were valid, and CI and Test262 Coverage were green.
+The same run measured candidate/QuickJS-NG at 7.3398x overall, ranging from
+3.1803x for `many_locals_call` to 10.9740x for `property_read`.
+
+After local property clones were removed, the numeric leaf executor's scan of
+the 216-byte general `Op` representation became visible. Numeric leaf bytecode
+now lazily compiles once into a compact, prevalidated micro-op plan. The plan
+propagates primitive constants through ordinary local slots and encodes a
+constant right binary operand directly, without reassociating operations or
+changing their floating-point rounding order. A terminal received-upvalue
+numeric update and return is compacted to one transaction-safe op; more complex
+received-upvalue writes keep the prior direct executor, and unsupported types
+or operations still fall back before any observable write.
+
+The first compact-plan experiment improved `many_locals_call` to 0.8428x but
+regressed `captured_write` to 1.1078x and measured 0.9990x overall. Merely
+routing received-upvalue writes to an outlined copy of the prior executor still
+left `captured_write` at 1.1107x and measured 0.9898x overall. Neither interim
+shape was retained. Compacting the general terminal upvalue-update shape fixed
+that regression. A three-block comparison with seed `20251147` measured
+0.9757x overall. An independent five-block comparison with seed `20251153`
+contained all 70 expected measurements and reproduced 0.9755x overall (2.45%
+lower wall ns/op). `many_locals_call` improved to 0.8339x and
+`captured_write` to 0.9816x. The other cases stayed near neutral:
+`array_read` 0.9958x, `plain_function_call` 1.0034x, `property_read` 1.0057x,
+`method_call` 1.0095x, and `captured_read` 1.0122x. These are exploratory local
+binaries without provenance receipts; use the post-commit Performance Preview
+for hosted evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment
