@@ -134,7 +134,7 @@ pub(crate) fn eval_function_bytecode(
 }
 
 pub(crate) struct DirectCallSlots<'a> {
-    pub(crate) this_value: Value,
+    pub(crate) this_value: Option<Value>,
     pub(crate) params: &'a qjs_ast::FunctionParams,
     pub(crate) arguments: &'a [Value],
 }

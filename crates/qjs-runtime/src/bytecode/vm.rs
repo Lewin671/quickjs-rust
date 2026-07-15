@@ -238,11 +238,15 @@ impl<'a> Vm<'a> {
         locals: &mut [Slot],
         direct_call_slots: DirectCallSlots<'_>,
     ) -> Option<Value> {
-        let direct_this = if let Some(slot) = bytecode.local_slot("this") {
-            locals[slot] = Some(direct_call_slots.this_value);
-            None
+        let direct_this = if let Some(this_value) = direct_call_slots.this_value {
+            if let Some(slot) = bytecode.local_slot("this") {
+                locals[slot] = Some(this_value);
+                None
+            } else {
+                Some(this_value)
+            }
         } else {
-            Some(direct_call_slots.this_value)
+            None
         };
         for (index, element) in direct_call_slots.params.positional.iter().enumerate() {
             let qjs_ast::BindingPattern::Identifier { name, .. } = &element.binding else {

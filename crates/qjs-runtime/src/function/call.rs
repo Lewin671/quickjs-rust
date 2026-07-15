@@ -750,13 +750,24 @@ fn function_env<'a>(
             }
         }
     } else {
-        let this_env_storage = callee_this_realm_env(function, env);
-        let this_env = this_env_storage.as_ref().unwrap_or(env);
-        let call_this = function_call_this(Some(this_value), this_env, function.is_strict);
-        if use_direct_call_slots {
-            direct_this_value = Some(call_this);
+        let call_this = if !use_direct_call_slots || bytecode.uses_lexical_this() {
+            let this_env_storage = callee_this_realm_env(function, env);
+            let this_env = this_env_storage.as_ref().unwrap_or(env);
+            Some(function_call_this(
+                Some(this_value),
+                this_env,
+                function.is_strict,
+            ))
         } else {
-            frame_env.insert("this".to_owned(), call_this);
+            None
+        };
+        if use_direct_call_slots {
+            direct_this_value = call_this;
+        } else {
+            frame_env.insert(
+                "this".to_owned(),
+                call_this.expect("general calls always bind this"),
+            );
         }
     }
     if !use_direct_call_slots {
@@ -836,7 +847,7 @@ fn function_env<'a>(
         frame_env.set_deopt_bindings(bindings.clone());
     }
     let direct_call_slots = use_direct_call_slots.then(|| DirectCallSlots {
-        this_value: direct_this_value.expect("direct leaf calls always bind this"),
+        this_value: direct_this_value,
         params: &function.params,
         arguments: argument_values,
     });

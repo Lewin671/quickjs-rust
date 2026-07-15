@@ -604,6 +604,7 @@ pub struct Bytecode {
     cached_contains_direct_eval: bool,
     cached_contains_with: bool,
     cached_contains_super_operation: bool,
+    cached_uses_lexical_this: bool,
 }
 
 impl Bytecode {
@@ -666,6 +667,7 @@ impl Bytecode {
             cached_contains_direct_eval: false,
             cached_contains_with: false,
             cached_contains_super_operation: false,
+            cached_uses_lexical_this: false,
         };
         // Order matters: closure/arguments metadata reads the simpler caches
         // (written-binding names, creates-closures) computed just above. Nested
@@ -703,6 +705,7 @@ impl Bytecode {
                     | Op::SuperMethodComputed
             )
         });
+        bytecode.cached_uses_lexical_this = bytecode.compute_uses_lexical_this();
         bytecode
     }
 
@@ -886,6 +889,10 @@ impl Bytecode {
     }
 
     pub(crate) fn uses_lexical_this(&self) -> bool {
+        self.cached_uses_lexical_this
+    }
+
+    fn compute_uses_lexical_this(&self) -> bool {
         self.code.iter().any(|op| {
             matches!(
                 op,

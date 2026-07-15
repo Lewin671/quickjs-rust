@@ -626,6 +626,38 @@ and `many_locals_call` 0.9994x. The unrelated cases were `property_read`
 provenance receipts; use the post-commit Performance Preview for hosted
 evidence.
 
+The post-commit Performance Preview at
+`e6a325055850230244edd9ab3eb35c8148292bbd` reproduced the small direction at
+0.9949x overall (0.51% lower wall ns/op), but its 95% confidence interval of
+[0.9924x, 1.0060x] crossed 1.0. The hosted cases were `captured_read` 0.9700x,
+`many_locals_call` 0.9867x, `method_call` 0.9873x, `captured_write` 0.9886x,
+`property_read` 1.0003x, `array_read` 1.0154x, and `plain_function_call`
+1.0166x. All 21 linearity probes passed and all three requested blocks were
+valid, but this remains neutral hosted evidence rather than a new baseline.
+The same run's candidate/QuickJS-NG point estimate was 15.0367x; retain
+`3d46556b` and its 14.6463x result as the latest confirmed hosted baseline. CI
+and the full Test262 Coverage workflow were green at `e6a32505`.
+
+The following profile showed that direct-leaf setup still normalized and
+stored `this` even when the compiled body never read it. Direct calls now omit
+that value when bytecode contains no own `this` or `super` operation; the
+existing direct-leaf contract already excludes closures, direct eval, and
+other paths that could observe the binding indirectly. The first prototype
+queried `uses_lexical_this` by scanning every opcode on every call: although it
+measured 0.9874x overall in a five-block run, a focused ten-block run confirmed
+that this regressed `many_locals_call` to 1.0171x. The retained implementation
+caches the immutable predicate once when `Bytecode` is built, matching the
+existing per-call metadata caches. A three-block comparison with seed
+`20250931` measured 0.9806x overall. An independent five-block comparison with
+seed `20251001` contained all 70 expected measurements and reproduced 0.9828x
+overall (1.72% lower wall ns/op). All five call and binding cases improved:
+`captured_read` was 0.9634x, `method_call` 0.9662x,
+`plain_function_call` 0.9766x, `captured_write` 0.9766x, and
+`many_locals_call` 0.9907x. The unrelated cases were `array_read` 1.0008x and
+`property_read` 1.0064x. These are exploratory local binaries without
+provenance receipts; use the post-commit Performance Preview for hosted
+evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment
