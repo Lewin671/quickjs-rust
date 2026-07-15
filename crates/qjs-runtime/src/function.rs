@@ -26,8 +26,8 @@ pub(crate) const CROSS_REALM_THROW_TYPE_ERROR_INTRINSIC: &str = "__quickjsRustRe
 
 pub(crate) use arguments::{native_mapped_argument_get, native_mapped_argument_set};
 pub(crate) use call::{
-    call_function, construct_function, ensure_constructor, initialize_instance_fields,
-    is_direct_leaf_function, try_call_direct_leaf_function,
+    call_direct_leaf_function, call_function, construct_function, ensure_constructor,
+    initialize_instance_fields, is_direct_leaf_function,
 };
 pub(crate) fn is_call_frame_binding(name: &str) -> bool {
     matches!(

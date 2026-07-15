@@ -123,7 +123,7 @@ pub(crate) fn call_function(
                 this_value,
                 &argument_values,
                 env,
-                is_construct,
+                FunctionEnvKind::General { is_construct },
             );
             return crate::async_generator::call_async_generator_function(
                 function,
@@ -144,7 +144,7 @@ pub(crate) fn call_function(
                 this_value,
                 &argument_values,
                 env,
-                is_construct,
+                FunctionEnvKind::General { is_construct },
             );
             return crate::generator::make_generator_object(
                 function,
@@ -175,7 +175,7 @@ pub(crate) fn call_function(
                 this_value,
                 &argument_values,
                 env,
-                is_construct,
+                FunctionEnvKind::General { is_construct },
             );
             return Ok(crate::async_function::call_async_function(
                 function,
@@ -196,7 +196,7 @@ pub(crate) fn call_function(
             this_value,
             &argument_values,
             env,
-            is_construct,
+            FunctionEnvKind::General { is_construct },
         );
         let immutable_name_caller_value = immutable_name_caller_value(function, env);
         let FunctionCallEnv {
@@ -243,21 +243,21 @@ pub(crate) fn call_function(
 /// dynamic, and write-back-capable callees. A direct leaf creates its own
 /// slot-backed frame and cannot mutate caller compatibility bindings, so that
 /// outer shell would be allocated and snapshotted without carrying data.
-pub(crate) fn try_call_direct_leaf_function(
+pub(crate) fn call_direct_leaf_function(
     callee: Value,
     this_value: Value,
     argument_values: Vec<Value>,
     env: &CallEnv,
     module_host: Option<crate::module::ModuleHostRef>,
     #[cfg(feature = "agents")] agent_context: Option<crate::agent::AgentContextRef>,
-) -> Option<Result<Value, RuntimeError>> {
+) -> Result<Value, RuntimeError> {
     let Value::Function(function) = &callee else {
-        return None;
+        unreachable!("direct leaf predicate only accepts functions");
     };
-    let bytecode = function.bytecode.as_ref()?;
-    if !can_seed_direct_leaf_call(function, bytecode, false) {
-        return None;
-    }
+    let bytecode = function
+        .bytecode
+        .as_ref()
+        .expect("direct leaf predicate requires bytecode");
     let FunctionCallEnv {
         env: mut call_env,
         direct_call_slots,
@@ -268,7 +268,7 @@ pub(crate) fn try_call_direct_leaf_function(
         this_value,
         &argument_values,
         env,
-        false,
+        FunctionEnvKind::GuardedDirectLeaf,
     );
     if call_env.module_host().is_none()
         && let Some(host) = module_host
@@ -280,17 +280,15 @@ pub(crate) fn try_call_direct_leaf_function(
         call_env.set_agent_context(context);
     }
     let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
-    Some(
-        eval_function_bytecode_with_direct_call_slots(
-            bytecode,
-            call_env,
-            function.upvalues.clone(),
-            function.with_stack.clone(),
-            true,
-            direct_call_slots,
-        )
-        .value,
+    eval_function_bytecode_with_direct_call_slots(
+        bytecode,
+        call_env,
+        function.upvalues.clone(),
+        function.with_stack.clone(),
+        true,
+        direct_call_slots,
     )
+    .value
 }
 
 pub(crate) fn is_direct_leaf_function(callee: &Value) -> bool {
@@ -668,6 +666,11 @@ struct FunctionCallEnv<'a> {
     direct_call_slots: Option<DirectCallSlots<'a>>,
 }
 
+enum FunctionEnvKind {
+    General { is_construct: bool },
+    GuardedDirectLeaf,
+}
+
 fn function_env<'a>(
     function: &'a Function,
     bytecode: &Bytecode,
@@ -675,9 +678,18 @@ fn function_env<'a>(
     this_value: Value,
     argument_values: &'a [Value],
     env: &CallEnv,
-    is_construct: bool,
+    kind: FunctionEnvKind,
 ) -> FunctionCallEnv<'a> {
-    let use_direct_call_slots = can_seed_direct_leaf_call(function, bytecode, is_construct);
+    let (is_construct, use_direct_call_slots) = match kind {
+        FunctionEnvKind::General { is_construct } => (
+            is_construct,
+            can_seed_direct_leaf_call(function, bytecode, is_construct),
+        ),
+        FunctionEnvKind::GuardedDirectLeaf => {
+            debug_assert!(can_seed_direct_leaf_call(function, bytecode, false));
+            (false, true)
+        }
+    };
     let lexical_this = received_upvalue_value(function, bytecode, "this");
     let lexical_field_initializer =
         received_upvalue_value(function, bytecode, FIELD_INITIALIZER_EVAL_BINDING);

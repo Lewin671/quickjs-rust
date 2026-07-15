@@ -598,6 +598,34 @@ cases were below 1.0: `plain_function_call` was 0.9763x, `captured_read`
 local binaries without provenance receipts; use the post-commit Performance
 Preview for hosted evidence.
 
+The post-commit Performance Preview at
+`3d46556b6440c528a03aab9f98dc69f5c262cfb4` confirmed the borrowed callee
+handle on hosted Linux at 0.9903x overall (0.97% lower wall ns/op), with a 95%
+confidence interval of [0.9903x, 0.9926x]. The hosted cases were
+`captured_write` 0.9676x, `method_call` 0.9757x, `captured_read` 0.9894x,
+`plain_function_call` 0.9924x, `array_read` 0.9941x, `property_read` 1.0063x,
+and `many_locals_call` 1.0074x. All 21 linearity probes passed and all three
+requested blocks were valid; the informational three-block cohort's precision
+policy remained inconclusive. The same run measured 14.6463x
+candidate/QuickJS-NG overall. CI and the full Test262 Coverage workflow were
+green. This commit replaces `9ee468a5` as the hosted baseline.
+
+Profiling that baseline showed the direct-leaf eligibility predicate still ran
+three times per VM call: once before dispatch, again inside the direct helper,
+and again while selecting the frame shape. The VM now performs the guard once
+and passes an explicit internal `GuardedDirectLeaf` mode through call setup;
+debug builds assert that the trusted mode still satisfies the full predicate.
+General calls retain the complete eligibility check. A three-block comparison
+with seed `20250926` measured 0.9916x overall. An independent five-block
+comparison with seed `20250927` contained all 70 expected measurements and
+reproduced 0.9941x overall (0.59% lower wall ns/op). All five call and binding
+cases were at or below 1.0: `captured_read` was 0.9813x,
+`captured_write` 0.9877x, `plain_function_call` 0.9902x, `method_call` 0.9970x,
+and `many_locals_call` 0.9994x. The unrelated cases were `property_read`
+0.9978x and `array_read` 1.0057x. These are exploratory local binaries without
+provenance receipts; use the post-commit Performance Preview for hosted
+evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment
