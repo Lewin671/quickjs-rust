@@ -821,6 +821,23 @@ fn direct_leaf_call_does_not_inherit_caller_catch_binding() {
 }
 
 #[test]
+fn direct_leaf_vm_call_preserves_caller_slot_and_global_write() {
+    assert_eq!(
+        eval(
+            "var total = 1; \
+             function leaf(value) { total = total + value; value = 99; return value; } \
+             function caller() { \
+               let value = 3; \
+               let returned = leaf(value); \
+               return value + ':' + returned + ':' + total; \
+             } \
+             caller();"
+        ),
+        Ok(Value::String("3:99:4".to_owned().into()))
+    );
+}
+
+#[test]
 fn arrow_captures_new_target_at_creation() {
     assert_eq!(
         eval(

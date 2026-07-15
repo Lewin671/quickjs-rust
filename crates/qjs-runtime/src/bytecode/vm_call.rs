@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    CallEnv, Function, NativeFunction, RuntimeError, Value, call_function, to_int32_number,
+    CallEnv, Function, NativeFunction, RuntimeError, Value, call_function,
+    function::{is_direct_leaf_function, try_call_direct_leaf_function},
+    to_int32_number,
 };
 
 use super::util::stack_underflow;
@@ -91,6 +93,22 @@ impl Vm<'_> {
             &self.realm_env(),
         ) {
             if let Some(value) = self.handle_runtime_result(result)? {
+                self.stack.push(value);
+            }
+            return Ok(());
+        }
+        if !direct_eval && is_direct_leaf_function(&callee) {
+            let result = try_call_direct_leaf_function(
+                callee,
+                this_value,
+                arguments,
+                &self.env,
+                self.module_host.clone(),
+                #[cfg(feature = "agents")]
+                self.agent_context.clone(),
+            )
+            .expect("direct leaf predicate and call guard must agree");
+            if let Some(value) = self.handle_call_result(result)? {
                 self.stack.push(value);
             }
             return Ok(());

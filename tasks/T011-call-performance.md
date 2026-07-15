@@ -512,6 +512,36 @@ all below 1.0 in the confirmation: `many_locals_call` was 0.9778x,
 binaries without provenance receipts; use the post-commit Performance Preview
 for hosted evidence.
 
+The post-commit Performance Preview at
+`f8e6994aad503608d39c546070978668c6a94179` produced no valid performance
+conclusion: candidate and base linearity probes passed, but the hosted
+QuickJS-NG `array_read` probe measured 1.1931x, outside the [0.85x, 1.15x]
+acceptance interval, so overall health was invalid. Its raw report is retained
+only as diagnostic evidence, not as a new hosted baseline. CI and the full
+Test262 Coverage workflow were green at this commit.
+
+The next profile exposed a larger duplicated frame cost in the VM call
+adapter. A user-bytecode call first built an empty compatibility `CallEnv`;
+`call_function` then built the real direct-leaf frame, and return handling
+snapshotted and applied the still-empty outer shell. The VM now bypasses that
+shell only when the existing strict direct-leaf predicate proves the callee
+cannot require caller binding write-back; native, dynamic, bound, generator,
+async, constructor, closure-creating, `eval`, `with`, and other complex calls
+retain the general path. A focused regression verifies that a callee parameter
+cannot overwrite a same-named caller slot while shared global writes remain
+visible. The bypass explicitly carries the VM's dynamic-import host and
+feature-gated agent context; the agents feature's 20 focused Atomics/worker
+tests cover that handoff. A three-block comparison of the final implementation
+with seed `20250920` measured 0.9012x overall. An independent five-block
+comparison with seed `20250921` contained all 70 expected measurements and
+reproduced 0.9013x overall (9.87% lower wall ns/op). The five affected cases
+all improved substantially: `method_call` was 0.8338x,
+`captured_write` 0.8394x, `plain_function_call` 0.8463x,
+`captured_read` 0.8621x, and `many_locals_call` 0.9401x. The two untouched
+cases stayed neutral: `array_read` was 1.0021x and `property_read` 1.0045x.
+These are exploratory local binaries without provenance receipts; use the
+post-commit Performance Preview for hosted evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment

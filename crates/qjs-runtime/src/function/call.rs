@@ -237,6 +237,72 @@ pub(crate) fn call_function(
     })
 }
 
+/// Runs the already-guarded ordinary leaf shape directly from a VM frame.
+///
+/// The general VM call path builds a compatibility `CallEnv` for native,
+/// dynamic, and write-back-capable callees. A direct leaf creates its own
+/// slot-backed frame and cannot mutate caller compatibility bindings, so that
+/// outer shell would be allocated and snapshotted without carrying data.
+pub(crate) fn try_call_direct_leaf_function(
+    callee: Value,
+    this_value: Value,
+    argument_values: Vec<Value>,
+    env: &CallEnv,
+    module_host: Option<crate::module::ModuleHostRef>,
+    #[cfg(feature = "agents")] agent_context: Option<crate::agent::AgentContextRef>,
+) -> Option<Result<Value, RuntimeError>> {
+    let Value::Function(function) = callee.clone() else {
+        return None;
+    };
+    let bytecode = function.bytecode.as_ref()?;
+    if !can_seed_direct_leaf_call(&function, bytecode, false) {
+        return None;
+    }
+    let FunctionCallEnv {
+        env: mut call_env,
+        direct_call_slots,
+    } = function_env(
+        &function,
+        bytecode,
+        callee,
+        this_value,
+        &argument_values,
+        env,
+        false,
+    );
+    if call_env.module_host().is_none()
+        && let Some(host) = module_host
+    {
+        call_env.set_module_host(host);
+    }
+    #[cfg(feature = "agents")]
+    if let Some(context) = agent_context {
+        call_env.set_agent_context(context);
+    }
+    let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
+    Some(
+        eval_function_bytecode_with_direct_call_slots(
+            bytecode,
+            call_env,
+            function.upvalues.clone(),
+            function.with_stack.clone(),
+            true,
+            direct_call_slots,
+        )
+        .value,
+    )
+}
+
+pub(crate) fn is_direct_leaf_function(callee: &Value) -> bool {
+    let Value::Function(function) = callee else {
+        return false;
+    };
+    function
+        .bytecode
+        .as_ref()
+        .is_some_and(|bytecode| can_seed_direct_leaf_call(function, bytecode, false))
+}
+
 fn class_constructor_call_error(function: &Function) -> RuntimeError {
     let message = "TypeError: class constructor cannot be invoked without 'new'".to_owned();
     if let Some(crate::Property {
