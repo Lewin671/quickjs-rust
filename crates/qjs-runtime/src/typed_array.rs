@@ -30,8 +30,6 @@ pub(crate) use ordering::*;
 const MAX_TYPED_ARRAY_LENGTH: usize = 1_000_000;
 
 /// Internal slot naming the concrete TypedArray kind (e.g. `"Uint8Array"`).
-/// Its presence is also the TypedArray brand used by `ArrayBuffer.isView` and
-/// the prototype accessors.
 pub(crate) const TYPED_ARRAY_KIND_PROPERTY: &str = "\0TypedArrayKind";
 /// Internal slot referencing the backing `ArrayBuffer` object.
 pub(crate) const TYPED_ARRAY_BUFFER_PROPERTY: &str = "\0TypedArrayBuffer";
@@ -44,7 +42,7 @@ pub(crate) const TYPED_ARRAY_LENGTH_TRACKING_PROPERTY: &str = "\0TypedArrayLengt
 
 /// Whether `object` carries the TypedArray brand.
 pub(crate) fn is_typed_array_object(object: &ObjectRef) -> bool {
-    object.has_own_property(TYPED_ARRAY_KIND_PROPERTY)
+    object.is_typed_array_exotic()
 }
 
 /// The eleven concrete TypedArray kinds, in installation order.

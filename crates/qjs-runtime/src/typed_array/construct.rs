@@ -340,6 +340,7 @@ fn install_view_slots(
     length_tracking: bool,
 ) {
     let name = typed_array_name(native);
+    object.mark_typed_array_exotic();
     object.set_to_string_tag(name);
     object.define_property(
         TYPED_ARRAY_KIND_PROPERTY.to_owned(),

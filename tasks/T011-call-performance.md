@@ -246,8 +246,29 @@ a focused three-block run. The final independent five-block comparison against
 ns/op), with all seven cases improved: `array_read` 0.417x, `property_read`
 0.525x, `many_locals_call` 0.669x, `plain_function_call` 0.722x,
 `captured_write` 0.723x, `method_call` 0.738x, and `captured_read` 0.741x. These
-are local dirty-source measurements and require post-commit Performance
-Preview confirmation.
+are local dirty-source measurements. The Performance Preview at
+`ecff7f88ccd5f4ba29bb1815ddf8926a11bc2581` confirmed the direction at
+0.7645x overall (23.55% lower wall ns/op), with a 95% confidence interval of
+[0.7626x, 0.7776x]. All seven hosted cases improved: `array_read` 0.565x,
+`property_read` 0.664x, `many_locals_call` 0.765x, `method_call` 0.847x,
+`captured_write` 0.848x, `plain_function_call` 0.860x, and `captured_read`
+0.862x. The resulting candidate/QuickJS-NG overall ratio fell from 33.6414x
+to 24.8457x. CI and the full Test262 Coverage workflow were also green at
+that commit.
+
+Profiling the resulting `property_read` binary showed that plain objects still
+paid a string-property HashMap probe in `is_typed_array_object` before every
+ordinary named read; TypedArray brand checks accounted for roughly 14% of the
+sampled workload. TypedArray identity now lives in a dedicated `ObjectData`
+internal brand bit installed with the view slots, making the ordinary-object
+rejection an O(1) cell read. This also stops a JavaScript-accessible NUL-prefixed
+property from serving as the internal brand. A final independent five-block
+comparison against `ecff7f88` with seed `20250817` contained all 70 expected
+measurement samples and measured 0.9745x overall (2.55% lower wall ns/op).
+`property_read` improved to 0.842x and `method_call` to 0.979x; the other five
+cases stayed between 0.998x and 1.013x. These are exploratory local binaries
+without provenance receipts; require the post-commit Performance Preview for
+the provenance-backed result.
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed

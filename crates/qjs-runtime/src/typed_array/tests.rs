@@ -35,6 +35,19 @@ fn concrete_constructor_requires_new() {
     assert!(eval("Uint8Array(3);").is_err());
 }
 
+#[test]
+fn typed_array_brand_is_not_a_string_keyed_property() {
+    assert_eq!(
+        eval(
+            "let array = new Uint8Array(1); \
+             delete array['\\0TypedArrayKind']; \
+             let fake = { '\\0TypedArrayKind': 'Uint8Array' }; \
+             ArrayBuffer.isView(array) + ':' + ArrayBuffer.isView(fake);"
+        ),
+        Ok(Value::String("true:false".to_owned().into()))
+    );
+}
+
 // --- Construction variants ---------------------------------------------------
 
 #[test]

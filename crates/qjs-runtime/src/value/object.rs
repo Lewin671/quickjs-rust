@@ -173,6 +173,10 @@ struct ObjectData {
     to_string_tag: Rc<RefCell<Option<String>>>,
     raw_json: Rc<Cell<bool>>,
     array_prototype_exotic: Rc<Cell<bool>>,
+    /// Whether this object has the TypedArray internal slots. Keep the brand
+    /// outside string-keyed property storage so ordinary property reads can
+    /// reject the integer-indexed exotic path without a HashMap probe.
+    typed_array_exotic: Cell<bool>,
     immutable_prototype_exotic: Rc<Cell<bool>>,
     module_namespace_exotic: Rc<Cell<bool>>,
     module_namespace_bindings: Rc<RefCell<Option<ModuleNamespaceBindings>>>,
@@ -265,6 +269,7 @@ impl ObjectRef {
             to_string_tag: Rc::new(RefCell::new(None)),
             raw_json: Rc::new(Cell::new(false)),
             array_prototype_exotic: Rc::new(Cell::new(false)),
+            typed_array_exotic: Cell::new(false),
             immutable_prototype_exotic: Rc::new(Cell::new(false)),
             module_namespace_exotic: Rc::new(Cell::new(false)),
             module_namespace_bindings: Rc::new(RefCell::new(None)),
@@ -379,6 +384,14 @@ impl ObjectRef {
 
     pub(crate) fn is_array_prototype_exotic(&self) -> bool {
         self.0.array_prototype_exotic.get()
+    }
+
+    pub(crate) fn mark_typed_array_exotic(&self) {
+        self.0.typed_array_exotic.set(true);
+    }
+
+    pub(crate) fn is_typed_array_exotic(&self) -> bool {
+        self.0.typed_array_exotic.get()
     }
 
     pub(crate) fn mark_immutable_prototype_exotic(&self) {
