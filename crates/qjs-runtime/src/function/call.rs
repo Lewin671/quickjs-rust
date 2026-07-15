@@ -57,7 +57,7 @@ pub(crate) fn call_function(
         }
         return crate::proxy::proxy_apply(proxy.clone(), this_value, argument_values, env);
     }
-    let Value::Function(function) = callee.clone() else {
+    let Value::Function(function) = &callee else {
         return Err(RuntimeError {
             thrown: None,
             message: "value is not callable".to_owned(),
@@ -102,11 +102,11 @@ pub(crate) fn call_function(
         );
     }
     if function.is_class_constructor && !is_construct {
-        return Err(class_constructor_call_error(&function));
+        return Err(class_constructor_call_error(function));
     }
     if let Some(native) = function.native {
         return call_native_function(
-            &function,
+            function,
             native,
             this_value,
             argument_values,
@@ -117,16 +117,16 @@ pub(crate) fn call_function(
     if let Some(bytecode) = &function.bytecode {
         if function.is_generator && function.is_async {
             let function_env = function_env(
-                &function,
+                function,
                 bytecode,
-                callee,
+                &callee,
                 this_value,
                 &argument_values,
                 env,
                 is_construct,
             );
             return crate::async_generator::call_async_generator_function(
-                &function,
+                function,
                 function_env.env,
                 env,
             );
@@ -138,16 +138,16 @@ pub(crate) fn call_function(
         // generator object exists.
         if function.is_generator {
             let function_env = function_env(
-                &function,
+                function,
                 bytecode,
-                callee,
+                &callee,
                 this_value,
                 &argument_values,
                 env,
                 is_construct,
             );
             return crate::generator::make_generator_object(
-                &function,
+                function,
                 crate::bytecode::GeneratorStart {
                     bytecode: bytecode.clone(),
                     env: function_env.env,
@@ -169,16 +169,16 @@ pub(crate) fn call_function(
         // parameter-binding errors, which reject rather than throw).
         if function.is_async {
             let function_env = function_env(
-                &function,
+                function,
                 bytecode,
-                callee,
+                &callee,
                 this_value,
                 &argument_values,
                 env,
                 is_construct,
             );
             return Ok(crate::async_function::call_async_function(
-                &function,
+                function,
                 function_env.env,
                 env,
             ));
@@ -187,18 +187,18 @@ pub(crate) fn call_function(
         // the receiver is created, before the constructor body runs. A derived
         // constructor defers this until `super(...)` binds `this`.
         if function.is_class_constructor && !function.is_derived_constructor && is_construct {
-            initialize_instance_fields(&function, &this_value, env)?;
+            initialize_instance_fields(function, &this_value, env)?;
         }
         let function_env = function_env(
-            &function,
+            function,
             bytecode,
-            callee,
+            &callee,
             this_value,
             &argument_values,
             env,
             is_construct,
         );
-        let immutable_name_caller_value = immutable_name_caller_value(&function, env);
+        let immutable_name_caller_value = immutable_name_caller_value(function, env);
         let FunctionCallEnv {
             env: call_env,
             direct_call_slots,
@@ -221,7 +221,7 @@ pub(crate) fn call_function(
                 true,
             )
         };
-        restore_immutable_name_caller_value(&function, env, immutable_name_caller_value);
+        restore_immutable_name_caller_value(function, env, immutable_name_caller_value);
         // A derived constructor implicitly returns its (super-bound) `this`
         // when the body does not return an object, and it is a ReferenceError
         // to finish without having called `super(...)`.
@@ -251,20 +251,20 @@ pub(crate) fn try_call_direct_leaf_function(
     module_host: Option<crate::module::ModuleHostRef>,
     #[cfg(feature = "agents")] agent_context: Option<crate::agent::AgentContextRef>,
 ) -> Option<Result<Value, RuntimeError>> {
-    let Value::Function(function) = callee.clone() else {
+    let Value::Function(function) = &callee else {
         return None;
     };
     let bytecode = function.bytecode.as_ref()?;
-    if !can_seed_direct_leaf_call(&function, bytecode, false) {
+    if !can_seed_direct_leaf_call(function, bytecode, false) {
         return None;
     }
     let FunctionCallEnv {
         env: mut call_env,
         direct_call_slots,
     } = function_env(
-        &function,
+        function,
         bytecode,
-        callee,
+        &callee,
         this_value,
         &argument_values,
         env,
@@ -671,7 +671,7 @@ struct FunctionCallEnv<'a> {
 fn function_env<'a>(
     function: &'a Function,
     bytecode: &Bytecode,
-    callee: Value,
+    callee: &Value,
     this_value: Value,
     argument_values: &'a [Value],
     env: &CallEnv,

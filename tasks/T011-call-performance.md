@@ -570,6 +570,34 @@ overall (4.08% lower wall ns/op). The five affected cases all improved:
 local binaries without provenance receipts; use the post-commit Performance
 Preview for hosted evidence.
 
+The post-commit Performance Preview at
+`9ee468a55e09d3413cc48c90a2060655ffc79179` confirmed the deferred native
+realm environment on hosted Linux at 0.9460x overall (5.40% lower wall ns/op),
+with a 95% confidence interval of [0.9405x, 0.9542x]. The five affected hosted
+cases were `plain_function_call` 0.8910x, `captured_read` 0.9123x,
+`method_call` 0.9134x, `captured_write` 0.9256x, and `many_locals_call`
+0.9751x. The two unaffected cases measured `array_read` 0.9995x and
+`property_read` 1.0120x. All 21 linearity probes passed and all three requested
+blocks were valid; the informational three-block cohort's precision policy
+remained inconclusive. The same run measured 15.6116x candidate/QuickJS-NG
+overall. CI and the full Test262 Coverage workflow were green. This commit
+replaces `a249e726` as the hosted baseline.
+
+The next profile also showed an avoidable shared-handle copy at both ordinary
+and direct-leaf function entry. Call dispatch previously cloned the callee
+`Value::Function` before inspecting it, even though `function_env` only needs
+an owned callee for the uncommon internal-name and derived-constructor
+bindings. Dispatch and `function_env` now borrow the existing callee and clone
+it only when one of those bindings is actually installed. A three-block
+comparison with seed `20250924` measured 0.9922x overall. An independent
+five-block comparison with seed `20250925` contained all 70 expected
+measurements and reproduced 0.9874x overall (1.26% lower wall ns/op). All seven
+cases were below 1.0: `plain_function_call` was 0.9763x, `captured_read`
+0.9814x, `method_call` 0.9859x, `property_read` 0.9871x, `array_read` 0.9895x,
+`many_locals_call` 0.9944x, and `captured_write` 0.9974x. These are exploratory
+local binaries without provenance receipts; use the post-commit Performance
+Preview for hosted evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment
