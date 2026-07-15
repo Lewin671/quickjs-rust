@@ -839,6 +839,22 @@ impl Vm<'_> {
     }
 
     pub(super) fn load_local(&mut self, slot: usize) -> Result<Value, RuntimeError> {
+        if self.slot_is_authoritative(slot) {
+            return match self.locals.get(slot) {
+                Some(Some(value)) => self.checked_local_value(slot, value.clone()),
+                Some(None) => Err(RuntimeError {
+                    thrown: None,
+                    message: format!(
+                        "ReferenceError: undefined identifier `{}`",
+                        self.bytecode.locals[slot].name
+                    ),
+                }),
+                None => Err(RuntimeError {
+                    thrown: None,
+                    message: "bytecode local index out of bounds".to_owned(),
+                }),
+            };
+        }
         if let Some(cell) = self.local_upvalues.get(slot).and_then(Option::as_ref)
             && let Some(local) = self.bytecode.locals.get(slot)
             && self.env.is_realm_binding_cell(&local.name, cell)
@@ -936,6 +952,16 @@ impl Vm<'_> {
     }
 
     pub(super) fn store_local(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
+        if self.slot_is_authoritative(slot)
+            && self
+                .bytecode
+                .locals
+                .get(slot)
+                .is_some_and(|local| local.mutable)
+        {
+            self.locals[slot] = Some(value);
+            return Ok(());
+        }
         // Read only the `Copy` slot metadata up front so the hot local write
         // never clones the `Local` (its owned `name` would be a heap
         // allocation on every assignment); the binding name is resolved by
@@ -1076,6 +1102,42 @@ impl Vm<'_> {
     }
 
     pub(super) fn assign_local(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
+        if self.slot_is_authoritative(slot)
+            && self
+                .bytecode
+                .locals
+                .get(slot)
+                .is_some_and(|local| local.mutable)
+        {
+            return match self.locals.get_mut(slot) {
+                Some(Some(Value::Function(function)))
+                    if function.is_uninitialized_lexical_marker() =>
+                {
+                    Err(RuntimeError {
+                        thrown: None,
+                        message: format!(
+                            "ReferenceError: undefined identifier `{}`",
+                            self.bytecode.locals[slot].name
+                        ),
+                    })
+                }
+                Some(Some(local)) => {
+                    *local = value;
+                    Ok(())
+                }
+                Some(None) => Err(RuntimeError {
+                    thrown: None,
+                    message: format!(
+                        "ReferenceError: undefined identifier `{}`",
+                        self.bytecode.locals[slot].name
+                    ),
+                }),
+                None => Err(RuntimeError {
+                    thrown: None,
+                    message: "bytecode local index out of bounds".to_owned(),
+                }),
+            };
+        }
         let current = self
             .upvalue_slot_value(slot)
             .or_else(|| self.locals.get(slot).and_then(Option::as_ref).cloned());
@@ -1098,6 +1160,19 @@ impl Vm<'_> {
                 ),
             }),
         }
+    }
+
+    /// True when this frame has no name-addressed state that can supersede the
+    /// indexed local. Captures, dynamic scope, modules, globals, and sloppy
+    /// fallback bindings all retain the full synchronization path.
+    fn slot_is_authoritative(&self, slot: usize) -> bool {
+        let Some(local) = self.bytecode.locals.get(slot) else {
+            return false;
+        };
+        !self.bytecode.global_scope
+            && !local.sloppy_global_fallback
+            && self.local_upvalues.get(slot).is_some_and(Option::is_none)
+            && self.env.slot_is_authoritative(&local.name)
     }
 
     pub(super) fn store_local_or_global_sloppy(

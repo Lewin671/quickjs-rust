@@ -221,8 +221,33 @@ and try-scope setup. An exact three-block comparison against
 0.776x overall, with all seven critical cases improved. An independent
 five-block run with seed `20250808` confirmed 0.779x overall (22.1% lower wall
 ns/op): `array_read` was 0.709x, `property_read` was 0.745x, and the five call
-and binding cases ranged from 0.751x to 0.817x. These are local dirty-source
-measurements and require post-commit Performance Preview confirmation.
+and binding cases ranged from 0.751x to 0.817x. The Performance Preview at
+`83dbe893c42af26287f87a7dc7a5820a6dfafaeb` confirmed a larger 0.7421x
+overall ratio (25.79% lower wall ns/op), with a 95% confidence interval of
+[0.7370x, 0.7486x]. All seven cases improved, led by `array_read` at 0.659x;
+the resulting candidate/QuickJS-NG ratio fell from 45.0203x to 33.6414x.
+
+A follow-up profile showed that ordinary loop-local writes still cloned the
+binding name and probed frame, module-import, module-live-binding, immutable,
+and global synchronization state on every iteration. Local reads likewise
+probed module imports even when an indexed slot was the only possible source.
+The VM now directly reads, initializes, and assigns mutable slot-only locals
+when the current frame has no same-named compatibility binding, dynamic-scope
+map, module binding, immutable function-name binding, shared upvalue, global
+scope, or sloppy-global fallback. The guard is checked against current runtime
+state rather than cached at frame construction, so `eval`, `with`, closures,
+modules, globals, and dynamically materialized same-named bindings retain the
+full synchronization path. An initial whole-frame guard measured 0.6483x
+overall in an independent five-block run but left `method_call` at 1.007x
+because its unrelated `this` binding disabled the parameter-slot fast path.
+Narrowing that guard to same-named frame bindings made `method_call` 0.736x in
+a focused three-block run. The final independent five-block comparison against
+`83dbe893` with seed `20250812` measured 0.6354x overall (36.5% lower wall
+ns/op), with all seven cases improved: `array_read` 0.417x, `property_read`
+0.525x, `many_locals_call` 0.669x, `plain_function_call` 0.722x,
+`captured_write` 0.723x, `method_call` 0.738x, and `captured_read` 0.741x. These
+are local dirty-source measurements and require post-commit Performance
+Preview confirmation.
 
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed

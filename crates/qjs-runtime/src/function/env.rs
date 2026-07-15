@@ -1035,6 +1035,16 @@ impl CallEnv {
                 .is_some_and(|bindings| bindings.contains_key(name))
     }
 
+    /// Whether ordinary bytecode locals can use their indexed slots without
+    /// consulting any name-addressed compatibility environment.
+    pub(crate) fn slot_is_authoritative(&self, name: &str) -> bool {
+        !self.frame_bindings.contains_key(name)
+            && self.deopt_bindings.is_none()
+            && self.module_imports.is_empty()
+            && self.module_live_bindings.is_none()
+            && self.immutable_function_name.is_none()
+    }
+
     pub(crate) fn frame_binding_cell(&self, name: &str) -> Option<Upvalue> {
         self.frame_bindings.cell(name)
     }
@@ -1095,8 +1105,9 @@ impl CallEnv {
 
 #[cfg(test)]
 mod tests {
-    use super::{FrameBindingValue, FrameBindings};
+    use super::{CallEnv, DynamicBindings, FrameBindingValue, FrameBindings, new_realm};
     use crate::Value;
+    use std::collections::HashMap;
 
     #[test]
     fn frame_binding_promotes_to_a_cell_only_when_identity_is_requested() {
@@ -1115,5 +1126,17 @@ mod tests {
         cell.set(Value::Number(2.0));
         assert!(matches!(bindings.get("value"), Some(Value::Number(2.0))));
         assert!(cell.ptr_eq(&bindings.cell("value").expect("cell is stable")));
+    }
+
+    #[test]
+    fn unrelated_frame_binding_does_not_disable_an_authoritative_slot() {
+        let mut env = CallEnv::new(new_realm(HashMap::new()));
+        env.insert("this".to_owned(), Value::Undefined);
+
+        assert!(env.slot_is_authoritative("value"));
+        assert!(!env.slot_is_authoritative("this"));
+
+        env.set_deopt_bindings(DynamicBindings::new());
+        assert!(!env.slot_is_authoritative("value"));
     }
 }
