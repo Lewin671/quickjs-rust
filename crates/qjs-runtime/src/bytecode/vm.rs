@@ -203,11 +203,18 @@ impl<'a> Vm<'a> {
         } else {
             Self::initial_slots(bytecode, &env)
         };
+        let direct_upvalues = direct_call_slots
+            .as_ref()
+            .map(|direct_call_slots| direct_call_slots.upvalues);
         let direct_this = direct_call_slots.and_then(|direct_call_slots| {
             Self::seed_direct_call_slots(bytecode, &mut locals, direct_call_slots)
         });
         let local_upvalues = if is_direct_call {
-            Self::initial_direct_local_upvalues(bytecode, &upvalues, &env)
+            Self::initial_direct_local_upvalues(
+                bytecode,
+                direct_upvalues.unwrap_or(&upvalues),
+                &env,
+            )
         } else {
             Self::initial_local_upvalues(bytecode, &locals, &upvalues, &env)
         };

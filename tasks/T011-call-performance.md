@@ -783,6 +783,21 @@ rejection rather than invalid evidence or a correctness failure. The import
 probe optimization was reverted; `178e5a4f` remains the latest confirmed
 hosted performance baseline.
 
+After restoring the `178e5a4f` code baseline, profiling showed that direct
+calls still cloned `Function.upvalues` into a second owning `Vec` for every
+invocation. A direct leaf cannot create a child closure, generator, or async
+continuation, so the incoming cells are now borrowed only while initializing
+the frame's indexed upvalue slots; the running VM does not retain the redundant
+owner vector, and the guard-guaranteed empty `with_stack` is not cloned. A
+three-block comparison with seed `20251015` measured 0.9808x overall. An
+independent five-block comparison with seed `20251016` contained all 70
+expected measurements and reproduced 0.9882x overall (1.18% lower wall
+ns/op). `captured_read` improved to 0.9527x, `captured_write` to 0.9591x, and
+`plain_function_call` to 0.9971x; `many_locals_call` and `method_call` were
+1.0032x and 1.0046x. The unrelated cases were `property_read` 0.9955x and
+`array_read` 1.0070x. These are exploratory local binaries without provenance
+receipts; use the post-commit Performance Preview for hosted evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment
