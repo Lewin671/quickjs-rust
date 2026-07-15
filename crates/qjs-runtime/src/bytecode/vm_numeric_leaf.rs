@@ -8,7 +8,7 @@ use super::{
 };
 
 const MAX_FAST_LOCALS: usize = 32;
-const MAX_FAST_STACK: usize = 64;
+const MAX_FAST_STACK: usize = 16;
 const NO_UPVALUE: usize = usize::MAX;
 
 #[derive(Clone, Copy)]

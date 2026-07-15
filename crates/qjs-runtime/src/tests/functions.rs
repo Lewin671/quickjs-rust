@@ -876,6 +876,20 @@ fn numeric_leaf_falls_back_for_duplicate_parameter_slots() {
 }
 
 #[test]
+fn numeric_leaf_falls_back_when_scratch_stack_is_too_deep() {
+    assert_eq!(
+        eval(
+            "function deep(value) { \
+               return value + (1 + (2 + (3 + (4 + (5 + (6 + (7 + (8 + (9 + \
+                 (10 + (11 + (12 + (13 + (14 + (15 + (16 + 17)))))))))))))))); \
+             } \
+             deep(0);"
+        ),
+        Ok(Value::Number(153.0))
+    );
+}
+
+#[test]
 fn numeric_leaf_commits_captured_writes_before_later_fallbacks() {
     assert_eq!(
         eval(

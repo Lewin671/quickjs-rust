@@ -827,6 +827,32 @@ are exploratory local binaries without provenance receipts; use the
 post-commit Performance Preview for hosted evidence.
 
 The post-commit Performance Preview at
+`f081ab172823bbb3265bc44bc415c3324166ce96` confirmed a 0.9729x overall
+improvement on hosted Linux (2.71% lower wall ns/op), with a 95% confidence
+interval of [0.9700x, 0.9825x]. All seven hosted cases improved:
+`many_locals_call` was 0.9218x, `captured_read` 0.9574x,
+`plain_function_call` 0.9709x, `captured_write` 0.9824x, `method_call`
+0.9861x, `property_read` 0.9968x, and `array_read` 0.9973x. All 21 linearity
+probes passed, all three requested blocks were valid, and CI and Test262
+Coverage were green. The same run reduced candidate/QuickJS-NG overall from
+the prior valid preview's 8.2719x to 7.6917x.
+
+The fixed numeric scratch stack was provisioned for 64 values even though the
+admitted leaf bodies normally peak at two or three. Its initialization became
+visible after the name scans disappeared. The stack now holds 16 values;
+deeper numeric expression trees fail the bounded push and transactionally use
+the general VM, preserving semantics without carrying the cold capacity on
+every call. A three-block comparison with seed `20251028` measured 0.9793x
+overall. An independent five-block comparison with seed `20251029` contained
+all 70 expected measurements and reproduced 0.9804x overall (1.96% lower wall
+ns/op). The five affected cases improved: `captured_read` was 0.9534x,
+`captured_write` 0.9690x, `plain_function_call` 0.9782x, `method_call`
+0.9787x, and `many_locals_call` 0.9840x. The unrelated cases were effectively
+neutral at `property_read` 0.9999x and `array_read` 1.0004x. These are
+exploratory local binaries without provenance receipts; use the post-commit
+Performance Preview for hosted evidence.
+
+The post-commit Performance Preview at
 `3170a7d5caf59a67770d9c568ac7de20a089f42d` measured 0.9928x overall on
 hosted Linux, with a 95% confidence interval of [0.9928x, 1.0034x]. The point
 estimate agrees with the local improvement, but the interval crosses 1.0, so
@@ -908,6 +934,15 @@ affected cases improved: `many_locals_call` was 0.9034x,
 0.9962x and `property_read` 1.0017x. These are exploratory local binaries
 without provenance receipts; use the post-commit Performance Preview for
 hosted evidence.
+
+The post-commit Performance Preview at
+`189213c6ccffb5552a70423fba9e7ead10a8f449` produced no performance
+conclusion because the base `property_read` linearity probe was 0.7915x,
+outside the accepted [0.85x, 1.15x] range. The otherwise complete diagnostic
+report pointed in the same direction at 0.9522x candidate/base overall and
+8.1630x candidate/QuickJS-NG overall, but protocol health was invalid, so
+neither ratio is provenance-backed evidence. CI and Test262 Coverage were
+green at this commit.
 
 The numeric executor still rediscovered the parameter and received-upvalue
 slot indices on every call, even though the immutable local table fixes both
