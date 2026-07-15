@@ -838,6 +838,49 @@ fn direct_leaf_vm_call_preserves_caller_slot_and_global_write() {
 }
 
 #[test]
+fn numeric_leaf_falls_back_for_coercion_without_duplicate_effects() {
+    assert_eq!(
+        eval(
+            "var coercions = 0; \
+             function addOne(value) { return value + 1; } \
+             var object = { valueOf: function() { coercions++; return 4; } }; \
+             addOne(2) + ':' + addOne('x') + ':' + addOne(object) + ':' + coercions;"
+        ),
+        Ok(Value::String("3:x1:5:1".to_owned().into()))
+    );
+}
+
+#[test]
+fn numeric_leaf_commits_captured_writes_before_later_fallbacks() {
+    assert_eq!(
+        eval(
+            "function makeCounter() { \
+               var captured = 0; \
+               return function(value) { captured += value; return captured; }; \
+             } \
+             var counter = makeCounter(); \
+             counter(2) + ':' + counter(3) + ':' + counter('x') + ':' + counter(1);"
+        ),
+        Ok(Value::String("2:5:5x:5x1".to_owned().into()))
+    );
+}
+
+#[test]
+fn numeric_leaf_rolls_back_scratch_writes_before_opcode_fallback() {
+    assert_eq!(
+        eval(
+            "function makeCounter() { \
+               var captured = 0; \
+               return function() { captured += 1; return Math.abs(captured); }; \
+             } \
+             var counter = makeCounter(); \
+             counter() + ':' + counter();"
+        ),
+        Ok(Value::String("1:2".to_owned().into()))
+    );
+}
+
+#[test]
 fn arrow_captures_new_target_at_creation() {
     assert_eq!(
         eval(

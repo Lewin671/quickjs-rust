@@ -8,6 +8,7 @@ use crate::{
     NativeFunction, ObjectRef, RuntimeError, Value,
     bytecode::{
         DirectCallSlots, eval_function_bytecode, eval_function_bytecode_with_direct_call_slots,
+        try_eval_numeric_leaf,
     },
     function_prototype,
     native::call_native_function,
@@ -256,6 +257,14 @@ pub(crate) fn call_direct_leaf_function(
         .bytecode
         .as_ref()
         .expect("direct leaf predicate requires bytecode");
+    if let Some(value) = try_eval_numeric_leaf(
+        bytecode,
+        &function.params,
+        argument_values,
+        &function.upvalues,
+    ) {
+        return Ok(value);
+    }
     let FunctionCallEnv {
         env: mut call_env,
         direct_call_slots,

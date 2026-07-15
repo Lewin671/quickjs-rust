@@ -826,6 +826,35 @@ unrelated cases were `property_read` 1.0064x and `array_read` 1.0097x. These
 are exploratory local binaries without provenance receipts; use the
 post-commit Performance Preview for hosted evidence.
 
+The post-commit Performance Preview at
+`3170a7d5caf59a67770d9c568ac7de20a089f42d` measured 0.9928x overall on
+hosted Linux, with a 95% confidence interval of [0.9928x, 1.0034x]. The point
+estimate agrees with the local improvement, but the interval crosses 1.0, so
+the hosted result remains directional rather than confirmed. The hosted
+affected cases were `plain_function_call` 0.9619x, `many_locals_call` 0.9821x,
+`captured_read` 0.9832x, `method_call` 0.9891x, and `captured_write` 1.0111x.
+The unrelated cases were `property_read` 0.9945x and `array_read` 1.0289x.
+All 21 linearity probes passed, all three requested blocks were valid, and CI
+was green. The same run measured 13.4084x candidate/QuickJS-NG overall.
+
+Profiling after the argument-vector removal showed that the five call cases
+still spent most of their time constructing, initializing, and destroying a
+nested general-purpose VM for bytecode bodies containing only local numeric
+work. A transactional numeric-leaf executor now runs the general subset of
+local loads/stores, primitive number operations, stack duplication, and return
+on fixed-size scratch storage. It commits received-upvalue writes only after a
+supported return; non-numeric inputs, coercions, complex opcodes, oversized
+frames, or unsupported semantics fall back before any observable write. A
+three-block comparison with seed `20251019` measured 0.6623x overall. An
+independent five-block comparison with seed `20251020` contained all 70
+expected measurements and reproduced 0.6614x overall (33.86% lower wall
+ns/op). All five affected cases improved substantially: `many_locals_call`
+was 0.4647x, `captured_write` 0.5383x, `captured_read` 0.5836x,
+`plain_function_call` 0.6168x, and `method_call` 0.6192x. The unrelated cases
+were `property_read` 0.9937x and `array_read` 0.9990x. These are exploratory
+local binaries without provenance receipts; use the post-commit Performance
+Preview for hosted evidence.
+
 An alternative attempt to store immutable BigInts behind shared handles did
 reduce `Value` from 32 to 24 bytes, but a three-block same-machine run regressed
 the seven-case geometric mean to 1.022x and slowed six cases. That experiment
