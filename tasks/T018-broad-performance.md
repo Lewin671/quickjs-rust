@@ -1438,6 +1438,20 @@ Lazy function-property bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+Trusted-main hosted run `29535572372` for the lazy function-property unit
+completed all 225 formal measurements, passed all 75 linearity diagnostics,
+and retained all three blocks. Candidate/QuickJS-NG was **0.35544x** overall;
+allocation was **2.81539x**, with object, array, and closure allocation at
+2.99168x, 3.31141x, and 2.25262x. Candidate/base allocation was 0.97689x and
+closure allocation was 0.93396x. The same three-block result reported a
+1.03352x overall candidate/base ratio while plain and method calls each moved
+to about 0.62x base, so the expected hosted health is `inconclusive` and those
+large cross-case movements are not treated as precise runtime claims. Run ID:
+`20f37360-6dda-49d6-a280-cfb31cd70378`; raw JSONL SHA-256:
+`241ac5fe4fd6b1890e46dc0dbbf20e63e35c2ccbe27386770a53b74dd8260ec5`;
+report JSON SHA-256:
+`5a4794aa2a5e8d07bc62b67650f89d1f7dbf2b6ad00cc8e698e83d12b4aafee4`.
+
 The twenty-sixth v2 runtime unit makes retained function source immutable at
 construction. The source used by `Function.prototype.toString` previously sat
 in a `RefCell<Option<Rc<str>>>` even though no function changes its original
@@ -1469,6 +1483,54 @@ Immutable function-source bindings:
   `0908d38348ab9197facc4ed209ad8587f6449e5a2214583fcfa64deb44d75786`;
 - preceding-runtime binary SHA-256:
   `767399ea347277809de49db26ccd03409feef27176e082f1e1d475e4baaa2e66`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
+The twenty-seventh v2 runtime unit consolidates dense-array cold state behind
+one lazy allocation. A fresh dense literal no longer carries inline empty
+`BTreeSet`, named-property `HashMap`, symbol-property `Vec`, and prototype
+override cells. The cold block appears only when holes, special properties,
+symbols, or a prototype override require it. The common `ArrayData` header is
+now capped at 64 bytes, and a layout/behavior test verifies that reading a
+dense element does not allocate cold state while deleting one does. Sparse and
+descriptor behavior remains on the same representation after materialization.
+
+A focused three-role `array_allocation` run made all nine formal measurements
+eligible and completed all 24 predetermined N/2N diagnostics. Candidate
+medians were 184.230/185.097/185.183 ns/op versus
+190.685/190.798/190.976 for the immediately preceding runtime, a **0.96864x**
+paired geometric ratio (3.1% lower wall ns/op). QuickJS-NG measured
+157.766/157.811/158.478 ns/op, leaving the local focused case at 1.16972x.
+
+A five-case candidate/base confirmation measured `array_allocation` at
+0.96700x, `array_write` at 0.99363x, `array_read` at 1.00382x, and
+`array_dynamic_read` at 1.00368x. Its `array_index_of` cohort retained one
+isolated 8.36 ns/op candidate sample while the other candidate blocks were
+5.02/5.03 ns/op against 5.65 ns/op base, making that first aggregate 1.05321x.
+The required independent five-block rerun was stable in every block at
+0.89123x-0.89354x and produced a **0.89219x** paired ratio. All 49 formal
+measurements across the three runs were eligible, all 120 diagnostics
+completed, and no sample had a non-ok status. These are focused local results;
+the hosted broad preview remains authoritative for the allocation-family gap.
+
+Lazy array-cold-state bindings:
+
+- three-role run ID: `0b533e47-a37e-42b8-8514-f85253efd00c`;
+- five-case confirmation run ID: `f7981cf3-8304-4ad2-b407-c2dc11b4dbb8`;
+- `array_index_of` confirmation run ID:
+  `2cb0c3ce-849a-402c-8c2d-37f88d2dc8fe`;
+- three-role raw JSONL SHA-256:
+  `5f5670b471383129b398acb6ed9f40854106dd8b28fdc6fe07b71b621480fe69`;
+- five-case raw JSONL SHA-256:
+  `54e38b5ce4148aca2e0eeea8c9c074ae916afda1a3ea03393e7ad4632af5dfa1`;
+- `array_index_of` raw JSONL SHA-256:
+  `272b9fab8ebfd98942d069aebc75ec024d137a297ae60bdbab2e84a04c1e7ddb`;
+- manifest SHA-256:
+  `5105e4923cb104f6608e935f73a35e9ab763562c57c7eea8cb0169d1710777ec`;
+- candidate binary SHA-256:
+  `537de482acc7b8905403cb8708381bb8431f9fd1b205dca6544a9232669f7e20`;
+- preceding-runtime binary SHA-256:
+  `0908d38348ab9197facc4ed209ad8587f6449e5a2214583fcfa64deb44d75786`;
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
