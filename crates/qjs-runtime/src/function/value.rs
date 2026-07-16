@@ -726,6 +726,7 @@ impl Function {
     /// then `prototype`) even when a constructable function has already
     /// recorded its lazy prototype slot.
     fn materialize_default_data_properties(&self) {
+        self.materialize_default_prototype_order();
         let had_length = self.auxiliary.implicit_length_property.replace(false);
         let had_name = self.auxiliary.implicit_name_property.replace(false);
         if !had_length && !had_name {
@@ -752,13 +753,23 @@ impl Function {
 
     fn mark_lazy_default_prototype(&self) {
         self.auxiliary.lazy_default_prototype.set(true);
-        self.auxiliary
-            .property_order
-            .borrow_mut()
-            .push("prototype".to_owned());
+    }
+
+    /// Records the ordinary function's original `prototype` property slot
+    /// only when property observation or mutation needs ordering state. This
+    /// keeps unobserved closures from allocating a `Vec` buffer and owned key.
+    fn materialize_default_prototype_order(&self) {
+        if !self.auxiliary.lazy_default_prototype.get() {
+            return;
+        }
+        let mut property_order = self.auxiliary.property_order.borrow_mut();
+        if !property_order.iter().any(|key| key == "prototype") {
+            property_order.push("prototype".to_owned());
+        }
     }
 
     fn ensure_default_prototype(&self) {
+        self.materialize_default_prototype_order();
         if !self.auxiliary.lazy_default_prototype.replace(false) {
             return;
         }
@@ -876,6 +887,7 @@ impl Function {
         if !self.auxiliary.extensible.get() {
             return;
         }
+        self.materialize_default_prototype_order();
         self.auxiliary.property_order.borrow_mut().push(key.clone());
         properties.insert(key.clone(), Property::enumerable(value));
         drop(properties);
@@ -883,6 +895,7 @@ impl Function {
     }
 
     pub(crate) fn define_property(&self, key: String, property: Property) {
+        self.materialize_default_prototype_order();
         if (key == "length" && self.auxiliary.implicit_length_property.get())
             || (key == "name" && self.auxiliary.implicit_name_property.get())
         {
@@ -1521,6 +1534,38 @@ mod tests {
                 "var f = function (value) { return value; }; f.prototype.constructor === f && Object.getOwnPropertyNames(f).includes('prototype') && !delete f.prototype;"
             ),
             Ok(Value::Boolean(true))
+        );
+    }
+
+    #[test]
+    fn compiled_function_keeps_default_prototype_order_implicit_until_observation() {
+        let function = eval("function make() { return function value() {}; } make();")
+            .expect("function expression should evaluate");
+        let Value::Function(function) = function else {
+            panic!("expected function value");
+        };
+
+        assert!(function.auxiliary.lazy_default_prototype.get());
+        assert!(function.auxiliary.property_order.borrow().is_empty());
+        assert_eq!(
+            function.own_property_names(),
+            ["length", "name", "prototype"]
+        );
+        assert_eq!(
+            function.auxiliary.property_order.borrow().as_slice(),
+            ["prototype"]
+        );
+    }
+
+    #[test]
+    fn later_properties_follow_an_unobserved_default_prototype_slot() {
+        assert_eq!(
+            eval(
+                "var f = function value() {}; f.assigned = 1; Object.defineProperty(f, 'defined', { value: 2, configurable: true }); Object.getOwnPropertyNames(f).join('|');"
+            ),
+            Ok(Value::String(
+                "length|name|prototype|assigned|defined".to_owned().into()
+            ))
         );
     }
 }

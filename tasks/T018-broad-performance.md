@@ -1249,6 +1249,37 @@ Lazy default-function-property bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+The twenty-first v2 runtime unit keeps the ordinary function `prototype`
+property's insertion-order slot implicit alongside its already-lazy value.
+Fresh constructable closures no longer allocate a property-order `Vec` buffer
+and owned `prototype` key unless property observation or mutation requires
+them. Materialization still places the slot after the original `length` and
+`name` properties and before later additions, including when either implicit
+default is deleted or redefined.
+
+A focused three-role `closure_allocation_call` run made all nine formal
+measurements eligible and passed all 24 predetermined N/2N samples with exact
+operation counts and checksums. Candidate medians were
+361.034/358.490/357.432 ns/op versus 412.801/412.516/410.401 for the immediately
+preceding runtime, a **0.87152x** paired geometric ratio (12.8% lower wall
+ns/op). QuickJS-NG measured 273.451/274.883/270.813 ns/op, leaving this focused
+case at 1.31474x QuickJS-NG on the macOS profile. This remains focused evidence,
+not a broad or allocation-family claim.
+
+Lazy default-prototype-order bindings:
+
+- run ID: `2dfd1588-1396-49be-b2de-a3be2609e5b7`;
+- raw JSONL SHA-256:
+  `981eb22da2bec8a9195b5c36ee164c7a5c531b49c83cb71bd1df74c6815f73b7`;
+- manifest SHA-256:
+  `5105e4923cb104f6608e935f73a35e9ab763562c57c7eea8cb0169d1710777ec`;
+- candidate binary SHA-256:
+  `db19df93c2a323451fdb55653012655a33f4e00fb98ac8e51ff22b796c1289c2`;
+- preceding-runtime binary SHA-256:
+  `ee0cae39fe0f8dcff1608a004d010b0aeb9562e8ecb557fed0ee765b918df2ee`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
