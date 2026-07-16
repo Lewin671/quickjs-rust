@@ -133,8 +133,7 @@ impl Vm<'_> {
 
         // The constructor's home object is its prototype; static `super.x`
         // resolves through it.
-        *constructor_function.auxiliary.home_object.borrow_mut() =
-            Some(Value::Object(prototype.clone()));
+        constructor_function.set_home_object(Value::Object(prototype.clone()));
 
         self.create_private_environment(private_elements, &prototype, &constructor_function);
         let computed_keys = self.resolve_computed_class_keys(

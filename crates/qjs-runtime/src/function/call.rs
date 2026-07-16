@@ -1011,7 +1011,7 @@ fn insert_super_bindings(
 
     // Methods/constructors use their own home object and parent constructor;
     // arrows inherit both from the enclosing frame so `super` works lexically.
-    if let Some(home) = function.auxiliary.home_object.borrow().clone() {
+    if let Some(home) = function.home_object() {
         frame_env.insert(HOME_OBJECT_BINDING.to_owned(), home);
     } else if function.lexical_this
         && let Some(home) = caller_env.get(HOME_OBJECT_BINDING)
@@ -1019,7 +1019,7 @@ fn insert_super_bindings(
         frame_env.insert(HOME_OBJECT_BINDING.to_owned(), home);
     }
 
-    if let Some(super_constructor) = function.auxiliary.super_constructor.borrow().clone() {
+    if let Some(super_constructor) = function.super_constructor() {
         frame_env.insert(SUPER_CONSTRUCTOR_BINDING.to_owned(), super_constructor);
     } else if function.lexical_this
         && let Some(super_constructor) = caller_env.get(SUPER_CONSTRUCTOR_BINDING)
@@ -1043,7 +1043,7 @@ fn function_private_environment(function: &Function) -> Option<PrivateEnvironmen
     if let Some(environment) = function.private_environment() {
         return Some(environment);
     }
-    match function.auxiliary.home_object.borrow().clone() {
+    match function.home_object() {
         Some(Value::Object(object)) => object.private_environment(),
         Some(Value::Function(function)) => function.private_environment(),
         _ => None,

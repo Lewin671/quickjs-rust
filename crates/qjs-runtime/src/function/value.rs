@@ -176,43 +176,71 @@ pub struct FunctionAuxiliaryState {
     /// identity-bearing storage.
     implicit_length_property: Cell<bool>,
     implicit_name_property: Cell<bool>,
-    pub(crate) home_object: RefCell<Option<Value>>,
-    /// For a derived constructor, the parent constructor invoked by `super()`.
-    pub(crate) super_constructor: RefCell<Option<Value>>,
-    /// For a class constructor, the instance-field initializers run when a new
-    /// instance is constructed (base class: at construction start; derived
-    /// class: immediately after `super()` returns).
-    instance_elements: RefCell<Vec<InstanceElementInitializer>>,
-    property_order: RefCell<Vec<String>>,
-    symbol_properties: RefCell<Vec<(ObjectRef, Property)>>,
     extensible: Cell<bool>,
     sealed: Cell<bool>,
     frozen: Cell<bool>,
-    /// Explicit [[Prototype]] override. `None` means "use the default
-    /// %Function.prototype% intrinsic"; `Some(None)` means it is null.
-    internal_prototype: RefCell<Option<Option<Prototype>>>,
-    private_state: RefCell<crate::private::PrivateState>,
     source_text: RefCell<Option<Rc<str>>>,
     lazy_default_prototype: Cell<bool>,
+    /// Metadata absent from ordinary closures. A single lazy allocation keeps
+    /// the hot function object compact while preserving shared object identity
+    /// when methods, classes, symbols, or prototype mutation need this state.
+    cold: RefCell<Option<Box<FunctionColdState>>>,
+}
+
+struct FunctionColdState {
+    home_object: Option<Value>,
+    /// For a derived constructor, the parent constructor invoked by `super()`.
+    super_constructor: Option<Value>,
+    /// For a class constructor, the instance-field initializers run when a new
+    /// instance is constructed (base class: at construction start; derived
+    /// class: immediately after `super()` returns).
+    instance_elements: Vec<InstanceElementInitializer>,
+    property_order: Vec<String>,
+    symbol_properties: Vec<(ObjectRef, Property)>,
+    /// Explicit [[Prototype]] override. `None` means "use the default
+    /// %Function.prototype% intrinsic"; `Some(None)` means it is null.
+    internal_prototype: Option<Option<Prototype>>,
+    private_state: crate::private::PrivateState,
 }
 
 impl FunctionAuxiliaryState {
     fn new(home_object: Option<Value>, super_constructor: Option<Value>) -> Self {
+        let cold = (home_object.is_some() || super_constructor.is_some())
+            .then(|| Box::new(FunctionColdState::new(home_object, super_constructor)));
         Self {
             implicit_length_property: Cell::new(false),
             implicit_name_property: Cell::new(false),
-            home_object: RefCell::new(home_object),
-            super_constructor: RefCell::new(super_constructor),
-            instance_elements: RefCell::new(Vec::new()),
-            property_order: RefCell::new(Vec::new()),
-            symbol_properties: RefCell::new(Vec::new()),
             extensible: Cell::new(true),
             sealed: Cell::new(false),
             frozen: Cell::new(false),
-            internal_prototype: RefCell::new(None),
-            private_state: RefCell::new(crate::private::PrivateState::default()),
             source_text: RefCell::new(None),
             lazy_default_prototype: Cell::new(false),
+            cold: RefCell::new(cold),
+        }
+    }
+
+    fn with_cold<R>(&self, read: impl FnOnce(Option<&FunctionColdState>) -> R) -> R {
+        let cold = self.cold.borrow();
+        read(cold.as_deref())
+    }
+
+    fn with_cold_mut<R>(&self, mutate: impl FnOnce(&mut FunctionColdState) -> R) -> R {
+        let mut cold = self.cold.borrow_mut();
+        let cold = cold.get_or_insert_with(|| Box::new(FunctionColdState::new(None, None)));
+        mutate(cold)
+    }
+}
+
+impl FunctionColdState {
+    fn new(home_object: Option<Value>, super_constructor: Option<Value>) -> Self {
+        Self {
+            home_object,
+            super_constructor,
+            instance_elements: Vec::new(),
+            property_order: Vec::new(),
+            symbol_properties: Vec::new(),
+            internal_prototype: None,
+            private_state: crate::private::PrivateState::default(),
         }
     }
 }
@@ -703,21 +731,22 @@ impl Function {
         }
 
         let mut properties = self.properties.borrow_mut();
-        let mut property_order = self.auxiliary.property_order.borrow_mut();
-        let mut insert_at = 0;
-        if had_length {
-            properties
-                .entry("length".to_owned())
-                .or_insert_with(|| self.default_length_property());
-            property_order.insert(insert_at, "length".to_owned());
-            insert_at += 1;
-        }
-        if had_name {
-            properties
-                .entry("name".to_owned())
-                .or_insert_with(|| self.default_name_property());
-            property_order.insert(insert_at, "name".to_owned());
-        }
+        self.auxiliary.with_cold_mut(|cold| {
+            let mut insert_at = 0;
+            if had_length {
+                properties
+                    .entry("length".to_owned())
+                    .or_insert_with(|| self.default_length_property());
+                cold.property_order.insert(insert_at, "length".to_owned());
+                insert_at += 1;
+            }
+            if had_name {
+                properties
+                    .entry("name".to_owned())
+                    .or_insert_with(|| self.default_name_property());
+                cold.property_order.insert(insert_at, "name".to_owned());
+            }
+        });
     }
 
     fn mark_lazy_default_prototype(&self) {
@@ -731,10 +760,11 @@ impl Function {
         if !self.auxiliary.lazy_default_prototype.get() {
             return;
         }
-        let mut property_order = self.auxiliary.property_order.borrow_mut();
-        if !property_order.iter().any(|key| key == "prototype") {
-            property_order.push("prototype".to_owned());
-        }
+        self.auxiliary.with_cold_mut(|cold| {
+            if !cold.property_order.iter().any(|key| key == "prototype") {
+                cold.property_order.push("prototype".to_owned());
+            }
+        });
     }
 
     fn ensure_default_prototype(&self) {
@@ -772,9 +802,11 @@ impl Function {
         for property in self.properties.borrow_mut().values_mut() {
             property.make_non_configurable();
         }
-        for (_, property) in self.auxiliary.symbol_properties.borrow_mut().iter_mut() {
-            property.make_non_configurable();
-        }
+        self.auxiliary.with_cold_mut(|cold| {
+            for (_, property) in &mut cold.symbol_properties {
+                property.make_non_configurable();
+            }
+        });
     }
 
     pub(crate) fn is_sealed(&self) -> bool {
@@ -786,12 +818,13 @@ impl Function {
                 .borrow()
                 .values()
                 .all(|property| !property.configurable)
-            && self
-                .auxiliary
-                .symbol_properties
-                .borrow()
-                .iter()
-                .all(|(_, property)| !property.configurable)
+            && self.auxiliary.with_cold(|cold| {
+                cold.is_none_or(|cold| {
+                    cold.symbol_properties
+                        .iter()
+                        .all(|(_, property)| !property.configurable)
+                })
+            })
     }
 
     pub(crate) fn freeze(&self) {
@@ -803,9 +836,11 @@ impl Function {
         for property in self.properties.borrow_mut().values_mut() {
             property.freeze_data();
         }
-        for (_, property) in self.auxiliary.symbol_properties.borrow_mut().iter_mut() {
-            property.freeze_data();
-        }
+        self.auxiliary.with_cold_mut(|cold| {
+            for (_, property) in &mut cold.symbol_properties {
+                property.freeze_data();
+            }
+        });
     }
 
     pub(crate) fn is_frozen(&self) -> bool {
@@ -818,12 +853,13 @@ impl Function {
                 .borrow()
                 .values()
                 .all(|property| !property.configurable && !property.writable)
-            && self
-                .auxiliary
-                .symbol_properties
-                .borrow()
-                .iter()
-                .all(|(_, property)| !property.configurable && !property.writable)
+            && self.auxiliary.with_cold(|cold| {
+                cold.is_none_or(|cold| {
+                    cold.symbol_properties
+                        .iter()
+                        .all(|(_, property)| !property.configurable && !property.writable)
+                })
+            })
     }
 
     pub(crate) fn set_property(&self, key: String, value: Value) {
@@ -857,7 +893,8 @@ impl Function {
             return;
         }
         self.materialize_default_prototype_order();
-        self.auxiliary.property_order.borrow_mut().push(key.clone());
+        self.auxiliary
+            .with_cold_mut(|cold| cold.property_order.push(key.clone()));
         properties.insert(key.clone(), Property::enumerable(value));
         drop(properties);
         self.refresh_dynamic_function_realm_override(&key);
@@ -875,7 +912,8 @@ impl Function {
         }
         let mut properties = self.properties.borrow_mut();
         if !properties.contains_key(&key) {
-            self.auxiliary.property_order.borrow_mut().push(key.clone());
+            self.auxiliary
+                .with_cold_mut(|cold| cold.property_order.push(key.clone()));
         }
         properties.insert(key.clone(), property);
         drop(properties);
@@ -928,7 +966,9 @@ impl Function {
     fn ordered_property_names(&self, include: impl Fn(&Property) -> bool) -> Vec<String> {
         self.ensure_default_prototype();
         let properties = self.properties.borrow();
-        let property_order = self.auxiliary.property_order.borrow().clone();
+        let property_order = self
+            .auxiliary
+            .with_cold(|cold| cold.map_or_else(Vec::new, |cold| cold.property_order.clone()));
         let mut indices = Vec::new();
         let mut strings = Vec::new();
         let mut fallback_strings = Vec::new();
@@ -1027,9 +1067,7 @@ impl Function {
             self.has_dynamic_function_realm_override.set(false);
         }
         self.auxiliary
-            .property_order
-            .borrow_mut()
-            .retain(|existing| existing != key);
+            .with_cold_mut(|cold| cold.property_order.retain(|existing| existing != key));
         true
     }
 
@@ -1051,9 +1089,7 @@ impl Function {
             self.has_dynamic_function_realm_override.set(false);
         }
         self.auxiliary
-            .property_order
-            .borrow_mut()
-            .retain(|existing| existing != key);
+            .with_cold_mut(|cold| cold.property_order.retain(|existing| existing != key));
     }
 
     pub(crate) fn symbol_property(&self, symbol: &ObjectRef, env: &CallEnv) -> Option<Property> {
@@ -1080,7 +1116,10 @@ impl Function {
     }
 
     fn effective_internal_prototype_with_env(&self, env: &CallEnv) -> Option<Prototype> {
-        match self.auxiliary.internal_prototype.borrow().clone() {
+        match self
+            .auxiliary
+            .with_cold(|cold| cold.and_then(|cold| cold.internal_prototype.clone()))
+        {
             Some(slot) => slot,
             None => crate::function_intrinsic_prototype_slot(env),
         }
@@ -1127,98 +1166,111 @@ impl Function {
     }
 
     pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
-        let mut properties = self.auxiliary.symbol_properties.borrow_mut();
-        if let Some((_, existing)) = properties
-            .iter_mut()
-            .find(|(existing_symbol, _)| existing_symbol.ptr_eq(&symbol))
-        {
-            *existing = property;
-            return;
-        }
-        properties.push((symbol, property));
+        self.auxiliary.with_cold_mut(|cold| {
+            if let Some((_, existing)) = cold
+                .symbol_properties
+                .iter_mut()
+                .find(|(existing_symbol, _)| existing_symbol.ptr_eq(&symbol))
+            {
+                *existing = property;
+                return;
+            }
+            cold.symbol_properties.push((symbol, property));
+        });
     }
 
     pub(crate) fn has_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
-        self.auxiliary
-            .symbol_properties
-            .borrow()
-            .iter()
-            .any(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
+        self.auxiliary.with_cold(|cold| {
+            cold.is_some_and(|cold| {
+                cold.symbol_properties
+                    .iter()
+                    .any(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
+            })
+        })
     }
 
     pub(crate) fn own_symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
-        self.auxiliary
-            .symbol_properties
-            .borrow()
-            .iter()
-            .find(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
-            .map(|(_, property)| property.clone())
+        self.auxiliary.with_cold(|cold| {
+            cold.and_then(|cold| {
+                cold.symbol_properties
+                    .iter()
+                    .find(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
+                    .map(|(_, property)| property.clone())
+            })
+        })
     }
 
     pub(crate) fn delete_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
-        let mut properties = self.auxiliary.symbol_properties.borrow_mut();
-        let Some(index) = properties
-            .iter()
-            .position(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
-        else {
-            return true;
-        };
-        if !properties[index].1.configurable {
-            return false;
-        }
-        properties.remove(index);
-        true
+        self.auxiliary.with_cold_mut(|cold| {
+            let Some(index) = cold
+                .symbol_properties
+                .iter()
+                .position(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
+            else {
+                return true;
+            };
+            if !cold.symbol_properties[index].1.configurable {
+                return false;
+            }
+            cold.symbol_properties.remove(index);
+            true
+        })
     }
 
     pub(crate) fn own_property_symbols(&self) -> Vec<ObjectRef> {
-        self.auxiliary
-            .symbol_properties
-            .borrow()
-            .iter()
-            .map(|(symbol, _)| symbol.clone())
-            .collect()
+        self.auxiliary.with_cold(|cold| {
+            cold.map_or_else(Vec::new, |cold| {
+                cold.symbol_properties
+                    .iter()
+                    .map(|(symbol, _)| symbol.clone())
+                    .collect()
+            })
+        })
     }
 
     /// Returns the function's private-name storage, creating it on first use.
     pub(crate) fn private_storage(&self) -> crate::private::PrivateStorage {
-        self.auxiliary
-            .private_state
-            .borrow_mut()
-            .storage
-            .get_or_insert_with(crate::private::PrivateStorage::new)
-            .clone()
+        self.auxiliary.with_cold_mut(|cold| {
+            cold.private_state
+                .storage
+                .get_or_insert_with(crate::private::PrivateStorage::new)
+                .clone()
+        })
     }
 
     /// Sets the private environment carried by a class constructor.
     pub(crate) fn set_private_environment(&self, environment: crate::private::PrivateEnvironment) {
-        self.auxiliary.private_state.borrow_mut().environment = Some(environment);
+        self.auxiliary
+            .with_cold_mut(|cold| cold.private_state.environment = Some(environment));
     }
 
     /// Returns the private environment carried by this constructor, if any.
     pub(crate) fn private_environment(&self) -> Option<crate::private::PrivateEnvironment> {
-        self.auxiliary.private_state.borrow().environment.clone()
+        self.auxiliary
+            .with_cold(|cold| cold.and_then(|cold| cold.private_state.environment.clone()))
     }
 
     /// Records an instance private element (a field initializer or a
     /// method/accessor brand) applied to each instance at construction time.
     pub(crate) fn push_instance_private_element(&self, element: InstancePrivateElement) {
-        self.auxiliary
-            .instance_elements
-            .borrow_mut()
-            .push(InstanceElementInitializer::PrivateElement(element));
+        self.auxiliary.with_cold_mut(|cold| {
+            cold.instance_elements
+                .push(InstanceElementInitializer::PrivateElement(element));
+        });
     }
 
     /// Records a public instance field applied at construction time.
     pub(crate) fn push_instance_public_field(&self, field: InstanceFieldInitializer) {
-        self.auxiliary
-            .instance_elements
-            .borrow_mut()
-            .push(InstanceElementInitializer::PublicField(field));
+        self.auxiliary.with_cold_mut(|cold| {
+            cold.instance_elements
+                .push(InstanceElementInitializer::PublicField(field));
+        });
     }
 
     /// Returns a snapshot of this constructor's instance elements.
     pub(crate) fn instance_elements(&self) -> Vec<InstanceElementInitializer> {
-        self.auxiliary.instance_elements.borrow().clone()
+        self.auxiliary
+            .with_cold(|cold| cold.map_or_else(Vec::new, |cold| cold.instance_elements.clone()))
     }
 
     /// The explicit [[Prototype]] override as an object slot. A function-valued
@@ -1226,15 +1278,14 @@ impl Function {
     /// function use [`Function::internal_prototype_slot`].
     pub(crate) fn internal_prototype_override(&self) -> Option<Option<ObjectRef>> {
         self.auxiliary
-            .internal_prototype
-            .borrow()
-            .clone()
+            .with_cold(|cold| cold.and_then(|cold| cold.internal_prototype.clone()))
             .map(|slot| slot.and_then(|prototype| prototype.as_object()))
     }
 
     /// The raw [[Prototype]] override slot, preserving a function prototype.
     pub(crate) fn internal_prototype_slot(&self) -> Option<Option<Prototype>> {
-        self.auxiliary.internal_prototype.borrow().clone()
+        self.auxiliary
+            .with_cold(|cold| cold.and_then(|cold| cold.internal_prototype.clone()))
     }
 
     /// Records the function's original source text for `Function.prototype
@@ -1252,10 +1303,10 @@ impl Function {
         &self,
         prototype: Option<Prototype>,
     ) -> Result<(), ()> {
-        if matches!(
-            self.auxiliary.internal_prototype.borrow().as_ref(),
-            Some(current) if same_prototype_slot(current, &prototype)
-        ) {
+        if self.auxiliary.with_cold(|cold| {
+            cold.and_then(|cold| cold.internal_prototype.as_ref())
+                .is_some_and(|current| same_prototype_slot(current, &prototype))
+        }) {
             return Ok(());
         }
         if !self.auxiliary.extensible.get() {
@@ -1267,8 +1318,30 @@ impl Function {
         {
             return Err(());
         }
-        *self.auxiliary.internal_prototype.borrow_mut() = Some(prototype);
+        self.auxiliary
+            .with_cold_mut(|cold| cold.internal_prototype = Some(prototype));
         Ok(())
+    }
+
+    pub(crate) fn home_object(&self) -> Option<Value> {
+        self.auxiliary
+            .with_cold(|cold| cold.and_then(|cold| cold.home_object.clone()))
+    }
+
+    pub(crate) fn set_home_object(&self, home_object: Value) {
+        self.auxiliary
+            .with_cold_mut(|cold| cold.home_object = Some(home_object));
+    }
+
+    pub(crate) fn super_constructor(&self) -> Option<Value> {
+        self.auxiliary
+            .with_cold(|cold| cold.and_then(|cold| cold.super_constructor.clone()))
+    }
+
+    #[cfg(test)]
+    fn property_order(&self) -> Vec<String> {
+        self.auxiliary
+            .with_cold(|cold| cold.map_or_else(Vec::new, |cold| cold.property_order.clone()))
     }
 }
 
@@ -1379,6 +1452,21 @@ mod tests {
         assert_eq!(
             mem::size_of::<Function>(),
             mem::size_of::<Rc<FunctionData>>()
+        );
+        assert!(function.auxiliary.cold.borrow().is_none());
+    }
+
+    #[test]
+    fn ordinary_function_header_keeps_cold_identity_state_out_of_line() {
+        let auxiliary_size = mem::size_of::<super::FunctionAuxiliaryState>();
+        let function_data_size = mem::size_of::<FunctionData>();
+        assert!(
+            auxiliary_size <= 64,
+            "function auxiliary header grew to {auxiliary_size} bytes"
+        );
+        assert!(
+            function_data_size <= 384,
+            "function object grew to {function_data_size} bytes"
         );
     }
 
@@ -1508,15 +1596,12 @@ mod tests {
         };
 
         assert!(function.auxiliary.lazy_default_prototype.get());
-        assert!(function.auxiliary.property_order.borrow().is_empty());
+        assert!(function.property_order().is_empty());
         assert_eq!(
             function.own_property_names(),
             ["length", "name", "prototype"]
         );
-        assert_eq!(
-            function.auxiliary.property_order.borrow().as_slice(),
-            ["prototype"]
-        );
+        assert_eq!(function.property_order(), ["prototype"]);
     }
 
     #[test]
