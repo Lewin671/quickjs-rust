@@ -57,6 +57,11 @@ enum NumericLoopTerm {
         name: String,
         arguments: NumericLoopArguments,
     },
+    GlobalMethodCall {
+        receiver_name: String,
+        key: std::rc::Rc<str>,
+        arguments: NumericLoopArguments,
+    },
     LocalCall {
         callee_slot: usize,
         arguments: NumericLoopArguments,
@@ -299,6 +304,24 @@ impl NumericLoopTerm {
                     cursor + 1,
                 ))
             }
+            Op::LoadGlobal(receiver_name)
+                if matches!(code.get(cursor + 1), Some(Op::Dup))
+                    && matches!(code.get(cursor + 2), Some(Op::GetPropNamed { .. })) =>
+            {
+                let Op::GetPropNamed { key, .. } = code.get(cursor + 2)? else {
+                    unreachable!("guarded named method read");
+                };
+                let (arguments, suffix) =
+                    compile_call_arguments(bytecode, cursor + 3, counter_slot, true)?;
+                Some((
+                    Self::GlobalMethodCall {
+                        receiver_name: receiver_name.clone(),
+                        key: key.clone(),
+                        arguments,
+                    },
+                    suffix,
+                ))
+            }
             Op::LoadGlobal(name) => {
                 let (arguments, suffix) =
                     compile_call_arguments(bytecode, cursor + 1, counter_slot, false)?;
@@ -346,7 +369,10 @@ impl NumericLoopTerm {
     fn is_call(&self) -> bool {
         matches!(
             self,
-            Self::GlobalCall { .. } | Self::LocalCall { .. } | Self::MethodCall { .. }
+            Self::GlobalCall { .. }
+                | Self::GlobalMethodCall { .. }
+                | Self::LocalCall { .. }
+                | Self::MethodCall { .. }
         )
     }
 
@@ -384,6 +410,21 @@ impl NumericLoopTerm {
             }
             Self::GlobalCall { name, arguments } => {
                 let Value::Function(function) = vm.env.get(name)? else {
+                    return None;
+                };
+                Self::prepare_call(function, arguments, vm)
+            }
+            Self::GlobalMethodCall {
+                receiver_name,
+                key,
+                arguments,
+            } => {
+                let Value::Object(object) = vm.env.get(receiver_name)? else {
+                    return None;
+                };
+                let OwnDataPropertyRead::Data(Value::Function(function)) =
+                    object.own_data_property_read(key)
+                else {
                     return None;
                 };
                 Self::prepare_call(function, arguments, vm)
@@ -449,10 +490,20 @@ fn compile_call_arguments(
         if let Some(call_count) = call_count {
             return (call_count == arguments.len()).then_some((arguments, cursor + 1));
         }
-        let argument = match bytecode.code.get(cursor)? {
-            Op::LoadLocal(slot) if *slot == counter_slot => NumericLoopArgument::Counter,
+        let (argument, next_cursor) = match bytecode.code.get(cursor)? {
+            Op::LoadLocal(slot) if *slot == counter_slot => {
+                (NumericLoopArgument::Counter, cursor + 1)
+            }
             Op::LoadConst(index) => match bytecode.constants.get(*index)? {
-                Value::Number(value) => NumericLoopArgument::Constant(*value),
+                Value::Number(value)
+                    if matches!(
+                        bytecode.code.get(cursor + 1),
+                        Some(Op::Unary(qjs_ast::UnaryOp::Minus))
+                    ) =>
+                {
+                    (NumericLoopArgument::Constant(-*value), cursor + 2)
+                }
+                Value::Number(value) => (NumericLoopArgument::Constant(*value), cursor + 1),
                 _ => return None,
             },
             _ => return None,
@@ -462,7 +513,7 @@ fn compile_call_arguments(
             NumericLoopArguments::One(first) => NumericLoopArguments::Two(first, argument),
             NumericLoopArguments::Two(_, _) => return None,
         };
-        cursor += 1;
+        cursor = next_cursor;
     }
 }
 
@@ -572,6 +623,19 @@ mod tests {
             let bytecode = nested_function(source);
             assert_eq!(NumericLoopPlan::compile_all(&bytecode).len(), 1, "{source}");
         }
+    }
+
+    #[test]
+    fn recognizes_numeric_global_object_method_calls() {
+        let bytecode = nested_function(
+            "function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s += Math.abs(-1); } return s; }",
+        );
+        assert_eq!(
+            NumericLoopPlan::compile_all(&bytecode).len(),
+            1,
+            "{:?}",
+            bytecode.code
+        );
     }
 
     #[test]

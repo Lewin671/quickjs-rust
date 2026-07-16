@@ -1,7 +1,7 @@
 use qjs_ast::{BinaryOp, FunctionParams, UpdateOp};
 
 use crate::{
-    Function, Value,
+    Function, NativeFunction, Value,
     function::{Upvalue, is_direct_leaf_function},
 };
 
@@ -102,6 +102,7 @@ enum NumericLeafShortcut {
 /// cells owned by the active frame before constructing this plan.
 #[derive(Clone, Debug)]
 pub(super) enum NumericLoopCall {
+    MathAbs,
     ArgumentAddConstants {
         argument_index: usize,
         constants: Vec<f64>,
@@ -466,6 +467,9 @@ impl NumericLoopCall {
         argument_count: usize,
         caller_cells: &[Option<Upvalue>],
     ) -> Option<Self> {
+        if function.native == Some(NativeFunction::MathAbs) && argument_count >= 1 {
+            return Some(Self::MathAbs);
+        }
         if argument_count > 2 || !is_direct_leaf_function(&Value::Function(function.clone())) {
             return None;
         }
@@ -588,6 +592,7 @@ impl NumericLoopCall {
             }
         };
         match self {
+            Self::MathAbs => first_argument.abs(),
             Self::ArgumentAddConstants {
                 argument_index,
                 constants,

@@ -144,6 +144,37 @@ Evidence bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+## Broad V2 Optimization Evidence
+
+The first v2 runtime unit admits guarded global-object method calls to the
+existing numeric counted-loop plan and specializes the exact native
+`Math.abs` identity for primitive numeric arguments. It still evaluates one
+absolute-value operation per JavaScript iteration; it does not replace the
+loop with a closed-form checksum. Accessor properties, replaced functions,
+and object-to-number conversions retain the observable generic path.
+
+An exact-case three-role diagnostic reduced `math_abs` from 1,362.85 ns/op on
+the frozen base to 2.823 ns/op on the candidate. Pinned QuickJS-NG measured
+34.994 ns/op, making the diagnostic ratios 0.00207x candidate/base and
+0.08067x candidate/QuickJS-NG. Both fast engines reached the existing
+20,000,000-iteration ceiling before the required 500 ms window, so these
+numbers are explicitly timer-limited diagnostics rather than campaign claims.
+Independent 100,000,000/200,000,000 candidate runs completed in 0.26/0.50 s
+with exact checksums, confirming linear work and identifying a required
+measurement-capacity follow-up before the next formal broad run.
+
+Diagnostic bindings:
+
+- run ID: `e704b280-6903-4c56-87a6-813d5d05c412`;
+- raw JSONL SHA-256:
+  `aa1249abe6b053ac9d462b9d211649d5566601d4e25e3cbaf1d2adcc20cb90b9`;
+- candidate binary SHA-256:
+  `d324de478dd801019c1595593f96ad6f70e5151c2ac64717e770a60e0ef787a7`;
+- base binary SHA-256:
+  `95f310fe996740d4d0031b6c3d0742e23114446ef806e90c371e3898911692bb`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

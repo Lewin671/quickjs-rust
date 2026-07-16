@@ -251,3 +251,25 @@ fn evaluates_math_builtins() {
     );
     assert!(eval("new Math.abs(1);").is_err());
 }
+
+#[test]
+fn preserves_math_abs_counted_loop_observability() {
+    assert_eq!(
+        eval(
+            "(function () { var sum = 0; for (var i = 0; i < 100; i++) { sum += Math.abs(-1); } return sum; })();"
+        ),
+        Ok(Value::Number(100.0))
+    );
+    assert_eq!(
+        eval(
+            "(function () { var reads = 0; Object.defineProperty(Math, 'abs', { configurable: true, get: function () { reads += 1; return function (value) { return value < 0 ? -value : value; }; } }); var sum = 0; for (var i = 0; i < 4; i++) { sum += Math.abs(-1); } return reads === 4 && sum === 4; })();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "(function () { var conversions = 0; var value = { valueOf: function () { conversions += 1; return -1; } }; var sum = 0; for (var i = 0; i < 4; i++) { sum += Math.abs(value); } return conversions === 4 && sum === 4; })();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

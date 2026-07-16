@@ -362,6 +362,14 @@ pub(super) fn try_fast_global_native_call(
             };
             Ok(Value::Number(crate::number::parse_float_string(&source)))
         }
+        NativeFunction::MathAbs => {
+            let number = match arguments.first().cloned().unwrap_or(Value::Undefined) {
+                Value::Number(number) => number,
+                Value::Undefined => f64::NAN,
+                _ => return None,
+            };
+            Ok(Value::Number(number.abs()))
+        }
         NativeFunction::Eval => {
             let Some(Value::String(source)) = arguments.first() else {
                 return None;
