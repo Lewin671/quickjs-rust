@@ -80,6 +80,32 @@ fn accumulates_numeric_global_local_method_and_stateful_calls() {
 }
 
 #[test]
+fn accumulates_two_argument_numeric_global_local_and_method_calls() {
+    assert_eq!(
+        eval(
+            "function add(left, right) { return left + right; } \
+             function globalCall(n) { var sum = 0; for (var i = 0; i < n; i++) sum += add(i, 2); return sum; } \
+             function localCall(n) { var f = add; var sum = 0; for (var i = 0; i < n; i++) sum += f(i, 3); return sum; } \
+             function methodCall(n) { var object = { f: add }; var sum = 0; for (var i = 0; i < n; i++) sum += object.f(i, 4); return sum; } \
+             globalCall(4) + ':' + localCall(4) + ':' + methodCall(4);"
+        ),
+        Ok(Value::String("14:18:22".to_owned().into()))
+    );
+}
+
+#[test]
+fn two_argument_call_loop_trace_falls_back_for_non_numeric_constants() {
+    assert_eq!(
+        eval(
+            "function append(left, right) { return left + right; } \
+             function run(n) { var result = ''; for (var i = 0; i < n; i++) result += append(i, 'x'); return result; } \
+             run(4);"
+        ),
+        Ok(Value::String("0x1x2x3x".to_owned().into()))
+    );
+}
+
+#[test]
 fn call_loop_trace_falls_back_for_observable_and_non_numeric_callees() {
     assert_eq!(
         eval(

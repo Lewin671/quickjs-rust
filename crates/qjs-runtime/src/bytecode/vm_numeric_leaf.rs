@@ -77,6 +77,11 @@ enum NumericLeafShortcut {
         upvalue_index: usize,
         op: BinaryOp,
     },
+    ArgumentArgumentBinary {
+        left_argument_index: usize,
+        right_argument_index: usize,
+        op: BinaryOp,
+    },
     UpvalueArgumentBinary {
         upvalue_index: usize,
         argument_index: usize,
@@ -98,15 +103,23 @@ enum NumericLeafShortcut {
 #[derive(Clone, Debug)]
 pub(super) enum NumericLoopCall {
     ArgumentAddConstants {
+        argument_index: usize,
         constants: Vec<f64>,
     },
     ArgumentConstChain {
+        argument_index: usize,
         operations: Vec<(BinaryOp, f64)>,
     },
     ArgumentCapturedBinary {
+        argument_index: usize,
         captured: f64,
         op: BinaryOp,
         argument_left: bool,
+    },
+    ArgumentArgumentBinary {
+        left_argument_index: usize,
+        right_argument_index: usize,
+        op: BinaryOp,
     },
     UpdateCapturedConstReturn {
         upvalue: Upvalue,
@@ -327,6 +340,16 @@ impl NumericLeafShortcut {
             FastOp::Return,
         ] = core
         {
+            if let (Some(left_argument_index), Some(right_argument_index)) = (
+                parameter_index(bytecode, *left),
+                parameter_index(bytecode, *right),
+            ) {
+                return Some(Self::ArgumentArgumentBinary {
+                    left_argument_index,
+                    right_argument_index,
+                    op: *op,
+                });
+            }
             if let (Some(argument_index), Some(upvalue_index)) = (
                 parameter_index(bytecode, *left),
                 upvalue_index(bytecode, *right),
@@ -403,6 +426,16 @@ impl NumericLeafShortcut {
                 upvalue_number(*upvalue_index)?,
             )?
             .into_value(),
+            Self::ArgumentArgumentBinary {
+                left_argument_index,
+                right_argument_index,
+                op,
+            } => direct_number_binary(
+                argument_number(*left_argument_index)?,
+                *op,
+                argument_number(*right_argument_index)?,
+            )?
+            .into_value(),
             Self::UpvalueArgumentBinary {
                 upvalue_index,
                 argument_index,
@@ -433,7 +466,7 @@ impl NumericLoopCall {
         argument_count: usize,
         caller_cells: &[Option<Upvalue>],
     ) -> Option<Self> {
-        if argument_count > 1 || !is_direct_leaf_function(&Value::Function(function.clone())) {
+        if argument_count > 2 || !is_direct_leaf_function(&Value::Function(function.clone())) {
             return None;
         }
         let bytecode = function.bytecode.as_ref()?;
@@ -468,10 +501,12 @@ impl NumericLoopCall {
             {
                 if operations.iter().all(|(op, _)| *op == BinaryOp::Add) {
                     Some(Self::ArgumentAddConstants {
+                        argument_index: *argument_index,
                         constants: operations.iter().map(|(_, right)| *right).collect(),
                     })
                 } else {
                     Some(Self::ArgumentConstChain {
+                        argument_index: *argument_index,
                         operations: operations.clone(),
                     })
                 }
@@ -484,6 +519,7 @@ impl NumericLoopCall {
                 let captured = captured_number(*upvalue_index)?;
                 number_binary(0.0, *op, captured)?;
                 Some(Self::ArgumentCapturedBinary {
+                    argument_index: *argument_index,
                     captured,
                     op: *op,
                     argument_left: true,
@@ -497,9 +533,24 @@ impl NumericLoopCall {
                 let captured = captured_number(*upvalue_index)?;
                 number_binary(captured, *op, 0.0)?;
                 Some(Self::ArgumentCapturedBinary {
+                    argument_index: *argument_index,
                     captured,
                     op: *op,
                     argument_left: false,
+                })
+            }
+            NumericLeafShortcut::ArgumentArgumentBinary {
+                left_argument_index,
+                right_argument_index,
+                op,
+            } if *left_argument_index < argument_count
+                && *right_argument_index < argument_count =>
+            {
+                number_binary(0.0, *op, 0.0)?;
+                Some(Self::ArgumentArgumentBinary {
+                    left_argument_index: *left_argument_index,
+                    right_argument_index: *right_argument_index,
+                    op: *op,
                 })
             }
             NumericLeafShortcut::UpdateUpvalueConstReturn {
@@ -528,17 +579,23 @@ impl NumericLoopCall {
         }
     }
 
-    pub(super) fn eval(&mut self, argument: Option<f64>) -> f64 {
+    pub(super) fn eval(&mut self, arguments: &[f64]) -> f64 {
         match self {
-            Self::ArgumentAddConstants { constants } => {
-                let mut value = argument.expect("validated numeric loop argument");
+            Self::ArgumentAddConstants {
+                argument_index,
+                constants,
+            } => {
+                let mut value = arguments[*argument_index];
                 for constant in constants {
                     value += *constant;
                 }
                 value
             }
-            Self::ArgumentConstChain { operations } => {
-                let mut value = argument.expect("validated numeric loop argument");
+            Self::ArgumentConstChain {
+                argument_index,
+                operations,
+            } => {
+                let mut value = arguments[*argument_index];
                 for (op, right) in operations {
                     value = number_binary(value, *op, *right)
                         .expect("validated numeric-result shortcut");
@@ -546,11 +603,12 @@ impl NumericLoopCall {
                 value
             }
             Self::ArgumentCapturedBinary {
+                argument_index,
                 captured,
                 op,
                 argument_left,
             } => {
-                let argument = argument.expect("validated numeric loop argument");
+                let argument = arguments[*argument_index];
                 let (left, right) = if *argument_left {
                     (argument, *captured)
                 } else {
@@ -558,6 +616,16 @@ impl NumericLoopCall {
                 };
                 number_binary(left, *op, right).expect("validated numeric-result shortcut")
             }
+            Self::ArgumentArgumentBinary {
+                left_argument_index,
+                right_argument_index,
+                op,
+            } => number_binary(
+                arguments[*left_argument_index],
+                *op,
+                arguments[*right_argument_index],
+            )
+            .expect("validated numeric-result shortcut"),
             Self::UpdateCapturedConstReturn {
                 value, op, right, ..
             } => {
@@ -1030,6 +1098,31 @@ mod tests {
             ),
             "unexpected plan: {plan:#?}"
         );
+    }
+
+    #[test]
+    fn two_argument_plan_uses_argument_binary_shortcut() {
+        let script = qjs_parser::parse_script("function add(left, right) { return left + right; }")
+            .expect("source should parse");
+        let script_bytecode = compiler::compile_script(&script).expect("source should compile");
+        let function_bytecode = script_bytecode
+            .code
+            .iter()
+            .find_map(|op| match op {
+                Op::NewFunction { bytecode, .. } => Some(bytecode),
+                _ => None,
+            })
+            .expect("function bytecode should be nested in the script");
+        let plan = NumericLeafPlan::compile(function_bytecode).expect("leaf should be admitted");
+
+        assert!(matches!(
+            plan.shortcut,
+            Some(NumericLeafShortcut::ArgumentArgumentBinary {
+                left_argument_index: 0,
+                right_argument_index: 1,
+                op: BinaryOp::Add,
+            })
+        ));
     }
 
     #[test]
