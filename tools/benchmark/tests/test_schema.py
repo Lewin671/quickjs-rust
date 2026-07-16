@@ -56,6 +56,13 @@ class ManifestTests(unittest.TestCase):
             },
         )
         self.assertTrue(all(case.critical for case in manifest.cases))
+        self.assertTrue(
+            all(
+                abs(case.expected_checksum(case.max_iterations)) <= (2**53 - 1)
+                for case in manifest.cases
+            ),
+            "every maximum-iteration checksum must remain an exact JavaScript number",
+        )
         self.assertTrue(all(not Path(identifier).is_absolute() for identifier in manifest.protocol_file_ids))
         self.assertEqual(
             manifest.protocol_file_ids,
