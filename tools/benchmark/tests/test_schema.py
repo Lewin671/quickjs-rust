@@ -23,8 +23,8 @@ class ManifestTests(unittest.TestCase):
     def test_repository_manifest_and_hashes_validate(self) -> None:
         manifest = load_manifest(ROOT / "benchmarks/manifest.json")
         self.assertEqual(manifest.schema_version, 4)
-        self.assertEqual(manifest.series_id, "broad-black-box-v1")
-        self.assertEqual(manifest.protocol_id, "quickjs-measurement-protocol-v5")
+        self.assertEqual(manifest.series_id, "broad-black-box-v2")
+        self.assertEqual(manifest.protocol_id, "quickjs-measurement-protocol-v6")
         self.assertEqual(manifest.lane_id, "throughput/wall_ns_per_operation")
         self.assertEqual(
             [case.id for case in manifest.cases],
@@ -56,6 +56,11 @@ class ManifestTests(unittest.TestCase):
             },
         )
         self.assertTrue(all(case.critical for case in manifest.cases))
+        cases = {case.id: case for case in manifest.cases}
+        for case_id in ("property_write", "array_write"):
+            self.assertEqual(cases[case_id].checksum_model, "triangular")
+            self.assertEqual(cases[case_id].checksum_factor, 1)
+            self.assertEqual(cases[case_id].expected_checksum(1024), 524800)
         self.assertTrue(
             all(
                 abs(case.expected_checksum(case.max_iterations)) <= (2**53 - 1)

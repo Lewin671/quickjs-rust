@@ -43,7 +43,7 @@ PROTOCOL_KEYS = (
 )
 PROTOCOL_SHAPES = {
     "throughput_measurement": (
-        "benchmarks/manifest.json", "quickjs-measurement-protocol-v5"
+        "benchmarks/manifest.json", "quickjs-measurement-protocol-v6"
     ),
     "throughput_analysis": (
         "benchmarks/analysis.json", "quickjs-analysis-protocol-v3"

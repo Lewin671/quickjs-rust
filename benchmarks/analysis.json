@@ -3,7 +3,7 @@
   "id": "quickjs-benchmark-analysis-v3",
   "compatible_measurement": {
     "schema_version": 4,
-    "protocol_id": "quickjs-measurement-protocol-v5"
+    "protocol_id": "quickjs-measurement-protocol-v6"
   },
   "protocol": {
     "id": "quickjs-analysis-protocol-v3",

@@ -180,12 +180,14 @@ function runPropertyDynamicRead(iterations) {
 
 function runPropertyWrite(iterations) {
     var object = { a: 0, b: 0, c: 0 };
+    var checksum = 0;
     for (var i = 0; i < iterations; i++) {
-        object.a = i;
-        object.b = i + 1;
-        object.c = i + 2;
+        object.a = object.c + 1;
+        object.b = object.a + 1;
+        object.c = object.b - 1;
+        checksum += object.c;
     }
-    return result(iterations * 3, object.a + object.b + object.c);
+    return result(iterations * 3, checksum);
 }
 
 function runArrayDynamicRead(iterations) {
@@ -203,13 +205,15 @@ function runArrayDynamicRead(iterations) {
 
 function runArrayWrite(iterations) {
     var array = [0, 0, 0, 0];
+    var checksum = 0;
     for (var i = 0; i < iterations; i++) {
-        array[0] = i + 1;
-        array[1] = i + 1;
-        array[2] = i + 1;
-        array[3] = i + 1;
+        array[0] = array[3] + 1;
+        array[1] = array[0] + 1;
+        array[2] = array[1] - 1;
+        array[3] = array[2];
+        checksum += array[3];
     }
-    return result(iterations * 4, array[0] + array[1] + array[2] + array[3]);
+    return result(iterations * 4, checksum);
 }
 
 function runEmptyLoop(iterations) {

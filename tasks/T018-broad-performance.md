@@ -27,7 +27,7 @@ below 1.00x.
 
 ## Portfolio Contract
 
-Broad v1 contains 25 critical cases across eight families: call (6), binding
+Broad v2 contains 25 critical cases across eight families: call (6), binding
 (5), property (3), array (3), control (2), builtin (2), string (1), and
 allocation (3). The seven historical T016 cases remain as a trace cohort; 18
 shape and subsystem holdouts prevent the historical exact-loop trace fast path
@@ -50,9 +50,9 @@ complete.
 
 ## Milestones
 
-- [x] B1 freeze broad v1 workload, exact case/family inventory, manifest,
+- [x] B1 freeze broad v2 workload, exact case/family inventory, manifest,
   protocol hashes, hosted preview contract, and documentation.
-- [x] B2 record the first complete three-role local baseline and identify the
+- [ ] B2 record the first complete broad v2 three-role local baseline and identify the
   largest family/case gaps without excluding weak cases.
 - [ ] B3 optimize structural bottlenecks in separately verified commits,
   recording broad candidate/base and candidate/QuickJS-NG evidence each time.
@@ -68,14 +68,34 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/benchmark/tests 
 ./scripts/benchmark.sh --candidate target/release/qjs \
   --base target/release/qjs \
   --quickjs-ng third_party/quickjs-ng/build/qjs \
-  --blocks 3 --output target/benchmarks/broad-v1-baseline.jsonl
+  --blocks 3 --output target/benchmarks/broad-v2-baseline.jsonl
 ./scripts/benchmark-report.sh \
-  --input target/benchmarks/broad-v1-baseline.jsonl \
-  --output target/benchmarks/broad-v1-baseline-report.json
+  --input target/benchmarks/broad-v2-baseline.jsonl \
+  --output target/benchmarks/broad-v2-baseline-report.json
 ./scripts/check.sh
 ```
 
-## Initial Broad V1 Baseline
+## Broad V1 Audit And V2 Reset
+
+Broad v1 is retained as historical evidence but is no longer the campaign
+score. Its write holdouts only observed the final values of repeatedly
+overwritten slots. A general safe-integer loop-summary prototype reduced
+`property_write` from about 1,110 ns/op to about 0.06 ns/op by computing those
+final values directly. That result was semantically correct but timer-limited,
+non-linear, and not evidence of sustained property-write throughput, so the
+prototype was discarded rather than committed or counted as progress.
+
+Broad v2 makes both `property_write` and `array_write` state-recurrent and adds
+every round's resulting state to a triangular checksum. Focused three-role
+diagnostics at the v2 contract show exact operation/checksum agreement,
+eligible measurement windows, and N/2N linearity for both cases. The current
+measurement identity is `quickjs-measurement-protocol-v6`, protocol SHA-256
+`9cbd57169707fe1c2b691c340a04b60a4f127c6140b8df7823407299fb60c2b3`,
+and dynamic manifest SHA-256
+`65008b4e1f708f87afdfa0a4f653f864dfd1cbf53bc8bb30c3887a753de5f40a`.
+A complete v2 baseline is required before further runtime optimization claims.
+
+## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
 `21af319082471fad1f2dc6a0501df25efd5d7b27`, seed `20260721`, against pinned
@@ -125,7 +145,7 @@ Evidence bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
-## Optimization Evidence
+## Historical Broad V1 Optimization Evidence
 
 The first runtime unit, commit
 `432f1c0afc2fffc95c726c7668f3dce74fb0b8f6`, generalized the counted-loop
@@ -194,7 +214,7 @@ report SHA-256:
 
 ## Notes
 
-Broad v1 is still a first-party micro portfolio, not a substitute for an
+Broad v2 is still a first-party micro portfolio, not a substitute for an
 admitted external macro suite. T017's external-corpus audit remains the path to
 broader public claims. The immediate purpose is to make optimization robust to
 code-shape changes and multiple runtime subsystems before chasing the 2x goal.

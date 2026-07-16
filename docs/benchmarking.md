@@ -40,14 +40,27 @@ an explicit reviewed manifest revision), even if the produced binary appears
 equivalent. The QuickJS-NG recipe explicitly enables `BUILD_QJS_LIBC` because
 the shell workload relies on normal qjs host facilities such as `scriptArgs`.
 
-The current `broad-black-box-v1` series supersedes `core-black-box-v4`; records
-from the two series are never pooled. Broad v1 retains the seven historical
-T016 cases as a trace cohort and adds 18 holdouts that deliberately vary loop
-placement, call arity and expression shape, dynamic access, writes, allocation,
-control flow, strings, and builtins. Its 25 critical cases cover eight families:
-call (6), binding (5), property (3), array (3), control (2), builtin (2),
-string (1), and allocation (3). Tests freeze the exact case inventory and these
-family counts so a later optimization cannot silently narrow the portfolio.
+The current `broad-black-box-v2` series supersedes both `core-black-box-v4` and
+`broad-black-box-v1`; records from different series are never pooled. Broad v2
+retains the seven historical T016 cases as a trace cohort and the same 18
+holdouts that vary loop placement, call arity and expression shape, dynamic
+access, writes, allocation, control flow, strings, and builtins. Its 25 critical
+cases cover eight families: call (6), binding (5), property (3), array (3),
+control (2), builtin (2), string (1), and allocation (3). Tests freeze the exact
+case inventory and these family counts so a later optimization cannot silently
+narrow the portfolio.
+
+Broad v1's `property_write` and `array_write` holdouts repeatedly overwrote a
+fixed set of slots and checked only their final values. A semantics-preserving
+loop summary could therefore replace all remaining iterations with the final
+state, producing constant-time samples that no longer measured sustained write
+throughput. Broad v2 chains each round's property/element values into the next
+round and accumulates every round into a triangular checksum. The declared
+operation count remains three named-property updates or four dense-element
+updates per iteration. This makes a terminal-state-only shortcut fail the
+checksum while leaving a genuinely general optimizer free to accelerate the
+state recurrence. The protocol ID, workload hash, suite ID, and series ID all
+changed so v1 evidence cannot be mistaken for v2 evidence.
 
 The workload reports deterministic operation counts and correctness checksums
 but contains no clock. Python measures `perf_counter_ns` around a fresh shell

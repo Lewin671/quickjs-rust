@@ -1,12 +1,12 @@
 {
   "schema_version": 4,
   "series": {
-    "id": "broad-black-box-v1",
-    "suite_id": "quickjs-rust-broad-micro@quickjs-ng-f7830186-v1"
+    "id": "broad-black-box-v2",
+    "suite_id": "quickjs-rust-broad-micro@quickjs-ng-f7830186-v2"
   },
   "lane": { "id": "throughput/wall_ns_per_operation" },
   "protocol": {
-    "id": "quickjs-measurement-protocol-v5",
+    "id": "quickjs-measurement-protocol-v6",
     "files": [
       "benchmarks/workloads/broad-micro.js",
       "scripts/benchmark.sh",
@@ -22,7 +22,7 @@
       "tools/benchmark/schema.py",
       "tools/benchmark/snapshots.py"
     ],
-    "aggregate_sha256": "b2f2e85343c1fbe2bb4bc58d3540a1a666cab85b71118e45e019400541ee75c6"
+    "aggregate_sha256": "9cbd57169707fe1c2b691c340a04b60a4f127c6140b8df7823407299fb60c2b3"
   },
   "reference_engine": {
     "identity": "quickjs-ng",
@@ -65,7 +65,7 @@
       "family": "call",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "triangular", "factor": 1 },
       "measurement": {
@@ -83,7 +83,7 @@
       "family": "call",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "triangular", "factor": 1 },
       "measurement": {
@@ -101,7 +101,7 @@
       "family": "binding",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "zero_based_triangular_plus_linear", "factor": 7 },
       "measurement": {
@@ -119,7 +119,7 @@
       "family": "binding",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "triangular", "factor": 1 },
       "measurement": {
@@ -137,7 +137,7 @@
       "family": "binding",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "zero_based_triangular_plus_linear", "factor": 136 },
       "measurement": {
@@ -155,7 +155,7 @@
       "family": "property",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 3,
       "checksum": { "model": "linear", "factor": 6 },
       "measurement": {
@@ -173,7 +173,7 @@
       "family": "array",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 4,
       "checksum": { "model": "linear", "factor": 10 },
       "measurement": {
@@ -191,7 +191,7 @@
       "family": "call",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "triangular", "factor": 1 },
       "measurement": {
@@ -209,7 +209,7 @@
       "family": "call",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "triangular", "factor": 1 },
       "measurement": {
@@ -227,7 +227,7 @@
       "family": "call",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "triangular", "factor": 1 },
       "measurement": {
@@ -245,7 +245,7 @@
       "family": "call",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "triangular", "factor": 1 },
       "measurement": {
@@ -263,7 +263,7 @@
       "family": "binding",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 2,
       "checksum": { "model": "linear", "factor": 3 },
       "measurement": {
@@ -281,7 +281,7 @@
       "family": "binding",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "linear", "factor": 1 },
       "measurement": {
@@ -299,7 +299,7 @@
       "family": "property",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 3,
       "checksum": { "model": "linear", "factor": 6 },
       "measurement": {
@@ -317,9 +317,9 @@
       "family": "property",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 3,
-      "checksum": { "model": "linear", "factor": 3 },
+      "checksum": { "model": "triangular", "factor": 1 },
       "measurement": {
         "initial_iterations": 1024,
         "max_iterations": 40000000,
@@ -335,7 +335,7 @@
       "family": "array",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 4,
       "checksum": { "model": "linear", "factor": 10 },
       "measurement": {
@@ -353,9 +353,9 @@
       "family": "array",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 4,
-      "checksum": { "model": "linear", "factor": 4 },
+      "checksum": { "model": "triangular", "factor": 1 },
       "measurement": {
         "initial_iterations": 1024,
         "max_iterations": 20000000,
@@ -371,7 +371,7 @@
       "family": "control",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "linear", "factor": 1 },
       "measurement": {
@@ -389,7 +389,7 @@
       "family": "control",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "linear", "factor": 1 },
       "measurement": {
@@ -407,7 +407,7 @@
       "family": "builtin",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "linear", "factor": 1 },
       "measurement": {
@@ -425,7 +425,7 @@
       "family": "builtin",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "linear", "factor": 2 },
       "measurement": {
@@ -443,7 +443,7 @@
       "family": "string",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "linear", "factor": 3 },
       "measurement": {
@@ -461,7 +461,7 @@
       "family": "allocation",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "linear", "factor": 3 },
       "measurement": {
@@ -479,7 +479,7 @@
       "family": "allocation",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "linear", "factor": 3 },
       "measurement": {
@@ -497,7 +497,7 @@
       "family": "allocation",
       "critical": true,
       "workload": "benchmarks/workloads/broad-micro.js",
-      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "workload_sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
       "operations_per_iteration": 1,
       "checksum": { "model": "linear", "factor": 1 },
       "measurement": {
