@@ -16,6 +16,8 @@ from typing import Any
 
 from .hosted_preview import (
     BASE_MODE,
+    MANUAL_INTEGRITY_SCOPE,
+    MANUAL_MODE,
     PR_INTEGRITY_SCOPE,
     PUSH_INTEGRITY_SCOPE,
     PUSH_MODE,
@@ -39,7 +41,7 @@ RUST_BUILD_FLAGS = (
     "--config=profile.release.incremental=false",
     "--config=profile.release.strip=\"none\"",
 )
-HARNESS_MODES = (BASE_MODE, PUSH_MODE)
+HARNESS_MODES = (BASE_MODE, PUSH_MODE, MANUAL_MODE)
 HOSTED_CASES = (
     "plain_function_call", "method_call", "captured_read", "captured_write",
     "many_locals_call", "property_read", "array_read", "function_call_two_args",
@@ -55,6 +57,7 @@ def _integrity_scope(harness_mode: str) -> str:
     return {
         BASE_MODE: PR_INTEGRITY_SCOPE,
         PUSH_MODE: PUSH_INTEGRITY_SCOPE,
+        MANUAL_MODE: MANUAL_INTEGRITY_SCOPE,
     }[harness_mode]
 
 

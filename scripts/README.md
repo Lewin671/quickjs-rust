@@ -88,7 +88,10 @@ each script is for.
   SHA, explicit base SHA, and manifest-pinned QuickJS-NG on one shared host.
   Same-repository PRs use a base-owned `pull_request_target` harness; every
   `main` push (merge or direct) uses `github.event.after` as the head-owned
-  harness/candidate and `github.event.before` as the base. Fork PRs are
+  harness/candidate and `github.event.before` as the base. A trusted manual
+  dispatch from `main` uses the selected revision as both candidate and A/A
+  base, then runs the full JetStream 3, Kraken, and SunSpider external preview.
+  Trigger it with `gh workflow run performance-smoke.yml --ref main`. Fork PRs are
   unsupported, and push admission fail-closes on event/ref/repository/SHA
   mismatches. The script
   clears GitHub command/token channels, verifies clean sources before and after
@@ -105,8 +108,9 @@ each script is for.
   namespace and the pinned QuickJS-NG binary normally hits. Invalid entries
   rebuild. Keys include hosted image/runtime/libc plus effective compiler and
   linker identities/environment. PR-target runs restore only; trusted `main`
-  pushes independently revalidate and may save completed entries even when a
-  later noisy measurement fails. Cache-service errors degrade to rebuild or
+  pushes and trusted manual-main runs independently revalidate and may save
+  completed entries even when a later noisy measurement fails. Cache-service
+  errors degrade to rebuild or
   no-save, and benchmark measurements/evidence always rerun. `build-cache.json` records
   per-role provenance.
 - `lifecycle-bench.sh`: Runs the dev-only Criterion parser/compiler lifecycle

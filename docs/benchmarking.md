@@ -567,7 +567,8 @@ Admission and execution tiers:
 - The current QuickJS-derived first-party subset remains the only claim-candidate
   runnable layer. The external registry records governance state, not
   first-party admission.
-- A trusted `main` push additionally runs a non-claim external preview described
+- A trusted `main` push or manual dispatch from `main` additionally runs a
+  non-claim external preview described
   by `benchmarks/external-preview.json`. It runs 45 explicitly listed cases from
   71 files at three full upstream revisions, verifies every SHA-256 before
   generating temporary bundles, and uploads hashes/results rather than source.
@@ -594,7 +595,7 @@ Admission and execution tiers:
   audit is never headline evidence: only a complete frozen measurement and
   analysis protocol on qualified hardware can support a performance claim.
 
-### External main-push preview
+### External main/manual preview
 
 The external preview compares only the current qjs-rust candidate and the
 pinned QuickJS-NG executable. QuickJS-NG runs with `--script` so historical
@@ -659,8 +660,10 @@ all `nightly`, `release`, and `pr_sentinel` gates disabled. Every
 `--require-gate` request therefore exits 2. A custom `--policy` is structural
 input only and cannot be combined with `--require-gate`.
 
-`.github/workflows/performance-smoke.yml` declares `pull_request_target` and
-`push`, both filtered to `main`. For a same-repository PR targeting `main`, the
+`.github/workflows/performance-smoke.yml` declares `pull_request_target`,
+`push`, and `workflow_dispatch`. PR and push events are filtered to `main`; a
+manual dispatch is admitted only when the selected ref is exactly
+`refs/heads/main`. For a same-repository PR targeting `main`, the
 base-owned workflow, setup action, and `base_owned_harness` compare the explicit
 PR head SHA against the explicit PR base SHA. Fork previews are explicitly
 unsupported and skipped. This is an integrity boundary for cooperative
@@ -679,22 +682,35 @@ before and after, and `github.sha == github.event.after`; unchanged or malformed
 identities fail closed. The after-owned harness is necessary because the first
 before revision predating this path cannot implement it.
 
-Before the main-push comparison, a separate trusted job prepares the pinned
+A manual run uses the selected `main` revision as the trusted workflow,
+candidate, and same-revision base. Its internal candidate/base lane is therefore
+an A/A noise observation, while the external phase still compares that exact
+qjs-rust revision with the pinned QuickJS-NG executable across JetStream 3,
+Kraken, and SunSpider. Dispatch admission requires event `workflow_dispatch`,
+ref `refs/heads/main`, matching workflow/event repository identities, and
+`github.sha` equal to the selected revision. Trigger it from the Actions page
+with **Run workflow** and branch `main`, or with:
+
+```sh
+gh workflow run performance-smoke.yml --ref main
+```
+
+Before a trusted main push or manual comparison, a separate job prepares the pinned
 QuickJS-NG executable cache. It computes the same content-addressed build
 identity as the measurement job, restores an exact entry when available, and
 builds plus saves the pinned reference only on a miss. The comparison job uses
 `always()` on that dependency: a cache-backend or preparation failure never
 suppresses the benchmark, because the existing orchestrator can still rebuild
 the reference as a fallback. The preparation job never produces or caches
-measurements. Every `main` update therefore runs a fresh benchmark even when
-every executable is reused.
+measurements. Every `main` update and every manual dispatch therefore runs a
+fresh benchmark even when every executable is reused.
 
 Both paths use read-only contents permission, no secrets, no write permission,
 no slowdown threshold, and no performance gate. Harness mode/revision plus the
 candidate, base, and pinned QuickJS-NG revisions are recorded in pending,
 failure, and successful provenance. PR numbers isolate and supersede stale PR
-runs, while each main push gets a distinct workflow-run-bound concurrency group so no
-push is canceled by a later one.
+runs, while each main push or manual dispatch gets a distinct workflow-run-bound
+concurrency group so no trusted run is canceled by a later one.
 
 `scripts/performance-preview.sh` initializes only the manifest-pinned
 QuickJS-NG revision and prepares all three engines on one `ubuntu-latest` host.

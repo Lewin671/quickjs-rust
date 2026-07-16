@@ -7,7 +7,7 @@ export PYTHONDONTWRITEBYTECODE=1
 usage() {
   cat <<'EOF'
 Usage: ./scripts/performance-preview.sh \
-  --harness-mode <base_owned_harness|main_push_head_owned_harness> \
+  --harness-mode <base_owned_harness|main_push_head_owned_harness|manual_main_head_owned_harness> \
   --candidate-source <path> --base-source <path> \
   --candidate-sha <full-sha> --base-sha <full-sha> \
   --candidate-repo <https-github-clone-url> \
@@ -87,6 +87,18 @@ case "$HARNESS_MODE" in
     }
     [ "$CANDIDATE_REPO" = "$BASE_REPO" ] || {
       echo "error: main-push candidate and base repositories must match" >&2; exit 2;
+    }
+    OUTPUT_OWNER="$CANDIDATE_SOURCE"
+    ;;
+  manual_main_head_owned_harness)
+    [ "$HARNESS_ROOT" = "$CANDIDATE_SOURCE" ] || {
+      echo "error: manual-main harness must execute from the candidate source" >&2; exit 2;
+    }
+    [ "$CANDIDATE_REPO" = "$BASE_REPO" ] || {
+      echo "error: manual-main candidate and base repositories must match" >&2; exit 2;
+    }
+    [ "$CANDIDATE_REVISION" = "$BASE_REVISION" ] || {
+      echo "error: manual-main candidate and base revisions must match" >&2; exit 2;
     }
     OUTPUT_OWNER="$CANDIDATE_SOURCE"
     ;;
@@ -380,7 +392,8 @@ CURRENT_PHASE="summary"
 # update. Pull requests keep the smaller base-owned internal preview. Source
 # files are downloaded at pinned revisions into a sibling cache and are never
 # uploaded with the evidence artifact.
-if [ "$HARNESS_MODE" = "main_push_head_owned_harness" ]; then
+if [ "$HARNESS_MODE" = "main_push_head_owned_harness" ] \
+  || [ "$HARNESS_MODE" = "manual_main_head_owned_harness" ]; then
   CURRENT_PHASE="external_corpus_preview"
   EXTERNAL_CACHE_ROOT="$(dirname "$OUTPUT")/external-corpora"
   EXTERNAL_WORK_ROOT="$(dirname "$OUTPUT")/external-work"

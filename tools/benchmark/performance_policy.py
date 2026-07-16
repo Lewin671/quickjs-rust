@@ -22,6 +22,8 @@ from .hosted_preview import (
     BASE_MODE,
     HOSTED_BASE_REF,
     HOSTED_PUSH_REF,
+    MANUAL_INTEGRITY_SCOPE,
+    MANUAL_MODE,
     PR_INTEGRITY_SCOPE,
     PUSH_INTEGRITY_SCOPE,
     PUSH_MODE,
@@ -55,7 +57,7 @@ PROTOCOL_SHAPES = {
         "benchmarks/resource-analysis.json", "quickjs-resource-analysis-protocol-v1"
     ),
 }
-EXPECTED_WORKFLOW_SHA256 = "609a986096d1cb5288e94288f287837cafe96e403dd83880d34d88ef37a07da7"
+EXPECTED_WORKFLOW_SHA256 = "72ce394337ab94b0c9436c714da7beefab44c39b409b55f89bcd5e567996a3d3"
 PREVIEW_ORCHESTRATOR = "scripts/performance-preview.sh"
 PREVIEW_ROLES = ("candidate", "base", "quickjs-ng")
 PREVIEW_IMPLEMENTATION_FILES = (
@@ -253,9 +255,11 @@ class PerformancePolicy:
     hosted_implementation_sha256: str
     hosted_integrity_scope: str
     hosted_push_integrity_scope: str
+    hosted_manual_integrity_scope: str
     hosted_base_ref: str
     hosted_push_ref: str
     hosted_push_mode: str
+    hosted_manual_mode: str
     reference_identity: str
     reference_repo: str
     reference_revision: str
@@ -510,6 +514,8 @@ def load_policy(path: Path) -> PerformancePolicy:
             "malicious_candidate_resistant", "forks_supported", "base_ref",
             "push_mode", "push_event", "push_ref", "push_integrity_scope",
             "push_comparison", "push_harness_owner", "fixed_hardware_claim_scope",
+            "manual_mode", "manual_event", "manual_ref", "manual_integrity_scope",
+            "manual_comparison", "manual_harness_owner",
         },
         "policy.hosted_pr.harness",
     )
@@ -533,6 +539,18 @@ def load_policy(path: Path) -> PerformancePolicy:
         ),
         _string(harness["push_comparison"], "policy.hosted_pr.harness.push_comparison"),
         _string(harness["push_harness_owner"], "policy.hosted_pr.harness.push_harness_owner"),
+        _string(harness["manual_mode"], "policy.hosted_pr.harness.manual_mode"),
+        _string(harness["manual_event"], "policy.hosted_pr.harness.manual_event"),
+        _string(harness["manual_ref"], "policy.hosted_pr.harness.manual_ref"),
+        _string(
+            harness["manual_integrity_scope"],
+            "policy.hosted_pr.harness.manual_integrity_scope",
+        ),
+        _string(harness["manual_comparison"], "policy.hosted_pr.harness.manual_comparison"),
+        _string(
+            harness["manual_harness_owner"],
+            "policy.hosted_pr.harness.manual_harness_owner",
+        ),
         _string(
             harness["fixed_hardware_claim_scope"],
             "policy.hosted_pr.harness.fixed_hardware_claim_scope",
@@ -544,6 +562,9 @@ def load_policy(path: Path) -> PerformancePolicy:
         HOSTED_BASE_REF, PUSH_MODE, "push", HOSTED_PUSH_REF,
         PUSH_INTEGRITY_SCOPE, "event_after_candidate_vs_event_before_base",
         "event_after_candidate",
+        MANUAL_MODE, "workflow_dispatch", HOSTED_PUSH_REF,
+        MANUAL_INTEGRITY_SCOPE, "selected_main_candidate_vs_same_revision_base",
+        "selected_main_candidate",
         "trusted_merged_commits_only",
     ):
         raise PerformancePolicyError("policy.hosted_pr.harness: invalid frozen integrity boundary")
@@ -575,9 +596,11 @@ def load_policy(path: Path) -> PerformancePolicy:
         hosted_implementation_sha256=implementation_sha256,
         hosted_integrity_scope=PR_INTEGRITY_SCOPE,
         hosted_push_integrity_scope=PUSH_INTEGRITY_SCOPE,
+        hosted_manual_integrity_scope=MANUAL_INTEGRITY_SCOPE,
         hosted_base_ref=HOSTED_BASE_REF,
         hosted_push_ref=HOSTED_PUSH_REF,
         hosted_push_mode=PUSH_MODE,
+        hosted_manual_mode=MANUAL_MODE,
         reference_identity=reference_values[0],
         reference_repo=reference_values[1],
         reference_revision=reference_values[2],

@@ -26,6 +26,8 @@ from tools.benchmark.hosted_preview import (
     BASE_MODE,
     HOSTED_BASE_REF,
     HOSTED_PUSH_REF,
+    MANUAL_INTEGRITY_SCOPE,
+    MANUAL_MODE,
     PUSH_MODE,
 )
 from tools.benchmark.receipts import load_receipt
@@ -127,6 +129,14 @@ class PreviewSummaryTests(unittest.TestCase):
         self.assertEqual(machine["integrity_scope"], "trusted_main_push")
         self.assertIn(PUSH_MODE, markdown)
 
+    def test_manual_summary_uses_trusted_dispatch_integrity_scope(self) -> None:
+        markdown, machine = summarize(
+            report(), harness_mode=MANUAL_MODE, harness_revision="1" * 40
+        )
+        self.assertEqual(machine["harness"]["mode"], MANUAL_MODE)
+        self.assertEqual(machine["integrity_scope"], MANUAL_INTEGRITY_SCOPE)
+        self.assertIn(MANUAL_MODE, markdown)
+
     def test_invalid_health_or_missing_comparison_never_emits_direction(self) -> None:
         attacks = []
         for section, field, value in (
@@ -184,7 +194,7 @@ class PreviewPreparationTests(unittest.TestCase):
         script = (ROOT / "scripts/performance-preview.sh").read_text(encoding="utf-8")
         for value in (
             "--harness-mode", "--candidate-source", "--base-source",
-            BASE_MODE, PUSH_MODE, "verify-source",
+            BASE_MODE, PUSH_MODE, MANUAL_MODE, "verify-source",
             "CARGO_ENCODED_RUSTFLAGS", "--kind rust --field cargo_args",
             'make -C "$QUICKJS_SOURCE" "CC=$QUICKJS_CC" "${QUICKJS_MAKE_ARGS[@]}"',
             "tools.benchmark.build_cache plan", "tools.benchmark.build_cache materialize",
@@ -199,7 +209,7 @@ class PreviewPreparationTests(unittest.TestCase):
             'CURRENT_PHASE="post_measure_validation"', "GITHUB_ENV GITHUB_PATH",
             "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "./scripts/performance-policy-audit.sh",
             "./scripts/external-corpus-audit.sh", "./scripts/external-performance-preview.sh",
-            'if [ "$HARNESS_MODE" = "main_push_head_owned_harness" ]',
+            '|| [ "$HARNESS_MODE" = "manual_main_head_owned_harness" ]',
             'cat "$OUTPUT/external-summary.md" >> "$OUTPUT/summary.md"',
         ):
             self.assertIn(value, script)
@@ -387,6 +397,25 @@ class HostedPreviewControlTests(unittest.TestCase):
             cwd=ROOT, capture_output=True, text=True, timeout=10, check=False,
         )
 
+    def _admit_dispatch(
+        self, *, event_name: str = "workflow_dispatch",
+        repository: str = "example/quickjs-rust",
+        event_repository: str = "example/quickjs-rust",
+        ref: str = HOSTED_PUSH_REF, revision: str = "2" * 40,
+        workflow_sha: str = "2" * 40,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                sys.executable, "-m", "tools.benchmark.hosted_preview",
+                "admit-dispatch", "--event-name", event_name,
+                "--repository", repository,
+                "--event-repository", event_repository, "--ref", ref,
+                "--revision", revision, "--workflow-sha", workflow_sha,
+                "--require-mode", MANUAL_MODE,
+            ],
+            cwd=ROOT, capture_output=True, text=True, timeout=10, check=False,
+        )
+
     def test_executable_pr_admission_contract(self) -> None:
         same = "example/quickjs-rust"
         long_term = self._admit("pull_request_target", same, same, "a" * 40)
@@ -440,6 +469,33 @@ class HostedPreviewControlTests(unittest.TestCase):
                 malformed = self._admit_push(**arguments)
                 self.assertEqual(malformed.returncode, 2)
                 self.assertIn(label, malformed.stderr)
+
+    def test_manual_dispatch_admission_is_main_only_and_fail_closed(self) -> None:
+        admitted = self._admit_dispatch()
+        self.assertEqual(admitted.returncode, 0, admitted.stderr)
+        payload = json.loads(admitted.stdout)
+        self.assertTrue(payload["run"])
+        self.assertEqual(payload["mode"], MANUAL_MODE)
+        self.assertEqual(payload["integrity_scope"], MANUAL_INTEGRITY_SCOPE)
+        for name, arguments, reason in (
+            ("ref", {"ref": "refs/heads/release"}, "dispatch_ref_unsupported"),
+            (
+                "repository",
+                {"event_repository": "other/repo"},
+                "dispatch_repository_mismatch",
+            ),
+            ("zero", {"revision": "0" * 40, "workflow_sha": "0" * 40},
+             "zero_dispatch_revision"),
+            ("workflow", {"workflow_sha": "3" * 40}, "workflow_sha_mismatch"),
+        ):
+            with self.subTest(name=name):
+                rejected = self._admit_dispatch(**arguments)
+                self.assertEqual(rejected.returncode, 2)
+                self.assertIn(reason, rejected.stderr)
+
+        wrong_event = self._admit_dispatch(event_name="push")
+        self.assertEqual(wrong_event.returncode, 2)
+        self.assertIn("event name: expected workflow_dispatch", wrong_event.stderr)
 
     def test_shell_env_passes_hostile_head_ref_as_literal_cli_argument(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:

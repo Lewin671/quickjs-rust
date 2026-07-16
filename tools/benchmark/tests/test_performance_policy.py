@@ -29,6 +29,8 @@ from tools.benchmark.hosted_preview import (
     BASE_MODE,
     HOSTED_BASE_REF,
     HOSTED_PUSH_REF,
+    MANUAL_INTEGRITY_SCOPE,
+    MANUAL_MODE,
     PUSH_INTEGRITY_SCOPE,
     PUSH_MODE,
 )
@@ -110,6 +112,10 @@ class PerformancePolicyTests(unittest.TestCase):
         self.assertEqual(policy.hosted_push_ref, HOSTED_PUSH_REF)
         self.assertEqual(policy.hosted_push_mode, PUSH_MODE)
         self.assertEqual(policy.hosted_push_integrity_scope, PUSH_INTEGRITY_SCOPE)
+        self.assertEqual(policy.hosted_manual_mode, MANUAL_MODE)
+        self.assertEqual(
+            policy.hosted_manual_integrity_scope, MANUAL_INTEGRITY_SCOPE
+        )
         self.assertEqual(hashlib.sha256(WORKFLOW.read_bytes()).hexdigest(), EXPECTED_WORKFLOW_SHA256)
         validate_workflow_bytes(policy, WORKFLOW.read_bytes())
         self.assertEqual(set(policy.protocols), set(PROTOCOL_KEYS))
@@ -176,6 +182,12 @@ class PerformancePolicyTests(unittest.TestCase):
             ("push_ref", "refs/heads/release"),
             ("push_comparison", "after_vs_quickjs_only"),
             ("push_harness_owner", "event_before_base"),
+            ("manual_mode", "candidate_owned_harness"),
+            ("manual_event", "repository_dispatch"),
+            ("manual_ref", "refs/heads/release"),
+            ("manual_integrity_scope", "untrusted_dispatch"),
+            ("manual_comparison", "arbitrary_revision"),
+            ("manual_harness_owner", "caller_branch"),
         ):
             data = copy.deepcopy(self.data)
             data["hosted_pr"]["harness"][field] = value
@@ -434,8 +446,8 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertIn("name: Performance Preview (Informational, Non-Gating)", workflow)
         self.assertIn("pull_request_target:", workflow)
         self.assertIn("push:", workflow)
+        self.assertIn("workflow_dispatch:", workflow)
         self.assertEqual(workflow.count("branches: [main]"), 2)
-        self.assertNotIn("workflow_dispatch:", workflow)
         self.assertNotIn("\n  pull_request:\n", workflow)
         self.assertNotIn("schedule:", workflow)
         self.assertEqual(workflow.count("runs-on: ubuntu-latest"), 4)
@@ -446,31 +458,43 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertIn("ref: ${{ github.event.pull_request.head.sha }}", workflow)
         self.assertIn("path: target/performance-preview/candidate-source", workflow)
         self.assertIn("repository: ${{ github.repository }}", workflow)
-        self.assertIn("ref: ${{ github.event.after }}", workflow)
-        self.assertIn("repository: ${{ github.event.repository.full_name }}", workflow)
-        self.assertIn("ref: ${{ github.event.before }}", workflow)
+        self.assertIn("ref: ${{ github.sha }}", workflow)
+        self.assertIn(
+            "RUN_EVENT_REPOSITORY: ${{ github.event.repository.full_name }}", workflow
+        )
+        self.assertIn(
+            "ref: ${{ github.event_name == 'push' && github.event.before || github.sha }}",
+            workflow,
+        )
         self.assertIn("path: target/performance-preview/base-source", workflow)
         self.assertEqual(workflow.count("fetch-depth: 1"), 5)
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn("submodules: false", workflow)
         self.assertIn(BASE_MODE, workflow)
         self.assertIn(PUSH_MODE, workflow)
+        self.assertIn(MANUAL_MODE, workflow)
         self.assertNotIn("bootstrap", workflow.lower())
         self.assertEqual(workflow.count("PR_BASE_REF: ${{ github.event.pull_request.base.ref }}"), 1)
         self.assertEqual(workflow.count("PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}"), 1)
         self.assertEqual(workflow.count('--base-ref "$PR_BASE_REF"'), 1)
         self.assertEqual(workflow.count('--pr-number "$PR_NUMBER"'), 1)
         self.assertEqual(workflow.count('--head-ref "$PR_HEAD_REF"'), 1)
-        self.assertIn("PUSH_BEFORE_SHA: ${{ github.event.before }}", workflow)
-        self.assertIn("PUSH_AFTER_SHA: ${{ github.event.after }}", workflow)
-        self.assertIn("PUSH_WORKFLOW_SHA: ${{ github.sha }}", workflow)
-        self.assertIn('--before-sha "$PUSH_BEFORE_SHA"', workflow)
-        self.assertIn('--after-sha "$PUSH_AFTER_SHA"', workflow)
-        self.assertIn('--workflow-sha "$PUSH_WORKFLOW_SHA"', workflow)
+        self.assertIn(
+            "RUN_BASE_SHA: ${{ github.event_name == 'push' && github.event.before || github.sha }}",
+            workflow,
+        )
+        self.assertIn("RUN_CANDIDATE_SHA: ${{ github.sha }}", workflow)
+        self.assertIn("RUN_WORKFLOW_SHA: ${{ github.sha }}", workflow)
+        self.assertIn('--before-sha "$RUN_BASE_SHA"', workflow)
+        self.assertIn('--after-sha "$RUN_CANDIDATE_SHA"', workflow)
+        self.assertIn('--workflow-sha "$RUN_WORKFLOW_SHA"', workflow)
+        self.assertIn("admit-dispatch", workflow)
+        self.assertIn('--revision "$RUN_CANDIDATE_SHA"', workflow)
         self.assertIn("fork-preview-unsupported", workflow)
         self.assertIn("github.event.pull_request.number || github.run_id", workflow)
         self.assertIn("github.event_name == 'pull_request_target'", workflow)
         self.assertIn("github.event_name == 'push'", workflow)
+        self.assertIn("github.event_name == 'workflow_dispatch'", workflow)
         self.assertIn("uses: ./.github/actions/setup-rust", workflow)
         self.assertNotIn("candidate-source/.github/actions/setup-rust", workflow)
         self.assertEqual(workflow.count("PYTHONDONTWRITEBYTECODE: '1'"), 3)
@@ -504,7 +528,8 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertIn("Save pinned QuickJS-NG executable cache before measurement", reference_job)
         self.assertNotIn("scripts/benchmark.sh", reference_job)
         self.assertIn("needs: reference-engine-cache", workflow)
-        self.assertIn("if: always() && github.event_name == 'push'", main_job)
+        self.assertIn("github.event_name == 'workflow_dispatch'", main_job)
+        self.assertIn("github.ref == 'refs/heads/main'", main_job)
         self.assertLess(
             reference_job.index("Build pinned QuickJS-NG only on cache miss"),
             reference_job.index("Save pinned QuickJS-NG executable cache before measurement"),

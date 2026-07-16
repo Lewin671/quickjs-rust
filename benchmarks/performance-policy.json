@@ -53,7 +53,7 @@
       "tools/benchmark/performance_policy.py",
       "tools/benchmark/preview.py"
     ],
-    "aggregate_sha256": "e94e0e4621638940bce8e892c36684c1f886b33442887949ae9afb54cd60d94a"
+    "aggregate_sha256": "60f37722be2f8dbc0fadf082ea72e75ee49296c9e0789fd10fd17edc327b0602"
   },
   "hosted_pr": {
     "tier": "informational_preview",
@@ -63,7 +63,7 @@
     "provider_url": "https://docs.github.com/actions/using-github-hosted-runners/about-github-hosted-runners",
     "runner": "ubuntu-latest",
     "workflow_path": ".github/workflows/performance-smoke.yml",
-    "workflow_sha256": "609a986096d1cb5288e94288f287837cafe96e403dd83880d34d88ef37a07da7",
+    "workflow_sha256": "72ce394337ab94b0c9436c714da7beefab44c39b409b55f89bcd5e567996a3d3",
     "gate": false,
     "slowdown_threshold": null,
     "upload_timing_evidence": true,
@@ -86,6 +86,12 @@
       "push_integrity_scope": "trusted_main_push",
       "push_comparison": "event_after_candidate_vs_event_before_base",
       "push_harness_owner": "event_after_candidate",
+      "manual_mode": "manual_main_head_owned_harness",
+      "manual_event": "workflow_dispatch",
+      "manual_ref": "refs/heads/main",
+      "manual_integrity_scope": "trusted_manual_main_dispatch",
+      "manual_comparison": "selected_main_candidate_vs_same_revision_base",
+      "manual_harness_owner": "selected_main_candidate",
       "fixed_hardware_claim_scope": "trusted_merged_commits_only"
     }
   },
