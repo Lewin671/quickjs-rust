@@ -55,7 +55,7 @@ PROTOCOL_SHAPES = {
         "benchmarks/resource-analysis.json", "quickjs-resource-analysis-protocol-v1"
     ),
 }
-EXPECTED_WORKFLOW_SHA256 = "bb7dec5bd7febd64d62d269027aac3acc4992ef3da0b5bb98aad0b31e111ef06"
+EXPECTED_WORKFLOW_SHA256 = "609a986096d1cb5288e94288f287837cafe96e403dd83880d34d88ef37a07da7"
 PREVIEW_ORCHESTRATOR = "scripts/performance-preview.sh"
 PREVIEW_ROLES = ("candidate", "base", "quickjs-ng")
 PREVIEW_IMPLEMENTATION_FILES = (

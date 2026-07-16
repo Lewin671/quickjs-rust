@@ -438,7 +438,7 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertNotIn("workflow_dispatch:", workflow)
         self.assertNotIn("\n  pull_request:\n", workflow)
         self.assertNotIn("schedule:", workflow)
-        self.assertEqual(workflow.count("runs-on: ubuntu-latest"), 3)
+        self.assertEqual(workflow.count("runs-on: ubuntu-latest"), 4)
         self.assertNotIn("self-hosted", workflow)
         self.assertIn("repository: ${{ github.event.pull_request.base.repo.full_name }}", workflow)
         self.assertIn("ref: ${{ github.event.pull_request.base.sha }}", workflow)
@@ -450,7 +450,7 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertIn("repository: ${{ github.event.repository.full_name }}", workflow)
         self.assertIn("ref: ${{ github.event.before }}", workflow)
         self.assertIn("path: target/performance-preview/base-source", workflow)
-        self.assertEqual(workflow.count("fetch-depth: 1"), 4)
+        self.assertEqual(workflow.count("fetch-depth: 1"), 5)
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn("submodules: false", workflow)
         self.assertIn(BASE_MODE, workflow)
@@ -473,7 +473,7 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertIn("github.event_name == 'push'", workflow)
         self.assertIn("uses: ./.github/actions/setup-rust", workflow)
         self.assertNotIn("candidate-source/.github/actions/setup-rust", workflow)
-        self.assertEqual(workflow.count("PYTHONDONTWRITEBYTECODE: '1'"), 2)
+        self.assertEqual(workflow.count("PYTHONDONTWRITEBYTECODE: '1'"), 3)
         self.assertIn("source-root:", setup_action)
         self.assertIn("working-directory: ${{ inputs.source-root }}", setup_action)
         self.assertIn("inputs.source-root", setup_action)
@@ -481,10 +481,13 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertIn("timeout-minutes: 35", workflow)
         self.assertIn("$GITHUB_STEP_SUMMARY", workflow)
         self.assertIn("actions/upload-artifact@v6", workflow)
-        self.assertEqual(workflow.count("uses: actions/cache/restore@v5"), 6)
-        self.assertEqual(workflow.count("uses: actions/cache/save@v5"), 3)
-        self.assertEqual(workflow.count("continue-on-error: true"), 9)
+        self.assertEqual(workflow.count("uses: actions/cache/restore@v5"), 7)
+        self.assertEqual(workflow.count("uses: actions/cache/save@v5"), 4)
+        self.assertEqual(workflow.count("continue-on-error: true"), 11)
         self.assertNotIn("restore-keys:", workflow)
+        reference_job = workflow.split("  reference-engine-cache:", 1)[1].split(
+            "  base-owned-preview:", 1
+        )[0]
         base_job = workflow.split("  base-owned-preview:", 1)[1].split(
             "  main-push-preview:", 1
         )[0]
@@ -496,6 +499,16 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertIn("actions/cache/save@v5", main_job)
         self.assertIn("Save candidate executable cache from trusted main", main_job)
         self.assertEqual(main_job.count("tools.benchmark.build_cache ready"), 3)
+        self.assertIn("tools.benchmark.build_cache reference-plan", reference_job)
+        self.assertIn("Build pinned QuickJS-NG only on cache miss", reference_job)
+        self.assertIn("Save pinned QuickJS-NG executable cache before measurement", reference_job)
+        self.assertNotIn("scripts/benchmark.sh", reference_job)
+        self.assertIn("needs: reference-engine-cache", workflow)
+        self.assertIn("if: always() && github.event_name == 'push'", main_job)
+        self.assertLess(
+            reference_job.index("Build pinned QuickJS-NG only on cache miss"),
+            reference_job.index("Save pinned QuickJS-NG executable cache before measurement"),
+        )
         self.assertGreaterEqual(main_job.count("always() && !cancelled()"), 6)
         self.assertLess(
             main_job.index("Build and measure three pinned engines"),

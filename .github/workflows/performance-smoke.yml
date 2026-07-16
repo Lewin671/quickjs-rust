@@ -16,6 +16,80 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  reference-engine-cache:
+    name: Prepare reusable QuickJS-NG executable cache
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      CACHE_ROOT: ${{ github.workspace }}/target/performance-preview/build-cache
+      PLAN_ROOT: ${{ github.workspace }}/target/performance-preview/reference-cache-plan
+    steps:
+      - name: Checkout exact trusted main revision
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.after }}
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+
+      - name: Compute pinned reference executable cache identity
+        id: reference-cache-plan
+        run: |
+          python3 -m tools.benchmark.build_cache reference-plan \
+            --manifest benchmarks/manifest.json \
+            --output-dir "$PLAN_ROOT" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Restore pinned QuickJS-NG executable cache
+        id: quickjs-cache
+        uses: actions/cache/restore@v5
+        continue-on-error: true
+        with:
+          path: target/performance-preview/build-cache/quickjs-ng/${{ steps.reference-cache-plan.outputs.quickjs-key }}
+          key: performance-preview-quickjs-ng-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.reference-cache-plan.outputs.quickjs-key }}
+
+      - name: Build pinned QuickJS-NG only on cache miss
+        if: steps.quickjs-cache.outputs.cache-hit != 'true'
+        run: |
+          reference_repo="$(python3 -m tools.benchmark.preview reference \
+            --manifest benchmarks/manifest.json --field repo)"
+          reference_revision="$(python3 -m tools.benchmark.preview reference \
+            --manifest benchmarks/manifest.json --field revision)"
+          git submodule sync -- third_party/quickjs-ng
+          git submodule update --init --depth 1 third_party/quickjs-ng
+          test "$(git -C third_party/quickjs-ng remote get-url origin)" = "$reference_repo"
+          python3 -m tools.benchmark.preview verify-source \
+            --source third_party/quickjs-ng --revision "$reference_revision"
+          quickjs_make_args=()
+          while IFS= read -r argument; do quickjs_make_args+=("$argument"); done \
+            < <(python3 -m tools.benchmark.build_cache recipe \
+              --kind quickjs --field make_args)
+          test "${#quickjs_make_args[@]}" -gt 0
+          make -C third_party/quickjs-ng "CC=$(command -v cc)" "${quickjs_make_args[@]}"
+          python3 -m tools.benchmark.preview verify-source \
+            --source third_party/quickjs-ng --revision "$reference_revision"
+          python3 -m tools.benchmark.build_cache store \
+            --entry "$CACHE_ROOT/quickjs-ng/${{ steps.reference-cache-plan.outputs.quickjs-key }}" \
+            --spec "$PLAN_ROOT/quickjs-ng.json" \
+            --binary third_party/quickjs-ng/build/qjs
+
+      - name: Revalidate pinned QuickJS-NG executable cache
+        run: |
+          python3 -m tools.benchmark.build_cache ready \
+            --entry "$CACHE_ROOT/quickjs-ng/${{ steps.reference-cache-plan.outputs.quickjs-key }}" \
+            --spec "$PLAN_ROOT/quickjs-ng.json"
+
+      - name: Save pinned QuickJS-NG executable cache before measurement
+        if: steps.quickjs-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        continue-on-error: true
+        with:
+          path: target/performance-preview/build-cache/quickjs-ng/${{ steps.reference-cache-plan.outputs.quickjs-key }}
+          key: performance-preview-quickjs-ng-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.reference-cache-plan.outputs.quickjs-key }}
+
   base-owned-preview:
     name: Base-owned preview - cooperative same-repository PR
     if: >-
@@ -179,7 +253,8 @@ jobs:
 
   main-push-preview:
     name: Head-owned preview - trusted main push
-    if: github.event_name == 'push'
+    needs: reference-engine-cache
+    if: always() && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:

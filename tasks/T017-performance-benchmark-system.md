@@ -75,6 +75,10 @@ execution, validated raw JSONL, and failure/timeout records without dependencies
   strict healthy non-claim reports. It cannot configure fixed hardware, apply
   thresholds, enable gates, or make claims. The policy binds an aggregate hash
   over the full hosted control/audit chain plus the direct QuickJS-NG pin.
+- [x] Every `main` push prewarms the exact content-addressed QuickJS-NG
+  executable cache in a separate trusted job before running fresh measurements.
+  A failed prewarm never skips the benchmark; the measurement job always runs
+  and retains its validated rebuild fallback.
 - [ ] M6 establishes fixed-hardware A/A shadow baselines.
 - [ ] M7 enables fixed-hardware nightly/release gates and, if justified,
   self-hosted PR sentinels.
@@ -155,4 +159,5 @@ The validator binds the aggregate hosted-implementation SHA-256 and direct
 QuickJS-NG pin; focused executable contract tests also freeze PR and main-push
 admission, push event/ref/repository/SHA checks, setup-action selection, explicit head/base selection,
 strict healthy summary requirements, always-run summary/artifact production,
-14-day retention, and the absence of thresholds, write permissions, or secrets.
+14-day retention, the independent reference-cache prewarm with always-run
+measurement fallback, and the absence of thresholds, write permissions, or secrets.

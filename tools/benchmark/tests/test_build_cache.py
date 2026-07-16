@@ -19,6 +19,7 @@ from tools.benchmark.build_cache import (
     store,
     validate_entry,
     write_plan,
+    write_reference_plan,
     ready_entry,
 )
 from tools.benchmark.schema import sha256_file
@@ -135,6 +136,20 @@ class BuildCacheTests(unittest.TestCase):
                 plan = write_plan(repo, repo, root / "unused.json", root / "plan")
             self.assertEqual(plan["candidate"]["key_sha256"], plan["base"]["key_sha256"])
             self.assertEqual(plan["quickjs-ng"], reference)
+
+    def test_reference_plan_matches_full_plan_without_rust_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            repo = self._repo(root / "repo")
+            reference = _spec("quickjs-ng", {"revision": "f" * 40})
+            with patch("tools.benchmark.build_cache.quickjs_spec", return_value=reference):
+                full = write_plan(repo, repo, root / "unused.json", root / "full")
+                standalone = write_reference_plan(root / "unused.json", root / "reference")
+            self.assertEqual(standalone, full["quickjs-ng"])
+            self.assertEqual(
+                json.loads((root / "reference/quickjs-ng.json").read_text(encoding="utf-8")),
+                reference,
+            )
 
     def test_missing_malformed_non_executable_and_digest_mismatch_are_misses(self) -> None:
         with tempfile.TemporaryDirectory() as name:

@@ -625,6 +625,16 @@ before and after, and `github.sha == github.event.after`; unchanged or malformed
 identities fail closed. The after-owned harness is necessary because the first
 before revision predating this path cannot implement it.
 
+Before the main-push comparison, a separate trusted job prepares the pinned
+QuickJS-NG executable cache. It computes the same content-addressed build
+identity as the measurement job, restores an exact entry when available, and
+builds plus saves the pinned reference only on a miss. The comparison job uses
+`always()` on that dependency: a cache-backend or preparation failure never
+suppresses the benchmark, because the existing orchestrator can still rebuild
+the reference as a fallback. The preparation job never produces or caches
+measurements. Every `main` update therefore runs a fresh benchmark even when
+every executable is reused.
+
 Both paths use read-only contents permission, no secrets, no write permission,
 no slowdown threshold, and no performance gate. Harness mode/revision plus the
 candidate, base, and pinned QuickJS-NG revisions are recorded in pending,
@@ -655,7 +665,9 @@ regular executable mode, size, and SHA-256 must validate before use; missing or
 invalid entries rebuild. Logs and artifact `build-cache.json` expose each
 role's hit/rebuild status and key. `pull_request_target` uses exact restore-only
 actions and cannot save candidate-influenced state. Only a trusted `main` push
-may save new immutable executable caches; prefix restores are not used. Before
+may save new immutable executable caches; its reference preparation job saves
+QuickJS-NG before measurement, while the measurement job retains a validated
+fallback save for any cache miss. Prefix restores are not used. Before
 storing a rebuilt miss locally, the orchestrator revalidates that role's source tree
 immediately after compilation, so a build that dirties tracked provenance
 cannot create a ready entry. Before a remote save, an always-run step
