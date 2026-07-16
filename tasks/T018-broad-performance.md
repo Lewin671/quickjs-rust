@@ -92,7 +92,7 @@ eligible measurement windows, and N/2N linearity for both cases. The current
 measurement identity is `quickjs-measurement-protocol-v6`, protocol SHA-256
 `9cbd57169707fe1c2b691c340a04b60a4f127c6140b8df7823407299fb60c2b3`,
 and checked-in manifest SHA-256
-`65008b4e1f708f87afdfa0a4f653f864dfd1cbf53bc8bb30c3887a753de5f40a`.
+`0eb67f3d13602f18bb280ae73094374a8d628971e5358ee9baa984a2d74d5d54`.
 
 ## Initial Broad V2 Baseline
 
@@ -163,6 +163,17 @@ Independent 100,000,000/200,000,000 candidate runs completed in 0.26/0.50 s
 with exact checksums, confirming linear work and identifying a required
 measurement-capacity follow-up before the next formal broad run.
 
+The follow-up raises only the `math_abs` iteration ceiling from 20,000,000 to
+400,000,000; the workload, checksum, operation count, warmup, minimum window,
+and all other cases remain unchanged. A three-block exact-case confirmation
+then made every role eligible: the candidate measured
+2.5007/2.5007/2.5018 ns/op, base measured
+1,346.45/1,343.48/1,363.80 ns/op, and QuickJS-NG measured
+34.3324/34.3188/34.3339 ns/op. The paired geometric ratios are 0.00185x
+candidate/base and 0.07286x candidate/QuickJS-NG. All N/2N diagnostics passed;
+the run remains a focused non-claim because it intentionally covers one of 25
+cases.
+
 Diagnostic bindings:
 
 - run ID: `e704b280-6903-4c56-87a6-813d5d05c412`;
@@ -174,6 +185,14 @@ Diagnostic bindings:
   `95f310fe996740d4d0031b6c3d0742e23114446ef806e90c371e3898911692bb`;
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
+Capacity-confirmation bindings:
+
+- run ID: `c67a4690-e8f1-48fe-9c62-fc85abc72988`;
+- raw JSONL SHA-256:
+  `4d3a27cecee05f8c31a01fb9ae60b6369ebac145f4c16594a384b36e68273c0e`;
+- manifest SHA-256:
+  `0eb67f3d13602f18bb280ae73094374a8d628971e5358ee9baa984a2d74d5d54`.
 
 ## Historical Broad V1 Baseline
 
