@@ -1136,6 +1136,20 @@ Compact Value-layout bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+Trusted-main hosted run `29519679154` confirmed that unit across the complete
+Linux broad portfolio: 225/225 formal measurements were eligible, all 75
+engine/case linearity diagnostics passed, and all three blocks remained valid.
+Candidate/base was 0.99286x overall with a 95% confidence interval of
+[0.98572x, 0.99709x]. Candidate/QuickJS-NG was **0.40054x overall** with a 95%
+confidence interval of [0.39956x, 0.40141x], while allocation improved from
+the preceding hosted 4.03263x to **3.20577x QuickJS-NG**, with a 95% confidence
+interval of [3.18374x, 3.29087x]. Allocation therefore remained the only
+critical family above 1.0. Run ID:
+`f56e98f7-8359-4147-ad74-27f51d7fb7bd`; raw JSONL SHA-256:
+`ca71d8441c1514a0b3acbc779c41f757a3b373a8cefb09cbef8f4da68b1b02fc`;
+report JSON SHA-256:
+`b537337bca577a01e0442adb8553a2dd5393f94588ca9fee8918a59c89dc8f26`.
+
 The eighteenth v2 runtime unit extends the existing named-property cache from
 one exact object identity to the shared shape of an unmodified data-only object
 literal. The first lookup resolves the property slot once; later objects from
@@ -1165,6 +1179,38 @@ Literal-shape cache bindings:
   `11081358d446a72eaba0d4b66191beacc064a9701c7ebbee9d7424986a3e1835`;
 - preceding-runtime binary SHA-256:
   `7f393c26c3128f0c301c03b2adbd8b36a50c6407a1ae5e843995dc5e4ef7fbf9`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
+The nineteenth v2 runtime unit removes per-closure copies of immutable
+function metadata. `NewFunction` bytecode now owns shared parameter and local
+name tables, and each runtime closure retains those tables by `Rc` instead of
+deep-cloning their vectors and strings. The function property table also moves
+into the existing identity-bearing auxiliary allocation, eliminating a second
+`Rc` allocation while preserving property identity across detached internal
+handles. Function objects, their properties, captures, and calls are still
+created and executed once per source iteration.
+
+A focused three-role `closure_allocation_call` run made all nine formal
+measurements eligible and passed all 24 predetermined N/2N samples with exact
+doubled operation counts and checksums. Candidate medians were
+729.818/718.565/746.831 ns/op versus 940.331/922.230/956.790 for the immediately
+preceding runtime, a **0.77861x** paired geometric ratio (22.1% lower wall
+ns/op). QuickJS-NG measured 284.814/280.389/282.819 ns/op, leaving this focused
+case at 2.58836x QuickJS-NG on the macOS profile. This is complete focused raw
+evidence, not a broad or allocation-family claim.
+
+Shared function-metadata bindings:
+
+- run ID: `d313ad41-f405-4622-b066-544d3ec0e47c`;
+- raw JSONL SHA-256:
+  `cc817061675cde916d094ad8bf20bffc194bf2a832de9ca95b2911d9750093e7`;
+- manifest SHA-256:
+  `5105e4923cb104f6608e935f73a35e9ab763562c57c7eea8cb0169d1710777ec`;
+- candidate binary SHA-256:
+  `b9334154c020e4fc303553d0aa32e3e8478e170697ad5dd6401a2a769ddf15b8`;
+- preceding-runtime binary SHA-256:
+  `11081358d446a72eaba0d4b66191beacc064a9701c7ebbee9d7424986a3e1835`;
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 

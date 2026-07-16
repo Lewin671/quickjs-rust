@@ -224,7 +224,7 @@ fn build_dynamic_function(
         module_host: None,
         module_imports: HashMap::new(),
         bytecode: Rc::new(bytecode),
-        local_names,
+        local_names: local_names.into(),
         constructable: false,
         is_strict,
         lexical_this: false,

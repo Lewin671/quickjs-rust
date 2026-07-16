@@ -537,8 +537,8 @@ impl Compiler {
                     // A named function expression's inner name binding is
                     // immutable; an anonymous one has no binding.
                     immutable_name_binding: name.is_some(),
-                    params: params.clone(),
-                    local_names,
+                    params: Rc::new(params.clone()),
+                    local_names: Rc::new(local_names),
                     lexical_captures,
                     bytecode: Rc::new(bytecode),
                     // A generator or async function is never constructable.
@@ -704,8 +704,8 @@ impl Compiler {
                     name: Some(name.to_owned()),
                     has_name_binding: false,
                     immutable_name_binding: false,
-                    params: params.clone(),
-                    local_names,
+                    params: Rc::new(params.clone()),
+                    local_names: Rc::new(local_names),
                     lexical_captures,
                     bytecode: Rc::new(bytecode),
                     constructable: *constructable && !*is_generator && !*is_async,
@@ -774,8 +774,8 @@ impl Compiler {
             name: Some(display_name.to_owned()),
             has_name_binding: false,
             immutable_name_binding: false,
-            params: params.clone(),
-            local_names,
+            params: Rc::new(params.clone()),
+            local_names: Rc::new(local_names),
             lexical_captures,
             bytecode: Rc::new(bytecode),
             constructable: *constructable && !*is_generator && !*is_async,

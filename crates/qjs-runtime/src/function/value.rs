@@ -1,5 +1,5 @@
 use std::{
-    cell::{Cell, RefCell},
+    cell::{Cell, Ref, RefCell, RefMut},
     collections::HashMap,
     fmt,
     ops::{Deref, DerefMut},
@@ -129,7 +129,7 @@ pub struct FunctionData {
     pub(crate) module_imports: ModuleImports,
     pub(crate) with_stack: Vec<Value>,
     pub(crate) upvalues: Vec<Upvalue>,
-    pub(crate) local_names: Vec<String>,
+    pub(crate) local_names: Rc<Vec<String>>,
     pub(crate) bytecode: Option<Rc<Bytecode>>,
     pub(crate) native: Option<NativeFunction>,
     pub(crate) constructable: bool,
@@ -162,7 +162,7 @@ pub struct FunctionData {
     pub(crate) auxiliary: Rc<FunctionAuxiliaryState>,
     pub(crate) bound: Option<Box<BoundFunction>>,
     /// Function object properties.
-    pub(crate) properties: Rc<RefCell<HashMap<String, Property>>>,
+    pub(crate) properties: FunctionProperties,
 }
 
 /// Identity-bearing mutable state that is cold for ordinary calls. Keeping
@@ -171,6 +171,7 @@ pub struct FunctionData {
 /// every closure.
 #[doc(hidden)]
 pub struct FunctionAuxiliaryState {
+    properties: RefCell<HashMap<String, Property>>,
     pub(crate) home_object: RefCell<Option<Value>>,
     /// For a derived constructor, the parent constructor invoked by `super()`.
     pub(crate) super_constructor: RefCell<Option<Value>>,
@@ -194,6 +195,7 @@ pub struct FunctionAuxiliaryState {
 impl FunctionAuxiliaryState {
     fn new(home_object: Option<Value>, super_constructor: Option<Value>) -> Rc<Self> {
         Rc::new(Self {
+            properties: RefCell::new(HashMap::new()),
             home_object: RefCell::new(home_object),
             super_constructor: RefCell::new(super_constructor),
             instance_elements: RefCell::new(Vec::new()),
@@ -207,6 +209,30 @@ impl FunctionAuxiliaryState {
             source_text: RefCell::new(None),
             lazy_default_prototype: Cell::new(false),
         })
+    }
+}
+
+/// Compatibility handle for the function's identity-bearing property table.
+/// It shares the existing auxiliary allocation instead of allocating a second
+/// `Rc<RefCell<_>>` for every function object.
+#[derive(Clone)]
+pub(crate) struct FunctionProperties(Rc<FunctionAuxiliaryState>);
+
+impl FunctionProperties {
+    fn new(auxiliary: &Rc<FunctionAuxiliaryState>) -> Self {
+        Self(Rc::clone(auxiliary))
+    }
+
+    pub(crate) fn borrow(&self) -> Ref<'_, HashMap<String, Property>> {
+        self.0.properties.borrow()
+    }
+
+    pub(crate) fn borrow_mut(&self) -> RefMut<'_, HashMap<String, Property>> {
+        self.0.properties.borrow_mut()
+    }
+
+    fn ptr_eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
     }
 }
 
@@ -242,7 +268,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) module_host: Option<ModuleHostRef>,
     pub(crate) module_imports: ModuleImports,
     pub(crate) bytecode: Rc<Bytecode>,
-    pub(crate) local_names: Vec<String>,
+    pub(crate) local_names: Rc<Vec<String>>,
     pub(crate) constructable: bool,
     pub(crate) is_strict: bool,
     pub(crate) lexical_this: bool,
@@ -358,6 +384,8 @@ impl Function {
             Some(bytecode) => bytecode,
             None => Rc::new(compile_function_body(&params, &body)?),
         };
+        let auxiliary = FunctionAuxiliaryState::new(None, None);
+        let properties = FunctionProperties::new(&auxiliary);
         let function = Self(Rc::new(FunctionData {
             has_name_binding: name.is_some(),
             immutable_name_binding: false,
@@ -374,7 +402,7 @@ impl Function {
             module_imports: HashMap::new(),
             with_stack: Vec::new(),
             upvalues: Vec::new(),
-            local_names,
+            local_names: Rc::new(local_names),
             bytecode: Some(bytecode),
             native: None,
             constructable,
@@ -387,9 +415,9 @@ impl Function {
             is_class_constructor: false,
             is_derived_constructor: false,
             is_field_initializer: false,
-            auxiliary: FunctionAuxiliaryState::new(None, None),
+            auxiliary,
             bound: None,
-            properties: Rc::new(RefCell::new(HashMap::new())),
+            properties,
         }));
         function.define_length_property();
         function.define_name_property();
@@ -435,6 +463,8 @@ impl Function {
             upvalues,
         } = compiled;
         let dynamic_function_realm_global = dynamic_function_realm_global(&realm);
+        let auxiliary = FunctionAuxiliaryState::new(home_object, super_constructor);
+        let properties = FunctionProperties::new(&auxiliary);
         let function = Self(Rc::new(FunctionData {
             has_name_binding,
             immutable_name_binding,
@@ -464,9 +494,9 @@ impl Function {
             is_class_constructor,
             is_derived_constructor,
             is_field_initializer,
-            auxiliary: FunctionAuxiliaryState::new(home_object, super_constructor),
+            auxiliary,
             bound: None,
-            properties: Rc::new(RefCell::new(HashMap::new())),
+            properties,
         }));
         function.define_length_property();
         function.define_name_property();
@@ -538,6 +568,8 @@ impl Function {
             _ => false,
         };
         let name = bound_function_name(&target);
+        let auxiliary = FunctionAuxiliaryState::new(None, None);
+        let properties = FunctionProperties::new(&auxiliary);
         let function = Self(Rc::new(FunctionData {
             name: Some(name),
             has_name_binding: false,
@@ -560,7 +592,7 @@ impl Function {
             module_imports: HashMap::new(),
             with_stack: Vec::new(),
             upvalues: Vec::new(),
-            local_names: Vec::new(),
+            local_names: Rc::new(Vec::new()),
             bytecode: None,
             native: None,
             constructable,
@@ -573,13 +605,13 @@ impl Function {
             is_class_constructor: false,
             is_derived_constructor: false,
             is_field_initializer: false,
-            auxiliary: FunctionAuxiliaryState::new(None, None),
+            auxiliary,
             bound: Some(Box::new(BoundFunction {
                 target,
                 this_value,
                 arguments,
             })),
-            properties: Rc::new(RefCell::new(HashMap::new())),
+            properties,
         }));
         function.define_length_property();
         function.define_name_property();
@@ -594,6 +626,8 @@ impl Function {
         constructable: bool,
     ) -> Self {
         let prototype = ObjectRef::new(HashMap::new());
+        let auxiliary = FunctionAuxiliaryState::new(None, None);
+        let properties = FunctionProperties::new(&auxiliary);
         let function = Self(Rc::new(FunctionData {
             has_name_binding: false,
             immutable_name_binding: false,
@@ -610,7 +644,7 @@ impl Function {
             module_imports: HashMap::new(),
             with_stack: Vec::new(),
             upvalues: Vec::new(),
-            local_names: Vec::new(),
+            local_names: Rc::new(Vec::new()),
             bytecode: None,
             native,
             constructable,
@@ -623,9 +657,9 @@ impl Function {
             is_class_constructor: false,
             is_derived_constructor: false,
             is_field_initializer: false,
-            auxiliary: FunctionAuxiliaryState::new(None, None),
+            auxiliary,
             bound: None,
-            properties: Rc::new(RefCell::new(HashMap::new())),
+            properties,
         }));
         function.define_length_property();
         function.define_name_property();
@@ -693,7 +727,7 @@ impl Function {
     }
 
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.properties, &other.properties)
+        self.properties.ptr_eq(&other.properties)
     }
 
     pub(crate) fn prevent_extensions(&self) {
@@ -1245,6 +1279,17 @@ mod tests {
 
         assert!(!Rc::ptr_eq(&function.0, &detached.0));
         assert!(Rc::ptr_eq(&function.auxiliary, &detached.auxiliary));
+        detached.define_property(
+            "shared".to_owned(),
+            crate::Property::enumerable(Value::Number(1.0)),
+        );
+        assert!(function.ptr_eq(&detached));
+        assert_eq!(
+            function
+                .own_property("shared")
+                .map(|property| property.value),
+            Some(Value::Number(1.0))
+        );
         detached.set_source_text(Some(Rc::from("function shared() {}")));
         assert_eq!(
             function.source_text().as_deref(),
