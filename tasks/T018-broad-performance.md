@@ -92,7 +92,7 @@ eligible measurement windows, and N/2N linearity for both cases. The current
 measurement identity is `quickjs-measurement-protocol-v6`, protocol SHA-256
 `9cbd57169707fe1c2b691c340a04b60a4f127c6140b8df7823407299fb60c2b3`,
 and checked-in manifest SHA-256
-`4456d56d48c68417afcb980c71486ac77465834aee3da032763256835a8775b8`.
+`60ee05ee125cabd670b49883281f5088cda4722e038e98ecf55a95d6f09f8341`.
 
 ## Initial Broad V2 Baseline
 
@@ -283,6 +283,33 @@ Property-recurrence diagnostic bindings:
   `7d09e7f13ae6634912eefafef76805bd2cf2af4f8514281a8ce4d09e3ca3ef51`;
 - candidate binary SHA-256:
   `a080c1fb6cb83894aaca0783d70cdeec34a98e3e3a1224b2f01fb556891992e3`.
+
+The isolated capacity follow-up raises only `property_write` from 40,000,000
+to 130,000,000 maximum iterations. A larger proposed ceiling was rejected by
+the benchmark's exact-number guard because the triangular checksum would
+exceed JavaScript's safe-integer range. At the accepted ceiling, all nine
+three-role formal measurements were eligible: candidate measured
+3.4883/3.4735/3.4880 ns/op, frozen broad-v2 base measured
+1,337.36/1,335.06/1,339.35 ns/op, and QuickJS-NG measured
+21.4708/21.4484/21.4493 ns/op. Paired geometric ratios were 0.002605x
+candidate/base and 0.162342x candidate/QuickJS-NG. Candidate, base, and
+QuickJS-NG N/2N normalized ratios were respectively 0.99085, 0.99595, and
+0.99497, with exact checksums throughout. This remains focused one-case
+evidence, not a broad-portfolio claim.
+
+Property-recurrence capacity-confirmation bindings:
+
+- run ID: `a144d94b-6d64-4d02-8eeb-56e5b44393f9`;
+- raw JSONL SHA-256:
+  `d7b0d4a9634e47a0f866bda06ef9c46e5c9fe1eb0d403c394e34f3c6e1614cb5`;
+- manifest SHA-256:
+  `60ee05ee125cabd670b49883281f5088cda4722e038e98ecf55a95d6f09f8341`;
+- candidate binary SHA-256:
+  `a080c1fb6cb83894aaca0783d70cdeec34a98e3e3a1224b2f01fb556891992e3`;
+- base binary SHA-256:
+  `fdf5db59c2cb5e1ae30f8eedffc01295cc91e7c45d936eb12e14c8510ff36158`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
 ## Historical Broad V1 Baseline
 
