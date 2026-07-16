@@ -928,6 +928,74 @@ Consolidated function-state bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+The corresponding trusted-main hosted run `29509431672` completed all 225
+formal measurements, all 600 predetermined linearity samples, and all three
+blocks without an execution failure. It is nevertheless not broad evidence:
+shared-runner noise made the QuickJS-NG `local_read` N/2N diagnostic 1.15938x,
+just outside the frozen [0.85x, 1.15x] interval, so report health is `invalid`
+with 74 passing and one failing engine/case diagnostic. No retry, outlier
+deletion, or widened bound is used, and its computed comparison ratios must not
+be reported as a performance conclusion. Run ID:
+`4ea864ca-d57e-40bb-9a3b-4fbce0b97d0a`; raw JSONL SHA-256:
+`a2bf9b0bdb97456d0f8af2898fc808a9b45e6516dce9eaf34fa41e29cb2abb32`;
+report JSON SHA-256:
+`a5317e609d65c95b80faa40c808f0065e0d3c00549baecab26486d05a8db99d6`.
+Commit `71972b0309c2164486b512a65b11933ba9b08c7c` changes only hosted-preview
+classification: a complete 3/3-block run with failed linearity now publishes
+an explicit successful/inconclusive status with empty comparisons and retained
+raw evidence; missing, malformed, or incomplete evidence still fails.
+
+The trusted-main validation run `29512547949` then exercised that classifier
+with the same runtime binary on both sides of the policy-only commit. It passed
+all 75 engine/case linearity diagnostics (600/600 samples), retained 225/225
+valid formal measurements and 3/3 valid blocks, and produced the expected
+`inconclusive`/`non_claim` hosted health. Candidate/base was 0.99797x with a
+95% confidence interval of [0.99126x, 0.99929x], while the current
+function-allocation runtime measured **0.55082x QuickJS-NG** overall with a
+95% confidence interval of [0.54317x, 0.55218x]. The remaining family failures
+were allocation 4.07820x, call 1.26862x, and string 15.09428x. Run ID:
+`cc13558a-751d-462c-8611-aadad74a1b1b`; raw JSONL SHA-256:
+`99b42374b1699ce622d813f6f55449d12336b601268b5c04d92a6a0a61b91770`;
+report JSON SHA-256:
+`f3f2cadbbf72f35216a3ec251249569bed1b0fbb8bca112d0e8a22d8a5406e3f`.
+
+The fourteenth v2 runtime unit removes allocation from UTF-16 length queries
+and adds a guarded counted-loop term for numeric `String.prototype.slice`
+followed by `.length`. String length now counts UTF-16 units directly instead
+of first materializing a `Vec<u16>`. The loop term is admitted only when the
+current String prototype owns the exact native `slice` data property; an
+overridden method or accessor remains on the observable VM path. For the
+portfolio's partial slice, every traced iteration still creates and drops the
+sliced string before reading its length.
+
+The allocation-free length change alone reduced focused `string_slice` from a
+955.882 ns/op base median to 865.244 ns/op, or 0.90518x base, while remaining
+9.38386x QuickJS-NG. Run ID:
+`d8140683-7fa5-476b-b79c-64b25806cd4f`; raw JSONL SHA-256:
+`a661349d4fa4f8c8edc39d225c9557587e8669f7d8f820a4d9e690322738614a`.
+
+The complete unit's focused three-role run then measured candidate medians of
+59.124/62.692/59.863 ns/op versus 831.775/834.280/830.431 for the
+length-only base and 91.314/89.654/91.260 for QuickJS-NG. Candidate was
+0.07197x of that base and **0.65596x QuickJS-NG**. All nine formal
+measurements were eligible and all 24 predetermined linearity samples
+succeeded; no measurement was timer-limited. This is focused complete raw
+evidence, not a broad claim.
+
+Guarded string-slice bindings:
+
+- run ID: `61ffb6c8-d26f-4783-814a-a06a5807850a`;
+- raw JSONL SHA-256:
+  `6a340048cb16f1425f90e52c6f1bc6413406afe186e775fda908a5297cf0ccbd`;
+- manifest SHA-256:
+  `c4c9834b6676a56e2e8fef35ec15352257730bb2048345e8503d2a4f8b19fbf8`;
+- candidate binary SHA-256:
+  `c36185b4191a3977d3af7c81c764a137b3bc17faf22c072bd1586e94711bc78a`;
+- length-only base binary SHA-256:
+  `acbcd3d88cf31fb22364d7a5510e15f64cabec4b7a49bfd9fec51e6c8f21af70`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

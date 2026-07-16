@@ -81,6 +81,10 @@ enum NumericLoopTerm {
         key: std::rc::Rc<str>,
         arguments: NumericLoopArguments,
     },
+    StringSliceLength {
+        receiver_slot: usize,
+        arguments: NumericLoopArguments,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -92,6 +96,10 @@ enum PreparedNumericLoopTerm {
     },
     Call {
         call: NumericLoopCall,
+        arguments: NumericLoopArguments,
+    },
+    StringSliceLength {
+        value: std::rc::Rc<String>,
         arguments: NumericLoopArguments,
     },
 }
@@ -389,6 +397,31 @@ impl NumericLoopTerm {
             }
             Op::LoadLocal(receiver_slot)
                 if matches!(code.get(cursor + 1), Some(Op::Dup))
+                    && matches!(
+                        code.get(cursor + 2),
+                        Some(Op::GetPropNamed { key, .. }) if key.as_ref() == "slice"
+                    ) =>
+            {
+                let (arguments, suffix) =
+                    compile_call_arguments(bytecode, cursor + 3, counter_slot, true)?;
+                if arguments.len() != 2
+                    || !matches!(
+                        code.get(suffix),
+                        Some(Op::GetPropNamed { key, .. }) if key.as_ref() == "length"
+                    )
+                {
+                    return None;
+                }
+                Some((
+                    Self::StringSliceLength {
+                        receiver_slot: *receiver_slot,
+                        arguments,
+                    },
+                    suffix + 1,
+                ))
+            }
+            Op::LoadLocal(receiver_slot)
+                if matches!(code.get(cursor + 1), Some(Op::Dup))
                     && matches!(code.get(cursor + 2), Some(Op::GetPropNamed { .. })) =>
             {
                 let Op::GetPropNamed { key, .. } = code.get(cursor + 2)? else {
@@ -427,6 +460,7 @@ impl NumericLoopTerm {
                 | Self::GlobalMethodCall { .. }
                 | Self::LocalCall { .. }
                 | Self::MethodCall { .. }
+                | Self::StringSliceLength { .. }
         )
     }
 
@@ -565,6 +599,32 @@ impl NumericLoopTerm {
                 };
                 Self::prepare_call(function, arguments, vm)
             }
+            Self::StringSliceLength {
+                receiver_slot,
+                arguments,
+            } => {
+                if !vm.slot_is_authoritative(*receiver_slot) {
+                    return None;
+                }
+                let Some(Some(Value::String(value))) = vm.locals.get(*receiver_slot) else {
+                    return None;
+                };
+                let prototype = crate::string_prototype(&vm.realm_env())?;
+                let property = prototype.own_property("slice")?;
+                if property.is_accessor() {
+                    return None;
+                }
+                let Value::Function(function) = property.value else {
+                    return None;
+                };
+                if function.native_kind() != Some(NativeFunction::StringPrototypeSlice) {
+                    return None;
+                }
+                Some(PreparedNumericLoopTerm::StringSliceLength {
+                    value: value.clone(),
+                    arguments: *arguments,
+                })
+            }
         }
     }
 
@@ -678,6 +738,11 @@ impl PreparedNumericLoopTerm {
             Self::Call { call, arguments } => {
                 let [first, second] = arguments.values(counter);
                 call.eval(first, second)
+            }
+            Self::StringSliceLength { value, arguments } => {
+                let [start, end] = arguments.values(counter);
+                let sliced = crate::string::numeric_string_slice(value, start, end);
+                crate::string::string_code_unit_len(&sliced) as f64
             }
         }
     }
@@ -885,6 +950,42 @@ mod tests {
             "function sum(n) { var array = [1, 2, 3, 4]; var s = 0; for (var i = 0; i < n; i++) { s += array.indexOf(3); } return s; }",
         );
         assert_eq!(NumericLoopPlan::compile_all(&bytecode).len(), 1);
+    }
+
+    #[test]
+    fn recognizes_numeric_string_slice_length_calls() {
+        let bytecode = nested_function(
+            "function sum(n) { var text = 'the quick brown fox'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(1, 4).length; } return s; }",
+        );
+        assert_eq!(NumericLoopPlan::compile_all(&bytecode).len(), 1);
+        assert_eq!(
+            eval(
+                "function sum(n) { var text = 'the quick brown fox'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(1, 4).length; } return s; } sum(1000);"
+            ),
+            Ok(Value::Number(3000.0))
+        );
+        assert_eq!(
+            eval(
+                "function sum(n) { var text = '😀x'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(0, 1).length; } return s; } sum(4);"
+            ),
+            Ok(Value::Number(8.0))
+        );
+    }
+
+    #[test]
+    fn overridden_string_slice_keeps_the_observable_loop_path() {
+        assert_eq!(
+            eval(
+                "String.prototype.slice = function () { return { length: 7 }; }; function sum(n) { var text = 'abc'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(1, 2).length; } return s; } sum(4);"
+            ),
+            Ok(Value::Number(28.0))
+        );
+        assert_eq!(
+            eval(
+                "var reads = 0; var slice = String.prototype.slice; Object.defineProperty(String.prototype, 'slice', { get: function () { reads += 1; return slice; } }); function sum(n) { var text = 'abc'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(1, 2).length; } return s + ':' + reads; } sum(4);"
+            ),
+            Ok(Value::String("4:4".to_owned().into()))
+        );
     }
 
     #[test]

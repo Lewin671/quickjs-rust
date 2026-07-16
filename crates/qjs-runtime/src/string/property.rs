@@ -1,6 +1,9 @@
 use crate::{Property, Value};
 
-use super::{indexing::canonical_string_index, string_code_units, string_from_code_unit};
+use super::{
+    indexing::canonical_string_index, string_code_unit_len, string_code_units,
+    string_from_code_unit,
+};
 
 pub(crate) fn string_property(value: &str, key: &str) -> Option<Value> {
     let index = canonical_string_index(key)?;
@@ -11,13 +14,13 @@ pub(crate) fn string_property(value: &str, key: &str) -> Option<Value> {
 
 pub(crate) fn string_has_own_property(value: &str, key: &str) -> bool {
     key == "length"
-        || canonical_string_index(key).is_some_and(|index| index < string_code_units(value).len())
+        || canonical_string_index(key).is_some_and(|index| index < string_code_unit_len(value))
 }
 
 pub(crate) fn string_own_property_descriptor(value: &str, key: &str) -> Option<Property> {
     if key == "length" {
         return Some(Property::data(
-            Value::Number(string_code_units(value).len() as f64),
+            Value::Number(string_code_unit_len(value) as f64),
             false,
             false,
             false,
@@ -27,7 +30,7 @@ pub(crate) fn string_own_property_descriptor(value: &str, key: &str) -> Option<P
 }
 
 pub(crate) fn string_own_property_keys(value: &str) -> Vec<String> {
-    (0..string_code_units(value).len())
+    (0..string_code_unit_len(value))
         .map(|index| index.to_string())
         .collect()
 }

@@ -197,7 +197,7 @@ impl Vm<'_> {
             }
             Value::String(value) => {
                 if key == "length" {
-                    return Some(Value::Number(string::string_code_units(value).len() as f64));
+                    return Some(Value::Number(string::string_code_unit_len(value) as f64));
                 }
                 if let Some(value) = string::string_property(value, key) {
                     return Some(value);
@@ -701,7 +701,7 @@ pub(super) fn get_property(
         Value::Array(elements) => property_value(Value::Array(elements), key, env),
         Value::Function(function) => property_value(Value::Function(function), key, env),
         Value::String(value) if key == "length" => {
-            Ok(Value::Number(string::string_code_units(&value).len() as f64))
+            Ok(Value::Number(string::string_code_unit_len(&value) as f64))
         }
         Value::String(value) => match string::string_property(&value, key) {
             Some(value) => Ok(value),
