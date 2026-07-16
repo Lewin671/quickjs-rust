@@ -45,6 +45,9 @@ impl NumericLoopArguments {
 
 #[derive(Clone, Debug)]
 enum NumericLoopTerm {
+    LocalRead {
+        slot: usize,
+    },
     NamedProperty {
         receiver_slot: usize,
         cache: NamedPropertyCache,
@@ -305,6 +308,13 @@ impl NumericLoopTerm {
     ) -> Option<(Self, usize)> {
         let code = &bytecode.code;
         match code.get(cursor)? {
+            Op::LoadLocal(slot)
+                if *slot != counter_slot
+                    && *slot != accumulator_slot
+                    && matches!(code.get(cursor + 1), Some(Op::Binary(BinaryOp::Add))) =>
+            {
+                Some((Self::LocalRead { slot: *slot }, cursor + 1))
+            }
             Op::GetPropNamed { cache, .. } => Some((
                 Self::NamedProperty {
                     receiver_slot: cache.local_slot()?,
@@ -414,6 +424,12 @@ impl NumericLoopTerm {
 
     fn prepare(&self, vm: &mut Vm<'_>) -> Option<PreparedNumericLoopTerm> {
         match self {
+            Self::LocalRead { slot } => {
+                if !vm.slot_is_authoritative(*slot) {
+                    return None;
+                }
+                local_number(vm, *slot).map(PreparedNumericLoopTerm::Stable)
+            }
             Self::NamedProperty {
                 receiver_slot,
                 cache,
@@ -707,6 +723,36 @@ mod tests {
         let plans = NumericLoopPlan::compile_all(&bytecode);
         assert_eq!(plans.len(), 1);
         assert_eq!(plans[0].terms.len(), 2);
+    }
+
+    #[test]
+    fn recognizes_stable_local_read_accumulation_loop() {
+        let bytecode = nested_function(
+            "function sum(n) { var first = 1, second = 2, s = 0; for (var i = 0; i < n; i++) { s += first; s += second; } return s; }",
+        );
+        let plans = NumericLoopPlan::compile_all(&bytecode);
+        assert_eq!(plans.len(), 1);
+        assert_eq!(plans[0].terms.len(), 2);
+        assert!(
+            plans[0]
+                .terms
+                .iter()
+                .all(|term| matches!(term, NumericLoopTerm::LocalRead { .. }))
+        );
+    }
+
+    #[test]
+    fn rejects_mutating_local_read_terms() {
+        for source in [
+            "function sum(n) { var s = 1; for (var i = 0; i < n; i++) { s += s; } return s; }",
+            "function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s += i; } return s; }",
+        ] {
+            let bytecode = nested_function(source);
+            assert!(
+                NumericLoopPlan::compile_all(&bytecode).is_empty(),
+                "{source}"
+            );
+        }
     }
 
     #[test]

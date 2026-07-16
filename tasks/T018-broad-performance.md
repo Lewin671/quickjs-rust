@@ -92,7 +92,7 @@ eligible measurement windows, and N/2N linearity for both cases. The current
 measurement identity is `quickjs-measurement-protocol-v6`, protocol SHA-256
 `9cbd57169707fe1c2b691c340a04b60a4f127c6140b8df7823407299fb60c2b3`,
 and checked-in manifest SHA-256
-`841ddd12b3a5e7c99bdfd73bb8c5a599c151e1e09295948b1c509be905c13137`.
+`9dd580107162b476be6a5b279fa94719cef2494092fe2475dd95a8813d6eda46`.
 
 ## Initial Broad V2 Baseline
 
@@ -365,6 +365,53 @@ Computed-read capacity-confirmation bindings:
   `a0c28f7618ec54e61f48b4052ab3ecfaf3c24566ff00adcbf1ddf405c52f57bc`;
 - base binary SHA-256:
   `fdf5db59c2cb5e1ae30f8eedffc01295cc91e7c45d936eb12e14c8510ff36158`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
+The corresponding hosted broad run produced all 225 eligible measurement
+records and complete 25-case comparisons, but it is deliberately excluded
+from campaign evidence. One of 75 linearity checks failed: candidate
+`captured_read` had a normalized N/2N ratio of 1.41753 while the byte-for-byte
+identical base binary measured 0.99896. The same-binary SHA-256 was
+`dcf79156b210d2df6187ceeb512b4c1802c1ae8c29a808f1a76bc37207d9c8b2`.
+The maximum critical-family relative half-width was also 3.97%, above the
+frozen 3% threshold. The rejected report's provisional candidate/QuickJS-NG
+ratio was 1.30035x, but the health failure means it is not a performance
+conclusion or a replacement baseline. This records the red workflow as a
+shared-runner sample failure instead of silently treating it as success.
+
+The sixth v2 runtime unit admits stable numeric local reads to the guarded
+counted-loop executor. Compile-time shape checks reject the loop counter and
+accumulator because they mutate, while runtime guards require every admitted
+slot to remain authoritative and numeric. Captured or otherwise non-
+authoritative locals, non-numeric values, and all unsupported loop shapes keep
+the generic path. The executor still performs each addition once per source
+iteration.
+
+The `local_read` capacity rises from 100,000,000 to 1,000,000,000 iterations
+so the optimized implementation can satisfy both the 500 ms window and the
+1% startup-fraction limit. Its maximum exact checksum is 3,000,000,000, safely
+below JavaScript's integer precision limit. A focused three-role run made all
+nine measurements eligible. Candidate medians were
+0.93849/0.93729/0.93791 ns/op, the frozen base measured
+96.4558/96.4086/95.6885 ns/op, and QuickJS-NG measured
+7.50443/7.48961/7.50049 ns/op. Paired geometric ratios were 0.009751x
+candidate/base and 0.125084x candidate/QuickJS-NG. Candidate/base/QuickJS-NG
+N/2N ratios were respectively 0.99587/1.01524/0.99560, with exact operation
+counts and checksums. This remains focused one-case evidence, not a broad
+portfolio claim.
+
+Stable-local-read bindings:
+
+- run ID: `3a69dd60-71a8-4351-8363-9ac2ee7e7452`;
+- raw JSONL SHA-256:
+  `18f197eea8f17dad132dd8441042909cf110f09bce288150eff0e14a7808569b`;
+- manifest SHA-256:
+  `9dd580107162b476be6a5b279fa94719cef2494092fe2475dd95a8813d6eda46`;
+- candidate binary SHA-256:
+  `31737595327c4430cccf1042205ae0e8cd43d737abaf2337f40d286d43b5133f`;
+- base binary SHA-256:
+  `07d447a21c867f097a7a1ad68650bc7b7455eebd5e230aaafaff69ddd6efbe56`;
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 

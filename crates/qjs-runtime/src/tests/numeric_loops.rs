@@ -22,6 +22,27 @@ fn accumulates_stable_properties_and_dense_indices() {
 }
 
 #[test]
+fn accumulates_stable_local_reads_without_freezing_mutating_slots() {
+    assert_eq!(
+        eval(
+            "function stable(n) { \
+               var first = 1, second = 2, sum = 0; \
+               for (var i = 0; i < n; i++) { sum += first; sum += second; } \
+               return sum; \
+             } \
+             function accumulator(n) { \
+               var sum = 1; for (var i = 0; i < n; i++) sum += sum; return sum; \
+             } \
+             function counter(n) { \
+               var sum = 0; for (var i = 0; i < n; i++) sum += i; return sum; \
+             } \
+             stable(5) + ':' + accumulator(4) + ':' + counter(5);"
+        ),
+        Ok(Value::String("15:16:10".to_owned().into()))
+    );
+}
+
+#[test]
 fn falls_back_for_observable_or_non_numeric_reads() {
     assert_eq!(
         eval(
