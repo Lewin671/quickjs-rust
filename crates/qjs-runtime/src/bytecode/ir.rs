@@ -173,6 +173,12 @@ pub(super) enum Op {
         raw: Vec<String>,
     },
     NewObjectLiteral,
+    /// Allocates a plain object whose data-property keys are fully known at
+    /// compile time. Values are evaluated left-to-right and consumed from the
+    /// stack; the shared keys avoid per-object string allocation.
+    NewObjectDataLiteral {
+        keys: Vec<Rc<str>>,
+    },
     /// Opens a `using` disposal scope: subsequent register ops add to it until
     /// the matching `DisposeScope`.
     EnterDisposableScope,

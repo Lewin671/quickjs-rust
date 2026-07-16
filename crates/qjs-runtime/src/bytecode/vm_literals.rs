@@ -30,6 +30,15 @@ impl Vm<'_> {
         }
         element_values.reverse();
 
+        if value_count == elements.len()
+            && elements
+                .iter()
+                .all(|element| matches!(element, ArrayElementKind::Expr))
+        {
+            self.stack.push(Value::Array(ArrayRef::new(element_values)));
+            return Ok(());
+        }
+
         let mut values = Vec::new();
         let mut holes = Vec::new();
         let mut next_value = element_values.into_iter();
@@ -108,6 +117,30 @@ impl Vm<'_> {
             HashMap::new(),
             object_prototype(&self.env),
         )));
+    }
+
+    pub(super) fn new_object_data_literal(
+        &mut self,
+        keys: &[std::rc::Rc<str>],
+    ) -> Result<(), RuntimeError> {
+        let mut values = Vec::with_capacity(keys.len());
+        for _ in 0..keys.len() {
+            values.push(self.pop()?);
+        }
+        values.reverse();
+        let home_functions = values
+            .iter()
+            .filter_map(|value| match value {
+                Value::Function(function) if !function.constructable => Some(function.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let object = ObjectRef::with_literal_properties(keys, values, object_prototype(&self.env));
+        for function in home_functions {
+            *function.home_object.borrow_mut() = Some(Value::Object(object.clone()));
+        }
+        self.stack.push(Value::Object(object));
+        Ok(())
     }
 
     /// Names an anonymous object-literal function/accessor from its computed

@@ -197,11 +197,11 @@ enum SymbolBrand {
 }
 
 struct ObjectData {
-    properties: RefCell<HashMap<String, Property>>,
+    properties: RefCell<HashMap<Rc<str>, Property>>,
     /// Invalidates monomorphic named-read caches whenever an own string
     /// property's descriptor or value changes.
     property_revision: Cell<u64>,
-    property_order: RefCell<Vec<String>>,
+    property_order: RefCell<Vec<Rc<str>>>,
     /// Count of own string keys that parse as array indices. Maintained as keys
     /// are added and removed so `has_own_index_property` is an O(1) check; this
     /// keeps the `array[i] = x` fast path from scanning a prototype's keys on
@@ -293,6 +293,10 @@ impl ObjectRef {
         properties: HashMap<String, Value>,
         prototype: Option<Prototype>,
     ) -> Self {
+        let properties: HashMap<Rc<str>, Property> = properties
+            .into_iter()
+            .map(|(key, value)| (Rc::from(key), Property::enumerable(value)))
+            .collect();
         let mut property_order: Vec<_> = properties.keys().cloned().collect();
         property_order.sort();
         let index_property_count = property_order
@@ -300,18 +304,61 @@ impl ObjectRef {
             .filter(|key| is_array_index_key(key))
             .count();
         Self(Rc::new(ObjectData {
-            properties: RefCell::new(
-                properties
-                    .into_iter()
-                    .map(|(key, value)| (key, Property::enumerable(value)))
-                    .collect(),
-            ),
+            properties: RefCell::new(properties),
             property_revision: Cell::new(0),
             property_order: RefCell::new(property_order),
             index_property_count: Cell::new(index_property_count),
             symbol_properties: RefCell::new(Vec::new()),
             extensible: Cell::new(true),
             prototype: RefCell::new(prototype),
+            to_string_tag: RefCell::new(None),
+            raw_json: Cell::new(false),
+            array_prototype_exotic: Cell::new(false),
+            typed_array_exotic: Cell::new(false),
+            symbol_brand: Cell::new(SymbolBrand::None),
+            immutable_prototype_exotic: Cell::new(false),
+            module_namespace_exotic: Cell::new(false),
+            module_namespace_bindings: OnceCell::new(),
+            generator_state: OnceCell::new(),
+            async_generator_state: OnceCell::new(),
+            private_state: OnceCell::new(),
+            internal_bytes: OnceCell::new(),
+            iterator_zip_state: OnceCell::new(),
+            #[cfg(feature = "agents")]
+            shared_backing: OnceCell::new(),
+        }))
+    }
+
+    /// Builds a plain object literal from statically known string keys without
+    /// re-running observable property-key conversion or copying the keys for
+    /// every object. Duplicate keys retain their first insertion position and
+    /// their last value, matching CreateDataProperty semantics.
+    pub(crate) fn with_literal_properties(
+        keys: &[Rc<str>],
+        values: Vec<Value>,
+        prototype: Option<ObjectRef>,
+    ) -> Self {
+        debug_assert_eq!(keys.len(), values.len());
+        let mut properties = HashMap::with_capacity(keys.len());
+        let mut property_order = Vec::with_capacity(keys.len());
+        for (key, value) in keys.iter().cloned().zip(values) {
+            if !properties.contains_key(key.as_ref()) {
+                property_order.push(key.clone());
+            }
+            properties.insert(key, Property::enumerable(value));
+        }
+        let index_property_count = property_order
+            .iter()
+            .filter(|key| is_array_index_key(key))
+            .count();
+        Self(Rc::new(ObjectData {
+            properties: RefCell::new(properties),
+            property_revision: Cell::new(0),
+            property_order: RefCell::new(property_order),
+            index_property_count: Cell::new(index_property_count),
+            symbol_properties: RefCell::new(Vec::new()),
+            extensible: Cell::new(true),
+            prototype: RefCell::new(prototype.map(Prototype::Object)),
             to_string_tag: RefCell::new(None),
             raw_json: Cell::new(false),
             array_prototype_exotic: Cell::new(false),
@@ -568,7 +615,7 @@ impl ObjectRef {
 
     pub(crate) fn set(&self, key: String, value: Value) {
         let mut properties = self.0.properties.borrow_mut();
-        if let Some(property) = properties.get_mut(&key) {
+        if let Some(property) = properties.get_mut(key.as_str()) {
             if property.writable {
                 property.value = value;
                 self.bump_property_revision();
@@ -596,6 +643,7 @@ impl ObjectRef {
                 .index_property_count
                 .set(self.0.index_property_count.get() + 1);
         }
+        let key: Rc<str> = key.into();
         self.0.property_order.borrow_mut().push(key.clone());
         properties.insert(key, Property::enumerable(value));
         self.bump_property_revision();
@@ -603,15 +651,18 @@ impl ObjectRef {
 
     pub(crate) fn define_property(&self, key: String, property: Property) {
         let mut properties = self.0.properties.borrow_mut();
-        if !properties.contains_key(&key) {
+        if let Some(existing) = properties.get_mut(key.as_str()) {
+            *existing = property;
+        } else {
             if is_array_index_key(&key) {
                 self.0
                     .index_property_count
                     .set(self.0.index_property_count.get() + 1);
             }
+            let key: Rc<str> = key.into();
             self.0.property_order.borrow_mut().push(key.clone());
+            properties.insert(key, property);
         }
-        properties.insert(key, property);
         self.bump_property_revision();
     }
 
@@ -638,7 +689,7 @@ impl ObjectRef {
             self.bump_property_revision();
             return;
         }
-        properties.insert(key.to_owned(), Property::non_enumerable(value));
+        properties.insert(Rc::from(key), Property::non_enumerable(value));
         self.bump_property_revision();
     }
 
@@ -858,7 +909,7 @@ impl ObjectRef {
         self.0
             .property_order
             .borrow_mut()
-            .retain(|existing| existing != key);
+            .retain(|existing| existing.as_ref() != key);
         true
     }
 
@@ -895,8 +946,8 @@ impl ObjectRef {
                     if is_internal_property_key(key) {
                         return None;
                     }
-                    let property = properties.get(key.as_str())?;
-                    include(property).then(|| key.clone())
+                    let property = properties.get(key.as_ref())?;
+                    include(property).then(|| key.to_string())
                 })
                 .collect();
         }
@@ -908,16 +959,16 @@ impl ObjectRef {
             if is_internal_property_key(key) {
                 continue;
             }
-            let Some(property) = properties.get(key.as_str()) else {
+            let Some(property) = properties.get(key.as_ref()) else {
                 continue;
             };
             if !include(property) {
                 continue;
             }
             if let Some(index) = array_index_property_key(key) {
-                indices.push((index, key.clone()));
+                indices.push((index, key.to_string()));
             } else {
-                strings.push(key.clone());
+                strings.push(key.to_string());
             }
         }
 

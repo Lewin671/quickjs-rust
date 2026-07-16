@@ -61,6 +61,22 @@ fn evaluates_object_literals_and_member_access() {
 }
 
 #[test]
+fn static_data_literal_bulk_path_preserves_order_duplicates_and_evaluation() {
+    assert_eq!(
+        eval(
+            "let log = ''; function take(x) { log += x; return x; } let object = { b: take('b'), a: take('a'), b: take('B') }; log + ':' + Object.keys(object).join(',') + ':' + object.b;"
+        ),
+        Ok(Value::String("baB:b,a:B".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let proto = { value: 41 }; let object = { method() { return super.value + 1; } }; Object.setPrototypeOf(object, proto); object.method();"
+        ),
+        Ok(Value::Number(42.0))
+    );
+}
+
+#[test]
 fn evaluates_object_spread_properties() {
     assert_eq!(
         eval(

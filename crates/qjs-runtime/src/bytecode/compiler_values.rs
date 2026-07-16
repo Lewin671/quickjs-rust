@@ -57,6 +57,33 @@ impl Compiler {
         &mut self,
         properties: &[ObjectProperty],
     ) -> Result<(), RuntimeError> {
+        if properties.iter().all(|property| {
+            matches!(property.kind, ObjectPropertyKind::Data)
+                && !property.is_proto_setter
+                && matches!(property.key, ObjectPropertyKey::Literal(_))
+        }) {
+            let mut keys = Vec::with_capacity(properties.len());
+            for property in properties {
+                let ObjectPropertyKey::Literal(key) = &property.key else {
+                    unreachable!("static object literal key checked above")
+                };
+                keys.push(Rc::from(key.as_str()));
+                if let qjs_ast::Expr::Function {
+                    name: Some(function_name),
+                    constructable: false,
+                    ..
+                } = &property.value
+                    && function_name == key
+                {
+                    self.compile_function_without_name_binding(&property.value, key)?;
+                } else {
+                    self.compile_named_expr(&property.value, key)?;
+                }
+            }
+            self.emit(Op::NewObjectDataLiteral { keys });
+            return Ok(());
+        }
+
         self.emit(Op::NewObjectLiteral);
         for property in properties {
             if matches!(property.kind, ObjectPropertyKind::Spread) {
@@ -773,6 +800,32 @@ mod tests {
                 .filter(|op| matches!(op, Op::GetProp))
                 .count(),
             3
+        );
+    }
+
+    #[test]
+    fn static_data_object_literals_use_bulk_allocation_op() {
+        let script = qjs_parser::parse_script(
+            "({ a: side(1), b: 2, a: 3 }); ({ [key]: 1 }); ({ __proto__: value }); ({ get x() {} }); ({ ...source });",
+        )
+        .expect("source should parse");
+        let bytecode = compiler::compile_script(&script).expect("source should compile");
+
+        assert_eq!(
+            bytecode
+                .code
+                .iter()
+                .filter(|op| matches!(op, Op::NewObjectDataLiteral { keys } if keys.len() == 3))
+                .count(),
+            1
+        );
+        assert_eq!(
+            bytecode
+                .code
+                .iter()
+                .filter(|op| matches!(op, Op::NewObjectLiteral))
+                .count(),
+            4
         );
     }
 }
