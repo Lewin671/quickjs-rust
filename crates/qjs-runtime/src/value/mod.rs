@@ -13,7 +13,9 @@ pub use array::ArrayRef;
 pub use map::MapRef;
 pub use object::ObjectRef;
 pub(crate) use object::Prototype;
-pub(crate) use object::{ModuleNamespaceBindings, ObjectWeakRef, OwnDataPropertyRead};
+pub(crate) use object::{
+    ModuleNamespaceBindings, ObjectWeakRef, OwnDataPropertyRead, OwnDataPropertyWrite,
+};
 pub(crate) use property::Property;
 pub use set::SetRef;
 

@@ -100,6 +100,23 @@ impl Compiler {
                 }),
             },
             AssignmentTarget::Member {
+                object,
+                property: qjs_ast::MemberProperty::Named(name),
+                ..
+            } => {
+                // A named key has no evaluation side effects. Keep the object
+                // value on the operand stack while evaluating the RHS so a RHS
+                // that rebinds the source identifier still writes the original
+                // reference, then use the dedicated no-coercion store.
+                self.compile_expr(object)?;
+                self.compile_expr(value)?;
+                self.emit(Op::SetPropNamed {
+                    key: name.as_str().into(),
+                    is_strict: self.strict,
+                });
+                Ok(())
+            }
+            AssignmentTarget::Member {
                 object, property, ..
             } => {
                 let object_slot = self.temp_local("assign_object");

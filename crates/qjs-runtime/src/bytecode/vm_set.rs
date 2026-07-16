@@ -2,7 +2,7 @@ use crate::CallEnv;
 use crate::{
     ObjectRef, Property, PropertyKey, RuntimeError, Value, array_prototype, call_function,
     function_own_property_descriptor, function_prototype_chain_descriptor,
-    object::define_array_length_value,
+    object::define_array_length_value, value::OwnDataPropertyWrite,
 };
 
 use super::vm_props::{
@@ -30,6 +30,11 @@ pub(crate) fn set_property(
                 {
                     return Ok(true);
                 }
+            }
+            match object.write_existing_own_data_property(&key, &value) {
+                OwnDataPropertyWrite::Written => return Ok(true),
+                OwnDataPropertyWrite::ReadOnly => return Ok(false),
+                OwnDataPropertyWrite::NeedsSlowPath => {}
             }
             let receiver = Value::Object(object.clone());
             ordinary_set_object(&object, receiver, key, value, env)

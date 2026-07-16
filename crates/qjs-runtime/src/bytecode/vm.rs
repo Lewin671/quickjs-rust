@@ -655,6 +655,10 @@ impl<'a> Vm<'a> {
                     let result = self.set_prop(*is_strict);
                     self.handle_runtime_result(result)?;
                 }
+                Op::SetPropNamed { key, is_strict } => {
+                    let result = self.set_named_prop(key, *is_strict);
+                    self.handle_runtime_result(result)?;
+                }
                 Op::GetPrivate(name) => {
                     let result = self.get_private(name);
                     if let Some(value) = self.handle_runtime_result(result)? {
@@ -1259,6 +1263,27 @@ impl<'a> Vm<'a> {
         }
         let key = self.coerce_property_key(key_value)?;
         let object = self.pop()?;
+        self.set_property_value(object, key, value, is_strict)
+    }
+
+    fn set_named_prop(&mut self, key: &str, is_strict: bool) -> Result<(), RuntimeError> {
+        let value = self.pop()?;
+        let object = self.pop()?;
+        self.set_property_value(
+            object,
+            PropertyKey::String(key.to_owned()),
+            value,
+            is_strict,
+        )
+    }
+
+    fn set_property_value(
+        &mut self,
+        object: Value,
+        key: PropertyKey,
+        value: Value,
+        is_strict: bool,
+    ) -> Result<(), RuntimeError> {
         if self.symbol_primitive_set_fails(&object, &key) {
             if is_strict {
                 return Err(RuntimeError {

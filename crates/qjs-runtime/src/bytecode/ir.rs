@@ -248,6 +248,13 @@ pub(super) enum Op {
     SetProp {
         is_strict: bool,
     },
+    /// Writes a statically named property from `[object, value]`, avoiding the
+    /// temporary key/local sequence and runtime ToPropertyKey coercion used by
+    /// computed assignment. Leaves the assigned value on the stack.
+    SetPropNamed {
+        key: Rc<str>,
+        is_strict: bool,
+    },
     /// Reads a private member `obj.#name`: pops the object, resolves `#name`
     /// against the current home object's private environment, and pushes the
     /// field value, the shared method, or the result of the getter. Throws a

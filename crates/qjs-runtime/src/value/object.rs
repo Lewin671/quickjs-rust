@@ -22,6 +22,14 @@ pub(crate) enum OwnDataPropertyRead {
     NeedsSlowPath,
 }
 
+/// Result of trying to complete `OrdinarySet` against an existing own data
+/// property. `NeedsSlowPath` preserves the full descriptor/prototype path.
+pub(crate) enum OwnDataPropertyWrite {
+    Written,
+    ReadOnly,
+    NeedsSlowPath,
+}
+
 #[derive(Clone)]
 pub(crate) struct ModuleNamespaceBindings {
     lexical: NamespaceBindingCell,
@@ -733,6 +741,32 @@ impl ObjectRef {
         }
     }
 
+    /// Updates an existing ordinary own data property without cloning its
+    /// descriptor or walking the prototype chain. Accessors, missing keys, and
+    /// module namespace exports retain their observable slow-path behavior.
+    pub(crate) fn write_existing_own_data_property(
+        &self,
+        key: &str,
+        value: &Value,
+    ) -> OwnDataPropertyWrite {
+        if self.0.module_namespace_exotic.get() {
+            return OwnDataPropertyWrite::NeedsSlowPath;
+        }
+        let mut properties = self.0.properties.borrow_mut();
+        let Some(property) = properties.get_mut(key) else {
+            return OwnDataPropertyWrite::NeedsSlowPath;
+        };
+        if property.is_accessor() {
+            return OwnDataPropertyWrite::NeedsSlowPath;
+        }
+        if !property.writable {
+            return OwnDataPropertyWrite::ReadOnly;
+        }
+        property.value = value.clone();
+        self.bump_property_revision();
+        OwnDataPropertyWrite::Written
+    }
+
     pub(crate) fn module_namespace_export_property(
         &self,
         key: &str,
@@ -928,7 +962,8 @@ fn is_array_index_key(key: &str) -> bool {
 mod tests {
     use std::{collections::HashMap, mem, rc::Rc};
 
-    use super::{ObjectData, ObjectRef};
+    use super::{ObjectData, ObjectRef, OwnDataPropertyWrite};
+    use crate::{Property, Value};
 
     #[test]
     fn cloned_object_is_a_pointer_sized_shared_handle() {
@@ -941,5 +976,41 @@ mod tests {
             mem::size_of::<ObjectRef>(),
             mem::size_of::<Rc<ObjectData>>()
         );
+    }
+
+    #[test]
+    fn existing_own_data_write_updates_or_rejects_without_slow_path() {
+        let object = ObjectRef::new(HashMap::from([("writable".to_owned(), Value::Number(1.0))]));
+        object.define_property(
+            "readonly".to_owned(),
+            Property::data(Value::Number(2.0), true, false, true),
+        );
+
+        assert!(matches!(
+            object.write_existing_own_data_property("writable", &Value::Number(3.0)),
+            OwnDataPropertyWrite::Written
+        ));
+        assert_eq!(object.get("writable"), Some(Value::Number(3.0)));
+        assert!(matches!(
+            object.write_existing_own_data_property("readonly", &Value::Number(4.0)),
+            OwnDataPropertyWrite::ReadOnly
+        ));
+        assert_eq!(object.get("readonly"), Some(Value::Number(2.0)));
+        assert!(matches!(
+            object.write_existing_own_data_property("missing", &Value::Number(5.0)),
+            OwnDataPropertyWrite::NeedsSlowPath
+        ));
+    }
+
+    #[test]
+    fn module_namespace_own_data_write_stays_on_slow_path() {
+        let object = ObjectRef::new(HashMap::from([("exported".to_owned(), Value::Number(1.0))]));
+        object.mark_module_namespace_exotic();
+
+        assert!(matches!(
+            object.write_existing_own_data_property("exported", &Value::Number(2.0)),
+            OwnDataPropertyWrite::NeedsSlowPath
+        ));
+        assert_eq!(object.get("exported"), Some(Value::Number(1.0)));
     }
 }

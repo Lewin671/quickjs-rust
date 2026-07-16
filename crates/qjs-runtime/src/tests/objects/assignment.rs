@@ -26,6 +26,20 @@ fn evaluates_member_assignment() {
 }
 
 #[test]
+fn named_member_assignment_keeps_the_reference_selected_before_the_rhs() {
+    assert_eq!(
+        eval(
+            "var original = { value: 0 };
+             var selected = original;
+             function rhs() { selected = { value: 10 }; return 7; }
+             selected.value = rhs();
+             original.value + ':' + selected.value;"
+        ),
+        Ok(Value::String("7:10".to_owned().into()))
+    );
+}
+
+#[test]
 fn ordinary_set_honors_non_writable_data_properties() {
     // Sloppy assignment to an own non-writable data property is a silent no-op.
     assert_eq!(
