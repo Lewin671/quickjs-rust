@@ -1380,6 +1380,46 @@ Lazy native-context bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+The twenty-fifth v2 runtime unit makes the general function-property table
+lazy. Standard `length`, `name`, and ordinary-function `prototype` properties
+already use compact implicit state, so a short-lived closure no longer carries
+the 56-byte empty `HashMap` header. The replacement lazy header is capped at 16
+bytes and the complete function object at 344 bytes by layout tests; explicit
+property observation or mutation preserves the existing borrow behavior and
+materializes the map on first use.
+
+A focused three-role run over `plain_function_call`, `method_call`, and
+`closure_allocation_call` made all 27 formal measurements eligible and all 72
+predetermined N/2N diagnostics completed with exact operation counts and
+checksums. For `closure_allocation_call`, candidate medians were
+291.412/291.746/292.511 ns/op versus 293.460/293.707/293.998 for the immediately
+preceding runtime, a **0.99376x** paired geometric ratio. QuickJS-NG measured
+269.153/270.050/271.642 ns/op, leaving this focused case at 1.07995x
+QuickJS-NG. `plain_function_call` was 1.00161x and `method_call` 0.99691x the
+preceding runtime. An independent five-block candidate/base confirmation made
+all 30 formal measurements eligible and all 48 diagnostics complete, measuring
+`closure_allocation_call` at **0.99154x**, `plain_function_call` at 1.00045x,
+and `method_call` at 0.99976x. The call diagnostics' roughly 2.2 ns/op absolute
+measurements are not treated as general call-speed claims. These remain focused
+results, not a broad or allocation-family claim.
+
+Lazy function-property bindings:
+
+- three-role run ID: `9f01dae7-0ee7-4756-aa9c-8a6c2a40a6ec`;
+- confirmation run ID: `2172bac5-7b39-4c90-a64d-b81ca85bbd37`;
+- three-role raw JSONL SHA-256:
+  `69dbc34ec65764738eaaa3824886ec38cb0971e6d87722aea058cb6f86bf91d4`;
+- confirmation raw JSONL SHA-256:
+  `8c6681a6903b04003553fcbac73b17418d3ecd088e3d272259b44844b3a39917`;
+- manifest SHA-256:
+  `5105e4923cb104f6608e935f73a35e9ab763562c57c7eea8cb0169d1710777ec`;
+- candidate binary SHA-256:
+  `767399ea347277809de49db26ccd03409feef27176e082f1e1d475e4baaa2e66`;
+- preceding-runtime binary SHA-256:
+  `386ce5c353c02c68b562af5a4049bd06517847aed8fe4685c486d1cbdbc62847`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

@@ -1,5 +1,5 @@
 use std::{
-    cell::{Cell, RefCell},
+    cell::{Cell, Ref, RefCell, RefMut},
     collections::HashMap,
     fmt,
     ops::Deref,
@@ -161,7 +161,7 @@ pub struct FunctionData {
     pub(crate) auxiliary: FunctionAuxiliaryState,
     pub(crate) bound: Option<Box<BoundFunction>>,
     /// Function object properties.
-    pub(crate) properties: RefCell<HashMap<String, Property>>,
+    pub(crate) properties: LazyFunctionProperties,
 }
 
 /// Identity-bearing mutable state that is cold for ordinary calls. Keeping
@@ -241,6 +241,51 @@ impl NativeContext {
     #[cfg(test)]
     fn is_allocated(&self) -> bool {
         self.0.is_some()
+    }
+}
+
+/// Compact property storage for functions that have not materialized an own
+/// property table.
+///
+/// The standard `length`, `name`, and ordinary-function `prototype` slots are
+/// already represented implicitly. Most short-lived closures therefore never
+/// need a general map at all. Explicit property observation or mutation keeps
+/// the existing `RefCell<HashMap<...>>` borrowing behavior while moving the
+/// much larger empty map header out of every function allocation.
+#[derive(Default)]
+// The indirection is deliberate: it removes the 56-byte empty map header from
+// every short-lived closure and is allocated only on explicit property access.
+#[allow(clippy::box_collection)]
+pub(crate) struct LazyFunctionProperties(RefCell<Option<Box<HashMap<String, Property>>>>);
+
+impl LazyFunctionProperties {
+    pub(crate) fn borrow(&self) -> Ref<'_, HashMap<String, Property>> {
+        self.ensure_allocated();
+        Ref::map(self.0.borrow(), |properties| {
+            properties
+                .as_deref()
+                .expect("function properties initialized before borrowing")
+        })
+    }
+
+    pub(crate) fn borrow_mut(&self) -> RefMut<'_, HashMap<String, Property>> {
+        self.ensure_allocated();
+        RefMut::map(self.0.borrow_mut(), |properties| {
+            properties
+                .as_deref_mut()
+                .expect("function properties initialized before borrowing")
+        })
+    }
+
+    fn ensure_allocated(&self) {
+        if self.0.borrow().is_none() {
+            *self.0.borrow_mut() = Some(Box::default());
+        }
+    }
+
+    #[cfg(test)]
+    fn is_allocated(&self) -> bool {
+        self.0.borrow().is_some()
     }
 }
 
@@ -474,7 +519,7 @@ impl Function {
             is_field_initializer: false,
             auxiliary,
             bound: None,
-            properties: RefCell::new(HashMap::new()),
+            properties: LazyFunctionProperties::default(),
         }));
         function.define_length_property();
         function.define_name_property();
@@ -554,7 +599,7 @@ impl Function {
             is_field_initializer,
             auxiliary,
             bound: None,
-            properties: RefCell::new(HashMap::new()),
+            properties: LazyFunctionProperties::default(),
         }));
         function.define_length_property();
         function.define_name_property();
@@ -668,7 +713,7 @@ impl Function {
                 this_value,
                 arguments,
             })),
-            properties: RefCell::new(HashMap::new()),
+            properties: LazyFunctionProperties::default(),
         }));
         function.define_length_property();
         function.define_name_property();
@@ -715,7 +760,7 @@ impl Function {
             is_field_initializer: false,
             auxiliary,
             bound: None,
-            properties: RefCell::new(HashMap::new()),
+            properties: LazyFunctionProperties::default(),
         }));
         function.define_length_property();
         function.define_name_property();
@@ -1507,23 +1552,28 @@ mod tests {
             "lazy native context must remain pointer-sized"
         );
         assert!(
+            mem::size_of::<super::LazyFunctionProperties>() <= 16,
+            "lazy function property header must stay within two machine words"
+        );
+        assert!(
             auxiliary_size <= 64,
             "function auxiliary header grew to {auxiliary_size} bytes"
         );
         assert!(
-            function_data_size <= 384,
+            function_data_size <= 344,
             "function object grew to {function_data_size} bytes"
         );
     }
 
     #[test]
-    fn user_functions_do_not_allocate_an_empty_native_context() {
+    fn user_functions_keep_empty_function_maps_unallocated() {
         let value = eval("function make() { return function value() {}; } make();")
             .expect("function expression should evaluate");
         let Value::Function(function) = value else {
             panic!("expected function value");
         };
         assert!(!function.native_context.is_allocated());
+        assert!(!function.properties.is_allocated());
 
         let mut native = Function::new_native(
             Some("capturing"),
@@ -1538,6 +1588,11 @@ mod tests {
             native.native_context.get("captured"),
             Some(&Value::Number(1.0))
         );
+        native.define_property(
+            "explicit".to_owned(),
+            crate::Property::enumerable(Value::Number(2.0)),
+        );
+        assert!(native.properties.is_allocated());
     }
 
     #[test]
