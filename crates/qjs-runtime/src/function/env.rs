@@ -76,7 +76,11 @@ pub(crate) fn new_realm(bindings: HashMap<String, Value>) -> Realm {
 pub(crate) type GlobalLexicalBindings = Rc<RefCell<HashSet<String>>>;
 pub(crate) type GlobalLexicalValues = Rc<RefCell<HashMap<String, Value>>>;
 pub(crate) type ImmutableLexicalBindings = Rc<RefCell<HashSet<String>>>;
-pub(crate) type ModuleImports = HashMap<String, (DynamicBindings, String)>;
+/// Structurally immutable module-import routing shared by function objects and
+/// call frames. Module setup uses copy-on-write so environment clones preserve
+/// their previous routing table while ordinary scripts and nested functions
+/// retain only one pointer-sized empty map.
+pub(crate) type ModuleImports = Rc<HashMap<String, (DynamicBindings, String)>>;
 
 #[derive(Clone)]
 enum FrameBindingValue {
@@ -534,7 +538,7 @@ impl CallEnv {
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
             module_host: None,
-            module_imports: HashMap::new(),
+            module_imports: Default::default(),
             module_live_bindings: None,
             #[cfg(feature = "agents")]
             agent_context: None,
@@ -571,7 +575,7 @@ impl CallEnv {
         exported_bindings: DynamicBindings,
         exported_local_name: String,
     ) {
-        self.module_imports
+        Rc::make_mut(&mut self.module_imports)
             .insert(local_name, (exported_bindings, exported_local_name));
     }
 
@@ -634,7 +638,7 @@ impl CallEnv {
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
             module_host: None,
-            module_imports: HashMap::new(),
+            module_imports: Default::default(),
             module_live_bindings: None,
             #[cfg(feature = "agents")]
             agent_context: None,
@@ -659,7 +663,7 @@ impl CallEnv {
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
             module_host: None,
-            module_imports: HashMap::new(),
+            module_imports: Default::default(),
             module_live_bindings: None,
             #[cfg(feature = "agents")]
             agent_context: None,
@@ -682,7 +686,7 @@ impl CallEnv {
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
             module_host: None,
-            module_imports: HashMap::new(),
+            module_imports: Default::default(),
             module_live_bindings: None,
             #[cfg(feature = "agents")]
             agent_context: None,
@@ -755,7 +759,7 @@ impl CallEnv {
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
             module_host: self.module_host.clone(),
-            module_imports: HashMap::new(),
+            module_imports: Default::default(),
             module_live_bindings: None,
             #[cfg(feature = "agents")]
             agent_context: self.agent_context.clone(),
@@ -1148,7 +1152,7 @@ impl CallEnv {
 mod tests {
     use super::{CallEnv, DynamicBindings, FrameBindingValue, FrameBindings, new_realm};
     use crate::Value;
-    use std::collections::HashMap;
+    use std::{collections::HashMap, rc::Rc};
 
     #[test]
     fn frame_binding_promotes_to_a_cell_only_when_identity_is_requested() {
@@ -1179,5 +1183,21 @@ mod tests {
 
         env.set_deopt_bindings(DynamicBindings::new());
         assert!(!env.slot_is_authoritative("value"));
+    }
+
+    #[test]
+    fn module_import_routes_share_until_environment_mutation() {
+        let mut env = CallEnv::new(new_realm(HashMap::new()));
+        let cloned = env.clone();
+        assert!(Rc::ptr_eq(&env.module_imports, &cloned.module_imports));
+
+        env.set_module_import(
+            "local".to_owned(),
+            DynamicBindings::new(),
+            "exported".to_owned(),
+        );
+        assert!(env.has_module_import("local"));
+        assert!(!cloned.has_module_import("local"));
+        assert!(!Rc::ptr_eq(&env.module_imports, &cloned.module_imports));
     }
 }

@@ -504,7 +504,7 @@ impl Function {
             has_dynamic_function_realm_override: Cell::new(false),
             deopt_bindings: None,
             module_host: None,
-            module_imports: HashMap::new(),
+            module_imports: Default::default(),
             with_stack: Vec::new(),
             upvalues: Vec::new(),
             local_names: Rc::new(local_names),
@@ -697,7 +697,7 @@ impl Function {
             has_dynamic_function_realm_override: Cell::new(false),
             deopt_bindings: None,
             module_host: None,
-            module_imports: HashMap::new(),
+            module_imports: Default::default(),
             with_stack: Vec::new(),
             upvalues: Vec::new(),
             local_names: Rc::new(Vec::new()),
@@ -749,7 +749,7 @@ impl Function {
             has_dynamic_function_realm_override: Cell::new(false),
             deopt_bindings: None,
             module_host: None,
-            module_imports: HashMap::new(),
+            module_imports: Default::default(),
             with_stack: Vec::new(),
             upvalues: Vec::new(),
             local_names: Rc::new(Vec::new()),
@@ -1553,6 +1553,11 @@ mod tests {
             mem::size_of::<Rc<()>>(),
             "lazy native context must remain pointer-sized"
         );
+        assert_eq!(
+            mem::size_of::<super::ModuleImports>(),
+            mem::size_of::<Rc<()>>(),
+            "shared module imports must remain pointer-sized"
+        );
         assert!(
             mem::size_of::<super::LazyFunctionProperties>() <= 16,
             "lazy function property header must stay within two machine words"
@@ -1562,7 +1567,7 @@ mod tests {
             "function auxiliary header grew to {auxiliary_size} bytes"
         );
         assert!(
-            function_data_size <= 336,
+            function_data_size <= 296,
             "function object grew to {function_data_size} bytes"
         );
     }

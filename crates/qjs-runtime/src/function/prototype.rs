@@ -223,7 +223,7 @@ fn build_dynamic_function(
         params: Rc::new(params),
         realm: super::env::new_realm(env_snapshot),
         module_host: None,
-        module_imports: HashMap::new(),
+        module_imports: Default::default(),
         bytecode: Rc::new(bytecode),
         source_text: None,
         local_names: local_names.into(),

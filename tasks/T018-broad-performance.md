@@ -1534,6 +1534,39 @@ Lazy array-cold-state bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+The twenty-eighth v2 runtime unit shares module-import routing tables between
+environments, nested functions, and call frames. The routing map is immutable
+after module setup on ordinary execution paths, so an `Rc<HashMap<...>>` plus
+copy-on-write mutation preserves the previous environment-snapshot semantics.
+Ordinary scripts now retain one pointer-sized empty map instead of embedding a
+48-byte `HashMap` header in every function and frame. A layout test caps the
+complete function object at 296 bytes, and a focused copy-on-write test proves
+that mutating one cloned environment does not change the other's import routes.
+
+A focused three-role run over `plain_function_call`, `method_call`, and
+`closure_allocation_call` made all 27 formal measurements eligible and
+completed all 72 predetermined N/2N diagnostics. Closure candidate medians
+were 281.660/282.158/282.483 ns/op versus 287.330/287.333/287.564 for the
+immediately preceding runtime, a **0.98153x** paired geometric ratio (1.8%
+lower wall ns/op). QuickJS-NG measured 269.543/269.568/270.604 ns/op, leaving
+the focused local case at 1.04519x. `plain_function_call` was 1.00072x and
+`method_call` 1.00001x base. This is focused local evidence, not a hosted
+allocation-family claim.
+
+Shared module-import bindings:
+
+- run ID: `4b39360c-3100-433f-bf21-bb9cdc10114c`;
+- raw JSONL SHA-256:
+  `5bb3bcf3f08fe796491303e954a08afe997c3dc1f2c3ce456ce3d85af04c50ac`;
+- manifest SHA-256:
+  `5105e4923cb104f6608e935f73a35e9ab763562c57c7eea8cb0169d1710777ec`;
+- candidate binary SHA-256:
+  `60a8b3c3c7cd8f1430d9bf125a1abacd5f1a1ee60e2a87049c3e39104d1658cb`;
+- preceding-runtime binary SHA-256:
+  `537de482acc7b8905403cb8708381bb8431f9fd1b205dca6544a9232669f7e20`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
