@@ -72,6 +72,11 @@ each script is for.
   only the checked-in registry and always fails; custom `--registry` input is
   structural only and cannot be combined with it. The script never downloads,
   initializes submodules, runs a corpus, or creates performance evidence.
+- `external-performance-preview.sh`: Audits, downloads, or runs the pinned
+  SunSpider 1.0, Kraken 1.1, and JetStream 3 JavaScript subset preview against
+  qjs-rust and QuickJS-NG. It verifies every upstream file hash, keeps source
+  outside artifacts, and produces informational per-case evidence without an
+  official suite score.
 - `performance-policy-audit.sh`: Validates the checked-in deny-only CI policy,
   current protocol hashes, direct QuickJS-NG pin, aggregate hosted workflow /
   setup / orchestrator / renderer / admission / audit-chain hash, and zero-admitted

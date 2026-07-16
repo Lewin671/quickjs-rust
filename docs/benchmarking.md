@@ -550,7 +550,7 @@ structural audit input and can never authorize a runner. Validation only reads
 metadata. It never downloads a corpus, initializes a submodule, or runs a
 benchmark.
 
-Real admission is not obtained by filling v1 fields with plausible strings.
+Real claim-grade admission is not obtained by filling v1 fields with plausible strings.
 It requires a separately reviewed v2 schema plus a content-hashed audit bundle
 binding source-pin evidence, a per-file license inventory and NOTICE decision,
 a repository-owned adapter, a neutral timing protocol and phase boundary, and
@@ -558,10 +558,16 @@ an expected-case manifest with source hashes. Generated/downloaded assets do
 not belong in `tests/`, and `third_party/` remains read-only. An upstream
 top-level license never substitutes for a per-file inventory.
 
-Admission tiers:
+Admission and execution tiers:
 
-- The current QuickJS-derived first-party subset is the only runnable layer;
-  the external registry records governance state, not first-party admission.
+- The current QuickJS-derived first-party subset remains the only claim-candidate
+  runnable layer. The external registry records governance state, not
+  first-party admission.
+- A trusted `main` push additionally runs a non-claim external preview described
+  by `benchmarks/external-preview.json`. It runs 45 explicitly listed cases from
+  71 files at three full upstream revisions, verifies every SHA-256 before
+  generating temporary bundles, and uploads hashes/results rather than source.
+  This execution-only layer does not change any `blocked` registry decision.
 - V8 benchmark suite v7 (`bench-v8`) and the QuickJS-NG Web Tooling Benchmark
   fork are blocked candidates pending per-workload license, capability, and
   timing audits. Web Tooling documents `qjs --stack-size 2048 --script
@@ -583,6 +589,50 @@ Admission tiers:
   phases, rather than a pure JavaScript shell. A registry entry or successful
   audit is never headline evidence: only a complete frozen measurement and
   analysis protocol on qualified hardware can support a performance claim.
+
+### External main-push preview
+
+The external preview compares only the current qjs-rust candidate and the
+pinned QuickJS-NG executable. QuickJS-NG runs with `--script` so historical
+implicit globals and top-level script semantics match qjs-rust. Python brackets
+each fresh shell process with `perf_counter_ns`; the metric therefore includes
+startup, parsing, execution, and shutdown. A seeded pair rotation changes engine
+order across the three measurement blocks.
+
+The frozen suite inventory is:
+
+- **SunSpider 1.0:** all 26 upstream cases;
+- **Kraken 1.1:** all 14 upstream cases, with each data file bound separately;
+- **JetStream 3 JavaScript subset:** `cdjs`, `hash-map`, `gaussian-blur`,
+  `stanford-crypto-aes`, and `raytrace-public-class-fields`, each invoking one
+  upstream `Benchmark.runIteration` plus its validation hook.
+
+Capability probes run before measurement. A failed or timed-out engine remains
+visible for that frozen case and the case receives no ratio. The report may show
+a diagnostic geometric mean over explicitly comparable cases, but an incomplete
+suite has no suite score. JetStream output is always named **JetStream 3
+JavaScript subset** and never an official JetStream score. All hosted output
+keeps `claim_eligible=false`.
+
+Run the same preview locally after building both shells:
+
+```sh
+cargo build --release -p qjs-cli
+make -C third_party/quickjs-ng BUILD_QJS_LIBC=y
+./scripts/external-performance-preview.sh audit
+./scripts/external-performance-preview.sh run \
+  --cache-root target/external-preview/corpora \
+  --work-root target/external-preview/work \
+  --output-dir target/external-preview/evidence \
+  --candidate target/release/qjs \
+  --quickjs-ng third_party/quickjs-ng/build/qjs
+```
+
+The output directory receives `external-raw.jsonl`,
+`external-report.json`, `external-summary.md`, and the exact manifest. Corpus
+files and generated bundles stay outside that directory; bundles are removed
+after the run. Use `--blocks 1 --timeout-seconds 1` only for harness smoke tests,
+not for a performance reading.
 
 ## CI Layering and Gate Activation
 

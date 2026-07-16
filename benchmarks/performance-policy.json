@@ -40,17 +40,20 @@
       ".github/actions/setup-rust/action.yml",
       ".github/workflows/performance-smoke.yml",
       "benchmarks/external-corpora.json",
+      "benchmarks/external-preview.json",
       "scripts/external-corpus-audit.sh",
+      "scripts/external-performance-preview.sh",
       "scripts/performance-policy-audit.sh",
       "scripts/performance-preview.sh",
       "tools/benchmark/build_cache.py",
       "tools/benchmark/build_cache_identity.py",
       "tools/benchmark/external_corpora.py",
+      "tools/benchmark/external_preview.py",
       "tools/benchmark/hosted_preview.py",
       "tools/benchmark/performance_policy.py",
       "tools/benchmark/preview.py"
     ],
-    "aggregate_sha256": "8e29de1c67d11a8f08150e5ccadbd74a2c58484626ccd3cb11f765597952b985"
+    "aggregate_sha256": "185f4a88dd09ccc49c76c62dbc1ba66c5aff0ff7db5942f943d6bc4164acb374"
   },
   "hosted_pr": {
     "tier": "informational_preview",

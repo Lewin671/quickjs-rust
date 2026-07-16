@@ -178,9 +178,12 @@ class PreviewPreparationTests(unittest.TestCase):
             "trap record_error ERR", 'CURRENT_PHASE="build_candidate"',
             'CURRENT_PHASE="build_base"', 'CURRENT_PHASE="build_quickjs_ng"',
             'CURRENT_PHASE="measurement"', 'CURRENT_PHASE="summary"',
+            'CURRENT_PHASE="external_corpus_preview"',
             'CURRENT_PHASE="post_measure_validation"', "GITHUB_ENV GITHUB_PATH",
             "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "./scripts/performance-policy-audit.sh",
-            "./scripts/external-corpus-audit.sh",
+            "./scripts/external-corpus-audit.sh", "./scripts/external-performance-preview.sh",
+            'if [ "$HARNESS_MODE" = "main_push_head_owned_harness" ]',
+            'cat "$OUTPUT/external-summary.md" >> "$OUTPUT/summary.md"',
         ):
             self.assertIn(value, script)
         self.assertGreaterEqual(script.count('verify_source "$CANDIDATE_SOURCE"'), 3)
@@ -211,6 +214,10 @@ class PreviewPreparationTests(unittest.TestCase):
         self.assertLess(
             script.index('CURRENT_PHASE="post_measure_validation"'),
             script.index('CURRENT_PHASE="summary"'),
+        )
+        self.assertLess(
+            script.index('CURRENT_PHASE="summary"'),
+            script.index('CURRENT_PHASE="external_corpus_preview"'),
         )
         self.assertNotIn("fetch --no-tags", script)
         self.assertNotIn("third_party/test262", script)

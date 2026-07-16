@@ -132,6 +132,11 @@ keep `claim_eligible=false`.
 M5 records five blocked source-pinned candidates and two excluded
 evidence-backed decisions with zero admitted entries; Octane deliberately has
 no pin. The registry is governance metadata, never headline evidence.
+Trusted `main` pushes now add a separate execution-only preview for all 26
+SunSpider 1.0 cases, all 14 Kraken 1.1 cases, and a five-case JetStream 3
+JavaScript subset. It preserves the blocked admission state, binds every
+downloaded file by SHA-256, omits source from artifacts, and reports only
+per-case or explicitly diagnostic comparable-case ratios.
 SunSpider is the preferred first v2 review after its per-file license inventory
 and NOTICE disposition close; QuickJS-NG Web Tooling is blocked on shell flags,
 bench-v8 and Kraken on neutral-referee plus license audits, JetStream 3 on a
