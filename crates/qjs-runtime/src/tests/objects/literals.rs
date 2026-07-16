@@ -92,6 +92,18 @@ fn static_data_literal_bulk_path_preserves_order_duplicates_and_evaluation() {
         ),
         Ok(Value::String("1,2,a:1,2:4".to_owned().into()))
     );
+    assert_eq!(
+        eval(
+            "let object = { a: 1, b: 2 }; Object.freeze(object); object.a = 7; delete object.b; Object.isFrozen(object) + ':' + object.a + ':' + object.b;"
+        ),
+        Ok(Value::String("true:1:2".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let proto = { value: 40 }; let object = { first() { return 1; }, second() { return super.value + 2; } }; Object.setPrototypeOf(object, proto); object.first() + object.second();"
+        ),
+        Ok(Value::Number(43.0))
+    );
 }
 
 #[test]

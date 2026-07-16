@@ -124,6 +124,22 @@ impl Vm<'_> {
         &mut self,
         shape: std::rc::Rc<ObjectLiteralShape>,
     ) -> Result<(), RuntimeError> {
+        if shape.input_len() == 2 && shape.unique_len() == 2 {
+            let second = self.pop()?;
+            let first = self.pop()?;
+            let home_functions = [&first, &second].map(|value| match value {
+                Value::Function(function) if !function.constructable => Some(function.clone()),
+                _ => None,
+            });
+            let object =
+                ObjectRef::with_literal_pair(shape, [first, second], object_prototype(&self.env));
+            for function in home_functions.into_iter().flatten() {
+                *function.home_object.borrow_mut() = Some(Value::Object(object.clone()));
+            }
+            self.stack.push(Value::Object(object));
+            return Ok(());
+        }
+
         let mut values = Vec::with_capacity(shape.input_len());
         for _ in 0..shape.input_len() {
             values.push(self.pop()?);

@@ -757,6 +757,67 @@ Shared-literal-shape allocation bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+The trusted-main preview for commit
+`d4fbb2b94e78e9c9bd630586e72758106c37df4e` is an audited pipeline failure,
+not performance evidence. The runner completed all 225 measurements with zero
+invalid measurement records and all 25 cases for every role, but only 72/75
+N/2N checks passed. The failing checks were the base engine's
+`object_allocation` at 1.16332, QuickJS-NG `array_read` at 1.15490, and
+QuickJS-NG `branch_arithmetic` at 1.19660; every candidate linearity check
+passed and there were no execution failures. Overall health was therefore
+`invalid`. The summary correctly refused a performance conclusion, then the
+workflow failed because hosted-preview publication accepts only the expected
+`inconclusive` state. CI and Test262 Coverage for the same SHA both passed.
+
+Failed shared-shape hosted bindings:
+
+- workflow run: `29498151883`;
+- benchmark run ID: `f4fa6dde-d5e9-4e61-9160-c89524cdda48`;
+- raw JSONL SHA-256:
+  `4dc2a169e0a119e8b1b76e5e68a2994b72fa406a4bb5af380409f95397239784`;
+- invalid-health report SHA-256:
+  `c010a6ffd3e44bd2cb92a63bc25bf282d3d9713a2aceda17d5e6a710bb954d98`;
+- hosted dynamic manifest SHA-256:
+  `94b47dc14cebbe56a1418d9d4e1ed102001fa4b7a682ea261ae6104f5797aca9`;
+- candidate binary SHA-256:
+  `4e70fc3217863414aeab91ee0709940ad9d6c245c0173466d0a1b429fd97a50c`;
+- base binary SHA-256:
+  `2e61a99854a534f1699157b754befece9b037efd86ebff7fd99cdfeee1f149f3`;
+- QuickJS-NG binary SHA-256:
+  `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+
+The twelfth v2 runtime unit specializes the common two-distinct-key static
+data literal. Its two values move directly from the operand stack into inline
+object slots, removing both the temporary `Vec<Value>` and per-instance
+descriptor vector. Reads clone the stored value directly. Any descriptor or
+structural mutation converts only that object to the full property storage,
+preserving delete/re-add order, integrity levels, and accessor semantics.
+Every source iteration still allocates a fresh `ObjectRef`.
+
+A focused two-case three-role run made all 18 formal measurements eligible.
+`object_allocation` candidate medians were
+323.034/317.650/317.126 ns/op versus 424.218/426.376/430.260 for the preceding
+base and 182.507/213.451/182.514 for QuickJS-NG. The candidate fell to
+0.74500x of the base, a 34.2% throughput improvement, and 1.7404x QuickJS-NG.
+`array_allocation` measured 232.654/232.313/234.029 ns/op versus
+247.040/251.906/249.409 for the base and 165.258/165.597/167.348 for
+QuickJS-NG. All six N/2N ratios were between 0.88883 and 1.03033 with exactly
+doubled checksums. This is focused complete raw evidence, not a broad claim.
+
+Direct-literal-pair allocation bindings:
+
+- run ID: `8ed26e6b-dd23-4784-8273-3f3770128b5f`;
+- raw JSONL SHA-256:
+  `0f4621d2efc8c6a051016d73fea193ac1be971414078c0d876925e51093eae4b`;
+- manifest SHA-256:
+  `316e9b90c415e07573f7e7674c8d1f2602279dcc30173e1ccc0f67b0008e18d1`;
+- candidate binary SHA-256:
+  `ab4d390b6ec9e1068a15b12656250c0acb62d99b09dc5089fbf0a65aca963f8e`;
+- base binary SHA-256:
+  `3ab6a4b1cc4f6fc0d6e620c2e2549e40e0e5148c7aff713381c7edc76bf6b838`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
