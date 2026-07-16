@@ -197,15 +197,26 @@ impl NumericLoopPlan {
         let mut accumulator_slot = None;
         let mut terms = Vec::new();
         while cursor < tail {
-            let Op::LoadLocal(term_accumulator_slot) = code.get(cursor)? else {
-                return None;
-            };
-            let (term, suffix) = NumericLoopTerm::compile(
-                bytecode,
-                cursor + 1,
-                *counter_slot,
-                *term_accumulator_slot,
-            )?;
+            let (term_accumulator_slot, term, suffix) =
+                if let Some(Op::LoadLocal(term_accumulator_slot)) = code.get(cursor) {
+                    let (term, suffix) = NumericLoopTerm::compile(
+                        bytecode,
+                        cursor + 1,
+                        *counter_slot,
+                        *term_accumulator_slot,
+                    )?;
+                    (*term_accumulator_slot, term, suffix)
+                } else {
+                    let (term, suffix) = NumericLoopTerm::compile_reordered_global_call(
+                        bytecode,
+                        cursor,
+                        *counter_slot,
+                    )?;
+                    let Op::LoadLocal(term_accumulator_slot) = code.get(suffix)? else {
+                        return None;
+                    };
+                    (*term_accumulator_slot, term, suffix + 1)
+                };
             let (
                 Op::Binary(BinaryOp::Add),
                 Op::Dup,
@@ -224,14 +235,15 @@ impl NumericLoopPlan {
             else {
                 return None;
             };
-            if assigned_accumulator_slot != term_accumulator_slot
+            if term_accumulator_slot == *counter_slot
+                || assigned_accumulator_slot != &term_accumulator_slot
                 || term_block_result_slot != block_result_slot
                 || term_loop_result_slot != loop_result_slot
-                || accumulator_slot.is_some_and(|slot| slot != *term_accumulator_slot)
+                || accumulator_slot.is_some_and(|slot| slot != term_accumulator_slot)
             {
                 return None;
             }
-            accumulator_slot = Some(*term_accumulator_slot);
+            accumulator_slot = Some(term_accumulator_slot);
             terms.push(term);
             cursor = suffix + 6;
         }
@@ -311,6 +323,25 @@ impl NumericLoopPlan {
 }
 
 impl NumericLoopTerm {
+    fn compile_reordered_global_call(
+        bytecode: &Bytecode,
+        cursor: usize,
+        counter_slot: usize,
+    ) -> Option<(Self, usize)> {
+        let Op::LoadGlobal(name) = bytecode.code.get(cursor)? else {
+            return None;
+        };
+        let (arguments, suffix) =
+            compile_call_arguments(bytecode, cursor + 1, counter_slot, false)?;
+        Some((
+            Self::GlobalCall {
+                name: name.clone(),
+                arguments,
+            },
+            suffix,
+        ))
+    }
+
     fn compile(
         bytecode: &Bytecode,
         cursor: usize,
@@ -929,6 +960,53 @@ mod tests {
             let bytecode = nested_function(source);
             assert_eq!(NumericLoopPlan::compile_all(&bytecode).len(), 1, "{source}");
         }
+    }
+
+    #[test]
+    fn recognizes_reordered_numeric_global_call() {
+        let source = "function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s = leaf(i) + s; } return s; }";
+        let bytecode = nested_function(source);
+        assert_eq!(NumericLoopPlan::compile_all(&bytecode).len(), 1, "{source}");
+        assert_eq!(
+            eval(
+                "function leaf(value) { return value + 1; } function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s = leaf(i) + s; } return s; } sum(1000);"
+            ),
+            Ok(Value::Number(500500.0))
+        );
+    }
+
+    #[test]
+    fn reordered_non_numeric_and_mutating_calls_keep_the_observable_path() {
+        assert_eq!(
+            eval(
+                "function leaf(value) { return 'x' + value; } function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s = leaf(i) + s; } return s; } sum(3);"
+            ),
+            Ok(Value::String("x2x1x00".to_owned().into()))
+        );
+        assert_eq!(
+            eval(
+                "function leaf(value) { if (value === 1) { leaf = function (next) { return next + 10; }; } return value + 1; } function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s = leaf(i) + s; } return s; } sum(3);"
+            ),
+            Ok(Value::Number(15.0))
+        );
+    }
+
+    #[test]
+    fn reordered_local_calls_are_not_loop_terms() {
+        let source = "function sum(n) { var offset = 1; var leaf = function (value) { return value + offset; }; var s = 0; for (var i = 0; i < n; i++) { s = leaf(i) + s; } return s; }";
+        let bytecode = nested_function(source);
+        assert!(
+            NumericLoopPlan::compile_all(&bytecode).is_empty(),
+            "{source}"
+        );
+
+        let counter_source =
+            "function sum(n) { for (var i = 0; i < n; i++) { i = leaf(i) + i; } return i; }";
+        let counter_bytecode = nested_function(counter_source);
+        assert!(
+            NumericLoopPlan::compile_all(&counter_bytecode).is_empty(),
+            "{counter_source}"
+        );
     }
 
     #[test]

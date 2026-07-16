@@ -996,6 +996,51 @@ Guarded string-slice bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+The fifteenth v2 runtime unit extends the same guarded counted-loop machinery
+to the expression-order holdout `sum = globalLeaf(counter) + sum`. Admission
+is intentionally narrower than general addition commutation: the left operand
+must be a global call that prepares as an existing numeric leaf plan, the
+right operand must be the authoritative numeric accumulator, and the normal
+loop/result trace must still match. Local closures are not admitted by this
+shape. Non-numeric leaf returns, global mutation, branches, or otherwise
+observable callees fail preparation and execute through the ordinary VM.
+
+The first focused run exposed a measurement-contract ceiling rather than
+reportable speed: the optimized candidate reached the case's old 50,000,000
+iteration cap in about 160 ms, below its 500 ms minimum, so all three candidate
+measurements were correctly marked `timer_limited`. To preserve fail-closed
+measurement while making the optimized case measurable, the case now uses the
+already-established fast-call calibration bounds from `plain_function_call`:
+130,000,000 maximum iterations, a 250 ms minimum window, and a 4% startup
+fraction. These settings apply identically to candidate, base, and QuickJS-NG;
+the workload, operation count, and checksum model are unchanged. The maximum
+triangular checksum is 8,450,000,065,000,000, still below `2^53` and therefore
+exactly representable.
+
+The calibrated focused three-role run made all nine formal measurements
+eligible and all 24 predetermined linearity samples passed. Candidate medians
+were 3.081/3.074/3.069 ns/op, versus 195.363/194.127/194.642 for the preceding
+runtime and 44.424/44.106/44.503 for QuickJS-NG. The preceding-runtime and
+QuickJS-NG medians remained consistent with the capped diagnostic's 194.065
+and 43.879 ns/op, respectively, showing that the calibration change extended
+the window without changing their comparison direction. Candidate was
+**0.01579x base** and **0.06920x QuickJS-NG** for this focused case. This is
+complete focused raw evidence, not a broad claim.
+
+Reordered global-call bindings:
+
+- run ID: `58930c50-309d-415a-b96d-a66a84b89aa6`;
+- raw JSONL SHA-256:
+  `ea4651e672eb3077fa9338850978cc97d5cf5d54406d966bce3a9edbf8499995`;
+- manifest SHA-256:
+  `5105e4923cb104f6608e935f73a35e9ab763562c57c7eea8cb0169d1710777ec`;
+- candidate binary SHA-256:
+  `26d514e98209db6f7922d393f5715175c940dfaebfc85430677a669268c2d023`;
+- preceding-runtime binary SHA-256:
+  `c36185b4191a3977d3af7c81c764a137b3bc17faf22c072bd1586e94711bc78a`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
