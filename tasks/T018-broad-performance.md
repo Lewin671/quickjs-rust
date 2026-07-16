@@ -125,6 +125,57 @@ Evidence bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+## Optimization Evidence
+
+The first runtime unit, commit
+`432f1c0afc2fffc95c726c7668f3dce74fb0b8f6`, generalized the counted-loop
+numeric leaf-call path to two simple arguments. Against the preceding
+`21af319082471fad1f2dc6a0501df25efd5d7b27` baseline it reduced the broad
+candidate/base ratio to **0.89985x** with a 95% confidence interval of
+[0.89307x, 0.90105x]. Candidate/QuickJS-NG fell to **2.57083x** with a 95%
+confidence interval of [2.57054x, 2.57542x], and the call family fell from
+1.37980x to 0.81756x. The clean three-role run had 225/225 valid measurements,
+75/75 passing linearity probes, and three valid blocks. Run ID:
+`4a464d4e-b117-4a1f-86b7-c546b023dc1d`; raw SHA-256:
+`ef04e03bc9a606d470ee863da51678802894d3f517578e1de41331fc16a4ae7b`;
+report SHA-256:
+`9375afe27f69c3fcd38207526f6cf982a274146d6fa11f4b2bb636651633940a`.
+
+The follow-up unit, commit
+`64ba9361eede0b06ce5cccd0b9fb790de0738f7f`, replaced per-iteration argument
+vectors with a fixed zero/one/two-argument plan and scalar dispatch. Against
+`432f1c0afc2fffc95c726c7668f3dce74fb0b8f6` it reduced the broad ratio to
+**0.98905x** with a 95% confidence interval of [0.98375x, 0.98998x]. The
+improvement was concentrated in `captured_read` (0.82696x) and
+`function_call_two_args` (0.89574x); the confidence intervals for the other
+previously fast call shapes include 1.00x, so this run does not establish a
+regression in those shapes. Candidate/QuickJS-NG is now **2.54217x** overall
+with a 95% confidence interval of [2.53535x, 2.55487x]. Current family ratios
+are:
+
+| Critical family | Candidate / QuickJS-NG |
+| --- | ---: |
+| builtin | 40.0700x |
+| string | 10.1817x |
+| property | 10.1676x |
+| control | 8.1016x |
+| allocation | 7.5606x |
+| array | 1.0781x |
+| call | 0.8064x |
+| binding | 0.6040x |
+
+The clean three-role run again had 225/225 valid measurements, 75/75 passing
+linearity probes, and three valid blocks. Run ID:
+`23e73eba-8b55-4279-8ca9-006ff9d19564`; candidate binary SHA-256:
+`6b5e6db88cf03ba1eb01e0f39ce99f39f3c774e5e4737faec1f8c05f7a7ffcca`;
+raw SHA-256:
+`519c4ddda56f674265e2fd57954cb7e1464b172b86481afd01e04a52f5e14847`;
+report SHA-256:
+`7b1fc99b1ac212c300d0a321e57ca76b411cec170a7b8a7b3b611d003afee811`.
+Both runs used seed `20250713`, the frozen measurement protocol
+`b2f2e85343c1fbe2bb4bc58d3540a1a666cab85b71118e45e019400541ee75c6`,
+and pinned QuickJS-NG `f7830186043e4488f2998759d60a514faf07cbc9`.
+
 ## Notes
 
 Broad v1 is still a first-party micro portfolio, not a substitute for an
