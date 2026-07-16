@@ -566,6 +566,70 @@ Control-loop capacity-confirmation bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+The trusted-main hosted preview for commit
+`85ebce9688dd425e43f87231293079b1efb6fd4c` completed with all 225
+measurements eligible, all 75 N/2N checks passing, and all 25 cases present for
+each role. Candidate/base was 0.78918x. Candidate/QuickJS-NG reached
+**0.64086x** with a 95% confidence interval of [0.63174x, 0.64339x], making the
+candidate 35.91% faster overall but still short of the 0.50x goal. Control fell
+from 18.2538x to 0.1892x, confirming the focused optimization direction on the
+hosted Linux profile. Allocation 14.0929x, string 14.1583x, and call 1.2456x
+still exceeded the 1.00x family ceiling.
+
+The three-block run remained `inconclusive`/`non_claim`; string's 34.95%
+relative half-width exceeded the frozen 3% threshold. It is complete
+optimization evidence, not the final fixed-hardware campaign claim.
+
+Hosted control-loop broad bindings:
+
+- workflow run: `29493748064`;
+- benchmark run ID: `c044b06b-3ca9-4d34-babc-10a910a6010b`;
+- raw JSONL SHA-256:
+  `0b178816be2c4e88e478300de103326af254308771e3b45871de499bd1ff4800`;
+- report JSON SHA-256:
+  `65445ec5b71005f86024c5a12b5f6c0a9cf9d2daf9798a96661582ad97c9803c`;
+- hosted dynamic manifest SHA-256:
+  `94b47dc14cebbe56a1418d9d4e1ed102001fa4b7a682ea261ae6104f5797aca9`;
+- candidate binary SHA-256:
+  `a9ebdba6b3de78774dd29dcca28c7ceceeb1e21aa18a3bcece7d6844e2b7e5a9`;
+- base binary SHA-256:
+  `a74ccc800288ac9aaa57d8e4a26e69441465465eaf3916f7d1af0202baab2892`;
+- QuickJS-NG binary SHA-256:
+  `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+
+The ninth v2 runtime unit removes redundant per-field `Rc` control-block
+allocations from ordinary object and array storage. Mutable state remains
+shared through the single outer `Rc`; rare object-only state such as generator,
+private-name, buffer, iterator-zip, and module-namespace storage is allocated
+lazily behind a boxed cell only when first used. Every JavaScript object and
+array is still allocated on every source iteration, with the same property and
+prototype behavior.
+
+A focused two-case three-role run made all 18 measurements eligible.
+`object_allocation` candidate medians were
+3031.43/3059.43/3072.79 ns/op versus 3455.98/3446.27/3435.55 for the base and
+173.398/173.205/173.249 for QuickJS-NG. `array_allocation` measured
+273.167/271.670/273.864 ns/op versus 516.661/511.610/517.823 for the base and
+160.026/159.085/158.555 for QuickJS-NG. The changes therefore reduced real
+object and array allocation paths to 0.8864x and 0.5295x of the preceding base,
+respectively. They remain 17.627x and 1.7140x of QuickJS-NG, so this structural
+improvement does not by itself satisfy the allocation-family ceiling. All six
+N/2N ratios were between 0.95221 and 1.00745 with exact checksums.
+
+Value-storage allocation bindings:
+
+- run ID: `bf7a8fe6-a079-4abf-b063-66e9ba805d4a`;
+- raw JSONL SHA-256:
+  `58bba64cbec109b5868a3b6062fe773a3f11ba23492d9058cce819985c60d748`;
+- manifest SHA-256:
+  `316e9b90c415e07573f7e7674c8d1f2602279dcc30173e1ccc0f67b0008e18d1`;
+- candidate binary SHA-256:
+  `5f5fc46bc7f989741346d5ff705dca573698fad10b3d74e463c07e974fc8561f`;
+- base binary SHA-256:
+  `51789c083e2484eff3fe303dc6f87367710a644f683c7a85e9b720cfccc2175f`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

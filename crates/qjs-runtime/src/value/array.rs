@@ -16,16 +16,16 @@ const MAX_ARRAY_INDEX: usize = u32::MAX as usize - 1;
 pub struct ArrayRef(Rc<ArrayData>);
 
 struct ArrayData {
-    elements: Rc<RefCell<Vec<Value>>>,
-    holes: Rc<RefCell<BTreeSet<usize>>>,
-    properties: Rc<RefCell<HashMap<String, Property>>>,
-    symbol_properties: Rc<RefCell<Vec<(ObjectRef, Property)>>>,
-    length: Rc<Cell<usize>>,
-    length_writable: Rc<Cell<bool>>,
-    extensible: Rc<Cell<bool>>,
-    sealed: Rc<Cell<bool>>,
-    frozen: Rc<Cell<bool>>,
-    prototype: Rc<RefCell<Option<Option<Prototype>>>>,
+    elements: RefCell<Vec<Value>>,
+    holes: RefCell<BTreeSet<usize>>,
+    properties: RefCell<HashMap<String, Property>>,
+    symbol_properties: RefCell<Vec<(ObjectRef, Property)>>,
+    length: Cell<usize>,
+    length_writable: Cell<bool>,
+    extensible: Cell<bool>,
+    sealed: Cell<bool>,
+    frozen: Cell<bool>,
+    prototype: RefCell<Option<Option<Prototype>>>,
 }
 
 impl ArrayRef {
@@ -35,16 +35,16 @@ impl ArrayRef {
 
     pub(crate) fn new_with_length(length: usize) -> Self {
         Self(Rc::new(ArrayData {
-            elements: Rc::new(RefCell::new(Vec::new())),
-            holes: Rc::new(RefCell::new(BTreeSet::new())),
-            properties: Rc::new(RefCell::new(HashMap::new())),
-            symbol_properties: Rc::new(RefCell::new(Vec::new())),
-            length: Rc::new(Cell::new(length)),
-            length_writable: Rc::new(Cell::new(true)),
-            extensible: Rc::new(Cell::new(true)),
-            sealed: Rc::new(Cell::new(false)),
-            frozen: Rc::new(Cell::new(false)),
-            prototype: Rc::new(RefCell::new(None)),
+            elements: RefCell::new(Vec::new()),
+            holes: RefCell::new(BTreeSet::new()),
+            properties: RefCell::new(HashMap::new()),
+            symbol_properties: RefCell::new(Vec::new()),
+            length: Cell::new(length),
+            length_writable: Cell::new(true),
+            extensible: Cell::new(true),
+            sealed: Cell::new(false),
+            frozen: Cell::new(false),
+            prototype: RefCell::new(None),
         }))
     }
 
@@ -58,16 +58,16 @@ impl ArrayRef {
             (elements, holes)
         };
         Self(Rc::new(ArrayData {
-            elements: Rc::new(RefCell::new(elements)),
-            holes: Rc::new(RefCell::new(holes)),
-            properties: Rc::new(RefCell::new(HashMap::new())),
-            symbol_properties: Rc::new(RefCell::new(Vec::new())),
-            length: Rc::new(Cell::new(length)),
-            length_writable: Rc::new(Cell::new(true)),
-            extensible: Rc::new(Cell::new(true)),
-            sealed: Rc::new(Cell::new(false)),
-            frozen: Rc::new(Cell::new(false)),
-            prototype: Rc::new(RefCell::new(None)),
+            elements: RefCell::new(elements),
+            holes: RefCell::new(holes),
+            properties: RefCell::new(HashMap::new()),
+            symbol_properties: RefCell::new(Vec::new()),
+            length: Cell::new(length),
+            length_writable: Cell::new(true),
+            extensible: Cell::new(true),
+            sealed: Cell::new(false),
+            frozen: Cell::new(false),
+            prototype: RefCell::new(None),
         }))
     }
 

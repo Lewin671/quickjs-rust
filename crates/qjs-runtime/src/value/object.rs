@@ -1,5 +1,5 @@
 use std::{
-    cell::{Cell, RefCell},
+    cell::{Cell, OnceCell, RefCell},
     collections::HashMap,
     fmt,
     rc::{Rc, Weak},
@@ -12,6 +12,10 @@ use super::{Property, Value};
 
 type NamespaceBindingCell = DynamicBindings;
 type NamespaceAliasMap = HashMap<String, (NamespaceBindingCell, String)>;
+
+fn lazy_cell<T>(cell: &OnceCell<Box<RefCell<T>>>, init: impl FnOnce() -> T) -> &RefCell<T> {
+    cell.get_or_init(|| Box::new(RefCell::new(init()))).as_ref()
+}
 
 /// Result of probing one ordinary object's string-keyed storage for the VM
 /// direct-get path. A data hit clones only its value; descriptors that need
@@ -193,22 +197,22 @@ enum SymbolBrand {
 }
 
 struct ObjectData {
-    properties: Rc<RefCell<HashMap<String, Property>>>,
+    properties: RefCell<HashMap<String, Property>>,
     /// Invalidates monomorphic named-read caches whenever an own string
     /// property's descriptor or value changes.
     property_revision: Cell<u64>,
-    property_order: Rc<RefCell<Vec<String>>>,
+    property_order: RefCell<Vec<String>>,
     /// Count of own string keys that parse as array indices. Maintained as keys
     /// are added and removed so `has_own_index_property` is an O(1) check; this
     /// keeps the `array[i] = x` fast path from scanning a prototype's keys on
     /// every write.
-    index_property_count: Rc<Cell<usize>>,
-    symbol_properties: Rc<RefCell<Vec<(ObjectRef, Property)>>>,
-    extensible: Rc<Cell<bool>>,
-    prototype: Rc<RefCell<Option<Prototype>>>,
-    to_string_tag: Rc<RefCell<Option<String>>>,
-    raw_json: Rc<Cell<bool>>,
-    array_prototype_exotic: Rc<Cell<bool>>,
+    index_property_count: Cell<usize>,
+    symbol_properties: RefCell<Vec<(ObjectRef, Property)>>,
+    extensible: Cell<bool>,
+    prototype: RefCell<Option<Prototype>>,
+    to_string_tag: RefCell<Option<String>>,
+    raw_json: Cell<bool>,
+    array_prototype_exotic: Cell<bool>,
     /// Whether this object has the TypedArray internal slots. Keep the brand
     /// outside string-keyed property storage so ordinary property reads can
     /// reject the integer-indexed exotic path without a HashMap probe.
@@ -217,35 +221,36 @@ struct ObjectData {
     /// Keep the primitive/boxed distinction outside string-keyed storage so
     /// ubiquitous symbol checks do not probe the property HashMap.
     symbol_brand: Cell<SymbolBrand>,
-    immutable_prototype_exotic: Rc<Cell<bool>>,
-    module_namespace_exotic: Rc<Cell<bool>>,
-    module_namespace_bindings: Rc<RefCell<Option<ModuleNamespaceBindings>>>,
+    immutable_prototype_exotic: Cell<bool>,
+    module_namespace_exotic: Cell<bool>,
+    module_namespace_bindings: OnceCell<Box<RefCell<Option<ModuleNamespaceBindings>>>>,
     /// Generator [[GeneratorState]] for generator objects; `None` for ordinary
     /// objects. Lazily allocated so non-generator objects pay only one `Rc`.
-    generator_state: Rc<RefCell<Option<crate::bytecode::GeneratorState>>>,
+    generator_state: OnceCell<Box<RefCell<Option<crate::bytecode::GeneratorState>>>>,
     /// Async-generator internal state (the [[AsyncGeneratorQueue]] of pending
     /// requests plus the draining flag) for async generator objects; `None` for
     /// every other object.
-    async_generator_state: Rc<RefCell<Option<crate::async_generator::AsyncGeneratorInternal>>>,
+    async_generator_state:
+        OnceCell<Box<RefCell<Option<crate::async_generator::AsyncGeneratorInternal>>>>,
     /// Private-name state: per-object storage (fields and brands) and, for class
     /// prototype objects, the private environment their members resolve `#x`
     /// references through. Lazily populated.
-    private_state: Rc<RefCell<crate::private::PrivateState>>,
+    private_state: OnceCell<Box<RefCell<crate::private::PrivateState>>>,
     /// Opaque byte storage for ArrayBuffer objects. The public ArrayBuffer brand
     /// remains a hidden property; bytes live here so typed-array element access
     /// does not have to encode and decode a string on every read or write.
-    internal_bytes: Rc<RefCell<Option<Vec<u8>>>>,
+    internal_bytes: OnceCell<Box<RefCell<Option<Vec<u8>>>>>,
     /// Iterator.zip helper internal state. Ordinary objects hold `None`; zip
     /// helpers store their records here so advancement does not round-trip
     /// through observable-looking property storage.
-    iterator_zip_state: Rc<RefCell<Option<crate::iterator::ZipState>>>,
+    iterator_zip_state: OnceCell<Box<RefCell<Option<crate::iterator::ZipState>>>>,
     /// Cross-thread backing for a `SharedArrayBuffer` under the Test262
     /// `$262.agent` harness. When present, the buffer's bytes live in this
     /// `Arc`-shared store (so a worker agent on another OS thread observes the
     /// same memory) instead of `internal_bytes`. Gated so the default build's
     /// object layout is unchanged.
     #[cfg(feature = "agents")]
-    shared_backing: Rc<RefCell<Option<crate::array_buffer::SharedBackingRef>>>,
+    shared_backing: OnceCell<Box<RefCell<Option<crate::array_buffer::SharedBackingRef>>>>,
 }
 
 impl fmt::Debug for ObjectRef {
@@ -295,40 +300,40 @@ impl ObjectRef {
             .filter(|key| is_array_index_key(key))
             .count();
         Self(Rc::new(ObjectData {
-            properties: Rc::new(RefCell::new(
+            properties: RefCell::new(
                 properties
                     .into_iter()
                     .map(|(key, value)| (key, Property::enumerable(value)))
                     .collect(),
-            )),
+            ),
             property_revision: Cell::new(0),
-            property_order: Rc::new(RefCell::new(property_order)),
-            index_property_count: Rc::new(Cell::new(index_property_count)),
-            symbol_properties: Rc::new(RefCell::new(Vec::new())),
-            extensible: Rc::new(Cell::new(true)),
-            prototype: Rc::new(RefCell::new(prototype)),
-            to_string_tag: Rc::new(RefCell::new(None)),
-            raw_json: Rc::new(Cell::new(false)),
-            array_prototype_exotic: Rc::new(Cell::new(false)),
+            property_order: RefCell::new(property_order),
+            index_property_count: Cell::new(index_property_count),
+            symbol_properties: RefCell::new(Vec::new()),
+            extensible: Cell::new(true),
+            prototype: RefCell::new(prototype),
+            to_string_tag: RefCell::new(None),
+            raw_json: Cell::new(false),
+            array_prototype_exotic: Cell::new(false),
             typed_array_exotic: Cell::new(false),
             symbol_brand: Cell::new(SymbolBrand::None),
-            immutable_prototype_exotic: Rc::new(Cell::new(false)),
-            module_namespace_exotic: Rc::new(Cell::new(false)),
-            module_namespace_bindings: Rc::new(RefCell::new(None)),
-            generator_state: Rc::new(RefCell::new(None)),
-            async_generator_state: Rc::new(RefCell::new(None)),
-            private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
-            internal_bytes: Rc::new(RefCell::new(None)),
-            iterator_zip_state: Rc::new(RefCell::new(None)),
+            immutable_prototype_exotic: Cell::new(false),
+            module_namespace_exotic: Cell::new(false),
+            module_namespace_bindings: OnceCell::new(),
+            generator_state: OnceCell::new(),
+            async_generator_state: OnceCell::new(),
+            private_state: OnceCell::new(),
+            internal_bytes: OnceCell::new(),
+            iterator_zip_state: OnceCell::new(),
             #[cfg(feature = "agents")]
-            shared_backing: Rc::new(RefCell::new(None)),
+            shared_backing: OnceCell::new(),
         }))
     }
 
     /// The generator [[GeneratorState]] cell for this object. Non-generator
     /// objects hold `None`; generator objects store their resumable state here.
-    pub(crate) fn generator_state(&self) -> &Rc<RefCell<Option<crate::bytecode::GeneratorState>>> {
-        &self.0.generator_state
+    pub(crate) fn generator_state(&self) -> &RefCell<Option<crate::bytecode::GeneratorState>> {
+        lazy_cell(&self.0.generator_state, || None)
     }
 
     /// The async-generator internal-state cell for this object. Ordinary objects
@@ -336,14 +341,13 @@ impl ObjectRef {
     /// request queue and draining flag here.
     pub(crate) fn async_generator_state(
         &self,
-    ) -> &Rc<RefCell<Option<crate::async_generator::AsyncGeneratorInternal>>> {
-        &self.0.async_generator_state
+    ) -> &RefCell<Option<crate::async_generator::AsyncGeneratorInternal>> {
+        lazy_cell(&self.0.async_generator_state, || None)
     }
 
     /// Returns the object's private-name storage, creating it on first use.
     pub(crate) fn private_storage(&self) -> PrivateStorage {
-        self.0
-            .private_state
+        lazy_cell(&self.0.private_state, crate::private::PrivateState::default)
             .borrow_mut()
             .storage
             .get_or_insert_with(PrivateStorage::new)
@@ -352,60 +356,71 @@ impl ObjectRef {
 
     /// Sets the private environment carried by a class prototype object.
     pub(crate) fn set_private_environment(&self, environment: PrivateEnvironment) {
-        self.0.private_state.borrow_mut().environment = Some(environment);
+        lazy_cell(&self.0.private_state, crate::private::PrivateState::default)
+            .borrow_mut()
+            .environment = Some(environment);
     }
 
     /// Returns the private environment carried by this object, if any.
     pub(crate) fn private_environment(&self) -> Option<PrivateEnvironment> {
-        self.0.private_state.borrow().environment.clone()
+        lazy_cell(&self.0.private_state, crate::private::PrivateState::default)
+            .borrow()
+            .environment
+            .clone()
     }
 
     pub(crate) fn internal_bytes(&self) -> Option<Vec<u8>> {
-        self.0.internal_bytes.borrow().clone()
+        lazy_cell(&self.0.internal_bytes, || None).borrow().clone()
     }
 
     pub(crate) fn with_internal_bytes<T>(&self, f: impl FnOnce(Option<&[u8]>) -> T) -> T {
-        let bytes = self.0.internal_bytes.borrow();
+        let bytes = lazy_cell(&self.0.internal_bytes, || None).borrow();
         f(bytes.as_deref())
     }
 
     pub(crate) fn set_internal_bytes(&self, bytes: Vec<u8>) {
-        *self.0.internal_bytes.borrow_mut() = Some(bytes);
+        *lazy_cell(&self.0.internal_bytes, || None).borrow_mut() = Some(bytes);
     }
 
     pub(crate) fn clear_internal_bytes(&self) {
-        *self.0.internal_bytes.borrow_mut() = None;
+        *lazy_cell(&self.0.internal_bytes, || None).borrow_mut() = None;
     }
 
     pub(crate) fn with_internal_bytes_mut<T>(
         &self,
         f: impl FnOnce(&mut Vec<u8>) -> T,
     ) -> Option<T> {
-        self.0.internal_bytes.borrow_mut().as_mut().map(f)
+        lazy_cell(&self.0.internal_bytes, || None)
+            .borrow_mut()
+            .as_mut()
+            .map(f)
     }
 
     /// The cross-thread `SharedArrayBuffer` backing for this object, if one was
     /// installed (agents harness only).
     #[cfg(feature = "agents")]
     pub(crate) fn shared_backing(&self) -> Option<crate::array_buffer::SharedBackingRef> {
-        self.0.shared_backing.borrow().clone()
+        lazy_cell(&self.0.shared_backing, || None).borrow().clone()
     }
 
     /// Installs the cross-thread `SharedArrayBuffer` backing for this object.
     #[cfg(feature = "agents")]
     pub(crate) fn set_shared_backing(&self, backing: crate::array_buffer::SharedBackingRef) {
-        *self.0.shared_backing.borrow_mut() = Some(backing);
+        *lazy_cell(&self.0.shared_backing, || None).borrow_mut() = Some(backing);
     }
 
     pub(crate) fn set_iterator_zip_state(&self, state: crate::iterator::ZipState) {
-        *self.0.iterator_zip_state.borrow_mut() = Some(state);
+        *lazy_cell(&self.0.iterator_zip_state, || None).borrow_mut() = Some(state);
     }
 
     pub(crate) fn with_iterator_zip_state_mut<T>(
         &self,
         f: impl FnOnce(&mut crate::iterator::ZipState) -> T,
     ) -> Option<T> {
-        self.0.iterator_zip_state.borrow_mut().as_mut().map(f)
+        lazy_cell(&self.0.iterator_zip_state, || None)
+            .borrow_mut()
+            .as_mut()
+            .map(f)
     }
 
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
@@ -479,7 +494,7 @@ impl ObjectRef {
     }
 
     pub(crate) fn set_module_namespace_bindings(&self, bindings: ModuleNamespaceBindings) {
-        *self.0.module_namespace_bindings.borrow_mut() = Some(bindings);
+        *lazy_cell(&self.0.module_namespace_bindings, || None).borrow_mut() = Some(bindings);
     }
 
     pub(crate) fn get(&self, key: &str) -> Option<Value> {
@@ -719,7 +734,9 @@ impl ObjectRef {
     pub(crate) fn own_property(&self, key: &str) -> Option<Property> {
         let mut property = self.0.properties.borrow().get(key).cloned()?;
         if self.0.module_namespace_exotic.get()
-            && let Some(bindings) = self.0.module_namespace_bindings.borrow().as_ref()
+            && let Some(bindings) = lazy_cell(&self.0.module_namespace_bindings, || None)
+                .borrow()
+                .as_ref()
             && let Some(value) = bindings.value_for_export(key)
         {
             property.value = value.clone();
@@ -796,7 +813,9 @@ impl ObjectRef {
             Some(property) => property,
             None => return Ok(None),
         };
-        if let Some(bindings) = self.0.module_namespace_bindings.borrow().as_ref()
+        if let Some(bindings) = lazy_cell(&self.0.module_namespace_bindings, || None)
+            .borrow()
+            .as_ref()
             && let Some(value) = bindings.value_for_export(key)
         {
             if value.is_uninitialized_lexical_marker() {
