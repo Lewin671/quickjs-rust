@@ -92,7 +92,7 @@ eligible measurement windows, and N/2N linearity for both cases. The current
 measurement identity is `quickjs-measurement-protocol-v6`, protocol SHA-256
 `9cbd57169707fe1c2b691c340a04b60a4f127c6140b8df7823407299fb60c2b3`,
 and checked-in manifest SHA-256
-`0eb67f3d13602f18bb280ae73094374a8d628971e5358ee9baa984a2d74d5d54`.
+`4456d56d48c68417afcb980c71486ac77465834aee3da032763256835a8775b8`.
 
 ## Initial Broad V2 Baseline
 
@@ -214,6 +214,17 @@ a timer-limited diagnostic. Independent 100,000,000/200,000,000 runs consumed
 work and requiring the same measurement-capacity follow-up before a formal
 broad run.
 
+The follow-up raises only the `array_index_of` iteration ceiling from
+20,000,000 to 400,000,000. This gives the optimized candidate and QuickJS-NG
+enough capacity to reach the 500 ms window and run the required N/2N
+diagnostic; the workload, checksum, operation count, warmup, timeout, and every
+other case remain unchanged. A three-block exact-case confirmation made all
+nine measurements eligible: candidate medians were 5.3114/5.3163/5.3141
+ns/op, the frozen base measured 1,957.95/1,964.78/1,951.20 ns/op, and
+QuickJS-NG measured 48.9590/48.9877/49.1140 ns/op. The paired geometric ratios
+were 0.002714x candidate/base and 0.108403x candidate/QuickJS-NG. All three
+N/2N ratios stayed within the frozen 0.85..1.15 bounds.
+
 Array-search diagnostic bindings:
 
 - run ID: `5303a382-a058-4c2b-8190-f1052b196349`;
@@ -221,6 +232,14 @@ Array-search diagnostic bindings:
   `b13c930f28059a0b55645a17180a3942b3424cacb02c5f6cd021c7dfa33de869`;
 - candidate binary SHA-256:
   `e90cedb609107af91fce44161309dd223e8379431584135d5fafd163c86f1faa`.
+
+Array-search capacity-confirmation bindings:
+
+- run ID: `51ee7614-e246-4035-a966-b9a8deea5ede`;
+- raw JSONL SHA-256:
+  `3eefd91c9f2bae62606c3de837f502dfb330e22eb69cf20e61075c4e628af397`;
+- dynamic manifest SHA-256:
+  `5c3413f899e6de879206be146f86bd548934ec051527228e4797ccd6ba08b4e3`.
 
 ## Historical Broad V1 Baseline
 
