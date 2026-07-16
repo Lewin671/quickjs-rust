@@ -52,8 +52,8 @@ complete.
 
 - [x] B1 freeze broad v2 workload, exact case/family inventory, manifest,
   protocol hashes, hosted preview contract, and documentation.
-- [ ] B2 record the first complete broad v2 three-role local baseline and identify the
-  largest family/case gaps without excluding weak cases.
+- [x] B2 record the first complete broad v2 three-role local baseline and
+  identify the largest family/case gaps without excluding weak cases.
 - [ ] B3 optimize structural bottlenecks in separately verified commits,
   recording broad candidate/base and candidate/QuickJS-NG evidence each time.
 - [ ] B4 reach <= 0.50x overall and <= 1.00x for every critical family.
@@ -91,9 +91,58 @@ diagnostics at the v2 contract show exact operation/checksum agreement,
 eligible measurement windows, and N/2N linearity for both cases. The current
 measurement identity is `quickjs-measurement-protocol-v6`, protocol SHA-256
 `9cbd57169707fe1c2b691c340a04b60a4f127c6140b8df7823407299fb60c2b3`,
-and dynamic manifest SHA-256
+and checked-in manifest SHA-256
 `65008b4e1f708f87afdfa0a4f653f864dfd1cbf53bc8bb30c3887a753de5f40a`.
-A complete v2 baseline is required before further runtime optimization claims.
+
+## Initial Broad V2 Baseline
+
+The first complete v2 baseline was recorded at commit
+`4297443e2ceda55eba7fc605dfb9881b993a1c7e`, seed `20250713`, against pinned
+QuickJS-NG `f7830186043e4488f2998759d60a514faf07cbc9`. Candidate and base were the
+same generic-CPU release binary. Their A/A ratio was **1.00291x**, with a 95%
+confidence interval of [1.00145x, 1.00492x]; the three-block run is explicitly
+`inconclusive`/`non_claim`, so this small same-binary offset is retained rather
+than treated as an engine change. All 225 measurements were eligible, all 75
+N/2N checks passed, and all three blocks were valid.
+
+Candidate/QuickJS-NG is **2.31261x** overall, with a 95% confidence interval of
+[2.30569x, 2.31630x]. Reaching 0.50x requires a further 4.63x geometric-mean
+improvement (78.4% lower wall ns/op) without allowing any critical family to
+exceed 1.00x.
+
+| Critical family | Candidate / QuickJS-NG |
+| --- | ---: |
+| builtin | 39.4847x |
+| string | 10.1758x |
+| control | 8.1150x |
+| allocation | 7.5084x |
+| property | 5.6092x |
+| array | 0.9960x |
+| call | 0.7741x |
+| binding | 0.5978x |
+
+The largest current case cliffs are recurrence-protected `property_write`
+61.7146x, `array_index_of` 40.0751x, `math_abs` 38.9030x,
+`property_dynamic_read` 32.1911x, and `top_level_function_call` 30.4638x.
+`property_write` measured 1,322.99 ns/op for the candidate and 21.44 ns/op for
+QuickJS-NG, with passing linearity for all roles. This replaces the rejected
+constant-time result with a credible sustained-work measurement.
+
+Evidence bindings:
+
+- run ID: `b59e142d-be12-4ac3-beb8-839c0996293d`;
+- measurement protocol SHA-256:
+  `9cbd57169707fe1c2b691c340a04b60a4f127c6140b8df7823407299fb60c2b3`;
+- dynamic manifest SHA-256:
+  `d886d709cec2d2ccb11bb9c6617aadd6a44fd42c244ec2448f06b22bf79f3c55`;
+- raw JSONL SHA-256:
+  `51b5b025a593cf860236e4c5c3a672480b95e32eaa56a9d3dfee818d15ff4184`;
+- report JSON SHA-256:
+  `a0290794d1cfd9ce906ac12668b289cfcc64ee67d20c971dbb7c05b167d98c50`;
+- candidate/base binary SHA-256:
+  `95f310fe996740d4d0031b6c3d0742e23114446ef806e90c371e3898911692bb`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
 ## Historical Broad V1 Baseline
 
