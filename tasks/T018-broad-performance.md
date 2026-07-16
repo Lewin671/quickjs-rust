@@ -176,6 +176,22 @@ Both runs used seed `20250713`, the frozen measurement protocol
 `b2f2e85343c1fbe2bb4bc58d3540a1a666cab85b71118e45e019400541ee75c6`,
 and pinned QuickJS-NG `f7830186043e4488f2998759d60a514faf07cbc9`.
 
+Commit `6e4c4d3fc8923f920face6c6989fa0f58b42f435` added a direct named-property
+store and an existing-own-data-property update path. Against
+`64ba9361eede0b06ce5cccd0b9fb790de0738f7f`, the complete broad ratio was
+**0.93998x** with a 95% confidence interval of [0.93608x, 0.94336x]. The
+targeted `property_write` case fell to 0.30284x candidate/base and 112.85674x
+candidate/QuickJS-NG; the property family fell from 10.16763x to 6.84045x.
+Candidate/QuickJS-NG reached **2.38021x** overall with a 95% confidence interval
+of [2.38021x, 2.38670x]. All 225 formal measurements were valid, all 75
+linearity probes passed, and all three blocks were valid. Run ID:
+`aa330f72-d5df-4a11-877a-a15dbf75223f`; candidate binary SHA-256:
+`95f310fe996740d4d0031b6c3d0742e23114446ef806e90c371e3898911692bb`;
+raw SHA-256:
+`3df3e6b752501855a9422d9a947f5fc8902fc85f2f1215d9e539adbac364243f`;
+report SHA-256:
+`3b6d44a8ab13bae223d8e0b59981b80b6ae5e45b1e10b35fba2d0d11f6285ed7`.
+
 ## Notes
 
 Broad v1 is still a first-party micro portfolio, not a substitute for an
