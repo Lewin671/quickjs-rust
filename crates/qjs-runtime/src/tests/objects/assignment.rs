@@ -26,6 +26,23 @@ fn evaluates_member_assignment() {
 }
 
 #[test]
+fn repeated_named_own_data_writes_preserve_the_final_state() {
+    assert_eq!(
+        eval(
+            "var object = { a: 0, b: 0, c: 0 }; var checksum = 0;
+             for (var i = 0; i < 1000; i++) {
+                 object.a = object.c + 1;
+                 object.b = object.a + 1;
+                 object.c = object.b - 1;
+                 checksum += object.c;
+             }
+             checksum + ':' + object.a + ':' + object.b + ':' + object.c;"
+        ),
+        Ok(Value::String("500500:1000:1001:1000".to_owned().into()))
+    );
+}
+
+#[test]
 fn named_member_assignment_keeps_the_reference_selected_before_the_rhs() {
     assert_eq!(
         eval(

@@ -241,6 +241,24 @@ Array-search capacity-confirmation bindings:
 - dynamic manifest SHA-256:
   `5c3413f899e6de879206be146f86bd548934ec051527228e4797ccd6ba08b4e3`.
 
+The third v2 runtime unit removes a redundant full `CallEnv` snapshot from
+named writes to existing ordinary own data properties. Global-object writes,
+missing properties, accessors, read-only descriptors, module namespaces, and
+all non-object receivers keep the observable generic path. A candidate-only
+three-block diagnostic measured `property_write` at
+185.404/183.714/183.988 ns/op, down from the frozen 1,322.99 ns/op baseline;
+all formal samples were eligible and the N/2N normalized ratio was 0.98968.
+This is an intermediate generic-path improvement, not yet the specialized
+recurrent-loop result needed to beat QuickJS-NG's 21.44 ns/op.
+
+Own-data-write diagnostic bindings:
+
+- run ID: `a82a4ea7-e5a6-4ff0-a7e8-b4764c60d756`;
+- raw JSONL SHA-256:
+  `0f5fbd2d95f654d5d0ceddc31984ae018d61473b77e9f42275c30210e78b7b51`;
+- candidate binary SHA-256:
+  `116b5e74d2da88f9ddaee111eef431fe2f89c42c3a026e720e3ff393b3d3cb15`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

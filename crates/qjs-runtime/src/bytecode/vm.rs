@@ -14,6 +14,7 @@ use crate::{
     SUPER_CONSTRUCTOR_BINDING, Value, construct_function,
     function::{CallEnv, CompiledUserFunction, DynamicBindings, Realm, Upvalue, new_realm},
     initialize_builtins, is_truthy, to_js_string_with_env, to_property_key_value,
+    value::OwnDataPropertyWrite,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -1295,6 +1296,27 @@ impl<'a> Vm<'a> {
             return Ok(());
         }
         let updates_global_binding = self.is_global_object(&object);
+        if !updates_global_binding
+            && let (Value::Object(object), PropertyKey::String(key)) = (&object, &key)
+        {
+            match object.write_existing_own_data_property(key, &value) {
+                OwnDataPropertyWrite::Written => {
+                    self.stack.push(value);
+                    return Ok(());
+                }
+                OwnDataPropertyWrite::ReadOnly => {
+                    if is_strict {
+                        return Err(RuntimeError {
+                            thrown: None,
+                            message: "TypeError: cannot set property".to_owned(),
+                        });
+                    }
+                    self.stack.push(value);
+                    return Ok(());
+                }
+                OwnDataPropertyWrite::NeedsSlowPath => {}
+            }
+        }
         let mut env = self.current_env();
         let wrote_data = set_property_key(object, key.clone(), value.clone(), &mut env)?;
         self.apply_env(env);
