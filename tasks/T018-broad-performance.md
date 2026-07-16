@@ -1087,6 +1087,55 @@ Object cold-state bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+The corresponding trusted-main hosted run `29517499253` completed 225/225
+formal measurements, passed all 75 engine/case linearity diagnostics, and
+retained all three blocks. Candidate/base was 0.99990x overall with a 95%
+confidence interval of [0.99937x, 1.00008x], so hosted noise does not establish
+an overall runtime change from the cold-state unit. Candidate/QuickJS-NG was
+**0.39252x overall** with a 95% confidence interval of
+[0.39134x, 0.39302x]. Every critical family except allocation was below 1.0;
+allocation remained 4.03263x with a 95% confidence interval of
+[3.98611x, 4.06889x]. Run ID:
+`2c10dc1a-d06c-4a4f-8ac6-10b30806e9a4`; raw JSONL SHA-256:
+`fb94e6132b864169e0dc013859fd30109189bc9afc9043b67507fcfadeaebbc3`;
+report JSON SHA-256:
+`237c6d8eaafec6755570a25c50bad377731e2903fd64868263fd92e88e908f17`.
+
+The seventeenth v2 runtime unit halves the common `Value` layout from 32 to
+16 bytes without using unsafe representation tricks. Immutable BigInts now
+live behind a shared `Rc`, and Map/Set storage plus their ordinary-object
+facade are each grouped behind one shared data pointer. BigInt operations
+unwrap uniquely owned values where possible, while clones of BigInt, Map, and
+Set values become pointer copies. A layout regression test fixes `Value` at
+two machine words. This reduces every `Vec<Value>`, argument/local slot array,
+array element buffer, and object property pair; it does not remove any
+portfolio allocation or change operation/checksum accounting.
+
+A focused three-role run over all three allocation cases made all 27 formal
+measurements eligible and passed all nine engine/case linearity diagnostics
+(72/72 predetermined samples). Relative to the immediately preceding runtime,
+`object_allocation` was 0.83728x, `array_allocation` was 0.86574x, and
+`closure_allocation_call` was 0.99450x. Their equal-case allocation aggregate
+was **0.89664x base**, with a diagnostic 95% interval of
+[0.89229x, 0.91201x]. On this macOS profile the resulting allocation family
+was still 1.75399x QuickJS-NG, so the critical-family goal remains open and
+requires a deeper allocation/GC architecture change. These are complete
+focused raw results, not a hosted broad claim.
+
+Compact Value-layout bindings:
+
+- run ID: `1f959b85-d78d-4b9c-8050-79e81ff25eae`;
+- raw JSONL SHA-256:
+  `fdc5b74e6e60a8c581abfd1f6876dd582a95c6fbee3bbc8041dbedb2e1101007`;
+- manifest SHA-256:
+  `5105e4923cb104f6608e935f73a35e9ab763562c57c7eea8cb0169d1710777ec`;
+- candidate binary SHA-256:
+  `08a7815041cce73d1f8c8c654083718bdad11a3f5bd77738fa549c328c8ed440`;
+- preceding-runtime binary SHA-256:
+  `7f393c26c3128f0c301c03b2adbd8b36a50c6407a1ae5e843995dc5e4ef7fbf9`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

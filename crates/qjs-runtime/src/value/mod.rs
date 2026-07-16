@@ -28,8 +28,9 @@ use crate::{Function, proxy::ProxyRef, string};
 pub enum Value {
     /// Number value.
     Number(f64),
-    /// BigInt value.
-    BigInt(BigInt),
+    /// BigInt value. JavaScript BigInts are immutable, so sharing keeps the
+    /// common `Value` representation pointer-sized without observable aliasing.
+    BigInt(Rc<BigInt>),
     /// String value. Held behind `Rc<String>` so cloning a string `Value`
     /// (which happens on every property read, parameter pass, and environment
     /// lookup) is a refcount bump rather than a full heap copy. JavaScript
@@ -95,6 +96,10 @@ impl PartialEq for Value {
 }
 
 impl Value {
+    pub(crate) fn bigint(value: BigInt) -> Self {
+        Self::BigInt(Rc::new(value))
+    }
+
     pub(crate) fn is_uninitialized_lexical_marker(&self) -> bool {
         matches!(self, Self::Function(function) if function.is_uninitialized_lexical_marker())
     }
@@ -125,5 +130,15 @@ impl Value {
             }
             _ => self.same_value(other),
         }
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::Value;
+
+    #[test]
+    fn value_stays_two_machine_words() {
+        assert_eq!(std::mem::size_of::<Value>(), 16);
     }
 }

@@ -101,7 +101,7 @@ pub(crate) fn native_bigint(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    Ok(Value::BigInt(value))
+    Ok(Value::bigint(value))
 }
 
 pub(crate) fn native_bigint_as_int_n(
@@ -117,7 +117,7 @@ pub(crate) fn native_bigint_as_int_n(
         env,
     )?;
     if bits == 0 {
-        return Ok(Value::BigInt(BigInt::zero()));
+        return Ok(Value::bigint(BigInt::zero()));
     }
     let modulus = BigInt::one() << bits;
     let unsigned = modulo_bigint(value, &modulus);
@@ -127,7 +127,7 @@ pub(crate) fn native_bigint_as_int_n(
     } else {
         unsigned
     };
-    Ok(Value::BigInt(signed))
+    Ok(Value::bigint(signed))
 }
 
 pub(crate) fn native_bigint_as_uint_n(
@@ -143,10 +143,10 @@ pub(crate) fn native_bigint_as_uint_n(
         env,
     )?;
     if bits == 0 {
-        return Ok(Value::BigInt(BigInt::zero()));
+        return Ok(Value::bigint(BigInt::zero()));
     }
     let modulus = BigInt::one() << bits;
-    Ok(Value::BigInt(modulo_bigint(value, &modulus)))
+    Ok(Value::bigint(modulo_bigint(value, &modulus)))
 }
 
 pub(crate) fn native_bigint_prototype_to_string(
@@ -172,7 +172,7 @@ pub(crate) fn native_bigint_prototype_to_string(
 }
 
 pub(crate) fn native_bigint_prototype_value_of(this_value: Value) -> Result<Value, RuntimeError> {
-    Ok(Value::BigInt(this_bigint_value(this_value)?))
+    Ok(Value::bigint(this_bigint_value(this_value)?))
 }
 
 pub(crate) fn parse_bigint_literal(raw: &str) -> Result<BigInt, RuntimeError> {
@@ -199,7 +199,7 @@ pub(crate) fn is_bigint_object(object: &ObjectRef) -> bool {
 pub(crate) fn to_bigint(value: Value, env: &mut CallEnv) -> Result<BigInt, RuntimeError> {
     let primitive = to_primitive_with_hint(value, PreferredType::Number, env)?;
     match primitive {
-        Value::BigInt(value) => Ok(value),
+        Value::BigInt(value) => Ok(std::rc::Rc::unwrap_or_clone(value)),
         Value::Boolean(value) => Ok(BigInt::from(if value { 1 } else { 0 })),
         Value::Number(_) => Err(invalid_bigint_conversion()),
         Value::String(value) => {
@@ -284,12 +284,12 @@ fn parse_bigint_text(raw: &str, allow_separators: bool) -> Option<BigInt> {
 
 fn this_bigint_value(value: Value) -> Result<BigInt, RuntimeError> {
     match value {
-        Value::BigInt(value) => Ok(value),
+        Value::BigInt(value) => Ok(std::rc::Rc::unwrap_or_clone(value)),
         Value::Object(object) => match object.own_property(BIGINT_DATA_PROPERTY) {
             Some(Property {
                 value: Value::BigInt(value),
                 ..
-            }) => Ok(value),
+            }) => Ok(std::rc::Rc::unwrap_or_clone(value)),
             _ => Err(bigint_method_error("object")),
         },
         _ => Err(bigint_method_error("value")),

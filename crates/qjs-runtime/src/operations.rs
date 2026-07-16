@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, rc::Rc};
 
 use num_bigint::{BigInt, Sign};
 use num_traits::{ToPrimitive, Zero};
@@ -25,12 +25,12 @@ pub(crate) fn eval_unary(
         // returns a BigInt) uses the BigInt operation rather than ToNumber,
         // which would throw.
         UnaryOp::Minus => match to_numeric_with_env(argument, env)? {
-            Value::BigInt(value) => Ok(Value::BigInt(-value)),
+            Value::BigInt(value) => Ok(Value::bigint(-Rc::unwrap_or_clone(value))),
             Value::Number(value) => Ok(Value::Number(-value)),
             _ => unreachable!("ToNumeric yields a Number or BigInt"),
         },
         UnaryOp::BitwiseNot => match to_numeric_with_env(argument, env)? {
-            Value::BigInt(value) => Ok(Value::BigInt(!value)),
+            Value::BigInt(value) => Ok(Value::bigint(!Rc::unwrap_or_clone(value))),
             Value::Number(value) => Ok(Value::Number(f64::from(!to_int32_number(value)))),
             _ => unreachable!("ToNumeric yields a Number or BigInt"),
         },
@@ -185,6 +185,8 @@ fn eval_bigint_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, 
     let (Value::BigInt(left), Value::BigInt(right)) = (left, right) else {
         return Err(bigint_mix_error());
     };
+    let left = Rc::unwrap_or_clone(left);
+    let right = Rc::unwrap_or_clone(right);
     let value = match op {
         BinaryOp::Add => left + right,
         BinaryOp::Sub => left - right,
@@ -229,7 +231,7 @@ fn eval_bigint_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, 
         }
         _ => unreachable!("BigInt binary operator should be arithmetic or bitwise"),
     };
-    Ok(Value::BigInt(value))
+    Ok(Value::bigint(value))
 }
 
 fn bigint_left_shift(left: BigInt, right: BigInt) -> Result<BigInt, RuntimeError> {
@@ -324,9 +326,9 @@ fn abstract_eq(left: &Value, right: &Value, env: &mut CallEnv) -> Result<bool, R
         (left, Value::Null | Value::Undefined) if crate::html_dda::is_html_dda(left) => Ok(true),
         (Value::Null | Value::Undefined, right) if crate::html_dda::is_html_dda(right) => Ok(true),
         (Value::BigInt(left), Value::String(right))
-        | (Value::String(right), Value::BigInt(left)) => {
-            Ok(crate::bigint::parse_bigint_string_value(right).is_some_and(|value| &value == left))
-        }
+        | (Value::String(right), Value::BigInt(left)) => Ok(
+            crate::bigint::parse_bigint_string_value(right).is_some_and(|value| value == **left),
+        ),
         (Value::BigInt(left), Value::Number(right))
         | (Value::Number(right), Value::BigInt(left)) => Ok(number_bigint_eq(*right, left)),
         (Value::Number(_), Value::String(value)) => {
@@ -409,7 +411,7 @@ fn bigint_relational_operand(
         // exactly as a BigInt (no f64 precision loss); any other string is
         // undefined, modelled here by NaN so every comparison yields false.
         Value::String(value) => match crate::bigint::parse_bigint_string_value(value.trim()) {
-            Some(parsed) => BigIntComparable::BigInt(parsed),
+            Some(parsed) => BigIntComparable::BigInt(Rc::new(parsed)),
             None => BigIntComparable::Number(f64::NAN),
         },
         value => BigIntComparable::Number(to_number_with_env(value, env)?),
@@ -417,7 +419,7 @@ fn bigint_relational_operand(
 }
 
 enum BigIntComparable {
-    BigInt(BigInt),
+    BigInt(Rc<BigInt>),
     Number(f64),
 }
 

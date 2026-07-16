@@ -80,7 +80,7 @@ pub(crate) fn native_object(
             | Value::Proxy(_),
         ) => Ok(argument_values[0].clone()),
         Some(Value::Boolean(value)) => Ok(boxed_boolean(*value, env)),
-        Some(Value::BigInt(value)) => Ok(boxed_bigint(value.clone(), env)),
+        Some(Value::BigInt(value)) => Ok(boxed_bigint(value.as_ref().clone(), env)),
         Some(Value::Number(value)) => Ok(boxed_number(*value, env)),
         Some(Value::String(value)) => Ok(boxed_string(value, env)),
         _ if is_construct => Ok(this_value),
@@ -94,7 +94,7 @@ pub(crate) fn native_object(
 pub(crate) fn boxed_primitive(value: Value, env: &CallEnv) -> Option<Value> {
     match value {
         Value::Boolean(value) => Some(boxed_boolean(value, env)),
-        Value::BigInt(value) => Some(boxed_bigint(value, env)),
+        Value::BigInt(value) => Some(boxed_bigint(std::rc::Rc::unwrap_or_clone(value), env)),
         Value::Number(value) => Some(boxed_number(value, env)),
         Value::String(value) => Some(boxed_string(&value, env)),
         Value::Object(object) if symbol::is_symbol_primitive(&object) => {
@@ -106,7 +106,7 @@ pub(crate) fn boxed_primitive(value: Value, env: &CallEnv) -> Option<Value> {
 
 fn boxed_bigint(value: num_bigint::BigInt, env: &CallEnv) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), constructor_prototype("BigInt", env));
-    object.define_non_enumerable(BIGINT_DATA_PROPERTY.to_owned(), Value::BigInt(value));
+    object.define_non_enumerable(BIGINT_DATA_PROPERTY.to_owned(), Value::bigint(value));
     Value::Object(object)
 }
 

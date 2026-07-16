@@ -421,7 +421,7 @@ pub(crate) fn is_truthy(value: &Value) -> bool {
     }
     match value {
         Value::Number(number) => *number != 0.0 && !number.is_nan(),
-        Value::BigInt(value) => value != &num_bigint::BigInt::from(0),
+        Value::BigInt(value) => **value != num_bigint::BigInt::from(0),
         Value::String(value) => !value.is_empty(),
         Value::Boolean(value) => *value,
         Value::Null | Value::Undefined => false,
