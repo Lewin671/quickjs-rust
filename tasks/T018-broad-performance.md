@@ -92,7 +92,7 @@ eligible measurement windows, and N/2N linearity for both cases. The current
 measurement identity is `quickjs-measurement-protocol-v6`, protocol SHA-256
 `9cbd57169707fe1c2b691c340a04b60a4f127c6140b8df7823407299fb60c2b3`,
 and checked-in manifest SHA-256
-`60ee05ee125cabd670b49883281f5088cda4722e038e98ecf55a95d6f09f8341`.
+`841ddd12b3a5e7c99bdfd73bb8c5a599c151e1e09295948b1c509be905c13137`.
 
 ## Initial Broad V2 Baseline
 
@@ -337,6 +337,36 @@ Computed-read diagnostic bindings:
   `7c361e53500d8fadbbcf4ff6dc6cd59e79b5ed74d8d62a1ef332ef0ae9c99084`;
 - candidate binary SHA-256:
   `a0c28f7618ec54e61f48b4052ab3ecfaf3c24566ff00adcbf1ddf405c52f57bc`.
+
+The isolated capacity follow-up raises only `property_dynamic_read` and
+`array_dynamic_read` from 50,000,000 to 400,000,000 maximum iterations. Their
+linear checksum factors are respectively 6 and 10, so even the new maxima stay
+well inside JavaScript's exact safe-integer range; schema validation freezes
+that invariant. All 18 three-role formal measurements were eligible. Candidate
+`property_dynamic_read` measured 0.93761/0.93613/0.93755 ns/op versus
+697.89/699.29/698.65 for the frozen base and 21.888/22.064/21.951 for
+QuickJS-NG. Candidate `array_dynamic_read` measured
+0.94418/0.93938/0.94060 ns/op versus 92.371/92.525/92.598 for the base and
+15.934/15.848/16.155 for QuickJS-NG. Across these two focused cases and three
+paired blocks, the geometric ratios were 0.003695x candidate/base and 0.050132x
+candidate/QuickJS-NG. The six candidate/base/QuickJS-NG N/2N ratios were all
+inside the frozen bounds: 0.99234/0.99554, 0.99285/0.98333, and
+1.00006/0.99531 for property/array respectively. This is still focused
+two-case evidence, not a broad-portfolio claim.
+
+Computed-read capacity-confirmation bindings:
+
+- run ID: `1982c285-b22d-4866-bab7-2e2f0bd827dc`;
+- raw JSONL SHA-256:
+  `6e03f2737056a50dc5be343b88b3fd5aa7db6929138da7832707af0a3cd12c4b`;
+- manifest SHA-256:
+  `841ddd12b3a5e7c99bdfd73bb8c5a599c151e1e09295948b1c509be905c13137`;
+- candidate binary SHA-256:
+  `a0c28f7618ec54e61f48b4052ab3ecfaf3c24566ff00adcbf1ddf405c52f57bc`;
+- base binary SHA-256:
+  `fdf5db59c2cb5e1ae30f8eedffc01295cc91e7c45d936eb12e14c8510ff36158`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
 ## Historical Broad V1 Baseline
 
