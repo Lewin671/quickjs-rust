@@ -11,6 +11,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from .linearity import LINEARITY_SEQUENCE
 from .planning import measurement_plan
 from .raw_contract import (
     ENGINE_FIELDS,
@@ -47,7 +48,7 @@ class ValidatedRun:
     measurement_records: dict[tuple[str, str, int], dict[str, Any]]
     valid_blocks: tuple[int, ...]
     invalid_blocks: tuple[dict[str, Any], ...]
-    linearity: dict[tuple[str, str, str], dict[str, Any]]
+    linearity: dict[tuple[str, str, str, int], dict[str, Any]]
     startup: dict[tuple[str, str], tuple[int, int, int]]
     diagnostic_failures: tuple[dict[str, Any], ...]
     runner_end_status: str
@@ -86,7 +87,9 @@ def _replay_setup(
     index = 0
     startup_durations: list[int] = []
 
-    def take(phase: str, iterations: int) -> tuple[dict[str, Any], str | None]:
+    def take(
+        phase: str, iterations: int, diagnostic_point: str | None = None
+    ) -> tuple[dict[str, Any], str | None]:
         nonlocal index
         if index >= len(samples):
             raise ReportError(f"diagnostic portfolio silently incomplete for {pair}")
@@ -100,6 +103,11 @@ def _replay_setup(
             raise ReportError(
                 f"diagnostic iterations mismatch for {pair}/{phase}: "
                 f"expected {iterations}, got {row['iterations']}"
+            )
+        if row["diagnostic_point"] != diagnostic_point:
+            raise ReportError(
+                f"diagnostic point mismatch for {pair}/{phase}: "
+                f"expected {diagnostic_point!r}, got {row['diagnostic_point']!r}"
             )
         return row, reason
 
@@ -154,12 +162,11 @@ def _replay_setup(
             return failed(row, reason, formal_iterations)
 
     diagnostic_n = max(1, min(formal_iterations, case.max_iterations // 2))
-    row, reason = take("linearity_n", diagnostic_n)
-    if reason is not None:
-        return failed(row, reason, formal_iterations)
-    row, reason = take("linearity_2n", diagnostic_n * 2)
-    if reason is not None:
-        return failed(row, reason, formal_iterations)
+    for scale, repetition in LINEARITY_SEQUENCE:
+        iterations = diagnostic_n if scale == "n" else diagnostic_n * 2
+        row, reason = take("linearity", iterations, f"{scale}:{repetition}")
+        if reason is not None:
+            return failed(row, reason, formal_iterations)
     if index != len(samples):
         raise ReportError(f"diagnostic portfolio has extra records for {pair}")
     return True, formal_iterations, tuple(startup_durations), None
@@ -256,13 +263,13 @@ def validate_run(input_path: Path, manifest: Manifest) -> ValidatedRun:
     measurement_rows = []
     measurement_orders: dict[int, set[int]] = defaultdict(set)
     diagnostic_rows: dict[tuple[str, str], list[tuple[dict[str, Any], str | None]]] = defaultdict(list)
-    linearity: dict[tuple[str, str, str], dict[str, Any]] = {}
+    linearity: dict[tuple[str, str, str, int], dict[str, Any]] = {}
     startup: dict[tuple[str, str], list[int]] = defaultdict(list)
     seen_measurement = False
     phase_rank_by_case: dict[tuple[str, str], int] = defaultdict(lambda: -1)
     phase_ranks = {
         "startup": 0, "calibration": 1, "warmup": 2,
-        "linearity_n": 3, "linearity_2n": 4, "measurement": 5,
+        "linearity": 3, "measurement": 4,
     }
     failed_sample_seen = False
     for index, row in enumerate(rows[1:-1], 2):
@@ -316,10 +323,14 @@ def validate_run(input_path: Path, manifest: Manifest) -> ValidatedRun:
             if row["block"] is not None or row["order"] is not None:
                 raise ReportError(f"{where}: diagnostic cannot have block/order")
             point = None
-            if phase in {"linearity_n", "linearity_2n"}:
-                point = "n" if phase == "linearity_n" else "2n"
-                if row["diagnostic_point"] != point:
+            if phase == "linearity":
+                expected_points = {
+                    f"{scale}:{repetition}": (scale, repetition)
+                    for scale, repetition in LINEARITY_SEQUENCE
+                }
+                if row["diagnostic_point"] not in expected_points:
                     raise ReportError(f"{where}: invalid linearity point")
+                point = expected_points[row["diagnostic_point"]]
             elif row["diagnostic_point"] is not None:
                 raise ReportError(f"{where}: setup cannot have diagnostic point")
             reason = None
@@ -332,7 +343,8 @@ def validate_run(input_path: Path, manifest: Manifest) -> ValidatedRun:
                 if phase == "startup":
                     startup[pair].append(row["duration_ns"])
                 if point is not None:
-                    linearity_key = (role, case.id, point)
+                    scale, repetition = point
+                    linearity_key = (role, case.id, scale, repetition)
                     if linearity_key in linearity:
                         raise ReportError(f"{where}: duplicate linearity point {linearity_key}")
                     linearity[linearity_key] = row

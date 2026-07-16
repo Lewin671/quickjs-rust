@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 from tools.benchmark.adapters import Engine, load_engine, probe_version
+from tools.benchmark.linearity import LINEARITY_SEQUENCE
 from tools.benchmark.process import ProcessResult, run_process
 from tools.benchmark.receipts import BuildReceipt, canonical_receipt_sha256
 from tools.benchmark.runner import BenchmarkRun, JsonlWriter
@@ -321,7 +322,7 @@ class RunnerTests(unittest.TestCase):
         self.assertFalse(measurement[0]["measurement_eligible"])
         self.assertNotIn((engine.role, case.id), run.iterations)
 
-    def test_calibration_emits_dedicated_exact_n_and_2n_linearity_phases(self) -> None:
+    def test_calibration_emits_balanced_repeated_n_and_2n_linearity(self) -> None:
         engine = self._engine("raise SystemExit(1)\n")
         manifest = load_manifest(ROOT / "benchmarks/manifest.json")
         case = replace(
@@ -342,12 +343,31 @@ class RunnerTests(unittest.TestCase):
         rows = [json.loads(line) for line in output.getvalue().splitlines()]
         self.assertEqual(
             [row["phase"] for row in rows],
-            ["startup", "startup", "startup", "calibration", "warmup", "linearity_n", "linearity_2n"],
+            ["startup", "startup", "startup", "calibration", "warmup"]
+            + ["linearity"] * 8,
         )
-        n, twice = rows[-2:]
-        self.assertEqual((n["diagnostic_point"], twice["diagnostic_point"]), ("n", "2n"))
-        self.assertEqual(twice["iterations"], n["iterations"] * 2)
-        self.assertFalse(n["measurement_eligible"])
+        diagnostics = rows[-8:]
+        self.assertEqual(
+            [row["diagnostic_point"] for row in diagnostics],
+            [
+                "n:0", "2n:0", "2n:1", "n:1",
+                "n:2", "2n:2", "2n:3", "n:3",
+            ],
+        )
+        n_iterations = {
+            row["iterations"]
+            for row in diagnostics
+            if row["diagnostic_point"].startswith("n:")
+        }
+        twice_iterations = {
+            row["iterations"]
+            for row in diagnostics
+            if row["diagnostic_point"].startswith("2n:")
+        }
+        self.assertEqual(len(n_iterations), 1)
+        self.assertEqual(len(twice_iterations), 1)
+        self.assertEqual(twice_iterations.pop(), n_iterations.pop() * 2)
+        self.assertTrue(all(not row["measurement_eligible"] for row in diagnostics))
 
     def test_calibration_safety_factor_selects_a_larger_iteration_count(self) -> None:
         engine = self._engine("raise SystemExit(1)\n")
@@ -416,7 +436,7 @@ class RunnerTests(unittest.TestCase):
         def fail_second_point(argv: list[str], _timeout: float) -> ProcessResult:
             nonlocal calls
             calls += 1
-            if calls == 7:
+            if calls == 8:
                 return self._process_result(exit_code=9)
             iterations = int(argv[-1])
             duration = 1_000_000 if iterations == 0 else 20_000_000
@@ -425,8 +445,14 @@ class RunnerTests(unittest.TestCase):
         with mock.patch("tools.benchmark.runner.run_process", side_effect=fail_second_point):
             self.assertFalse(run.execute())
         rows = [json.loads(line) for line in output.getvalue().splitlines()]
-        failed = next(row for row in rows if row.get("phase") == "linearity_2n")
-        self.assertEqual((failed["status"], failed["diagnostic_point"]), ("failed", "2n"))
+        failed = next(
+            row
+            for row in rows
+            if row.get("phase") == "linearity" and row["status"] == "failed"
+        )
+        self.assertEqual(
+            (failed["status"], failed["diagnostic_point"]), ("failed", "2n:1")
+        )
         self.assertFalse(rows[-1]["comparison_input_complete"])
         self.assertEqual(
             next(row for row in rows if row.get("phase") == "measurement")["status"],
@@ -508,7 +534,7 @@ class RunnerTests(unittest.TestCase):
         for engine in engines:
             for case in manifest.cases:
                 run.measurement_counts[(engine.role, case.id)] = 1
-                run.linearity_counts[(engine.role, case.id)] = 2
+                run.linearity_counts[(engine.role, case.id)] = len(LINEARITY_SEQUENCE)
         self.assertTrue(run._comparison_input_complete())
         run.failed = True
         self.assertFalse(run._comparison_input_complete())

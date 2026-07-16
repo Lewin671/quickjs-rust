@@ -5,13 +5,13 @@
   "protocols": {
     "throughput_measurement": {
       "manifest_path": "benchmarks/manifest.json",
-      "protocol_id": "quickjs-measurement-protocol-v6",
-      "protocol_sha256": "9cbd57169707fe1c2b691c340a04b60a4f127c6140b8df7823407299fb60c2b3"
+      "protocol_id": "quickjs-measurement-protocol-v7",
+      "protocol_sha256": "dd5225ed8b8ce4b29535d1654b0ad692583aaed95e498491890804bff070c111"
     },
     "throughput_analysis": {
       "manifest_path": "benchmarks/analysis.json",
-      "protocol_id": "quickjs-analysis-protocol-v3",
-      "protocol_sha256": "49b15bb4353e57add4eb93f9abd7fa79e00a9f714db8aca0c7a1434449cb12c6"
+      "protocol_id": "quickjs-analysis-protocol-v4",
+      "protocol_sha256": "e68c72df7b975b8ada2dd3b1cdda8640866e5704ff5bbef31024281eb4697f6a"
     },
     "resource_measurement": {
       "manifest_path": "benchmarks/resources.json",
@@ -50,7 +50,7 @@
       "tools/benchmark/performance_policy.py",
       "tools/benchmark/preview.py"
     ],
-    "aggregate_sha256": "f12fb7bfa6b7e643b013b5767ed927cbb79a2d969ac431dcc604982fcdc19cf2"
+    "aggregate_sha256": "ef07118df705b947f6307b8a0b29d2ac7631080a70383b7a04df482f2cc21293"
   },
   "hosted_pr": {
     "tier": "informational_preview",
@@ -105,8 +105,8 @@
           "qualified_fixed_hardware_fingerprint"
         ],
         "required_protocol_sha256": {
-          "throughput_measurement": "9cbd57169707fe1c2b691c340a04b60a4f127c6140b8df7823407299fb60c2b3",
-          "throughput_analysis": "49b15bb4353e57add4eb93f9abd7fa79e00a9f714db8aca0c7a1434449cb12c6",
+          "throughput_measurement": "dd5225ed8b8ce4b29535d1654b0ad692583aaed95e498491890804bff070c111",
+          "throughput_analysis": "e68c72df7b975b8ada2dd3b1cdda8640866e5704ff5bbef31024281eb4697f6a",
           "resource_measurement": "67eee418bcb19a1ea45813f109b5fdcb0058393528052aeaa6657f1ca2d99bac",
           "resource_analysis": "4d28b20cd3090bdc74a4350774c1d12807458a957ebfe85ae03d286f4b59e14a"
         }
@@ -126,8 +126,8 @@
           "qualified_fixed_hardware_fingerprint"
         ],
         "required_protocol_sha256": {
-          "throughput_measurement": "9cbd57169707fe1c2b691c340a04b60a4f127c6140b8df7823407299fb60c2b3",
-          "throughput_analysis": "49b15bb4353e57add4eb93f9abd7fa79e00a9f714db8aca0c7a1434449cb12c6",
+          "throughput_measurement": "dd5225ed8b8ce4b29535d1654b0ad692583aaed95e498491890804bff070c111",
+          "throughput_analysis": "e68c72df7b975b8ada2dd3b1cdda8640866e5704ff5bbef31024281eb4697f6a",
           "resource_measurement": "67eee418bcb19a1ea45813f109b5fdcb0058393528052aeaa6657f1ca2d99bac",
           "resource_analysis": "4d28b20cd3090bdc74a4350774c1d12807458a957ebfe85ae03d286f4b59e14a"
         }
@@ -148,8 +148,8 @@
           "qualified_fixed_hardware_fingerprint"
         ],
         "required_protocol_sha256": {
-          "throughput_measurement": "9cbd57169707fe1c2b691c340a04b60a4f127c6140b8df7823407299fb60c2b3",
-          "throughput_analysis": "49b15bb4353e57add4eb93f9abd7fa79e00a9f714db8aca0c7a1434449cb12c6",
+          "throughput_measurement": "dd5225ed8b8ce4b29535d1654b0ad692583aaed95e498491890804bff070c111",
+          "throughput_analysis": "e68c72df7b975b8ada2dd3b1cdda8640866e5704ff5bbef31024281eb4697f6a",
           "resource_measurement": "67eee418bcb19a1ea45813f109b5fdcb0058393528052aeaa6657f1ca2d99bac",
           "resource_analysis": "4d28b20cd3090bdc74a4350774c1d12807458a957ebfe85ae03d286f4b59e14a"
         }

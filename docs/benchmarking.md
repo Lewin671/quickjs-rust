@@ -104,12 +104,16 @@ malformed output, operation mismatches, and checksum mismatches are
 durable records and make the run non-zero. Output is capped at 64 KiB per
 stream. No outlier is automatically deleted.
 
-After successful calibration and warmup, every role/case emits two dedicated
-diagnostic samples, `linearity_n` and `linearity_2n`. The runner chooses N so
-2N is exact and within `max_iterations`; these samples occur before all formal
-measurement blocks and never inherit measurement eligibility. They are not
-derived from, or included in, formal block durations. A missing, duplicate,
-malformed, or failed diagnostic makes the raw comparison input incomplete.
+After successful calibration and warmup, every role/case emits eight dedicated
+`linearity` diagnostics in the fixed scale order N, 2N, 2N, N, N, 2N, 2N, N.
+The runner chooses N so 2N is exact and within `max_iterations`. Four
+alternating-order pairs make the reported ratio the median of four paired 2N/N
+per-op ratios; the balanced order limits monotonic hosted-runner frequency drift
+without conditionally retrying or deleting any observation.
+These samples occur before all formal measurement blocks and never inherit
+measurement eligibility. They are not derived from, or included in, formal
+block durations. A missing, duplicate, reordered, malformed, or failed
+diagnostic makes the raw comparison input incomplete.
 
 The legacy `scripts/microbench.sh` uses an internal millisecond `Date.now()`
 loop. It remains a useful quick probe, but its quantization and fixed engine
@@ -208,7 +212,7 @@ valid output and timing quality for later analysis; diagnostics and `not_run`
 records are false. Run start and run end always carry `claim_eligible=false`.
 Run end may set `comparison_input_complete=true` only for the exact
 candidate/base/QuickJS-NG role triple, the full portfolio, clean recipe-validated
-receipts, every eligible block, both linearity points for every role/case, and
+receipts, every eligible block, all eight linearity diagnostics for every role/case, and
 an otherwise successful run. A structurally complete run may instead end with
 `comparison_input_complete=false` and `status=failed`; every planned
 measurement still has an exact durable record. Single- and two-role runs can
@@ -305,9 +309,9 @@ candidate/base and candidate/QuickJS-NG. Every case, family, and overall result
 also records the multiplicative relative half-width
 `max(upper/estimate - 1, estimate/lower - 1)` over positive values.
 
-Linearity health subtracts the median of three startup samples from both
-diagnostic durations, converts each to per-op cost, and reports the normalized
-2N/N ratio for every role/case. Non-positive adjusted durations are
+Linearity health subtracts the median of three startup samples from every
+diagnostic duration, converts each paired N/2N observation to a per-op ratio,
+and reports the median paired ratio for every role/case. Non-positive adjusted durations are
 `inconclusive`; ratios outside the frozen bounds are `fail`. An executed setup
 or linearity failure makes overall health `invalid`; it cannot be relabeled as
 an analyzable success. This is experiment health, not a regression gate: M3
