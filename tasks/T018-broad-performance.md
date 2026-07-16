@@ -259,6 +259,31 @@ Own-data-write diagnostic bindings:
 - candidate binary SHA-256:
   `116b5e74d2da88f9ddaee111eef431fe2f89c42c3a026e720e3ff393b3d3cb15`.
 
+The fourth v2 runtime unit recognizes counted loops whose body updates up to
+eight writable numeric own fields on one ordinary object using ordered
+`field +/- numeric constant` recurrences, then accumulates one of those
+fields. It scalar-replaces the fields for the remaining iterations and commits
+their final values at loop exit. Every source iteration still executes every
+recurrence step; there is no closed-form checksum or skipped loop work.
+Accessors, read-only or non-numeric fields, typed arrays, symbol primitives,
+module namespaces, the global object, and non-authoritative locals retain the
+generic path.
+
+A candidate-only diagnostic reduced `property_write` again to
+3.5697/3.5657/3.5709 ns/op. The exact 20,000,000/40,000,000 N/2N points had a
+0.97742 normalized ratio and exact recurrence checksums. The three formal
+samples stopped at 40,000,000 iterations and about 428 ms, below the frozen
+500 ms eligibility window, so this result is explicitly timer-limited pending
+the same isolated capacity follow-up used for the builtin optimizations.
+
+Property-recurrence diagnostic bindings:
+
+- run ID: `664d2a55-c3cd-4db3-8a52-e3e783f7a63b`;
+- raw JSONL SHA-256:
+  `7d09e7f13ae6634912eefafef76805bd2cf2af4f8514281a8ce4d09e3ca3ef51`;
+- candidate binary SHA-256:
+  `a080c1fb6cb83894aaca0783d70cdeec34a98e3e3a1224b2f01fb556891992e3`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

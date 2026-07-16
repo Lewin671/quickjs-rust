@@ -680,6 +680,8 @@ pub struct Bytecode {
     pub(super) code: Vec<Op>,
     pub(super) numeric_leaf_plan: OnceCell<Option<super::vm_numeric_leaf::NumericLeafPlan>>,
     pub(super) numeric_loop_plans: OnceCell<Vec<super::vm_numeric_loop::NumericLoopPlan>>,
+    pub(super) numeric_mutation_loop_plans:
+        OnceCell<Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>>,
     pub(super) template_objects: RefCell<HashMap<usize, Value>>,
     /// Per-call metadata precomputed once at construction. Each of these used to
     /// be recomputed on every call by recursively walking `code` (and nested
@@ -764,6 +766,7 @@ impl Bytecode {
             code,
             numeric_leaf_plan: OnceCell::new(),
             numeric_loop_plans: OnceCell::new(),
+            numeric_mutation_loop_plans: OnceCell::new(),
             template_objects: RefCell::new(HashMap::new()),
             cached_closure_referenced_global_names: Vec::new(),
             cached_written_binding_names: Vec::new(),

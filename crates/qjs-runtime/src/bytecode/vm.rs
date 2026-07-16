@@ -67,6 +67,8 @@ pub(super) struct Vm<'a> {
     pub(super) bytecode: &'a Bytecode,
     pub(super) ip: usize,
     pub(super) numeric_loop_plans: Vec<super::vm_numeric_loop::NumericLoopPlan>,
+    pub(super) numeric_mutation_loop_plans:
+        Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>,
     pub(super) stack: Vec<Value>,
     pub(super) locals: Vec<Slot>,
     pub(super) local_upvalues: Vec<Option<Upvalue>>,
@@ -226,10 +228,17 @@ impl<'a> Vm<'a> {
             .numeric_loop_plans
             .get_or_init(|| super::vm_numeric_loop::NumericLoopPlan::compile_all(bytecode))
             .clone();
+        let numeric_mutation_loop_plans = bytecode
+            .numeric_mutation_loop_plans
+            .get_or_init(|| {
+                super::vm_numeric_mutation_loop::NumericMutationLoopPlan::compile_all(bytecode)
+            })
+            .clone();
         Self {
             bytecode,
             ip: 0,
             numeric_loop_plans,
+            numeric_mutation_loop_plans,
             stack: Vec::with_capacity(64),
             locals,
             local_upvalues,
@@ -925,8 +934,11 @@ impl<'a> Vm<'a> {
                 Op::Jump(target) => {
                     let backedge = self.ip - 1;
                     if *target >= backedge
-                        || self.numeric_loop_plans.is_empty()
-                        || !super::vm_numeric_loop::try_run_numeric_loop(self, *target, backedge)
+                        || (!super::vm_numeric_mutation_loop::try_run_numeric_mutation_loop(
+                            self, *target, backedge,
+                        ) && !super::vm_numeric_loop::try_run_numeric_loop(
+                            self, *target, backedge,
+                        ))
                     {
                         self.ip = *target;
                     }

@@ -741,6 +741,24 @@ impl ObjectRef {
         }
     }
 
+    /// Reads a writable ordinary own numeric data property for scalar
+    /// replacement. Exotic namespaces, accessors, read-only descriptors, and
+    /// non-numeric values stay on the observable property path.
+    pub(crate) fn writable_own_data_number(&self, key: &str) -> Option<f64> {
+        if self.0.module_namespace_exotic.get() {
+            return None;
+        }
+        let properties = self.0.properties.borrow();
+        let property = properties.get(key)?;
+        if property.is_accessor() || !property.writable {
+            return None;
+        }
+        match property.value {
+            Value::Number(value) => Some(value),
+            _ => None,
+        }
+    }
+
     /// Updates an existing ordinary own data property without cloning its
     /// descriptor or walking the prototype chain. Accessors, missing keys, and
     /// module namespace exports retain their observable slow-path behavior.
