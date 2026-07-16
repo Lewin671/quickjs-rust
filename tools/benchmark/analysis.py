@@ -9,6 +9,7 @@ from typing import Any
 
 from .analysis_schema import AnalysisManifest
 from .health import block_health, precision_health
+from .linearity import LINEARITY_SEQUENCE
 from .raw_validation import ReportError, ValidatedRun
 from .schema import Manifest
 from .statistics import paired_block_bootstrap, relative_half_width
@@ -122,23 +123,43 @@ def analyze_run(
                     "execution_failure": failure_by_pair[pair],
                 }
                 continue
-            n = validated.linearity[(role, case.id, "n")]
-            twice = validated.linearity[(role, case.id, "2n")]
-            n_iterations = n["iterations"]
-            twice_iterations = twice["iterations"]
-            if twice_iterations != n_iterations * 2:
+            repetitions = sorted(
+                {repetition for _scale, repetition in LINEARITY_SEQUENCE}
+            )
+            n_rows = [
+                validated.linearity[(role, case.id, "n", repetition)]
+                for repetition in repetitions
+            ]
+            twice_rows = [
+                validated.linearity[(role, case.id, "2n", repetition)]
+                for repetition in repetitions
+            ]
+            n_iterations = n_rows[0]["iterations"]
+            twice_iterations = twice_rows[0]["iterations"]
+            if (
+                any(row["iterations"] != n_iterations for row in n_rows)
+                or any(row["iterations"] != twice_iterations for row in twice_rows)
+                or twice_iterations != n_iterations * 2
+            ):
                 raise ReportError(f"linearity iterations are not exact 2x for {role}/{case.id}")
             startup_ns = statistics.median(validated.startup[(role, case.id)])
-            n_adjusted = n["duration_ns"] - startup_ns
-            twice_adjusted = twice["duration_ns"] - startup_ns
-            if n_adjusted <= 0 or twice_adjusted <= 0:
+            paired_ratios = []
+            for n_row, twice_row in zip(n_rows, twice_rows, strict=True):
+                n_per_op = (
+                    n_row["duration_ns"] - startup_ns
+                ) / n_row["operations"]
+                twice_per_op = (
+                    twice_row["duration_ns"] - startup_ns
+                ) / twice_row["operations"]
+                if n_per_op <= 0 or twice_per_op <= 0:
+                    paired_ratios = []
+                    break
+                paired_ratios.append(twice_per_op / n_per_op)
+            if not paired_ratios:
                 ratio = None
                 status = "inconclusive"
             else:
-                ratio = (
-                    (twice_adjusted / twice["operations"])
-                    / (n_adjusted / n["operations"])
-                )
+                ratio = statistics.median(paired_ratios)
                 status = (
                     "pass"
                     if analysis.linearity_lower <= ratio <= analysis.linearity_upper

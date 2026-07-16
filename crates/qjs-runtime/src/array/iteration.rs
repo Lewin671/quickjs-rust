@@ -161,10 +161,9 @@ fn dynamic_iteration_indices(iteration: &ArrayIteration, env: &CallEnv) -> Vec<u
         Value::Object(object) => {
             numeric_indices_from_names(object.own_property_names(), iteration.source_len)
         }
-        Value::Function(function) => numeric_indices_from_names(
-            function.properties.borrow().keys().cloned().collect(),
-            iteration.source_len,
-        ),
+        Value::Function(function) => {
+            numeric_indices_from_names(function.own_property_names(), iteration.source_len)
+        }
         _ => (0..iteration.source_len).collect(),
     }
 }

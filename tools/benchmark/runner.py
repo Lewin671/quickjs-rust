@@ -13,6 +13,7 @@ from typing import Any, TextIO
 from uuid import uuid4
 
 from .adapters import Engine, probe_version
+from .linearity import LINEARITY_SEQUENCE
 from .planning import measurement_plan
 from .process import ProcessResult, run_process
 from .records import parse_result
@@ -295,7 +296,7 @@ class BenchmarkRun:
             quality = "timer_limited"
         if phase == "measurement" and status == "ok" and quality == "eligible":
             self.measurement_counts[(engine.role, case.id)] += 1
-        if phase in {"linearity_n", "linearity_2n"} and status == "ok":
+        if phase == "linearity" and status == "ok":
             self.linearity_counts[(engine.role, case.id)] += 1
         self.writer.write(self._sample_record(
             engine,
@@ -367,19 +368,17 @@ class BenchmarkRun:
         # N is chosen after calibration and constrained so that 2N is always
         # exact and never exceeds the manifest maximum.
         diagnostic_n = max(1, min(iterations, case.max_iterations // 2))
-        for diagnostic_iterations, phase, point in (
-            (diagnostic_n, "linearity_n", "n"),
-            (diagnostic_n * 2, "linearity_2n", "2n"),
-        ):
+        for scale, repetition in LINEARITY_SEQUENCE:
+            diagnostic_iterations = diagnostic_n if scale == "n" else diagnostic_n * 2
             _result, status, _quality = self._sample(
                 engine,
                 case,
                 diagnostic_iterations,
-                phase,
+                "linearity",
                 None,
                 None,
                 "diagnostic",
-                diagnostic_point=point,
+                diagnostic_point=f"{scale}:{repetition}",
             )
             if status != "ok":
                 return False
@@ -414,7 +413,7 @@ class BenchmarkRun:
             and all(count == len(self.cases) for count in coverage["measured_by_role"].values())
         )
         linearity_complete = all(
-            self.linearity_counts[(role, case_id)] == 2
+            self.linearity_counts[(role, case_id)] == len(LINEARITY_SEQUENCE)
             for role in self.engines
             for case_id in self.cases
         )

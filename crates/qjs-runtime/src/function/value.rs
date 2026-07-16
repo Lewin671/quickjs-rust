@@ -159,36 +159,55 @@ pub struct FunctionData {
     /// The method/constructor [[HomeObject]] used to resolve `super.x`. For an
     /// instance method this is the class prototype; for a static method it is
     /// the constructor; for a derived constructor it is the prototype.
-    pub(crate) home_object: Rc<RefCell<Option<Value>>>,
-    /// For a derived constructor, the parent constructor invoked by `super()`.
-    pub(crate) super_constructor: Rc<RefCell<Option<Value>>>,
-    /// For a class constructor, the instance-field initializers run when a new
-    /// instance is constructed (base class: at construction start; derived
-    /// class: immediately after `super()` returns).
-    pub(crate) instance_elements: Rc<RefCell<Vec<InstanceElementInitializer>>>,
+    pub(crate) auxiliary: Rc<FunctionAuxiliaryState>,
     pub(crate) bound: Option<Box<BoundFunction>>,
     /// Function object properties.
     pub(crate) properties: Rc<RefCell<HashMap<String, Property>>>,
-    property_order: Rc<RefCell<Vec<String>>>,
-    symbol_properties: Rc<RefCell<Vec<(ObjectRef, Property)>>>,
-    extensible: Rc<Cell<bool>>,
-    sealed: Rc<Cell<bool>>,
-    frozen: Rc<Cell<bool>>,
+}
+
+/// Identity-bearing mutable state that is cold for ordinary calls. Keeping
+/// these cells behind one shared allocation preserves function identity across
+/// cloned handles without paying for ten independent `Rc` allocations for
+/// every closure.
+#[doc(hidden)]
+pub struct FunctionAuxiliaryState {
+    pub(crate) home_object: RefCell<Option<Value>>,
+    /// For a derived constructor, the parent constructor invoked by `super()`.
+    pub(crate) super_constructor: RefCell<Option<Value>>,
+    /// For a class constructor, the instance-field initializers run when a new
+    /// instance is constructed (base class: at construction start; derived
+    /// class: immediately after `super()` returns).
+    instance_elements: RefCell<Vec<InstanceElementInitializer>>,
+    property_order: RefCell<Vec<String>>,
+    symbol_properties: RefCell<Vec<(ObjectRef, Property)>>,
+    extensible: Cell<bool>,
+    sealed: Cell<bool>,
+    frozen: Cell<bool>,
     /// Explicit [[Prototype]] override. `None` means "use the default
-    /// %Function.prototype% intrinsic"; `Some(None)` means the prototype was
-    /// set to `null`; `Some(Some(p))` means it points at an object or another
-    /// function (for example a subclass constructor whose [[Prototype]] is its
-    /// superclass).
-    internal_prototype: Rc<RefCell<Option<Option<Prototype>>>>,
-    /// Private-name state: per-function storage (static fields and brands on the
-    /// constructor) and the private environment a class constructor carries.
-    /// Lazily populated; combined behind one allocation to keep `Function`
-    /// small.
-    private_state: Rc<RefCell<crate::private::PrivateState>>,
-    /// Original source text for `Function.prototype.toString` (a slice of the
-    /// compiled script's source), or `None` to use the `[native code]` form.
-    /// Shared across clones; set just after a user function is created.
-    source_text: Rc<RefCell<Option<Rc<str>>>>,
+    /// %Function.prototype% intrinsic"; `Some(None)` means it is null.
+    internal_prototype: RefCell<Option<Option<Prototype>>>,
+    private_state: RefCell<crate::private::PrivateState>,
+    source_text: RefCell<Option<Rc<str>>>,
+    lazy_default_prototype: Cell<bool>,
+}
+
+impl FunctionAuxiliaryState {
+    fn new(home_object: Option<Value>, super_constructor: Option<Value>) -> Rc<Self> {
+        Rc::new(Self {
+            home_object: RefCell::new(home_object),
+            super_constructor: RefCell::new(super_constructor),
+            instance_elements: RefCell::new(Vec::new()),
+            property_order: RefCell::new(Vec::new()),
+            symbol_properties: RefCell::new(Vec::new()),
+            extensible: Cell::new(true),
+            sealed: Cell::new(false),
+            frozen: Cell::new(false),
+            internal_prototype: RefCell::new(None),
+            private_state: RefCell::new(crate::private::PrivateState::default()),
+            source_text: RefCell::new(None),
+            lazy_default_prototype: Cell::new(false),
+        })
+    }
 }
 
 impl Deref for Function {
@@ -368,19 +387,9 @@ impl Function {
             is_class_constructor: false,
             is_derived_constructor: false,
             is_field_initializer: false,
-            home_object: Rc::new(RefCell::new(None)),
-            super_constructor: Rc::new(RefCell::new(None)),
-            instance_elements: Rc::new(RefCell::new(Vec::new())),
+            auxiliary: FunctionAuxiliaryState::new(None, None),
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
-            property_order: Rc::new(RefCell::new(Vec::new())),
-            symbol_properties: Rc::new(RefCell::new(Vec::new())),
-            extensible: Rc::new(Cell::new(true)),
-            sealed: Rc::new(Cell::new(false)),
-            frozen: Rc::new(Cell::new(false)),
-            internal_prototype: Rc::new(RefCell::new(None)),
-            source_text: Rc::new(RefCell::new(None)),
-            private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
         }));
         function.define_length_property();
         function.define_name_property();
@@ -426,10 +435,6 @@ impl Function {
             upvalues,
         } = compiled;
         let dynamic_function_realm_global = dynamic_function_realm_global(&realm);
-        let prototype = ObjectRef::with_prototype(
-            HashMap::new(),
-            object_prototype(&crate::CallEnv::new(Rc::clone(&realm))),
-        );
         let function = Self(Rc::new(FunctionData {
             has_name_binding,
             immutable_name_binding,
@@ -459,19 +464,9 @@ impl Function {
             is_class_constructor,
             is_derived_constructor,
             is_field_initializer,
-            home_object: Rc::new(RefCell::new(home_object)),
-            super_constructor: Rc::new(RefCell::new(super_constructor)),
-            instance_elements: Rc::new(RefCell::new(Vec::new())),
+            auxiliary: FunctionAuxiliaryState::new(home_object, super_constructor),
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
-            property_order: Rc::new(RefCell::new(Vec::new())),
-            symbol_properties: Rc::new(RefCell::new(Vec::new())),
-            extensible: Rc::new(Cell::new(true)),
-            sealed: Rc::new(Cell::new(false)),
-            frozen: Rc::new(Cell::new(false)),
-            internal_prototype: Rc::new(RefCell::new(None)),
-            source_text: Rc::new(RefCell::new(None)),
-            private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
         }));
         function.define_length_property();
         function.define_name_property();
@@ -479,15 +474,7 @@ impl Function {
         // builder so the property attributes and prototype object can match the
         // class semantics; ordinary functions get the default prototype here.
         if constructable && !is_class_constructor {
-            prototype
-                .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
-            function.define_property(
-                "prototype".to_owned(),
-                // A function's `prototype` is writable and non-enumerable but
-                // non-configurable (a class constructor's is also non-writable,
-                // wired separately by the class builder).
-                Property::data(Value::Object(prototype), false, true, false),
-            );
+            function.mark_lazy_default_prototype();
         }
         function
     }
@@ -586,23 +573,13 @@ impl Function {
             is_class_constructor: false,
             is_derived_constructor: false,
             is_field_initializer: false,
-            home_object: Rc::new(RefCell::new(None)),
-            super_constructor: Rc::new(RefCell::new(None)),
-            instance_elements: Rc::new(RefCell::new(Vec::new())),
+            auxiliary: FunctionAuxiliaryState::new(None, None),
             bound: Some(Box::new(BoundFunction {
                 target,
                 this_value,
                 arguments,
             })),
             properties: Rc::new(RefCell::new(HashMap::new())),
-            property_order: Rc::new(RefCell::new(Vec::new())),
-            symbol_properties: Rc::new(RefCell::new(Vec::new())),
-            extensible: Rc::new(Cell::new(true)),
-            sealed: Rc::new(Cell::new(false)),
-            frozen: Rc::new(Cell::new(false)),
-            internal_prototype: Rc::new(RefCell::new(None)),
-            source_text: Rc::new(RefCell::new(None)),
-            private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
         }));
         function.define_length_property();
         function.define_name_property();
@@ -646,19 +623,9 @@ impl Function {
             is_class_constructor: false,
             is_derived_constructor: false,
             is_field_initializer: false,
-            home_object: Rc::new(RefCell::new(None)),
-            super_constructor: Rc::new(RefCell::new(None)),
-            instance_elements: Rc::new(RefCell::new(Vec::new())),
+            auxiliary: FunctionAuxiliaryState::new(None, None),
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
-            property_order: Rc::new(RefCell::new(Vec::new())),
-            symbol_properties: Rc::new(RefCell::new(Vec::new())),
-            extensible: Rc::new(Cell::new(true)),
-            sealed: Rc::new(Cell::new(false)),
-            frozen: Rc::new(Cell::new(false)),
-            internal_prototype: Rc::new(RefCell::new(None)),
-            source_text: Rc::new(RefCell::new(None)),
-            private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
         }));
         function.define_length_property();
         function.define_name_property();
@@ -700,8 +667,29 @@ impl Function {
         );
     }
 
+    fn mark_lazy_default_prototype(&self) {
+        self.auxiliary.lazy_default_prototype.set(true);
+        self.auxiliary
+            .property_order
+            .borrow_mut()
+            .push("prototype".to_owned());
+    }
+
+    fn ensure_default_prototype(&self) {
+        if !self.auxiliary.lazy_default_prototype.replace(false) {
+            return;
+        }
+        let prototype =
+            ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.creation_env()));
+        prototype.define_non_enumerable("constructor".to_owned(), Value::Function(self.clone()));
+        self.properties.borrow_mut().insert(
+            "prototype".to_owned(),
+            Property::data(Value::Object(prototype), false, true, false),
+        );
+    }
+
     pub(crate) fn is_extensible(&self) -> bool {
-        self.extensible.get()
+        self.auxiliary.extensible.get()
     }
 
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
@@ -709,29 +697,33 @@ impl Function {
     }
 
     pub(crate) fn prevent_extensions(&self) {
-        self.extensible.set(false);
+        self.ensure_default_prototype();
+        self.auxiliary.extensible.set(false);
     }
 
     pub(crate) fn seal(&self) {
+        self.ensure_default_prototype();
         self.prevent_extensions();
-        self.sealed.set(true);
+        self.auxiliary.sealed.set(true);
         for property in self.properties.borrow_mut().values_mut() {
             property.make_non_configurable();
         }
-        for (_, property) in self.symbol_properties.borrow_mut().iter_mut() {
+        for (_, property) in self.auxiliary.symbol_properties.borrow_mut().iter_mut() {
             property.make_non_configurable();
         }
     }
 
     pub(crate) fn is_sealed(&self) -> bool {
-        !self.extensible.get()
-            && self.sealed.get()
+        self.ensure_default_prototype();
+        !self.auxiliary.extensible.get()
+            && self.auxiliary.sealed.get()
             && self
                 .properties
                 .borrow()
                 .values()
                 .all(|property| !property.configurable)
             && self
+                .auxiliary
                 .symbol_properties
                 .borrow()
                 .iter()
@@ -739,27 +731,30 @@ impl Function {
     }
 
     pub(crate) fn freeze(&self) {
+        self.ensure_default_prototype();
         self.prevent_extensions();
-        self.sealed.set(true);
-        self.frozen.set(true);
+        self.auxiliary.sealed.set(true);
+        self.auxiliary.frozen.set(true);
         for property in self.properties.borrow_mut().values_mut() {
             property.freeze_data();
         }
-        for (_, property) in self.symbol_properties.borrow_mut().iter_mut() {
+        for (_, property) in self.auxiliary.symbol_properties.borrow_mut().iter_mut() {
             property.freeze_data();
         }
     }
 
     pub(crate) fn is_frozen(&self) -> bool {
-        !self.extensible.get()
-            && self.sealed.get()
-            && self.frozen.get()
+        self.ensure_default_prototype();
+        !self.auxiliary.extensible.get()
+            && self.auxiliary.sealed.get()
+            && self.auxiliary.frozen.get()
             && self
                 .properties
                 .borrow()
                 .values()
                 .all(|property| !property.configurable && !property.writable)
             && self
+                .auxiliary
                 .symbol_properties
                 .borrow()
                 .iter()
@@ -767,6 +762,9 @@ impl Function {
     }
 
     pub(crate) fn set_property(&self, key: String, value: Value) {
+        if key == "prototype" {
+            self.ensure_default_prototype();
+        }
         let mut properties = self.properties.borrow_mut();
         if let Some(property) = properties.get_mut(&key) {
             if property.writable {
@@ -776,19 +774,22 @@ impl Function {
             self.refresh_dynamic_function_realm_override(&key);
             return;
         }
-        if !self.extensible.get() {
+        if !self.auxiliary.extensible.get() {
             return;
         }
-        self.property_order.borrow_mut().push(key.clone());
+        self.auxiliary.property_order.borrow_mut().push(key.clone());
         properties.insert(key.clone(), Property::enumerable(value));
         drop(properties);
         self.refresh_dynamic_function_realm_override(&key);
     }
 
     pub(crate) fn define_property(&self, key: String, property: Property) {
+        if key == "prototype" {
+            self.ensure_default_prototype();
+        }
         let mut properties = self.properties.borrow_mut();
         if !properties.contains_key(&key) {
-            self.property_order.borrow_mut().push(key.clone());
+            self.auxiliary.property_order.borrow_mut().push(key.clone());
         }
         properties.insert(key.clone(), property);
         drop(properties);
@@ -808,6 +809,9 @@ impl Function {
     }
 
     pub(crate) fn own_property(&self, key: &str) -> Option<Property> {
+        if key == "prototype" {
+            self.ensure_default_prototype();
+        }
         self.properties.borrow().get(key).cloned()
     }
 
@@ -820,8 +824,9 @@ impl Function {
     }
 
     fn ordered_property_names(&self, include: impl Fn(&Property) -> bool) -> Vec<String> {
+        self.ensure_default_prototype();
         let properties = self.properties.borrow();
-        let property_order = self.property_order.borrow().clone();
+        let property_order = self.auxiliary.property_order.borrow().clone();
         let mut indices = Vec::new();
         let mut strings = Vec::new();
         let mut fallback_strings = Vec::new();
@@ -862,6 +867,9 @@ impl Function {
     }
 
     pub(crate) fn delete_own_property(&self, key: &str) -> bool {
+        if key == "prototype" {
+            self.ensure_default_prototype();
+        }
         let mut properties = self.properties.borrow_mut();
         if properties
             .get(key)
@@ -874,7 +882,8 @@ impl Function {
         if key == DYNAMIC_FUNCTION_REALM_GLOBAL {
             self.has_dynamic_function_realm_override.set(false);
         }
-        self.property_order
+        self.auxiliary
+            .property_order
             .borrow_mut()
             .retain(|existing| existing != key);
         true
@@ -884,11 +893,15 @@ impl Function {
     /// for install-time setup of native objects that must not expose a property
     /// the generic builder added (e.g. `Proxy` has no own `prototype`).
     pub(crate) fn remove_own_property_unchecked(&self, key: &str) {
+        if key == "prototype" {
+            self.ensure_default_prototype();
+        }
         self.properties.borrow_mut().remove(key);
         if key == DYNAMIC_FUNCTION_REALM_GLOBAL {
             self.has_dynamic_function_realm_override.set(false);
         }
-        self.property_order
+        self.auxiliary
+            .property_order
             .borrow_mut()
             .retain(|existing| existing != key);
     }
@@ -917,7 +930,7 @@ impl Function {
     }
 
     fn effective_internal_prototype_with_env(&self, env: &CallEnv) -> Option<Prototype> {
-        match self.internal_prototype.borrow().clone() {
+        match self.auxiliary.internal_prototype.borrow().clone() {
             Some(slot) => slot,
             None => crate::function_intrinsic_prototype_slot(env),
         }
@@ -964,7 +977,7 @@ impl Function {
     }
 
     pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
-        let mut properties = self.symbol_properties.borrow_mut();
+        let mut properties = self.auxiliary.symbol_properties.borrow_mut();
         if let Some((_, existing)) = properties
             .iter_mut()
             .find(|(existing_symbol, _)| existing_symbol.ptr_eq(&symbol))
@@ -976,14 +989,16 @@ impl Function {
     }
 
     pub(crate) fn has_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
-        self.symbol_properties
+        self.auxiliary
+            .symbol_properties
             .borrow()
             .iter()
             .any(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
     }
 
     pub(crate) fn own_symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
-        self.symbol_properties
+        self.auxiliary
+            .symbol_properties
             .borrow()
             .iter()
             .find(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
@@ -991,7 +1006,7 @@ impl Function {
     }
 
     pub(crate) fn delete_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
-        let mut properties = self.symbol_properties.borrow_mut();
+        let mut properties = self.auxiliary.symbol_properties.borrow_mut();
         let Some(index) = properties
             .iter()
             .position(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
@@ -1006,7 +1021,8 @@ impl Function {
     }
 
     pub(crate) fn own_property_symbols(&self) -> Vec<ObjectRef> {
-        self.symbol_properties
+        self.auxiliary
+            .symbol_properties
             .borrow()
             .iter()
             .map(|(symbol, _)| symbol.clone())
@@ -1015,7 +1031,8 @@ impl Function {
 
     /// Returns the function's private-name storage, creating it on first use.
     pub(crate) fn private_storage(&self) -> crate::private::PrivateStorage {
-        self.private_state
+        self.auxiliary
+            .private_state
             .borrow_mut()
             .storage
             .get_or_insert_with(crate::private::PrivateStorage::new)
@@ -1024,39 +1041,42 @@ impl Function {
 
     /// Sets the private environment carried by a class constructor.
     pub(crate) fn set_private_environment(&self, environment: crate::private::PrivateEnvironment) {
-        self.private_state.borrow_mut().environment = Some(environment);
+        self.auxiliary.private_state.borrow_mut().environment = Some(environment);
     }
 
     /// Returns the private environment carried by this constructor, if any.
     pub(crate) fn private_environment(&self) -> Option<crate::private::PrivateEnvironment> {
-        self.private_state.borrow().environment.clone()
+        self.auxiliary.private_state.borrow().environment.clone()
     }
 
     /// Records an instance private element (a field initializer or a
     /// method/accessor brand) applied to each instance at construction time.
     pub(crate) fn push_instance_private_element(&self, element: InstancePrivateElement) {
-        self.instance_elements
+        self.auxiliary
+            .instance_elements
             .borrow_mut()
             .push(InstanceElementInitializer::PrivateElement(element));
     }
 
     /// Records a public instance field applied at construction time.
     pub(crate) fn push_instance_public_field(&self, field: InstanceFieldInitializer) {
-        self.instance_elements
+        self.auxiliary
+            .instance_elements
             .borrow_mut()
             .push(InstanceElementInitializer::PublicField(field));
     }
 
     /// Returns a snapshot of this constructor's instance elements.
     pub(crate) fn instance_elements(&self) -> Vec<InstanceElementInitializer> {
-        self.instance_elements.borrow().clone()
+        self.auxiliary.instance_elements.borrow().clone()
     }
 
     /// The explicit [[Prototype]] override as an object slot. A function-valued
     /// override collapses to `Some(None)` here; callers that must observe the
     /// function use [`Function::internal_prototype_slot`].
     pub(crate) fn internal_prototype_override(&self) -> Option<Option<ObjectRef>> {
-        self.internal_prototype
+        self.auxiliary
+            .internal_prototype
             .borrow()
             .clone()
             .map(|slot| slot.and_then(|prototype| prototype.as_object()))
@@ -1064,18 +1084,18 @@ impl Function {
 
     /// The raw [[Prototype]] override slot, preserving a function prototype.
     pub(crate) fn internal_prototype_slot(&self) -> Option<Option<Prototype>> {
-        self.internal_prototype.borrow().clone()
+        self.auxiliary.internal_prototype.borrow().clone()
     }
 
     /// Records the function's original source text for `Function.prototype
     /// .toString`.
     pub(crate) fn set_source_text(&self, source: Option<Rc<str>>) {
-        *self.source_text.borrow_mut() = source;
+        *self.auxiliary.source_text.borrow_mut() = source;
     }
 
     /// The function's original source text, when retained.
     pub(crate) fn source_text(&self) -> Option<Rc<str>> {
-        self.source_text.borrow().clone()
+        self.auxiliary.source_text.borrow().clone()
     }
 
     pub(crate) fn set_internal_prototype_slot(
@@ -1083,12 +1103,12 @@ impl Function {
         prototype: Option<Prototype>,
     ) -> Result<(), ()> {
         if matches!(
-            self.internal_prototype.borrow().as_ref(),
+            self.auxiliary.internal_prototype.borrow().as_ref(),
             Some(current) if same_prototype_slot(current, &prototype)
         ) {
             return Ok(());
         }
-        if !self.extensible.get() {
+        if !self.auxiliary.extensible.get() {
             return Err(());
         }
         if prototype
@@ -1097,7 +1117,7 @@ impl Function {
         {
             return Err(());
         }
-        *self.internal_prototype.borrow_mut() = Some(prototype);
+        *self.auxiliary.internal_prototype.borrow_mut() = Some(prototype);
         Ok(())
     }
 }
@@ -1192,7 +1212,7 @@ mod tests {
     use std::{mem, rc::Rc};
 
     use super::{Function, FunctionData};
-    use crate::NativeFunction;
+    use crate::{NativeFunction, Value, eval};
 
     #[test]
     fn cloning_function_reuses_the_backing_allocation() {
@@ -1209,6 +1229,36 @@ mod tests {
         assert_eq!(
             mem::size_of::<Function>(),
             mem::size_of::<Rc<FunctionData>>()
+        );
+    }
+
+    #[test]
+    fn detached_function_data_keeps_identity_state_shared() {
+        let function = Function::new_native(
+            Some("shared"),
+            0,
+            NativeFunction::UninitializedLexical,
+            false,
+        );
+        let mut detached = function.clone();
+        Rc::make_mut(&mut detached.0).name = Some("detached handle".to_owned());
+
+        assert!(!Rc::ptr_eq(&function.0, &detached.0));
+        assert!(Rc::ptr_eq(&function.auxiliary, &detached.auxiliary));
+        detached.set_source_text(Some(Rc::from("function shared() {}")));
+        assert_eq!(
+            function.source_text().as_deref(),
+            Some("function shared() {}")
+        );
+    }
+
+    #[test]
+    fn compiled_function_materializes_default_prototype_on_observation() {
+        assert_eq!(
+            eval(
+                "var f = function (value) { return value; }; f.prototype.constructor === f && Object.getOwnPropertyNames(f).includes('prototype') && !delete f.prototype;"
+            ),
+            Ok(Value::Boolean(true))
         );
     }
 }

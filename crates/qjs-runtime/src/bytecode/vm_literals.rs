@@ -134,7 +134,7 @@ impl Vm<'_> {
             let object =
                 ObjectRef::with_literal_pair(shape, [first, second], object_prototype(&self.env));
             for function in home_functions.into_iter().flatten() {
-                *function.home_object.borrow_mut() = Some(Value::Object(object.clone()));
+                *function.auxiliary.home_object.borrow_mut() = Some(Value::Object(object.clone()));
             }
             self.stack.push(Value::Object(object));
             return Ok(());
@@ -154,7 +154,7 @@ impl Vm<'_> {
             .collect::<Vec<_>>();
         let object = ObjectRef::with_literal_properties(shape, values, object_prototype(&self.env));
         for function in home_functions {
-            *function.home_object.borrow_mut() = Some(Value::Object(object.clone()));
+            *function.auxiliary.home_object.borrow_mut() = Some(Value::Object(object.clone()));
         }
         self.stack.push(Value::Object(object));
         Ok(())
@@ -206,7 +206,7 @@ impl Vm<'_> {
         // that `super.x` resolves the prototype chain correctly.
         if let Value::Function(ref function) = value {
             if !function.constructable {
-                *function.home_object.borrow_mut() = Some(Value::Object(object.clone()));
+                *function.auxiliary.home_object.borrow_mut() = Some(Value::Object(object.clone()));
             }
         }
         let mut key_env = self.current_env();

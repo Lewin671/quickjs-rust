@@ -89,10 +89,10 @@ Broad v2 makes both `property_write` and `array_write` state-recurrent and adds
 every round's resulting state to a triangular checksum. Focused three-role
 diagnostics at the v2 contract show exact operation/checksum agreement,
 eligible measurement windows, and N/2N linearity for both cases. The current
-measurement identity is `quickjs-measurement-protocol-v6`, protocol SHA-256
-`9cbd57169707fe1c2b691c340a04b60a4f127c6140b8df7823407299fb60c2b3`,
+measurement identity is `quickjs-measurement-protocol-v7`, protocol SHA-256
+`dd5225ed8b8ce4b29535d1654b0ad692583aaed95e498491890804bff070c111`,
 and checked-in manifest SHA-256
-`316e9b90c415e07573f7e7674c8d1f2602279dcc30173e1ccc0f67b0008e18d1`.
+`c4c9834b6676a56e2e8fef35ec15352257730bb2048345e8503d2a4f8b19fbf8`.
 
 ## Initial Broad V2 Baseline
 
@@ -815,6 +815,116 @@ Direct-literal-pair allocation bindings:
   `ab4d390b6ec9e1068a15b12656250c0acb62d99b09dc5089fbf0a65aca963f8e`;
 - base binary SHA-256:
   `3ab6a4b1cc4f6fc0d6e620c2e2549e40e0e5148c7aff713381c7edc76bf6b838`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
+The trusted-main preview for commit
+`1af959fb486993e2470ce73a3d42e273190dc477` is another audited pipeline
+failure, not performance evidence. All 225 formal measurements were eligible,
+all three blocks were valid, and candidate/base passed all 50 of their
+linearity checks. QuickJS-NG alone failed `array_read` at 0.82472 and
+`branch_arithmetic` at 1.20773, so overall health was `invalid` and the summary
+correctly emitted no performance conclusion. CI and the 16-shard Test262
+Coverage workflow for the same SHA passed. The prior failed preview had the
+same QuickJS-NG cases at 1.15490 and 1.19660, while the preceding successful
+preview measured them at 0.94151 and 0.99765. This repeated cross-boundary
+movement on unchanged QuickJS-NG code identifies the single N-then-2N
+diagnostic as hosted-frequency-drift-sensitive rather than a candidate
+regression.
+
+Failed direct-pair hosted bindings:
+
+- workflow run: `29500580090`;
+- benchmark run ID: `8c0efa8e-f00c-4386-b68b-7aa52babe0a0`;
+- raw JSONL SHA-256:
+  `6508c402154d3f3ff3ae08a83eac079a6bc99d3cc642b582c0292de85b09d6bb`;
+- invalid-health report SHA-256:
+  `ba405c5f14f431b0e0938b94d6a53aa1f87499c281cb563c2c8743dab8ca7dba`;
+- hosted dynamic manifest SHA-256:
+  `94b47dc14cebbe56a1418d9d4e1ed102001fa4b7a682ea261ae6104f5797aca9`;
+- candidate binary SHA-256:
+  `90aca2238b81b1207597d2a513971b2d7df1f4f89e43bcf86585d161849baa44`;
+- base binary SHA-256:
+  `4e70fc3217863414aeab91ee0709940ad9d6c245c0173466d0a1b429fd97a50c`;
+- QuickJS-NG binary SHA-256:
+  `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+
+Measurement protocol v7 fixes that instrumentation defect without changing a
+case, family, checksum, weight, calibration window, or the frozen 0.85..1.15
+linearity bounds. Every role/case now executes the predetermined balanced
+sequence N, 2N, 2N, N, N, 2N, 2N, N and analysis uses the median of four
+paired 2N/N per-op ratios. All eight raw diagnostics remain mandatory, ordered,
+hash-bound, and fail closed;
+there is no conditional retry or outlier deletion. Analysis protocol v4 is
+bound to this interpretation with SHA-256
+`e68c72df7b975b8ada2dd3b1cdda8640866e5704ff5bbef31024281eb4697f6a`.
+
+A focused local three-engine protocol-v7 run exercised the two repeatedly
+unstable hosted cases without producing campaign evidence. All 48 predetermined
+linearity diagnostics completed. The four-pair medians were 0.99646 for
+QuickJS-NG `array_read` and 0.99981 for QuickJS-NG `branch_arithmetic`; the
+candidate and base medians for both cases were also within 0.99934..1.00122.
+The focused portfolio deliberately ended with
+`comparison_input_complete=false`. Its diagnostic bindings are run ID
+`e505bc07-d7af-43ad-83a7-5c3af41452bd`, raw JSONL SHA-256
+`246beed80b0be73d6a95ef7d6114a59674a5308d71fe329ad7f92efb4ad77435`,
+and dynamic manifest SHA-256
+`e9fcbc0db3aa950f92bfe3b24c9fa6d2a1a9ac37555315ace168b5cd363b49e8`.
+Only a complete hosted portfolio can validate the new protocol for campaign
+use.
+
+The trusted-main preview for protocol commit
+`fc9887e1a81a63f5b484a691268860420202a2bf` supplied that validation. CI,
+all 16 Test262 Coverage shards plus aggregation, and Performance all passed.
+The artifact contains 225/225 eligible formal measurements, 600/600 successful
+linearity samples, three valid blocks, and no non-ok record. Its expected
+three-block health is `inconclusive`/`non_claim`. Candidate/QuickJS-NG was
+**0.56666x** overall with a 95% confidence interval of
+[0.56493x, 0.56778x], about 1.765x QuickJS-NG throughput. The remaining failed
+family gates were allocation 5.88374x, call 1.20692x, and string 14.34432x.
+
+Hosted protocol-v7 bindings:
+
+- workflow run: `29504692564`;
+- benchmark run ID: `5bedae18-1d72-4550-9557-ce552e497e6f`;
+- raw JSONL SHA-256:
+  `4447be28d20f159f6082bbd897334f361d07fe228982bda7e227d70a93097ad6`;
+- report JSON SHA-256:
+  `5a70b07edabd225c3012b3c9bba67341908f9a6d3778a7e49afdc016d1349f95`;
+- hosted dynamic manifest SHA-256:
+  `1153586b91c2270f7788908091ca009afad7e2a51d39d6420b0422680fdaf104`;
+- candidate/base binary SHA-256:
+  `90aca2238b81b1207597d2a513971b2d7df1f4f89e43bcf86585d161849baa44`;
+- QuickJS-NG binary SHA-256:
+  `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+
+The thirteenth v2 runtime unit reduces real closure-allocation work rather than
+summarizing the benchmark loop. Function identity state that previously used
+ten independent `Rc` allocations is consolidated behind one shared auxiliary
+allocation. Ordinary compiled constructors now materialize their default
+`prototype` object only when property observation, mutation, integrity, or
+construction semantics require it. Each source iteration still creates a
+distinct function and performs the call.
+
+A focused one-case three-role run made all nine formal measurements eligible
+and all 24 predetermined linearity samples succeeded. For
+`closure_allocation_call`, candidate medians were
+952.953/952.569/943.102 ns/op versus 1737.775/1747.237/1750.027 for the
+preceding base and 281.590/281.702/281.371 for QuickJS-NG. The candidate was
+0.54519x of the base, a 45.5% wall-time reduction, and 3.38283x QuickJS-NG.
+This is focused complete raw evidence, not a broad claim.
+
+Consolidated function-state bindings:
+
+- run ID: `d0ba3cac-bcec-4241-9766-dea99f59e032`;
+- raw JSONL SHA-256:
+  `b3ae4826fa86996e6edb165c977e8f1a28cbb72da0b95017d5ac184c8ed999ac`;
+- manifest SHA-256:
+  `c4c9834b6676a56e2e8fef35ec15352257730bb2048345e8503d2a4f8b19fbf8`;
+- candidate binary SHA-256:
+  `2b44004f9341158fc450088cafe7ca0302794f97a10a43713136fce1ea728598`;
+- base binary SHA-256:
+  `ab4d390b6ec9e1068a15b12656250c0acb62d99b09dc5089fbf0a65aca963f8e`;
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 

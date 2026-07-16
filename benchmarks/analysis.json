@@ -1,12 +1,12 @@
 {
   "schema_version": 2,
-  "id": "quickjs-benchmark-analysis-v3",
+  "id": "quickjs-benchmark-analysis-v4",
   "compatible_measurement": {
     "schema_version": 4,
-    "protocol_id": "quickjs-measurement-protocol-v6"
+    "protocol_id": "quickjs-measurement-protocol-v7"
   },
   "protocol": {
-    "id": "quickjs-analysis-protocol-v3",
+    "id": "quickjs-analysis-protocol-v4",
     "files": [
       "scripts/benchmark-report.sh",
       "tools/__init__.py",
@@ -15,6 +15,7 @@
       "tools/benchmark/analysis_schema.py",
       "tools/benchmark/artifact.py",
       "tools/benchmark/health.py",
+      "tools/benchmark/linearity.py",
       "tools/benchmark/planning.py",
       "tools/benchmark/raw_contract.py",
       "tools/benchmark/raw_validation.py",
@@ -24,7 +25,7 @@
       "tools/benchmark/schema.py",
       "tools/benchmark/statistics.py"
     ],
-    "aggregate_sha256": "49b15bb4353e57add4eb93f9abd7fa79e00a9f714db8aca0c7a1434449cb12c6"
+    "aggregate_sha256": "e68c72df7b975b8ada2dd3b1cdda8640866e5704ff5bbef31024281eb4697f6a"
   },
   "bootstrap": {
     "samples": 20000,

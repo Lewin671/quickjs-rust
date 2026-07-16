@@ -539,7 +539,7 @@ class ReportTests(unittest.TestCase):
         })
         discarded = {
             id(row) for row in pair_diagnostics
-            if row["phase"] in {"warmup", "linearity_n", "linearity_2n"}
+            if row["phase"] in {"warmup", "linearity"}
         }
         rewritten = []
         for row in rows:
@@ -605,7 +605,7 @@ class ReportTests(unittest.TestCase):
         role = "candidate"
         case_id = "plain_function_call"
         for phase in (
-            "startup", "calibration", "warmup", "linearity_n", "linearity_2n",
+            "startup", "calibration", "warmup", "linearity",
         ):
             with self.subTest(phase=phase):
                 rows = self._complete_rows()
@@ -663,16 +663,20 @@ class ReportTests(unittest.TestCase):
             self._build_report()
 
         rows = self._complete_rows()
-        n_index = next(i for i, row in enumerate(rows) if row.get("phase") == "linearity_n")
-        twice_index = next(
-            i for i, row in enumerate(rows)
-            if row.get("phase") == "linearity_2n"
-            and row["role"] == rows[n_index]["role"]
-            and row["case_id"] == rows[n_index]["case_id"]
+        first_index = next(
+            i
+            for i, row in enumerate(rows)
+            if row.get("diagnostic_point") == "2n:0"
         )
-        rows[n_index], rows[twice_index] = rows[twice_index], rows[n_index]
+        second_index = next(
+            i for i, row in enumerate(rows)
+            if row.get("diagnostic_point") == "2n:1"
+            and row["role"] == rows[first_index]["role"]
+            and row["case_id"] == rows[first_index]["case_id"]
+        )
+        rows[first_index], rows[second_index] = rows[second_index], rows[first_index]
         self._write_rows(rows)
-        with self.assertRaisesRegex(ReportError, "invalid phase order"):
+        with self.assertRaisesRegex(ReportError, "diagnostic point mismatch"):
             self._build_report()
 
     def test_seed_and_seeded_measurement_plan_fail_closed(self) -> None:
@@ -727,7 +731,7 @@ class ReportTests(unittest.TestCase):
             self._build_report()
 
         rows = self._complete_rows()
-        point = next(row for row in rows if row.get("phase") == "linearity_n")
+        point = next(row for row in rows if row.get("diagnostic_point") == "n:0")
         self._retarget(point, point["iterations"] - 1)
         self._write_rows(rows)
         with self.assertRaisesRegex(ReportError, "diagnostic iterations mismatch"):
@@ -760,33 +764,56 @@ class ReportTests(unittest.TestCase):
 
     def test_linearity_missing_duplicate_invalid_and_failed_health(self) -> None:
         rows = self._complete_rows()
-        point = next(row for row in rows if row.get("phase") == "linearity_n")
+        point = next(row for row in rows if row.get("diagnostic_point") == "n:0")
         rows.remove(point)
         self._write_rows(rows)
-        with self.assertRaisesRegex(ReportError, "diagnostic state mismatch"):
+        with self.assertRaisesRegex(ReportError, "diagnostic iterations mismatch"):
             self._build_report()
 
         rows = self._complete_rows()
-        point = next(row for row in rows if row.get("phase") == "linearity_n")
+        point = next(row for row in rows if row.get("diagnostic_point") == "n:0")
         rows.insert(rows.index(point) + 1, dict(point))
         self._write_rows(rows)
         with self.assertRaisesRegex(ReportError, "duplicate linearity"):
             self._build_report()
 
         rows = self._complete_rows()
-        point = next(row for row in rows if row.get("phase") == "linearity_2n")
+        point = next(row for row in rows if row.get("diagnostic_point") == "2n:0")
         point["diagnostic_point"] = "n"
         self._write_rows(rows)
         with self.assertRaisesRegex(ReportError, "invalid linearity point"):
             self._build_report()
 
         rows = self._complete_rows()
-        point = next(row for row in rows if row.get("phase") == "linearity_2n")
-        point["duration_ns"] *= 3
+        points = [
+            row
+            for row in rows
+            if row.get("diagnostic_point") in {"2n:0", "2n:1"}
+            and row["role"] == "candidate"
+            and row["case_id"] == "plain_function_call"
+        ]
+        self.assertEqual(len(points), 2)
+        for point in points:
+            point["duration_ns"] *= 3
         self._write_rows(rows)
         report = self._build_report()
         self.assertEqual(report["health"]["status"], "invalid")
         self.assertFalse(report["claim_eligible"])
+
+    def test_linearity_median_retains_one_fixed_probe_outlier(self) -> None:
+        rows = self._complete_rows()
+        point = next(
+            row
+            for row in rows
+            if row.get("diagnostic_point") == "2n:0"
+            and row["role"] == "candidate"
+            and row["case_id"] == "plain_function_call"
+        )
+        point["duration_ns"] *= 3
+        self._write_rows(rows)
+        report = self._build_report()
+        self.assertEqual(report["health"]["linearity"]["status"], "pass")
+        self.assertEqual(report["health"]["status"], "inconclusive")
 
     def test_report_cli_writes_atomically_and_refuses_overwrite(self) -> None:
         # Use the repository contract for the subprocess by regenerating raw
