@@ -579,13 +579,20 @@ impl NumericLoopCall {
         }
     }
 
-    pub(super) fn eval(&mut self, arguments: &[f64]) -> f64 {
+    pub(super) fn eval(&mut self, first_argument: f64, second_argument: f64) -> f64 {
+        let argument = |index: usize| {
+            if index == 0 {
+                first_argument
+            } else {
+                second_argument
+            }
+        };
         match self {
             Self::ArgumentAddConstants {
                 argument_index,
                 constants,
             } => {
-                let mut value = arguments[*argument_index];
+                let mut value = argument(*argument_index);
                 for constant in constants {
                     value += *constant;
                 }
@@ -595,7 +602,7 @@ impl NumericLoopCall {
                 argument_index,
                 operations,
             } => {
-                let mut value = arguments[*argument_index];
+                let mut value = argument(*argument_index);
                 for (op, right) in operations {
                     value = number_binary(value, *op, *right)
                         .expect("validated numeric-result shortcut");
@@ -608,7 +615,7 @@ impl NumericLoopCall {
                 op,
                 argument_left,
             } => {
-                let argument = arguments[*argument_index];
+                let argument = argument(*argument_index);
                 let (left, right) = if *argument_left {
                     (argument, *captured)
                 } else {
@@ -621,9 +628,9 @@ impl NumericLoopCall {
                 right_argument_index,
                 op,
             } => number_binary(
-                arguments[*left_argument_index],
+                argument(*left_argument_index),
                 *op,
-                arguments[*right_argument_index],
+                argument(*right_argument_index),
             )
             .expect("validated numeric-result shortcut"),
             Self::UpdateCapturedConstReturn {

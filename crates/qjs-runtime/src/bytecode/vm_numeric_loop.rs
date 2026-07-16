@@ -14,6 +14,35 @@ enum NumericLoopArgument {
     Constant(f64),
 }
 
+#[derive(Clone, Copy, Debug)]
+enum NumericLoopArguments {
+    None,
+    One(NumericLoopArgument),
+    Two(NumericLoopArgument, NumericLoopArgument),
+}
+
+impl NumericLoopArguments {
+    fn len(self) -> usize {
+        match self {
+            Self::None => 0,
+            Self::One(_) => 1,
+            Self::Two(_, _) => 2,
+        }
+    }
+
+    fn values(self, counter: f64) -> [f64; 2] {
+        let value = |argument| match argument {
+            NumericLoopArgument::Counter => counter,
+            NumericLoopArgument::Constant(value) => value,
+        };
+        match self {
+            Self::None => [0.0, 0.0],
+            Self::One(first) => [value(first), 0.0],
+            Self::Two(first, second) => [value(first), value(second)],
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 enum NumericLoopTerm {
     NamedProperty {
@@ -26,16 +55,16 @@ enum NumericLoopTerm {
     },
     GlobalCall {
         name: String,
-        arguments: Vec<NumericLoopArgument>,
+        arguments: NumericLoopArguments,
     },
     LocalCall {
         callee_slot: usize,
-        arguments: Vec<NumericLoopArgument>,
+        arguments: NumericLoopArguments,
     },
     MethodCall {
         receiver_slot: usize,
         key: std::rc::Rc<str>,
-        arguments: Vec<NumericLoopArgument>,
+        arguments: NumericLoopArguments,
     },
 }
 
@@ -44,7 +73,7 @@ enum PreparedNumericLoopTerm {
     Stable(f64),
     Call {
         call: NumericLoopCall,
-        arguments: Vec<NumericLoopArgument>,
+        arguments: NumericLoopArguments,
     },
 }
 
@@ -394,12 +423,12 @@ impl NumericLoopTerm {
 
     fn prepare_call(
         function: crate::Function,
-        arguments: &[NumericLoopArgument],
+        arguments: &NumericLoopArguments,
         vm: &Vm<'_>,
     ) -> Option<PreparedNumericLoopTerm> {
         Some(PreparedNumericLoopTerm::Call {
             call: NumericLoopCall::prepare(&function, arguments.len(), &vm.local_upvalues)?,
-            arguments: arguments.to_vec(),
+            arguments: *arguments,
         })
     }
 }
@@ -409,8 +438,8 @@ fn compile_call_arguments(
     mut cursor: usize,
     counter_slot: usize,
     resolved: bool,
-) -> Option<(Vec<NumericLoopArgument>, usize)> {
-    let mut arguments = Vec::new();
+) -> Option<(NumericLoopArguments, usize)> {
+    let mut arguments = NumericLoopArguments::None;
     loop {
         let call_count = match bytecode.code.get(cursor)? {
             Op::Call(count) if !resolved => Some(*count),
@@ -420,9 +449,6 @@ fn compile_call_arguments(
         if let Some(call_count) = call_count {
             return (call_count == arguments.len()).then_some((arguments, cursor + 1));
         }
-        if arguments.len() == 2 {
-            return None;
-        }
         let argument = match bytecode.code.get(cursor)? {
             Op::LoadLocal(slot) if *slot == counter_slot => NumericLoopArgument::Counter,
             Op::LoadConst(index) => match bytecode.constants.get(*index)? {
@@ -431,7 +457,11 @@ fn compile_call_arguments(
             },
             _ => return None,
         };
-        arguments.push(argument);
+        arguments = match arguments {
+            NumericLoopArguments::None => NumericLoopArguments::One(argument),
+            NumericLoopArguments::One(first) => NumericLoopArguments::Two(first, argument),
+            NumericLoopArguments::Two(_, _) => return None,
+        };
         cursor += 1;
     }
 }
@@ -441,14 +471,8 @@ impl PreparedNumericLoopTerm {
         match self {
             Self::Stable(value) => *value,
             Self::Call { call, arguments } => {
-                let mut values = [0.0; 2];
-                for (index, argument) in arguments.iter().enumerate() {
-                    values[index] = match argument {
-                        NumericLoopArgument::Counter => counter,
-                        NumericLoopArgument::Constant(value) => *value,
-                    };
-                }
-                call.eval(&values[..arguments.len()])
+                let [first, second] = arguments.values(counter);
+                call.eval(first, second)
             }
         }
     }
