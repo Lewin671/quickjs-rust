@@ -40,11 +40,21 @@ HARNESS_REVISION = "a" * 40
 
 def report(ratio_base: float = 1.25, ratio_qjs: float = 0.8) -> dict[str, object]:
     def comparison(ratio: float) -> dict[str, object]:
+        cases = {}
+        for index, case_id in enumerate(HOSTED_CASES, 1):
+            candidate = float(100 + index)
+            cases[case_id] = {
+                "candidate_median_ns_per_op": candidate,
+                "comparator_median_ns_per_op": candidate / ratio,
+                "ratio": ratio,
+                "confidence_interval": {"lower": ratio * 0.9, "upper": ratio * 1.1},
+            }
         return {
             "overall": {
                 "ratio": ratio,
                 "confidence_interval": {"lower": ratio * 0.9, "upper": ratio * 1.1},
-            }
+            },
+            "cases": cases,
         }
 
     engines = []
@@ -98,6 +108,10 @@ class PreviewSummaryTests(unittest.TestCase):
         self.assertNotIn("faster", markdown.lower())
         self.assertNotIn("slower", markdown.lower())
         self.assertIn("Valid blocks: `3/3`", markdown)
+        self.assertIn("### Per-case performance", markdown)
+        self.assertIn("| `plain_function_call` |", markdown)
+        self.assertIn("| `closure_allocation_call` |", markdown)
+        self.assertEqual(len(machine["comparisons"]["candidate vs base"]["cases"]), 25)
         self.assertEqual(
             machine["ratio_semantics"],
             "candidate_over_comparator_wall_ns_per_operation",
@@ -153,6 +167,9 @@ class PreviewSummaryTests(unittest.TestCase):
         missing = report()
         missing["comparisons"]["candidate_vs_base"] = None
         attacks.append(missing)
+        missing_case = report()
+        missing_case["comparisons"]["candidate_vs_base"]["cases"].pop(HOSTED_CASES[0])
+        attacks.append(missing_case)
         incomplete = report()
         incomplete["coverage"]["comparison_input_complete"] = False
         attacks.append(incomplete)
@@ -209,7 +226,6 @@ class PreviewPreparationTests(unittest.TestCase):
             'CURRENT_PHASE="post_measure_validation"', "GITHUB_ENV GITHUB_PATH",
             "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "./scripts/performance-policy-audit.sh",
             "./scripts/external-corpus-audit.sh", "./scripts/external-performance-preview.sh",
-            '|| [ "$HARNESS_MODE" = "manual_main_head_owned_harness" ]',
             'cat "$OUTPUT/external-summary.md" >> "$OUTPUT/summary.md"',
         ):
             self.assertIn(value, script)
@@ -249,6 +265,9 @@ class PreviewPreparationTests(unittest.TestCase):
         self.assertNotIn("fetch --no-tags", script)
         self.assertNotIn("third_party/test262", script)
         self.assertNotIn("--threshold", script)
+        self.assertNotIn(
+            'if [ "$HARNESS_MODE" = "main_push_head_owned_harness" ]', script
+        )
 
     def test_verify_source_detects_mock_build_dirtying_tracked_source(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:

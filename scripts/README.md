@@ -90,7 +90,9 @@ each script is for.
   `main` push (merge or direct) uses `github.event.after` as the head-owned
   harness/candidate and `github.event.before` as the base. A trusted manual
   dispatch from `main` uses the selected revision as both candidate and A/A
-  base, then runs the full JetStream 3, Kraken, and SunSpider external preview.
+  base. Every admitted mode runs the full JetStream 3, Kraken, and SunSpider
+  external preview, and the final Step Summary includes the 25 internal cases,
+  the three external-suite diagnostics, and all 45 named external cases.
   Trigger it with `gh workflow run performance-smoke.yml --ref main`. Fork PRs are
   unsupported, and push admission fail-closes on event/ref/repository/SHA
   mismatches. The script

@@ -567,11 +567,13 @@ Admission and execution tiers:
 - The current QuickJS-derived first-party subset remains the only claim-candidate
   runnable layer. The external registry records governance state, not
   first-party admission.
-- A trusted `main` push or manual dispatch from `main` additionally runs a
-  non-claim external preview described
+- Every admitted hosted preview mode runs the non-claim external preview
+  described
   by `benchmarks/external-preview.json`. It runs 45 explicitly listed cases from
   71 files at three full upstream revisions, verifies every SHA-256 before
   generating temporary bundles, and uploads hashes/results rather than source.
+  Same-repository pull requests use the base-owned harness, while trusted
+  `main` pushes and manual dispatches use the exact `main` harness revision.
   This execution-only layer does not change any `blocked` registry decision.
 - V8 benchmark suite v7 (`bench-v8`) and the QuickJS-NG Web Tooling Benchmark
   fork are blocked candidates pending per-workload license, capability, and
@@ -595,7 +597,7 @@ Admission and execution tiers:
   audit is never headline evidence: only a complete frozen measurement and
   analysis protocol on qualified hardware can support a performance claim.
 
-### External main/manual preview
+### External hosted preview
 
 The external preview compares only the current qjs-rust candidate and the
 pinned QuickJS-NG executable. QuickJS-NG runs with `--script` so historical
@@ -617,7 +619,10 @@ visible for that frozen case and the case receives no ratio. The report may show
 a diagnostic geometric mean over explicitly comparable cases, but an incomplete
 suite has no suite score. JetStream output is always named **JetStream 3
 JavaScript subset** and never an official JetStream score. All hosted output
-keeps `claim_eligible=false`.
+keeps `claim_eligible=false`. The GitHub Step Summary shows both the three-suite
+overview and every named external case with qjs-rust and QuickJS-NG median wall
+time, ratio, and lower-wall-time engine. The internal portfolio is likewise
+rendered as a 25-case table instead of only an overall ratio.
 
 Run the same preview locally after building both shells:
 

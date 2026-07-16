@@ -580,6 +580,36 @@ def _markdown(report: dict[str, Any]) -> str:
             f"{ratio_text} | {suite['wins']['candidate']} | {suite['wins']['quickjs-ng']} |"
         )
     lines.extend([
+        "", "### External per-case performance", "",
+        "Median wall time is the outer process duration per run. Lower ratios favor qjs-rust.", "",
+        "| Suite / case | qjs-rust ms/run | QuickJS-NG ms/run | Ratio | Lower wall time |",
+        "|---|---:|---:|---:|---|",
+    ])
+    for suite in report["suites"]:
+        for case in suite["cases"]:
+            candidate = case["median_duration_ns"]["candidate"]
+            quickjs = case["median_duration_ns"]["quickjs-ng"]
+            ratio = case["candidate_over_quickjs_ng"]
+            if ratio is None or candidate is None or quickjs is None:
+                candidate_text = "—" if candidate is None else f"{candidate / 1_000_000:.3f}"
+                quickjs_text = "—" if quickjs is None else f"{quickjs / 1_000_000:.3f}"
+                ratio_text = "—"
+                lower_wall_time = (
+                    f"not comparable ({case['capability']['candidate']} / "
+                    f"{case['capability']['quickjs-ng']})"
+                )
+            else:
+                candidate_text = f"{candidate / 1_000_000:.3f}"
+                quickjs_text = f"{quickjs / 1_000_000:.3f}"
+                ratio_text = f"{ratio:.3f}x"
+                lower_wall_time = (
+                    "qjs-rust" if ratio < 1 else "QuickJS-NG" if ratio > 1 else "tie"
+                )
+            lines.append(
+                f"| `{suite['id']}/{case['id']}` | {candidate_text} | {quickjs_text} | "
+                f"{ratio_text} | {lower_wall_time} |"
+            )
+    lines.extend([
         "", "Lower ratios are faster for qjs-rust. The ratio is a diagnostic geometric mean",
         "over explicitly reported comparable cases, never a substitute for a suite score.", "",
     ])

@@ -388,26 +388,23 @@ CURRENT_PHASE="summary"
   --json-output "$OUTPUT/summary.json" --status-output "$OUTPUT/status.json" \
   --harness-mode "$HARNESS_MODE" --harness-revision "$HARNESS_REVISION")
 
-# External corpora remain non-claim evidence and run only after a trusted main
-# update. Pull requests keep the smaller base-owned internal preview. Source
-# files are downloaded at pinned revisions into a sibling cache and are never
-# uploaded with the evidence artifact.
-if [ "$HARNESS_MODE" = "main_push_head_owned_harness" ] \
-  || [ "$HARNESS_MODE" = "manual_main_head_owned_harness" ]; then
-  CURRENT_PHASE="external_corpus_preview"
-  EXTERNAL_CACHE_ROOT="$(dirname "$OUTPUT")/external-corpora"
-  EXTERNAL_WORK_ROOT="$(dirname "$OUTPUT")/external-work"
-  (cd "$HARNESS_ROOT" && ./scripts/external-performance-preview.sh audit)
-  (cd "$HARNESS_ROOT" && ./scripts/external-performance-preview.sh run \
-    --cache-root "$EXTERNAL_CACHE_ROOT" --work-root "$EXTERNAL_WORK_ROOT" \
-    --output-dir "$OUTPUT" --candidate "$CANDIDATE_BINARY" \
-    --quickjs-ng "$QUICKJS_BINARY")
-  verify_source "$CANDIDATE_SOURCE" "$CANDIDATE_REVISION"
-  verify_source "$BASE_SOURCE" "$BASE_REVISION"
-  verify_source "$QUICKJS_SOURCE" "$REFERENCE_REVISION"
-  printf '\n' >> "$OUTPUT/summary.md"
-  cat "$OUTPUT/external-summary.md" >> "$OUTPUT/summary.md"
-fi
+# External corpora remain non-claim evidence in every admitted hosted mode.
+# The base-owned PR harness keeps corpus selection and reporting code trusted;
+# source files are downloaded at pinned revisions into a sibling cache and are
+# never uploaded with the evidence artifact.
+CURRENT_PHASE="external_corpus_preview"
+EXTERNAL_CACHE_ROOT="$(dirname "$OUTPUT")/external-corpora"
+EXTERNAL_WORK_ROOT="$(dirname "$OUTPUT")/external-work"
+(cd "$HARNESS_ROOT" && ./scripts/external-performance-preview.sh audit)
+(cd "$HARNESS_ROOT" && ./scripts/external-performance-preview.sh run \
+  --cache-root "$EXTERNAL_CACHE_ROOT" --work-root "$EXTERNAL_WORK_ROOT" \
+  --output-dir "$OUTPUT" --candidate "$CANDIDATE_BINARY" \
+  --quickjs-ng "$QUICKJS_BINARY")
+verify_source "$CANDIDATE_SOURCE" "$CANDIDATE_REVISION"
+verify_source "$BASE_SOURCE" "$BASE_REVISION"
+verify_source "$QUICKJS_SOURCE" "$REFERENCE_REVISION"
+printf '\n' >> "$OUTPUT/summary.md"
+cat "$OUTPUT/external-summary.md" >> "$OUTPUT/summary.md"
 
 RUN_COMPLETED=1
 CURRENT_PHASE="complete"

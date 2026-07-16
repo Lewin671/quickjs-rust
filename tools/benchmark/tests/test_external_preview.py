@@ -165,7 +165,11 @@ class ExternalPreviewTests(unittest.TestCase):
             self.assertFalse((work / "bundles").exists())
             self.assertFalse((work / "engine-snapshots").exists())
             self.assertNotIn("externalValue", (output / "external-raw.jsonl").read_text())
-            self.assertIn("Informational only", (output / "external-summary.md").read_text())
+            markdown = (output / "external-summary.md").read_text()
+            self.assertIn("Informational only", markdown)
+            self.assertIn("### External per-case performance", markdown)
+            self.assertIn("| `suite/case` |", markdown)
+            self.assertIn("qjs-rust ms/run", markdown)
 
     def test_checked_in_cli_audit_works_outside_repository(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
