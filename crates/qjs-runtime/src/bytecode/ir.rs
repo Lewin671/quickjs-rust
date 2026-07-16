@@ -21,10 +21,16 @@ struct NamedPropertyCacheState {
 }
 
 #[derive(Clone, Debug)]
-struct NamedPropertyCacheEntry {
-    object: ObjectWeakRef,
-    revision: u64,
-    value: CachedPrimitive,
+enum NamedPropertyCacheEntry {
+    Exact {
+        object: ObjectWeakRef,
+        revision: u64,
+        value: CachedPrimitive,
+    },
+    LiteralShape {
+        shape: Rc<ObjectLiteralShape>,
+        slot: usize,
+    },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -50,10 +56,22 @@ impl NamedPropertyCache {
     pub(super) fn get(&self, object: &ObjectRef) -> Option<Value> {
         let state = self.0.borrow();
         let entry = state.entry.as_ref()?;
-        if !entry.object.ptr_eq(object) || entry.revision != object.property_revision() {
-            return None;
-        }
-        Some(match entry.value {
+        let value = match entry {
+            NamedPropertyCacheEntry::Exact {
+                object: cached_object,
+                revision,
+                value,
+            } => {
+                if !cached_object.ptr_eq(object) || *revision != object.property_revision() {
+                    return None;
+                }
+                *value
+            }
+            NamedPropertyCacheEntry::LiteralShape { shape, slot } => {
+                return object.literal_data_slot_value(shape, *slot);
+            }
+        };
+        Some(match value {
             CachedPrimitive::Undefined => Value::Undefined,
             CachedPrimitive::Null => Value::Null,
             CachedPrimitive::Boolean(value) => Value::Boolean(value),
@@ -61,7 +79,11 @@ impl NamedPropertyCache {
         })
     }
 
-    pub(super) fn update(&self, object: &ObjectRef, value: &Value) {
+    pub(super) fn update(&self, object: &ObjectRef, key: &str, value: &Value) {
+        if let Some((shape, slot)) = object.literal_data_slot(key) {
+            self.0.borrow_mut().entry = Some(NamedPropertyCacheEntry::LiteralShape { shape, slot });
+            return;
+        }
         let value = match value {
             Value::Undefined => CachedPrimitive::Undefined,
             Value::Null => CachedPrimitive::Null,
@@ -72,7 +94,7 @@ impl NamedPropertyCache {
                 return;
             }
         };
-        self.0.borrow_mut().entry = Some(NamedPropertyCacheEntry {
+        self.0.borrow_mut().entry = Some(NamedPropertyCacheEntry::Exact {
             object: object.downgrade(),
             revision: object.property_revision(),
             value,
@@ -1347,5 +1369,40 @@ fn collect_sloppy_global_assignment_names_from_ops(code: &[Op], names: &mut BTre
         if let Op::StoreLocalOrGlobalSloppy { name, .. } = op {
             names.insert(name.clone());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Property;
+
+    #[test]
+    fn named_property_cache_reuses_literal_shape_across_objects() {
+        let shape = ObjectLiteralShape::new(vec![Rc::from("a"), Rc::from("b")]);
+        let first = ObjectRef::with_literal_pair(
+            shape.clone(),
+            [Value::Number(1.0), Value::Number(2.0)],
+            None,
+        );
+        let second = ObjectRef::with_literal_pair(
+            shape.clone(),
+            [Value::Number(3.0), Value::Number(4.0)],
+            None,
+        );
+        let cache = NamedPropertyCache::default();
+
+        cache.update(&first, "a", &Value::Number(1.0));
+        assert_eq!(cache.get(&second), Some(Value::Number(3.0)));
+
+        second.define_property(
+            "a".to_owned(),
+            Property::data(Value::Number(5.0), false, false, true),
+        );
+        assert_eq!(cache.get(&second), None);
+
+        let third =
+            ObjectRef::with_literal_pair(shape, [Value::Number(6.0), Value::Number(7.0)], None);
+        assert_eq!(cache.get(&third), Some(Value::Number(6.0)));
     }
 }

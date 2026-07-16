@@ -1136,6 +1136,38 @@ Compact Value-layout bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+The eighteenth v2 runtime unit extends the existing named-property cache from
+one exact object identity to the shared shape of an unmodified data-only object
+literal. The first lookup resolves the property slot once; later objects from
+the same bytecode site validate the shared shape and read their own current
+slot value without repeating the string hash. Descriptor changes, ordinary
+writes, dynamic storage, exotic objects, and different shapes fail the guard
+and retain the observable property path. The object allocation and both
+property reads remain present in every benchmark iteration.
+
+A focused three-role `object_allocation` run made all nine formal measurements
+eligible and passed all 24 predetermined N/2N samples with exact doubled
+operation counts and checksums. Candidate medians were
+251.653/255.329/253.926 ns/op versus 358.707/345.424/351.497 for the immediately
+preceding runtime, a **0.72088x** paired geometric ratio (27.9% lower wall
+ns/op). QuickJS-NG measured 202.189/195.760/186.835 ns/op, leaving this focused
+case at 1.30184x QuickJS-NG on the macOS profile. This is complete focused raw
+evidence, not a broad or allocation-family claim.
+
+Literal-shape cache bindings:
+
+- run ID: `851d517a-5be8-4ef1-8f2b-71cac0cd5f9c`;
+- raw JSONL SHA-256:
+  `2e8e6bb492a87ae3347c8186bf80646b4063354b63672652ed7945b11427dad8`;
+- manifest SHA-256:
+  `5105e4923cb104f6608e935f73a35e9ab763562c57c7eea8cb0169d1710777ec`;
+- candidate binary SHA-256:
+  `11081358d446a72eaba0d4b66191beacc064a9701c7ebbee9d7424986a3e1835`;
+- preceding-runtime binary SHA-256:
+  `7f393c26c3128f0c301c03b2adbd8b36a50c6407a1ae5e843995dc5e4ef7fbf9`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

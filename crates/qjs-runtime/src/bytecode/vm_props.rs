@@ -252,7 +252,7 @@ impl Vm<'_> {
         }
         match object_ref.own_data_property_read(key) {
             OwnDataPropertyRead::Data(value) => {
-                cache.update(object_ref, &value);
+                cache.update(object_ref, key, &value);
                 Some(value)
             }
             OwnDataPropertyRead::Missing | OwnDataPropertyRead::NeedsSlowPath => {

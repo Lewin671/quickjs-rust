@@ -1139,6 +1139,45 @@ impl ObjectRef {
         self.0.properties.borrow().own_data_read(key)
     }
 
+    /// Returns the shared literal shape and storage slot for an unmodified
+    /// data-only object literal. Named-property caches use this to share one
+    /// cache entry across distinct objects created by the same bytecode site.
+    pub(crate) fn literal_data_slot(&self, key: &str) -> Option<(Rc<ObjectLiteralShape>, usize)> {
+        if self.0.module_namespace_exotic.get() || self.property_revision() != 0 {
+            return None;
+        }
+        let properties = self.0.properties.borrow();
+        let shape = match &*properties {
+            PropertyStorage::Shaped { shape, .. } | PropertyStorage::ShapedPair { shape, .. } => {
+                shape
+            }
+            PropertyStorage::Dynamic { .. } => return None,
+        };
+        let slot = *shape.lookup.get(key)?;
+        Some((shape.clone(), slot))
+    }
+
+    /// Reads a previously resolved literal slot after checking that this
+    /// object still has the same unmodified shared shape.
+    pub(crate) fn literal_data_slot_value(
+        &self,
+        expected_shape: &Rc<ObjectLiteralShape>,
+        slot: usize,
+    ) -> Option<Value> {
+        if self.0.module_namespace_exotic.get() || self.property_revision() != 0 {
+            return None;
+        }
+        match &*self.0.properties.borrow() {
+            PropertyStorage::Shaped { shape, properties } if Rc::ptr_eq(shape, expected_shape) => {
+                properties.get(slot).map(|property| property.value.clone())
+            }
+            PropertyStorage::ShapedPair { shape, values } if Rc::ptr_eq(shape, expected_shape) => {
+                values.get(slot).cloned()
+            }
+            _ => None,
+        }
+    }
+
     /// Reads a writable ordinary own numeric data property for scalar
     /// replacement. Exotic namespaces, accessors, read-only descriptors, and
     /// non-numeric values stay on the observable property path.
