@@ -79,22 +79,20 @@ pub(crate) fn constructor_prototype_slot(
     if let Some(bound) = &function.bound {
         return constructor_prototype_slot(&bound.target, env);
     }
-    match function.properties.borrow().get("prototype") {
+    match function.own_property("prototype") {
         Some(Property {
             value: Value::Object(prototype),
             ..
-        }) if !symbol::is_symbol_primitive(prototype) => {
-            Some(crate::Prototype::Object(prototype.clone()))
-        }
+        }) if !symbol::is_symbol_primitive(&prototype) => Some(crate::Prototype::Object(prototype)),
         Some(Property {
             value: Value::Function(prototype),
             ..
-        }) => Some(crate::Prototype::Function(prototype.clone())),
+        }) => Some(crate::Prototype::Function(prototype)),
         Some(Property {
             value: Value::Array(array),
             ..
         }) => Some(crate::Prototype::Object(array_as_object_prototype(
-            array, env,
+            &array, env,
         ))),
         _ => None,
     }
@@ -159,35 +157,35 @@ pub(crate) fn function_intrinsic_prototype_slot(env: &CallEnv) -> Option<crate::
     let Some(Value::Function(function_constructor)) = env.get("Function") else {
         return None;
     };
-    match function_constructor.properties.borrow().get("prototype") {
+    match function_constructor.own_property("prototype") {
         Some(Property {
             value: Value::Object(prototype),
             ..
-        }) => Some(crate::Prototype::Object(prototype.clone())),
+        }) => Some(crate::Prototype::Object(prototype)),
         Some(Property {
             value: Value::Function(prototype),
             ..
-        }) => Some(crate::Prototype::Function(prototype.clone())),
+        }) => Some(crate::Prototype::Function(prototype)),
         Some(Property {
             value: Value::Array(array),
             ..
         }) => Some(crate::Prototype::Object(array_as_object_prototype(
-            array, env,
+            &array, env,
         ))),
         Some(Property {
             value: Value::Proxy(prototype),
             ..
-        }) => Some(crate::Prototype::Proxy(prototype.clone())),
+        }) => Some(crate::Prototype::Proxy(prototype)),
         _ => None,
     }
 }
 
 pub(crate) fn function_prototype(function: &Function) -> Option<ObjectRef> {
-    match function.properties.borrow().get("prototype") {
+    match function.own_property("prototype") {
         Some(Property {
             value: Value::Object(prototype),
             ..
-        }) => Some(prototype.clone()),
+        }) => Some(prototype),
         _ => None,
     }
 }

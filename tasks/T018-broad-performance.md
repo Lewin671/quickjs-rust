@@ -873,6 +873,61 @@ and dynamic manifest SHA-256
 Only a complete hosted portfolio can validate the new protocol for campaign
 use.
 
+The trusted-main preview for protocol commit
+`fc9887e1a81a63f5b484a691268860420202a2bf` supplied that validation. CI,
+all 16 Test262 Coverage shards plus aggregation, and Performance all passed.
+The artifact contains 225/225 eligible formal measurements, 600/600 successful
+linearity samples, three valid blocks, and no non-ok record. Its expected
+three-block health is `inconclusive`/`non_claim`. Candidate/QuickJS-NG was
+**0.56666x** overall with a 95% confidence interval of
+[0.56493x, 0.56778x], about 1.765x QuickJS-NG throughput. The remaining failed
+family gates were allocation 5.88374x, call 1.20692x, and string 14.34432x.
+
+Hosted protocol-v7 bindings:
+
+- workflow run: `29504692564`;
+- benchmark run ID: `5bedae18-1d72-4550-9557-ce552e497e6f`;
+- raw JSONL SHA-256:
+  `4447be28d20f159f6082bbd897334f361d07fe228982bda7e227d70a93097ad6`;
+- report JSON SHA-256:
+  `5a70b07edabd225c3012b3c9bba67341908f9a6d3778a7e49afdc016d1349f95`;
+- hosted dynamic manifest SHA-256:
+  `1153586b91c2270f7788908091ca009afad7e2a51d39d6420b0422680fdaf104`;
+- candidate/base binary SHA-256:
+  `90aca2238b81b1207597d2a513971b2d7df1f4f89e43bcf86585d161849baa44`;
+- QuickJS-NG binary SHA-256:
+  `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+
+The thirteenth v2 runtime unit reduces real closure-allocation work rather than
+summarizing the benchmark loop. Function identity state that previously used
+ten independent `Rc` allocations is consolidated behind one shared auxiliary
+allocation. Ordinary compiled constructors now materialize their default
+`prototype` object only when property observation, mutation, integrity, or
+construction semantics require it. Each source iteration still creates a
+distinct function and performs the call.
+
+A focused one-case three-role run made all nine formal measurements eligible
+and all 24 predetermined linearity samples succeeded. For
+`closure_allocation_call`, candidate medians were
+952.953/952.569/943.102 ns/op versus 1737.775/1747.237/1750.027 for the
+preceding base and 281.590/281.702/281.371 for QuickJS-NG. The candidate was
+0.54519x of the base, a 45.5% wall-time reduction, and 3.38283x QuickJS-NG.
+This is focused complete raw evidence, not a broad claim.
+
+Consolidated function-state bindings:
+
+- run ID: `d0ba3cac-bcec-4241-9766-dea99f59e032`;
+- raw JSONL SHA-256:
+  `b3ae4826fa86996e6edb165c977e8f1a28cbb72da0b95017d5ac184c8ed999ac`;
+- manifest SHA-256:
+  `c4c9834b6676a56e2e8fef35ec15352257730bb2048345e8503d2a4f8b19fbf8`;
+- candidate binary SHA-256:
+  `2b44004f9341158fc450088cafe7ca0302794f97a10a43713136fce1ea728598`;
+- base binary SHA-256:
+  `ab4d390b6ec9e1068a15b12656250c0acb62d99b09dc5089fbf0a65aca963f8e`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
