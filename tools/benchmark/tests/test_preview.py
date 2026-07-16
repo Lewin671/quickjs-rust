@@ -151,6 +151,23 @@ class PreviewSummaryTests(unittest.TestCase):
                 with self.assertRaises(PreviewError):
                     summarize_report(value_report)
 
+    def test_complete_linearity_failure_is_successfully_inconclusive(self) -> None:
+        value_report = report()
+        value_report["health"]["status"] = "invalid"
+        value_report["health"]["linearity"]["status"] = "fail"
+        markdown, machine = summarize_report(value_report)
+        self.assertEqual(machine["state"], "success")
+        self.assertEqual(
+            machine["classification"],
+            "informational_measurement_inconclusive_not_fixed_hardware_claim",
+        )
+        self.assertEqual(machine["health"], "invalid")
+        self.assertEqual(machine["linearity"], "fail")
+        self.assertEqual(machine["comparisons"], {})
+        self.assertIn("No performance direction is reported", markdown)
+        self.assertNotIn("Overall ratio", markdown)
+        self.assertNotIn("candidate vs", markdown)
+
     def test_profile_and_markdown_payloads_fail_or_escape(self) -> None:
         unsafe = report()
         unsafe["run"]["profile"]["id"] = "![image](https://attacker.invalid/x)"
