@@ -750,13 +750,20 @@ impl<'a> Vm<'a> {
                         self.captured_immutable_function_name(bytecode, local_names);
                     let immutable_env_value = immutable_env_binding
                         .as_deref()
-                        .and_then(|name| self.env.get(name));
+                        .and_then(|name| self.env.get(name))
+                        .map(Upvalue::new);
+                    let lexical_new_target = if *lexical_this {
+                        self.env.get(crate::NEW_TARGET_BINDING).map(Upvalue::new)
+                    } else {
+                        None
+                    };
                     let deopt_bindings = self.frame_deopt_bindings();
-                    let mut function = Function::new_user_compiled(CompiledUserFunction {
+                    let function = Function::new_user_compiled(CompiledUserFunction {
                         name: name.clone(),
                         has_name_binding: *has_name_binding,
                         immutable_name_binding: *immutable_name_binding,
                         immutable_env_binding,
+                        immutable_env_value,
                         params: Rc::clone(params),
                         realm: Rc::clone(&self.realm),
                         module_host: self.module_host.clone(),
@@ -767,6 +774,7 @@ impl<'a> Vm<'a> {
                         is_strict: *is_strict,
                         lexical_this: *lexical_this,
                         lexical_arguments: *lexical_arguments,
+                        lexical_new_target,
                         is_generator: *is_generator,
                         is_async: *is_async,
                         is_class_constructor: false,
@@ -782,11 +790,6 @@ impl<'a> Vm<'a> {
                         with_stack: self.with_stack.clone(),
                         upvalues,
                     });
-                    if *lexical_this {
-                        function.lexical_new_target =
-                            self.env.get(crate::NEW_TARGET_BINDING).map(Upvalue::new);
-                    }
-                    function.immutable_env_value = immutable_env_value.map(Upvalue::new);
                     function.set_source_text(source_text.clone());
                     self.capture_private_environment(&function);
                     if *is_generator && *is_async {

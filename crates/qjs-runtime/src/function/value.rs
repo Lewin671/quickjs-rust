@@ -172,6 +172,12 @@ pub struct FunctionData {
 #[doc(hidden)]
 pub struct FunctionAuxiliaryState {
     properties: RefCell<HashMap<String, Property>>,
+    /// Fresh functions expose the standard `length` and `name` data
+    /// properties without allocating entries in the general property table.
+    /// They are materialized together only when descriptor mutation requires
+    /// identity-bearing storage.
+    implicit_length_property: Cell<bool>,
+    implicit_name_property: Cell<bool>,
     pub(crate) home_object: RefCell<Option<Value>>,
     /// For a derived constructor, the parent constructor invoked by `super()`.
     pub(crate) super_constructor: RefCell<Option<Value>>,
@@ -196,6 +202,8 @@ impl FunctionAuxiliaryState {
     fn new(home_object: Option<Value>, super_constructor: Option<Value>) -> Rc<Self> {
         Rc::new(Self {
             properties: RefCell::new(HashMap::new()),
+            implicit_length_property: Cell::new(false),
+            implicit_name_property: Cell::new(false),
             home_object: RefCell::new(home_object),
             super_constructor: RefCell::new(super_constructor),
             instance_elements: RefCell::new(Vec::new()),
@@ -246,6 +254,12 @@ impl Deref for Function {
 
 impl DerefMut for Function {
     fn deref_mut(&mut self) -> &mut Self::Target {
+        // Metadata mutation can detach the `FunctionData` allocation through
+        // `Rc::make_mut`, while object properties deliberately remain shared
+        // identity state. Freeze the implicit defaults into that shared state
+        // first so detached internal handles cannot synthesize different
+        // `name` or `length` property values.
+        self.materialize_default_data_properties();
         Rc::make_mut(&mut self.0)
     }
 }
@@ -263,6 +277,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) has_name_binding: bool,
     pub(crate) immutable_name_binding: bool,
     pub(crate) immutable_env_binding: Option<String>,
+    pub(crate) immutable_env_value: Option<Upvalue>,
     pub(crate) params: Rc<FunctionParams>,
     pub(crate) realm: Realm,
     pub(crate) module_host: Option<ModuleHostRef>,
@@ -273,6 +288,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) is_strict: bool,
     pub(crate) lexical_this: bool,
     pub(crate) lexical_arguments: bool,
+    pub(crate) lexical_new_target: Option<Upvalue>,
     pub(crate) is_generator: bool,
     pub(crate) is_async: bool,
     pub(crate) is_class_constructor: bool,
@@ -441,6 +457,7 @@ impl Function {
             has_name_binding,
             immutable_name_binding,
             immutable_env_binding,
+            immutable_env_value,
             params,
             realm,
             module_host,
@@ -451,6 +468,7 @@ impl Function {
             is_strict,
             lexical_this,
             lexical_arguments,
+            lexical_new_target,
             is_generator,
             is_async,
             is_class_constructor,
@@ -469,7 +487,7 @@ impl Function {
             has_name_binding,
             immutable_name_binding,
             immutable_env_binding,
-            immutable_env_value: None,
+            immutable_env_value,
             name,
             params,
             native_context: Rc::new(HashMap::new()),
@@ -488,7 +506,7 @@ impl Function {
             is_strict,
             lexical_this,
             lexical_arguments,
-            lexical_new_target: None,
+            lexical_new_target,
             is_generator,
             is_async,
             is_class_constructor,
@@ -678,27 +696,58 @@ impl Function {
     }
 
     fn define_length_property(&self) {
-        self.define_property(
-            "length".to_owned(),
-            Property::data(
-                Value::Number(self.params.length() as f64),
-                false,
-                false,
-                true,
-            ),
-        );
+        self.auxiliary.implicit_length_property.set(true);
     }
 
     fn define_name_property(&self) {
-        self.define_property(
-            "name".to_owned(),
-            Property::data(
-                Value::String(self.name.clone().unwrap_or_default().into()),
-                false,
-                false,
-                true,
-            ),
-        );
+        self.auxiliary.implicit_name_property.set(true);
+    }
+
+    fn default_length_property(&self) -> Property {
+        Property::data(
+            Value::Number(self.params.length() as f64),
+            false,
+            false,
+            true,
+        )
+    }
+
+    fn default_name_property(&self) -> Property {
+        Property::data(
+            Value::String(self.name.clone().unwrap_or_default().into()),
+            false,
+            false,
+            true,
+        )
+    }
+
+    /// Moves the implicit standard data properties into the general table.
+    /// Inserting at the front preserves the creation order (`length`, `name`,
+    /// then `prototype`) even when a constructable function has already
+    /// recorded its lazy prototype slot.
+    fn materialize_default_data_properties(&self) {
+        let had_length = self.auxiliary.implicit_length_property.replace(false);
+        let had_name = self.auxiliary.implicit_name_property.replace(false);
+        if !had_length && !had_name {
+            return;
+        }
+
+        let mut properties = self.properties.borrow_mut();
+        let mut property_order = self.auxiliary.property_order.borrow_mut();
+        let mut insert_at = 0;
+        if had_length {
+            properties
+                .entry("length".to_owned())
+                .or_insert_with(|| self.default_length_property());
+            property_order.insert(insert_at, "length".to_owned());
+            insert_at += 1;
+        }
+        if had_name {
+            properties
+                .entry("name".to_owned())
+                .or_insert_with(|| self.default_name_property());
+            property_order.insert(insert_at, "name".to_owned());
+        }
     }
 
     fn mark_lazy_default_prototype(&self) {
@@ -736,6 +785,7 @@ impl Function {
     }
 
     pub(crate) fn seal(&self) {
+        self.materialize_default_data_properties();
         self.ensure_default_prototype();
         self.prevent_extensions();
         self.auxiliary.sealed.set(true);
@@ -765,6 +815,7 @@ impl Function {
     }
 
     pub(crate) fn freeze(&self) {
+        self.materialize_default_data_properties();
         self.ensure_default_prototype();
         self.prevent_extensions();
         self.auxiliary.sealed.set(true);
@@ -796,6 +847,20 @@ impl Function {
     }
 
     pub(crate) fn set_property(&self, key: String, value: Value) {
+        if (key == "length" && self.auxiliary.implicit_length_property.get())
+            || (key == "name" && self.auxiliary.implicit_name_property.get())
+        {
+            // Install-time built-ins may have replaced an implicit default by
+            // writing directly to the compatibility property table. Treat
+            // that entry as the same original slot; otherwise the untouched
+            // standard default is non-writable and needs no materialization.
+            if let Some(property) = self.properties.borrow_mut().get_mut(&key) {
+                if property.writable {
+                    property.value = value;
+                }
+            }
+            return;
+        }
         if key == "prototype" {
             self.ensure_default_prototype();
         }
@@ -818,6 +883,11 @@ impl Function {
     }
 
     pub(crate) fn define_property(&self, key: String, property: Property) {
+        if (key == "length" && self.auxiliary.implicit_length_property.get())
+            || (key == "name" && self.auxiliary.implicit_name_property.get())
+        {
+            self.materialize_default_data_properties();
+        }
         if key == "prototype" {
             self.ensure_default_prototype();
         }
@@ -843,6 +913,22 @@ impl Function {
     }
 
     pub(crate) fn own_property(&self, key: &str) -> Option<Property> {
+        if key == "length" && self.auxiliary.implicit_length_property.get() {
+            return self
+                .properties
+                .borrow()
+                .get(key)
+                .cloned()
+                .or_else(|| Some(self.default_length_property()));
+        }
+        if key == "name" && self.auxiliary.implicit_name_property.get() {
+            return self
+                .properties
+                .borrow()
+                .get(key)
+                .cloned()
+                .or_else(|| Some(self.default_name_property()));
+        }
         if key == "prototype" {
             self.ensure_default_prototype();
         }
@@ -865,6 +951,27 @@ impl Function {
         let mut strings = Vec::new();
         let mut fallback_strings = Vec::new();
 
+        let implicit_length = self.auxiliary.implicit_length_property.get();
+        let implicit_name = self.auxiliary.implicit_name_property.get();
+        if implicit_length {
+            let property = properties
+                .get("length")
+                .cloned()
+                .unwrap_or_else(|| self.default_length_property());
+            if include(&property) {
+                strings.push("length".to_owned());
+            }
+        }
+        if implicit_name {
+            let property = properties
+                .get("name")
+                .cloned()
+                .unwrap_or_else(|| self.default_name_property());
+            if include(&property) {
+                strings.push("name".to_owned());
+            }
+        }
+
         for key in property_order.iter() {
             let Some(property) = properties.get(key.as_str()) else {
                 continue;
@@ -880,7 +987,11 @@ impl Function {
         }
 
         for (key, property) in properties.iter() {
-            if property_order.iter().any(|ordered| ordered == key) || !include(property) {
+            if (implicit_length && key == "length")
+                || (implicit_name && key == "name")
+                || property_order.iter().any(|ordered| ordered == key)
+                || !include(property)
+            {
                 continue;
             }
             if let Some(index) = array_index_property_key(key) {
@@ -901,6 +1012,23 @@ impl Function {
     }
 
     pub(crate) fn delete_own_property(&self, key: &str) -> bool {
+        let implicit_default = (key == "length" && self.auxiliary.implicit_length_property.get())
+            || (key == "name" && self.auxiliary.implicit_name_property.get());
+        if implicit_default {
+            let mut properties = self.properties.borrow_mut();
+            if let Some(property) = properties.get(key) {
+                if !property.configurable {
+                    return false;
+                }
+                properties.remove(key);
+            }
+            if key == "length" {
+                self.auxiliary.implicit_length_property.set(false);
+            } else {
+                self.auxiliary.implicit_name_property.set(false);
+            }
+            return true;
+        }
         if key == "prototype" {
             self.ensure_default_prototype();
         }
@@ -927,6 +1055,12 @@ impl Function {
     /// for install-time setup of native objects that must not expose a property
     /// the generic builder added (e.g. `Proxy` has no own `prototype`).
     pub(crate) fn remove_own_property_unchecked(&self, key: &str) {
+        if key == "length" {
+            self.auxiliary.implicit_length_property.set(false);
+        }
+        if key == "name" {
+            self.auxiliary.implicit_name_property.set(false);
+        }
         if key == "prototype" {
             self.ensure_default_prototype();
         }
@@ -1275,10 +1409,14 @@ mod tests {
             false,
         );
         let mut detached = function.clone();
-        Rc::make_mut(&mut detached.0).name = Some("detached handle".to_owned());
+        detached.name = Some("detached handle".to_owned());
 
         assert!(!Rc::ptr_eq(&function.0, &detached.0));
         assert!(Rc::ptr_eq(&function.auxiliary, &detached.auxiliary));
+        assert_eq!(
+            detached.own_property("name").map(|property| property.value),
+            Some(Value::String("shared".to_owned().into()))
+        );
         detached.define_property(
             "shared".to_owned(),
             crate::Property::enumerable(Value::Number(1.0)),
@@ -1295,6 +1433,85 @@ mod tests {
             function.source_text().as_deref(),
             Some("function shared() {}")
         );
+    }
+
+    #[test]
+    fn default_name_and_length_stay_implicit_until_descriptor_mutation() {
+        let function = Function::new_native(
+            Some("shared"),
+            2,
+            NativeFunction::UninitializedLexical,
+            false,
+        );
+
+        assert!(function.properties.borrow().is_empty());
+        assert_eq!(
+            function
+                .own_property("length")
+                .map(|property| property.value),
+            Some(Value::Number(2.0))
+        );
+        assert_eq!(
+            function.own_property("name").map(|property| property.value),
+            Some(Value::String("shared".to_owned().into()))
+        );
+        assert_eq!(function.own_property_names(), ["length", "name"]);
+
+        function.define_property(
+            "name".to_owned(),
+            crate::Property::data(
+                Value::String("renamed".to_owned().into()),
+                false,
+                false,
+                true,
+            ),
+        );
+        assert_eq!(function.properties.borrow().len(), 2);
+        assert_eq!(function.own_property_names(), ["length", "name"]);
+    }
+
+    #[test]
+    fn deleting_and_redefining_an_implicit_default_moves_it_to_the_end() {
+        assert_eq!(
+            eval(
+                "var f = function value(a) {}; delete f.name; Object.defineProperty(f, 'name', { value: 'again', configurable: true }); Object.getOwnPropertyNames(f).join('|');"
+            ),
+            Ok(Value::String("length|prototype|name".to_owned().into()))
+        );
+    }
+
+    #[test]
+    fn install_time_override_and_implicit_default_are_one_property_slot() {
+        let function = Function::new_native(
+            Some("initial"),
+            0,
+            NativeFunction::UninitializedLexical,
+            false,
+        );
+        function.properties.borrow_mut().insert(
+            "name".to_owned(),
+            crate::Property::data(
+                Value::String("installed".to_owned().into()),
+                false,
+                false,
+                true,
+            ),
+        );
+
+        assert_eq!(
+            function.own_property("name").map(|property| property.value),
+            Some(Value::String("installed".to_owned().into()))
+        );
+        assert_eq!(
+            function
+                .own_property_names()
+                .into_iter()
+                .filter(|key| key == "name")
+                .count(),
+            1
+        );
+        assert!(function.delete_own_property("name"));
+        assert!(function.own_property("name").is_none());
     }
 
     #[test]

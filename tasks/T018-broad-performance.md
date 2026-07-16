@@ -1214,6 +1214,41 @@ Shared function-metadata bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+The twentieth v2 runtime unit keeps fresh functions' standard `length` and
+`name` data properties implicit until descriptor mutation or integrity
+operations require general property-table storage. Reads, own-property
+descriptors, deletion, redefinition order, sealing, and freezing retain their
+ordinary observable semantics; creation no longer allocates HashMap entries,
+property keys, or an empty name value for closures that never inspect those
+properties. Metadata that used to be assigned through `DerefMut` immediately
+after `Op::NewFunction` is now supplied in `CompiledUserFunction`, so the hot
+path does not prematurely materialize the properties. Function and prototype
+allocation, closure capture, and the call still occur once per source
+iteration.
+
+A focused three-role `closure_allocation_call` run made all nine formal
+measurements eligible and passed all 24 predetermined N/2N samples with exact
+operation counts and checksums. Candidate medians were
+410.768/409.423/409.578 ns/op versus 682.216/683.761/684.559 for the immediately
+preceding runtime, a **0.59973x** paired geometric ratio (40.0% lower wall
+ns/op). QuickJS-NG measured 268.936/270.043/269.279 ns/op, leaving this focused
+case at 1.52150x QuickJS-NG on the macOS profile. This remains focused evidence,
+not a broad or allocation-family claim.
+
+Lazy default-function-property bindings:
+
+- run ID: `8dcef08b-d237-4262-98a5-5db3b9b6b640`;
+- raw JSONL SHA-256:
+  `8dc9925b15c0245b41c374db86696d18581f41205ac1a206e2a44ca8d74272fb`;
+- manifest SHA-256:
+  `5105e4923cb104f6608e935f73a35e9ab763562c57c7eea8cb0169d1710777ec`;
+- candidate binary SHA-256:
+  `ee0cae39fe0f8dcff1608a004d010b0aeb9562e8ecb557fed0ee765b918df2ee`;
+- preceding-runtime binary SHA-256:
+  `b9334154c020e4fc303553d0aa32e3e8478e170697ad5dd6401a2a769ddf15b8`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
