@@ -111,7 +111,7 @@ pub struct FunctionData {
     /// reactions, async helpers, RegExp accessors, ...). User bytecode functions
     /// keep this empty: lexical captures live in indexed [`Upvalue`] cells and
     /// globals live in the shared `realm` cell below.
-    pub(crate) native_context: Rc<HashMap<String, Value>>,
+    pub(crate) native_context: NativeContext,
     /// The creation realm of a user bytecode function. Native functions keep
     /// `None` and receive their active realm through `CallEnv`.
     pub(crate) realm: Option<Realm>,
@@ -201,6 +201,47 @@ struct FunctionColdState {
     /// %Function.prototype% intrinsic"; `Some(None)` means it is null.
     internal_prototype: Option<Option<Prototype>>,
     private_state: crate::private::PrivateState,
+}
+
+/// Lazily allocated state captured by native closure-like functions.
+///
+/// Ordinary user bytecode functions never use this map. Keeping the empty
+/// state as `None` avoids a separate heap allocation every time a JavaScript
+/// closure is created while preserving the existing lookup API for native
+/// helpers that do capture values.
+#[derive(Clone, Default)]
+pub(crate) struct NativeContext(Option<Rc<HashMap<String, Value>>>);
+
+impl NativeContext {
+    fn from_map(map: HashMap<String, Value>) -> Self {
+        if map.is_empty() {
+            Self::default()
+        } else {
+            Self(Some(Rc::new(map)))
+        }
+    }
+
+    pub(crate) fn get(&self, key: &str) -> Option<&Value> {
+        self.0.as_deref().and_then(|context| context.get(key))
+    }
+
+    pub(crate) fn keys(&self) -> impl Iterator<Item = &String> {
+        self.0.iter().flat_map(|context| context.keys())
+    }
+
+    fn insert(&mut self, key: String, value: Value) {
+        let context = self.0.get_or_insert_with(|| Rc::new(HashMap::new()));
+        Rc::make_mut(context).insert(key, value);
+    }
+
+    pub(crate) fn clone_map(&self) -> HashMap<String, Value> {
+        self.0.as_deref().cloned().unwrap_or_default()
+    }
+
+    #[cfg(test)]
+    fn is_allocated(&self) -> bool {
+        self.0.is_some()
+    }
 }
 
 impl FunctionAuxiliaryState {
@@ -321,7 +362,7 @@ impl Function {
     pub(crate) fn insert_native_context(&mut self, key: String, value: Value) {
         let data = Rc::get_mut(&mut self.0)
             .expect("native context must be populated before sharing the function");
-        Rc::make_mut(&mut data.native_context).insert(key, value);
+        data.native_context.insert(key, value);
     }
 
     /// Adds an indexed capture while constructing a fresh internal native
@@ -409,7 +450,7 @@ impl Function {
             immutable_env_value: None,
             name,
             params: Rc::new(params),
-            native_context: Rc::new(HashMap::new()),
+            native_context: NativeContext::default(),
             realm: Some(realm),
             dynamic_function_realm_global,
             has_dynamic_function_realm_override: Cell::new(false),
@@ -489,7 +530,7 @@ impl Function {
             immutable_env_value,
             name,
             params,
-            native_context: Rc::new(HashMap::new()),
+            native_context: NativeContext::default(),
             realm: Some(realm),
             dynamic_function_realm_global,
             has_dynamic_function_realm_override: Cell::new(false),
@@ -593,7 +634,7 @@ impl Function {
             immutable_env_binding: None,
             immutable_env_value: None,
             params: Rc::new(FunctionParams::positional(vec![String::new(); length])),
-            native_context: Rc::new(HashMap::new()),
+            native_context: NativeContext::default(),
             realm: match &target {
                 Value::Function(function) => function.realm.clone(),
                 _ => None,
@@ -650,7 +691,7 @@ impl Function {
             immutable_env_value: None,
             name,
             params: Rc::new(FunctionParams::positional(params)),
-            native_context: Rc::new(env),
+            native_context: NativeContext::from_map(env),
             realm: None,
             dynamic_function_realm_global: None,
             has_dynamic_function_realm_override: Cell::new(false),
@@ -1135,7 +1176,7 @@ impl Function {
 
     fn creation_env(&self) -> crate::CallEnv {
         self.realm.as_ref().map_or_else(
-            || crate::CallEnv::from_map((*self.native_context).clone()),
+            || crate::CallEnv::from_map(self.native_context.clone_map()),
             |realm| crate::CallEnv::new(Rc::clone(realm)),
         )
     }
@@ -1460,6 +1501,11 @@ mod tests {
     fn ordinary_function_header_keeps_cold_identity_state_out_of_line() {
         let auxiliary_size = mem::size_of::<super::FunctionAuxiliaryState>();
         let function_data_size = mem::size_of::<FunctionData>();
+        assert_eq!(
+            mem::size_of::<super::NativeContext>(),
+            mem::size_of::<Rc<()>>(),
+            "lazy native context must remain pointer-sized"
+        );
         assert!(
             auxiliary_size <= 64,
             "function auxiliary header grew to {auxiliary_size} bytes"
@@ -1467,6 +1513,30 @@ mod tests {
         assert!(
             function_data_size <= 384,
             "function object grew to {function_data_size} bytes"
+        );
+    }
+
+    #[test]
+    fn user_functions_do_not_allocate_an_empty_native_context() {
+        let value = eval("function make() { return function value() {}; } make();")
+            .expect("function expression should evaluate");
+        let Value::Function(function) = value else {
+            panic!("expected function value");
+        };
+        assert!(!function.native_context.is_allocated());
+
+        let mut native = Function::new_native(
+            Some("capturing"),
+            0,
+            NativeFunction::UninitializedLexical,
+            false,
+        );
+        assert!(!native.native_context.is_allocated());
+        native.insert_native_context("captured".to_owned(), Value::Number(1.0));
+        assert!(native.native_context.is_allocated());
+        assert_eq!(
+            native.native_context.get("captured"),
+            Some(&Value::Number(1.0))
         );
     }
 

@@ -618,7 +618,7 @@ fn regexp_receiver_error_value(function: &Function, message: &str) -> Option<Val
     let Value::Function(constructor) = constructor? else {
         return None;
     };
-    let mut env = CallEnv::from_map((*function.native_context).clone());
+    let mut env = CallEnv::from_map(function.native_context.clone_map());
     error::native_error(
         &constructor,
         Value::Undefined,

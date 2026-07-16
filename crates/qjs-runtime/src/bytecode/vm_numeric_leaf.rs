@@ -583,6 +583,10 @@ impl NumericLoopCall {
         }
     }
 
+    // This executes once per admitted loop iteration. Small unrelated layout
+    // changes can otherwise make LLVM outline it, adding a call to the hottest
+    // part of the numeric-loop path.
+    #[inline(always)]
     pub(super) fn eval(&mut self, first_argument: f64, second_argument: f64) -> f64 {
         let argument = |index: usize| {
             if index == 0 {

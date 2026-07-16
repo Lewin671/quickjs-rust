@@ -1345,6 +1345,41 @@ Lazy function cold-state bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+The twenty-fourth v2 runtime unit makes the native-only capture map lazy.
+Ordinary user bytecode functions previously allocated an empty `HashMap` for
+every closure even though lexical captures use indexed upvalue cells and the
+realm supplies globals. The map is now absent until an internal native helper
+inserts captured state. The same unit pins `NumericLoopCall::eval` inline: the
+function runs once per admitted loop iteration, and the function-layout change
+otherwise caused LLVM to outline it and add a measured call-path regression.
+
+A focused three-role run over `plain_function_call`, `method_call`, and
+`closure_allocation_call` made all 27 formal measurements eligible and all 72
+predetermined N/2N diagnostics completed with exact operation counts and
+checksums. For `closure_allocation_call`, candidate medians were
+292.964/293.585/294.330 ns/op versus 317.816/318.320/318.494 for the immediately
+preceding runtime, a **0.92274x** paired geometric ratio (7.7% lower wall
+ns/op). QuickJS-NG measured 268.958/270.684/271.749 ns/op, leaving this focused
+case at 1.08565x QuickJS-NG on the macOS profile. The inline constraint kept
+the two trace-path diagnostics neutral: `plain_function_call` was 1.00050x and
+`method_call` 0.99919x the preceding runtime. Their roughly 2.2 ns/op absolute
+measurements are not treated as general call-speed claims. This remains
+focused evidence, not a broad or allocation-family claim.
+
+Lazy native-context bindings:
+
+- run ID: `96915241-5805-4d5b-ab1d-f788cca6a22d`;
+- raw JSONL SHA-256:
+  `189b4b37ea95060e24deda0e2cf3175fce5166caa468884f3468ed8ab55f58d9`;
+- manifest SHA-256:
+  `5105e4923cb104f6608e935f73a35e9ab763562c57c7eea8cb0169d1710777ec`;
+- candidate binary SHA-256:
+  `386ce5c353c02c68b562af5a4049bd06517847aed8fe4685c486d1cbdbc62847`;
+- preceding-runtime binary SHA-256:
+  `a636eae690fb0e66c4163218a6b341ea90460b8ca28a6a56a7a455bcdd0e82cc`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
