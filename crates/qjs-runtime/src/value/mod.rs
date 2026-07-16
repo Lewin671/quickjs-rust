@@ -11,6 +11,7 @@ mod set;
 
 pub use array::ArrayRef;
 pub use map::MapRef;
+pub(crate) use object::ObjectLiteralShape;
 pub use object::ObjectRef;
 pub(crate) use object::Prototype;
 pub(crate) use object::{

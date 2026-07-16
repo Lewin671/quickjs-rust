@@ -11,6 +11,7 @@ use qjs_ast::ObjectPropertyKind;
 use crate::{
     ArrayRef, ObjectRef, Property, PropertyKey, Prototype, RuntimeError, Value,
     array::iterable_values_with_env, object, object_prototype, to_property_key_value,
+    value::ObjectLiteralShape,
 };
 
 use super::ir::{ArrayElementKind, ComputedNameKind, ObjectPropertyMeta};
@@ -121,10 +122,10 @@ impl Vm<'_> {
 
     pub(super) fn new_object_data_literal(
         &mut self,
-        keys: &[std::rc::Rc<str>],
+        shape: std::rc::Rc<ObjectLiteralShape>,
     ) -> Result<(), RuntimeError> {
-        let mut values = Vec::with_capacity(keys.len());
-        for _ in 0..keys.len() {
+        let mut values = Vec::with_capacity(shape.input_len());
+        for _ in 0..shape.input_len() {
             values.push(self.pop()?);
         }
         values.reverse();
@@ -135,7 +136,7 @@ impl Vm<'_> {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        let object = ObjectRef::with_literal_properties(keys, values, object_prototype(&self.env));
+        let object = ObjectRef::with_literal_properties(shape, values, object_prototype(&self.env));
         for function in home_functions {
             *function.home_object.borrow_mut() = Some(Value::Object(object.clone()));
         }

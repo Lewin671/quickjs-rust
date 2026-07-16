@@ -197,11 +197,10 @@ enum SymbolBrand {
 }
 
 struct ObjectData {
-    properties: RefCell<HashMap<Rc<str>, Property>>,
+    properties: RefCell<PropertyStorage>,
     /// Invalidates monomorphic named-read caches whenever an own string
     /// property's descriptor or value changes.
     property_revision: Cell<u64>,
-    property_order: RefCell<Vec<Rc<str>>>,
     /// Count of own string keys that parse as array indices. Maintained as keys
     /// are added and removed so `has_own_index_property` is an O(1) check; this
     /// keeps the `array[i] = x` fast path from scanning a prototype's keys on
@@ -251,6 +250,163 @@ struct ObjectData {
     /// object layout is unchanged.
     #[cfg(feature = "agents")]
     shared_backing: OnceCell<Box<RefCell<Option<crate::array_buffer::SharedBackingRef>>>>,
+}
+
+/// Shared key layout for object literals whose property names are statically
+/// known. The bytecode owns one shape; each evaluated object allocates only
+/// its property values until a structural mutation requires generic storage.
+#[derive(Debug)]
+pub(crate) struct ObjectLiteralShape {
+    keys: Rc<[Rc<str>]>,
+    input_slots: Rc<[usize]>,
+    lookup: HashMap<Rc<str>, usize>,
+    index_property_count: usize,
+}
+
+impl ObjectLiteralShape {
+    pub(crate) fn new(input_keys: Vec<Rc<str>>) -> Rc<Self> {
+        let mut keys = Vec::with_capacity(input_keys.len());
+        let mut lookup = HashMap::with_capacity(input_keys.len());
+        let mut input_slots = Vec::with_capacity(input_keys.len());
+        for key in input_keys {
+            let slot = match lookup.get(key.as_ref()) {
+                Some(slot) => *slot,
+                None => {
+                    let slot = keys.len();
+                    keys.push(key.clone());
+                    lookup.insert(key, slot);
+                    slot
+                }
+            };
+            input_slots.push(slot);
+        }
+        let index_property_count = keys.iter().filter(|key| is_array_index_key(key)).count();
+        Self {
+            keys: keys.into(),
+            input_slots: input_slots.into(),
+            lookup,
+            index_property_count,
+        }
+        .into()
+    }
+
+    pub(crate) fn input_len(&self) -> usize {
+        self.input_slots.len()
+    }
+}
+
+enum PropertyStorage {
+    Dynamic {
+        properties: HashMap<Rc<str>, Property>,
+        order: Vec<Rc<str>>,
+    },
+    Shaped {
+        shape: Rc<ObjectLiteralShape>,
+        properties: Vec<Property>,
+    },
+}
+
+impl PropertyStorage {
+    fn dynamic(properties: HashMap<Rc<str>, Property>, order: Vec<Rc<str>>) -> Self {
+        Self::Dynamic { properties, order }
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            Self::Dynamic { properties, .. } => properties.len(),
+            Self::Shaped { properties, .. } => properties.len(),
+        }
+    }
+
+    fn get(&self, key: &str) -> Option<&Property> {
+        match self {
+            Self::Dynamic { properties, .. } => properties.get(key),
+            Self::Shaped { shape, properties } => {
+                shape.lookup.get(key).and_then(|slot| properties.get(*slot))
+            }
+        }
+    }
+
+    fn get_mut(&mut self, key: &str) -> Option<&mut Property> {
+        match self {
+            Self::Dynamic { properties, .. } => properties.get_mut(key),
+            Self::Shaped { shape, properties } => {
+                let slot = *shape.lookup.get(key)?;
+                properties.get_mut(slot)
+            }
+        }
+    }
+
+    fn contains_key(&self, key: &str) -> bool {
+        self.get(key).is_some()
+    }
+
+    fn for_each_mut(&mut self, apply: impl FnMut(&mut Property)) {
+        match self {
+            Self::Dynamic { properties, .. } => properties.values_mut().for_each(apply),
+            Self::Shaped { properties, .. } => properties.iter_mut().for_each(apply),
+        }
+    }
+
+    fn all(&self, predicate: impl Fn(&Property) -> bool) -> bool {
+        match self {
+            Self::Dynamic { properties, .. } => properties.values().all(predicate),
+            Self::Shaped { properties, .. } => properties.iter().all(predicate),
+        }
+    }
+
+    fn order(&self) -> &[Rc<str>] {
+        match self {
+            Self::Dynamic { order, .. } => order,
+            Self::Shaped { shape, .. } => &shape.keys,
+        }
+    }
+
+    fn ensure_dynamic(&mut self) {
+        let Self::Shaped { shape, properties } = self else {
+            return;
+        };
+        let properties = std::mem::take(properties);
+        let order = shape.keys.to_vec();
+        let properties = order.iter().cloned().zip(properties).collect();
+        *self = Self::Dynamic { properties, order };
+    }
+
+    fn insert(&mut self, key: Rc<str>, property: Property) -> Option<Property> {
+        if let Some(existing) = self.get_mut(&key) {
+            return Some(std::mem::replace(existing, property));
+        }
+        self.ensure_dynamic();
+        let Self::Dynamic { properties, order } = self else {
+            unreachable!("property storage was converted to dynamic")
+        };
+        order.push(key.clone());
+        properties.insert(key, property)
+    }
+
+    fn insert_unordered(&mut self, key: Rc<str>, property: Property) -> Option<Property> {
+        if let Some(existing) = self.get_mut(&key) {
+            return Some(std::mem::replace(existing, property));
+        }
+        self.ensure_dynamic();
+        let Self::Dynamic { properties, .. } = self else {
+            unreachable!("property storage was converted to dynamic")
+        };
+        properties.insert(key, property)
+    }
+
+    fn remove(&mut self, key: &str) -> Option<Property> {
+        if !self.contains_key(key) {
+            return None;
+        }
+        self.ensure_dynamic();
+        let Self::Dynamic { properties, order } = self else {
+            unreachable!("property storage was converted to dynamic")
+        };
+        let removed = properties.remove(key);
+        order.retain(|existing| existing.as_ref() != key);
+        removed
+    }
 }
 
 impl fmt::Debug for ObjectRef {
@@ -304,9 +460,8 @@ impl ObjectRef {
             .filter(|key| is_array_index_key(key))
             .count();
         Self(Rc::new(ObjectData {
-            properties: RefCell::new(properties),
+            properties: RefCell::new(PropertyStorage::dynamic(properties, property_order)),
             property_revision: Cell::new(0),
-            property_order: RefCell::new(property_order),
             index_property_count: Cell::new(index_property_count),
             symbol_properties: RefCell::new(Vec::new()),
             extensible: Cell::new(true),
@@ -334,27 +489,23 @@ impl ObjectRef {
     /// every object. Duplicate keys retain their first insertion position and
     /// their last value, matching CreateDataProperty semantics.
     pub(crate) fn with_literal_properties(
-        keys: &[Rc<str>],
+        shape: Rc<ObjectLiteralShape>,
         values: Vec<Value>,
         prototype: Option<ObjectRef>,
     ) -> Self {
-        debug_assert_eq!(keys.len(), values.len());
-        let mut properties = HashMap::with_capacity(keys.len());
-        let mut property_order = Vec::with_capacity(keys.len());
-        for (key, value) in keys.iter().cloned().zip(values) {
-            if !properties.contains_key(key.as_ref()) {
-                property_order.push(key.clone());
-            }
-            properties.insert(key, Property::enumerable(value));
+        debug_assert_eq!(shape.input_slots.len(), values.len());
+        let mut properties = vec![None; shape.keys.len()];
+        for (slot, value) in shape.input_slots.iter().copied().zip(values) {
+            properties[slot] = Some(Property::enumerable(value));
         }
-        let index_property_count = property_order
-            .iter()
-            .filter(|key| is_array_index_key(key))
-            .count();
+        let properties = properties
+            .into_iter()
+            .map(|property| property.expect("literal shape slot must have a value"))
+            .collect();
+        let index_property_count = shape.index_property_count;
         Self(Rc::new(ObjectData {
-            properties: RefCell::new(properties),
+            properties: RefCell::new(PropertyStorage::Shaped { shape, properties }),
             property_revision: Cell::new(0),
-            property_order: RefCell::new(property_order),
             index_property_count: Cell::new(index_property_count),
             symbol_properties: RefCell::new(Vec::new()),
             extensible: Cell::new(true),
@@ -644,7 +795,6 @@ impl ObjectRef {
                 .set(self.0.index_property_count.get() + 1);
         }
         let key: Rc<str> = key.into();
-        self.0.property_order.borrow_mut().push(key.clone());
         properties.insert(key, Property::enumerable(value));
         self.bump_property_revision();
     }
@@ -660,7 +810,6 @@ impl ObjectRef {
                     .set(self.0.index_property_count.get() + 1);
             }
             let key: Rc<str> = key.into();
-            self.0.property_order.borrow_mut().push(key.clone());
             properties.insert(key, property);
         }
         self.bump_property_revision();
@@ -689,7 +838,7 @@ impl ObjectRef {
             self.bump_property_revision();
             return;
         }
-        properties.insert(Rc::from(key), Property::non_enumerable(value));
+        properties.insert_unordered(Rc::from(key), Property::non_enumerable(value));
         self.bump_property_revision();
     }
 
@@ -718,9 +867,10 @@ impl ObjectRef {
 
     pub(crate) fn seal(&self) {
         self.prevent_extensions();
-        for property in self.0.properties.borrow_mut().values_mut() {
-            property.make_non_configurable();
-        }
+        self.0
+            .properties
+            .borrow_mut()
+            .for_each_mut(Property::make_non_configurable);
         for (_, property) in self.0.symbol_properties.borrow_mut().iter_mut() {
             property.make_non_configurable();
         }
@@ -746,7 +896,6 @@ impl ObjectRef {
                 .0
                 .properties
                 .borrow()
-                .values()
                 .all(|property| !property.configurable)
             && self
                 .0
@@ -758,9 +907,10 @@ impl ObjectRef {
 
     pub(crate) fn freeze(&self) {
         self.prevent_extensions();
-        for property in self.0.properties.borrow_mut().values_mut() {
-            property.freeze_data();
-        }
+        self.0
+            .properties
+            .borrow_mut()
+            .for_each_mut(Property::freeze_data);
         for (_, property) in self.0.symbol_properties.borrow_mut().iter_mut() {
             property.freeze_data();
         }
@@ -772,7 +922,6 @@ impl ObjectRef {
                 .0
                 .properties
                 .borrow()
-                .values()
                 .all(|property| !property.configurable && !property.writable)
             && self
                 .0
@@ -906,10 +1055,6 @@ impl ObjectRef {
                 .index_property_count
                 .set(self.0.index_property_count.get().saturating_sub(1));
         }
-        self.0
-            .property_order
-            .borrow_mut()
-            .retain(|existing| existing.as_ref() != key);
         true
     }
 
@@ -938,7 +1083,7 @@ impl ObjectRef {
 
     fn ordered_property_names(&self, include: impl Fn(&Property) -> bool) -> Vec<String> {
         let properties = self.0.properties.borrow();
-        let order = self.0.property_order.borrow();
+        let order = properties.order();
         if self.0.index_property_count.get() == 0 {
             return order
                 .iter()

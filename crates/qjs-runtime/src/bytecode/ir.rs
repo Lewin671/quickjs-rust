@@ -6,7 +6,10 @@ use std::{
 
 use qjs_ast::{BinaryOp, FunctionParams, ObjectPropertyKind, UnaryOp, UpdateOp};
 
-use crate::{ObjectRef, Value, value::ObjectWeakRef};
+use crate::{
+    ObjectRef, Value,
+    value::{ObjectLiteralShape, ObjectWeakRef},
+};
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct NamedPropertyCache(Rc<RefCell<NamedPropertyCacheState>>);
@@ -175,9 +178,9 @@ pub(super) enum Op {
     NewObjectLiteral,
     /// Allocates a plain object whose data-property keys are fully known at
     /// compile time. Values are evaluated left-to-right and consumed from the
-    /// stack; the shared keys avoid per-object string allocation.
+    /// stack; the shared shape avoids per-object key lookup and order storage.
     NewObjectDataLiteral {
-        keys: Vec<Rc<str>>,
+        shape: Rc<ObjectLiteralShape>,
     },
     /// Opens a `using` disposal scope: subsequent register ops add to it until
     /// the matching `DisposeScope`.

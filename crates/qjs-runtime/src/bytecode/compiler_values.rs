@@ -9,6 +9,7 @@ use crate::{
     RuntimeError, Value,
     function::{collect_function_local_names, is_strict_function_body},
     module::DEFAULT_BINDING,
+    value::ObjectLiteralShape,
 };
 
 use super::compiler::Compiler;
@@ -80,7 +81,9 @@ impl Compiler {
                     self.compile_named_expr(&property.value, key)?;
                 }
             }
-            self.emit(Op::NewObjectDataLiteral { keys });
+            self.emit(Op::NewObjectDataLiteral {
+                shape: ObjectLiteralShape::new(keys),
+            });
             return Ok(());
         }
 
@@ -815,7 +818,9 @@ mod tests {
             bytecode
                 .code
                 .iter()
-                .filter(|op| matches!(op, Op::NewObjectDataLiteral { keys } if keys.len() == 3))
+                .filter(|op| {
+                    matches!(op, Op::NewObjectDataLiteral { shape } if shape.input_len() == 3)
+                })
                 .count(),
             1
         );

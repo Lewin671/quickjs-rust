@@ -74,6 +74,24 @@ fn static_data_literal_bulk_path_preserves_order_duplicates_and_evaluation() {
         ),
         Ok(Value::Number(42.0))
     );
+    assert_eq!(
+        eval(
+            "let object = { a: 1, b: 2 }; object.c = 3; delete object.a; object.a = 4; Object.keys(object).join(',') + ':' + object.a + object.b + object.c;"
+        ),
+        Ok(Value::String("b,c,a:423".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function make(value) { return { x: value, y: value + 1 }; } let first = make(1); let second = make(10); first.x = 3; first.x + ':' + first.y + ':' + second.x + ':' + second.y;"
+        ),
+        Ok(Value::String("3:2:10:11".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let object = { 2: 'two', a: 1, 1: 'one' }; Object.defineProperty(object, 'a', { value: 4, enumerable: false }); Object.getOwnPropertyNames(object).join(',') + ':' + Object.keys(object).join(',') + ':' + object.a;"
+        ),
+        Ok(Value::String("1,2,a:1,2:4".to_owned().into()))
+    );
 }
 
 #[test]

@@ -635,7 +635,9 @@ impl<'a> Vm<'a> {
                     self.new_template_object(*site, cooked, raw)
                 }
                 Op::NewObjectLiteral => self.new_object_literal(),
-                Op::NewObjectDataLiteral { keys } => self.new_object_data_literal(keys)?,
+                Op::NewObjectDataLiteral { shape } => {
+                    self.new_object_data_literal(shape.clone())?
+                }
                 op @ (Op::EnterDisposableScope
                 | Op::RegisterDisposable
                 | Op::RegisterAsyncDisposable
