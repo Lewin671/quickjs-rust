@@ -504,12 +504,12 @@ fn decode(element: ElementType, slice: &[u8], little_endian: bool) -> Value {
         ElementType::BigInt64 => {
             let mut buf = [0u8; 8];
             buf.copy_from_slice(&ordered);
-            Value::BigInt(BigInt::from(i64::from_be_bytes(buf)))
+            Value::bigint(BigInt::from(i64::from_be_bytes(buf)))
         }
         ElementType::BigUint64 => {
             let mut buf = [0u8; 8];
             buf.copy_from_slice(&ordered);
-            Value::BigInt(BigInt::from(u64::from_be_bytes(buf)))
+            Value::bigint(BigInt::from(u64::from_be_bytes(buf)))
         }
     }
 }

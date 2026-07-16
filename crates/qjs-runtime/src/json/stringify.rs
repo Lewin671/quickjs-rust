@@ -341,7 +341,7 @@ fn unbox_json_wrapper(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeE
         )),
         Value::Object(object) => Ok(wrapper_boolean_value(&object)
             .map(Value::Boolean)
-            .or_else(|| wrapper_bigint_value(&object).map(Value::BigInt))
+            .or_else(|| wrapper_bigint_value(&object).map(Value::bigint))
             .unwrap_or(Value::Object(object))),
         value => Ok(value),
     }
@@ -376,7 +376,7 @@ fn wrapper_bigint_value(object: &ObjectRef) -> Option<num_bigint::BigInt> {
         Some(Property {
             value: Value::BigInt(value),
             ..
-        }) => Some(value),
+        }) => Some(value.as_ref().clone()),
         _ => None,
     }
 }

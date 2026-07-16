@@ -52,7 +52,7 @@ fn coerce_big_int_element(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let big = bigint::to_bigint(value, env)?;
-    Ok(Value::BigInt(wrap_big_int(native, big)))
+    Ok(Value::bigint(wrap_big_int(native, big)))
 }
 
 fn wrap_big_int(native: NativeFunction, value: BigInt) -> BigInt {
@@ -76,7 +76,7 @@ fn f32_round(number: f64) -> f64 {
 /// The neutral element for `native` (zero, BigInt zero for the 64-bit kinds).
 pub(crate) fn zero_value(native: NativeFunction) -> Value {
     if is_big_int_kind(native) {
-        Value::BigInt(BigInt::from(0))
+        Value::bigint(BigInt::from(0))
     } else {
         Value::Number(0.0)
     }
@@ -118,12 +118,12 @@ pub(crate) fn read_element(native: NativeFunction, bytes: &[u8], byte_index: usi
         NativeFunction::BigInt64Array => {
             let mut buf = [0u8; 8];
             buf.copy_from_slice(slice);
-            Value::BigInt(BigInt::from(i64::from_le_bytes(buf)))
+            Value::bigint(BigInt::from(i64::from_le_bytes(buf)))
         }
         NativeFunction::BigUint64Array => {
             let mut buf = [0u8; 8];
             buf.copy_from_slice(slice);
-            Value::BigInt(BigInt::from(u64::from_le_bytes(buf)))
+            Value::bigint(BigInt::from(u64::from_le_bytes(buf)))
         }
         _ => zero_value(native),
     }
@@ -180,7 +180,7 @@ fn big_int_of(value: &Value) -> i64 {
         Value::BigInt(big) => {
             // Take the low 64 bits.
             let modulo = BigInt::from(1u128 << 64);
-            let wrapped = ((big % &modulo) + &modulo) % &modulo;
+            let wrapped = ((big.as_ref() % &modulo) + &modulo) % &modulo;
             wrapped.to_u64().map(|value| value as i64).unwrap_or(0)
         }
         _ => 0,
@@ -342,7 +342,7 @@ pub(crate) fn try_set_integer_indexed_primitive_element(
             };
             coerce_number_element(native, number)
         }
-        (true, Value::BigInt(big)) => Value::BigInt(wrap_big_int(native, big.clone())),
+        (true, Value::BigInt(big)) => Value::bigint(wrap_big_int(native, big.as_ref().clone())),
         _ => return false,
     };
     if super::typed_array_buffer_detached(object) || index >= typed_array_length(object) {

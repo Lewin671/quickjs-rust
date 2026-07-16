@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use num_bigint::BigInt;
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
@@ -79,10 +81,11 @@ impl Vm<'_> {
                 });
             }
             Value::BigInt(value) => {
+                let value = Rc::unwrap_or_clone(value);
                 let one = BigInt::from(1);
                 return Ok(match op {
-                    UpdateOp::Increment => Value::BigInt(value + one),
-                    UpdateOp::Decrement => Value::BigInt(value - one),
+                    UpdateOp::Increment => Value::bigint(value + one),
+                    UpdateOp::Decrement => Value::bigint(value - one),
                 });
             }
             value => value,
@@ -91,10 +94,11 @@ impl Vm<'_> {
         let primitive = to_primitive_with_hint(value, PreferredType::Number, &mut env)?;
         let result = match primitive {
             Value::BigInt(value) => {
+                let value = Rc::unwrap_or_clone(value);
                 let one = BigInt::from(1);
                 match op {
-                    UpdateOp::Increment => Value::BigInt(value + one),
-                    UpdateOp::Decrement => Value::BigInt(value - one),
+                    UpdateOp::Increment => Value::bigint(value + one),
+                    UpdateOp::Decrement => Value::bigint(value - one),
                 }
             }
             value => {

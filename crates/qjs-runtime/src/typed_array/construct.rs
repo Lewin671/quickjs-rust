@@ -112,7 +112,7 @@ fn initialize_from_length(
         .ok_or_else(invalid_length_error)?;
     let buffer = array_buffer_for(byte_length, env);
     let zero = if is_big_int_kind(native) {
-        Value::BigInt(num_bigint::BigInt::from(0))
+        Value::bigint(num_bigint::BigInt::from(0))
     } else {
         Value::Number(0.0)
     };

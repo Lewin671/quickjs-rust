@@ -336,7 +336,7 @@ fn data_view_float16_accessors_follow_resizable_buffer() {
 fn data_view_bigint_round_trips() {
     assert_eq!(
         eval("let v = new DataView(new ArrayBuffer(8)); v.setBigInt64(0, -1n); v.getBigInt64(0);"),
-        Ok(Value::BigInt(num_bigint::BigInt::from(-1)))
+        Ok(Value::bigint(num_bigint::BigInt::from(-1)))
     );
     assert_eq!(
         eval(

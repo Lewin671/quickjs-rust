@@ -423,7 +423,7 @@ fn to_atomic_store_value(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if typed_array::is_big_int_kind(kind) {
-        return crate::bigint::to_bigint(value, env).map(Value::BigInt);
+        return crate::bigint::to_bigint(value, env).map(Value::bigint);
     }
     let number = to_number_with_env(value, env)?;
     let integer = if number.is_nan() {
@@ -478,9 +478,9 @@ fn apply_big_int_atomic_op(
         AtomicOp::Xor => old ^ value,
     };
     if matches!(kind, NativeFunction::BigUint64Array) {
-        Value::BigInt(BigInt::from(result as u64))
+        Value::bigint(BigInt::from(result as u64))
     } else {
-        Value::BigInt(BigInt::from(result))
+        Value::bigint(BigInt::from(result))
     }
 }
 
@@ -503,7 +503,7 @@ fn big_int_to_i64(value: &Value) -> i64 {
     match value {
         Value::BigInt(value) => {
             let modulo = BigInt::from(1u128 << 64);
-            let wrapped = ((value % &modulo) + &modulo) % &modulo;
+            let wrapped = ((value.as_ref() % &modulo) + &modulo) % &modulo;
             wrapped.to_u64().map(|value| value as i64).unwrap_or(0)
         }
         _ => 0,
