@@ -30,7 +30,7 @@ pub(super) use prototype::{
     native_string_prototype_substring, native_string_prototype_to_lower_case,
     native_string_prototype_to_string, native_string_prototype_to_upper_case,
     native_string_prototype_to_well_formed, native_string_prototype_trim,
-    native_string_prototype_trim_end, native_string_prototype_trim_start,
+    native_string_prototype_trim_end, native_string_prototype_trim_start, numeric_string_slice,
 };
 
 pub(crate) const STRING_DATA_PROPERTY: &str = "\0StringData";
@@ -49,6 +49,19 @@ pub(crate) fn string_code_units(value: &str) -> Vec<u16> {
             }
         })
         .collect()
+}
+
+pub(crate) fn string_code_unit_len(value: &str) -> usize {
+    value
+        .chars()
+        .map(|character| {
+            if surrogate_escape_code_unit(character).is_some() {
+                1
+            } else {
+                character.len_utf16()
+            }
+        })
+        .sum()
 }
 
 pub(crate) fn string_utf16_eq(left: &str, right: &str) -> bool {
@@ -106,5 +119,18 @@ pub(crate) fn push_code_unit(result: &mut String, code_unit: u16) {
         );
     } else {
         result.push(char::from_u32(u32::from(code_unit)).unwrap_or(char::REPLACEMENT_CHARACTER));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{string_code_unit_len, string_code_units, string_from_code_units};
+
+    #[test]
+    fn code_unit_length_matches_materialized_utf16() {
+        let escaped_surrogates = string_from_code_units(&[0xD800, 0xDC00, 0xDFFF]);
+        for value in ["ascii", "A😀文", escaped_surrogates.as_str()] {
+            assert_eq!(string_code_unit_len(value), string_code_units(value).len());
+        }
     }
 }

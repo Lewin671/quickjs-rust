@@ -334,7 +334,7 @@ pub(crate) fn property_value_key_with_receiver(
         Value::String(value) => {
             if key == "length" {
                 Ok(Value::Number(
-                    crate::string::string_code_units(&value).len() as f64,
+                    crate::string::string_code_unit_len(&value) as f64
                 ))
             } else {
                 let descriptor = crate::string::string_property(&value, key)

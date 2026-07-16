@@ -86,6 +86,24 @@ pub(crate) fn native_string_prototype_slice(
     )))
 }
 
+pub(crate) fn numeric_string_slice(value: &Rc<String>, start: f64, end: f64) -> Rc<String> {
+    let value = StringSequenceValue::Shared(value.clone());
+    let length = string_char_len(value.as_str());
+    let normalize = |number: f64| {
+        if number.is_nan() {
+            0
+        } else {
+            let integer = number.trunc();
+            if integer < 0.0 {
+                (length as f64 + integer).max(0.0) as usize
+            } else {
+                integer.min(length as f64) as usize
+            }
+        }
+    };
+    string_slice_chars(&value, normalize(start), normalize(end), length)
+}
+
 pub(crate) fn native_string_prototype_split(
     this_value: Value,
     argument_values: &[Value],

@@ -6,7 +6,8 @@ use crate::{
 };
 
 use super::{
-    STRING_DATA_PROPERTY, string_code_units, string_from_code_unit, string_from_code_units,
+    STRING_DATA_PROPERTY, string_code_unit_len, string_code_units, string_from_code_unit,
+    string_from_code_units,
 };
 use crate::CallEnv;
 
@@ -185,7 +186,7 @@ pub(super) fn define_string_data(object: &ObjectRef, value: &str) {
     object.define_property(
         "length".to_owned(),
         Property::data(
-            Value::Number(string_code_units(value).len() as f64),
+            Value::Number(string_code_unit_len(value) as f64),
             false,
             false,
             false,

@@ -131,7 +131,7 @@ fn boxed_string(value: &str, env: &CallEnv) -> Value {
     object.define_property(
         "length".to_owned(),
         Property::data(
-            Value::Number(string::string_code_units(value).len() as f64),
+            Value::Number(string::string_code_unit_len(value) as f64),
             false,
             false,
             false,

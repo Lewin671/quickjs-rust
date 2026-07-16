@@ -144,6 +144,19 @@ Evidence bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+Trusted-main run `29514390468` then validated the complete string unit on the
+hosted Linux profile. It retained 225/225 eligible formal measurements,
+75/75 passing linearity diagnostics, and three valid blocks. Candidate/base
+was 0.88061x with a 95% confidence interval of [0.88061x, 0.88469x]. The
+complete candidate reached **0.54249x QuickJS-NG** overall with a 95%
+confidence interval of [0.53665x, 0.54705x], while the string family reached
+**0.59737x QuickJS-NG**. The only remaining family failures at that revision
+were call 1.19556x and allocation 4.48144x. Run ID:
+`3a81d8d6-0ac2-45c0-9a8b-0f28f483bf52`; raw JSONL SHA-256:
+`b221ce1d5126b0f0103650aaf001024c5a1fb2734fda261e1ce29902632e8a31`;
+report JSON SHA-256:
+`0b981d9990fd970bfcc03745e21149d22e3dd76ce1b6143ee623a0664edf1107`.
+
 ## Broad V2 Optimization Evidence
 
 The first v2 runtime unit admits guarded global-object method calls to the
@@ -925,6 +938,152 @@ Consolidated function-state bindings:
   `2b44004f9341158fc450088cafe7ca0302794f97a10a43713136fce1ea728598`;
 - base binary SHA-256:
   `ab4d390b6ec9e1068a15b12656250c0acb62d99b09dc5089fbf0a65aca963f8e`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
+The corresponding trusted-main hosted run `29509431672` completed all 225
+formal measurements, all 600 predetermined linearity samples, and all three
+blocks without an execution failure. It is nevertheless not broad evidence:
+shared-runner noise made the QuickJS-NG `local_read` N/2N diagnostic 1.15938x,
+just outside the frozen [0.85x, 1.15x] interval, so report health is `invalid`
+with 74 passing and one failing engine/case diagnostic. No retry, outlier
+deletion, or widened bound is used, and its computed comparison ratios must not
+be reported as a performance conclusion. Run ID:
+`4ea864ca-d57e-40bb-9a3b-4fbce0b97d0a`; raw JSONL SHA-256:
+`a2bf9b0bdb97456d0f8af2898fc808a9b45e6516dce9eaf34fa41e29cb2abb32`;
+report JSON SHA-256:
+`a5317e609d65c95b80faa40c808f0065e0d3c00549baecab26486d05a8db99d6`.
+Commit `71972b0309c2164486b512a65b11933ba9b08c7c` changes only hosted-preview
+classification: a complete 3/3-block run with failed linearity now publishes
+an explicit successful/inconclusive status with empty comparisons and retained
+raw evidence; missing, malformed, or incomplete evidence still fails.
+
+The trusted-main validation run `29512547949` then exercised that classifier
+with the same runtime binary on both sides of the policy-only commit. It passed
+all 75 engine/case linearity diagnostics (600/600 samples), retained 225/225
+valid formal measurements and 3/3 valid blocks, and produced the expected
+`inconclusive`/`non_claim` hosted health. Candidate/base was 0.99797x with a
+95% confidence interval of [0.99126x, 0.99929x], while the current
+function-allocation runtime measured **0.55082x QuickJS-NG** overall with a
+95% confidence interval of [0.54317x, 0.55218x]. The remaining family failures
+were allocation 4.07820x, call 1.26862x, and string 15.09428x. Run ID:
+`cc13558a-751d-462c-8611-aadad74a1b1b`; raw JSONL SHA-256:
+`99b42374b1699ce622d813f6f55449d12336b601268b5c04d92a6a0a61b91770`;
+report JSON SHA-256:
+`f3f2cadbbf72f35216a3ec251249569bed1b0fbb8bca112d0e8a22d8a5406e3f`.
+
+The fourteenth v2 runtime unit removes allocation from UTF-16 length queries
+and adds a guarded counted-loop term for numeric `String.prototype.slice`
+followed by `.length`. String length now counts UTF-16 units directly instead
+of first materializing a `Vec<u16>`. The loop term is admitted only when the
+current String prototype owns the exact native `slice` data property; an
+overridden method or accessor remains on the observable VM path. For the
+portfolio's partial slice, every traced iteration still creates and drops the
+sliced string before reading its length.
+
+The allocation-free length change alone reduced focused `string_slice` from a
+955.882 ns/op base median to 865.244 ns/op, or 0.90518x base, while remaining
+9.38386x QuickJS-NG. Run ID:
+`d8140683-7fa5-476b-b79c-64b25806cd4f`; raw JSONL SHA-256:
+`a661349d4fa4f8c8edc39d225c9557587e8669f7d8f820a4d9e690322738614a`.
+
+The complete unit's focused three-role run then measured candidate medians of
+59.124/62.692/59.863 ns/op versus 831.775/834.280/830.431 for the
+length-only base and 91.314/89.654/91.260 for QuickJS-NG. Candidate was
+0.07197x of that base and **0.65596x QuickJS-NG**. All nine formal
+measurements were eligible and all 24 predetermined linearity samples
+succeeded; no measurement was timer-limited. This is focused complete raw
+evidence, not a broad claim.
+
+Guarded string-slice bindings:
+
+- run ID: `61ffb6c8-d26f-4783-814a-a06a5807850a`;
+- raw JSONL SHA-256:
+  `6a340048cb16f1425f90e52c6f1bc6413406afe186e775fda908a5297cf0ccbd`;
+- manifest SHA-256:
+  `c4c9834b6676a56e2e8fef35ec15352257730bb2048345e8503d2a4f8b19fbf8`;
+- candidate binary SHA-256:
+  `c36185b4191a3977d3af7c81c764a137b3bc17faf22c072bd1586e94711bc78a`;
+- length-only base binary SHA-256:
+  `acbcd3d88cf31fb22364d7a5510e15f64cabec4b7a49bfd9fec51e6c8f21af70`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
+The fifteenth v2 runtime unit extends the same guarded counted-loop machinery
+to the expression-order holdout `sum = globalLeaf(counter) + sum`. Admission
+is intentionally narrower than general addition commutation: the left operand
+must be a global call that prepares as an existing numeric leaf plan, the
+right operand must be the authoritative numeric accumulator, and the normal
+loop/result trace must still match. Local closures are not admitted by this
+shape. Non-numeric leaf returns, global mutation, branches, or otherwise
+observable callees fail preparation and execute through the ordinary VM.
+
+The first focused run exposed a measurement-contract ceiling rather than
+reportable speed: the optimized candidate reached the case's old 50,000,000
+iteration cap in about 160 ms, below its 500 ms minimum, so all three candidate
+measurements were correctly marked `timer_limited`. To preserve fail-closed
+measurement while making the optimized case measurable, the case now uses the
+already-established fast-call calibration bounds from `plain_function_call`:
+130,000,000 maximum iterations, a 250 ms minimum window, and a 4% startup
+fraction. These settings apply identically to candidate, base, and QuickJS-NG;
+the workload, operation count, and checksum model are unchanged. The maximum
+triangular checksum is 8,450,000,065,000,000, still below `2^53` and therefore
+exactly representable.
+
+The calibrated focused three-role run made all nine formal measurements
+eligible and all 24 predetermined linearity samples passed. Candidate medians
+were 3.081/3.074/3.069 ns/op, versus 195.363/194.127/194.642 for the preceding
+runtime and 44.424/44.106/44.503 for QuickJS-NG. The preceding-runtime and
+QuickJS-NG medians remained consistent with the capped diagnostic's 194.065
+and 43.879 ns/op, respectively, showing that the calibration change extended
+the window without changing their comparison direction. Candidate was
+**0.01579x base** and **0.06920x QuickJS-NG** for this focused case. This is
+complete focused raw evidence, not a broad claim.
+
+Reordered global-call bindings:
+
+- run ID: `58930c50-309d-415a-b96d-a66a84b89aa6`;
+- raw JSONL SHA-256:
+  `ea4651e672eb3077fa9338850978cc97d5cf5d54406d966bce3a9edbf8499995`;
+- manifest SHA-256:
+  `5105e4923cb104f6608e935f73a35e9ab763562c57c7eea8cb0169d1710777ec`;
+- candidate binary SHA-256:
+  `26d514e98209db6f7922d393f5715175c940dfaebfc85430677a669268c2d023`;
+- preceding-runtime binary SHA-256:
+  `c36185b4191a3977d3af7c81c764a137b3bc17faf22c072bd1586e94711bc78a`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
+The sixteenth v2 runtime unit consolidates ordinary-object cold state behind
+one lazy allocation. Symbol properties, `toStringTag`, module-namespace
+bindings, generator and async-generator state, private state, ArrayBuffer
+bytes, iterator-zip state, and the optional agents backing no longer reserve
+independent space in every ordinary object. Missing-state reads avoid creating
+the cold block; the corresponding mutation or exotic-object initialization
+creates it on demand. On the current 64-bit layout this reduces `ObjectData`
+from 248 to 144 bytes without removing object allocation or property reads.
+
+A focused three-role `object_allocation` run made all nine formal measurements
+eligible and passed all 24 predetermined linearity samples. Candidate medians
+were 310.922/311.948/312.097 ns/op versus
+320.846/319.840/321.746 for the preceding runtime, a **0.97227x** ratio. The
+local QuickJS-NG median was 174.047 ns/op and the candidate/QuickJS-NG ratio was
+1.79232x on this macOS profile; that local cross-engine number is diagnostic
+and is not substituted for the hosted Linux family score. The measured runtime
+gain is modest, so the allocation family still requires a deeper Value and
+allocator redesign.
+
+Object cold-state bindings:
+
+- run ID: `e5fcbdb3-5bf6-4236-9dbb-9231f7180d8f`;
+- raw JSONL SHA-256:
+  `ec1980bae4183693a3585880e17d0cfc98ef7f6594a5b9afd68a3406e4630799`;
+- manifest SHA-256:
+  `5105e4923cb104f6608e935f73a35e9ab763562c57c7eea8cb0169d1710777ec`;
+- candidate binary SHA-256:
+  `7f393c26c3128f0c301c03b2adbd8b36a50c6407a1ae5e843995dc5e4ef7fbf9`;
+- preceding-runtime binary SHA-256:
+  `26d514e98209db6f7922d393f5715175c940dfaebfc85430677a669268c2d023`;
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
