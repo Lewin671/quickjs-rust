@@ -554,7 +554,7 @@ structural audit input and can never authorize a runner. Validation only reads
 metadata. It never downloads a corpus, initializes a submodule, or runs a
 benchmark.
 
-Real admission is not obtained by filling v1 fields with plausible strings.
+Real claim-grade admission is not obtained by filling v1 fields with plausible strings.
 It requires a separately reviewed v2 schema plus a content-hashed audit bundle
 binding source-pin evidence, a per-file license inventory and NOTICE decision,
 a repository-owned adapter, a neutral timing protocol and phase boundary, and
@@ -562,10 +562,19 @@ an expected-case manifest with source hashes. Generated/downloaded assets do
 not belong in `tests/`, and `third_party/` remains read-only. An upstream
 top-level license never substitutes for a per-file inventory.
 
-Admission tiers:
+Admission and execution tiers:
 
-- The current QuickJS-derived first-party subset is the only runnable layer;
-  the external registry records governance state, not first-party admission.
+- The current QuickJS-derived first-party subset remains the only claim-candidate
+  runnable layer. The external registry records governance state, not
+  first-party admission.
+- Every admitted hosted preview mode runs the non-claim external preview
+  described
+  by `benchmarks/external-preview.json`. It runs 45 explicitly listed cases from
+  71 files at three full upstream revisions, verifies every SHA-256 before
+  generating temporary bundles, and uploads hashes/results rather than source.
+  Same-repository pull requests use the base-owned harness, while trusted
+  `main` pushes and manual dispatches use the exact `main` harness revision.
+  This execution-only layer does not change any `blocked` registry decision.
 - V8 benchmark suite v7 (`bench-v8`) and the QuickJS-NG Web Tooling Benchmark
   fork are blocked candidates pending per-workload license, capability, and
   timing audits. Web Tooling documents `qjs --stack-size 2048 --script
@@ -588,6 +597,53 @@ Admission tiers:
   audit is never headline evidence: only a complete frozen measurement and
   analysis protocol on qualified hardware can support a performance claim.
 
+### External hosted preview
+
+The external preview compares only the current qjs-rust candidate and the
+pinned QuickJS-NG executable. QuickJS-NG runs with `--script` so historical
+implicit globals and top-level script semantics match qjs-rust. Python brackets
+each fresh shell process with `perf_counter_ns`; the metric therefore includes
+startup, parsing, execution, and shutdown. A seeded pair rotation changes engine
+order across the three measurement blocks.
+
+The frozen suite inventory is:
+
+- **SunSpider 1.0:** all 26 upstream cases;
+- **Kraken 1.1:** all 14 upstream cases, with each data file bound separately;
+- **JetStream 3 JavaScript subset:** `cdjs`, `hash-map`, `gaussian-blur`,
+  `stanford-crypto-aes`, and `raytrace-public-class-fields`, each invoking one
+  upstream `Benchmark.runIteration` plus its validation hook.
+
+Capability probes run before measurement. A failed or timed-out engine remains
+visible for that frozen case and the case receives no ratio. The report may show
+a diagnostic geometric mean over explicitly comparable cases, but an incomplete
+suite has no suite score. JetStream output is always named **JetStream 3
+JavaScript subset** and never an official JetStream score. All hosted output
+keeps `claim_eligible=false`. The GitHub Step Summary shows both the three-suite
+overview and every named external case with qjs-rust and QuickJS-NG median wall
+time, ratio, and lower-wall-time engine. The internal portfolio is likewise
+rendered as a 25-case table instead of only an overall ratio.
+
+Run the same preview locally after building both shells:
+
+```sh
+cargo build --release -p qjs-cli
+make -C third_party/quickjs-ng BUILD_QJS_LIBC=y
+./scripts/external-performance-preview.sh audit
+./scripts/external-performance-preview.sh run \
+  --cache-root target/external-preview/corpora \
+  --work-root target/external-preview/work \
+  --output-dir target/external-preview/evidence \
+  --candidate target/release/qjs \
+  --quickjs-ng third_party/quickjs-ng/build/qjs
+```
+
+The output directory receives `external-raw.jsonl`,
+`external-report.json`, `external-summary.md`, and the exact manifest. Corpus
+files and generated bundles stay outside that directory; bundles are removed
+after the run. Use `--blocks 1 --timeout-seconds 1` only for harness smoke tests,
+not for a performance reading.
+
 ## CI Layering and Gate Activation
 
 `benchmarks/performance-policy.json` is a fail-closed v2 policy. Validate the
@@ -609,8 +665,10 @@ all `nightly`, `release`, and `pr_sentinel` gates disabled. Every
 `--require-gate` request therefore exits 2. A custom `--policy` is structural
 input only and cannot be combined with `--require-gate`.
 
-`.github/workflows/performance-smoke.yml` declares `pull_request_target` and
-`push`, both filtered to `main`. For a same-repository PR targeting `main`, the
+`.github/workflows/performance-smoke.yml` declares `pull_request_target`,
+`push`, and `workflow_dispatch`. PR and push events are filtered to `main`; a
+manual dispatch is admitted only when the selected ref is exactly
+`refs/heads/main`. For a same-repository PR targeting `main`, the
 base-owned workflow, setup action, and `base_owned_harness` compare the explicit
 PR head SHA against the explicit PR base SHA. Fork previews are explicitly
 unsupported and skipped. This is an integrity boundary for cooperative
@@ -629,12 +687,35 @@ before and after, and `github.sha == github.event.after`; unchanged or malformed
 identities fail closed. The after-owned harness is necessary because the first
 before revision predating this path cannot implement it.
 
+A manual run uses the selected `main` revision as the trusted workflow,
+candidate, and same-revision base. Its internal candidate/base lane is therefore
+an A/A noise observation, while the external phase still compares that exact
+qjs-rust revision with the pinned QuickJS-NG executable across JetStream 3,
+Kraken, and SunSpider. Dispatch admission requires event `workflow_dispatch`,
+ref `refs/heads/main`, matching workflow/event repository identities, and
+`github.sha` equal to the selected revision. Trigger it from the Actions page
+with **Run workflow** and branch `main`, or with:
+
+```sh
+gh workflow run performance-smoke.yml --ref main
+```
+
+Before a trusted main push or manual comparison, a separate job prepares the pinned
+QuickJS-NG executable cache. It computes the same content-addressed build
+identity as the measurement job, restores an exact entry when available, and
+builds plus saves the pinned reference only on a miss. The comparison job uses
+`always()` on that dependency: a cache-backend or preparation failure never
+suppresses the benchmark, because the existing orchestrator can still rebuild
+the reference as a fallback. The preparation job never produces or caches
+measurements. Every `main` update and every manual dispatch therefore runs a
+fresh benchmark even when every executable is reused.
+
 Both paths use read-only contents permission, no secrets, no write permission,
 no slowdown threshold, and no performance gate. Harness mode/revision plus the
 candidate, base, and pinned QuickJS-NG revisions are recorded in pending,
 failure, and successful provenance. PR numbers isolate and supersede stale PR
-runs, while each main push gets a distinct workflow-run-bound concurrency group so no
-push is canceled by a later one.
+runs, while each main push or manual dispatch gets a distinct workflow-run-bound
+concurrency group so no trusted run is canceled by a later one.
 
 `scripts/performance-preview.sh` initializes only the manifest-pinned
 QuickJS-NG revision and prepares all three engines on one `ubuntu-latest` host.
@@ -659,7 +740,9 @@ regular executable mode, size, and SHA-256 must validate before use; missing or
 invalid entries rebuild. Logs and artifact `build-cache.json` expose each
 role's hit/rebuild status and key. `pull_request_target` uses exact restore-only
 actions and cannot save candidate-influenced state. Only a trusted `main` push
-may save new immutable executable caches; prefix restores are not used. Before
+may save new immutable executable caches; its reference preparation job saves
+QuickJS-NG before measurement, while the measurement job retains a validated
+fallback save for any cache miss. Prefix restores are not used. Before
 storing a rebuilt miss locally, the orchestrator revalidates that role's source tree
 immediately after compilation, so a build that dirties tracked provenance
 cannot create a ready entry. Before a remote save, an always-run step

@@ -72,6 +72,11 @@ each script is for.
   only the checked-in registry and always fails; custom `--registry` input is
   structural only and cannot be combined with it. The script never downloads,
   initializes submodules, runs a corpus, or creates performance evidence.
+- `external-performance-preview.sh`: Audits, downloads, or runs the pinned
+  SunSpider 1.0, Kraken 1.1, and JetStream 3 JavaScript subset preview against
+  qjs-rust and QuickJS-NG. It verifies every upstream file hash, keeps source
+  outside artifacts, and produces informational per-case evidence without an
+  official suite score.
 - `performance-policy-audit.sh`: Validates the checked-in deny-only CI policy,
   current protocol hashes, direct QuickJS-NG pin, aggregate hosted workflow /
   setup / orchestrator / renderer / admission / audit-chain hash, and zero-admitted
@@ -83,7 +88,12 @@ each script is for.
   SHA, explicit base SHA, and manifest-pinned QuickJS-NG on one shared host.
   Same-repository PRs use a base-owned `pull_request_target` harness; every
   `main` push (merge or direct) uses `github.event.after` as the head-owned
-  harness/candidate and `github.event.before` as the base. Fork PRs are
+  harness/candidate and `github.event.before` as the base. A trusted manual
+  dispatch from `main` uses the selected revision as both candidate and A/A
+  base. Every admitted mode runs the full JetStream 3, Kraken, and SunSpider
+  external preview, and the final Step Summary includes the 25 internal cases,
+  the three external-suite diagnostics, and all 45 named external cases.
+  Trigger it with `gh workflow run performance-smoke.yml --ref main`. Fork PRs are
   unsupported, and push admission fail-closes on event/ref/repository/SHA
   mismatches. The script
   clears GitHub command/token channels, verifies clean sources before and after
@@ -100,8 +110,9 @@ each script is for.
   namespace and the pinned QuickJS-NG binary normally hits. Invalid entries
   rebuild. Keys include hosted image/runtime/libc plus effective compiler and
   linker identities/environment. PR-target runs restore only; trusted `main`
-  pushes independently revalidate and may save completed entries even when a
-  later noisy measurement fails. Cache-service errors degrade to rebuild or
+  pushes and trusted manual-main runs independently revalidate and may save
+  completed entries even when a later noisy measurement fails. Cache-service
+  errors degrade to rebuild or
   no-save, and benchmark measurements/evidence always rerun. `build-cache.json` records
   per-role provenance.
 - `lifecycle-bench.sh`: Runs the dev-only Criterion parser/compiler lifecycle

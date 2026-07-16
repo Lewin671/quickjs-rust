@@ -40,17 +40,20 @@
       ".github/actions/setup-rust/action.yml",
       ".github/workflows/performance-smoke.yml",
       "benchmarks/external-corpora.json",
+      "benchmarks/external-preview.json",
       "scripts/external-corpus-audit.sh",
+      "scripts/external-performance-preview.sh",
       "scripts/performance-policy-audit.sh",
       "scripts/performance-preview.sh",
       "tools/benchmark/build_cache.py",
       "tools/benchmark/build_cache_identity.py",
       "tools/benchmark/external_corpora.py",
+      "tools/benchmark/external_preview.py",
       "tools/benchmark/hosted_preview.py",
       "tools/benchmark/performance_policy.py",
       "tools/benchmark/preview.py"
     ],
-    "aggregate_sha256": "00e6d6c33d632cc375f48033673a1c0ff4fe4d47fba0b112100e7b2bfd7a5451"
+    "aggregate_sha256": "6e6542947a177348600c4e10c837fb799fb0512487d9e77b7623323fda89c26b"
   },
   "hosted_pr": {
     "tier": "informational_preview",
@@ -60,7 +63,7 @@
     "provider_url": "https://docs.github.com/actions/using-github-hosted-runners/about-github-hosted-runners",
     "runner": "ubuntu-latest",
     "workflow_path": ".github/workflows/performance-smoke.yml",
-    "workflow_sha256": "bb7dec5bd7febd64d62d269027aac3acc4992ef3da0b5bb98aad0b31e111ef06",
+    "workflow_sha256": "72ce394337ab94b0c9436c714da7beefab44c39b409b55f89bcd5e567996a3d3",
     "gate": false,
     "slowdown_threshold": null,
     "upload_timing_evidence": true,
@@ -83,6 +86,12 @@
       "push_integrity_scope": "trusted_main_push",
       "push_comparison": "event_after_candidate_vs_event_before_base",
       "push_harness_owner": "event_after_candidate",
+      "manual_mode": "manual_main_head_owned_harness",
+      "manual_event": "workflow_dispatch",
+      "manual_ref": "refs/heads/main",
+      "manual_integrity_scope": "trusted_manual_main_dispatch",
+      "manual_comparison": "selected_main_candidate_vs_same_revision_base",
+      "manual_harness_owner": "selected_main_candidate",
       "fixed_hardware_claim_scope": "trusted_merged_commits_only"
     }
   },

@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request_target:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -16,6 +17,82 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  reference-engine-cache:
+    name: Prepare reusable QuickJS-NG executable cache
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      CACHE_ROOT: ${{ github.workspace }}/target/performance-preview/build-cache
+      PLAN_ROOT: ${{ github.workspace }}/target/performance-preview/reference-cache-plan
+    steps:
+      - name: Checkout exact trusted main revision
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+
+      - name: Compute pinned reference executable cache identity
+        id: reference-cache-plan
+        run: |
+          python3 -m tools.benchmark.build_cache reference-plan \
+            --manifest benchmarks/manifest.json \
+            --output-dir "$PLAN_ROOT" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Restore pinned QuickJS-NG executable cache
+        id: quickjs-cache
+        uses: actions/cache/restore@v5
+        continue-on-error: true
+        with:
+          path: target/performance-preview/build-cache/quickjs-ng/${{ steps.reference-cache-plan.outputs.quickjs-key }}
+          key: performance-preview-quickjs-ng-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.reference-cache-plan.outputs.quickjs-key }}
+
+      - name: Build pinned QuickJS-NG only on cache miss
+        if: steps.quickjs-cache.outputs.cache-hit != 'true'
+        run: |
+          reference_repo="$(python3 -m tools.benchmark.preview reference \
+            --manifest benchmarks/manifest.json --field repo)"
+          reference_revision="$(python3 -m tools.benchmark.preview reference \
+            --manifest benchmarks/manifest.json --field revision)"
+          git submodule sync -- third_party/quickjs-ng
+          git submodule update --init --depth 1 third_party/quickjs-ng
+          test "$(git -C third_party/quickjs-ng remote get-url origin)" = "$reference_repo"
+          python3 -m tools.benchmark.preview verify-source \
+            --source third_party/quickjs-ng --revision "$reference_revision"
+          quickjs_make_args=()
+          while IFS= read -r argument; do quickjs_make_args+=("$argument"); done \
+            < <(python3 -m tools.benchmark.build_cache recipe \
+              --kind quickjs --field make_args)
+          test "${#quickjs_make_args[@]}" -gt 0
+          make -C third_party/quickjs-ng "CC=$(command -v cc)" "${quickjs_make_args[@]}"
+          python3 -m tools.benchmark.preview verify-source \
+            --source third_party/quickjs-ng --revision "$reference_revision"
+          python3 -m tools.benchmark.build_cache store \
+            --entry "$CACHE_ROOT/quickjs-ng/${{ steps.reference-cache-plan.outputs.quickjs-key }}" \
+            --spec "$PLAN_ROOT/quickjs-ng.json" \
+            --binary third_party/quickjs-ng/build/qjs
+
+      - name: Revalidate pinned QuickJS-NG executable cache
+        run: |
+          python3 -m tools.benchmark.build_cache ready \
+            --entry "$CACHE_ROOT/quickjs-ng/${{ steps.reference-cache-plan.outputs.quickjs-key }}" \
+            --spec "$PLAN_ROOT/quickjs-ng.json"
+
+      - name: Save pinned QuickJS-NG executable cache before measurement
+        if: steps.quickjs-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        continue-on-error: true
+        with:
+          path: target/performance-preview/build-cache/quickjs-ng/${{ steps.reference-cache-plan.outputs.quickjs-key }}
+          key: performance-preview-quickjs-ng-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.reference-cache-plan.outputs.quickjs-key }}
+
   base-owned-preview:
     name: Base-owned preview - cooperative same-repository PR
     if: >-
@@ -178,54 +255,69 @@ jobs:
           retention-days: 14
 
   main-push-preview:
-    name: Head-owned preview - trusted main push
-    if: github.event_name == 'push'
+    name: Head-owned preview - trusted main update
+    needs: reference-engine-cache
+    if: >-
+      always() &&
+      (github.event_name == 'push' ||
+       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       QJS_HARNESS_ROOT: ${{ github.workspace }}
-      QJS_HARNESS_MODE: main_push_head_owned_harness
+      QJS_HARNESS_MODE: ${{ github.event_name == 'workflow_dispatch' && 'manual_main_head_owned_harness' || 'main_push_head_owned_harness' }}
       EVIDENCE_DIR: ${{ github.workspace }}/target/performance-preview/evidence
       PYTHONDONTWRITEBYTECODE: '1'
       PREVIEW_EVENT_NAME: ${{ github.event_name }}
-      PUSH_REPOSITORY: ${{ github.repository }}
-      PUSH_EVENT_REPOSITORY: ${{ github.event.repository.full_name }}
-      PUSH_REF: ${{ github.ref }}
-      PUSH_BEFORE_SHA: ${{ github.event.before }}
-      PUSH_AFTER_SHA: ${{ github.event.after }}
-      PUSH_WORKFLOW_SHA: ${{ github.sha }}
-      PUSH_CLONE_URL: ${{ github.event.repository.clone_url }}
+      RUN_REPOSITORY: ${{ github.repository }}
+      RUN_EVENT_REPOSITORY: ${{ github.event.repository.full_name }}
+      RUN_REF: ${{ github.ref }}
+      RUN_BASE_SHA: ${{ github.event_name == 'push' && github.event.before || github.sha }}
+      RUN_CANDIDATE_SHA: ${{ github.sha }}
+      RUN_WORKFLOW_SHA: ${{ github.sha }}
+      RUN_CLONE_URL: ${{ github.event.repository.clone_url }}
     steps:
-      - name: Checkout explicit push after SHA as head-owned harness and candidate
+      - name: Checkout exact main revision as head-owned harness and candidate
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.event.after }}
+          ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
           submodules: false
 
-      - name: Checkout explicit push before SHA as comparison source
+      - name: Checkout exact comparison revision
         uses: actions/checkout@v6
         with:
-          repository: ${{ github.event.repository.full_name }}
-          ref: ${{ github.event.before }}
+          repository: ${{ github.repository }}
+          ref: ${{ github.event_name == 'push' && github.event.before || github.sha }}
           path: target/performance-preview/base-source
           fetch-depth: 1
           persist-credentials: false
           submodules: false
 
-      - name: Admit exact trusted main push
+      - name: Admit exact trusted main update
         run: |
-          python3 -m tools.benchmark.hosted_preview admit-push \
-            --event-name "$PREVIEW_EVENT_NAME" \
-            --repository "$PUSH_REPOSITORY" \
-            --event-repository "$PUSH_EVENT_REPOSITORY" \
-            --ref "$PUSH_REF" \
-            --before-sha "$PUSH_BEFORE_SHA" \
-            --after-sha "$PUSH_AFTER_SHA" \
-            --workflow-sha "$PUSH_WORKFLOW_SHA" \
-            --require-mode main_push_head_owned_harness
+          if [ "$PREVIEW_EVENT_NAME" = "push" ]; then
+            python3 -m tools.benchmark.hosted_preview admit-push \
+              --event-name "$PREVIEW_EVENT_NAME" \
+              --repository "$RUN_REPOSITORY" \
+              --event-repository "$RUN_EVENT_REPOSITORY" \
+              --ref "$RUN_REF" \
+              --before-sha "$RUN_BASE_SHA" \
+              --after-sha "$RUN_CANDIDATE_SHA" \
+              --workflow-sha "$RUN_WORKFLOW_SHA" \
+              --require-mode main_push_head_owned_harness
+          else
+            python3 -m tools.benchmark.hosted_preview admit-dispatch \
+              --event-name "$PREVIEW_EVENT_NAME" \
+              --repository "$RUN_REPOSITORY" \
+              --event-repository "$RUN_EVENT_REPOSITORY" \
+              --ref "$RUN_REF" \
+              --revision "$RUN_CANDIDATE_SHA" \
+              --workflow-sha "$RUN_WORKFLOW_SHA" \
+              --require-mode manual_main_head_owned_harness
+          fi
 
       - name: Initialize pending evidence before setup and audit
         run: |
@@ -235,29 +327,29 @@ jobs:
           python3 -m tools.benchmark.preview status \
             --state pending --phase pre_setup --output-dir "$EVIDENCE_DIR" \
             --harness-mode "$QJS_HARNESS_MODE" \
-            --harness-revision "$PUSH_AFTER_SHA" \
-            --candidate-revision "$PUSH_AFTER_SHA" \
-            --base-revision "$PUSH_BEFORE_SHA" \
+            --harness-revision "$RUN_CANDIDATE_SHA" \
+            --candidate-revision "$RUN_CANDIDATE_SHA" \
+            --base-revision "$RUN_BASE_SHA" \
             --reference-revision "$reference_revision" \
             --message "setup or audit has not completed; no performance conclusion is available"
 
-      - name: Setup Rust from trusted main push harness
+      - name: Setup Rust from trusted main harness
         uses: ./.github/actions/setup-rust
         with:
           source-root: .
 
-      - name: Audit trusted main push harness policy
+      - name: Audit trusted main harness policy
         run: |
           reference_revision="$(python3 -m tools.benchmark.preview reference \
             --manifest benchmarks/manifest.json --field revision)"
           python3 -m tools.benchmark.preview status \
             --state pending --phase audit --output-dir "$EVIDENCE_DIR" \
             --harness-mode "$QJS_HARNESS_MODE" \
-            --harness-revision "$PUSH_AFTER_SHA" \
-            --candidate-revision "$PUSH_AFTER_SHA" \
-            --base-revision "$PUSH_BEFORE_SHA" \
+            --harness-revision "$RUN_CANDIDATE_SHA" \
+            --candidate-revision "$RUN_CANDIDATE_SHA" \
+            --base-revision "$RUN_BASE_SHA" \
             --reference-revision "$reference_revision" \
-            --message "selected trusted main push harness audits have not completed"
+            --message "selected trusted main harness audits have not completed"
           ./scripts/performance-policy-audit.sh
           ./scripts/external-corpus-audit.sh
 
@@ -303,10 +395,10 @@ jobs:
             --harness-mode "$QJS_HARNESS_MODE" \
             --candidate-source "$GITHUB_WORKSPACE" \
             --base-source "$GITHUB_WORKSPACE/target/performance-preview/base-source" \
-            --candidate-sha "$PUSH_AFTER_SHA" \
-            --base-sha "$PUSH_BEFORE_SHA" \
-            --candidate-repo "$PUSH_CLONE_URL" \
-            --base-repo "$PUSH_CLONE_URL" \
+            --candidate-sha "$RUN_CANDIDATE_SHA" \
+            --base-sha "$RUN_BASE_SHA" \
+            --candidate-repo "$RUN_CLONE_URL" \
+            --base-repo "$RUN_CLONE_URL" \
             --output "$EVIDENCE_DIR" \
             --build-cache-root "$GITHUB_WORKSPACE/target/performance-preview/build-cache"
 

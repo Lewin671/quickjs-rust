@@ -26,6 +26,8 @@ from tools.benchmark.hosted_preview import (
     BASE_MODE,
     HOSTED_BASE_REF,
     HOSTED_PUSH_REF,
+    MANUAL_INTEGRITY_SCOPE,
+    MANUAL_MODE,
     PUSH_MODE,
 )
 from tools.benchmark.receipts import load_receipt
@@ -38,11 +40,21 @@ HARNESS_REVISION = "a" * 40
 
 def report(ratio_base: float = 1.25, ratio_qjs: float = 0.8) -> dict[str, object]:
     def comparison(ratio: float) -> dict[str, object]:
+        cases = {}
+        for index, case_id in enumerate(HOSTED_CASES, 1):
+            candidate = float(100 + index)
+            cases[case_id] = {
+                "candidate_median_ns_per_op": candidate,
+                "comparator_median_ns_per_op": candidate / ratio,
+                "ratio": ratio,
+                "confidence_interval": {"lower": ratio * 0.9, "upper": ratio * 1.1},
+            }
         return {
             "overall": {
                 "ratio": ratio,
                 "confidence_interval": {"lower": ratio * 0.9, "upper": ratio * 1.1},
-            }
+            },
+            "cases": cases,
         }
 
     engines = []
@@ -96,6 +108,10 @@ class PreviewSummaryTests(unittest.TestCase):
         self.assertNotIn("faster", markdown.lower())
         self.assertNotIn("slower", markdown.lower())
         self.assertIn("Valid blocks: `3/3`", markdown)
+        self.assertIn("### Per-case performance", markdown)
+        self.assertIn("| `plain_function_call` |", markdown)
+        self.assertIn("| `closure_allocation_call` |", markdown)
+        self.assertEqual(len(machine["comparisons"]["candidate vs base"]["cases"]), 25)
         self.assertEqual(
             machine["ratio_semantics"],
             "candidate_over_comparator_wall_ns_per_operation",
@@ -127,6 +143,14 @@ class PreviewSummaryTests(unittest.TestCase):
         self.assertEqual(machine["integrity_scope"], "trusted_main_push")
         self.assertIn(PUSH_MODE, markdown)
 
+    def test_manual_summary_uses_trusted_dispatch_integrity_scope(self) -> None:
+        markdown, machine = summarize(
+            report(), harness_mode=MANUAL_MODE, harness_revision="1" * 40
+        )
+        self.assertEqual(machine["harness"]["mode"], MANUAL_MODE)
+        self.assertEqual(machine["integrity_scope"], MANUAL_INTEGRITY_SCOPE)
+        self.assertIn(MANUAL_MODE, markdown)
+
     def test_invalid_health_or_missing_comparison_never_emits_direction(self) -> None:
         attacks = []
         for section, field, value in (
@@ -143,6 +167,9 @@ class PreviewSummaryTests(unittest.TestCase):
         missing = report()
         missing["comparisons"]["candidate_vs_base"] = None
         attacks.append(missing)
+        missing_case = report()
+        missing_case["comparisons"]["candidate_vs_base"]["cases"].pop(HOSTED_CASES[0])
+        attacks.append(missing_case)
         incomplete = report()
         incomplete["coverage"]["comparison_input_complete"] = False
         attacks.append(incomplete)
@@ -184,7 +211,7 @@ class PreviewPreparationTests(unittest.TestCase):
         script = (ROOT / "scripts/performance-preview.sh").read_text(encoding="utf-8")
         for value in (
             "--harness-mode", "--candidate-source", "--base-source",
-            BASE_MODE, PUSH_MODE, "verify-source",
+            BASE_MODE, PUSH_MODE, MANUAL_MODE, "verify-source",
             "CARGO_ENCODED_RUSTFLAGS", "--kind rust --field cargo_args",
             'make -C "$QUICKJS_SOURCE" "CC=$QUICKJS_CC" "${QUICKJS_MAKE_ARGS[@]}"',
             "tools.benchmark.build_cache plan", "tools.benchmark.build_cache materialize",
@@ -195,9 +222,11 @@ class PreviewPreparationTests(unittest.TestCase):
             "trap record_error ERR", 'CURRENT_PHASE="build_candidate"',
             'CURRENT_PHASE="build_base"', 'CURRENT_PHASE="build_quickjs_ng"',
             'CURRENT_PHASE="measurement"', 'CURRENT_PHASE="summary"',
+            'CURRENT_PHASE="external_corpus_preview"',
             'CURRENT_PHASE="post_measure_validation"', "GITHUB_ENV GITHUB_PATH",
             "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "./scripts/performance-policy-audit.sh",
-            "./scripts/external-corpus-audit.sh",
+            "./scripts/external-corpus-audit.sh", "./scripts/external-performance-preview.sh",
+            'cat "$OUTPUT/external-summary.md" >> "$OUTPUT/summary.md"',
         ):
             self.assertIn(value, script)
         self.assertGreaterEqual(script.count('verify_source "$CANDIDATE_SOURCE"'), 3)
@@ -229,9 +258,16 @@ class PreviewPreparationTests(unittest.TestCase):
             script.index('CURRENT_PHASE="post_measure_validation"'),
             script.index('CURRENT_PHASE="summary"'),
         )
+        self.assertLess(
+            script.index('CURRENT_PHASE="summary"'),
+            script.index('CURRENT_PHASE="external_corpus_preview"'),
+        )
         self.assertNotIn("fetch --no-tags", script)
         self.assertNotIn("third_party/test262", script)
         self.assertNotIn("--threshold", script)
+        self.assertNotIn(
+            'if [ "$HARNESS_MODE" = "main_push_head_owned_harness" ]', script
+        )
 
     def test_verify_source_detects_mock_build_dirtying_tracked_source(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
@@ -380,6 +416,25 @@ class HostedPreviewControlTests(unittest.TestCase):
             cwd=ROOT, capture_output=True, text=True, timeout=10, check=False,
         )
 
+    def _admit_dispatch(
+        self, *, event_name: str = "workflow_dispatch",
+        repository: str = "example/quickjs-rust",
+        event_repository: str = "example/quickjs-rust",
+        ref: str = HOSTED_PUSH_REF, revision: str = "2" * 40,
+        workflow_sha: str = "2" * 40,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                sys.executable, "-m", "tools.benchmark.hosted_preview",
+                "admit-dispatch", "--event-name", event_name,
+                "--repository", repository,
+                "--event-repository", event_repository, "--ref", ref,
+                "--revision", revision, "--workflow-sha", workflow_sha,
+                "--require-mode", MANUAL_MODE,
+            ],
+            cwd=ROOT, capture_output=True, text=True, timeout=10, check=False,
+        )
+
     def test_executable_pr_admission_contract(self) -> None:
         same = "example/quickjs-rust"
         long_term = self._admit("pull_request_target", same, same, "a" * 40)
@@ -433,6 +488,33 @@ class HostedPreviewControlTests(unittest.TestCase):
                 malformed = self._admit_push(**arguments)
                 self.assertEqual(malformed.returncode, 2)
                 self.assertIn(label, malformed.stderr)
+
+    def test_manual_dispatch_admission_is_main_only_and_fail_closed(self) -> None:
+        admitted = self._admit_dispatch()
+        self.assertEqual(admitted.returncode, 0, admitted.stderr)
+        payload = json.loads(admitted.stdout)
+        self.assertTrue(payload["run"])
+        self.assertEqual(payload["mode"], MANUAL_MODE)
+        self.assertEqual(payload["integrity_scope"], MANUAL_INTEGRITY_SCOPE)
+        for name, arguments, reason in (
+            ("ref", {"ref": "refs/heads/release"}, "dispatch_ref_unsupported"),
+            (
+                "repository",
+                {"event_repository": "other/repo"},
+                "dispatch_repository_mismatch",
+            ),
+            ("zero", {"revision": "0" * 40, "workflow_sha": "0" * 40},
+             "zero_dispatch_revision"),
+            ("workflow", {"workflow_sha": "3" * 40}, "workflow_sha_mismatch"),
+        ):
+            with self.subTest(name=name):
+                rejected = self._admit_dispatch(**arguments)
+                self.assertEqual(rejected.returncode, 2)
+                self.assertIn(reason, rejected.stderr)
+
+        wrong_event = self._admit_dispatch(event_name="push")
+        self.assertEqual(wrong_event.returncode, 2)
+        self.assertIn("event name: expected workflow_dispatch", wrong_event.stderr)
 
     def test_shell_env_passes_hostile_head_ref_as_literal_cli_argument(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:

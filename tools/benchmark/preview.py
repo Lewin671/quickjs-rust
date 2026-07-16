@@ -16,6 +16,8 @@ from typing import Any
 
 from .hosted_preview import (
     BASE_MODE,
+    MANUAL_INTEGRITY_SCOPE,
+    MANUAL_MODE,
     PR_INTEGRITY_SCOPE,
     PUSH_INTEGRITY_SCOPE,
     PUSH_MODE,
@@ -39,7 +41,7 @@ RUST_BUILD_FLAGS = (
     "--config=profile.release.incremental=false",
     "--config=profile.release.strip=\"none\"",
 )
-HARNESS_MODES = (BASE_MODE, PUSH_MODE)
+HARNESS_MODES = (BASE_MODE, PUSH_MODE, MANUAL_MODE)
 HOSTED_CASES = (
     "plain_function_call", "method_call", "captured_read", "captured_write",
     "many_locals_call", "property_read", "array_read", "function_call_two_args",
@@ -55,6 +57,7 @@ def _integrity_scope(harness_mode: str) -> str:
     return {
         BASE_MODE: PR_INTEGRITY_SCOPE,
         PUSH_MODE: PUSH_INTEGRITY_SCOPE,
+        MANUAL_MODE: MANUAL_INTEGRITY_SCOPE,
     }[harness_mode]
 
 
@@ -372,6 +375,44 @@ def _comparison(report: dict[str, Any], key: str, label: str) -> dict[str, Any]:
     else:
         direction = "equal ns/op"
         percent = 0.0
+    case_map = comparisons[key].get("cases")
+    if not isinstance(case_map, dict) or set(case_map) != set(HOSTED_CASES):
+        raise PreviewError(f"report is missing the exact {label} per-case results")
+    cases = []
+    for case_id in HOSTED_CASES:
+        case = case_map.get(case_id)
+        if not isinstance(case, dict):
+            raise PreviewError(f"report is missing required {label} case {case_id}")
+        case_ratio = _positive_number(case.get("ratio"), f"{label} {case_id} ratio")
+        case_interval = case.get("confidence_interval")
+        if not isinstance(case_interval, dict):
+            raise PreviewError(
+                f"report is missing required {label} {case_id} confidence interval"
+            )
+        case_lower = _positive_number(
+            case_interval.get("lower"), f"{label} {case_id} CI lower"
+        )
+        case_upper = _positive_number(
+            case_interval.get("upper"), f"{label} {case_id} CI upper"
+        )
+        if not case_lower <= case_ratio <= case_upper:
+            raise PreviewError(
+                f"{label} {case_id} confidence interval does not contain the ratio"
+            )
+        cases.append({
+            "id": case_id,
+            "candidate_median_ns_per_op": _positive_number(
+                case.get("candidate_median_ns_per_op"),
+                f"{label} {case_id} candidate median",
+            ),
+            "comparator_median_ns_per_op": _positive_number(
+                case.get("comparator_median_ns_per_op"),
+                f"{label} {case_id} comparator median",
+            ),
+            "ratio": case_ratio,
+            "ci_lower": case_lower,
+            "ci_upper": case_upper,
+        })
     return {
         "label": label,
         "ratio": ratio,
@@ -379,6 +420,7 @@ def _comparison(report: dict[str, Any], key: str, label: str) -> dict[str, Any]:
         "ci_upper": upper,
         "direction": direction,
         "percent": percent,
+        "cases": cases,
     }
 
 
@@ -512,6 +554,32 @@ def summarize(
             f"| {result['label']} | {result['ratio']:.4f}× | "
             f"[{result['ci_lower']:.4f}×, {result['ci_upper']:.4f}×] | "
             f"{result['percent']:.2f}% {result['direction']} |"
+        )
+    base_cases = {case["id"]: case for case in results[0]["cases"]}
+    quickjs_cases = {case["id"]: case for case in results[1]["cases"]}
+    lines.extend([
+        "",
+        "### Per-case performance",
+        "",
+        "Medians are wall ns/op. Ratios are qjs-rust ÷ comparator, so lower is better for qjs-rust.",
+        "",
+        "| Case | qjs-rust ns/op | Base ns/op | vs base | QuickJS-NG ns/op | vs QuickJS-NG |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
+    ])
+    for case_id in HOSTED_CASES:
+        base_case = base_cases[case_id]
+        quickjs_case = quickjs_cases[case_id]
+        if not math.isclose(
+            base_case["candidate_median_ns_per_op"],
+            quickjs_case["candidate_median_ns_per_op"],
+            rel_tol=1e-12,
+        ):
+            raise PreviewError(f"candidate median disagrees across comparisons for {case_id}")
+        lines.append(
+            f"| `{case_id}` | {base_case['candidate_median_ns_per_op']:,.2f} | "
+            f"{base_case['comparator_median_ns_per_op']:,.2f} | {base_case['ratio']:.4f}× | "
+            f"{quickjs_case['comparator_median_ns_per_op']:,.2f} | "
+            f"{quickjs_case['ratio']:.4f}× |"
         )
     lines.extend([
         "",

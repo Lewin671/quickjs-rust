@@ -17,8 +17,10 @@ HOSTED_BASE_REF = "main"
 HOSTED_PUSH_REF = "refs/heads/main"
 BASE_MODE = "base_owned_harness"
 PUSH_MODE = "main_push_head_owned_harness"
+MANUAL_MODE = "manual_main_head_owned_harness"
 PR_INTEGRITY_SCOPE = "cooperative_same_repository_pull_request"
 PUSH_INTEGRITY_SCOPE = "trusted_main_push"
+MANUAL_INTEGRITY_SCOPE = "trusted_manual_main_dispatch"
 _REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z")
 _REVISION = re.compile(r"[0-9a-f]{40}\Z")
 
@@ -115,6 +117,34 @@ def decide_push_admission(
     if before_sha == after_sha:
         return Admission(False, None, "unchanged_push_sha", event_name, scope)
     return Admission(True, PUSH_MODE, "trusted_main_push", event_name, scope)
+
+
+def decide_dispatch_admission(
+    event_name: str,
+    repository: str,
+    event_repository: str,
+    ref: str,
+    revision: str,
+    workflow_sha: str,
+) -> Admission:
+    """Return the fail-closed head-owned decision for one manual main run."""
+    _repository(repository, "workflow repository")
+    _repository(event_repository, "event repository")
+    _ref(ref, "dispatch ref")
+    _revision(revision, "dispatch revision")
+    _revision(workflow_sha, "workflow SHA")
+    if event_name != "workflow_dispatch":
+        raise HostedPreviewError("event name: expected workflow_dispatch")
+    scope = MANUAL_INTEGRITY_SCOPE
+    if ref != HOSTED_PUSH_REF:
+        return Admission(False, None, "dispatch_ref_unsupported", event_name, scope)
+    if repository != event_repository:
+        return Admission(False, None, "dispatch_repository_mismatch", event_name, scope)
+    if revision == "0" * 40:
+        return Admission(False, None, "zero_dispatch_revision", event_name, scope)
+    if revision != workflow_sha:
+        return Admission(False, None, "workflow_sha_mismatch", event_name, scope)
+    return Admission(True, MANUAL_MODE, "trusted_manual_main_dispatch", event_name, scope)
 
 
 def _write_replace(path: Path, content: bytes) -> None:
@@ -218,6 +248,20 @@ def _admit_push(args: argparse.Namespace) -> None:
     print(json.dumps(asdict(admission), sort_keys=True, separators=(",", ":")))
 
 
+def _admit_dispatch(args: argparse.Namespace) -> None:
+    admission = decide_dispatch_admission(
+        args.event_name, args.repository, args.event_repository, args.ref,
+        args.revision, args.workflow_sha,
+    )
+    if args.require_mode is not None and (
+        not admission.run or admission.mode != args.require_mode
+    ):
+        raise HostedPreviewError(
+            f"event is not admitted as {args.require_mode}: {admission.reason}"
+        )
+    print(json.dumps(asdict(admission), sort_keys=True, separators=(",", ":")))
+
+
 def _publish(args: argparse.Namespace) -> None:
     publish_or_fallback(
         args.output_dir, args.step_summary, args.message, args.job_status
@@ -249,6 +293,15 @@ def _parser() -> argparse.ArgumentParser:
     admit_push.add_argument("--workflow-sha", required=True)
     admit_push.add_argument("--require-mode", choices=(PUSH_MODE,))
     admit_push.set_defaults(function=_admit_push)
+    admit_dispatch = commands.add_parser("admit-dispatch")
+    admit_dispatch.add_argument("--event-name", required=True)
+    admit_dispatch.add_argument("--repository", required=True)
+    admit_dispatch.add_argument("--event-repository", required=True)
+    admit_dispatch.add_argument("--ref", required=True)
+    admit_dispatch.add_argument("--revision", required=True)
+    admit_dispatch.add_argument("--workflow-sha", required=True)
+    admit_dispatch.add_argument("--require-mode", choices=(MANUAL_MODE,))
+    admit_dispatch.set_defaults(function=_admit_dispatch)
     publish = commands.add_parser("publish")
     publish.add_argument("--output-dir", type=Path, required=True)
     publish.add_argument("--step-summary", type=Path, required=True)

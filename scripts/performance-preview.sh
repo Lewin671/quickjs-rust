@@ -7,7 +7,7 @@ export PYTHONDONTWRITEBYTECODE=1
 usage() {
   cat <<'EOF'
 Usage: ./scripts/performance-preview.sh \
-  --harness-mode <base_owned_harness|main_push_head_owned_harness> \
+  --harness-mode <base_owned_harness|main_push_head_owned_harness|manual_main_head_owned_harness> \
   --candidate-source <path> --base-source <path> \
   --candidate-sha <full-sha> --base-sha <full-sha> \
   --candidate-repo <https-github-clone-url> \
@@ -87,6 +87,18 @@ case "$HARNESS_MODE" in
     }
     [ "$CANDIDATE_REPO" = "$BASE_REPO" ] || {
       echo "error: main-push candidate and base repositories must match" >&2; exit 2;
+    }
+    OUTPUT_OWNER="$CANDIDATE_SOURCE"
+    ;;
+  manual_main_head_owned_harness)
+    [ "$HARNESS_ROOT" = "$CANDIDATE_SOURCE" ] || {
+      echo "error: manual-main harness must execute from the candidate source" >&2; exit 2;
+    }
+    [ "$CANDIDATE_REPO" = "$BASE_REPO" ] || {
+      echo "error: manual-main candidate and base repositories must match" >&2; exit 2;
+    }
+    [ "$CANDIDATE_REVISION" = "$BASE_REVISION" ] || {
+      echo "error: manual-main candidate and base revisions must match" >&2; exit 2;
     }
     OUTPUT_OWNER="$CANDIDATE_SOURCE"
     ;;
@@ -375,6 +387,24 @@ CURRENT_PHASE="summary"
   --report "$OUTPUT/report.json" --markdown "$OUTPUT/summary.md" \
   --json-output "$OUTPUT/summary.json" --status-output "$OUTPUT/status.json" \
   --harness-mode "$HARNESS_MODE" --harness-revision "$HARNESS_REVISION")
+
+# External corpora remain non-claim evidence in every admitted hosted mode.
+# The base-owned PR harness keeps corpus selection and reporting code trusted;
+# source files are downloaded at pinned revisions into a sibling cache and are
+# never uploaded with the evidence artifact.
+CURRENT_PHASE="external_corpus_preview"
+EXTERNAL_CACHE_ROOT="$(dirname "$OUTPUT")/external-corpora"
+EXTERNAL_WORK_ROOT="$(dirname "$OUTPUT")/external-work"
+(cd "$HARNESS_ROOT" && ./scripts/external-performance-preview.sh audit)
+(cd "$HARNESS_ROOT" && ./scripts/external-performance-preview.sh run \
+  --cache-root "$EXTERNAL_CACHE_ROOT" --work-root "$EXTERNAL_WORK_ROOT" \
+  --output-dir "$OUTPUT" --candidate "$CANDIDATE_BINARY" \
+  --quickjs-ng "$QUICKJS_BINARY")
+verify_source "$CANDIDATE_SOURCE" "$CANDIDATE_REVISION"
+verify_source "$BASE_SOURCE" "$BASE_REVISION"
+verify_source "$QUICKJS_SOURCE" "$REFERENCE_REVISION"
+printf '\n' >> "$OUTPUT/summary.md"
+cat "$OUTPUT/external-summary.md" >> "$OUTPUT/summary.md"
 
 RUN_COMPLETED=1
 CURRENT_PHASE="complete"

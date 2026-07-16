@@ -75,6 +75,10 @@ execution, validated raw JSONL, and failure/timeout records without dependencies
   strict healthy non-claim reports. It cannot configure fixed hardware, apply
   thresholds, enable gates, or make claims. The policy binds an aggregate hash
   over the full hosted control/audit chain plus the direct QuickJS-NG pin.
+- [x] Every `main` push prewarms the exact content-addressed QuickJS-NG
+  executable cache in a separate trusted job before running fresh measurements.
+  A failed prewarm never skips the benchmark; the measurement job always runs
+  and retains its validated rebuild fallback.
 - [ ] M6 establishes fixed-hardware A/A shadow baselines.
 - [ ] M7 enables fixed-hardware nightly/release gates and, if justified,
   self-hosted PR sentinels.
@@ -128,6 +132,11 @@ keep `claim_eligible=false`.
 M5 records five blocked source-pinned candidates and two excluded
 evidence-backed decisions with zero admitted entries; Octane deliberately has
 no pin. The registry is governance metadata, never headline evidence.
+Trusted `main` pushes now add a separate execution-only preview for all 26
+SunSpider 1.0 cases, all 14 Kraken 1.1 cases, and a five-case JetStream 3
+JavaScript subset. It preserves the blocked admission state, binds every
+downloaded file by SHA-256, omits source from artifacts, and reports only
+per-case or explicitly diagnostic comparable-case ratios.
 SunSpider is the preferred first v2 review after its per-file license inventory
 and NOTICE disposition close; QuickJS-NG Web Tooling is blocked on shell flags,
 bench-v8 and Kraken on neutral-referee plus license audits, JetStream 3 on a
@@ -155,4 +164,5 @@ The validator binds the aggregate hosted-implementation SHA-256 and direct
 QuickJS-NG pin; focused executable contract tests also freeze PR and main-push
 admission, push event/ref/repository/SHA checks, setup-action selection, explicit head/base selection,
 strict healthy summary requirements, always-run summary/artifact production,
-14-day retention, and the absence of thresholds, write permissions, or secrets.
+14-day retention, the independent reference-cache prewarm with always-run
+measurement fallback, and the absence of thresholds, write permissions, or secrets.

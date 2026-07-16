@@ -218,6 +218,13 @@ no ratio conclusion. Phase status identifies the failed build/measurement/
 summary stage, and even pre-orchestrator failure creates Markdown and JSON
 evidence. There is no threshold or gate.
 
+The main-push path first runs `reference-engine-cache`, which restores the
+exact pinned QuickJS-NG executable or builds and saves it before measurement.
+The dependent preview job uses `always()`, so failed cache preparation
+degrades to the orchestrator's normal rebuild path rather than skipping that
+main update. The preparation job never runs a benchmark and never caches
+evidence; all 25 cases are measured again on every push.
+
 The hosted workflow restores exact-key, content-addressed final engine
 executables to avoid recompiling unchanged Rust inputs and the fixed QuickJS-NG
 revision. Candidate/base share the Rust content namespace. Keys cover tracked
@@ -227,8 +234,9 @@ build-affecting environment, and exact recipes; QuickJS-NG also binds its pin.
 Every entry is revalidated against metadata, executable mode,
 size, and SHA-256 or rebuilt. Cache misses revalidate clean source immediately
 after compilation and before atomic storage. PR-target runs restore only; trusted `main` pushes
-independently revalidate and can save completed entries even after a later
-measurement/report failure. Cache-service errors degrade to rebuild/no-save.
+pre-save the pinned reference before measurement, then independently
+revalidate and can save fallback entries even after a later measurement/report
+failure. Cache-service errors degrade to rebuild/no-save.
 Measurements, receipts, reports,
 summaries, and artifacts always regenerate, with provenance in
 `build-cache.json`.

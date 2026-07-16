@@ -163,6 +163,15 @@ def write_plan(candidate: Path, base: Path, manifest: Path, output: Path) -> dic
     return plan
 
 
+def write_reference_plan(manifest: Path, output: Path) -> dict[str, Any]:
+    """Write the pinned reference-engine cache plan without Rust source inputs."""
+    output = output.expanduser().resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    spec = quickjs_spec(manifest)
+    (output / "quickjs-ng.json").write_bytes(_json_bytes(spec))
+    return spec
+
+
 def load_spec(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -302,6 +311,15 @@ def _plan_command(args: argparse.Namespace) -> None:
                 handle.write(f"{name}={value}\n")
 
 
+def _reference_plan_command(args: argparse.Namespace) -> None:
+    spec = write_reference_plan(args.manifest, args.output_dir)
+    value = spec["key_sha256"]
+    print(f"quickjs-key={value}")
+    if args.github_output is not None:
+        with args.github_output.open("a", encoding="utf-8") as handle:
+            handle.write(f"quickjs-key={value}\n")
+
+
 def _materialize_command(args: argparse.Namespace) -> None:
     hit, detail = materialize(args.entry, args.spec, args.output)
     if not hit:
@@ -345,6 +363,11 @@ def _parser() -> argparse.ArgumentParser:
     plan.add_argument("--output-dir", type=Path, required=True)
     plan.add_argument("--github-output", type=Path)
     plan.set_defaults(function=_plan_command)
+    reference_plan = commands.add_parser("reference-plan")
+    reference_plan.add_argument("--manifest", type=Path, required=True)
+    reference_plan.add_argument("--output-dir", type=Path, required=True)
+    reference_plan.add_argument("--github-output", type=Path)
+    reference_plan.set_defaults(function=_reference_plan_command)
     restore = commands.add_parser("materialize")
     restore.add_argument("--entry", type=Path, required=True)
     restore.add_argument("--spec", type=Path, required=True)

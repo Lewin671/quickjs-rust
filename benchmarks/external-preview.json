@@ -1,0 +1,631 @@
+{
+  "claim_eligible": false,
+  "measurement": {
+    "blocks": 3,
+    "metric": "outer_process_wall_time",
+    "order": "seeded_pair_rotation",
+    "phase_boundary": "before_process_spawn_to_wait_return",
+    "seed": 20260716,
+    "timeout_seconds": 15
+  },
+  "preview_id": "quickjs-authoritative-external-preview-v1",
+  "schema_version": 1,
+  "suites": [
+    {
+      "cases": [
+        {
+          "files": [
+            {
+              "path": "cdjs/constants.js",
+              "sha256": "428ca49173278366f1fbb06f6525d2ec5a31b3d78bde4125fbedb3817ba0d43b"
+            },
+            {
+              "path": "cdjs/util.js",
+              "sha256": "a58922518b97a1fa65f435c8e056c042efe70fef386053c1ae161f5e4fa68033"
+            },
+            {
+              "path": "cdjs/red_black_tree.js",
+              "sha256": "f784d71d2a743f8417d85e44e85d68599aaa88885d9ff092ead37818bc910e69"
+            },
+            {
+              "path": "cdjs/call_sign.js",
+              "sha256": "d163579b2db08821c02eee9dd99a103ee4dd6400f4ed292d9ad2ff96c725d591"
+            },
+            {
+              "path": "cdjs/vector_2d.js",
+              "sha256": "121c553a2cf3c1b31c484b337beffdaf8a5150b307404b90a3443e4c81e222c4"
+            },
+            {
+              "path": "cdjs/vector_3d.js",
+              "sha256": "e8675d83ff5f24e66938c1d6eef970195f011a213701fe1c2967d99383b987b7"
+            },
+            {
+              "path": "cdjs/motion.js",
+              "sha256": "369900c8f63a59d15ec0a280262c8b6e5b470a3677ff04c8dbc8077304f0f041"
+            },
+            {
+              "path": "cdjs/reduce_collision_set.js",
+              "sha256": "d6b96cd39e6cbfdc2589d8468d336e579d46ba2e4ee0d9fbdb1980360c38c433"
+            },
+            {
+              "path": "cdjs/simulator.js",
+              "sha256": "49643d0ae4977f6edeba24322a82284e5df41c7aa5dfb0c1613220299eabf9e7"
+            },
+            {
+              "path": "cdjs/collision.js",
+              "sha256": "b5f7dd27c603353b66e66aaf48c91138786b8d8b6db3999d5aec2feaf157c86b"
+            },
+            {
+              "path": "cdjs/collision_detector.js",
+              "sha256": "5db494f06a87d343340363cbc76394ab656315ada0f8fc7f8d75165387022de6"
+            },
+            {
+              "path": "cdjs/benchmark.js",
+              "sha256": "1bc507611818eb3560af0c4bef260b25e752a6b296d924af0899c82b037b3b05"
+            }
+          ],
+          "harness": "jetstream-class",
+          "id": "cdjs",
+          "iteration_count": 1
+        },
+        {
+          "files": [
+            {
+              "path": "simple/hash-map.js",
+              "sha256": "9789c4d06f12ee4e4836c669b5515a40c6caaf5e9321c08da548740225fb46fb"
+            }
+          ],
+          "harness": "jetstream-class",
+          "id": "hash-map",
+          "iteration_count": 1
+        },
+        {
+          "files": [
+            {
+              "path": "SeaMonster/gaussian-blur.js",
+              "sha256": "3510d05710feaf16d3626b3bf738491f3ff7b2d21a20f5da6e8f205d52599b97"
+            }
+          ],
+          "harness": "jetstream-class",
+          "id": "gaussian-blur",
+          "iteration_count": 1
+        },
+        {
+          "files": [
+            {
+              "path": "SeaMonster/sjlc.js",
+              "sha256": "83e2199533f9ce83b37ed28bc5008da2fa0fce2a07283a147d6952e832848225"
+            },
+            {
+              "path": "SeaMonster/stanford-crypto-aes.js",
+              "sha256": "7665eb8a3b155475308b51736223b3e7dc146d1f5207224c53abab90d3067ef8"
+            }
+          ],
+          "harness": "jetstream-class",
+          "id": "stanford-crypto-aes",
+          "iteration_count": 1
+        },
+        {
+          "files": [
+            {
+              "path": "class-fields/raytrace-public-class-fields.js",
+              "sha256": "5bb6cbf1f8c771604921eee1c1d8dcc7e5de3b8005fe5489bad9b29c741c6697"
+            }
+          ],
+          "harness": "jetstream-class",
+          "id": "raytrace-public-class-fields",
+          "iteration_count": 1
+        }
+      ],
+      "id": "jetstream3-js-subset",
+      "license_review": {
+        "evidence_urls": [
+          "https://github.com/WebKit/JetStream/blob/b7babdf323e64e69bd2f6c376189c15825f5c73a/LICENSE"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "JetStream 3 JavaScript subset",
+      "reporting_rule": "Named per-case diagnostic evidence only; never an official JetStream score.",
+      "source": {
+        "path_prefix": "",
+        "repository": "https://github.com/WebKit/JetStream.git",
+        "revision": "b7babdf323e64e69bd2f6c376189c15825f5c73a"
+      }
+    },
+    {
+      "cases": [
+        {
+          "files": [
+            {
+              "path": "ai-astar-data.js",
+              "sha256": "22366873662558d87ff8ed05e5c65085d7f3a619c9ab62dee7078daba5ae33d0"
+            },
+            {
+              "path": "ai-astar.js",
+              "sha256": "ab1778d3625e51a9e54a24a7692a7729ae88922162ea3bfbe6acfb5562247467"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "ai-astar"
+        },
+        {
+          "files": [
+            {
+              "path": "audio-beat-detection-data.js",
+              "sha256": "2de4f3d959e7e20a8a04b7abab42eee0ce3aabbea6fc060eb4cab94fe81d846d"
+            },
+            {
+              "path": "audio-beat-detection.js",
+              "sha256": "93a3e820ebff3db9c1412520acebc44d4725f2952b4a986ae5ffddbfa52dcfa2"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "audio-beat-detection"
+        },
+        {
+          "files": [
+            {
+              "path": "audio-dft-data.js",
+              "sha256": "c3be3ec9c736864c4a34c4377e77a66a9493d93e37fa7a35ddb9627fa631bfe3"
+            },
+            {
+              "path": "audio-dft.js",
+              "sha256": "427019a8f7fbd31172f82101d06041ccc2257e0c28663194effcf678f6197d6c"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "audio-dft"
+        },
+        {
+          "files": [
+            {
+              "path": "audio-fft-data.js",
+              "sha256": "f4f3977b8736840016f1fa0d4aed601edf26f79bc57f2c18cd9f9b551e14d133"
+            },
+            {
+              "path": "audio-fft.js",
+              "sha256": "83f1706a3f98d70ebde986fc6559c361463335699ecbe68c19a7414d6f1279dd"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "audio-fft"
+        },
+        {
+          "files": [
+            {
+              "path": "audio-oscillator-data.js",
+              "sha256": "c3be3ec9c736864c4a34c4377e77a66a9493d93e37fa7a35ddb9627fa631bfe3"
+            },
+            {
+              "path": "audio-oscillator.js",
+              "sha256": "ae3dfa981306a7579e2f3217256e631691340690cee975e7e4a4c477dd58db39"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "audio-oscillator"
+        },
+        {
+          "files": [
+            {
+              "path": "imaging-gaussian-blur-data.js",
+              "sha256": "655abfd39cc2363a6cebd33b71c6427fe2a3ceb50854d82475b22a31291c1812"
+            },
+            {
+              "path": "imaging-gaussian-blur.js",
+              "sha256": "80e36cc8f86c7fcecce1d06a1a124f2b8f35043923bc7d7b6a6d560bd29b8be4"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "imaging-gaussian-blur"
+        },
+        {
+          "files": [
+            {
+              "path": "imaging-darkroom-data.js",
+              "sha256": "f04a024e167cb1b2f9abf698e7b485a001a793454a72c803c1e376fe8825b39b"
+            },
+            {
+              "path": "imaging-darkroom.js",
+              "sha256": "71f40ec91923eaf14fc204c0fd59fa1981b2a3bbe9ddfe1e1e89473041609986"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "imaging-darkroom"
+        },
+        {
+          "files": [
+            {
+              "path": "imaging-desaturate-data.js",
+              "sha256": "7e08415fd6fe74cea665b2e430f6e8a05cd25317cb062c3afb59f1e24838af3e"
+            },
+            {
+              "path": "imaging-desaturate.js",
+              "sha256": "fc2ad99da28b2afaccce6eb35004f51d512f0a3eb913e7d8b550ba4d5fdc0654"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "imaging-desaturate"
+        },
+        {
+          "files": [
+            {
+              "path": "json-parse-financial-data.js",
+              "sha256": "5404ec9033314ad64dff609ce1fc4069aa6fae1c946b5e83b211fb456b6aafc3"
+            },
+            {
+              "path": "json-parse-financial.js",
+              "sha256": "ca156f220a1dd086d39b4cee38945991ad4b0339e27742316ff07140e0057c21"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "json-parse-financial"
+        },
+        {
+          "files": [
+            {
+              "path": "json-stringify-tinderbox-data.js",
+              "sha256": "57f73a220d50f8846f11586d079da2c6c936493ced909ed1fe12e827bceae243"
+            },
+            {
+              "path": "json-stringify-tinderbox.js",
+              "sha256": "8262bda42f045dfa4cf0d27a20e0b7afadd5c9a56a8b5bf5d9c441108264e6d1"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "json-stringify-tinderbox"
+        },
+        {
+          "files": [
+            {
+              "path": "stanford-crypto-aes-data.js",
+              "sha256": "36213f864575aea128037eeb5a5aca85acc01eae9cdf350d040cc644d5bab0ae"
+            },
+            {
+              "path": "stanford-crypto-aes.js",
+              "sha256": "521daa3c7a24742ea735937273d4802723a044d7511f29fc51220c13ef0a65f6"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "stanford-crypto-aes"
+        },
+        {
+          "files": [
+            {
+              "path": "stanford-crypto-ccm-data.js",
+              "sha256": "5899ed23c851760b91d3b1a56490e8e521f4c63fc33e2375e4d41e9f493c7f35"
+            },
+            {
+              "path": "stanford-crypto-ccm.js",
+              "sha256": "0fcb0c148acc90cefaf5f8ffee60ba056a8904db95d4b395fb8d93f1f884ebbe"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "stanford-crypto-ccm"
+        },
+        {
+          "files": [
+            {
+              "path": "stanford-crypto-pbkdf2-data.js",
+              "sha256": "bbb26e36b07accb58fef40bac92794b0bc201c18baa5cc2412514d891bf41726"
+            },
+            {
+              "path": "stanford-crypto-pbkdf2.js",
+              "sha256": "9b5ff5b408b708fbb41db79fcef9afcc4c92dde57583f0e7055194304a9db6d7"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "stanford-crypto-pbkdf2"
+        },
+        {
+          "files": [
+            {
+              "path": "stanford-crypto-sha256-iterative-data.js",
+              "sha256": "8a38c82d9de7ace72d2796d48464d25603d7a7ad43ec41fde85a041ea9dd93b1"
+            },
+            {
+              "path": "stanford-crypto-sha256-iterative.js",
+              "sha256": "1a67b41e20ce28bb067282ff82cb83ad373e1e7b561919c22bd39741d8c90e32"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "stanford-crypto-sha256-iterative"
+        }
+      ],
+      "id": "kraken-1.1",
+      "license_review": {
+        "evidence_urls": [
+          "https://github.com/mozilla/krakenbenchmark.mozilla.org/tree/0112a237e0f3f87a465fd2d04ac9674c27595d76/tests/kraken-1.1"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "Kraken 1.1",
+      "reporting_rule": "Historical per-case lifecycle evidence; incomplete coverage has no suite score.",
+      "source": {
+        "path_prefix": "tests/kraken-1.1",
+        "repository": "https://github.com/mozilla/krakenbenchmark.mozilla.org.git",
+        "revision": "0112a237e0f3f87a465fd2d04ac9674c27595d76"
+      }
+    },
+    {
+      "cases": [
+        {
+          "files": [
+            {
+              "path": "3d-cube.js",
+              "sha256": "3b140ae1a61a98b37fa82fa7e4d390c00692a99eb76f5bb6dd67558049f82b5d"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "3d-cube"
+        },
+        {
+          "files": [
+            {
+              "path": "3d-morph.js",
+              "sha256": "9a782188384af592c308338225f014cc7df246614f47f312cf71f29ed06e9f2d"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "3d-morph"
+        },
+        {
+          "files": [
+            {
+              "path": "3d-raytrace.js",
+              "sha256": "87a1cb968113dcaf427dc2634e95f6ee6460f38e132c26cdf640639521620591"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "3d-raytrace"
+        },
+        {
+          "files": [
+            {
+              "path": "access-binary-trees.js",
+              "sha256": "af16d6f52b448094138cfd8e5f6e24c8d60772654463a4a8627cd54f910f93b5"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "access-binary-trees"
+        },
+        {
+          "files": [
+            {
+              "path": "access-fannkuch.js",
+              "sha256": "a768076e7bae5e4e52fd6709732ccd52bcf1299bea7e464c02b905d189bb7f69"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "access-fannkuch"
+        },
+        {
+          "files": [
+            {
+              "path": "access-nbody.js",
+              "sha256": "84f08150e27c075e4a6b1b900b743cc2845abd3a47175cd444f6a1178493487c"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "access-nbody"
+        },
+        {
+          "files": [
+            {
+              "path": "access-nsieve.js",
+              "sha256": "ef62b42b6f926d61d9741a8e57b2758a9aea28ad2d1ee1e7d4747957d00fdc20"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "access-nsieve"
+        },
+        {
+          "files": [
+            {
+              "path": "bitops-3bit-bits-in-byte.js",
+              "sha256": "908076ee39ddf74f3d6be54b7f7c78fae8ddc9a308849f1ab1e40f1676779b41"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "bitops-3bit-bits-in-byte"
+        },
+        {
+          "files": [
+            {
+              "path": "bitops-bits-in-byte.js",
+              "sha256": "4f1a917cd52ebc07ec30dbe9d3e369e03c09825f9d2898fc3403ebd34a9bd853"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "bitops-bits-in-byte"
+        },
+        {
+          "files": [
+            {
+              "path": "bitops-bitwise-and.js",
+              "sha256": "65ce384a6a7bf6a3d7590bb3efb7b275d9964fdf55bd964bc226be8821da47e2"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "bitops-bitwise-and"
+        },
+        {
+          "files": [
+            {
+              "path": "bitops-nsieve-bits.js",
+              "sha256": "de7b6de8f565b877dfc5449c6b23d808fa22058a662a81421f1810cbbdc8b6bc"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "bitops-nsieve-bits"
+        },
+        {
+          "files": [
+            {
+              "path": "controlflow-recursive.js",
+              "sha256": "7689048105ae415ad60df2a882384063df640371d806d7a7d91446f2881b7d83"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "controlflow-recursive"
+        },
+        {
+          "files": [
+            {
+              "path": "crypto-aes.js",
+              "sha256": "7151c362dd1d10ec6bf8bd332a57bf96aa3d6bf64a87695b7b670af09e430365"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "crypto-aes"
+        },
+        {
+          "files": [
+            {
+              "path": "crypto-md5.js",
+              "sha256": "5a2688c93d64256f7fb19a771240050da2a3c37a1cadd5d802d82ba3d39f5d20"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "crypto-md5"
+        },
+        {
+          "files": [
+            {
+              "path": "crypto-sha1.js",
+              "sha256": "967f4dda44c6225118cdaaca3fdf4302c12b0ea44ecf553470ffc8b4b6bc1aa1"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "crypto-sha1"
+        },
+        {
+          "files": [
+            {
+              "path": "date-format-tofte.js",
+              "sha256": "cbefaffbecb6769a85f5877765b21f967a1cff5ab2625d4a9066c050fcdc7b5e"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "date-format-tofte"
+        },
+        {
+          "files": [
+            {
+              "path": "date-format-xparb.js",
+              "sha256": "8c5dae670a78939e88e46baaf14b75250001c7d73116613e54ad86c4f0c03eba"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "date-format-xparb"
+        },
+        {
+          "files": [
+            {
+              "path": "math-cordic.js",
+              "sha256": "ad8710fb0e502fb0d214179751102861eff3b3d5c4603344e3129afa693305a6"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "math-cordic"
+        },
+        {
+          "files": [
+            {
+              "path": "math-partial-sums.js",
+              "sha256": "3c0cca9004d6e1d1c651addeaaf59dad90e7df15973eca7c8948dd3d758c7d0c"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "math-partial-sums"
+        },
+        {
+          "files": [
+            {
+              "path": "math-spectral-norm.js",
+              "sha256": "d57283fcb398ed3fd512991068768c5a20b8af3aa8c69ed0d6dc5416f6d0023f"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "math-spectral-norm"
+        },
+        {
+          "files": [
+            {
+              "path": "regexp-dna.js",
+              "sha256": "0897d1123aa12283a6865cb5e5925db8d09a08097c6fc51117e21f51c76d4135"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "regexp-dna"
+        },
+        {
+          "files": [
+            {
+              "path": "string-base64.js",
+              "sha256": "48e6106fc6df6cb725b2c56934aff1591c97527862d27accfc11e419467639fc"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "string-base64"
+        },
+        {
+          "files": [
+            {
+              "path": "string-fasta.js",
+              "sha256": "b790324ca6c5caa25da93638fa0cf9a9014a3764cbf4f04b4ff3babf6999f6dd"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "string-fasta"
+        },
+        {
+          "files": [
+            {
+              "path": "string-tagcloud.js",
+              "sha256": "9634886bcb846c76141f97b681b33a11df444901e0b4c899d8f72a3b6544f9d5"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "string-tagcloud"
+        },
+        {
+          "files": [
+            {
+              "path": "string-unpack-code.js",
+              "sha256": "6ff9856ad51b877ef29262b942015ec04dd2ffe916b5adc85324aee2a144d382"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "string-unpack-code"
+        },
+        {
+          "files": [
+            {
+              "path": "string-validate-input.js",
+              "sha256": "518ed0c67fde0c0d65af6238b91f5e498d8ba5d188c428f4a76dd498704737d5"
+            }
+          ],
+          "harness": "direct-script",
+          "id": "string-validate-input"
+        }
+      ],
+      "id": "sunspider-1.0",
+      "license_review": {
+        "evidence_urls": [
+          "https://github.com/WebKit/WebKit/tree/c3b0e52db623f0dea86b977f08a9ba766770cf8d/PerformanceTests/SunSpider"
+        ],
+        "redistribute_source_in_artifact": false,
+        "status": "execution-only"
+      },
+      "name": "SunSpider 1.0",
+      "reporting_rule": "Historical per-case lifecycle evidence; incomplete coverage has no suite score.",
+      "source": {
+        "path_prefix": "PerformanceTests/SunSpider/tests/sunspider-1.0",
+        "repository": "https://github.com/WebKit/WebKit.git",
+        "revision": "c3b0e52db623f0dea86b977f08a9ba766770cf8d"
+      }
+    }
+  ]
+}
