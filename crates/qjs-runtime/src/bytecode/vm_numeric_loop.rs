@@ -49,6 +49,10 @@ enum NumericLoopTerm {
         receiver_slot: usize,
         cache: NamedPropertyCache,
     },
+    ComputedProperty {
+        receiver_slot: usize,
+        key_slot: usize,
+    },
     DenseIndex {
         receiver_slot: usize,
         index: usize,
@@ -182,7 +186,12 @@ impl NumericLoopPlan {
             let Op::LoadLocal(term_accumulator_slot) = code.get(cursor)? else {
                 return None;
             };
-            let (term, suffix) = NumericLoopTerm::compile(bytecode, cursor + 1, *counter_slot)?;
+            let (term, suffix) = NumericLoopTerm::compile(
+                bytecode,
+                cursor + 1,
+                *counter_slot,
+                *term_accumulator_slot,
+            )?;
             let (
                 Op::Binary(BinaryOp::Add),
                 Op::Dup,
@@ -288,7 +297,12 @@ impl NumericLoopPlan {
 }
 
 impl NumericLoopTerm {
-    fn compile(bytecode: &Bytecode, cursor: usize, counter_slot: usize) -> Option<(Self, usize)> {
+    fn compile(
+        bytecode: &Bytecode,
+        cursor: usize,
+        counter_slot: usize,
+        accumulator_slot: usize,
+    ) -> Option<(Self, usize)> {
         let code = &bytecode.code;
         match code.get(cursor)? {
             Op::GetPropNamed { cache, .. } => Some((
@@ -298,6 +312,24 @@ impl NumericLoopTerm {
                 },
                 cursor + 1,
             )),
+            Op::LoadLocal(receiver_slot)
+                if matches!(code.get(cursor + 1), Some(Op::LoadLocal(_)))
+                    && matches!(code.get(cursor + 2), Some(Op::GetProp)) =>
+            {
+                let Op::LoadLocal(key_slot) = code.get(cursor + 1)? else {
+                    unreachable!("guarded computed-property key load");
+                };
+                if *key_slot == counter_slot || *key_slot == accumulator_slot {
+                    return None;
+                }
+                Some((
+                    Self::ComputedProperty {
+                        receiver_slot: *receiver_slot,
+                        key_slot: *key_slot,
+                    },
+                    cursor + 3,
+                ))
+            }
             Op::GetPropIndex(encoded) if usize::BITS > u32::BITS => {
                 let receiver_slot = (encoded >> u32::BITS).checked_sub(1)?;
                 Some((
@@ -394,6 +426,35 @@ impl NumericLoopTerm {
                 };
                 match cache.get(object)? {
                     Value::Number(value) => Some(PreparedNumericLoopTerm::Stable(value)),
+                    _ => None,
+                }
+            }
+            Self::ComputedProperty {
+                receiver_slot,
+                key_slot,
+            } => {
+                if !vm.slot_is_authoritative(*receiver_slot) || !vm.slot_is_authoritative(*key_slot)
+                {
+                    return None;
+                }
+                let receiver = vm.locals.get(*receiver_slot)?.as_ref()?;
+                let key = vm.locals.get(*key_slot)?.as_ref()?;
+                match (receiver, key) {
+                    (Value::Object(object), Value::String(key)) => {
+                        match object.own_data_property_read(key) {
+                            OwnDataPropertyRead::Data(Value::Number(value)) => {
+                                Some(PreparedNumericLoopTerm::Stable(value))
+                            }
+                            _ => None,
+                        }
+                    }
+                    (Value::Array(array), Value::Number(number)) => {
+                        let index = super::vm_props::array_index_from_number(*number)?;
+                        match array.direct_dense_index_value(index)? {
+                            Value::Number(value) => Some(PreparedNumericLoopTerm::Stable(value)),
+                            _ => None,
+                        }
+                    }
                     _ => None,
                 }
             }
@@ -623,6 +684,7 @@ fn set_local_number(vm: &mut Vm<'_>, slot: usize, value: f64) {
 mod tests {
     use super::*;
     use crate::bytecode::compiler;
+    use crate::{Value, eval};
 
     fn nested_function(source: &str) -> Bytecode {
         let script = qjs_parser::parse_script(source).expect("source should parse");
@@ -655,6 +717,49 @@ mod tests {
         let plans = NumericLoopPlan::compile_all(&bytecode);
         assert_eq!(plans.len(), 1);
         assert_eq!(plans[0].terms.len(), 3);
+    }
+
+    #[test]
+    fn recognizes_computed_object_and_array_accumulation_loops() {
+        for (source, term_count) in [
+            (
+                "function sum(n) { var o = { a: 1, b: 2 }; var x = 'a', y = 'b'; var s = 0; for (var i = 0; i < n; i++) { s += o[x]; s += o[y]; } return s; }",
+                2,
+            ),
+            (
+                "function sum(n) { var a = [1, 2, 3]; var x = 0, y = 1, z = 2; var s = 0; for (var i = 0; i < n; i++) { s += a[x]; s += a[y]; s += a[z]; } return s; }",
+                3,
+            ),
+        ] {
+            let bytecode = nested_function(source);
+            let plans = NumericLoopPlan::compile_all(&bytecode);
+            assert_eq!(plans.len(), 1, "{source}");
+            assert_eq!(plans[0].terms.len(), term_count, "{source}");
+        }
+    }
+
+    #[test]
+    fn computed_accessors_keep_the_observable_loop_path() {
+        assert_eq!(
+            eval(
+                "function run(n) { var reads = 0, o = {}, key = 'a', sum = 0; Object.defineProperty(o, 'a', { get: function () { reads += 1; return 2; } }); for (var i = 0; i < n; i++) { sum += o[key]; } return sum + ':' + reads; } run(4);"
+            ),
+            Ok(Value::String("8:4".to_owned().into()))
+        );
+    }
+
+    #[test]
+    fn rejects_computed_keys_mutated_by_the_loop() {
+        for source in [
+            "function sum(n) { var a = [1, 2, 3]; var s = 0; for (var i = 0; i < n; i++) { s += a[i]; } return s; }",
+            "function sum(n) { var o = { 0: 1, 1: 2 }; var s = 0; for (var i = 0; i < n; i++) { s += o[s]; } return s; }",
+        ] {
+            let bytecode = nested_function(source);
+            assert!(
+                NumericLoopPlan::compile_all(&bytecode).is_empty(),
+                "{source}"
+            );
+        }
     }
 
     #[test]

@@ -311,6 +311,33 @@ Property-recurrence capacity-confirmation bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+The fifth v2 runtime unit extends the same guarded counted-loop executor to
+stable computed reads. Ordinary object reads are admitted only for an own
+numeric data property selected by an authoritative string-key local; dense
+array reads require an authoritative numeric-key local and a directly readable
+numeric element. Accessors, missing or inherited properties, exotic objects,
+sparse or descriptor-backed array elements, non-primitive keys, and keys held
+in either the loop counter or accumulator slot retain the generic path. The
+last guard is important because those two locals are mutated by the loop and
+therefore cannot be hoisted as stable keys.
+
+A fresh candidate-only diagnostic measured `property_dynamic_read` at
+0.97562/0.97808/0.97665 ns/op and `array_dynamic_read` at
+0.96509/0.96771/0.96479 ns/op. Exact 25,000,000/50,000,000 N/2N points had
+normalized ratios of 0.95722 and 0.96163 respectively, with exact operation
+counts and checksums. Both cases stopped at the existing 50,000,000-iteration
+ceiling after about 146 ms and 193 ms, so these are timer-limited diagnostics,
+not formal broad evidence. An isolated measurement-capacity follow-up is
+required before the next complete broad run.
+
+Computed-read diagnostic bindings:
+
+- run ID: `066d7744-1920-475d-9d96-5a2fa33ca33b`;
+- raw JSONL SHA-256:
+  `7c361e53500d8fadbbcf4ff6dc6cd59e79b5ed74d8d62a1ef332ef0ae9c99084`;
+- candidate binary SHA-256:
+  `a0c28f7618ec54e61f48b4052ab3ecfaf3c24566ff00adcbf1ddf405c52f57bc`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
