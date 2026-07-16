@@ -43,6 +43,28 @@ fn accumulates_stable_local_reads_without_freezing_mutating_slots() {
 }
 
 #[test]
+fn accumulates_stable_global_reads_but_preserves_global_accessors() {
+    assert_eq!(
+        eval(
+            "var stableValue = 3; \
+             function stable(n) { \
+               var sum = 0; for (var i = 0; i < n; i++) sum += stableValue; return sum; \
+             } \
+             var reads = 0; \
+             Object.defineProperty(globalThis, 'observedValue', { \
+               configurable: true, \
+               get: function () { reads += 1; return 2; } \
+             }); \
+             function observed(n) { \
+               var sum = 0; for (var i = 0; i < n; i++) sum += observedValue; return sum; \
+             } \
+             stable(5) + ':' + observed(4) + ':' + reads;"
+        ),
+        Ok(Value::String("15:8:4".to_owned().into()))
+    );
+}
+
+#[test]
 fn falls_back_for_observable_or_non_numeric_reads() {
     assert_eq!(
         eval(

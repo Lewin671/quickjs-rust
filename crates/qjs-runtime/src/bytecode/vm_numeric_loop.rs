@@ -48,6 +48,9 @@ enum NumericLoopTerm {
     LocalRead {
         slot: usize,
     },
+    GlobalRead {
+        name: String,
+    },
     NamedProperty {
         receiver_slot: usize,
         cache: NamedPropertyCache,
@@ -368,6 +371,11 @@ impl NumericLoopTerm {
                     suffix,
                 ))
             }
+            Op::LoadGlobal(name)
+                if matches!(code.get(cursor + 1), Some(Op::Binary(BinaryOp::Add))) =>
+            {
+                Some((Self::GlobalRead { name: name.clone() }, cursor + 1))
+            }
             Op::LoadGlobal(name) => {
                 let (arguments, suffix) =
                     compile_call_arguments(bytecode, cursor + 1, counter_slot, false)?;
@@ -429,6 +437,18 @@ impl NumericLoopTerm {
                     return None;
                 }
                 local_number(vm, *slot).map(PreparedNumericLoopTerm::Stable)
+            }
+            Self::GlobalRead { name } => {
+                if vm.bytecode.local_slot(name).is_some()
+                    || vm.env.module_import_value(name).is_some()
+                    || vm.env.is_immutable_function_name(name)
+                {
+                    return None;
+                }
+                match vm.env.get(name) {
+                    Some(Value::Number(value)) => Some(PreparedNumericLoopTerm::Stable(value)),
+                    _ => None,
+                }
             }
             Self::NamedProperty {
                 receiver_slot,
@@ -739,6 +759,19 @@ mod tests {
                 .iter()
                 .all(|term| matches!(term, NumericLoopTerm::LocalRead { .. }))
         );
+    }
+
+    #[test]
+    fn recognizes_stable_global_read_accumulation_loop() {
+        let bytecode = nested_function(
+            "var value = 2; function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s += value; } return s; }",
+        );
+        let plans = NumericLoopPlan::compile_all(&bytecode);
+        assert_eq!(plans.len(), 1);
+        assert!(matches!(
+            plans[0].terms.as_slice(),
+            [NumericLoopTerm::GlobalRead { name }] if name == "value"
+        ));
     }
 
     #[test]

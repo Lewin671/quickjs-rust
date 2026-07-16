@@ -92,7 +92,7 @@ eligible measurement windows, and N/2N linearity for both cases. The current
 measurement identity is `quickjs-measurement-protocol-v6`, protocol SHA-256
 `9cbd57169707fe1c2b691c340a04b60a4f127c6140b8df7823407299fb60c2b3`,
 and checked-in manifest SHA-256
-`9dd580107162b476be6a5b279fa94719cef2494092fe2475dd95a8813d6eda46`.
+`42c2f3035e8c3d18a9b036d424a088e27caab531b574d0e0abee42069b1b1af9`.
 
 ## Initial Broad V2 Baseline
 
@@ -412,6 +412,84 @@ Stable-local-read bindings:
   `31737595327c4430cccf1042205ae0e8cd43d737abaf2337f40d286d43b5133f`;
 - base binary SHA-256:
   `07d447a21c867f097a7a1ad68650bc7b7455eebd5e230aaafaff69ddd6efbe56`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
+The trusted-main hosted preview for commit
+`2ae7b1b09dbb14f2280a5b337fb68c02be6bb12c` completed successfully with all
+225 measurement records eligible, all 75 N/2N checks passing, and all 25 cases
+present for all three roles. Candidate/base was 0.84447x, establishing a
+15.55% broad improvement over `fd0d49ae9aab0c454a84bedfd74926755e2a4dc4`.
+Candidate/QuickJS-NG was **1.09688x** with a 95% confidence interval of
+[1.08462x, 1.10098x], so the candidate remained 9.69% slower overall and did
+not meet the campaign target. The three-block hosted profile is intentionally
+`inconclusive`/`non_claim`; its maximum critical-family relative half-width was
+9.66%, so it is useful complete optimization evidence but not a fixed-hardware
+claim.
+
+| Critical family | Candidate / QuickJS-NG |
+| --- | ---: |
+| control | 17.6918x |
+| string | 14.5880x |
+| allocation | 14.0758x |
+| call | 1.2367x |
+| array | 0.6045x |
+| binding | 0.4354x |
+| property | 0.1718x |
+| builtin | 0.1124x |
+
+This clean broad run confirms that the earlier failed hosted samples did not
+hide completion: allocation, control, string, and call remain above the frozen
+1.00x family ceiling even though property and builtin are now substantially
+faster than QuickJS-NG.
+
+Hosted broad bindings:
+
+- workflow run: `29490844063`;
+- benchmark run ID: `1da86341-44ff-4966-9124-b22d002cb66d`;
+- raw JSONL SHA-256:
+  `72164f7ff42c8c39837a5fb73c948a08a4f7856db8d7ffd8c29da2f47767fd79`;
+- report JSON SHA-256:
+  `b925fca05d1965dfba824b43937a717ad2f027c40330bf6689b08940e3adeec1`;
+- hosted dynamic manifest SHA-256:
+  `f5d3829f453db3b74cd6e57102550398e0e6a8e89f5adf5d9318f7e4b62b5723`;
+- candidate binary SHA-256:
+  `47b0f85ae8e6b9a7aa966bcf81a63376c80b60722c8e3e049bdf1147faff6edf`;
+- base binary SHA-256:
+  `dcf79156b210d2df6187ceeb512b4c1802c1ae8c29a808f1a76bc37207d9c8b2`;
+- QuickJS-NG binary SHA-256:
+  `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+
+The seventh v2 runtime unit extends that stable-read plan to numeric global
+bindings. It rejects any name with a same-named bytecode local, module import,
+or immutable function-name binding before reading directly from the current
+environment. A missing direct binding also falls back, which preserves
+global-object accessors and their per-iteration side effects. The accepted
+loop still performs one numeric addition per source iteration.
+
+The `global_read` capacity rises from 100,000,000 to 2,000,000,000 iterations
+because this one-operation loop needs a larger ceiling than `local_read` to
+meet the same 500 ms and 1% startup thresholds. The maximum checksum is
+2,000,000,000 and remains exactly representable. All nine focused three-role
+measurements were eligible. Candidate medians were
+0.93793/0.94840/0.94606 ns/op, the preceding base measured
+171.952/171.675/171.815 ns/op, and QuickJS-NG measured
+13.4319/13.4254/13.4645 ns/op. The paired geometric ratios were 0.005495x
+candidate/base and 0.070244x candidate/QuickJS-NG. Candidate/base/QuickJS-NG
+N/2N ratios were 0.99610/0.99937/0.99817 respectively, with exact operations
+and checksums. This is focused one-case evidence, not a broad claim.
+
+Stable-global-read bindings:
+
+- run ID: `6039684a-bb0d-4c3f-ad92-023d1af69323`;
+- raw JSONL SHA-256:
+  `bf22b282c80db43eac7a44f20418425ba6bfc8e71c995b4adc5695960365858b`;
+- manifest SHA-256:
+  `42c2f3035e8c3d18a9b036d424a088e27caab531b574d0e0abee42069b1b1af9`;
+- candidate binary SHA-256:
+  `08dd851c998448326d1620340527895ddc7ba72986519973b4f1001f7e367678`;
+- base binary SHA-256:
+  `0216f98ed9c8f9cf940febf513b2eb24429fb3259694a8bf7060f9d6f746f2e9`;
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
