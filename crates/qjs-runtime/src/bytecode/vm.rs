@@ -769,6 +769,7 @@ impl<'a> Vm<'a> {
                         module_host: self.module_host.clone(),
                         module_imports: self.env.module_imports(),
                         bytecode: Rc::clone(bytecode),
+                        source_text: source_text.clone(),
                         local_names: Rc::clone(local_names),
                         constructable: *constructable,
                         is_strict: *is_strict,
@@ -790,7 +791,6 @@ impl<'a> Vm<'a> {
                         with_stack: self.with_stack.clone(),
                         upvalues,
                     });
-                    function.set_source_text(source_text.clone());
                     self.capture_private_environment(&function);
                     if *is_generator && *is_async {
                         crate::async_generator::wire_async_generator_function_intrinsics(

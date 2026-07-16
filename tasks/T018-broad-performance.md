@@ -1380,6 +1380,24 @@ Lazy native-context bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+The subsequent hosted broad-v2 preview for commit `4650ab16` completed with
+225/225 valid formal measurements, 75/75 passing linearity diagnostics, and no
+invalid block. It confirmed that the inline constraint removed the preceding
+hosted call-path regression: candidate/QuickJS-NG was **0.34621x** overall
+(about 2.89x throughput). Allocation remains the campaign blocker at
+**2.85825x** QuickJS-NG: `object_allocation`, `array_allocation`, and
+`closure_allocation_call` measured 2.95247x, 3.24443x, and 2.43768x. This is a
+complete informational hosted result, not a fixed-hardware claim.
+
+Hosted lazy-native-context evidence:
+
+- GitHub Actions run: `29534110680`;
+- benchmark run ID: `a09e6085-b0fc-4710-82c7-d98132869709`;
+- raw JSONL SHA-256:
+  `63503b57988b922b805893b35b357bac68d0354f03c6b85e1707957ad8f44458`;
+- report JSON SHA-256:
+  `83e538c67b519d68b205524e81056759780494e38c95b14c7989c159e3437052`.
+
 The twenty-fifth v2 runtime unit makes the general function-property table
 lazy. Standard `length`, `name`, and ordinary-function `prototype` properties
 already use compact implicit state, so a short-lived closure no longer carries
@@ -1417,6 +1435,40 @@ Lazy function-property bindings:
   `767399ea347277809de49db26ccd03409feef27176e082f1e1d475e4baaa2e66`;
 - preceding-runtime binary SHA-256:
   `386ce5c353c02c68b562af5a4049bd06517847aed8fe4685c486d1cbdbc62847`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
+The twenty-sixth v2 runtime unit makes retained function source immutable at
+construction. The source used by `Function.prototype.toString` previously sat
+in a `RefCell<Option<Rc<str>>>` even though no function changes its original
+source after creation. Storing the same optional shared string directly in the
+function allocation removes the borrow word from every function. Layout tests
+now cap the auxiliary header at 48 bytes and the complete function object at
+336 bytes. Function expressions and public/private class methods still retain
+their exact source, while native functions and internal thunks remain absent.
+
+A focused three-role run over `plain_function_call`, `method_call`, and
+`closure_allocation_call` made all 27 formal measurements eligible and all 72
+predetermined N/2N diagnostics completed with exact operation counts and
+checksums. For `closure_allocation_call`, candidate medians were
+287.392/287.912/290.375 ns/op versus 289.493/290.419/292.097 for the immediately
+preceding runtime, a **0.99274x** paired geometric ratio. QuickJS-NG measured
+270.054/272.875/274.676 ns/op, leaving this focused case at 1.05881x
+QuickJS-NG on the macOS profile. `plain_function_call` was 0.99821x and
+`method_call` 0.99788x the preceding runtime. These remain focused results,
+not a broad or allocation-family claim.
+
+Immutable function-source bindings:
+
+- run ID: `10d9860a-271f-4f21-affb-6f03accb0ec5`;
+- raw JSONL SHA-256:
+  `79a02ac671c0730bdef3c23b1dab7f28b977550ad70a34a50e13dd62d9c91ed1`;
+- manifest SHA-256:
+  `5105e4923cb104f6608e935f73a35e9ab763562c57c7eea8cb0169d1710777ec`;
+- candidate binary SHA-256:
+  `0908d38348ab9197facc4ed209ad8587f6449e5a2214583fcfa64deb44d75786`;
+- preceding-runtime binary SHA-256:
+  `767399ea347277809de49db26ccd03409feef27176e082f1e1d475e4baaa2e66`;
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 

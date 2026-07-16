@@ -173,6 +173,7 @@ impl Vm<'_> {
             module_host: self.module_host.clone(),
             module_imports: self.env.module_imports(),
             bytecode: def.bytecode.clone(),
+            source_text: def.source_text.clone(),
             local_names: def.local_names.clone().into(),
             constructable: false,
             is_strict: true,
@@ -194,7 +195,6 @@ impl Vm<'_> {
                 name.zip(class_upvalue.as_ref()),
             ),
         });
-        function.set_source_text(def.source_text.clone());
         if def.is_generator && def.is_async {
             crate::async_generator::wire_async_generator_function_intrinsics(&function, &self.env);
         } else if def.is_generator {
@@ -232,6 +232,7 @@ impl Vm<'_> {
             module_host: self.module_host.clone(),
             module_imports: self.env.module_imports(),
             bytecode: definition.bytecode.clone(),
+            source_text: None,
             local_names: definition.local_names.clone().into(),
             constructable: false,
             is_strict: true,

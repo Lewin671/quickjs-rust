@@ -130,6 +130,10 @@ pub struct FunctionData {
     pub(crate) upvalues: Vec<Upvalue>,
     pub(crate) local_names: Rc<Vec<String>>,
     pub(crate) bytecode: Option<Rc<Bytecode>>,
+    /// Original source retained for `Function.prototype.toString`. Function
+    /// source is fixed at creation, so it does not need a `RefCell` in the
+    /// mutable auxiliary header.
+    pub(crate) source_text: Option<Rc<str>>,
     pub(crate) native: Option<NativeFunction>,
     pub(crate) constructable: bool,
     pub(crate) is_strict: bool,
@@ -179,7 +183,6 @@ pub struct FunctionAuxiliaryState {
     extensible: Cell<bool>,
     sealed: Cell<bool>,
     frozen: Cell<bool>,
-    source_text: RefCell<Option<Rc<str>>>,
     lazy_default_prototype: Cell<bool>,
     /// Metadata absent from ordinary closures. A single lazy allocation keeps
     /// the hot function object compact while preserving shared object identity
@@ -299,7 +302,6 @@ impl FunctionAuxiliaryState {
             extensible: Cell::new(true),
             sealed: Cell::new(false),
             frozen: Cell::new(false),
-            source_text: RefCell::new(None),
             lazy_default_prototype: Cell::new(false),
             cold: RefCell::new(cold),
         }
@@ -358,6 +360,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) module_host: Option<ModuleHostRef>,
     pub(crate) module_imports: ModuleImports,
     pub(crate) bytecode: Rc<Bytecode>,
+    pub(crate) source_text: Option<Rc<str>>,
     pub(crate) local_names: Rc<Vec<String>>,
     pub(crate) constructable: bool,
     pub(crate) is_strict: bool,
@@ -506,6 +509,7 @@ impl Function {
             upvalues: Vec::new(),
             local_names: Rc::new(local_names),
             bytecode: Some(bytecode),
+            source_text: None,
             native: None,
             constructable,
             is_strict,
@@ -549,6 +553,7 @@ impl Function {
             module_host,
             module_imports,
             bytecode,
+            source_text,
             local_names,
             constructable,
             is_strict,
@@ -586,6 +591,7 @@ impl Function {
             upvalues,
             local_names,
             bytecode: Some(bytecode),
+            source_text,
             native: None,
             constructable,
             is_strict,
@@ -696,6 +702,7 @@ impl Function {
             upvalues: Vec::new(),
             local_names: Rc::new(Vec::new()),
             bytecode: None,
+            source_text: None,
             native: None,
             constructable,
             is_strict: false,
@@ -747,6 +754,7 @@ impl Function {
             upvalues: Vec::new(),
             local_names: Rc::new(Vec::new()),
             bytecode: None,
+            source_text: None,
             native,
             constructable,
             is_strict: false,
@@ -1374,15 +1382,9 @@ impl Function {
             .with_cold(|cold| cold.and_then(|cold| cold.internal_prototype.clone()))
     }
 
-    /// Records the function's original source text for `Function.prototype
-    /// .toString`.
-    pub(crate) fn set_source_text(&self, source: Option<Rc<str>>) {
-        *self.auxiliary.source_text.borrow_mut() = source;
-    }
-
     /// The function's original source text, when retained.
     pub(crate) fn source_text(&self) -> Option<Rc<str>> {
-        self.auxiliary.source_text.borrow().clone()
+        self.source_text.clone()
     }
 
     pub(crate) fn set_internal_prototype_slot(
@@ -1556,11 +1558,11 @@ mod tests {
             "lazy function property header must stay within two machine words"
         );
         assert!(
-            auxiliary_size <= 64,
+            auxiliary_size <= 48,
             "function auxiliary header grew to {auxiliary_size} bytes"
         );
         assert!(
-            function_data_size <= 344,
+            function_data_size <= 336,
             "function object grew to {function_data_size} bytes"
         );
     }
@@ -1596,7 +1598,7 @@ mod tests {
     }
 
     #[test]
-    fn cloned_function_handles_keep_identity_state_shared() {
+    fn cloned_function_handles_keep_identity_state_and_source_shared() {
         let function = Function::new_native(
             Some("shared"),
             0,
@@ -1616,9 +1618,16 @@ mod tests {
                 .map(|property| property.value),
             Some(Value::Number(1.0))
         );
-        cloned.set_source_text(Some(Rc::from("function shared() {}")));
+
+        let Value::Function(function) = eval("(function shared() {})")
+            .expect("function expression with retained source should evaluate")
+        else {
+            panic!("expected function value");
+        };
+        let cloned = function.clone();
+        assert!(Rc::ptr_eq(&function.0, &cloned.0));
         assert_eq!(
-            function.source_text().as_deref(),
+            cloned.source_text().as_deref(),
             Some("function shared() {}")
         );
     }

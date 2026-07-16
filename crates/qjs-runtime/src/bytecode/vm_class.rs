@@ -83,6 +83,7 @@ impl Vm<'_> {
             module_host: self.module_host.clone(),
             module_imports: self.env.module_imports(),
             bytecode: constructor.bytecode.clone(),
+            source_text: None,
             local_names: constructor.local_names.clone().into(),
             constructable: true,
             is_strict: true,
@@ -296,6 +297,7 @@ impl Vm<'_> {
                         module_host: self.module_host.clone(),
                         module_imports: self.env.module_imports(),
                         bytecode: bytecode.clone(),
+                        source_text: None,
                         local_names: local_names.clone().into(),
                         constructable: false,
                         is_strict: true,
@@ -358,6 +360,7 @@ impl Vm<'_> {
             module_host: self.module_host.clone(),
             module_imports: self.env.module_imports(),
             bytecode: method.bytecode.clone(),
+            source_text: method.source_text.clone(),
             local_names: method.local_names.clone().into(),
             constructable: false,
             is_strict: true,
@@ -379,7 +382,6 @@ impl Vm<'_> {
                 name.zip(class_upvalue.as_ref()),
             ),
         });
-        method_function.set_source_text(method.source_text.clone());
         if method.is_generator && method.is_async {
             crate::async_generator::wire_async_generator_function_intrinsics(
                 &method_function,
@@ -458,6 +460,7 @@ impl Vm<'_> {
             module_host: self.module_host.clone(),
             module_imports: self.env.module_imports(),
             bytecode: bytecode.clone(),
+            source_text: None,
             local_names: local_names.clone().into(),
             constructable: false,
             is_strict: true,
@@ -507,6 +510,7 @@ impl Vm<'_> {
             module_host: self.module_host.clone(),
             module_imports: self.env.module_imports(),
             bytecode: bytecode.clone(),
+            source_text: None,
             local_names: local_names.clone().into(),
             constructable: false,
             is_strict: true,
