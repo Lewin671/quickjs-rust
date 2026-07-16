@@ -370,6 +370,9 @@ pub(super) fn try_fast_global_native_call(
             };
             Ok(Value::Number(number.abs()))
         }
+        NativeFunction::ArrayPrototypeIndexOf => Ok(crate::array::fast_dense_array_index_of(
+            this_value, arguments, realm_env,
+        )?),
         NativeFunction::Eval => {
             let Some(Value::String(source)) = arguments.first() else {
                 return None;

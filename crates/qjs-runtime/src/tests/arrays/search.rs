@@ -129,3 +129,37 @@ fn evaluates_array_search_builtins() {
     assert!(eval("Array.prototype.includes.call(null, 0);").is_err());
     assert!(eval("Array.prototype.includes.call(undefined, 0);").is_err());
 }
+
+#[test]
+fn preserves_index_of_counted_loop_guards() {
+    assert_eq!(
+        eval(
+            "(function () { var array = [1, 2, 3, 4]; var sum = 0; for (var i = 0; i < 100; i++) { sum += array.indexOf(3); } return sum; })();"
+        ),
+        Ok(Value::Number(200.0))
+    );
+    assert_eq!(
+        eval(
+            "(function () { var array = [1, 2, 1]; var sum = 0; for (var i = 0; i < 4; i++) { sum += array.indexOf(1, -2); } return sum; })();"
+        ),
+        Ok(Value::Number(8.0))
+    );
+    assert_eq!(
+        eval(
+            "(function () { var calls = 0; var array = [1, 2, 3, 4]; array.indexOf = function (value) { calls += 1; return value; }; var sum = 0; for (var i = 0; i < 4; i++) { sum += array.indexOf(3); } return calls === 4 && sum === 12; })();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "(function () { var calls = 0; Array.prototype.indexOf = function (value) { calls += 1; return value; }; var array = [1, 2, 3, 4]; var sum = 0; for (var i = 0; i < 4; i++) { sum += array.indexOf(3); } return calls === 4 && sum === 12; })();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "(function () { var reads = 0; var array = [1, 2, 3, 4]; Object.defineProperty(array, 'indexOf', { get: function () { reads += 1; return Array.prototype.indexOf; } }); var sum = 0; for (var i = 0; i < 4; i++) { sum += array.indexOf(3); } return reads === 4 && sum === 8; })();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

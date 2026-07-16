@@ -54,8 +54,8 @@ pub(crate) use mutation::{
     native_array_prototype_push, native_array_prototype_reverse,
 };
 pub(crate) use search::{
-    native_array_prototype_at, native_array_prototype_includes, native_array_prototype_index_of,
-    native_array_prototype_last_index_of,
+    fast_dense_array_index_of, native_array_prototype_at, native_array_prototype_includes,
+    native_array_prototype_index_of, native_array_prototype_last_index_of,
 };
 pub(crate) use sequence::{
     native_array_prototype_concat, native_array_prototype_slice,

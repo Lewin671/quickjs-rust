@@ -51,6 +51,9 @@ pub(crate) fn native_array_prototype_index_of(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    if let Some(result) = fast_dense_array_index_of(&this_value, argument_values, env) {
+        return Ok(result);
+    }
     let source = array_like_length(this_value, "Array.prototype.indexOf", env)?;
     if source.length == 0 {
         return Ok(Value::Number(-1.0));
@@ -72,6 +75,40 @@ pub(crate) fn native_array_prototype_index_of(
         }
     }
     Ok(Value::Number(-1.0))
+}
+
+pub(crate) fn fast_dense_array_index_of(
+    this_value: &Value,
+    argument_values: &[Value],
+    env: &CallEnv,
+) -> Option<Value> {
+    let Value::Array(array) = this_value else {
+        return None;
+    };
+    let length = array.len();
+    let from_index = match argument_values.get(1) {
+        None | Some(Value::Undefined) => 0.0,
+        Some(Value::Number(number)) => *number,
+        _ => return None,
+    };
+    let start = if from_index.is_nan() {
+        0
+    } else if from_index >= length as f64 {
+        length
+    } else if from_index >= 0.0 {
+        from_index.trunc() as usize
+    } else {
+        (length as f64 + from_index.trunc()).max(0.0) as usize
+    };
+    let search_element = argument_values.first().unwrap_or(&Value::Undefined);
+    array.with_dense_argument_elements(env, |elements| {
+        elements[start..]
+            .iter()
+            .position(|element| element == search_element)
+            .map_or(Value::Number(-1.0), |offset| {
+                Value::Number((start + offset) as f64)
+            })
+    })
 }
 
 pub(crate) fn native_array_prototype_last_index_of(

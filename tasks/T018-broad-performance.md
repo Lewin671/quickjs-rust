@@ -194,6 +194,34 @@ Capacity-confirmation bindings:
 - manifest SHA-256:
   `0eb67f3d13602f18bb280ae73094374a8d628971e5358ee9baa984a2d74d5d54`.
 
+The second v2 runtime unit adds a conservative dense implementation fast path
+for ordinary `Array.prototype.indexOf` calls, then admits the same operation to
+the counted-loop executor only when the receiver has dense storage, the
+default prototype, no intercepting descriptors, the prototype property still
+resolves to the exact native function, and all admitted arguments are numeric.
+The executor performs a dense search on every source iteration; it does not
+precompute the search result or the final checksum. Own methods, accessors,
+prototype replacements, sparse arrays, and coercing `fromIndex` values fall
+back to the observable generic path.
+
+The ordinary-call fast path first reduced `array_index_of` from about
+1,989 ns/op to 496.90 ns/op. The guarded loop path then measured 5.784 ns/op,
+versus 1,974.24 ns/op for the frozen base and 49.697 ns/op for QuickJS-NG:
+0.00293x candidate/base and 0.11639x candidate/QuickJS-NG. The candidate again
+reached the existing 20,000,000-iteration ceiling, so this exact-case result is
+a timer-limited diagnostic. Independent 100,000,000/200,000,000 runs consumed
+0.55/1.06 CPU seconds with exact checksums, confirming linear per-iteration
+work and requiring the same measurement-capacity follow-up before a formal
+broad run.
+
+Array-search diagnostic bindings:
+
+- run ID: `5303a382-a058-4c2b-8190-f1052b196349`;
+- raw JSONL SHA-256:
+  `b13c930f28059a0b55645a17180a3942b3424cacb02c5f6cd021c7dfa33de869`;
+- candidate binary SHA-256:
+  `e90cedb609107af91fce44161309dd223e8379431584135d5fafd163c86f1faa`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

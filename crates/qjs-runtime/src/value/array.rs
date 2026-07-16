@@ -237,6 +237,26 @@ impl ArrayRef {
         elements.get(index).cloned()
     }
 
+    /// Searches fully dense numeric storage without generic property lookup.
+    /// Callers separately guard the resolved `Array.prototype.indexOf` identity;
+    /// this method rejects holes, descriptors, and prototype overrides so the
+    /// array cannot expose different indexed values during the search.
+    pub(crate) fn direct_dense_index_of_number(&self, search: f64, start: usize) -> Option<f64> {
+        let elements = self.0.elements.borrow();
+        if self.0.length.get() != elements.len() || !self.0.holes.borrow().is_empty() {
+            return None;
+        }
+        if !self.0.properties.borrow().is_empty() || !self.uses_default_prototype() {
+            return None;
+        }
+        Some(
+            elements[start.min(elements.len())..]
+                .iter()
+                .position(|element| matches!(element, Value::Number(number) if *number == search))
+                .map_or(-1.0, |offset| (start + offset) as f64),
+        )
+    }
+
     pub(crate) fn dense_index_store_eligible(&self, index: usize) -> bool {
         if index >= MAX_DENSE_STORAGE_LENGTH || self.0.frozen.get() || !self.0.length_writable.get()
         {

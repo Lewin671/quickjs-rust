@@ -1,6 +1,6 @@
 use qjs_ast::{BinaryOp, UpdateOp};
 
-use crate::{Value, value::OwnDataPropertyRead};
+use crate::{NativeFunction, Value, value::OwnDataPropertyRead};
 
 use super::{
     ir::{Bytecode, NamedPropertyCache, Op},
@@ -76,6 +76,10 @@ enum NumericLoopTerm {
 #[derive(Clone, Debug)]
 enum PreparedNumericLoopTerm {
     Stable(f64),
+    DenseArrayIndexOf {
+        array: crate::ArrayRef,
+        arguments: NumericLoopArguments,
+    },
     Call {
         call: NumericLoopCall,
         arguments: NumericLoopArguments,
@@ -449,6 +453,11 @@ impl NumericLoopTerm {
                 if !vm.slot_is_authoritative(*receiver_slot) {
                     return None;
                 }
+                if let Some(term) =
+                    Self::prepare_dense_array_index_of(*receiver_slot, key, *arguments, vm)
+                {
+                    return Some(term);
+                }
                 let Some(Some(Value::Object(object))) = vm.locals.get(*receiver_slot) else {
                     return None;
                 };
@@ -460,6 +469,38 @@ impl NumericLoopTerm {
                 Self::prepare_call(function, arguments, vm)
             }
         }
+    }
+
+    fn prepare_dense_array_index_of(
+        receiver_slot: usize,
+        key: &str,
+        arguments: NumericLoopArguments,
+        vm: &Vm<'_>,
+    ) -> Option<PreparedNumericLoopTerm> {
+        if key != "indexOf" || arguments.len() == 0 {
+            return None;
+        }
+        let Some(Some(Value::Array(array))) = vm.locals.get(receiver_slot) else {
+            return None;
+        };
+        if !array.uses_default_prototype() || array.property(key).is_some() {
+            return None;
+        }
+        let prototype = crate::array_prototype(&vm.realm_env())?;
+        let OwnDataPropertyRead::Data(Value::Function(function)) =
+            prototype.own_data_property_read(key)
+        else {
+            return None;
+        };
+        if function.native != Some(NativeFunction::ArrayPrototypeIndexOf)
+            || array.direct_dense_index_of_number(0.0, 0).is_none()
+        {
+            return None;
+        }
+        Some(PreparedNumericLoopTerm::DenseArrayIndexOf {
+            array: array.clone(),
+            arguments,
+        })
     }
 
     fn prepare_call(
@@ -521,6 +562,22 @@ impl PreparedNumericLoopTerm {
     fn eval(&mut self, counter: f64) -> f64 {
         match self {
             Self::Stable(value) => *value,
+            Self::DenseArrayIndexOf { array, arguments } => {
+                let [search, from_index] = arguments.values(counter);
+                let length = array.len();
+                let start = if arguments.len() < 2 || from_index.is_nan() {
+                    0
+                } else if from_index >= length as f64 {
+                    length
+                } else if from_index >= 0.0 {
+                    from_index.trunc() as usize
+                } else {
+                    (length as f64 + from_index.trunc()).max(0.0) as usize
+                };
+                array
+                    .direct_dense_index_of_number(search, start)
+                    .expect("prepared dense array search stays side-effect free")
+            }
             Self::Call { call, arguments } => {
                 let [first, second] = arguments.values(counter);
                 call.eval(first, second)
@@ -636,6 +693,14 @@ mod tests {
             "{:?}",
             bytecode.code
         );
+    }
+
+    #[test]
+    fn recognizes_dense_array_index_of_calls() {
+        let bytecode = nested_function(
+            "function sum(n) { var array = [1, 2, 3, 4]; var s = 0; for (var i = 0; i < n; i++) { s += array.indexOf(3); } return s; }",
+        );
+        assert_eq!(NumericLoopPlan::compile_all(&bytecode).len(), 1);
     }
 
     #[test]
