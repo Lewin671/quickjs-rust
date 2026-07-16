@@ -1050,8 +1050,8 @@ pub(crate) fn call_async_generator_function(
         GeneratorStart {
             bytecode,
             env: function_env,
-            upvalues: function.upvalues.clone(),
-            with_stack: function.with_stack.clone(),
+            upvalues: function.upvalues.to_vec(),
+            with_stack: function.with_stack.to_vec(),
             immutable_function_name: function
                 .immutable_name_binding
                 .then(|| function.name.clone())

@@ -99,7 +99,7 @@ fn mapped_argument_getter(parameter: Upvalue) -> Value {
         NativeFunction::MappedArgumentGet,
         false,
     );
-    getter.push_upvalue(parameter);
+    getter.set_single_upvalue(parameter);
     Value::Function(getter)
 }
 
@@ -110,7 +110,7 @@ fn mapped_argument_setter(parameter: Upvalue) -> Value {
         NativeFunction::MappedArgumentSet,
         false,
     );
-    setter.push_upvalue(parameter);
+    setter.set_single_upvalue(parameter);
     Value::Function(setter)
 }
 

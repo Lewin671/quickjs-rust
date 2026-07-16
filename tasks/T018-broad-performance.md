@@ -1567,6 +1567,55 @@ Shared module-import bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+The twenty-ninth v2 runtime unit stores a function's immutable capture-index
+sequences as boxed slices rather than capacity-bearing vectors. Empty ordinary
+functions remain allocation-free for both `with` captures and lexical
+upvalues, while each sequence header shrinks from three machine words to two.
+Mapped-arguments accessors install their single capture directly; user
+functions still provide the complete capture list at construction. Generator
+and async snapshots continue to materialize owned vectors, preserving the
+previous suspended-frame ownership model. The complete `FunctionData` header
+is now capped at 280 bytes, down from 296 bytes.
+
+The first focused three-role run over `plain_function_call`, `method_call`, and
+`closure_allocation_call` made all 27 formal measurements eligible, completed
+all 72 predetermined N/2N diagnostics, and had no non-ok sample. Closure
+candidate medians were 282.236/282.261/283.805 ns/op versus
+480.523/484.597/486.312 for the immediately preceding runtime, a **0.58446x**
+paired geometric ratio. QuickJS-NG measured 269.095/270.173/276.074 ns/op,
+leaving the focused local case at 1.04049x. `plain_function_call` was 0.99962x
+and `method_call` 1.00139x base.
+
+Because the preceding binary had measured near 282 ns/op in an earlier local
+run, the large allocation change was not accepted from that cohort alone. An
+independent five-block candidate/base confirmation again made every one of 30
+formal measurements eligible and completed all 48 diagnostics without a
+non-ok sample. Every closure block remained separated: candidate
+281.584-283.074 ns/op versus base 480.973-486.509 ns/op, for a **0.58491x**
+paired ratio. Plain and method calls remained neutral at 0.99656x and
+0.99930x. The repeatable discontinuity is consistent with crossing a macOS
+allocator size class, not with faster call execution; the hosted Linux broad
+preview remains required before treating it as a portable allocation-family
+improvement.
+
+Boxed function-capture bindings:
+
+- three-role run ID: `758166d5-92c6-411e-bc3b-443b46c23ba9`;
+- five-block confirmation run ID:
+  `397e0e16-0c7b-4637-833c-5ed07d9c065f`;
+- three-role raw JSONL SHA-256:
+  `1115986370a56327316e25f55f58ceb75eedcb8d3c7c71491c637b91f6faab1e`;
+- confirmation raw JSONL SHA-256:
+  `3ad788d0530470d99fa62b10947c42a08ae61a6439c53a6a78f4b25cd5018ea8`;
+- manifest SHA-256:
+  `5105e4923cb104f6608e935f73a35e9ab763562c57c7eea8cb0169d1710777ec`;
+- candidate binary SHA-256:
+  `d695b21ec1979bdb04867fe270340e1d9cd2bd0b9d0865b409eb0cd066ad9c59`;
+- preceding-runtime binary SHA-256:
+  `60a8b3c3c7cd8f1430d9bf125a1abacd5f1a1ee60e2a87049c3e39104d1658cb`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
