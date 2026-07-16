@@ -144,6 +144,19 @@ Evidence bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+Trusted-main run `29514390468` then validated the complete string unit on the
+hosted Linux profile. It retained 225/225 eligible formal measurements,
+75/75 passing linearity diagnostics, and three valid blocks. Candidate/base
+was 0.88061x with a 95% confidence interval of [0.88061x, 0.88469x]. The
+complete candidate reached **0.54249x QuickJS-NG** overall with a 95%
+confidence interval of [0.53665x, 0.54705x], while the string family reached
+**0.59737x QuickJS-NG**. The only remaining family failures at that revision
+were call 1.19556x and allocation 4.48144x. Run ID:
+`3a81d8d6-0ac2-45c0-9a8b-0f28f483bf52`; raw JSONL SHA-256:
+`b221ce1d5126b0f0103650aaf001024c5a1fb2734fda261e1ce29902632e8a31`;
+report JSON SHA-256:
+`0b981d9990fd970bfcc03745e21149d22e3dd76ce1b6143ee623a0664edf1107`.
+
 ## Broad V2 Optimization Evidence
 
 The first v2 runtime unit admits guarded global-object method calls to the
@@ -1038,6 +1051,39 @@ Reordered global-call bindings:
   `26d514e98209db6f7922d393f5715175c940dfaebfc85430677a669268c2d023`;
 - preceding-runtime binary SHA-256:
   `c36185b4191a3977d3af7c81c764a137b3bc17faf22c072bd1586e94711bc78a`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
+The sixteenth v2 runtime unit consolidates ordinary-object cold state behind
+one lazy allocation. Symbol properties, `toStringTag`, module-namespace
+bindings, generator and async-generator state, private state, ArrayBuffer
+bytes, iterator-zip state, and the optional agents backing no longer reserve
+independent space in every ordinary object. Missing-state reads avoid creating
+the cold block; the corresponding mutation or exotic-object initialization
+creates it on demand. On the current 64-bit layout this reduces `ObjectData`
+from 248 to 144 bytes without removing object allocation or property reads.
+
+A focused three-role `object_allocation` run made all nine formal measurements
+eligible and passed all 24 predetermined linearity samples. Candidate medians
+were 310.922/311.948/312.097 ns/op versus
+320.846/319.840/321.746 for the preceding runtime, a **0.97227x** ratio. The
+local QuickJS-NG median was 174.047 ns/op and the candidate/QuickJS-NG ratio was
+1.79232x on this macOS profile; that local cross-engine number is diagnostic
+and is not substituted for the hosted Linux family score. The measured runtime
+gain is modest, so the allocation family still requires a deeper Value and
+allocator redesign.
+
+Object cold-state bindings:
+
+- run ID: `e5fcbdb3-5bf6-4236-9dbb-9231f7180d8f`;
+- raw JSONL SHA-256:
+  `ec1980bae4183693a3585880e17d0cfc98ef7f6594a5b9afd68a3406e4630799`;
+- manifest SHA-256:
+  `5105e4923cb104f6608e935f73a35e9ab763562c57c7eea8cb0169d1710777ec`;
+- candidate binary SHA-256:
+  `7f393c26c3128f0c301c03b2adbd8b36a50c6407a1ae5e843995dc5e4ef7fbf9`;
+- preceding-runtime binary SHA-256:
+  `26d514e98209db6f7922d393f5715175c940dfaebfc85430677a669268c2d023`;
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
