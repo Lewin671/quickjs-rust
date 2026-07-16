@@ -1280,6 +1280,37 @@ Lazy default-prototype-order bindings:
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 
+The twenty-second v2 runtime unit inlines cold identity-bearing function state
+and the property table into the existing shared `FunctionData` allocation.
+Fresh closures no longer allocate a second `Rc` block. General `DerefMut`
+copy-on-write detachment is removed; the two internal construction-only
+mutations now require unique ownership explicitly, while observable function
+properties and cold state remain interior-mutable through the single shared
+identity allocation.
+
+A focused three-role `closure_allocation_call` run made all nine formal
+measurements eligible and passed all 24 predetermined N/2N samples with exact
+operation counts and checksums. Candidate medians were
+334.603/334.220/331.973 ns/op versus 359.420/357.416/357.515 for the immediately
+preceding runtime, a **0.93153x** paired geometric ratio (6.8% lower wall
+ns/op). QuickJS-NG measured 273.079/268.666/270.343 ns/op, leaving this focused
+case at 1.23239x QuickJS-NG on the macOS profile. This remains focused evidence,
+not a broad or allocation-family claim.
+
+Inline function-identity-state bindings:
+
+- run ID: `e01fe7b5-67f2-4877-99e5-dad17325af66`;
+- raw JSONL SHA-256:
+  `dcf382cd44104304e7ed15f2ff019b26e9f17d51a2aedd317631c6df7440a977`;
+- manifest SHA-256:
+  `5105e4923cb104f6608e935f73a35e9ab763562c57c7eea8cb0169d1710777ec`;
+- candidate binary SHA-256:
+  `b5c9abdeaf202876789b78c367ccae4f932280e6702f00dc63b7784decfcbc35`;
+- preceding-runtime binary SHA-256:
+  `db19df93c2a323451fdb55653012655a33f4e00fb98ac8e51ff22b796c1289c2`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

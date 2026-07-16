@@ -1,8 +1,8 @@
 use std::{
-    cell::{Cell, Ref, RefCell, RefMut},
+    cell::{Cell, RefCell},
     collections::HashMap,
     fmt,
-    ops::{Deref, DerefMut},
+    ops::Deref,
     rc::Rc,
 };
 
@@ -73,16 +73,15 @@ pub(crate) struct PrivateFieldInit {
 /// Functions are copied through the operand stack, environments, properties,
 /// and argument vectors on every call. Keeping the object behind one shared
 /// allocation makes those copies reference-count bumps instead of repeatedly
-/// cloning the function's vectors and maps. Mutable construction still uses
-/// `DerefMut`; the existing shared object-property cells preserve identity when
-/// a freshly built function has already installed its prototype back-reference.
+/// cloning the function's vectors and maps. Post-construction identity state is
+/// interior-mutable inside that same allocation, so handles can never detach
+/// into distinct objects through copy-on-write metadata mutation.
 #[derive(Clone)]
 pub struct Function(Rc<FunctionData>);
 
 /// Storage behind [`Function`]. Public only because it is the target of the
 /// handle's public `Deref` implementation; the runtime does not re-export it.
 #[doc(hidden)]
-#[derive(Clone)]
 pub struct FunctionData {
     /// Optional internal function name.
     pub name: Option<String>,
@@ -159,10 +158,10 @@ pub struct FunctionData {
     /// The method/constructor [[HomeObject]] used to resolve `super.x`. For an
     /// instance method this is the class prototype; for a static method it is
     /// the constructor; for a derived constructor it is the prototype.
-    pub(crate) auxiliary: Rc<FunctionAuxiliaryState>,
+    pub(crate) auxiliary: FunctionAuxiliaryState,
     pub(crate) bound: Option<Box<BoundFunction>>,
     /// Function object properties.
-    pub(crate) properties: FunctionProperties,
+    pub(crate) properties: RefCell<HashMap<String, Property>>,
 }
 
 /// Identity-bearing mutable state that is cold for ordinary calls. Keeping
@@ -171,7 +170,6 @@ pub struct FunctionData {
 /// every closure.
 #[doc(hidden)]
 pub struct FunctionAuxiliaryState {
-    properties: RefCell<HashMap<String, Property>>,
     /// Fresh functions expose the standard `length` and `name` data
     /// properties without allocating entries in the general property table.
     /// They are materialized together only when descriptor mutation requires
@@ -199,9 +197,8 @@ pub struct FunctionAuxiliaryState {
 }
 
 impl FunctionAuxiliaryState {
-    fn new(home_object: Option<Value>, super_constructor: Option<Value>) -> Rc<Self> {
-        Rc::new(Self {
-            properties: RefCell::new(HashMap::new()),
+    fn new(home_object: Option<Value>, super_constructor: Option<Value>) -> Self {
+        Self {
             implicit_length_property: Cell::new(false),
             implicit_name_property: Cell::new(false),
             home_object: RefCell::new(home_object),
@@ -216,31 +213,7 @@ impl FunctionAuxiliaryState {
             private_state: RefCell::new(crate::private::PrivateState::default()),
             source_text: RefCell::new(None),
             lazy_default_prototype: Cell::new(false),
-        })
-    }
-}
-
-/// Compatibility handle for the function's identity-bearing property table.
-/// It shares the existing auxiliary allocation instead of allocating a second
-/// `Rc<RefCell<_>>` for every function object.
-#[derive(Clone)]
-pub(crate) struct FunctionProperties(Rc<FunctionAuxiliaryState>);
-
-impl FunctionProperties {
-    fn new(auxiliary: &Rc<FunctionAuxiliaryState>) -> Self {
-        Self(Rc::clone(auxiliary))
-    }
-
-    pub(crate) fn borrow(&self) -> Ref<'_, HashMap<String, Property>> {
-        self.0.properties.borrow()
-    }
-
-    pub(crate) fn borrow_mut(&self) -> RefMut<'_, HashMap<String, Property>> {
-        self.0.properties.borrow_mut()
-    }
-
-    fn ptr_eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.0, &other.0)
+        }
     }
 }
 
@@ -249,18 +222,6 @@ impl Deref for Function {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl DerefMut for Function {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        // Metadata mutation can detach the `FunctionData` allocation through
-        // `Rc::make_mut`, while object properties deliberately remain shared
-        // identity state. Freeze the implicit defaults into that shared state
-        // first so detached internal handles cannot synthesize different
-        // `name` or `length` property values.
-        self.materialize_default_data_properties();
-        Rc::make_mut(&mut self.0)
     }
 }
 
@@ -330,7 +291,19 @@ impl Function {
     /// a freshly created native reaction's captured state; `Rc::make_mut` is
     /// cheap here because the `Rc` is uniquely held immediately after creation.
     pub(crate) fn insert_native_context(&mut self, key: String, value: Value) {
-        Rc::make_mut(&mut self.native_context).insert(key, value);
+        let data = Rc::get_mut(&mut self.0)
+            .expect("native context must be populated before sharing the function");
+        Rc::make_mut(&mut data.native_context).insert(key, value);
+    }
+
+    /// Adds an indexed capture while constructing a fresh internal native
+    /// function. Keeping this mutation behind the handle prevents general
+    /// copy-on-write detachment of JavaScript function identity.
+    pub(crate) fn push_upvalue(&mut self, upvalue: Upvalue) {
+        Rc::get_mut(&mut self.0)
+            .expect("upvalues must be populated before sharing the function")
+            .upvalues
+            .push(upvalue);
     }
 
     pub(crate) fn new_user(
@@ -401,7 +374,6 @@ impl Function {
             None => Rc::new(compile_function_body(&params, &body)?),
         };
         let auxiliary = FunctionAuxiliaryState::new(None, None);
-        let properties = FunctionProperties::new(&auxiliary);
         let function = Self(Rc::new(FunctionData {
             has_name_binding: name.is_some(),
             immutable_name_binding: false,
@@ -433,7 +405,7 @@ impl Function {
             is_field_initializer: false,
             auxiliary,
             bound: None,
-            properties,
+            properties: RefCell::new(HashMap::new()),
         }));
         function.define_length_property();
         function.define_name_property();
@@ -482,7 +454,6 @@ impl Function {
         } = compiled;
         let dynamic_function_realm_global = dynamic_function_realm_global(&realm);
         let auxiliary = FunctionAuxiliaryState::new(home_object, super_constructor);
-        let properties = FunctionProperties::new(&auxiliary);
         let function = Self(Rc::new(FunctionData {
             has_name_binding,
             immutable_name_binding,
@@ -514,7 +485,7 @@ impl Function {
             is_field_initializer,
             auxiliary,
             bound: None,
-            properties,
+            properties: RefCell::new(HashMap::new()),
         }));
         function.define_length_property();
         function.define_name_property();
@@ -587,7 +558,6 @@ impl Function {
         };
         let name = bound_function_name(&target);
         let auxiliary = FunctionAuxiliaryState::new(None, None);
-        let properties = FunctionProperties::new(&auxiliary);
         let function = Self(Rc::new(FunctionData {
             name: Some(name),
             has_name_binding: false,
@@ -629,7 +599,7 @@ impl Function {
                 this_value,
                 arguments,
             })),
-            properties,
+            properties: RefCell::new(HashMap::new()),
         }));
         function.define_length_property();
         function.define_name_property();
@@ -645,7 +615,6 @@ impl Function {
     ) -> Self {
         let prototype = ObjectRef::new(HashMap::new());
         let auxiliary = FunctionAuxiliaryState::new(None, None);
-        let properties = FunctionProperties::new(&auxiliary);
         let function = Self(Rc::new(FunctionData {
             has_name_binding: false,
             immutable_name_binding: false,
@@ -677,7 +646,7 @@ impl Function {
             is_field_initializer: false,
             auxiliary,
             bound: None,
-            properties,
+            properties: RefCell::new(HashMap::new()),
         }));
         function.define_length_property();
         function.define_name_property();
@@ -787,7 +756,7 @@ impl Function {
     }
 
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
-        self.properties.ptr_eq(&other.properties)
+        Rc::ptr_eq(&self.0, &other.0)
     }
 
     pub(crate) fn prevent_extensions(&self) {
@@ -1414,34 +1383,27 @@ mod tests {
     }
 
     #[test]
-    fn detached_function_data_keeps_identity_state_shared() {
+    fn cloned_function_handles_keep_identity_state_shared() {
         let function = Function::new_native(
             Some("shared"),
             0,
             NativeFunction::UninitializedLexical,
             false,
         );
-        let mut detached = function.clone();
-        detached.name = Some("detached handle".to_owned());
-
-        assert!(!Rc::ptr_eq(&function.0, &detached.0));
-        assert!(Rc::ptr_eq(&function.auxiliary, &detached.auxiliary));
-        assert_eq!(
-            detached.own_property("name").map(|property| property.value),
-            Some(Value::String("shared".to_owned().into()))
-        );
-        detached.define_property(
+        let cloned = function.clone();
+        cloned.define_property(
             "shared".to_owned(),
             crate::Property::enumerable(Value::Number(1.0)),
         );
-        assert!(function.ptr_eq(&detached));
+        assert!(Rc::ptr_eq(&function.0, &cloned.0));
+        assert!(function.ptr_eq(&cloned));
         assert_eq!(
             function
                 .own_property("shared")
                 .map(|property| property.value),
             Some(Value::Number(1.0))
         );
-        detached.set_source_text(Some(Rc::from("function shared() {}")));
+        cloned.set_source_text(Some(Rc::from("function shared() {}")));
         assert_eq!(
             function.source_text().as_deref(),
             Some("function shared() {}")
