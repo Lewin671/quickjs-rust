@@ -65,6 +65,24 @@ fn accumulates_stable_global_reads_but_preserves_global_accessors() {
 }
 
 #[test]
+fn runs_empty_and_bitwise_branch_control_loops() {
+    assert_eq!(
+        eval(
+            "function empty(n) { var i; for (i = 0; i < n; i++) {} return i; } \
+             function branch(n) { \
+               var sum = 0; \
+               for (var i = 0; i < n; i++) { \
+                 if ((i & 1) === 0) sum += 1; else sum += 2; \
+               } \
+               return sum; \
+             } \
+             empty(0) + ':' + empty(7) + ':' + branch(0) + ':' + branch(7);"
+        ),
+        Ok(Value::String("0:7:0:10".to_owned().into()))
+    );
+}
+
+#[test]
 fn falls_back_for_observable_or_non_numeric_reads() {
     assert_eq!(
         eval(

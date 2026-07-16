@@ -23,6 +23,7 @@ mod vm_bindings;
 mod vm_call;
 mod vm_capture;
 mod vm_class;
+mod vm_control_loop;
 mod vm_dispose;
 mod vm_errors;
 mod vm_generator;

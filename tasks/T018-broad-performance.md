@@ -92,7 +92,7 @@ eligible measurement windows, and N/2N linearity for both cases. The current
 measurement identity is `quickjs-measurement-protocol-v6`, protocol SHA-256
 `9cbd57169707fe1c2b691c340a04b60a4f127c6140b8df7823407299fb60c2b3`,
 and checked-in manifest SHA-256
-`42c2f3035e8c3d18a9b036d424a088e27caab531b574d0e0abee42069b1b1af9`.
+`316e9b90c415e07573f7e7674c8d1f2602279dcc30173e1ccc0f67b0008e18d1`.
 
 ## Initial Broad V2 Baseline
 
@@ -490,6 +490,79 @@ Stable-global-read bindings:
   `08dd851c998448326d1620340527895ddc7ba72986519973b4f1001f7e367678`;
 - base binary SHA-256:
   `0216f98ed9c8f9cf940febf513b2eb24429fb3259694a8bf7060f9d6f746f2e9`;
+- QuickJS-NG binary SHA-256:
+  `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
+The trusted-main hosted preview for commit
+`443857b8274bbad6e49080a11ac7161849f5b461` was the next complete clean broad
+run: all 225 measurements were eligible, all 75 N/2N checks passed, and all 25
+cases were present for every role. Candidate/base was 0.73177x, a 26.82%
+improvement over `2ae7b1b09dbb14f2280a5b337fb68c02be6bb12c`.
+Candidate/QuickJS-NG reached **0.80301x** with a 95% confidence interval of
+[0.77783x, 0.80384x], making the candidate 19.70% faster overall but still
+short of the 0.50x campaign goal. Four families remained above the 1.00x
+ceiling: control 18.2538x, allocation 14.2543x, string 14.3089x, and call
+1.2779x. The other family ratios were array 0.3451x, binding 0.1552x, builtin
+0.1220x, and property 0.1078x.
+
+The three-block hosted profile remained `inconclusive`/`non_claim`; array's
+31.64% relative half-width exceeded the frozen 3% threshold. This does not
+invalidate its complete optimization evidence, but it prevents treating the
+hosted result as the final fixed-hardware campaign claim.
+
+Hosted global-read broad bindings:
+
+- workflow run: `29492341691`;
+- benchmark run ID: `5c6bb24b-2546-4e34-98eb-ec238534eca8`;
+- raw JSONL SHA-256:
+  `9b6f7b9dc020a8d9dc330ca085cac5d6929f5629d6b4cf42e4d941c0ab77779a`;
+- report JSON SHA-256:
+  `1d99848e5260ff8d0132e3ee409324b5178d71f979c7ac4f6853a5ac4454597d`;
+- hosted dynamic manifest SHA-256:
+  `f68ee4d4d96095c8e8024610cff9910a02441a196687f8763fbfcd0613cfefb1`;
+- candidate binary SHA-256:
+  `a74ccc800288ac9aaa57d8e4a26e69441465465eaf3916f7d1af0202baab2892`;
+- base binary SHA-256:
+  `47b0f85ae8e6b9a7aa966bcf81a63376c80b60722c8e3e049bdf1147faff6edf`;
+- QuickJS-NG binary SHA-256:
+  `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+
+The eighth v2 runtime unit adds a separate guarded control-loop plan for empty
+counted loops and numeric bitwise branches of the form used by the frozen
+portfolio. The empty path still increments the counter once per source
+iteration. The branch path performs `ToInt32` masking, the comparison, the
+selected numeric update, and the counter increment on every iteration; its
+implementation accepts distinct then/else deltas, so it does not depend on the
+portfolio's equal branch results. Captured or non-numeric source locals,
+coerced limits, direct-eval frames, and all bytecode shapes outside the exact
+validated control forms retain the generic VM path.
+
+The initial 100,000,000/50,000,000 ceilings proved N/2N linearity and exact
+checksums but left the optimized samples timer-limited. Raising only
+`empty_loop` to 2,000,000,000 and `branch_arithmetic` to 1,000,000,000 gives
+the calibration protocol enough headroom; both maximum checksums remain exact
+safe integers. All 18 final three-role measurements were eligible.
+`empty_loop` candidate medians were 0.93785/0.93891/0.93770 ns/op versus
+74.5642/74.4397/74.7399 for the base and 9.11938/9.08829/9.10040 for
+QuickJS-NG. `branch_arithmetic` measured 1.44833/1.45043/1.44860 ns/op versus
+237.191/238.397/237.951 for the base and 25.1369/25.0830/25.1003 for
+QuickJS-NG. Per-case candidate/QuickJS-NG ratios were 0.10306x and 0.05772x;
+the focused control-family geometric ratio was 0.07713x. The corresponding
+candidate/base family ratio was 0.008754x. All six N/2N ratios were between
+0.98658 and 0.99827 with exact operation counts and checksums. This remains
+focused two-case evidence pending the next complete broad run.
+
+Control-loop capacity-confirmation bindings:
+
+- run ID: `2c318e6b-16bf-4c7d-b661-d32b4bbd2aaf`;
+- raw JSONL SHA-256:
+  `f765485634e94c42ea5c216b389f3481d4b3a557f05bf6727ede0146bd3991ea`;
+- manifest SHA-256:
+  `316e9b90c415e07573f7e7674c8d1f2602279dcc30173e1ccc0f67b0008e18d1`;
+- candidate binary SHA-256:
+  `51789c083e2484eff3fe303dc6f87367710a644f683c7a85e9b720cfccc2175f`;
+- base binary SHA-256:
+  `08dd851c998448326d1620340527895ddc7ba72986519973b4f1001f7e367678`;
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
 

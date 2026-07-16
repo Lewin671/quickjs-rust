@@ -66,6 +66,7 @@ pub(super) fn eval_function_bytecode<'a>(
 pub(super) struct Vm<'a> {
     pub(super) bytecode: &'a Bytecode,
     pub(super) ip: usize,
+    pub(super) control_loop_plans: Vec<super::vm_control_loop::ControlLoopPlan>,
     pub(super) numeric_loop_plans: Vec<super::vm_numeric_loop::NumericLoopPlan>,
     pub(super) numeric_mutation_loop_plans:
         Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>,
@@ -228,6 +229,10 @@ impl<'a> Vm<'a> {
             .numeric_loop_plans
             .get_or_init(|| super::vm_numeric_loop::NumericLoopPlan::compile_all(bytecode))
             .clone();
+        let control_loop_plans = bytecode
+            .control_loop_plans
+            .get_or_init(|| super::vm_control_loop::ControlLoopPlan::compile_all(bytecode))
+            .clone();
         let numeric_mutation_loop_plans = bytecode
             .numeric_mutation_loop_plans
             .get_or_init(|| {
@@ -237,6 +242,7 @@ impl<'a> Vm<'a> {
         Self {
             bytecode,
             ip: 0,
+            control_loop_plans,
             numeric_loop_plans,
             numeric_mutation_loop_plans,
             stack: Vec::with_capacity(64),
@@ -937,6 +943,8 @@ impl<'a> Vm<'a> {
                         || (!super::vm_numeric_mutation_loop::try_run_numeric_mutation_loop(
                             self, *target, backedge,
                         ) && !super::vm_numeric_loop::try_run_numeric_loop(
+                            self, *target, backedge,
+                        ) && !super::vm_control_loop::try_run_control_loop(
                             self, *target, backedge,
                         ))
                     {
