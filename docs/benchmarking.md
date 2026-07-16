@@ -693,13 +693,14 @@ raw/report/manifest/receipt/status evidence is retained for 14 days.
 
 The Step Summary defines ratio as candidate wall ns/op divided by comparator:
 above 1 means higher ns/op and below 1 means lower ns/op. It shows both overall
-ratios, 95% CIs, direction/percentage, valid blocks, and health. A success
-summary is emitted only for the expected non-claim report: overall
-`inconclusive`, block health `non_claim`, linearity `pass`, all three blocks
-valid, and both candidate comparisons present. A higher ratio never fails the
-job; missing, malformed, incomplete, or unhealthy comparison evidence does and
-does not receive a ratio conclusion. The output is informational, non-gating,
-and not a fixed-hardware claim. The policy freezes the aggregate hosted
+ratios, 95% CIs, direction/percentage, valid blocks, and health when the
+expected non-claim report has overall `inconclusive`, block health `non_claim`,
+linearity `pass`, all three blocks valid, and both candidate comparisons
+present. If a complete 3/3-block hosted run instead fails linearity, the job
+succeeds as explicitly inconclusive, preserves the raw evidence, and emits no
+ratio direction. A higher ratio never fails the job; missing, malformed, or
+incomplete evidence still does. The output is informational, non-gating, and
+not a fixed-hardware claim. The policy freezes the aggregate hosted
 implementation hash, direct QuickJS-NG pin, three roles, 25 cases, three
 blocks, artifact retention, no threshold, no gate, and claim ineligibility.
 Any future fixed-hardware claim or gate is scoped to trusted merged commits,

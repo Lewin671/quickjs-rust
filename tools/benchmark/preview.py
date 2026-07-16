@@ -433,11 +433,15 @@ def summarize(
     if valid_blocks != 3 or blocks.get("invalid") != 0 or blocks.get("status") != "non_claim":
         raise PreviewError("hosted preview requires exactly 3/3 valid non-claim blocks")
     status = _string(health.get("status"), "health status")
-    if status != "inconclusive":
-        raise PreviewError("hosted preview overall health must be inconclusive")
     linearity = health.get("linearity")
-    if not isinstance(linearity, dict) or linearity.get("status") != "pass":
-        raise PreviewError("hosted preview linearity health must pass")
+    if not isinstance(linearity, dict):
+        raise PreviewError("hosted preview is missing linearity health")
+    linearity_status = linearity.get("status")
+    if (status, linearity_status) not in {
+        ("inconclusive", "pass"),
+        ("invalid", "fail"),
+    }:
+        raise PreviewError("hosted preview health and linearity status disagree")
     profile = run.get("profile")
     if not isinstance(profile, dict):
         raise PreviewError("report is missing profile identity")
@@ -448,6 +452,46 @@ def summarize(
         raise PreviewError("unknown harness ownership mode")
     harness_revision = _revision(harness_revision, "harness revision")
     engines = _engine_provenance(run)
+    common_machine = {
+        "schema_version": 1,
+        "state": "success",
+        "ratio_semantics": "candidate_over_comparator_wall_ns_per_operation",
+        "profile_id": profile_id,
+        "health": status,
+        "linearity": linearity_status,
+        "valid_blocks": valid_blocks,
+        "requested_blocks": 3,
+        "harness": {"mode": harness_mode, "revision": harness_revision},
+        "integrity_scope": _integrity_scope(harness_mode),
+        "malicious_candidate_resistant": False,
+        "engines": engines,
+    }
+    if status == "invalid":
+        lines = [
+            "## Performance Preview Inconclusive",
+            "",
+            "> **No performance direction is reported.**",
+            "> The complete hosted measurement failed its linearity diagnostic; raw evidence is preserved for audit.",
+            "",
+            "- Classification: informational measurement inconclusive; not a fixed-hardware claim",
+            "- Health: invalid; block health: non_claim; linearity: fail",
+            f"- Valid blocks: `{valid_blocks}/3`",
+            f"- Harness ownership mode: `{harness_mode}` at `{harness_revision}`",
+            f"- Integrity scope: `{_integrity_scope(harness_mode)}`",
+            "- Security boundary: candidate build/execution is not sandboxed; artifacts do not resist a malicious candidate",
+            f"- Profile: `{profile_id}`",
+            f"- Portfolio: `{len(HOSTED_CASES)}/{len(HOSTED_CASES)} cases`, roles: `candidate/base/quickjs-ng`",
+            f"- Candidate: `{engines['candidate']['source_revision']}` / `{engines['candidate']['binary_sha256']}`",
+            f"- Base: `{engines['base']['source_revision']}` / `{engines['base']['binary_sha256']}`",
+            f"- QuickJS-NG: `{engines['quickjs-ng']['source_revision']}` / `{engines['quickjs-ng']['binary_sha256']}`",
+            "",
+        ]
+        machine = {
+            **common_machine,
+            "classification": "informational_measurement_inconclusive_not_fixed_hardware_claim",
+            "comparisons": {},
+        }
+        return "\n".join(lines), machine
     results = [
         _comparison(report, "candidate_vs_base", "candidate vs base"),
         _comparison(report, "candidate_vs_quickjs_ng", "candidate vs QuickJS-NG"),
@@ -456,7 +500,7 @@ def summarize(
         "## Performance Preview",
         "",
         "> **Informational only — non-gating — not a fixed-hardware claim.**",
-        "> GitHub-hosted runners are variable. A slowdown never fails this job; missing or invalid evidence does.",
+        "> GitHub-hosted runners are variable. Missing or malformed evidence fails; a completed noisy measurement is inconclusive.",
         "",
         "Ratio = candidate wall ns/op ÷ comparator wall ns/op. Above 1.0 is higher ns/op; below 1.0 is lower ns/op.",
         "",
@@ -484,18 +528,8 @@ def summarize(
         "",
     ])
     machine = {
-        "schema_version": 1,
-        "state": "success",
+        **common_machine,
         "classification": "informational_non_gating_not_fixed_hardware_claim",
-        "ratio_semantics": "candidate_over_comparator_wall_ns_per_operation",
-        "profile_id": profile_id,
-        "health": status,
-        "valid_blocks": valid_blocks,
-        "requested_blocks": 3,
-        "harness": {"mode": harness_mode, "revision": harness_revision},
-        "integrity_scope": _integrity_scope(harness_mode),
-        "malicious_candidate_resistant": False,
-        "engines": engines,
         "comparisons": {result["label"]: result for result in results},
     }
     return "\n".join(lines), machine

@@ -90,8 +90,11 @@ each script is for.
   builds and measurement, reruns audits after measurement, emits truthful dynamic
   receipts/manifest, runs all 25 throughput cases for three blocks, and
   renders Markdown/JSON summaries. Ratios require strict 3/3 valid-block,
-  non-claim, linearity-pass health. Pending/failure status includes the active
-  phase and remains publishable without a ratio conclusion. It is informational
+  non-claim, linearity-pass health. A complete hosted run whose linearity
+  diagnostic fails succeeds as explicitly inconclusive, preserves its raw
+  evidence, and emits no ratio direction; missing, malformed, or incomplete
+  evidence still fails. Pending/failure status includes the active phase and
+  remains publishable without a ratio conclusion. It is informational
   and non-gating, and is not a malicious candidate sandbox. Exact content keys
   may reuse validated final engine executables; candidate/base share one Rust
   namespace and the pinned QuickJS-NG binary normally hits. Invalid entries
