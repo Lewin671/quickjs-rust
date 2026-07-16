@@ -43,10 +43,10 @@ PROTOCOL_KEYS = (
 )
 PROTOCOL_SHAPES = {
     "throughput_measurement": (
-        "benchmarks/manifest.json", "quickjs-measurement-protocol-v4"
+        "benchmarks/manifest.json", "quickjs-measurement-protocol-v5"
     ),
     "throughput_analysis": (
-        "benchmarks/analysis.json", "quickjs-analysis-protocol-v2"
+        "benchmarks/analysis.json", "quickjs-analysis-protocol-v3"
     ),
     "resource_measurement": (
         "benchmarks/resources.json", "quickjs-resource-measurement-protocol-v1"
@@ -486,7 +486,7 @@ def load_policy(path: Path) -> PerformancePolicy:
     orchestrator = _path(hosted["orchestrator_path"], "policy.hosted_pr.orchestrator_path")
     if orchestrator != PREVIEW_ORCHESTRATOR:
         raise PerformancePolicyError("policy.hosted_pr.orchestrator_path: invalid frozen path")
-    if _string(hosted["portfolio"], "policy.hosted_pr.portfolio") != "complete-seven-case":
+    if _string(hosted["portfolio"], "policy.hosted_pr.portfolio") != "complete-broad-25-case":
         raise PerformancePolicyError("policy.hosted_pr.portfolio: invalid frozen portfolio")
     blocks = _integer(hosted["blocks"], "policy.hosted_pr.blocks", 1)
     if blocks != 3:

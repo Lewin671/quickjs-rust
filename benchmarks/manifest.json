@@ -1,14 +1,14 @@
 {
   "schema_version": 4,
   "series": {
-    "id": "core-black-box-v4",
-    "suite_id": "quickjs-rust-t016-first-party-micro@quickjs-ng-f7830186-v4"
+    "id": "broad-black-box-v1",
+    "suite_id": "quickjs-rust-broad-micro@quickjs-ng-f7830186-v1"
   },
   "lane": { "id": "throughput/wall_ns_per_operation" },
   "protocol": {
-    "id": "quickjs-measurement-protocol-v4",
+    "id": "quickjs-measurement-protocol-v5",
     "files": [
-      "benchmarks/workloads/core-micro.js",
+      "benchmarks/workloads/broad-micro.js",
       "scripts/benchmark.sh",
       "tools/__init__.py",
       "tools/benchmark/__init__.py",
@@ -22,7 +22,7 @@
       "tools/benchmark/schema.py",
       "tools/benchmark/snapshots.py"
     ],
-    "aggregate_sha256": "5301d69ae51dec230e0288d5a9afbedc96bb9391708aa0267ba02b2c60ab49fd"
+    "aggregate_sha256": "b2f2e85343c1fbe2bb4bc58d3540a1a666cab85b71118e45e019400541ee75c6"
   },
   "reference_engine": {
     "identity": "quickjs-ng",
@@ -64,8 +64,8 @@
       "id": "plain_function_call",
       "family": "call",
       "critical": true,
-      "workload": "benchmarks/workloads/core-micro.js",
-      "workload_sha256": "93faf3d83568b89e2e2eab603294cddcca8af067cc013d787d1bd8f4887f736f",
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
       "operations_per_iteration": 1,
       "checksum": { "model": "triangular", "factor": 1 },
       "measurement": {
@@ -82,8 +82,8 @@
       "id": "method_call",
       "family": "call",
       "critical": true,
-      "workload": "benchmarks/workloads/core-micro.js",
-      "workload_sha256": "93faf3d83568b89e2e2eab603294cddcca8af067cc013d787d1bd8f4887f736f",
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
       "operations_per_iteration": 1,
       "checksum": { "model": "triangular", "factor": 1 },
       "measurement": {
@@ -100,8 +100,8 @@
       "id": "captured_read",
       "family": "binding",
       "critical": true,
-      "workload": "benchmarks/workloads/core-micro.js",
-      "workload_sha256": "93faf3d83568b89e2e2eab603294cddcca8af067cc013d787d1bd8f4887f736f",
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
       "operations_per_iteration": 1,
       "checksum": { "model": "zero_based_triangular_plus_linear", "factor": 7 },
       "measurement": {
@@ -118,8 +118,8 @@
       "id": "captured_write",
       "family": "binding",
       "critical": true,
-      "workload": "benchmarks/workloads/core-micro.js",
-      "workload_sha256": "93faf3d83568b89e2e2eab603294cddcca8af067cc013d787d1bd8f4887f736f",
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
       "operations_per_iteration": 1,
       "checksum": { "model": "triangular", "factor": 1 },
       "measurement": {
@@ -136,8 +136,8 @@
       "id": "many_locals_call",
       "family": "binding",
       "critical": true,
-      "workload": "benchmarks/workloads/core-micro.js",
-      "workload_sha256": "93faf3d83568b89e2e2eab603294cddcca8af067cc013d787d1bd8f4887f736f",
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
       "operations_per_iteration": 1,
       "checksum": { "model": "zero_based_triangular_plus_linear", "factor": 136 },
       "measurement": {
@@ -154,8 +154,8 @@
       "id": "property_read",
       "family": "property",
       "critical": true,
-      "workload": "benchmarks/workloads/core-micro.js",
-      "workload_sha256": "93faf3d83568b89e2e2eab603294cddcca8af067cc013d787d1bd8f4887f736f",
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
       "operations_per_iteration": 3,
       "checksum": { "model": "linear", "factor": 6 },
       "measurement": {
@@ -172,13 +172,337 @@
       "id": "array_read",
       "family": "array",
       "critical": true,
-      "workload": "benchmarks/workloads/core-micro.js",
-      "workload_sha256": "93faf3d83568b89e2e2eab603294cddcca8af067cc013d787d1bd8f4887f736f",
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
       "operations_per_iteration": 4,
       "checksum": { "model": "linear", "factor": 10 },
       "measurement": {
         "initial_iterations": 1024,
         "max_iterations": 160000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "function_call_two_args",
+      "family": "call",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "triangular", "factor": 1 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 50000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "function_call_reordered",
+      "family": "call",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "triangular", "factor": 1 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 50000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "top_level_function_call",
+      "family": "call",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "triangular", "factor": 1 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 50000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "dynamic_method_call",
+      "family": "call",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "triangular", "factor": 1 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 50000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "local_read",
+      "family": "binding",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 2,
+      "checksum": { "model": "linear", "factor": 3 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 100000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "global_read",
+      "family": "binding",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "linear", "factor": 1 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 100000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "property_dynamic_read",
+      "family": "property",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 3,
+      "checksum": { "model": "linear", "factor": 6 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 50000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "property_write",
+      "family": "property",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 3,
+      "checksum": { "model": "linear", "factor": 3 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 20000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "array_dynamic_read",
+      "family": "array",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 4,
+      "checksum": { "model": "linear", "factor": 10 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 50000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "array_write",
+      "family": "array",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 4,
+      "checksum": { "model": "linear", "factor": 4 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 20000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "empty_loop",
+      "family": "control",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "linear", "factor": 1 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 100000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "branch_arithmetic",
+      "family": "control",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "linear", "factor": 1 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 50000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "math_abs",
+      "family": "builtin",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "linear", "factor": 1 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 20000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "array_index_of",
+      "family": "builtin",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "linear", "factor": 2 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 20000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "string_slice",
+      "family": "string",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "linear", "factor": 3 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 20000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "object_allocation",
+      "family": "allocation",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "linear", "factor": 3 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 20000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "array_allocation",
+      "family": "allocation",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "linear", "factor": 3 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 20000000,
+        "min_window_ms": 500,
+        "startup_max_fraction": 0.01,
+        "calibration_safety_factor": 1.25,
+        "warmup_runs": 1,
+        "timeout_seconds": 30
+      }
+    },
+    {
+      "id": "closure_allocation_call",
+      "family": "allocation",
+      "critical": true,
+      "workload": "benchmarks/workloads/broad-micro.js",
+      "workload_sha256": "17a3684cd5656194a17a6cf08d8c347f8e1f343a86340a34d4de685da956078b",
+      "operations_per_iteration": 1,
+      "checksum": { "model": "linear", "factor": 1 },
+      "measurement": {
+        "initial_iterations": 1024,
+        "max_iterations": 20000000,
         "min_window_ms": 500,
         "startup_max_fraction": 0.01,
         "calibration_safety_factor": 1.25,

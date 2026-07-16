@@ -212,7 +212,7 @@ path runs for every `main` update, including merges and direct pushes, using
 repository, malformed or zero SHAs, or an after SHA different from
 `github.sha`. Both paths use read-only permissions without secrets. This is a
 cooperative integrity scope, not a malicious candidate sandbox. It publishes ratios
-only after a strict three-block, seven-case non-claim health check. Pending or
+only after a strict three-block, 25-case non-claim health check. Pending or
 failed runs still publish a status summary and any available provenance, but
 no ratio conclusion. Phase status identifies the failed build/measurement/
 summary stage, and even pre-orchestrator failure creates Markdown and JSON

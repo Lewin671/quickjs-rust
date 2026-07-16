@@ -66,6 +66,11 @@ Campaign working rules:
 
 ## Performance
 
+- `T018-broad-performance.md` — establish the 25-case, eight-family broad
+  black-box benchmark, then drive candidate/QuickJS-NG overall wall ns/op to
+  at most 0.50x without regressing any critical family above 1.00x or weakening
+  correctness. This is the active performance campaign; each runtime change
+  remains a separately measured, reviewable unit.
 - `T017-performance-benchmark-system.md` — versioned candidate/base/QuickJS-NG
   black-box benchmark platform. M0-M4 landed, including independent throughput,
   resource lanes, and diagnostic public-boundary Criterion lifecycle benches;

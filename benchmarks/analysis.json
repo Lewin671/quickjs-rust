@@ -1,12 +1,12 @@
 {
   "schema_version": 2,
-  "id": "quickjs-benchmark-analysis-v2",
+  "id": "quickjs-benchmark-analysis-v3",
   "compatible_measurement": {
     "schema_version": 4,
-    "protocol_id": "quickjs-measurement-protocol-v4"
+    "protocol_id": "quickjs-measurement-protocol-v5"
   },
   "protocol": {
-    "id": "quickjs-analysis-protocol-v2",
+    "id": "quickjs-analysis-protocol-v3",
     "files": [
       "scripts/benchmark-report.sh",
       "tools/__init__.py",

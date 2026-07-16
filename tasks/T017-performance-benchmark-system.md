@@ -138,7 +138,7 @@ licenses and NOTICE, a repository-owned adapter, a neutral timing protocol,
 and a case manifest with source hashes.
 
 CI layering is ready without claiming M6 or M7 completion. GitHub-hosted CI now
-publishes an informational three-block preview for the full seven-case,
+publishes an informational three-block preview for the full 25-case,
 three-role portfolio, including dynamic provenance, raw evidence,
 deterministic report, and Step Summary. Same-repository PRs use the base-owned
 `pull_request_target` harness; every `main` update uses the after revision as a

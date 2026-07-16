@@ -88,7 +88,7 @@ each script is for.
   mismatches. The script
   clears GitHub command/token channels, verifies clean sources before and after
   builds and measurement, reruns audits after measurement, emits truthful dynamic
-  receipts/manifest, runs all seven throughput cases for three blocks, and
+  receipts/manifest, runs all 25 throughput cases for three blocks, and
   renders Markdown/JSON summaries. Ratios require strict 3/3 valid-block,
   non-claim, linearity-pass health. Pending/failure status includes the active
   phase and remains publishable without a ratio conclusion. It is informational

@@ -40,20 +40,23 @@ an explicit reviewed manifest revision), even if the produced binary appears
 equivalent. The QuickJS-NG recipe explicitly enables `BUILD_QJS_LIBC` because
 the shell workload relies on normal qjs host facilities such as `scriptArgs`.
 
-The `core-black-box-v4` series deliberately supersedes v3. It gives the raw
-schema the explicit `throughput/wall_ns_per_operation` lane identity and moves
-health interpretation to analysis-v2, so v3 evidence cannot be silently read
-under the new policy. Measurement and analysis contracts remain independent,
-and protocol file identities remain portable. v3 and v4 records are never
-pooled. The v4 suite is a first-party subset derived from
-the same behavior families as
-the repository's historical QuickJS micro probe. Its T016 matrix covers plain
-calls, method calls, captured reads, captured writes, and calls with many
-locals, alongside property and array reads. It reports deterministic operation
-counts and correctness checksums but contains
-no clock. Python measures `perf_counter_ns` around a fresh shell process, so the
-metric is **amortized black-box throughput**, including startup, parsing,
-realm/setup, execution, and shutdown. It is not VM-only execution time.
+The current `broad-black-box-v1` series supersedes `core-black-box-v4`; records
+from the two series are never pooled. Broad v1 retains the seven historical
+T016 cases as a trace cohort and adds 18 holdouts that deliberately vary loop
+placement, call arity and expression shape, dynamic access, writes, allocation,
+control flow, strings, and builtins. Its 25 critical cases cover eight families:
+call (6), binding (5), property (3), array (3), control (2), builtin (2),
+string (1), and allocation (3). Tests freeze the exact case inventory and these
+family counts so a later optimization cannot silently narrow the portfolio.
+
+The workload reports deterministic operation counts and correctness checksums
+but contains no clock. Python measures `perf_counter_ns` around a fresh shell
+process, so the metric is **amortized black-box throughput**, including startup,
+parsing, realm/setup, execution, and shutdown. It is not VM-only execution time.
+The campaign target in `tasks/T018-broad-performance.md` is an overall
+candidate/QuickJS-NG geometric-mean wall-ns/op ratio at or below 0.50, with
+every critical family at or below 1.00. Those are optimization acceptance
+criteria, not an enabled CI gate or a public fixed-hardware claim.
 
 For each engine/case, the runner measures zero-iteration startup/setup, then
 calibrates the iteration count against a safety-adjusted target. The target is
@@ -660,7 +663,7 @@ source trees and reruns both selected-harness audits before summary generation.
 These checks limit accidental or cooperative drift; they do not turn candidate
 code into an adversarial sandbox. The script generates a Linux-hosted dynamic manifest and three
 verified receipts bound to the actual source SHAs, binary hashes, toolchains,
-targets, and build flags. It then runs the complete seven-case portfolio for
+targets, and build flags. It then runs the complete 25-case portfolio for
 three blocks, validates raw JSONL, and creates the deterministic report.
 
 The measurement step is bounded below the 45-minute job timeout. A pending
@@ -680,7 +683,7 @@ valid, and both candidate comparisons present. A higher ratio never fails the
 job; missing, malformed, incomplete, or unhealthy comparison evidence does and
 does not receive a ratio conclusion. The output is informational, non-gating,
 and not a fixed-hardware claim. The policy freezes the aggregate hosted
-implementation hash, direct QuickJS-NG pin, three roles, seven cases, three
+implementation hash, direct QuickJS-NG pin, three roles, 25 cases, three
 blocks, artifact retention, no threshold, no gate, and claim ineligibility.
 Any future fixed-hardware claim or gate is scoped to trusted merged commits,
 not hosted PR artifacts.

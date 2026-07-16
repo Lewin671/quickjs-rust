@@ -176,7 +176,10 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(report["health"]["blocks"]["requested"], 30)
         self.assertEqual(report["health"]["blocks"]["valid"], 30)
         self.assertEqual(report["health"]["blocks"]["invalid"], 0)
-        self.assertEqual(report["coverage"]["attempted_measurement_records"], 630)
+        self.assertEqual(
+            report["coverage"]["attempted_measurement_records"],
+            len(self.manifest.cases) * 3 * 30,
+        )
         self.assertEqual(report["health"]["policy"]["retry_policy"], "never")
         self.assertEqual(report["health"]["policy"]["outlier_policy"], "retain")
         self.assertFalse(report["claim_eligible"])
@@ -395,8 +398,13 @@ class ReportTests(unittest.TestCase):
         invalid = report["health"]["blocks"]["invalid_blocks"]
         self.assertEqual(len(invalid), 1)
         self.assertEqual(invalid[0]["triggers"][0]["reason"], "timer_limited")
-        self.assertEqual(report["coverage"]["valid_measurement_records"], 21)
-        self.assertEqual(report["coverage"]["invalid_measurement_records"], 21)
+        records_per_block = len(self.manifest.cases) * 3
+        self.assertEqual(
+            report["coverage"]["valid_measurement_records"], records_per_block
+        )
+        self.assertEqual(
+            report["coverage"]["invalid_measurement_records"], records_per_block
+        )
         self.assertEqual(
             {trigger["case_id"] for trigger in invalid[0]["triggers"]},
             {measurement["case_id"]},

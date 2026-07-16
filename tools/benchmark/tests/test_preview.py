@@ -13,6 +13,7 @@ import uuid
 from pathlib import Path
 
 from tools.benchmark.preview import (
+    HOSTED_CASES,
     RUST_BUILD_FLAGS,
     PreviewError,
     _github_url,
@@ -61,7 +62,7 @@ def report(ratio_base: float = 1.25, ratio_qjs: float = 0.8) -> dict[str, object
             "engines": engines,
         },
         "coverage": {
-            "roles": 3, "cases": 7, "blocks": 3,
+            "roles": 3, "cases": len(HOSTED_CASES), "blocks": 3,
             "comparison_input_complete": True,
         },
         "health": {
@@ -293,7 +294,7 @@ class PreviewPreparationTests(unittest.TestCase):
                 prepare(args)
                 dynamic = load_manifest(manifest_path)
                 self.assertEqual(dynamic.protocol_sha256, template.protocol_sha256)
-                self.assertEqual(len(dynamic.cases), 7)
+                self.assertEqual(len(dynamic.cases), 25)
                 rust = dynamic.build_recipes["qjs-rust"]
                 self.assertEqual(rust.flags, RUST_BUILD_FLAGS)
                 self.assertEqual(rust.lto, "off-forced-by-cargo-config")

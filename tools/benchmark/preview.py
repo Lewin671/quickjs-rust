@@ -40,6 +40,15 @@ RUST_BUILD_FLAGS = (
     "--config=profile.release.strip=\"none\"",
 )
 HARNESS_MODES = (BASE_MODE, PUSH_MODE)
+HOSTED_CASES = (
+    "plain_function_call", "method_call", "captured_read", "captured_write",
+    "many_locals_call", "property_read", "array_read", "function_call_two_args",
+    "function_call_reordered", "top_level_function_call", "dynamic_method_call",
+    "local_read", "global_read", "property_dynamic_read", "property_write",
+    "array_dynamic_read", "array_write", "empty_loop", "branch_arithmetic",
+    "math_abs", "array_index_of", "string_slice", "object_allocation",
+    "array_allocation", "closure_allocation_call",
+)
 
 
 def _integrity_scope(harness_mode: str) -> str:
@@ -226,11 +235,8 @@ def prepare(args: argparse.Namespace) -> None:
     template_path = args.template.expanduser().resolve()
     template = load_manifest(template_path)
     data = _read_object(template_path, "measurement manifest")
-    if tuple(case.id for case in template.cases) != (
-        "plain_function_call", "method_call", "captured_read", "captured_write",
-        "many_locals_call", "property_read", "array_read",
-    ):
-        raise PreviewError("hosted preview requires the complete frozen seven-case portfolio")
+    if tuple(case.id for case in template.cases) != HOSTED_CASES:
+        raise PreviewError("hosted preview requires the complete frozen broad portfolio")
     profile_id = _string(args.profile_id, "profile id")
     platform = _string(args.platform, "platform")
     rust_flags = list(RUST_BUILD_FLAGS)
@@ -414,8 +420,12 @@ def summarize(
         raise PreviewError("report is missing run, coverage, or health")
     if coverage.get("comparison_input_complete") is not True:
         raise PreviewError("report comparison input is incomplete")
-    if coverage.get("roles") != 3 or coverage.get("cases") != 7 or coverage.get("blocks") != 3:
-        raise PreviewError("hosted preview requires three roles, seven cases, and three blocks")
+    if (
+        coverage.get("roles") != 3
+        or coverage.get("cases") != len(HOSTED_CASES)
+        or coverage.get("blocks") != 3
+    ):
+        raise PreviewError("hosted preview requires three roles, the broad portfolio, and three blocks")
     blocks = health.get("blocks")
     if not isinstance(blocks, dict) or type(blocks.get("valid")) is not int:
         raise PreviewError("report is missing valid-block health")
@@ -467,7 +477,7 @@ def summarize(
         f"- Integrity scope: `{_integrity_scope(harness_mode)}`",
         "- Security boundary: candidate build/execution is not sandboxed; artifacts do not resist a malicious candidate",
         f"- Profile: `{profile_id}`",
-        "- Portfolio: `7/7 cases`, roles: `candidate/base/quickjs-ng`",
+        f"- Portfolio: `{len(HOSTED_CASES)}/{len(HOSTED_CASES)} cases`, roles: `candidate/base/quickjs-ng`",
         f"- Candidate: `{engines['candidate']['source_revision']}` / `{engines['candidate']['binary_sha256']}`",
         f"- Base: `{engines['base']['source_revision']}` / `{engines['base']['binary_sha256']}`",
         f"- QuickJS-NG: `{engines['quickjs-ng']['source_revision']}` / `{engines['quickjs-ng']['binary_sha256']}`",

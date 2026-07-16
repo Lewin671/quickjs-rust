@@ -75,7 +75,7 @@ class CliTests(unittest.TestCase):
         plan = json.loads(result.stdout)
         self.assertEqual(plan["cases"], ["plain_function_call"])
         self.assertFalse(plan["portfolio_complete"])
-        self.assertEqual(plan["protocol_id"], "quickjs-measurement-protocol-v4")
+        self.assertEqual(plan["protocol_id"], "quickjs-measurement-protocol-v5")
         self.assertEqual(plan["schema_version"], 4)
         self.assertEqual(plan["lane_id"], "throughput/wall_ns_per_operation")
         declarations = {item["role"]: item for item in plan["engine_declarations"]}

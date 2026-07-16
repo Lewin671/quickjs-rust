@@ -23,19 +23,44 @@ class ManifestTests(unittest.TestCase):
     def test_repository_manifest_and_hashes_validate(self) -> None:
         manifest = load_manifest(ROOT / "benchmarks/manifest.json")
         self.assertEqual(manifest.schema_version, 4)
+        self.assertEqual(manifest.series_id, "broad-black-box-v1")
+        self.assertEqual(manifest.protocol_id, "quickjs-measurement-protocol-v5")
         self.assertEqual(manifest.lane_id, "throughput/wall_ns_per_operation")
         self.assertEqual(
             [case.id for case in manifest.cases],
             [
                 "plain_function_call", "method_call", "captured_read",
                 "captured_write", "many_locals_call", "property_read", "array_read",
+                "function_call_two_args", "function_call_reordered",
+                "top_level_function_call", "dynamic_method_call", "local_read",
+                "global_read", "property_dynamic_read", "property_write",
+                "array_dynamic_read", "array_write", "empty_loop",
+                "branch_arithmetic", "math_abs", "array_index_of", "string_slice",
+                "object_allocation", "array_allocation", "closure_allocation_call",
             ],
         )
+        family_counts: dict[str, int] = {}
+        for case in manifest.cases:
+            family_counts[case.family] = family_counts.get(case.family, 0) + 1
+        self.assertEqual(
+            family_counts,
+            {
+                "call": 6,
+                "binding": 5,
+                "property": 3,
+                "array": 3,
+                "control": 2,
+                "builtin": 2,
+                "string": 1,
+                "allocation": 3,
+            },
+        )
+        self.assertTrue(all(case.critical for case in manifest.cases))
         self.assertTrue(all(not Path(identifier).is_absolute() for identifier in manifest.protocol_file_ids))
         self.assertEqual(
             manifest.protocol_file_ids,
             (
-                "benchmarks/workloads/core-micro.js",
+                "benchmarks/workloads/broad-micro.js",
                 "scripts/benchmark.sh",
                 "tools/__init__.py",
                 "tools/benchmark/__init__.py",
