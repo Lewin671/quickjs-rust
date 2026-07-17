@@ -6,7 +6,7 @@ use std::{collections::HashMap, rc::Rc};
 use crate::CallEnv;
 
 use crate::{
-    Function, ObjectRef, RuntimeError, Value, call_function,
+    Function, ObjectRef, RuntimeError, Value, call_field_initializer, call_function,
     function::{
         CROSS_REALM_TYPE_ERROR_PROTOTYPE, CompiledUserFunction, InstancePrivateElement,
         PrivateFieldInit,
@@ -336,13 +336,7 @@ impl Vm<'_> {
         this_value: Value,
     ) -> Result<Value, RuntimeError> {
         let mut env = self.current_env();
-        let result = call_function(
-            Value::Function(thunk.clone()),
-            this_value,
-            Vec::new(),
-            &mut env,
-            false,
-        );
+        let result = call_field_initializer(thunk, this_value, &mut env);
         self.apply_env(env);
         result
     }
@@ -500,13 +494,7 @@ pub(crate) fn apply_instance_private_element(
     match &element.field_initializer {
         Some(field) => {
             let value = match &field.initializer {
-                Some(thunk) => call_function(
-                    Value::Function(thunk.clone()),
-                    this_value.clone(),
-                    Vec::new(),
-                    env,
-                    false,
-                )?,
+                Some(thunk) => call_field_initializer(thunk, this_value.clone(), env)?,
                 None => Value::Undefined,
             };
             if !storage.add_field(binding.id.clone(), value) {

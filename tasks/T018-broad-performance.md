@@ -2529,6 +2529,69 @@ This representation change materially improves an external typed-array
 workload while preserving the non-target regression guard; B4 and B5 remain
 active.
 
+The exact-SHA hosted workflows for
+`c13aaa5004b4b4537c2110e7bca4f91679dcbf28` all completed successfully. CI
+passed the comparison, Test262 subset, and full check jobs. Exact Test262
+coverage remained 42,671 pass, one fail, zero timeout, and one actionable gap;
+the burndown and comparison-case artifact SHA-256 values are
+`ff270ba5c2e1927c4774f3d95357ee2ee51b6a89e58fdee6c63453dbdca55d72`
+and `3ba9a1a20f4cd430f9f33471ca97652a67a12602740b26453f2e06fd63a58329`.
+The hosted broad preview retained 25/25 cases, 225/225 eligible measurements,
+and all 75 linearity pairs. Its 1.016688x candidate/base result was
+inconclusive on the variable hosted runner; candidate/QuickJS-NG was
+0.366655x, with allocation still failing B4 at 2.706040x. The hosted external
+preview still failed B5 at 10.804721x QuickJS-NG for 5/5 JetStream cases,
+6.061909x for 7/14 Kraken cases, and 11.057512x for 23/26 SunSpider cases.
+Hosted broad raw/report SHA-256 are
+`9e8e3be5cf6a16caa674bf3dbc1a664dabbcfc5598fc14b701c912fa6e5e19de`
+and `1d7fa415b203f3e74d31ef6797f98c5a953d42e81d236efbd246825d710d588f`;
+hosted external raw/report SHA-256 are
+`4ab4e3d229db2ee447790495d7231a4dfe73d9d5116f6c7676770c72c8d01556`
+and `e952355b78ed56b1177b13f3207a2ee81cd30ab19816c5856d5e2e9e7077d01f`.
+
+The forty-sixth v2 unit follows a fresh external class-heavy profile into the
+general field-initializer call path. Public, private, instance, and static
+fields previously evaluated every initializer thunk through a compatibility
+environment, allocating argument and binding containers even when bytecode had
+no direct eval, closure creation, `super` operation, complex parameters, or
+other observable dynamic environment state. Simple field initializers now use
+the existing slot-backed leaf-call path for their receiver and captured values;
+the guard leaves every semantic-heavy initializer on the complete call path.
+A focused test covers both an earlier-field `this` read and capture of the class
+inner binding. Existing closure, derived-constructor, proxy, private-field, and
+`super` tests continue to exercise the preserved slow paths. No workload name,
+source path, iteration count, checksum, or expected benchmark value appears in
+the implementation.
+
+Against base binary SHA-256
+`d2bda569d41560a1e00607163a0fe5f258d2c46257b8ae362231d0e02fa093f7`,
+candidate binary SHA-256
+`d4d4930db2bb3e8939ae9228ea979dbe25c34d2bf17ddd5aad136d7b6c6d957d`
+cut the independent JetStream class-field raytrace case to 0.862964x base.
+Complete one-block candidate and same-window base external previews retained
+identical coverage at 5/5 JetStream, 11/14 Kraken, and 23/26 SunSpider.
+Common-case candidate/base suite geometric means were 0.972917x, 0.998275x,
+and 0.999306x. Candidate/QuickJS-NG still failed B5 at 7.776865x, 4.702112x,
+and 6.167400x; the improved raytrace case itself remained 11.793273x.
+Candidate external raw/report SHA-256 are
+`c432e480e5a3f9b7f28422b208e6255d6095db323ca6cf0d8d85036b62d85dec`
+and `eca416d406b986635b09c66de587387b1327d9df64d41e5fa4be409baae8100e`;
+base raw/report SHA-256 are
+`62f34e1a24e4e0993bb7d6b152aa3513808869aa60872e943c24310352027a5e`
+and `bfbd9b2a358aeacb14f9e630ec332d7d7ce689708534d87cbd83343bbecc3e64`.
+
+The complete three-role broad development diagnostic produced 225/225
+eligible exact-checksum measurements, zero non-OK samples, and 600 linearity
+samples with all 75 engine/case pairs passing. Candidate/base was 1.003467x
+overall; family ratios ranged from 0.997485x for binding through 1.057264x for
+the single string case, which was also the worst case. Candidate/QuickJS-NG was
+0.194702x overall, but allocation still failed B4 at 1.138514x. The strict
+analyzer correctly rejected the receipt-less dirty development binaries, so
+this is regression evidence rather than a fixed-hardware claim. Broad raw
+SHA-256: `d1db2d4998b95ad988670acc4b31da7219d28f300824c5f4055629ce7e36b962`.
+This unit improves a class-heavy external program while preserving both other
+external suites and the internal regression guard; B4 and B5 remain active.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

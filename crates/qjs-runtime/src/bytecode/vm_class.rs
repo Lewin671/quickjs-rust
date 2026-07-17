@@ -8,7 +8,8 @@ use crate::{
     to_property_key_value,
 };
 use crate::{
-    call_function, construct_function, property_value_key_with_receiver, value_prototype_slot,
+    call_field_initializer, construct_function, property_value_key_with_receiver,
+    value_prototype_slot,
 };
 
 use super::ir::{
@@ -544,13 +545,7 @@ impl Vm<'_> {
         this_value: Value,
     ) -> Result<Value, RuntimeError> {
         let mut env = self.current_env();
-        let result = call_function(
-            Value::Function(thunk.clone()),
-            this_value,
-            Vec::new(),
-            &mut env,
-            false,
-        );
+        let result = call_field_initializer(thunk, this_value, &mut env);
         self.apply_env(env);
         result
     }

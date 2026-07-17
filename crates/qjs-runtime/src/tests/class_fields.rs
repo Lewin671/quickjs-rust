@@ -23,6 +23,17 @@ fn fields_initialize_in_definition_order_seeing_earlier_fields() {
 }
 
 #[test]
+fn simple_field_initializers_keep_receiver_and_class_capture() {
+    assert_eq!(
+        eval(
+            "class C { a = 1; b = this.a + 1; self = C; } \
+             let c = new C(); [c.b, c.self === C].join(':');"
+        ),
+        Ok(Value::String("2:true".to_owned().into()))
+    );
+}
+
+#[test]
 fn field_shadows_prototype_method_and_is_own_enumerable() {
     assert_eq!(
         eval(

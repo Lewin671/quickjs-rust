@@ -350,13 +350,7 @@ pub(crate) fn initialize_instance_fields(
         match element {
             InstanceElementInitializer::PublicField(field) => {
                 let value = match &field.initializer {
-                    Some(thunk) => call_function(
-                        Value::Function(thunk.clone()),
-                        this_value.clone(),
-                        Vec::new(),
-                        env,
-                        false,
-                    )?,
+                    Some(thunk) => call_field_initializer(thunk, this_value.clone(), env)?,
                     None => Value::Undefined,
                 };
                 crate::bytecode::install_field_value(this_value, field.key.clone(), value, env)?;
@@ -369,6 +363,32 @@ pub(crate) fn initialize_instance_fields(
         }
     }
     Ok(())
+}
+
+/// Evaluates a class field initializer with the receiver supplied by class
+/// construction. Simple initializers have no observable compatibility
+/// environment: their receiver and captures are already represented by VM
+/// slots, and direct eval/closure/super cases are excluded by the leaf guard.
+/// Run those thunks through the same allocation-light path as ordinary leaf
+/// calls; semantic-heavy initializers retain the complete call machinery.
+pub(crate) fn call_field_initializer(
+    thunk: &Function,
+    this_value: Value,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let callee = Value::Function(thunk.clone());
+    if is_direct_leaf_function(&callee) {
+        return call_direct_leaf_function(
+            callee,
+            this_value,
+            &[],
+            env,
+            env.module_host(),
+            #[cfg(feature = "agents")]
+            env.agent_context(),
+        );
+    }
+    call_function(callee, this_value, Vec::new(), env, false)
 }
 
 fn finish_derived_construct(
@@ -881,10 +901,9 @@ fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode) -> bool {
         && !function.is_generator
         && !function.is_async
         && !function.is_class_constructor
-        && !function.is_field_initializer
         && !function.has_name_binding
         && !function.immutable_name_binding
-        && function.immutable_env_binding.is_none()
+        && (function.immutable_env_binding.is_none() || function.is_field_initializer)
         && function.deopt_bindings.is_none()
         && function.with_stack.is_empty()
         && function.params.is_simple()
