@@ -32,6 +32,21 @@ impl Vm<'_> {
             .map(ObjectRef::has_own_index_property)
     }
 
+    /// Whether an array uses this realm's ordinary Array.prototype, either via
+    /// the implicit literal-array slot or the explicit slot installed by the
+    /// intrinsic `new Array(...)` constructor.
+    pub(super) fn array_uses_realm_prototype(&mut self, array: &crate::ArrayRef) -> bool {
+        if array.uses_default_prototype() {
+            return true;
+        }
+        if self.array_prototype_cache.is_none() {
+            self.array_prototype_cache = array_prototype(&self.realm_env());
+        }
+        self.array_prototype_cache
+            .as_ref()
+            .is_some_and(|prototype| array.uses_prototype_object(prototype))
+    }
+
     pub(super) fn symbol_primitive_set_fails(
         &self,
         object: &Value,
@@ -1005,4 +1020,24 @@ pub(super) fn array_index_from_number(number: f64) -> Option<usize> {
         return None;
     }
     Some(number as usize)
+}
+
+/// Returns a canonical string array index (`"0"` through `"4294967294"`).
+///
+/// Compound assignments and update expressions apply `ToPropertyKey` once
+/// before their read/write pair, so a computed numeric index reaches `SetProp`
+/// as a string. Recognizing that already-coerced primitive lets the dense-array
+/// store use the same semantics-preserving fast path as a simple numeric write.
+pub(super) fn array_index_from_string(key: &str) -> Option<usize> {
+    let bytes = key.as_bytes();
+    if bytes.is_empty()
+        || (bytes.len() > 1 && bytes[0] == b'0')
+        || !bytes.iter().all(u8::is_ascii_digit)
+    {
+        return None;
+    }
+    key.parse::<u32>()
+        .ok()
+        .filter(|index| *index < u32::MAX)
+        .map(|index| index as usize)
 }

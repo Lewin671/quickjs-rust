@@ -1,7 +1,9 @@
 use super::util::{stack_underflow, typeof_value};
 use super::vm_call::user_bytecode_function;
 use super::vm_iter::DelegateStep;
-use super::vm_props::{array_index_from_number, get_property, get_property_key};
+use super::vm_props::{
+    array_index_from_number, array_index_from_string, get_property, get_property_key,
+};
 use super::vm_result::{Completion, FunctionBytecodeResult, ResumeMode};
 use super::vm_set::set_property_key;
 use super::vm_try::TryFrame;
@@ -1250,12 +1252,16 @@ impl<'a> Vm<'a> {
         // Fast path: writing a real array index to a plain array with the
         // default prototype, no own descriptor at that index, and no exotic
         // inherited index accessor. This is the dominant pattern in tight
-        // `a[i] = x` append loops, so it skips the string-key allocation and
-        // the per-write prototype-chain setter probe taken by the generic path.
-        if let Value::Number(number) = &key_value
-            && let Some(index) = array_index_from_number(*number)
+        // `a[i] = x` append loops and computed compound updates. The latter
+        // arrive as canonical string keys because the compiler must perform
+        // observable `ToPropertyKey` exactly once before the read/write pair.
+        let array_index = match &key_value {
+            Value::Number(number) => array_index_from_number(*number),
+            Value::String(key) => array_index_from_string(key),
+            _ => None,
+        };
+        if let Some(index) = array_index
             && let Some(Value::Array(elements)) = self.stack.last()
-            && elements.uses_default_prototype()
             && elements.dense_index_store_eligible(index)
         {
             let elements = elements.clone();
@@ -1265,7 +1271,9 @@ impl<'a> Vm<'a> {
             // would have to honor. Both checks are O(1), so a tight `a[i] = x`
             // loop avoids the string-key allocation and prototype walk of the
             // generic path.
-            if !self.array_prototype_has_index_property().unwrap_or(true) {
+            if self.array_uses_realm_prototype(&elements)
+                && !self.array_prototype_has_index_property().unwrap_or(true)
+            {
                 self.pop()?;
                 elements.set(index, value.clone());
                 self.stack.push(value);

@@ -209,6 +209,17 @@ impl ArrayRef {
         self.0.uses_default_prototype()
     }
 
+    /// Whether this array's explicit prototype slot names the supplied realm
+    /// Array.prototype object. `new Array(...)` records the intrinsic object
+    /// explicitly, while array literals normally use the implicit default
+    /// slot; both representations have ordinary array prototype semantics.
+    pub(crate) fn uses_prototype_object(&self, prototype: &ObjectRef) -> bool {
+        matches!(
+            self.0.prototype_override(),
+            Some(Some(Prototype::Object(actual))) if actual.ptr_eq(prototype)
+        )
+    }
+
     /// Reads every element `0..length` directly out of dense storage as an
     /// argument list, returning `None` when a generic property lookup is needed
     /// instead. The fast path requires fully dense storage (length matches the

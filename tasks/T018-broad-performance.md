@@ -1795,6 +1795,59 @@ local results are evidence for the mechanism and regression boundary only;
 the next complete hosted internal and external artifacts decide campaign
 progress.
 
+Hosted run `29555075595` at `515e2a77` accepted the thirty-second unit without
+a correctness or CI failure. Its internal candidate/QuickJS-NG aggregate was
+0.352487x and candidate/base was 1.004979x, effectively neutral at preview
+resolution. Against the preceding external artifact on identical case sets,
+the four common JetStream cases improved from 17.9070x to 17.0478x and the 23
+common SunSpider cases improved from 26.3519x to 21.9527x; Kraken's two common
+cases remained neutral at 2.4610x versus 2.4543x. Comparable coverage increased
+without a loss: JetStream regained `stanford-crypto-aes`, and Kraken gained
+three Stanford crypto ports. The internal report SHA-256 is
+`3100e77066d3128e7298edc82c0ceb74b85cef80d46976631fb5073e78c1bf30`;
+the external report SHA-256 is
+`a1f250f4d832c84cdaecc46223051129d2bae1ad82445b31a00ca64ce3ee4af1`.
+
+The thirty-third v2 unit addresses a second external profile rather than an
+internal case. SunSpider `bitops-nsieve-bits` spent 723 of 724 macOS samples in
+its sieve loop, dominated by `Vm::set_property_value`, `current_env`,
+`CallEnv::snapshot_locals`, string cloning, hashing, allocation, and release.
+Computed compound assignments and update expressions correctly apply
+`ToPropertyKey` once before their read/write pair, so numeric indices reach the
+store as canonical strings. The dense array store recognized only uncoerced
+numbers. In addition, the intrinsic `new Array(length)` constructor records the
+realm's ordinary Array.prototype explicitly, while the fast path recognized
+only the implicit prototype slot used by literals. The general fix accepts a
+canonical string array index and either representation of the exact realm
+Array.prototype. Non-canonical strings, custom prototypes, proxies, inherited
+indexed properties, own special descriptors, frozen arrays, and non-extensible
+arrays retain ordinary `[[Set]]` behavior. The implementation has no workload
+identity, source path, iteration count, or checksum input.
+
+Three fresh-process runs reduced `bitops-nsieve-bits` hot wall time from
+approximately 1.68 s to 0.21-0.22 s (about 7.7x faster). The structurally
+different `string-validate-input` and `access-nbody` ports also improved from
+approximately 0.83 s to 0.77 s and 0.60 s to 0.56 s, respectively. The complete
+45-case local external preview retained or increased comparable coverage and
+reported 12.719x for all 5 JetStream ports, 5.965x for 8/14 Kraken ports, and
+11.357x for 23/26 SunSpider ports. These remain far above the <=1.00x external
+completion guard and have zero qjs-rust wins, so the campaign remains active.
+The external raw SHA-256 is
+`85ee263c6e0b12a19f38093634c588c42e8ca8eb153f8c074af3d0c56f6c63f2`;
+the report SHA-256 is
+`c3cad7c6a227c6af73c6c071bc61fc0b63a86e76dca37fe2b9aed86bdaf65137`.
+
+A separate candidate/base/QuickJS-NG three-block broad diagnostic used a clean
+detached `515e2a77` base binary and completed all 25 cases with exact checksums.
+Its raw median diagnostic was 0.9714x candidate/base; the directly affected
+internal `array_write` simple-assignment shape was neutral at 1.0083x. Because
+the candidate came from a dirty development tree without build receipts, the
+strict report correctly rejected the run as unverified; this is regression
+diagnostic evidence only, not a campaign score. Raw SHA-256:
+`617217da69fe591f6f2c30894680c432cc3aeded44b3f4481f03b626439cc0a3`.
+The next hosted receipt-bound artifact decides whether this unit counts as
+campaign progress.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

@@ -134,3 +134,39 @@ fn dense_index_store_preserves_prototype_set_semantics() {
         Ok(Value::String("0:x".to_owned().into()))
     );
 }
+
+/// Computed compound assignments and updates cache a property key after
+/// `ToPropertyKey`. Canonical string indices may still use dense storage, but
+/// inherited setters and non-index strings must retain ordinary `[[Set]]`
+/// behavior.
+#[test]
+fn dense_compound_index_store_preserves_property_semantics() {
+    assert_eq!(
+        eval(
+            "let xs = new Array(8); xs[7] = 15; xs[7] &= 6; xs[7]++; \
+             xs[7] + ':' + xs.length;"
+        ),
+        Ok(Value::String("7:8".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let hits = 0; \
+             Object.defineProperty(Array.prototype, '7', { \
+                 get: function() { return 3; }, \
+                 set: function(value) { hits += value; }, \
+                 configurable: true \
+             }); \
+             let xs = new Array(8); xs[7] += 4; xs[7]++; \
+             let result = hits + ':' + xs.hasOwnProperty('7'); \
+             delete Array.prototype['7']; result;"
+        ),
+        Ok(Value::String("11:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let xs = [10, 20]; xs['1.0'] = 4; xs['1.0'] += 3; \
+             xs[1] + ':' + xs['1.0'] + ':' + xs.length;"
+        ),
+        Ok(Value::String("20:7:2".to_owned().into()))
+    );
+}
