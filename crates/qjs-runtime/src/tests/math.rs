@@ -273,3 +273,19 @@ fn preserves_math_abs_counted_loop_observability() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn detached_unary_math_natives_preserve_primitive_and_coercion_semantics() {
+    assert_eq!(
+        eval(
+            "(function () { var sin = Math.sin; var sqrt = Math.sqrt; var ceil = Math.ceil; return sin(0, 99) === 0 && sqrt(81) === 9 && 1 / ceil(-0.1) === -Infinity && Number.isNaN(sin()); })();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "(function () { var sin = Math.sin; var sqrt = Math.sqrt; var conversions = 0; var value = { valueOf: function () { conversions += 1; return 0; } }; return sin(value) === 0 && sqrt('81') === 9 && conversions === 1; })();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

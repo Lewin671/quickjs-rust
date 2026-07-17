@@ -2100,6 +2100,53 @@ and `5cf68587eacbee05051a456df307b0f1adae7368b4576a18f1710948cca53ed1`.
 This unit is a general allocation improvement, but B4 and B5 remain active and
 the exact-SHA hosted artifacts remain authoritative.
 
+The thirty-ninth v2 unit is selected entirely from external profiles rather
+than an internal broad case. Fresh samples of the pinned SunSpider `3d-morph`
+and `access-nbody` ports shared the same general native-call hotspot: detached
+`Math.sin` and direct `Math.sqrt` calls built the caller's complete environment,
+then snapshotted and applied it after a pure numeric operation. The native-call
+fast path now handles the common unary Math operations when the first argument
+is already a number or is absent. Strings, objects, and every observable
+coercion still take the general path; focused tests cover detached calls,
+ignored extra arguments, negative zero, missing arguments, string conversion,
+and an object `valueOf` side effect. The implementation has no benchmark name,
+source path, iteration count, or checksum input and applies to ordinary code in
+every workload.
+
+Against clean base binary SHA-256
+`02e66c1b0c80f7815335ac04a5e632c3cfa6985200307aad2080f65bf6301428`,
+candidate binary SHA-256
+`f34503c0863f42860031e786119f74222106bc3d532b579ff51881ded1a526e9`
+reduced nine-block interleaved source medians to approximately 0.200x for
+`3d-morph` and 0.297x for `access-nbody`; unrelated `math-cordic` remained near
+neutral. The complete local three-role broad diagnostic retained all 25 cases,
+225 eligible exact-checksum measurements, and 600 passing linearity samples.
+Candidate/base was 0.997809x overall; family ratios ranged from 0.973467x for
+string to 1.004860x for array. Candidate/QuickJS-NG was 0.194276x overall, but
+allocation still failed B4 at 1.126177x. The strict analyzer correctly rejected
+the receipt-less local binaries, so these remain regression diagnostics. Broad
+raw SHA-256:
+`fa844fa9574afeb18a234a906b908dbfe9649f97bd50a4c5f04b41a8bfe1c6a6`.
+
+Independent one-block full external A/B previews preserved 5/5 JetStream and
+23/26 SunSpider coverage, while Kraken coverage improved from 8/14 to 10/14:
+`audio-beat-detection` and `audio-fft` changed from timeout to comparable.
+Across common cases the suite candidate/base geometric means were 0.976217x,
+0.937224x, and 0.862132x. SunSpider `3d-morph`, `access-nbody`, and
+`math-partial-sums` measured 0.187441x, 0.285967x, and 0.700497x respectively.
+Candidate/QuickJS-NG suite diagnostics were 9.537662x, 5.704433x, and 7.339977x,
+so B5 remains far from complete. Eleven-block interleaved reruns reduced the
+two apparent unrelated regressions to approximately 1.002x for
+`string-validate-input` and 0.992x for `date-format-xparb`. Candidate raw/report
+SHA-256 are
+`5b4c3c5ceb637af4d0bb45045c1fe3c6a0b0cd1681bf9815081e6906fd9d4305`
+and `9721bd8efedad67801b941add6a3def375871e22d268b5fbdbb7e9c3eb14d247`;
+base raw/report SHA-256 are
+`db17d2b062606fd9cfed22b3e93ab5d69a1970a77ad017179cec6ac80770e53f`
+and `9966d978fc232aa2719937e5c851a3ae2b9920c446b9cc08aaea9ddcf30ec4c8`.
+This is external generalization progress, not completion: the external suites
+still lose every comparable case to QuickJS-NG and both B4 and B5 remain active.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

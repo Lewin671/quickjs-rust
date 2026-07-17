@@ -362,21 +362,31 @@ pub(super) fn try_fast_global_native_call(
             };
             Ok(Value::Number(crate::number::parse_float_string(&source)))
         }
-        NativeFunction::MathAbs => {
-            let number = match arguments.first().cloned().unwrap_or(Value::Undefined) {
-                Value::Number(number) => number,
-                Value::Undefined => f64::NAN,
-                _ => return None,
-            };
-            Ok(Value::Number(number.abs()))
-        }
-        NativeFunction::MathFloor => {
-            let number = match arguments.first().cloned().unwrap_or(Value::Undefined) {
-                Value::Number(number) => number,
-                Value::Undefined => f64::NAN,
-                _ => return None,
-            };
-            Ok(Value::Number(number.floor()))
+        NativeFunction::MathAbs
+        | NativeFunction::MathAcos
+        | NativeFunction::MathAcosh
+        | NativeFunction::MathAsin
+        | NativeFunction::MathAsinh
+        | NativeFunction::MathAtan
+        | NativeFunction::MathAtanh
+        | NativeFunction::MathCbrt
+        | NativeFunction::MathCeil
+        | NativeFunction::MathCos
+        | NativeFunction::MathCosh
+        | NativeFunction::MathExp
+        | NativeFunction::MathExpm1
+        | NativeFunction::MathFloor
+        | NativeFunction::MathLog
+        | NativeFunction::MathLog1p
+        | NativeFunction::MathLog10
+        | NativeFunction::MathLog2
+        | NativeFunction::MathSin
+        | NativeFunction::MathSinh
+        | NativeFunction::MathSqrt
+        | NativeFunction::MathTan
+        | NativeFunction::MathTanh
+        | NativeFunction::MathTrunc => {
+            Ok(Value::Number(fast_primitive_unary_math(native, arguments)?))
         }
         NativeFunction::MathRandom if arguments.is_empty() => crate::math::native_math_random(),
         NativeFunction::ArrayPrototypeIndexOf => Ok(crate::array::fast_dense_array_index_of(
@@ -469,6 +479,42 @@ pub(super) fn try_fast_global_native_call(
         NativeFunction::Test262AssertSameValue => {
             crate::global::native_test262_assert_same_value(arguments)
         }
+        _ => return None,
+    };
+    Some(result)
+}
+
+fn fast_primitive_unary_math(native: NativeFunction, arguments: &[Value]) -> Option<f64> {
+    let number = match arguments.first() {
+        Some(Value::Number(number)) => *number,
+        None | Some(Value::Undefined) => f64::NAN,
+        _ => return None,
+    };
+    let result = match native {
+        NativeFunction::MathAbs => number.abs(),
+        NativeFunction::MathAcos => number.acos(),
+        NativeFunction::MathAcosh => number.acosh(),
+        NativeFunction::MathAsin => number.asin(),
+        NativeFunction::MathAsinh => number.asinh(),
+        NativeFunction::MathAtan => number.atan(),
+        NativeFunction::MathAtanh => number.atanh(),
+        NativeFunction::MathCbrt => number.cbrt(),
+        NativeFunction::MathCeil => number.ceil(),
+        NativeFunction::MathCos => number.cos(),
+        NativeFunction::MathCosh => number.cosh(),
+        NativeFunction::MathExp => number.exp(),
+        NativeFunction::MathExpm1 => number.exp_m1(),
+        NativeFunction::MathFloor => number.floor(),
+        NativeFunction::MathLog => number.ln(),
+        NativeFunction::MathLog1p => number.ln_1p(),
+        NativeFunction::MathLog10 => number.log10(),
+        NativeFunction::MathLog2 => number.log2(),
+        NativeFunction::MathSin => number.sin(),
+        NativeFunction::MathSinh => number.sinh(),
+        NativeFunction::MathSqrt => number.sqrt(),
+        NativeFunction::MathTan => number.tan(),
+        NativeFunction::MathTanh => number.tanh(),
+        NativeFunction::MathTrunc => number.trunc(),
         _ => return None,
     };
     Some(result)
