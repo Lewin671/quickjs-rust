@@ -519,6 +519,35 @@ fn named_get_fast_path_preserves_observable_prototype_fallbacks() {
 }
 
 #[test]
+fn primitive_named_get_uses_realm_prototypes_without_frame_shadowing() {
+    assert_eq!(
+        eval_bytecode_source(
+            "let symbol = Symbol('marker'); \
+             function read(String, Number, Boolean, BigInt, Symbol) { \
+                 return 'ab'.charAt(1) + ':' + (12).toString() + ':' + \
+                     true.toString() + ':' + (3n).toString() + ':' + symbol.description; \
+             } \
+             read(null, null, null, null, null);"
+        ),
+        Ok(Value::String("b:12:true:3:marker".to_owned().into()))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "let hits = 0; let original = String.prototype.charAt; \
+             Object.defineProperty(String.prototype, 'charAt', { \
+                 configurable: true, get: function() { hits++; return original; } \
+             }); \
+             let result = 'xy'.charAt(1); \
+             Object.defineProperty(String.prototype, 'charAt', { \
+                 configurable: true, writable: true, value: original \
+             }); \
+             result + ':' + hits;"
+        ),
+        Ok(Value::String("y:1".to_owned().into()))
+    );
+}
+
+#[test]
 fn named_get_cache_tracks_receiver_identity_and_property_mutations() {
     assert_eq!(
         eval_bytecode_source(

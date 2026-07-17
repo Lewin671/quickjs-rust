@@ -18,6 +18,14 @@ use super::vm_set::property_set_uses_setter;
 use crate::CallEnv;
 
 impl Vm<'_> {
+    fn primitive_prototype_env(&self) -> CallEnv {
+        if self.env.dynamic_function_realm_global().is_some() {
+            self.current_env()
+        } else {
+            self.realm_env()
+        }
+    }
+
     /// Whether the realm's current Array.prototype owns any indexed property.
     /// Returns `None` when no Array.prototype is reachable. The Array.prototype
     /// object is cached so the hot path skips the `Array`-binding lookup; the
@@ -116,9 +124,12 @@ impl Vm<'_> {
     /// data property (no getter). Returns `None` to signal that the generic
     /// clone-and-writeback path is required: any accessor descriptor, a Proxy
     /// target, or a primitive base that needs intrinsic lookups not covered
-    /// here. Prototype intrinsics are read out of `&self.globals` directly,
-    /// avoiding the full `current_env()` map copy on the dominant method-call
-    /// and member-read patterns.
+    /// here. Prototype intrinsics normally use a realm-only environment,
+    /// avoiding the full `current_env()` frame materialization on the dominant
+    /// method-call and member-read patterns. The marked-realm compatibility
+    /// path retains the complete frame view. Ordinary frame bindings named
+    /// `String`, `Number`, and so on cannot affect a primitive value's
+    /// intrinsic prototype.
     pub(super) fn try_direct_get(&self, object: &Value, key: &PropertyKey) -> Option<Value> {
         match key {
             PropertyKey::String(name) => self.try_direct_get_string(object, name),
@@ -130,7 +141,7 @@ impl Vm<'_> {
         match object {
             Value::Object(object) => {
                 if symbol::is_symbol_primitive(object) {
-                    let env = self.current_env();
+                    let env = self.primitive_prototype_env();
                     return data_property_value(inherited_primitive_prototype_descriptor(
                         &env, "Symbol", key,
                     ));
@@ -217,25 +228,25 @@ impl Vm<'_> {
                 if let Some(value) = string::string_property(value, key) {
                     return Some(value);
                 }
-                let env = self.current_env();
+                let env = self.primitive_prototype_env();
                 data_property_value(inherited_primitive_prototype_descriptor(
                     &env, "String", key,
                 ))
             }
             Value::Number(_) => {
-                let env = self.current_env();
+                let env = self.primitive_prototype_env();
                 data_property_value(inherited_primitive_prototype_descriptor(
                     &env, "Number", key,
                 ))
             }
             Value::Boolean(_) => {
-                let env = self.current_env();
+                let env = self.primitive_prototype_env();
                 data_property_value(inherited_primitive_prototype_descriptor(
                     &env, "Boolean", key,
                 ))
             }
             Value::BigInt(_) => {
-                let env = self.current_env();
+                let env = self.primitive_prototype_env();
                 data_property_value(inherited_primitive_prototype_descriptor(
                     &env, "BigInt", key,
                 ))

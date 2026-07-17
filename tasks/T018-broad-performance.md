@@ -2341,6 +2341,69 @@ This general global-binding optimization materially improves two unrelated
 external sources while preserving the internal regression guard; B4 and B5
 remain active.
 
+The exact-SHA hosted workflows for
+`a8726fb030e34ffd72d38240a8c6d5b017cbfe41` all completed successfully. CI
+passed the comparison, Test262 subset, and full check jobs. Exact Test262
+coverage remained 42,671 pass, one fail, zero timeout, and one actionable gap.
+The hosted broad preview retained 25/25 cases, 3/3 valid blocks, and passing
+linearity, but its 1.0179x candidate/base result was classified inconclusive:
+several unrelated cases moved together on the variable hosted runner. The
+candidate/QuickJS-NG diagnostic was 0.3574x. More importantly for the campaign
+boundary, the hosted external preview still failed B5 by a wide margin at
+12.608x QuickJS-NG for 5/5 JetStream cases, 7.736x for 7/14 Kraken cases, and
+11.684x for 23/26 SunSpider cases. Hosted broad raw/report SHA-256 are
+`e40fbd919b692b2ba31f0b8c08588a65a3258646e19535f9e58550c8c2039514`
+and `f4b208db24a1b567506e9a7571973b4a6f1308966276128205a538fe4ce4f113`;
+hosted external raw/report SHA-256 are
+`68081a1cf2f8a0b841241d5740db57b3059fa2b54697f21d9f9d87584e631e8b`
+and `94414e047fd7fb53be81b35dd98949ef3ee348957e8396f1e936f308fbccc284`.
+
+The forty-third v2 unit follows the external string profile into primitive
+named-property reads. Looking up a data method on a string, number, boolean,
+bigint, or symbol previously materialized every live frame binding into a
+`CallEnv`, even though primitive `[[Get]]` resolves the realm's intrinsic
+prototype and frame bindings named `String`, `Number`, and so on are
+irrelevant. The direct path now uses an empty-frame realm view. Accessor
+descriptors still take the observable slow path. A cached dynamic-realm marker
+keeps indirect eval and dynamically constructed functions on the complete
+frame view; this guard was added after the full runtime suite caught the
+cross-realm case during development. Tests cover all five primitive families,
+frame-name shadowing, a prototype getter side effect, and the pre-existing
+marked-realm behavior. The implementation contains no workload name, source
+path, iteration count, checksum, or expected result.
+
+Against base binary SHA-256
+`8b566b3cb05d6570273b20248654403ba92af6288ecf487bd127c437b631a70b`,
+candidate binary SHA-256
+`2a7d910a70158e6c92f22674447bbbe56d515b6e4918d11ecce47b22cb609364`
+improved two independent external string programs in eleven-block interleaved
+runs: `string-validate-input` measured 0.778007x base and `string-base64`
+0.637258x. `crypto-md5` and `crypto-sha1` were neutral at 1.000493x and
+0.999578x, so they are not counted as wins. Complete corrected-candidate and
+same-window base external previews retained identical coverage at 5/5
+JetStream, 10/14 Kraken, and 23/26 SunSpider. Common-case candidate/base suite
+geometric means were 0.981036x, 0.971765x, and 0.949689x; candidate/QuickJS-NG
+remained far from B5 at 9.456082x, 5.507269x, and 6.260206x. Candidate external
+raw/report
+SHA-256 are
+`739ed4b89f9c96218e71fe4b6c14b68fe107bb00d7b4ec517dc6411e3afa9ed5`
+and `7fcbc241d7416d2aaae25b4ca559a77238590bc792ff15d43e78dc08a6735b09`;
+base raw/report SHA-256 are
+`f39138977bab8708d557d150d02ddf9a030dd1da92a935a3cb64da9151396483`
+and `0c622af88447819a17350cef152a2ee89288db23fa4d6ca29a6f9bb53b11d654`.
+
+The corrected candidate's complete broad physical plan produced all 1,625
+records, 225/225 eligible formal measurements, zero non-OK samples, and 600
+passing linearity samples. Candidate/base was 1.001860x overall; family ratios
+ranged from 0.973575x for string through 1.006763x for call. The intended
+`string_slice` case measured 0.973575x base. Candidate/QuickJS-NG was 0.194900x
+overall, but allocation still failed B4 at 1.135609x. The strict analyzer
+correctly rejected the receipt-less dirty development binaries, so these are
+regression diagnostics rather than a fixed-hardware claim. Broad raw SHA-256
+is `c60e47562d42e47cc83c8c6e60bd07aa71be1406e7b603ebbc36c7236c582342`.
+This unit generalizes across independent external string programs while
+keeping the broad regression guard neutral; B4 and B5 remain active.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

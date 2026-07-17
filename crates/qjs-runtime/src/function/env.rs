@@ -972,6 +972,28 @@ impl CallEnv {
         self.realm.borrow().get(name).cloned()
     }
 
+    /// Returns the active global object override used by indirect eval and
+    /// dynamically constructed functions. A frame-local marker, including a
+    /// non-object value that disables an outer override, wins before the
+    /// realm's cached marker.
+    pub(crate) fn dynamic_function_realm_global(&self) -> Option<ObjectRef> {
+        let frame_value = self
+            .frame_bindings
+            .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
+            .or_else(|| {
+                self.deopt_bindings
+                    .as_ref()
+                    .and_then(|bindings| bindings.get(DYNAMIC_FUNCTION_REALM_GLOBAL))
+            });
+        if let Some(value) = frame_value {
+            return match value {
+                Value::Object(global) => Some(global),
+                _ => None,
+            };
+        }
+        self.realm.dynamic_function_realm_global()
+    }
+
     /// Returns the realm's internal global-this slot without hashing its
     /// private string key. The slot is fixed when a realm is created; writes
     /// to the public `globalThis` property do not replace this identity.
