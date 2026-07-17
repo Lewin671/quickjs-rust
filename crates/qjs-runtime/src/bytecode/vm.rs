@@ -13,7 +13,9 @@ use crate::{
     Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, ObjectRef, PropertyKey, RuntimeError,
     SUPER_CONSTRUCTOR_BINDING, Value, construct_function,
     function::{CallEnv, CompiledUserFunction, DynamicBindings, Realm, Upvalue, new_realm},
-    initialize_builtins, is_truthy, to_js_string_with_env, to_property_key_value,
+    initialize_builtins, is_truthy,
+    property::try_to_property_key_without_coercion,
+    to_js_string_with_env, to_property_key_value,
     value::OwnDataPropertyWrite,
 };
 use std::{
@@ -444,6 +446,10 @@ impl<'a> Vm<'a> {
         &mut self,
         value: Value,
     ) -> Result<PropertyKey, RuntimeError> {
+        let value = match try_to_property_key_without_coercion(value) {
+            Ok(key) => return Ok(key),
+            Err(value) => value,
+        };
         match value {
             Value::Object(_)
             | Value::Function(_)

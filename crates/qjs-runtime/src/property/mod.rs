@@ -15,7 +15,7 @@ pub(crate) use function::{
     function_own_property_descriptor, function_own_property_keys, function_own_property_names,
     function_own_property_symbols, function_own_symbol_property_descriptor,
 };
-pub(crate) use key::{PropertyKey, to_property_key_value};
+pub(crate) use key::{PropertyKey, to_property_key_value, try_to_property_key_without_coercion};
 pub(crate) use prototype::{
     array_as_object_prototype, array_prototype, constructor_named_prototype, constructor_prototype,
     constructor_prototype_slot, function_constructor_as_prototype_slot,

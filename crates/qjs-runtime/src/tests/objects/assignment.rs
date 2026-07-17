@@ -15,6 +15,18 @@ fn evaluates_member_assignment() {
         Ok(Value::Number(8.0))
     );
     assert_eq!(
+        eval(
+            "function read() {
+                 let calls = '';
+                 let key = { toString: function() { calls += 'k'; return 'answer'; } };
+                 let object = { answer: 9 };
+                 return object[key] + ':' + calls;
+             }
+             read();"
+        ),
+        Ok(Value::String("9:k".to_owned().into()))
+    );
+    assert_eq!(
         eval("let seen = 0; let o = { set answer(value) { seen = value; } }; o.answer = 9; seen;"),
         Ok(Value::Number(9.0))
     );

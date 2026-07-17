@@ -1753,6 +1753,48 @@ all 15 eligible measurements and exact per-iteration checksums; medians were
 the next hosted broad and external artifacts decide whether the unit counts as
 campaign progress.
 
+Hosted run `29552887188` at `239bc64f` confirms that the thirty-first unit
+generalizes, but does not satisfy the external completion gate. The internal
+candidate/QuickJS-NG aggregate improved from 0.366860x to 0.351871x while
+candidate/base remained neutral at 0.997721x. Across the 22 SunSpider cases
+comparable in both runs, the diagnostic ratio fell from 33.6948x to 25.8658x;
+`crypto-md5` fell from 376.086x to 19.540x and `crypto-sha1` from 155.150x to
+14.299x. Kraken's two-case ratio fell from 2.8441x to 2.4543x. JetStream is not
+admissible as progress: its comparable coverage fell from five cases to four
+when `stanford-crypto-aes` timed out, so the displayed 17.907x ratio cannot be
+compared to the preceding five-case 23.812x ratio. The internal report SHA-256
+is `cf1eb3195c46b3946d7d9b9f81df3ddc4a2df1b57434002750305128a1af9a38`;
+the external report SHA-256 is
+`7ef6a3e4251880540aa4fe9449a0150ee52f99659b520494675149e35fc4ce78`.
+
+The thirty-second v2 unit follows the next external profile rather than an
+internal benchmark shape. On the current `access-nbody` port, a three-second
+macOS sample placed 412 top-of-stack samples in `FrameBindings::insert` and
+117 in `Vm::current_env`, with allocation, free, string clone, and frame-copy
+work dominating the remaining profile. The VM was rebuilding a complete
+`CallEnv` and copying live local bindings even when an already-primitive
+string, number, BigInt, boolean, null, undefined, or symbol became a property
+key. The general fast path converts those values directly because that
+conversion cannot execute JavaScript. Function, array, map, set, ordinary
+object, and proxy keys retain the existing observable `ToPrimitive` path and
+environment behavior. The implementation has no workload identity, source
+path, iteration count, or checksum input.
+
+Against retained current-base binary SHA-256
+`e355addab61f9fd2e50d9ff3b342d7dff30565a60692b5b3332e518d6ac505e0`,
+the candidate binary
+`9470c968a2b2f9be972559d3b6f218684269acef8a15606948323389be8e5b09`
+reduced five-run `access-nbody` median wall time from 3.36 s to 0.57 s
+(0.170x base, about 5.9x faster). Three-run cross-checks reduced
+`access-fannkuch` from 3.95 s to 3.34 s, `bitops-nsieve-bits` from 2.93 s to
+1.57 s, and the already-optimized `crypto-md5` from 0.17 s to 0.13 s, while
+`controlflow-recursive` remained approximately 0.10 s. A five-case,
+five-block internal diagnostic retained all 75 measurements and exact
+checksums; candidate/base medians ranged from 0.999x to 1.023x. These focused
+local results are evidence for the mechanism and regression boundary only;
+the next complete hosted internal and external artifacts decide campaign
+progress.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
