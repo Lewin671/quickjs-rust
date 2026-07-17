@@ -370,6 +370,15 @@ pub(super) fn try_fast_global_native_call(
             };
             Ok(Value::Number(number.abs()))
         }
+        NativeFunction::MathFloor => {
+            let number = match arguments.first().cloned().unwrap_or(Value::Undefined) {
+                Value::Number(number) => number,
+                Value::Undefined => f64::NAN,
+                _ => return None,
+            };
+            Ok(Value::Number(number.floor()))
+        }
+        NativeFunction::MathRandom if arguments.is_empty() => crate::math::native_math_random(),
         NativeFunction::ArrayPrototypeIndexOf => Ok(crate::array::fast_dense_array_index_of(
             this_value, arguments, realm_env,
         )?),
@@ -421,6 +430,41 @@ pub(super) fn try_fast_global_native_call(
         | NativeFunction::StringPrototypeSubstr
         | NativeFunction::StringPrototypeSubstring => {
             fast_string_sequence_native(native, this_value, arguments, realm_env)?
+        }
+        NativeFunction::StringPrototypeCharAt => {
+            let Value::String(_) = this_value else {
+                return None;
+            };
+            if !matches!(
+                arguments.first(),
+                None | Some(Value::Number(_) | Value::Undefined)
+            ) {
+                return None;
+            }
+            let mut env = realm_env.clone();
+            crate::string::native_string_prototype_char_at(this_value.clone(), arguments, &mut env)
+        }
+        NativeFunction::StringPrototypeConcat => {
+            let Value::String(_) = this_value else {
+                return None;
+            };
+            if !arguments
+                .iter()
+                .all(|value| matches!(value, Value::String(_) | Value::Number(_)))
+            {
+                return None;
+            }
+            let mut env = realm_env.clone();
+            crate::string::native_string_prototype_concat(this_value.clone(), arguments, &mut env)
+        }
+        NativeFunction::RegExpPrototypeTest => {
+            if !matches!(this_value, Value::Object(_))
+                || !matches!(arguments.first(), Some(Value::String(_)))
+            {
+                return None;
+            }
+            let mut env = realm_env.clone();
+            crate::regexp::native_regexp_prototype_test(this_value.clone(), arguments, &mut env)
         }
         NativeFunction::Test262AssertSameValue => {
             crate::global::native_test262_assert_same_value(arguments)

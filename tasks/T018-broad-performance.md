@@ -1848,6 +1848,51 @@ diagnostic evidence only, not a campaign score. Raw SHA-256:
 The next hosted receipt-bound artifact decides whether this unit counts as
 campaign progress.
 
+The thirty-fourth v2 unit follows the new external guard rather than an
+internal case. A macOS sample of SunSpider `string-validate-input`, the worst
+case in hosted run `29558463474`, showed that regular-expression matching was
+not the dominant cost. Caller-frame compatibility synchronization,
+`CallEnv::snapshot_locals`, string-key hashing/insertion, allocation, and
+string copying dominated. The general fix bypasses caller-local environment
+materialization for primitive-only calls to `Math.floor`, `Math.random`,
+`String.prototype.charAt`, `String.prototype.concat`, and
+`RegExp.prototype.test`. It also evaluates primitive string concatenation,
+equality, and UTF-16 relational comparison without a `CallEnv` round trip.
+Object/Symbol operands, observable coercions, nonstandard receivers, and every
+unsupported native shape retain the generic path. The implementation has no
+workload identity, source path, iteration count, or checksum input.
+
+Against clean detached `a21bcb27` binary SHA-256
+`4f66028113a17d498d5fdab262c0780c9399063c25fa2362ddb39c2b4ed4c63d`,
+the clean candidate binary
+`ed22991efcb815a932eb4611621b3bc2c8b2ff6667d64dd79ea15494d3220ef1`
+reduced seven-run interleaved median wall time for
+`string-validate-input` from 0.776 s to 0.238 s (0.307x base, about 3.26x
+faster). Structurally different cases also improved: `date-format-tofte` to
+0.516x, `date-format-xparb` to 0.680x, and `string-base64` to 0.829x.
+`access-nbody`, `bitops-nsieve-bits`, and `crypto-md5` remained within 1.0%
+of base in the clean diagnostic.
+
+The complete 45-case, three-block local external preview preserved coverage
+at 5/5 JetStream, 8/14 Kraken, and 23/26 SunSpider cases. JetStream improved
+from 12.719x to 11.806x and SunSpider from 11.357x to 10.360x; Kraken was
+neutral at 5.984x versus 5.965x. `string-validate-input` itself improved from
+36.037x to 11.164x QuickJS-NG locally. The preview still has zero qjs-rust
+wins and remains far above the <=1.00x completion guard, so the campaign stays
+active. External raw SHA-256:
+`d2d8b5442d34729a85261cff5e7a25b09997070f555c50918054188db4d51792`;
+report SHA-256:
+`0bce808d2418b81a19cef77b670fb2b2c413ea749da65691a7a17221dba4de27`.
+
+A separate clean-binary three-role broad diagnostic completed all 25 cases
+with exact checksums. Raw medians were 0.9548x candidate/base and 0.1961x
+candidate/QuickJS-NG. No otherwise-neutral critical family moved by more than
+1.5%; the call and allocation families improved. The strict report correctly
+rejected the dirty development runner and receipt-less binaries as unverified,
+so these values are regression diagnostics only. Raw SHA-256:
+`4b98b738c107ffe5994bf84b0c8fb2e80de2ab515f4f4d573ee984ec7c650462`.
+The next hosted receipt-bound artifact decides campaign progress.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

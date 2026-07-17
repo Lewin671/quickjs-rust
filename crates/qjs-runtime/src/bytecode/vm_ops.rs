@@ -18,6 +18,9 @@ impl Vm<'_> {
         if let Some(value) = fast_number_binary(&left, op, &right) {
             return Ok(value);
         }
+        if let Some(value) = fast_primitive_string_binary(&left, op, &right) {
+            return Ok(value);
+        }
         if matches!(op, BinaryOp::StrictEq | BinaryOp::StrictNe)
             && let Some(equal) = fast_strict_eq(&left, &right)
         {
@@ -173,6 +176,62 @@ impl Vm<'_> {
             }
         }
     }
+}
+
+fn fast_primitive_string_binary(left: &Value, op: BinaryOp, right: &Value) -> Option<Value> {
+    if let (Value::String(left), Value::String(right)) = (left, right) {
+        let value = match op {
+            BinaryOp::Eq | BinaryOp::StrictEq => {
+                Value::Boolean(crate::string::string_utf16_eq(left, right))
+            }
+            BinaryOp::Ne | BinaryOp::StrictNe => {
+                Value::Boolean(!crate::string::string_utf16_eq(left, right))
+            }
+            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
+                let ordering = crate::string::string_code_units(left)
+                    .cmp(&crate::string::string_code_units(right));
+                Value::Boolean(match op {
+                    BinaryOp::Lt => ordering.is_lt(),
+                    BinaryOp::Le => ordering.is_le(),
+                    BinaryOp::Gt => ordering.is_gt(),
+                    BinaryOp::Ge => ordering.is_ge(),
+                    _ => unreachable!("relational operator matched above"),
+                })
+            }
+            BinaryOp::Add => {
+                let mut result = String::with_capacity(left.len().checked_add(right.len())?);
+                result.push_str(left);
+                result.push_str(right);
+                Value::String(result.into())
+            }
+            _ => return None,
+        };
+        return Some(value);
+    }
+    if op != BinaryOp::Add
+        || (!matches!(left, Value::String(_)) && !matches!(right, Value::String(_)))
+    {
+        return None;
+    }
+    let left = primitive_js_string(left)?;
+    let right = primitive_js_string(right)?;
+    let mut result = String::with_capacity(left.len().checked_add(right.len())?);
+    result.push_str(&left);
+    result.push_str(&right);
+    Some(Value::String(result.into()))
+}
+
+fn primitive_js_string(value: &Value) -> Option<String> {
+    Some(match value {
+        Value::Number(number) => crate::number::number_to_js_string(*number),
+        Value::BigInt(value) => value.to_string(),
+        Value::String(value) => value.to_string(),
+        Value::Boolean(true) => "true".to_owned(),
+        Value::Boolean(false) => "false".to_owned(),
+        Value::Null => "null".to_owned(),
+        Value::Undefined => "undefined".to_owned(),
+        _ => return None,
+    })
 }
 
 fn fast_strict_eq(left: &Value, right: &Value) -> Option<bool> {

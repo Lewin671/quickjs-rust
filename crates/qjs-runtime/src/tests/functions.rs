@@ -1314,6 +1314,35 @@ fn evaluates_new_expressions() {
 }
 
 #[test]
+fn primitive_native_calls_preserve_caller_slots_and_coercion_fallbacks() {
+    assert_eq!(
+        eval(
+            "function fast() {
+               let marker = 'live';
+               let random = Math.random();
+               return marker + ':' + Math.floor(2.9) + ':' +
+                 (random >= 0 && random < 1) + ':' + 'abc'.charAt(1) + ':' +
+                 'x'.concat('y', 3) + ':' + /b/.test('abc');
+             }
+             fast();"
+        ),
+        Ok(Value::String("live:2:true:b:xy3:true".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let calls = '';
+             let number = { valueOf() { calls += 'f'; return 3.8; } };
+             let index = { valueOf() { calls += 'c'; return 1; } };
+             let suffix = { toString() { calls += 's'; return 'z'; } };
+             let input = { toString() { calls += 'r'; return 'abc'; } };
+             Math.floor(number) + ':' + 'abc'.charAt(index) + ':' +
+               'x'.concat(suffix) + ':' + /b/.test(input) + ':' + calls;"
+        ),
+        Ok(Value::String("3:b:xz:true:fcsr".to_owned().into()))
+    );
+}
+
+#[test]
 fn function_prototype_has_empty_name_after_length() {
     // %Function.prototype% exposes an empty, non-writable, non-enumerable,
     // configurable `name`, ordered immediately after `length`.
