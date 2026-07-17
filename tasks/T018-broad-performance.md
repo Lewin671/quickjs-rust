@@ -2404,6 +2404,69 @@ is `c60e47562d42e47cc83c8c6e60bd07aa71be1406e7b603ebbc36c7236c582342`.
 This unit generalizes across independent external string programs while
 keeping the broad regression guard neutral; B4 and B5 remain active.
 
+The exact-SHA hosted workflows for
+`8265d8f11ef79da254dfbc387d4ac84ae60378c4` all completed successfully. CI
+passed the comparison, Test262 subset, and full check jobs; exact Test262
+coverage remained 42,671 pass, one fail, zero timeout, and one actionable gap.
+The hosted broad preview retained 25/25 cases, 225/225 eligible measurements,
+and 600 passing linearity samples. Candidate/base was 0.994670x overall and
+candidate/QuickJS-NG was 0.359130x. The hosted external preview still failed
+B5 at 12.088980x QuickJS-NG for 4/5 JetStream cases, 7.218816x for 6/14
+Kraken cases, and 11.047923x for 23/26 SunSpider cases. Hosted broad raw/report
+SHA-256 are
+`c68bbd588a10436ea952fa32c10af134e2096a44b55355c9e43341a93cebf4e5`
+and `df4f0f419573dc1c98b19ce4cd8a513c8cb510e56f85941dfdee855573f76182`;
+hosted external raw/report SHA-256 are
+`9df5b54ed3f75e3f19d723fbbb8f6f58255922e4065b67bab605e5a114f679d6`
+and `774f2bc9f4a126d77f9649530a7d2c9d7e72fbb904060cf1015d4625018c1448`.
+
+The forty-fourth v2 unit follows a fresh external profile into standard array
+creation rather than adding a workload-specific fast path. `CreateDataProperty`
+with the ordinary writable, enumerable, configurable index descriptor used to
+send arrays through generic descriptor storage. Standard operations such as
+`slice`, `map`, and `filter` therefore produced arrays whose indices lived in
+the cold descriptor map, forcing later ordinary indexed writes through generic
+property and environment paths. Compatible default index definitions now stay
+in dense storage when the array is mutable, extensible, length-writable, and
+within the dense index limit. Accessors, special descriptors, frozen, sealed,
+non-extensible, length-locked, sparse-large-index, and descriptor-preserving
+overwrites retain the generic path. A lowest-layer test verifies the dense
+representation. No workload name, source path, iteration count, checksum, or
+expected benchmark value appears in the implementation.
+
+Against base binary SHA-256
+`2a7d910a70158e6c92f22674447bbbe56d515b6e4918d11ecce47b22cb609364`,
+candidate binary SHA-256
+`aebef9ebc2a8805c530888ca412c9a21febf94e55350874ce1fefab1918f7680`
+improved independent external programs across three suites. JetStream
+`stanford-crypto-aes` measured 0.826802x base; Kraken
+`stanford-crypto-sha256-iterative`, `stanford-crypto-ccm`, and
+`stanford-crypto-aes` measured 0.295653x, 0.770199x, and 0.827258x. SunSpider
+`crypto-sha1` independently measured 0.843897x. Complete one-block candidate
+and same-window base external previews retained 5/5 JetStream and 23/26
+SunSpider cases; Kraken improved from 10/14 to 11/14 because
+`stanford-crypto-pbkdf2` crossed from timeout to complete. Common-case
+candidate/base suite geometric means were 0.971058x, 0.847388x, and 0.993435x.
+Candidate/QuickJS-NG remained far from B5 at 9.062235x, 4.683388x, and
+6.256767x. Candidate external raw/report SHA-256 are
+`7aab0cb908bfe40cc4d9557f1d839bbad2b66d2cbf52e3a5f788f9126b09e37b`
+and `89a747190833cac84029c61857c2f36895f93c04ef19ba73b1df4c09907bbb49`;
+base raw/report SHA-256 are
+`6f4ec873aa1e39faf81e2245285b42e15316d01390fdf88d7c3c7085f43e4c1d`
+and `e26f74e2b68faf43c38785dc5baa7da7d460d8bd024bea3cb581d0eadb3a2cba`.
+
+The complete three-role broad development diagnostic produced all 1,625
+records, 225/225 eligible exact-checksum measurements, zero non-OK samples,
+and 600 linearity samples with all 75 engine/case pairs passing. Candidate/base
+was 0.998272x overall; family ratios ranged from 0.996083x for binding through
+1.000429x for allocation, and the worst case was 1.006811x. Candidate/QuickJS-NG
+was 0.194477x overall, but allocation still failed B4 at 1.137729x. The strict
+analyzer correctly rejected the receipt-less dirty development binaries, so
+this is regression evidence rather than a fixed-hardware claim. Broad raw
+SHA-256: `e71b97feb3314937dccf318007df67a4adc38bad11ad24b5f43548015d9f62b7`.
+This unit materially improves multiple independent external sources while
+keeping the internal regression guard neutral; B4 and B5 remain active.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

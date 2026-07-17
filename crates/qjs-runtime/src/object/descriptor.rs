@@ -753,6 +753,14 @@ pub(crate) fn define_property_on_value_key(
                     elements.set_len(crate::to_length_with_env(descriptor.value, env)?);
                 }
                 elements.set_length_writable(descriptor.writable);
+            } else if !descriptor.accessor
+                && descriptor.enumerable
+                && descriptor.writable
+                && descriptor.configurable
+                && let Some(index) = array_index_key(&key)
+                && elements.dense_data_property_eligible(index)
+            {
+                elements.set(index, descriptor.value);
             } else {
                 elements.define_property(key, descriptor);
             }
@@ -899,5 +907,34 @@ fn ensure_define_property_target(target: &Value) -> Result<(), RuntimeError> {
             thrown: None,
             message: "Object.defineProperty target must be an object".to_owned(),
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::define_property_on_value_key;
+    use crate::{ArrayRef, CallEnv, Property, PropertyKey, Value, function::new_realm};
+
+    #[test]
+    fn default_array_index_definitions_use_dense_storage() {
+        let array = ArrayRef::new_with_length(2);
+        let mut env = CallEnv::new(new_realm(HashMap::new()));
+
+        for (index, value) in [3.0, 5.0].into_iter().enumerate() {
+            assert_eq!(
+                define_property_on_value_key(
+                    Value::Array(array.clone()),
+                    PropertyKey::String(index.to_string()),
+                    Property::data(Value::Number(value), true, true, true),
+                    &mut env,
+                ),
+                Ok(true)
+            );
+        }
+
+        assert_eq!(array.direct_dense_index_value(0), Some(Value::Number(3.0)));
+        assert_eq!(array.direct_dense_index_value(1), Some(Value::Number(5.0)));
     }
 }
