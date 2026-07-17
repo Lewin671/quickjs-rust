@@ -277,6 +277,58 @@ impl Vm<'_> {
         }
     }
 
+    /// Creates a missing ordinary own string data property without cloning the
+    /// call environment when the complete [[Set]] result is already known.
+    /// Observable exotic behavior (accessors, Proxies, typed arrays, module
+    /// namespaces, or non-extensible receivers) remains on the generic path.
+    pub(super) fn try_create_ordinary_own_data_property(
+        &self,
+        object: &ObjectRef,
+        key: &str,
+        value: &Value,
+    ) -> bool {
+        if symbol::is_symbol_primitive(object)
+            || crate::typed_array::is_typed_array_object(object)
+            || object.is_module_namespace_exotic()
+            || !object.is_extensible()
+            || !matches!(
+                object.own_data_property_read(key),
+                OwnDataPropertyRead::Missing
+            )
+        {
+            return false;
+        }
+
+        let mut current = object.prototype_slot();
+        loop {
+            match current {
+                Some(crate::Prototype::Object(prototype)) => {
+                    if symbol::is_symbol_primitive(&prototype)
+                        || crate::typed_array::is_typed_array_object(&prototype)
+                        || prototype.is_module_namespace_exotic()
+                    {
+                        return false;
+                    }
+                    if let Some(property) = prototype.own_property(key) {
+                        if property.accessor || !property.writable {
+                            return false;
+                        }
+                        object.set(key.to_owned(), value.clone());
+                        return true;
+                    }
+                    current = prototype.prototype_slot();
+                }
+                Some(crate::Prototype::Function(_) | crate::Prototype::Proxy(_)) => {
+                    return false;
+                }
+                None => {
+                    object.set(key.to_owned(), value.clone());
+                    return true;
+                }
+            }
+        }
+    }
+
     fn try_direct_get_symbol(&self, object: &Value, symbol: &ObjectRef) -> Option<Value> {
         match object {
             Value::Object(object) => match ordinary_chain_symbol_property(object, symbol) {

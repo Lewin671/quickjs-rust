@@ -1354,7 +1354,12 @@ impl<'a> Vm<'a> {
                     self.stack.push(value);
                     return Ok(());
                 }
-                OwnDataPropertyWrite::NeedsSlowPath => {}
+                OwnDataPropertyWrite::NeedsSlowPath => {
+                    if self.try_create_ordinary_own_data_property(object, key, &value) {
+                        self.stack.push(value);
+                        return Ok(());
+                    }
+                }
             }
         }
         let mut env = self.current_env();

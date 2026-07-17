@@ -1943,6 +1943,66 @@ Raw SHA-256:
 `701c0bcb81998d84b6dec5cb3113c4df9c394e4cd36a67145d5e08becd41b76c`.
 The next hosted receipt-bound artifact decides campaign progress.
 
+Hosted run `29566653789` accepted the thirty-fifth unit at commit
+`69541277`. CI run `29566653844` and full Test262 coverage run `29566855091`
+also completed successfully. The receipt-bound broad artifact measured
+0.984530x candidate/base and 0.362880x candidate/QuickJS-NG overall;
+allocation remained the only failing broad family at 2.663908x. The external
+artifact preserved 5/5 JetStream, 6/14 Kraken, and 23/26 SunSpider comparable
+cases, with diagnostic ratios of 14.136785x, 8.704828x, and 15.858843x. The
+unary change was therefore accepted as a general improvement, but all three
+external suites still fail the <=1.00x B5 guard by a wide margin.
+
+The thirty-sixth v2 unit targets ordinary construction and property creation,
+not a benchmark identity. A profile of the pinned SunSpider
+`access-binary-trees` port showed ordinary constructors repeatedly cloning and
+writing back frame maps for parameters, `this`, and simple `this.x = value`
+stores. Ordinary constructors now use the same slot-backed parameter and
+receiver seed as semantically eligible ordinary calls; `new.target` stays in
+the compatibility frame. A second general fast path creates a missing ordinary
+own string data property only after proving that the receiver is extensible and
+that its all-object prototype chain contains no accessor, read-only descriptor,
+Proxy, typed array, module namespace, symbol primitive, or function prototype.
+Every observable or exotic case remains on the full `OrdinarySet` path. The
+implementation has no workload ID, source path, iteration count, or checksum
+input.
+
+Against clean base binary SHA-256
+`2d45d24dddb5cd09afc6c72d5504a1c59de45204d9ce70aa0d5797edaac492e2`,
+candidate binary SHA-256
+`0fd0b797227d3e82086d49a81817d6178990b174a1f70f44ad21a736f42cec41`
+reduced an eleven-block interleaved `access-binary-trees` warm median from
+0.262770 s to 0.112107 s (0.426635x). A structurally independent 200,000-
+property Point-construction diagnostic reduced its warm median from 0.505860 s
+to 0.311988 s (0.616748x), confirming that the mechanism is not specific to
+binary trees.
+
+The complete local three-role broad diagnostic preserved all 25 exact-checksum
+cases at 0.994993x candidate/base. Allocation moved 1.019465x and the worst
+single case, `object_allocation`, moved 1.030024x; neither is a material
+regression. The local candidate/QuickJS-NG diagnostic was 0.195824x overall,
+with allocation still failing at 1.185220x. The strict report correctly rejects
+these dirty, receipt-less development binaries, so the numbers are regression
+diagnostics only. Raw SHA-256:
+`1ff9cc3fef45df30875ccc402d90072d0629c959cbecb099bce66029cb9d2aae`.
+
+Independent one-block full external A/B previews preserved identical coverage
+at 5/5 JetStream, 8/14 Kraken, and 23/26 SunSpider. Across all 36 common
+comparable cases, candidate/base was 0.966328x: seven cases improved by more
+than 2%, 26 stayed within 2%, three moved between 2.19% and 2.43%, and no case
+regressed by 25%. `access-binary-trees` reached 0.425861x; JetStream `cdjs`,
+`hash-map`, and `stanford-crypto-aes` reached 0.806694x, 0.879076x, and
+0.947559x. Candidate/QuickJS-NG suite diagnostics improved from
+10.483653x/5.835611x/8.945211x to 9.685067x/5.827903x/8.667864x. Candidate raw
+and report SHA-256 are
+`eff0b411f9ef836a66722da8cf611115a5d802bbc25b44f7587f34940bdb8552`
+and `7fef9228a7748ecea23fab85098d6c4993a326afd75a184b896c31809acf5d5d`;
+base raw and report SHA-256 are
+`10a588da704da9806f1c42fc9dda93a587092767021e8b9db917902f1df2e8c8`
+and `8c9b2f0ab3c8f98ec6009f8a01ba6a93e4c2238220fa00ddff3ce9f5e9046264`.
+These gains satisfy the no-overfitting regression boundary for this unit, but
+the external <=1.00x target and broad allocation <=1.00x target remain open.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

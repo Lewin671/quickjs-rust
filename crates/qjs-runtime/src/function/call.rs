@@ -289,7 +289,7 @@ pub(crate) fn is_direct_leaf_function(callee: &Value) -> bool {
     function
         .bytecode
         .as_ref()
-        .is_some_and(|bytecode| can_seed_direct_leaf_call(function, bytecode, false))
+        .is_some_and(|bytecode| can_seed_direct_leaf_call(function, bytecode))
 }
 
 fn class_constructor_call_error(function: &Function) -> RuntimeError {
@@ -664,7 +664,7 @@ fn direct_leaf_function_env<'a>(
     argument_values: &'a [Value],
     env: &CallEnv,
 ) -> FunctionCallEnv<'a> {
-    debug_assert!(can_seed_direct_leaf_call(function, bytecode, false));
+    debug_assert!(can_seed_direct_leaf_call(function, bytecode));
     let mut frame_env = env.new_direct_leaf_function_frame();
     let direct_this_value = if bytecode.uses_lexical_this() {
         let this_env_storage = callee_this_realm_env(function, env);
@@ -703,7 +703,7 @@ fn function_env<'a>(
     env: &CallEnv,
     is_construct: bool,
 ) -> FunctionCallEnv<'a> {
-    let use_direct_call_slots = can_seed_direct_leaf_call(function, bytecode, is_construct);
+    let use_direct_call_slots = can_seed_direct_leaf_call(function, bytecode);
     let lexical_this = received_upvalue_value(function, bytecode, "this");
     let lexical_field_initializer =
         received_upvalue_value(function, bytecode, FIELD_INITIALIZER_EVAL_BINDING);
@@ -872,9 +872,11 @@ fn function_env<'a>(
     }
 }
 
-fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode, is_construct: bool) -> bool {
-    !is_construct
-        && !function.lexical_this
+fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode) -> bool {
+    // Ordinary constructors use the same slot-backed parameter and receiver
+    // model as ordinary calls. Constructor-only state such as `new.target`
+    // remains in the small compatibility frame installed by function_env.
+    !function.lexical_this
         && !function.lexical_arguments
         && !function.is_generator
         && !function.is_async

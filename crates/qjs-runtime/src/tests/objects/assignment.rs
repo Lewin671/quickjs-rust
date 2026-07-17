@@ -112,6 +112,49 @@ fn ordinary_set_honors_non_writable_data_properties() {
 }
 
 #[test]
+fn ordinary_missing_own_data_write_preserves_prototype_semantics() {
+    assert_eq!(
+        eval(
+            "var prototype = { p: 1 };
+             var object = Object.create(prototype);
+             object.p = 2;
+             var descriptor = Object.getOwnPropertyDescriptor(object, 'p');
+             [object.p, prototype.p, descriptor.writable, descriptor.enumerable,
+              descriptor.configurable].join(':');"
+        ),
+        Ok(Value::String("2:1:true:true:true".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var seen = 0;
+             var prototype = { set p(value) { seen = value; } };
+             var object = Object.create(prototype);
+             object.p = 3;
+             seen + ':' + object.hasOwnProperty('p');"
+        ),
+        Ok(Value::String("3:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var calls = 0;
+             var prototype = new Proxy({}, { set() { calls += 1; return true; } });
+             var object = Object.create(prototype);
+             object.p = 4;
+             calls + ':' + object.hasOwnProperty('p');"
+        ),
+        Ok(Value::String("1:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var object = Object.preventExtensions({});
+             object.p = 5;
+             object.hasOwnProperty('p');"
+        ),
+        Ok(Value::Boolean(false))
+    );
+}
+
+#[test]
 fn ordinary_set_runs_setter_in_strict_mode() {
     // A successful accessor setter must not throw in strict mode.
     assert_eq!(
