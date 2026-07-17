@@ -2051,6 +2051,55 @@ These local results satisfy the unit's no-overfitting regression boundary but
 do not satisfy B4 or B5; the exact-SHA hosted broad and external artifacts
 remain authoritative.
 
+The thirty-eighth v2 unit removes two private-name lookup costs from general
+runtime function creation. A fresh five-second profile of
+`closure_allocation_call` placed 197 samples below the realm lookup for
+`__quickjsRustDynamicFunctionRealm` and another 203 below the private
+environment lookup's miss on the call-frame-only `\0home_object` binding.
+`RealmState` now caches the optional dynamic-Function global object. Initial
+realm construction, incremental insert/remove/entry operations, and the few
+bulk script/module initialization paths keep that cache synchronized. Ordinary
+realm writes compare the mutated name and do not rehash the private key.
+Call-frame-only home-object reads now use the frame/deopt lookup directly and
+never fall through to the realm map. The implementation contains no workload
+ID, source path, iteration count, or checksum input, and applies to every
+runtime-created function.
+
+Against clean base binary SHA-256
+`af59c4e55c36f2dd739b2698b285f6bda059a32fa7bb00383c090632251f1957`,
+candidate binary SHA-256
+`02e66c1b0c80f7815335ac04a5e632c3cfa6985200307aad2080f65bf6301428`
+reduced the five-block `closure_allocation_call` median to 0.923390x base and
+0.961210x QuickJS-NG. `object_allocation` was 0.986678x base and
+`array_allocation` 1.008357x, producing a 0.972131x allocation-family
+candidate/base diagnostic. Focused raw SHA-256:
+`511ba3f08e8c45a389918bc5956970ddb1128fbb15013cf0f38652735414ff80`.
+
+The complete local three-role broad diagnostic preserved all 25 cases, 225
+eligible exact-checksum measurements, and 600 passing linearity samples.
+Candidate/base was 0.996436x overall; allocation was 0.972323x, while every
+other family stayed between 0.986150x and 1.002579x. The worst individual
+movement was `array_write` at 1.008887x. The local candidate/QuickJS-NG
+diagnostic was 0.194802x overall, but allocation still failed B4 at 1.142737x.
+The strict analyzer rejected the intentionally receipt-less development
+binaries, so these numbers remain regression diagnostics. Broad raw SHA-256:
+`9f92052043d6ace2cce8f2858261b4a4f813876ad35636cfd38c2c11597be23b`.
+
+Independent one-block full external A/B previews retained identical coverage
+at 5/5 JetStream, 8/14 Kraken, and 23/26 SunSpider. Across all 36 common cases,
+candidate/base was 0.992922x; suite ratios were 0.992089x, 0.990770x, and
+0.993853x. Six cases improved by more than 2%, 26 remained within 2%, four
+moved between 2.01% and 2.68%, and none regressed by 25%. Candidate/QuickJS-NG
+suite diagnostics remained far from B5 at 9.636794x, 5.723410x, and 8.532851x.
+Candidate raw/report SHA-256 are
+`4afd83044dad2a11e5c20f925686e48246b377c7064ae823fc85f258c0b485f9`
+and `576a367f43f8e3871280eb2fb5d4c23f9527bc378ba77e5507775240c097e189`;
+base raw/report SHA-256 are
+`c09ec42d2851039d3a567aa6e3ff8fde932b857b7e05047a808e7c5cebc07fa3`
+and `5cf68587eacbee05051a456df307b0f1adae7368b4576a18f1710948cca53ed1`.
+This unit is a general allocation improvement, but B4 and B5 remain active and
+the exact-SHA hosted artifacts remain authoritative.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

@@ -470,7 +470,7 @@ impl Vm<'_> {
         if let Some(environment) = self.env.private_environment() {
             return Some(environment);
         }
-        match self.env.get(crate::HOME_OBJECT_BINDING) {
+        match self.env.get_local(crate::HOME_OBJECT_BINDING) {
             Some(Value::Object(object)) => object.private_environment(),
             Some(Value::Function(function)) => function.private_environment(),
             _ => None,

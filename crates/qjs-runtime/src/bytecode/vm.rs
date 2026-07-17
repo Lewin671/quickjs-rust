@@ -141,6 +141,7 @@ impl<'a> Vm<'a> {
             let mut globals = realm.borrow_mut();
             Self::initialize_script_global_bindings(bytecode, &mut globals)?;
         }
+        realm.refresh_dynamic_function_realm_global();
         Ok(Self::new_with_globals(bytecode, env))
     }
 
@@ -752,7 +753,7 @@ impl<'a> Vm<'a> {
                     source_text,
                 } => {
                     let (home_object, super_constructor) = if *lexical_this {
-                        let home_object = self.env.get(HOME_OBJECT_BINDING);
+                        let home_object = self.env.get_local(HOME_OBJECT_BINDING);
                         let mut super_constructor = self.env.get(SUPER_CONSTRUCTOR_BINDING);
                         if self.load_global("this").is_err() && super_constructor.is_none() {
                             super_constructor = Some(Value::Undefined);

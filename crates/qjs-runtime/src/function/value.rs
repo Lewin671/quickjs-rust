@@ -21,10 +21,7 @@ use crate::{
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
 fn dynamic_function_realm_global(realm: &Realm) -> Option<ObjectRef> {
-    match realm.borrow().get(DYNAMIC_FUNCTION_REALM_GLOBAL) {
-        Some(Value::Object(global)) => Some(global.clone()),
-        _ => None,
-    }
+    realm.dynamic_function_realm_global()
 }
 
 /// A compiled instance-field initializer attached to a class constructor. It

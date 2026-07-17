@@ -31,6 +31,7 @@ pub(super) fn eval_prelude_script(bytecode: &Bytecode, realm: &Realm) -> Result<
         let mut globals = realm.borrow_mut();
         Vm::initialize_script_global_bindings(bytecode, &mut globals)?;
     }
+    realm.refresh_dynamic_function_realm_global();
     let env = CallEnv::new(Rc::clone(realm));
     let mut vm = Vm::new_with_globals(bytecode, env);
     vm.run()?;
@@ -76,6 +77,7 @@ pub(super) fn eval_module_body(
             globals.insert(name, value);
         }
     }
+    realm.refresh_dynamic_function_realm_global();
     let mut env = CallEnv::new(Rc::clone(realm));
     // Wire the realm's dynamic-import host so an `import()` in this module body
     // (or in a closure it creates) can load further modules.

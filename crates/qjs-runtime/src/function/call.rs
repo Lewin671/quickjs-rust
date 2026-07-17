@@ -1016,7 +1016,7 @@ fn insert_super_bindings(
     if let Some(home) = function.home_object() {
         frame_env.insert(HOME_OBJECT_BINDING.to_owned(), home);
     } else if function.lexical_this
-        && let Some(home) = caller_env.get(HOME_OBJECT_BINDING)
+        && let Some(home) = caller_env.get_local(HOME_OBJECT_BINDING)
     {
         frame_env.insert(HOME_OBJECT_BINDING.to_owned(), home);
     }

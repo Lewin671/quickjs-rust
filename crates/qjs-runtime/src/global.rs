@@ -1278,7 +1278,7 @@ fn direct_eval_parse_context(env: &CallEnv) -> EvalParseContext {
             env.get(crate::FIELD_INITIALIZER_EVAL_BINDING),
             Some(Value::Boolean(true))
         ),
-        in_method: env.get(crate::HOME_OBJECT_BINDING).is_some(),
+        in_method: env.get_local(crate::HOME_OBJECT_BINDING).is_some(),
         in_derived_constructor: env.get(crate::SUPER_CONSTRUCTOR_BINDING).is_some(),
         in_field_initializer: matches!(
             env.get(crate::FIELD_INITIALIZER_EVAL_BINDING),

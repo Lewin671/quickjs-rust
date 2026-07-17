@@ -753,7 +753,7 @@ impl Vm<'_> {
     /// Returns the lookup base for `super` property access: the [[Prototype]]
     /// of the current method's home object.
     fn super_lookup_base(&self) -> Result<Value, RuntimeError> {
-        let Some(home) = self.env.get(crate::HOME_OBJECT_BINDING) else {
+        let Some(home) = self.env.get_local(crate::HOME_OBJECT_BINDING) else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "SyntaxError: 'super' keyword unexpected here".to_owned(),

@@ -29,20 +29,31 @@ use std::{
 
 use crate::{Function, ObjectRef, Value, function::Upvalue, private::PrivateEnvironment};
 
+const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
+
 /// Shared realm state: intrinsics, true globals, and captured-global cells.
 pub(crate) struct RealmState {
     bindings: RefCell<HashMap<String, Value>>,
     binding_cells: DynamicBindings,
     global_this: Option<Value>,
+    dynamic_function_realm_global: RefCell<Option<ObjectRef>>,
 }
 
 impl RealmState {
     fn new(bindings: HashMap<String, Value>) -> Self {
         let global_this = bindings.get(crate::GLOBAL_THIS_BINDING).cloned();
+        let dynamic_function_realm_global =
+            bindings
+                .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
+                .and_then(|value| match value {
+                    Value::Object(global) => Some(global.clone()),
+                    _ => None,
+                });
         Self {
             bindings: RefCell::new(bindings),
             binding_cells: DynamicBindings::new(),
             global_this,
+            dynamic_function_realm_global: RefCell::new(dynamic_function_realm_global),
         }
     }
 
@@ -56,6 +67,36 @@ impl RealmState {
 
     pub(crate) fn global_this(&self) -> Option<Value> {
         self.global_this.clone()
+    }
+
+    /// Returns the internal global object used by dynamically constructed
+    /// functions without hashing its private binding name for every closure.
+    pub(crate) fn dynamic_function_realm_global(&self) -> Option<ObjectRef> {
+        self.dynamic_function_realm_global.borrow().clone()
+    }
+
+    fn sync_dynamic_function_realm_binding(&self, name: &str, value: Option<&Value>) {
+        if name != DYNAMIC_FUNCTION_REALM_GLOBAL {
+            return;
+        }
+        *self.dynamic_function_realm_global.borrow_mut() = value.and_then(|value| match value {
+            Value::Object(global) => Some(global.clone()),
+            _ => None,
+        });
+    }
+
+    /// Rebuilds cached internal metadata after a bulk initialization path has
+    /// edited the binding map directly.
+    pub(crate) fn refresh_dynamic_function_realm_global(&self) {
+        let global = self
+            .bindings
+            .borrow()
+            .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
+            .and_then(|value| match value {
+                Value::Object(global) => Some(global.clone()),
+                _ => None,
+            });
+        *self.dynamic_function_realm_global.borrow_mut() = global;
     }
 }
 
@@ -954,6 +995,7 @@ impl CallEnv {
 
     pub(crate) fn remove_realm(&self, name: &str) -> Option<Value> {
         let removed = self.realm.borrow_mut().remove(name);
+        self.realm.sync_dynamic_function_realm_binding(name, None);
         if let Some(cell) = self.realm.binding_cells.cell(name) {
             cell.set(Value::Function(Function::uninitialized_lexical_marker()));
         }
@@ -1018,6 +1060,8 @@ impl CallEnv {
         if let Some(cell) = self.realm.binding_cells.cell(&name) {
             cell.set(value.clone());
         }
+        self.realm
+            .sync_dynamic_function_realm_binding(&name, Some(&value));
         self.realm.borrow_mut().insert(name, value)
     }
 
@@ -1045,7 +1089,11 @@ impl CallEnv {
     /// Defines `name` in the shared realm only if it is not already bound there.
     /// Used by global-binding initialization (script and indirect-eval scopes).
     pub(crate) fn realm_entry_or_insert(&self, name: String, value: Value) {
+        let refresh_dynamic_realm = name == DYNAMIC_FUNCTION_REALM_GLOBAL;
         self.realm.borrow_mut().entry(name).or_insert(value);
+        if refresh_dynamic_realm {
+            self.realm.refresh_dynamic_function_realm_global();
+        }
     }
 
     /// True if the shared realm cell binds `name`.
@@ -1154,8 +1202,11 @@ impl CallEnv {
 
 #[cfg(test)]
 mod tests {
-    use super::{CallEnv, DynamicBindings, FrameBindingValue, FrameBindings, new_realm};
-    use crate::Value;
+    use super::{
+        CallEnv, DYNAMIC_FUNCTION_REALM_GLOBAL, DynamicBindings, FrameBindingValue, FrameBindings,
+        new_realm,
+    };
+    use crate::{ObjectRef, Value};
     use std::{collections::HashMap, rc::Rc};
 
     #[test]
@@ -1203,5 +1254,42 @@ mod tests {
         assert!(env.has_module_import("local"));
         assert!(!cloned.has_module_import("local"));
         assert!(!Rc::ptr_eq(&env.module_imports, &cloned.module_imports));
+    }
+
+    #[test]
+    fn dynamic_function_realm_cache_tracks_bulk_and_incremental_mutations() {
+        let first = ObjectRef::new(HashMap::new());
+        let mut bindings = HashMap::new();
+        bindings.insert(
+            DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
+            Value::Object(first.clone()),
+        );
+        let realm = new_realm(bindings);
+        assert!(
+            realm
+                .dynamic_function_realm_global()
+                .is_some_and(|global| global.ptr_eq(&first))
+        );
+
+        realm
+            .borrow_mut()
+            .insert(DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(), Value::Undefined);
+        realm.refresh_dynamic_function_realm_global();
+        assert!(realm.dynamic_function_realm_global().is_none());
+
+        let second = ObjectRef::new(HashMap::new());
+        let env = CallEnv::new(Rc::clone(&realm));
+        env.insert_realm(
+            DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
+            Value::Object(second.clone()),
+        );
+        assert!(
+            realm
+                .dynamic_function_realm_global()
+                .is_some_and(|global| global.ptr_eq(&second))
+        );
+
+        env.remove_realm(DYNAMIC_FUNCTION_REALM_GLOBAL);
+        assert!(realm.dynamic_function_realm_global().is_none());
     }
 }
