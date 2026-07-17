@@ -264,6 +264,13 @@ impl Vm<'_> {
                 }
                 continue;
             }
+            if bytecode.global_scope
+                && local.hoisted
+                && let Some(upvalue) = env.realm_binding_cell(&local.name)
+            {
+                local_upvalues[slot] = Some(upvalue);
+                continue;
+            }
             if local.sloppy_global_fallback {
                 local_upvalues[slot] = env.realm_binding_cell(&local.name);
                 continue;

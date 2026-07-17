@@ -413,14 +413,15 @@ impl Compiler {
         match expr {
             Expr::Literal(literal) => self.compile_literal(literal),
             Expr::Identifier { name, .. } => {
-                let slot = self.resolve_local_slot(name);
-                if self.identifier_needs_with_resolution(slot) {
+                let reference_slot = self.resolve_local_slot(name);
+                let load_slot = self.resolve_identifier_load_slot(name);
+                if self.identifier_needs_with_resolution(reference_slot) {
                     self.emit(Op::LoadIdentWith {
                         name: name.clone(),
-                        slot,
+                        slot: load_slot,
                         is_strict: self.strict,
                     });
-                } else if let Some(slot) = slot {
+                } else if let Some(slot) = load_slot {
                     self.emit(Op::LoadLocal(slot));
                 } else {
                     self.emit(Op::LoadGlobal(name.clone()));

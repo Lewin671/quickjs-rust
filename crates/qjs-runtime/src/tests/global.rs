@@ -1256,6 +1256,39 @@ fn eval_script_runs_global_declaration_instantiation_checks() {
 }
 
 #[test]
+fn top_level_global_var_slot_tracks_realm_mutations() {
+    assert_eq!(
+        eval("var slotBackedGlobal = 1; eval('slotBackedGlobal = 3'); slotBackedGlobal;"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval(
+            "var slotBackedGlobal = 1; \
+             globalThis.slotBackedGlobal = 4; \
+             slotBackedGlobal;"
+        ),
+        Ok(Value::Number(4.0))
+    );
+    assert_eq!(
+        eval(
+            "var slotBackedGlobal = 1; \
+             Object.defineProperty(globalThis, 'slotBackedGlobal', { value: 5 }); \
+             slotBackedGlobal;"
+        ),
+        Ok(Value::Number(5.0))
+    );
+    assert_eq!(
+        eval(
+            "var slotBackedGlobal = ''; \
+             function appendToGlobal() { slotBackedGlobal += 'x'; } \
+             appendToGlobal(); \
+             slotBackedGlobal;"
+        ),
+        Ok(Value::String("x".to_owned().into()))
+    );
+}
+
+#[test]
 fn test262_build_string_host_helper_matches_regexp_utils_shape() {
     assert_eq!(
         eval(

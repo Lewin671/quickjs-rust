@@ -97,6 +97,19 @@ impl Compiler {
             .filter(|slot| !self.locals[*slot].sloppy_global_fallback)
     }
 
+    /// Resolves an identifier read to an indexed binding when the binding is
+    /// known at compile time. Global `var`/function writes deliberately keep
+    /// using the global operations so descriptor and strictness checks remain
+    /// centralized, while reads can use the shared realm cell installed for
+    /// their otherwise vestigial local slot.
+    pub(super) fn resolve_identifier_load_slot(&self, name: &str) -> Option<usize> {
+        self.resolve_local_slot(name).or_else(|| {
+            (self.global_scope && self.global_hoisted.contains(name))
+                .then(|| self.local_slots.get(name).copied())
+                .flatten()
+        })
+    }
+
     pub(super) fn assignment_slot(&mut self, name: &str) -> usize {
         if let Some(slot) = self.resolve_local_slot(name) {
             return slot;
@@ -584,6 +597,37 @@ mod tests {
         assert_eq!(
             upvalue_resolver::resolve_upvalues(outer).cell_slots,
             vec![var_slot]
+        );
+    }
+
+    #[test]
+    fn global_var_reads_use_the_shared_slot_but_writes_stay_global() {
+        let script =
+            qjs_parser::parse_script("var value = 1; value; value *= 2; value++; typeof value;")
+                .expect("source should parse");
+        let bytecode =
+            super::super::compiler::compile_script(&script).expect("source should compile");
+        let value_slot = bytecode
+            .local_slot("value")
+            .expect("global var should retain an indexed slot");
+
+        assert!(
+            bytecode
+                .code
+                .iter()
+                .any(|op| matches!(op, Op::LoadLocal(slot) if *slot == value_slot))
+        );
+        assert!(
+            bytecode
+                .code
+                .iter()
+                .any(|op| matches!(op, Op::StoreGlobalSloppy(name) if name == "value"))
+        );
+        assert!(
+            !bytecode
+                .code
+                .iter()
+                .any(|op| matches!(op, Op::LoadGlobal(name) if name == "value"))
         );
     }
 

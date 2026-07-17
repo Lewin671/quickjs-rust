@@ -2592,6 +2592,82 @@ SHA-256: `d1db2d4998b95ad988670acc4b31da7219d28f300824c5f4055629ce7e36b962`.
 This unit improves a class-heavy external program while preserving both other
 external suites and the internal regression guard; B4 and B5 remain active.
 
+The exact-SHA hosted workflows for
+`eaf64f20f4790681a38dfbc382696eb52330ed2e` then completed successfully. CI
+run `29617126163` passed comparison, Test262 subset, and full-check jobs.
+Coverage run `29617310831` retained 42,671 Rust passes, one failure, zero
+timeouts, and one actionable gap; its burndown and comparison-case SHA-256
+values are
+`0a9594104963a6815964c986c5779d09088d4a88761688f9fa9c476ef762a900`
+and `3ba9a1a20f4cd430f9f33471ca97652a67a12602740b26453f2e06fd63a58329`.
+
+Performance Preview run `29617126173` retained 25/25 broad cases, all 225/225
+eligible measurements, and all 75 engine/case linearity pairs. The hosted
+runner's 1.007516x candidate/base result was inconclusive; candidate/QuickJS-NG
+was 0.366549x overall, but allocation still failed B4 at 2.822703x. The other
+family ratios were 0.615636x array, 0.173452x binding, 0.087795x builtin,
+0.528594x call, 0.188521x control, 0.170350x property, and 0.521216x string.
+Hosted broad raw/report SHA-256 are
+`48ecceb438c6359b17346f048e99305ebde22d46a4c53a1c361d6644e33ec467`
+and `c76237ea82ad301bbb51c99929da9ec91accaade2238e3e2d2c8a53e7c2f15a4`.
+
+The same exact-SHA artifact retained comparable coverage at 5/5 JetStream,
+7/14 Kraken, and 23/26 SunSpider, but qjs-rust lost every comparable case.
+Suite diagnostic ratios remained far from B5 at 10.625742x, 6.170478x, and
+11.060351x QuickJS-NG. Hosted external raw/report SHA-256 are
+`33e631640f11669044b630bc663e7d7849ef60a85f6077cabf853d020cc1c848`
+and `59bd814501b7b4f0cf40c4be3f96b291bd44f075b84484a40026658861421f6f`.
+The target JetStream class-field raytrace duration nevertheless fell from
+10,044,283,046 ns at the exact base artifact to 8,697,197,004 ns here, a
+0.865886x cross-artifact ratio, while its candidate/QuickJS-NG ratio improved
+from 16.940592x to 14.608166x. This confirms that the mechanism generalized to
+the independent external workload; it does not mask the much larger remaining
+engine-wide deficit. The external results, rather than internal-only wins,
+therefore continue to drive the next structural bottlenecks. B4 and B5 remain
+active.
+
+The forty-seventh v2 unit follows a fresh external bitops profile into the
+general global-binding read path. A declared top-level `var` or function
+previously re-hashed its source name and consulted the realm/global object on
+every read even though declaration instantiation already provided a stable
+shared realm cell. Such reads now use the declaration's indexed slot backed by
+that cell. Writes remain on the complete global path so writable descriptors,
+strict/sloppy behavior, `with`, direct eval, global-object mutations, and
+accessor/deletion deoptimization keep their existing checks. The same change
+made every top-level declaration install its realm cell at frame entry. It also
+closed two older string-append paths that mutated the realm value table
+directly: both now refresh an existing shared cell after copy-on-write. Focused
+tests prove the read opcode/write opcode split and visibility after direct
+eval, global-object assignment, `Object.defineProperty`, and a nested string
+append. No workload name, source path, iteration count, checksum, or expected
+benchmark value appears in the implementation.
+
+Against base binary SHA-256
+`d4d4930db2bb3e8939ae9228ea979dbe25c34d2bf17ddd5aad136d7b6c6d957d`,
+candidate binary SHA-256
+`989f3cd0c827db801b23ebf95ef8eea326c144a34e05313c1327ef2b24132926`
+improved alternating outer-wall probes of six independent SunSpider sources.
+Candidate/base medians were 0.804612x for `bitops-bitwise-and`, 0.979102x for
+`bitops-nsieve-bits`, 0.936710x for `3d-morph`, 0.963054x for
+`access-nsieve`, 0.994970x for `math-partial-sums`, and 0.994814x for
+`string-validate-input`. The 9-run probes were independently repeated with 21
+runs for the three closest or initially variable cases. These focused probes
+use the pinned upstream source and the external preview's raw CLI mode, but are
+development evidence rather than a complete suite claim; the exact-SHA hosted
+preview remains authoritative.
+
+The complete one-block three-role broad development diagnostic produced 1,473
+OK samples: 498 calibration, 225 startup, 75 warmup, 75/75 eligible
+measurements, and 600 linearity samples. Candidate/base was 0.987170x overall;
+family ratios ranged from 0.955193x call through 1.001039x property, and the
+worst individual candidate/base ratio was 1.011043x. Candidate/QuickJS-NG was
+0.192872x overall, but allocation still failed B4 at 1.136663x. The strict
+analyzer correctly rejected the receipt-less dirty development binaries, so
+this is regression evidence rather than a fixed-hardware claim. Broad raw
+SHA-256: `fc5533c3541b3fdc108c85e3744a2cd90b976e83bc19ef8e09188e3158dbfc33`.
+This unit improves several structurally different external programs while
+keeping the internal family guard neutral; B4 and B5 remain active.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

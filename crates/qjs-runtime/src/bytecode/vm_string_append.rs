@@ -102,9 +102,11 @@ impl Vm<'_> {
                     result.clone()
                 });
             if self.realm.borrow().contains_key(&local_meta.name) {
-                self.realm
-                    .borrow_mut()
-                    .insert(local_meta.name, result.clone());
+                // A top-level reader may already hold the realm binding's
+                // shared cell even when this older from-env frame still uses a
+                // compatibility slot. Route the mirror through CallEnv so the
+                // cell cannot retain the pre-append string.
+                self.env.insert_realm(local_meta.name, result.clone());
             }
         }
         Ok(result)
@@ -136,6 +138,9 @@ impl Vm<'_> {
                             result.clone()
                         });
                 }
+                // `Rc::make_mut` can detach the realm string from a cell's
+                // earlier clone. Refresh that cell after the in-place append.
+                self.env.insert_realm(name.to_owned(), result.clone());
                 self.write_through_module_live_binding(name, result.clone());
                 return Ok(result);
             }
