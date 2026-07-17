@@ -320,6 +320,14 @@ impl<'a> Vm<'a> {
         upvalues: &[Upvalue],
         env: &CallEnv,
     ) -> Vec<Option<Upvalue>> {
+        // Most direct leaf calls have no captured, module, or sloppy-global
+        // cells. An empty vector represents the all-None state for those
+        // frames and avoids allocating one pointer-sized entry per local on
+        // every call. Direct-call eligibility excludes operations that can
+        // create cells later (closures, eval, and with).
+        if !bytecode.has_direct_local_upvalue_routes() && !env.has_module_imports() {
+            return Vec::new();
+        }
         let mut next_received = 0;
         bytecode
             .locals
@@ -1503,5 +1511,82 @@ impl<'a> Vm<'a> {
         let references_name = bytecode.local_slot(name).is_some()
             || bytecode.global_names().iter().any(|global| global == name);
         references_name.then(|| name.to_owned())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bytecode::ir::Local;
+
+    fn local(name: &str, from_env: bool) -> Local {
+        Local {
+            name: name.to_owned(),
+            hoisted: false,
+            hoisted_function: false,
+            parameter: false,
+            catch_binding: false,
+            mutable: true,
+            from_env,
+            sloppy_global_fallback: false,
+        }
+    }
+
+    fn empty_env() -> CallEnv {
+        CallEnv::new(new_realm(HashMap::new()))
+    }
+
+    #[test]
+    fn direct_cell_free_frame_uses_empty_upvalue_storage() {
+        let bytecode = Bytecode::new(Vec::new(), vec![local("value", false)], Vec::new());
+        let env = empty_env();
+
+        let local_upvalues = Vm::initial_direct_local_upvalues(&bytecode, &[], &env);
+
+        assert!(local_upvalues.is_empty());
+        assert_eq!(
+            Vm::initial_authoritative_slots(&bytecode, &local_upvalues, &env),
+            1
+        );
+    }
+
+    #[test]
+    fn direct_captured_frame_keeps_received_upvalue_storage() {
+        let bytecode = Bytecode::new(Vec::new(), vec![local("captured", true)], Vec::new());
+        let env = empty_env();
+        let captured = Upvalue::new(Value::Number(42.0));
+
+        let local_upvalues =
+            Vm::initial_direct_local_upvalues(&bytecode, std::slice::from_ref(&captured), &env);
+
+        assert_eq!(local_upvalues.len(), 1);
+        assert!(
+            local_upvalues[0]
+                .as_ref()
+                .is_some_and(|upvalue| upvalue.ptr_eq(&captured))
+        );
+    }
+
+    #[test]
+    fn direct_module_frame_keeps_import_cell_storage() {
+        let bytecode = Bytecode::new(Vec::new(), vec![local("imported", false)], Vec::new());
+        let mut env = empty_env();
+        let exports = DynamicBindings::new();
+        exports.insert("exported".to_owned(), Value::Number(7.0));
+        env.set_module_import(
+            "imported".to_owned(),
+            exports.clone(),
+            "exported".to_owned(),
+        );
+
+        let local_upvalues = Vm::initial_direct_local_upvalues(&bytecode, &[], &env);
+
+        assert_eq!(local_upvalues.len(), 1);
+        assert!(
+            local_upvalues[0]
+                .as_ref()
+                .zip(exports.cell("exported").as_ref())
+                .is_some_and(|(local, exported)| local.ptr_eq(exported))
+        );
     }
 }

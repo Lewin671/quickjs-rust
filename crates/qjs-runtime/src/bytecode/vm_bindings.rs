@@ -386,7 +386,7 @@ impl Vm<'_> {
             .filter_map(|(slot, local)| {
                 (!bytecode.global_scope
                     && !local.sloppy_global_fallback
-                    && local_upvalues.get(slot).is_some_and(Option::is_none)
+                    && local_upvalues.get(slot).is_none_or(Option::is_none)
                     && env.slot_is_authoritative(&local.name))
                 .then_some(1_u128 << slot)
             })

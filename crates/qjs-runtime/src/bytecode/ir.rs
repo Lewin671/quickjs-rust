@@ -695,6 +695,10 @@ pub struct Bytecode {
     local_slots: HashMap<String, usize>,
     parameter_slots: Vec<usize>,
     received_upvalue_slots: Vec<usize>,
+    /// Whether direct-call frame setup may need per-local upvalue storage for
+    /// an outer capture or sloppy global fallback. Module imports are tracked
+    /// by `CallEnv` and checked separately at call time.
+    has_direct_local_upvalue_routes: bool,
     global_names: Vec<String>,
     global_lexical_names: Vec<String>,
     sloppy_global_assignment_names: Vec<String>,
@@ -783,11 +787,15 @@ impl Bytecode {
             .enumerate()
             .filter_map(|(slot, local)| local.is_received_upvalue().then_some(slot))
             .collect();
+        let has_direct_local_upvalue_routes = locals
+            .iter()
+            .any(|local| local.is_received_upvalue() || local.sloppy_global_fallback);
         let mut bytecode = Self {
             constants,
             local_slots: collect_local_slots(&locals),
             parameter_slots,
             received_upvalue_slots,
+            has_direct_local_upvalue_routes,
             locals,
             global_names: collect_global_names(&code),
             global_lexical_names,
@@ -969,6 +977,10 @@ impl Bytecode {
 
     pub(super) fn received_upvalue_slots(&self) -> &[usize] {
         &self.received_upvalue_slots
+    }
+
+    pub(super) fn has_direct_local_upvalue_routes(&self) -> bool {
+        self.has_direct_local_upvalue_routes
     }
 
     pub(crate) fn local_name_at(&self, slot: usize) -> Option<&str> {

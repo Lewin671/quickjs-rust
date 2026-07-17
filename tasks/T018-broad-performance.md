@@ -2003,6 +2003,54 @@ and `8c9b2f0ab3c8f98ec6009f8a01ba6a93e4c2238220fa00ddff3ce9f5e9046264`.
 These gains satisfy the no-overfitting regression boundary for this unit, but
 the external <=1.00x target and broad allocation <=1.00x target remain open.
 
+The thirty-seventh v2 unit follows a hotspot shared by the external
+`access-binary-trees` port and the broad call/allocation profiles. Direct leaf
+frames previously allocated a `Vec<Option<Upvalue>>` with one `None` entry per
+local on every call even when the compiled function had no received capture,
+sloppy-global route, or module import. Bytecode now caches whether either
+local route exists, `CallEnv` exposes whether module-import routes exist, and a
+cell-free direct frame represents the all-`None` upvalue table with an empty
+vector. Authoritative-slot setup treats a missing entry as `None`. The existing
+direct-call admission contract excludes closures, direct eval, and `with`, so
+no operation can create a cell later on this path. Captured and module-import
+unit tests prove that their identity-bearing cells still use full storage. The
+implementation has no workload ID, source path, iteration count, or checksum
+input.
+
+Against clean base binary SHA-256
+`0fd0b797227d3e82086d49a81817d6178990b174a1f70f44ad21a736f42cec41`,
+candidate binary SHA-256
+`af59c4e55c36f2dd739b2698b285f6bda059a32fa7bb00383c090632251f1957`
+reduced an eleven-block interleaved external-shaped binary-tree median from
+8.653387 s to 8.391495 s (0.969735x). The complete local three-role broad
+diagnostic preserved all 25 cases and 225 eligible exact-checksum samples at
+0.998932x candidate/base. Binding was 0.987920x, call 0.997499x, and allocation
+1.013692x; the latter remains below the unit's 2% material family threshold.
+The raw SHA-256 is
+`fd022895f0a7bc9197bc352274bea0cc0d9a28d352bbed11ea903b7f4cdb8ec8`.
+The strict analyzer rejected the intentionally receipt-less local binaries, so
+these remain regression diagnostics rather than a performance claim.
+
+Independent one-block full external A/B previews preserved identical coverage
+at 5/5 JetStream, 8/14 Kraken, and 23/26 SunSpider. Across all 36 common
+comparable cases, candidate/base was 0.998782x; five cases improved by more
+than 2%, 27 stayed within 2%, four moved between 2.05% and 5.12%, and none
+regressed by 25%. Suite candidate/base ratios were 0.994606x, 1.000293x, and
+0.999167x. Candidate/QuickJS-NG diagnostics remain far from completion at
+9.599757x, 5.766279x, and 8.740135x. An eleven-block interleaved rerun of the
+external source confirmed `access-binary-trees` at 0.969378x; three apparent
+regressions resolved to 0.988744x (`math-cordic`), 0.994895x (`crypto-md5`),
+and 1.000494x (`string-fasta`), while `date-format-tofte` retained a small
+1.021284x movement. Candidate raw/report SHA-256 are
+`ddda93bdf1a6953061728ab3112cc2215867aa8d4c39e5858d098d5563c307e9`
+and `864339bfe2f648024a63be730dce401a2a2812709a28f1be41ea24f63ffb8c9a`;
+base raw/report SHA-256 are
+`5f38ae170e09a785fefc6fa053712e4c5da64c7b13f28d3a0eac096fa1d53893`
+and `c3c049ecbccff7e082320ad9c88d38506e30edfa7c7dba51c807fbfec7cf0335`.
+These local results satisfy the unit's no-overfitting regression boundary but
+do not satisfy B4 or B5; the exact-SHA hosted broad and external artifacts
+remain authoritative.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

@@ -605,6 +605,10 @@ impl CallEnv {
         self.module_imports.clone()
     }
 
+    pub(crate) fn has_module_imports(&self) -> bool {
+        !self.module_imports.is_empty()
+    }
+
     pub(crate) fn set_module_imports(&mut self, imports: ModuleImports) {
         self.module_imports = imports;
     }
