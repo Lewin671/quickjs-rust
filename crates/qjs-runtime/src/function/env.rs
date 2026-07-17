@@ -1186,6 +1186,17 @@ impl CallEnv {
         self.frame_bindings.cell(name)
     }
 
+    /// Returns the live cell for a binding supplied by the current caller or
+    /// dynamic environment, without falling through to the realm. Direct eval
+    /// uses this to keep a same-named function local distinct from a global.
+    pub(crate) fn local_binding_cell(&self, name: &str) -> Option<Upvalue> {
+        self.frame_bindings.cell(name).or_else(|| {
+            self.deopt_bindings
+                .as_ref()
+                .and_then(|bindings| bindings.cell(name))
+        })
+    }
+
     pub(crate) fn set_local(&self, name: &str, value: Value) -> bool {
         self.frame_bindings.set(name, value.clone())
             || self

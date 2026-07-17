@@ -264,6 +264,17 @@ impl Vm<'_> {
                 }
                 continue;
             }
+            // A direct-eval program is compiled as a global-scope bytecode,
+            // but its imported `var` slots can still name the caller's local
+            // binding. Preserve that binding identity before considering the
+            // same-named realm cell.
+            if direct_eval_frame
+                && local.hoisted
+                && let Some(upvalue) = env.local_binding_cell(&local.name)
+            {
+                local_upvalues[slot] = Some(upvalue);
+                continue;
+            }
             if bytecode.global_scope
                 && local.hoisted
                 && let Some(upvalue) = env.realm_binding_cell(&local.name)
@@ -272,7 +283,12 @@ impl Vm<'_> {
                 continue;
             }
             if local.sloppy_global_fallback {
-                local_upvalues[slot] = env.realm_binding_cell(&local.name);
+                local_upvalues[slot] = if direct_eval_frame {
+                    env.local_binding_cell(&local.name)
+                        .or_else(|| env.realm_binding_cell(&local.name))
+                } else {
+                    env.realm_binding_cell(&local.name)
+                };
                 continue;
             }
             if local.is_received_upvalue() {

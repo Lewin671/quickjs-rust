@@ -329,6 +329,10 @@ impl<'a> Vm<'a> {
         if !bytecode.has_direct_local_upvalue_routes() && !env.has_module_imports() {
             return Vec::new();
         }
+        let direct_eval_frame = matches!(
+            env.get_local(crate::DIRECT_EVAL_BINDING),
+            Some(Value::Boolean(true))
+        );
         let mut next_received = 0;
         bytecode
             .locals
@@ -341,6 +345,10 @@ impl<'a> Vm<'a> {
                     return Some(upvalue);
                 }
                 if local.sloppy_global_fallback {
+                    if direct_eval_frame && let Some(upvalue) = env.local_binding_cell(&local.name)
+                    {
+                        return Some(upvalue);
+                    }
                     return env.realm_binding_cell(&local.name);
                 }
                 if local.is_received_upvalue() {

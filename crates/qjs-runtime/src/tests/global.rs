@@ -1289,6 +1289,34 @@ fn top_level_global_var_slot_tracks_realm_mutations() {
 }
 
 #[test]
+fn direct_eval_keeps_shadowing_function_var_distinct_from_global_cell() {
+    assert_eq!(
+        eval(
+            "var shadowedEvalGlobal = 'global'; \
+             (function() { \
+               var shadowedEvalGlobal = 'local'; \
+               eval('shadowedEvalGlobal = 1;'); \
+               if (shadowedEvalGlobal !== 1) throw new Error('direct eval local'); \
+             })(); \
+             shadowedEvalGlobal;"
+        ),
+        Ok(Value::String("global".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var shadowedEvalGlobal = 'global'; \
+             (function() { \
+               var shadowedEvalGlobal = 'local'; \
+               eval(...['shadowedEvalGlobal = 2;']); \
+               if (shadowedEvalGlobal !== 2) throw new Error('spread eval local'); \
+             })(); \
+             shadowedEvalGlobal;"
+        ),
+        Ok(Value::String("global".to_owned().into()))
+    );
+}
+
+#[test]
 fn test262_build_string_host_helper_matches_regexp_utils_shape() {
     assert_eq!(
         eval(

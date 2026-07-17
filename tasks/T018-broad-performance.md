@@ -2668,6 +2668,56 @@ SHA-256: `fc5533c3541b3fdc108c85e3744a2cd90b976e83bc19ef8e09188e3158dbfc33`.
 This unit improves several structurally different external programs while
 keeping the internal family guard neutral; B4 and B5 remain active.
 
+The exact-SHA audit for
+`e73773d4481310490b9f6d12e39bfa9fa759c2fe` deliberately separates workflow
+success from goal success. CI run `29620670097` passed all three jobs, and
+Performance Preview run `29620670106` completed all 225/225 broad measurements
+and all 75 linearity pairs. On the hosted runner, candidate/base was
+0.991388x overall. The binding family improved to 0.969603x and the top-level
+function-call case to 0.800568x, while the aggregate remained below the
+campaign's practical effect threshold and several unrelated cases varied in
+both directions. Candidate/QuickJS-NG was 0.368849x overall, but allocation
+still failed B4 at 2.168137x; the other family ratios were 0.590612x array,
+0.169022x binding, 0.100850x builtin, 0.610915x call, 0.246021x control,
+0.144766x property, and 0.527411x string. Hosted broad raw/report SHA-256 are
+`0c22db41a60128cda6b315342bb2eac6bf8715d54442fde9d7d5b64926903fe7`
+and `e356af5fa81c678438bbba5fe895fe239fb5de36a00408147fa825671e67ec94`.
+
+The same artifact is the authoritative warning against treating an internal
+win as general engine speed. It retained 5/5 JetStream, 8/14 Kraken, and 23/26
+SunSpider comparable cases, but qjs-rust still won none. Suite diagnostic
+ratios were 10.710538x, 7.155944x, and 11.051522x QuickJS-NG: effectively no
+suite-level closure of the external deficit. Some individual ratios improved,
+including `string-validate-input` from 52.765730x to 36.587812x and the
+class-field raytrace from 14.608166x to 13.369248x, while the targeted
+`bitops-bitwise-and` ratio moved from 20.896859x to 23.019352x on the new
+hosted run. Cross-run absolute durations moved for both engines and are not a
+fixed-hardware comparison, so those mixed ratios outrank the favorable local
+probes. External raw/report/manifest SHA-256 are
+`65ad40f0cbc57fe71bef0fcad441428fa89e452782a683f19d68ab329eff24d6`,
+`2fe13bab16b5600e7093d4829aeb2698bcafdf4a91cb8d78c186b08b5a33c965`,
+and `fbcd37039908f72342effd1c2d9d3b12156f180bec745e95ff9a8bae2d56a93a`.
+B4 and B5 remain active, and the next optimization must again target a general
+external-profiled mechanism rather than an internal workload shape.
+
+Coverage run `29620811076` also exposed why a green workflow is not sufficient
+evidence. It completed successfully, but Rust moved from 42,671 pass / 1 fail
+to 42,668 pass / 4 fail, creating three new actionable gaps in the direct-eval
+spread family. The global-read change made a pre-existing bad cell route
+observable: an unresolved assignment in direct eval could attach a
+same-named function local to the realm cell, so the later top-level indexed
+read observed the local assignment. The immediate correctness follow-up now
+resolves a direct-eval caller or deoptimized binding cell before considering
+the realm cell, in both regular and direct VM initialization, and covers plain
+and spread eval with a shadowing function `var`. All four exact upstream
+`eval-spread*` cases, 114 focused eval/call cases, 1,389 runtime tests, and the
+full 5,139-case curated subset pass locally. The regressed coverage artifact's
+burndown/comparison SHA-256 are
+`8ef8c44a2ea9d4b676f5c0797c76350504f4ace9efc6829a6b7ac7a04548aaaa`
+and `9961943568f0540bda862cf368c7175e105bf7ac4bd811dc955c5fc49186a696`;
+the next exact-SHA coverage artifact must restore the former one-gap baseline
+before this optimization unit is accepted.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
