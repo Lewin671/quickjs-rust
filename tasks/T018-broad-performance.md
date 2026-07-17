@@ -1893,6 +1893,56 @@ so these values are regression diagnostics only. Raw SHA-256:
 `4b98b738c107ffe5994bf84b0c8fb2e80de2ab515f4f4d573ee984ec7c650462`.
 The next hosted receipt-bound artifact decides campaign progress.
 
+Hosted run `29562514302` accepted the thirty-fourth unit at commit
+`7fe4f34a`. CI, full Test262 coverage, and the performance workflow all
+completed successfully. The receipt-bound broad artifact was neutral against
+its exact base at 0.9998x candidate/base and measured 0.3721x
+candidate/QuickJS-NG overall; allocation remained the only failing family at
+2.3652x. The external artifact preserved 5/5 JetStream, 5/14 Kraken, and 23/26
+SunSpider comparable cases. `string-validate-input` fell from 2.128 s to
+0.836 s across the two hosted artifacts, but external suite ratios remained
+15.635x, 8.530x, and 17.336x respectively. This was genuine generalization,
+not completion of B4/B5.
+
+The thirty-fifth v2 unit follows the next dominant external profile.
+SunSpider `access-fannkuch` spent most sampled time in `current_env`,
+`apply_env`, `CallEnv::snapshot_locals`, string-key hashing, and frame-map
+allocation. The hot source operation was logical-not over already-computed
+Boolean results. ECMAScript logical-not only applies `ToBoolean`, and `void`
+only discards an already-evaluated value; neither invokes `valueOf`,
+`toString`, `Symbol.toPrimitive`, accessors, or any other user code. The
+general fix therefore evaluates both operators directly on the VM `Value`
+without materializing or writing back a caller `CallEnv`. All coercing unary
+operators retain their existing generic path, and the implementation has no
+workload identity, source path, iteration count, or checksum input.
+
+Against clean detached `7fe4f34a` binary SHA-256
+`66862542b73d4491ea2cb6241f54c4b331442a61d8e69c729ac502f8c2cd264a`,
+candidate binary SHA-256
+`fd98f344ce99249d720406af18236e8ec67c66945fde3701f48a73409e05bb8f`
+reduced seven-run interleaved `access-fannkuch` median wall time from 3.251 s
+to 0.146 s (0.0448x base, 95.5% lower). The complete local external preview
+preserved coverage at 5/5 JetStream, 8/14 Kraken, and 23/26 SunSpider.
+`access-fannkuch` fell from 3.344 s to 0.264 s (0.0789x); structurally distinct
+`3d-cube`, JetStream `hash-map`, and JetStream `cdjs` reached 0.613x, 0.752x,
+and 0.796x of their preceding candidate wall times. Across 36 common
+comparable cases, 14 improved by more than 2%, 21 remained within 2%, and one
+moved 4.0% alongside a 9.4% QuickJS-NG timing shift. Suite ratios improved
+from 11.806x/5.984x/10.360x to 10.451x/5.849x/8.946x. These are substantial
+external gains but still fail the <=1.00x B5 guard. External raw SHA-256:
+`8dbc52c781ffd9a06dfebe89c62e0e46adef63df31b0dc82d425d23e71d4a8e0`;
+report SHA-256:
+`9b809cb3756f4de8120ca79ba74495a1e003ace430bda161287e800cfa4cc275`.
+
+The clean-binary three-role broad diagnostic completed all 25 cases with exact
+checksums. Raw medians were 0.9559x candidate/base and 0.1974x
+candidate/QuickJS-NG; allocation improved to 1.1726x but remained above its
+critical-family guard. The strict report correctly rejected the receipt-less
+development binaries as unverified, so these are regression diagnostics only.
+Raw SHA-256:
+`701c0bcb81998d84b6dec5cb3113c4df9c394e4cd36a67145d5e08becd41b76c`.
+The next hosted receipt-bound artifact decides campaign progress.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

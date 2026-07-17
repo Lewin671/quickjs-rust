@@ -4,7 +4,7 @@ use num_bigint::BigInt;
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
 use crate::{
-    ArrayRef, PreferredType, RuntimeError, Value, error, operations, to_number_with_env,
+    ArrayRef, PreferredType, RuntimeError, Value, error, is_truthy, operations, to_number_with_env,
     to_primitive_with_hint,
 };
 
@@ -50,6 +50,15 @@ impl Vm<'_> {
 
     pub(super) fn eval_unary(&mut self, op: UnaryOp) -> Result<Value, RuntimeError> {
         let value = self.pop()?;
+        // Neither logical-not nor void performs user-observable coercion. In
+        // particular, objects stay truthy without consulting valueOf,
+        // Symbol.toPrimitive, or the caller environment. Keep these ubiquitous
+        // operators on the VM value path instead of materializing a CallEnv.
+        match op {
+            UnaryOp::Not => return Ok(Value::Boolean(!is_truthy(&value))),
+            UnaryOp::Void => return Ok(Value::Undefined),
+            _ => {}
+        }
         if let Some(value) = fast_number_unary(op, &value) {
             return Ok(value);
         }

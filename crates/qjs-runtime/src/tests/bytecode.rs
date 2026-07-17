@@ -138,6 +138,26 @@ fn evaluates_number_unary_fast_paths_with_bytecode() {
 }
 
 #[test]
+fn evaluates_non_coercing_unary_fast_paths_with_bytecode() {
+    assert_eq!(
+        eval_bytecode_source(
+            "let calls = 0; let object = { valueOf() { calls++; return 0; }, toString() { calls++; return ''; } }; (!object) + ':' + (void object) + ':' + calls;"
+        ),
+        Ok(Value::String("false:undefined:0".to_owned().into()))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "[!false, !0, !-0, !NaN, !0n, !'', !null, !undefined, !1, !1n, !'x', !{}, !Symbol()].join(',');"
+        ),
+        Ok(Value::String(
+            "true,true,true,true,true,true,true,true,false,false,false,false,false"
+                .to_owned()
+                .into()
+        ))
+    );
+}
+
+#[test]
 fn evaluates_slot_locals_with_bytecode() {
     assert_bytecode_evaluates("let x = 2; const y = 3; x * y;");
     assert_bytecode_evaluates("var x = 1, y = 2, missing; x + y;");
