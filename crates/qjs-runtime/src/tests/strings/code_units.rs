@@ -14,6 +14,14 @@ fn evaluates_string_code_unit_builtins() {
     assert_eq!(eval("'abc'.at(3);"), Ok(Value::Undefined));
     assert_eq!(eval("'abc'.at(-4);"), Ok(Value::Undefined));
     assert_eq!(
+        eval("'😀'.at(0).charCodeAt(0);"),
+        Ok(Value::Number(55_357.0))
+    );
+    assert_eq!(
+        eval("'😀'.at(1).charCodeAt(0);"),
+        Ok(Value::Number(56_832.0))
+    );
+    assert_eq!(
         eval("'abc'.at();"),
         Ok(Value::String("a".to_owned().into()))
     );

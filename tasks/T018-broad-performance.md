@@ -1725,6 +1725,34 @@ exactly matching the retained pre-change `1089e7cd` binary. The revert keeps
 the external generalization contract and its evidence, but no boxed-capture
 performance claim.
 
+The thirty-first v2 unit starts from an external profile instead of an internal
+case shape. A three-second macOS sample of the pinned SunSpider `crypto-md5`
+port placed 2,073 of 2,113 in-engine samples under
+`native_string_prototype_char_code_at`. Every primitive-string call cloned the
+entire `Rc<String>` into a new `String` and then materialized a complete UTF-16
+`Vec`, making a forward character scan quadratic and allocation-heavy. The
+general fix adds direct code-unit access: ASCII strings use byte-indexed O(1)
+reads and lengths, non-ASCII strings scan without materializing the whole
+UTF-16 sequence, primitive receivers retain their shared immutable storage,
+and full UTF-16 conversion now preallocates once rather than allocating a
+temporary vector per scalar. `at`, `charAt`, `charCodeAt`, and `codePointAt`
+all use the same mechanism, with explicit ASCII, supplementary-plane, and lone
+surrogate tests. No workload name, source path, iteration count, or checksum is
+available to the implementation.
+
+Three fresh-process local runs against the retained pre-change binary reduced
+SunSpider `crypto-md5` median wall time from approximately 6.39 s to 0.18 s
+(0.0282x base, about 35.5x faster) and `crypto-sha1` from 2.66 s to 0.12 s
+(0.0451x base, about 22.2x faster). The unrelated `access-nbody` and
+`bitops-nsieve-bits` ports remained near their preceding 3.3 s and 3.0 s,
+respectively, which is consistent with the profiled string mechanism rather
+than a suite-wide shortcut. A five-block internal `string_slice` run retained
+all 15 eligible measurements and exact per-iteration checksums; medians were
+56.927 ns/op candidate, 59.935 ns/op base, and 90.016 ns/op QuickJS-NG
+(0.9498x base and 0.6324x QuickJS-NG). These are focused local diagnostics;
+the next hosted broad and external artifacts decide whether the unit counts as
+campaign progress.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

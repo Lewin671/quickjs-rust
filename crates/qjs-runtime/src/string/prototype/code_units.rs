@@ -1,19 +1,30 @@
-use crate::{RuntimeError, Value, string::string_code_units, string::string_from_code_unit};
+use std::rc::Rc;
+
+use crate::{
+    RuntimeError, Value,
+    string::{string_code_unit_at, string_code_unit_len, string_from_code_unit},
+};
 
 use super::super::indexing::{
     relative_string_code_unit_index, this_string_value, to_char_code_position,
 };
 use crate::CallEnv;
 
+fn shared_string_value(value: Value, env: &mut CallEnv) -> Result<Rc<String>, RuntimeError> {
+    match value {
+        Value::String(value) => Ok(value),
+        value => this_string_value(value, env).map(Rc::new),
+    }
+}
+
 pub(crate) fn native_string_prototype_at(
     this_value: Value,
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let value = this_string_value(this_value, env)?;
-    let code_units = string_code_units(&value);
+    let value = shared_string_value(this_value, env)?;
     let Some(index) = relative_string_code_unit_index(
-        code_units.len(),
+        string_code_unit_len(&value),
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?
@@ -21,9 +32,10 @@ pub(crate) fn native_string_prototype_at(
         return Ok(Value::Undefined);
     };
 
-    Ok(Value::String(
-        string_from_code_unit(code_units[index]).into(),
-    ))
+    let Some(code_unit) = string_code_unit_at(&value, index) else {
+        return Ok(Value::Undefined);
+    };
+    Ok(Value::String(string_from_code_unit(code_unit).into()))
 }
 
 pub(crate) fn native_string_prototype_char_at(
@@ -31,7 +43,7 @@ pub(crate) fn native_string_prototype_char_at(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let value = this_string_value(this_value, env)?;
+    let value = shared_string_value(this_value, env)?;
     let position = to_char_code_position(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
@@ -41,9 +53,8 @@ pub(crate) fn native_string_prototype_char_at(
     }
     let index = position as usize;
     Ok(Value::String(
-        string_code_units(&value)
-            .get(index)
-            .map(|code_unit| string_from_code_unit(*code_unit))
+        string_code_unit_at(&value, index)
+            .map(string_from_code_unit)
             .unwrap_or_default()
             .into(),
     ))
@@ -54,7 +65,7 @@ pub(crate) fn native_string_prototype_char_code_at(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let value = this_string_value(this_value, env)?;
+    let value = shared_string_value(this_value, env)?;
     let position = to_char_code_position(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
@@ -63,11 +74,9 @@ pub(crate) fn native_string_prototype_char_code_at(
         return Ok(Value::Number(f64::NAN));
     }
 
-    let code_units = string_code_units(&value);
     let index = position as usize;
-    Ok(code_units
-        .get(index)
-        .map(|code_unit| Value::Number(f64::from(*code_unit)))
+    Ok(string_code_unit_at(&value, index)
+        .map(|code_unit| Value::Number(f64::from(code_unit)))
         .unwrap_or(Value::Number(f64::NAN)))
 }
 
@@ -76,7 +85,7 @@ pub(crate) fn native_string_prototype_code_point_at(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let value = this_string_value(this_value, env)?;
+    let value = shared_string_value(this_value, env)?;
     let position = to_char_code_position(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
@@ -85,16 +94,17 @@ pub(crate) fn native_string_prototype_code_point_at(
         return Ok(Value::Undefined);
     }
 
-    let code_units = string_code_units(&value);
     let index = position as usize;
-    let Some(first) = code_units.get(index).copied() else {
+    let Some(first) = string_code_unit_at(&value, index) else {
         return Ok(Value::Undefined);
     };
-    if !(0xD800..=0xDBFF).contains(&first) || index + 1 == code_units.len() {
+    if !(0xD800..=0xDBFF).contains(&first) {
         return Ok(Value::Number(f64::from(first)));
     }
 
-    let second = code_units[index + 1];
+    let Some(second) = string_code_unit_at(&value, index + 1) else {
+        return Ok(Value::Number(f64::from(first)));
+    };
     if !(0xDC00..=0xDFFF).contains(&second) {
         return Ok(Value::Number(f64::from(first)));
     }

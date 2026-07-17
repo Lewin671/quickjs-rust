@@ -38,20 +38,51 @@ pub(crate) const STRING_DATA_PROPERTY: &str = "\0StringData";
 const SURROGATE_ESCAPE_SENTINEL_BASE: u32 = 0xF0000;
 
 pub(crate) fn string_code_units(value: &str) -> Vec<u16> {
-    value
-        .chars()
-        .flat_map(|character| {
-            if let Some(code_unit) = surrogate_escape_code_unit(character) {
-                vec![code_unit]
-            } else {
-                let mut buffer = [0; 2];
-                character.encode_utf16(&mut buffer).to_vec()
+    if value.is_ascii() {
+        return value.bytes().map(u16::from).collect();
+    }
+
+    let mut code_units = Vec::with_capacity(string_code_unit_len(value));
+    for character in value.chars() {
+        if let Some(code_unit) = surrogate_escape_code_unit(character) {
+            code_units.push(code_unit);
+        } else {
+            let mut buffer = [0; 2];
+            code_units.extend_from_slice(character.encode_utf16(&mut buffer));
+        }
+    }
+    code_units
+}
+
+pub(crate) fn string_code_unit_at(value: &str, index: usize) -> Option<u16> {
+    if value.is_ascii() {
+        return value.as_bytes().get(index).copied().map(u16::from);
+    }
+
+    let mut current_index = 0;
+    for character in value.chars() {
+        if let Some(code_unit) = surrogate_escape_code_unit(character) {
+            if current_index == index {
+                return Some(code_unit);
             }
-        })
-        .collect()
+            current_index += 1;
+            continue;
+        }
+
+        let mut buffer = [0; 2];
+        let encoded = character.encode_utf16(&mut buffer);
+        if index < current_index + encoded.len() {
+            return encoded.get(index - current_index).copied();
+        }
+        current_index += encoded.len();
+    }
+    None
 }
 
 pub(crate) fn string_code_unit_len(value: &str) -> usize {
+    if value.is_ascii() {
+        return value.len();
+    }
     value
         .chars()
         .map(|character| {
@@ -124,13 +155,31 @@ pub(crate) fn push_code_unit(result: &mut String, code_unit: u16) {
 
 #[cfg(test)]
 mod tests {
-    use super::{string_code_unit_len, string_code_units, string_from_code_units};
+    use super::{
+        string_code_unit_at, string_code_unit_len, string_code_units, string_from_code_units,
+    };
 
     #[test]
     fn code_unit_length_matches_materialized_utf16() {
         let escaped_surrogates = string_from_code_units(&[0xD800, 0xDC00, 0xDFFF]);
         for value in ["ascii", "A😀文", escaped_surrogates.as_str()] {
             assert_eq!(string_code_unit_len(value), string_code_units(value).len());
+        }
+    }
+
+    #[test]
+    fn code_unit_at_matches_materialized_utf16() {
+        let escaped_surrogates = string_from_code_units(&[0xD800, 0xDC00, 0xDFFF]);
+        for (value, expected) in [
+            ("ascii", vec![0x61, 0x73, 0x63, 0x69, 0x69]),
+            ("A😀文", vec![0x41, 0xD83D, 0xDE00, 0x6587]),
+            (escaped_surrogates.as_str(), vec![0xD800, 0xDC00, 0xDFFF]),
+        ] {
+            assert_eq!(string_code_units(value), expected);
+            for (index, code_unit) in expected.iter().enumerate() {
+                assert_eq!(string_code_unit_at(value, index), Some(*code_unit));
+            }
+            assert_eq!(string_code_unit_at(value, expected.len()), None);
         }
     }
 }
