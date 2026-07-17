@@ -2467,6 +2467,68 @@ SHA-256: `e71b97feb3314937dccf318007df67a4adc38bad11ad24b5f43548015d9f62b7`.
 This unit materially improves multiple independent external sources while
 keeping the internal regression guard neutral; B4 and B5 remain active.
 
+The exact-SHA hosted workflows for
+`d17cde1891f329debfeb023781ae13e3ae72318c` all completed successfully. CI
+passed the comparison, Test262 subset, and full check jobs. Exact Test262
+coverage remained 42,671 pass, one fail, zero timeout, and one actionable gap.
+The hosted broad preview retained 25/25 cases, 225/225 eligible measurements,
+and all 75 linearity pairs. Its 1.009458x candidate/base result was
+inconclusive on the variable hosted runner; candidate/QuickJS-NG was 0.357441x.
+The hosted external preview still failed B5 at 12.714481x QuickJS-NG for 5/5
+JetStream cases, 7.670607x for 10/14 Kraken cases, and 11.436771x for 23/26
+SunSpider cases. Hosted broad raw/report SHA-256 are
+`5c38f33d55998c24c791a86d0f16b522932423d005217780aa0ba96d42244e40`
+and `994c8f2464f94475266a4f46dfadc8b17dc88e9d98721105328c116879e4ea6a`;
+hosted external raw/report SHA-256 are
+`b8c64f9f8aa3c0b947a7462887168370c345597bc216b8068834d2fe989148a5`
+and `f48754941ee1ee3f89514ea295fbbe3443a40c7610c814f9b02499a99db986f3`.
+
+The forty-fifth v2 unit follows a fresh JetStream Gaussian Blur profile into
+TypedArray representation. The five spec-internal view slots for kind, backing
+buffer, byte offset, fixed length, and length tracking previously lived as
+hidden string-keyed object properties. Each indexed access therefore repeated
+property-map hashing and descriptor cloning before reading or writing bytes;
+scripts that guessed the NUL-prefixed keys could also delete or overwrite the
+metadata. Typed arrays now store one immutable slot record in the object's
+existing lazily allocated cold data. Ordinary objects gain no hot-layout field,
+while all TypedArray helpers read the record directly and continue to query the
+backing buffer for live detached and resizable state. A focused test proves
+that deleting or forging the old string keys cannot change a real Int16Array's
+brand, element value, or element width. No workload name, source path,
+iteration count, checksum, or expected benchmark value appears in the
+implementation.
+
+Against base binary SHA-256
+`aebef9ebc2a8805c530888ca412c9a21febf94e55350874ce1fefab1918f7680`,
+candidate binary SHA-256
+`d2bda569d41560a1e00607163a0fe5f258d2c46257b8ae362231d0e02fa093f7`
+cut JetStream `gaussian-blur` to 0.515644x base. Complete one-block candidate
+and same-window base external previews retained identical coverage at 5/5
+JetStream, 11/14 Kraken, and 23/26 SunSpider. Common-case candidate/base suite
+geometric means were 0.878084x, 1.004602x, and 1.000667x; the non-target suite
+movements were neutral, and the complete broad diagnostic below did not
+reproduce the short `json-parse-financial` outlier. Candidate/QuickJS-NG still
+failed B5 at 8.001698x, 4.671355x, and 6.202666x. Candidate external raw/report
+SHA-256 are
+`9c1153991587be3a76c1f06f22fe2a6c0084e892a7b42a2669d39fb5370c5f4e`
+and `7f51336e473b1a37b56917449c25c607e74e7fc893e7e6ebd0b27532709d9194`;
+base raw/report SHA-256 are
+`7ccd6895ac6437fdec87a2711d5ea8be2cf6339a242123cc48fe616208bada1f`
+and `c0a4d391b07a81935cc7bffab85ee20bc293d53b0fbce1d51d87498dde4b81ed`.
+
+The complete three-role broad development diagnostic produced 225/225
+eligible exact-checksum measurements, zero non-OK samples, and 600 linearity
+samples with all 75 engine/case pairs passing. Candidate/base was 0.999558x
+overall; family ratios ranged from 0.983997x for string through 1.003190x for
+allocation, and the worst case was 1.008119x. Candidate/QuickJS-NG was
+0.194814x overall, but allocation still failed B4 at 1.145679x. The strict
+analyzer correctly rejected the receipt-less dirty development binaries, so
+this is regression evidence rather than a fixed-hardware claim. Broad raw
+SHA-256: `d42ede2ad98dd0866348e2c2b9a3007f35aeb276bd80cd6615dbb44816d477dd`.
+This representation change materially improves an external typed-array
+workload while preserving the non-target regression guard; B4 and B5 remain
+active.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

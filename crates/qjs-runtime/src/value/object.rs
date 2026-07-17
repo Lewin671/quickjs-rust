@@ -239,6 +239,10 @@ struct ObjectColdData {
     /// remains a hidden property; bytes live here so typed-array element access
     /// does not have to encode and decode a string on every read or write.
     internal_bytes: RefCell<Option<Vec<u8>>>,
+    /// TypedArray internal slots. Keeping these out of string-keyed property
+    /// storage avoids repeated hashing on every indexed access and prevents
+    /// guessed property names from mutating spec-internal view metadata.
+    typed_array_slots: OnceCell<crate::typed_array::TypedArraySlots>,
     /// Iterator.zip helper internal state. Ordinary objects hold `None`; zip
     /// helpers store their records here so advancement does not round-trip
     /// through observable-looking property storage.
@@ -844,8 +848,23 @@ impl ObjectRef {
         self.0.array_prototype_exotic.get()
     }
 
-    pub(crate) fn mark_typed_array_exotic(&self) {
+    fn mark_typed_array_exotic(&self) {
         self.0.typed_array_exotic.set(true);
+    }
+
+    pub(crate) fn install_typed_array_slots(&self, slots: crate::typed_array::TypedArraySlots) {
+        self.mark_typed_array_exotic();
+        let installed = self.0.cold().typed_array_slots.set(slots);
+        debug_assert!(
+            installed.is_ok(),
+            "TypedArray internal slots must only be installed once"
+        );
+    }
+
+    pub(crate) fn typed_array_slots(&self) -> Option<&crate::typed_array::TypedArraySlots> {
+        self.0
+            .cold_if_present()
+            .and_then(|cold| cold.typed_array_slots.get())
     }
 
     pub(crate) fn is_typed_array_exotic(&self) -> bool {

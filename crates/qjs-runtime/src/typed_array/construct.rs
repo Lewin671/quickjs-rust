@@ -7,10 +7,8 @@ use crate::{
 
 use super::element::write_element;
 use super::{
-    MAX_TYPED_ARRAY_LENGTH, TYPED_ARRAY_BUFFER_PROPERTY, TYPED_ARRAY_BYTE_OFFSET_PROPERTY,
-    TYPED_ARRAY_KIND_PROPERTY, TYPED_ARRAY_LENGTH_PROPERTY, TYPED_ARRAY_LENGTH_TRACKING_PROPERTY,
-    bytes_per_element, coerce_element, is_big_int_kind, is_typed_array_object,
-    to_typed_array_length, typed_array_kind, typed_array_name,
+    MAX_TYPED_ARRAY_LENGTH, TypedArraySlots, bytes_per_element, coerce_element, is_big_int_kind,
+    is_typed_array_object, to_typed_array_length, typed_array_kind, typed_array_name,
 };
 use crate::CallEnv;
 
@@ -340,28 +338,14 @@ fn install_view_slots(
     length_tracking: bool,
 ) {
     let name = typed_array_name(native);
-    object.mark_typed_array_exotic();
+    object.install_typed_array_slots(TypedArraySlots::new(
+        native,
+        buffer,
+        byte_offset,
+        length,
+        length_tracking,
+    ));
     object.set_to_string_tag(name);
-    object.define_property(
-        TYPED_ARRAY_KIND_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::String(name.to_owned().into())),
-    );
-    object.define_property(
-        TYPED_ARRAY_BUFFER_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::Object(buffer.clone())),
-    );
-    object.define_property(
-        TYPED_ARRAY_BYTE_OFFSET_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::Number(byte_offset as f64)),
-    );
-    object.define_property(
-        TYPED_ARRAY_LENGTH_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::Number(length as f64)),
-    );
-    object.define_property(
-        TYPED_ARRAY_LENGTH_TRACKING_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::Boolean(length_tracking)),
-    );
 }
 
 // --- static methods (%TypedArray%.from / %TypedArray%.of) --------------------

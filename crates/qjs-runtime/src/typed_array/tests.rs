@@ -39,12 +39,14 @@ fn concrete_constructor_requires_new() {
 fn typed_array_brand_is_not_a_string_keyed_property() {
     assert_eq!(
         eval(
-            "let array = new Uint8Array(1); \
+            "let array = new Int16Array([258]); \
              delete array['\\0TypedArrayKind']; \
+             array['\\0TypedArrayBuffer'] = null; \
              let fake = { '\\0TypedArrayKind': 'Uint8Array' }; \
-             ArrayBuffer.isView(array) + ':' + ArrayBuffer.isView(fake);"
+             ArrayBuffer.isView(array) + ':' + ArrayBuffer.isView(fake) + ':' + \
+               array[0] + ':' + array.BYTES_PER_ELEMENT;"
         ),
-        Ok(Value::String("true:false".to_owned().into()))
+        Ok(Value::String("true:false:258:2".to_owned().into()))
     );
 }
 

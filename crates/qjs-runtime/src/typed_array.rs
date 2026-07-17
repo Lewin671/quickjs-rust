@@ -29,16 +29,32 @@ pub(crate) use ordering::*;
 
 const MAX_TYPED_ARRAY_LENGTH: usize = 1_000_000;
 
-/// Internal slot naming the concrete TypedArray kind (e.g. `"Uint8Array"`).
-pub(crate) const TYPED_ARRAY_KIND_PROPERTY: &str = "\0TypedArrayKind";
-/// Internal slot referencing the backing `ArrayBuffer` object.
-pub(crate) const TYPED_ARRAY_BUFFER_PROPERTY: &str = "\0TypedArrayBuffer";
-/// Internal slot holding the byte offset of the view into its buffer.
-pub(crate) const TYPED_ARRAY_BYTE_OFFSET_PROPERTY: &str = "\0TypedArrayByteOffset";
-/// Internal slot holding the element count of the view.
-pub(crate) const TYPED_ARRAY_LENGTH_PROPERTY: &str = "\0TypedArrayArrayLength";
-/// Internal slot marking views whose length tracks a resizable ArrayBuffer.
-pub(crate) const TYPED_ARRAY_LENGTH_TRACKING_PROPERTY: &str = "\0TypedArrayLengthTracking";
+#[derive(Clone)]
+pub(crate) struct TypedArraySlots {
+    kind: NativeFunction,
+    buffer: ObjectRef,
+    byte_offset: usize,
+    fixed_length: usize,
+    length_tracking: bool,
+}
+
+impl TypedArraySlots {
+    pub(crate) fn new(
+        kind: NativeFunction,
+        buffer: ObjectRef,
+        byte_offset: usize,
+        fixed_length: usize,
+        length_tracking: bool,
+    ) -> Self {
+        Self {
+            kind,
+            buffer,
+            byte_offset,
+            fixed_length,
+            length_tracking,
+        }
+    }
+}
 
 /// Whether `object` carries the TypedArray brand.
 pub(crate) fn is_typed_array_object(object: &ObjectRef) -> bool {
@@ -378,10 +394,7 @@ pub(crate) fn native_typed_array_prototype_buffer(
     this_value: Value,
 ) -> Result<Value, RuntimeError> {
     let object = typed_array_receiver(&this_value)?;
-    match object.own_property(TYPED_ARRAY_BUFFER_PROPERTY) {
-        Some(Property { value, .. }) => Ok(value),
-        None => Ok(Value::Undefined),
-    }
+    Ok(typed_array_buffer(&object).map_or(Value::Undefined, Value::Object))
 }
 
 /// `get %TypedArray.prototype%[Symbol.toStringTag]`: the kind name, or
@@ -390,15 +403,11 @@ pub(crate) fn native_typed_array_prototype_to_string_tag(
     this_value: Value,
 ) -> Result<Value, RuntimeError> {
     match this_value {
-        Value::Object(object) if is_typed_array_object(&object) => {
-            match object.own_property(TYPED_ARRAY_KIND_PROPERTY) {
-                Some(Property {
-                    value: Value::String(name),
-                    ..
-                }) => Ok(Value::String(name)),
-                _ => Ok(Value::Undefined),
-            }
-        }
+        Value::Object(object) if is_typed_array_object(&object) => Ok(Value::String(
+            typed_array_name(typed_array_kind(&object))
+                .to_owned()
+                .into(),
+        )),
         _ => Ok(Value::Undefined),
     }
 }
@@ -605,13 +614,9 @@ fn is_object_like(value: &Value) -> bool {
 // --- Internal-slot helpers ---------------------------------------------------
 
 pub(crate) fn typed_array_kind(object: &ObjectRef) -> NativeFunction {
-    match object.own_property(TYPED_ARRAY_KIND_PROPERTY) {
-        Some(Property {
-            value: Value::String(name),
-            ..
-        }) => native_for_name(&name),
-        _ => NativeFunction::Uint8Array,
-    }
+    object
+        .typed_array_slots()
+        .map_or(NativeFunction::Uint8Array, |slots| slots.kind)
 }
 
 pub(crate) fn typed_array_length(object: &ObjectRef) -> usize {
@@ -628,13 +633,10 @@ pub(super) fn typed_array_length_for_buffer_byte_length(
     object: &ObjectRef,
     buffer_byte_length: usize,
 ) -> usize {
-    let fixed_length = match object.own_property(TYPED_ARRAY_LENGTH_PROPERTY) {
-        Some(Property {
-            value: Value::Number(length),
-            ..
-        }) => length as usize,
-        _ => return 0,
+    let Some(slots) = object.typed_array_slots() else {
+        return 0;
     };
+    let fixed_length = slots.fixed_length;
     let offset = typed_array_byte_offset(object);
     let element = bytes_per_element(typed_array_kind(object));
     if typed_array_is_length_tracking(object) {
@@ -657,23 +659,13 @@ pub(super) fn typed_array_length_for_buffer_byte_length(
 }
 
 fn typed_array_fixed_length(object: &ObjectRef) -> Option<usize> {
-    match object.own_property(TYPED_ARRAY_LENGTH_PROPERTY) {
-        Some(Property {
-            value: Value::Number(length),
-            ..
-        }) => Some(length as usize),
-        _ => None,
-    }
+    object.typed_array_slots().map(|slots| slots.fixed_length)
 }
 
 pub(crate) fn typed_array_is_length_tracking(object: &ObjectRef) -> bool {
-    matches!(
-        object.own_property(TYPED_ARRAY_LENGTH_TRACKING_PROPERTY),
-        Some(Property {
-            value: Value::Boolean(true),
-            ..
-        })
-    )
+    object
+        .typed_array_slots()
+        .is_some_and(|slots| slots.length_tracking)
 }
 
 pub(crate) fn typed_array_is_out_of_bounds(object: &ObjectRef) -> bool {
@@ -687,13 +679,7 @@ pub(crate) fn typed_array_is_out_of_bounds(object: &ObjectRef) -> bool {
     if typed_array_is_length_tracking(object) {
         typed_array_byte_offset(object) > buffer_byte_length
     } else {
-        let fixed_length = match object.own_property(TYPED_ARRAY_LENGTH_PROPERTY) {
-            Some(Property {
-                value: Value::Number(length),
-                ..
-            }) => length as usize,
-            _ => 0,
-        };
+        let fixed_length = typed_array_fixed_length(object).unwrap_or(0);
         let element = bytes_per_element(typed_array_kind(object));
         let byte_length = fixed_length.checked_mul(element);
         byte_length.is_none_or(|byte_length| {
@@ -705,23 +691,13 @@ pub(crate) fn typed_array_is_out_of_bounds(object: &ObjectRef) -> bool {
 }
 
 pub(crate) fn typed_array_byte_offset(object: &ObjectRef) -> usize {
-    match object.own_property(TYPED_ARRAY_BYTE_OFFSET_PROPERTY) {
-        Some(Property {
-            value: Value::Number(offset),
-            ..
-        }) => offset as usize,
-        _ => 0,
-    }
+    object
+        .typed_array_slots()
+        .map_or(0, |slots| slots.byte_offset)
 }
 
 pub(crate) fn typed_array_buffer(object: &ObjectRef) -> Option<ObjectRef> {
-    match object.own_property(TYPED_ARRAY_BUFFER_PROPERTY) {
-        Some(Property {
-            value: Value::Object(buffer),
-            ..
-        }) => Some(buffer),
-        _ => None,
-    }
+    object.typed_array_slots().map(|slots| slots.buffer.clone())
 }
 
 pub(crate) fn typed_array_buffer_detached(object: &ObjectRef) -> bool {
@@ -876,14 +852,6 @@ pub(crate) fn typed_array_name(native: NativeFunction) -> &'static str {
         NativeFunction::BigUint64Array => "BigUint64Array",
         _ => unreachable!("typed array native expected"),
     }
-}
-
-fn native_for_name(name: &str) -> NativeFunction {
-    TYPED_ARRAY_KINDS
-        .iter()
-        .find(|(kind, _)| *kind == name)
-        .map(|(_, native)| *native)
-        .unwrap_or(NativeFunction::Uint8Array)
 }
 
 #[cfg(test)]
