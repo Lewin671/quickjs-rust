@@ -289,3 +289,19 @@ fn detached_unary_math_natives_preserve_primitive_and_coercion_semantics() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn detached_math_pow_preserves_primitive_and_coercion_semantics() {
+    assert_eq!(
+        eval(
+            "(function () { var pow = Math.pow; return pow(2, 8, 99) === 256 && Number.isNaN(pow()) && pow(undefined, 0) === 1 && Number.isNaN(pow(1, Infinity)) && 1 / pow(-0, 3) === -Infinity; })();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "(function () { var pow = Math.pow; var conversions = []; var base = { valueOf: function () { conversions.push('base'); return 2; } }; var exponent = { valueOf: function () { conversions.push('exponent'); return 3; } }; return pow(base, exponent) === 8 && pow('4', 0.5) === 2 && conversions.join(',') === 'base,exponent'; })();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

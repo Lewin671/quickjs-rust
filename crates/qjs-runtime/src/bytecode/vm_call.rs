@@ -388,6 +388,7 @@ pub(super) fn try_fast_global_native_call(
         | NativeFunction::MathTrunc => {
             Ok(Value::Number(fast_primitive_unary_math(native, arguments)?))
         }
+        NativeFunction::MathPow => Ok(Value::Number(fast_primitive_math_pow(arguments)?)),
         NativeFunction::MathRandom if arguments.is_empty() => crate::math::native_math_random(),
         NativeFunction::ArrayPrototypeIndexOf => Ok(crate::array::fast_dense_array_index_of(
             this_value, arguments, realm_env,
@@ -518,6 +519,17 @@ fn fast_primitive_unary_math(native: NativeFunction, arguments: &[Value]) -> Opt
         _ => return None,
     };
     Some(result)
+}
+
+fn fast_primitive_math_pow(arguments: &[Value]) -> Option<f64> {
+    let primitive_number = |value: Option<&Value>| match value {
+        Some(Value::Number(number)) => Some(*number),
+        None | Some(Value::Undefined) => Some(f64::NAN),
+        _ => None,
+    };
+    let base = primitive_number(arguments.first())?;
+    let exponent = primitive_number(arguments.get(1))?;
+    Some(crate::operations::number_exponentiate(base, exponent))
 }
 
 fn fast_string_sequence_native(

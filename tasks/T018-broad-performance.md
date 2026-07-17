@@ -2147,6 +2147,68 @@ and `9966d978fc232aa2719937e5c851a3ae2b9920c446b9cc08aaea9ddcf30ec4c8`.
 This is external generalization progress, not completion: the external suites
 still lose every comparable case to QuickJS-NG and both B4 and B5 remain active.
 
+The exact-SHA hosted evidence for `b3cb72b416891ae7aeae6054ab28eacee9dc4e9e`
+kept the distinction between the internal guard and general engine speed
+explicit. The 25-case broad preview was 0.9984x base and 0.3529x QuickJS-NG,
+but the external preview remained 12.523x QuickJS-NG for 5/5 JetStream cases,
+7.640x for 5/14 Kraken cases, and 13.056x for 23/26 SunSpider cases. Thus the
+internal number is not completion evidence. CI, the Test262 coverage scan, and
+the informational performance workflow all completed successfully; Test262
+remained 42,671 pass, one fail, and zero timeout. Hosted broad raw/report
+SHA-256 are
+`7568681b9a15b3baa6cfe458cf9cab3c236facac667927d23cdada5d92cf19d8`
+and `96c3a7a75d11ea65bfc6e197977f20b7f91b76ed636b93cd5c14333dfcece9e8`;
+hosted external raw/report SHA-256 are
+`2872b5c0b6c97ad9bb82784932d17599dc9d003c8dab271a3354c79af0e421e0`
+and `acbc87b66b4559efdb3c13e6d7d7bcf14078479e69d34b16e084e5e76fce2bb7`.
+
+The fortieth v2 unit continues from the external profile rather than adding an
+internal benchmark case. After the unary Math fast path, the pinned SunSpider
+`math-partial-sums` profile still spent substantial time constructing,
+snapshotting, and applying caller environments for primitive `Math.pow`
+calls. The native-call fast path now evaluates `Math.pow` directly only when
+both consumed arguments are numbers or absent/undefined, reusing the engine's
+shared Number exponentiation semantics. Strings, objects, BigInts, and every
+observable conversion still take the complete native path. Focused tests cover
+detached calls, ignored extra arguments, missing arguments, NaN and infinity,
+negative zero, string conversion, object conversion order, and side effects.
+The implementation contains no benchmark name, source path, iteration count,
+or checksum input.
+
+Against clean base binary SHA-256
+`f34503c0863f42860031e786119f74222106bc3d532b579ff51881ded1a526e9`,
+candidate binary SHA-256
+`40c55d677023f3829b964df0e75db88f9651d1b2dc064f5a3d7c49ddefaea478`
+reduced the nine-block interleaved `math-partial-sums` source median from
+approximately 0.39 seconds to 0.23 seconds, or about 0.59x base. A complete
+one-block external A/B retained identical coverage at 5/5 JetStream, 10/14
+Kraken, and 23/26 SunSpider. Common-case suite candidate/base geometric means
+were 0.997046x, 0.978466x, and 0.973802x; `math-partial-sums` was 0.623923x and
+Kraken `imaging-darkroom`, another `Math.pow` user, was 0.836867x. The suite
+candidate/QuickJS-NG diagnostics remained far from B5 at 9.591883x, 5.579897x,
+and 7.254125x. Eleven-block interleaved source reruns rejected the three
+apparent unrelated regressions: `string-base64` was 0.994426x,
+`access-nbody` 0.999028x, and `3d-morph` 1.004505x base. External raw/report
+SHA-256 are
+`e66c81e96cc2d6f9acc7edebce6d4053838f8314a505c6ca75eed3367a40c180`
+and `1a38a0f85ee76cbf9ff9daa44759c36dce77caf5b3381e38d58d8bd83b3aa6cf`.
+
+The full local broad diagnostic had no failed sample, but the unchanged base
+binary's `captured_read` measurements were all timer-limited, so only 24/25
+cases were formally common and this run is not complete claim evidence. The
+24-case candidate/base diagnostic was 1.004864x overall. An independent
+seven-block rerun reduced every apparent unrelated movement below 2%:
+`string_slice` 1.000394x, `object_allocation` 1.001747x,
+`function_call_reordered` 1.002308x, `top_level_function_call` 0.999709x, and
+`array_allocation` 1.011237x. `captured_read` raw medians were 5.431 versus
+5.408 ns/op, although the base remained timer-limited. The complete
+candidate/QuickJS-NG side was 0.196533x overall, while allocation still failed
+B4 at 1.181221x. Full and focused-rerun broad raw SHA-256 are
+`81b0c5fc575eda3f1d54382d0531862e9ecf2f9a945c1b177ff044d5acfd20e3`
+and `0cbf9018be8b65466ccbff2b4903111ec5bcdae4ba4476412ee743d2ef2c52f0`.
+This is a general native-dispatch improvement with external evidence, not a
+benchmark-specific shortcut; B4 and B5 remain active.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
