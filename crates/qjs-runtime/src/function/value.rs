@@ -126,14 +126,8 @@ pub struct FunctionData {
     pub(crate) deopt_bindings: Option<DynamicBindings>,
     pub(crate) module_host: Option<ModuleHostRef>,
     pub(crate) module_imports: ModuleImports,
-    /// Captured `with` objects are immutable after function creation. A boxed
-    /// slice keeps the empty hot-path representation allocation-free while
-    /// using two words instead of `Vec`'s three-word capacity-bearing header.
-    pub(crate) with_stack: Box<[Value]>,
-    /// Captured lexical cells are likewise fixed at function creation. The
-    /// cells themselves remain shared and mutable; only this index sequence is
-    /// immutable.
-    pub(crate) upvalues: Box<[Upvalue]>,
+    pub(crate) with_stack: Vec<Value>,
+    pub(crate) upvalues: Vec<Upvalue>,
     pub(crate) local_names: Rc<Vec<String>>,
     pub(crate) bytecode: Option<Rc<Bytecode>>,
     /// Original source retained for `Function.prototype.toString`. Function
@@ -419,15 +413,14 @@ impl Function {
         data.native_context.insert(key, value);
     }
 
-    /// Installs the sole indexed capture of a fresh internal native function.
-    /// Mapped-arguments accessors are the only incremental construction path;
-    /// ordinary user functions provide their complete capture list up front.
-    pub(crate) fn set_single_upvalue(&mut self, upvalue: Upvalue) {
-        let upvalues = &mut Rc::get_mut(&mut self.0)
+    /// Adds an indexed capture while constructing a fresh internal native
+    /// function. Keeping this mutation behind the handle prevents general
+    /// copy-on-write detachment of JavaScript function identity.
+    pub(crate) fn push_upvalue(&mut self, upvalue: Upvalue) {
+        Rc::get_mut(&mut self.0)
             .expect("upvalues must be populated before sharing the function")
-            .upvalues;
-        assert!(upvalues.is_empty(), "single upvalue is already installed");
-        *upvalues = Box::new([upvalue]);
+            .upvalues
+            .push(upvalue);
     }
 
     pub(crate) fn new_user(
@@ -512,8 +505,8 @@ impl Function {
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),
-            with_stack: Box::default(),
-            upvalues: Box::default(),
+            with_stack: Vec::new(),
+            upvalues: Vec::new(),
             local_names: Rc::new(local_names),
             bytecode: Some(bytecode),
             source_text: None,
@@ -594,8 +587,8 @@ impl Function {
             deopt_bindings,
             module_host,
             module_imports,
-            with_stack: with_stack.into_boxed_slice(),
-            upvalues: upvalues.into_boxed_slice(),
+            with_stack,
+            upvalues,
             local_names,
             bytecode: Some(bytecode),
             source_text,
@@ -705,8 +698,8 @@ impl Function {
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),
-            with_stack: Box::default(),
-            upvalues: Box::default(),
+            with_stack: Vec::new(),
+            upvalues: Vec::new(),
             local_names: Rc::new(Vec::new()),
             bytecode: None,
             source_text: None,
@@ -757,8 +750,8 @@ impl Function {
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),
-            with_stack: Box::default(),
-            upvalues: Box::default(),
+            with_stack: Vec::new(),
+            upvalues: Vec::new(),
             local_names: Rc::new(Vec::new()),
             bytecode: None,
             source_text: None,
@@ -1574,7 +1567,7 @@ mod tests {
             "function auxiliary header grew to {auxiliary_size} bytes"
         );
         assert!(
-            function_data_size <= 280,
+            function_data_size <= 296,
             "function object grew to {function_data_size} bytes"
         );
     }

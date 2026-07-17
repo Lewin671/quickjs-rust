@@ -152,8 +152,8 @@ pub(crate) fn call_function(
                 crate::bytecode::GeneratorStart {
                     bytecode: bytecode.clone(),
                     env: function_env.env,
-                    upvalues: function.upvalues.to_vec(),
-                    with_stack: function.with_stack.to_vec(),
+                    upvalues: function.upvalues.clone(),
+                    with_stack: function.with_stack.clone(),
                     immutable_function_name: function
                         .immutable_name_binding
                         .then(|| function.name.clone())
@@ -215,8 +215,8 @@ pub(crate) fn call_function(
             eval_function_bytecode(
                 bytecode,
                 call_env,
-                function.upvalues.to_vec(),
-                function.with_stack.to_vec(),
+                function.upvalues.clone(),
+                function.with_stack.clone(),
                 true,
             )
         };

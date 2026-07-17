@@ -5,7 +5,11 @@
 Beat the pinned QuickJS-NG reference by at least 2x on the repository's broad
 black-box throughput portfolio: candidate/QuickJS-NG overall geometric-mean
 wall ns/op must be at most 0.50x, while every critical family remains at or
-below 1.00x.
+below 1.00x. This is explicitly a **general JavaScript-engine performance**
+goal, not permission to optimize only the repository's internal benchmark
+shapes. The pinned external JetStream 3 JavaScript subset, Kraken 1.1, and
+SunSpider 1.0 neutral shell ports are an independent anti-overfitting boundary:
+the campaign cannot complete unless the improvement generalizes there too.
 
 ## Scope
 
@@ -14,6 +18,12 @@ below 1.00x.
 - Forbidden paths: `third_party/`, benchmark-only engine shortcuts, weakened
   checksums, reduced iteration work, hidden case selection, or Test262
   regressions.
+- Runtime changes must optimize a general mechanism (for example allocation,
+  representation, dispatch, property access, compilation, or GC) and remain
+  justified without referring to an internal case ID, expected iteration
+  count, checksum, or workload source path. An internal-only win that leaves
+  the corresponding external workloads unchanged or materially worse is not
+  campaign progress.
 - Owner boundary: serialize manifest/protocol changes and broad runtime
   architecture changes on the main branch; one measured change per commit.
 
@@ -48,6 +58,31 @@ The target is a campaign acceptance criterion. Existing hosted previews remain
 informational and non-gating until T017 M6/M7 fixed-hardware qualification is
 complete.
 
+## External Generalization Contract
+
+Every trusted `main` push already publishes a pinned, execution-only external
+preview. These neutral shell ports are not official JetStream, Kraken, or
+SunSpider scores, and incomplete suites have no suite score. They are still
+the campaign's independent anti-overfitting evidence because their source,
+adapter, case inventory, engine revisions, outer wall timer, and per-case
+results do not depend on the broad-micro workload.
+
+Completion additionally requires a repeatable final external preview in which:
+
+- the diagnostic geometric mean over comparable cases is <= 1.00x
+  qjs-rust/QuickJS-NG for each of the three pinned external suites;
+- no comparable external case is slower than 1.25x QuickJS-NG;
+- comparable coverage does not decrease to manufacture a better ratio, and
+  every unsupported case remains visible with its capability status;
+- the winning mechanisms are general runtime changes, with no benchmark-name,
+  file-path, iteration-count, or checksum specialization;
+- an independent rerun confirms the final external result alongside the broad
+  portfolio confirmation and the full correctness gate.
+
+The external preview remains informational in CI and cannot become an official
+suite claim. These thresholds are T018 completion guards, not a statement that
+an incomplete neutral shell port is an upstream suite score.
+
 ## Milestones
 
 - [x] B1 freeze broad v2 workload, exact case/family inventory, manifest,
@@ -55,9 +90,12 @@ complete.
 - [x] B2 record the first complete broad v2 three-role local baseline and
   identify the largest family/case gaps without excluding weak cases.
 - [ ] B3 optimize structural bottlenecks in separately verified commits,
-  recording broad candidate/base and candidate/QuickJS-NG evidence each time.
+  recording broad and external generalization evidence for each pushed unit.
 - [ ] B4 reach <= 0.50x overall and <= 1.00x for every critical family.
-- [ ] B5 independently confirm the result and run the full correctness gate.
+- [ ] B5 reach <= 1.00x for every pinned external comparable-case geometric
+  mean with no comparable case above 1.25x and no coverage reduction.
+- [ ] B6 independently confirm both internal and external results and run the
+  full correctness gate.
 
 ## Verification
 
@@ -72,8 +110,47 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/benchmark/tests 
 ./scripts/benchmark-report.sh \
   --input target/benchmarks/broad-v2-baseline.jsonl \
   --output target/benchmarks/broad-v2-baseline-report.json
+./scripts/external-performance-preview.sh audit
+./scripts/external-performance-preview.sh run \
+  --cache-root target/benchmarks/external-cache \
+  --work-root target/benchmarks/external-work \
+  --output-dir target/benchmarks/external-result \
+  --candidate target/release/qjs \
+  --quickjs-ng third_party/quickjs-ng/build/qjs
 ./scripts/check.sh
 ```
+
+## External Generalization Reset
+
+The hosted preview for commit `e48ab495` is the baseline that made the external
+guard explicit. Its internal broad-v2 candidate/QuickJS-NG ratio was 0.36098x,
+yet the independently sourced external preview moved in the opposite
+direction. qjs-rust lost every comparable external case:
+
+| Neutral shell port | Comparable | qjs-rust / QuickJS-NG | qjs-rust wins |
+| --- | ---: | ---: | ---: |
+| JetStream 3 JavaScript subset | 4/5 | 18.87978x | 0 |
+| Kraken 1.1 | 2/14 | 3.05142x | 0 |
+| SunSpider 1.0 | 22/26 | 34.45873x | 0 |
+
+The largest comparable cliffs include `crypto-md5` at 426.16x,
+`crypto-sha1` at 183.01x, `access-nbody` at 161.36x, and
+`bitops-nsieve-bits` at 151.81x. Even the smallest comparable gap,
+Kraken `json-parse-financial`, remains 1.76x. This evidence contradicts any
+claim that the current internal broad score represents general engine speed.
+Future priorities therefore come from cross-workload runtime mechanisms and
+external profiles, while broad v2 remains the regression and reproducibility
+contract.
+
+External reset evidence:
+
+- GitHub Actions run: `29539886147`;
+- external raw JSONL SHA-256:
+  `d8e7b9def594f01f762420b9b611f47c97bccaddd12211b2e2366af1c80f5228`;
+- external report JSON SHA-256:
+  `20b46bb7826fc4d430986187718dff8996df914d8a7f8e1bcb98b0c0bd8445a8`;
+- external manifest SHA-256:
+  `fbcd37039908f72342effd1c2d9d3b12156f180bec745e95ff9a8bae2d56a93a`.
 
 ## Broad V1 Audit And V2 Reset
 
@@ -1615,6 +1692,38 @@ Boxed function-capture bindings:
   `60a8b3c3c7cd8f1430d9bf125a1abacd5f1a1ee60e2a87049c3e39104d1658cb`;
 - QuickJS-NG binary SHA-256:
   `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
+The hosted Linux preview rejected this unit as a general optimization. All
+225 formal measurements and 600 N/2N diagnostic samples were complete and
+valid, but candidate/base overall was **1.00877x** with a 95% confidence
+interval of [1.00539x, 1.01036x]. Allocation was neutral at 0.99742x, while
+`closure_allocation_call` regressed to 1.01538x [1.01391x, 1.03162x]. More
+importantly, `plain_function_call` and `method_call` both regressed by about
+7.1% with tight intervals. The macOS allocation-class discontinuity therefore
+did not generalize to the hosted Linux allocator and came with a portable call
+cost. The unit cannot count as T018 progress despite its local focused result.
+
+Hosted boxed-capture rejection evidence:
+
+- GitHub Actions run: `29539886147`;
+- benchmark run ID: `e0f1c904-7b13-4372-9f1a-a106368ba73b`;
+- raw JSONL SHA-256:
+  `000807baae594d368bf2ab388ee47b3975e2ed15b8faccf499db8c3a1a8b7e5d`;
+- report JSON SHA-256:
+  `af502f4af69db71d399db0024dadb0c30ba6a82842497d82bb60cfdc1a86cf84`;
+- hosted manifest SHA-256:
+  `23461814e6374e96eb8fed5cd8f2343855544f32e9e540ea18aa27dfb88d9363`.
+
+The thirtieth v2 unit removes the rejected boxed-capture representation in
+full. Both capture sequences return to their preceding `Vec` representation,
+including the mapped-arguments construction API and generator/async snapshot
+paths. This is deliberately a byte-for-byte runtime restoration rather than a
+new benchmark-driven hybrid: rebuilding the working tree produces release
+binary SHA-256
+`60a8b3c3c7cd8f1430d9bf125a1abacd5f1a1ee60e2a87049c3e39104d1658cb`,
+exactly matching the retained pre-change `1089e7cd` binary. The revert keeps
+the external generalization contract and its evidence, but no boxed-capture
+performance claim.
 
 ## Historical Broad V1 Baseline
 
