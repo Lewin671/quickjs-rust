@@ -2209,6 +2209,72 @@ and `0cbf9018be8b65466ccbff2b4903111ec5bcdae4ba4476412ee743d2ef2c52f0`.
 This is a general native-dispatch improvement with external evidence, not a
 benchmark-specific shortcut; B4 and B5 remain active.
 
+The exact-SHA hosted workflows for
+`07970f8d394c33323f36a8d864efb9f1c0a4cf68` all completed successfully. The
+hosted broad preview retained 25/25 cases and measured 1.0062x base and 0.3583x
+QuickJS-NG overall. Its isolated `array_allocation` 1.1462x base movement was
+not reproduced by the local independent rerun recorded above. The hosted
+external preview remained far from B5 at 12.437x QuickJS-NG for 5/5 JetStream,
+7.613x for 7/14 Kraken, and 12.803x for 23/26 SunSpider; `math-partial-sums`
+improved from the preceding hosted artifact's 25.290x QuickJS-NG to 15.271x,
+but still lost decisively. Exact Test262 coverage remained 42,671 pass, one
+fail, and zero timeout. Hosted broad raw/report SHA-256 are
+`65d14956ed6a3f458f9c79c545398ec41800982bcd7358250998959bff558c47`
+and `61bdc2ddb8d9beaf82af6ba945f153c660e389a0e682c29b4e5d670860ea4850`;
+hosted external raw/report SHA-256 are
+`0df30133b3ae726c0298b456e8b2bdd49ff2af1e6e9c0bdf68eb8c9d947cd4da`
+and `b874194fadee20681ce9b71f835e7bce216a8020e468759c71c7811d24c3f98f`.
+
+The forty-first v2 unit follows the external SunSpider `string-base64`
+profile. Its encoding and decoding loops repeatedly call
+`String.prototype.charCodeAt` with an already primitive string receiver and
+numeric index, but the general native-call path still constructed and applied
+the caller environment for each code-unit read. The fast native dispatcher
+now reads the code unit directly only for primitive string receivers and
+number/undefined indices. Object receivers, object or string indices, and all
+observable conversions remain on the complete path. Tests cover numeric
+truncation, NaN, infinity, ignored extra arguments, UTF-16 code units, object
+index conversion, and conversion side effects. The implementation has no
+benchmark name, path, iteration count, checksum, or workload-specific table.
+
+Against clean base binary SHA-256
+`40c55d677023f3829b964df0e75db88f9651d1b2dc064f5a3d7c49ddefaea478`,
+candidate binary SHA-256
+`4d6b4e3bf0626695baf98cbd69ebe8b4700045c63aa2f3a332558aea51186a67`
+improved eleven-block interleaved external source medians across four distinct
+workloads: `string-base64` was 0.495773x base, `crypto-md5` 0.782206x,
+`crypto-sha1` 0.813148x, and `crypto-aes` 0.889119x. Five-block interleaved
+Kraken bundles also measured `audio-dft` at 0.970906x and
+`stanford-crypto-ccm` at 0.974229x, rejecting apparent regressions in the
+unpaired full previews.
+
+Complete one-block candidate and same-thermal-window base rerun previews kept
+identical coverage at 5/5 JetStream, 10/14 Kraken, and 23/26 SunSpider. Their
+common-case suite candidate/base diagnostics were 0.982537x, 0.991921x, and
+0.985346x. The intended SunSpider cases reproduced at 0.495484x for
+`string-base64`, 0.779431x for `crypto-md5`, 0.811919x for `crypto-sha1`, and
+0.908398x for `crypto-aes`. Eleven-block interleaved reruns of the eight worst
+unrelated SunSpider movements placed every one between 0.993864x and 1.016738x
+base. Candidate/QuickJS-NG suite diagnostics improved but still failed B5 at
+9.459241x, 5.548499x, and 6.903639x. Candidate external raw/report SHA-256 are
+`a46d34497bda45152c37fe0f1a6cf97ddc0d094cf4e4aab139fca4e8d36212e6`
+and `64c5d91ed608fbcc7fd8acc2e6318b074c62bb4c8c80cc29be7ec5df5ae4d240`;
+base-rerun raw/report SHA-256 are
+`a767097e73ad5dae244ee46c2cb01a3787bf386753d45b874d45a0e2dbec631d`
+and `d18feb94f8162c674fa71b6ebca4886887b8ddf435bd8f2ef5c497db9a73105f`.
+
+The complete local three-role broad diagnostic retained all 25 cases, 225
+eligible exact-checksum measurements, and 600 passing linearity samples.
+Candidate/base was 0.997764x overall; family ratios ranged from 0.988520x for
+string to 1.002026x for property, and the worst individual case was
+`array_allocation` at 1.009524x. Candidate/QuickJS-NG was 0.194364x overall,
+but allocation still failed B4 at 1.135321x. The strict analyzer correctly
+rejects the receipt-less development binaries, so this remains regression
+evidence rather than a fixed-hardware claim. Broad raw SHA-256:
+`2f657b75ebab15ad3e10ee286c8eb80e855c2862ac30ca5ca9ba4d0f30f46ed3`.
+This unit generalizes across external string and crypto workloads, while B4
+and B5 remain active.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

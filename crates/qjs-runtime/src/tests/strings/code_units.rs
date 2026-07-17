@@ -61,6 +61,18 @@ fn evaluates_string_code_unit_builtins() {
     assert_eq!(eval("'😀'.charCodeAt(0);"), Ok(Value::Number(55_357.0)));
     assert_eq!(eval("'😀'.charCodeAt(1);"), Ok(Value::Number(56_832.0)));
     assert_eq!(
+        eval(
+            "let conversions = 0; let index = { valueOf() { conversions += 1; return 1; } }; 'abc'.charCodeAt(index) === 98 && conversions === 1;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "'abc'.charCodeAt(NaN) === 97 && 'abc'.charCodeAt(1.9, 99) === 98 && Number.isNaN('abc'.charCodeAt(Infinity));"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("'\\uD800\\uDC00'.codePointAt(0);"),
         Ok(Value::Number(65_536.0))
     );

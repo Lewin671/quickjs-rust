@@ -455,6 +455,9 @@ pub(super) fn try_fast_global_native_call(
             let mut env = realm_env.clone();
             crate::string::native_string_prototype_char_at(this_value.clone(), arguments, &mut env)
         }
+        NativeFunction::StringPrototypeCharCodeAt => {
+            Ok(fast_primitive_string_char_code_at(this_value, arguments)?)
+        }
         NativeFunction::StringPrototypeConcat => {
             let Value::String(_) = this_value else {
                 return None;
@@ -530,6 +533,24 @@ fn fast_primitive_math_pow(arguments: &[Value]) -> Option<f64> {
     let base = primitive_number(arguments.first())?;
     let exponent = primitive_number(arguments.get(1))?;
     Some(crate::operations::number_exponentiate(base, exponent))
+}
+
+fn fast_primitive_string_char_code_at(this_value: &Value, arguments: &[Value]) -> Option<Value> {
+    let Value::String(value) = this_value else {
+        return None;
+    };
+    let number = match arguments.first() {
+        Some(Value::Number(number)) => *number,
+        None | Some(Value::Undefined) => 0.0,
+        _ => return None,
+    };
+    let position = if number.is_nan() { 0.0 } else { number.trunc() };
+    let code_unit = if position < 0.0 || !position.is_finite() {
+        None
+    } else {
+        crate::string::string_code_unit_at(value, position as usize)
+    };
+    Some(Value::Number(code_unit.map_or(f64::NAN, f64::from)))
 }
 
 fn fast_string_sequence_native(
