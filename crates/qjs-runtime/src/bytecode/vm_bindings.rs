@@ -8,6 +8,7 @@ use crate::{
     property::has_property,
     property_value, property_value_key,
     symbol::unscopables_symbol,
+    value::OwnDataPropertyWrite,
 };
 
 use super::util::typeof_value;
@@ -1251,6 +1252,24 @@ impl Vm<'_> {
             .locals
             .get(slot)
             .is_some_and(|local| local.sloppy_global_fallback);
+        if is_sloppy_global_fallback
+            && self.locals.get(slot).is_some_and(Option::is_some)
+            && let Some(Value::Object(global_this)) = self.env.global_this()
+        {
+            match global_this.write_existing_own_data_property(&name, &value) {
+                OwnDataPropertyWrite::Written => {
+                    self.invalidate_array_prototype_cache(&name);
+                    if !self.env.replace_existing_realm(&name, value.clone()) {
+                        self.env.insert_realm(name.clone(), value.clone());
+                    }
+                    self.locals[slot] = Some(value);
+                    self.sync_marked_dynamic_global(&name);
+                    return Ok(());
+                }
+                OwnDataPropertyWrite::ReadOnly => return Ok(()),
+                OwnDataPropertyWrite::NeedsSlowPath => {}
+            }
+        }
         match self.locals.get(slot) {
             Some(Some(_)) => {
                 if self.local_slot_targets_non_writable_global(slot, &name) {

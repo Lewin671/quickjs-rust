@@ -1065,6 +1065,24 @@ impl CallEnv {
         self.realm.borrow_mut().insert(name, value)
     }
 
+    /// Replaces an existing realm binding without allocating an owned lookup
+    /// key. Hot global stores use this after proving that the corresponding
+    /// global-object property is still an ordinary writable data property.
+    pub(crate) fn replace_existing_realm(&self, name: &str, value: Value) -> bool {
+        let mut bindings = self.realm.borrow_mut();
+        let Some(binding) = bindings.get_mut(name) else {
+            return false;
+        };
+        *binding = value.clone();
+        drop(bindings);
+        if let Some(cell) = self.realm.binding_cells.cell(name) {
+            cell.set(value.clone());
+        }
+        self.realm
+            .sync_dynamic_function_realm_binding(name, Some(&value));
+        true
+    }
+
     /// Mirrors a data-property definition on this realm's global object into
     /// the realm value table and any already-captured global cell.
     pub(crate) fn sync_realm_global_object_property(&self, object: &ObjectRef, name: &str) {

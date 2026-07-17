@@ -2275,6 +2275,72 @@ evidence rather than a fixed-hardware claim. Broad raw SHA-256:
 This unit generalizes across external string and crypto workloads, while B4
 and B5 remain active.
 
+The exact-SHA hosted workflows for
+`3bf3229a87043bab78cbb775cbabaec4f2bc5298` all completed successfully. Hosted
+broad retained 25/25 cases and measured 0.9955x base and 0.3531x QuickJS-NG
+overall. Exact Test262 coverage remained 42,671 pass, one fail, and zero
+timeout. Hosted external evidence confirmed the `charCodeAt` improvement:
+`string-base64` fell from roughly 570 ms in the preceding artifact to 293 ms.
+The suite diagnostics nevertheless still failed B5 at 12.485x QuickJS-NG for
+5/5 JetStream, 7.317x for 6/14 Kraken, and 12.016x for 23/26 SunSpider. The
+Kraken coverage variation came from timeout boundaries and is not accepted as
+performance progress. Hosted broad raw/report SHA-256 are
+`3637b5c5291435eb00c2bbd42f470d1cb8788e69631af0bb81aed481c5e8ea67`
+and `3d81caf1949e5e5804a010f2a1a3dfc2564bcb27bf4bd2632f0a00ff3f0fd4f8`;
+hosted external raw/report SHA-256 are
+`97c4946e44132e7ad992c3c9b457ddfe7c07f6e3ee0be7d4041c24f74f51f7a4`
+and `e516e6e262294dc09cc40d7c6f5635182232769cf2c3e3cf32bb67b9a06cf5d5`.
+
+The forty-second v2 unit follows an external profile into the general sloppy
+global write path. Repeated assignments to an already-created writable data
+property previously cloned property descriptors and owned string keys, then
+performed redundant global-object, realm-map, and captured-cell updates. The
+VM now uses the existing borrowed-key data-property write operation and a
+borrowed-key realm replacement after the first assignment establishes the
+binding. Missing properties, accessors, read-only descriptors, module imports,
+immutable bindings, deletion/recreation, and dynamic scope retain their full
+paths. Tests cover repeated writes, global-object visibility, read-only
+redefinition, and delete/recreate behavior. No workload name, source path,
+iteration count, checksum, or expected value appears in the implementation.
+
+Against base binary SHA-256
+`4d6b4e3bf0626695baf98cbd69ebe8b4700045c63aa2f3a332558aea51186a67`,
+candidate binary SHA-256
+`8b566b3cb05d6570273b20248654403ba92af6288ecf487bd127c437b631a70b`
+improved two independent external programs in eleven-block interleaved runs.
+SunSpider `bitops-bitwise-and`, whose loop repeatedly updates one sloppy
+global, measured 0.681459x base. `math-partial-sums` independently exercises
+the same mechanism because its chained local initialization creates eight
+sloppy globals that the inner numeric loop updates; it measured 0.450487x
+base. Four unrelated SunSpider cases selected from the worst full-preview
+movements reran between 0.989407x and 1.027093x base.
+
+Complete one-block candidate and same-thermal-window base external previews
+kept identical coverage at 5/5 JetStream, 10/14 Kraken, and 23/26 SunSpider.
+Their common-case candidate/base suite diagnostics were 0.978390x, 0.950001x,
+and 0.918161x. Candidate/QuickJS-NG still failed B5 at 9.523116x, 5.544422x,
+and 6.543434x. Candidate external raw/report SHA-256 are
+`636611c03d111cc6f9faa33cda7c12278a77cc5a8973b7c1b8141bd9fd214fbf`
+and `79aa22a3612c17215ee1ea8ff1ade62b91f7ad72716467f51f9298282a717875`;
+base raw/report SHA-256 are
+`5a8693f1f7591acfd9d848fca473b0659fc567392609a9544882a8d23dfce7be`
+and `163a3ec02518b110733375104ce6bf89c92b56c5d3ca464fe8607141ac23b0ee`.
+
+The complete three-role broad diagnostic retained all 25 cases, 225 eligible
+exact-checksum measurements, 600 passing linearity samples, and zero non-OK
+records. Candidate/base was 1.003683x overall and candidate/QuickJS-NG was
+0.194571x. Family candidate/base ratios ranged from 0.997989x for binding to
+1.030763x for string. Eleven-block fixed-iteration reruns reduced the apparent
+`string_slice` movement to 1.012958x; the six worst full-run cases ranged from
+0.990570x to 1.021262x. Allocation still failed B4 at 1.145498x QuickJS-NG.
+The strict analyzer correctly rejected the dirty, receipt-less development
+binaries, so this is regression evidence rather than a fixed-hardware claim.
+Broad raw SHA-256:
+`3642bd71ef72428f9021db6f7569cee72da9f8376a1c3727da7b40a3af2f5969`.
+This general global-binding optimization materially improves two unrelated
+external sources while preserving the internal regression guard; B4 and B5
+remain active.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

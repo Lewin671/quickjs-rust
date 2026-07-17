@@ -1008,6 +1008,24 @@ fn evaluates_sloppy_undeclared_global_assignment() {
         ),
         Ok(Value::String("1:1:2".to_owned().into()))
     );
+    assert_eq!(
+        eval(
+            "repeatedGlobal = 1; repeatedGlobal = 2; repeatedGlobal = 3; repeatedGlobal + this.repeatedGlobal;"
+        ),
+        Ok(Value::Number(6.0))
+    );
+    assert_eq!(
+        eval(
+            "readonlyGlobal = 1; Object.defineProperty(this, 'readonlyGlobal', { writable: false }); readonlyGlobal = 2; readonlyGlobal + this.readonlyGlobal;"
+        ),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval(
+            "deletedGlobal = 1; let removed = delete deletedGlobal; deletedGlobal = 3; removed && deletedGlobal === 3 && this.deletedGlobal === 3;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
