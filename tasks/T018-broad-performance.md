@@ -3262,6 +3262,55 @@ and `44cdb54200fbbebbb9353ed4f93c3c39b80a7135d20c05ed0eb6f25806bf401b`.
 Unit 54 is closed as a general regexp allocation improvement that increased
 external coverage, not as B5 or 100% Test262 completion.
 
+### Unit 55: lazy regexp search starts
+
+Runtime commit `a5e39997fb640425a2902a2b08e204bc3eecd7ca` removes the
+`Vec<usize>` that `regexp_match` previously allocated and filled with every
+candidate start position before attempting a non-anchored match. It now walks
+the same inclusive range lazily and stops at the first match. This is a general
+engine allocation and memory-traffic reduction: it is independent of workload
+identity, expected output, iteration count, and benchmark path.
+
+The first broad A/B attempt was rejected because its nominal base executable
+came from a stale main-worktree `target/release/qjs`. The accepted same-path
+rebuild binds candidate SHA-256
+`30d55d46f68bd358be52072a6d81a9e6095b621778075c546ba749becc1befd7`
+and unit-54 base SHA-256
+`e26e0b9478797e027ac36f0db213ecc6bb3037a06c73b23a58587e4705d509c1`.
+The final source rebuild reproduced the candidate hash byte for byte. Its exact
+25/25-case, 50/50-eligible two-role broad run measured candidate/base
+**1.003574x**. All family ratios stayed below 1.026x; the largest was string at
+1.025469x. The raw SHA-256 is
+`3e018eb528d3a0eb0d8450cbe37478f98c82fb658528187fafd1ebbbd54c5600`.
+A separate five-block call-family audit measured 0.993581x overall, with all
+four cases between 0.965410x and 1.009943x; raw SHA-256 is
+`91e5adc5a1057a1dc6098d3f823578f5a7448095d0ab6b6e41e55e9c772e4311`.
+
+Two formal 60-second external runs each completed 44/45 cases. Both timed out
+only on Kraken `imaging-gaussian-blur`; an isolated run completed in 48.73 s,
+so this remains a real near-limit external hotspot rather than being hidden or
+reclassified. On the second run, unit-55/unit-54 duration geometric means on
+the comparable inventories were 0.996167x for JetStream, 0.999839x for Kraken,
+and 0.918827x for SunSpider. Raw/report SHA-256 are
+`dc2e67eb2546906396c4983a73f693275a0950bd28e1a7b5b33d62c243e264a9`
+and `bb7d799e253f3206c53debd545174844e781182b1b55e5ec5931b3778b7996c5`.
+
+A separately labelled 90-second diagnostic completed all 5/5 JetStream,
+14/14 Kraken, and 26/26 SunSpider cases. Relative to unit 54, complete-suite
+duration geometric means were 0.998322x, 0.994281x, and 0.916457x. The directly
+affected SunSpider ratios were 0.585879x for `regexp-dna`, 0.502985x for
+`string-tagcloud`, and 0.457737x for `string-unpack-code`. Candidate/QuickJS-NG
+remains **7.231091x**, **4.971088x**, and **6.322610x** respectively, so the
+external evidence confirms useful generalization but also a large remaining
+performance gap. Diagnostic raw/report SHA-256 are
+`911c89f960c2685e079802a73393ab76c121316dbc715642182cc39ac81d318f`
+and `a09bb528d3f8b93cec46be0fe55e9e71e1c1a46f1fcf7c12774dab000d27f45a`.
+
+Local correctness gates passed 1,392 runtime tests, the full repository check
+including all 198 benchmark-tool tests and 5,139 Test262 subset cases, and all
+205 QuickJS-NG comparison fixtures. Hosted performance and coverage artifacts
+remain required before unit 55 is closed.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
