@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Resolve symlinks so the hook works when invoked via .git/hooks/ (where
-# dirname/.. would otherwise resolve to .git instead of the repo root).
-SCRIPT_PATH="${BASH_SOURCE[0]}"
-while [ -L "$SCRIPT_PATH" ]; do
-  SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
-  SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
-  [[ "$SCRIPT_PATH" != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
-done
-ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
-
 if [ "${QJS_SKIP_PRE_PUSH:-0}" = "1" ]; then
   echo "pre-push: skipped because QJS_SKIP_PRE_PUSH=1"
   exit 0
 fi
 
+# Git exports repository-local variables to hooks. Clear them before resolving
+# the current worktree or running the test suite so nested Git commands can
+# discover their own repositories instead of mutating this repository's shared
+# metadata. Git invokes push hooks from the worktree root.
+GIT_LOCAL_ENV_VARS="$(git rev-parse --local-env-vars)"
+for variable in $GIT_LOCAL_ENV_VARS; do
+  unset "$variable"
+done
+ROOT_DIR="$(git -C "$PWD" rev-parse --show-toplevel)"
+
 echo "pre-push: full local gate..."
-"$ROOT_DIR/scripts/check.sh"
+(cd "$ROOT_DIR" && ./scripts/check.sh)

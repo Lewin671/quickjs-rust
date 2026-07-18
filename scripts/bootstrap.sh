@@ -10,8 +10,9 @@ git -C "$ROOT_DIR" submodule update --init third_party/quickjs-ng third_party/te
 # change-aware checks; the pre-push hook runs the full local gate.
 for hook in pre-commit pre-push; do
   HOOK_SRC="$ROOT_DIR/scripts/$hook"
-  HOOK_DST="$ROOT_DIR/.git/hooks/$hook"
+  HOOK_DST="$(git -C "$ROOT_DIR" rev-parse --path-format=absolute --git-path "hooks/$hook")"
   if [ -f "$HOOK_SRC" ] && [ ! -e "$HOOK_DST" ]; then
+    mkdir -p "$(dirname "$HOOK_DST")"
     ln -sf "$HOOK_SRC" "$HOOK_DST"
     echo "Installed $hook hook."
   fi
