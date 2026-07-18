@@ -3019,6 +3019,45 @@ All three prototypes were discarded without a runtime commit. This is an
 intentional application of the external anti-overfitting contract: internal
 benchmark speedups alone are not T018 progress.
 
+The fifty-second v2 unit instead comes directly from independent external
+profiles. macOS sampling of Kraken `ai-astar` and `audio-oscillator` placed
+`apply_env` at the top of both stacks (44 and 57 samples respectively), with
+the time below it dominated by caller-local snapshots, string clones, and
+`HashMap` insertion/hashing. Ordinary native functions do not dynamically
+inherit their caller's lexical environment: user callbacks already carry
+their exact closure/upvalue cells, and global state is shared by the realm.
+The VM therefore gives frame-independent native calls a realm-only `CallEnv`
+instead of reconstructing every active caller slot and name map. Direct eval
+is explicitly excluded and retains the active dynamic-name view. The focused
+correctness test covers both coercion and array callbacks mutating captured
+locals, plus direct eval mutating a caller local. No workload name, source
+path, iteration count, checksum, or expected result appears in the runtime
+implementation.
+
+Against the exact unit-51 local base, the independent one-block external
+inventory retained full 5/5 JetStream, 14/14 Kraken, and 26/26 SunSpider
+coverage. Common-case candidate/base geometric means were **0.955718x**,
+**0.886864x**, and **0.996554x** respectively. JetStream improved in all 5/5
+cases; Kraken improved in 11/14, led by `audio-oscillator` at 0.299309x and
+bounded by a 1.028269x worst observed ratio; SunSpider split 14/26 faster and
+12/26 slower, with a 1.107301x worst single-block observation. Candidate/
+QuickJS-NG remains far from B5 at 7.617x, 5.480x, and 10.169x, so this is a
+general structural improvement rather than a target-completion claim.
+External raw/report SHA-256 are
+`4fa259b01a1642b0e60b35319bf5965970995a4ee17c10b1ee3f78924e203d9a`
+and `0bd046453dee13903dde12663c35a0ee9ae2ed57fbbcd9ada8b127362c140fd4`.
+
+The accompanying receipt-less one-block broad diagnostic retained all 25
+cases. Its manual protocol-equivalent normalization measured candidate/base
+at 1.005854x overall, with 11/25 cases faster and all individual ratios
+between 0.990890x and 1.050665x. Candidate/QuickJS-NG was 0.186030x in this
+diagnostic. The strict report tool correctly rejected the run as unverified
+because development binaries had no build receipts; the complete raw JSONL
+is retained only as regression evidence with SHA-256
+`59244edb2b9eb5ddf39ab0ec0ad54bf7c5578dc060d7fd6c627fe540c4ff8236`.
+Exact pushed performance and coverage artifacts remain required before this
+unit is closed.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

@@ -103,6 +103,33 @@ fn eval_line_comment_with_line_terminator_still_evaluates_tail() {
 }
 
 #[test]
+fn native_calls_use_callback_cells_without_losing_direct_eval_scope() {
+    assert_eq!(
+        eval(
+            "function updateThroughNative() { \
+               let captured = 1; \
+               Math.max({ valueOf() { captured = 3; return 2; } }, 1); \
+               [0].forEach(function () { captured = 5; }); \
+               return captured; \
+             } \
+             updateThroughNative();"
+        ),
+        Ok(Value::Number(5.0))
+    );
+    assert_eq!(
+        eval(
+            "function updateThroughDirectEval() { \
+               let local = 1; \
+               eval('local = 7'); \
+               return local; \
+             } \
+             updateThroughDirectEval();"
+        ),
+        Ok(Value::Number(7.0))
+    );
+}
+
+#[test]
 fn global_nan_is_non_writable() {
     // Sloppy mode: assignment silently fails, NaN remains a number.
     assert_eq!(

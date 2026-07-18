@@ -119,7 +119,19 @@ impl Vm<'_> {
         let effective_direct_eval = direct_eval
             && matches!(&callee, Value::Function(function) if function.native == Some(NativeFunction::Eval));
         let in_parameter_scope = effective_direct_eval && self.in_parameter_prologue();
-        let mut env = self.call_env(&callee);
+        // Native functions do not inherit their caller's lexical environment.
+        // Any user callbacks they invoke already carry their own upvalue cells,
+        // while realm writes are shared through the realm itself. Only a direct
+        // eval call needs the active frame's dynamic-name view.
+        let frame_independent_native = !effective_direct_eval
+            && matches!(&callee, Value::Function(function) if function.native.is_some());
+        let mut env = if frame_independent_native {
+            super::vm::VmCallEnv {
+                env: self.realm_env(),
+            }
+        } else {
+            self.call_env(&callee)
+        };
         if effective_direct_eval {
             env.env
                 .insert(crate::DIRECT_EVAL_BINDING.to_owned(), Value::Boolean(true));
