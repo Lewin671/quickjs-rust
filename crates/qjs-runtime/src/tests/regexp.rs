@@ -908,6 +908,29 @@ fn evaluates_regexp_symbol_replace() {
         ),
         Ok(Value::String("Xar".to_owned().into()))
     );
+    // The prepared native loop must remain disabled when `exec` is observable,
+    // both for an own override and for a mutated intrinsic prototype.
+    assert_eq!(
+        eval(
+            "let calls = 0; let re = /a/g; \
+             re.exec = function(input) { calls += 1; return calls === 1 ? { length: 1, 0: 'a', index: 0, groups: undefined } : null; }; \
+             re[Symbol.replace]('a', 'x') + ':' + calls;"
+        ),
+        Ok(Value::String("x:2".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let saved = RegExp.prototype.exec; let calls = 0; \
+             RegExp.prototype.exec = function(input) { calls += 1; return saved.call(this, input); }; \
+             let result = (/a/g)[Symbol.replace]('aba', 'x'); \
+             RegExp.prototype.exec = saved; result + ':' + calls;"
+        ),
+        Ok(Value::String("xbx:3".to_owned().into()))
+    );
+    assert_eq!(
+        eval("'a1b2'.replace(/(?<digit>\\d)/g, '<$<digit>>');"),
+        Ok(Value::String("a<1>b<2>".to_owned().into()))
+    );
 }
 
 #[test]

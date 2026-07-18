@@ -1,8 +1,8 @@
 use crate::CallEnv;
 use crate::string::{string_code_units, string_from_code_units};
 use crate::{
-    Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
-    property_value, reflect, symbol, to_js_string_with_env, to_length_with_env,
+    Function, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, RuntimeError, Value,
+    call_function, property_value, reflect, symbol, to_js_string_with_env, to_length_with_env,
 };
 
 const MAX_STRING_LENGTH: usize = (1 << 30) - 1;
@@ -79,6 +79,9 @@ fn collect_matches(
     if let Some(matches) = dot_plus_global_fast_path(&regexp, input, global, unicode, env)? {
         return Ok(matches);
     }
+    if let Some(matches) = prepared_native_global_matches(&regexp, input, global, unicode, env)? {
+        return Ok(matches);
+    }
 
     let mut matches = Vec::new();
     loop {
@@ -100,6 +103,127 @@ fn collect_matches(
         }
     }
     Ok(matches)
+}
+
+/// Runs the builtin global-exec loop without rebuilding its pattern, capture
+/// metadata, input code units, and temporary match array on every iteration.
+/// The exact-prototype checks are intentionally strict: custom `exec` methods
+/// and RegExp-like objects must keep the fully observable spec protocol above.
+fn prepared_native_global_matches(
+    regexp: &Value,
+    input: &str,
+    global: bool,
+    unicode: bool,
+    env: &mut CallEnv,
+) -> Result<Option<Vec<MatchRecord>>, RuntimeError> {
+    if !global {
+        return Ok(None);
+    }
+    let Some((object, source, flags)) = original_native_regexp(regexp, env) else {
+        return Ok(None);
+    };
+    if flags.contains('g') != global || (flags.contains('u') || flags.contains('v')) != unicode {
+        return Ok(None);
+    }
+
+    let ignore_case = flags.contains('i');
+    let dot_all = flags.contains('s');
+    let multiline = flags.contains('m');
+    let sticky = flags.contains('y');
+    let matcher =
+        super::matcher::PreparedRegexp::new(&source, ignore_case, unicode, dot_all, multiline);
+    let prepared_input = matcher.prepare_input(input);
+    let group_names = super::matcher::regexp_group_names(&source);
+    let mut matches = Vec::new();
+
+    loop {
+        let start_code_unit = super::regexp_last_index(regexp, env)?;
+        let start = if unicode {
+            super::char_index_from_code_unit_index(input, start_code_unit)
+        } else {
+            start_code_unit
+        };
+        let match_result = if sticky {
+            matcher.match_at(input, &prepared_input, start)
+        } else {
+            matcher.match_range(input, &prepared_input, start)
+        };
+        let Some(match_result) = match_result else {
+            super::regexp_set_last_index_object(&object, 0, env)?;
+            break;
+        };
+
+        let match_start = if unicode {
+            super::code_unit_index_for_char_index(input, match_result.start)
+        } else {
+            match_result.start
+        };
+        let match_end = if unicode {
+            super::code_unit_index_for_char_index(input, match_result.end)
+        } else {
+            match_result.end
+        };
+        super::regexp_set_last_index_object(&object, match_end, env)?;
+
+        let matched = super::input_slice(input, match_result.start, match_result.end, unicode);
+        let captures = match_result
+            .captures
+            .iter()
+            .map(|capture| {
+                capture
+                    .map(|(start, end)| {
+                        Value::String(super::input_slice(input, start, end, unicode).into())
+                    })
+                    .unwrap_or(Value::Undefined)
+            })
+            .collect();
+        let groups =
+            super::regexp_groups_object(input, &match_result.captures, unicode, &group_names);
+        let empty = matched.is_empty();
+        matches.push(MatchRecord {
+            start: match_start,
+            end: match_end,
+            matched,
+            captures,
+            groups,
+        });
+        if empty {
+            let next_index = advance_string_index(input, match_end, unicode);
+            super::regexp_set_last_index_object(&object, next_index, env)?;
+        }
+    }
+    Ok(Some(matches))
+}
+
+fn original_native_regexp(regexp: &Value, env: &CallEnv) -> Option<(ObjectRef, String, String)> {
+    let Value::Object(object) = regexp else {
+        return None;
+    };
+    if object.own_property("exec").is_some() {
+        return None;
+    }
+    let Prototype::Object(prototype) = object.prototype_slot()? else {
+        return None;
+    };
+    let Some(Value::Object(realm_prototype)) = env.get_realm(super::REGEXP_PROTOTYPE_BINDING)
+    else {
+        return None;
+    };
+    if !prototype.ptr_eq(&realm_prototype) {
+        return None;
+    }
+    let exec = prototype.own_property("exec")?;
+    if exec.accessor
+        || !matches!(
+            exec.value,
+            Value::Function(function)
+                if function.native_kind() == Some(NativeFunction::RegExpPrototypeExec)
+        )
+    {
+        return None;
+    }
+    let (source, flags) = super::regexp_source_flags(regexp)?;
+    Some((object.clone(), source, flags))
 }
 
 fn dot_plus_global_fast_path(

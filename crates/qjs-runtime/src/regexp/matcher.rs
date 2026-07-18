@@ -59,6 +59,138 @@ struct MatchOptions {
     reverse_captures: bool,
 }
 
+/// Pattern-side state that is invariant across the repeated `exec` calls made
+/// by global RegExp operations. Keeping it separate from the input lets native
+/// builtins prepare both sides once without changing the observable `exec`
+/// protocol for custom RegExp-like objects.
+pub(super) struct PreparedRegexp {
+    pattern: Vec<char>,
+    group_indices: HashMap<usize, usize>,
+    properties: PropertyCache,
+    alternatives: Vec<(usize, usize)>,
+    options: MatchOptions,
+}
+
+pub(super) struct PreparedInput {
+    text: Vec<char>,
+}
+
+impl PreparedRegexp {
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn new(
+        source: &str,
+        ignore_case: bool,
+        unicode: bool,
+        dot_all: bool,
+        multiline: bool,
+    ) -> Self {
+        let source = normalized_regexp_source(source);
+        let pattern: Vec<char> = if unicode {
+            source.chars().collect()
+        } else {
+            string_code_units(source)
+                .into_iter()
+                .map(char_from_code_unit)
+                .collect()
+        };
+        let options = MatchOptions {
+            ignore_case,
+            unicode,
+            dot_all,
+            multiline,
+            reverse_captures: false,
+        };
+        let group_indices = capture_group_indices(&pattern);
+        let properties = PropertyCache::build(&pattern);
+        let alternatives = group_alternatives(&pattern, 0, pattern.len());
+        Self {
+            pattern,
+            group_indices,
+            properties,
+            alternatives,
+            options,
+        }
+    }
+
+    pub(super) fn prepare_input(&self, input: &str) -> PreparedInput {
+        let text = if self.options.unicode {
+            input.chars().collect()
+        } else {
+            string_code_units(input)
+                .into_iter()
+                .map(char_from_code_unit)
+                .collect()
+        };
+        PreparedInput { text }
+    }
+
+    pub(super) fn match_range(
+        &self,
+        input: &str,
+        prepared_input: &PreparedInput,
+        start_index: usize,
+    ) -> Option<RegexpMatch> {
+        self.match_input(input, prepared_input, start_index, false)
+    }
+
+    pub(super) fn match_at(
+        &self,
+        input: &str,
+        prepared_input: &PreparedInput,
+        start_index: usize,
+    ) -> Option<RegexpMatch> {
+        self.match_input(input, prepared_input, start_index, true)
+    }
+
+    fn match_input(
+        &self,
+        input: &str,
+        prepared_input: &PreparedInput,
+        start_index: usize,
+        exact_start: bool,
+    ) -> Option<RegexpMatch> {
+        match match_anchored_property_repetition(&self.pattern, input, start_index, self.options) {
+            AnchoredPropertyResult::Matched(match_result) => return Some(match_result),
+            AnchoredPropertyResult::NoMatch => return None,
+            AnchoredPropertyResult::NotAnchored => {}
+        }
+        let text = &prepared_input.text;
+        if start_index > text.len() {
+            return None;
+        }
+        let final_start = if exact_start { start_index } else { text.len() };
+        (start_index..=final_start)
+            .filter(|index| !self.options.unicode || !is_trailing_surrogate_position(text, *index))
+            .find_map(|start| {
+                let state = MatchState {
+                    index: start,
+                    captures: vec![None; self.group_indices.len()],
+                };
+                self.alternatives
+                    .iter()
+                    .find_map(|(alternative_start, alternative_end)| {
+                        match_pattern(
+                            &self.pattern,
+                            text,
+                            *alternative_start,
+                            *alternative_end,
+                            state.clone(),
+                            &self.group_indices,
+                            &self.properties,
+                            self.options,
+                        )
+                        .into_iter()
+                        .next()
+                    })
+                    .map(|state| RegexpMatch {
+                        start,
+                        end: state.index,
+                        captures: state.captures,
+                    })
+            })
+    }
+}
+
 struct RepeatAtom<'a> {
     pattern: &'a [char],
     text: &'a [char],
@@ -129,70 +261,13 @@ fn regexp_match(
     multiline: bool,
     exact_start: bool,
 ) -> Option<RegexpMatch> {
-    let source = normalized_regexp_source(source);
-    let pattern: Vec<_> = if unicode {
-        source.chars().collect()
+    let prepared = PreparedRegexp::new(source, ignore_case, unicode, dot_all, multiline);
+    let prepared_input = prepared.prepare_input(input);
+    if exact_start {
+        prepared.match_at(input, &prepared_input, start_index)
     } else {
-        string_code_units(source)
-            .into_iter()
-            .map(char_from_code_unit)
-            .collect()
-    };
-    let options = MatchOptions {
-        ignore_case,
-        unicode,
-        dot_all,
-        multiline,
-        reverse_captures: false,
-    };
-    match match_anchored_property_repetition(&pattern, input, start_index, options) {
-        AnchoredPropertyResult::Matched(match_result) => return Some(match_result),
-        AnchoredPropertyResult::NoMatch => return None,
-        AnchoredPropertyResult::NotAnchored => {}
+        prepared.match_range(input, &prepared_input, start_index)
     }
-    let text: Vec<_> = if unicode {
-        input.chars().collect()
-    } else {
-        string_code_units(input)
-            .into_iter()
-            .map(char_from_code_unit)
-            .collect()
-    };
-    if start_index > text.len() {
-        return None;
-    }
-    let group_indices = capture_group_indices(&pattern);
-    let properties = PropertyCache::build(&pattern);
-    let final_start = if exact_start { start_index } else { text.len() };
-    (start_index..=final_start)
-        .filter(|index| !options.unicode || !is_trailing_surrogate_position(&text, *index))
-        .find_map(|start| {
-            let state = MatchState {
-                index: start,
-                captures: vec![None; group_indices.len()],
-            };
-            group_alternatives(&pattern, 0, pattern.len())
-                .into_iter()
-                .find_map(|(alternative_start, alternative_end)| {
-                    match_pattern(
-                        &pattern,
-                        &text,
-                        alternative_start,
-                        alternative_end,
-                        state.clone(),
-                        &group_indices,
-                        &properties,
-                        options,
-                    )
-                    .into_iter()
-                    .next()
-                })
-                .map(|state| RegexpMatch {
-                    start,
-                    end: state.index,
-                    captures: state.captures,
-                })
-        })
 }
 
 enum AnchoredPropertyResult {
