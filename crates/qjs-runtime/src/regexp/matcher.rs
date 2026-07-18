@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::string::{
-    advance_string_index, string_code_units, string_from_code_unit, surrogate_escape_code_unit,
+    advance_string_index, char_from_code_unit, string_code_units, surrogate_escape_code_unit,
 };
 
 mod classes;
@@ -135,7 +135,7 @@ fn regexp_match(
     } else {
         string_code_units(source)
             .into_iter()
-            .filter_map(|code_unit| string_from_code_unit(code_unit).chars().next())
+            .map(char_from_code_unit)
             .collect()
     };
     let options = MatchOptions {
@@ -155,7 +155,7 @@ fn regexp_match(
     } else {
         string_code_units(input)
             .into_iter()
-            .filter_map(|code_unit| string_from_code_unit(code_unit).chars().next())
+            .map(char_from_code_unit)
             .collect()
     };
     if start_index > text.len() {
@@ -1116,10 +1116,7 @@ fn match_property_escape_reverse(
 }
 
 fn code_unit_char(code_unit: u16) -> char {
-    string_from_code_unit(code_unit)
-        .chars()
-        .next()
-        .unwrap_or(char::REPLACEMENT_CHARACTER)
+    char_from_code_unit(code_unit)
 }
 
 fn match_class(

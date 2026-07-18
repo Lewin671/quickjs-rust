@@ -142,22 +142,36 @@ pub(crate) fn string_from_code_unit(code_unit: u16) -> String {
     result
 }
 
-pub(crate) fn push_code_unit(result: &mut String, code_unit: u16) {
+pub(crate) fn char_from_code_unit(code_unit: u16) -> char {
     if (0xD800..=0xDFFF).contains(&code_unit) {
-        result.push(
-            char::from_u32(SURROGATE_ESCAPE_SENTINEL_BASE + u32::from(code_unit) - 0xD800)
-                .unwrap_or(char::REPLACEMENT_CHARACTER),
-        );
+        char::from_u32(SURROGATE_ESCAPE_SENTINEL_BASE + u32::from(code_unit) - 0xD800)
+            .unwrap_or(char::REPLACEMENT_CHARACTER)
     } else {
-        result.push(char::from_u32(u32::from(code_unit)).unwrap_or(char::REPLACEMENT_CHARACTER));
+        char::from_u32(u32::from(code_unit)).unwrap_or(char::REPLACEMENT_CHARACTER)
     }
+}
+
+pub(crate) fn push_code_unit(result: &mut String, code_unit: u16) {
+    result.push(char_from_code_unit(code_unit));
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        string_code_unit_at, string_code_unit_len, string_code_units, string_from_code_units,
+        char_from_code_unit, string_code_unit_at, string_code_unit_len, string_code_units,
+        string_from_code_units, surrogate_escape_code_unit,
     };
+
+    #[test]
+    fn code_unit_character_conversion_preserves_ascii_and_lone_surrogates() {
+        assert_eq!(char_from_code_unit(0x41), 'A');
+        for code_unit in [0xD800, 0xDC00, 0xDFFF] {
+            assert_eq!(
+                surrogate_escape_code_unit(char_from_code_unit(code_unit)),
+                Some(code_unit)
+            );
+        }
+    }
 
     #[test]
     fn code_unit_length_matches_materialized_utf16() {
