@@ -337,7 +337,11 @@ fn replace_matches(
 ) -> Result<Value, RuntimeError> {
     let mut result = String::new();
     let mut result_len = 0usize;
-    let input_len = string_code_units(&input).len();
+    // Match positions are UTF-16 code-unit offsets. Prepare that view once so
+    // a global replacement does not decode the entire input again for every
+    // unmatched segment and every `$`` / `$'` substitution.
+    let input_code_units = string_code_units(&input);
+    let input_len = input_code_units.len();
     let replacement_is_function = matches!(&replacement, Replacement::Function(_));
     let mut copied_until = 0usize;
     for match_record in matches {
@@ -346,7 +350,11 @@ fn replace_matches(
         }
         result_len =
             checked_string_length(result_len, match_record.start.saturating_sub(copied_until))?;
-        result.push_str(&input_char_slice(&input, copied_until, match_record.start));
+        result.push_str(&input_code_unit_slice(
+            &input_code_units,
+            copied_until,
+            match_record.start,
+        ));
         let replacement_string = match &replacement {
             Replacement::Function(function) => {
                 functional_replacement((**function).clone(), &match_record, input.clone(), env)?
@@ -361,7 +369,7 @@ fn replace_matches(
                     replacement,
                     &match_record.matched,
                     match_record.start,
-                    &input,
+                    input_len,
                     &match_record.captures,
                     &named_captures,
                 );
@@ -372,7 +380,7 @@ fn replace_matches(
                     replacement,
                     &match_record.matched,
                     match_record.start,
-                    &input,
+                    &input_code_units,
                     &match_record.captures,
                     &named_captures,
                     env,
@@ -392,7 +400,11 @@ fn replace_matches(
         copied_until = match_record.end;
     }
     checked_string_length(result_len, input_len.saturating_sub(copied_until))?;
-    result.push_str(&input_char_slice(&input, copied_until, input_len));
+    result.push_str(&input_code_unit_slice(
+        &input_code_units,
+        copied_until,
+        input_len,
+    ));
     Ok(Value::String(result.into()))
 }
 
@@ -451,7 +463,7 @@ fn get_substitution(
     replacement: &str,
     matched: &str,
     position: usize,
-    input: &str,
+    input_code_units: &[u16],
     captures: &[Value],
     named_captures: &Value,
     env: &mut CallEnv,
@@ -470,11 +482,11 @@ fn get_substitution(
         match next {
             '$' => result.push('$'),
             '&' => result.push_str(matched),
-            '`' => result.push_str(&input_char_slice(input, 0, position)),
-            '\'' => result.push_str(&input_char_slice(
-                input,
+            '`' => result.push_str(&input_code_unit_slice(input_code_units, 0, position)),
+            '\'' => result.push_str(&input_code_unit_slice(
+                input_code_units,
                 position + string_code_units(matched).len(),
-                string_code_units(input).len(),
+                input_code_units.len(),
             )),
             '0'..='9' => substitute_capture(&mut result, &mut chars, captures, next),
             '<' if !matches!(named_captures, Value::Undefined) => {
@@ -493,13 +505,12 @@ fn substitution_length(
     replacement: &str,
     matched: &str,
     position: usize,
-    input: &str,
+    input_len: usize,
     captures: &[Value],
     named_captures: &Value,
 ) -> Option<usize> {
     let mut length = 0usize;
     let matched_len = string_code_units(matched).len();
-    let input_len = string_code_units(input).len();
     let suffix_len = input_len.saturating_sub(position + matched_len);
     let capture_lengths: Vec<_> = captures
         .iter()
@@ -657,11 +668,10 @@ fn advance_string_index(input: &str, index: usize, unicode: bool) -> usize {
     }
 }
 
-fn input_char_slice(input: &str, start: usize, end: usize) -> String {
-    let input_len = string_code_units(input).len();
-    let start = start.min(input_len);
-    let end = end.min(input_len);
-    string_from_code_units(&string_code_units(input)[start..end])
+fn input_code_unit_slice(input_code_units: &[u16], start: usize, end: usize) -> String {
+    let start = start.min(input_code_units.len());
+    let end = end.min(input_code_units.len());
+    string_from_code_units(&input_code_units[start..end])
 }
 
 fn is_object_value(value: &Value) -> bool {
