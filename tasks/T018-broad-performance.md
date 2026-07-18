@@ -10,6 +10,9 @@ goal, not permission to optimize only the repository's internal benchmark
 shapes. The pinned external JetStream 3 JavaScript subset, Kraken 1.1, and
 SunSpider 1.0 neutral shell ports are an independent anti-overfitting boundary:
 the campaign cannot complete unless the improvement generalizes there too.
+Optimization priorities must therefore come from general engine mechanisms and
+independent external profiles; broad-micro is a regression guard, not a target
+whose case shapes may dictate runtime design.
 
 ## Scope
 
@@ -3185,6 +3188,46 @@ and `a89aad7fed7558559c4fe70387c4fb9ae09efc7e70154e76df5cffab5e9af6a0`.
 The prototype was reverted without a runtime commit: one improved external
 case does not outweigh three suite-wide regressions under the anti-overfitting
 contract.
+
+The fifty-fourth v2 unit follows the independent SunSpider regexp/string
+profile into general UTF-16 regexp preparation. macOS sampling of
+`string-unpack-code` showed that every non-Unicode pattern and input code unit
+allocated a temporary Rust `String` only to extract its first `char`. The
+runtime now maps a code unit directly to the existing internal character
+representation: ordinary code units retain their scalar value and lone
+surrogates retain the established sentinel encoding. `push_code_unit` shares
+the same conversion helper, and the focused test covers both ASCII and lone
+surrogate round trips. The implementation contains no suite or case identity,
+source path, iteration count, checksum, or benchmark-specific result.
+
+Against the exact unit-53 same-host base, the complete one-block external
+inventory retained 5/5 JetStream, 14/14 Kraken, and 26/26 SunSpider coverage.
+Candidate/base geometric means were **1.006037x**, **1.008965x**, and
+**0.726930x** respectively, with 2/5, 6/14, and 12/26 cases faster. The small
+unaffected-suite movements are within the adjacent one-block host drift: the
+immediately preceding rejected property-cache prototype measured 1.009939x
+and 1.005941x against the same base. The affected independent cases improved
+by an order of magnitude: `regexp-dna` fell to 0.075346x base,
+`string-tagcloud` to 0.059895x, and `string-unpack-code` to 0.049642x.
+Independent three-run direct timings were 3.52--3.55 seconds, 2.62--2.63
+seconds, and 4.40--4.51 seconds respectively, versus unit-53 one-block
+durations of 46.68, 42.81, and 89.21 seconds. Candidate/QuickJS-NG remains far
+from B5 at 7.317x, 4.976x, and 6.765x. External raw/report SHA-256 are
+`2531f93d84e9cbba106c32f10879c89697b01c79c587e3e0f4acef42eaa4c321`
+and `b41aab481a0b0d3f28b13ba45a47ad849fd7df35f426cd9c0b10ab93b0d97c32`.
+
+The receipt-less one-block broad diagnostic completed all 25 cases and all
+75/75 eligible measurements. Manual protocol-equivalent normalization
+measured candidate/base at **1.006793x** overall with 10/25 cases faster and
+candidate/QuickJS-NG at **0.189055x**. The string family was 0.983693x base;
+unaffected families ranged from 1.001059x to 1.026644x in this single-block
+run. The raw JSONL SHA-256 is
+`9007098682c619de1113da5c1ab37315c188717087729f70fc9cdcb9ae3d3d8a`.
+All 1,392 runtime tests, the full workspace and benchmark-tool gates, the
+5,139-case Test262 subset, and 205 QuickJS-NG comparison fixtures passed.
+Exact pushed performance and coverage artifacts remain required before unit
+54 is closed; this local result is accepted as external generalization
+evidence, not B5 completion.
 
 ## Historical Broad V1 Baseline
 
