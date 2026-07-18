@@ -461,7 +461,10 @@ pub(crate) struct CallEnv {
     immutable_lexical_bindings: ImmutableLexicalBindings,
     frame_bindings: FrameBindings,
     deopt_bindings: Option<DynamicBindings>,
-    catch_bindings: HashSet<String>,
+    /// Dynamic-scope metadata is inherited by nested execution views but is
+    /// mutated only by catch setup. Share the ordinary call path and
+    /// detach on those cold mutations instead of cloning a hash table per call.
+    catch_bindings: Rc<HashSet<String>>,
     /// The immutable name binding of a named function expression, for this
     /// frame only. Assigning to it is a silent no-op in sloppy mode and a
     /// TypeError in strict mode (unless a parameter/`var`/lexical shadows it,
@@ -469,7 +472,9 @@ pub(crate) struct CallEnv {
     /// never consults this field). New ordinary function frames reset this;
     /// lexical-this functions inherit it explicitly from their enclosing frame.
     immutable_function_name: Option<String>,
-    direct_eval_var_conflicts: HashSet<String>,
+    /// Share the inherited declaration-conflict set across ordinary frames and
+    /// detach only when direct-eval setup rebuilds the active conflict names.
+    direct_eval_var_conflicts: Rc<HashSet<String>>,
     /// The lexical private-name environment active for this frame. This is
     /// separate from `\0home_object`: ordinary nested functions do not inherit
     /// `super`, but they do retain access to private names declared by enclosing
@@ -573,9 +578,9 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             frame_bindings: FrameBindings::default(),
             deopt_bindings: None,
-            catch_bindings: HashSet::new(),
+            catch_bindings: Default::default(),
             immutable_function_name: None,
-            direct_eval_var_conflicts: HashSet::new(),
+            direct_eval_var_conflicts: Default::default(),
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
             module_host: None,
@@ -677,9 +682,9 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             frame_bindings: FrameBindings::default(),
             deopt_bindings: None,
-            catch_bindings: HashSet::new(),
+            catch_bindings: Default::default(),
             immutable_function_name: None,
-            direct_eval_var_conflicts: HashSet::new(),
+            direct_eval_var_conflicts: Default::default(),
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
             module_host: None,
@@ -702,9 +707,9 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             frame_bindings: FrameBindings::default(),
             deopt_bindings: None,
-            catch_bindings: HashSet::new(),
+            catch_bindings: Default::default(),
             immutable_function_name: None,
-            direct_eval_var_conflicts: HashSet::new(),
+            direct_eval_var_conflicts: Default::default(),
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
             module_host: None,
@@ -725,9 +730,9 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             frame_bindings: FrameBindings::from_values(locals),
             deopt_bindings: None,
-            catch_bindings: HashSet::new(),
+            catch_bindings: Default::default(),
             immutable_function_name: None,
-            direct_eval_var_conflicts: HashSet::new(),
+            direct_eval_var_conflicts: Default::default(),
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
             module_host: None,
@@ -798,9 +803,9 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
             frame_bindings: FrameBindings::default(),
             deopt_bindings: None,
-            catch_bindings: HashSet::new(),
+            catch_bindings: Default::default(),
             immutable_function_name: None,
-            direct_eval_var_conflicts: HashSet::new(),
+            direct_eval_var_conflicts: Default::default(),
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
             module_host: self.module_host.clone(),
@@ -841,11 +846,11 @@ impl CallEnv {
     }
 
     pub(crate) fn mark_catch_binding(&mut self, name: String) {
-        self.catch_bindings.insert(name);
+        Rc::make_mut(&mut self.catch_bindings).insert(name);
     }
 
     pub(crate) fn unmark_catch_binding(&mut self, name: &str) {
-        self.catch_bindings.remove(name);
+        Rc::make_mut(&mut self.catch_bindings).remove(name);
     }
 
     pub(crate) fn is_catch_binding(&self, name: &str) -> bool {
@@ -869,11 +874,11 @@ impl CallEnv {
     }
 
     pub(crate) fn clear_direct_eval_var_conflicts(&mut self) {
-        self.direct_eval_var_conflicts.clear();
+        Rc::make_mut(&mut self.direct_eval_var_conflicts).clear();
     }
 
     pub(crate) fn mark_direct_eval_var_conflict(&mut self, name: String) {
-        self.direct_eval_var_conflicts.insert(name);
+        Rc::make_mut(&mut self.direct_eval_var_conflicts).insert(name);
     }
 
     pub(crate) fn is_direct_eval_var_conflict(&self, name: &str) -> bool {
@@ -1277,6 +1282,28 @@ mod tests {
         cell.set(Value::Number(2.0));
         assert!(matches!(bindings.get("value"), Some(Value::Number(2.0))));
         assert!(cell.ptr_eq(&bindings.cell("value").expect("cell is stable")));
+    }
+
+    #[test]
+    fn function_frame_eval_conflict_sets_are_copy_on_write() {
+        let mut caller = CallEnv::new(new_realm(HashMap::new()));
+        caller.mark_catch_binding("caller_catch".to_owned());
+        caller.mark_direct_eval_var_conflict("caller_lexical".to_owned());
+
+        let mut callee = caller.new_function_frame();
+        callee.unmark_catch_binding("caller_catch");
+        callee.mark_catch_binding("callee_catch".to_owned());
+        callee.clear_direct_eval_var_conflicts();
+        callee.mark_direct_eval_var_conflict("callee_lexical".to_owned());
+
+        assert!(caller.is_catch_binding("caller_catch"));
+        assert!(!caller.is_catch_binding("callee_catch"));
+        assert!(caller.is_direct_eval_var_conflict("caller_lexical"));
+        assert!(!caller.is_direct_eval_var_conflict("callee_lexical"));
+        assert!(!callee.is_catch_binding("caller_catch"));
+        assert!(callee.is_catch_binding("callee_catch"));
+        assert!(!callee.is_direct_eval_var_conflict("caller_lexical"));
+        assert!(callee.is_direct_eval_var_conflict("callee_lexical"));
     }
 
     #[test]
