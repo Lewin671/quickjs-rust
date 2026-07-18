@@ -128,7 +128,6 @@ impl Vm<'_> {
         let mut env = if frame_independent_native {
             super::vm::VmCallEnv {
                 env: self.realm_env(),
-                apply_back: true,
             }
         } else {
             self.call_env(&callee)
