@@ -3229,6 +3229,39 @@ Exact pushed performance and coverage artifacts remain required before unit
 54 is closed; this local result is accepted as external generalization
 evidence, not B5 completion.
 
+The pushed unit-54 runtime is commit
+`549486dfd6973fe0fd2efedcaf860b160365e3be`; the trusted harness revision is
+`c3d65ad3d36362f105c31404bc7137f37dedcf01`. CI run `29640021376`,
+Performance Preview run `29640021343`, and Test262 Coverage run `29640099734`
+all completed successfully. The downloaded performance artifact contains a
+complete verified 25/25-case broad run with 225/225 eligible measurements,
+passing linearity, and three valid blocks. Hosted candidate/base was
+**0.983314x** with a 95% confidence interval of [0.982050x, 0.999283x];
+candidate/QuickJS-NG was **0.344955x** with a 95% confidence interval of
+[0.335483x, 0.349178x]. Broad raw/report SHA-256 are
+`17379b13dda3513f99225bcb6750b1f5e31a88ffdf0800db109faa210f70106e`
+and `57bb53ae67ac9375f49582120460e90a1a92da584afecc1bdbb09f2f593a9612`.
+
+The hosted external preview completed all 5/5 JetStream and, for the first
+time in this campaign, all 26/26 SunSpider cases; Kraken remained partial at
+7/14. On the unchanged unit-53 comparable inventories, candidate duration
+geometric means improved to 0.987196x, 0.975203x, and 0.990279x respectively.
+The three newly completed SunSpider cases are exactly the profiled mechanisms:
+`regexp-dna`, `string-tagcloud`, and `string-unpack-code`. Because their large
+remaining QuickJS-NG gaps now enter the aggregate, the complete SunSpider
+candidate/QuickJS-NG ratio is **10.979076x**, not a B5 pass; JetStream was
+9.925689x and partial Kraken was 5.869854x. External raw/report SHA-256 are
+`19cafd80bd7038845d7a73f94b0f4779e24147e0c13c38d9bffc2a9dd5898a3b`
+and `dd8582196f826522518a4ab1ee89bb2deedb42d6d899b4ae72a96132616c0384`.
+
+Coverage remained 42,671/42,672 configured qjs-rust passes with zero timeout
+and the same sole actionable private-static-setter gap. Coverage
+burndown/comparison SHA-256 are
+`efb8ed34e77a5341952f0850fdd63b4dca90393d17d9275922c0f2f5adf48309`
+and `44cdb54200fbbebbb9353ed4f93c3c39b80a7135d20c05ed0eb6f25806bf401b`.
+Unit 54 is closed as a general regexp allocation improvement that increased
+external coverage, not as B5 or 100% Test262 completion.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
