@@ -163,41 +163,36 @@ fn regexp_match(
     }
     let group_indices = capture_group_indices(&pattern);
     let properties = PropertyCache::build(&pattern);
-    let starts: Vec<_> = if exact_start {
-        vec![start_index]
-    } else {
-        (start_index.min(text.len())..=text.len())
-            .filter(|index| !options.unicode || !is_trailing_surrogate_position(&text, *index))
-            .collect()
-    };
-
-    starts.into_iter().find_map(|start| {
-        let state = MatchState {
-            index: start,
-            captures: vec![None; group_indices.len()],
-        };
-        group_alternatives(&pattern, 0, pattern.len())
-            .into_iter()
-            .find_map(|(alternative_start, alternative_end)| {
-                match_pattern(
-                    &pattern,
-                    &text,
-                    alternative_start,
-                    alternative_end,
-                    state.clone(),
-                    &group_indices,
-                    &properties,
-                    options,
-                )
+    let final_start = if exact_start { start_index } else { text.len() };
+    (start_index..=final_start)
+        .filter(|index| !options.unicode || !is_trailing_surrogate_position(&text, *index))
+        .find_map(|start| {
+            let state = MatchState {
+                index: start,
+                captures: vec![None; group_indices.len()],
+            };
+            group_alternatives(&pattern, 0, pattern.len())
                 .into_iter()
-                .next()
-            })
-            .map(|state| RegexpMatch {
-                start,
-                end: state.index,
-                captures: state.captures,
-            })
-    })
+                .find_map(|(alternative_start, alternative_end)| {
+                    match_pattern(
+                        &pattern,
+                        &text,
+                        alternative_start,
+                        alternative_end,
+                        state.clone(),
+                        &group_indices,
+                        &properties,
+                        options,
+                    )
+                    .into_iter()
+                    .next()
+                })
+                .map(|state| RegexpMatch {
+                    start,
+                    end: state.index,
+                    captures: state.captures,
+                })
+        })
 }
 
 enum AnchoredPropertyResult {
