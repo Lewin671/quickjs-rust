@@ -5,7 +5,10 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use ahash::AHashMap;
+#[cfg(target_feature = "aes")]
+use ahash::AHashMap as PropertyHashMap;
+#[cfg(not(target_feature = "aes"))]
+use std::collections::HashMap as PropertyHashMap;
 
 use crate::private::{PrivateEnvironment, PrivateStorage};
 use crate::{Function, RuntimeError, function::DynamicBindings, proxy::ProxyRef};
@@ -275,14 +278,14 @@ impl ObjectData {
 pub(crate) struct ObjectLiteralShape {
     keys: Rc<[Rc<str>]>,
     input_slots: Rc<[usize]>,
-    lookup: AHashMap<Rc<str>, usize>,
+    lookup: PropertyHashMap<Rc<str>, usize>,
     index_property_count: usize,
 }
 
 impl ObjectLiteralShape {
     pub(crate) fn new(input_keys: Vec<Rc<str>>) -> Rc<Self> {
         let mut keys = Vec::with_capacity(input_keys.len());
-        let mut lookup = AHashMap::with_capacity(input_keys.len());
+        let mut lookup = PropertyHashMap::with_capacity(input_keys.len());
         let mut input_slots = Vec::with_capacity(input_keys.len());
         for key in input_keys {
             let slot = match lookup.get(key.as_ref()) {
@@ -317,7 +320,7 @@ impl ObjectLiteralShape {
 
 enum PropertyStorage {
     Dynamic {
-        properties: AHashMap<Rc<str>, Property>,
+        properties: PropertyHashMap<Rc<str>, Property>,
         order: Vec<Rc<str>>,
     },
     Shaped {
@@ -331,7 +334,7 @@ enum PropertyStorage {
 }
 
 impl PropertyStorage {
-    fn dynamic(properties: AHashMap<Rc<str>, Property>, order: Vec<Rc<str>>) -> Self {
+    fn dynamic(properties: PropertyHashMap<Rc<str>, Property>, order: Vec<Rc<str>>) -> Self {
         Self::Dynamic { properties, order }
     }
 
@@ -612,7 +615,7 @@ impl ObjectRef {
         properties: HashMap<String, Value>,
         prototype: Option<Prototype>,
     ) -> Self {
-        let properties: AHashMap<Rc<str>, Property> = properties
+        let properties: PropertyHashMap<Rc<str>, Property> = properties
             .into_iter()
             .map(|(key, value)| (Rc::from(key), Property::enumerable(value)))
             .collect();
