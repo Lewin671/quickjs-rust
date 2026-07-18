@@ -22,10 +22,6 @@ categories.workspace = true
 agents = ["dep:parking_lot"]
 
 [dependencies]
-# Randomly keyed, collision-resistant hashing for hot in-memory object-property
-# tables when the compile target exposes AES acceleration. Generic targets keep
-# the standard keyed map; property order remains explicit in either case.
-ahash = "0.8.12"
 num-bigint = "0.4"
 num-traits = "0.2"
 parking_lot = { version = "0.12", optional = true }
