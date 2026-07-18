@@ -3396,9 +3396,37 @@ for the three suites, with zero qjs-rust wins. External raw/report SHA-256 are
 `55dea2ad176657d2eeacbc161ea36badba91fa84e1fef65f45243e5897b91534`
 and `0433284651053a783219241b06029123b67e834536a6c43f96fca7ce0f2d20c1`.
 All 1,395 runtime tests, the full workspace and 198 benchmark-tool tests,
-5,139 Test262 subset cases, and 205 QuickJS-NG comparisons pass. Hosted
-artifacts are still required before unit 56 is closed; the goal remains open
-because external throughput is still roughly 4.9--7.3x slower than QuickJS-NG.
+5,139 Test262 subset cases, and 205 QuickJS-NG comparisons pass.
+
+The pushed runtime and goal-contract documentation are commits `35c3f33e` and
+`f3b7d1a6`. CI run `29646643893`, Performance Preview run `29646643882`, and
+Test262 Coverage run `29646745719` all completed successfully. The hosted
+three-block broad run was complete with 225/225 eligible measurements and
+75/75 passing linearity probes. Candidate/base was **0.985002x** with a 95%
+confidence interval of [0.982929x, 0.985761x]; binding was 0.973778x, call was
+0.979214x, and candidate/QuickJS-NG was 0.354042x. Broad raw/report SHA-256 are
+`438365cf7d51d6dcd2d6ddcd13c77be66c68ed46538f20d8f14e93c32391c2d8`
+and `9bb019f2f67857a3c5aa74d9dec880c863d2971ba48c2aacd744b324fbc7e80f`.
+
+Under the hosted preview's fixed 15-second external timeout, JetStream and
+SunSpider remained complete at 5/5 and 26/26 while Kraken expanded from the
+unit-55 hosted 7/14 to 9/14. The five remaining Kraken timeouts are
+`ai-astar`, `audio-beat-detection`, `audio-fft`, `imaging-gaussian-blur`, and
+`imaging-desaturate`; all complete locally with the formal 60-second timeout,
+so none is hidden or reclassified. Hosted candidate/QuickJS-NG was
+**10.194558x**, **6.791710x**, and **11.031447x**, with zero qjs-rust wins.
+External raw/report SHA-256 are
+`3b926d7caabf7b7a030cd0e6528232d14f6f99782aba2fd3173badf826345178`
+and `da3ad19b43acd2773ebc718841bb884734eba5f20ab4175484f2d78199ef9b4a`.
+
+Coverage remained 42,671/42,672 with zero timeout and the same sole
+private-static-setter actionable gap. Coverage burndown/comparison SHA-256 are
+`e9d23b6e280470f1d7b2743950b64920af18f53d2e06dc21a2aca54a4cbc7a6a`
+and `94a97687babcdfba02efff77997af0a59fa7ddfb08a2370d03fbb933de069e69`.
+Unit 56 is closed as a fully verified general environment-representation
+improvement. The goal remains open because every comparable hosted external
+case still loses and external throughput remains roughly 6.8--11.0x slower
+than QuickJS-NG on the hosted inventory.
 
 ## Historical Broad V1 Baseline
 
