@@ -30,6 +30,25 @@ whose case shapes may dictate runtime design.
 - Owner boundary: serialize manifest/protocol changes and broad runtime
   architecture changes on the main branch; one measured change per commit.
 
+## General Optimization Acceptance Rule
+
+This campaign accepts performance work only when the implementation is a
+general engine mechanism and the evidence shows that it is not merely fitted
+to broad-micro. Every runtime unit must therefore include both the complete
+broad portfolio and the pinned external preview before it is closed. A unit is
+rejected as campaign progress when its benefit depends on an internal case
+shape, benchmark identity, fixed iteration count, expected checksum, or source
+path; when it reduces comparable external coverage; or when a nominal internal
+win leaves the relevant external workloads materially worse without an
+explained, independently measured tradeoff. Focused microbenchmarks may locate
+a bottleneck, but they cannot define the runtime semantics or serve as the
+unit's only acceptance evidence.
+
+External results remain informational neutral-shell measurements rather than
+official suite scores. That limitation does not make them optional: their role
+inside T018 is the mandatory independent check that an optimization improves
+ordinary JavaScript mechanisms beyond the repository's own benchmark shapes.
+
 ## References
 
 - `AGENTS.md`
@@ -3308,8 +3327,78 @@ and `a09bb528d3f8b93cec46be0fe55e9e71e1c1a46f1fcf7c12774dab000d27f45a`.
 
 Local correctness gates passed 1,392 runtime tests, the full repository check
 including all 198 benchmark-tool tests and 5,139 Test262 subset cases, and all
-205 QuickJS-NG comparison fixtures. Hosted performance and coverage artifacts
-remain required before unit 55 is closed.
+205 QuickJS-NG comparison fixtures.
+
+The pushed unit-55 runtime and documentation are commits `a5e39997` and
+`9f88688c`. CI run `29642617673`, Performance Preview run `29642617675`, and
+Test262 Coverage run `29642717096` all completed successfully. The hosted
+three-block broad artifact was complete and healthy, but it did not confirm
+the locally neutral movement: candidate/base was **1.025615x** with a 95%
+confidence interval of [1.024365x, 1.028105x]. Binding was **1.100406x** and
+call was **1.047362x** base; candidate/QuickJS-NG remained **0.370231x**.
+Broad raw/report SHA-256 are
+`94a7ff86ec7d85ed21eb1c0945bd19b46cf226682c9fb06a4f44659ed872c938`
+and `c165359d95310b49fd33cd3b2a371488c9544e7899a122b4417a2e51a11270d5`.
+
+The hosted external preview completed 5/5 JetStream, 7/14 Kraken, and 26/26
+SunSpider cases. Candidate/QuickJS-NG was **10.394x**, **6.815x**, and
+**10.913x** respectively, with zero qjs-rust wins; Kraken
+`imaging-gaussian-blur` remained the sole timer-limited case from the complete
+local 90-second inventory. External raw/report SHA-256 are
+`7bfee955fdfaab3b42a2f578a7fb9a359f04376d0b4a8c0dc0e9c0d56f634c1a`
+and `16e4a11c475c0b34ae451f0ce8a6a431f7726be7426f14547ef17195afa5992b`.
+Coverage stayed 42,671/42,672 with the same private-static-setter gap;
+burndown/comparison SHA-256 are
+`5f0bc2e506fdec3476e7aa5f8bd5460a1a6888a24f83ff4fd5aabc7981323266`
+and `44cdb54200fbbebbb9353ed4f93c3c39b80a7135d20c05ed0eb6f25806bf401b`.
+Unit 55 is closed as fully verified evidence for a general lazy-regexp
+mechanism, but its hosted broad regression means it is not counted as an
+internal broad improvement and does not advance B4 by itself.
+
+### Unit 56: read-only global captures through realm cells
+
+Runtime commit `35c3f33e` lets statically known, read-only top-level `var`
+references flow through shared realm cells and ordinary local/upvalue slots.
+Writers remain name-addressed global operations, nested readers reuse the same
+cell, and any function containing direct `eval` stays on the dynamic name path.
+Numeric-loop admission was generalized to consume authoritative realm slots,
+including reordered calls, rather than adding a workload-specific exception.
+The implementation contains no benchmark identity, source path, iteration
+count, checksum, or expected-result specialization.
+
+Two prototypes were rejected before acceptance. The first made broad
+candidate/base **2.3137x**, including `global_read` at 167.94x, because the
+general numeric-loop path did not understand the new slot representation. A
+second fixed stable reads but left reordered calls at 57.18x. Neither result is
+counted. The final implementation also fixed two correctness boundaries found
+by the full gates: direct-eval functions are explicitly deoptimized, and the
+string-append path releases its realm borrow before synchronizing a captured
+global. Both have focused regression tests.
+
+The final candidate binary SHA-256 is
+`fc01c52272370d48ee71caa6963ce88a0cc649b8c983c8ee04db82c1518decdf`.
+Its complete 25/25-case, 50/50-eligible broad A/B measured candidate/base
+**0.998691x**. Binding improved to **0.974028x**; the other seven families
+ranged from 0.998004x to 1.010294x. Broad raw SHA-256 is
+`2f7a32bc659db059cf0f0152600ae56cfe3c2454dda5baaa03b2745faf0657ef`.
+An independent five-block call audit measured **0.996854x** overall:
+`plain_function_call` 0.993997x, `closure_allocation_call` 0.997818x, and
+`empty_loop` 0.998752x. Its raw SHA-256 is
+`dc7bd42642c4a2dd1d2c8ecc0410e609fc67905344c56ee641613dc039ef3857`.
+
+The exact final external binary completed all 45/45 cases at the formal
+60-second timeout, including Kraken `imaging-gaussian-blur` at 39.2945 s.
+Against the unit-55 common local inventory, duration geometric means were
+1.001862x for JetStream, 1.002953x for Kraken, and 0.988179x for SunSpider;
+the newly completed Gaussian case is the material generalization result.
+Candidate/QuickJS-NG is still **7.344830x**, **4.912244x**, and **6.277423x**
+for the three suites, with zero qjs-rust wins. External raw/report SHA-256 are
+`55dea2ad176657d2eeacbc161ea36badba91fa84e1fef65f45243e5897b91534`
+and `0433284651053a783219241b06029123b67e834536a6c43f96fca7ce0f2d20c1`.
+All 1,395 runtime tests, the full workspace and 198 benchmark-tool tests,
+5,139 Test262 subset cases, and 205 QuickJS-NG comparisons pass. Hosted
+artifacts are still required before unit 56 is closed; the goal remains open
+because external throughput is still roughly 4.9--7.3x slower than QuickJS-NG.
 
 ## Historical Broad V1 Baseline
 
