@@ -538,38 +538,38 @@ impl Vm<'_> {
         if self.env.is_immutable_function_name(name) {
             return Ok(());
         }
-        if let Some(slot) = self.bytecode.local_slot(name)
-            && self.locals.get(slot).is_some_and(Option::is_some)
-        {
+        if let Some(slot) = self.bytecode.local_slot(name) {
             if let Some(result) = self.try_store_indexed_realm_global(slot, name, &value, false) {
                 return result;
             }
-            if self.local_slot_targets_non_writable_global(slot, name) {
+            if self.locals.get(slot).is_some_and(Option::is_some) {
+                if self.local_slot_targets_non_writable_global(slot, name) {
+                    return Ok(());
+                }
+                let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
+                    thrown: None,
+                    message: "bytecode local index out of bounds".to_owned(),
+                })?;
+                *local = Some(value.clone());
+                self.env.insert(name.to_owned(), value.clone());
+                if self.bytecode.global_scope
+                    && self.bytecode.local_is_body_hoist_only(slot)
+                    && !super::vm_bindings::is_compiler_temporary(name)
+                {
+                    if self.realm.borrow().contains_key(name) {
+                        self.env.insert_realm(name.to_owned(), value.clone());
+                    }
+                    if let Some(Value::Object(global_this)) =
+                        self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
+                        && global_this.has_own_property(name)
+                    {
+                        global_this.set(name.to_owned(), value.clone());
+                    }
+                }
+                self.write_through_module_live_binding(name, value);
+                self.sync_marked_dynamic_global(name);
                 return Ok(());
             }
-            let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
-                thrown: None,
-                message: "bytecode local index out of bounds".to_owned(),
-            })?;
-            *local = Some(value.clone());
-            self.env.insert(name.to_owned(), value.clone());
-            if self.bytecode.global_scope
-                && self.bytecode.local_is_body_hoist_only(slot)
-                && !super::vm_bindings::is_compiler_temporary(name)
-            {
-                if self.realm.borrow().contains_key(name) {
-                    self.env.insert_realm(name.to_owned(), value.clone());
-                }
-                if let Some(Value::Object(global_this)) =
-                    self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
-                    && global_this.has_own_property(name)
-                {
-                    global_this.set(name.to_owned(), value.clone());
-                }
-            }
-            self.write_through_module_live_binding(name, value);
-            self.sync_marked_dynamic_global(name);
-            return Ok(());
         }
         // Silently reject writes to non-writable global properties (e.g. NaN,
         // Infinity, undefined) in sloppy mode.

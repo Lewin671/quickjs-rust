@@ -2905,8 +2905,70 @@ SHA-256 are
 `a7cb68592f9e1a966c9238123245945ae5c9bb0ca63ff96eab0d87c3ca0d97a9`
 and `e451838b3a38acdb74a2b227e765860e1e9dfdcdbbf3a506c87671379af2adb7`.
 Because the development binaries lack trusted receipts, these are regression
-diagnostics; exact pushed artifacts remain required before accepting the
-unit.
+diagnostics rather than hosted claims.
+
+The exact pushed closure is commit
+`769e2dcb3cf2944d807856c732a3c24e9a133245`. Performance Preview run
+`29629531518` retained 25/25 broad cases, 75/75 passing linearity probes, and
+three valid blocks. Candidate/base was 1.005411x and candidate/QuickJS-NG was
+0.353097x overall; allocation still failed B4 at 2.630826x. Broad raw/report
+SHA-256 are
+`a1ec049a7fd5e25e3011502543ff9c0d2169d86a174acb4cbf4b667661a71161`
+and `b23f02272533192d8d6cc1bab2dd025dd2ae21556003451149c4fa2d4f27f074`.
+
+The exact external artifact retained 5/5 JetStream, 6/14 Kraken, and 23/26
+SunSpider comparable cases and still lost every one; suite diagnostic ratios
+were 11.166x, 6.488x, and 10.243x QuickJS-NG. Nevertheless, the two independent
+Date cases confirmed the mechanism on the hosted runner:
+`date-format-tofte` fell from 1,121.565 ms at the exact unit-49 base to
+966.720 ms (0.861938x), and `date-format-xparb` fell from 659.281 ms to
+421.213 ms (0.638923x). External raw/report SHA-256 are
+`1cdbcc643d819b9a06ce4e47fecd2c7b165954bbc6ec85c624ad58e5dc7b9241`
+and `ead9c8dcc35bfe6efe6a1561098ce300eba815f669706aa5575eb72acf39f520`.
+CI run `29629531527` passed, and coverage run `29629626617` retained 42,671
+passes, one failure, zero timeouts, and one actionable gap. Its
+burndown/comparison SHA-256 are
+`f5c7e5b5787b504ccd3013dd8b2486372c4dbe90aea7f011ce8fd5a7ca098cb9`
+and `3ca541ca3392c4e5198bff5fa938a7b8e9b8cd6cb709b65b28b207cc64d18dd8`.
+The external aggregate remains the campaign verdict; the Date improvement is
+accepted as a general mechanism slice, not as B5 completion.
+
+The fifty-first v2 unit continues from the independent bitwise profile into a
+general top-level binding write. A hoisted script `var` starts with an empty
+compatibility local but already owns an exact shared realm cell. The previous
+indexed fast store was incorrectly gated on that compatibility local already
+being initialized, so the first assignment could never admit the fast path
+and every later loop update repeated name hashing and global-object/realm
+synchronization. The VM now attempts the exact-cell write before consulting
+the local mirror. It still admits only an existing own writable data property;
+missing, accessor, deleted, immutable, module, direct-eval, and non-writable
+cases retain their observable paths. No workload name, source path, iteration
+count, checksum, or expected result appears in the implementation.
+
+Against the exact unit-50 local base, the independent one-block external
+inventory retained 5/5 JetStream, 11/14 Kraken, and 23/26 SunSpider comparable
+cases. Common-case candidate/base geometric means were 1.010112x, 0.999584x,
+and 0.980121x. `bitops-bitwise-and` improved to 0.718379x base; every other
+common case was bounded by 0.942692x and 1.043184x. Candidate/QuickJS-NG suite
+ratios were 7.910x, 4.743x, and 5.831x, with zero candidate wins, so B5 remains
+open. Candidate external raw/report SHA-256 are
+`5b339d3a7d4a38312df2f9ab16872a65d23c3ee2c5d9be8ed844678c15214e64`
+and `1dabe5a61b0a6493283172324ec2b90b9706c5f7b66bed6c03e5f2656f95607c`;
+base raw/report SHA-256 are
+`850580124798146c5739fb28525a2f160bdae75b365fa749ac8a9adde6bd1c7a`
+and `13c8a2823c034749fe37b33ccee7a8bdcf6fb16e8d7780b537e65b52cfd6d60d`.
+
+The accompanying one-block broad diagnostic retained all 25 cases, 75/75
+eligible measurements, and 600/600 successful linearity samples. Candidate/
+base was 0.981309x overall. The call family improved to 0.921300x, led by the
+general top-level call shape at 0.605039x; the other families ranged from
+0.982964x through 1.027620x, which was also the worst individual ratio.
+Candidate/QuickJS-NG was 0.187216x overall, while allocation still failed B4
+at 1.146695x. The receipt-less development run is regression evidence rather
+than a hosted claim; broad raw SHA-256 is
+`5262e49fb51499f66a35527a6918a241a69e2f05ad7542e0e1fc85e1fdfb00c2`.
+Exact pushed performance and coverage artifacts remain required before
+accepting this unit.
 
 ## Historical Broad V1 Baseline
 
