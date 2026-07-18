@@ -422,8 +422,41 @@ pub(super) fn try_fast_global_native_call(
             };
             crate::number::number_to_radix_string(*number, radix).map(|s| Value::String(s.into()))
         }
-        NativeFunction::DatePrototypeGetTimezoneOffset if arguments.is_empty() => {
+        NativeFunction::DatePrototypeGetTime => {
+            crate::date::native_date_prototype_get_time(this_value.clone())
+        }
+        NativeFunction::DatePrototypeGetTimezoneOffset => {
             crate::date::native_date_prototype_get_timezone_offset(this_value.clone())
+        }
+        NativeFunction::DatePrototypeGetYear => {
+            crate::date::native_date_prototype_get_year(this_value.clone())
+        }
+        NativeFunction::DatePrototypeGetUtcDate => {
+            crate::date::native_date_prototype_get_utc_date(this_value.clone())
+        }
+        NativeFunction::DatePrototypeGetUtcDay => {
+            crate::date::native_date_prototype_get_utc_day(this_value.clone())
+        }
+        NativeFunction::DatePrototypeGetUtcFullYear => {
+            crate::date::native_date_prototype_get_utc_full_year(this_value.clone())
+        }
+        NativeFunction::DatePrototypeGetUtcHours => {
+            crate::date::native_date_prototype_get_utc_hours(this_value.clone())
+        }
+        NativeFunction::DatePrototypeGetUtcMilliseconds => {
+            crate::date::native_date_prototype_get_utc_milliseconds(this_value.clone())
+        }
+        NativeFunction::DatePrototypeGetUtcMinutes => {
+            crate::date::native_date_prototype_get_utc_minutes(this_value.clone())
+        }
+        NativeFunction::DatePrototypeGetUtcMonth => {
+            crate::date::native_date_prototype_get_utc_month(this_value.clone())
+        }
+        NativeFunction::DatePrototypeGetUtcSeconds => {
+            crate::date::native_date_prototype_get_utc_seconds(this_value.clone())
+        }
+        NativeFunction::DatePrototypeValueOf => {
+            crate::date::native_date_prototype_value_of(this_value.clone())
         }
         NativeFunction::DatePrototypeSetTime => {
             if !matches!(arguments.first(), Some(Value::Number(_)))

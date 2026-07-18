@@ -491,6 +491,12 @@ fn evaluates_date_builtins() {
         eval("Number.isNaN(new Date(NaN).getUTCFullYear());"),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "var d = new Date(0); var ignored = { valueOf: function () { throw new Error('must not convert'); } }; [d.getTime(ignored), d.getUTCFullYear(ignored), d.valueOf(ignored)].join('|');"
+        ),
+        Ok(Value::String("0|1970|0".to_owned().into()))
+    );
     assert!(eval("Date.prototype.getTime.call({});").is_err());
     assert!(eval("Date.prototype.getUTCFullYear.call({});").is_err());
     assert!(eval("Date.prototype.setTime.call({}, 0);").is_err());

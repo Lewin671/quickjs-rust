@@ -2841,7 +2841,72 @@ family was between 0.983683x and 1.000439x, and the worst individual ratio was
 failed B4 at 1.122560x. Because the dirty development binaries have no trusted
 receipts, the strict report correctly rejected claim generation; raw SHA-256
 is `6734a73d0ebee06f538607a0958447daf2b6658d5487f20a3676af5c4dca12e1`.
-The exact pushed artifacts remain required before accepting this unit.
+
+The exact pushed closure is commit
+`a0e77626616b8f86e517c73f06f6178db0a286fc`. Performance Preview run
+`29628011436` retained 25/25 broad cases, 75/75 passing linearity probes, and
+three valid blocks. Candidate/base was 0.990962x overall, with binding at
+0.957254x and call at 0.954900x; candidate/QuickJS-NG was 0.354227x overall,
+but allocation still failed B4 at 2.654359x. Broad raw/report SHA-256 are
+`f94dcbd348e398ef64e17d9372e52694e60005da18dd07ebb23aad10155fa719`
+and `a60efa1bd35478ee567576877489051b75d7a4a4e2d2d89b7c7ab1e061e2ac79`.
+
+The independently sourced result remains the controlling interpretation:
+the same exact artifact retained 5/5 JetStream, 7/14 Kraken, and 23/26
+SunSpider comparable cases, lost every one, and measured 10.850x, 6.362x, and
+10.206x QuickJS-NG. Thus the internal improvement is not evidence of general
+engine leadership. External raw/report SHA-256 are
+`aa220f95dd2f101448f3a04eceaad8928186fea2a1a561b3d7cb3219f9ba4b53`
+and `77b6590b5c801b51e0bee7ce0de6e812f41eeba37bcfe026345da5b1a5a944d6`.
+CI run `29628011449` passed, and coverage run `29628122466` retained 42,671
+passes, one failure, zero timeouts, and one actionable gap. Its
+burndown/comparison SHA-256 are
+`00e6508fb2210d6018f113f70ceee69bbe5e93bb1f5af06b7d453b3b6e42a637`
+and `3ca541ca3392c4e5198bff5fa938a7b8e9b8cd6cb709b65b28b207cc64d18dd8`.
+
+A bounded realm-eval bytecode-cache prototype was evaluated before the next
+runtime unit. It improved a synthetic repeated-eval diagnostic by roughly
+12--16%, but did not improve the independently sourced Date workload used to
+test the hypothesis. The prototype was discarded rather than counted as
+progress: an internal diagnostic alone is not sufficient evidence under the
+external generalization contract.
+
+The fiftieth v2 unit follows the independent SunSpider Date cliff into the
+general native-call mechanism. Every ordinary Date getter and `valueOf`
+previously cloned a complete call environment before dispatch and applied it
+again afterward, even though these functions only read their Date receiver.
+The VM now sends all such environment-free Date natives through its existing
+identity-based fast native dispatcher. Replaced functions still use their
+actual callable identity, invalid receivers still throw, argument expressions
+are still evaluated, and the getters ignore rather than convert extra
+arguments as required. The implementation contains no workload name, source
+path, iteration count, checksum, or expected result.
+
+Against the exact unit-49 local base, the independent one-block external
+inventory retained 5/5 JetStream, 11/14 Kraken, and 23/26 SunSpider comparable
+cases. `date-format-tofte` improved to 0.851757x base and
+`date-format-xparb` to 0.616619x base. Common-case candidate/base geometric
+means were 0.998801x, 1.012140x, and 0.967962x respectively; candidate/
+QuickJS-NG suite ratios were 7.864687x, 4.742293x, and 5.926553x, with zero
+candidate wins. This closes a real external mechanism but remains far from
+B5. External raw/report SHA-256 are
+`c675f35e88a5a1e64ebc0a98d6a5d94e8b1b4d4feef201fc3fcdca31111e1f33`
+and `d9750ada24eb9fd8eef8c0036b75896acbcba9be7784777ed08acb7656119cec`.
+
+The accompanying one-block broad diagnostic retained all 25 cases, 75/75
+eligible measurements, and 600/600 successful linearity samples. Candidate/
+base was 1.008617x overall and candidate/QuickJS-NG was 0.191653x; allocation
+still failed B4 at 1.134601x. A single unrelated `plain_function_call` sample
+showed 1.114594x base, so the complete six-case call family was independently
+rerun for three blocks. That confirmation measured 1.003226x candidate/base
+overall and 1.002650x for `plain_function_call`, rejecting the apparent cliff
+as one-block noise rather than silently excluding it. Broad and call-rerun raw
+SHA-256 are
+`a7cb68592f9e1a966c9238123245945ae5c9bb0ca63ff96eab0d87c3ca0d97a9`
+and `e451838b3a38acdb74a2b227e765860e1e9dfdcdbbf3a506c87671379af2adb7`.
+Because the development binaries lack trusted receipts, these are regression
+diagnostics; exact pushed artifacts remain required before accepting the
+unit.
 
 ## Historical Broad V1 Baseline
 
