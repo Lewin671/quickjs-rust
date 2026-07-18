@@ -2970,6 +2970,55 @@ than a hosted claim; broad raw SHA-256 is
 Exact pushed performance and coverage artifacts remain required before
 accepting this unit.
 
+The exact pushed closure is commit
+`473c5185763820f699dd2eb12d03558a86c8ed70`. Performance Preview run
+`29630951841` retained 25/25 broad cases, 75/75 passing linearity probes, and
+three valid blocks. Candidate/base was 0.996413x overall and candidate/
+QuickJS-NG was 0.352509x. Allocation remains the controlling internal gap:
+the object, array, and closure allocation cases measured 2.995x, 3.457x, and
+1.888x QuickJS-NG. Broad raw/report SHA-256 are
+`4af4c6d0282b75eef1a5cd87655fa0e874483de2c2025dfb559b06484098a9ba`
+and `b1f56074726d075f892525a15f996cb825d7b8551f2cde416e49b785c8869731`.
+
+The exact external artifact retained 5/5 JetStream, 7/14 Kraken, and 23/26
+SunSpider comparable cases, lost every one, and measured 11.139x, 6.581x,
+and 10.063x QuickJS-NG. External raw/report SHA-256 are
+`65590d7bb66c2e2c27156899635ecbb0c06017767d9343f4a3eb93f9ce9eeff7`
+and `bf84482525ae633877dd6de6cc72929fac56e92b60e34c217c4f450e8df551a4`.
+CI run `29630951843` passed, and coverage run `29631049852` retained 42,671
+passes, one failure, zero timeouts, and one actionable gap. Its
+burndown/comparison SHA-256 are
+`c6d4bdadcee2e8224b3809dac66cd92e02aabd415e29ae18119eb6ffe550fdff`
+and `3ca541ca3392c4e5198bff5fa938a7b8e9b8cd6cb709b65b28b207cc64d18dd8`.
+The hosted external result, rather than the internal bitwise win, remains the
+campaign verdict.
+
+Three broader realm-binding representations were then prototyped and rejected
+before accepting any fifty-second runtime unit. Eagerly storing every realm
+binding in an upvalue cell improved the focused top-level binding diagnostic,
+but common-case external candidate/base geometric means regressed to 1.009x,
+1.012x, and 1.003x for JetStream, Kraken, and SunSpider. A hybrid cell/value
+dual table was slower even in the focused diagnostic because every ordinary
+builtin lookup paid a failed cell-table probe before its value-table lookup.
+
+The final prototype kept a single realm table and lazily promoted only shared
+bindings from direct values to cells. It preserved all 1,389 runtime tests and
+improved the focused six-million-iteration diagnostic by roughly 14--15%, but
+the adjacent same-host external comparison rejected it decisively. JetStream
+regressed to 1.074133x base with all 5/5 cases slower; Kraken regressed to
+1.024859x with 10/14 cases slower; SunSpider regressed to 1.006060x with
+17/26 cases slower. `bitops-bitwise-and` improved to 0.866410x base, but a
+single local win does not compensate for suite-wide generalization failure.
+Candidate external raw/report SHA-256 are
+`13cbf7081da455d4fb3828dd7ad7976ae394d13ef64c2ecfc7754f77a1bd990b`
+and `5156523f7ad9358d69c71f1e9b6ec527cb96c29055e3a42a347978f808b240d2`;
+the adjacent exact unit-51 base raw/report SHA-256 are
+`d9f98f7a2697e77f6bfbcac7f6ddd1e1f80445507558066c03e52240e6f52b9c`
+and `1b185f387e410a6b47c2a1d786818867550d3f0e6d483f28e312d1bc30c6f126`.
+All three prototypes were discarded without a runtime commit. This is an
+intentional application of the external anti-overfitting contract: internal
+benchmark speedups alone are not T018 progress.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
