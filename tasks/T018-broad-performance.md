@@ -3484,6 +3484,42 @@ required before closing this unit. The goal remains open: the general call-path
 improvement is real, but external suites are still 4.86--7.44x slower than
 QuickJS-NG and have no qjs-rust wins.
 
+The pushed runtime and local-evidence commits are `06c96adf` and `27be05d4`.
+CI run `29649223133`, Performance Preview run `29649223064`, and Test262
+Coverage run `29649333891` all completed successfully. The hosted three-block
+broad artifact was complete with 225/225 valid measurements, 75/75 passing
+linearity probes, and three valid blocks. Candidate/base was **0.993178x**
+with a 95% confidence interval of [0.991214x, 0.994007x], while
+candidate/QuickJS-NG was **0.356623x**. Call was 0.950335x base; the other
+families ranged from 0.920431x builtin to 1.043543x binding. Broad raw/report
+SHA-256 are
+`785adae20fca07c0c8b5ec16cd11fb48cc522aee1b8195e0f0cffb8328beed12`
+and `04926a78c782b491df60794f4b05e8ae9e5ee67f0c72e0dce7b054e57ab9a5e1`.
+
+The hosted fixed-15-second external preview completed 5/5 JetStream, 9/14
+Kraken, and 26/26 SunSpider cases. Candidate/QuickJS-NG was **10.778x**,
+**7.940x**, and **11.382x**, with zero qjs-rust wins. QuickJS-NG wall times
+moved enough that these cross-engine ratios are worse than unit 56, so the
+same-engine candidate-duration comparison is recorded separately rather than
+mislabeling reference-runner drift as a runtime regression. On the common
+hosted inventories, unit-57/unit-56 candidate duration was 0.968086x for
+JetStream, 1.022976x for Kraken, and 0.975161x for SunSpider; the exact local
+45/45 run independently measured 1.010063x, 0.983659x, and 0.984789x. The
+Kraken direction therefore remains runner-sensitive, while two suites and the
+complete local inventory confirm external generalization. Hosted external
+raw/report SHA-256 are
+`6464ac4180d253a9b537bb6e550c6967380ade84ca9b3640bcdfb131d6be1f47`
+and `d0c2733247e17128f758ac00beb3570d56d4337cbc4a9458c2f7a617a43b0e3d`.
+
+Coverage remained 42,671/42,672 with zero timeout and the same sole
+private-static-setter actionable gap. Coverage burndown/comparison SHA-256 are
+`579364989fc544ecefe302bf9094393fedae9084c9a34f115459049a11f9cdae`
+and `94a97687babcdfba02efff77997af0a59fa7ddfb08a2370d03fbb933de069e69`.
+Unit 57 is closed as a fully verified general call-environment representation
+improvement, not as B5 progress. The campaign remains open because every
+hosted external comparable case still loses and the suite-level diagnostic
+ratios remain 7.9--11.4x QuickJS-NG.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
