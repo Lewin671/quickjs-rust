@@ -931,6 +931,13 @@ fn evaluates_regexp_symbol_replace() {
         eval("'a1b2'.replace(/(?<digit>\\d)/g, '<$<digit>>');"),
         Ok(Value::String("a<1>b<2>".to_owned().into()))
     );
+    assert_eq!(
+        eval(
+            "'A\\u{1F600}B\\u{1F600}C'.replace(/\\u{1F600}/gu, 'x') + ':' + \
+             'A\\u{1F600}B'.replace(/\\u{1F600}/u, \"[$`][$&][$']\");"
+        ),
+        Ok(Value::String("AxBxC:A[A][\u{1F600}][B]B".to_owned().into()))
+    );
 }
 
 #[test]
