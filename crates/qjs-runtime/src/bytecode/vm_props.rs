@@ -1,6 +1,6 @@
 use qjs_ast::{BinaryOp, UnaryOp};
 
-use crate::value::OwnDataPropertyRead;
+use crate::value::{OwnDataPropertyRead, OwnDataPropertyWrite};
 use crate::{
     GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
     array_prototype, function_delete_own_property, function_delete_own_symbol_property,
@@ -18,6 +18,38 @@ use super::vm_set::property_set_uses_setter;
 use crate::CallEnv;
 
 impl Vm<'_> {
+    fn try_store_indexed_realm_global(
+        &mut self,
+        slot: usize,
+        name: &str,
+        value: &Value,
+        is_strict: bool,
+    ) -> Option<Result<(), RuntimeError>> {
+        if !self.slot_is_realm_binding(slot) {
+            return None;
+        }
+        let Some(Value::Object(global_this)) = self.env.global_this() else {
+            return None;
+        };
+        match global_this.write_existing_own_data_property(name, value) {
+            OwnDataPropertyWrite::Written => {
+                self.invalidate_array_prototype_cache(name);
+                if !self.env.replace_existing_realm(name, value.clone()) {
+                    self.env.insert_realm(name.to_owned(), value.clone());
+                }
+                self.locals[slot] = Some(value.clone());
+                self.sync_marked_dynamic_global(name);
+                Some(Ok(()))
+            }
+            OwnDataPropertyWrite::ReadOnly if is_strict => Some(Err(RuntimeError {
+                thrown: None,
+                message: format!("TypeError: Cannot assign to read only property '{name}'"),
+            })),
+            OwnDataPropertyWrite::ReadOnly => Some(Ok(())),
+            OwnDataPropertyWrite::NeedsSlowPath => None,
+        }
+    }
+
     fn primitive_prototype_env(&self) -> CallEnv {
         if self.env.dynamic_function_realm_global().is_some() {
             self.current_env()
@@ -374,16 +406,16 @@ impl Vm<'_> {
 
     pub(super) fn store_global_strict(
         &mut self,
-        name: String,
+        name: &str,
         value: Value,
     ) -> Result<(), RuntimeError> {
-        if self.env.has_module_import(&name) {
+        if self.env.has_module_import(name) {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
         }
-        if self.env.is_immutable_lexical_binding(&name) {
+        if self.env.is_immutable_lexical_binding(name) {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
@@ -391,7 +423,7 @@ impl Vm<'_> {
         }
         // The inner name of a named function expression is immutable; a strict
         // assignment to it is a TypeError.
-        if self.env.is_immutable_function_name(&name) {
+        if self.env.is_immutable_function_name(name) {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
@@ -400,10 +432,13 @@ impl Vm<'_> {
         // A caller-scope binding carried in this frame's locals layer is written
         // there (and propagated back to the caller on return); only a true realm
         // global goes to the shared cell.
-        if let Some(slot) = self.bytecode.local_slot(&name)
+        if let Some(slot) = self.bytecode.local_slot(name)
             && self.locals.get(slot).is_some_and(Option::is_some)
         {
-            if self.local_slot_targets_non_writable_global(slot, &name) {
+            if let Some(result) = self.try_store_indexed_realm_global(slot, name, &value, true) {
+                return result;
+            }
+            if self.local_slot_targets_non_writable_global(slot, name) {
                 return Err(RuntimeError {
                     thrown: None,
                     message: format!("TypeError: Cannot assign to read only property '{name}'"),
@@ -414,29 +449,29 @@ impl Vm<'_> {
                 message: "bytecode local index out of bounds".to_owned(),
             })?;
             *local = Some(value.clone());
-            self.env.insert(name.clone(), value.clone());
+            self.env.insert(name.to_owned(), value.clone());
             if self.bytecode.global_scope
                 && self.bytecode.local_is_body_hoist_only(slot)
-                && !super::vm_bindings::is_compiler_temporary(&name)
+                && !super::vm_bindings::is_compiler_temporary(name)
             {
-                if self.realm.borrow().contains_key(&name) {
-                    self.env.insert_realm(name.clone(), value.clone());
+                if self.realm.borrow().contains_key(name) {
+                    self.env.insert_realm(name.to_owned(), value.clone());
                 }
                 if let Some(Value::Object(global_this)) =
                     self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
-                    && global_this.has_own_property(&name)
+                    && global_this.has_own_property(name)
                 {
-                    global_this.set(name.clone(), value.clone());
+                    global_this.set(name.to_owned(), value.clone());
                 }
             }
-            self.write_through_module_live_binding(&name, value);
-            self.sync_marked_dynamic_global(&name);
+            self.write_through_module_live_binding(name, value);
+            self.sync_marked_dynamic_global(name);
             return Ok(());
         }
         // Reject writes to non-writable global properties (e.g. NaN, Infinity,
         // undefined) before any env/realm write. In strict mode this is a
         // TypeError per the spec.
-        if let Some(property) = self.global_this_own_property(&name) {
+        if let Some(property) = self.global_this_own_property(name) {
             if !property.writable {
                 return Err(RuntimeError {
                     thrown: None,
@@ -444,55 +479,55 @@ impl Vm<'_> {
                 });
             }
         }
-        if self.env.has_local_binding(&name) {
-            self.env.insert(name.clone(), value.clone());
-            self.write_through_module_live_binding(&name, value.clone());
-            if self.realm.borrow().contains_key(&name) {
-                self.env.insert_realm(name.clone(), value.clone());
+        if self.env.has_local_binding(name) {
+            self.env.insert(name.to_owned(), value.clone());
+            self.write_through_module_live_binding(name, value.clone());
+            if self.realm.borrow().contains_key(name) {
+                self.env.insert_realm(name.to_owned(), value.clone());
             }
             if let Some(Value::Object(global_this)) =
                 self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
-                && global_this.has_own_property(&name)
+                && global_this.has_own_property(name)
             {
-                global_this.set(name.clone(), value);
+                global_this.set(name.to_owned(), value);
             }
-            self.sync_marked_dynamic_global(&name);
+            self.sync_marked_dynamic_global(name);
             return Ok(());
         }
-        if !self.realm.borrow().contains_key(&name) && self.global_this_property(&name).is_none() {
+        if !self.realm.borrow().contains_key(name) && self.global_this_property(name).is_none() {
             return Err(RuntimeError {
                 thrown: None,
                 message: format!("ReferenceError: undefined identifier `{name}`"),
             });
         }
-        self.invalidate_array_prototype_cache(&name);
-        self.env.insert_realm(name.clone(), value.clone());
-        self.write_through_module_live_binding(&name, value.clone());
+        self.invalidate_array_prototype_cache(name);
+        self.env.insert_realm(name.to_owned(), value.clone());
+        self.write_through_module_live_binding(name, value.clone());
         let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
             Some(Value::Object(global_this)) => Some(global_this.clone()),
             _ => None,
         };
         if let Some(global_this) = global_this
-            && global_this.has_own_property(&name)
+            && global_this.has_own_property(name)
         {
-            global_this.set(name.clone(), value);
+            global_this.set(name.to_owned(), value);
         }
-        self.sync_marked_dynamic_global(&name);
+        self.sync_marked_dynamic_global(name);
         Ok(())
     }
 
     pub(super) fn store_global_sloppy(
         &mut self,
-        name: String,
+        name: &str,
         value: Value,
     ) -> Result<(), RuntimeError> {
-        if self.env.has_module_import(&name) {
+        if self.env.has_module_import(name) {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
         }
-        if self.env.is_immutable_lexical_binding(&name) {
+        if self.env.is_immutable_lexical_binding(name) {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
@@ -500,13 +535,16 @@ impl Vm<'_> {
         }
         // The inner name of a named function expression is immutable; a sloppy
         // assignment to it is a silent no-op, even from a nested function.
-        if self.env.is_immutable_function_name(&name) {
+        if self.env.is_immutable_function_name(name) {
             return Ok(());
         }
-        if let Some(slot) = self.bytecode.local_slot(&name)
+        if let Some(slot) = self.bytecode.local_slot(name)
             && self.locals.get(slot).is_some_and(Option::is_some)
         {
-            if self.local_slot_targets_non_writable_global(slot, &name) {
+            if let Some(result) = self.try_store_indexed_realm_global(slot, name, &value, false) {
+                return result;
+            }
+            if self.local_slot_targets_non_writable_global(slot, name) {
                 return Ok(());
             }
             let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
@@ -514,61 +552,61 @@ impl Vm<'_> {
                 message: "bytecode local index out of bounds".to_owned(),
             })?;
             *local = Some(value.clone());
-            self.env.insert(name.clone(), value.clone());
+            self.env.insert(name.to_owned(), value.clone());
             if self.bytecode.global_scope
                 && self.bytecode.local_is_body_hoist_only(slot)
-                && !super::vm_bindings::is_compiler_temporary(&name)
+                && !super::vm_bindings::is_compiler_temporary(name)
             {
-                if self.realm.borrow().contains_key(&name) {
-                    self.env.insert_realm(name.clone(), value.clone());
+                if self.realm.borrow().contains_key(name) {
+                    self.env.insert_realm(name.to_owned(), value.clone());
                 }
                 if let Some(Value::Object(global_this)) =
                     self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
-                    && global_this.has_own_property(&name)
+                    && global_this.has_own_property(name)
                 {
-                    global_this.set(name.clone(), value.clone());
+                    global_this.set(name.to_owned(), value.clone());
                 }
             }
-            self.write_through_module_live_binding(&name, value);
-            self.sync_marked_dynamic_global(&name);
+            self.write_through_module_live_binding(name, value);
+            self.sync_marked_dynamic_global(name);
             return Ok(());
         }
         // Silently reject writes to non-writable global properties (e.g. NaN,
         // Infinity, undefined) in sloppy mode.
-        if let Some(property) = self.global_this_own_property(&name) {
+        if let Some(property) = self.global_this_own_property(name) {
             if !property.writable {
                 return Ok(());
             }
         }
-        if self.env.has_local_binding(&name) {
-            self.env.insert(name.clone(), value.clone());
-            self.write_through_module_live_binding(&name, value.clone());
-            if self.realm.borrow().contains_key(&name) {
-                self.env.insert_realm(name.clone(), value.clone());
+        if self.env.has_local_binding(name) {
+            self.env.insert(name.to_owned(), value.clone());
+            self.write_through_module_live_binding(name, value.clone());
+            if self.realm.borrow().contains_key(name) {
+                self.env.insert_realm(name.to_owned(), value.clone());
             }
             if let Some(Value::Object(global_this)) =
                 self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
-                && global_this.has_own_property(&name)
+                && global_this.has_own_property(name)
             {
-                global_this.set(name.clone(), value);
+                global_this.set(name.to_owned(), value);
             }
-            self.sync_marked_dynamic_global(&name);
+            self.sync_marked_dynamic_global(name);
             return Ok(());
         }
-        self.invalidate_array_prototype_cache(&name);
-        if self.realm.borrow().contains_key(&name) {
-            self.env.insert_realm(name.clone(), value.clone());
-            self.write_through_module_live_binding(&name, value.clone());
+        self.invalidate_array_prototype_cache(name);
+        if self.realm.borrow().contains_key(name) {
+            self.env.insert_realm(name.to_owned(), value.clone());
+            self.write_through_module_live_binding(name, value.clone());
             let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
                 Some(Value::Object(global_this)) => Some(global_this.clone()),
                 _ => None,
             };
             if let Some(global_this) = global_this
-                && global_this.has_own_property(&name)
+                && global_this.has_own_property(name)
             {
-                global_this.set(name.clone(), value);
+                global_this.set(name.to_owned(), value);
             }
-            self.sync_marked_dynamic_global(&name);
+            self.sync_marked_dynamic_global(name);
             return Ok(());
         }
         let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
@@ -576,11 +614,11 @@ impl Vm<'_> {
             _ => None,
         };
         if let Some(global_this) = global_this {
-            global_this.set(name.clone(), value.clone());
+            global_this.set(name.to_owned(), value.clone());
         }
-        self.env.insert_realm(name.clone(), value.clone());
-        self.write_through_module_live_binding(&name, value);
-        self.sync_marked_dynamic_global(&name);
+        self.env.insert_realm(name.to_owned(), value.clone());
+        self.write_through_module_live_binding(name, value);
+        self.sync_marked_dynamic_global(name);
         Ok(())
     }
 

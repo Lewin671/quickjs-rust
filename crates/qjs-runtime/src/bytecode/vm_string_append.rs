@@ -341,9 +341,9 @@ impl Vm<'_> {
         )?;
         self.apply_env(env);
         if is_strict {
-            self.store_global_strict(name.to_owned(), result.clone())?;
+            self.store_global_strict(name, result.clone())?;
         } else {
-            self.store_global_sloppy(name.to_owned(), result.clone())?;
+            self.store_global_sloppy(name, result.clone())?;
         }
         Ok(result)
     }

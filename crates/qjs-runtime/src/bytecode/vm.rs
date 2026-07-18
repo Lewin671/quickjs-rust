@@ -81,6 +81,11 @@ pub(super) struct Vm<'a> {
     /// binding authority. The common first 128 slots require no allocation;
     /// larger slot indices conservatively use the full binding path.
     pub(super) authoritative_slots: u128,
+    /// Inline per-slot cache for locals backed by this realm's shared binding
+    /// cells. This turns ordinary global-var reads into a direct cell load;
+    /// the cell's uninitialized marker still deoptimizes deleted/accessor
+    /// globals through the observable global-object path.
+    pub(super) realm_binding_slots: u128,
     pub(super) upvalues: Vec<Upvalue>,
     /// Shared realm plus this frame's internal/caller-scope bindings.
     pub(super) env: CallEnv,
@@ -230,6 +235,8 @@ impl<'a> Vm<'a> {
         };
         let authoritative_slots =
             Self::initial_authoritative_slots(bytecode, &local_upvalues, &env);
+        let realm_binding_slots =
+            Self::initial_realm_binding_slots(bytecode, &local_upvalues, &env);
         let numeric_loop_plans = bytecode
             .numeric_loop_plans
             .get_or_init(|| super::vm_numeric_loop::NumericLoopPlan::compile_all(bytecode))
@@ -254,6 +261,7 @@ impl<'a> Vm<'a> {
             locals,
             local_upvalues,
             authoritative_slots,
+            realm_binding_slots,
             upvalues,
             env,
             direct_this,
@@ -579,7 +587,7 @@ impl<'a> Vm<'a> {
                     let result = if self.direct_eval_with_stack {
                         self.store_ident_with(name, None, true, value)
                     } else {
-                        self.store_global_strict(name.clone(), value)
+                        self.store_global_strict(name, value)
                     };
                     self.handle_runtime_result(result)?;
                 }
@@ -588,13 +596,13 @@ impl<'a> Vm<'a> {
                     let result = if self.direct_eval_with_stack {
                         self.store_ident_with(name, None, false, value)
                     } else {
-                        self.store_global_sloppy(name.clone(), value)
+                        self.store_global_sloppy(name, value)
                     };
                     self.handle_runtime_result(result)?;
                 }
                 Op::StoreLocalOrGlobalSloppy { slot, name } => {
                     let value = self.pop()?;
-                    let result = self.store_local_or_global_sloppy(*slot, name.clone(), value);
+                    let result = self.store_local_or_global_sloppy(*slot, name, value);
                     self.handle_runtime_result(result)?;
                 }
                 Op::TypeofGlobal(name) => {

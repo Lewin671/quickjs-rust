@@ -1286,6 +1286,35 @@ fn top_level_global_var_slot_tracks_realm_mutations() {
         ),
         Ok(Value::String("x".to_owned().into()))
     );
+    assert_eq!(
+        eval(
+            "var slotBackedGlobal = 1; \
+             function readGlobal() { return slotBackedGlobal; } \
+             for (var i = 0; i < 10; i++) slotBackedGlobal += i; \
+             slotBackedGlobal + ':' + readGlobal() + ':' + globalThis.slotBackedGlobal;"
+        ),
+        Ok(Value::String("46:46:46".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var slotBackedGlobal = 1; \
+             Object.defineProperty(globalThis, 'slotBackedGlobal', { writable: false }); \
+             slotBackedGlobal = 2; \
+             slotBackedGlobal;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "'use strict'; \
+             var slotBackedGlobal = 1; \
+             Object.defineProperty(globalThis, 'slotBackedGlobal', { writable: false }); \
+             let caught = false; \
+             try { slotBackedGlobal = 2; } catch (error) { caught = error instanceof TypeError; } \
+             caught + ':' + slotBackedGlobal;"
+        ),
+        Ok(Value::String("true:1".to_owned().into()))
+    );
 }
 
 #[test]

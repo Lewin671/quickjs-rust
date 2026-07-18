@@ -2790,6 +2790,59 @@ Broad raw SHA-256 is
 This unit closes one profiled external mechanism without trading away the
 internal families; B4 and B5 remain active.
 
+The trusted hosted closure for commit `39fb188bd7bc015b03eb569a9830304d32b81a4e`
+reinforces the external-first interpretation. Performance Preview run
+`29626227250` measured broad candidate/base at 1.0075x and candidate/QuickJS-NG
+at 0.3564x, but the same exact artifact measured qjs-rust at 10.604x JetStream,
+5.939x Kraken, and 10.044x SunSpider versus QuickJS-NG, with zero qjs-rust wins.
+The external comparable inventory was 5/5, 7/14, and 23/26. Broad summary and
+external report SHA-256 are
+`f5760ccff29505ba2bf72a5be668df08467d6e293fa036b60cbd6b008ba2155d`
+and `36f62381d149150b4e5b084c6c890ce77d413f80967e850a4a3d55499ecfaadd`.
+Coverage run `29626336016` independently retained 42,671 passes, one failure,
+zero timeouts, and one actionable gap. Its burndown/comparison SHA-256 are
+`d58b953981f0da104efb995fa28764b13113a5e5c3ddc08d39f2bc43feeb1e22`
+and `3ba9a1a20f4cd430f9f33471ca97652a67a12602740b26453f2e06fd63a58329`.
+The favorable internal score therefore remains a regression guard, not proof
+of general engine speed.
+
+The forty-ninth v2 unit follows the worst comparable hosted SunSpider global
+loop into the general realm-binding mechanism. Top-level `var` reads
+previously re-hashed the binding name to prove that a cached upvalue was the
+realm cell on every access, while writes cloned the opcode name and traversed
+the full global-binding path. The VM now classifies its first 128 local slots
+once at frame creation, directly reads initialized realm cells, and directly
+updates existing own writable global data properties while keeping the realm
+cell and local mirror coherent. Deleted globals retain the uninitialized
+marker and deopt through observable global-object lookup; accessors, missing
+properties, lexical/module bindings, caller locals, direct eval, and strict or
+sloppy non-writable writes retain their existing semantic paths. Store helpers
+also borrow the immutable bytecode name so the common path performs no name
+clone. The implementation contains no benchmark name, source path, iteration
+count, checksum, or expected result.
+
+Against the exact `39fb188b` local base, the independent one-block external
+inventory retained 5/5 JetStream, 11/14 Kraken, and 23/26 SunSpider comparable
+cases. Common-case candidate/base geometric means were 1.003942x, 0.994949x,
+and 0.970081x respectively. `bitops-bitwise-and` improved to 0.715605x base;
+the best and worst unrelated SunSpider ratios were bounded by that result and
+1.068998x. Candidate/QuickJS-NG suite ratios moved from 7.849188x, 4.723542x,
+and 6.182158x to 7.792788x, 4.699712x, and 6.101560x. The candidate still lost
+all comparable cases, so this is measured structural progress rather than B5
+completion. Candidate external raw/report SHA-256 are
+`c6a55a4838cbf68e30820bc2fc6314828ccb2287c0d6dd8ea73bc0489b195ee4`
+and `a6aa7cad1f73ebb90ca8722a99a3be7a884b1e0b3e98030f217e88081840a5ef`.
+
+The accompanying one-block broad diagnostic retained all 25 cases and found a
+0.983771x candidate/base geometric mean. The call family improved to
+0.942244x, led by the general top-level call shape at 0.701536x; every other
+family was between 0.983683x and 1.000439x, and the worst individual ratio was
+1.002788x. Candidate/QuickJS-NG was 0.189843x overall, while allocation still
+failed B4 at 1.122560x. Because the dirty development binaries have no trusted
+receipts, the strict report correctly rejected claim generation; raw SHA-256
+is `6734a73d0ebee06f538607a0958447daf2b6658d5487f20a3676af5c4dca12e1`.
+The exact pushed artifacts remain required before accepting this unit.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

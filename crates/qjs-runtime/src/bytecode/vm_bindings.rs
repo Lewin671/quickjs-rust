@@ -417,9 +417,31 @@ impl Vm<'_> {
             .fold(0, |slots, slot| slots | slot)
     }
 
+    pub(super) fn initial_realm_binding_slots(
+        bytecode: &Bytecode,
+        local_upvalues: &[Option<Upvalue>],
+        env: &CallEnv,
+    ) -> u128 {
+        bytecode
+            .locals
+            .iter()
+            .enumerate()
+            .take(u128::BITS as usize)
+            .filter_map(|(slot, local)| {
+                local_upvalues
+                    .get(slot)
+                    .and_then(Option::as_ref)
+                    .is_some_and(|cell| env.is_realm_binding_cell(&local.name, cell))
+                    .then_some(1_u128 << slot)
+            })
+            .fold(0, |slots, slot| slots | slot)
+    }
+
     pub(super) fn refresh_authoritative_slots(&mut self) {
         self.authoritative_slots =
             Self::initial_authoritative_slots(self.bytecode, &self.local_upvalues, &self.env);
+        self.realm_binding_slots =
+            Self::initial_realm_binding_slots(self.bytecode, &self.local_upvalues, &self.env);
     }
 
     /// Keeps a module's exported binding cell current for name-based writes.
@@ -756,9 +778,9 @@ impl Vm<'_> {
         }
         match slot {
             Some(slot) => self.assign_local(slot, value),
-            None if is_strict => self.store_global_strict(name.to_owned(), value),
+            None if is_strict => self.store_global_strict(name, value),
             None => {
-                self.store_global_sloppy(name.to_owned(), value)?;
+                self.store_global_sloppy(name, value)?;
                 self.record_sloppy_global_name(name);
                 Ok(())
             }
@@ -818,9 +840,9 @@ impl Vm<'_> {
         match self.load_local(object_slot)? {
             Value::Undefined => match slot {
                 Some(slot) => self.assign_local(slot, value),
-                None if is_strict => self.store_global_strict(name.to_owned(), value),
+                None if is_strict => self.store_global_strict(name, value),
                 None => {
-                    self.store_global_sloppy(name.to_owned(), value)?;
+                    self.store_global_sloppy(name, value)?;
                     self.record_sloppy_global_name(name);
                     Ok(())
                 }
@@ -910,12 +932,14 @@ impl Vm<'_> {
 
     #[inline(never)]
     fn load_local_slow(&mut self, slot: usize) -> Result<Value, RuntimeError> {
-        if let Some(cell) = self.local_upvalues.get(slot).and_then(Option::as_ref)
-            && let Some(local) = self.bytecode.locals.get(slot)
-            && self.env.is_realm_binding_cell(&local.name, cell)
-            && !self.realm.borrow().contains_key(&local.name)
+        if self.slot_is_realm_binding(slot)
+            && let Some(cell) = self.local_upvalues.get(slot).and_then(Option::as_ref)
         {
-            let name = local.name.clone();
+            let value = cell.get();
+            if !value.is_uninitialized_lexical_marker() {
+                return Ok(value);
+            }
+            let name = self.bytecode.locals[slot].name.clone();
             if let Some(value) = self.global_this_own_value(&name)? {
                 return Ok(value);
             }
@@ -1253,13 +1277,18 @@ impl Vm<'_> {
         slot < u128::BITS as usize && self.authoritative_slots & (1_u128 << slot) != 0
     }
 
+    #[inline(always)]
+    pub(super) fn slot_is_realm_binding(&self, slot: usize) -> bool {
+        slot < u128::BITS as usize && self.realm_binding_slots & (1_u128 << slot) != 0
+    }
+
     pub(super) fn store_local_or_global_sloppy(
         &mut self,
         slot: usize,
-        name: String,
+        name: &str,
         value: Value,
     ) -> Result<(), RuntimeError> {
-        if self.env.has_module_import(&name) {
+        if self.env.has_module_import(name) {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
@@ -1267,7 +1296,7 @@ impl Vm<'_> {
         }
         // The inner name of a named function expression is immutable; a sloppy
         // assignment to it is a silent no-op.
-        if self.env.is_immutable_function_name(&name) {
+        if self.env.is_immutable_function_name(name) {
             return Ok(());
         }
         let is_sloppy_global_fallback = self
@@ -1279,14 +1308,14 @@ impl Vm<'_> {
             && self.locals.get(slot).is_some_and(Option::is_some)
             && let Some(Value::Object(global_this)) = self.env.global_this()
         {
-            match global_this.write_existing_own_data_property(&name, &value) {
+            match global_this.write_existing_own_data_property(name, &value) {
                 OwnDataPropertyWrite::Written => {
-                    self.invalidate_array_prototype_cache(&name);
-                    if !self.env.replace_existing_realm(&name, value.clone()) {
-                        self.env.insert_realm(name.clone(), value.clone());
+                    self.invalidate_array_prototype_cache(name);
+                    if !self.env.replace_existing_realm(name, value.clone()) {
+                        self.env.insert_realm(name.to_owned(), value.clone());
                     }
                     self.locals[slot] = Some(value);
-                    self.sync_marked_dynamic_global(&name);
+                    self.sync_marked_dynamic_global(name);
                     return Ok(());
                 }
                 OwnDataPropertyWrite::ReadOnly => return Ok(()),
@@ -1295,19 +1324,19 @@ impl Vm<'_> {
         }
         match self.locals.get(slot) {
             Some(Some(_)) => {
-                if self.local_slot_targets_non_writable_global(slot, &name) {
+                if self.local_slot_targets_non_writable_global(slot, name) {
                     return Ok(());
                 }
-                if is_sloppy_global_fallback || self.has_realm_or_global_this_binding(&name) {
+                if is_sloppy_global_fallback || self.has_realm_or_global_this_binding(name) {
                     let syncs_global_snapshot = is_sloppy_global_fallback
-                        && self.captured_or_local_matches_global_this(&name);
+                        && self.captured_or_local_matches_global_this(name);
                     if syncs_global_snapshot {
-                        self.record_sloppy_global_name(&name);
+                        self.record_sloppy_global_name(name);
                     }
-                    self.store_realm_or_global_this_sloppy(name.clone(), value.clone())?;
+                    self.store_realm_or_global_this_sloppy(name.to_owned(), value.clone())?;
                     self.store_local(slot, value)?;
                     if syncs_global_snapshot && let Some(value) = self.locals[slot].clone() {
-                        self.sync_global_this_own_property(&name, value);
+                        self.sync_global_this_own_property(name, value);
                     }
                 } else {
                     self.store_local(slot, value)?;
@@ -1316,23 +1345,23 @@ impl Vm<'_> {
             }
             Some(None) => {
                 if is_sloppy_global_fallback {
-                    if self.local_slot_targets_non_writable_global(slot, &name) {
+                    if self.local_slot_targets_non_writable_global(slot, name) {
                         return Ok(());
                     }
-                    let syncs_global_snapshot = self.captured_or_local_matches_global_this(&name);
+                    let syncs_global_snapshot = self.captured_or_local_matches_global_this(name);
                     if syncs_global_snapshot {
-                        self.record_sloppy_global_name(&name);
+                        self.record_sloppy_global_name(name);
                     }
-                    self.store_realm_or_global_this_sloppy(name.clone(), value.clone())?;
+                    self.store_realm_or_global_this_sloppy(name.to_owned(), value.clone())?;
                     self.store_local(slot, value)?;
                     if syncs_global_snapshot && let Some(value) = self.locals[slot].clone() {
-                        self.sync_global_this_own_property(&name, value);
+                        self.sync_global_this_own_property(name, value);
                     }
                     return Ok(());
                 }
-                self.store_global_sloppy(name.clone(), value)?;
-                self.record_sloppy_global_name(&name);
-                let global_value = self.load_global(&name)?;
+                self.store_global_sloppy(name, value)?;
+                self.record_sloppy_global_name(name);
+                let global_value = self.load_global(name)?;
                 let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
                     thrown: None,
                     message: "bytecode local index out of bounds".to_owned(),
