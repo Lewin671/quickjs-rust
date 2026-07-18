@@ -27,6 +27,10 @@ use std::{
 pub(super) type Slot = Option<Value>;
 pub(super) struct VmCallEnv {
     pub(super) env: CallEnv,
+    /// Ordinary bytecode callees own slot-indexed frames and expose mutations
+    /// through shared upvalue/realm cells. Only dynamic/native call shells
+    /// still need the compatibility environment copied back into the caller.
+    pub(super) apply_back: bool,
 }
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
     let mut vm = Vm::new(bytecode)?;
@@ -1471,15 +1475,21 @@ impl<'a> Vm<'a> {
     pub(super) fn call_env(&self, callee: &Value) -> VmCallEnv {
         if user_bytecode_function(callee).is_some() {
             let env = self.attach_host(self.env.new_function_frame());
-            return VmCallEnv { env };
+            return VmCallEnv {
+                env,
+                apply_back: false,
+            };
         }
         VmCallEnv {
             env: self.current_env(),
+            apply_back: true,
         }
     }
 
     pub(super) fn apply_call_env(&mut self, env: VmCallEnv) {
-        self.apply_env(env.env);
+        if env.apply_back {
+            self.apply_env(env.env);
+        }
         self.refresh_realm_backed_locals_from_realm();
     }
 

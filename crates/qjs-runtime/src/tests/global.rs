@@ -1017,6 +1017,28 @@ fn keeps_global_object_properties_and_bindings_in_sync() {
 }
 
 #[test]
+fn ordinary_user_calls_publish_only_shared_cell_and_realm_writes() {
+    assert_eq!(
+        eval(
+            "let captured = 1; function writeCaptured() { captured = 2; } writeCaptured(); captured;"
+        ),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval(
+            "function writeThroughEval() { eval('globalThis.fromNestedEval = 3'); } writeThroughEval(); fromNestedEval;"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval(
+            "function writeSloppyGlobal() { fromOrdinaryCall = 4; } writeSloppyGlobal(); fromOrdinaryCall;"
+        ),
+        Ok(Value::Number(4.0))
+    );
+}
+
+#[test]
 fn direct_function_eval_rejects_var_arguments_only_in_parameter_scope() {
     // A direct eval in a *parameter default* may not hoist a `var`/`function`
     // named `arguments`: with parameter expressions the parameter list has its
