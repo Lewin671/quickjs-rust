@@ -2718,6 +2718,78 @@ and `9961943568f0540bda862cf368c7175e105bf7ac4bd811dc955c5fc49186a696`;
 the next exact-SHA coverage artifact must restore the former one-gap baseline
 before this optimization unit is accepted.
 
+The exact correction commit
+`e56aee3422bbba6e9f9b53ffaf0ea5d28f4241b4` closed that requirement. CI run
+`29622215672` passed all jobs, and coverage run `29622349540` restored 42,671
+Rust passes, one failure, zero timeouts, and one actionable gap across all
+42,672 configured cases. The restored burndown/comparison SHA-256 values are
+`a44f50aaf14636af13027f8228b49f53012d51f664b4379250e740d87360f1bc`
+and `3ba9a1a20f4cd430f9f33471ca97652a67a12602740b26453f2e06fd63a58329`.
+This is the semantic metric closure; workflow success alone was not counted.
+
+Performance Preview run `29622215689` also completed at that exact correction
+SHA. Hosted broad candidate/base was 0.987593x and candidate/QuickJS-NG was
+0.355157x overall; allocation still failed B4 at 2.538944x. The other family
+ratios were 0.577693x array, 0.169475x binding, 0.092127x builtin, 0.502671x
+call, 0.188787x control, 0.172372x property, and 0.522510x string. Broad
+raw/report SHA-256 are
+`78bc381763394af7626c20453a949b7827e20e03282172f425bda6b8e2e79340`
+and `e7fbfbd8264fd0b70c9eadc5708e39e0ad97b0b952826797706580c42e3155b3`.
+
+The same exact artifact retained 5/5 JetStream, 7/14 Kraken, and 23/26
+SunSpider comparable cases and again won none. Suite diagnostic ratios were
+10.169012x, 6.016440x, and 10.481689x QuickJS-NG. In particular,
+`string-validate-input` measured 52.310699x, which confirms that the external
+string-accumulation deficit remains real despite the favorable internal broad
+ratio. External raw/report SHA-256 are
+`7f59bb6353e9ad02c65d5687bf2bbf765bb3f1ca4a3146f8abb449bc70e55b89`
+and `5d957b9a0527bd17e5c5b0eb9bb9ae4f4bc54d216f415018763e3d71cf9e4ee7`.
+
+The forty-eighth v2 unit follows the independent SunSpider string profile into
+general primitive-string accumulation. A dynamic string `+` followed by a
+binding store previously copied the whole left string even when its extra
+`Rc<String>` owners were only engine-internal slot, upvalue, realm, and global
+data-property mirrors. The VM now recognizes that ordinary bytecode store
+shape at execution time, temporarily drops only exact-pointer internal
+mirrors, and lets `Rc::unwrap_or_clone` retain the allocation and its capacity.
+Any real JavaScript alias keeps an `Rc` alive and still forces copy-on-write;
+RHS objects keep the full observable ToPrimitive path; immutable, accessor,
+non-writable, module, `with`, and direct-eval bindings remain on their existing
+paths. Moving an owned string through ToString now also avoids an unnecessary
+copy. The numeric primitive fast path remains first, after the first complete
+broad diagnostic caught and rejected an intermediate dispatch-order
+regression. No workload name, source path, iteration count, checksum, or
+expected benchmark value appears in the implementation.
+
+On the same macOS host, exact base binary SHA-256
+`2f9fafddea0f28046b4461672c8800f9aef8a3d30525544e935cd0f442974b53`
+and final candidate binary SHA-256
+`be9652fb29b39b0638bc9a55eba055bd477492430030852d8fc7be121eb263b4`
+retained identical comparable coverage at 5/5 JetStream, 11/14 Kraken, and
+23/26 SunSpider. Common-case candidate/base geometric means were 1.003227x,
+0.999240x, and 1.008344x, so this is not a suite-wide speedup. The independently
+sourced `string-validate-input` case nevertheless fell to 0.724812x base, and
+its candidate/QuickJS-NG ratio fell from 9.318717x to 6.821436x. The candidate
+still lost all comparable cases; suite ratios remained 7.849188x, 4.723542x,
+and 6.182158x QuickJS-NG. Candidate external raw/report SHA-256 are
+`66dd73dea64a967bded6a550ad9abbbf5b69fb7896ca797248687123eeb650cd`
+and `4ab9e6475fcc855facdf6f344b26c792dc771aff3882d614bdde4d41a9b8e280`;
+base raw/report SHA-256 are
+`dbe7b03155fb5ec7df2b529b9af23649ac6a03ae8112c031722e659496310a7a`
+and `947e157fca4ec43303ac8c71f732bc81e86031739d7808c8ef253cf0c25b2885`.
+
+The final one-block broad diagnostic produced 75/75 eligible measurements,
+600/600 passing linearity samples, and 1,462 OK samples. Candidate/base was
+0.999098x overall; family ratios ranged from 0.996075x array through
+1.003763x string, and the worst individual ratio was 1.029102x. Candidate/
+QuickJS-NG was 0.192541x overall, but allocation still failed B4 at 1.142756x.
+The strict analyzer correctly rejected the receipt-less dirty development
+binaries, so this is regression evidence rather than a fixed-hardware claim.
+Broad raw SHA-256 is
+`47368de161f9f66180c1aed665a3b50e632818626c98a8affdcc0f778f6c3c75`.
+This unit closes one profiled external mechanism without trading away the
+internal families; B4 and B5 remain active.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

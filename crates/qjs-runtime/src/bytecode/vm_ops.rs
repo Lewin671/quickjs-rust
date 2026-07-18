@@ -18,6 +18,24 @@ impl Vm<'_> {
         if let Some(value) = fast_number_binary(&left, op, &right) {
             return Ok(value);
         }
+        let (left, right) = if op == BinaryOp::Add {
+            match (left, right) {
+                (Value::String(left), right) => {
+                    match super::vm_string_append::primitive_append_suffix(right) {
+                        Ok(suffix) => {
+                            self.prepare_compound_string_reuse(&left);
+                            let mut result = Rc::unwrap_or_clone(left);
+                            result.push_str(&suffix);
+                            return Ok(Value::String(result.into()));
+                        }
+                        Err(right) => (Value::String(left), right),
+                    }
+                }
+                operands => operands,
+            }
+        } else {
+            (left, right)
+        };
         if let Some(value) = fast_primitive_string_binary(&left, op, &right) {
             return Ok(value);
         }

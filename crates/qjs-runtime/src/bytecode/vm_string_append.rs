@@ -5,6 +5,182 @@ use crate::{GLOBAL_THIS_BINDING, RuntimeError, Value, operations};
 use super::{ir::Op, vm::Vm, vm_bindings::is_compiler_temporary};
 
 impl Vm<'_> {
+    /// Drops only engine-internal mirrors before a compound string assignment.
+    /// The following `Dup` + store bytecodes restore the binding immediately;
+    /// any real JavaScript alias keeps the Rc shared and therefore immutable.
+    pub(super) fn prepare_compound_string_reuse(&mut self, expected: &std::rc::Rc<String>) -> bool {
+        if !matches!(self.bytecode.code.get(self.ip), Some(Op::Dup)) {
+            return false;
+        }
+        match self.bytecode.code.get(self.ip + 1).cloned() {
+            Some(Op::AssignLocal(slot)) => self.detach_matching_local_string(slot, expected),
+            Some(Op::StoreGlobalStrict(name)) | Some(Op::StoreGlobalSloppy(name)) => {
+                self.detach_matching_realm_string(&name, expected)
+            }
+            Some(Op::StoreLocalOrGlobalSloppy { slot, name }) => {
+                self.detach_matching_local_string(slot, expected)
+                    || self.detach_matching_realm_string(&name, expected)
+            }
+            _ => false,
+        }
+    }
+
+    fn detach_matching_local_string(
+        &mut self,
+        slot: usize,
+        expected: &std::rc::Rc<String>,
+    ) -> bool {
+        if self.direct_eval_with_stack && self.bytecode.local_is_from_env(slot) {
+            return false;
+        }
+        let Some(local_meta) = self.bytecode.locals.get(slot) else {
+            return false;
+        };
+        let name = local_meta.name.clone();
+        if !local_meta.mutable
+            || self.env.has_module_import(&name)
+            || self.env.is_immutable_lexical_binding(&name)
+            || self.env.is_immutable_function_name(&name)
+            || self.local_slot_targets_non_writable_global(slot, &name)
+        {
+            return false;
+        }
+        if self.slot_is_authoritative(slot)
+            && let Some(Some(local)) = self.locals.get_mut(slot)
+            && matches!(local, Value::String(current) if std::rc::Rc::ptr_eq(current, expected))
+        {
+            *local = Value::Undefined;
+            return true;
+        }
+        self.detach_matching_shared_string(slot, expected)
+    }
+
+    /// Temporarily clears the engine's internal mirrors of one shared binding
+    /// value so `Rc::unwrap_or_clone` can reclaim its allocation. Any actual
+    /// JavaScript alias keeps an Rc alive and therefore still forces a copy,
+    /// preserving string immutability. The completed assignment immediately
+    /// restores the slot/cell/realm mirrors through the normal store path.
+    fn detach_matching_shared_string(
+        &mut self,
+        slot: usize,
+        expected: &std::rc::Rc<String>,
+    ) -> bool {
+        if self.direct_eval_with_stack {
+            return false;
+        }
+        let Some(cell) = self
+            .local_upvalues
+            .get(slot)
+            .and_then(Option::as_ref)
+            .cloned()
+        else {
+            return false;
+        };
+        let matches = cell.with_value(|value| {
+            matches!(value, Value::String(current) if std::rc::Rc::ptr_eq(current, expected))
+        });
+        if !matches {
+            return false;
+        }
+
+        let name = self.bytecode.locals[slot].name.clone();
+        let realm_cell = self.env.is_realm_binding_cell(&name, &cell);
+        let global_this = if realm_cell {
+            match self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned() {
+                Some(Value::Object(global_this)) => Some(global_this),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        if let Some(property) = global_this
+            .as_ref()
+            .and_then(|global_this| global_this.own_property(&name))
+            && (property.is_accessor() || !property.writable)
+        {
+            return false;
+        }
+
+        cell.set(Value::Undefined);
+        if let Some(Some(local)) = self.locals.get_mut(slot)
+            && matches!(local, Value::String(current) if std::rc::Rc::ptr_eq(current, expected))
+        {
+            *local = Value::Undefined;
+        }
+        if realm_cell {
+            if let Some(binding) = self.realm.borrow_mut().get_mut(&name)
+                && matches!(binding, Value::String(current) if std::rc::Rc::ptr_eq(current, expected))
+            {
+                *binding = Value::Undefined;
+            }
+            if let Some(global_this) = global_this
+                && global_this
+                    .own_property(&name)
+                    .is_some_and(|property| {
+                        matches!(property.value, Value::String(current) if std::rc::Rc::ptr_eq(&current, expected))
+                    })
+            {
+                global_this.set(name, Value::Undefined);
+            }
+        }
+        true
+    }
+
+    fn detach_matching_realm_string(&mut self, name: &str, expected: &std::rc::Rc<String>) -> bool {
+        if self.env.has_module_import(name)
+            || self.env.is_immutable_lexical_binding(name)
+            || self.env.is_immutable_function_name(name)
+            || self.env.has_local_binding(name)
+            || self
+                .bytecode
+                .local_slot(name)
+                .is_some_and(|slot| self.locals.get(slot).is_some_and(Option::is_some))
+        {
+            return false;
+        }
+        let realm_matches = self.realm.borrow().get(name).is_some_and(|value| {
+            matches!(value, Value::String(current) if std::rc::Rc::ptr_eq(current, expected))
+        });
+        if !realm_matches {
+            return false;
+        }
+        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned() {
+            Some(Value::Object(global_this)) => Some(global_this),
+            _ => None,
+        };
+        if let Some(property) = global_this
+            .as_ref()
+            .and_then(|global_this| global_this.own_property(name))
+            && (property.is_accessor() || !property.writable)
+        {
+            return false;
+        }
+        let cell = self.env.realm_binding_cell(name);
+        if let Some(cell) = &cell
+            && !cell.with_value(|value| {
+                matches!(value, Value::String(current) if std::rc::Rc::ptr_eq(current, expected))
+            })
+        {
+            return false;
+        }
+        if let Some(cell) = cell {
+            cell.set(Value::Undefined);
+        }
+        if let Some(binding) = self.realm.borrow_mut().get_mut(name) {
+            *binding = Value::Undefined;
+        }
+        if let Some(global_this) = global_this
+            && global_this
+                .own_property(name)
+                .is_some_and(|property| {
+                    matches!(property.value, Value::String(current) if std::rc::Rc::ptr_eq(&current, expected))
+                })
+        {
+            global_this.set(name.to_owned(), Value::Undefined);
+        }
+        true
+    }
+
     pub(super) fn run_string_append_op(&mut self, op: Op) -> Result<(), RuntimeError> {
         let result = match op {
             Op::AppendStringLiteralLocal { slot, value } => {
@@ -171,4 +347,17 @@ impl Vm<'_> {
         }
         Ok(result)
     }
+}
+
+pub(super) fn primitive_append_suffix(value: Value) -> Result<String, Value> {
+    Ok(match value {
+        Value::Number(number) => crate::number::number_to_js_string(number),
+        Value::BigInt(value) => value.to_string(),
+        Value::String(value) => std::rc::Rc::unwrap_or_clone(value),
+        Value::Boolean(true) => "true".to_owned(),
+        Value::Boolean(false) => "false".to_owned(),
+        Value::Null => "null".to_owned(),
+        Value::Undefined => "undefined".to_owned(),
+        value => return Err(value),
+    })
 }

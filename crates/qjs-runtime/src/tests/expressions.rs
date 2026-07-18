@@ -193,6 +193,50 @@ fn accumulates_string_concatenation_in_place() {
         eval("let s = 1; s = s + 'x'; s += 2; s;"),
         Ok(Value::String("1x2".to_owned().into()))
     );
+    // A JavaScript alias must retain the immutable pre-assignment value even
+    // when the binding itself can reuse its allocation.
+    assert_eq!(
+        eval("let s = 'a'; let old = s; s += 'b'; old + ':' + s;"),
+        Ok(Value::String("a:ab".to_owned().into()))
+    );
+    // The compound-assignment reference and left value are fixed before the
+    // RHS runs. If the RHS rebinds the target, the final store still uses the
+    // original left value rather than appending to the intervening value.
+    assert_eq!(
+        eval(
+            "let s = 'a'; function rhs() { s = 'changed'; return 'c'; } let result = s += rhs(); result + ':' + s;"
+        ),
+        Ok(Value::String("ac:ac".to_owned().into()))
+    );
+    // Captured global bindings and their global-object mirrors take the same
+    // general append path; an old alias remains unchanged.
+    assert_eq!(
+        eval(
+            "var s = 'a'; var old = s; function append(v) { return s += v; } var result = append('b'); old + ':' + result + ':' + s + ':' + globalThis.s;"
+        ),
+        Ok(Value::String("a:ab:ab:ab".to_owned().into()))
+    );
+    // Object operands retain ordinary ToPrimitive ordering and side effects.
+    assert_eq!(
+        eval(
+            "let calls = 0; let s = 'a'; s += { toString() { calls++; return 'b'; } }; s + ':' + calls;"
+        ),
+        Ok(Value::String("ab:1".to_owned().into()))
+    );
+    // Failed or ignored stores must not leave a temporarily detached binding
+    // behind. The RHS is still evaluated before const/read-only rejection.
+    assert_eq!(
+        eval(
+            "let calls = 0; function suffix() { calls++; return 'b'; } const s = 'a'; let caught = false; try { s += suffix(); } catch (error) { caught = error instanceof TypeError; } caught + ':' + calls + ':' + s;"
+        ),
+        Ok(Value::String("true:1:a".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var s = 'a'; Object.defineProperty(globalThis, 's', { writable: false }); function append(v) { return s += v; } var result = append('b'); result + ':' + s;"
+        ),
+        Ok(Value::String("ab:a".to_owned().into()))
+    );
 }
 
 #[test]

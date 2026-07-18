@@ -18,7 +18,7 @@ pub(crate) fn to_js_string_with_env(
     match value {
         Value::Number(number) => Ok(number::number_to_js_string(number)),
         Value::BigInt(value) => Ok(value.to_string()),
-        Value::String(value) => Ok(value.to_string()),
+        Value::String(value) => Ok(std::rc::Rc::unwrap_or_clone(value)),
         Value::Boolean(true) => Ok("true".to_owned()),
         Value::Boolean(false) => Ok("false".to_owned()),
         Value::Null => Ok("null".to_owned()),
