@@ -3136,6 +3136,56 @@ The strict report tool correctly rejects both development runs as unverified
 because they have no build receipts. Exact pushed performance and coverage
 artifacts remain required before unit 53 is closed.
 
+The pushed unit-53 closure is commit
+`188033532d183934b3e898f5480aa887ed0c9346`. CI run `29637597458`, Performance
+Preview run `29637597433`, and Test262 Coverage run `29637684611` all completed
+successfully. The downloaded performance artifact binds the candidate to that
+exact revision and contains a complete, verified 25/25-case broad run with all
+225/225 measurements eligible and all three blocks valid. Hosted
+candidate/base was **0.999398x** with a 95% confidence interval of
+[0.999037x, 1.002281x]; candidate/QuickJS-NG was 0.348981x with a 95%
+confidence interval of [0.346488x, 0.353847x]. Broad raw/report SHA-256 are
+`aeafc5568565038168f470e64bfbc558ce1692c9542cd2285840e59e92439bad`
+and `72654f2c5d0ede4c7909e79164b9f8d6becc0ae8222525979abdad0b33f1fefe`.
+
+The hosted external preview remains incomplete under its fixed 15-second
+limit: JetStream completed 5/5, Kraken 7/14, and SunSpider 23/26. The ten
+missing candidate results are explicit timeouts, so no incomplete-suite ratio
+is promoted to an aggregate claim. On the unchanged comparable inventory,
+however, all three diagnostic geometric means improved over unit 52:
+JetStream moved from 10.824x to **9.993x** (0.923173x unit 52), Kraken from
+6.400x to **6.028x** (0.941909x), and SunSpider from 10.007x to **9.166x**
+(0.915984x). This agrees directionally with the complete same-host 45/45 local
+comparison and is accepted as generalization evidence, not B5 completion.
+External raw/report SHA-256 are
+`fce00a26b28013cecd4af0d6999b1a3a207871de94f6718e786985084d6cbd20`
+and `9fd71f44b1859767eda82165a79e48eb98d61f1c7dde4e07bdd8be7e379fd9ba`.
+
+Coverage remained 42,671/42,672 configured qjs-rust passes with zero timeout
+and the same sole actionable private-static-setter gap. Coverage
+burndown/comparison SHA-256 are
+`44ca082b6f7adb754ce4458c929e88c09506fcae46c1f46c896e7c8527631240`
+and `44cdb54200fbbebbb9353ed4f93c3c39b80a7135d20c05ed0eb6f25806bf401b`.
+Unit 53 is closed as an externally corroborated general runtime improvement,
+not as a complete external run, B5, or 100% Test262 completion.
+
+A post-unit-53 prototype extended the exact named-property inline cache from
+primitive results to weakly held object results. The mechanism was semantic
+and workload-independent: it reused only the same receiver identity and
+property revision, did not retain the returned object, and invalidated after
+receiver mutation. It also reduced the sampled `ai-astar` property-lookup
+stack and improved that case to 0.971996x of the unit-53 base. The complete
+same-host external inventory nevertheless rejected it: JetStream was
+**1.009939x** base with all 5/5 cases slower, Kraken was **1.005941x** with
+only 4/14 faster, and SunSpider was **1.008835x** with 10/26 faster. The
+worst one-block observation was 1.112912x. Candidate/QuickJS-NG remained
+7.259x, 4.976x, and 9.554x. External raw/report SHA-256 are
+`88090e5668fd6a1d8d667d9d611e1ec8d08c00b12d412e67e0b0880561946858`
+and `a89aad7fed7558559c4fe70387c4fb9ae09efc7e70154e76df5cffab5e9af6a0`.
+The prototype was reverted without a runtime commit: one improved external
+case does not outweigh three suite-wide regressions under the anti-overfitting
+contract.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
