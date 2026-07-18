@@ -3093,6 +3093,49 @@ and `44cdb54200fbbebbb9353ed4f93c3c39b80a7135d20c05ed0eb6f25806bf401b`.
 Unit 52 is closed as a broad structural performance improvement, not as B5 or
 100% Test262 completion.
 
+The fifty-third v2 unit removes the same compatibility-frame tax from the
+generic binary-coercion fallback. A post-unit-52 macOS sample of Kraken
+`ai-astar` attributed 4,054/7,150 nested samples in the slow binary path to
+`apply_env`, with another 1,455 samples constructing `current_env`; caller
+local snapshots and name-map reconstruction dominated both stacks. Binary
+coercion hooks execute as ordinary functions and therefore already carry their
+closure/upvalue cells, while globals are shared through the realm. The VM now
+uses a realm-only `CallEnv` for this fallback and never snapshots or writes
+back the caller compatibility environment. The fallback is `#[inline(never)]`
+so its cold body does not inflate the main bytecode dispatch loop. Native
+Error `instanceof` stays on the same realm-only semantic path. The focused
+test proves that `valueOf` can still mutate both a captured lexical binding
+and a realm global. No workload identity, source path, iteration count,
+checksum, or expected benchmark result appears in the implementation.
+
+Against the exact unit-52 same-host base, the complete one-block external
+inventory retained 5/5 JetStream, 14/14 Kraken, and 26/26 SunSpider coverage.
+Candidate/base geometric means were **0.952120x**, **0.904433x**, and
+**0.932400x** respectively. The worst observed case was only 1.052829x base;
+`ai-astar` fell to 0.231100x and `3d-raytrace` to 0.390563x. A final clean
+single-case A* run took 13.33 seconds versus roughly 57.24 seconds for the
+unit-52 binary. Candidate/QuickJS-NG nevertheless remains far from B5 at
+7.248x, 4.929x, and 9.418x. External raw/report SHA-256 are
+`ed666cc08f8e0b6319b0d863118704815f30b7435ef989ac595749fec3156f7d`
+and `77fdd85a06986df5f28642c2658e11d3271d6c8cd9fd77baf000c70194a444ca`.
+
+The accompanying receipt-less one-block broad diagnostic completed all 25
+cases and all 75/75 eligible measurements. Manual protocol-equivalent
+normalization measured candidate/base at 1.007021x overall with 17/25 cases
+faster, and candidate/QuickJS-NG at 0.187913x. The call and allocation family
+ratios were 1.024921x and 1.024799x; all other families were at or below
+0.999821x. The worst case, `dynamic_method_call`, was 1.179716x and remained
+1.171988x in an independent five-block focused rerun; `closure_allocation_call`
+was 1.098205x and 1.097293x respectively. These measured layout side effects
+remain below the 1.25 per-case guardrail but are explicit debt for later units,
+not evidence that the final critical-family requirement is met. Broad and
+focused raw SHA-256 are
+`080f51470c22473f0f7fdf062668c45c77a89edde05cea625614c2e6bd086132`
+and `e2b4b43a2590f26e792c502e3877b0214416cc9d8ba56b6d9af0266898528ea9`.
+The strict report tool correctly rejects both development runs as unverified
+because they have no build receipts. Exact pushed performance and coverage
+artifacts remain required before unit 53 is closed.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit

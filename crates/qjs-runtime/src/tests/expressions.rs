@@ -97,6 +97,22 @@ fn evaluates_loose_equality_edge_cases() {
 }
 
 #[test]
+fn binary_coercion_uses_callback_cells_and_shared_realm() {
+    assert_eq!(
+        eval(
+            "var realmValue = 1; \
+             function outer() { \
+               let captured = 2; \
+               let operand = { valueOf() { captured = 7; realmValue = 9; return 3; } }; \
+               return (operand + 4) + ':' + captured + ':' + realmValue; \
+             } \
+             outer();"
+        ),
+        Ok(Value::String("7:7:9".to_owned().into()))
+    );
+}
+
+#[test]
 fn evaluates_bitwise_and_shift_expressions() {
     assert_eq!(eval("5 & 3;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("5 | 2;"), Ok(Value::Number(7.0)));

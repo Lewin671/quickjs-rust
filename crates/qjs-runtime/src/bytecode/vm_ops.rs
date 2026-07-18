@@ -48,22 +48,31 @@ impl Vm<'_> {
                 !equal
             }));
         }
+        self.eval_binary_with_realm(left, op, right)
+    }
+
+    #[inline(never)]
+    fn eval_binary_with_realm(
+        &mut self,
+        left: Value,
+        op: BinaryOp,
+        right: Value,
+    ) -> Result<Value, RuntimeError> {
+        // Binary coercion never executes in the caller's lexical environment.
+        // User hooks already carry their closure/upvalue cells, and global
+        // effects are shared through the realm, so materializing every caller
+        // slot as a name-keyed compatibility frame is both unnecessary and
+        // observably the dominant cost in comparison-heavy external workloads.
+        let mut env = self.realm_env();
         if op == BinaryOp::Instanceof
             && matches!(
                 &right,
                 Value::Function(function) if function.native.is_some_and(error::is_native_error)
             )
         {
-            let mut env = self.current_env();
-            let result =
-                operations::ordinary_has_instance(left, right, &mut env).map(Value::Boolean);
-            self.apply_env(env);
-            return result;
+            return operations::ordinary_has_instance(left, right, &mut env).map(Value::Boolean);
         }
-        let mut env = self.current_env();
-        let result = operations::eval_binary(left, op, right, &mut env);
-        self.apply_env(env);
-        result
+        operations::eval_binary(left, op, right, &mut env)
     }
 
     pub(super) fn eval_unary(&mut self, op: UnaryOp) -> Result<Value, RuntimeError> {
