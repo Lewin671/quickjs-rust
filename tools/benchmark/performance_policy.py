@@ -73,6 +73,7 @@ PREVIEW_IMPLEMENTATION_FILES = (
     "tools/benchmark/build_cache_identity.py",
     "tools/benchmark/external_corpora.py",
     "tools/benchmark/external_preview.py",
+    "tools/benchmark/external_preview_markdown.py",
     "tools/benchmark/hosted_preview.py",
     "tools/benchmark/performance_policy.py",
     "tools/benchmark/preview.py",

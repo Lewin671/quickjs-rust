@@ -3,13 +3,13 @@
   "measurement": {
     "blocks": 3,
     "metric": "outer_process_wall_time",
-    "order": "seeded_pair_rotation",
+    "order": "seeded_role_rotation",
     "phase_boundary": "before_process_spawn_to_wait_return",
     "seed": 20260716,
     "timeout_seconds": 15
   },
-  "preview_id": "quickjs-authoritative-external-preview-v1",
-  "schema_version": 1,
+  "preview_id": "quickjs-authoritative-external-preview-v2",
+  "schema_version": 2,
   "suites": [
     {
       "cases": [

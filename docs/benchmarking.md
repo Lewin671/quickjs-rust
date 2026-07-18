@@ -599,12 +599,17 @@ Admission and execution tiers:
 
 ### External hosted preview
 
-The external preview compares only the current qjs-rust candidate and the
-pinned QuickJS-NG executable. QuickJS-NG runs with `--script` so historical
+The external preview compares the current qjs-rust candidate, its exact
+comparison-base revision, and the pinned QuickJS-NG executable on the same
+host. The candidate/base ratio is the authoritative per-change generalization
+diagnostic; comparing qjs-rust durations across separate hosted runs is only
+diagnostic because runner drift is not controlled across runs. QuickJS-NG runs
+with `--script` so historical
 implicit globals and top-level script semantics match qjs-rust. Python brackets
 each fresh shell process with `perf_counter_ns`; the metric therefore includes
-startup, parsing, execution, and shutdown. A seeded pair rotation changes engine
-order across the three measurement blocks.
+startup, parsing, execution, and shutdown. A seeded three-role Latin-square
+rotation gives every engine each order position once across the three
+measurement blocks.
 
 The frozen suite inventory is:
 
@@ -615,16 +620,19 @@ The frozen suite inventory is:
   upstream `Benchmark.runIteration` plus its validation hook.
 
 Capability probes run before measurement. A failed or timed-out engine remains
-visible for that frozen case and the case receives no ratio. The report may show
-a diagnostic geometric mean over explicitly comparable cases, but an incomplete
+visible for that frozen case and is excluded only from comparisons that require
+that role; the other supported roles are still measured. The report may show a
+diagnostic geometric mean over explicitly comparable cases, but an incomplete
 suite has no suite score. JetStream output is always named **JetStream 3
 JavaScript subset** and never an official JetStream score. All hosted output
 keeps `claim_eligible=false`. The GitHub Step Summary shows both the three-suite
-overview and every named external case with qjs-rust and QuickJS-NG median wall
-time, ratio, and lower-wall-time engine. The internal portfolio is likewise
+overview and every named external case with candidate, base, and QuickJS-NG
+median wall time plus candidate/base and candidate/QuickJS-NG ratios. The
+internal portfolio is likewise
 rendered as a 25-case table instead of only an overall ratio.
 
-Run the same preview locally after building both shells:
+Run the same preview locally after building the candidate, base, and reference
+shells:
 
 ```sh
 cargo build --release -p qjs-cli
@@ -635,6 +643,7 @@ make -C third_party/quickjs-ng BUILD_QJS_LIBC=y
   --work-root target/external-preview/work \
   --output-dir target/external-preview/evidence \
   --candidate target/release/qjs \
+  --base /path/to/base/qjs \
   --quickjs-ng third_party/quickjs-ng/build/qjs
 ```
 

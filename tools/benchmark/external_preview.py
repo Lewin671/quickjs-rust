@@ -7,7 +7,6 @@ import hashlib
 import json
 import math
 import os
-import random
 import re
 import shutil
 import statistics
@@ -19,10 +18,13 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from .external_preview_markdown import render_markdown
 from .process import ProcessResult, run_process
+from .planning import role_orders
 
 
 SENTINEL = "__QJS_EXTERNAL_OK__"
+EXTERNAL_ROLES = ("candidate", "base", "quickjs-ng")
 _ID = re.compile(r"[a-z0-9][a-z0-9.-]*\Z")
 _REVISION = re.compile(r"[0-9a-f]{40}\Z")
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -164,12 +166,12 @@ def load_manifest(path: Path) -> Manifest:
         {"schema_version", "preview_id", "claim_eligible", "measurement", "suites"},
         "manifest",
     )
-    if _integer(root["schema_version"], "manifest.schema_version", 1) != 1:
-        raise ExternalPreviewError("manifest.schema_version: expected version 1")
+    if _integer(root["schema_version"], "manifest.schema_version", 1) != 2:
+        raise ExternalPreviewError("manifest.schema_version: expected version 2")
     if root["claim_eligible"] is not False:
         raise ExternalPreviewError("manifest.claim_eligible: preview must remain false")
     preview_id = _string(root["preview_id"], "manifest.preview_id")
-    if preview_id != "quickjs-authoritative-external-preview-v1":
+    if preview_id != "quickjs-authoritative-external-preview-v2":
         raise ExternalPreviewError("manifest.preview_id: unexpected trust-root identity")
     measurement_data = _keys(
         root["measurement"],
@@ -191,7 +193,7 @@ def load_manifest(path: Path) -> Manifest:
     if (
         measurement.metric != "outer_process_wall_time"
         or measurement.phase_boundary != "before_process_spawn_to_wait_return"
-        or measurement.order != "seeded_pair_rotation"
+        or measurement.order != "seeded_role_rotation"
     ):
         raise ExternalPreviewError("manifest.measurement: unsupported protocol")
 
@@ -398,7 +400,7 @@ def _binary(path: Path, role: str) -> tuple[Path, str]:
 
 
 def _command(role: str, binary: Path, bundle: Path) -> list[str]:
-    if role == "candidate":
+    if role in {"candidate", "base"}:
         return [str(binary), "--raw", str(bundle)]
     if role == "quickjs-ng":
         return [str(binary), "--script", str(bundle)]
@@ -495,12 +497,14 @@ def _report(manifest: Manifest, records: list[dict[str, Any]]) -> dict[str, Any]
     suites: list[dict[str, Any]] = []
     for suite in manifest.suites:
         case_reports: list[dict[str, Any]] = []
-        ratios: list[float] = []
+        quickjs_ratios: list[float] = []
+        base_ratios: list[float] = []
         wins = {"candidate": 0, "quickjs-ng": 0, "tie": 0}
+        base_wins = {"candidate": 0, "base": 0, "tie": 0}
         for case in suite.cases:
             capability: dict[str, str] = {}
             medians: dict[str, int | None] = {}
-            for role in ("candidate", "quickjs-ng"):
+            for role in EXTERNAL_ROLES:
                 probe = samples.get((suite.id, case.id, role, "capability"), [])
                 capability[role] = probe[0]["status"] if probe else "not_run"
                 measured = samples.get((suite.id, case.id, role, "measurement"), [])
@@ -512,25 +516,44 @@ def _report(manifest: Manifest, records: list[dict[str, Any]]) -> dict[str, Any]
                     if len(durations) == manifest.measurement.blocks else None
                 )
             ratio = None
+            base_ratio = None
             if medians["candidate"] is not None and medians["quickjs-ng"] is not None:
                 ratio = medians["candidate"] / medians["quickjs-ng"]
-                ratios.append(ratio)
+                quickjs_ratios.append(ratio)
                 if ratio < 1:
                     wins["candidate"] += 1
                 elif ratio > 1:
                     wins["quickjs-ng"] += 1
                 else:
                     wins["tie"] += 1
+            if medians["candidate"] is not None and medians["base"] is not None:
+                base_ratio = medians["candidate"] / medians["base"]
+                base_ratios.append(base_ratio)
+                if base_ratio < 1:
+                    base_wins["candidate"] += 1
+                elif base_ratio > 1:
+                    base_wins["base"] += 1
+                else:
+                    base_wins["tie"] += 1
             case_reports.append(
                 {
                     "id": case.id,
                     "capability": capability,
                     "median_duration_ns": medians,
+                    "candidate_over_base": base_ratio,
                     "candidate_over_quickjs_ng": ratio,
                 }
             )
-        complete = len(ratios) == len(suite.cases)
-        diagnostic = math.exp(sum(math.log(ratio) for ratio in ratios) / len(ratios)) if ratios else None
+        complete = len(quickjs_ratios) == len(suite.cases)
+        base_complete = len(base_ratios) == len(suite.cases)
+        diagnostic = (
+            math.exp(sum(math.log(ratio) for ratio in quickjs_ratios) / len(quickjs_ratios))
+            if quickjs_ratios else None
+        )
+        base_diagnostic = (
+            math.exp(sum(math.log(ratio) for ratio in base_ratios) / len(base_ratios))
+            if base_ratios else None
+        )
         suites.append(
             {
                 "id": suite.id,
@@ -541,11 +564,15 @@ def _report(manifest: Manifest, records: list[dict[str, Any]]) -> dict[str, Any]
                 },
                 "reporting_rule": suite.reporting_rule,
                 "case_count": len(suite.cases),
-                "comparable_case_count": len(ratios),
+                "comparable_case_count": len(quickjs_ratios),
                 "complete_comparison": complete,
+                "base_comparable_case_count": len(base_ratios),
+                "complete_base_comparison": base_complete,
                 "official_suite_score": None,
                 "diagnostic_comparable_case_geomean_ratio": diagnostic,
+                "diagnostic_candidate_over_base_geomean_ratio": base_diagnostic,
                 "wins": wins,
+                "base_wins": base_wins,
                 "cases": case_reports,
             }
         )
@@ -557,63 +584,10 @@ def _report(manifest: Manifest, records: list[dict[str, Any]]) -> dict[str, Any]
         "claim_eligible": False,
         "metric": manifest.measurement.metric,
         "timer_phase_boundary": manifest.measurement.phase_boundary,
-        "roles": ["candidate", "quickjs-ng"],
+        "roles": list(EXTERNAL_ROLES),
         "blocks": manifest.measurement.blocks,
         "suites": suites,
     }
-
-
-def _markdown(report: dict[str, Any]) -> str:
-    lines = [
-        "## External Benchmark Preview", "",
-        "> **Informational only.** These are pinned, neutral shell ports; no row is an official",
-        "> JetStream, Kraken, or SunSpider score, and incomplete suites have no aggregate score.",
-        "",
-        "| Suite | Comparable | qjs-rust / QuickJS-NG | qjs-rust wins | QuickJS-NG wins |",
-        "|---|---:|---:|---:|---:|",
-    ]
-    for suite in report["suites"]:
-        ratio = suite["diagnostic_comparable_case_geomean_ratio"]
-        ratio_text = f"{ratio:.3f}x" if ratio is not None else "—"
-        lines.append(
-            f"| {suite['name']} | {suite['comparable_case_count']}/{suite['case_count']} | "
-            f"{ratio_text} | {suite['wins']['candidate']} | {suite['wins']['quickjs-ng']} |"
-        )
-    lines.extend([
-        "", "### External per-case performance", "",
-        "Median wall time is the outer process duration per run. Lower ratios favor qjs-rust.", "",
-        "| Suite / case | qjs-rust ms/run | QuickJS-NG ms/run | Ratio | Lower wall time |",
-        "|---|---:|---:|---:|---|",
-    ])
-    for suite in report["suites"]:
-        for case in suite["cases"]:
-            candidate = case["median_duration_ns"]["candidate"]
-            quickjs = case["median_duration_ns"]["quickjs-ng"]
-            ratio = case["candidate_over_quickjs_ng"]
-            if ratio is None or candidate is None or quickjs is None:
-                candidate_text = "—" if candidate is None else f"{candidate / 1_000_000:.3f}"
-                quickjs_text = "—" if quickjs is None else f"{quickjs / 1_000_000:.3f}"
-                ratio_text = "—"
-                lower_wall_time = (
-                    f"not comparable ({case['capability']['candidate']} / "
-                    f"{case['capability']['quickjs-ng']})"
-                )
-            else:
-                candidate_text = f"{candidate / 1_000_000:.3f}"
-                quickjs_text = f"{quickjs / 1_000_000:.3f}"
-                ratio_text = f"{ratio:.3f}x"
-                lower_wall_time = (
-                    "qjs-rust" if ratio < 1 else "QuickJS-NG" if ratio > 1 else "tie"
-                )
-            lines.append(
-                f"| `{suite['id']}/{case['id']}` | {candidate_text} | {quickjs_text} | "
-                f"{ratio_text} | {lower_wall_time} |"
-            )
-    lines.extend([
-        "", "Lower ratios are faster for qjs-rust. The ratio is a diagnostic geometric mean",
-        "over explicitly reported comparable cases, never a substitute for a suite score.", "",
-    ])
-    return "\n".join(lines)
 
 
 def run_preview(
@@ -622,6 +596,7 @@ def run_preview(
     work_root: Path,
     output_dir: Path,
     candidate_path: Path,
+    base_path: Path,
     quickjs_path: Path,
     *,
     blocks: int | None = None,
@@ -629,9 +604,10 @@ def run_preview(
 ) -> dict[str, Any]:
     fetch_corpora(manifest, cache_root)
     candidate, candidate_sha = _binary(candidate_path, "candidate")
+    base, base_sha = _binary(base_path, "base")
     quickjs, quickjs_sha = _binary(quickjs_path, "quickjs-ng")
-    source_binaries = {"candidate": candidate, "quickjs-ng": quickjs}
-    binary_hashes = {"candidate": candidate_sha, "quickjs-ng": quickjs_sha}
+    source_binaries = {"candidate": candidate, "base": base, "quickjs-ng": quickjs}
+    binary_hashes = {"candidate": candidate_sha, "base": base_sha, "quickjs-ng": quickjs_sha}
     selected_blocks = blocks if blocks is not None else manifest.measurement.blocks
     selected_timeout = (
         timeout_seconds if timeout_seconds is not None else manifest.measurement.timeout_seconds
@@ -671,8 +647,14 @@ def run_preview(
                 bundle = bundle_root / suite.id / f"{case.id}.js"
                 bundle.parent.mkdir(parents=True, exist_ok=True)
                 bundle.write_text(_bundle_source(suite, case, cache_root), encoding="utf-8")
-                capability_ok = True
-                for order, role in enumerate(("candidate", "quickjs-ng")):
+                case_seed = (
+                    manifest.measurement.seed + suite_index * 10000 + case_index * 100
+                )
+                capable_roles: list[str] = []
+                capability_order = role_orders(
+                    list(EXTERNAL_ROLES), 1, case_seed + 1
+                )[0]
+                for order, role in enumerate(capability_order):
                     argv = _command(role, binaries[role], bundle)
                     result = run_process(argv, selected_timeout)
                     record = _record(
@@ -680,15 +662,13 @@ def run_preview(
                         "capability", None, order, result, argv,
                     )
                     records.append(record)
-                    capability_ok = capability_ok and record["status"] == "ok"
-                if not capability_ok:
+                    if record["status"] == "ok":
+                        capable_roles.append(role)
+                if not capable_roles:
                     continue
+                orders = role_orders(capable_roles, selected_blocks, case_seed)
                 for block in range(selected_blocks):
-                    roles = ["candidate", "quickjs-ng"]
-                    random.Random(
-                        manifest.measurement.seed + suite_index * 10000 + case_index * 100 + block
-                    ).shuffle(roles)
-                    for order, role in enumerate(roles):
+                    for order, role in enumerate(orders[block]):
                         argv = _command(role, binaries[role], bundle)
                         result = run_process(argv, selected_timeout)
                         records.append(
@@ -711,7 +691,7 @@ def run_preview(
             output / "external-report.json",
             (json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n").encode(),
         )
-        _atomic_write(output / "external-summary.md", _markdown(report).encode())
+        _atomic_write(output / "external-summary.md", render_markdown(report).encode())
         _atomic_write(output / "external-manifest.json", manifest.path.read_bytes())
         return report
     finally:
@@ -731,6 +711,7 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--work-root", type=Path, required=True)
     run.add_argument("--output-dir", type=Path, required=True)
     run.add_argument("--candidate", type=Path, required=True)
+    run.add_argument("--base", type=Path, required=True)
     run.add_argument("--quickjs-ng", type=Path, required=True)
     run.add_argument("--blocks", type=int)
     run.add_argument("--timeout-seconds", type=int)
@@ -754,7 +735,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             report = run_preview(
                 manifest, args.cache_root, args.work_root, args.output_dir,
-                args.candidate, args.quickjs_ng,
+                args.candidate, args.base, args.quickjs_ng,
                 blocks=args.blocks, timeout_seconds=args.timeout_seconds,
             )
             print(json.dumps({

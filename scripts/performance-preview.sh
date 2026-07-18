@@ -399,6 +399,7 @@ EXTERNAL_WORK_ROOT="$(dirname "$OUTPUT")/external-work"
 (cd "$HARNESS_ROOT" && ./scripts/external-performance-preview.sh run \
   --cache-root "$EXTERNAL_CACHE_ROOT" --work-root "$EXTERNAL_WORK_ROOT" \
   --output-dir "$OUTPUT" --candidate "$CANDIDATE_BINARY" \
+  --base "$BASE_BINARY" \
   --quickjs-ng "$QUICKJS_BINARY")
 verify_source "$CANDIDATE_SOURCE" "$CANDIDATE_REVISION"
 verify_source "$BASE_SOURCE" "$BASE_REVISION"

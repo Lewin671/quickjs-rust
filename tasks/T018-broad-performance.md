@@ -83,9 +83,12 @@ complete.
 ## External Generalization Contract
 
 Every trusted `main` push already publishes a pinned, execution-only external
-preview. These neutral shell ports are not official JetStream, Kraken, or
-SunSpider scores, and incomplete suites have no suite score. They are still
-the campaign's independent anti-overfitting evidence because their source,
+preview. Each runtime unit must compare candidate, the exact preceding base,
+and QuickJS-NG in the same external run; cross-run candidate-duration movement
+is diagnostic only and cannot accept a unit because hosted-runner drift is not
+controlled across runs. These neutral shell ports are not official JetStream,
+Kraken, or SunSpider scores, and incomplete suites have no suite score. They
+are still the campaign's independent anti-overfitting evidence because their source,
 adapter, case inventory, engine revisions, outer wall timer, and per-case
 results do not depend on the broad-micro workload.
 
@@ -138,6 +141,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/benchmark/tests 
   --work-root target/benchmarks/external-work \
   --output-dir target/benchmarks/external-result \
   --candidate target/release/qjs \
+  --base /path/to/base/qjs \
   --quickjs-ng third_party/quickjs-ng/build/qjs
 ./scripts/check.sh
 ```
@@ -3520,69 +3524,79 @@ improvement, not as B5 progress. The campaign remains open because every
 hosted external comparable case still loses and the suite-level diagnostic
 ratios remain 7.9--11.4x QuickJS-NG.
 
-### Unit 58: fast keyed hashing for object properties
+### Unit 58: rejected property-hashing experiment
 
-Runtime commit `0000faf8` replaces SipHash-backed maps only in the hot
-in-memory object-property storage and object-literal shape lookup with
-`ahash` 0.8.12 `AHashMap`. AHash supplies a randomly keyed map state so the
-engine retains collision-attack resistance instead of adopting an unkeyed
-microbenchmark hasher. Observable property order remains in the existing
-explicit key vectors and is therefore independent of randomized map iteration.
-This is a runtime dependency used only by `qjs-runtime`; it does not cross a
-public engine API or persist hash values. The implementation contains no
-benchmark identity, source path, iteration count, checksum, or expected-result
-specialization.
-
-An earlier small-call prototype was rejected before this unit was accepted. It
-put zero-to-four direct-leaf arguments in a fixed stack array, but a five-block
-focused run measured `function_call_two_args` at 1.001885x and
-`dynamic_method_call` at 1.078745x base, for a 1.012593x aggregate. The
-prototype was fully reverted; its raw SHA-256 is
-`1c8be01cf97a99ff17f3bf8465cff0005a12b34a847964f92089a551a7fec466`.
-This failure showed that the external `pop_arguments` samples were not on the
-direct-leaf branch and prevented an internal-shape-only change from advancing.
-
-The accepted AHash candidate and frozen unit-57 base binary SHA-256 values are
-`60590198adcc92453f77759a19deed76429010ec80104101d0060818bdf02ee1`
-and `4d50f538db4c3b71ca19fa1d3f0c41a72073d61663318090d801f89b7d678539`.
-An eight-case, five-block property-and-control audit measured **0.994565x**
-overall; `dynamic_method_call` improved to 0.946879x while the other seven
-cases ranged from 0.998051x to 1.006735x. Its raw SHA-256 is
-`5db5daa3d47ccd484184d991af328d975d86e1b5f39709857d6b0bb5b9ee10a3`.
-
-The complete 25/25-case, 50/50-eligible one-block broad run measured
-candidate/base **0.997777x**, with no non-`ok` measurements. Call was
-0.982275x; the other families ranged from 0.998026x to 1.015996x. Broad raw
-SHA-256 is
-`48bb6cc89fc05b81deaf5f746b7b6dbcbbf7af72d9ffb6c417692928a363ff37`.
-Because the one-block result showed possible regressions, a separate
-five-block audit retained both the gains and the controls. It measured
-`dynamic_method_call` 0.950558x and `top_level_function_call` 0.954356x, but
-also `array_write` 1.015439x and `string_slice` 1.017118x; the six-case
-aggregate was 0.990289x. Its raw SHA-256 is
-`d91d9d9d7a0a64a90a9cd1be0cb9b3f1a8232d7d1b0b4311d92bd531cc9c6d7a`.
-The string and dense-array paths do not use the changed maps, so these small
-unrelated-path regressions remain visible rather than being attributed to the
-property mechanism or omitted.
-
-The exact 60-second external run completed all 45/45 cases. Relative to the
-exact unit-57 candidate inventory, duration geometric means improved to
-**0.930623x** for JetStream (4/5 cases faster), **0.988313x** for Kraken
-(10/14), and **0.986173x** for SunSpider (12/26). Candidate/QuickJS-NG fell to
-**6.879x**, **4.795x**, and **6.147x**, respectively, although qjs-rust still
-won zero cases. External raw/report SHA-256 are
+This unit is deliberately recorded as a rejection, not performance progress.
+Runtime commit `0000faf8` replaced SipHash-backed hot object-property and shape
+maps with keyed `AHashMap`. Local Apple-silicon measurements initially looked
+promising: the complete one-block broad run was 0.997777x base, a five-block
+focused audit was 0.990289x, and `dynamic_method_call` was 0.950558x. A local
+external inventory measured unit-58/unit-57 candidate durations at 0.930623x,
+0.988313x, and 0.986173x for JetStream, Kraken, and SunSpider. Those external
+numbers compared separate runs, however, so they are now classified as
+diagnostic rather than acceptance evidence. Their raw/report SHA-256 are
 `337d9270c725c56bfe0abf4e341a09ae06270b472dbf8e72342ac67797ccec97`
 and `ed8b737bffdc91718c14d1ad8c5308845333ab35c7178100bb231f13309eccd8`.
-This complete independent improvement across all three suites is the evidence
-that accepts the general hashing mechanism despite small unrelated internal
-layout regressions.
 
-Local correctness gates passed all 1,396 runtime tests, all 205 QuickJS-NG
-comparisons, default and `agents` Clippy/tests, all 198 benchmark-tool tests,
-and the full repository check including 5,139 Test262 subset cases. Hosted CI,
-broad, external, and coverage artifacts are still required before closing this
-unit. The goal remains open because the external gap is still 4.8--6.9x and no
-external case beats QuickJS-NG.
+Two repetitions of hosted Linux run `29651613063` contradicted the local
+result. The unconditional candidate/base broad ratio was **1.013641x** with a
+95% confidence interval of [1.013640x, 1.016890x] on the first attempt and
+**1.018547x** with [1.016832x, 1.018626x] on the second. Binding regressed to
+1.04987x/1.04957x base, builtin to 1.04048x/1.03955x, and array to
+1.02012x/1.01928x. The raw/report SHA-256 pairs are
+`c749ae5beb38fc25584fe32f7bdb82643ce4eae98d729e4fe209ce12ef5516a3` /
+`8a605622b2c2f3ae10c4fede2bade8afcfd5aa2b62c95f02937dea4972f8cc3d`
+and
+`07c7c7b087cdb934b6def22fae4cd425c84bc43e9247b30079a4bfe12ab16b0e` /
+`a3b189cac909bbd64e7a7ba84c9aa94c1cb87e18740ce2d5bd35299a0b83bf`.
+
+Commit `7a0af070` then limited AHash to builds with the AES target feature. That
+retained local ARM gains, including a 0.787307x direct candidate/base result on
+JetStream `gaussian-blur`, but hosted run `29653501977` was still **1.002847x**
+base with [1.000751x, 1.006010x]. Call, control, and property regressed to
+1.053123x, 1.020426x, and 1.005379x. Its external preview still had zero
+qjs-rust wins and was 9.887x, 5.692x, and 10.394x QuickJS-NG. Broad raw/report
+SHA-256 are
+`d406191e627f618e34911aa652cca3921a777e8ed15051c9c6cb86f14d60391f`
+and `8eb942700c49bc8e6e4fb7df02f279b9071341b03eb9f7a071d1ce3231ffb5d4`;
+external raw/report SHA-256 are
+`e8f978e05a926b70003d8ee09d8acd7cf32e120332afb5eebc344ef72e15ea56`
+and `02374816acce24565efbbec7bdf9484593e56a9288cb3065bdcfba49ed277a18`.
+
+Commit `0fdf1b53` therefore fully reverted both hashing commits and the new runtime
+dependency. `Cargo.lock`, `qjs-runtime/Cargo.toml`, and object storage are byte
+for byte identical to the closed unit-57 state. Local verification passed the
+complete repository check, including all 198 benchmark-tool tests and 5,139
+Test262 subset cases. Hosted CI run `29655047865` and coverage run
+`29655165753` succeeded; coverage remained 42,671/42,672 with one failure and
+zero timeout. Coverage burndown/comparison SHA-256 are
+`d8537e57ba916b730e3eb768a4eb33639bc5c4cfe5153f96eda45f63750ff33d`
+and `94a97687babcdfba02efff77997af0a59fa7ddfb08a2370d03fbb933de069e69`.
+
+Hosted Performance Preview run `29655047930` also succeeded. Its restored
+candidate binary SHA-256,
+`bc35d9cb2f0ac0a6bcf07c1bcf8b9f94b13ac4c6991feedd38b940f557e2590a`,
+exactly matches the unit-57 hosted binary. The broad candidate/gated-base ratio
+was 0.984800x with a 95% confidence interval of [0.981700x, 0.988875x], and
+candidate/QuickJS-NG was 0.346714x. The old two-role external protocol still
+reported zero qjs-rust wins and 10.089x, 5.858x, and 10.616x QuickJS-NG for
+JetStream, Kraken, and SunSpider; it cannot establish a candidate/base external
+direction. Broad raw/report SHA-256 are
+`0d33542f438784d8645b6555dbb7135bbbd3c50a613203ac64fd557869b189b1`
+and `a6442b284a6343f1c78033c7ec1231ba3f64c6984c1c159772592536f73edaf0`;
+external raw/report SHA-256 are
+`021425144e661807ba859da5820e94c71245272c646d9cb20b92f34475185019`
+and `d22e2406dc4137189a2ec91daf5f7bf972bbab9652801c00b1fc02b73e43a328`.
+
+A separate realm-binding `AHashMap` prototype was also rejected before commit.
+Its focused eight-case run was 0.991944x overall, but
+`dynamic_method_call` regressed to 1.025535x and a seven-block direct external
+JetStream Gaussian comparison regressed to 1.019049x. The focused raw SHA-256
+is `b32d5f7a21bcd1ca11c35bc1aa815598dd16fe7a940a2640a29e1916909be1ad`.
+Together these failures demonstrate why a portable, same-run external base is
+mandatory: an architecture-specific internal win is not a general engine
+optimization. Unit 58 contributes rejection evidence only; B3, B4, and B5
+remain open.
 
 ## Historical Broad V1 Baseline
 

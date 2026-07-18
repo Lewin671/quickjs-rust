@@ -38,7 +38,7 @@ class ExternalPreviewTests(unittest.TestCase):
 
     def test_exact_three_suite_inventory_is_non_claim(self) -> None:
         manifest = load_manifest(MANIFEST)
-        self.assertEqual(manifest.preview_id, "quickjs-authoritative-external-preview-v1")
+        self.assertEqual(manifest.preview_id, "quickjs-authoritative-external-preview-v2")
         self.assertEqual(
             {suite.id: len(suite.cases) for suite in manifest.suites},
             {
@@ -49,6 +49,7 @@ class ExternalPreviewTests(unittest.TestCase):
         )
         self.assertEqual(manifest.measurement.blocks, 3)
         self.assertEqual(manifest.measurement.metric, "outer_process_wall_time")
+        self.assertEqual(manifest.measurement.order, "seeded_role_rotation")
         self.assertEqual(
             sum(len(case.files) for suite in manifest.suites for case in suite.cases),
             71,
@@ -87,8 +88,8 @@ class ExternalPreviewTests(unittest.TestCase):
             duplicate = directory / "duplicate.json"
             duplicate.write_text(
                 MANIFEST.read_text(encoding="utf-8").replace(
-                    '"schema_version": 1,',
-                    '"schema_version": 1,\n  "schema_version": 1,',
+                    '"schema_version": 2,',
+                    '"schema_version": 2,\n  "schema_version": 2,',
                     1,
                 ),
                 encoding="utf-8",
@@ -110,7 +111,7 @@ class ExternalPreviewTests(unittest.TestCase):
             "b7babdf323e64e69bd2f6c376189c15825f5c73a/cdjs/constants.js",
         )
 
-    def test_fake_two_engine_run_emits_non_claim_report_and_removes_bundle(self) -> None:
+    def test_fake_three_engine_run_emits_same_run_base_report_and_removes_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
             directory = Path(directory_name)
             cache = directory / "cache"
@@ -126,7 +127,7 @@ class ExternalPreviewTests(unittest.TestCase):
                 timeout_seconds=10,
                 metric="outer_process_wall_time",
                 phase_boundary="before_process_spawn_to_wait_return",
-                order="seeded_pair_rotation",
+                order="seeded_role_rotation",
                 seed=7,
             )
             case = Case("case", (SourceFile("case.js", digest),), "direct-script", None)
@@ -142,7 +143,7 @@ class ExternalPreviewTests(unittest.TestCase):
             manifest = Manifest(
                 manifest_file,
                 hashlib.sha256(b"{}\n").hexdigest(),
-                "quickjs-authoritative-external-preview-v1",
+                "quickjs-authoritative-external-preview-v2",
                 measurement,
                 (suite,),
             )
@@ -156,11 +157,29 @@ class ExternalPreviewTests(unittest.TestCase):
                 return_value={"downloaded": 0, "reused": 1},
             ):
                 report = run_preview(
-                    manifest, cache, work, output, engine, engine,
-                    blocks=1, timeout_seconds=10,
+                    manifest, cache, work, output, engine, engine, engine,
+                    blocks=3, timeout_seconds=10,
                 )
             self.assertFalse(report["claim_eligible"])
             self.assertEqual(report["suites"][0]["comparable_case_count"], 1)
+            self.assertEqual(report["suites"][0]["base_comparable_case_count"], 1)
+            self.assertGreater(
+                report["suites"][0]["cases"][0]["candidate_over_base"], 0
+            )
+            self.assertEqual(report["roles"], ["candidate", "base", "quickjs-ng"])
+            records = [
+                json.loads(line)
+                for line in (output / "external-raw.jsonl").read_text().splitlines()
+            ]
+            measurements = [row for row in records if row["phase"] == "measurement"]
+            self.assertEqual(len(measurements), 9)
+            self.assertEqual(
+                {
+                    role: {row["order"] for row in measurements if row["role"] == role}
+                    for role in ("candidate", "base", "quickjs-ng")
+                },
+                {role: {0, 1, 2} for role in ("candidate", "base", "quickjs-ng")},
+            )
             self.assertIsNone(report["suites"][0]["official_suite_score"])
             self.assertFalse((work / "bundles").exists())
             self.assertFalse((work / "engine-snapshots").exists())
@@ -169,7 +188,8 @@ class ExternalPreviewTests(unittest.TestCase):
             self.assertIn("Informational only", markdown)
             self.assertIn("### External per-case performance", markdown)
             self.assertIn("| `suite/case` |", markdown)
-            self.assertIn("qjs-rust ms/run", markdown)
+            self.assertIn("Candidate ms/run", markdown)
+            self.assertIn("Candidate/base", markdown)
 
     def test_checked_in_cli_audit_works_outside_repository(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:

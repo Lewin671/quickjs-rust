@@ -74,7 +74,8 @@ each script is for.
   initializes submodules, runs a corpus, or creates performance evidence.
 - `external-performance-preview.sh`: Audits, downloads, or runs the pinned
   SunSpider 1.0, Kraken 1.1, and JetStream 3 JavaScript subset preview against
-  qjs-rust and QuickJS-NG. It verifies every upstream file hash, keeps source
+  same-run qjs-rust candidate/base binaries and QuickJS-NG. It verifies every
+  upstream file hash, keeps source
   outside artifacts, and produces informational per-case evidence without an
   official suite score.
 - `performance-policy-audit.sh`: Validates the checked-in deny-only CI policy,

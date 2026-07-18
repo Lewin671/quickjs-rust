@@ -49,11 +49,12 @@
       "tools/benchmark/build_cache_identity.py",
       "tools/benchmark/external_corpora.py",
       "tools/benchmark/external_preview.py",
+      "tools/benchmark/external_preview_markdown.py",
       "tools/benchmark/hosted_preview.py",
       "tools/benchmark/performance_policy.py",
       "tools/benchmark/preview.py"
     ],
-    "aggregate_sha256": "6e6542947a177348600c4e10c837fb799fb0512487d9e77b7623323fda89c26b"
+    "aggregate_sha256": "749e628a54aa31228913e7d7e59fd0ef2c5d05ef02b40a7ee9b13d97ab9be92f"
   },
   "hosted_pr": {
     "tier": "informational_preview",
