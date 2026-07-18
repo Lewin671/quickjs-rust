@@ -3058,6 +3058,41 @@ is retained only as regression evidence with SHA-256
 Exact pushed performance and coverage artifacts remain required before this
 unit is closed.
 
+The pushed unit-52 closure is commit
+`562c3ec57def00389f638951714713abc2b18bc2`. CI run `29635023959`, Performance
+Preview run `29635023955`, and Test262 Coverage run `29635121251` all completed
+successfully. The downloaded performance artifact binds the candidate to that
+exact revision and contains a complete, verified 25/25-case broad run with all
+225/225 measurements eligible and all three blocks valid. Hosted
+candidate/base was **0.964125x** with a 95% confidence interval of
+[0.960787x, 0.971370x]; candidate/QuickJS-NG was 0.343608x with a 95%
+confidence interval of [0.342418x, 0.345492x]. Broad raw/report SHA-256 are
+`c234eaa735a3cc6a98a3737778338a84924491e0ffcee68bc600f6379f1551a8`
+and `28cf2d593d13f784b0119dec58a7396bfe1ecbf735f82b135b72836899875b2c`.
+
+The same hosted artifact does **not** close external coverage: the fixed
+15-second informational preview completed JetStream 5/5 but only Kraken 7/14
+and SunSpider 23/26. All ten missing comparisons are explicit qjs-rust
+timeouts (`ai-astar`, five additional Kraken audio/imaging cases, and three
+SunSpider string/regexp cases), while QuickJS-NG completed them. The partial
+comparable-case ratios of 10.824x, 6.400x, and 10.007x therefore remain
+diagnostic only and must not be presented as complete suite results. External
+raw/report SHA-256 are
+`36e0575a7778a6e3ae83e6a38c10b2da8a690cdf92ba0b23b952cb7f930e4f03`
+and `403244805fce920e12b1048bef24004a43fa4678da0f9e6036f225a936417574`.
+The independent same-host local inventory above remains the complete 45/45
+external comparison for this unit.
+
+Coverage recorded 42,671/42,672 configured qjs-rust passes and one actionable
+gap,
+`test/language/expressions/class/private-static-setter-multiple-evaluations-of-class-realm.js`;
+the comparison artifact confirms this is the sole QuickJS-NG-pass/qjs-rust-fail
+case. Coverage burndown/comparison SHA-256 are
+`25df7fae86a217e2a2e957c47c133a9b2c416ff3455cc7f339c524c515dd4bd2`
+and `44cdb54200fbbebbb9353ed4f93c3c39b80a7135d20c05ed0eb6f25806bf401b`.
+Unit 52 is closed as a broad structural performance improvement, not as B5 or
+100% Test262 completion.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
