@@ -3598,6 +3598,139 @@ mandatory: an architecture-specific internal win is not a general engine
 optimization. Unit 58 contributes rejection evidence only; B3, B4, and B5
 remain open.
 
+### Unit 59: rejected user-call environment writeback shortcut
+
+This unit is also recorded as a rejection, not performance progress. Commit
+`63dbd768` skipped the environment writeback after a user-function call when
+the callee could not mutate any name-addressed binding. The implementation was
+a general call-frame mechanism with no benchmark IDs or checksum branches, but
+mechanism-level generality alone is not sufficient: acceptance still requires
+portable broad and external evidence without trading one workload family for
+another.
+
+Hosted Performance Preview run `29657953046` compared the exact candidate
+binary `2075c3fceca53cfa09fb68342fdbc3b089888c27e223a991f0ac03dbca8f2578`
+against the exact protocol-baseline binary
+`bc35d9cb2f0ac0a6bcf07c1bcf8b9f94b13ac4c6991feedd38b940f557e2590a`.
+The unconditional broad candidate/base ratio was **0.998752x**, but its 95%
+confidence interval of [0.997096x, 1.005531x] crossed 1.00x. The focused hosted
+call shapes were mixed: `function_call_two_args` improved to 0.919801x and
+`top_level_function_call` to 0.972439x, while `array_index_of` regressed to
+1.046024x and `closure_allocation_call` to 1.041305x. Broad raw/report SHA-256
+are `e4d31669504e9e71d8ed6f65ca0226cdfc847c8e21053d72669840a029ef06b3`
+and `6fc7d3a5faa29ec412b36e361b0dada2b60116d877341af102ff7602958ffd1d`.
+
+The same hosted run did show small same-run external candidate/base gains:
+0.997402x across 5/5 comparable JetStream cases, 0.989929x across 6/14 Kraken
+cases, and 0.998013x across 26/26 SunSpider cases. Those results are evidence
+about this Linux runner, not a sufficient acceptance result. An independent
+five-block Apple-silicon audit did not reproduce either hosted call win:
+`function_call_two_args` was 1.00194x and `top_level_function_call` was
+1.00404x, while `array_index_of` and `closure_allocation_call` were 1.00057x
+and 0.99641x. Its raw SHA-256 is
+`dbfe162ed4a0b9a738ba88babfe701e432bfb8df5d232b501a5bbb34c5a44dc9`.
+Hosted external raw/report SHA-256 are
+`855bbbc4c8c30eb3249ab6034295b66cbe832d960f8983947add9a87fdb56d16`
+and `e40aebaa1ecb4dee0ebca66f36d0fcc626a61c3d435126c1757fdf81bafcd42d`.
+
+Commit `36ae2dea` therefore reverted unit 59. Hosted CI run `29659400697`,
+coverage run `29659492656`, and Performance Preview run `29659400691` all
+succeeded. Coverage remained 42,671/42,672 with one actionable gap and zero
+timeout. The restored candidate binary again has SHA-256
+`bc35d9cb2f0ac0a6bcf07c1bcf8b9f94b13ac4c6991feedd38b940f557e2590a`.
+The reverse broad comparison was 0.997875x with [0.991715x, 1.008582x]; the
+reverse external ratios were 1.014675x, 1.001979x, and 1.011904x for
+JetStream, Kraken, and SunSpider. Revert broad raw/report SHA-256 are
+`2bb7d7b63434a9c237b7f8fcdebe956d80b67eb688c354d2ede5a4181d4e1d7a`
+and `6ded17c0893a6506af7a739a648953bf36712f98fc4be70766eaf2de36d060f3`;
+external raw/report SHA-256 are
+`d628310f9eaf3f3aa1a4d15113b7507484f8cd7322e65c1fa0760a8369ea8113`
+and `ba19d4de8c746554cb5f9fa88b4f03cbcf2b5a6a18b4ed5afebfc3effdc13243`.
+Unit 59 is closed as rejection evidence: a narrow hosted win that is not
+portable and introduces other regressions cannot count as general engine
+optimization.
+
+### Unit 60: accepted small-object property storage with recorded broad tradeoff
+
+Commit `5a0c9cff` replaces the always-hashed property table for ordinary objects
+with a general two-tier representation. Objects retain up to eight own
+properties in an insertion-ordered small vector and promote to the existing
+SipHash-backed dynamic map on the ninth property. Large and adversarial-key
+objects therefore retain the existing hash-flooding protection; shaped object
+literals retain their shaped representation. The mechanism contains no
+benchmark identity, source-path, iteration-count, or checksum condition. It
+preserves descriptor behavior, numeric-key-before-string enumeration,
+delete/reinsert ordering, and the existing `ObjectData` size bound.
+
+The complete hosted three-role Performance Preview run `29660991986` compared
+candidate revision `5a0c9cff7ebcfe12abbe918fc0940fdc9621dde4` with exact base
+revision `36ae2dea5b03eaafe610a2eb6a57f560b30ba4c7`. Their executable
+SHA-256 values are
+`ed47cbf63c66bb4b9b844abeb2a3b3b1c91d70c22bdd3603b6947a0a6ebb1192`
+and
+`bc35d9cb2f0ac0a6bcf07c1bcf8b9f94b13ac4c6991feedd38b940f557e2590a`;
+the pinned QuickJS-NG executable remains
+`8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+All 75 linearity diagnostics passed and all three blocks were valid.
+
+The hosted broad result records a real tradeoff rather than an across-the-board
+win. Candidate/base was **1.008574x** overall with a 95% confidence interval of
+[1.004889x, 1.010198x]. The directly relevant allocation family improved to
+0.979045x base, while call and string improved to 0.994284x and 0.953584x.
+Array and property were effectively flat at 0.998750x and 0.999531x. Binding,
+control, and builtin moved to 1.022082x, 1.001362x, and 1.134355x; in
+particular, the unrelated `math_abs` and `array_index_of` cases measured
+1.209817x and 1.063600x base. These regressions remain follow-up liabilities
+and are not hidden by the aggregate.
+
+Candidate/QuickJS-NG was **0.359801x** overall. Seven families remain below
+QuickJS-NG, but allocation is still 2.726752x, so B4 is not complete despite
+the overall ratio being below 0.50x. Broad raw/report SHA-256 are
+`6a53496552b88499f36340964ace32ce1ba2a73c9850295e1babefc0d90459e0`
+and `1a0f12d45d9831f2c14725916bce9a1f7d87e629108dccd8afff367575025ae0`.
+
+The mandatory same-run external evidence moved in the desired direction on
+all three independent corpora:
+
+| Neutral shell port | Comparable | Candidate / base | Candidate wins vs base | Candidate / QuickJS-NG |
+| --- | ---: | ---: | ---: | ---: |
+| JetStream 3 JavaScript subset | 5/5 | 0.920256x | 4/5 | 9.829701x |
+| Kraken 1.1 | 7/14 | 0.972240x | 7/7 | 6.702010x |
+| SunSpider 1.0 | 26/26 | 0.995071x | 16/26 | 11.185109x |
+
+An independent Apple-silicon one-block diagnostic also moved all three suites
+in the same direction: 0.907655x, 0.989059x, and 0.991116x base over 5/5,
+13/14, and 26/26 comparable cases. Its external raw/report SHA-256 are
+`0ca30ac9b6048284b8dd4b42c18ddc8a41fe3696a52ac3ff2e1d38c5b037c3ec`
+and `c8b61f62ab9fb09a55caf390e5014f876caa4058c37516f5aa4dc90e4e0b9e25`.
+The corresponding local broad diagnostic was 0.987344x base, but it had only
+one block and no formal build receipts, so it is not used to override the
+hosted broad regression; its raw SHA-256 is
+`e29ddba79a4b5f1e47cb8d9ce6477dcb69acbdb99179845ebbd91227034da109`.
+
+Hosted external raw/report SHA-256 are
+`5bf9a8b5ab0d02476711aa17196c591b0d17a1854dd9613274eebfd5499f9fc1`
+and `5d74ccbee15fc4fee2272a797853865d7ed4b3623088179e323d535af07bd7df`.
+Every external comparison against QuickJS-NG still loses, so this unit is not
+B5 progress and makes no official upstream-suite score claim.
+
+Focused small-storage tests cover promotion, numeric enumeration, and removal
+ordering. The complete local gate passed 1,399 runtime tests, all 198 benchmark
+tool tests, and 5,139 Test262 subset cases; QuickJS-NG comparison smoke tests
+also passed. Hosted CI run `29660991977` and Test262 Coverage run
+`29661093222` succeeded. Coverage remained 42,671/42,672 with one actionable
+gap and zero timeout; burndown/comparison SHA-256 are
+`7e772d8063ea61126d77e01d9bca883db866fdc038f9914d10897156b112e311`
+and `94a97687babcdfba02efff77997af0a59fa7ddfb08a2370d03fbb933de069e69`.
+
+Unit 60 is accepted as B3 campaign progress because a general representation
+change produced repeatable, same-direction improvements on all three external
+corpora and improved the sole remaining above-ceiling broad family. It is not
+accepted as an internal-benchmark win: the hosted broad regression is an
+explicit cost, and subsequent work must recover the unrelated binding and
+builtin movement without giving back the external gains. The campaign remains
+open with zero external wins against QuickJS-NG.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
