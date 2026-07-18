@@ -197,26 +197,24 @@ impl NumericLoopPlan {
         let mut accumulator_slot = None;
         let mut terms = Vec::new();
         while cursor < tail {
-            let (term_accumulator_slot, term, suffix) =
-                if let Some(Op::LoadLocal(term_accumulator_slot)) = code.get(cursor) {
-                    let (term, suffix) = NumericLoopTerm::compile(
-                        bytecode,
-                        cursor + 1,
-                        *counter_slot,
-                        *term_accumulator_slot,
-                    )?;
-                    (*term_accumulator_slot, term, suffix)
-                } else {
-                    let (term, suffix) = NumericLoopTerm::compile_reordered_global_call(
-                        bytecode,
-                        cursor,
-                        *counter_slot,
-                    )?;
-                    let Op::LoadLocal(term_accumulator_slot) = code.get(suffix)? else {
-                        return None;
-                    };
-                    (*term_accumulator_slot, term, suffix + 1)
+            let accumulator_first = match code.get(cursor) {
+                Some(Op::LoadLocal(term_accumulator_slot)) => NumericLoopTerm::compile(
+                    bytecode,
+                    cursor + 1,
+                    *counter_slot,
+                    *term_accumulator_slot,
+                )
+                .map(|(term, suffix)| (*term_accumulator_slot, term, suffix)),
+                _ => None,
+            };
+            let (term_accumulator_slot, term, suffix) = accumulator_first.or_else(|| {
+                let (term, suffix) =
+                    NumericLoopTerm::compile_reordered_call(bytecode, cursor, *counter_slot)?;
+                let Op::LoadLocal(term_accumulator_slot) = code.get(suffix)? else {
+                    return None;
                 };
+                Some((*term_accumulator_slot, term, suffix + 1))
+            })?;
             let (
                 Op::Binary(BinaryOp::Add),
                 Op::Dup,
@@ -323,23 +321,27 @@ impl NumericLoopPlan {
 }
 
 impl NumericLoopTerm {
-    fn compile_reordered_global_call(
+    fn compile_reordered_call(
         bytecode: &Bytecode,
         cursor: usize,
         counter_slot: usize,
     ) -> Option<(Self, usize)> {
-        let Op::LoadGlobal(name) = bytecode.code.get(cursor)? else {
-            return None;
+        let (global_name, local_slot) = match bytecode.code.get(cursor)? {
+            Op::LoadGlobal(name) => (Some(name.clone()), None),
+            Op::LoadLocal(callee_slot) => (None, Some(*callee_slot)),
+            _ => return None,
         };
         let (arguments, suffix) =
             compile_call_arguments(bytecode, cursor + 1, counter_slot, false)?;
-        Some((
-            Self::GlobalCall {
-                name: name.clone(),
+        let term = match (global_name, local_slot) {
+            (Some(name), None) => Self::GlobalCall { name, arguments },
+            (None, Some(callee_slot)) => Self::LocalCall {
+                callee_slot,
                 arguments,
             },
-            suffix,
-        ))
+            _ => unreachable!("reordered call has exactly one callee route"),
+        };
+        Some((term, suffix))
     }
 
     fn compile(
@@ -498,10 +500,10 @@ impl NumericLoopTerm {
     fn prepare(&self, vm: &mut Vm<'_>) -> Option<PreparedNumericLoopTerm> {
         match self {
             Self::LocalRead { slot } => {
-                if !vm.slot_is_authoritative(*slot) {
+                if !slot_is_stable_read(vm, *slot) {
                     return None;
                 }
-                local_number(vm, *slot).map(PreparedNumericLoopTerm::Stable)
+                local_number_read(vm, *slot).map(PreparedNumericLoopTerm::Stable)
             }
             Self::GlobalRead { name } => {
                 if vm.bytecode.local_slot(name).is_some()
@@ -519,13 +521,13 @@ impl NumericLoopTerm {
                 receiver_slot,
                 cache,
             } => {
-                if !vm.slot_is_authoritative(*receiver_slot) {
+                if !slot_is_stable_read(vm, *receiver_slot) {
                     return None;
                 }
-                let Some(Some(Value::Object(object))) = vm.locals.get(*receiver_slot) else {
+                let Some(Value::Object(object)) = vm.local_slot_value(*receiver_slot) else {
                     return None;
                 };
-                match cache.get(object)? {
+                match cache.get(&object)? {
                     Value::Number(value) => Some(PreparedNumericLoopTerm::Stable(value)),
                     _ => None,
                 }
@@ -534,13 +536,12 @@ impl NumericLoopTerm {
                 receiver_slot,
                 key_slot,
             } => {
-                if !vm.slot_is_authoritative(*receiver_slot) || !vm.slot_is_authoritative(*key_slot)
-                {
+                if !slot_is_stable_read(vm, *receiver_slot) || !slot_is_stable_read(vm, *key_slot) {
                     return None;
                 }
-                let receiver = vm.locals.get(*receiver_slot)?.as_ref()?;
-                let key = vm.locals.get(*key_slot)?.as_ref()?;
-                match (receiver, key) {
+                let receiver = vm.local_slot_value(*receiver_slot)?;
+                let key = vm.local_slot_value(*key_slot)?;
+                match (&receiver, &key) {
                     (Value::Object(object), Value::String(key)) => {
                         match object.own_data_property_read(key) {
                             OwnDataPropertyRead::Data(Value::Number(value)) => {
@@ -563,10 +564,10 @@ impl NumericLoopTerm {
                 receiver_slot,
                 index,
             } => {
-                if !vm.slot_is_authoritative(*receiver_slot) {
+                if !slot_is_stable_read(vm, *receiver_slot) {
                     return None;
                 }
-                let Some(Some(Value::Array(array))) = vm.locals.get(*receiver_slot) else {
+                let Some(Value::Array(array)) = vm.local_slot_value(*receiver_slot) else {
                     return None;
                 };
                 match array.direct_dense_index_value(*index)? {
@@ -599,20 +600,20 @@ impl NumericLoopTerm {
                 callee_slot,
                 arguments,
             } => {
-                if !vm.slot_is_authoritative(*callee_slot) {
+                if !slot_is_stable_read(vm, *callee_slot) {
                     return None;
                 }
-                let Some(Some(Value::Function(function))) = vm.locals.get(*callee_slot) else {
+                let Some(Value::Function(function)) = vm.local_slot_value(*callee_slot) else {
                     return None;
                 };
-                Self::prepare_call(function.clone(), arguments, vm)
+                Self::prepare_call(function, arguments, vm)
             }
             Self::MethodCall {
                 receiver_slot,
                 key,
                 arguments,
             } => {
-                if !vm.slot_is_authoritative(*receiver_slot) {
+                if !slot_is_stable_read(vm, *receiver_slot) {
                     return None;
                 }
                 if let Some(term) =
@@ -620,7 +621,7 @@ impl NumericLoopTerm {
                 {
                     return Some(term);
                 }
-                let Some(Some(Value::Object(object))) = vm.locals.get(*receiver_slot) else {
+                let Some(Value::Object(object)) = vm.local_slot_value(*receiver_slot) else {
                     return None;
                 };
                 let OwnDataPropertyRead::Data(Value::Function(function)) =
@@ -808,6 +809,10 @@ fn local_number_read(vm: &Vm<'_>, slot: usize) -> Option<f64> {
     }
 }
 
+fn slot_is_stable_read(vm: &Vm<'_>, slot: usize) -> bool {
+    vm.slot_is_authoritative(slot) || vm.slot_is_realm_binding(slot)
+}
+
 fn set_local_number(vm: &mut Vm<'_>, slot: usize, value: f64) {
     vm.locals[slot] = Some(Value::Number(value));
 }
@@ -859,15 +864,15 @@ mod tests {
 
     #[test]
     fn recognizes_stable_global_read_accumulation_loop() {
-        let bytecode = nested_function(
-            "var value = 2; function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s += value; } return s; }",
-        );
+        let source = "var value = 2; function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s += value; } return s; }";
+        let bytecode = nested_function(source);
         let plans = NumericLoopPlan::compile_all(&bytecode);
         assert_eq!(plans.len(), 1);
-        assert!(matches!(
-            plans[0].terms.as_slice(),
-            [NumericLoopTerm::GlobalRead { name }] if name == "value"
-        ));
+        let [NumericLoopTerm::LocalRead { slot }] = plans[0].terms.as_slice() else {
+            panic!("read-only global should compile as a realm-cell local read");
+        };
+        assert!(bytecode.local_is_from_env(*slot));
+        assert_eq!(eval(&format!("{source} sum(4);")), Ok(Value::Number(8.0)));
     }
 
     #[test]
@@ -992,12 +997,13 @@ mod tests {
     }
 
     #[test]
-    fn reordered_local_calls_are_not_loop_terms() {
+    fn recognizes_reordered_numeric_local_call_and_rejects_counter_accumulation() {
         let source = "function sum(n) { var offset = 1; var leaf = function (value) { return value + offset; }; var s = 0; for (var i = 0; i < n; i++) { s = leaf(i) + s; } return s; }";
         let bytecode = nested_function(source);
-        assert!(
-            NumericLoopPlan::compile_all(&bytecode).is_empty(),
-            "{source}"
+        assert_eq!(NumericLoopPlan::compile_all(&bytecode).len(), 1, "{source}");
+        assert_eq!(
+            eval(&format!("{source} sum(1000);")),
+            Ok(Value::Number(500500.0))
         );
 
         let counter_source =

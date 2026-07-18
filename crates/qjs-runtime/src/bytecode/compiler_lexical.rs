@@ -165,16 +165,12 @@ impl Compiler {
         function_local_names: &[String],
     ) -> Vec<LexicalCapture> {
         let mut captures = Vec::new();
-        for name in function_bytecode
-            .global_names()
+        let global_names = function_bytecode.global_names();
+        let written_names = function_bytecode.written_binding_names();
+        for name in global_names
             .iter()
             .map(String::as_str)
-            .chain(
-                function_bytecode
-                    .written_binding_names()
-                    .iter()
-                    .map(String::as_str),
-            )
+            .chain(written_names.iter().map(String::as_str))
             .chain(function_bytecode.local_names())
         {
             // Compiler temporaries are owned by the function whose prologue or
@@ -191,7 +187,13 @@ impl Compiler {
             {
                 continue;
             }
-            if let Some(slot) = self.resolve_active_capture_slot(name)
+            let read_only_global = !function_bytecode.contains_direct_eval()
+                && !written_names.iter().any(|written| written == name)
+                && (global_names.iter().any(|global| global == name)
+                    || function_bytecode
+                        .local_slot(name)
+                        .is_some_and(|slot| function_bytecode.local_is_from_env(slot)));
+            if let Some(slot) = self.resolve_active_capture_slot(name, read_only_global)
                 && !captures
                     .iter()
                     .any(|capture: &LexicalCapture| capture.slot == slot)
@@ -213,7 +215,7 @@ impl Compiler {
             && function_local_names
                 .binary_search_by(|local| local.as_str().cmp("this"))
                 .is_err()
-            && let Some(slot) = self.resolve_active_capture_slot("this")
+            && let Some(slot) = self.resolve_active_capture_slot("this", false)
             && !captures
                 .iter()
                 .any(|capture: &LexicalCapture| capture.slot == slot)
@@ -256,9 +258,19 @@ impl Compiler {
     /// Lexical scopes win over same-named function-environment bindings;
     /// parameters and body `var`/function declarations are otherwise
     /// capturable even though they live in `local_slots` rather than
-    /// `lexical_scopes`. Global `var` bindings deliberately stay realm-backed.
-    fn resolve_active_capture_slot(&self, name: &str) -> Option<usize> {
+    /// `lexical_scopes`. A read-only reference to a statically known global
+    /// `var` may receive the realm's shared cell too; any function that writes
+    /// the name keeps the global operations so descriptor checks remain on the
+    /// name-addressed path.
+    fn resolve_active_capture_slot(&self, name: &str, read_only_global: bool) -> Option<usize> {
         self.resolve_active_lexical_slot(name).or_else(|| {
+            if self.global_scope
+                && !self.direct_eval_source
+                && read_only_global
+                && self.global_hoisted.contains(name)
+            {
+                return self.local_slots.get(name).copied();
+            }
             (!self.global_scope && !self.direct_eval_source)
                 .then(|| self.resolve_local_slot(name))
                 .flatten()
@@ -625,6 +637,88 @@ mod tests {
         );
         assert!(
             !bytecode
+                .code
+                .iter()
+                .any(|op| matches!(op, Op::LoadGlobal(name) if name == "value"))
+        );
+    }
+
+    #[test]
+    fn nested_read_only_global_uses_realm_cell_but_writer_stays_global() {
+        let script = qjs_parser::parse_script(
+            "var value = 1; function read() { return value; } function write() { value = 2; return value; }",
+        )
+        .expect("source should parse");
+        let top = super::super::compiler::compile_script(&script).expect("source should compile");
+
+        let nested = |function_name: &str| {
+            top.code
+                .iter()
+                .find_map(|op| match op {
+                    Op::NewFunction {
+                        name: Some(name),
+                        bytecode,
+                        lexical_captures,
+                        ..
+                    } if name == function_name => Some((bytecode, lexical_captures)),
+                    _ => None,
+                })
+                .expect("nested function should be emitted")
+        };
+
+        let (reader, reader_captures) = nested("read");
+        assert_eq!(reader_captures.len(), 1);
+        assert_eq!(reader_captures[0].0, "value");
+        let reader_slot = reader
+            .local_slot("value")
+            .expect("reader should receive the realm cell in a slot");
+        assert!(reader.local_is_from_env(reader_slot));
+        assert!(
+            reader
+                .code
+                .iter()
+                .any(|op| matches!(op, Op::LoadLocal(slot) if *slot == reader_slot))
+        );
+
+        let (writer, writer_captures) = nested("write");
+        assert!(writer_captures.is_empty());
+        assert!(
+            writer
+                .code
+                .iter()
+                .any(|op| matches!(op, Op::LoadGlobal(name) if name == "value"))
+        );
+        assert!(writer.code.iter().any(|op| matches!(
+            op,
+            Op::StoreLocalOrGlobalSloppy { name, .. } if name == "value"
+        )));
+    }
+
+    #[test]
+    fn nested_direct_eval_keeps_read_only_globals_name_addressed() {
+        let script = qjs_parser::parse_script(
+            "var value = 1; function read() { eval('var value = 2'); return value; }",
+        )
+        .expect("source should parse");
+        let top = super::super::compiler::compile_script(&script).expect("source should compile");
+        let (reader, captures) = top
+            .code
+            .iter()
+            .find_map(|op| match op {
+                Op::NewFunction {
+                    name: Some(name),
+                    bytecode,
+                    lexical_captures,
+                    ..
+                } if name == "read" => Some((bytecode, lexical_captures)),
+                _ => None,
+            })
+            .expect("nested function should be emitted");
+
+        assert!(captures.is_empty());
+        assert!(reader.contains_direct_eval());
+        assert!(
+            reader
                 .code
                 .iter()
                 .any(|op| matches!(op, Op::LoadGlobal(name) if name == "value"))

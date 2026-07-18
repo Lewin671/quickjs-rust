@@ -266,9 +266,10 @@ impl Vm<'_> {
             || (self.bytecode.global_scope
                 && self.bytecode.local_is_body_hoist_only(slot)
                 && !is_compiler_temporary(&local_meta.name));
-        if syncs_global_var
-            && let Some(Value::Object(global_this)) =
-                self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
+        let global_this = syncs_global_var
+            .then(|| self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned())
+            .flatten();
+        if let Some(Value::Object(global_this)) = global_this
             && global_this.has_own_property(&local_meta.name)
         {
             global_this
@@ -360,4 +361,19 @@ pub(super) fn primitive_append_suffix(value: Value) -> Result<String, Value> {
         Value::Undefined => "undefined".to_owned(),
         value => return Err(value),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Value, eval};
+
+    #[test]
+    fn captured_global_string_append_releases_realm_read_before_sync() {
+        assert_eq!(
+            eval(
+                "var trace = ''; function outer() { return function() { trace += '1'; }; } outer()(); trace;"
+            ),
+            Ok(Value::String("1".to_owned().into()))
+        );
+    }
 }
