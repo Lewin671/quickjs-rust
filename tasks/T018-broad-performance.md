@@ -3428,6 +3428,62 @@ improvement. The goal remains open because every comparable hosted external
 case still loses and external throughput remains roughly 6.8--11.0x slower
 than QuickJS-NG on the hosted inventory.
 
+### Unit 57: copy-on-write eval conflict metadata
+
+Runtime commit `06c96adf` changes per-function `catch_bindings` and
+`direct_eval_var_conflicts` metadata from owned `HashSet<String>` values to
+shared `Rc<HashSet<String>>` values. Ordinary call frames now clone two
+reference-counted pointers instead of cloning both hash tables; the uncommon
+paths that discover new catch or direct-eval conflicts preserve isolation with
+`Rc::make_mut`. This is a general call-environment representation improvement:
+it applies independently of benchmark identity, source path, iteration count,
+checksum, or expected result. A focused test verifies the copy-on-write
+boundary between parent and child frames.
+
+An earlier prototype that reset both sets to empty in child frames was
+rejected. Although it helped closure and dynamic-method calls, its five-block
+focused aggregate was **1.016x** base and `top_level_function_call` regressed
+about 22.7%. The accepted representation keeps the inherited semantics and
+eliminates the common clone cost instead of assuming that the metadata is
+irrelevant.
+
+The accepted candidate and frozen unit-56 base binary SHA-256 values are
+`4d50f538db4c3b71ca19fa1d3f0c41a72073d61663318090d801f89b7d678539`
+and `fc01c52272370d48ee71caa6963ce88a0cc649b8c983c8ee04db82c1518decdf`.
+A five-block affected-and-control audit measured **0.970893x** overall:
+`closure_allocation_call` 0.929553x, `dynamic_method_call` 0.944619x,
+`plain_function_call` 1.002990x, and `top_level_function_call` 1.008922x.
+Its raw SHA-256 is
+`43862921ba129750d3d7f9aa4361b20d221d373ef5436bdc36bec8595c5abf5f`.
+
+The complete 25/25-case, 50/50-eligible one-block broad run measured
+candidate/base **0.998799x**. Allocation was 0.983529x and call was 0.995145x;
+the apparent one-block string, empty-loop, and plain-call regressions were
+audited separately rather than ignored. The broad raw SHA-256 is
+`c65be083bfdd7c95d9b4d94e76ae5eb8dfe4f053fcd1b08854f3d34500a16c36`.
+That independent five-block control rerun measured **0.994921x** overall,
+with `object_allocation` 1.012008x, `plain_function_call` 0.993994x,
+`empty_loop` 0.992101x, and `string_concat` 0.981817x. Its raw SHA-256 is
+`638356598cd4aa32d787d735412715fc63266e32c033239da119c2a375d51692`.
+
+The exact 60-second external run completed all 45/45 cases. Relative to the
+exact unit-56 local inventory, candidate duration geometric means were
+1.010063x for JetStream, 0.983659x for Kraken, and 0.984789x for SunSpider;
+10/14 Kraken and 20/26 SunSpider cases improved. Candidate/QuickJS-NG remains
+**7.443087x**, **4.861760x**, and **6.273050x**, respectively, with zero
+qjs-rust wins. This satisfies the per-unit external-generalization audit but
+is far from the campaign target. External raw/report SHA-256 are
+`700b34a4e2e85ed8640d66e869f3eb1c6e76054d1a98b3286776e1443c688912`
+and `f7eeffe1be41d80e6c5197b09d0ffd178b44641d7d219b8277852a270d65b134`.
+
+Local correctness gates passed all 1,396 runtime tests, 67 focused eval/catch
+Test262 cases, the staged gate including 49 function Test262 cases, all 205
+QuickJS-NG comparisons, and the full repository check including 5,139 Test262
+subset cases. Hosted CI, broad, external, and coverage artifacts are still
+required before closing this unit. The goal remains open: the general call-path
+improvement is real, but external suites are still 4.86--7.44x slower than
+QuickJS-NG and have no qjs-rust wins.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
