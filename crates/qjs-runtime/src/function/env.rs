@@ -37,6 +37,8 @@ pub(crate) struct RealmState {
     binding_cells: DynamicBindings,
     global_this: Option<Value>,
     dynamic_function_realm_global: RefCell<Option<ObjectRef>>,
+    empty_names: Rc<HashSet<String>>,
+    empty_module_imports: ModuleImports,
 }
 
 impl RealmState {
@@ -54,7 +56,17 @@ impl RealmState {
             binding_cells: DynamicBindings::new(),
             global_this,
             dynamic_function_realm_global: RefCell::new(dynamic_function_realm_global),
+            empty_names: Rc::new(HashSet::new()),
+            empty_module_imports: Rc::new(HashMap::new()),
         }
+    }
+
+    fn empty_names(&self) -> Rc<HashSet<String>> {
+        Rc::clone(&self.empty_names)
+    }
+
+    fn empty_module_imports(&self) -> ModuleImports {
+        Rc::clone(&self.empty_module_imports)
     }
 
     pub(crate) fn borrow(&self) -> Ref<'_, HashMap<String, Value>> {
@@ -800,8 +812,11 @@ impl CallEnv {
     /// contract excludes direct eval, `with`, closures, and special lexical
     /// bindings. Function-owned private and module state is installed by the
     /// caller after construction, so copying the caller's transient maps here
-    /// would only allocate them before immediately replacing them.
+    /// would only allocate them before immediately replacing them. Empty
+    /// copy-on-write metadata is shared by the realm, avoiding three heap
+    /// allocations per leaf call while preserving isolation on mutation.
     pub(crate) fn new_direct_leaf_function_frame(&self) -> Self {
+        let empty_names = self.realm.empty_names();
         Self {
             realm: Rc::clone(&self.realm),
             global_lexical_bindings: Rc::clone(&self.global_lexical_bindings),
@@ -810,13 +825,13 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
             frame_bindings: FrameBindings::default(),
             deopt_bindings: None,
-            catch_bindings: Default::default(),
+            catch_bindings: Rc::clone(&empty_names),
             immutable_function_name: None,
-            direct_eval_var_conflicts: Default::default(),
+            direct_eval_var_conflicts: empty_names,
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
             module_host: self.module_host.clone(),
-            module_imports: Default::default(),
+            module_imports: self.realm.empty_module_imports(),
             module_live_bindings: None,
             #[cfg(feature = "agents")]
             agent_context: self.agent_context.clone(),
@@ -1352,6 +1367,32 @@ mod tests {
         assert!(callee.is_catch_binding("callee_catch"));
         assert!(!callee.is_direct_eval_var_conflict("caller_lexical"));
         assert!(callee.is_direct_eval_var_conflict("callee_lexical"));
+    }
+
+    #[test]
+    fn direct_leaf_frames_share_realm_empty_metadata_until_mutated() {
+        let root = CallEnv::new(new_realm(HashMap::new()));
+        let mut first = root.new_direct_leaf_function_frame();
+        let second = root.new_direct_leaf_function_frame();
+
+        assert!(Rc::ptr_eq(&first.catch_bindings, &second.catch_bindings));
+        assert!(Rc::ptr_eq(
+            &first.direct_eval_var_conflicts,
+            &second.direct_eval_var_conflicts
+        ));
+        assert!(Rc::ptr_eq(&first.module_imports, &second.module_imports));
+
+        first.mark_catch_binding("catch".to_owned());
+        first.mark_direct_eval_var_conflict("lexical".to_owned());
+        first.set_module_import(
+            "local".to_owned(),
+            DynamicBindings::new(),
+            "exported".to_owned(),
+        );
+
+        assert!(!second.is_catch_binding("catch"));
+        assert!(!second.is_direct_eval_var_conflict("lexical"));
+        assert!(!second.has_module_import("local"));
     }
 
     #[test]
