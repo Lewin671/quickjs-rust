@@ -4042,6 +4042,46 @@ binding buffer or replace direct-eval value copying and name-based writeback
 with shared slot/upvalue cells; it must preserve the external gains and recover
 the builtin code-layout debt rather than specializing a benchmark source.
 
+### Unit 65: rejected streamed dynamic-environment writeback
+
+The uncommitted Unit 65 prototype attempted the smaller of those follow-ups:
+it moved direct frame values through a callback instead of allocating the
+temporary visible-binding `Vec`, froze cell-backed values before callbacks,
+and avoided direct-parameter shadow sets outside parameter prologues. The
+prototype changed only the general environment representation and
+`Vm::apply_env`; it contained no workload identity, source, checksum, or
+iteration matching. Focused visible-binding and direct-eval tests passed, as
+did all-target clippy, but the mechanism added 188 lines while removing 79.
+
+An exact local A/B used Unit 64 binary SHA-256
+`c42b6774060e58d8a510371dd62b48086877c984cffe3cd9bba4f164e7039381`
+and prototype SHA-256
+`7ad50da46a6894f4645906a3c13f59045aeddcc942c44ae8fc2f2cf17091f157`.
+After warmup, twenty paired external blocks produced robust median
+candidate/base ratios of 0.999855x for `date-format-tofte`, 0.998219x for
+`date-format-xparb`, and 0.999425x for `string-tagcloud`. Geometric means moved
+more because of noisy long-tail samples, but the medians show no repeatable
+general gain.
+
+A six-block diagnostic broad slice agreed. Formal measurement samples gave
+median candidate/base ratios of 1.000491x for `array_index_of`, 1.004113x for
+`dynamic_method_call`, 1.000402x for `many_locals_call`, 1.002385x for
+`plain_function_call`, and 1.000056x for `top_level_function_call`. The raw
+SHA-256 is
+`c68e7424d4e025d920bac2bdf5fcee17ebd3675186812d69c2d4a629475efa82`.
+The report correctly rejected this deliberately incomplete case selection as
+an identity/completeness mismatch, so these values are local diagnostics, not
+a portfolio claim.
+
+Unit 65 is rejected without a runtime commit or hosted preview. It neither
+improved the independent external workloads nor the selected broad paths by a
+material amount, and accepting its added representation complexity would
+violate the campaign's general-performance and anti-overfitting rules. The
+next unit must attack the structural cost that streaming could not remove:
+direct eval still copies values into a name-based environment and writes them
+back by name. Shared slot/upvalue cells are the intended mechanism; acceptance
+still requires complete broad and mandatory external evidence.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
