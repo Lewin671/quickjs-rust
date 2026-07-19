@@ -693,6 +693,9 @@ pub struct Bytecode {
     pub(super) constants: Vec<Value>,
     pub(super) locals: Vec<Local>,
     local_slots: HashMap<String, usize>,
+    /// Compiled local slot for each positional parameter. Function bytecode
+    /// preserves duplicate parameter positions so direct-call seeding can use
+    /// this vector without repeating name-table lookups.
     parameter_slots: Vec<usize>,
     received_upvalue_slots: Vec<usize>,
     /// Whether direct-call frame setup may need per-local upvalue storage for
@@ -746,6 +749,17 @@ pub struct Bytecode {
 impl Bytecode {
     pub(super) fn new(constants: Vec<Value>, locals: Vec<Local>, code: Vec<Op>) -> Self {
         Self::with_scope(constants, locals, code, false)
+    }
+
+    pub(super) fn new_function(
+        constants: Vec<Value>,
+        locals: Vec<Local>,
+        code: Vec<Op>,
+        parameter_slots: Vec<usize>,
+    ) -> Self {
+        let mut bytecode = Self::new(constants, locals, code);
+        bytecode.parameter_slots = parameter_slots;
+        bytecode
     }
 
     pub(super) fn with_scope(
@@ -998,7 +1012,7 @@ impl Bytecode {
         self.local_slots.get(name).copied()
     }
 
-    pub(super) fn parameter_slots(&self) -> &[usize] {
+    pub(crate) fn parameter_slots(&self) -> &[usize] {
         &self.parameter_slots
     }
 
@@ -1434,6 +1448,13 @@ mod tests {
         let oversized = Vec::with_capacity(Bytecode::MAX_RECYCLED_OPERAND_STACK_CAPACITY + 1);
         bytecode.recycle_operand_stack(oversized);
         assert!(bytecode.operand_stack_pool.borrow().is_none());
+    }
+
+    #[test]
+    fn direct_parameter_slots_preserve_duplicate_positions() {
+        let bytecode = Bytecode::new_function(Vec::new(), Vec::new(), Vec::new(), vec![3, 3, 7]);
+
+        assert_eq!(bytecode.parameter_slots(), &[3, 3, 7]);
     }
 
     #[test]

@@ -140,7 +140,7 @@ pub(crate) fn eval_function_bytecode(
 
 pub(crate) struct DirectCallSlots<'a> {
     pub(crate) this_value: Option<Value>,
-    pub(crate) params: &'a qjs_ast::FunctionParams,
+    pub(crate) parameter_slots: &'a [usize],
     pub(crate) arguments: &'a [Value],
     pub(crate) upvalues: &'a [crate::function::Upvalue],
     pub(crate) realm_upvalue_slots: u128,

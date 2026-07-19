@@ -890,7 +890,7 @@ fn numeric_leaf_plan_preserves_rounding_and_terminal_update_fallbacks() {
 }
 
 #[test]
-fn numeric_leaf_falls_back_for_duplicate_parameter_slots() {
+fn numeric_leaf_handles_duplicate_parameter_slots() {
     assert_eq!(
         eval("function duplicate(value, value) { return value + 1; } duplicate(2, 4);"),
         Ok(Value::Number(5.0))

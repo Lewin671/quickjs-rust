@@ -679,7 +679,7 @@ struct FunctionCallEnv<'a> {
 
 fn direct_leaf_function_env<'a>(
     function: &'a Function,
-    bytecode: &Bytecode,
+    bytecode: &'a Bytecode,
     this_value: Value,
     argument_values: &'a [Value],
     env: &CallEnv,
@@ -706,7 +706,7 @@ fn direct_leaf_function_env<'a>(
         env: frame_env,
         direct_call_slots: Some(DirectCallSlots {
             this_value: direct_this_value,
-            params: &function.params,
+            parameter_slots: bytecode.parameter_slots(),
             arguments: argument_values,
             upvalues: &function.upvalues,
             realm_upvalue_slots: function.realm_upvalue_slots,
@@ -716,7 +716,7 @@ fn direct_leaf_function_env<'a>(
 
 fn function_env<'a>(
     function: &'a Function,
-    bytecode: &Bytecode,
+    bytecode: &'a Bytecode,
     callee: &Value,
     this_value: Value,
     argument_values: &'a [Value],
@@ -884,7 +884,7 @@ fn function_env<'a>(
     }
     let direct_call_slots = use_direct_call_slots.then(|| DirectCallSlots {
         this_value: direct_this_value,
-        params: &function.params,
+        parameter_slots: bytecode.parameter_slots(),
         arguments: argument_values,
         upvalues: &function.upvalues,
         realm_upvalue_slots: function.realm_upvalue_slots,

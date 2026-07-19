@@ -294,9 +294,10 @@ impl Compiler {
     ) -> Result<Bytecode, RuntimeError> {
         self.global_scope = false;
         self.strict = self.strict || is_strict_function_body(body);
+        let mut direct_parameter_slots = Vec::with_capacity(params.positional.len());
         for (index, element) in params.positional.iter().enumerate() {
             let binding_name = parameter_binding_name(&element.binding, index);
-            self.parameter_slot(&binding_name);
+            direct_parameter_slots.push(self.parameter_slot(&binding_name));
         }
         if let Some(rest) = &params.rest {
             let binding_name = rest_parameter_binding_name(rest);
@@ -330,7 +331,12 @@ impl Compiler {
         })?;
         self.emit_load_undefined();
         self.code.push(Op::Return);
-        Ok(Bytecode::new(self.constants, self.locals, self.code))
+        Ok(Bytecode::new_function(
+            self.constants,
+            self.locals,
+            self.code,
+            direct_parameter_slots,
+        ))
     }
 
     /// `nested` is true once recursion descends below the top level of the body

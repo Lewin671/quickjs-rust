@@ -352,19 +352,13 @@ impl<'a> Vm<'a> {
         } else {
             None
         };
-        for (index, element) in direct_call_slots.params.positional.iter().enumerate() {
-            let qjs_ast::BindingPattern::Identifier { name, .. } = &element.binding else {
-                debug_assert!(false, "direct call slots require simple parameters");
-                continue;
-            };
+        for (index, &slot) in direct_call_slots.parameter_slots.iter().enumerate() {
             let value = direct_call_slots
                 .arguments
                 .get(index)
                 .cloned()
                 .unwrap_or(Value::Undefined);
-            if let Some(slot) = bytecode.local_slot(name) {
-                locals[slot] = Some(value);
-            }
+            locals[slot] = Some(value);
         }
         direct_this
     }
