@@ -39,9 +39,42 @@ impl Vm<'_> {
             let arguments = argument.as_slice();
             return self.call_direct_leaf_callee(callee, Value::Undefined, arguments);
         }
+        let fixed_multi_argument_direct_leaf = argc <= 3
+            && self
+                .stack
+                .len()
+                .checked_sub(argc + 1)
+                .and_then(|index| self.stack.get(index))
+                .is_some_and(is_direct_leaf_function);
+        if fixed_multi_argument_direct_leaf {
+            return self.call_fixed_multi_argument_direct_leaf(argc);
+        }
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
         self.call_callee(callee, Value::Undefined, arguments)
+    }
+
+    // Keep the fixed-array setup out of the main opcode dispatch body. The
+    // zero/one-argument path is hotter across the broad workload, and inlining
+    // all three shapes makes that unrelated path measurably slower.
+    #[inline(never)]
+    fn call_fixed_multi_argument_direct_leaf(&mut self, argc: usize) -> Result<(), RuntimeError> {
+        match argc {
+            2 => {
+                let second = self.pop()?;
+                let first = self.pop()?;
+                let callee = self.pop()?;
+                self.call_direct_leaf_callee(callee, Value::Undefined, &[first, second])
+            }
+            3 => {
+                let third = self.pop()?;
+                let second = self.pop()?;
+                let first = self.pop()?;
+                let callee = self.pop()?;
+                self.call_direct_leaf_callee(callee, Value::Undefined, &[first, second, third])
+            }
+            _ => unreachable!("fixed multi-argument calls contain two or three values"),
+        }
     }
 
     pub(super) fn call_direct_eval(
