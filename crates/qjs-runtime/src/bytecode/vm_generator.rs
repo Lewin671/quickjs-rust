@@ -120,7 +120,7 @@ pub(crate) fn is_suspended_at_plain_yield(generator: &ObjectRef) -> bool {
 impl Vm<'_> {
     /// Captures the running generator body's state at a `yield`.
     fn into_snapshot(
-        self,
+        mut self,
         bytecode: Rc<Bytecode>,
         suspension: SuspensionKind,
     ) -> GeneratorSnapshot {
@@ -128,7 +128,7 @@ impl Vm<'_> {
         GeneratorSnapshot {
             bytecode,
             ip: self.ip,
-            stack: self.stack,
+            stack: self.stack.take(),
             locals: self.locals,
             local_upvalues: self.local_upvalues,
             upvalues: self.upvalues,
@@ -225,7 +225,7 @@ fn run_from_yield(
         vm.env.set_immutable_function_name(name);
     }
     vm.ip = snapshot.ip;
-    vm.stack = snapshot.stack;
+    vm.stack.replace(snapshot.stack);
     vm.locals = snapshot.locals;
     vm.local_upvalues = snapshot.local_upvalues;
     vm.refresh_authoritative_slots();

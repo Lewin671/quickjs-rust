@@ -22,9 +22,55 @@ use crate::{
 };
 use std::{
     collections::{HashMap, HashSet},
+    ops::{Deref, DerefMut},
     rc::Rc,
 };
 pub(super) type Slot = Option<Value>;
+
+pub(super) struct OperandStack<'a> {
+    bytecode: &'a Bytecode,
+    values: Vec<Value>,
+}
+
+impl<'a> OperandStack<'a> {
+    fn new(bytecode: &'a Bytecode) -> Self {
+        Self {
+            bytecode,
+            values: bytecode.take_operand_stack(),
+        }
+    }
+
+    pub(super) fn take(&mut self) -> Vec<Value> {
+        std::mem::take(&mut self.values)
+    }
+
+    pub(super) fn replace(&mut self, values: Vec<Value>) {
+        let previous = std::mem::replace(&mut self.values, values);
+        self.bytecode.recycle_operand_stack(previous);
+    }
+}
+
+impl Deref for OperandStack<'_> {
+    type Target = Vec<Value>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.values
+    }
+}
+
+impl DerefMut for OperandStack<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.values
+    }
+}
+
+impl Drop for OperandStack<'_> {
+    fn drop(&mut self) {
+        self.bytecode
+            .recycle_operand_stack(std::mem::take(&mut self.values));
+    }
+}
+
 pub(super) struct VmCallEnv {
     pub(super) env: CallEnv,
 }
@@ -74,7 +120,7 @@ pub(super) struct Vm<'a> {
     pub(super) numeric_loop_plans: Vec<super::vm_numeric_loop::NumericLoopPlan>,
     pub(super) numeric_mutation_loop_plans:
         Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>,
-    pub(super) stack: Vec<Value>,
+    pub(super) stack: OperandStack<'a>,
     pub(super) locals: Vec<Slot>,
     pub(super) local_upvalues: Vec<Option<Upvalue>>,
     /// Inline per-slot cache for frames where indexed storage is the sole
@@ -257,7 +303,7 @@ impl<'a> Vm<'a> {
             control_loop_plans,
             numeric_loop_plans,
             numeric_mutation_loop_plans,
-            stack: Vec::with_capacity(64),
+            stack: OperandStack::new(bytecode),
             locals,
             local_upvalues,
             authoritative_slots,
@@ -544,9 +590,13 @@ impl<'a> Vm<'a> {
                     }
                 }
                 Op::LoadLocalOrUndefined(slot) => {
-                    self.stack.push(self.load_local_or_undefined(*slot)?)
+                    let value = self.load_local_or_undefined(*slot)?;
+                    self.stack.push(value);
                 }
-                Op::LoadNewTarget => self.stack.push(self.load_new_target()),
+                Op::LoadNewTarget => {
+                    let value = self.load_new_target();
+                    self.stack.push(value);
+                }
                 op @ (Op::AppendStringLiteralLocal { .. }
                 | Op::AppendStringLiteralGlobal { .. }) => self.run_string_append_op(op.clone())?,
                 Op::StoreLocal(slot) => {
