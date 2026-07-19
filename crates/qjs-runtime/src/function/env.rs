@@ -137,6 +137,13 @@ impl FrameBindingValue {
         }
     }
 
+    fn with_value<R>(&self, read: impl FnOnce(&Value) -> R) -> R {
+        match self {
+            Self::Direct(value) => read(value),
+            Self::Cell(value) => value.with_value(read),
+        }
+    }
+
     fn set(&mut self, value: Value) -> Value {
         match self {
             Self::Direct(existing) => std::mem::replace(existing, value),
@@ -890,6 +897,33 @@ impl CallEnv {
         BindingSnapshot(self.snapshot_locals())
     }
 
+    /// Visits the currently visible values in the frame-local environment
+    /// without materializing a name-keyed snapshot. This is reserved for cold
+    /// dynamic-scope compatibility work such as direct-eval capture repair;
+    /// ordinary bytecode bindings remain slot-indexed.
+    pub(crate) fn for_each_visible_local_value(&self, mut visit: impl FnMut(&Value)) {
+        let frame_bindings = self.frame_bindings.0.borrow();
+        if let Some(deopt_bindings) = &self.deopt_bindings {
+            for (name, value) in deopt_bindings.0.borrow().iter() {
+                if !frame_bindings
+                    .iter()
+                    .any(|(frame_name, _)| frame_name == name)
+                {
+                    value.with_value(&mut visit);
+                }
+            }
+        }
+        for (index, (name, value)) in frame_bindings.iter().enumerate() {
+            if frame_bindings[index + 1..]
+                .iter()
+                .any(|(inner_name, _)| inner_name == name)
+            {
+                continue;
+            }
+            value.with_value(&mut visit);
+        }
+    }
+
     /// Returns the lexical private-name environment for this frame, if any.
     pub(crate) fn private_environment(&self) -> Option<PrivateEnvironment> {
         self.private_environment.clone()
@@ -1316,6 +1350,31 @@ mod tests {
 
         env.set_deopt_bindings(DynamicBindings::new());
         assert!(!env.slot_is_authoritative("value"));
+    }
+
+    #[test]
+    fn visible_local_value_scan_skips_shadowed_bindings() {
+        let mut env = CallEnv::new(new_realm(HashMap::new()));
+        let deopt = DynamicBindings::new();
+        deopt.insert("deopt-only".to_owned(), Value::Number(3.0));
+        deopt.insert("shadowed".to_owned(), Value::Number(1.0));
+        env.set_deopt_bindings(deopt);
+        env.frame_bindings
+            .push("shadowed".to_owned(), Value::Number(2.0));
+        env.frame_bindings
+            .push("shadowed".to_owned(), Value::Number(4.0));
+        env.frame_bindings
+            .push("frame-only".to_owned(), Value::Number(5.0));
+
+        let mut visited = Vec::new();
+        env.for_each_visible_local_value(|value| {
+            if let Value::Number(number) = value {
+                visited.push(*number as i32);
+            }
+        });
+        visited.sort_unstable();
+
+        assert_eq!(visited, vec![3, 4, 5]);
     }
 
     #[test]

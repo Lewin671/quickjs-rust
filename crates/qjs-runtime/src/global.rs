@@ -1337,9 +1337,9 @@ fn validate_eval_global_lexical_bindings(
 }
 
 fn update_direct_eval_captured_functions(env: &mut CallEnv, name: &str, value: Value) {
-    for (_, mut local_value) in env.binding_snapshot() {
-        update_function_captured_binding(&mut local_value, name, value.clone());
-    }
+    env.for_each_visible_local_value(|local_value| {
+        update_function_captured_binding(local_value, name, value.clone());
+    });
 }
 
 fn update_direct_eval_parameter_captured_functions(env: &mut CallEnv, name: &str, value: Value) {
@@ -1352,7 +1352,7 @@ fn update_direct_eval_parameter_captured_functions(env: &mut CallEnv, name: &str
     let _ = (marker_name, value);
 }
 
-fn update_function_captured_binding(value: &mut Value, name: &str, replacement: Value) {
+fn update_function_captured_binding(value: &Value, name: &str, replacement: Value) {
     let Value::Function(function) = value else {
         return;
     };
