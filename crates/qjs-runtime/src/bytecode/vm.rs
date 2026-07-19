@@ -1190,7 +1190,7 @@ impl<'a> Vm<'a> {
         let value = if let Some(value) = self.try_direct_get(&object, &key) {
             value
         } else if let PropertyKey::String(key) = &key
-            && let Some(result) = self.try_frame_independent_getter(&object, key)
+            && let Some(result) = self.try_direct_leaf_getter(&object, key)
         {
             result?
         } else {
@@ -1242,7 +1242,7 @@ impl<'a> Vm<'a> {
         }
         let value = if let Some(value) = self.try_cached_get_string(&object, key, cache) {
             value
-        } else if let Some(result) = self.try_frame_independent_getter(&object, key) {
+        } else if let Some(result) = self.try_direct_leaf_getter(&object, key) {
             result?
         } else {
             let mut env = self.current_env();
