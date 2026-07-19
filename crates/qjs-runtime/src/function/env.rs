@@ -897,31 +897,50 @@ impl CallEnv {
         BindingSnapshot(self.snapshot_locals())
     }
 
-    /// Visits the currently visible values in the frame-local environment
+    /// Visits the currently visible bindings in the frame-local environment
     /// without materializing a name-keyed snapshot. This is reserved for cold
-    /// dynamic-scope compatibility work such as direct-eval capture repair;
-    /// ordinary bytecode bindings remain slot-indexed.
-    pub(crate) fn for_each_visible_local_value(&self, mut visit: impl FnMut(&Value)) {
+    /// dynamic-scope compatibility work such as direct eval and native-call
+    /// writeback; ordinary bytecode bindings remain slot-indexed.
+    pub(crate) fn for_each_visible_local_binding(&self, mut visit: impl FnMut(&str, &Value)) {
         let frame_bindings = self.frame_bindings.0.borrow();
+        let mut visible_frame_names = HashSet::with_capacity(frame_bindings.len());
+        for (name, value) in frame_bindings.iter().rev() {
+            if visible_frame_names.insert(name.as_str()) {
+                value.with_value(|value| visit(name, value));
+            }
+        }
         if let Some(deopt_bindings) = &self.deopt_bindings {
             for (name, value) in deopt_bindings.0.borrow().iter() {
-                if !frame_bindings
-                    .iter()
-                    .any(|(frame_name, _)| frame_name == name)
-                {
-                    value.with_value(&mut visit);
+                if !visible_frame_names.contains(name.as_str()) {
+                    value.with_value(|value| visit(name, value));
                 }
             }
         }
-        for (index, (name, value)) in frame_bindings.iter().enumerate() {
-            if frame_bindings[index + 1..]
-                .iter()
-                .any(|(inner_name, _)| inner_name == name)
-            {
-                continue;
-            }
-            value.with_value(&mut visit);
-        }
+    }
+
+    pub(crate) fn for_each_visible_local_value(&self, mut visit: impl FnMut(&Value)) {
+        self.for_each_visible_local_binding(|_, value| visit(value));
+    }
+
+    /// Collects only binding names when values are irrelevant, avoiding the
+    /// value clones and intermediate `HashMap` used by `binding_snapshot`.
+    pub(crate) fn visible_local_names(&self) -> HashSet<String> {
+        let mut names = HashSet::new();
+        self.for_each_visible_local_binding(|name, _| {
+            names.insert(name.to_owned());
+        });
+        names
+    }
+
+    /// Collects visible bindings in a sequential writeback buffer. Unlike a
+    /// compatibility snapshot, this does not allocate or hash a temporary
+    /// name-to-value map before the VM immediately iterates the result.
+    pub(crate) fn visible_local_entries(&self) -> Vec<(String, Value)> {
+        let mut entries = Vec::new();
+        self.for_each_visible_local_binding(|name, value| {
+            entries.push((name.to_owned(), value.clone()));
+        });
+        entries
     }
 
     /// Returns the lexical private-name environment for this frame, if any.
@@ -976,11 +995,6 @@ impl CallEnv {
     /// This frame's own locals layer, mutably.
     pub(crate) fn replace_local_value(&self, expected: &Value, replacement: &Value) {
         self.frame_bindings.replace_value(expected, replacement);
-    }
-
-    /// Consumes the view, returning a dynamic-name value snapshot.
-    pub(crate) fn into_binding_snapshot(self) -> HashMap<String, Value> {
-        self.snapshot_locals()
     }
 
     /// Looks up `name`: frame locals first, then a short realm borrow. Returns
@@ -1353,7 +1367,7 @@ mod tests {
     }
 
     #[test]
-    fn visible_local_value_scan_skips_shadowed_bindings() {
+    fn visible_local_scans_skip_shadowed_bindings() {
         let mut env = CallEnv::new(new_realm(HashMap::new()));
         let deopt = DynamicBindings::new();
         deopt.insert("deopt-only".to_owned(), Value::Number(3.0));
@@ -1375,6 +1389,20 @@ mod tests {
         visited.sort_unstable();
 
         assert_eq!(visited, vec![3, 4, 5]);
+
+        let names = env.visible_local_names();
+        assert_eq!(names.len(), 3);
+        assert!(names.contains("deopt-only"));
+        assert!(names.contains("shadowed"));
+        assert!(names.contains("frame-only"));
+
+        let entries = env
+            .visible_local_entries()
+            .into_iter()
+            .collect::<HashMap<_, _>>();
+        assert_eq!(entries.get("deopt-only"), Some(&Value::Number(3.0)));
+        assert_eq!(entries.get("shadowed"), Some(&Value::Number(4.0)));
+        assert_eq!(entries.get("frame-only"), Some(&Value::Number(5.0)));
     }
 
     #[test]

@@ -1521,10 +1521,10 @@ impl Vm<'_> {
                     .collect::<HashMap<_, _>>()
             })
             .unwrap_or_default();
-        let locals = env.into_binding_snapshot();
+        let locals = env.visible_local_entries();
         let direct_parameter_eval_vars = locals
-            .keys()
-            .filter_map(|name| {
+            .iter()
+            .filter_map(|(name, _)| {
                 name.strip_prefix(crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX)
                     .map(str::to_owned)
             })

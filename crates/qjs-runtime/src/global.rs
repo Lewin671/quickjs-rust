@@ -886,11 +886,7 @@ pub(super) fn native_global_eval(
     } else {
         validate_eval_global_lexical_bindings(&bytecode, &eval_env, false, false)?;
     }
-    let caller_locals = eval_env
-        .binding_snapshot()
-        .keys()
-        .cloned()
-        .collect::<HashSet<_>>();
+    let caller_locals = eval_env.visible_local_names();
     let hoisted_names = bytecode
         .hoisted_local_names()
         .map(str::to_owned)
