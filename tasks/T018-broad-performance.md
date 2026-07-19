@@ -4142,6 +4142,93 @@ call-frame unit should eliminate allocation without adding per-op stack
 branches or trading call throughput against object, array, and closure
 allocation.
 
+### Unit 67: accepted bounded bytecode operand-stack reuse
+
+Runtime commit `2c9e7da3`, merged as `adc52017`, gives each compiled `Bytecode`
+one shared, single-entry pool for its VM operand-stack allocation. Ordinary
+execution takes the cleared buffer and returns it on frame exit; generator
+suspension moves the live stack into the snapshot and returns any unused
+acquired buffer. Fresh buffers start with capacity 64, and capacities above 256
+are deliberately not retained so one unusual frame cannot permanently inflate
+the compiled function. The mechanism applies to every bytecode invocation and
+contains no benchmark identity, source path, iteration count, checksum, or
+expected result. A focused unit test fixes cleared reuse and bounded rejection,
+including clones of the same bytecode.
+
+The local screening evidence was directionally positive but deliberately not
+used as acceptance evidence. A focused nine-case call/binding/allocation run
+had an approximate candidate/base case geometric mean of 0.9909x, and a direct
+alternating JetStream raytrace sample measured 0.9591x base. The local complete
+portfolio attempt was only 24/25 comparable because one `captured_write` block
+failed local linearity; its raw all-measurement diagnostic was 0.9938x base.
+That incomplete result justified sending the general mechanism to hosted
+measurement, not accepting it.
+
+Trusted-main Performance Preview run `29676062273` compared exact candidate
+`adc5201782e3594c856a82c763a2c01846b6c67e` with exact base
+`5f7f7a16a78f9b9aeaa635019ce30908168bae68`. Candidate, base, and pinned
+QuickJS-NG executable SHA-256 were
+`04c98f4a10f7254e41c15ef2e2ceb81832fdd7808af6f544cfc7494947a1c288`,
+`bc711e20bd1206c21ac9436885f585a2dc4a632966ade9d61be81f8fe9ce8498`,
+and `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+All 225/225 formal measurements were valid, all 75 engine/case linearity
+diagnostics passed, and all three blocks remained valid. As expected for the
+three-block hosted preview, health is `non-claim`/`inconclusive`, not a
+fixed-hardware public claim.
+
+Hosted broad candidate/base was **0.996099x** overall with a 95% confidence
+interval of [0.993897x, 1.001591x]. The interval crosses 1.0, so the 0.39%
+point improvement is recorded as near-neutral rather than a broad win. Call
+was 0.996625x base and control 0.989373x; builtin moved to 0.890904x, driven by
+unrelated code-layout movement in `math_abs` and `array_index_of`, and is not
+claimed as causal. Allocation, binding, property, array, and string were
+1.012187x, 1.020030x, 1.004207x, 1.007278x, and 1.005126x base. In particular,
+`captured_read` and `function_call_two_args` were 1.088225x and 1.090019x;
+those internal regressions remain debt rather than being hidden by the overall
+geometric mean. Candidate/QuickJS-NG was **0.360613x** overall, but allocation
+remained **2.756890x** and call remained 0.568853x, so B4 is still open.
+
+The mandatory same-run external evidence generalized modestly in all three
+corpora and is the reason this near-neutral broad unit is retained:
+
+| Neutral shell port | Comparable | Candidate / base | Candidate wins vs base | Candidate / QuickJS-NG |
+| --- | ---: | ---: | ---: | ---: |
+| JetStream 3 JavaScript subset | 5/5 | 0.982408x | 5/5 | 9.663311x |
+| Kraken 1.1 | 7/14 | 0.993973x | 5/7 | 6.727101x |
+| SunSpider 1.0 | 26/26 | 0.995835x | 15/26 | 9.061978x |
+
+Every JetStream case improved against the exact base. Kraken's two losing
+comparable cases were at most 1.003281x base, and SunSpider's largest
+regression was 1.011216x; comparable coverage did not decrease. These are
+neutral shell-port diagnostics, not official suite scores, and they also make
+the remaining external deficit unambiguous: qjs-rust still loses every
+comparable external case to QuickJS-NG by large suite-level geometric means.
+
+Broad raw/report SHA-256 are
+`763dd57962a2456a996a487e5ab6f916670db31565d75f68432f8daf587dbf42`
+and `9ec4e97372641d523081495fb2b8bb9c9e0b52584ae1e66105d8e5f11676c3e4`;
+external raw/report SHA-256 are
+`094957ef8038102713a5b82fdc08c7aeeeda9e36064111db295344388266af61`
+and `3e9e994a7a8073923b0cd8366bae7f1284e00a24ef071665d2277cc5af38a57d`.
+The complete local gate passed 1,401 runtime tests, all 198 benchmark-tool
+tests, 5,139 Test262 subset cases, and all QuickJS-NG comparisons. Branch CI
+run `29674623516`, main CI run `29676062272`, Performance Preview run
+`29676062273`, and Test262 Coverage run `29676164904` all succeeded. Coverage
+remained 42,671/42,672 with one actionable gap and zero timeout;
+burndown/comparison SHA-256 are
+`c1893e0880725baaef7f27f76adc6b714b8906caa8cefefe8e0489e88fce0111`
+and `94a97687babcdfba02efff77997af0a59fa7ddfb08a2370d03fbb933de069e69`.
+
+Unit 67 is accepted only as small B3 external-generalization progress: a
+bounded, benchmark-independent allocation-reuse mechanism kept the complete
+broad portfolio near neutral and improved all three independent external
+suite-level diagnostics. It is not B4 or B5 progress, and its internal binding
+and allocation regressions constrain the next unit. The next general unit
+should target the remaining per-call frame/local/upvalue allocations or the
+object/array/closure allocator itself, while preserving the external gains and
+recovering the binding family; benchmark-specific stack sizing or case-aware
+pooling remains forbidden.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
