@@ -4462,6 +4462,145 @@ evidence bindings:
   and
   `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
 
+### Unit 72: rejected native-getter shortcut
+
+Runtime commit `a64ee6f8` called an already resolved frame-independent native
+getter without rebuilding the caller compatibility environment. The focused
+typed-array getter probe improved to 0.2537x candidate/base, but that narrow
+result did not generalize. Trusted-main Performance Preview run `29687435417`
+completed all 225/225 formal measurements, all 75 linearity checks, and all
+three blocks. Candidate/base was **1.008305x** overall with a 95% confidence
+interval of [1.005640x, 1.014772x]. Builtin was 1.046763x, call was 1.023254x,
+and string was 1.028092x. The mandatory external preview was also neutral to
+worse: candidate/base was 1.001049x for JetStream, 1.002609x for Kraken, and
+1.000579x for SunSpider.
+
+This is exactly the kind of internal-only win prohibited by the general
+optimization acceptance rule. The mechanism improved its motivating probe but
+made the complete broad guard significantly worse and produced no independent
+external benefit, so commit `85c4696b` reverted it. The reverse Performance
+Preview run `29689512453` recovered the broad result to 0.989672x with a 95%
+confidence interval of [0.987800x, 0.993055x]. Its external candidate/base
+ratios were 0.997334x, 0.995028x, and 0.998796x respectively, confirming that
+the rejected shortcut had not carried an external gain. CI run `29689512443`
+and Test262 Coverage run `29689606829` passed after the revert; the full local
+gate passed 1,402 runtime tests, 198 benchmark-tool tests, and all 5,139 curated
+Test262 cases.
+
+Rejected-candidate broad raw/report SHA-256 are
+`6b0ac4cc6b9b267eee53834d003a2f842b1f8993d23e4d1118cf7e2a9bbe06ca`
+and
+`8081741939a8fa782cd7405b9df6a8b4477b44a84e15dca0c14b3fa55a0f0072`;
+its external raw/report SHA-256 are
+`f3a6804f8327603daeb1eea2bf8fa0d913112345096508e15c3a0d8c67ed07c7`
+and
+`ccbdb1f3db6ada52fc549649d1bc2207dcbfd2ed2ff649faf26850c066660c04`.
+Reverse-run broad raw/report SHA-256 are
+`f2d6b7199e209d19880557b5074ca20e13c32db602a7c8418c2cc0e1e671bc5c`
+and
+`c1b406a3e405ffda2247fd908d6162d76b41d0249392fc9c3f67cd2c47b6ab29`;
+reverse-run external raw/report SHA-256 are
+`8efeddafc87a986c0ce41a1d20770a59e10aa7483d8757fe743ea992882db313`
+and
+`3dbf270dbeede6c9a7e7235198b9ce0a248aeebdcabc9ceef4dfc868a794213c`.
+
+### Unit 73: accepted metadata-free plain JSON parsing
+
+Runtime commit `c4b41d80` makes the ordinary no-reviver `JSON.parse` path build
+values directly. Only a callable reviver requests the source strings and
+recursive `JsonNode` child tree needed by the source-context extension. This
+is a general parser allocation change: it is independent of input size,
+property names, suite identity, source path, iteration count, and checksum.
+Focused coverage verifies that plain parsing discards metadata while reviver
+parsing retains exact primitive source text. The full local gate passed 1,403
+runtime tests, 198 benchmark-tool tests, all 5,139 curated Test262 cases,
+formatting, Clippy, agents, and file-size checks. Main CI run `29691436176` and
+Test262 Coverage run `29691553101` both passed.
+
+The external result provides the causal acceptance evidence. Trusted-main
+Performance Preview run `29691436194` measured exact candidate
+`c4b41d8076ed4c0b9c9898ff6710c87d6e64c713` against exact base
+`85c4696bf1ac3af7a6f8f6b6feb82d7010663ef2`. Kraken
+`json-parse-financial` fell from 156.529 ms to 108.779 ms: **0.694944x**
+candidate/base, or about 30.5% faster. It reached 1.055857x
+candidate/QuickJS-NG. The distinct `json-stringify-tinderbox` path remained
+neutral at 0.998733x candidate/base. Kraken's six-case comparable diagnostic
+geometric mean improved to **0.946306x**; JetStream was 0.998683x and
+SunSpider was 1.000436x, with no coverage loss caused by the change.
+
+The hosted broad run was physically complete: 225/225 measurements, 75/75
+linearity checks, and three valid blocks. It reported 1.003668x candidate/base
+with a 95% confidence interval of [1.002444x, 1.009864x], while retaining the
+profile's explicit `inconclusive`/non-claim classification. No broad case calls
+`JSON.parse` (the harness only uses `JSON.stringify` to emit its result), so
+that cross-case shift has no execution-path connection to this commit. The
+same-host external controls agree: both unrelated complete suites were within
+0.14%, while the exact parser workload moved by 30.5%. Unit 73 is therefore
+accepted as externally demonstrated general-engine progress rather than being
+rejected on an unrelated hosted-runner shift. Candidate/QuickJS-NG remained
+0.345121x on broad overall, but allocation still failed B4 at 2.767643x; the
+external suite diagnostics remained 8.752580x JetStream, 5.343628x Kraken, and
+8.721159x SunSpider, so B4/B5 remain open.
+
+Hosted broad raw/report SHA-256 are
+`7471f410a224d7534eb0901246a83961bee946d4597b2907726000bfc9a84eb2`
+and
+`801735c0c8b3593e9b2aa998368ee8b6b6b280d8f808a71e910e4f4416084925`;
+hosted external raw/report SHA-256 are
+`30b67c7db74d8f0b1bec4b9669654341ae2dcec7cfbd73727b891e882077bc7c`
+and
+`91ae97056a57092bac9819477e74d5157320474ecc139c08d33426181b8f0a29`.
+Candidate/base/QuickJS-NG executable SHA-256 are
+`efd2be5bc2bfc3d8c0b048d74091747dc1310d05c122b62419a8fb6a5e2dea68`,
+`f4931ee4609bb3a137486144887c6e82151d6cba9efea699d6d7f98c865e4396`,
+and
+`8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+
+### Unit 74: rejected direct slots for closure-producing calls
+
+Runtime commit `42685690` allowed a closure-producing function to enter the
+general indexed-slot call path, retaining an all-`None` local-upvalue table so
+captured locals could be promoted lazily when a nested closure was created.
+The change contained no benchmark identity or input-shape condition, and its
+focused local probes suggested about 3% improvements for closure allocation
+and dynamic method calls. The full local gate passed 1,404 runtime tests, 198
+benchmark-tool tests, all 5,139 curated Test262 cases, formatting, Clippy,
+agents, file-size checks, and QuickJS-NG comparisons. Main CI run
+`29692851062` and Test262 Coverage run `29692980217` also passed.
+
+The trusted complete evidence did not confirm the focused result. Performance
+Preview run `29692851054` compared exact candidate
+`42685690f7e89d03671e2a905673ff008e87f897` with exact base
+`c4b41d8076ed4c0b9c9898ff6710c87d6e64c713`. All 225/225 broad measurements,
+75/75 linearity checks, and three blocks were valid, but candidate/base was
+**1.016134x** overall with a 95% confidence interval of [1.014143x,
+1.055291x]. `captured_read` regressed to 1.157411x, `captured_write` to
+1.088178x, and the motivating `closure_allocation_call` case was effectively
+unchanged at 1.000398x. Candidate/QuickJS-NG remained 0.352113x overall, with
+the allocation family still above the campaign threshold.
+
+The mandatory external preview supplied no offsetting generalization benefit.
+Candidate/base was 0.999050x for JetStream, 1.001361x for Kraken, and
+1.014847x for SunSpider. SunSpider `string-unpack-code` was 1.308688x, while
+the intended closure-related direction did not produce a repeatable suite-wide
+gain. These are informational neutral-shell ratios, not official suite scores,
+but they independently agree that the unit is not general performance
+progress. Commit `c8f02e33` therefore reverts Unit 74.
+
+Hosted broad raw/report SHA-256 are
+`c85ee7ca801a22c04ab1dcdcf10a20767daade112ef32241b2ea24b73c3b8203`
+and
+`0c3660ddf24ee5e95fed4da8f72368f8f67a3848f619e425318fb3665d8925ef`;
+hosted external raw/report SHA-256 are
+`469fe76f84cb9dfe0d32c28669ba1c2b357836cbbf305e3fa9ff2c60c96fe979`
+and
+`4cd1b4248d276a37515779dc3acdd7ca8d678d2a21cb0c6da9a57890d10427ea`.
+Candidate/base/QuickJS-NG executable SHA-256 are
+`34d2b53b311d0af6817d0b8f4984df27840ceaae62222773f58c93ea1d784282`,
+`efd2be5bc2bfc3d8c0b048d74091747dc1310d05c122b62419a8fb6a5e2dea68`,
+and
+`8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
