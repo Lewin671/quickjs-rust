@@ -105,7 +105,7 @@ pub(super) fn eval_function_bytecode<'a>(
     vm.direct_eval_with_stack = direct_eval_with_stack;
     let value = vm.run();
     FunctionBytecodeResult {
-        value,
+        value: Some(value),
         bytecode,
         env: vm.env,
         locals: vm.locals,
@@ -363,11 +363,14 @@ impl<'a> Vm<'a> {
     }
 
     fn initial_direct_call_slots(bytecode: &Bytecode) -> Vec<Slot> {
-        bytecode
-            .locals
-            .iter()
-            .map(|local| local.hoisted.then_some(Value::Undefined))
-            .collect()
+        let mut locals = bytecode.take_frame_locals();
+        locals.extend(
+            bytecode
+                .locals
+                .iter()
+                .map(|local| local.hoisted.then_some(Value::Undefined)),
+        );
+        locals
     }
 
     fn initial_direct_local_upvalues(

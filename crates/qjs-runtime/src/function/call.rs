@@ -227,7 +227,7 @@ pub(crate) fn call_function(
         if function.is_derived_constructor && is_construct {
             return finish_derived_construct(result);
         }
-        return result.value;
+        return result.into_value();
     }
 
     Err(RuntimeError {
@@ -279,7 +279,8 @@ pub(crate) fn call_direct_leaf_function(
         call_env.set_agent_context(context);
     }
     let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
-    eval_function_bytecode_with_direct_call_slots(bytecode, call_env, true, direct_call_slots).value
+    eval_function_bytecode_with_direct_call_slots(bytecode, call_env, true, direct_call_slots)
+        .into_value()
 }
 
 pub(crate) fn is_direct_leaf_function(callee: &Value) -> bool {
@@ -395,7 +396,7 @@ fn finish_derived_construct(
     result: crate::bytecode::FunctionBytecodeResult<'_>,
 ) -> Result<Value, RuntimeError> {
     let bound_this = result.frame_cell_binding("this");
-    let value = result.value?;
+    let value = result.into_value()?;
     match value {
         // A Symbol (or BigInt) primitive is represented as an object reference
         // but is not an Object, so it does not override `this`; it is a TypeError

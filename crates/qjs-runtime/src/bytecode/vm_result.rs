@@ -6,7 +6,7 @@ use crate::{
 use super::ir::Bytecode;
 
 pub(crate) struct FunctionBytecodeResult<'a> {
-    pub(crate) value: Result<Value, RuntimeError>,
+    pub(crate) value: Option<Result<Value, RuntimeError>>,
     pub(super) bytecode: &'a Bytecode,
     pub(super) env: CallEnv,
     pub(super) locals: Vec<Option<Value>>,
@@ -68,6 +68,12 @@ pub(super) enum ResumeMode {
 }
 
 impl FunctionBytecodeResult<'_> {
+    pub(crate) fn into_value(mut self) -> Result<Value, RuntimeError> {
+        self.value
+            .take()
+            .expect("function bytecode result value is consumed once")
+    }
+
     pub(crate) fn frame_binding(&self, name: &str) -> Option<Value> {
         self.bytecode
             .local_slot(name)
@@ -108,5 +114,40 @@ impl FunctionBytecodeResult<'_> {
                     .or_else(|| self.locals.get(index).and_then(Option::as_ref).cloned())
             })
             .or_else(|| self.env.get(name))
+    }
+}
+
+impl Drop for FunctionBytecodeResult<'_> {
+    fn drop(&mut self) {
+        self.bytecode
+            .recycle_frame_locals(std::mem::take(&mut self.locals));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::function::new_realm;
+    use std::collections::HashMap;
+
+    #[test]
+    fn dropping_result_returns_cleared_locals_to_bytecode_pool() {
+        let bytecode = Bytecode::new(Vec::new(), Vec::new(), Vec::new());
+        let locals = vec![Some(Value::Number(1.0))];
+        let allocation = locals.as_ptr();
+        let result = FunctionBytecodeResult {
+            value: Some(Ok(Value::Undefined)),
+            bytecode: &bytecode,
+            env: CallEnv::new(new_realm(HashMap::new())),
+            locals,
+            local_upvalues: Vec::new(),
+            sloppy_global_names: Vec::new(),
+        };
+
+        drop(result);
+        let reused = bytecode.take_frame_locals();
+
+        assert!(reused.is_empty());
+        assert_eq!(reused.as_ptr(), allocation);
     }
 }

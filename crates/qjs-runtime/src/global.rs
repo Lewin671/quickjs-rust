@@ -1010,7 +1010,7 @@ pub(super) fn native_global_eval(
     if direct_eval {
         *env = strict_direct_writeback_env.unwrap_or(eval_env);
     }
-    result.value
+    result.into_value()
 }
 
 pub(crate) fn eval_source_is_only_comments_and_whitespace(source: &str) -> bool {
@@ -1190,7 +1190,7 @@ pub(super) fn native_eval_script(
             }
         }
     }
-    result.value
+    result.into_value()
 }
 
 pub(crate) fn try_eval_regexp_literal_source(

@@ -195,53 +195,51 @@ impl Vm<'_> {
     }
 
     pub(super) fn initial_slots(bytecode: &Bytecode, env: &CallEnv) -> Vec<Slot> {
-        bytecode
-            .locals
-            .iter()
-            .map(|local| {
-                // Global-scope `var`/function bindings live in the realm; the
-                // vestigial slot stays empty so captures and loads route to
-                // the shared cell instead of a frozen copy.
-                if local.hoisted && bytecode.global_scope {
-                    None
-                } else if !local.from_env
-                    && crate::function::is_call_frame_binding(&local.name)
-                    && let Some(value) = env.get_local(&local.name)
-                {
-                    // A declaring function's materialized `this`/`arguments`
-                    // slot is seeded by call setup. It is deliberately not an
-                    // indexed upvalue; a nested arrow captures the resulting
-                    // local cell as an ordinary ParentLocal source.
-                    Some(value)
-                } else if local.from_env
-                    && let Some(value) = env.get_local(&local.name)
-                    && !matches!(
-                        &value,
-                        Value::Function(function) if function.is_uninitialized_lexical_marker()
-                    )
-                {
-                    // Only a binding the caller passed in the frame's locals
-                    // layer seeds a from_env slot; realm globals stay in the
-                    // shared cell so closures observe live values.
-                    Some(value)
-                } else if local.from_env
-                    && !local.hoisted
-                    && !crate::function::is_call_frame_binding(&local.name)
-                    && let Some(value) = env.get_realm(&local.name)
-                {
-                    // A script-level `var`/function binding is realm-backed,
-                    // not an incoming lexical upvalue. Seed the compatibility
-                    // slot from the live realm; stores below synchronize the
-                    // global object and realm rather than creating a closure
-                    // snapshot.
-                    Some(value)
-                } else if local.hoisted {
-                    Some(Value::Undefined)
-                } else {
-                    None
-                }
-            })
-            .collect()
+        let mut locals = bytecode.take_frame_locals();
+        locals.extend(bytecode.locals.iter().map(|local| {
+            // Global-scope `var`/function bindings live in the realm; the
+            // vestigial slot stays empty so captures and loads route to
+            // the shared cell instead of a frozen copy.
+            if local.hoisted && bytecode.global_scope {
+                None
+            } else if !local.from_env
+                && crate::function::is_call_frame_binding(&local.name)
+                && let Some(value) = env.get_local(&local.name)
+            {
+                // A declaring function's materialized `this`/`arguments`
+                // slot is seeded by call setup. It is deliberately not an
+                // indexed upvalue; a nested arrow captures the resulting
+                // local cell as an ordinary ParentLocal source.
+                Some(value)
+            } else if local.from_env
+                && let Some(value) = env.get_local(&local.name)
+                && !matches!(
+                    &value,
+                    Value::Function(function) if function.is_uninitialized_lexical_marker()
+                )
+            {
+                // Only a binding the caller passed in the frame's locals
+                // layer seeds a from_env slot; realm globals stay in the
+                // shared cell so closures observe live values.
+                Some(value)
+            } else if local.from_env
+                && !local.hoisted
+                && !crate::function::is_call_frame_binding(&local.name)
+                && let Some(value) = env.get_realm(&local.name)
+            {
+                // A script-level `var`/function binding is realm-backed,
+                // not an incoming lexical upvalue. Seed the compatibility
+                // slot from the live realm; stores below synchronize the
+                // global object and realm rather than creating a closure
+                // snapshot.
+                Some(value)
+            } else if local.hoisted {
+                Some(Value::Undefined)
+            } else {
+                None
+            }
+        }));
+        locals
     }
 
     pub(super) fn initial_local_upvalues(

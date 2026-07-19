@@ -724,6 +724,11 @@ pub struct Bytecode {
     /// single slot removes their allocator traffic without retaining every
     /// stack created by deep recursion. Cloned bytecode shares the same slot.
     operand_stack_pool: Rc<RefCell<Option<Vec<Value>>>>,
+    /// One cleared local-slot allocation retained for the next invocation of
+    /// this compiled body. This removes the per-call `Vec` allocation from
+    /// ordinary sequential calls while recursion still falls back to fresh
+    /// storage. Cloned bytecode shares the same slot.
+    frame_locals_pool: Rc<RefCell<Option<Vec<Option<Value>>>>>,
     /// Per-call metadata precomputed once at construction. Each of these used to
     /// be recomputed on every call by recursively walking `code` (and nested
     /// function/class op trees) and materializing a fresh `BTreeSet`/`Vec`,
@@ -815,6 +820,7 @@ impl Bytecode {
             numeric_mutation_loop_plans: OnceCell::new(),
             template_objects: RefCell::new(HashMap::new()),
             operand_stack_pool: Rc::new(RefCell::new(None)),
+            frame_locals_pool: Rc::new(RefCell::new(None)),
             cached_closure_referenced_global_names: Vec::new(),
             cached_written_binding_names: Vec::new(),
             cached_closure_written_binding_names: Vec::new(),
@@ -868,6 +874,7 @@ impl Bytecode {
 
     const INITIAL_OPERAND_STACK_CAPACITY: usize = 64;
     const MAX_RECYCLED_OPERAND_STACK_CAPACITY: usize = 256;
+    const MAX_RECYCLED_FRAME_LOCALS_CAPACITY: usize = 256;
 
     pub(super) fn take_operand_stack(&self) -> Vec<Value> {
         self.operand_stack_pool
@@ -884,6 +891,24 @@ impl Bytecode {
         let mut pooled = self.operand_stack_pool.borrow_mut();
         if pooled.is_none() {
             *pooled = Some(stack);
+        }
+    }
+
+    pub(super) fn take_frame_locals(&self) -> Vec<Option<Value>> {
+        self.frame_locals_pool
+            .borrow_mut()
+            .take()
+            .unwrap_or_else(|| Vec::with_capacity(self.locals.len()))
+    }
+
+    pub(super) fn recycle_frame_locals(&self, mut locals: Vec<Option<Value>>) {
+        locals.clear();
+        if locals.capacity() > Self::MAX_RECYCLED_FRAME_LOCALS_CAPACITY {
+            return;
+        }
+        let mut pooled = self.frame_locals_pool.borrow_mut();
+        if pooled.is_none() {
+            *pooled = Some(locals);
         }
     }
 
@@ -1434,6 +1459,39 @@ mod tests {
         let oversized = Vec::with_capacity(Bytecode::MAX_RECYCLED_OPERAND_STACK_CAPACITY + 1);
         bytecode.recycle_operand_stack(oversized);
         assert!(bytecode.operand_stack_pool.borrow().is_none());
+    }
+
+    #[test]
+    fn frame_locals_pool_reuses_cleared_bounded_storage() {
+        let bytecode = Bytecode::new(
+            Vec::new(),
+            vec![Local {
+                name: "value".to_owned(),
+                hoisted: false,
+                hoisted_function: false,
+                parameter: false,
+                catch_binding: false,
+                mutable: true,
+                from_env: false,
+                sloppy_global_fallback: false,
+            }],
+            Vec::new(),
+        );
+        let mut first = bytecode.take_frame_locals();
+        first.push(Some(Value::Number(1.0)));
+        let allocation = first.as_ptr();
+
+        bytecode.recycle_frame_locals(first);
+        let reused = bytecode.take_frame_locals();
+
+        assert!(reused.is_empty());
+        assert_eq!(reused.as_ptr(), allocation);
+        bytecode.recycle_frame_locals(reused);
+
+        let _active = bytecode.take_frame_locals();
+        let oversized = Vec::with_capacity(Bytecode::MAX_RECYCLED_FRAME_LOCALS_CAPACITY + 1);
+        bytecode.recycle_frame_locals(oversized);
+        assert!(bytecode.frame_locals_pool.borrow().is_none());
     }
 
     #[test]
