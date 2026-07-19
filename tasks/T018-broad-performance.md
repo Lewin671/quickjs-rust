@@ -4287,6 +4287,54 @@ path. The next unit must profile and reduce a broader frame/call mechanism
 target another independently dominant external subsystem. It must not extend
 this pool merely to make the internal call cases look better.
 
+### Unit 69: rejected direct-call argument moves
+
+Unit 69 tested whether VM-owned arguments could enter slot-backed leaf frames
+without the existing shallow `Value` clone and matching drop. This was a
+benchmark-independent call-frame mechanism motivated by the same independent
+JetStream `hash-map` profile: `Value::clone` and `Value::drop` together
+accounted for 123 of 1,821 sampled run-time stacks, while the VM already owned
+the arguments it had popped. Neither implementation contained workload names,
+iteration counts, checksums, or source-path conditions.
+
+The first implementation generalized direct-call argument storage to borrowed,
+empty, one-value, and owned-vector variants. It passed `cargo check` and all
+1,401 runtime tests, but its exact release binary
+`506c074454df35bf06177ebb4ed7f6de90931da39dd6b4d07255652128299746`
+failed the first external screen. Seven alternating JetStream `hash-map`
+samples produced a 3,379,502,917 ns candidate median and a 3,308,020,208 ns
+base median, or **1.021609x** candidate/base. The generalized enum and iterator
+dispatch cost more than the removed clones, so this shape was discarded.
+
+The second implementation preserved the original borrowed multi-argument path
+and moved only the VM's hottest zero/one-argument shape. It also passed
+`cargo check` and all 1,401 runtime tests. Exact candidate and base release
+binary SHA-256 were
+`a87dc2b1f4fb615d1b445feb1bf89807829c6cbcf523386484dcfbed57cb85b2`
+and `1917121ac8a121c6214ffef0c7107f4d71064ad0719ca56a2959ff69d6f5d20f`.
+Seven alternating, post-warmup JetStream `hash-map` samples yielded medians of
+3,356,192,166 ns and 3,387,047,500 ns, or **0.990890x** candidate/base. That
+0.91% direction was smaller than the observed run-to-run spread and therefore
+was not treated as an external win. The generated hash-verified bundle SHA-256
+was `aa98bc1975d8824840df5c31a397b5dab27d514e1854ff5681ceea8ec4bf2c20`.
+
+A separate three-block, randomly ordered black-box diagnostic then measured all
+six internal call-family cases against the exact same base and pinned
+QuickJS-NG. Candidate/base median ns/op ratios were 0.995354x for
+`plain_function_call`, 0.999063x for `method_call`, 1.001234x for
+`function_call_two_args`, 1.005297x for `function_call_reordered`, 1.022224x
+for `top_level_function_call`, and 1.009039x for `dynamic_method_call`.
+Four of six shapes regressed, including the two slower general call shapes.
+This selected-case run is diagnostic only, not a complete portfolio claim; its
+raw JSONL SHA-256 is
+`aa0f202bb788ef162a3a19dff8c1f5325477a8ebe7ae320ec6652300405415aa`.
+
+Unit 69 is rejected with no runtime commit. The experiment establishes that a
+single shallow argument clone is not a dominant enough cost to justify added
+frame state or dispatch. The next unit must remove a larger end-to-end call or
+allocation mechanism demonstrated by external profiles; specializing internal
+call cases or extending argument-shape variants is explicitly out of scope.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
