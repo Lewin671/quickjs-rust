@@ -3958,6 +3958,90 @@ the actual general native-call and direct-eval environment paths. That broader
 unit must pass its own hosted broad and external acceptance run; otherwise the
 scaffolding is reverted rather than counted as progress.
 
+### Unit 64: accepted dynamic-environment snapshot reduction
+
+Commit `fc0cce0a`, merged as `7453dea3`, makes the Unit 63 visible-binding
+iterator serve the general dynamic-environment paths for which it was retained.
+`Vm::apply_env` now consumes a sequential visible-binding buffer instead of
+first building a name-to-value `HashMap`, and direct eval collects only visible
+names when values are not needed. Reverse frame traversal still preserves the
+innermost active shadow, and explicit deopt cells remain visible only when a
+frame binding does not shadow them. The implementation is independent of
+benchmark identity, source path, iteration count, and expected output.
+
+The change was selected from the independent SunSpider date-format profile,
+not from a broad-micro case. An exact-base ten-block local external A/B measured
+`date-format-tofte` at 0.865776x base and `date-format-xparb` at 0.963753x;
+`string-tagcloud`, which was not the profiling target, remained neutral at
+1.002251x. A fresh short candidate profile still placed `apply_env` and the
+remaining sequential binding collection among the top frames, while the exact
+base profile showed the removed `snapshot_locals` work below both direct eval
+and `apply_env`. This supports the mechanism's causal relationship but is not
+used in place of the hosted comparison.
+
+The complete hosted three-role Performance Preview run `29669068340` compared
+candidate revision `7453dea3c339a6b93f3f2ec767866c762f4ea699` with exact base
+revision `8d3100fa07995dfdb1fcd01b6a932ecaf449e345`. Their executable
+SHA-256 values are
+`bc711e20bd1206c21ac9436885f585a2dc4a632966ade9d61be81f8fe9ce8498`
+and
+`faae28959686dccbea81fb8bb3a34cc8f9bbb85c69e769790958000760ca1b0c`;
+the pinned QuickJS-NG executable remains
+`8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+All 75 linearity diagnostics passed and all three blocks were valid.
+
+Hosted broad candidate/base improved to **0.979391x** overall with a 95%
+confidence interval of [0.979057x, 0.981504x]. Call, binding, allocation,
+property, array, and string were 0.946087x, 0.968429x, 0.982383x, 0.996781x,
+0.997303x, and 0.984163x base. Control was effectively neutral at 1.001469x.
+Builtin regressed to **1.028617x**, driven by `array_index_of` at 1.057915x;
+that broad case does not execute the changed dynamic-environment mechanism, so
+the regression is recorded as portable code-layout debt rather than hidden or
+claimed as a semantic trade. Several direct-call cases similarly improved even
+though they do not execute this mechanism, so their movement is not counted as
+causal evidence. Candidate/QuickJS-NG was **0.345553x** overall, slightly
+better than Unit 62's pre-scaffolding 0.346338x, but allocation remained
+**2.559545x** and B4 is therefore incomplete. Broad raw/report SHA-256 are
+`a60a3f1c0d7016a6ddb44566805f0cca6e9efe91b087a6e3f1188c55677da684`
+and `b4d6145978d5c2a5971b3198bdb409ca0ccc6b9098dbd0434f9161bb2a187af7`.
+
+The mandatory same-run external evidence generalized in all three corpora:
+
+| Neutral shell port | Comparable | Candidate / base | Candidate wins vs base | Candidate / QuickJS-NG |
+| --- | ---: | ---: | ---: | ---: |
+| JetStream 3 JavaScript subset | 5/5 | 0.983272x | 4/5 | 8.934282x |
+| Kraken 1.1 | 7/14 | 0.995930x | 4/7 | 5.703890x |
+| SunSpider 1.0 | 26/26 | 0.984351x | 15/26 | 8.458902x |
+
+Both independently profiled eval workloads moved in the expected direction:
+`date-format-tofte` fell from 844.677 ms to 731.238 ms (0.865701x base), and
+`date-format-xparb` fell from 193.271 ms to 188.700 ms (0.976349x).
+`string-tagcloud` also improved to 0.983944x base. No external comparable case
+regressed beyond 1.023051x, all three suite-level candidate/base geometric
+means improved, and comparable coverage did not decrease. External raw/report
+SHA-256 are
+`357d3ca02f446a91feb3c9770a2a16224a49fae09d547939f407e7d4b1037e6c`
+and `96dacea4db2c2a28795c75a3e5947be131fc28a74774acb3e8692676557b7a11`.
+
+The complete local repository gate passed 1,400 runtime tests, all 198
+benchmark-tool tests, and 5,139 Test262 subset cases; QuickJS-NG comparison
+smoke tests also passed. Branch CI run `29668579145`, main CI run
+`29669068333`, and Test262 Coverage run `29669147736` all succeeded. Coverage
+remained 42,671/42,672 with one actionable gap and zero timeout;
+burndown/comparison SHA-256 are
+`b194cfd73aac52655cad6d1a60c0315dfc5b7718d967dd16b37e8f0b5b9dd25d`
+and `94a97687babcdfba02efff77997af0a59fa7ddfb08a2370d03fbb933de069e69`.
+
+Unit 64 is accepted as B3 external-generalization progress: an externally
+profiled, general environment mechanism produced repeatable gains on both eval
+workloads, remained positive across all three external corpora, recovered the
+pre-scaffolding broad position, and preserved correctness. It is not B4 or B5
+progress: allocation and every external suite still lose materially to
+QuickJS-NG. The next environment unit should remove the remaining temporary
+binding buffer or replace direct-eval value copying and name-based writeback
+with shared slot/upvalue cells; it must preserve the external gains and recover
+the builtin code-layout debt rather than specializing a benchmark source.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
