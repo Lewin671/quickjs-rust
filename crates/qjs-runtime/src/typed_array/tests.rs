@@ -518,6 +518,30 @@ fn instance_accessors_report_view_geometry() {
 }
 
 #[test]
+fn instance_native_accessors_preserve_receiver_and_abrupt_completion() {
+    assert_eq!(
+        eval(
+            "let view = new Uint8Array(4); \
+             let proto = Object.getPrototypeOf(Uint8Array.prototype); \
+             let bufferGet = Object.getOwnPropertyDescriptor(proto, 'buffer').get; \
+             let byteLengthGet = Object.getOwnPropertyDescriptor(proto, 'byteLength').get; \
+             Object.defineProperty(view, 'savedBuffer', { get: bufferGet }); \
+             Object.defineProperty(view, 'savedByteLength', { get: byteLengthGet }); \
+             (view.savedBuffer === view.buffer) + ':' + view.savedByteLength;"
+        ),
+        Ok(Value::String("true:4".to_owned().into()))
+    );
+    assert!(
+        eval(
+            "let proto = Object.getPrototypeOf(Uint8Array.prototype); \
+             let get = Object.getOwnPropertyDescriptor(proto, 'buffer').get; \
+             let object = {}; Object.defineProperty(object, 'value', { get }); object.value;"
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn accessors_brand_check_their_receiver() {
     assert!(
         eval("Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype), 'byteLength').get.call({});").is_err()
