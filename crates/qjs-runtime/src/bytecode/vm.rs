@@ -113,6 +113,25 @@ pub(super) fn eval_function_bytecode<'a>(
         sloppy_global_names: vm.sloppy_global_names,
     }
 }
+
+pub(super) fn eval_direct_function_bytecode(
+    bytecode: &Bytecode,
+    env: CallEnv,
+    persist_global_lexicals: bool,
+    direct_call_slots: DirectCallSlots<'_>,
+) -> Result<Value, RuntimeError> {
+    let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
+        bytecode,
+        env,
+        Vec::new(),
+        Vec::new(),
+        Some(direct_call_slots),
+    );
+    vm.persist_global_lexicals = persist_global_lexicals;
+    let value = vm.run();
+    bytecode.recycle_direct_local_slots(std::mem::take(&mut vm.locals));
+    value
+}
 pub(super) struct Vm<'a> {
     pub(super) bytecode: &'a Bytecode,
     pub(super) ip: usize,
@@ -364,11 +383,14 @@ impl<'a> Vm<'a> {
     }
 
     fn initial_direct_call_slots(bytecode: &Bytecode) -> Vec<Slot> {
-        bytecode
-            .locals
-            .iter()
-            .map(|local| local.hoisted.then_some(Value::Undefined))
-            .collect()
+        let mut slots = bytecode.take_direct_local_slots();
+        slots.extend(
+            bytecode
+                .locals
+                .iter()
+                .map(|local| local.hoisted.then_some(Value::Undefined)),
+        );
+        slots
     }
 
     fn initial_direct_local_upvalues(
