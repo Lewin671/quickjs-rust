@@ -4782,6 +4782,77 @@ Candidate/base/QuickJS-NG executable SHA-256 are
 and
 `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
 
+### Unit 78: accepted compile-time direct-call parameter slots
+
+Commit `b99d5e43a81bba86f5189c940d1408110ae0c52e` records the local slot for
+each positional parameter when function bytecode is compiled and seeds direct
+VM frames from that indexed vector. Previously every eligible invocation
+walked the parameter AST and repeated a string-keyed local-slot lookup for each
+argument. Duplicate sloppy parameters retain their positional entries and are
+seeded in order; the numeric-leaf parameter map deliberately selects the last
+duplicate position. The existing bytecode vector is reused, so the function
+object hot header does not grow. The change contains no benchmark identity,
+source path, recursion check, input threshold, checksum, or expected result.
+
+Independent external evidence is the acceptance criterion. A local 31-sample
+alternating run of the fixed SunSpider `controlflow-recursive` source measured
+76.551 ms candidate versus 81.147 ms Unit 77 base, or 0.943369x. The hosted
+x86 preview confirmed the direction at 134.480 ms versus 138.896 ms, or
+**0.968206x** (3.2% lower wall time). A fresh five-second sample of the
+amplified external source also removed the prior parameter-name hashing and
+`HashMap` lookup symbols from the top-of-stack hot list, matching the intended
+general mechanism.
+
+All three hosted external suite diagnostics were neutral or faster against the
+Unit 77 base. JetStream's five cases measured 0.986562x candidate/base with
+four candidate wins; Kraken's seven mutually comparable cases measured
+0.994085x with five candidate wins; and all 26 SunSpider cases measured
+0.997293x with 17 candidate wins. Kraken capability was symmetric: the same
+seven cases timed out for candidate and base, including `audio-oscillator` on
+the 15-second boundary, so the smaller comparable cohort is not a candidate
+coverage regression.
+
+The hosted broad diagnostic was physically complete with 225/225 measurements,
+75/75 passing linearity checks, and three valid blocks. It measured 0.984370x
+candidate/base with a 95% confidence interval of [0.981254x, 0.985314x]. Its
+health remains deliberately `inconclusive` because three blocks are a preview,
+not a claim cohort. The binding family improved to 0.855519x, but call and
+builtin measured 1.047157x and 1.061698x. The unrelated `array_index_of` case
+also moved to 1.126158x despite this unit not touching builtin execution; these
+internal movements remain explicit regression watches rather than a reason to
+select a favorable internal-only story.
+
+The campaign target is still far away. Candidate/QuickJS-NG was 0.355666x on
+the internal portfolio, but external candidate/QuickJS-NG geometric means were
+8.287110x on JetStream, 4.852732x on the incomplete Kraken comparison, and
+8.323470x on SunSpider. QuickJS-NG won all 38 comparable external cases.
+
+The isolated branch full check passed 1,406 runtime tests, all 198
+benchmark-tool tests, all 5,139 curated Test262 cases, formatting, Clippy,
+agents, and file-size checks; `compare-qjs.sh` also passed. Isolated branch CI
+run `29702791971`, main CI run `29703032108`, Test262 Coverage run
+`29703142411`, and Performance Preview run `29703032123` all completed
+successfully. A redundant main-worktree check was interrupted when the local
+macOS filesystem left Clippy compiler processes in prolonged uninterruptible
+I/O; the exact isolated local gate plus isolated and main remote gates are the
+completed verification evidence. GitHub's most recent 100 runs contained no
+failure, cancellation, or timeout at acceptance time.
+
+Hosted broad run ID is `a2d0ab7a-2cf5-46bf-b78b-92d4247babfd`; broad
+raw/report SHA-256 are
+`22f19414f665568ee02b33fdb6c3c79e8c25c8e4590841e5bcd5115c2c2da664`
+and
+`0bf5297fa542bc97fa5826631b4470f4219d30a128e3f00aa9e65fceb814f8ae`;
+hosted external raw/report SHA-256 are
+`8070a3a839f6ab6929c21231b994c75c53a425d54f2acd3dc1c22d0cfceb0017`
+and
+`de98371b746adc45514b39b0c5572a00ef6caf35fa028d8bbcff6f8d82215fc1`.
+Candidate/base/QuickJS-NG executable SHA-256 are
+`69359825cb8d010bd4a0ad11343de409f31781865b1371834739260f81154338`,
+`9a61fef261b458b5f8b805ae235c7bd41bedd6953d2a4af31ee138ebde42161e`,
+and
+`8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
