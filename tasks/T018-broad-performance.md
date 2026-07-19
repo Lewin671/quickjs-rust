@@ -4853,6 +4853,87 @@ Candidate/base/QuickJS-NG executable SHA-256 are
 and
 `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
 
+### Units 79-80: rejected direct-call representation prototypes
+
+Two local-only prototypes were rejected before integration. Unit 79 cached the
+complete direct-leaf eligibility predicate on each function, but alternating
+external screens measured 1.01947x candidate/base over 31 pairs and 1.01303x
+over 41 pairs. Unit 80 replaced small direct-frame local vectors with inline
+storage; both the four-slot and eight-slot variants regressed the fixed
+external workload, at 1.01127x and 1.01357x respectively. Neither prototype
+was committed or pushed. These rejections prevent metadata caching or inline
+storage from being presented as progress merely because they appear cheaper
+in isolation.
+
+### Unit 81: accepted fixed small direct-call argument slices
+
+Commit `619f98fc3df0286cf6653530dee7557979786079` avoids constructing a heap
+`Vec<Value>` for eligible two- and three-argument direct leaf VM calls. The VM
+pops those values into fixed stack arrays and passes a slice to the existing
+direct-call implementation. The zero/one-argument path is unchanged, and the
+new fixed-array helper is deliberately out of line because placing all shapes
+in the main opcode dispatch body measurably slowed unrelated calls. The change
+is selected only by ordinary call arity and the existing semantic direct-leaf
+predicate; it contains no benchmark identity, source path, recursion test,
+input-size threshold, checksum, or expected-result condition.
+
+The mandatory external preview supplies the acceptance evidence. Against Unit
+78 base `8a1f174f0f6689b5f9bf1b30cb011bd6a930e490`, all five JetStream subset
+cases were comparable and measured 0.993956x candidate/base, with three
+candidate wins. SunSpider's complete 26-case comparison measured 0.990886x,
+with 15 candidate wins; the independently sourced `controlflow-recursive`
+case fell from 131.858 ms to 125.358 ms, or **0.950703x**. The effect was not
+confined to that case: `raytrace-public-class-fields` measured 0.981578x,
+Kraken `imaging-darkroom` 0.973209x, SunSpider `crypto-md5` 0.965192x, and
+`math-spectral-norm` 0.937482x. Kraken's seven mutually comparable cases were
+near neutral at 1.003129x with four candidate wins. Capability was symmetric:
+the same seven of fourteen Kraken cases completed for candidate and base, so
+no candidate-only timeout or coverage loss was hidden in the aggregate.
+
+The hosted broad diagnostic was physically complete with 225/225 valid
+measurements, 75/75 passing linearity checks, and three valid blocks. It
+measured 0.986032x candidate/base with a 95% confidence interval of
+[0.982679x, 0.987919x]. Health remains deliberately `inconclusive` because
+three preview blocks are a non-claim cohort. The motivating call family
+improved to 0.929429x; allocation was 0.993758x and string was 0.980306x.
+Binding, builtin, property, control, and array measured 1.004388x, 1.020559x,
+1.017020x, 1.004152x, and 1.001539x respectively and remain explicit
+regression watches. In particular, `captured_write` was 1.091107x and
+`array_index_of` was 1.041356x even though this unit does not alter those
+operations. The accepted external multi-suite improvement and the 0.929429x
+call-family result outweigh those small unrelated movements, but the watches
+must be remeasured by the next unit.
+
+The campaign remains far from complete. Candidate/QuickJS-NG was 0.347249x on
+the internal portfolio, while the external diagnostic geometric means were
+8.186116x on JetStream, 4.828001x on the incomplete Kraken comparison, and
+8.170998x on SunSpider. QuickJS-NG won all 38 comparable external cases.
+
+The isolated full local gate passed 1,407 runtime tests, all 198 benchmark-tool
+tests, all 5,139 curated Test262 cases, formatting, Clippy, agents, and
+file-size checks; `compare-qjs.sh` also passed. Isolated branch CI run
+`29705061727`, main CI run `29705376840`, Test262 Coverage run `29705469813`,
+and Performance Preview run `29705376810` all completed successfully. The
+redundant main-worktree pre-push hook was interrupted only after the SSH remote
+closed its idle connection during a third full local rebuild; the already
+completed exact isolated gates and both remote CI layers are the authoritative
+verification, and no CI job was skipped or ignored.
+
+Hosted broad run ID is `90518955-a23d-413c-88b9-2c0a92c157a0`; broad
+raw/report SHA-256 are
+`c49720cb97e48d924a70f8198a707d43f5421ab6308e5849b447b44f7f87e59d`
+and
+`6171d0030ddce38eb8153e0b2eb0872c0db5f238d57ae7dd393d0d8f506b9c8f`;
+hosted external raw/report SHA-256 are
+`3cfc396c632eb579d56e4ae1324d44528dbf004b288c8894e0d3918b84246933`
+and
+`ac6d27454583d37973a732a46751baf9b83b96bfbd6a56ca4e92273a3bf8d4ed`.
+Candidate/base/QuickJS-NG executable SHA-256 are
+`1492ef71536f52b3694e04e0c5f9c3fd66943ee1c8b32224fb2fb1735b6837e9`,
+`69359825cb8d010bd4a0ad11343de409f31781865b1371834739260f81154338`,
+and
+`8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
