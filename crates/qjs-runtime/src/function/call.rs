@@ -710,6 +710,7 @@ fn direct_leaf_function_env<'a>(
             params: &function.params,
             arguments: argument_values,
             upvalues: &function.upvalues,
+            realm_upvalue_slots: function.realm_upvalue_slots,
         }),
     }
 }
@@ -885,6 +886,7 @@ fn function_env<'a>(
         params: &function.params,
         arguments: argument_values,
         upvalues: &function.upvalues,
+        realm_upvalue_slots: function.realm_upvalue_slots,
     });
     FunctionCallEnv {
         env: frame_env,

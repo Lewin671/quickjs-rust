@@ -98,6 +98,12 @@ impl RealmState {
             });
         *self.dynamic_function_realm_global.borrow_mut() = global;
     }
+
+    pub(crate) fn is_binding_cell(&self, name: &str, cell: &Upvalue) -> bool {
+        self.binding_cells
+            .cell(name)
+            .is_some_and(|candidate| candidate.ptr_eq(cell))
+    }
 }
 
 impl fmt::Debug for RealmState {
@@ -1078,10 +1084,7 @@ impl CallEnv {
     }
 
     pub(crate) fn is_realm_binding_cell(&self, name: &str, cell: &Upvalue) -> bool {
-        self.realm
-            .binding_cells
-            .cell(name)
-            .is_some_and(|candidate| candidate.ptr_eq(cell))
+        self.realm.is_binding_cell(name, cell)
     }
 
     /// True if `name` is bound in either layer.

@@ -125,6 +125,10 @@ pub struct FunctionData {
     pub(crate) module_imports: ModuleImports,
     pub(crate) with_stack: Vec<Value>,
     pub(crate) upvalues: Vec<Upvalue>,
+    /// Received-upvalue slots backed by the function creation realm. The cells
+    /// stay live; this mask only avoids rediscovering their identity by name on
+    /// every direct call.
+    pub(crate) realm_upvalue_slots: u128,
     pub(crate) local_names: Rc<Vec<String>>,
     pub(crate) bytecode: Option<Rc<Bytecode>>,
     /// Original source retained for `Function.prototype.toString`. Function
@@ -504,6 +508,7 @@ impl Function {
             module_imports: Default::default(),
             with_stack: Vec::new(),
             upvalues: Vec::new(),
+            realm_upvalue_slots: 0,
             local_names: Rc::new(local_names),
             bytecode: Some(bytecode),
             source_text: None,
@@ -568,6 +573,18 @@ impl Function {
             with_stack,
             upvalues,
         } = compiled;
+        let realm_upvalue_slots = bytecode
+            .received_upvalue_slots()
+            .iter()
+            .zip(&upvalues)
+            .filter_map(|(slot, cell)| {
+                (*slot < u128::BITS as usize
+                    && bytecode
+                        .local_name_at(*slot)
+                        .is_some_and(|name| realm.is_binding_cell(name, cell)))
+                .then_some(1_u128 << *slot)
+            })
+            .fold(0, |slots, slot| slots | slot);
         let dynamic_function_realm_global = dynamic_function_realm_global(&realm);
         let auxiliary = FunctionAuxiliaryState::new(home_object, super_constructor);
         let function = Self(Rc::new(FunctionData {
@@ -586,6 +603,7 @@ impl Function {
             module_imports,
             with_stack,
             upvalues,
+            realm_upvalue_slots,
             local_names,
             bytecode: Some(bytecode),
             source_text,
@@ -697,6 +715,7 @@ impl Function {
             module_imports: Default::default(),
             with_stack: Vec::new(),
             upvalues: Vec::new(),
+            realm_upvalue_slots: 0,
             local_names: Rc::new(Vec::new()),
             bytecode: None,
             source_text: None,
@@ -749,6 +768,7 @@ impl Function {
             module_imports: Default::default(),
             with_stack: Vec::new(),
             upvalues: Vec::new(),
+            realm_upvalue_slots: 0,
             local_names: Rc::new(Vec::new()),
             bytecode: None,
             source_text: None,

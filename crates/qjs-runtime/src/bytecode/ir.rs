@@ -1002,7 +1002,7 @@ impl Bytecode {
         &self.parameter_slots
     }
 
-    pub(super) fn received_upvalue_slots(&self) -> &[usize] {
+    pub(crate) fn received_upvalue_slots(&self) -> &[usize] {
         &self.received_upvalue_slots
     }
 
