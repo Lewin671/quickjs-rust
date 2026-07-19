@@ -14,10 +14,10 @@ pub(crate) fn native_json_parse(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let node = parse_json_node(&source, env)?;
-    let value = node.value.clone();
     let reviver = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     if is_callable(&reviver) {
+        let node = parse_json_node(&source, env)?;
+        let value = node.value.clone();
         let root = Value::Object(crate::ObjectRef::with_prototype(
             std::collections::HashMap::new(),
             object_prototype(env),
@@ -27,7 +27,7 @@ pub(crate) fn native_json_parse(
         }
         internalize_json_property(&root, "", &node, &reviver, env)
     } else {
-        Ok(value)
+        parse_json_text(&source, env)
     }
 }
 
@@ -287,11 +287,13 @@ fn delete_property(target: Value, key: PropertyKey, env: &mut CallEnv) -> Result
 }
 
 pub(crate) fn parse_json_text(source: &str, env: &CallEnv) -> Result<Value, RuntimeError> {
-    parse_json_node(source, env).map(|node| node.value)
+    JsonParser::new(source, env)
+        .parse::<false>()
+        .map(|node| node.value)
 }
 
 fn parse_json_node(source: &str, env: &CallEnv) -> Result<JsonNode, RuntimeError> {
-    JsonParser::new(source, env).parse()
+    JsonParser::new(source, env).parse::<true>()
 }
 
 struct JsonParser<'a> {
@@ -309,9 +311,9 @@ impl<'a> JsonParser<'a> {
         }
     }
 
-    fn parse(mut self) -> Result<JsonNode, RuntimeError> {
+    fn parse<const PRESERVE_METADATA: bool>(mut self) -> Result<JsonNode, RuntimeError> {
         self.skip_whitespace();
-        let value = self.value()?;
+        let value = self.value::<PRESERVE_METADATA>()?;
         self.skip_whitespace();
         if self.cursor == self.source.len() {
             Ok(value)
@@ -320,34 +322,43 @@ impl<'a> JsonParser<'a> {
         }
     }
 
-    fn value(&mut self) -> Result<JsonNode, RuntimeError> {
+    fn value<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
         self.skip_whitespace();
         match self.peek() {
-            Some('"') => self.string_node(),
-            Some('[') => self.array(),
-            Some('{') => self.object(),
-            Some('t') => self.literal("true", Value::Boolean(true)),
-            Some('f') => self.literal("false", Value::Boolean(false)),
-            Some('n') => self.literal("null", Value::Null),
-            Some('-' | '0'..='9') => self.number(),
+            Some('"') => self.string_node::<PRESERVE_METADATA>(),
+            Some('[') => self.array::<PRESERVE_METADATA>(),
+            Some('{') => self.object::<PRESERVE_METADATA>(),
+            Some('t') => self.literal::<PRESERVE_METADATA>("true", Value::Boolean(true)),
+            Some('f') => self.literal::<PRESERVE_METADATA>("false", Value::Boolean(false)),
+            Some('n') => self.literal::<PRESERVE_METADATA>("null", Value::Null),
+            Some('-' | '0'..='9') => self.number::<PRESERVE_METADATA>(),
             _ => Err(self.syntax_error()),
         }
     }
 
-    fn array(&mut self) -> Result<JsonNode, RuntimeError> {
+    fn array<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
         self.expect_char('[')?;
-        let mut children = Vec::new();
+        let mut values = Vec::new();
+        let mut children = PRESERVE_METADATA.then(Vec::new);
         self.skip_whitespace();
         if self.consume_char(']') {
             return Ok(JsonNode {
                 value: Value::Array(ArrayRef::new(Vec::new())),
                 source: None,
-                children: JsonNodeChildren::Array(Vec::new()),
+                children: children
+                    .map(JsonNodeChildren::Array)
+                    .unwrap_or(JsonNodeChildren::None),
             });
         }
 
         loop {
-            children.push(self.value()?);
+            let child = self.value::<PRESERVE_METADATA>()?;
+            if let Some(children) = children.as_mut() {
+                values.push(child.value.clone());
+                children.push(child);
+            } else {
+                values.push(child.value);
+            }
             self.skip_whitespace();
             if self.consume_char(']') {
                 break;
@@ -355,24 +366,26 @@ impl<'a> JsonParser<'a> {
             self.expect_char(',')?;
         }
         Ok(JsonNode {
-            value: Value::Array(ArrayRef::new(
-                children.iter().map(|child| child.value.clone()).collect(),
-            )),
+            value: Value::Array(ArrayRef::new(values)),
             source: None,
-            children: JsonNodeChildren::Array(children),
+            children: children
+                .map(JsonNodeChildren::Array)
+                .unwrap_or(JsonNodeChildren::None),
         })
     }
 
-    fn object(&mut self) -> Result<JsonNode, RuntimeError> {
+    fn object<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
         self.expect_char('{')?;
         let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(self.env));
-        let mut children = Vec::new();
+        let mut children = PRESERVE_METADATA.then(Vec::new);
         self.skip_whitespace();
         if self.consume_char('}') {
             return Ok(JsonNode {
                 value: Value::Object(object),
                 source: None,
-                children: JsonNodeChildren::Object(Vec::new()),
+                children: children
+                    .map(JsonNodeChildren::Object)
+                    .unwrap_or(JsonNodeChildren::None),
             });
         }
 
@@ -384,9 +397,13 @@ impl<'a> JsonParser<'a> {
             let key = self.string()?;
             self.skip_whitespace();
             self.expect_char(':')?;
-            let child = self.value()?;
-            object.set(key.clone(), child.value.clone());
-            children.push((key, child));
+            let child = self.value::<PRESERVE_METADATA>()?;
+            if let Some(children) = children.as_mut() {
+                object.set(key.clone(), child.value.clone());
+                children.push((key, child));
+            } else {
+                object.set(key, child.value);
+            }
             self.skip_whitespace();
             if self.consume_char('}') {
                 break;
@@ -396,16 +413,18 @@ impl<'a> JsonParser<'a> {
         Ok(JsonNode {
             value: Value::Object(object),
             source: None,
-            children: JsonNodeChildren::Object(children),
+            children: children
+                .map(JsonNodeChildren::Object)
+                .unwrap_or(JsonNodeChildren::None),
         })
     }
 
-    fn string_node(&mut self) -> Result<JsonNode, RuntimeError> {
+    fn string_node<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
         let start = self.cursor;
         let value = self.string()?;
         Ok(JsonNode {
             value: Value::String(value.into()),
-            source: Some(self.source[start..self.cursor].to_owned()),
+            source: PRESERVE_METADATA.then(|| self.source[start..self.cursor].to_owned()),
             children: JsonNodeChildren::None,
         })
     }
@@ -456,7 +475,7 @@ impl<'a> JsonParser<'a> {
         char::from_u32(value).ok_or_else(|| self.syntax_error())
     }
 
-    fn number(&mut self) -> Result<JsonNode, RuntimeError> {
+    fn number<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
         let start = self.cursor;
         self.consume_char('-');
         match self.peek() {
@@ -497,21 +516,25 @@ impl<'a> JsonParser<'a> {
             }
         }
 
-        let source = self.source[start..self.cursor].to_owned();
+        let source = &self.source[start..self.cursor];
         let value = source.parse::<f64>().map_err(|_| self.syntax_error())?;
         Ok(JsonNode {
             value: Value::Number(value),
-            source: Some(source),
+            source: PRESERVE_METADATA.then(|| source.to_owned()),
             children: JsonNodeChildren::None,
         })
     }
 
-    fn literal(&mut self, literal: &str, value: Value) -> Result<JsonNode, RuntimeError> {
+    fn literal<const PRESERVE_METADATA: bool>(
+        &mut self,
+        literal: &str,
+        value: Value,
+    ) -> Result<JsonNode, RuntimeError> {
         if self.source[self.cursor..].starts_with(literal) {
             self.cursor += literal.len();
             Ok(JsonNode {
                 value,
-                source: Some(literal.to_owned()),
+                source: PRESERVE_METADATA.then(|| literal.to_owned()),
                 children: JsonNodeChildren::None,
             })
         } else {
@@ -557,5 +580,36 @@ impl<'a> JsonParser<'a> {
             thrown: None,
             message: "SyntaxError: JSON syntax error".to_owned(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::function::new_realm;
+
+    fn test_env() -> CallEnv {
+        CallEnv::new(new_realm(HashMap::new()))
+    }
+
+    #[test]
+    fn metadata_is_retained_only_for_the_reviver_parse_mode() {
+        let source = r#"{"items":[1,"x",true,null]}"#;
+        let env = test_env();
+
+        let plain = JsonParser::new(source, &env).parse::<false>().unwrap();
+        assert!(matches!(plain.children, JsonNodeChildren::None));
+
+        let reviver = JsonParser::new(source, &env).parse::<true>().unwrap();
+        let JsonNodeChildren::Object(properties) = reviver.children else {
+            panic!("reviver mode must retain object children");
+        };
+        let JsonNodeChildren::Array(items) = &properties[0].1.children else {
+            panic!("reviver mode must retain array children");
+        };
+        assert_eq!(items[0].source.as_deref(), Some("1"));
+        assert_eq!(items[1].source.as_deref(), Some("\"x\""));
+        assert_eq!(items[2].source.as_deref(), Some("true"));
+        assert_eq!(items[3].source.as_deref(), Some("null"));
     }
 }
