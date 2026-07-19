@@ -384,15 +384,13 @@ impl<'a> Vm<'a> {
             {
                 continue;
             }
-            let cell_is_visible = (self.locals.get(index).is_some_and(Option::is_some)
-                || self.bytecode.locals[index].is_received_upvalue())
-                && self.local_upvalues.get(index).is_some_and(Option::is_some);
-            if !cell_is_visible && let Some(value) = self.local_slot_value(index) {
+            if let Some(value) = self.local_slot_value(index) {
                 let name = self.bytecode.locals[index].name.clone();
                 // Slots are emitted in lexical declaration order. Inserting every
-                // non-cell visible slot under its source name therefore makes an
-                // inner shadowing binding replace the outer entry. Live cells are
-                // overlaid in the second pass, preserving that same ordering.
+                // active slot under its source name therefore makes an inner
+                // shadowing binding replace the outer entry, while an exited
+                // block's cleared slot never wins. Slot identity, not a mangled
+                // name, remains authoritative for ordinary bytecode access.
                 env.insert(name, value);
             }
         }
