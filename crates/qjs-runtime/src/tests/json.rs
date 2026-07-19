@@ -111,6 +111,10 @@ fn json_stringify_observes_replacer_and_wrapper_semantics() {
 #[test]
 fn json_stringify_space_and_primitive_wrappers_use_conversion() {
     assert_eq!(
+        eval("JSON.stringify({first: undefined, keep: 1, last: function() {}}, null, 2);"),
+        Ok(Value::String("{\n  \"keep\": 1\n}".to_owned().into()))
+    );
+    assert_eq!(
         eval("JSON.stringify({a:{b:1}}, null, new Number(2));"),
         Ok(Value::String(
             "{\n  \"a\": {\n    \"b\": 1\n  }\n}".to_owned().into()
@@ -165,7 +169,17 @@ fn json_stringify_to_json_proxy_and_cycle_semantics() {
 }
 
 #[test]
-fn json_stringify_escapes_unpaired_surrogates() {
+fn json_stringify_escapes_strings_and_unpaired_surrogates() {
+    assert_eq!(
+        eval(r#"JSON.stringify("😀\"\\\\\b\f\n\r\t\u0001");"#),
+        Ok(Value::String(
+            r#""😀\"\\\\\b\f\n\r\t\u0001""#.to_owned().into()
+        ))
+    );
+    assert_eq!(
+        eval("JSON.stringify(String.fromCharCode(0xD83D, 0xDE00));"),
+        Ok(Value::String("\"😀\"".to_owned().into()))
+    );
     assert_eq!(
         eval("JSON.stringify(String.fromCharCode(0xD834));"),
         Ok(Value::String("\"\\ud834\"".to_owned().into()))

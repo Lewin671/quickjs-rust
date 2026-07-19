@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Write as _};
 
 use crate::{
     ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function, number, property_value,
@@ -33,9 +33,11 @@ pub(crate) fn native_json_stringify(
         crate::object_prototype(env),
     );
     let mut state = ctx;
-    match serialize_json_property("", Value::Object(wrapper), &mut state, env)? {
-        Some(json) => Ok(Value::String(json.into())),
-        None => Ok(Value::Undefined),
+    let mut output = String::new();
+    if serialize_json_property_into("", Value::Object(wrapper), &mut state, env, &mut output)? {
+        Ok(Value::String(output.into()))
+    } else {
+        Ok(Value::Undefined)
     }
 }
 
@@ -107,12 +109,13 @@ fn number_gap(number: f64) -> Result<String, RuntimeError> {
     Ok(" ".repeat(count))
 }
 
-fn serialize_json_property(
+fn serialize_json_property_into(
     key: &str,
     holder: Value,
     ctx: &mut StringifyContext,
     env: &mut CallEnv,
-) -> Result<Option<String>, RuntimeError> {
+    output: &mut String,
+) -> Result<bool, RuntimeError> {
     let mut value = property_value(holder.clone(), key, env)?;
     if matches!(
         value,
@@ -147,62 +150,101 @@ fn serialize_json_property(
 
     value = unbox_json_wrapper(value, env)?;
     match value {
-        Value::String(value) => Ok(Some(quote_json_string(&value))),
-        Value::Number(value) if value.is_finite() => Ok(Some(number::number_to_js_string(value))),
-        Value::Number(_) | Value::Null => Ok(Some("null".to_owned())),
-        Value::Boolean(true) => Ok(Some("true".to_owned())),
-        Value::Boolean(false) => Ok(Some("false".to_owned())),
+        Value::String(value) => {
+            push_quoted_json_string(output, &value);
+            Ok(true)
+        }
+        Value::Number(value) if value.is_finite() => {
+            output.push_str(&number::number_to_js_string(value));
+            Ok(true)
+        }
+        Value::Number(_) | Value::Null => {
+            output.push_str("null");
+            Ok(true)
+        }
+        Value::Boolean(true) => {
+            output.push_str("true");
+            Ok(true)
+        }
+        Value::Boolean(false) => {
+            output.push_str("false");
+            Ok(true)
+        }
         Value::BigInt(_) => Err(RuntimeError {
             thrown: None,
             message: "TypeError: cannot serialize BigInt".to_owned(),
         }),
         Value::Array(_) | Value::Proxy(_) if is_array_like(&value, env)? => {
-            serialize_json_array(value, ctx, env).map(Some)
+            serialize_json_array_into(value, ctx, env, output)?;
+            Ok(true)
         }
-        Value::Array(_) => serialize_json_object(value, ctx, env).map(Some),
+        Value::Array(_) => {
+            serialize_json_object_into(value, ctx, env, output)?;
+            Ok(true)
+        }
         Value::Object(object) => {
             if crate::symbol::is_symbol_primitive(&object) {
-                return Ok(None);
+                return Ok(false);
             }
             if let Some(raw_json) = raw_json_value(&object) {
-                Ok(Some(raw_json))
+                output.push_str(&raw_json);
+                Ok(true)
             } else {
-                serialize_json_object(Value::Object(object), ctx, env).map(Some)
+                serialize_json_object_into(Value::Object(object), ctx, env, output)?;
+                Ok(true)
             }
         }
-        Value::Map(_) | Value::Set(_) => serialize_json_object(value, ctx, env).map(Some),
-        Value::Function(_) | Value::Undefined => Ok(None),
-        Value::Proxy(_) => serialize_json_object(value, ctx, env).map(Some),
+        Value::Map(_) | Value::Set(_) => {
+            serialize_json_object_into(value, ctx, env, output)?;
+            Ok(true)
+        }
+        Value::Function(_) | Value::Undefined => Ok(false),
+        Value::Proxy(_) => {
+            serialize_json_object_into(value, ctx, env, output)?;
+            Ok(true)
+        }
     }
 }
 
-fn serialize_json_array(
+fn serialize_json_array_into(
     value: Value,
     ctx: &mut StringifyContext,
     env: &mut CallEnv,
-) -> Result<String, RuntimeError> {
+    output: &mut String,
+) -> Result<(), RuntimeError> {
     push_stack(value.clone(), ctx)?;
     let old_indent = ctx.indent.clone();
     ctx.indent.push_str(&ctx.gap);
     let length = crate::to_length_with_env(property_value(value.clone(), "length", env)?, env)?;
-    let mut parts = Vec::with_capacity(length);
+    output.push('[');
     for index in 0..length {
-        parts.push(
-            serialize_json_property(&index.to_string(), value.clone(), ctx, env)?
-                .unwrap_or_else(|| "null".to_owned()),
-        );
+        if index > 0 {
+            output.push(',');
+        }
+        if !ctx.gap.is_empty() {
+            output.push('\n');
+            output.push_str(&ctx.indent);
+        }
+        if !serialize_json_property_into(&index.to_string(), value.clone(), ctx, env, output)? {
+            output.push_str("null");
+        }
     }
-    let result = join_json_array(&parts, &ctx.gap, &ctx.indent, &old_indent);
+    if length > 0 && !ctx.gap.is_empty() {
+        output.push('\n');
+        output.push_str(&old_indent);
+    }
+    output.push(']');
     ctx.indent = old_indent;
     ctx.stack.pop();
-    Ok(result)
+    Ok(())
 }
 
-fn serialize_json_object(
+fn serialize_json_object_into(
     value: Value,
     ctx: &mut StringifyContext,
     env: &mut CallEnv,
-) -> Result<String, RuntimeError> {
+    output: &mut String,
+) -> Result<(), RuntimeError> {
     push_stack(value.clone(), ctx)?;
     let keys = if let Some(property_list) = &ctx.property_list {
         property_list.clone()
@@ -211,22 +253,36 @@ fn serialize_json_object(
     };
     let old_indent = ctx.indent.clone();
     ctx.indent.push_str(&ctx.gap);
-    let mut parts = Vec::new();
+    output.push('{');
+    let mut wrote_member = false;
     for key in keys {
-        let Some(json) = serialize_json_property(&key, value.clone(), ctx, env)? else {
+        let member_start = output.len();
+        if wrote_member {
+            output.push(',');
+        }
+        if !ctx.gap.is_empty() {
+            output.push('\n');
+            output.push_str(&ctx.indent);
+        }
+        push_quoted_json_string(output, &key);
+        output.push(':');
+        if !ctx.gap.is_empty() {
+            output.push(' ');
+        }
+        if !serialize_json_property_into(&key, value.clone(), ctx, env, output)? {
+            output.truncate(member_start);
             continue;
-        };
-        let member = if ctx.gap.is_empty() {
-            format!("{}:{json}", quote_json_string(&key))
-        } else {
-            format!("{}: {json}", quote_json_string(&key))
-        };
-        parts.push(member);
+        }
+        wrote_member = true;
     }
-    let result = join_json_object(&parts, &ctx.gap, &ctx.indent, &old_indent);
+    if wrote_member && !ctx.gap.is_empty() {
+        output.push('\n');
+        output.push_str(&old_indent);
+    }
+    output.push('}');
     ctx.indent = old_indent;
     ctx.stack.pop();
-    Ok(result)
+    Ok(())
 }
 
 fn enumerable_own_string_keys(
@@ -278,34 +334,6 @@ fn own_property_descriptor(
         }
         value => crate::object::own_property_descriptor_key(value, key, env),
     }
-}
-
-fn join_json_array(parts: &[String], gap: &str, indent: &str, old_indent: &str) -> String {
-    if parts.is_empty() {
-        return "[]".to_owned();
-    }
-    if gap.is_empty() {
-        return format!("[{}]", parts.join(","));
-    }
-    format!("[\n{}\n{}]", join_indented(parts, indent), old_indent)
-}
-
-fn join_json_object(parts: &[String], gap: &str, indent: &str, old_indent: &str) -> String {
-    if parts.is_empty() {
-        return "{}".to_owned();
-    }
-    if gap.is_empty() {
-        return format!("{{{}}}", parts.join(","));
-    }
-    format!("{{\n{}\n{}}}", join_indented(parts, indent), old_indent)
-}
-
-fn join_indented(parts: &[String], indent: &str) -> String {
-    parts
-        .iter()
-        .map(|part| format!("{indent}{part}"))
-        .collect::<Vec<_>>()
-        .join(",\n")
 }
 
 fn push_stack(value: Value, ctx: &mut StringifyContext) -> Result<(), RuntimeError> {
@@ -412,35 +440,42 @@ fn truncate_string_code_units(value: &str, max_units: usize) -> String {
     string::string_from_code_units(&units[..units.len().min(max_units)])
 }
 
-fn quote_json_string(value: &str) -> String {
-    let mut output = String::from("\"");
-    let units = string::string_code_units(value);
-    let mut index = 0;
-    while index < units.len() {
-        let code_unit = units[index];
-        match code_unit {
-            0x22 => output.push_str("\\\""),
-            0x5c => output.push_str("\\\\"),
-            0x08 => output.push_str("\\b"),
-            0x0c => output.push_str("\\f"),
-            0x0a => output.push_str("\\n"),
-            0x0d => output.push_str("\\r"),
-            0x09 => output.push_str("\\t"),
-            0x00..=0x1f => output.push_str(&format!("\\u{code_unit:04x}")),
-            0xD800..=0xDBFF if index + 1 < units.len() => {
-                let next = units[index + 1];
-                if (0xDC00..=0xDFFF).contains(&next) {
-                    output.push_str(&string::string_from_code_units(&[code_unit, next]));
-                    index += 1;
-                } else {
-                    output.push_str(&format!("\\u{code_unit:04x}"));
-                }
+fn push_quoted_json_string(output: &mut String, value: &str) {
+    output.push('"');
+    let mut characters = value.chars().peekable();
+    while let Some(character) = characters.next() {
+        if let Some(code_unit) = string::surrogate_escape_code_unit(character) {
+            if matches!(
+                (
+                    code_unit,
+                    characters
+                        .peek()
+                        .copied()
+                        .and_then(string::surrogate_escape_code_unit)
+                ),
+                (0xD800..=0xDBFF, Some(0xDC00..=0xDFFF))
+            ) {
+                output.push(character);
+                output.push(characters.next().expect("peeked surrogate must remain"));
+                continue;
             }
-            0xD800..=0xDFFF => output.push_str(&format!("\\u{code_unit:04x}")),
-            _ => output.push_str(&string::string_from_code_units(&[code_unit])),
+            write!(output, "\\u{code_unit:04x}").expect("writing to a String cannot fail");
+            continue;
         }
-        index += 1;
+        match character {
+            '"' => output.push_str("\\\""),
+            '\\' => output.push_str("\\\\"),
+            '\u{0008}' => output.push_str("\\b"),
+            '\u{000c}' => output.push_str("\\f"),
+            '\n' => output.push_str("\\n"),
+            '\r' => output.push_str("\\r"),
+            '\t' => output.push_str("\\t"),
+            '\u{0000}'..='\u{001f}' => {
+                let code_unit = character as u32;
+                write!(output, "\\u{code_unit:04x}").expect("writing to a String cannot fail")
+            }
+            _ => output.push(character),
+        }
     }
     output.push('"');
-    output
 }
