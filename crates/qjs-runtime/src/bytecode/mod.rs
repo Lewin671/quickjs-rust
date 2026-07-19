@@ -143,6 +143,7 @@ pub(crate) struct DirectCallSlots<'a> {
     pub(crate) params: &'a qjs_ast::FunctionParams,
     pub(crate) arguments: &'a [Value],
     pub(crate) upvalues: &'a [crate::function::Upvalue],
+    pub(crate) realm_upvalue_slots: u128,
 }
 
 pub(crate) fn eval_function_bytecode_with_direct_call_slots<'a>(

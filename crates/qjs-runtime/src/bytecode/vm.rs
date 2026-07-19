@@ -267,22 +267,29 @@ impl<'a> Vm<'a> {
         let direct_upvalues = direct_call_slots
             .as_ref()
             .map(|direct_call_slots| direct_call_slots.upvalues);
+        let direct_realm_upvalue_slots = direct_call_slots
+            .as_ref()
+            .map_or(0, |direct_call_slots| direct_call_slots.realm_upvalue_slots);
         let direct_this = direct_call_slots.and_then(|direct_call_slots| {
             Self::seed_direct_call_slots(bytecode, &mut locals, direct_call_slots)
         });
-        let local_upvalues = if is_direct_call {
+        let (local_upvalues, direct_realm_binding_slots) = if is_direct_call {
             Self::initial_direct_local_upvalues(
                 bytecode,
                 direct_upvalues.unwrap_or(&upvalues),
+                direct_realm_upvalue_slots,
                 &env,
             )
         } else {
-            Self::initial_local_upvalues(bytecode, &locals, &upvalues, &env)
+            (
+                Self::initial_local_upvalues(bytecode, &locals, &upvalues, &env),
+                None,
+            )
         };
         let authoritative_slots =
             Self::initial_authoritative_slots(bytecode, &local_upvalues, &env);
-        let realm_binding_slots =
-            Self::initial_realm_binding_slots(bytecode, &local_upvalues, &env);
+        let realm_binding_slots = direct_realm_binding_slots
+            .unwrap_or_else(|| Self::initial_realm_binding_slots(bytecode, &local_upvalues, &env));
         let numeric_loop_plans = bytecode
             .numeric_loop_plans
             .get_or_init(|| super::vm_numeric_loop::NumericLoopPlan::compile_all(bytecode))
@@ -373,46 +380,59 @@ impl<'a> Vm<'a> {
     fn initial_direct_local_upvalues(
         bytecode: &Bytecode,
         upvalues: &[Upvalue],
+        received_realm_binding_slots: u128,
         env: &CallEnv,
-    ) -> Vec<Option<Upvalue>> {
+    ) -> (Vec<Option<Upvalue>>, Option<u128>) {
         // Most direct leaf calls have no captured, module, or sloppy-global
         // cells. An empty vector represents the all-None state for those
         // frames and avoids allocating one pointer-sized entry per local on
         // every call. Direct-call eligibility excludes operations that can
         // create cells later (closures, eval, and with).
         if !bytecode.has_direct_local_upvalue_routes() && !env.has_module_imports() {
-            return Vec::new();
+            return (Vec::new(), Some(0));
         }
         let direct_eval_frame = matches!(
             env.get_local(crate::DIRECT_EVAL_BINDING),
             Some(Value::Boolean(true))
         );
         let mut next_received = 0;
-        bytecode
-            .locals
-            .iter()
-            .map(|local| {
-                if let Some(upvalue) = env.module_import_cell(&local.name) {
-                    if local.is_received_upvalue() {
-                        next_received += 1;
-                    }
-                    return Some(upvalue);
-                }
-                if local.sloppy_global_fallback {
-                    if direct_eval_frame && let Some(upvalue) = env.local_binding_cell(&local.name)
-                    {
-                        return Some(upvalue);
-                    }
-                    return env.realm_binding_cell(&local.name);
-                }
+        let has_module_imports = env.has_module_imports();
+        let mut realm_binding_slots = 0_u128;
+        let mut local_upvalues = Vec::with_capacity(bytecode.locals.len());
+        for (slot, local) in bytecode.locals.iter().enumerate() {
+            if has_module_imports && let Some(upvalue) = env.module_import_cell(&local.name) {
                 if local.is_received_upvalue() {
-                    let upvalue = upvalues.get(next_received).cloned();
                     next_received += 1;
-                    return upvalue;
                 }
-                None
-            })
-            .collect()
+                local_upvalues.push(Some(upvalue));
+                continue;
+            }
+            if local.sloppy_global_fallback {
+                if direct_eval_frame && let Some(upvalue) = env.local_binding_cell(&local.name) {
+                    local_upvalues.push(Some(upvalue));
+                    continue;
+                }
+                let upvalue = env.realm_binding_cell(&local.name);
+                if upvalue.is_some() && slot < u128::BITS as usize {
+                    realm_binding_slots |= 1_u128 << slot;
+                }
+                local_upvalues.push(upvalue);
+                continue;
+            }
+            if local.is_received_upvalue() {
+                let upvalue = upvalues.get(next_received).cloned();
+                next_received += 1;
+                if slot < u128::BITS as usize
+                    && received_realm_binding_slots & (1_u128 << slot) != 0
+                {
+                    realm_binding_slots |= 1_u128 << slot;
+                }
+                local_upvalues.push(upvalue);
+                continue;
+            }
+            local_upvalues.push(None);
+        }
+        (local_upvalues, Some(realm_binding_slots))
     }
 
     /// Builds a `CallEnv` over the shared realm with this frame's live slots.
@@ -1614,9 +1634,11 @@ mod tests {
         let bytecode = Bytecode::new(Vec::new(), vec![local("value", false)], Vec::new());
         let env = empty_env();
 
-        let local_upvalues = Vm::initial_direct_local_upvalues(&bytecode, &[], &env);
+        let (local_upvalues, realm_binding_slots) =
+            Vm::initial_direct_local_upvalues(&bytecode, &[], 0, &env);
 
         assert!(local_upvalues.is_empty());
+        assert_eq!(realm_binding_slots, Some(0));
         assert_eq!(
             Vm::initial_authoritative_slots(&bytecode, &local_upvalues, &env),
             1
@@ -1629,10 +1651,32 @@ mod tests {
         let env = empty_env();
         let captured = Upvalue::new(Value::Number(42.0));
 
-        let local_upvalues =
-            Vm::initial_direct_local_upvalues(&bytecode, std::slice::from_ref(&captured), &env);
+        let (local_upvalues, realm_binding_slots) =
+            Vm::initial_direct_local_upvalues(&bytecode, std::slice::from_ref(&captured), 0, &env);
 
         assert_eq!(local_upvalues.len(), 1);
+        assert_eq!(realm_binding_slots, Some(0));
+        assert!(
+            local_upvalues[0]
+                .as_ref()
+                .is_some_and(|upvalue| upvalue.ptr_eq(&captured))
+        );
+    }
+
+    #[test]
+    fn direct_captured_frame_reuses_preclassified_realm_cell_slot() {
+        let bytecode = Bytecode::new(Vec::new(), vec![local("captured", true)], Vec::new());
+        let realm = new_realm(HashMap::from([(
+            "captured".to_owned(),
+            Value::Number(42.0),
+        )]));
+        let env = CallEnv::new(realm);
+        let captured = env.realm_binding_cell("captured").unwrap();
+
+        let (local_upvalues, realm_binding_slots) =
+            Vm::initial_direct_local_upvalues(&bytecode, std::slice::from_ref(&captured), 1, &env);
+
+        assert_eq!(realm_binding_slots, Some(1));
         assert!(
             local_upvalues[0]
                 .as_ref()
@@ -1652,9 +1696,11 @@ mod tests {
             "exported".to_owned(),
         );
 
-        let local_upvalues = Vm::initial_direct_local_upvalues(&bytecode, &[], &env);
+        let (local_upvalues, realm_binding_slots) =
+            Vm::initial_direct_local_upvalues(&bytecode, &[], 0, &env);
 
         assert_eq!(local_upvalues.len(), 1);
+        assert_eq!(realm_binding_slots, Some(0));
         assert!(
             local_upvalues[0]
                 .as_ref()
