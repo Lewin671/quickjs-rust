@@ -838,6 +838,21 @@ fn direct_leaf_vm_call_preserves_caller_slot_and_global_write() {
 }
 
 #[test]
+fn direct_leaf_vm_call_preserves_two_and_three_argument_order() {
+    assert_eq!(
+        eval(
+            "function pair(first, second) { return first * 10 + second; } \
+             function triple(first, second, third) { \
+               if (third === 0) return first * 10 + second; \
+               return triple(second, first + 1, third - 1); \
+             } \
+             pair(4, 7) + ':' + triple(1, 2, 2);"
+        ),
+        Ok(Value::String("47:23".to_owned().into()))
+    );
+}
+
+#[test]
 fn numeric_leaf_falls_back_for_coercion_without_duplicate_effects() {
     assert_eq!(
         eval(
