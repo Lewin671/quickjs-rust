@@ -4661,6 +4661,69 @@ Candidate/base/QuickJS-NG executable SHA-256 are
 and
 `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
 
+### Unit 76: accepted preclassified direct-call realm upvalues
+
+Runtime commit `0189845f` classifies realm-backed received-upvalue slots once
+when a function is created. Direct calls reuse that fixed mask instead of
+repeating module-import and sloppy-global classification for every invocation;
+the empty-import path also bypasses an otherwise useless lookup. This is a
+function/environment representation change used by every eligible direct call.
+It contains no benchmark identity, source path, recursion check, iteration
+count, input-size threshold, checksum, or expected-result condition.
+
+The full local gate passed 1,404 runtime tests, all 198 benchmark-tool tests,
+all 5,139 curated Test262 cases, formatting, Clippy, agents, and file-size
+checks; `compare-qjs.sh` also passed. Isolated branch CI run `29698934914`,
+main CI run `29699035809`, and Test262 Coverage run `29699134087` passed.
+Performance Preview run `29699035799` completed successfully. Its skipped
+steps are expected conditional paths on a trusted main push and cache hit; the
+actual three-engine builds, measurements, reports, and artifact uploads passed.
+
+The independent external preview confirms the motivating general call-path
+effect. SunSpider `controlflow-recursive` fell from 157.097 ms to 146.323 ms,
+or **0.931418x** candidate/base (6.9% lower wall time). Across complete suites,
+candidate/base geometric means were 0.992738x for all five JetStream cases and
+0.994731x for all 26 SunSpider cases. Kraken's eight mutually comparable cases
+were 0.996665x. No external case improved enough to approach the campaign
+target: candidate/QuickJS-NG remained 9.288036x on JetStream, 6.102195x on the
+incomplete Kraken comparison, and 8.700169x on SunSpider, with QuickJS-NG
+winning 38 of 39 comparable cases.
+
+Kraken `audio-oscillator` is explicitly excluded from that comparison because
+it lies on the 15-second timeout boundary, not because it establishes a
+coverage regression. Candidate capability sampling timed out at 15.0018 s;
+base capability sampling completed at 14.9353 s, but two of its three formal
+samples also timed out at 15.0014 s and 15.0018 s. This threshold instability
+must not be reported as stable candidate or base coverage.
+
+The hosted broad diagnostic was physically complete with 225/225 measurements,
+75/75 passing linearity checks, and three valid blocks. It measured 0.989345x
+candidate/base with a 95% confidence interval of [0.982844x, 0.994661x], and
+0.360526x candidate/QuickJS-NG. Its health is deliberately `inconclusive`:
+three preview blocks are a non-claim cohort, not the fixed-hardware 30-block
+claim protocol. The internal call family improved to 0.957789x candidate/base,
+while the binding family measured 1.045998x; individual captured-read/write
+ratios were 1.087975x and 1.187982x. Those loop-body cases execute call setup
+only once and conflict in direction with the external recursive-call result,
+so they are retained as an explicit regression watch rather than used to
+reject the externally confirmed mechanism. The next unit must remeasure them;
+this unit is not evidence that the campaign goal is complete.
+
+Hosted broad run ID is `013d2508-899f-4ef0-9312-cf323ad45000`; broad
+raw/report SHA-256 are
+`5ae6db5df6a969878d40989b27a73d99edb395b3d68c73a346647aeaba1b6f5f`
+and
+`25daba07d6c6c8dd4ae7542b3eae6d3e32e96f925896901bec00a61c24b13d36`;
+hosted external raw/report SHA-256 are
+`861b530f808824c24afa0180ce1b16cac90a826ecf06f602f8248afe89884811`
+and
+`6f0d3677205dfb44c605cfd9bc79f783b340f833b58e0ba5cc52ba67a321a863`.
+Candidate/base/QuickJS-NG executable SHA-256 are
+`479cb674ff8c2e029c74f1a249b15dd961d5ac58202c84b3b97a2c7d735e3e45`,
+`0c9e51565c2972e01ed168173f9a3712bdf4594a9bd00fff2a23f631aa470a16`,
+and
+`8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
