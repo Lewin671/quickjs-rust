@@ -722,11 +722,17 @@ pub struct Bytecode {
     pub(super) numeric_mutation_loop_plans:
         OnceCell<Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>>,
     pub(super) template_objects: RefCell<HashMap<usize, Value>>,
-    /// One cleared operand-stack allocation retained for the next invocation
-    /// of this compiled body. Sequential calls are the common case, so a
-    /// single slot removes their allocator traffic without retaining every
-    /// stack created by deep recursion. Cloned bytecode shares the same slot.
-    operand_stack_pool: Rc<RefCell<Option<Vec<Value>>>>,
+    /// Cleared operand-stack allocations retained for later invocations of
+    /// this compiled body. The bounded pool covers both sequential calls and
+    /// commonly repeated recursive depths without retaining an unbounded
+    /// number of stacks. Cloned bytecode shares the same pool.
+    operand_stack_pool: Rc<RefCell<Vec<Vec<Value>>>>,
+    /// Cleared local-slot allocations retained for direct leaf invocations of
+    /// this compiled body. Unlike the operand stack, recursion needs more than
+    /// one live allocation before any frame can return one, so this pool is
+    /// bounded rather than single-entry. General frames keep owning their
+    /// locals because callers may inspect them after evaluation.
+    direct_local_slots_pool: Rc<RefCell<Vec<Vec<Option<Value>>>>>,
     /// Per-call metadata precomputed once at construction. Each of these used to
     /// be recomputed on every call by recursively walking `code` (and nested
     /// function/class op trees) and materializing a fresh `BTreeSet`/`Vec`,
@@ -828,7 +834,8 @@ impl Bytecode {
             control_loop_plans: OnceCell::new(),
             numeric_mutation_loop_plans: OnceCell::new(),
             template_objects: RefCell::new(HashMap::new()),
-            operand_stack_pool: Rc::new(RefCell::new(None)),
+            operand_stack_pool: Rc::new(RefCell::new(Vec::new())),
+            direct_local_slots_pool: Rc::new(RefCell::new(Vec::new())),
             cached_closure_referenced_global_names: Vec::new(),
             cached_written_binding_names: Vec::new(),
             cached_closure_written_binding_names: Vec::new(),
@@ -882,11 +889,14 @@ impl Bytecode {
 
     const INITIAL_OPERAND_STACK_CAPACITY: usize = 64;
     const MAX_RECYCLED_OPERAND_STACK_CAPACITY: usize = 256;
+    const MAX_RECYCLED_OPERAND_STACKS: usize = 64;
+    const MAX_RECYCLED_DIRECT_LOCAL_SLOT_CAPACITY: usize = 256;
+    const MAX_RECYCLED_DIRECT_LOCAL_FRAMES: usize = 64;
 
     pub(super) fn take_operand_stack(&self) -> Vec<Value> {
         self.operand_stack_pool
             .borrow_mut()
-            .take()
+            .pop()
             .unwrap_or_else(|| Vec::with_capacity(Self::INITIAL_OPERAND_STACK_CAPACITY))
     }
 
@@ -896,8 +906,26 @@ impl Bytecode {
             return;
         }
         let mut pooled = self.operand_stack_pool.borrow_mut();
-        if pooled.is_none() {
-            *pooled = Some(stack);
+        if pooled.len() < Self::MAX_RECYCLED_OPERAND_STACKS {
+            pooled.push(stack);
+        }
+    }
+
+    pub(super) fn take_direct_local_slots(&self) -> Vec<Option<Value>> {
+        self.direct_local_slots_pool
+            .borrow_mut()
+            .pop()
+            .unwrap_or_else(|| Vec::with_capacity(self.locals.len()))
+    }
+
+    pub(super) fn recycle_direct_local_slots(&self, mut locals: Vec<Option<Value>>) {
+        locals.clear();
+        if locals.capacity() > Self::MAX_RECYCLED_DIRECT_LOCAL_SLOT_CAPACITY {
+            return;
+        }
+        let mut pool = self.direct_local_slots_pool.borrow_mut();
+        if pool.len() < Self::MAX_RECYCLED_DIRECT_LOCAL_FRAMES {
+            pool.push(locals);
         }
     }
 
@@ -1447,7 +1475,25 @@ mod tests {
         let _active = bytecode.take_operand_stack();
         let oversized = Vec::with_capacity(Bytecode::MAX_RECYCLED_OPERAND_STACK_CAPACITY + 1);
         bytecode.recycle_operand_stack(oversized);
-        assert!(bytecode.operand_stack_pool.borrow().is_none());
+        assert!(bytecode.operand_stack_pool.borrow().is_empty());
+    }
+
+    #[test]
+    fn direct_local_slot_pool_reuses_only_cleared_bounded_storage() {
+        let bytecode = Bytecode::new(Vec::new(), Vec::new(), Vec::new());
+        let mut first = Vec::with_capacity(4);
+        first.push(Some(Value::Number(1.0)));
+        let allocation = first.as_ptr();
+
+        bytecode.recycle_direct_local_slots(first);
+        let reused = bytecode.take_direct_local_slots();
+
+        assert!(reused.is_empty());
+        assert_eq!(reused.as_ptr(), allocation);
+
+        let oversized = Vec::with_capacity(Bytecode::MAX_RECYCLED_DIRECT_LOCAL_SLOT_CAPACITY + 1);
+        bytecode.recycle_direct_local_slots(oversized);
+        assert!(bytecode.direct_local_slots_pool.borrow().is_empty());
     }
 
     #[test]

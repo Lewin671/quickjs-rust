@@ -853,6 +853,26 @@ fn direct_leaf_vm_call_preserves_two_and_three_argument_order() {
 }
 
 #[test]
+fn recycled_direct_leaf_frames_clear_slots_and_keep_recursive_frames_distinct() {
+    assert_eq!(
+        eval(
+            "function choose(flag, value) { \
+               let selected; \
+               if (flag) selected = value; \
+               return selected; \
+             } \
+             function sum(depth) { \
+               let local = depth; \
+               return depth === 0 ? local : local + sum(depth - 1); \
+             } \
+             choose(true, 47); \
+             choose(false, 99) === undefined && sum(12) === 78 && sum(12) === 78;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn numeric_leaf_falls_back_for_coercion_without_duplicate_effects() {
     assert_eq!(
         eval(

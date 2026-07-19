@@ -204,22 +204,23 @@ pub(crate) fn call_function(
             env: call_env,
             direct_call_slots,
         } = function_env;
-        let result = if let Some(direct_call_slots) = direct_call_slots {
-            eval_function_bytecode_with_direct_call_slots(
+        if let Some(direct_call_slots) = direct_call_slots {
+            let result = eval_function_bytecode_with_direct_call_slots(
                 bytecode,
                 call_env,
                 true,
                 direct_call_slots,
-            )
-        } else {
-            eval_function_bytecode(
-                bytecode,
-                call_env,
-                function.upvalues.clone(),
-                function.with_stack.clone(),
-                true,
-            )
-        };
+            );
+            restore_immutable_name_caller_value(function, env, immutable_name_caller_value);
+            return result;
+        }
+        let result = eval_function_bytecode(
+            bytecode,
+            call_env,
+            function.upvalues.clone(),
+            function.with_stack.clone(),
+            true,
+        );
         restore_immutable_name_caller_value(function, env, immutable_name_caller_value);
         // A derived constructor implicitly returns its (super-bound) `this`
         // when the body does not return an object, and it is a ReferenceError
@@ -279,7 +280,7 @@ pub(crate) fn call_direct_leaf_function(
         call_env.set_agent_context(context);
     }
     let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
-    eval_function_bytecode_with_direct_call_slots(bytecode, call_env, true, direct_call_slots).value
+    eval_function_bytecode_with_direct_call_slots(bytecode, call_env, true, direct_call_slots)
 }
 
 pub(crate) fn is_direct_leaf_function(callee: &Value) -> bool {
