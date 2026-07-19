@@ -4724,6 +4724,64 @@ Candidate/base/QuickJS-NG executable SHA-256 are
 and
 `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
 
+### Unit 77: accepted shared empty direct-call environment metadata
+
+Commit `625b19fde62e664b0408217673ca9dd3c3df77fc` made the direct-call
+environment reuse realm-owned canonical empty name sets for local-lexical and
+local-declaration metadata, while passing the function's actual module-import
+metadata through directly. Copy-on-write preserves mutation semantics. This
+removes three empty-container allocations from every eligible direct leaf call;
+it is a general runtime representation change with no benchmark identity,
+source path, recursion shape, iteration count, input threshold, checksum, or
+expected-result condition.
+
+The authoritative external preview is the acceptance evidence. Against Unit 76
+base `87a1063710c049772a72d72c671128cbac0aa222`, all five JetStream subset
+cases improved, for a 0.972380x candidate/base diagnostic geometric mean.
+SunSpider improved on 18 of 26 cases, for a 0.987360x suite geometric mean;
+the motivating but independently sourced `controlflow-recursive` case fell
+from 134.483 ms to 119.009 ms, or **0.884932x** (11.5% lower wall time).
+Kraken's eight mutually comparable cases measured 0.998421x, with the same
+capability coverage as base: six cases timed out for both engines, and no new
+candidate-only timeout appeared. These multi-suite effects establish that the
+optimization generalizes beyond the internal micro portfolio.
+
+The hosted broad diagnostic was physically complete with 225/225 measurements,
+75/75 passing linearity checks, and three valid blocks. Its 1.001172x
+candidate/base ratio has a 95% confidence interval of [0.997016x, 1.001172x]
+and is treated as neutral; it is not allowed to override the external evidence.
+The binding family improved to 0.967602x, while the call family measured
+1.015452x and remains a regression watch. Candidate/QuickJS-NG was 0.359719x
+on the internal portfolio, but the external suites remain much slower:
+9.097435x on JetStream, 6.270528x on the incomplete Kraken comparison, and
+8.862341x on SunSpider, with QuickJS-NG winning all 39 comparable cases. The
+campaign goal is therefore still far from complete.
+
+The isolated branch full check passed 1,405 runtime tests, all 198
+benchmark-tool tests, all 5,139 curated Test262 cases, formatting, Clippy,
+agents, and file-size checks; `compare-qjs.sh` also passed. Isolated branch CI
+run `29700684387`, main CI run `29701341940`, Test262 Coverage run
+`29701453804`, and Performance Preview run `29701341938` all completed
+successfully. A redundant main-worktree local recheck was interrupted after the
+macOS loader stalled before starting a test binary; the exact branch and main
+remote gates provide the completed verification rather than concealing that
+local infrastructure anomaly.
+
+Hosted broad run ID is `86d58dd9-f282-4f32-b840-a4c72059e52c`; broad
+raw/report SHA-256 are
+`803c007875c1e2ea1fd8bf8c4ce10c065d6c7534fa7e13af73db65fb6d61dc01`
+and
+`ebaad42ddaa0d1968ad77e78071845ee6d8d68a34eba11589f980dc3c60e39af`;
+hosted external raw/report SHA-256 are
+`7318a565f92fab54aafcc473300b86d06265fa8f863047a0d77f55241c7932e5`
+and
+`438c6b2db031195307bb2c868e02d3f9e8a2a5c91a17959558002c2b0f655959`.
+Candidate/base/QuickJS-NG executable SHA-256 are
+`9a61fef261b458b5f8b805ae235c7bd41bedd6953d2a4af31ee138ebde42161e`,
+`479cb674ff8c2e029c74f1a249b15dd961d5ac58202c84b3b97a2c7d735e3e45`,
+and
+`8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
