@@ -4601,6 +4601,66 @@ Candidate/base/QuickJS-NG executable SHA-256 are
 and
 `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
 
+### Unit 75: accepted streaming JSON serialization
+
+Runtime commit `28cbf049` makes `JSON.stringify` append directly to one output
+`String`. Recursive array/object serialization no longer constructs a fresh
+`String` for every node, collects object members in a temporary vector, joins
+temporary fragments, or allocates a second quoting buffer. The same mechanism
+handles all serializable values and preserves replacer, pretty-printing,
+omission, escaping, astral-pair, and lone-surrogate behavior. It contains no
+benchmark identity, source path, iteration count, input-size threshold,
+checksum, or expected-result condition.
+
+The full local gate passed 1,403 runtime tests, all 198 benchmark-tool tests,
+all 5,139 curated Test262 cases, formatting, Clippy, agents, and file-size
+checks; `compare-qjs.sh` also passed. Main CI run `29695787335` and Test262
+Coverage run `29695892451` passed. Performance Preview run `29695787364`
+completed successfully. Its skipped steps are expected conditional paths:
+QuickJS-NG was restored from a validated cache, PR/fork-only jobs do not run on
+a trusted main push, and already-populated caches are not saved again. The
+actual three-engine measurement and evidence upload steps passed.
+
+The hosted external result supplies the causal acceptance evidence. Exact
+candidate `28cbf0490ef605e76514101ddb3411a13b10124d` was measured against exact
+base `a4ac3833be2a35383c023900bb21081a2343848d`. Kraken
+`json-stringify-tinderbox` fell from 411.400 ms to 213.864 ms:
+**0.519846x** candidate/base, or 48.0% lower wall time. Its ratio to pinned
+QuickJS-NG improved to **1.903608x**. The distinct JSON parser case remained
+near the previous level; all 5 JetStream and all 26 SunSpider cases remained
+comparable, and Kraken retained the same 7/14 candidate/base coverage. The
+diagnostic candidate/base geometric means were 1.003349x JetStream,
+0.911213x Kraken, and 1.000409x SunSpider. Those unrelated complete suites are
+effectively neutral around the large exact-path improvement, so this is
+accepted as externally demonstrated general-engine progress.
+
+The hosted broad run was physically complete: 225/225 measurements, 75/75
+linearity checks, and three valid blocks. It measured 0.990982x
+candidate/base with a 95% confidence interval of [0.981362x, 1.023412x], and
+0.343968x candidate/QuickJS-NG. That internal aggregate does **not** complete
+this goal. The mandatory external preview still measured qjs-rust at
+**8.722909x** QuickJS-NG for JetStream, **5.032326x** for the incomplete
+Kraken comparison, and **8.713730x** for SunSpider; QuickJS-NG won every one of
+the 38 comparable external cases. Unit 75 therefore closes only one general
+serialization bottleneck. The campaign remains open until the broad critical
+families and independent external workloads both demonstrate the required
+general performance, rather than an internal-portfolio-only score.
+
+Hosted broad run ID is `67af037c-60e4-4048-8952-e71c572becf6`; broad
+raw/report SHA-256 are
+`d155f202821204c0505a6942994c6098b15c1bf173d4c9def8e4e7358c195763`
+and
+`c2fea3437f7ee8b46ba8a7f7cd0407208200e820b5af1f08035de1bea12c28a5`;
+hosted external raw/report SHA-256 are
+`69cd3364c16fe93a147b945f8652262e4fda28a7143166598684d0aab3c2c8a5`
+and
+`a49ca465e14e69ca512b695e29bcea22f6ce27b43eb98ca203930ecff2136e27`.
+Candidate/base/QuickJS-NG executable SHA-256 are
+`0c9e51565c2972e01ed168173f9a3712bdf4594a9bd00fff2a23f631aa470a16`,
+`efd2be5bc2bfc3d8c0b048d74091747dc1310d05c122b62419a8fb6a5e2dea68`,
+and
+`8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
