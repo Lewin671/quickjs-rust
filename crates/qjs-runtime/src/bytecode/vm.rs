@@ -1189,6 +1189,10 @@ impl<'a> Vm<'a> {
         let key = self.coerce_property_key(key_value)?;
         let value = if let Some(value) = self.try_direct_get(&object, &key) {
             value
+        } else if let PropertyKey::String(key) = &key
+            && let Some(result) = self.try_direct_leaf_getter(&object, key)
+        {
+            result?
         } else {
             let mut env = self.current_env();
             let value = get_property_key(object, &key, &mut env)?;
@@ -1238,6 +1242,8 @@ impl<'a> Vm<'a> {
         }
         let value = if let Some(value) = self.try_cached_get_string(&object, key, cache) {
             value
+        } else if let Some(result) = self.try_direct_leaf_getter(&object, key) {
+            result?
         } else {
             let mut env = self.current_env();
             let value = get_property(object, key, &mut env)?;

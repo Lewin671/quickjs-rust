@@ -419,6 +419,24 @@ fn instance_getter_reads_state() {
 }
 
 #[test]
+fn instance_getter_preserves_receiver_writes_and_abrupt_completion() {
+    assert_eq!(
+        eval(
+            "class C { \
+               get value() { this.hits = (this.hits || 0) + 1; return this.hits; } \
+               get failure() { throw this.value; } \
+             } \
+             let c = new C(); \
+             let first = c.value; \
+             let thrown; \
+             try { c.failure; } catch (value) { thrown = value; } \
+             first + ':' + thrown + ':' + c.hits;"
+        ),
+        Ok(Value::String("1:2:2".to_owned().into()))
+    );
+}
+
+#[test]
 fn instance_setter_writes_state() {
     assert_eq!(
         eval(

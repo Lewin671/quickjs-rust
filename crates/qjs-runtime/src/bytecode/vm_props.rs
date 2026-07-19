@@ -288,6 +288,42 @@ impl Vm<'_> {
         }
     }
 
+    /// Invokes an ordinary object's getter without materializing the caller's
+    /// compatibility environment when the getter already satisfies the direct
+    /// leaf contract. Such a getter cannot observe direct eval, `with`, or a
+    /// caller-local writeback channel; shared realm and upvalue state remains
+    /// live through the function object. Accessors outside that contract and
+    /// any exotic or Proxy-bearing chain retain the generic path.
+    pub(super) fn try_direct_leaf_getter(
+        &self,
+        receiver: &Value,
+        key: &str,
+    ) -> Option<Result<Value, RuntimeError>> {
+        let Value::Object(object) = receiver else {
+            return None;
+        };
+        if symbol::is_symbol_primitive(object)
+            || crate::typed_array::is_typed_array_object(object)
+            || object.is_module_namespace_exotic()
+        {
+            return None;
+        }
+        let property = ordinary_chain_property(object, key).ok().flatten()?;
+        let getter = property.get?;
+        if !crate::function::is_direct_leaf_function(&getter) {
+            return None;
+        }
+        Some(crate::function::call_direct_leaf_function(
+            getter,
+            receiver.clone(),
+            &[],
+            &self.env,
+            self.module_host.clone(),
+            #[cfg(feature = "agents")]
+            self.agent_context.clone(),
+        ))
+    }
+
     pub(super) fn try_cached_get_string(
         &self,
         object: &Value,
