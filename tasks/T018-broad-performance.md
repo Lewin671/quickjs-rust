@@ -4401,6 +4401,67 @@ change is reverted. The next unit keeps the externally profiled direction but
 must isolate a mechanism whose benefit survives both the broad guard and the
 external preview.
 
+### Unit 71: accepted direct leaf-getter call path
+
+Runtime commit `662f63e1` removes the caller-environment snapshot and writeback
+from a general property-access mechanism: an ordinary, Proxy-free prototype
+lookup may invoke a directly resolved leaf user getter with the callee's own
+slot frame. Accessors reached through proxies or exotic objects, non-leaf user
+functions, and every dynamically unresolved case retain the observable generic
+path. The implementation contains no workload identity, source-path, iteration,
+checksum, or expected-result condition. Focused tests cover the receiver,
+prototype lookup, abrupt completion, captured accessors, and the guarded
+fallbacks. The full local gate passed 1,402 runtime tests, 198 benchmark-tool
+tests, 5,139 curated Test262 cases, all QuickJS-NG comparisons, formatting,
+Clippy, and file-size checks.
+
+Trusted-main Performance Preview run `29685294595` compared exact candidate
+`662f63e1d407c2c763dde42b1ed7f0094e18d181` with exact base
+`255e9796fa505c4e98ee28418878566ebd4af8a7`. All 225/225 formal broad
+measurements were eligible, all 75 N/2N checks passed, and all three blocks
+were valid. Candidate/base was **0.991664x** overall with a 95% confidence
+interval of [0.990401x, 0.992370x]. Call was 0.975402x and binding was
+0.995658x; allocation was 1.009048x and control was 1.026165x. The latter
+small family movement is retained visibly rather than hidden by the aggregate.
+Candidate/QuickJS-NG was 0.344189x overall, but allocation still failed B4 at
+2.784770x. The hosted profile remains intentionally
+`inconclusive`/`non_claim`, not a fixed-hardware public claim.
+
+The mandatory external preview independently accepted the mechanism's
+direction. JetStream's five-case candidate/base geometric mean was
+**0.970663x**, with four candidate wins and one base win; `hash-map`, the
+profiled beneficiary, measured **0.882188x**, while `cdjs`,
+`raytrace-public-class-fields`, and `stanford-crypto-aes` also improved.
+SunSpider remained neutral at 0.999567x over all 26 cases. Kraken was
+1.004750x over the six cases comparable to the exact base and retained seven
+candidate/QuickJS-NG comparable cases; it is an incomplete diagnostic, not a
+suite score. qjs-rust still trails QuickJS-NG badly on these ports at 8.729700x
+JetStream, 5.803031x Kraken, and 8.735423x SunSpider. This unit is therefore
+accepted as measured general-engine progress, not as evidence that the external
+performance goal is close to complete.
+
+The standard CI run `29685294592` passed every executed job. Test262 Coverage
+run `29685411920` passed all 16 Rust shards and aggregation; its baseline-shard
+and cache-save skips were expected cache hits rather than failures. Hosted
+evidence bindings:
+
+- benchmark run ID: `fee7ab26-e56f-4823-8081-c971165b5a66`;
+- artifact SHA-256:
+  `b98c367e70f2b5234100bf29821c3cbcfe45784cd5dde1d730292c02de28da7e`;
+- broad raw/report SHA-256:
+  `d1d42afba6508e7f94536dea639c884bab2348baf54e62197f98f4ae2bf1a03a`
+  and
+  `444765779b7c57b764ae818b0564231d7c8f147722c5dc00dc4d846b07a4917f`;
+- external raw/report SHA-256:
+  `9a2a97032eb70886fa4648c946c5d2bd855c5b16817bc405129b0a7beb3ac955`
+  and
+  `b36518672870dbdac3a475dca0dad5f747874bd6467f175e683da53d47b3abba`;
+- candidate/base/QuickJS-NG executable SHA-256:
+  `f4931ee4609bb3a137486144887c6e82151d6cba9efea699d6d7f98c865e4396`,
+  `04c98f4a10f7254e41c15ef2e2ceb81832fdd7808af6f544cfc7494947a1c288`,
+  and
+  `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
