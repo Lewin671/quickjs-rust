@@ -663,7 +663,7 @@ fn parameter_index(bytecode: &Bytecode, slot: usize) -> Option<usize> {
     bytecode
         .parameter_slots()
         .iter()
-        .position(|candidate| *candidate == slot)
+        .rposition(|candidate| *candidate == slot)
 }
 
 fn upvalue_index(bytecode: &Bytecode, slot: usize) -> Option<usize> {
