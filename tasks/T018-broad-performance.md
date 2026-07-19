@@ -4082,6 +4082,66 @@ direct eval still copies values into a name-based environment and writes them
 back by name. Shared slot/upvalue cells are the intended mechanism; acceptance
 still requires complete broad and mandatory external evidence.
 
+### Unit 66: rejected redundant live-cell value-copy removal
+
+Runtime commit `11d9e4df` attempted the shared-cell follow-up without changing
+the dynamic-environment contract: when `frame_call_env` was already going to
+overlay a visible slot with its live upvalue cell, its first pass stopped
+cloning the cell's current `Value` into a temporary name binding. The mechanism
+was general and contained no workload identity, source path, iteration count,
+or checksum matching. An initial single-pass prototype incorrectly changed
+lexical-shadow ordering; focused tests caught two failures, and the pushed
+version retained the original two-pass ordering. All 1,400 runtime tests, 65
+selected eval/block/function Test262 cases, the complete repository gate, and
+the branch CI run `29672096329` passed before integration.
+
+Hosted Performance Preview run `29672508646` compared candidate merge
+`4e9c9c7c` and exact base `51063ac8`. Candidate and base executable SHA-256
+were `ee866f6232be90f1e71e449a666c05448dae4311e0ad641f0f047f2a22c51e4f`
+and `bc711e20bd1206c21ac9436885f585a2dc4a632966ade9d61be81f8fe9ce8498`;
+the pinned QuickJS-NG executable was
+`8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+The broad artifact was complete with 225/225 valid measurements, 75/75 passing
+linearity probes, and three valid blocks. It rejected the candidate clearly:
+candidate/base was **1.034108x**, with a 95% confidence interval of
+[1.031907x, 1.037882x]. Call, binding, and allocation regressed to 1.067149x,
+1.064953x, and 1.052465x base; `captured_read`, `function_call_two_args`, and
+`captured_write` reached 1.207745x, 1.166919x, and 1.136323x. The isolated
+`array_index_of` improvement to 0.950038x cannot offset those general losses.
+Candidate/QuickJS-NG was 0.359263x overall, but allocation remained 2.683857x,
+so the candidate was neither B4 progress nor an acceptable intermediate unit.
+
+The mandatory same-run external evidence was mixed rather than compensating:
+candidate/base geometric ratios were 0.998699x for all 5/5 JetStream cases,
+0.997804x for 7/14 comparable Kraken cases, and 1.001515x for all 26/26
+SunSpider cases. The selected `date-format-tofte` path did reproduce the local
+gain at 0.963264x base; `date-format-xparb` was 0.991150x and
+`string-tagcloud` 0.997592x. Nevertheless, the three external diagnostic ratios
+were still 8.953760x, 5.700817x, and 8.499701x QuickJS-NG with zero qjs-rust
+wins. A single 3.7% eval-workload win therefore cannot justify a repeatable
+3.4% broad regression.
+
+Broad raw/report SHA-256 are
+`9e3ae12898c0f486e0541417eb1ec6f67a60731106a19f7b676c50dfad0c7c21`
+and `b00cc11d4a2928178e9f589c02c93d0a7156c19ec191d45bed68366ff1ad3bf0`;
+external raw/report SHA-256 are
+`3b53eeb569b61b78460d0cd8ae47489e667ff740ac4a24f5767a75c9959dd1d0`
+and `50bed5d82d66710398cba0225d0eed341e763f9f00ba0d9b6b3c249a95f83bae`.
+Main CI run `29672508650` and Test262 Coverage run `29672600574` succeeded.
+Coverage remained 42,671/42,672 with one actionable gap and zero timeout;
+burndown/comparison SHA-256 are
+`82c7c42e8cfa32e4dd0d75e06e37d98cbf823b44059ddcd0153d20e72f4ab3b4`
+and `94a97687babcdfba02efff77997af0a59fa7ddfb08a2370d03fbb933de069e69`.
+
+Commit `d65d5cfd` restores the exact base runtime. Before that revert was pushed,
+the full local gate again passed 1,400 runtime tests, all 198 benchmark-tool
+tests, 5,139 Test262 subset cases, and all 205 QuickJS-NG comparisons. Unit 66
+is rejection evidence only: even a benchmark-independent mechanism is not
+campaign progress when complete broad and external evidence disagree. The next
+call-frame unit should eliminate allocation without adding per-op stack
+branches or trading call throughput against object, array, and closure
+allocation.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
