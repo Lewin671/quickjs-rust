@@ -3812,6 +3812,83 @@ claimed. The next external profile identified repeated full-input UTF-16
 conversion while emitting replacement segments; that is tracked as a separate
 optimization unit rather than being folded into this evidence after the fact.
 
+### Unit 62: accepted reusable UTF-16 RegExp replacement input
+
+Commit `be9db2db`, merged as `88e1a232`, retains one UTF-16 code-unit view of
+the input while emitting a native RegExp replacement. Unmatched segments and
+the `$\`` / `$'` substitutions now slice that prepared view instead of decoding
+the complete input again for each global match. Replacement length accounting
+also receives the already-computed input length. The change applies to the
+ordinary replacement mechanism and contains no benchmark identity, source
+path, expected checksum, or iteration-count condition.
+
+The work was selected from an independent `string-tagcloud` sample after Unit
+61. Interleaved local A/B checks against the Unit 61 executable showed the
+expected same-direction reductions on `string-tagcloud`, `regexp-dna`, and
+`string-unpack-code`; the separate one-block 25-case broad diagnostic was
+1.002467x base and was treated only as noise screening. Focused coverage adds
+an astral-character global replacement and verifies `$\``, `$&`, and `$'`
+UTF-16 slicing in the same result.
+
+The complete hosted three-role Performance Preview run `29666107766` compared
+candidate revision `88e1a2324a6b01dfb80abf561ec787497344ada6` with exact base
+revision `9a0edd0761d0eafa6a6e6fa529af2ada505a0843`. Their executable SHA-256
+values are
+`0dfcf5aa4a81b6e43f2e7412df82e41d76acb5cf4277c7557a59d94a42f2a1bb`
+and
+`95568ece30bdf4a71d01a151aec9c28b165377e538d9ebe07f297c07d9a89086`;
+the pinned QuickJS-NG executable remains
+`8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+All 75 linearity diagnostics passed and all three blocks were valid.
+
+Hosted broad candidate/base was **1.007638x** overall with a 95% confidence
+interval of [1.000553x, 1.010157x]. The binding and builtin families regressed
+to 1.015581x and 1.028162x base; allocation, array, control, call, property,
+and string were 1.015459x, 1.005068x, 1.001232x, 0.999956x, 0.999975x, and
+0.994072x. The RegExp replacement path is absent from this portfolio, but the
+statistically separated broad movement remains a campaign cost rather than
+being dismissed as unrelated runner noise. Candidate/QuickJS-NG moved to
+**0.346338x** overall, and allocation remains **2.592431x**, so B4 is not
+complete. Broad raw/report SHA-256 are
+`57434e9dae099519d4efbe28e184b3a859e8071b22147e652b2aeb91a4768866`
+and `6d2e2c8beb9899536c558325512da315def7ab511f185f40cba69055a1a6c1dd`.
+
+The mandatory same-run external evidence confirmed the prepared-input gain on
+all three independent RegExp replacement workloads while the other two
+corpora remained effectively flat:
+
+| Neutral shell port | Comparable | Candidate / base | Candidate wins vs base | Candidate / QuickJS-NG |
+| --- | ---: | ---: | ---: | ---: |
+| JetStream 3 JavaScript subset | 5/5 | 0.993752x | 3/5 | 8.966690x |
+| Kraken 1.1 | 7/14 | 1.003210x | 4/7 | 5.682961x |
+| SunSpider 1.0 | 26/26 | 0.962590x | 9/26 | 8.608818x |
+
+`regexp-dna` fell from 1,277.797 ms to 1,019.770 ms (0.798069x base),
+`string-tagcloud` from 797.625 ms to 550.729 ms (0.690461x), and
+`string-unpack-code` from 788.978 ms to 451.626 ms (0.572418x). SunSpider's
+absolute candidate/QuickJS-NG comparable-case ratio improved from Unit 61's
+9.017390x to 8.608818x, but every external case still loses to QuickJS-NG.
+External raw/report SHA-256 are
+`97124b66df7277cdde0b0ab66f4bddf47687a8a11455ed4e2b39873084177971`
+and `c9d68241a55715702e233cb6597c920ed5d5ab5a7ce873b0d32b6d864a6f389e`.
+
+The complete local repository gate passed 1,399 runtime tests, all 198
+benchmark-tool tests, and 5,139 Test262 subset cases; QuickJS-NG comparison
+smoke tests also passed. Branch CI run `29665620218`, main CI run
+`29666107762`, and Test262 Coverage run `29666207650` all succeeded. Coverage
+remained 42,671/42,672 with one actionable gap and zero timeout;
+burndown/comparison SHA-256 are
+`6d6bf67895979ee84af2b5f498ec816dd009ad3575fd40992b0f7ec9644a14e6`
+and `94a97687babcdfba02efff77997af0a59fa7ddfb08a2370d03fbb933de069e69`.
+
+Unit 62 is accepted as B3 external-generalization progress because an
+externally selected, benchmark-independent runtime mechanism produced large,
+same-direction gains on three workloads without a material cross-corpus
+regression. It is not broad-target or B5 progress: the hosted broad regression
+is explicit debt, allocation remains above QuickJS-NG, and the external suites
+remain 5.68x to 8.97x slower. Subsequent units must recover the broad movement
+while preserving these external gains.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
