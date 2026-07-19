@@ -375,12 +375,16 @@ impl<'a> Vm<'a> {
         upvalues: &[Upvalue],
         env: &CallEnv,
     ) -> Vec<Option<Upvalue>> {
-        // Most direct leaf calls have no captured, module, or sloppy-global
-        // cells. An empty vector represents the all-None state for those
-        // frames and avoids allocating one pointer-sized entry per local on
-        // every call. Direct-call eligibility excludes operations that can
-        // create cells later (closures, eval, and with).
-        if !bytecode.has_direct_local_upvalue_routes() && !env.has_module_imports() {
+        // Most direct calls have no captured, module, sloppy-global, or
+        // closure-created cells. An empty vector represents the all-None
+        // state for those frames and avoids allocating one pointer-sized
+        // entry per local on every call. Closure-producing frames retain the
+        // indexed table so a local can be promoted lazily when the nested
+        // function is constructed; direct eval and with remain ineligible.
+        if !bytecode.has_direct_local_upvalue_routes()
+            && !env.has_module_imports()
+            && !bytecode.creates_closures()
+        {
             return Vec::new();
         }
         let direct_eval_frame = matches!(
@@ -1661,5 +1665,27 @@ mod tests {
                 .zip(exports.cell("exported").as_ref())
                 .is_some_and(|(local, exported)| local.ptr_eq(exported))
         );
+    }
+
+    #[test]
+    fn direct_closure_frame_keeps_slots_available_for_lazy_promotion() {
+        let script =
+            qjs_parser::parse_script("function outer(value) { return () => eval('value'); }")
+                .unwrap();
+        let script_bytecode = crate::bytecode::compile_script(&script).unwrap();
+        let closure_bytecode = script_bytecode
+            .code
+            .iter()
+            .find_map(|op| match op {
+                Op::NewFunction { bytecode, .. } => Some(bytecode.as_ref()),
+                _ => None,
+            })
+            .expect("function declaration must compile to NewFunction");
+        assert!(closure_bytecode.creates_closures());
+
+        let local_upvalues = Vm::initial_direct_local_upvalues(closure_bytecode, &[], &empty_env());
+
+        assert_eq!(local_upvalues.len(), closure_bytecode.locals.len());
+        assert!(local_upvalues.iter().all(Option::is_none));
     }
 }
