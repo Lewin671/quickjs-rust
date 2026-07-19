@@ -4335,6 +4335,72 @@ frame state or dispatch. The next unit must remove a larger end-to-end call or
 allocation mechanism demonstrated by external profiles; specializing internal
 call cases or extending argument-shape variants is explicitly out of scope.
 
+### Unit 70: rejected realm-owned empty direct-call metadata
+
+Runtime commit `43fa6d56` tested a general allocation reduction identified by
+the independent JetStream `hash-map` profile. Every direct leaf frame created
+three fresh empty reference-counted maps/sets for catch bindings, direct-eval
+conflicts, and module imports. The candidate instead shared canonical empty
+metadata owned by the realm and retained copy-on-write mutation semantics. It
+contained no benchmark identity, source path, iteration count, checksum, or
+expected result. A focused test verified sharing, mutation isolation, and the
+unchanged frame contract; 1,402 runtime tests, the touched Test262 slice, all
+5,139 complete-gate Test262 cases, and all QuickJS-NG comparisons passed.
+Branch CI run `29682077926` and main CI run `29682201219` were fully green.
+
+Local external screening strongly favored the mechanism. Eight alternating
+post-warmup JetStream `hash-map` samples measured a 0.922703x candidate/base
+median. The complete one-block external preview retained 5/5 JetStream, 13/14
+Kraken, and 26/26 SunSpider comparable cases; candidate/base suite diagnostics
+were 0.954x, 0.992x, and 0.984x. A complete 25-case, three-block local broad
+diagnostic measured 0.984973x base overall, with every family below 1.0x and
+only `property_read` slightly above base at 1.001423x. These receipt-less local
+measurements were screening evidence, not acceptance evidence. Their broad raw
+SHA-256 was
+`e6d6046d197e59e41ad1d38fa4e4cb3ba47077696878f418bfe5fa17466f64b8`;
+external raw/report SHA-256 were
+`f8505e0ae107fe446cb895c77311f1be9d159f5b1f5a615e3403c4837f336672`
+and
+`19303eb0277aa15cc958fd592a873c467798ffd675a3450aec3238d0c3c39081`.
+
+Trusted-main Performance Preview run `29682201213` compared exact candidate
+`43fa6d5634bf5f396c3ff8fd52dbda1c0b69148d` with exact base
+`e749a6fa07cdec94febec292dead22c3b3d113c6`. Candidate, base, and pinned
+QuickJS-NG executable SHA-256 were
+`62555e5b7068a3906ab51f6f3123c915a7ff46cf02a6e82897e58c583e19d0eb`,
+`04c98f4a10f7254e41c15ef2e2ceb81832fdd7808af6f544cfc7494947a1c288`,
+and `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+All 225/225 formal measurements and all 75 linearity diagnostics were valid,
+with 3/3 complete blocks.
+
+The hosted broad result contradicted the local screen: candidate/base was
+**1.022354x** overall with a 95% confidence interval of
+[1.019425x, 1.025640x]. Call was **1.086263x** and binding was 1.023243x;
+`plain_function_call`, `method_call`, and `function_call_reordered` each
+regressed about 15%. Candidate/QuickJS-NG remained 0.354328x overall, but the
+allocation family was still 2.780764x, so the campaign target was not reached.
+The same hosted run did confirm external generalization: candidate/base was
+0.975x for JetStream with 5/5 wins, 1.002x for Kraken, and 0.993x for
+SunSpider. Candidate/QuickJS-NG remained far from B5 at 8.815x, 5.792x, and
+8.595x respectively, with no coverage decrease attributable to the change.
+
+Hosted broad raw/report SHA-256 are
+`06ab59205e86a16959f500d37d3a6afc7a71eeedb57da54e5a5f9d76149379bc`
+and
+`6c6d6512b582437f33f68b0beb130d24c18c3af99774163ba77f21c3dfd449aa`;
+hosted external raw/report SHA-256 are
+`92bbedb1ef5ec63b19b85762377a5a15efc1d2b5aa43b1318b46f3a8269e647f`
+and
+`f13e0ea7c866179fef52810bf1650014fbc19e76aaf8d4b290ad55ceff1b61a5`.
+
+Unit 70 is rejected despite its genuine external improvement. Broad-micro is
+not allowed to dictate the optimization design, but it remains the campaign's
+mandatory regression guard; a complete hosted 2.24% overall loss and 8.63%
+call-family loss cannot be hidden by the external aggregate. The runtime
+change is reverted. The next unit keeps the externally profiled direction but
+must isolate a mechanism whose benefit survives both the broad guard and the
+external preview.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
