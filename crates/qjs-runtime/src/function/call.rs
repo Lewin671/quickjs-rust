@@ -368,9 +368,7 @@ pub(crate) fn initialize_instance_fields(
 /// Evaluates a class field initializer with the receiver supplied by class
 /// construction. Simple initializers have no observable compatibility
 /// environment: their receiver and captures are already represented by VM
-/// slots, and direct eval/super cases are excluded by the leaf guard. A thunk
-/// that creates a nested closure still uses this path: captured locals are
-/// promoted from its indexed slots only when the closure is constructed.
+/// slots, and direct eval/closure/super cases are excluded by the leaf guard.
 /// Run those thunks through the same allocation-light path as ordinary leaf
 /// calls; semantic-heavy initializers retain the complete call machinery.
 pub(crate) fn call_field_initializer(
@@ -699,12 +697,6 @@ fn direct_leaf_function_env<'a>(
     } else {
         None
     };
-    if bytecode.creates_closures() {
-        frame_env.insert(
-            DIRECT_EVAL_FUNCTION_CONTEXT_BINDING.to_owned(),
-            Value::Boolean(true),
-        );
-    }
     insert_marked_call_realm(function, &mut frame_env);
     if let Some(host) = function.module_host.clone() {
         frame_env.set_module_host(host);
@@ -919,6 +911,7 @@ fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode) -> bool {
         && !bytecode.contains_direct_eval()
         && !bytecode.contains_with()
         && !bytecode.contains_super_operation()
+        && !bytecode.creates_closures()
 }
 
 fn parameter_list_contains_name(params: &FunctionParams, expected: &str) -> bool {
