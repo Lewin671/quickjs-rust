@@ -3889,6 +3889,75 @@ is explicit debt, allocation remains above QuickJS-NG, and the external suites
 remain 5.68x to 8.97x slower. Subsequent units must recover the broad movement
 while preserving these external gains.
 
+### Unit 63: rejected direct-eval capture scan
+
+Commit `79d236c1`, merged as `8d3100fa`, replaced the value-cloning
+`binding_snapshot` used by direct-eval captured-function repair with a visible
+binding scan. The API itself is benchmark-independent and preserves frame
+shadowing, but the isolated unit does not qualify as a general performance
+improvement.
+
+The complete hosted three-role Performance Preview run `29667880164` compared
+candidate revision `8d3100fa07995dfdb1fcd01b6a932ecaf449e345` with exact base
+revision `9a98ea3c66c5231dabfc71d19d28dcb4f6b56963`. Their executable SHA-256
+values are
+`faae28959686dccbea81fb8bb3a34cc8f9bbb85c69e769790958000760ca1b0c`
+and
+`0dfcf5aa4a81b6e43f2e7412df82e41d76acb5cf4277c7557a59d94a42f2a1bb`;
+the pinned QuickJS-NG executable remains
+`8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+All 75 linearity diagnostics passed and all three blocks were valid.
+
+Hosted broad candidate/base regressed to **1.016034x** overall with a 95%
+confidence interval of [1.015676x, 1.019484x]. The call and binding families
+regressed to 1.052319x and 1.032314x base; allocation and property were
+1.007020x and 1.004619x. `captured_read` reached 1.124465x,
+`function_call_two_args` 1.083704x, `function_call_reordered` 1.072784x,
+`plain_function_call` 1.071010x, and `method_call` 1.070150x. These paths do not
+execute the new scan, so their coherent movement is a portable code-layout
+cost, not a mechanism win. Candidate/QuickJS-NG was **0.354517x** overall, but
+allocation remained **2.597257x**, so B4 remained incomplete. Broad raw/report
+SHA-256 are
+`1ac39bed374b1af6a282b3b0fc9d008727465558cd7b43cbf84ce9d917b3043f`
+and `8541643184404911c313f9b4016ad66dfe2109e240a17a4563078f3fe841b75a`.
+
+The same-run external matrix also failed to establish generalization:
+
+| Neutral shell port | Comparable | Candidate / base | Candidate wins vs base | Candidate / QuickJS-NG |
+| --- | ---: | ---: | ---: | ---: |
+| JetStream 3 JavaScript subset | 5/5 | 1.010x | 1/5 | 9.104x |
+| Kraken 1.1 | 6/14 | 1.004x | 1/6 | 5.734x |
+| SunSpider 1.0 | 26/26 | 0.999x | 14/26 | 8.610x |
+
+SunSpider `date-format-tofte` measured 0.945x base, but its eval strings are
+call-only expressions such as `a()`: they contain no hoisted or written
+binding, so the changed capture-repair helper is not invoked. The other date
+eval workload, `date-format-xparb`, was 0.999x base, while the unrelated
+`regexp-dna` moved to 1.074x. The target-looking result therefore cannot be
+causally attributed to the new scan. A same-binary A/A preview from run
+`29667307939` further demonstrated runner/layout sensitivity: candidate and
+base shared executable SHA-256
+`0dfcf5aa4a81b6e43f2e7412df82e41d76acb5cf4277c7557a59d94a42f2a1bb`,
+yet broad candidate/base reported 0.9923x with a confidence interval excluding
+1.00x. External raw/report SHA-256 for Unit 63 are
+`9247663a7b0adbe2a1fe64c3a8118dc326e47ad303153fae1bc09fce13f6599a`
+and `fb72c089da12065df3afc0bbfe13dac5a67f77f3d822c28070ac4d3268342522`.
+
+The complete local repository gate passed 1,400 runtime tests, all 198
+benchmark-tool tests, and 5,139 Test262 subset cases; QuickJS-NG comparison
+smoke tests also passed. Branch CI run `29667445280`, main CI run
+`29667880160`, and Test262 Coverage run `29667960402` all succeeded. Coverage
+remained 42,671/42,672 with one actionable gap and zero timeout;
+burndown/comparison SHA-256 are
+`24ec1f95b1d49b895b94d05b548fec536fbc32791b69b91a6dbc44dc41242bf5`
+and `94a97687babcdfba02efff77997af0a59fa7ddfb08a2370d03fbb933de069e69`.
+
+Unit 63 is rejected for B3, B4, and B5. Its visible-binding iterator is carried
+forward only as scaffolding for the next unit, which makes the iterator serve
+the actual general native-call and direct-eval environment paths. That broader
+unit must pass its own hosted broad and external acceptance run; otherwise the
+scaffolding is reverted rather than counted as progress.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
