@@ -685,7 +685,7 @@ fn direct_leaf_function_env<'a>(
     env: &CallEnv,
 ) -> FunctionCallEnv<'a> {
     debug_assert!(can_seed_direct_leaf_call(function, bytecode));
-    let mut frame_env = env.new_direct_leaf_function_frame();
+    let mut frame_env = env.new_direct_leaf_function_frame(function.module_imports.clone());
     let direct_this_value = if bytecode.uses_lexical_this() {
         let this_env_storage = callee_this_realm_env(function, env);
         let this_env = this_env_storage.as_ref().unwrap_or(env);
@@ -701,7 +701,6 @@ fn direct_leaf_function_env<'a>(
     if let Some(host) = function.module_host.clone() {
         frame_env.set_module_host(host);
     }
-    frame_env.set_module_imports(function.module_imports.clone());
     frame_env.set_private_environment(function_private_environment(function));
     FunctionCallEnv {
         env: frame_env,
@@ -732,7 +731,7 @@ fn function_env<'a>(
     // small number of internal context bindings. Reserve that hot-path shape
     // up front instead of growing the frame binding vector several times.
     let mut frame_env = if use_direct_call_slots {
-        env.new_direct_leaf_function_frame()
+        env.new_direct_leaf_function_frame(function.module_imports.clone())
     } else {
         env.new_function_frame_with_capacity(function.params.positional.len().saturating_add(4))
     };
@@ -876,7 +875,9 @@ fn function_env<'a>(
     if let Some(host) = function.module_host.clone() {
         frame_env.set_module_host(host);
     }
-    frame_env.set_module_imports(function.module_imports.clone());
+    if !use_direct_call_slots {
+        frame_env.set_module_imports(function.module_imports.clone());
+    }
     frame_env.set_private_environment(function_private_environment(function));
     if let Some(bindings) = &function.deopt_bindings {
         frame_env.set_deopt_bindings(bindings.clone());

@@ -35,6 +35,9 @@ const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 pub(crate) struct RealmState {
     bindings: RefCell<HashMap<String, Value>>,
     binding_cells: DynamicBindings,
+    /// Canonical empty copy-on-write name set for ordinary frames. Sharing it
+    /// avoids allocating catch/eval metadata that most calls never mutate.
+    empty_name_set: Rc<HashSet<String>>,
     global_this: Option<Value>,
     dynamic_function_realm_global: RefCell<Option<ObjectRef>>,
 }
@@ -52,6 +55,7 @@ impl RealmState {
         Self {
             bindings: RefCell::new(bindings),
             binding_cells: DynamicBindings::new(),
+            empty_name_set: Rc::new(HashSet::new()),
             global_this,
             dynamic_function_realm_global: RefCell::new(dynamic_function_realm_global),
         }
@@ -103,6 +107,10 @@ impl RealmState {
         self.binding_cells
             .cell(name)
             .is_some_and(|candidate| candidate.ptr_eq(cell))
+    }
+
+    fn empty_name_set(&self) -> Rc<HashSet<String>> {
+        Rc::clone(&self.empty_name_set)
     }
 }
 
@@ -804,10 +812,11 @@ impl CallEnv {
 
     /// Builds the minimal context for an ordinary leaf function whose call
     /// contract excludes direct eval, `with`, closures, and special lexical
-    /// bindings. Function-owned private and module state is installed by the
-    /// caller after construction, so copying the caller's transient maps here
-    /// would only allocate them before immediately replacing them.
-    pub(crate) fn new_direct_leaf_function_frame(&self) -> Self {
+    /// bindings. Function-owned module routing is supplied directly and private
+    /// state is installed by the caller, so copying the caller's transient maps
+    /// here would only allocate them before immediately replacing them.
+    pub(crate) fn new_direct_leaf_function_frame(&self, module_imports: ModuleImports) -> Self {
+        let empty_name_set = self.realm.empty_name_set();
         Self {
             realm: Rc::clone(&self.realm),
             global_lexical_bindings: Rc::clone(&self.global_lexical_bindings),
@@ -816,13 +825,13 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
             frame_bindings: FrameBindings::default(),
             deopt_bindings: None,
-            catch_bindings: Default::default(),
+            catch_bindings: Rc::clone(&empty_name_set),
             immutable_function_name: None,
-            direct_eval_var_conflicts: Default::default(),
+            direct_eval_var_conflicts: empty_name_set,
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
             module_host: self.module_host.clone(),
-            module_imports: Default::default(),
+            module_imports,
             module_live_bindings: None,
             #[cfg(feature = "agents")]
             agent_context: self.agent_context.clone(),
@@ -1355,6 +1364,27 @@ mod tests {
         assert!(callee.is_catch_binding("callee_catch"));
         assert!(!callee.is_direct_eval_var_conflict("caller_lexical"));
         assert!(callee.is_direct_eval_var_conflict("callee_lexical"));
+    }
+
+    #[test]
+    fn direct_leaf_frames_share_empty_metadata_until_mutation() {
+        let caller = CallEnv::new(new_realm(HashMap::new()));
+        let imports = Rc::new(HashMap::new());
+        let mut first = caller.new_direct_leaf_function_frame(Rc::clone(&imports));
+        let second = caller.new_direct_leaf_function_frame(Rc::clone(&imports));
+
+        assert!(Rc::ptr_eq(&first.catch_bindings, &second.catch_bindings));
+        assert!(Rc::ptr_eq(
+            &first.catch_bindings,
+            &first.direct_eval_var_conflicts
+        ));
+        assert!(Rc::ptr_eq(&first.module_imports, &imports));
+        assert!(Rc::ptr_eq(&second.module_imports, &imports));
+
+        first.mark_catch_binding("caught".to_owned());
+        assert!(first.is_catch_binding("caught"));
+        assert!(!second.is_catch_binding("caught"));
+        assert!(!first.is_direct_eval_var_conflict("caught"));
     }
 
     #[test]
