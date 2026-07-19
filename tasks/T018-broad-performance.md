@@ -4229,6 +4229,64 @@ object/array/closure allocator itself, while preserving the external gains and
 recovering the binding family; benchmark-specific stack sizing or case-aware
 pooling remains forbidden.
 
+### Unit 68: rejected single-entry function-locals reuse
+
+Branch commit `fc445cef` tested one benchmark-independent allocation change:
+each compiled function retained one cleared local-slot `Vec` for a later
+sequential invocation, while recursive overlap allocated normally and
+capacities above 256 slots were discarded. `FunctionBytecodeResult` returned
+the storage on drop, including errors and derived-constructor consumers. The
+implementation contained no workload identity, iteration count, checksum, or
+source-path condition. It was motivated by an independent JetStream `hash-map`
+sample in which VM frame construction accounted for 83 of 1,821 run-time
+top-of-stack samples (4.56%), alongside substantial allocator/free traffic.
+
+Correctness screening passed 1,403 runtime tests, the 114-case touched
+Test262 slice, the complete local pre-push gate including 5,139 Test262 cases,
+and all QuickJS-NG comparisons. Branch CI run `29678450308` was fully green:
+`check`, `compare-qjs`, and `test262-subset` all succeeded. Correctness was not
+the rejection reason.
+
+The first complete external same-run diagnostic kept full 5/5 JetStream,
+14/14 Kraken, and 26/26 SunSpider coverage. Candidate/base geometric means
+were 0.993134x, 1.006689x, and 0.986631x respectively. JetStream improved in
+4/5 cases and SunSpider improved at suite level, but Kraken regressed 0.67%; in
+particular `ai-astar` and `stanford-crypto-ccm` were 1.055087x and 1.058075x
+base. The external raw/report SHA-256 were
+`65c64f6913db35eb86ca17f18d53eaadd2397e03bcbc4d3a30dd2dafcfc885ee`
+and `30dd9f0d13113c1f441b5b5e0a6024899666c4e4f37012ac8baf6f6f57eb538b`.
+This direct-binary run did not carry hosted build receipts, so it is retained
+as diagnostic rejection evidence rather than trusted acceptance evidence.
+
+A subsequent clean-source preview rebuilt exact candidate `fc445cef`, exact
+base `57d3b888`, and pinned QuickJS-NG with the hosted fixed recipe. Executable
+SHA-256 were `30116c6a1ef0131f4a71ab40347ca0237ed689461eb238191b05526ae16bc7ac`,
+`36b5269a1c6e4edae6ed23e03dd7897d87a6d731ec14f1a87ee78a2180b83fb6`,
+and `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+All 75 linearity diagnostics passed and all 225 formal measurements executed,
+but every portfolio block was correctly invalidated: candidate
+`captured_read` and base `property_write` were timer-limited in all three
+blocks on the local M1 host. Therefore the report contains no valid complete
+comparison and cannot support a performance claim.
+
+The invalid-block raw measurements remain useful only for deciding whether to
+spend a hosted run. Their all-case candidate/base diagnostic geometric mean
+was 0.997127x. The mechanism's own expected beneficiaries moved in the wrong
+direction: call was 1.001988x and allocation was 1.006378x base. String was
+1.065892x, while array, binding, builtin, control, and property were
+0.986259x, 0.994131x, 0.980709x, 0.977606x, and 0.996161x. Verified raw/report
+SHA-256 were
+`2db5eb0ebf9a3ccdcc2943afce71759ff7fdfef4690ad843d563064c1efb2ff0`
+and `2d80803055c6b7d4342e5c042c64c2e4762e8721cecd7bbc52cc4a7b67f0e9af`.
+
+Unit 68 is rejected and its runtime commit is not merged. The result shows
+that removing one local-slot allocation is too small to offset the added pool
+bookkeeping and does not explain most of the external frame-construction hot
+path. The next unit must profile and reduce a broader frame/call mechanism
+(initialization, value cloning/dropping, environment lookup, or dispatch), or
+target another independently dominant external subsystem. It must not extend
+this pool merely to make the internal call cases look better.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
