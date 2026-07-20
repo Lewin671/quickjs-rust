@@ -165,20 +165,21 @@ fn prepared_native_global_matches(
         };
         super::regexp_set_last_index_object(&object, match_end, env)?;
 
-        let matched = super::input_slice(input, match_result.start, match_result.end, unicode);
+        let matched = prepared_input.slice(match_result.start, match_result.end);
         let captures = match_result
             .captures
             .iter()
             .map(|capture| {
                 capture
-                    .map(|(start, end)| {
-                        Value::String(super::input_slice(input, start, end, unicode).into())
-                    })
+                    .map(|(start, end)| Value::String(prepared_input.slice(start, end).into()))
                     .unwrap_or(Value::Undefined)
             })
             .collect();
-        let groups =
-            super::regexp_groups_object(input, &match_result.captures, unicode, &group_names);
+        let groups = super::regexp_groups_object_prepared(
+            &prepared_input,
+            &match_result.captures,
+            &group_names,
+        );
         let empty = matched.is_empty();
         matches.push(MatchRecord {
             start: match_start,

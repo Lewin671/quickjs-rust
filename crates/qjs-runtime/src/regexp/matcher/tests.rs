@@ -1,6 +1,6 @@
 use super::regexp_match_range as regexp_match_range_inner;
-use super::{RegexpMatch, regexp_match_at};
-use crate::string::string_from_code_unit;
+use super::{PreparedRegexp, RegexpMatch, regexp_match_at};
+use crate::string::{string_code_units, string_from_code_unit};
 
 /// Test wrapper keeping the historical six-argument signature (multiline off).
 fn regexp_match_range(
@@ -57,6 +57,20 @@ fn streamed_simple_repetition_preserves_first_full_match_priority() {
     let lazy = regexp_match_range(r"a*?(a|aa)", "aa", 0, false, false, false).unwrap();
     assert_eq!((lazy.start, lazy.end), (0, 1));
     assert_eq!(lazy.captures, vec![Some((0, 1))]);
+}
+
+#[test]
+fn prepared_input_slices_reuse_unicode_and_code_unit_views() {
+    let unicode = PreparedRegexp::new(".", false, true, false, false).prepare_input("A😀B");
+    assert_eq!(unicode.slice(1, 2), "😀");
+
+    let code_units = PreparedRegexp::new(".", false, false, false, false).prepare_input("A😀B");
+    assert_eq!(string_code_units(&code_units.slice(1, 2)), vec![0xD83D]);
+    assert_eq!(string_code_units(&code_units.slice(2, 3)), vec![0xDE00]);
+    assert_eq!(
+        string_code_units(&code_units.slice(1, 3)),
+        vec![0xD83D, 0xDE00]
+    );
 }
 
 #[test]

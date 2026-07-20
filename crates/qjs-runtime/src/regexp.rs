@@ -962,6 +962,24 @@ fn regexp_groups_object(
     unicode: bool,
     group_names: &[Option<String>],
 ) -> Value {
+    regexp_groups_object_with(captures, group_names, |start, end| {
+        input_slice(input, start, end, unicode)
+    })
+}
+
+fn regexp_groups_object_prepared(
+    input: &matcher::PreparedInput,
+    captures: &[Option<(usize, usize)>],
+    group_names: &[Option<String>],
+) -> Value {
+    regexp_groups_object_with(captures, group_names, |start, end| input.slice(start, end))
+}
+
+fn regexp_groups_object_with(
+    captures: &[Option<(usize, usize)>],
+    group_names: &[Option<String>],
+    mut input_slice: impl FnMut(usize, usize) -> String,
+) -> Value {
     if group_names.is_empty() {
         return Value::Undefined;
     }
@@ -972,7 +990,7 @@ fn regexp_groups_object(
             .get(capture_index)
             .copied()
             .flatten()
-            .map(|(start, end)| Value::String(input_slice(input, start, end, unicode).into()))
+            .map(|(start, end)| Value::String(input_slice(start, end).into()))
             .unwrap_or(Value::Undefined);
         groups.set(name.clone(), value);
     }
