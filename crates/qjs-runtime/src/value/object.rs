@@ -1521,6 +1521,10 @@ impl ObjectWeakRef {
     pub(crate) fn ptr_eq(&self, object: &ObjectRef) -> bool {
         self.0.as_ptr() == Rc::as_ptr(&object.0)
     }
+
+    pub(crate) fn upgrade(&self) -> Option<ObjectRef> {
+        self.0.upgrade().map(ObjectRef)
+    }
 }
 
 fn same_prototype_slot(left: Option<&Prototype>, right: Option<&Prototype>) -> bool {

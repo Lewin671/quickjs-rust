@@ -25,7 +25,7 @@ enum NamedPropertyCacheEntry {
     Exact {
         object: ObjectWeakRef,
         revision: u64,
-        value: CachedPrimitive,
+        value: CachedValue,
     },
     LiteralShape {
         shape: Rc<ObjectLiteralShape>,
@@ -33,12 +33,13 @@ enum NamedPropertyCacheEntry {
     },
 }
 
-#[derive(Clone, Copy, Debug)]
-enum CachedPrimitive {
+#[derive(Clone, Debug)]
+enum CachedValue {
     Undefined,
     Null,
     Boolean(bool),
     Number(f64),
+    Object(ObjectWeakRef),
 }
 
 impl NamedPropertyCache {
@@ -65,17 +66,18 @@ impl NamedPropertyCache {
                 if !cached_object.ptr_eq(object) || *revision != object.property_revision() {
                     return None;
                 }
-                *value
+                value
             }
             NamedPropertyCacheEntry::LiteralShape { shape, slot } => {
                 return object.literal_data_slot_value(shape, *slot);
             }
         };
         Some(match value {
-            CachedPrimitive::Undefined => Value::Undefined,
-            CachedPrimitive::Null => Value::Null,
-            CachedPrimitive::Boolean(value) => Value::Boolean(value),
-            CachedPrimitive::Number(value) => Value::Number(value),
+            CachedValue::Undefined => Value::Undefined,
+            CachedValue::Null => Value::Null,
+            CachedValue::Boolean(value) => Value::Boolean(*value),
+            CachedValue::Number(value) => Value::Number(*value),
+            CachedValue::Object(value) => Value::Object(value.upgrade()?),
         })
     }
 
@@ -85,10 +87,11 @@ impl NamedPropertyCache {
             return;
         }
         let value = match value {
-            Value::Undefined => CachedPrimitive::Undefined,
-            Value::Null => CachedPrimitive::Null,
-            Value::Boolean(value) => CachedPrimitive::Boolean(*value),
-            Value::Number(value) => CachedPrimitive::Number(*value),
+            Value::Undefined => CachedValue::Undefined,
+            Value::Null => CachedValue::Null,
+            Value::Boolean(value) => CachedValue::Boolean(*value),
+            Value::Number(value) => CachedValue::Number(*value),
+            Value::Object(value) => CachedValue::Object(value.downgrade()),
             _ => {
                 self.clear();
                 return;
@@ -1491,5 +1494,27 @@ mod tests {
         let third =
             ObjectRef::with_literal_pair(shape, [Value::Number(6.0), Value::Number(7.0)], None);
         assert_eq!(cache.get(&third), Some(Value::Number(6.0)));
+    }
+
+    #[test]
+    fn named_property_cache_weakly_caches_object_values() {
+        let child = ObjectRef::new(HashMap::new());
+        let child_weak = child.downgrade();
+        let receiver = ObjectRef::new(HashMap::from([(
+            "child".to_owned(),
+            Value::Object(child.clone()),
+        )]));
+        let cache = NamedPropertyCache::default();
+
+        cache.update(&receiver, "child", &Value::Object(child.clone()));
+        let Some(Value::Object(cached)) = cache.get(&receiver) else {
+            panic!("cached object value should remain reachable through its receiver");
+        };
+        assert!(cached.ptr_eq(&child));
+
+        drop(cached);
+        drop(receiver);
+        drop(child);
+        assert!(child_weak.upgrade().is_none());
     }
 }
