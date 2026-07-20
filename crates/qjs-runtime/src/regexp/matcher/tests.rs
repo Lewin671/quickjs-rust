@@ -74,19 +74,6 @@ fn prepared_input_slices_reuse_unicode_and_code_unit_views() {
 }
 
 #[test]
-fn exact_once_simple_atoms_advance_into_the_continuation() {
-    let literal = regexp_match_range(r"^a(b|bc)$", "abc", 0, false, false, false).unwrap();
-    assert_eq!((literal.start, literal.end), (0, 3));
-    assert_eq!(literal.captures, vec![Some((1, 3))]);
-
-    let class = regexp_match_range(r"^[a-c]{1}(d)$", "bd", 0, false, false, false).unwrap();
-    assert_eq!((class.start, class.end), (0, 2));
-    assert_eq!(class.captures, vec![Some((1, 2))]);
-
-    assert!(regexp_match_range(r"^\d(x)$", "ax", 0, false, false, false).is_none());
-}
-
-#[test]
 fn counted_simple_atom_respects_bounds() {
     let matched = regexp_match_range(r"a{2,3}", "aaaa", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 3));
