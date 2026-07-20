@@ -19,7 +19,7 @@ use escapes::{
     control_letter_escape, hex_escape, is_trailing_surrogate_position, legacy_octal_escape,
     property_escape, regexp_control_escape, regexp_whitespace, regexp_word_char, unicode_escape,
 };
-use fast_scan::{repeat_simple_atom, simple_atom_boundaries, simple_atom_matcher};
+use fast_scan::{repeat_simple_atom, simple_atom_matcher};
 use groups::{
     GroupKind, closing_group, group_alternatives, group_kind, is_non_capturing_group,
     named_backreference, named_group_index,
@@ -169,7 +169,7 @@ impl PreparedRegexp {
                 self.alternatives
                     .iter()
                     .find_map(|(alternative_start, alternative_end)| {
-                        match_pattern_first(
+                        match_pattern(
                             &self.pattern,
                             text,
                             *alternative_start,
@@ -179,6 +179,8 @@ impl PreparedRegexp {
                             &self.properties,
                             self.options,
                         )
+                        .into_iter()
+                        .next()
                     })
                     .map(|state| RegexpMatch {
                         start,
@@ -501,156 +503,6 @@ fn match_pattern(
                 })
             })
             .collect(),
-    }
-}
-
-/// Find the first match in ECMAScript backtracking priority order without
-/// constructing all successful end states. Top-level RegExp execution only
-/// consumes that first state; keeping the all-state matcher for nested atoms
-/// preserves the existing general fallback while the common sequence of
-/// simple atoms can stream its repetition boundaries into the continuation.
-#[allow(clippy::too_many_arguments)]
-fn match_pattern_first(
-    pattern: &[char],
-    text: &[char],
-    pc: usize,
-    end_pc: usize,
-    state: MatchState,
-    group_indices: &HashMap<usize, usize>,
-    properties: &PropertyCache,
-    options: MatchOptions,
-) -> Option<MatchState> {
-    if pc == end_pc {
-        return Some(state);
-    }
-    match pattern[pc] {
-        '^' => at_line_start(text, state.index, options.multiline)
-            .then_some(())
-            .and_then(|()| {
-                match_pattern_first(
-                    pattern,
-                    text,
-                    pc + 1,
-                    end_pc,
-                    state,
-                    group_indices,
-                    properties,
-                    options,
-                )
-            }),
-        '$' => at_line_end(text, state.index, options.multiline)
-            .then_some(())
-            .and_then(|()| {
-                match_pattern_first(
-                    pattern,
-                    text,
-                    pc + 1,
-                    end_pc,
-                    state,
-                    group_indices,
-                    properties,
-                    options,
-                )
-            }),
-        '\\' if matches!(pattern.get(pc + 1), Some('b' | 'B')) => {
-            let before = state.index > 0 && regexp_word_char(text[state.index - 1]);
-            let after = text.get(state.index).copied().is_some_and(regexp_word_char);
-            let want_boundary = pattern[pc + 1] == 'b';
-            ((before != after) == want_boundary)
-                .then_some(())
-                .and_then(|()| {
-                    match_pattern_first(
-                        pattern,
-                        text,
-                        pc + 2,
-                        end_pc,
-                        state,
-                        group_indices,
-                        properties,
-                        options,
-                    )
-                })
-        }
-        _ => {
-            let atom_end = atom_end(pattern, pc, properties, options.unicode)?;
-            let quantifier = quantifier(pattern, atom_end);
-            let atom_captures =
-                atom_capture_indices(pattern, pc, group_indices, properties, options.unicode);
-            if atom_captures.is_empty()
-                && let Some(matcher) = simple_atom_matcher(pattern, pc, properties, options)
-            {
-                let boundaries = simple_atom_boundaries(
-                    text,
-                    &matcher,
-                    quantifier,
-                    state.index,
-                    properties,
-                    options,
-                )?;
-                let lowest = quantifier.min;
-                let highest = boundaries.len() - 1;
-                if quantifier.greedy {
-                    for count in (lowest..=highest).rev() {
-                        let mut candidate = state.clone();
-                        candidate.index = boundaries[count];
-                        if let Some(matched) = match_pattern_first(
-                            pattern,
-                            text,
-                            quantifier.next_pc,
-                            end_pc,
-                            candidate,
-                            group_indices,
-                            properties,
-                            options,
-                        ) {
-                            return Some(matched);
-                        }
-                    }
-                } else {
-                    for boundary in &boundaries[lowest..=highest] {
-                        let mut candidate = state.clone();
-                        candidate.index = *boundary;
-                        if let Some(matched) = match_pattern_first(
-                            pattern,
-                            text,
-                            quantifier.next_pc,
-                            end_pc,
-                            candidate,
-                            group_indices,
-                            properties,
-                            options,
-                        ) {
-                            return Some(matched);
-                        }
-                    }
-                }
-                return None;
-            }
-
-            repeat_atom(
-                pattern,
-                text,
-                pc,
-                quantifier,
-                state,
-                group_indices,
-                properties,
-                options,
-            )
-            .into_iter()
-            .find_map(|state| {
-                match_pattern_first(
-                    pattern,
-                    text,
-                    quantifier.next_pc,
-                    end_pc,
-                    state,
-                    group_indices,
-                    properties,
-                    options,
-                )
-            })
-        }
     }
 }
 
