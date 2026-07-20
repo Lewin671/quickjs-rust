@@ -34,6 +34,21 @@ fn simple_field_initializers_keep_receiver_and_class_capture() {
 }
 
 #[test]
+fn shared_instance_metadata_allows_initializer_reentrancy() {
+    assert_eq!(
+        eval(
+            "class C { \
+               first = Object.defineProperty(C, 'probe', { value: 7 }); \
+               second = C.probe + 1; \
+             } \
+             let value = new C(); \
+             value.first === C && value.second === 8;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn field_shadows_prototype_method_and_is_own_enumerable() {
     assert_eq!(
         eval(
