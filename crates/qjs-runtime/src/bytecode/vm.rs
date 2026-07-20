@@ -1049,6 +1049,8 @@ impl<'a> Vm<'a> {
                             self, *target, backedge,
                         ) && !super::vm_control_loop::try_run_control_loop(
                             self, *target, backedge,
+                        ) && !super::vm_simple_numeric_loop::try_run_simple_numeric_loop(
+                            self, *target, backedge,
                         ))
                     {
                         self.ip = *target;
