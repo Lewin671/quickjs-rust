@@ -584,11 +584,21 @@ fn match_pattern_first(
         _ => {
             let atom_end = atom_end(pattern, pc, properties, options.unicode)?;
             let quantifier = quantifier(pattern, atom_end);
-            let atom_captures =
-                atom_capture_indices(pattern, pc, group_indices, properties, options.unicode);
-            if atom_captures.is_empty()
-                && let Some(matcher) = simple_atom_matcher(pattern, pc, properties, options)
-            {
+            if let Some(matcher) = simple_atom_matcher(pattern, pc, properties, options) {
+                if quantifier.min == 1 && quantifier.max == Some(1) {
+                    let mut candidate = state;
+                    candidate.index = matcher.step(text, candidate.index, properties, options)?;
+                    return match_pattern_first(
+                        pattern,
+                        text,
+                        quantifier.next_pc,
+                        end_pc,
+                        candidate,
+                        group_indices,
+                        properties,
+                        options,
+                    );
+                }
                 let boundaries = simple_atom_boundaries(
                     text,
                     &matcher,
@@ -1549,19 +1559,17 @@ fn repeat_atom(
     properties: &PropertyCache,
     options: MatchOptions,
 ) -> Vec<MatchState> {
-    let atom_captures =
-        atom_capture_indices(pattern, atom_pc, group_indices, properties, options.unicode);
-
     // Fast path: a quantified single-code-point atom with no captures (`\p{X}+`,
     // `\d*`, `[a-z]{2,}`, `.`, a literal, ...) can be scanned linearly instead of
     // driving the generic explicit-stack DFS, which clones a `MatchState` per
     // character and per backtrack point. This keeps property-escape cases that
     // match ~1M code points (`/^\p{L}+$/u`) inside the matcher's budget.
-    if atom_captures.is_empty()
-        && let Some(matcher) = simple_atom_matcher(pattern, atom_pc, properties, options)
-    {
+    if let Some(matcher) = simple_atom_matcher(pattern, atom_pc, properties, options) {
         return repeat_simple_atom(text, &matcher, quantifier, state, properties, options);
     }
+
+    let atom_captures =
+        atom_capture_indices(pattern, atom_pc, group_indices, properties, options.unicode);
 
     let mut current = vec![state];
     for _ in 0..quantifier.min {

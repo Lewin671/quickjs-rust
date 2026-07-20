@@ -116,7 +116,7 @@ pub(super) fn simple_atom_matcher<'a>(
 
 impl SimpleAtom<'_> {
     /// Test the code point at `index`, returning the index just past a match.
-    fn step(
+    pub(super) fn step(
         &self,
         text: &[char],
         index: usize,
