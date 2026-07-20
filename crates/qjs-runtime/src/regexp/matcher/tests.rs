@@ -49,6 +49,17 @@ fn lazy_simple_atom_takes_shortest_run() {
 }
 
 #[test]
+fn streamed_simple_repetition_preserves_first_full_match_priority() {
+    let greedy = regexp_match_range(r"a*(a|aa)", "aa", 0, false, false, false).unwrap();
+    assert_eq!((greedy.start, greedy.end), (0, 2));
+    assert_eq!(greedy.captures, vec![Some((1, 2))]);
+
+    let lazy = regexp_match_range(r"a*?(a|aa)", "aa", 0, false, false, false).unwrap();
+    assert_eq!((lazy.start, lazy.end), (0, 1));
+    assert_eq!(lazy.captures, vec![Some((0, 1))]);
+}
+
+#[test]
 fn counted_simple_atom_respects_bounds() {
     let matched = regexp_match_range(r"a{2,3}", "aaaa", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 3));
