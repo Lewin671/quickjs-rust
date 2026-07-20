@@ -5392,6 +5392,65 @@ external raw/report SHA-256 were
 `8f1db47353a8be9d39be72449237fd3126c1b9559deff8b635ea0006193d0ebc`
 and `bdeabc41c79c3904748c4fb3c21d912b4d5af7bda09e72216ebe7d18790ec547`.
 
+### Unit 88: rejected exact-once RegExp step
+
+Unit 88 tested a general exact-once matcher path for simple RegExp programs.
+It classified a conservative capture-free subset and executed its first
+matching step directly instead of constructing temporary match-state vectors.
+The implementation contained no benchmark name, source path, fixed iteration
+count, or expected output, and focused tests plus the local full correctness
+gate passed. Branch and trusted-main CI also passed, but correctness alone was
+not sufficient to accept a performance unit.
+
+The first trusted-main Performance Preview attempt for commit `cd5ab038` was
+not a performance conclusion. QuickJS-NG `array_read` was timer-limited in
+block 2, invalidating the entire block and leaving only 150/225 formal
+measurements. The workflow correctly failed instead of publishing a partial
+broad comparison. The failed-attempt broad raw/report SHA-256 were
+`031eb96878c8718c04b849d7442b09f7a680c754dc4e20d80649eaead8df45a8`
+and `c2031fc0bd00190b754fd9971d97c61567edaf4137e951a5e2b9f051e56ec8fb`.
+This was a benchmark-host interruption, not a code or correctness failure, so
+only the failed job was rerun against the same commit.
+
+The rerun completed all 225 measurements, all 75 linearity probes, and all
+three blocks. It found a material **1.02089x** candidate/base broad regression
+with a 95% confidence interval of [1.01089x, 1.03140x]. Call regressed to
+**1.05498x** and binding to **1.04906x**; `captured_read` was 1.16769x,
+`function_call_two_args` 1.12522x, `captured_write` 1.08429x, and the plain,
+method, and reordered-call cases were about 1.070--1.071x. These cases never
+execute the changed RegExp matcher, so the result exposed a material general
+hot-path/code-layout cost rather than an allowed RegExp tradeoff.
+
+The external rerun did confirm a real focused benefit: `regexp-dna` improved
+to 0.47287x candidate/base, while suite geometric ratios were 0.98727x for
+JetStream, 0.98945x for Kraken, and 0.96239x for SunSpider. However, QuickJS-NG
+still won every comparable external case, with qjs-rust/QuickJS-NG at 8.218x,
+4.820x, and 7.418x respectively. A large isolated RegExp win cannot compensate
+for a statistically clear regression across unrelated call and binding paths,
+so Unit 88 was rejected under the general-optimization rule.
+
+Rerun broad raw/report SHA-256 were
+`98c543f7d1567d0928b12ce1acb8ae1c06c57de043be495785b1957cedde4db1`
+and `b743b4315da3cdfd97e8379657cebfe147fea408f3800ca22a65eb288a239b73`;
+external raw/report SHA-256 were
+`cc744cc42a3538848d4f7ab5f4b836ea4bff86a5f64ad4d6394c6ab30b111136`
+and `2d0f7c788e65a13625ee90e679fcf3ba14c8b9effad5f5318cd9a9a28cb9edb5`.
+Candidate, base, and QuickJS-NG executable SHA-256 were
+`f8537a5bca5184824c512a4706e58afdb50e28acdde1cdda7d39e40455b1e80f`,
+`5a7ad0f43fe96a8195e685911c721f39db4e3e95fa5b06c7d5b683d9083a36b4`,
+and `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+
+Commit `ac509225` reverts Unit 88. Main CI `29728886300`, Test262 Coverage
+`29729084748`, and Performance Preview `29728886296` all passed after the
+rollback. The rollback candidate executable exactly matches accepted Unit 87
+and measured 0.97737x versus the rejected Unit 88 base, recovering the inverse
+call and binding losses. Rollback broad raw/report SHA-256 were
+`cfddef31b8e3bb1bbe2d793023d1ce28de989cfd39bb3bf0ec10fb363f7c80e6`
+and `8618746a33b34fbadb90fbfd1e8a87b8bb2afeb4d97b5d8e176db48fb8b1eb44`;
+external raw/report SHA-256 were
+`da3cf5524580cdb10caa462815234d3191961aaf4bba81d21f0fd2aa31f55bc0`
+and `8a88701529d2de6bf4f54edb131439d3b33a362d57ee619bcb3436bbfe9fe8b4`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
