@@ -75,6 +75,16 @@ pub(super) struct PreparedInput {
     text: Vec<char>,
 }
 
+impl PreparedInput {
+    /// Materialize a matcher-indexed substring from the input view that was
+    /// already prepared for this RegExp execution. In non-Unicode mode every
+    /// entry represents one UTF-16 code unit (including surrogate sentinels);
+    /// in Unicode mode every entry represents one scalar value.
+    pub(super) fn slice(&self, start: usize, end: usize) -> String {
+        self.text[start..end].iter().collect()
+    }
+}
+
 impl PreparedRegexp {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
