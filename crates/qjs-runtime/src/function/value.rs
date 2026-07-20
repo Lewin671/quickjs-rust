@@ -194,10 +194,7 @@ struct FunctionColdState {
     /// For a class constructor, the instance-field initializers run when a new
     /// instance is constructed (base class: at construction start; derived
     /// class: immediately after `super()` returns).
-    /// Immutable after class definition. Share the complete list across
-    /// constructions so each instance does not clone every field key and
-    /// initializer handle before running them.
-    instance_elements: Option<Rc<Vec<InstanceElementInitializer>>>,
+    instance_elements: Vec<InstanceElementInitializer>,
     property_order: Vec<String>,
     symbol_properties: Vec<(ObjectRef, Property)>,
     /// Explicit [[Prototype]] override. `None` means "use the default
@@ -324,7 +321,7 @@ impl FunctionColdState {
         Self {
             home_object,
             super_constructor,
-            instance_elements: None,
+            instance_elements: Vec::new(),
             property_order: Vec::new(),
             symbol_properties: Vec::new(),
             internal_prototype: None,
@@ -1364,29 +1361,23 @@ impl Function {
     /// method/accessor brand) applied to each instance at construction time.
     pub(crate) fn push_instance_private_element(&self, element: InstancePrivateElement) {
         self.auxiliary.with_cold_mut(|cold| {
-            Rc::make_mut(
-                cold.instance_elements
-                    .get_or_insert_with(|| Rc::new(Vec::new())),
-            )
-            .push(InstanceElementInitializer::PrivateElement(element));
+            cold.instance_elements
+                .push(InstanceElementInitializer::PrivateElement(element));
         });
     }
 
     /// Records a public instance field applied at construction time.
     pub(crate) fn push_instance_public_field(&self, field: InstanceFieldInitializer) {
         self.auxiliary.with_cold_mut(|cold| {
-            Rc::make_mut(
-                cold.instance_elements
-                    .get_or_insert_with(|| Rc::new(Vec::new())),
-            )
-            .push(InstanceElementInitializer::PublicField(field));
+            cold.instance_elements
+                .push(InstanceElementInitializer::PublicField(field));
         });
     }
 
-    /// Returns a shared snapshot of this constructor's instance elements.
-    pub(crate) fn instance_elements(&self) -> Option<Rc<Vec<InstanceElementInitializer>>> {
+    /// Returns a snapshot of this constructor's instance elements.
+    pub(crate) fn instance_elements(&self) -> Vec<InstanceElementInitializer> {
         self.auxiliary
-            .with_cold(|cold| cold?.instance_elements.as_ref().map(Rc::clone))
+            .with_cold(|cold| cold.map_or_else(Vec::new, |cold| cold.instance_elements.clone()))
     }
 
     /// The explicit [[Prototype]] override as an object slot. A function-valued
@@ -1657,31 +1648,6 @@ mod tests {
             cloned.source_text().as_deref(),
             Some("function shared() {}")
         );
-    }
-
-    #[test]
-    fn class_constructions_share_instance_element_metadata() {
-        let Value::Function(constructor) =
-            eval("(class Point { x = 1; y = 2; })").expect("class expression should evaluate")
-        else {
-            panic!("expected class constructor");
-        };
-
-        let first = constructor
-            .instance_elements()
-            .expect("class should retain its fields");
-        let second = constructor
-            .instance_elements()
-            .expect("class should retain its fields");
-        assert_eq!(first.len(), 2);
-        assert!(Rc::ptr_eq(&first, &second));
-
-        let Value::Function(without_fields) =
-            eval("(class Empty { method() {} })").expect("class expression should evaluate")
-        else {
-            panic!("expected class constructor");
-        };
-        assert!(without_fields.instance_elements().is_none());
     }
 
     #[test]

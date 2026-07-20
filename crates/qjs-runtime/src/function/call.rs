@@ -345,9 +345,7 @@ pub(crate) fn initialize_instance_fields(
     this_value: &Value,
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
-    let Some(elements) = function.instance_elements() else {
-        return Ok(());
-    };
+    let elements = function.instance_elements();
     for element in elements.iter() {
         match element {
             InstanceElementInitializer::PublicField(field) => {
