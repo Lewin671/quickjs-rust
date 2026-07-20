@@ -650,8 +650,12 @@ make -C third_party/quickjs-ng BUILD_QJS_LIBC=y
 The output directory receives `external-raw.jsonl`,
 `external-report.json`, `external-summary.md`, and the exact manifest. Corpus
 files and generated bundles stay outside that directory; bundles are removed
-after the run. Use `--blocks 1 --timeout-seconds 1` only for harness smoke tests,
-not for a performance reading.
+after the run. Before each engine process starts, the runner flushes the current
+suite, case, phase, block, and role to standard error so a long run exposes its
+active sample without changing the final machine-readable JSON on standard
+output. Evidence files are still published atomically only after the complete
+run. Use `--blocks 1 --timeout-seconds 1` only for harness smoke tests, not for a
+performance reading.
 
 ## CI Layering and Gate Activation
 

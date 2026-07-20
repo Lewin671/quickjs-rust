@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import io
 import json
 import os
 import subprocess
@@ -155,11 +156,29 @@ class ExternalPreviewTests(unittest.TestCase):
             with patch(
                 "tools.benchmark.external_preview.fetch_corpora",
                 return_value={"downloaded": 0, "reused": 1},
-            ):
+            ), patch("sys.stderr", new_callable=io.StringIO) as progress:
                 report = run_preview(
                     manifest, cache, work, output, engine, engine, engine,
                     blocks=3, timeout_seconds=10,
                 )
+            progress_lines = progress.getvalue().splitlines()
+            self.assertEqual(len(progress_lines), 12)
+            self.assertTrue(
+                any(
+                    line
+                    == "external-preview: suite=suite case=case "
+                    "phase=capability role=candidate"
+                    for line in progress_lines
+                )
+            )
+            self.assertTrue(
+                any(
+                    line
+                    == "external-preview: suite=suite case=case "
+                    "phase=measurement block=3/3 role=quickjs-ng"
+                    for line in progress_lines
+                )
+            )
             self.assertFalse(report["claim_eligible"])
             self.assertEqual(report["suites"][0]["comparable_case_count"], 1)
             self.assertEqual(report["suites"][0]["base_comparable_case_count"], 1)

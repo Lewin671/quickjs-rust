@@ -54,7 +54,7 @@
       "tools/benchmark/performance_policy.py",
       "tools/benchmark/preview.py"
     ],
-    "aggregate_sha256": "749e628a54aa31228913e7d7e59fd0ef2c5d05ef02b40a7ee9b13d97ab9be92f"
+    "aggregate_sha256": "0f52fe116c9981c30826467bcf8f9f2732051c23084bc5a0400fd247400a25e9"
   },
   "hosted_pr": {
     "tier": "informational_preview",

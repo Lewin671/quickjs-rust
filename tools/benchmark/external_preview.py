@@ -487,6 +487,23 @@ def _atomic_write(path: Path, content: bytes) -> None:
             temporary.unlink(missing_ok=True)
 
 
+def _print_sample_progress(
+    suite_id: str,
+    case_id: str,
+    phase: str,
+    role: str,
+    block: int | None,
+    blocks: int,
+) -> None:
+    block_text = "" if block is None else f" block={block + 1}/{blocks}"
+    print(
+        f"external-preview: suite={suite_id} case={case_id} "
+        f"phase={phase}{block_text} role={role}",
+        file=sys.stderr,
+        flush=True,
+    )
+
+
 def _report(manifest: Manifest, records: list[dict[str, Any]]) -> dict[str, Any]:
     samples: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
     for record in records:
@@ -656,6 +673,9 @@ def run_preview(
                 )[0]
                 for order, role in enumerate(capability_order):
                     argv = _command(role, binaries[role], bundle)
+                    _print_sample_progress(
+                        suite.id, case.id, "capability", role, None, selected_blocks
+                    )
                     result = run_process(argv, selected_timeout)
                     record = _record(
                         manifest, suite, case, role, binary_hashes[role], bundle,
@@ -670,6 +690,9 @@ def run_preview(
                 for block in range(selected_blocks):
                     for order, role in enumerate(orders[block]):
                         argv = _command(role, binaries[role], bundle)
+                        _print_sample_progress(
+                            suite.id, case.id, "measurement", role, block, selected_blocks
+                        )
                         result = run_process(argv, selected_timeout)
                         records.append(
                             _record(
