@@ -1048,8 +1048,14 @@ impl ObjectRef {
     }
 
     pub(crate) fn set(&self, key: String, value: Value) {
+        self.set_shared_key(key.into(), value);
+    }
+
+    /// Sets a statically owned property key without copying it out of bytecode.
+    /// Existing properties still retain their original insertion-order key.
+    pub(crate) fn set_shared_key(&self, key: Rc<str>, value: Value) {
         let mut properties = self.0.properties.borrow_mut();
-        if let Some(property) = properties.get_mut(key.as_str()) {
+        if let Some(property) = properties.get_mut(&key) {
             if property.writable {
                 property.value = value;
                 self.bump_property_revision();
@@ -1077,7 +1083,6 @@ impl ObjectRef {
                 .index_property_count
                 .set(self.0.index_property_count.get() + 1);
         }
-        let key: Rc<str> = key.into();
         properties.insert(key, Property::enumerable(value));
         self.bump_property_revision();
     }
@@ -1598,6 +1603,21 @@ mod tests {
                 .map(|index| format!("field{index}"))
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn ordinary_object_retains_shared_static_property_key() {
+        let object = ObjectRef::new(HashMap::new());
+        let key: Rc<str> = Rc::from("field");
+
+        object.set_shared_key(Rc::clone(&key), Value::Number(1.0));
+
+        assert!(matches!(
+            &*object.0.properties.borrow(),
+            PropertyStorage::Small { entries }
+                if entries.len() == 1 && Rc::ptr_eq(&entries[0].0, &key)
+        ));
+        assert_eq!(object.get("field"), Some(Value::Number(1.0)));
     }
 
     #[test]

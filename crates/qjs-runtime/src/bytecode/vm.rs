@@ -1412,12 +1412,43 @@ impl<'a> Vm<'a> {
         self.set_property_value(object, key, value, is_strict)
     }
 
-    fn set_named_prop(&mut self, key: &str, is_strict: bool) -> Result<(), RuntimeError> {
+    fn set_named_prop(&mut self, key: &Rc<str>, is_strict: bool) -> Result<(), RuntimeError> {
         let value = self.pop()?;
         let object = self.pop()?;
+        if !self.is_global_object(&object)
+            && let Value::Object(object_ref) = &object
+            && !crate::symbol::is_symbol_primitive(object_ref)
+        {
+            match object_ref.write_existing_own_data_property(key, &value) {
+                OwnDataPropertyWrite::Written => {
+                    self.stack.push(value);
+                    return Ok(());
+                }
+                OwnDataPropertyWrite::ReadOnly => {
+                    if is_strict {
+                        return Err(RuntimeError {
+                            thrown: None,
+                            message: "TypeError: cannot set property".to_owned(),
+                        });
+                    }
+                    self.stack.push(value);
+                    return Ok(());
+                }
+                OwnDataPropertyWrite::NeedsSlowPath => {
+                    if self.try_create_ordinary_own_data_property(
+                        object_ref,
+                        Rc::clone(key),
+                        &value,
+                    ) {
+                        self.stack.push(value);
+                        return Ok(());
+                    }
+                }
+            }
+        }
         self.set_property_value(
             object,
-            PropertyKey::String(key.to_owned()),
+            PropertyKey::String(key.to_string()),
             value,
             is_strict,
         )
@@ -1460,7 +1491,11 @@ impl<'a> Vm<'a> {
                     return Ok(());
                 }
                 OwnDataPropertyWrite::NeedsSlowPath => {
-                    if self.try_create_ordinary_own_data_property(object, key, &value) {
+                    if self.try_create_ordinary_own_data_property(
+                        object,
+                        Rc::from(key.as_str()),
+                        &value,
+                    ) {
                         self.stack.push(value);
                         return Ok(());
                     }

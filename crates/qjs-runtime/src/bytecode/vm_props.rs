@@ -16,6 +16,7 @@ const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 use super::ir::NamedPropertyCache;
 use super::vm_set::property_set_uses_setter;
 use crate::CallEnv;
+use std::rc::Rc;
 
 impl Vm<'_> {
     fn try_store_indexed_realm_global(
@@ -363,7 +364,7 @@ impl Vm<'_> {
     pub(super) fn try_create_ordinary_own_data_property(
         &self,
         object: &ObjectRef,
-        key: &str,
+        key: Rc<str>,
         value: &Value,
     ) -> bool {
         if symbol::is_symbol_primitive(object)
@@ -371,7 +372,7 @@ impl Vm<'_> {
             || object.is_module_namespace_exotic()
             || !object.is_extensible()
             || !matches!(
-                object.own_data_property_read(key),
+                object.own_data_property_read(&key),
                 OwnDataPropertyRead::Missing
             )
         {
@@ -388,11 +389,11 @@ impl Vm<'_> {
                     {
                         return false;
                     }
-                    if let Some(property) = prototype.own_property(key) {
+                    if let Some(property) = prototype.own_property(&key) {
                         if property.accessor || !property.writable {
                             return false;
                         }
-                        object.set(key.to_owned(), value.clone());
+                        object.set_shared_key(key, value.clone());
                         return true;
                     }
                     current = prototype.prototype_slot();
@@ -401,7 +402,7 @@ impl Vm<'_> {
                     return false;
                 }
                 None => {
-                    object.set(key.to_owned(), value.clone());
+                    object.set_shared_key(key, value.clone());
                     return true;
                 }
             }
