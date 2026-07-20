@@ -4934,6 +4934,464 @@ Candidate/base/QuickJS-NG executable SHA-256 are
 and
 `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
 
+### Unit 82: rejected bounded direct-call frame-storage pools
+
+Runtime commit `d4d84b3bff5846582e9373b5ea8faf16b1a614ce` tested a
+general allocation mechanism identified by independent SunSpider profiling.
+It replaced the single retained operand stack with a bounded per-bytecode pool,
+added a bounded pool for cleared direct-leaf local slots, and returned direct
+leaf locals to the owning bytecode as soon as evaluation completed. Both pools
+were capped at 64 retained frames and discarded allocations above 256 entries;
+all values were cleared before reuse. The implementation contained no suite or
+case identity, source path, recursion shape, iteration count, checksum, or
+expected-result condition. Focused tests covered clearing, capacity bounds,
+sequential reuse, and distinct live recursive frames.
+
+Local screening favored the mechanism's independently motivated path. Forty-one
+alternating fixed-source `controlflow-recursive` pairs measured 0.930967x by
+median and 0.931467x by paired geometric mean. A complete one-block external
+preview measured 0.990080x candidate/base on all five JetStream cases,
+0.997636x on thirteen mutually comparable Kraken cases, and 0.990174x on all
+26 SunSpider cases; `controlflow-recursive` was 0.935986x. The complete local
+25-case broad diagnostic was near neutral at 1.001850x, with call at 1.002115x.
+Its raw SHA-256 was
+`16ab81c63df5ab862b49e13783753d52ccce2cf4f14218fba6645c5da5e1dbc2`.
+These local measurements were screening evidence only.
+
+Trusted-main Performance Preview run `29707728246` compared the exact
+candidate against base `ca50e57d03e9bf2b95ecead5b6c5fef07a83d619` and
+pinned QuickJS-NG `f7830186043e4488f2998759d60a514faf07cbc9`. Candidate,
+base, and QuickJS-NG executable SHA-256 were
+`8d97453c0052560b9ac71d8c73d679122a2f5038ad5bcaeb4e668a846bf54da0`,
+`1492ef71536f52b3694e04e0c5f9c3fd66943ee1c8b32224fb2fb1735b6837e9`,
+and
+`8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+All 225/225 broad measurements were valid, all 75 linearity checks passed, and
+all three blocks were valid.
+
+The hosted external preview reproduced and strengthened the local direction.
+Candidate/base geometric means were **0.984034x** on JetStream with four of
+five candidate wins, **0.995107x** on Kraken's seven mutually comparable
+cases with three candidate wins, and **0.989483x** on all 26 SunSpider cases
+with eighteen candidate wins. `controlflow-recursive` improved to **0.911533x**
+(125.117 ms to 114.048 ms), while independently different allocation and
+object-heavy cases also moved: JetStream `hash-map` was 0.957666x and
+SunSpider `access-binary-trees` was 0.939958x. Capability remained symmetric;
+no candidate-only failure or missing case manufactured those ratios.
+
+The broad regression guard nevertheless rejected the unit. Candidate/base was
+**1.009971x** overall with a 95% confidence interval of
+[1.008544x, 1.013162x]. Call regressed to **1.042732x** and binding to
+**1.019466x**; the direct-call cases `plain_function_call`, `method_call`,
+`captured_read`, and `function_call_reordered` measured 1.070732x, 1.071304x,
+1.079916x, and 1.070390x. Array and string were also above base at 1.015816x
+and 1.018169x. Allocation, builtin, property, and control measured 0.975432x,
+0.976982x, 0.986815x, and 0.998252x, but those wins cannot hide a significant
+general call-path regression. This is exactly the campaign's two-sided
+anti-overfitting rule: external workloads are mandatory, while broad-micro
+remains a regression guard rather than an optional score to discard.
+
+Candidate/QuickJS-NG remained far from the external completion boundary at
+8.089199x on JetStream, 4.848733x on incomplete Kraken, and 8.159375x on
+SunSpider; QuickJS-NG won all 38 comparable cases. The internal portfolio was
+0.354123x candidate/QuickJS-NG, but that result cannot accept a candidate that
+regresses its exact base.
+
+The full local gate passed 1,409 runtime tests, 198 benchmark-tool tests, all
+5,139 curated Test262 cases, formatting, Clippy, agents, file-size checks, and
+all QuickJS-NG comparisons. Isolated branch CI run `29707633388`, main CI run
+`29707728255`, and Test262 Coverage run `29707816149` were fully green. The
+performance run ID was `dddc69a5-ecdf-4359-80a4-689e637c2059`; broad
+raw/report SHA-256 were
+`ea724078e4f8e9a28d6b7efa17ae5961119275bbfa441a3c7f18cfe3aef85b17`
+and
+`867a6dcb0744e4186a2f3043b5f03c444c34db4c5cb20ec406e9e224ddf3fcc3`;
+external raw/report SHA-256 were
+`96227ad7f8804f80075eb07907f2ce2f0f077dafa7d9eb24106abda4b2ca8816`
+and
+`86691e38d61d4a3d9aa6e245c26f16253b9687441606bf6e1ea95dc954cb64cb`.
+
+Commit `1be491b75412a3d967739c2d4921d4069e3b7305` reverts Unit 82. Its
+runtime tree is byte-for-byte identical to the accepted Unit 81 state at
+`ca50e57d03e9bf2b95ecead5b6c5fef07a83d619`. Unit 82 therefore contributes
+rejection and profiling evidence only; B3, B4, and B5 remain open. The next
+unit must reduce externally observed frame/environment overhead without adding
+per-call pool bookkeeping that regresses the already-fast direct-call cohort.
+Revert CI run `29708634404` and Test262 Coverage run `29708721088` both
+completed successfully.
+
+### Unit 83: rejected declaration-free direct-eval writeback skip
+
+An uncommitted Unit 83 prototype tested the next independently profiled
+environment cost. Before direct eval, the caller VM exposes ordinary locals as
+shared upvalue cells. For eval scripts with no `var`/function declarations, no
+lexical declarations, and no direct binding writes, the prototype marked the
+subsequent name-based whole-frame `apply_env` as redundant and refreshed only
+realm-backed slot caches. Calls executed by the eval still mutated captured
+cells and the shared realm in place. The guard used compiled semantic metadata,
+not source text, suite identity, workload name, or expected output. Two focused
+tests verified repeated reads and call side effects through caller cells; all
+57 global/eval tests passed.
+
+The mechanism did not survive the external-first screening rule. Exact release
+candidate and accepted Unit 81 base binaries had SHA-256
+`b1ba4faa51a320f321cd388440e446f97d07c80b7bdab721b35f3eec1ab82942`
+and
+`f448ee1b769ead47036010068b70064c9aab3e1a9c4e3e1c0ad32a85abc07313`.
+An initial eleven-pair alternating SunSpider `date-format-tofte` run was only
+about 0.994x by median. A fresh, already-warm 21-pair alternating run reversed
+that small movement: candidate median was 418.319 ms, base median was 417.080
+ms, or **1.002971x** candidate/base. Raw timing SHA-256 was
+`ded5ca4a7523d7b1c9e68c6f7be786a3272c8d5f01d0c55ca4ac271068251cd0`.
+A candidate profile confirmed that constructor-call environment application,
+current-environment construction, hashing, and allocation still dominated; the
+removed return-stage walk was not a material end-to-end bottleneck.
+
+Unit 83 is rejected without a runtime commit, broad run, or hosted preview. A
+semantically valid branch is not campaign progress when the independent
+external workload is neutral. The next unit must remove the larger environment
+construction or object/allocation mechanism itself instead of adding another
+post-call shortcut.
+
+### Unit 84: rejected lazy caller-name collection for direct eval
+
+An uncommitted Unit 84 prototype targeted the remaining pre-evaluation name
+scan rather than Unit 83's post-evaluation writeback. The current direct-eval
+path always clones and hashes every visible caller binding, although that set
+is consumed only by declaration validation, binding initialization, and
+name-based writeback. The prototype used compiled hoist/write metadata to skip
+that collection for read/call-only eval code. Ordinary reads still used the
+supplied caller frame and functions invoked by the eval still mutated shared
+upvalue cells. It contained no suite identity, source-text match, case name,
+iteration threshold, checksum, or expected result. A focused test covered an
+eval expression that both reads a local and invokes a closure that mutates it;
+all 55 selected global/eval tests passed.
+
+The independent external screen again found no material end-to-end benefit.
+Exact release candidate and accepted Unit 81 base executable SHA-256 were
+`c5a46bb513880c5a7dd21cd5db22f9c54fed5129c6cd5e46604cd5d8d1ccc279`
+and
+`6d97786319139b4ccabcfcf3fe687418a403b98ff51bde29b246396c3f86db55`.
+After three warmups per binary and case, 21 alternating pairs measured paired
+median candidate/base ratios of **1.001154x** for SunSpider
+`date-format-tofte`, **1.000096x** for `date-format-xparb`, and **1.009086x**
+for the independently different `string-tagcloud`. Candidate/base median wall
+times were 416.464/416.198 ms, 107.934/108.179 ms, and 422.994/421.292 ms.
+Raw timing-record SHA-256 was
+`dbed25a65057aaa697370d08f630db7f7a6bc52bcb97ab0678f567b3b2e7a40c`.
+
+Unit 84 is rejected without a runtime commit, broad run, or hosted preview,
+and the prototype was removed. Eliminating an allocation visible in a sampled
+profile is not sufficient when three independent external cases remain neutral
+or regress. The next unit should target work that occupies a much larger share
+of an external execution, especially general object representation/allocation
+or the environment construction itself, rather than another small eval scan.
+
+A temporary hit diagnostic on the restored accepted runtime then executed all
+26 original SunSpider sources. None of the three existing counted-loop engines
+(`NumericLoopPlan`, `ControlLoopPlan`, or `NumericMutationLoopPlan`) ran even
+once. The diagnostic code was removed after the inventory. This zero-hit result
+explains the internal/external split more directly than another micro-profile:
+the broad portfolio's historically fast trace cohort is real, but the current
+trace grammar does not generalize to even one complete SunSpider workload.
+The next trace unit must therefore add a reusable semantic loop family selected
+from external code and retain broad regression checks; adding another internal
+case-specific pattern would not address B5.
+
+### Unit 85: guarded simple numeric recurrence loops
+
+Unit 85, runtime commit `7fa2cca7e233861091b612e970f9168377baf6b1`,
+starts from an original external source shape rather than adding another broad
+micro case. It recognizes a straight-line counted loop whose numeric
+accumulator is updated from itself, the counter, a stable local, or a numeric
+constant, followed by an incrementing or decrementing numeric counter. The
+plan supports arithmetic, remainder, exponentiation, shifts, and bitwise
+recurrences. It is selected from bytecode structure only: there is no source
+text, suite or case identity, variable name, iteration threshold, checksum, or
+expected-result check.
+
+Runtime admission is deliberately semantic. The counter and accumulator must
+be numbers; local slots must remain authoritative or stable realm bindings;
+global sinks must be writable ordinary data properties; and accessors,
+non-number coercion, `with`, or direct-eval state deopt before the first
+iteration is consumed. The plan commits the final accumulator, counter, loop
+result, upvalue/realm/module mirrors, and sloppy-global bookkeeping once at
+loop exit. Focused tests cover arbitrary local and global names, arithmetic
+and bitwise operators, increment and decrement, a dynamic accumulator limit,
+zero iterations, string-addition deopt, and observable global accessor reads.
+
+The motivating independent case is original SunSpider
+`bitops-bitwise-and`, whose 600,000-iteration global recurrence was not
+recognized by any previous loop plan. With exact release candidate/base
+executable SHA-256
+`8b701934d4bfdda3c6094c7b85d93d1a470142580fbbdfdda9b49818782dc12d`
+and
+`6d97786319139b4ccabcfcf3fe687418a403b98ff51bde29b246396c3f86db55`,
+three warmups and 21 alternating pairs measured median wall times of
+5.719/213.990 ms for candidate/base. The pinned QuickJS-NG median was 24.587
+ms, giving **0.02673x base** and **0.23261x QuickJS-NG**. This is the first
+external case in the v2 campaign with a directly caused qjs-rust win over
+QuickJS-NG, but remains a focused local diagnostic rather than an acceptance
+claim.
+
+The complete 25-case local broad screen used one block and seed `20260724`.
+All 75 formal measurements were valid. Candidate/base geometric mean was
+**1.00058x**, while candidate/QuickJS-NG was **0.18542x**. Family
+candidate/base ratios were allocation 1.00676x, array 0.99567x, binding
+1.00475x, builtin 0.99614x, call 0.99640x, control 0.99847x, property
+0.99944x, and string 1.01791x. This single-block run is an anti-regression
+screen, not a stability claim; the hosted multi-block artifact decides whether
+the unit is retained. Raw JSONL SHA-256 was
+`b8394728cfc1f3c68e17cbf2e7d6e7e03363b681da6f28dad812e6e10e049335`.
+
+Local `scripts/check.sh`, all 1,413 runtime tests, the staged 65-case Test262
+slice, and `scripts/compare-qjs.sh` passed. Branch CI `29711304789` and main CI
+`29712265686` passed every job. Main Test262 Coverage `29712373798` passed all
+16 shards and the aggregate. Its commit-bound artifact reports 42,671 Rust
+passes, one failure, zero timeouts, and one actionable QuickJS-NG gap, so this
+performance change introduced no authoritative conformance regression.
+Burndown JSON SHA-256 was
+`881765e1ddae74a5359c0210dafb639c08098b3185a9882cf90c3fd900ff7e9c`.
+Trusted-main Performance Preview run `29712265669` compared the exact candidate
+against base `1be491b75412a3d967739c2d4921d4069e3b7305` and pinned QuickJS-NG
+`f7830186043e4488f2998759d60a514faf07cbc9`. Candidate, base, and QuickJS-NG
+executable SHA-256 were
+`046945d520437da4a541fead5c6244876634dc0f55477c2228835680946ed330`,
+`1492ef71536f52b3694e04e0c5f9c3fd66943ee1c8b32224fb2fb1735b6837e9`,
+and
+`8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+All 225/225 broad measurements were valid, all 75 linearity probes passed, and
+all three requested blocks were valid.
+
+The hosted external result reproduced the motivating win:
+`bitops-bitwise-and` fell from 319.491 ms on the exact base to 6.208 ms on the
+candidate, versus 25.022 ms on QuickJS-NG. Its ratios were **0.01943x base**
+and **0.24810x QuickJS-NG**. SunSpider's 26-case candidate/base geometric mean
+therefore improved to **0.86273x**, but candidate/QuickJS-NG remained
+**7.32254x**, with QuickJS-NG winning the other 25 cases. The independent
+JetStream and Kraken directions were neutral to adverse at **1.00545x** and
+**1.00280x** candidate/base, and still **8.36038x** and **5.87786x**
+candidate/QuickJS-NG. Comparable coverage was unchanged: 5/5 JetStream, 9/14
+Kraken, and 26/26 SunSpider cases.
+
+The broad regression guard rejects Unit 85. Candidate/base was **1.00333x**
+overall with a 95% confidence interval of [0.98588x, 1.00583x], but four
+critical families were above the exact base: control **1.02625x**
+([1.02611x, 1.02627x]), allocation **1.01297x** ([1.01297x, 1.02465x]),
+array **1.01007x** ([1.00704x, 1.02162x]), and property **1.00084x**
+([1.00021x, 1.00181x]). In particular, the independently shaped
+`branch_arithmetic`, `array_write`, and `closure_allocation_call` cases
+regressed to 1.05301x, 1.03044x, and 1.03419x. A single external 51x
+candidate/base speedup cannot hide statistically clear regressions in general
+control, array, allocation, and property work.
+
+Broad raw/report SHA-256 were
+`4391594126151a6b3f294b0db2a9245df69493f0565849a640bf6e44be94fa24`
+and
+`daf05d354da8c41c2e95f5eced595003d8c5ea17e33ebc1a8058f280d230a234`;
+external raw/report SHA-256 were
+`4dad12d57197023358ac722942eedbec7f7f96955c35814146e0eb6a5496feee`
+and
+`613a12c11304681e15846f34124b5b61d2a24a0649d0ab4e2fb2b2f4051c5867`.
+Commit `8710d404248ecf2fb53046ba74bf250f360ef2f7` reverts Unit 85, restoring
+the runtime tree byte-for-byte to accepted Unit 81. Unit 85 contributes a
+useful loop-shape prototype and rejection evidence only. The next unit must
+reduce a general mechanism shared by multiple independent external cases
+without paying a new per-loop dispatch cost on unrelated control paths.
+
+### Unit 86: stream top-level RegExp match priority
+
+Unit 86, runtime commit `60eabcdb9cac449fc6ecd88f38d1a826f0d1d2eb`,
+was selected from independent external profiles rather than an internal broad
+case. Samples from original external `string-tagcloud` and `regexp-dna`
+executions both concentrated in the native RegExp matcher, especially
+`match_pattern` and simple-atom repetition. The implementation adds a
+top-level first-match path that streams greedy or lazy simple-repetition
+boundaries into the remaining pattern and stops at the first complete match in
+ECMAScript backtracking priority. Nested and general matching retain the
+existing all-state fallback. Selection depends only on RegExp structure and
+matching semantics; it contains no benchmark identity, source path, fixed
+input, iteration count, checksum, or expected result.
+
+Focused tests cover greedy and lazy first-match and capture priority. Local
+`scripts/check-touched.sh`, `scripts/check.sh`, all 1,408 runtime tests, all
+5,139 selected Test262 cases, and `scripts/compare-qjs.sh` passed. Branch CI
+`29716125491` passed all jobs before integration. Candidate and accepted Unit
+81 base release executable SHA-256 were
+`42d9a8f340a44ca1be80d905cd2400ac70c5d4746b33e78b42be5f85a98870f1`
+and
+`6d97786319139b4ccabcfcf3fe687418a403b98ff51bde29b246396c3f86db55`.
+
+After three warmups, 11 alternating local pairs measured candidate/base
+ratios of **0.89508x** for external `string-tagcloud` and **0.65990x** for
+external `regexp-dna`. A complete one-block external screen reproduced the
+direction at **0.886x** and **0.685x**, while the independently shaped
+`string-validate-input` case also improved to **0.917x**. The external raw and
+report SHA-256 were
+`b30b06964606b4e6384b5360879c7ca4858a60789e0cfc56442b0568de9d6458`
+and
+`5592bebc0e7fb1880131b7fd1631607da1cac1a73971eab91834d49e84350b02`.
+Complete-suite candidate/base diagnostic means were 1.001x for JetStream,
+1.001x for Kraken, and 0.972x for SunSpider.
+
+The complete three-block local broad guard recorded 225/225 valid
+measurements. Candidate/base was **1.00158x** overall; family ratios were
+allocation 0.99371x, array 0.99613x, binding 1.00385x, builtin 1.00074x, call
+1.00471x, control 1.00200x, property 1.00628x, and string 0.99844x.
+Candidate/QuickJS-NG was 0.18552x overall. Raw JSONL SHA-256 was
+`02bcaa56ab77f14ef3e4f2d0ed044948d3b0ba0005d6ff3719273a656fbd084e`.
+These local broad offsets are small but do not prove neutrality; trusted-main
+Performance Preview `29716273894` is the acceptance authority. It compared the
+exact candidate against accepted base
+`8710d404248ecf2fb53046ba74bf250f360ef2f7` and pinned QuickJS-NG
+`f7830186043e4488f2998759d60a514faf07cbc9`. Candidate, base, and QuickJS-NG
+executable SHA-256 were
+`c18151cc0e7af31c9ee0ef30f24b8f7ffd45ef1c9e20f2f9aa98a6f9e8711c64`,
+`1492ef71536f52b3694e04e0c5f9c3fd66943ee1c8b32224fb2fb1735b6837e9`,
+and
+`8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+All 225/225 broad measurements, 75/75 linearity probes, and three requested
+blocks were valid.
+
+The hosted external result reproduced the general RegExp benefit across three
+independent cases: `regexp-dna` was **0.642x**, `string-tagcloud` **0.870x**,
+and `string-validate-input` **0.916x** candidate/base. SunSpider improved to
+**0.974x** over all 26 comparable cases, while Kraken was neutral at 0.997x
+over 7/14 and JetStream was slightly adverse at 1.006x over 5/5. qjs-rust
+remained far from the external completion boundary at 7.975x, 4.865x, and
+8.199x QuickJS-NG for SunSpider, Kraken, and JetStream respectively, with zero
+qjs-rust wins against QuickJS-NG.
+
+Unit 86 is nevertheless rejected by the two-sided broad regression guard.
+Candidate/base was 0.98139x overall with a 95% confidence interval of
+[0.98139x, 0.98577x], but the critical `string` family regressed to
+**1.05709x** with a wholly adverse interval of **[1.04694x, 1.07083x]**. A
+real external win cannot override a statistically clear critical-family
+regression, just as an internal win cannot override neutral external evidence.
+Broad raw/report SHA-256 were
+`8791ada02999d38ee3d75232edf874b0d8127e3b587c90a9c0edace82a9cd49e`
+and
+`b093d8cda811117fe1a516d83e7d4bc48b67f34f38cd45e00e4df2884acd9d97`;
+external raw/report SHA-256 were
+`174155f1b4c93d70e068c50beec824368d5abe38aff7495695717acc09f16d09`
+and
+`4b52d7b4f23d83bacdc1c795db7c98e7e98a4e871154df07a84f432e2b0181e8`.
+
+Main CI `29716273925` passed all jobs. Test262 Coverage `29716402425`
+passed all 16 shards and aggregation; its commit-bound artifact reports 42,671
+Rust passes, one failure, zero timeouts, and one actionable QuickJS-NG gap.
+Burndown JSON SHA-256 was
+`d2e7e348d2f243a8cff46163f8e1ce286c7d38722ffcb660e0e54bc2901bd293`.
+Commit `78c03c19474ea3d93b3904e70f398e3a7f348499` reverts Unit 86 and restores
+the three matcher files byte-for-byte to accepted Unit 81. A cumulative
+follow-up may reintroduce the semantic first-match stream only if an additional
+general external-profiled change clears both the external and broad guards
+against that accepted base.
+
+### Unit 87: reuse prepared RegExp input slices
+
+Unit 87 reintroduces the Unit 86 first-match stream as commit
+`e58c57ea` and adds commit `c804af0ff35af2a12ae19b0e5ab764227e0c006f`.
+The additional mechanism was selected from post-Unit-86 external profiles:
+`string-tagcloud` placed 62 top-of-stack samples, about 21% of the sample, in
+`input_slice -> string_code_units`; `regexp-dna` independently placed 23
+samples there. The prepared native global-RegExp path already decodes its input
+once for matching, but result materialization decoded the complete input again
+for every match and capture merely to extract a short substring.
+
+`PreparedInput::slice` now materializes matcher-indexed substrings directly
+from that existing view. Non-Unicode entries retain one UTF-16 code unit,
+including lone-surrogate sentinels; Unicode entries retain one scalar value.
+Whole matches, captures, and named-group values in the strict original-native
+global replace path share it. Custom `exec`, RegExp-like objects, and all
+observable fallback protocol remain unchanged. Focused tests cover Unicode
+substrings and both halves of an astral character in non-Unicode code-unit
+mode. The implementation has no benchmark identity, source path, input
+constant, iteration count, or expected output.
+
+The clean complete local external screen compared cumulative candidate SHA-256
+`29edf05c3bd4abb3c13fde69dd27d528923504791a1e250f4cb44c3425660a84`
+against accepted Unit 81 base
+`6d97786319139b4ccabcfcf3fe687418a403b98ff51bde29b246396c3f86db55`.
+JetStream was 0.998x candidate/base over 5/5 cases, Kraken 0.994x over
+13/14, and SunSpider **0.919x** over 26/26. The independently improved cases
+were `regexp-dna` **0.554x**, `string-tagcloud` **0.625x**,
+`string-validate-input` **0.900x**, and `string-unpack-code` **0.396x**.
+No comparable coverage was removed. External raw/report SHA-256 were
+`0d1903bf96ffc683da150361ec64e7de943720978ce41d8c0b26b588e8cccac5`
+and
+`ff12b07add054b1847cba14d29577e0a7f34bfbb5b8c96081354ad2c12f75668`.
+
+A complete clean-commit local broad screen produced 1,621 protocol records,
+225/225 valid formal measurements, all 25 cases, and three blocks. Local
+direct binaries have no trusted build receipts, so the report validator
+correctly rejected `provenance_status=unverified`; these numbers are screening
+evidence only. Recomputed paired case medians gave 1.00117x candidate/base
+overall and 0.18407x candidate/QuickJS-NG. Candidate/base family ratios were
+allocation 0.99364x, array 0.99383x, binding 1.00478x, builtin 0.99788x,
+call 0.99827x, control 1.00163x, property 1.01962x, and string 0.99628x.
+The changing small family directions across two complete local runs reinforce
+that only a receipt-bound hosted report may accept or reject the cumulative
+candidate. Local raw JSONL SHA-256 was
+`5e5edd8e7ddadda532ea7467d0bc3c7c7e3d94b750f316f3f2d219ab5a1dc46c`.
+
+`scripts/check-touched.sh`, `scripts/check.sh`, all 1,409 runtime tests, all
+198 benchmark-tool tests, the 5,139-case Test262 subset, and
+`scripts/compare-qjs.sh` passed. Branch CI `29719854934` and main CI
+`29720061660` passed every job. Main Test262 Coverage `29720196801` passed all
+16 shards and aggregation; its commit-bound artifact reports 42,671 Rust
+passes, one failure, zero timeouts, and one actionable QuickJS-NG gap.
+Burndown JSON SHA-256 was
+`35495a77398ec22119ec2b00c5624cea4ef1173203dc7b948bbeaa9261ec6812`.
+Trusted-main Performance Preview `29720061573` accepted Unit 87 after two
+complete attempts over the exact same candidate, base, and QuickJS-NG
+executables. Candidate, base, and QuickJS-NG binary SHA-256 were
+`5a7ad0f43fe96a8195e685911c721f39db4e3e95fa5b06c7d5b683d9083a36b4`,
+`1492ef71536f52b3694e04e0c5f9c3fd66943ee1c8b32224fb2fb1735b6837e9`,
+and `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+The first broad attempt measured **0.98690x** candidate/base overall with a
+95% confidence interval of [0.98307x, 0.98892x]; the independent rerun measured
+**0.98851x** with [0.98477x, 0.98952x]. Both attempts had 225/225 valid
+measurements, all 75 linearity probes passing, and all three blocks valid.
+
+The external direction also reproduced. The first and second attempt suite
+ratios were 1.004x and 1.005x on JetStream, 0.996x and 0.992x on the mutually
+comparable Kraken cases, and **0.940x** and **0.942x** on all 26 SunSpider
+cases. The independently selected RegExp/string cases reproduced large gains:
+`regexp-dna` was 0.536x then 0.535x, `string-tagcloud` 0.741x then 0.714x,
+`string-unpack-code` 0.538x then 0.543x, and `string-validate-input` 0.903x
+then 0.928x candidate/base. Comparable coverage did not decrease.
+
+The broad `builtin` family was a repeatable regression watch at 1.00630x
+([1.00440x, 1.01061x]) and 1.00597x ([1.00562x, 1.00641x]); the second
+attempt also placed control at 1.00102x and string at 1.00419x, with both
+confidence intervals crossing 1.00x. These cases do not execute the changed
+RegExp path, the portfolio overall improved on both attempts, and the maximum
+repeatable family movement was 0.63%, so this is retained as a small
+code-layout/hosted-runner regression watch rather than classified as a
+material general-path regression. The next unit must remeasure `builtin`; a
+larger or compounding regression is not acceptable.
+
+Unit 87 is accepted as general-engine progress because the implementation is
+semantic rather than workload-specific, the motivating benefit reproduced
+across four independent external cases on two hosted attempts, overall broad
+performance improved on both attempts, correctness remained green, and no
+coverage was removed. It does not approach campaign completion: the rerun was
+still 8.291x QuickJS-NG on JetStream, 4.861x on incomplete Kraken, and 7.703x
+on SunSpider, with QuickJS-NG winning all 38 comparable external cases.
+First-attempt broad raw/report SHA-256 were
+`8c713f5fb204c06a86f1f9231762f060ff9df53383d7ed2e6126a899f7a5063b`
+and `9b08d5f64690e4128ccb439d34ae091285ac453600026ed88bc4b5531f9afdc2`;
+external raw/report SHA-256 were
+`7ce61fb4bf36b611f2e43f4256b801d5237cb8f442ceab54b1074bfb81580025`
+and `565fc3e8b20c74f612eaf821a1d23422587d5f4e63a43a1aee46f0ec38d693d0`.
+Rerun broad raw/report SHA-256 were
+`b0e0bfcd9f331edb91ba713e1282cdeb829fa38464214bf63b6f1891e47928ed`
+and `c6555bdc0ce1c7a6b71999b9850ae4cda90f6de9df2cac154418f4ac18311005`;
+external raw/report SHA-256 were
+`8f1db47353a8be9d39be72449237fd3126c1b9559deff8b635ea0006193d0ebc`
+and `bdeabc41c79c3904748c4fb3c21d912b4d5af7bda09e72216ebe7d18790ec547`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
