@@ -5756,3 +5756,13 @@ Broad v2 is still a first-party micro portfolio, not a substitute for an
 admitted external macro suite. T017's external-corpus audit remains the path to
 broader public claims. The immediate purpose is to make optimization robust to
 code-shape changes and multiple runtime subsystems before chasing the 2x goal.
+
+2026-07-20: opened `T019-object-layout-rewrite.md` to attack the persistent
+`allocation` critical family gap (2.56x-7.56x across recorded units, never
+reached QuickJS-NG parity) as a narrower alternative to a full GC/arena
+rewrite. `third_party/quickjs-ng/quickjs.c` confirms QuickJS-NG itself uses
+refcounting plus a periodic cycle-collecting mark/sweep pass, not a
+tracing/moving GC, so the gap is attributed to `JSObject`'s flat C layout
+rather than to memory-management strategy. T019 shrinks `ObjectData`/
+`ArrayData`/`PropertyStorage` layout in separately measured slices; land its
+units the same way as any other T018 structural-bottleneck unit.

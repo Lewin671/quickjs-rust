@@ -71,6 +71,11 @@ Campaign working rules:
   at most 0.50x without regressing any critical family above 1.00x or weakening
   correctness. This is the active performance campaign; each runtime change
   remains a separately measured, reviewable unit.
+- `T019-object-layout-rewrite.md` — feeds T018 B3/B4. Shrinks `ObjectData`/
+  `ArrayData`/`PropertyStorage` layout to close the `allocation` critical
+  family's persistent QuickJS-NG gap, as a narrower alternative to a full
+  GC/arena rewrite (`docs/design/object-layout-rewrite.md`). S1 (box the cold
+  `PropertyStorage::Dynamic` payload) landed. Serialize on one branch.
 - `T017-performance-benchmark-system.md` — versioned candidate/base/QuickJS-NG
   black-box benchmark platform. M0-M4 landed, including independent throughput,
   resource lanes, and diagnostic public-boundary Criterion lifecycle benches;
