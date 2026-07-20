@@ -45,10 +45,39 @@ promptly so hosted CI records the formal three-role evidence.
   unit test is tightened from `<= 160` to `<= 112` bytes. All existing
   `PropertyStorage`/`ObjectData` unit tests pass unchanged; no behavior or
   public-API change.
-- [ ] **S2 — Pack `ObjectData`'s boolean/brand `Cell` fields into one
-  `Cell<u8>`.**
-- [ ] **S3 — Pack `ArrayData`'s boolean flag `Cell`s into one `Cell<u8>`.**
-- [ ] **S4 — Audit and narrow `Property`'s 56-byte footprint.**
+- [x] **S2 — rejected.** Attempted packing `ObjectData`'s six `Cell<bool>`
+  fields plus `symbol_brand` into one `Cell<u8>`. Measured `size_of::<
+  ObjectData>()` before and after: **104 bytes both times, zero reduction.**
+  Rust's default (non-`repr(C)`) struct layout already reorders and packs
+  single-byte fields into existing alignment padding, so seven separately
+  declared single-byte `Cell`s cost nothing beyond what one packed byte would
+  — the struct's size is dictated by its largest-aligned field (pointers,
+  needing 8-byte alignment) plus whatever padding remains, and that padding
+  already absorbed the bools. A full three-role local A/B (25 cases, 3
+  blocks) confirmed no case moved outside +/-2.1% noise. Reverted rather than
+  keeping unjustified indirection, per T018's own acceptance discipline.
+- [x] **S3 — skipped without implementing.** Same physics as S2:
+  `ArrayData`'s four `Cell<bool>` flags (`length_writable`, `extensible`,
+  `sealed`, `frozen`) already fit inside the padding between its 52 bytes of
+  addressable fields and the 56-byte aligned total (`RefCell<Vec<Value>>` 32B
+  + `Cell<usize>` 8B + 4 bools 4B + `OnceCell<Box<..>>` 8B = 52, padded to
+  56). Packing them into one byte cannot reduce a total that padding already
+  covers. Do not re-attempt bitset-packing of scattered single-byte `Cell`
+  fields in this codebase without first confirming the struct's *unpacked*
+  field sum crosses an alignment boundary the packed version would avoid.
+- [ ] **S4 — deferred, not started this session.** Audit and narrow
+  `Property`'s 56-byte footprint (`value: Value` 16B + `get: Option<Value>`
+  16B + `set: Option<Value>` 16B + 4 packed bools, padded to 56). Unlike S2/
+  S3, this one has real headroom: `get`/`set` are `None` for the overwhelming
+  majority of properties (plain data properties), so boxing them behind an
+  `Option<Box<AccessorState { get, set }>>` could shrink `Property` toward
+  ~32 bytes for the common case. Not attempted this session because
+  `Property`'s fields are `pub(crate)` and read directly (not through
+  accessor methods) from roughly 100+ call sites across `bytecode/**`,
+  `property/**`, and other crate modules outside T019's `value/**` scope
+  boundary — this needs its own scope-justified slice (or its own task) with
+  enough budget to update every direct field-read site and re-verify the
+  full descriptor/accessor Test262 surface, not a rushed mid-session change.
 - [ ] **S5 (open, gate on a fresh measurement first) — evaluate whether
   `Rc`'s strong/weak refcount block is avoidable for object kinds never
   targeted by `Weak`.**
@@ -119,3 +148,45 @@ parity. Do not credit this campaign with closing T018's `allocation` family
 until hosted three-role CI evidence and external-suite generalization
 (JetStream/Kraken/SunSpider) both show a repeatable improvement, per T018's
 own General Optimization Acceptance Rule, and until S2-S4 compound with S1.
+
+Hosted `Performance Preview` for commit `cfde2fbd` (run `29767781513`)
+completed all engine builds and measurement but exited with `report
+comparison input is incomplete` — the harness's own fail-closed non-claim
+policy, matching prior recorded incomplete-measurement attempts (e.g. T018
+unit 92 attempt 1). The separate correctness `CI` job (`29767781545`) and
+`Test262 Coverage` (`29768040632`) both passed. This is hosted-runner
+measurement variance, not a regression signal; do not re-push solely to
+retry the preview.
+
+### S2/S3 result: bitset-packing scattered `Cell<bool>` fields does not help
+
+See the S2/S3 checklist entries above. This is the campaign's most useful
+negative result so far: Rust's default struct layout already packs
+single-byte fields into existing alignment padding, so consolidating them
+into an explicit `Cell<u8>` only helps when the *unpacked* field sum crosses
+an alignment boundary the packed form would avoid. Verify this arithmetic
+before proposing another bitset-packing slice.
+
+### A much larger lever found outside this campaign's scope: global `var` sync
+
+While re-measuring, the full 25-case candidate/QuickJS-NG standing (from the
+S1 A/B raw data, not the stale initial-baseline table in T018) showed
+`top_level_function_call` at **9.897x** QuickJS-NG — by far the worst case in
+the portfolio, dwarfing every `allocation` case. `dynamic_method_call`
+(3.854x) and `array_write` (2.446x) are also larger than anything in this
+campaign's scope. Root-caused `top_level_function_call` to
+`Vm::store_local_slow` (`crates/qjs-runtime/src/bytecode/vm_bindings.rs`):
+every write to a hoisted top-level `var` inside `syncs_global_var` re-fetches
+`globalThis` from the realm's binding map, calls
+`global_this.has_own_property(name)`, clones the binding name `String` up to
+three times, and does two to four more `HashMap` lookups/inserts (`realm
+.borrow().contains_key`, `env.insert_realm`, `env.has_local_binding`,
+`env.insert`) — all on every loop iteration, not just once. This is **not**
+T019 scope (it is VM dispatch / environment-sync work, not object/array
+layout) and it is **not** a safe quick fix: it sits in the same
+historically fragile realm/globalThis-sync territory that took many
+dedicated sessions to stabilize (see memory `Parity progress` sessions on
+realm semantics). Recorded here and in `T018-broad-performance.md` as the
+clear next priority, deliberately not attempted without a full session's
+verification budget (focused Annex B / sloppy-var Test262 scans before and
+after, not just the broad-micro portfolio).

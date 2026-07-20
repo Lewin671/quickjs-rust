@@ -5765,4 +5765,26 @@ refcounting plus a periodic cycle-collecting mark/sweep pass, not a
 tracing/moving GC, so the gap is attributed to `JSObject`'s flat C layout
 rather than to memory-management strategy. T019 shrinks `ObjectData`/
 `ArrayData`/`PropertyStorage` layout in separately measured slices; land its
-units the same way as any other T018 structural-bottleneck unit.
+units the same way as any other T018 structural-bottleneck unit. S1 (box
+`PropertyStorage::Dynamic`) landed with a measured, non-regressing 1.2% win
+on `object_allocation`/`array_allocation`; S2/S3 (bitset-pack scattered
+`Cell<bool>` fields) were attempted and rejected — Rust's default struct
+layout already absorbs single-byte fields into existing alignment padding,
+so consolidating them saves zero bytes here. Full writeup in
+`tasks/T019-object-layout-rewrite.md`.
+
+2026-07-20: re-measuring the full 25-case portfolio against QuickJS-NG (not
+the stale initial-baseline table above) surfaced a much larger, previously
+uncatalogued outlier: **`top_level_function_call` at 9.897x QuickJS-NG** —
+worse than every case T019 targets. `dynamic_method_call` (3.854x) and
+`array_write` (2.446x) are also larger than the `allocation` family cases.
+Root cause for `top_level_function_call`: `Vm::store_local_slow`
+(`crates/qjs-runtime/src/bytecode/vm_bindings.rs`) re-fetches `globalThis`
+from the realm binding map, calls `has_own_property`, and clones the
+binding name up to three times on *every* write to a hoisted top-level
+`var`, not just once. This is VM dispatch / environment-sync work, not
+object layout — it belongs to a future T018 unit, not T019. Deliberately
+not attempted without a dedicated session's verification budget: this code
+sits in the realm/globalThis-sync territory that took many sessions to
+stabilize historically (see the `Parity progress` memory entries on realm
+semantics). Next session should prioritize this over continuing T019.
