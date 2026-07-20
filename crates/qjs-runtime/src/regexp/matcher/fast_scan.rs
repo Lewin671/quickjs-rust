@@ -206,22 +206,11 @@ pub(super) fn repeat_simple_atom(
     properties: &PropertyCache,
     options: MatchOptions,
 ) -> Vec<MatchState> {
-    let mut boundaries = vec![state.index];
-    let mut index = state.index;
-    let max = quantifier.max.unwrap_or(usize::MAX);
-    while boundaries.len() - 1 < max {
-        let Some(next) = matcher.step(text, index, properties, options) else {
-            break;
-        };
-        if next == index {
-            break;
-        }
-        index = next;
-        boundaries.push(index);
-    }
-    if boundaries.len() - 1 < quantifier.min {
+    let Some(boundaries) =
+        simple_atom_boundaries(text, matcher, quantifier, state.index, properties, options)
+    else {
         return Vec::new();
-    }
+    };
     let lowest = quantifier.min;
     let highest = boundaries.len() - 1;
     let order: Vec<usize> = if quantifier.greedy {
@@ -237,4 +226,32 @@ pub(super) fn repeat_simple_atom(
             accepted
         })
         .collect()
+}
+
+/// Scan a quantified simple atom once and return every reachable input
+/// boundary in ascending repetition-count order. The caller can then walk the
+/// boundaries greedily or lazily without materializing a `MatchState` for
+/// every position before it knows whether the rest of the pattern matches.
+pub(super) fn simple_atom_boundaries(
+    text: &[char],
+    matcher: &SimpleAtom<'_>,
+    quantifier: Quantifier,
+    start: usize,
+    properties: &PropertyCache,
+    options: MatchOptions,
+) -> Option<Vec<usize>> {
+    let mut boundaries = vec![start];
+    let mut index = start;
+    let max = quantifier.max.unwrap_or(usize::MAX);
+    while boundaries.len() - 1 < max {
+        let Some(next) = matcher.step(text, index, properties, options) else {
+            break;
+        };
+        if next == index {
+            break;
+        }
+        index = next;
+        boundaries.push(index);
+    }
+    (boundaries.len() > quantifier.min).then_some(boundaries)
 }
