@@ -14,9 +14,18 @@ use crate::{
 #[derive(Clone, Debug, Default)]
 pub(super) struct NamedPropertyCache(Rc<RefCell<NamedPropertyCacheState>>);
 
+/// Number of distinct receiver shapes/objects one call site remembers at
+/// once. A call site whose receiver alternates between exactly this many
+/// shapes (for example `a.f()`/`b.f()` behind a ternary) stays entirely on
+/// the cache-hit path instead of rebuilding a single-entry cache on every
+/// call; sites with more distinct shapes degrade gracefully to the slow
+/// path exactly as a single-entry cache would.
+const POLYMORPHIC_CACHE_SLOTS: usize = 2;
+
 #[derive(Clone, Debug, Default)]
 struct NamedPropertyCacheState {
-    entry: Option<NamedPropertyCacheEntry>,
+    entries: [Option<NamedPropertyCacheEntry>; POLYMORPHIC_CACHE_SLOTS],
+    next_slot: usize,
     local_slot: Option<usize>,
 }
 
@@ -45,7 +54,8 @@ enum CachedValue {
 impl NamedPropertyCache {
     pub(super) fn for_local(slot: usize) -> Self {
         Self(Rc::new(RefCell::new(NamedPropertyCacheState {
-            entry: None,
+            entries: Default::default(),
+            next_slot: 0,
             local_slot: Some(slot),
         })))
     }
@@ -56,7 +66,14 @@ impl NamedPropertyCache {
 
     pub(super) fn get(&self, object: &ObjectRef) -> Option<Value> {
         let state = self.0.borrow();
-        let entry = state.entry.as_ref()?;
+        state
+            .entries
+            .iter()
+            .flatten()
+            .find_map(|entry| Self::read_entry(entry, object))
+    }
+
+    fn read_entry(entry: &NamedPropertyCacheEntry, object: &ObjectRef) -> Option<Value> {
         let value = match entry {
             NamedPropertyCacheEntry::Exact {
                 object: cached_object,
@@ -82,30 +99,36 @@ impl NamedPropertyCache {
     }
 
     pub(super) fn update(&self, object: &ObjectRef, key: &str, value: &Value) {
-        if let Some((shape, slot)) = object.literal_data_slot(key) {
-            self.0.borrow_mut().entry = Some(NamedPropertyCacheEntry::LiteralShape { shape, slot });
-            return;
-        }
-        let value = match value {
-            Value::Undefined => CachedValue::Undefined,
-            Value::Null => CachedValue::Null,
-            Value::Boolean(value) => CachedValue::Boolean(*value),
-            Value::Number(value) => CachedValue::Number(*value),
-            Value::Object(value) => CachedValue::Object(value.downgrade()),
-            _ => {
-                self.clear();
-                return;
+        let entry = if let Some((shape, slot)) = object.literal_data_slot(key) {
+            NamedPropertyCacheEntry::LiteralShape { shape, slot }
+        } else {
+            let value = match value {
+                Value::Undefined => CachedValue::Undefined,
+                Value::Null => CachedValue::Null,
+                Value::Boolean(value) => CachedValue::Boolean(*value),
+                Value::Number(value) => CachedValue::Number(*value),
+                Value::Object(value) => CachedValue::Object(value.downgrade()),
+                _ => {
+                    self.clear();
+                    return;
+                }
+            };
+            NamedPropertyCacheEntry::Exact {
+                object: object.downgrade(),
+                revision: object.property_revision(),
+                value,
             }
         };
-        self.0.borrow_mut().entry = Some(NamedPropertyCacheEntry::Exact {
-            object: object.downgrade(),
-            revision: object.property_revision(),
-            value,
-        });
+        let mut state = self.0.borrow_mut();
+        let slot = state.next_slot;
+        state.entries[slot] = Some(entry);
+        state.next_slot = (slot + 1) % POLYMORPHIC_CACHE_SLOTS;
     }
 
     pub(super) fn clear(&self) {
-        self.0.borrow_mut().entry = None;
+        let mut state = self.0.borrow_mut();
+        state.entries = Default::default();
+        state.next_slot = 0;
     }
 }
 
@@ -1494,6 +1517,30 @@ mod tests {
         let third =
             ObjectRef::with_literal_pair(shape, [Value::Number(6.0), Value::Number(7.0)], None);
         assert_eq!(cache.get(&third), Some(Value::Number(6.0)));
+    }
+
+    #[test]
+    fn named_property_cache_remembers_two_alternating_receivers() {
+        // A call site whose receiver alternates between exactly two distinct
+        // objects (for example `a.f()`/`b.f()` behind a ternary) must not
+        // thrash a single-entry cache: both identities should stay cached
+        // rather than evicting each other on every access.
+        let first = ObjectRef::new(HashMap::from([("value".to_owned(), Value::Number(1.0))]));
+        let second = ObjectRef::new(HashMap::from([("value".to_owned(), Value::Number(2.0))]));
+        let cache = NamedPropertyCache::default();
+
+        cache.update(&first, "value", &Value::Number(1.0));
+        cache.update(&second, "value", &Value::Number(2.0));
+
+        assert_eq!(cache.get(&first), Some(Value::Number(1.0)));
+        assert_eq!(cache.get(&second), Some(Value::Number(2.0)));
+
+        // A third distinct receiver evicts the oldest slot (round robin),
+        // not the most recently used one.
+        let third = ObjectRef::new(HashMap::from([("value".to_owned(), Value::Number(3.0))]));
+        cache.update(&third, "value", &Value::Number(3.0));
+        assert_eq!(cache.get(&second), Some(Value::Number(2.0)));
+        assert_eq!(cache.get(&third), Some(Value::Number(3.0)));
     }
 
     #[test]

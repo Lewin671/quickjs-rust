@@ -5788,3 +5788,24 @@ not attempted without a dedicated session's verification budget: this code
 sits in the realm/globalThis-sync territory that took many sessions to
 stabilize historically (see the `Parity progress` memory entries on realm
 semantics). Next session should prioritize this over continuing T019.
+
+2026-07-20: accepted a general dispatch mechanism fix for `dynamic_method_call`
+(3.854x QuickJS-NG). Profiling isolated the cost to `NamedPropertyCache`
+(`crates/qjs-runtime/src/bytecode/ir.rs`): its single-entry cache thrashed on
+every access because the benchmark's receiver alternates between two
+distinct object shapes (`a.f()`/`b.f()` behind a ternary), so every call
+rebuilt the cache from a full hashed shape lookup instead of hitting. Changed
+the single `Option<NamedPropertyCacheEntry>` to a small fixed `[Option<_>; 2]`
+round-robin polymorphic cache — a strict capability superset (a miss still
+falls back to the existing slow path exactly as before; the only change is
+that up to two receiver identities/shapes can be remembered instead of one).
+Local three-role `benchmark.sh` A/B (3 blocks, 25 cases): `dynamic_method_call`
+candidate/base **0.887x** (11.3% faster), candidate/QuickJS-NG improved from
+3.854x to 3.404x; no other case moved outside noise. `method_call`
+(monomorphic, unaffected by the fix) initially showed a 3-block 1.137x
+reading; a 5-block/20-sample re-isolation converged to 1.008x, confirming
+that was measurement noise from too few samples, not a regression. Added a
+focused `named_property_cache_remembers_two_alternating_receivers` unit test.
+Mechanism is general (any polymorphic call site benefits, not just this
+benchmark shape); does not close the case's gap to QuickJS-NG, which remains
+open for further work.
