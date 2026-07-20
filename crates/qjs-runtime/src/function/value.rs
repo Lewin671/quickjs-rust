@@ -20,10 +20,6 @@ use crate::{
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
-fn dynamic_function_realm_global(realm: &Realm) -> Option<ObjectRef> {
-    realm.dynamic_function_realm_global()
-}
-
 /// A compiled instance-field initializer attached to a class constructor. It
 /// runs at construction time with `this` bound to the new instance.
 #[derive(Clone)]
@@ -112,10 +108,10 @@ pub struct FunctionData {
     /// The creation realm of a user bytecode function. Native functions keep
     /// `None` and receive their active realm through `CallEnv`.
     pub(crate) realm: Option<Realm>,
-    /// Cached internal global for functions created by a cross-realm dynamic
-    /// Function constructor. Ordinary user functions keep this empty, avoiding
-    /// hidden string-property and realm-map lookups on every call.
-    pub(crate) dynamic_function_realm_global: Option<ObjectRef>,
+    /// Whether this function was created while the host's temporary dynamic
+    /// realm marker was active. The marker object remains live realm state;
+    /// this bit only keeps ordinary calls off that cold lookup path.
+    pub(crate) has_dynamic_function_realm: bool,
     /// Whether this function currently has an own object-valued override for
     /// the internal dynamic-realm marker. Property mutation keeps this bit in
     /// sync so ordinary calls need not hash the hidden property name.
@@ -478,7 +474,7 @@ impl Function {
         lexical_bindings: LexicalBindings,
     ) -> Result<Self, crate::RuntimeError> {
         let realm = super::env::new_realm(env);
-        let dynamic_function_realm_global = dynamic_function_realm_global(&realm);
+        let has_dynamic_function_realm = realm.dynamic_function_realm_global().is_some();
         let prototype = ObjectRef::with_prototype(
             HashMap::new(),
             object_prototype(&crate::CallEnv::new(Rc::clone(&realm))),
@@ -504,7 +500,7 @@ impl Function {
             params: Rc::new(params),
             native_context: NativeContext::default(),
             realm: Some(realm),
-            dynamic_function_realm_global,
+            has_dynamic_function_realm,
             has_dynamic_function_realm_override: Cell::new(false),
             deopt_bindings: None,
             module_host: None,
@@ -588,7 +584,7 @@ impl Function {
                 .then_some(1_u128 << *slot)
             })
             .fold(0, |slots, slot| slots | slot);
-        let dynamic_function_realm_global = dynamic_function_realm_global(&realm);
+        let has_dynamic_function_realm = realm.dynamic_function_realm_global().is_some();
         let auxiliary = FunctionAuxiliaryState::new(home_object, super_constructor);
         let function = Self(Rc::new(FunctionData {
             has_name_binding,
@@ -599,7 +595,7 @@ impl Function {
             params,
             native_context: NativeContext::default(),
             realm: Some(realm),
-            dynamic_function_realm_global,
+            has_dynamic_function_realm,
             has_dynamic_function_realm_override: Cell::new(false),
             deopt_bindings,
             module_host,
@@ -708,9 +704,9 @@ impl Function {
                 Value::Function(function) => function.realm.clone(),
                 _ => None,
             },
-            dynamic_function_realm_global: match &target {
-                Value::Function(function) => function.dynamic_function_realm_global.clone(),
-                _ => None,
+            has_dynamic_function_realm: match &target {
+                Value::Function(function) => function.has_dynamic_function_realm,
+                _ => false,
             },
             has_dynamic_function_realm_override: Cell::new(false),
             deopt_bindings: None,
@@ -764,7 +760,7 @@ impl Function {
             params: Rc::new(FunctionParams::positional(params)),
             native_context: NativeContext::from_map(env),
             realm: None,
-            dynamic_function_realm_global: None,
+            has_dynamic_function_realm: false,
             has_dynamic_function_realm_override: Cell::new(false),
             deopt_bindings: None,
             module_host: None,

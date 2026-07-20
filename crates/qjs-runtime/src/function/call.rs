@@ -963,9 +963,8 @@ fn received_upvalue_value(function: &Function, bytecode: &Bytecode, name: &str) 
 }
 
 fn insert_marked_call_realm(function: &Function, frame_env: &mut CallEnv) {
-    let cached_global = function.dynamic_function_realm_global.as_ref();
     let has_override = function.has_dynamic_function_realm_override.get();
-    if cached_global.is_none() && !has_override {
+    if !function.has_dynamic_function_realm && !has_override {
         return;
     }
     let own_global = has_override.then(|| {
@@ -976,7 +975,13 @@ fn insert_marked_call_realm(function: &Function, frame_env: &mut CallEnv) {
                 _ => None,
             })
     });
-    let Some(global) = own_global.flatten().or_else(|| cached_global.cloned()) else {
+    let realm_global = function.has_dynamic_function_realm.then(|| {
+        function
+            .realm
+            .as_ref()
+            .and_then(|realm| realm.dynamic_function_realm_global())
+    });
+    let Some(global) = own_global.flatten().or_else(|| realm_global.flatten()) else {
         return;
     };
     frame_env.insert(

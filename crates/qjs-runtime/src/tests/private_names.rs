@@ -522,6 +522,52 @@ fn marked_function_call_realm_tracks_property_updates() {
 }
 
 #[test]
+fn temporary_realm_markers_do_not_persist_on_class_methods() {
+    assert_eq!(
+        eval(
+            "var __quickjsRustDynamicFunctionRealm;
+             function makeRealm(RealmTypeError) {
+               let realm = Object.create(globalThis);
+               realm.TypeError = RealmTypeError;
+               realm.eval = function(source) {
+                 let previous = __quickjsRustDynamicFunctionRealm;
+                 __quickjsRustDynamicFunctionRealm = realm;
+                 globalThis.__quickjsRustDynamicFunctionRealm = realm;
+                 try { return (0, eval)(source); }
+                 finally {
+                   __quickjsRustDynamicFunctionRealm = previous;
+                   globalThis.__quickjsRustDynamicFunctionRealm = previous;
+                 }
+               };
+               return realm;
+             }
+             function RealmOneTypeError() {}
+             RealmOneTypeError.prototype = Object.create(TypeError.prototype);
+             function RealmTwoTypeError() {}
+             RealmTwoTypeError.prototype = Object.create(TypeError.prototype);
+             let realm1 = makeRealm(RealmOneTypeError);
+             let realm2 = makeRealm(RealmTwoTypeError);
+             let source = `(class {
+               static set #m(value) { this.value = value; }
+               static access() { this.#m = 'ok'; }
+             })`;
+             let C1 = realm1.eval(source);
+             let C2 = realm2.eval(source);
+             C1.access();
+             C2.access();
+             let cross1 = false;
+             let cross2 = false;
+             try { C1.access.call(C2); }
+             catch (error) { cross1 = error instanceof RealmOneTypeError; }
+             try { C2.access.call(C1); }
+             catch (error) { cross2 = error instanceof RealmTwoTypeError; }
+             C1.value === 'ok' && C2.value === 'ok' && cross1 && cross2;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn nested_class_resolves_outer_private_name() {
     assert_eq!(
         eval(
