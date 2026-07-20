@@ -5451,6 +5451,44 @@ external raw/report SHA-256 were
 `da3cf5524580cdb10caa462815234d3191961aaf4bba81d21f0fd2aa31f55bc0`
 and `8a88701529d2de6bf4f54edb131439d3b33a362d57ee619bcb3436bbfe9fe8b4`.
 
+### Unit 89: rejected repeated-eval bytecode cache
+
+An uncommitted Unit 89 prototype added a bounded per-realm cache for successful
+`eval` compilations. Its key included source, direct/indirect mode, strict and
+function/method/constructor/field-initializer parser context, and the visible
+private names. Syntax failures were not cached, and each hit returned a fresh
+bytecode clone so eval-local mutation and template-object identity remained
+per evaluation. Focused tests covered current local values, strict/sloppy
+separation, distinct private environments, and fresh tagged-template arrays.
+Formatting, focused tests, Clippy, and a release build passed.
+
+The mechanism came from the external `date-format-tofte` profile, where
+repeated same-source evals spent time parsing and compiling. Sixteen balanced
+targeted pairs initially measured 0.97028x candidate/base for that case and
+0.99331x for `date-format-xparb`. The complete one-block external screen did
+not reproduce a material suite-level improvement: JetStream was 0.99144x,
+Kraken 1.00507x, and SunSpider 0.99842x; `date-format-tofte` itself was
+0.99698x in that noisier complete run. Coverage did not decrease. External
+raw/report SHA-256 were
+`80eb3dae7966984bc11b3efa22098d9db87ca84ab3eb441de27e53e153c47c51`
+and `51b44fe0349d70cfd1c82b9cbd0d964f02b4a3b20a5161e57e4aae58edcccc45`.
+
+A complete local three-block broad screen had 225/225 eligible measurements
+and all 600 linearity samples successful, but the fixed-host execution was too
+unstable to clear the regression guard. Its provisional overall ratio was
+1.01288x and its three block ratios were 0.99845x, 1.04988x, and 0.99129x.
+The middle block drove `function_call_two_args` to 1.70695x and
+`captured_read` to 1.62129x even though the surrounding blocks were near one;
+the cache cannot run in those cases. Without a repeatable external benefit or
+a clean broad result, the prototype was rejected rather than pushed. Its raw
+JSONL SHA-256 was
+`f09b43216eda38c416db0c4299d7ab3e9c9dabb6db0b38c3815f02ebd408e456`;
+candidate/base executable SHA-256 were
+`52c91b328f0eb0313c5bd8486221d67b2df0a9de817eb2833801d5e2628ae0c6`
+and `29edf05c3bd4abb3c13fde69dd27d528923504791a1e250f4cb44c3425660a84`.
+The isolated worktree is retained only for diagnosis; none of its four runtime
+files entered `main`.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
