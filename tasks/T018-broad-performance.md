@@ -5489,6 +5489,150 @@ and `29edf05c3bd4abb3c13fde69dd27d528923504791a1e250f4cb44c3425660a84`.
 The isolated worktree is retained only for diagnosis; none of its four runtime
 files entered `main`.
 
+### Unit 90: rejected shared class-instance metadata
+
+Unit 90 tested a general allocation optimization for class construction. Commit
+`178e5093` shared immutable instance-element metadata behind `Rc<Vec<_>>`
+instead of cloning the full vector into every constructed instance. The
+mechanism contained no benchmark identity or workload-specific branch, and its
+focused class-field tests plus the local correctness gate passed.
+
+Trusted-main Performance Preview `29736942043` did not reproduce useful
+general-engine progress. Broad candidate/base was 1.0097x. The external suite
+ratios were 0.998x for JetStream, 1.010x for Kraken, and 1.009x for SunSpider;
+the intended `raytrace-public-class-fields` workload itself was 0.996x. The
+candidate still trailed QuickJS-NG by 8.45x, 4.99x, and 8.01x on the three
+external suite diagnostics. A representation change with no repeatable target
+benefit and small broad/external regressions is not campaign progress, so the
+optimization was rejected.
+
+Commit `40aa0424` reverts Unit 90 while retaining the independent realm fix
+described below. Main CI `29740806181`, Test262 Coverage `29740972027`, and
+Performance Preview `29740806114` all passed. The rollback comparison moved in
+the counterintuitive direction: broad candidate/base was 1.0206x with a 95%
+confidence interval of [1.0015x, 1.0262x], while external JetStream, Kraken,
+and SunSpider were 1.020x, 1.003x, and 1.006x. This inverse result is runner
+variance, not evidence that the rejected metadata clone was beneficial.
+Rollback broad raw/report SHA-256 were
+`fc352215353b3d5128819f463016a48b604e2900007b7927faef5fa034f6aab7`
+and `6776382f4a4a1834f8ca2e95996d3e99c860059167edeed105b81cb7a0d60bff`;
+external raw/report SHA-256 were
+`95e62175ba433582a461eb53c3fc1cd5ebadc00289a70912430d4e304acffdcf`
+and `d076cd3c5fdad39e5c04a0614ab74c074f501a6d0bd2db8ab5d8686bd943bd4b`.
+
+### Unit 91: close the dynamic-function realm correctness regression
+
+The coverage audit around Unit 90 exposed a correctness failure unrelated to
+its metadata experiment:
+`private-static-setter-multiple-evaluations-of-class-realm.js` overflowed the
+stack. The first bad revision was `0a3fb27c`, whose cached dynamic-Function
+realm identity had copied a temporary per-function snapshot. Later realm
+changes were therefore stale during repeated class evaluation.
+
+Commit `55ec2ad9` replaces that snapshot with an immutable presence hint and
+reads the live realm marker when the function executes. A focused regression
+test exercises the repeated dynamic realm transition. The local full gate and
+main CI `29739923449` passed. Test262 Coverage `29740129617` then reported
+42,672/42,672 configured cases passing, zero failures or timeouts, and zero
+actionable gaps; its burndown SHA-256 was
+`43f67fc820b3c0e0dc203afa905039f2fb20e7e3a866862d6341a1744e5da0da`.
+The post-rollback Coverage run `29740972027` independently preserved the same
+42,672/42,672 result; its burndown SHA-256 was
+`cf3feb1d134344ee467b67b994e57791264d29dbf25d22f7ca3f27c2f0cab9d8`.
+Correctness closure is recorded separately and is not counted as a performance
+win.
+
+### Unit 92: retain canonical numeric compound-assignment keys
+
+Unit 92 starts from an independent macOS `sample` profile of SunSpider
+`bitops-nsieve-bits`. The profile attributed a material part of the hot path to
+`coerce_property_key` and `number_to_js_string`: computed compound assignments
+such as `array[index] &= value` converted a canonical numeric array index into
+a newly allocated string before both the read and write-back.
+
+Commit `b83b97cb` adds an internal `ToPropertyKeyForAccess` bytecode operation.
+It performs observable object-key coercion exactly once, but retains primitive
+canonical numeric indices as numbers so dense-array GetProp/SetProp paths can
+consume them without string formatting. The implementation is independent of
+benchmark identity, source path, iteration count, and checksum. A focused test
+also verifies that an object key with `Symbol.toPrimitive` is still coerced
+exactly once and produces the correct write-back value.
+
+The first local complete broad screen executed all 225 formal measurements and
+all 600 linearity samples successfully. Because the candidate and base were
+local binaries outside the receipt-backed build workflow, the reporter
+correctly rejected their provenance instead of issuing a formal report. A
+provisional replay using the frozen median-log aggregation was 0.99405x
+candidate/base overall; no family indicated a material regression. Its raw
+JSONL SHA-256 was
+`6d4113aaf28b8395c14d67b7813eb997124883a18dd34b71dd4515960b83a03c`.
+
+A separate three-block local external run used exact candidate, base, and
+QuickJS-NG executable SHA-256 values
+`08393a0bc24a4d852d50cfee3191c112c6859754a6a8b3f03b226d5de20a758e`,
+`64eab52425912a4dc3af1c26269a4b0340cf0c40bbbfb8d6524bda993c5ef6f3`,
+and `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+JetStream was neutral at 0.99846x candidate/base; Kraken was 0.99196x and
+SunSpider was 0.97929x. The mechanism-shaped results repeated in every block:
+Kraken `audio-fft` was 0.925--0.937x, `audio-beat-detection` was
+0.930--0.935x, SunSpider `bitops-bitwise-and` was 0.851--0.872x, and
+`bitops-nsieve-bits` was 0.868--0.876x. The same run exposed a real local
+tradeoff: `audio-dft` was 1.030--1.052x. All 399 formal measurements were
+successful; the only capability failures were symmetric candidate/base
+timeouts for Kraken `imaging-gaussian-blur`. External raw/report SHA-256 were
+`6bdfd1c5a4762ff9abb1971c43e73cdb6e9657876714720ed27381ba5e8c237e`
+and `f0d22c7e6709e189602090f614938ddc963653402f918187f465d95f8b1f5a2b`.
+
+Trusted-main Performance Preview `29743460693` was deliberately evaluated
+across all three attempts rather than selecting the most favorable result:
+
+- Attempt 1 produced no performance conclusion. Candidate `captured_write`
+  was timer-limited in broad blocks 0 and 2, invalidating both complete blocks
+  under the frozen portfolio-wide policy. All 225 measurement processes and
+  600 linearity samples otherwise completed with status `ok`; external
+  measurement never started. Raw/report SHA-256 were
+  `33a58e807d954b7851c7f8861366cb1a7b0eb257fb8fbc250ba78531e712f816`
+  and `e50d0420fd95a19de24cd93e82730b74274bd04f6c8a66d0aa81eec14b80783e`.
+- Attempt 2 completed all three broad blocks and reported 0.97190x
+  candidate/base with a 95% confidence interval of [0.96892x, 0.98033x]. That
+  attractive aggregate was not credited: large movement in unaffected binding
+  cases and a 1.0543x `branch_arithmetic` result showed substantial hosted
+  runner/code-layout noise. External candidate/base was 1.00127x for
+  JetStream, 0.99397x for Kraken, and 0.99407x for SunSpider.
+  `bitops-bitwise-and` and `bitops-nsieve-bits` were 0.95568x and 0.95995x.
+  Broad raw/report SHA-256 were
+  `66c49db7b7df3a1e791d8f18aefc1185ab47b77b24fc568a0183108e31783b59`
+  and `78d6dd6e0cf3c6b6a632f4993e60c239862379c2b3f1b039479d4b894adecc5a`;
+  external raw/report SHA-256 were
+  `d66594b8866ada6f4ae95daf96a825972695d1d421ec80d16f398b327bd70080`
+  and `d7dfdd4be592fe05e3fd15e1f710cef4cb7553f6a943d7006ebf9186082ed816`.
+- Attempt 3 independently completed all three broad blocks and converged to a
+  neutral 0.99974x overall, with a 95% confidence interval of
+  [0.99786x, 1.00469x]. External candidate/base was 1.00579x for JetStream,
+  0.99902x for the 7/14 mutually comparable Kraken cases, and 0.99966x for
+  SunSpider. `bitops-nsieve-bits` again improved to 0.93316x; the noisier
+  `bitops-bitwise-and` result was 0.99474x. Broad raw/report SHA-256 were
+  `167c8855cf1f9a167723fe38bea993fedb9c36a20f655731ba479df0d728e9ad`
+  and `6264137bc7f6f99d81ef6b4263073cf13d7577621d1b02c2867ed306b16334b5`;
+  external raw/report SHA-256 were
+  `07cc91aa6f79841b5f1c51965c6fc831c58abf6cb0396119727752cbf2b9407b`
+  and `2b22a257446149feab9bb41f832c7ce639709d06061fbc2f6ddc3f4e2ed2c9bc`.
+
+Unit 92 is accepted as a modest general-engine step, not as the large broad win
+suggested by attempt 2. The changed mechanism's `bitops-nsieve-bits` benefit
+repeated in the local three-block run and both successful hosted attempts,
+while the independent hosted broad repeat was neutral and no external suite
+showed a repeatable material regression. Main CI `29743460727` passed, and
+Test262 Coverage `29743678092` reported 42,672/42,672 configured cases passing,
+zero failures or timeouts, and zero actionable gaps. Its burndown SHA-256 was
+`5d4ccef310aca9aae2004cf32baab8380a9d8863e8e5b595d5dd4072c1055cef`.
+
+This unit does not materially close T018. Attempt 3 remained at 0.34918x
+candidate/QuickJS-NG on broad v2, with allocation still 2.835x QuickJS-NG.
+External candidate/QuickJS-NG remained 8.470x for JetStream, 4.975x for the
+comparable Kraken subset, and 7.942x for SunSpider. B3 therefore continues with
+larger external-profile-driven structural bottlenecks; B4--B6 remain open.
+
 ## Historical Broad V1 Baseline
 
 The first complete baseline was recorded on 2026-07-15 at commit
