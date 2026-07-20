@@ -721,6 +721,8 @@ pub struct Bytecode {
     pub(super) control_loop_plans: OnceCell<Vec<super::vm_control_loop::ControlLoopPlan>>,
     pub(super) numeric_mutation_loop_plans:
         OnceCell<Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>>,
+    pub(super) simple_numeric_loop_plans:
+        OnceCell<Vec<super::vm_simple_numeric_loop::SimpleNumericLoopPlan>>,
     pub(super) template_objects: RefCell<HashMap<usize, Value>>,
     /// One cleared operand-stack allocation retained for the next invocation
     /// of this compiled body. Sequential calls are the common case, so a
@@ -827,6 +829,7 @@ impl Bytecode {
             numeric_loop_plans: OnceCell::new(),
             control_loop_plans: OnceCell::new(),
             numeric_mutation_loop_plans: OnceCell::new(),
+            simple_numeric_loop_plans: OnceCell::new(),
             template_objects: RefCell::new(HashMap::new()),
             operand_stack_pool: Rc::new(RefCell::new(None)),
             cached_closure_referenced_global_names: Vec::new(),
