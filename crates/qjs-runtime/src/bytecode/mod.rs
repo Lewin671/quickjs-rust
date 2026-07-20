@@ -40,7 +40,6 @@ mod vm_private;
 mod vm_props;
 mod vm_result;
 mod vm_set;
-mod vm_simple_numeric_loop;
 mod vm_string_append;
 mod vm_try;
 
