@@ -420,6 +420,13 @@ pub(super) enum Op {
     Typeof,
     ToString,
     ToPropertyKey,
+    /// Normalizes a computed member-assignment key exactly once while retaining
+    /// canonical numeric array indices as numbers. Primitive number-to-string
+    /// conversion is unobservable, so GetProp/SetProp may consume the numeric
+    /// form directly on dense arrays and defer conversion on other receivers.
+    /// Object keys and all other primitives still become ordinary property-key
+    /// values here, preserving observable coercion and reuse semantics.
+    ToPropertyKeyForAccess,
     ToNumeric,
     Unary(UnaryOp),
     Update(UpdateOp),

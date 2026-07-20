@@ -1016,6 +1016,16 @@ impl<'a> Vm<'a> {
                     let key = self.coerce_property_key(value)?;
                     self.stack.push(key.into_value());
                 }
+                Op::ToPropertyKeyForAccess => {
+                    let value = self.pop()?;
+                    if matches!(&value, Value::Number(number) if array_index_from_number(*number).is_some())
+                    {
+                        self.stack.push(value);
+                    } else {
+                        let key = self.coerce_property_key(value)?;
+                        self.stack.push(key.into_value());
+                    }
+                }
                 Op::ToNumeric => {
                     let result = self.eval_to_numeric();
                     if let Some(value) = self.handle_runtime_result(result)? {

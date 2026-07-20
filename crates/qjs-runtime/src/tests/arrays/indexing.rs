@@ -169,4 +169,12 @@ fn dense_compound_index_store_preserves_property_semantics() {
         ),
         Ok(Value::String("20:7:2".to_owned().into()))
     );
+    assert_eq!(
+        eval(
+            "let calls = 0; \
+             let key = { [Symbol.toPrimitive]: function() { calls++; return 0; } }; \
+             let xs = [4]; xs[key] += 3; calls + ':' + xs[0];"
+        ),
+        Ok(Value::String("1:7".to_owned().into()))
+    );
 }

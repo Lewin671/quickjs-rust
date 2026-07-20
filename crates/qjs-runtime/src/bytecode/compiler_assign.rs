@@ -735,7 +735,7 @@ impl Compiler {
             self.emit(Op::LoadLocal(object_slot));
             self.emit(Op::RequireObjectCoercible);
             self.emit(Op::Pop);
-            self.emit(Op::ToPropertyKey);
+            self.emit(Op::ToPropertyKeyForAccess);
         }
         self.emit(Op::StoreLocal(key_slot));
         Ok(())
