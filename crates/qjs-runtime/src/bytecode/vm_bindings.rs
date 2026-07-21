@@ -20,18 +20,17 @@ use super::{
 };
 
 impl Vm<'_> {
-    /// Cached realm `globalThis` object handle (see `Vm::global_this_cache`).
-    /// Prefer this over re-fetching `self.realm.borrow().get(GLOBAL_THIS_BINDING)`
-    /// on every store/load — the underlying binding is fixed for the VM's
-    /// lifetime.
+    /// Realm `globalThis` object handle. `CallEnv::global_this` already
+    /// resolves this from a plain `Option<Value>` field set once at realm
+    /// construction (see `RealmState::new`), so this is just the `Value` ->
+    /// `ObjectRef` narrowing — no `RefCell` borrow or `HashMap` lookup, unlike
+    /// `self.realm.borrow().get(GLOBAL_THIS_BINDING)`.
     #[inline(always)]
     pub(super) fn cached_global_this(&self) -> Option<crate::ObjectRef> {
-        self.global_this_cache
-            .get_or_init(|| match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
-                Some(Value::Object(global_this)) => Some(global_this.clone()),
-                _ => None,
-            })
-            .clone()
+        match self.env.global_this() {
+            Some(Value::Object(global_this)) => Some(global_this),
+            _ => None,
+        }
     }
 
     pub(super) fn enter_body_deopt_scope(&mut self) {
