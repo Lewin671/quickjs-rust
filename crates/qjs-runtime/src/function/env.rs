@@ -665,7 +665,10 @@ impl CallEnv {
     }
 
     pub(crate) fn has_module_import(&self, local_name: &str) -> bool {
-        self.module_imports.contains_key(local_name)
+        // Almost every frame (any non-module script/function) has no module
+        // imports at all; skip the name-table hash entirely in that case
+        // instead of hashing `local_name` against an empty map on every call.
+        !self.module_imports.is_empty() && self.module_imports.contains_key(local_name)
     }
 
     pub(crate) fn module_imports(&self) -> ModuleImports {
@@ -864,7 +867,11 @@ impl CallEnv {
     }
 
     pub(crate) fn is_immutable_lexical_binding(&self, name: &str) -> bool {
-        self.immutable_lexical_bindings.borrow().contains(name)
+        // Most frames never mark any immutable lexical bindings; skip the
+        // name-table hash on the common empty case instead of hashing `name`
+        // against an empty set on every call.
+        let bindings = self.immutable_lexical_bindings.borrow();
+        !bindings.is_empty() && bindings.contains(name)
     }
 
     pub(crate) fn mark_catch_binding(&mut self, name: String) {
