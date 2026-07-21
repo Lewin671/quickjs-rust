@@ -156,6 +156,12 @@ pub(super) struct Vm<'a> {
     pub(super) resume_mode: Option<ResumeMode>,
     /// Cached realm Array.prototype for the `a[i] = x` fast path.
     pub(super) array_prototype_cache: Option<ObjectRef>,
+    /// Cached realm Object.prototype for object-literal construction. Every
+    /// `{...}` literal previously re-resolved this by hashing the `Object`
+    /// binding and then its `prototype` own-property on every evaluation;
+    /// dropped (like `array_prototype_cache`) whenever the `Object` global is
+    /// reassigned.
+    pub(super) object_prototype_cache: Option<ObjectRef>,
     /// Makes generators run parameter prologues before first suspension.
     pub(super) stop_at_prologue: bool,
     /// Enclosing `with` object-environment records, innermost last.
@@ -327,6 +333,7 @@ impl<'a> Vm<'a> {
             resume_mode: None,
             stop_at_prologue: false,
             array_prototype_cache: None,
+            object_prototype_cache: None,
             with_stack,
             direct_eval_with_stack: false,
             disposable_scopes: Vec::new(),

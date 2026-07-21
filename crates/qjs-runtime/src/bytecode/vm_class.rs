@@ -3,7 +3,7 @@ use std::{collections::HashMap, rc::Rc};
 use crate::{
     Function, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_as_object_prototype,
     function::{CompiledUserFunction, InstanceFieldInitializer, Upvalue},
-    function_prototype, object, object_prototype, property_value,
+    function_prototype, object, property_value,
     symbol::symbol_function_name_description,
     to_property_key_value,
 };
@@ -58,7 +58,7 @@ impl Vm<'_> {
         let prototype_parent = match &heritage {
             Some(ClassHeritage::Null) => None,
             Some(ClassHeritage::Parent(parent)) => parent.prototype.clone(),
-            None => object_prototype(&self.env).map(crate::Prototype::Object),
+            None => self.cached_object_prototype().map(crate::Prototype::Object),
         };
 
         let super_constructor = match &heritage {

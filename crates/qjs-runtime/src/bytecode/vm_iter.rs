@@ -196,7 +196,8 @@ impl Vm<'_> {
         let Some(entries) = self.handle_runtime_result(result)? else {
             return Ok(());
         };
-        let rest = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.env));
+        let prototype = self.cached_object_prototype();
+        let rest = ObjectRef::with_prototype(HashMap::new(), prototype);
         for (key, value) in entries {
             match key {
                 PropertyKey::String(key) => rest.set(key, value),

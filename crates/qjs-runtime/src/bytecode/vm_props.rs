@@ -136,11 +136,24 @@ impl Vm<'_> {
 
     /// Drops the cached Array.prototype when the `Array` global binding itself is
     /// rewritten, so a later index store resolves the replacement constructor's
-    /// prototype.
+    /// prototype. Also drops the cached Object.prototype on the same global-store
+    /// path when `Object` is reassigned.
     pub(super) fn invalidate_array_prototype_cache(&mut self, name: &str) {
         if name == "Array" {
             self.array_prototype_cache = None;
+        } else if name == "Object" {
+            self.object_prototype_cache = None;
         }
+    }
+
+    /// The realm's current Object.prototype, cached like `array_prototype_cache`
+    /// so object-literal construction skips hashing the `Object` binding and
+    /// then its `prototype` own-property on every evaluation.
+    pub(super) fn cached_object_prototype(&mut self) -> Option<ObjectRef> {
+        if self.object_prototype_cache.is_none() {
+            self.object_prototype_cache = crate::object_prototype(&self.realm_env());
+        }
+        self.object_prototype_cache.clone()
     }
 
     pub(super) fn delete_prop(&mut self, is_strict: bool) -> Result<(), RuntimeError> {

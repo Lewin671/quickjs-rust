@@ -10,8 +10,7 @@ use qjs_ast::ObjectPropertyKind;
 
 use crate::{
     ArrayRef, ObjectRef, Property, PropertyKey, Prototype, RuntimeError, Value,
-    array::iterable_values_with_env, object, object_prototype, to_property_key_value,
-    value::ObjectLiteralShape,
+    array::iterable_values_with_env, object, to_property_key_value, value::ObjectLiteralShape,
 };
 
 use super::ir::{ArrayElementKind, ComputedNameKind, ObjectPropertyMeta};
@@ -114,9 +113,10 @@ impl Vm<'_> {
     }
 
     pub(super) fn new_object_literal(&mut self) {
+        let prototype = self.cached_object_prototype();
         self.stack.push(Value::Object(ObjectRef::with_prototype(
             HashMap::new(),
-            object_prototype(&self.env),
+            prototype,
         )));
     }
 
@@ -131,8 +131,8 @@ impl Vm<'_> {
                 Value::Function(function) if !function.constructable => Some(function.clone()),
                 _ => None,
             });
-            let object =
-                ObjectRef::with_literal_pair(shape, [first, second], object_prototype(&self.env));
+            let prototype = self.cached_object_prototype();
+            let object = ObjectRef::with_literal_pair(shape, [first, second], prototype);
             for function in home_functions.into_iter().flatten() {
                 function.set_home_object(Value::Object(object.clone()));
             }
@@ -152,7 +152,8 @@ impl Vm<'_> {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        let object = ObjectRef::with_literal_properties(shape, values, object_prototype(&self.env));
+        let prototype = self.cached_object_prototype();
+        let object = ObjectRef::with_literal_properties(shape, values, prototype);
         for function in home_functions {
             function.set_home_object(Value::Object(object.clone()));
         }
