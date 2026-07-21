@@ -1157,33 +1157,64 @@ impl Vm<'_> {
             self.env.insert(name, value.clone());
             env_mirror_synced = true;
         }
-        let shared_realm_cell = self
-            .local_upvalues
-            .get(slot)
-            .and_then(Option::as_ref)
-            .is_some_and(|cell| {
-                self.env
-                    .is_realm_binding_cell(&self.bytecode.locals[slot].name, cell)
-            });
-        let syncs_global_var = (from_env && !hoisted && (!uses_shared_cell || shared_realm_cell))
-            || (self.bytecode.global_scope
+        // `shared_realm_cell` only matters through the first `syncs_global_var`
+        // disjunct, which is unreachable when `hoisted` (its `!hoisted` term is
+        // false) — skip the hash lookup entirely for the common hoisted-var
+        // case instead of computing a value that can't affect the result.
+        let syncs_global_var = if hoisted {
+            self.bytecode.global_scope
                 && self.bytecode.local_is_body_hoist_only(slot)
-                && !is_compiler_temporary(&self.bytecode.locals[slot].name));
+                && !is_compiler_temporary(&self.bytecode.locals[slot].name)
+        } else {
+            let shared_realm_cell = self
+                .local_upvalues
+                .get(slot)
+                .and_then(Option::as_ref)
+                .is_some_and(|cell| {
+                    self.env
+                        .is_realm_binding_cell(&self.bytecode.locals[slot].name, cell)
+                });
+            (from_env && (!uses_shared_cell || shared_realm_cell))
+                || (self.bytecode.global_scope
+                    && self.bytecode.local_is_body_hoist_only(slot)
+                    && !is_compiler_temporary(&self.bytecode.locals[slot].name))
+        };
         let global_this = if syncs_global_var {
             self.cached_global_this()
         } else {
             None
         };
-        if let Some(global_this) = global_this
-            && global_this.has_own_property(&self.bytecode.locals[slot].name)
-        {
-            let name = self.bytecode.locals[slot].name.clone();
-            global_this.set(name.clone(), value.clone());
-            if self.realm.borrow().contains_key(&name) {
-                self.env.insert_realm(name.clone(), value.clone());
-            }
-            if !env_mirror_synced && self.env.has_local_binding(&name) {
-                self.env.insert(name, value);
+        if let Some(global_this) = global_this {
+            // A plain writable data property (the common case for a hoisted
+            // `var`'s global slot) is a single hashed lookup here instead of
+            // the `has_own_property` existence check plus a second hashed
+            // `set()` lookup; accessors and non-existent/read-only properties
+            // fall back to the original two-lookup path unchanged.
+            match global_this
+                .write_existing_own_data_property(&self.bytecode.locals[slot].name, &value)
+            {
+                OwnDataPropertyWrite::Written => {
+                    let name = self.bytecode.locals[slot].name.clone();
+                    if self.realm.borrow().contains_key(&name) {
+                        self.env.insert_realm(name.clone(), value.clone());
+                    }
+                    if !env_mirror_synced && self.env.has_local_binding(&name) {
+                        self.env.insert(name, value);
+                    }
+                }
+                OwnDataPropertyWrite::ReadOnly => {}
+                OwnDataPropertyWrite::NeedsSlowPath => {
+                    if global_this.has_own_property(&self.bytecode.locals[slot].name) {
+                        let name = self.bytecode.locals[slot].name.clone();
+                        global_this.set(name.clone(), value.clone());
+                        if self.realm.borrow().contains_key(&name) {
+                            self.env.insert_realm(name.clone(), value.clone());
+                        }
+                        if !env_mirror_synced && self.env.has_local_binding(&name) {
+                            self.env.insert(name, value);
+                        }
+                    }
+                }
             }
         }
         Ok(())
