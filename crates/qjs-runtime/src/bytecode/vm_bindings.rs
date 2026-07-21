@@ -1146,11 +1146,14 @@ impl Vm<'_> {
                 self.env.mark_immutable_lexical_binding(name);
             }
         }
-        if !uses_shared_cell && (from_env || self.bytecode.local_is_body_hoist_only(slot)) {
+        let mut env_mirror_synced = false;
+        if !uses_shared_cell
+            && (from_env || self.bytecode.local_is_body_hoist_only(slot))
+            && self.env.has_local_binding(&self.bytecode.locals[slot].name)
+        {
             let name = self.bytecode.locals[slot].name.clone();
-            if self.env.has_local_binding(&name) {
-                self.env.insert(name, value.clone());
-            }
+            self.env.insert(name, value.clone());
+            env_mirror_synced = true;
         }
         let shared_realm_cell = self
             .local_upvalues
@@ -1177,7 +1180,7 @@ impl Vm<'_> {
             if self.realm.borrow().contains_key(&name) {
                 self.env.insert_realm(name.clone(), value.clone());
             }
-            if self.env.has_local_binding(&name) {
+            if !env_mirror_synced && self.env.has_local_binding(&name) {
                 self.env.insert(name, value);
             }
         }
