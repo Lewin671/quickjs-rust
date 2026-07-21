@@ -633,7 +633,7 @@ mod tests {
             bytecode
                 .code
                 .iter()
-                .any(|op| matches!(op, Op::StoreGlobalSloppy(name) if name == "value"))
+                .any(|op| matches!(op, Op::StoreGlobalSloppy { name, .. } if name == "value"))
         );
         assert!(
             !bytecode

@@ -557,8 +557,38 @@ impl Vm<'_> {
         Ok(())
     }
 
+    /// Resolves the local slot by name before delegating. Used only by
+    /// callers without a compile-time-known slot (indirect/dynamic paths);
+    /// the compiled `Op::StoreGlobalSloppy { slot, .. }` dispatch already
+    /// knows the slot and calls [`Self::store_global_sloppy_at_slot`]
+    /// directly instead, skipping this name-table hash lookup.
     pub(super) fn store_global_sloppy(
         &mut self,
+        name: &str,
+        value: Value,
+    ) -> Result<(), RuntimeError> {
+        let slot = self.bytecode.local_slot(name);
+        self.store_global_sloppy_with_slot(slot, name, value)
+    }
+
+    /// A hoisted global `var`'s slot is known at compile time (the emitting
+    /// branch only fires when the name is already in the bytecode's hoisted
+    /// set), so `Op::StoreGlobalSloppy { slot, name }` carries it directly —
+    /// this skips the `bytecode.local_slot(name)` hash lookup that
+    /// [`Self::store_global_sloppy`] still has to perform for callers without
+    /// a pre-resolved slot.
+    pub(super) fn store_global_sloppy_at_slot(
+        &mut self,
+        slot: usize,
+        name: &str,
+        value: Value,
+    ) -> Result<(), RuntimeError> {
+        self.store_global_sloppy_with_slot(Some(slot), name, value)
+    }
+
+    fn store_global_sloppy_with_slot(
+        &mut self,
+        slot: Option<usize>,
         name: &str,
         value: Value,
     ) -> Result<(), RuntimeError> {
@@ -579,7 +609,7 @@ impl Vm<'_> {
         if self.env.is_immutable_function_name(name) {
             return Ok(());
         }
-        if let Some(slot) = self.bytecode.local_slot(name) {
+        if let Some(slot) = slot {
             if let Some(result) = self.try_store_indexed_realm_global(slot, name, &value, false) {
                 return result;
             }

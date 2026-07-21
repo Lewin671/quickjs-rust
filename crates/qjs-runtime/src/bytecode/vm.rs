@@ -655,12 +655,12 @@ impl<'a> Vm<'a> {
                     };
                     self.handle_runtime_result(result)?;
                 }
-                Op::StoreGlobalSloppy(name) => {
+                Op::StoreGlobalSloppy { slot, name } => {
                     let value = self.pop()?;
                     let result = if self.direct_eval_with_stack {
                         self.store_ident_with(name, None, false, value)
                     } else {
-                        self.store_global_sloppy(name, value)
+                        self.store_global_sloppy_at_slot(*slot, name, value)
                     };
                     self.handle_runtime_result(result)?;
                 }

@@ -153,7 +153,10 @@ pub(super) enum Op {
     DefineGlobalVar(String),
     LoadGlobal(String),
     StoreGlobalStrict(String),
-    StoreGlobalSloppy(String),
+    StoreGlobalSloppy {
+        slot: usize,
+        name: String,
+    },
     StoreLocalOrGlobalSloppy {
         slot: usize,
         name: String,
@@ -1304,7 +1307,7 @@ fn collect_written_binding_names_from_ops(
     for op in code {
         match op {
             Op::StoreGlobalStrict(name)
-            | Op::StoreGlobalSloppy(name)
+            | Op::StoreGlobalSloppy { name, .. }
             | Op::AppendStringLiteralGlobal { name, .. }
             | Op::StoreLocalOrGlobalSloppy { name, .. }
             | Op::StoreIdentWith {
@@ -1344,7 +1347,7 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
         match op {
             Op::LoadGlobal(name)
             | Op::StoreGlobalStrict(name)
-            | Op::StoreGlobalSloppy(name)
+            | Op::StoreGlobalSloppy { name, .. }
             | Op::AppendStringLiteralGlobal { name, .. }
             | Op::TypeofGlobal(name) => {
                 names.insert(name.clone());

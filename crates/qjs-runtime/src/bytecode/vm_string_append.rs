@@ -14,7 +14,7 @@ impl Vm<'_> {
         }
         match self.bytecode.code.get(self.ip + 1).cloned() {
             Some(Op::AssignLocal(slot)) => self.detach_matching_local_string(slot, expected),
-            Some(Op::StoreGlobalStrict(name)) | Some(Op::StoreGlobalSloppy(name)) => {
+            Some(Op::StoreGlobalStrict(name)) | Some(Op::StoreGlobalSloppy { name, .. }) => {
                 self.detach_matching_realm_string(&name, expected)
             }
             Some(Op::StoreLocalOrGlobalSloppy { slot, name }) => {

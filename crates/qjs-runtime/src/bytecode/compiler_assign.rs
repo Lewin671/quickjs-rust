@@ -350,7 +350,11 @@ impl Compiler {
         } else if self.strict {
             self.emit(Op::StoreGlobalStrict(name.to_owned()));
         } else if self.global_scope && self.global_hoisted.contains(name) {
-            self.emit(Op::StoreGlobalSloppy(name.to_owned()));
+            let slot = self.assignment_slot(name);
+            self.emit(Op::StoreGlobalSloppy {
+                slot,
+                name: name.to_owned(),
+            });
         } else {
             let slot = self.assignment_slot(name);
             self.emit(Op::StoreLocalOrGlobalSloppy {
