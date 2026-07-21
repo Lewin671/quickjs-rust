@@ -12,7 +12,6 @@ use crate::{
 
 use super::vm::Vm;
 
-const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 use super::ir::NamedPropertyCache;
 use super::vm_set::property_set_uses_setter;
 use crate::CallEnv;
@@ -649,7 +648,17 @@ impl Vm<'_> {
     /// Keep that object's existing globals live at the write site; generator
     /// suspension no longer performs a later name-based writeback pass.
     pub(super) fn sync_marked_dynamic_global(&self, name: &str) {
-        let Some(Value::Object(global)) = self.env.get(DYNAMIC_FUNCTION_REALM_GLOBAL) else {
+        // `dynamic_function_realm_global()` is a field read (a
+        // `frame_bindings` linear scan then a plain `RefCell` clone kept in
+        // sync with the same-named realm entry) instead of a name-table hash
+        // — this function runs after every global var store, and the marked
+        // dynamic-function realm feature is unset in the overwhelming common
+        // case, so the fast `None` here must stay cheap. `GLOBAL_THIS_BINDING`
+        // is intentionally still read through `env.get`, not the realm's
+        // fixed `global_this`: a dynamically-constructed function body's own
+        // frame overrides this binding to the marked realm object, and that
+        // frame-local override is exactly what this comparison must observe.
+        let Some(global) = self.env.dynamic_function_realm_global() else {
             return;
         };
         let Some(Value::Object(global_this)) = self.env.get(GLOBAL_THIS_BINDING) else {
