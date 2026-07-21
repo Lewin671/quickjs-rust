@@ -468,11 +468,14 @@ impl Vm<'_> {
     /// Slot-addressed module live-binding update.
     pub(super) fn write_through_module_live_binding_slot(&self, slot: usize, value: &Value) {
         if let Some(name) = self.bytecode.locals.get(slot).map(|local| &local.name) {
-            // Module live bindings describe the module's top-level declaration
-            // slot. A nested lexical may reuse the same source name but owns a
-            // distinct cell and must never update the export by coincidence.
-            if self.bytecode.local_slot(name) == Some(slot)
-                && let Some(binding) = self.env.module_live_binding_cell(name)
+            // Check the cheap, almost-always-`None` live-binding lookup first:
+            // non-module scripts never pay for the `local_slot` name-table
+            // hash lookup below. Module live bindings describe the module's
+            // top-level declaration slot; a nested lexical may reuse the same
+            // source name but owns a distinct cell and must never update the
+            // export by coincidence.
+            if let Some(binding) = self.env.module_live_binding_cell(name)
+                && self.bytecode.local_slot(name) == Some(slot)
             {
                 binding.set(value.clone());
             }
