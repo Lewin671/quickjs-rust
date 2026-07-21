@@ -165,12 +165,12 @@ impl Vm<'_> {
 
     pub(super) fn initialize_script_global_bindings(
         bytecode: &Bytecode,
-        globals: &mut HashMap<String, Value>,
+        realm: &crate::function::Realm,
     ) -> Result<(), RuntimeError> {
-        let global_this = globals
-            .get(GLOBAL_THIS_BINDING)
+        let global_this = realm
+            .get_value(GLOBAL_THIS_BINDING)
             .and_then(|value| match value {
-                Value::Object(object) => Some(object.clone()),
+                Value::Object(object) => Some(object),
                 _ => None,
             });
         if let Some(global_this) = &global_this {
@@ -193,9 +193,9 @@ impl Vm<'_> {
                 .as_ref()
                 .and_then(|object| object.own_property(name))
             {
-                globals.insert(name.to_owned(), property.value);
+                realm.insert_value(name.to_owned(), property.value);
             } else {
-                globals.entry(name.to_owned()).or_insert(Value::Undefined);
+                realm.entry_or_insert_value(name.to_owned(), Value::Undefined);
                 if let Some(global_this) = &global_this {
                     global_this.define_property(
                         name.to_owned(),
@@ -606,7 +606,7 @@ impl Vm<'_> {
     }
 
     fn has_realm_or_global_this_binding(&self, name: &str) -> bool {
-        self.realm.borrow().contains_key(name) || self.global_this_property(name).is_some()
+        self.realm.contains(name) || self.global_this_property(name).is_some()
     }
 
     fn store_realm_or_global_this_sloppy(
@@ -632,7 +632,7 @@ impl Vm<'_> {
             return Ok(());
         }
         self.invalidate_array_prototype_cache(&name);
-        if self.realm.borrow().contains_key(&name) {
+        if self.realm.contains(&name) {
             self.env.insert_realm(name.clone(), value.clone());
             if self.env.has_local_binding(&name) {
                 self.env.insert(name.clone(), value.clone());
@@ -1195,7 +1195,7 @@ impl Vm<'_> {
             {
                 OwnDataPropertyWrite::Written => {
                     let name = self.bytecode.locals[slot].name.clone();
-                    if self.realm.borrow().contains_key(&name) {
+                    if self.realm.contains(&name) {
                         self.env.insert_realm(name.clone(), value.clone());
                     }
                     if !env_mirror_synced && self.env.has_local_binding(&name) {
@@ -1207,7 +1207,7 @@ impl Vm<'_> {
                     if global_this.has_own_property(&self.bytecode.locals[slot].name) {
                         let name = self.bytecode.locals[slot].name.clone();
                         global_this.set(name.clone(), value.clone());
-                        if self.realm.borrow().contains_key(&name) {
+                        if self.realm.contains(&name) {
                             self.env.insert_realm(name.clone(), value.clone());
                         }
                         if !env_mirror_synced && self.env.has_local_binding(&name) {
@@ -1622,7 +1622,7 @@ impl Vm<'_> {
                             .get(index)
                             .and_then(Option::as_ref)
                             .is_some_and(|cell| self.env.is_realm_binding_cell(&name, cell));
-                    if realm_backed_slot && self.realm.borrow().contains_key(&name) {
+                    if realm_backed_slot && self.realm.contains(&name) {
                         self.env.insert_realm(name, value);
                     } else if syncs_global_this {
                         self.sync_global_this_own_property(&name, value);
@@ -1637,7 +1637,7 @@ impl Vm<'_> {
                     && !is_compiler_temporary(&name))
             {
                 self.env.insert(name, value);
-            } else if self.realm.borrow().contains_key(&name) {
+            } else if self.realm.contains(&name) {
                 // Already a realm binding (shared cell) — leave it; a mutation
                 // would have hit the cell directly.
             } else {
@@ -1703,7 +1703,7 @@ impl Vm<'_> {
         if !global_this.has_own_property(name) {
             // Name exists in realm but not on globalThis — it's a lexical
             // binding from a script-level `let`/`const`; undeletable.
-            if self.realm.borrow().contains_key(name) {
+            if self.realm.contains(name) {
                 return false;
             }
             return true;

@@ -188,10 +188,7 @@ impl<'a> Vm<'a> {
         let realm: Realm = new_realm(globals);
         let mut env = CallEnv::new(Rc::clone(&realm));
         initialize_builtins(&mut env, &global_this);
-        {
-            let mut globals = realm.borrow_mut();
-            Self::initialize_script_global_bindings(bytecode, &mut globals)?;
-        }
+        Self::initialize_script_global_bindings(bytecode, &realm)?;
         realm.refresh_dynamic_function_realm_global();
         Ok(Self::new_with_globals(bytecode, env))
     }
@@ -1613,7 +1610,7 @@ impl<'a> Vm<'a> {
             {
                 continue;
             }
-            let value = if let Some(value) = self.realm.borrow().get(name).cloned() {
+            let value = if let Some(value) = self.realm.get_value(name) {
                 value
             } else if let Some(property) = self.global_this_own_property(name)
                 && !property.is_accessor()

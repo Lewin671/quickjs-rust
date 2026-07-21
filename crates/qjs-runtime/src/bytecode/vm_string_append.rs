@@ -105,11 +105,11 @@ impl Vm<'_> {
             *local = Value::Undefined;
         }
         if realm_cell {
-            if let Some(binding) = self.realm.borrow_mut().get_mut(&name)
-                && matches!(binding, Value::String(current) if std::rc::Rc::ptr_eq(current, expected))
-            {
-                *binding = Value::Undefined;
-            }
+            // `cell` (already set to `Value::Undefined` above) *is* the
+            // realm's canonical binding for `name` when `realm_cell` is
+            // true — the realm's binding storage has no separate raw map to
+            // mirror this into anymore, only the globalThis own-property
+            // value below is a distinct JS-observable storage.
             if let Some(global_this) = global_this
                 && global_this
                     .own_property(&name)
@@ -135,8 +135,8 @@ impl Vm<'_> {
         {
             return false;
         }
-        let realm_matches = self.realm.borrow().get(name).is_some_and(|value| {
-            matches!(value, Value::String(current) if std::rc::Rc::ptr_eq(current, expected))
+        let realm_matches = self.realm.get_value(name).is_some_and(|value| {
+            matches!(value, Value::String(current) if std::rc::Rc::ptr_eq(&current, expected))
         });
         if !realm_matches {
             return false;
@@ -158,10 +158,9 @@ impl Vm<'_> {
             return false;
         }
         if let Some(cell) = cell {
+            // `cell` *is* the realm's canonical binding for `name` — no
+            // separate raw map entry to mirror this into.
             cell.set(Value::Undefined);
-        }
-        if let Some(binding) = self.realm.borrow_mut().get_mut(name) {
-            *binding = Value::Undefined;
         }
         if let Some(global_this) = global_this
             && global_this
@@ -272,7 +271,7 @@ impl Vm<'_> {
                     global_this.set(local_meta.name.clone(), result.clone());
                     result.clone()
                 });
-            if self.realm.borrow().contains_key(&local_meta.name) {
+            if self.realm.contains(&local_meta.name) {
                 // A top-level reader may already hold the realm binding's
                 // shared cell even when this older from-env frame still uses a
                 // compatibility slot. Route the mirror through CallEnv so the
@@ -293,11 +292,20 @@ impl Vm<'_> {
             return self.append_string_literal_global_via_store(name, suffix, is_strict);
         }
         {
-            let mut realm = self.realm.borrow_mut();
-            if let Some(Value::String(string)) = realm.get_mut(name) {
-                std::rc::Rc::make_mut(string).push_str(suffix);
-                let result = Value::String(string.clone());
-                drop(realm);
+            // The cell is the sole storage for this binding, so mutating it
+            // in place needs no separate cell refresh afterward — unlike the
+            // old two-map realm model, where `Rc::make_mut` on the raw map's
+            // copy could detach the value from an already-captured cell.
+            let appended = self.realm.cell(name).and_then(|cell| {
+                cell.with_value_mut(|value| {
+                    let Value::String(string) = value else {
+                        return None;
+                    };
+                    std::rc::Rc::make_mut(string).push_str(suffix);
+                    Some(value.clone())
+                })
+            });
+            if let Some(result) = appended {
                 if let Some(global_this) = self.cached_global_this()
                     && global_this.has_own_property(name)
                 {
@@ -308,9 +316,6 @@ impl Vm<'_> {
                             result.clone()
                         });
                 }
-                // `Rc::make_mut` can detach the realm string from a cell's
-                // earlier clone. Refresh that cell after the in-place append.
-                self.env.insert_realm(name.to_owned(), result.clone());
                 self.write_through_module_live_binding(name, result.clone());
                 return Ok(result);
             }

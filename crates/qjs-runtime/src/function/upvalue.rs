@@ -51,6 +51,15 @@ impl Upvalue {
         read(&self.0.borrow())
     }
 
+    /// Mutates the cell's value in place (e.g. an in-place `Rc::make_mut`
+    /// string append). Since the cell is the sole storage for its binding,
+    /// this needs no separate refresh step afterward — unlike the old
+    /// two-map realm model, where an in-place edit through the raw map could
+    /// detach the value from an already-captured cell.
+    pub(crate) fn with_value_mut<R>(&self, mutate: impl FnOnce(&mut Value) -> R) -> R {
+        mutate(&mut self.0.borrow_mut())
+    }
+
     /// Overwrites the cell's value; visible through every handle to this cell.
     pub(crate) fn set(&self, value: Value) {
         *self.0.borrow_mut() = value;

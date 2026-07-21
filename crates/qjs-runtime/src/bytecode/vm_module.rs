@@ -27,10 +27,7 @@ use super::{ModuleEvaluation, ModuleLiveExports};
 /// drained so a prelude that schedules microtasks settles before module
 /// evaluation.
 pub(super) fn eval_prelude_script(bytecode: &Bytecode, realm: &Realm) -> Result<(), RuntimeError> {
-    {
-        let mut globals = realm.borrow_mut();
-        Vm::initialize_script_global_bindings(bytecode, &mut globals)?;
-    }
+    Vm::initialize_script_global_bindings(bytecode, realm)?;
     realm.refresh_dynamic_function_realm_global();
     let env = CallEnv::new(Rc::clone(realm));
     let mut vm = Vm::new_with_globals(bytecode, env);
@@ -68,14 +65,11 @@ pub(super) fn eval_module_body(
     live_exports: ModuleLiveExports,
     drain: bool,
 ) -> Result<ModuleEvaluation, RuntimeError> {
-    {
-        let mut globals = realm.borrow_mut();
-        if bytecode.is_global_scope() {
-            Vm::initialize_script_global_bindings(bytecode, &mut globals)?;
-        }
-        for (name, value) in imports {
-            globals.insert(name, value);
-        }
+    if bytecode.is_global_scope() {
+        Vm::initialize_script_global_bindings(bytecode, realm)?;
+    }
+    for (name, value) in imports {
+        realm.insert_value(name, value);
     }
     realm.refresh_dynamic_function_realm_global();
     let mut env = CallEnv::new(Rc::clone(realm));

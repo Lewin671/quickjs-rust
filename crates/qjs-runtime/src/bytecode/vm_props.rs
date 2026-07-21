@@ -500,7 +500,7 @@ impl Vm<'_> {
                 && self.bytecode.local_is_body_hoist_only(slot)
                 && !super::vm_bindings::is_compiler_temporary(name)
             {
-                if self.realm.borrow().contains_key(name) {
+                if self.realm.contains(name) {
                     self.env.insert_realm(name.to_owned(), value.clone());
                 }
                 if let Some(global_this) = self.cached_global_this()
@@ -527,7 +527,7 @@ impl Vm<'_> {
         if self.env.has_local_binding(name) {
             self.env.insert(name.to_owned(), value.clone());
             self.write_through_module_live_binding(name, value.clone());
-            if self.realm.borrow().contains_key(name) {
+            if self.realm.contains(name) {
                 self.env.insert_realm(name.to_owned(), value.clone());
             }
             if let Some(global_this) = self.cached_global_this()
@@ -538,7 +538,7 @@ impl Vm<'_> {
             self.sync_marked_dynamic_global(name);
             return Ok(());
         }
-        if !self.realm.borrow().contains_key(name) && self.global_this_property(name).is_none() {
+        if !self.realm.contains(name) && self.global_this_property(name).is_none() {
             return Err(RuntimeError {
                 thrown: None,
                 message: format!("ReferenceError: undefined identifier `{name}`"),
@@ -627,7 +627,7 @@ impl Vm<'_> {
                     && self.bytecode.local_is_body_hoist_only(slot)
                     && !super::vm_bindings::is_compiler_temporary(name)
                 {
-                    if self.realm.borrow().contains_key(name) {
+                    if self.realm.contains(name) {
                         self.env.insert_realm(name.to_owned(), value.clone());
                     }
                     if let Some(global_this) = self.cached_global_this()
@@ -651,7 +651,7 @@ impl Vm<'_> {
         if self.env.has_local_binding(name) {
             self.env.insert(name.to_owned(), value.clone());
             self.write_through_module_live_binding(name, value.clone());
-            if self.realm.borrow().contains_key(name) {
+            if self.realm.contains(name) {
                 self.env.insert_realm(name.to_owned(), value.clone());
             }
             if let Some(global_this) = self.cached_global_this()
@@ -663,7 +663,7 @@ impl Vm<'_> {
             return Ok(());
         }
         self.invalidate_array_prototype_cache(name);
-        if self.realm.borrow().contains_key(name) {
+        if self.realm.contains(name) {
             self.env.insert_realm(name.to_owned(), value.clone());
             self.write_through_module_live_binding(name, value.clone());
             let global_this = self.cached_global_this();

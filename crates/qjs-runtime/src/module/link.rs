@@ -782,8 +782,8 @@ impl ModuleGraph {
             if let Some(value) = module.live_lexical.borrow().get(local_name) {
                 return value.clone();
             }
-            if let Some(value) = self.realm.borrow().get(local_name) {
-                return value.clone();
+            if let Some(value) = self.realm.get_value(local_name) {
+                return value;
             }
         }
         module
@@ -821,8 +821,8 @@ impl ModuleGraph {
     }
 
     fn global_this_property(&self, name: &str) -> Option<Value> {
-        let global_this = match self.realm.borrow().get(crate::GLOBAL_THIS_BINDING) {
-            Some(Value::Object(global_this)) => Some(global_this.clone()),
+        let global_this = match self.realm.global_this() {
+            Some(Value::Object(global_this)) => Some(global_this),
             _ => None,
         }?;
         global_this
