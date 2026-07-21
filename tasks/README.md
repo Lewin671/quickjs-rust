@@ -76,15 +76,13 @@ Campaign working rules:
   family's persistent QuickJS-NG gap, as a narrower alternative to a full
   GC/arena rewrite (`docs/design/object-layout-rewrite.md`). S1 (box the cold
   `PropertyStorage::Dynamic` payload) landed. Serialize on one branch.
-- `T020-realm-binding-cell-unification.md` — feeds T018's `call`/global-var
-  families. After T016, global-scope hoisted `var`/function bindings still
-  keep two separate hash maps in sync per store (the raw realm binding map
-  and the binding's shared cell) because `CallEnv::get`/`get_realm` read the
-  raw map directly. Unifying behind the cell removes a redundant per-store
-  hash lookup, audited blast radius ~34 call sites across 6 files. Needs
-  full-portfolio hosted Performance Preview verification per slice (read-side
-  change risks regressing the common no-cell case); not a same-session
-  drive-by. Serialize on one branch.
+- `T020-realm-binding-cell-unification.md` — **landed** (`bfcd53da`). Feeds
+  T018's `call`/global-var families. `RealmState`'s raw
+  `HashMap<String, Value>` and its separate `binding_cells` registry are
+  unified into one `DynamicBindings` map, so a cell-backed global no longer
+  costs two name-table hash lookups per store. Verified with the full test
+  suite, Test262 subset, `compare-qjs.sh`, and exact gap scans across
+  eval/module/global-code/with/for/Function; zero regressions.
 - `T017-performance-benchmark-system.md` — versioned candidate/base/QuickJS-NG
   black-box benchmark platform. M0-M4 landed, including independent throughput,
   resource lanes, and diagnostic public-boundary Criterion lifecycle benches;
