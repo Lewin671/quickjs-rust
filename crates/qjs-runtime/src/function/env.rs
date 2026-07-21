@@ -1170,6 +1170,29 @@ impl CallEnv {
         true
     }
 
+    /// Same as [`Self::replace_existing_realm`], but for a caller that already
+    /// holds this name's realm-binding cell (e.g. via a slot's `local_upvalues`
+    /// entry, gated by the `realm_binding_slots` bitset) — skips the second
+    /// `binding_cells.cell(name)` name-table hash lookup that
+    /// `replace_existing_realm` would otherwise redo.
+    pub(crate) fn replace_existing_realm_with_cell(
+        &self,
+        name: &str,
+        value: Value,
+        cell: &Upvalue,
+    ) -> bool {
+        let mut bindings = self.realm.borrow_mut();
+        let Some(binding) = bindings.get_mut(name) else {
+            return false;
+        };
+        *binding = value.clone();
+        drop(bindings);
+        cell.set(value.clone());
+        self.realm
+            .sync_dynamic_function_realm_binding(name, Some(&value));
+        true
+    }
+
     /// Mirrors a data-property definition on this realm's global object into
     /// the realm value table and any already-captured global cell.
     pub(crate) fn sync_realm_global_object_property(&self, object: &ObjectRef, name: &str) {

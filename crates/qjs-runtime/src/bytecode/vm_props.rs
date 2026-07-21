@@ -34,7 +34,19 @@ impl Vm<'_> {
         match global_this.write_existing_own_data_property(name, value) {
             OwnDataPropertyWrite::Written => {
                 self.invalidate_array_prototype_cache(name);
-                if !self.env.replace_existing_realm(name, value.clone()) {
+                // `slot_is_realm_binding` only sets its bit when this slot's
+                // upvalue is exactly the realm's binding cell for `name`
+                // (`initial_realm_binding_slots`), so it's already at hand
+                // here and `replace_existing_realm` would otherwise redo the
+                // same name-table hash lookup to re-derive it.
+                let synced = match self.local_upvalues.get(slot).and_then(Option::as_ref) {
+                    Some(cell) => {
+                        self.env
+                            .replace_existing_realm_with_cell(name, value.clone(), cell)
+                    }
+                    None => self.env.replace_existing_realm(name, value.clone()),
+                };
+                if !synced {
                     self.env.insert_realm(name.to_owned(), value.clone());
                 }
                 self.locals[slot] = Some(value.clone());
