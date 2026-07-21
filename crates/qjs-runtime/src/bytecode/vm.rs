@@ -156,6 +156,17 @@ pub(super) struct Vm<'a> {
     pub(super) resume_mode: Option<ResumeMode>,
     /// Cached realm Array.prototype for the `a[i] = x` fast path.
     pub(super) array_prototype_cache: Option<ObjectRef>,
+    /// Cached realm `globalThis` object, resolved lazily on first use and
+    /// memoized after. The `"\0global_this"` realm entry is written once when
+    /// the realm/module is created and never reassigned afterward (it is
+    /// unreachable from JS, whose identifiers cannot contain `\0`), so every
+    /// per-store/per-load re-fetch through
+    /// `self.realm.borrow().get(GLOBAL_THIS_BINDING)` was redundant `RefCell`
+    /// borrow + `HashMap` lookup + `Value` clone work. Lazy (rather than
+    /// resolved eagerly in the constructor) so frames that never touch
+    /// `globalThis` — the common case for a leaf function call — pay nothing
+    /// extra per call.
+    pub(super) global_this_cache: std::cell::OnceCell<Option<ObjectRef>>,
     /// Makes generators run parameter prologues before first suspension.
     pub(super) stop_at_prologue: bool,
     /// Enclosing `with` object-environment records, innermost last.
@@ -330,6 +341,7 @@ impl<'a> Vm<'a> {
             resume_mode: None,
             stop_at_prologue: false,
             array_prototype_cache: None,
+            global_this_cache: std::cell::OnceCell::new(),
             with_stack,
             direct_eval_with_stack: false,
             disposable_scopes: Vec::new(),

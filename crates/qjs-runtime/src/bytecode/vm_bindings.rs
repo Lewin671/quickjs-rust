@@ -20,6 +20,20 @@ use super::{
 };
 
 impl Vm<'_> {
+    /// Cached realm `globalThis` object handle (see `Vm::global_this_cache`).
+    /// Prefer this over re-fetching `self.realm.borrow().get(GLOBAL_THIS_BINDING)`
+    /// on every store/load — the underlying binding is fixed for the VM's
+    /// lifetime.
+    #[inline(always)]
+    pub(super) fn cached_global_this(&self) -> Option<crate::ObjectRef> {
+        self.global_this_cache
+            .get_or_init(|| match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
+                Some(Value::Object(global_this)) => Some(global_this.clone()),
+                _ => None,
+            })
+            .clone()
+    }
+
     pub(super) fn enter_body_deopt_scope(&mut self) {
         let Some(parameter_bindings) = self.env.deopt_bindings().cloned() else {
             return;
@@ -563,9 +577,8 @@ impl Vm<'_> {
         &mut self,
         name: &str,
     ) -> Result<Option<Value>, RuntimeError> {
-        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
-            Some(Value::Object(global_this)) => global_this.clone(),
-            _ => return Ok(None),
+        let Some(global_this) = self.cached_global_this() else {
+            return Ok(None);
         };
         if !global_this.has_own_property(name) {
             return Ok(None);
@@ -584,10 +597,7 @@ impl Vm<'_> {
 
     /// Reads an own property of the realm's `globalThis` object, if any.
     pub(super) fn global_this_property(&self, name: &str) -> Option<Value> {
-        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
-            Some(Value::Object(global_this)) => Some(global_this.clone()),
-            _ => None,
-        }?;
+        let global_this = self.cached_global_this()?;
         global_this
             .own_property(name)
             .map(|property| property.value)
@@ -626,10 +636,7 @@ impl Vm<'_> {
                 self.env.insert(name.clone(), value.clone());
             }
             self.write_through_module_live_binding(&name, value.clone());
-            let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
-                Some(Value::Object(global_this)) => Some(global_this.clone()),
-                _ => None,
-            };
+            let global_this = self.cached_global_this();
             if let Some(global_this) = global_this
                 && global_this.has_own_property(&name)
             {
@@ -638,10 +645,7 @@ impl Vm<'_> {
             self.sync_marked_dynamic_global(&name);
             return Ok(());
         }
-        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
-            Some(Value::Object(global_this)) => Some(global_this.clone()),
-            _ => None,
-        };
+        let global_this = self.cached_global_this();
         if let Some(global_this) = global_this {
             global_this.set(name.clone(), value.clone());
         }
@@ -657,10 +661,7 @@ impl Vm<'_> {
     /// Returns the full own-property descriptor of a `globalThis` property so
     /// callers can inspect attribute flags such as `writable`.
     pub(super) fn global_this_own_property(&self, name: &str) -> Option<Property> {
-        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
-            Some(Value::Object(global_this)) => Some(global_this.clone()),
-            _ => None,
-        }?;
+        let global_this = self.cached_global_this()?;
         global_this.own_property(name)
     }
 
@@ -1163,15 +1164,8 @@ impl Vm<'_> {
             || (self.bytecode.global_scope
                 && self.bytecode.local_is_body_hoist_only(slot)
                 && !is_compiler_temporary(&self.bytecode.locals[slot].name));
-        // Resolve `globalThis` into a local first so the `self.realm` borrow is
-        // released before the body re-borrows it mutably (an `if let` chain
-        // would otherwise hold the immutable borrow across the body and panic on
-        // the `borrow_mut` below).
         let global_this = if syncs_global_var {
-            match self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned() {
-                Some(Value::Object(global_this)) => Some(global_this),
-                _ => None,
-            }
+            self.cached_global_this()
         } else {
             None
         };
@@ -1429,9 +1423,7 @@ impl Vm<'_> {
         name: String,
         value: Value,
     ) -> Result<(), RuntimeError> {
-        let Some(Value::Object(global_this)) =
-            self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
-        else {
+        let Some(global_this) = self.cached_global_this() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "global object binding is missing".to_owned(),
@@ -1619,9 +1611,7 @@ impl Vm<'_> {
     }
 
     fn sync_global_this_own_property(&self, name: &str, value: Value) {
-        let Some(Value::Object(global_this)) =
-            self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
-        else {
+        let Some(global_this) = self.cached_global_this() else {
             return;
         };
         if global_this.has_own_property(name) {
@@ -1671,9 +1661,8 @@ impl Vm<'_> {
         // For globals, check the globalThis property descriptor. Only
         // configurable properties (bare assignments like `x = 1`) can be
         // deleted. `var` declarations are non-configurable.
-        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned() {
-            Some(Value::Object(obj)) => obj,
-            _ => return true,
+        let Some(global_this) = self.cached_global_this() else {
+            return true;
         };
         if !global_this.has_own_property(name) {
             // Name exists in realm but not on globalThis — it's a lexical

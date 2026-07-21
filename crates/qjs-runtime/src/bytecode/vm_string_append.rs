@@ -1,6 +1,6 @@
 use qjs_ast::BinaryOp;
 
-use crate::{GLOBAL_THIS_BINDING, RuntimeError, Value, operations};
+use crate::{RuntimeError, Value, operations};
 
 use super::{ir::Op, vm::Vm, vm_bindings::is_compiler_temporary};
 
@@ -86,10 +86,7 @@ impl Vm<'_> {
         let name = self.bytecode.locals[slot].name.clone();
         let realm_cell = self.env.is_realm_binding_cell(&name, &cell);
         let global_this = if realm_cell {
-            match self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned() {
-                Some(Value::Object(global_this)) => Some(global_this),
-                _ => None,
-            }
+            self.cached_global_this()
         } else {
             None
         };
@@ -144,10 +141,7 @@ impl Vm<'_> {
         if !realm_matches {
             return false;
         }
-        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned() {
-            Some(Value::Object(global_this)) => Some(global_this),
-            _ => None,
-        };
+        let global_this = self.cached_global_this();
         if let Some(property) = global_this
             .as_ref()
             .and_then(|global_this| global_this.own_property(name))
@@ -267,9 +261,9 @@ impl Vm<'_> {
                 && self.bytecode.local_is_body_hoist_only(slot)
                 && !is_compiler_temporary(&local_meta.name));
         let global_this = syncs_global_var
-            .then(|| self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned())
+            .then(|| self.cached_global_this())
             .flatten();
-        if let Some(Value::Object(global_this)) = global_this
+        if let Some(global_this) = global_this
             && global_this.has_own_property(&local_meta.name)
         {
             global_this
@@ -304,8 +298,7 @@ impl Vm<'_> {
                 std::rc::Rc::make_mut(string).push_str(suffix);
                 let result = Value::String(string.clone());
                 drop(realm);
-                if let Some(Value::Object(global_this)) =
-                    self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
+                if let Some(global_this) = self.cached_global_this()
                     && global_this.has_own_property(name)
                 {
                     global_this

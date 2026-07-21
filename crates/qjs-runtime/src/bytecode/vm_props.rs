@@ -119,10 +119,8 @@ impl Vm<'_> {
         let Value::Object(object) = value else {
             return false;
         };
-        matches!(
-            self.realm.borrow().get(GLOBAL_THIS_BINDING),
-            Some(Value::Object(global_object)) if object.ptr_eq(global_object)
-        )
+        self.cached_global_this()
+            .is_some_and(|global_object| object.ptr_eq(&global_object))
     }
 
     /// Drops the cached Array.prototype when the `Array` global binding itself is
@@ -494,8 +492,7 @@ impl Vm<'_> {
                 if self.realm.borrow().contains_key(name) {
                     self.env.insert_realm(name.to_owned(), value.clone());
                 }
-                if let Some(Value::Object(global_this)) =
-                    self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
+                if let Some(global_this) = self.cached_global_this()
                     && global_this.has_own_property(name)
                 {
                     global_this.set(name.to_owned(), value.clone());
@@ -522,8 +519,7 @@ impl Vm<'_> {
             if self.realm.borrow().contains_key(name) {
                 self.env.insert_realm(name.to_owned(), value.clone());
             }
-            if let Some(Value::Object(global_this)) =
-                self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
+            if let Some(global_this) = self.cached_global_this()
                 && global_this.has_own_property(name)
             {
                 global_this.set(name.to_owned(), value);
@@ -540,10 +536,7 @@ impl Vm<'_> {
         self.invalidate_array_prototype_cache(name);
         self.env.insert_realm(name.to_owned(), value.clone());
         self.write_through_module_live_binding(name, value.clone());
-        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
-            Some(Value::Object(global_this)) => Some(global_this.clone()),
-            _ => None,
-        };
+        let global_this = self.cached_global_this();
         if let Some(global_this) = global_this
             && global_this.has_own_property(name)
         {
@@ -596,8 +589,7 @@ impl Vm<'_> {
                     if self.realm.borrow().contains_key(name) {
                         self.env.insert_realm(name.to_owned(), value.clone());
                     }
-                    if let Some(Value::Object(global_this)) =
-                        self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
+                    if let Some(global_this) = self.cached_global_this()
                         && global_this.has_own_property(name)
                     {
                         global_this.set(name.to_owned(), value.clone());
@@ -621,8 +613,7 @@ impl Vm<'_> {
             if self.realm.borrow().contains_key(name) {
                 self.env.insert_realm(name.to_owned(), value.clone());
             }
-            if let Some(Value::Object(global_this)) =
-                self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
+            if let Some(global_this) = self.cached_global_this()
                 && global_this.has_own_property(name)
             {
                 global_this.set(name.to_owned(), value);
@@ -634,10 +625,7 @@ impl Vm<'_> {
         if self.realm.borrow().contains_key(name) {
             self.env.insert_realm(name.to_owned(), value.clone());
             self.write_through_module_live_binding(name, value.clone());
-            let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
-                Some(Value::Object(global_this)) => Some(global_this.clone()),
-                _ => None,
-            };
+            let global_this = self.cached_global_this();
             if let Some(global_this) = global_this
                 && global_this.has_own_property(name)
             {
@@ -646,10 +634,7 @@ impl Vm<'_> {
             self.sync_marked_dynamic_global(name);
             return Ok(());
         }
-        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
-            Some(Value::Object(global_this)) => Some(global_this.clone()),
-            _ => None,
-        };
+        let global_this = self.cached_global_this();
         if let Some(global_this) = global_this {
             global_this.set(name.to_owned(), value.clone());
         }
