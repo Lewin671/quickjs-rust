@@ -286,10 +286,15 @@ pub(crate) fn is_direct_leaf_function(callee: &Value) -> bool {
     let Value::Function(function) = callee else {
         return false;
     };
-    function
+    if let Some(eligible) = function.direct_leaf_call_eligible.get() {
+        return eligible;
+    }
+    let eligible = function
         .bytecode
         .as_ref()
-        .is_some_and(|bytecode| can_seed_direct_leaf_call(function, bytecode))
+        .is_some_and(|bytecode| can_seed_direct_leaf_call(function, bytecode));
+    function.direct_leaf_call_eligible.set(Some(eligible));
+    eligible
 }
 
 fn class_constructor_call_error(function: &Function) -> RuntimeError {

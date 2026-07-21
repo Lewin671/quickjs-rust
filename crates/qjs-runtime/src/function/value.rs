@@ -116,6 +116,11 @@ pub struct FunctionData {
     /// the internal dynamic-realm marker. Property mutation keeps this bit in
     /// sync so ordinary calls need not hash the hidden property name.
     pub(crate) has_dynamic_function_realm_override: Cell<bool>,
+    /// Memoized result of `can_seed_direct_leaf_call`: every input it checks
+    /// (function flags, parameter simplicity, bytecode analysis bits) is
+    /// fixed once this function is created, so recomputing it — including an
+    /// O(parameter count) scan — on every single call is pure waste.
+    pub(crate) direct_leaf_call_eligible: Cell<Option<bool>>,
     pub(crate) deopt_bindings: Option<DynamicBindings>,
     pub(crate) module_host: Option<ModuleHostRef>,
     pub(crate) module_imports: ModuleImports,
@@ -499,6 +504,7 @@ impl Function {
             realm: Some(realm),
             has_dynamic_function_realm,
             has_dynamic_function_realm_override: Cell::new(false),
+            direct_leaf_call_eligible: Cell::new(None),
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),
@@ -594,6 +600,7 @@ impl Function {
             realm: Some(realm),
             has_dynamic_function_realm,
             has_dynamic_function_realm_override: Cell::new(false),
+            direct_leaf_call_eligible: Cell::new(None),
             deopt_bindings,
             module_host,
             module_imports,
@@ -706,6 +713,7 @@ impl Function {
                 _ => false,
             },
             has_dynamic_function_realm_override: Cell::new(false),
+            direct_leaf_call_eligible: Cell::new(None),
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),
@@ -759,6 +767,7 @@ impl Function {
             realm: None,
             has_dynamic_function_realm: false,
             has_dynamic_function_realm_override: Cell::new(false),
+            direct_leaf_call_eligible: Cell::new(None),
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),
