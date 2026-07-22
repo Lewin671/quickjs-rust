@@ -199,6 +199,25 @@ fn evaluates_native_error_builtins() {
 }
 
 #[test]
+fn native_error_constructor_explicit_prototype_overrides_synthetic_parent() {
+    assert_eq!(
+        eval(
+            "let prototype = []; prototype.marker = 'array'; \
+             Reflect.setPrototypeOf(TypeError, prototype); \
+             [Reflect.getPrototypeOf(TypeError) === prototype, \
+              Object.getPrototypeOf(TypeError) === prototype, \
+              TypeError.__proto__ === prototype, \
+              TypeError.marker === 'array', \
+              TypeError.isError === undefined, \
+              !('isError' in TypeError)].join(':');"
+        ),
+        Ok(Value::String(
+            "true:true:true:true:true:true".to_owned().into()
+        ))
+    );
+}
+
+#[test]
 fn error_constructors_use_new_target_realm_default_prototype() {
     assert_eq!(
         eval(

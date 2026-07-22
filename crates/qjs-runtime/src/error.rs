@@ -292,7 +292,13 @@ pub(crate) fn is_native_error(native: NativeFunction) -> bool {
     native_error_name(native).is_some()
 }
 
+/// Returns the synthetic `Error` parent of an unmodified native error
+/// constructor. Once user code installs an explicit raw [[Prototype]] slot,
+/// that slot is authoritative for every prototype-chain operation.
 pub(crate) fn native_error_constructor_parent(function: &Function, env: &CallEnv) -> Option<Value> {
+    if function.internal_prototype_slot().is_some() {
+        return None;
+    }
     function
         .native
         .filter(|native| is_native_error(*native))
