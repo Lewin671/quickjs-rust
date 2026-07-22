@@ -654,6 +654,21 @@ pub(super) enum Op {
         skip: usize,
         discard: bool,
     },
+    /// Replaces creation of a proven non-escaping ordinary function with an
+    /// unobservable placeholder. When `local` is present the following alias
+    /// store is folded into this instruction and skipped.
+    InitVirtualFunction {
+        local: Option<usize>,
+        skip: usize,
+    },
+    /// Calls one proven non-escaping function literal without materializing a
+    /// `Function` object. The original `NewFunction` remains available in the
+    /// immutable source stream at `allocation_ip` and supplies the generic
+    /// parameter/body metadata.
+    CallVirtualFunction {
+        allocation_ip: usize,
+        argc: usize,
+    },
 }
 
 /// Compiled definition of a class constructor.

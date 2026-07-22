@@ -801,7 +801,9 @@ impl<'a> Vm<'a> {
                 | Op::BinaryAssignLocals { .. }
                 | Op::IncrementLocal { .. }
                 | Op::CopyLocal { .. }
-                | Op::CompareLocalsJumpFalse { .. }) => self.run_virtual_object_op(op)?,
+                | Op::CompareLocalsJumpFalse { .. }
+                | Op::InitVirtualFunction { .. }
+                | Op::CallVirtualFunction { .. }) => self.run_virtual_object_op(op)?,
                 op @ (Op::EnterDisposableScope
                 | Op::RegisterDisposable
                 | Op::RegisterAsyncDisposable

@@ -75,6 +75,18 @@ impl AbstractValue {
         }
     }
 
+    fn virtual_function_candidate(candidate: CandidateId) -> Self {
+        Self {
+            candidates: BTreeSet::from([candidate]),
+            may_be_other: false,
+            // If this candidate is ever stored into an object literal, the
+            // ordinary function object must exist for SetFunctionName and
+            // home-object wiring. Preserve that possibility in the lattice.
+            may_be_home_function: true,
+            known_string: None,
+        }
+    }
+
     fn exact_candidate(&self) -> Option<CandidateId> {
         (!self.may_be_other && self.candidates.len() == 1)
             .then(|| *self.candidates.first().expect("one candidate checked"))
@@ -177,16 +189,23 @@ impl<'a> Analyzer<'a> {
                         length: elements.len(),
                     })
                 }
+                Op::NewFunction { bytecode, .. } => {
+                    Some(VirtualKind::Function(Rc::clone(bytecode)))
+                }
                 _ => None,
             };
             if let Some(kind) = kind {
                 let candidate = candidates.len();
                 candidate_at[ip] = Some(candidate);
+                let mut escape_reasons = BTreeSet::new();
+                if matches!(kind, VirtualKind::Function(_)) && !function_candidate_is_safe(op) {
+                    escape_reasons.insert(EscapeReason::UnsupportedInstruction { ip });
+                }
                 candidates.push(VirtualCandidate {
                     allocation_ip: ip,
                     kind,
                     uses: BTreeSet::new(),
-                    escape_reasons: BTreeSet::new(),
+                    escape_reasons,
                     seen: false,
                 });
             }
@@ -491,7 +510,24 @@ impl<'a> Analyzer<'a> {
                 self.escape_value(&right, EscapeReason::IdentityUse { ip });
                 state.stack.push(AbstractValue::known_non_function());
             }
-            Op::Call(argc) | Op::New(argc) => {
+            Op::Call(argc) => {
+                let arguments = Self::pop_many(state, argc, ip)?;
+                for argument in &arguments {
+                    self.escape_value(argument, EscapeReason::IdentityUse { ip });
+                }
+                let callee = Self::pop(state, ip)?;
+                if let Some(candidate) = callee.exact_candidate()
+                    && matches!(self.candidates[candidate].kind, VirtualKind::Function(_))
+                {
+                    self.candidates[candidate]
+                        .uses
+                        .insert(VirtualUse::DirectCall { ip, argc });
+                } else {
+                    self.escape_value(&callee, EscapeReason::IdentityUse { ip });
+                }
+                state.stack.push(AbstractValue::unknown());
+            }
+            Op::New(argc) => {
                 self.consume_escape(ip, state, argc + 1)?;
                 state.stack.push(AbstractValue::unknown());
             }
@@ -507,7 +543,14 @@ impl<'a> Analyzer<'a> {
                 self.consume_escape(ip, state, 3)?;
                 state.stack.push(AbstractValue::unknown());
             }
-            Op::NewFunction { .. } => state.stack.push(AbstractValue::known_function()),
+            Op::NewFunction { .. } => {
+                let candidate = self.candidate_at[ip]
+                    .expect("function literal should have a registered candidate");
+                self.candidates[candidate].seen = true;
+                state
+                    .stack
+                    .push(AbstractValue::virtual_function_candidate(candidate));
+            }
             Op::RequireObjectCoercible => {
                 let value = state
                     .stack
@@ -643,7 +686,9 @@ impl<'a> Analyzer<'a> {
             | Op::BinaryAssignLocals { .. }
             | Op::IncrementLocal { .. }
             | Op::CopyLocal { .. }
-            | Op::CompareLocalsJumpFalse { .. } => {
+            | Op::CompareLocalsJumpFalse { .. }
+            | Op::InitVirtualFunction { .. }
+            | Op::CallVirtualFunction { .. } => {
                 return Err(AnalysisFailure::Unsupported(ip));
             }
         }
@@ -677,6 +722,7 @@ impl<'a> Analyzer<'a> {
                 Some(VirtualUse::ArrayLengthRead { ip })
             }
             VirtualKind::DenseArray { .. } => None,
+            VirtualKind::Function(_) => None,
         };
         if let Some(use_kind) = use_kind {
             let is_array_length = matches!(use_kind, VirtualUse::ArrayLengthRead { .. });
@@ -713,6 +759,7 @@ impl<'a> Analyzer<'a> {
                 Some(VirtualUse::ElementRead { ip, index })
             }
             VirtualKind::DenseArray { .. } => None,
+            VirtualKind::Function(_) => None,
         };
         if let Some(use_kind) = use_kind {
             self.candidates[candidate].uses.insert(use_kind);
@@ -755,6 +802,11 @@ impl<'a> Analyzer<'a> {
                     .uses
                     .insert(VirtualUse::ElementWrite { ip, index });
             }
+            VirtualKind::Function(_) => {
+                self.candidates[candidate]
+                    .escape_reasons
+                    .insert(EscapeReason::UnknownProperty { ip });
+            }
         }
     }
 
@@ -773,6 +825,7 @@ impl<'a> Analyzer<'a> {
                 Some(VirtualUse::ElementWrite { ip, index })
             }
             VirtualKind::DenseArray { .. } => None,
+            VirtualKind::Function(_) => None,
         };
         if let Some(use_kind) = use_kind {
             self.candidates[candidate].uses.insert(use_kind);
@@ -810,6 +863,51 @@ impl<'a> Analyzer<'a> {
         self.escape_value(value, EscapeReason::StoredInAggregate { ip });
         self.write_index(ip, receiver, index);
     }
+}
+
+fn function_candidate_is_safe(op: &Op) -> bool {
+    let Op::NewFunction {
+        has_name_binding,
+        immutable_name_binding,
+        params,
+        lexical_captures,
+        bytecode,
+        lexical_this,
+        lexical_arguments,
+        is_generator,
+        is_async,
+        ..
+    } = op
+    else {
+        return false;
+    };
+
+    !has_name_binding
+        && !immutable_name_binding
+        && lexical_captures.is_empty()
+        && bytecode.received_upvalue_slots().is_empty()
+        && !lexical_this
+        && !lexical_arguments
+        && !is_generator
+        && !is_async
+        && params.is_simple()
+        && !bytecode.needs_arguments_object()
+        && !bytecode.contains_direct_eval()
+        && !bytecode.contains_with()
+        && !bytecode.contains_super_operation()
+        && !bytecode.creates_closures()
+        && !bytecode.uses_lexical_this()
+        && !bytecode.code.iter().any(|op| {
+            matches!(
+                op,
+                Op::LoadNewTarget
+                    | Op::GetPrivate(_)
+                    | Op::SetPrivate(_)
+                    | Op::PrivateIn(_)
+                    | Op::ImportCall { .. }
+                    | Op::ImportMeta
+            )
+        })
 }
 
 fn canonical_array_index(key: &str) -> Option<usize> {

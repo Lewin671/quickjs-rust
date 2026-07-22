@@ -282,6 +282,31 @@ pub(crate) fn call_direct_leaf_function(
     eval_function_bytecode_with_direct_call_slots(bytecode, call_env, true, direct_call_slots).value
 }
 
+/// Executes a function literal whose allocation and identity were proven
+/// unobservable by the bytecode flow analysis. The eligibility proof excludes
+/// captures and every function-owned call-context feature, so this is the same
+/// direct-slot entry used by an allocated ordinary leaf, minus the temporary
+/// `Function` object and its metadata copies.
+pub(crate) fn call_direct_function_literal(
+    params: &FunctionParams,
+    bytecode: &Bytecode,
+    argument_values: &[Value],
+    env: &CallEnv,
+) -> Result<Value, RuntimeError> {
+    if let Some(value) = try_eval_numeric_leaf(bytecode, params, argument_values, &[]) {
+        return Ok(value);
+    }
+    let call_env = env.new_direct_leaf_function_frame(env.module_imports());
+    let direct_call_slots = DirectCallSlots {
+        this_value: None,
+        parameter_slots: bytecode.parameter_slots(),
+        arguments: argument_values,
+        upvalues: &[],
+        realm_upvalue_slots: 0,
+    };
+    eval_function_bytecode_with_direct_call_slots(bytecode, call_env, true, direct_call_slots).value
+}
+
 pub(crate) fn is_direct_leaf_function(callee: &Value) -> bool {
     let Value::Function(function) = callee else {
         return false;

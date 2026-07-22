@@ -26,9 +26,9 @@ pub(super) fn analyze(bytecode: &Bytecode) -> VirtualObjectAnalysis {
     flow::analyze(bytecode)
 }
 
-#[cfg(test)]
-pub(super) use lower::record_virtual_init_for_test;
 pub(super) use lower::{VirtualObjectProgram, lower};
+#[cfg(test)]
+pub(super) use lower::{record_virtual_function_init_for_test, record_virtual_init_for_test};
 
 type CandidateId = usize;
 
@@ -59,6 +59,7 @@ impl VirtualCandidate {
 pub(super) enum VirtualKind {
     Object(Rc<ObjectLiteralShape>),
     DenseArray { length: usize },
+    Function(Rc<Bytecode>),
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -71,6 +72,7 @@ pub(super) enum VirtualUse {
     ArrayLengthRead { ip: usize },
     ElementRead { ip: usize, index: usize },
     ElementWrite { ip: usize, index: usize },
+    DirectCall { ip: usize, argc: usize },
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]

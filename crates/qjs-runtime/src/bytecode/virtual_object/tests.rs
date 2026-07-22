@@ -46,6 +46,155 @@ fn dense_array_candidates(analysis: &VirtualObjectAnalysis) -> Vec<&VirtualCandi
         .collect()
 }
 
+fn function_candidates(analysis: &VirtualObjectAnalysis) -> Vec<&VirtualCandidate> {
+    analysis
+        .candidates
+        .iter()
+        .filter(|candidate| matches!(candidate.kind, VirtualKind::Function(_)))
+        .collect()
+}
+
+#[test]
+fn tracks_non_escaping_function_literal_calls_through_local_aliases() {
+    let bytecode = named_function(
+        r#"
+            function run(count) {
+                var total = 0;
+                while (count > 0) {
+                    var add = function (value) { return value + 1; };
+                    var alias = add;
+                    total += alias(0);
+                    count--;
+                }
+                return total;
+            }
+            "#,
+        "run",
+    );
+    let analysis = analyze(&bytecode);
+    let functions = function_candidates(&analysis);
+
+    assert!(analysis.complete);
+    assert_eq!(functions.len(), 1);
+    assert!(functions[0].is_virtualizable(), "{:#?}", functions[0]);
+    assert!(
+        functions[0]
+            .uses
+            .iter()
+            .any(|use_kind| matches!(use_kind, VirtualUse::Alias { .. }))
+    );
+    assert!(
+        functions[0]
+            .uses
+            .iter()
+            .any(|use_kind| matches!(use_kind, VirtualUse::DirectCall { argc: 1, .. }))
+    );
+}
+
+#[test]
+fn function_context_features_fail_closed() {
+    for (source, name) in [
+        (
+            r#"function capture() { var x = 1; var f = function () { return x; }; return f(); }"#,
+            "capture",
+        ),
+        (
+            r#"function receiver() { var f = function () { return this; }; return f(); }"#,
+            "receiver",
+        ),
+        (
+            r#"function args() { var f = function () { return arguments[0]; }; return f(1); }"#,
+            "args",
+        ),
+        (
+            r#"function target() { var f = function () { return new.target; }; return f(); }"#,
+            "target",
+        ),
+        (
+            r#"function recursive() { var f = function inner(n) { return n ? inner(n - 1) : 0; }; return f(1); }"#,
+            "recursive",
+        ),
+        (
+            r#"function generator() { var f = function* () { yield 1; }; return f(); }"#,
+            "generator",
+        ),
+        (
+            r#"function asynchronous() { var f = async function () { return 1; }; return f(); }"#,
+            "asynchronous",
+        ),
+        (
+            r#"function arrow() { var f = () => 1; return f(); }"#,
+            "arrow",
+        ),
+    ] {
+        let bytecode = named_function(source, name);
+        let analysis = analyze(&bytecode);
+        let functions = function_candidates(&analysis);
+        assert_eq!(functions.len(), 1, "{name}");
+        assert!(
+            !functions[0].is_virtualizable(),
+            "{name}: {:#?}",
+            functions[0]
+        );
+    }
+}
+
+#[test]
+fn function_identity_and_dynamic_scope_uses_fail_closed() {
+    for (source, name) in [
+        (
+            r#"function construct() { var f = function () { return 1; }; return new f(); }"#,
+            "construct",
+        ),
+        (
+            r#"function readName() { var f = function () {}; return f.name; }"#,
+            "readName",
+        ),
+        (
+            r#"function readPrototype() { var f = function () {}; return f.prototype; }"#,
+            "readPrototype",
+        ),
+        (
+            r#"function escapeReturn() { var f = function () {}; return f; }"#,
+            "escapeReturn",
+        ),
+        (
+            r#"function escapeArray() { var f = function () {}; return [f]; }"#,
+            "escapeArray",
+        ),
+        (
+            r#"function dynamic() { var f = function () { return 1; }; eval(""); return f(); }"#,
+            "dynamic",
+        ),
+        (
+            r#"function typeObservation() { var f = function () {}; return typeof f; }"#,
+            "typeObservation",
+        ),
+        (
+            r#"function identityComparison() { var f = function () {}; return f === f; }"#,
+            "identityComparison",
+        ),
+        (
+            r#"function spread() { var f = function (value) { return value; }; return f(...[1]); }"#,
+            "spread",
+        ),
+        (
+            r#"function resolved() { var f = function (value) { return value; }; return f.call(undefined, 1); }"#,
+            "resolved",
+        ),
+    ] {
+        let bytecode = named_function(source, name);
+        let analysis = analyze(&bytecode);
+        let functions = function_candidates(&analysis);
+        assert_eq!(functions.len(), 1, "{name}");
+        assert!(
+            !functions[0].is_virtualizable(),
+            "{name}: {:#?}",
+            functions[0]
+        );
+    }
+}
+
 #[test]
 fn cfg_builds_if_loop_edges_without_instruction_offsets() {
     let bytecode = named_function(

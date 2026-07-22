@@ -115,6 +115,9 @@ fn collect_superinstruction_authority(code: &[Op], required: &mut BTreeSet<usize
             | Op::InitVirtualConstants {
                 local: Some(slot), ..
             }
+            | Op::InitVirtualFunction {
+                local: Some(slot), ..
+            }
             | Op::IncrementLocal { slot, .. } => {
                 required.insert(*slot);
             }
@@ -133,6 +136,7 @@ fn candidate_input_count(candidate: &VirtualCandidate) -> usize {
     match &candidate.kind {
         VirtualKind::Object(shape) => shape.input_len(),
         VirtualKind::DenseArray { length } => *length,
+        VirtualKind::Function(_) => 0,
     }
 }
 
@@ -147,18 +151,24 @@ fn candidate_replacements(
             if Rc::ptr_eq(shape, expected) => {}
         (Op::NewArray { elements }, VirtualKind::DenseArray { length })
             if elements.len() == *length => {}
+        (Op::NewFunction { bytecode, .. }, VirtualKind::Function(expected))
+            if Rc::ptr_eq(bytecode, expected) => {}
         _ => return None,
     }
 
-    let mut replacements = vec![(
-        candidate.allocation_ip,
-        Op::InitVirtualObject {
+    let allocation_replacement = match candidate.kind {
+        VirtualKind::Function(_) => Op::InitVirtualFunction {
+            local: None,
+            skip: 0,
+        },
+        _ => Op::InitVirtualObject {
             slot: slot_base,
             count: input_count,
             local: None,
             skip: 0,
         },
-    )];
+    };
+    let mut replacements = vec![(candidate.allocation_ip, allocation_replacement)];
     for use_kind in &candidate.uses {
         let replacement = match use_kind {
             VirtualUse::Alias { .. } | VirtualUse::Discard { .. } => continue,
@@ -207,6 +217,20 @@ fn candidate_replacements(
                     return None;
                 }
                 (*ip, Op::GuardVirtualObject)
+            }
+            VirtualUse::DirectCall { ip, argc } => {
+                if !matches!(bytecode.code.get(*ip), Some(Op::Call(found)) if found == argc)
+                    || !matches!(candidate.kind, VirtualKind::Function(_))
+                {
+                    return None;
+                }
+                (
+                    *ip,
+                    Op::CallVirtualFunction {
+                        allocation_ip: candidate.allocation_ip,
+                        argc: *argc,
+                    },
+                )
             }
         };
         replacements.push(replacement);
@@ -260,6 +284,35 @@ fn fuse_virtual_initializers(
             code[ip] = Op::InitVirtualObject {
                 slot,
                 count,
+                local: Some(local),
+                skip: 1,
+            };
+        }
+    }
+
+    for ip in 0..code.len().saturating_sub(1) {
+        let Op::InitVirtualFunction {
+            local: None,
+            skip: 0,
+        } = code[ip]
+        else {
+            continue;
+        };
+        let local = match code.get(ip + 1) {
+            Some(Op::StoreLocal(local)) if analysis.slot_authority.is_authoritative(*local) => {
+                *local
+            }
+            Some(Op::AssignLocal(local))
+                if analysis
+                    .slot_authority
+                    .is_assignment_authoritative(bytecode, *local) =>
+            {
+                *local
+            }
+            _ => continue,
+        };
+        if range_is_linear(analysis, ip, ip + 1) {
+            code[ip] = Op::InitVirtualFunction {
                 local: Some(local),
                 skip: 1,
             };
@@ -519,11 +572,17 @@ fn set_receiver_input_count(op: &Op) -> Option<usize> {
 #[cfg(test)]
 thread_local! {
     static TEST_VIRTUAL_INIT_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TEST_VIRTUAL_FUNCTION_INIT_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
 pub(in crate::bytecode) fn record_virtual_init_for_test() {
     TEST_VIRTUAL_INIT_HITS.set(TEST_VIRTUAL_INIT_HITS.get() + 1);
+}
+
+#[cfg(test)]
+pub(in crate::bytecode) fn record_virtual_function_init_for_test() {
+    TEST_VIRTUAL_FUNCTION_INIT_HITS.set(TEST_VIRTUAL_FUNCTION_INIT_HITS.get() + 1);
 }
 
 #[cfg(test)]
@@ -534,6 +593,16 @@ fn reset_test_hits() {
 #[cfg(test)]
 fn test_hits() -> usize {
     TEST_VIRTUAL_INIT_HITS.get()
+}
+
+#[cfg(test)]
+fn reset_virtual_function_test_hits() {
+    TEST_VIRTUAL_FUNCTION_INIT_HITS.set(0);
+}
+
+#[cfg(test)]
+fn virtual_function_test_hits() -> usize {
+    TEST_VIRTUAL_FUNCTION_INIT_HITS.get()
 }
 
 #[cfg(test)]
@@ -553,6 +622,213 @@ mod tests {
                 _ => None,
             })
             .expect("function bytecode should be nested in the script")
+    }
+
+    #[test]
+    fn lowers_general_non_escaping_function_literal_calls_in_the_shared_stream() {
+        let bytecode = nested_function(
+            "function run(n) { var total = 0; for (var i = 0; i < n; i++) { var add = function (value) { return value + 1; }; total += add(0); } return total; }",
+        );
+        let program = lower(&bytecode);
+        let code = program.code(&bytecode.code);
+        assert_eq!(code.len(), bytecode.code.len());
+        assert!(
+            code.iter()
+                .any(|op| matches!(op, Op::InitVirtualFunction { .. }))
+        );
+        assert!(
+            code.iter()
+                .any(|op| matches!(op, Op::CallVirtualFunction { argc: 1, .. }))
+        );
+
+        reset_virtual_function_test_hits();
+        assert_eq!(
+            eval(
+                "function run(n) { var total = 0; for (var i = 0; i < n; i++) { var add = function (value) { return value + 1; }; total += add(0); } return total; } run(5);"
+            ),
+            Ok(Value::Number(5.0))
+        );
+        assert_eq!(virtual_function_test_hits(), 5);
+    }
+
+    #[test]
+    fn virtual_function_calls_cover_vm_fallback_aliases_and_argument_order() {
+        reset_virtual_function_test_hits();
+        assert_eq!(
+            eval(
+                "function run() { var decorate = function (value) { return value + '!'; }; var alias = decorate; return decorate('a') + alias('b'); } run();"
+            ),
+            Ok(Value::String("a!b!".to_owned().into()))
+        );
+        assert_eq!(virtual_function_test_hits(), 1);
+
+        reset_virtual_function_test_hits();
+        assert_eq!(
+            eval(
+                "function run() { var zero = function () { return 7; }; var one = function (a) { return a; }; var two = function (a, b) { return a * 10 + b; }; var three = function (a, b, c) { return a * 100 + b * 10 + c; }; var five = function (a, b, c, d, e) { return a * 10000 + b * 1000 + c * 100 + d * 10 + e; }; return [zero(), one(1), two(2, 3), three(4, 5, 6), five(6, 7, 8, 9, 0)].join(':'); } run();"
+            ),
+            Ok(Value::String("7:1:23:456:67890".to_owned().into()))
+        );
+        assert_eq!(virtual_function_test_hits(), 5);
+
+        reset_virtual_function_test_hits();
+        assert_eq!(
+            eval(
+                "var order = ''; function mark(value) { order += value; return value; } (function (a, b, c, d, e) { return a * 10000 + b * 1000 + c * 100 + d * 10 + e; })(mark(1), mark(2), mark(3), mark(4), mark(5)) + ':' + order;"
+            ),
+            Ok(Value::String("12345:12345".to_owned().into()))
+        );
+        assert_eq!(virtual_function_test_hits(), 1);
+    }
+
+    #[test]
+    fn independent_holdout_scalar_replaces_branching_five_argument_literal() {
+        reset_virtual_function_test_hits();
+        let source = r#"
+            function checksum(limit) {
+                var score = 0;
+                for (var index = 0; index < limit; index++) {
+                    score += (function (tag, value, second, third, fourth) {
+                        var text = tag + ":" + (value + second + third + fourth);
+                        if (value % 2) return text.length;
+                        return text.indexOf(":") + second + third + fourth;
+                    })("x", index, 2, 3, 4);
+                }
+                return score;
+            }
+            checksum(4);
+        "#;
+        assert_eq!(eval(source), Ok(Value::Number(28.0)));
+        assert_eq!(virtual_function_test_hits(), 4);
+    }
+
+    #[test]
+    fn virtual_function_call_propagates_thrown_values_through_the_existing_vm() {
+        reset_virtual_function_test_hits();
+        let error = eval("(function () { throw 7; })();").expect_err("call should throw");
+        assert!(error.message.contains('7'), "{}", error.message);
+        assert_eq!(virtual_function_test_hits(), 1);
+    }
+
+    #[test]
+    fn observable_function_context_and_identity_keep_real_allocations() {
+        for (source, expected) in [
+            (
+                "function run() { var x = 3; var f = function () { return x; }; return f(); } run();",
+                Value::Number(3.0),
+            ),
+            (
+                "function run() { var f = function () { return this === globalThis; }; return f(); } run();",
+                Value::Boolean(true),
+            ),
+            (
+                "function run() { var f = function () { return arguments[0]; }; return f(4); } run();",
+                Value::Number(4.0),
+            ),
+            (
+                "function run() { var f = function () { return 3; }; return typeof new f() === 'object'; } run();",
+                Value::Boolean(true),
+            ),
+            (
+                "function run() { var f = function () {}; return f.name; } run();",
+                Value::String("f".to_owned().into()),
+            ),
+            (
+                "function run() { var f = function () {}; return typeof f.prototype; } run();",
+                Value::String("object".to_owned().into()),
+            ),
+            (
+                "function run() { var f = function inner(n) { return n ? n * inner(n - 1) : 1; }; return f(5); } run();",
+                Value::Number(120.0),
+            ),
+            (
+                "function run() { var f = function* () { yield 4; }; return f().next().value; } run();",
+                Value::Number(4.0),
+            ),
+            (
+                "function run() { var f = function () { return new.target; }; return f() === undefined; } run();",
+                Value::Boolean(true),
+            ),
+            (
+                "function run() { var f = function () { return 1; }; eval(\"f = function () { return 2; }\"); return f(); } run();",
+                Value::Number(2.0),
+            ),
+            (
+                "function run() { var f = function () {}; return typeof f; } run();",
+                Value::String("function".to_owned().into()),
+            ),
+            (
+                "function run() { var f = function () {}; return f === f; } run();",
+                Value::Boolean(true),
+            ),
+            (
+                "function sink(value) { return value.name; } function run() { var f = function () {}; return sink(f); } run();",
+                Value::String("f".to_owned().into()),
+            ),
+            (
+                "function run() { var f = function () {}; return ({ value: f }).value.name; } run();",
+                Value::String("f".to_owned().into()),
+            ),
+            (
+                "function run() { var f = function () {}; return [f][0].name; } run();",
+                Value::String("f".to_owned().into()),
+            ),
+            (
+                "function run() { var f = function () {}; var target = { value: null }; target.value = f; return target.value.name; } run();",
+                Value::String("f".to_owned().into()),
+            ),
+            (
+                "function run() { var f = function (a, b) { return a * 10 + b; }; return f(...[2, 3]); } run();",
+                Value::Number(23.0),
+            ),
+            (
+                "function run() { var f = function (value) { return value; }; var holder = { method: f }; return holder.method(3); } run();",
+                Value::Number(3.0),
+            ),
+            (
+                "function run() { var f = function (value) { return value; }; return f.call(undefined, 3); } run();",
+                Value::Number(3.0),
+            ),
+            (
+                "function run() { with ({}) { var f = function () { return 1; }; return f(); } } run();",
+                Value::Number(1.0),
+            ),
+            (
+                "class A { value() { return 3; } } class B extends A { run() { var f = () => super.value(); return f(); } } new B().run();",
+                Value::Number(3.0),
+            ),
+            (
+                "class C { #value = 2; run() { var f = function (receiver) { return receiver.#value; }; return f(this); } } new C().run();",
+                Value::Number(2.0),
+            ),
+        ] {
+            reset_virtual_function_test_hits();
+            assert_eq!(eval(source), Ok(expected), "{source}");
+            assert_eq!(virtual_function_test_hits(), 0, "{source}");
+        }
+    }
+
+    #[test]
+    fn outer_generator_and_async_suspension_keep_function_identity_materialized() {
+        reset_virtual_function_test_hits();
+        assert_eq!(
+            eval(
+                "function* run() { var f = function (value) { return value + 1; }; yield 0; return f(1); } var iterator = run(); iterator.next(); iterator.next().value;"
+            ),
+            Ok(Value::Number(2.0))
+        );
+        assert_eq!(virtual_function_test_hits(), 0);
+
+        reset_virtual_function_test_hits();
+        let value = eval(
+            "var log = []; async function run() { var f = function (value) { return value + 1; }; await 0; log.push(f(1)); } run(); log;",
+        )
+        .expect("async call should drain its jobs");
+        let Value::Array(log) = value else {
+            panic!("expected async log array, got {value:?}");
+        };
+        assert_eq!(log.to_vec(), vec![Value::Number(2.0)]);
+        assert_eq!(virtual_function_test_hits(), 0);
     }
 
     #[test]

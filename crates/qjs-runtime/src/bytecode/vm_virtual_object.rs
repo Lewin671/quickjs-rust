@@ -97,6 +97,20 @@ impl<'a> Vm<'a> {
                 #[cfg(test)]
                 super::virtual_object::record_virtual_init_for_test();
             }
+            Op::InitVirtualFunction { local, skip } => {
+                if let Some(local) = local {
+                    let target = self.locals.get_mut(*local).ok_or_else(|| RuntimeError {
+                        thrown: None,
+                        message: "virtual function alias slot out of bounds".to_owned(),
+                    })?;
+                    *target = Some(Value::Undefined);
+                } else {
+                    self.stack.push(Value::Undefined);
+                }
+                self.ip += *skip;
+                #[cfg(test)]
+                super::virtual_object::record_virtual_function_init_for_test();
+            }
             Op::LoadVirtualValue { slot, discard } => {
                 for _ in 0..*discard {
                     self.pop()?;
@@ -304,7 +318,80 @@ impl<'a> Vm<'a> {
                 };
                 self.finish_virtual_comparison(value, *target, *skip, *discard);
             }
+            Op::CallVirtualFunction {
+                allocation_ip,
+                argc,
+            } => self.call_virtual_function(*allocation_ip, *argc)?,
             _ => unreachable!("non-virtual opcode routed to virtual-object handler"),
+        }
+        Ok(())
+    }
+
+    fn call_virtual_function(
+        &mut self,
+        allocation_ip: usize,
+        argc: usize,
+    ) -> Result<(), RuntimeError> {
+        let (params, bytecode) = match self.bytecode.code.get(allocation_ip) {
+            Some(Op::NewFunction {
+                params, bytecode, ..
+            }) => (params.clone(), bytecode.clone()),
+            _ => {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "virtual function template is unavailable".to_owned(),
+                });
+            }
+        };
+
+        let result = match argc {
+            0 => {
+                self.pop()?;
+                crate::function::call_direct_function_literal(&params, &bytecode, &[], &self.env)
+            }
+            1 => {
+                let first = self.pop()?;
+                self.pop()?;
+                crate::function::call_direct_function_literal(
+                    &params,
+                    &bytecode,
+                    std::slice::from_ref(&first),
+                    &self.env,
+                )
+            }
+            2 => {
+                let second = self.pop()?;
+                let first = self.pop()?;
+                self.pop()?;
+                crate::function::call_direct_function_literal(
+                    &params,
+                    &bytecode,
+                    &[first, second],
+                    &self.env,
+                )
+            }
+            3 => {
+                let third = self.pop()?;
+                let second = self.pop()?;
+                let first = self.pop()?;
+                self.pop()?;
+                crate::function::call_direct_function_literal(
+                    &params,
+                    &bytecode,
+                    &[first, second, third],
+                    &self.env,
+                )
+            }
+            _ => {
+                let arguments = self.pop_arguments(argc)?;
+                self.pop()?;
+                crate::function::call_direct_function_literal(
+                    &params, &bytecode, &arguments, &self.env,
+                )
+            }
+        };
+        if let Some(value) = self.handle_call_result(result)? {
+            self.stack.push(value);
         }
         Ok(())
     }
