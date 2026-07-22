@@ -212,6 +212,9 @@ impl Vm<'_> {
             .locals
             .iter()
             .map(|local| {
+                if local.compiler_temporary {
+                    return Some(Value::Undefined);
+                }
                 // Global-scope `var`/function bindings live in the realm; the
                 // vestigial slot stays empty so captures and loads route to
                 // the shared cell instead of a frozen copy.
@@ -270,6 +273,9 @@ impl Vm<'_> {
             Some(Value::Boolean(true))
         );
         for (slot, local) in bytecode.locals.iter().enumerate() {
+            if local.compiler_temporary {
+                continue;
+            }
             if let Some(upvalue) = env.module_import_cell(&local.name) {
                 local_upvalues[slot] = Some(upvalue);
                 if local.is_received_upvalue() {
@@ -324,7 +330,9 @@ impl Vm<'_> {
                     .locals
                     .iter()
                     .enumerate()
-                    .filter_map(|(slot, local)| local.parameter.then_some(slot)),
+                    .filter_map(|(slot, local)| {
+                        (local.parameter && !local.compiler_temporary).then_some(slot)
+                    }),
             );
         }
         if bytecode.contains_direct_eval()
@@ -337,7 +345,9 @@ impl Vm<'_> {
                     .iter()
                     .enumerate()
                     .filter_map(|(slot, local)| {
-                        (!(local.sloppy_global_fallback || bytecode.global_scope && local.hoisted))
+                        (!(local.compiler_temporary
+                            || local.sloppy_global_fallback
+                            || bytecode.global_scope && local.hoisted))
                             .then_some(slot)
                     }),
             );
@@ -350,7 +360,8 @@ impl Vm<'_> {
                 .iter()
                 .enumerate()
                 .filter_map(|(slot, local)| {
-                    (bytecode.local_slot(&local.name) == Some(slot)
+                    (!local.compiler_temporary
+                        && bytecode.local_slot(&local.name) == Some(slot)
                         && env.module_live_binding_cell(&local.name).is_some())
                     .then_some(slot)
                 }),
@@ -361,6 +372,9 @@ impl Vm<'_> {
             let Some(local) = bytecode.locals.get(slot) else {
                 continue;
             };
+            if local.compiler_temporary {
+                continue;
+            }
             if local.is_received_upvalue() {
                 continue;
             }
@@ -421,10 +435,10 @@ impl Vm<'_> {
             .enumerate()
             .take(u128::BITS as usize)
             .filter_map(|(slot, local)| {
-                (!bytecode.global_scope
-                    && !local.sloppy_global_fallback
+                (!local.sloppy_global_fallback
                     && local_upvalues.get(slot).is_none_or(Option::is_none)
-                    && env.slot_is_authoritative(&local.name))
+                    && (local.compiler_temporary
+                        || !bytecode.global_scope && env.slot_is_authoritative(&local.name)))
                 .then_some(1_u128 << slot)
             })
             .fold(0, |slots, slot| slots | slot)
@@ -537,7 +551,7 @@ impl Vm<'_> {
         if self.bytecode.global_scope
             && let Some(slot) = self.bytecode.local_slot(name)
             && self.bytecode.local_is_body_hoist_only(slot)
-            && !is_compiler_temporary(name)
+            && !self.bytecode.local_is_compiler_temporary(slot)
             && let Some(value) = self.global_this_property(name)
         {
             return Ok(value);
@@ -670,7 +684,7 @@ impl Vm<'_> {
     pub(super) fn local_slot_targets_non_writable_global(&self, slot: usize, name: &str) -> bool {
         let is_global_shadow = self.bytecode.global_scope
             && self.bytecode.local_is_body_hoist_only(slot)
-            && !is_compiler_temporary(name);
+            && !self.bytecode.local_is_compiler_temporary(slot);
         let is_sloppy_fallback = self
             .bytecode
             .locals
@@ -1005,7 +1019,7 @@ impl Vm<'_> {
     #[cold]
     #[inline(never)]
     fn uninitialized_local_value(&self, slot: usize) -> Result<Value, RuntimeError> {
-        if is_compiler_temporary(&self.bytecode.locals[slot].name) {
+        if self.bytecode.local_is_compiler_temporary(slot) {
             return Ok(Value::Undefined);
         }
         Err(RuntimeError {
@@ -1138,7 +1152,7 @@ impl Vm<'_> {
                 .global_lexical_names()
                 .iter()
                 .any(|name| name == &self.bytecode.locals[slot].name)
-            && !is_compiler_temporary(&self.bytecode.locals[slot].name)
+            && !self.bytecode.local_is_compiler_temporary(slot)
         {
             let name = self.bytecode.locals[slot].name.clone();
             self.env
@@ -1164,7 +1178,7 @@ impl Vm<'_> {
         let syncs_global_var = if hoisted {
             self.bytecode.global_scope
                 && self.bytecode.local_is_body_hoist_only(slot)
-                && !is_compiler_temporary(&self.bytecode.locals[slot].name)
+                && !self.bytecode.local_is_compiler_temporary(slot)
         } else {
             let shared_realm_cell = self
                 .local_upvalues
@@ -1177,7 +1191,7 @@ impl Vm<'_> {
             (from_env && (!uses_shared_cell || shared_realm_cell))
                 || (self.bytecode.global_scope
                     && self.bytecode.local_is_body_hoist_only(slot)
-                    && !is_compiler_temporary(&self.bytecode.locals[slot].name))
+                    && !self.bytecode.local_is_compiler_temporary(slot))
         };
         let global_this = if syncs_global_var {
             self.cached_global_this()
@@ -1594,7 +1608,7 @@ impl Vm<'_> {
                 let syncs_global_this = self.bytecode.local_is_sloppy_global_fallback(index)
                     || (self.bytecode.global_scope
                         && self.bytecode.local_is_body_hoist_only(index)
-                        && !is_compiler_temporary(&name));
+                        && !self.bytecode.local_is_compiler_temporary(index));
                 let value = if syncs_global_this {
                     self.global_this_property(&name).unwrap_or(value)
                 } else {
@@ -1618,7 +1632,7 @@ impl Vm<'_> {
                     self.write_through_module_live_binding(&name, value.clone());
                     let realm_backed_slot = (self.bytecode.global_scope
                         && self.bytecode.local_is_body_hoist_only(index)
-                        && !is_compiler_temporary(&name))
+                        && !self.bytecode.local_is_compiler_temporary(index))
                         || self
                             .local_upvalues
                             .get(index)

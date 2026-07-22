@@ -132,6 +132,7 @@ mod tests {
     fn local(name: &str, from_env: bool) -> Local {
         Local {
             name: name.to_owned(),
+            compiler_temporary: false,
             hoisted: false,
             hoisted_function: false,
             parameter: false,
@@ -145,6 +146,7 @@ mod tests {
     fn parameter(name: &str) -> Local {
         Local {
             name: name.to_owned(),
+            compiler_temporary: false,
             hoisted: true,
             hoisted_function: false,
             parameter: true,

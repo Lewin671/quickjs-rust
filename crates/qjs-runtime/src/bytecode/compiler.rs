@@ -481,19 +481,28 @@ impl Compiler {
         }
     }
 
-    pub(super) fn local_slot(&mut self, name: &str, hoisted: bool) -> usize {
-        if hoisted && self.global_scope {
+    fn local_slot_with_kind(
+        &mut self,
+        name: &str,
+        hoisted: bool,
+        compiler_temporary: bool,
+    ) -> usize {
+        if hoisted && self.global_scope && !compiler_temporary {
             self.global_hoisted.insert(name.to_owned());
         }
         if let Some(slot) = self.local_slots.get(name) {
             if hoisted {
                 self.locals[*slot].hoisted = true;
             }
+            if compiler_temporary {
+                self.locals[*slot].compiler_temporary = true;
+            }
             return *slot;
         }
         let slot = self.locals.len();
         self.locals.push(Local {
             name: name.to_owned(),
+            compiler_temporary,
             hoisted,
             hoisted_function: false,
             parameter: false,
@@ -504,6 +513,14 @@ impl Compiler {
         });
         self.local_slots.insert(name.to_owned(), slot);
         slot
+    }
+
+    pub(super) fn local_slot(&mut self, name: &str, hoisted: bool) -> usize {
+        self.local_slot_with_kind(name, hoisted, false)
+    }
+
+    pub(super) fn compiler_temporary_slot(&mut self, name: &str, hoisted: bool) -> usize {
+        self.local_slot_with_kind(name, hoisted, true)
     }
 
     /// Materializes an own `this`/`arguments` slot so a nested arrow can
@@ -587,7 +604,7 @@ impl Compiler {
     pub(super) fn temp_local(&mut self, prefix: &str) -> usize {
         let name = format!("\0\0{prefix}_{}", self.next_temp);
         self.next_temp += 1;
-        self.local_slot(&name, true)
+        self.compiler_temporary_slot(&name, true)
     }
 
     pub(super) fn push_loop(&mut self, result_slot: usize) {

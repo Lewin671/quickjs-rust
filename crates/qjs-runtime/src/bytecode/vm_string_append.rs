@@ -2,7 +2,7 @@ use qjs_ast::BinaryOp;
 
 use crate::{RuntimeError, Value, operations};
 
-use super::{ir::Op, vm::Vm, vm_bindings::is_compiler_temporary};
+use super::{ir::Op, vm::Vm};
 
 impl Vm<'_> {
     /// Drops only engine-internal mirrors before a compound string assignment.
@@ -258,7 +258,7 @@ impl Vm<'_> {
         let syncs_global_var = (local_meta.from_env && !local_meta.hoisted)
             || (self.bytecode.global_scope
                 && self.bytecode.local_is_body_hoist_only(slot)
-                && !is_compiler_temporary(&local_meta.name));
+                && !self.bytecode.local_is_compiler_temporary(slot));
         let global_this = syncs_global_var
             .then(|| self.cached_global_this())
             .flatten();

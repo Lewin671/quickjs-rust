@@ -837,6 +837,10 @@ pub(super) enum CatchScope {
 #[derive(Clone, Debug)]
 pub(super) struct Local {
     pub(super) name: String,
+    /// Compiler-owned scratch storage. These slots never participate in a
+    /// JavaScript environment record, even when their containing bytecode is
+    /// global code or has a dynamic-scope compatibility map.
+    pub(super) compiler_temporary: bool,
     pub(super) hoisted: bool,
     pub(super) hoisted_function: bool,
     pub(super) parameter: bool,
@@ -1143,14 +1147,18 @@ impl Bytecode {
     }
 
     pub(crate) fn local_names(&self) -> impl Iterator<Item = &str> {
-        self.locals.iter().map(|local| local.name.as_str())
+        self.locals
+            .iter()
+            .filter(|local| !local.compiler_temporary)
+            .map(|local| local.name.as_str())
     }
 
     pub(crate) fn eval_lexical_local_names(&self) -> impl Iterator<Item = &str> {
         self.locals
             .iter()
             .filter(|local| {
-                !local.hoisted
+                !local.compiler_temporary
+                    && !local.hoisted
                     && !local.sloppy_global_fallback
                     && !local.name.starts_with('\0')
                     && !self
@@ -1164,7 +1172,7 @@ impl Bytecode {
     pub(crate) fn hoisted_local_names(&self) -> impl Iterator<Item = &str> {
         self.locals
             .iter()
-            .filter(|local| local.hoisted)
+            .filter(|local| local.hoisted && !local.compiler_temporary)
             .map(|local| local.name.as_str())
     }
 
@@ -1201,6 +1209,12 @@ impl Bytecode {
 
     pub(crate) fn local_is_mutable(&self, slot: usize) -> bool {
         self.locals.get(slot).is_some_and(|local| local.mutable)
+    }
+
+    pub(crate) fn local_is_compiler_temporary(&self, slot: usize) -> bool {
+        self.locals
+            .get(slot)
+            .is_some_and(|local| local.compiler_temporary)
     }
 
     pub(crate) fn mark_eval_deletable_locals<I>(&mut self, names: I)
@@ -1462,7 +1476,11 @@ fn collect_written_binding_names_from_ops(
             | Op::StoreResolvedIdentWith {
                 slot: Some(slot), ..
             } => {
-                if let Some(local) = bytecode.locals.get(*slot) {
+                if let Some(local) = bytecode
+                    .locals
+                    .get(*slot)
+                    .filter(|local| !local.compiler_temporary)
+                {
                     names.insert(local.name.clone());
                 }
             }
@@ -1600,6 +1618,37 @@ fn collect_sloppy_global_assignment_names_from_ops(code: &[Op], names: &mut BTre
 mod tests {
     use super::*;
     use crate::Property;
+    use crate::bytecode::compiler;
+
+    #[test]
+    fn compiler_temporaries_are_excluded_from_written_binding_caches() {
+        let script = qjs_parser::parse_script(
+            "var total = 0; for (var index = 0; index < 4; index++) total += index;",
+        )
+        .expect("source should parse");
+        let bytecode = compiler::compile_script(&script).expect("source should compile");
+        let written = bytecode.written_binding_names();
+        let temporary_names = bytecode
+            .locals
+            .iter()
+            .filter(|local| local.compiler_temporary)
+            .map(|local| local.name.clone())
+            .collect::<Vec<_>>();
+
+        assert!(!temporary_names.is_empty());
+        assert!(written.iter().any(|name| name == "total"));
+        assert!(written.iter().any(|name| name == "index"));
+        for name in temporary_names {
+            assert!(
+                !written.contains(&name),
+                "temporary leaked into writeback: {name:?}"
+            );
+            assert!(
+                !bytecode.writes_binding(&name),
+                "temporary leaked into recursive write set: {name:?}"
+            );
+        }
+    }
 
     #[test]
     fn index_receiver_codec_round_trips_shared_ir_layout() {
