@@ -233,9 +233,9 @@
       "checksum": { "model": "triangular", "factor": 1 },
       "measurement": {
         "initial_iterations": 1024,
-        "max_iterations": 50000000,
-        "min_window_ms": 500,
-        "startup_max_fraction": 0.01,
+        "max_iterations": 130000000,
+        "min_window_ms": 250,
+        "startup_max_fraction": 0.04,
         "calibration_safety_factor": 1.25,
         "warmup_runs": 1,
         "timeout_seconds": 30

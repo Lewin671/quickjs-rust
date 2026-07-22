@@ -6091,6 +6091,25 @@ The preview remains `inconclusive`/`non_claim` because it ran on variable
 GitHub-hosted hardware, so it is prioritization evidence rather than a public
 fixed-hardware claim. B4 and B5 remain open.
 
+### 2026-07-22 top-level call measurement-capacity repair
+
+Trusted-main Performance Preview `29942288216` produced no performance
+conclusion after the guarded top-level numeric-loop unit. Candidate and base
+both reached the existing 50,000,000-iteration ceiling in about 234 ms, below
+the frozen 500 ms formal window, so `top_level_function_call` was
+`timer_limited` in all three blocks. The other 24 cases were present for both
+roles and all 75 three-role linearity checks passed.
+
+The measurement ceiling for that case is therefore raised to 130,000,000, and
+its capacity-bound formal window becomes 250 ms with a 4% startup ceiling.
+This leaves the workload, operation count, checksum model, warmup, timeout, and
+analysis policy unchanged. Its maximum triangular checksum is
+8,450,000,065,000,000, below JavaScript's maximum safe integer. The 250 ms
+window still requires at least 25x startup amortization and matches the policy
+already used for cases whose exact checksum bounds cap safe iterations. This
+is a capacity repair only and is not counted as a runtime performance
+improvement.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
