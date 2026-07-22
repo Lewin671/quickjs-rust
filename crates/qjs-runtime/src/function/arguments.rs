@@ -45,7 +45,7 @@ pub(super) fn arguments_object(
             Property::non_enumerable(Value::Function(function.clone())),
         );
     }
-    define_arguments_iterator(&object, env);
+    define_arguments_iterator(&object, function, env);
     object.set_to_string_tag("Arguments");
     Value::Object(object)
 }
@@ -176,15 +176,21 @@ fn cross_realm_throw_type_error(function: &Function) -> Option<Value> {
     Some(value)
 }
 
-fn define_arguments_iterator(object: &ObjectRef, env: &CallEnv) {
+fn define_arguments_iterator(object: &ObjectRef, function: &Function, env: &CallEnv) {
     let Some(iterator) = symbol::iterator_symbol(env) else {
         return;
     };
     // Reuse the shared %Array.prototype.values% so `arguments[Symbol.iterator]`
     // has the same identity as `Array.prototype.values`, falling back to a fresh
     // native if the realm intrinsic is somehow absent.
-    let values = env
-        .get_realm(super::ARRAY_PROTO_VALUES_INTRINSIC)
+    let values = cross_realm_array_proto_values(function)
+        .or_else(|| {
+            function
+                .realm
+                .as_ref()
+                .and_then(|realm| realm.get_value(super::ARRAY_PROTO_VALUES_INTRINSIC))
+        })
+        .or_else(|| env.get_realm(super::ARRAY_PROTO_VALUES_INTRINSIC))
         .unwrap_or_else(|| {
             Value::Function(Function::new_native(
                 Some("[Symbol.iterator]"),
@@ -194,6 +200,19 @@ fn define_arguments_iterator(object: &ObjectRef, env: &CallEnv) {
             ))
         });
     object.define_symbol_property(iterator, Property::non_enumerable(values));
+}
+
+fn cross_realm_array_proto_values(function: &Function) -> Option<Value> {
+    if !function.has_dynamic_function_realm && !function.has_dynamic_function_realm_override.get() {
+        return None;
+    }
+    match function
+        .own_property(super::CROSS_REALM_ARRAY_PROTO_VALUES_INTRINSIC)?
+        .value
+    {
+        Value::Function(values) => Some(Value::Function(values)),
+        _ => None,
+    }
 }
 
 pub(crate) fn native_mapped_argument_get(function: &Function) -> Result<Value, RuntimeError> {

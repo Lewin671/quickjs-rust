@@ -20,6 +20,13 @@ pub(crate) const THROW_TYPE_ERROR_INTRINSIC: &str = "%ThrowTypeError%";
 /// `Array.prototype.values` / `Array.prototype[Symbol.iterator]`.
 pub(crate) const ARRAY_PROTO_VALUES_INTRINSIC: &str = "%ArrayProto_values%";
 
+/// Synthetic-Realm handoff for that Realm's original
+/// `%Array.prototype.values%` intrinsic. The Test262 host attaches the stable
+/// function identity to dynamically created functions because the temporary
+/// Realm shim otherwise executes on the caller's native Realm state.
+pub(crate) const CROSS_REALM_ARRAY_PROTO_VALUES_INTRINSIC: &str =
+    "__quickjsRustRealmArrayProtoValues";
+
 pub(crate) const CROSS_REALM_TYPE_ERROR_PROTOTYPE: &str = "__quickjsRustRealmTypeErrorPrototype";
 
 pub(crate) const CROSS_REALM_THROW_TYPE_ERROR_INTRINSIC: &str = "__quickjsRustRealmThrowTypeError";

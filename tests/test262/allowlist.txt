@@ -3895,6 +3895,7 @@ test/language/arguments-object/mapped/nonconfigurable-nonwritable-descriptors-se
 test/language/arguments-object/mapped/nonconfigurable-nonwritable-descriptors-set-by-param.js
 cases/arguments-empty-basic.js
 cases/arguments-index-basic.js
+cases/arguments-iterator-cross-realm-identity.js
 cases/function-extra-arguments-basic.js
 cases/function-missing-parameter-basic.js
 cases/function-length-basic.js

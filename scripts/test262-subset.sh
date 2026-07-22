@@ -245,6 +245,9 @@ var $262 = {
       Object.defineProperty(fn, "__quickjsRustRealmArrayPrototype", {
         value: crossRealmArray.prototype
       });
+      Object.defineProperty(fn, "__quickjsRustRealmArrayProtoValues", {
+        value: crossRealmArrayValues
+      });
       Object.defineProperty(fn, "__quickjsRustRealmRegExpPrototype", {
         value: crossRealmRegExpPrototype
       });
@@ -361,6 +364,22 @@ var $262 = {
       configurable: true
     });
     crossRealmFunction.prototype = crossRealmFunctionPrototype;
+    var crossRealmArrayValues = function values() {
+      return globalThis.Array.prototype.values.call(this);
+    };
+    Object.setPrototypeOf(crossRealmArrayValues, crossRealmFunction.prototype);
+    Object.defineProperty(crossRealmArray.prototype, "values", {
+      value: crossRealmArrayValues,
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
+    Object.defineProperty(crossRealmArray.prototype, globalThis.Symbol.iterator, {
+      value: crossRealmArrayValues,
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
     var crossRealmRegExp = function RegExp() {
       return Reflect.construct(globalThis.RegExp, globalThis.Array.prototype.slice.call(arguments), new.target || crossRealmRegExp);
     };
@@ -577,6 +596,9 @@ var $262 = {
       if (typeof value === "function") {
         Object.defineProperty(value, "__quickjsRustRealmTypeErrorPrototype", {
           value: crossRealmNativeErrorPrototypes.TypeError
+        });
+        Object.defineProperty(value, "__quickjsRustRealmArrayProtoValues", {
+          value: crossRealmArrayValues
         });
       }
       if (typeof value === "function" && value.constructor === intrinsicGeneratorFunction) {
@@ -1084,6 +1106,12 @@ run_test262_case() {
   case_path="$(case_path_for_entry "$entry")"
   exec_path="$case_path"
   case "$entry" in
+    cases/*.js)
+      if grep -Fq '$262' "$case_path"; then
+        exec_path="$RESULT_DIR/$current.case.js"
+        awk 1 "$PRELUDE_FILE" "$case_path" >"$exec_path"
+      fi
+      ;;
     test/*.js)
       {
         read -r flags

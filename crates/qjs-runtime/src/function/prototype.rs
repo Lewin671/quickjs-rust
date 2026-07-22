@@ -21,6 +21,7 @@ const CROSS_REALM_FUNCTION_MARKERS: &[&str] = &[
     "__quickjsRustRealmObjectPrototype",
     "__quickjsRustRealmFunctionPrototype",
     "__quickjsRustRealmArrayPrototype",
+    super::CROSS_REALM_ARRAY_PROTO_VALUES_INTRINSIC,
     "__quickjsRustRealmRegExpPrototype",
     "__quickjsRustRealmBooleanPrototype",
     "__quickjsRustRealmNumberPrototype",

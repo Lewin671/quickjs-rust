@@ -296,6 +296,67 @@ fn arguments_symbol_iterator_is_array_prototype_values() {
 }
 
 #[test]
+fn realm_marked_arguments_use_creation_realm_array_values() {
+    assert_eq!(
+        eval(
+            "var __quickjsRustDynamicFunctionRealm; \
+             var localValues = Array.prototype.values; \
+             var realmGlobal = Object.create(globalThis); \
+             var realmObject = function RealmObject(value) { return globalThis.Object(value); }; \
+             realmObject.prototype = Object.create(Object.prototype); \
+             var realmArray = function RealmArray() {}; \
+             realmArray.prototype = Object.create(Array.prototype); \
+             var realmValues = function values() { \
+               return globalThis.Array.prototype.values.call(this); \
+             }; \
+             Object.defineProperty(realmArray.prototype, 'values', { \
+               value: realmValues, writable: true, enumerable: false, configurable: true \
+             }); \
+             Object.defineProperty(realmArray.prototype, Symbol.iterator, { \
+               value: realmValues, writable: true, enumerable: false, configurable: true \
+             }); \
+             var realmFunction = function RealmFunction() { \
+               var previousRealm = __quickjsRustDynamicFunctionRealm; \
+               __quickjsRustDynamicFunctionRealm = realmGlobal; \
+               globalThis.__quickjsRustDynamicFunctionRealm = realmGlobal; \
+               try { var fn = globalThis.Function.apply(null, arguments); } \
+               finally { \
+                 __quickjsRustDynamicFunctionRealm = previousRealm; \
+                 globalThis.__quickjsRustDynamicFunctionRealm = previousRealm; \
+               } \
+               Object.defineProperty(fn, '__quickjsRustRealmArrayProtoValues', { \
+                 value: realmValues \
+               }); \
+               return fn; \
+             }; \
+             realmGlobal.Object = realmObject; \
+             realmGlobal.Array = realmArray; \
+             realmGlobal.Function = realmFunction; \
+             realmGlobal.globalThis = realmGlobal; \
+             var mapped = realmGlobal.Function('return arguments[Symbol.iterator];'); \
+             var unmapped = realmGlobal.Function(\
+               '\"use strict\"; return arguments[Symbol.iterator];'\
+             ); \
+             var mappedValues = mapped(1); \
+             var unmappedValues = unmapped(1); \
+             var iterator = mappedValues.call({ 0: 7, length: 1 }); \
+             var initial = typeof realmGlobal.Array.prototype.values === 'function' \
+               && realmGlobal.Array.prototype.values === realmValues \
+               && realmGlobal.Array.prototype[Symbol.iterator] === realmValues \
+               && mappedValues === realmValues \
+               && unmappedValues === realmValues \
+               && mappedValues !== localValues \
+               && iterator.next().value === 7; \
+             realmArray.prototype.values = function replacement() {}; \
+             realmGlobal.Array = function ReplacementArray() {}; \
+             var later = realmGlobal.Function('return arguments[Symbol.iterator];'); \
+             initial && later(2) === realmValues;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn throw_type_error_poison_is_a_single_shared_intrinsic() {
     // %ThrowTypeError% is one object: the strict `arguments.callee` poison
     // getter is the same function as `Function.prototype.arguments`/`caller`'s.
