@@ -257,7 +257,7 @@ impl Compiler {
         }
         self.source
             .get((span.start + offset)..span.end)
-            .map(Rc::from)
+            .map(|source| self.canonical_function_source(source))
     }
 }
 

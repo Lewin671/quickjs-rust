@@ -65,7 +65,10 @@ impl fmt::Debug for Value {
         match self {
             Self::Number(value) => formatter.debug_tuple("Number").field(value).finish(),
             Self::BigInt(value) => formatter.debug_tuple("BigInt").field(value).finish(),
-            Self::String(value) => formatter.debug_tuple("String").field(value).finish(),
+            Self::String(value) => formatter
+                .debug_tuple("String")
+                .field(&string::string_to_utf8_lossy(value))
+                .finish(),
             Self::Boolean(value) => formatter.debug_tuple("Boolean").field(value).finish(),
             Self::Null => formatter.write_str("Null"),
             Self::Undefined => formatter.write_str("Undefined"),
@@ -103,6 +106,16 @@ impl Value {
     /// preserving real scalars that overlap the runtime's surrogate sentinels.
     pub fn string_from_utf8(value: &str) -> Self {
         Self::String(Rc::new(string::string_from_utf8_scalars(value)))
+    }
+
+    /// Returns a host UTF-8 view of a JavaScript String. Valid surrogate pairs
+    /// are recombined and isolated surrogates are replaced with U+FFFD.
+    #[must_use]
+    pub fn string_to_utf8_lossy(&self) -> Option<String> {
+        match self {
+            Self::String(value) => Some(string::string_to_utf8_lossy(value)),
+            _ => None,
+        }
     }
 
     pub(crate) fn bigint(value: BigInt) -> Self {

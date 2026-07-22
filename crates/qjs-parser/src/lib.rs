@@ -79,11 +79,12 @@ pub fn parse_dynamic_function_wtf16_script(source: &str) -> Result<Script, Parse
 }
 
 fn parse_script_with_options(source: &str, options: LexOptions) -> Result<Script, ParseError> {
+    let source_is_wtf16 = options.wtf16_source;
     let tokens = lex_with_options(source, options).map_err(|error| ParseError {
         message: error.message,
         span: error.span,
     })?;
-    Parser::new(tokens, source.to_owned()).parse_script()
+    Parser::new(tokens, source.to_owned(), source_is_wtf16).parse_script()
 }
 
 /// Additional parser context for direct eval code.
@@ -147,7 +148,7 @@ fn parse_direct_eval_script_with_options(
         message: error.message,
         span: error.span,
     })?;
-    let mut parser = Parser::new(tokens, source.to_owned());
+    let mut parser = Parser::new(tokens, source.to_owned(), wtf16_source);
     parser.strict = context.strict;
     parser.in_function = context.in_function;
     parser.in_method = context.in_method;
@@ -193,7 +194,7 @@ pub fn parse_module(source: &str) -> Result<Script, ParseError> {
         message: error.message,
         span: error.span,
     })?;
-    let mut parser = Parser::new(tokens, source.to_owned());
+    let mut parser = Parser::new(tokens, source.to_owned(), false);
     parser.goal = Goal::Module;
     parser.strict = true;
     // Under the Module goal the top level is an `[+Await]` context: `await expr`
@@ -216,6 +217,7 @@ pub(crate) enum Goal {
 
 struct Parser {
     source: String,
+    source_is_wtf16: bool,
     tokens: Vec<Token>,
     cursor: usize,
     /// The grammar goal symbol: script or module. Module source allows

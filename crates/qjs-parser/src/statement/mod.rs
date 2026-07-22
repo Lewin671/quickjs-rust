@@ -67,6 +67,7 @@ impl Parser {
         Ok(Script {
             body,
             source: self.source.as_str().into(),
+            source_is_wtf16: self.source_is_wtf16,
         })
     }
 

@@ -796,6 +796,29 @@ fn evaluates_function_declarations_and_calls() {
 }
 
 #[test]
+fn function_source_text_preserves_host_utf8_provenance() {
+    let sentinel_source = format!(
+        "function sentinel() {{ return '{}'; }} sentinel.toString();",
+        '\u{F0000}'
+    );
+    assert_eq!(
+        eval(&sentinel_source),
+        Ok(Value::string_from_utf8(
+            "function sentinel() { return '\u{F0000}'; }"
+        ))
+    );
+
+    let sentinel_method_source = format!(
+        "let object = {{ method() {{ return '{}'; }} }}; object.method.toString();",
+        '\u{F0000}'
+    );
+    assert_eq!(
+        eval(&sentinel_method_source),
+        Ok(Value::string_from_utf8("method() { return '\u{F0000}'; }"))
+    );
+}
+
+#[test]
 fn sloppy_function_this_keeps_internal_global_identity() {
     assert_eq!(
         eval(

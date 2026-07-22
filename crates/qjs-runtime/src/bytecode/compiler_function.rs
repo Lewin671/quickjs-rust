@@ -16,6 +16,7 @@ fn compile_with_captured_lexicals(
     with_base_depth: usize,
     captured_lexicals: &[(&str, &str, bool)],
     source: &std::rc::Rc<str>,
+    source_is_wtf16: bool,
 ) -> Result<Bytecode, RuntimeError> {
     let mut compiler = Compiler::function_compiler_with_base_with_depth(
         is_strict,
@@ -23,6 +24,7 @@ fn compile_with_captured_lexicals(
         with_base_depth,
     );
     compiler.source = source.clone();
+    compiler.source_is_wtf16 = source_is_wtf16;
     for (name, storage_name, mutable) in captured_lexicals {
         compiler.declare_captured_lexical_slot_with_storage_name(name, storage_name, *mutable);
     }
@@ -42,7 +44,17 @@ impl Compiler {
     /// is available (synthesized bodies) or the span is out of range, falling
     /// back to the `[native code]` form.
     pub(super) fn function_source_text(&self, span: qjs_ast::Span) -> Option<std::rc::Rc<str>> {
-        self.source.get(span.start..span.end).map(std::rc::Rc::from)
+        self.source
+            .get(span.start..span.end)
+            .map(|source| self.canonical_function_source(source))
+    }
+
+    pub(super) fn canonical_function_source(&self, source: &str) -> std::rc::Rc<str> {
+        if self.source_is_wtf16 {
+            std::rc::Rc::from(source)
+        } else {
+            std::rc::Rc::from(crate::string::string_from_utf8_scalars(source))
+        }
     }
 
     pub(super) fn compile_nested_function_body(
@@ -68,6 +80,7 @@ impl Compiler {
                 Compiler::function_compiler(is_strict, is_generator && is_async)
             };
             compiler.source = self.source.clone();
+            compiler.source_is_wtf16 = self.source_is_wtf16;
             compiler.compile_function(params, body)?
         };
         let mut lexical_captures = self.active_lexical_captures(&bytecode, local_names);
@@ -91,6 +104,7 @@ impl Compiler {
                 self.with_depth,
                 &captured_lexicals,
                 &self.source,
+                self.source_is_wtf16,
             )?;
             lexical_captures = self.active_lexical_captures(&bytecode, local_names);
         }

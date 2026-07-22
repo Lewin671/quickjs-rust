@@ -62,6 +62,19 @@
     eval("'" + lone + "'") === lone,
     eval("'" + lone + "'").length,
     Function("return '" + direct + "';")() === direct,
-    Function("return '" + direct + "';")().length
+    Function("return '" + direct + "';")().length,
+    eval("'\\" + direct + "'") === direct,
+    eval("'\\" + lone + "'") === lone,
+    Function("return '\\" + direct + "';")() === direct,
+    Function("return '\\" + lone + "';")() === lone,
+    eval("tag`\\" + direct + "`") === "2:3",
+    eval("tag`\\" + lone + "`") === "1:2",
+    new RegExp(direct + "+", "u").exec(direct + direct)[0].length,
+    new RegExp(direct + "{2}", "u").test(direct + direct),
+    /󰀀+/u.exec(direct + direct)[0].length,
+    /󰀀{2}/u.test(direct + direct),
+    /󰀀{2}/u.exec(direct + direct)[0].length,
+    /\u{F0000}+/u.exec(direct + direct)[0].length,
+    /[󰀀]+/u.exec(direct + direct)[0].length
   ].join(":");
 })()
