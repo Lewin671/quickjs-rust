@@ -184,8 +184,10 @@ to `benchmark-report.sh`: the formal validator intentionally requires all 25
 manifest cases, complete coverage, and verified three-role receipts.
 
 For a low-latency independent external gate, derive a temporary manifest that
-contains only JetStream `hash-map` and SunSpider `controlflow-recursive`, then
-run the existing hash-verified adapter:
+keeps JetStream `hash-map`, Kraken `json-parse-financial`, and SunSpider
+`controlflow-recursive`, then run the existing hash-verified adapter. All three
+suites remain present because the preview manifest validator deliberately
+rejects partial suite identities:
 
 ```sh
 QJS_FRAME_EXT_DIR="$(mktemp -d /tmp/qjs-frame-ext.XXXXXX)"
@@ -193,9 +195,11 @@ jq '
   .suites |= map(
     if .id == "jetstream3-js-subset" then
       .cases |= map(select(.id == "hash-map"))
+    elif .id == "kraken-1.1" then
+      .cases |= map(select(.id == "json-parse-financial"))
     elif .id == "sunspider-1.0" then
       .cases |= map(select(.id == "controlflow-recursive"))
-    else empty end
+    else . end
   )
 ' benchmarks/external-preview.json > "$QJS_FRAME_EXT_DIR/manifest.json"
 ./scripts/external-performance-preview.sh \
