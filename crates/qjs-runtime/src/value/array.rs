@@ -144,7 +144,7 @@ impl ArrayRef {
                 cold.properties
                     .borrow()
                     .keys()
-                    .filter_map(|key| key.parse::<usize>().ok())
+                    .filter_map(|key| array_index_property_key(key))
                     .filter(|index| *index < len),
             );
         }
@@ -431,7 +431,7 @@ impl ArrayRef {
             cold.properties
                 .borrow()
                 .keys()
-                .filter_map(|key| key.parse::<usize>().ok())
+                .filter_map(|key| array_index_property_key(key))
                 .filter(|index| *index >= length && *index <= MAX_ARRAY_INDEX)
                 .collect()
         });
@@ -459,11 +459,7 @@ impl ArrayRef {
     }
 
     pub(crate) fn define_property(&self, key: String, property: Property) {
-        if let Ok(index) = key.parse::<usize>() {
-            if index > MAX_ARRAY_INDEX {
-                self.0.cold().properties.borrow_mut().insert(key, property);
-                return;
-            }
+        if let Some(index) = array_index_property_key(&key) {
             if index >= self.0.length.get() {
                 if !self.0.length_writable.get() {
                     return;
@@ -567,7 +563,7 @@ impl ArrayRef {
                     cold.properties
                         .borrow()
                         .keys()
-                        .filter_map(|key| key.parse::<usize>().ok())
+                        .filter_map(|key| array_index_property_key(key))
                         .filter(|index| *index >= length && *index <= MAX_ARRAY_INDEX)
                         .collect()
                 });
@@ -718,6 +714,16 @@ impl ArrayRef {
         *self.0.cold().prototype.borrow_mut() = Some(prototype);
         Ok(())
     }
+}
+
+/// Parses an ECMAScript Array Index property key. Numeric-looking strings
+/// such as `"01"`, `"1e0"`, and `"4294967295"` are ordinary string keys:
+/// only the canonical decimal spelling of a uint32 below 2^32 - 1 is indexed.
+pub(crate) fn array_index_property_key(key: &str) -> Option<usize> {
+    key.parse::<u32>()
+        .ok()
+        .filter(|index| *index < u32::MAX && index.to_string() == key)
+        .map(|index| index as usize)
 }
 
 impl fmt::Debug for ArrayRef {

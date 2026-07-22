@@ -381,9 +381,7 @@ pub(crate) fn property_value_key_with_receiver(
             if key == "length" {
                 Ok(Value::Number(elements.len() as f64))
             } else {
-                let descriptor = key
-                    .parse::<usize>()
-                    .ok()
+                let descriptor = crate::array_index_property_key(key)
                     .and_then(|index| elements.get(index).map(Property::enumerable))
                     .or_else(|| elements.property(key));
                 if descriptor.is_some() {

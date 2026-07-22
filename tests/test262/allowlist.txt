@@ -3245,6 +3245,7 @@ cases/array-unshift-object-generic.js
 cases/array-unshift-prototype-setter-length.js
 cases/array-unshift-read-only-property.js
 cases/array-index-assignment-basic.js
+cases/array-index-noncanonical-property-key.js
 cases/array-index-assignment-function-effective-prototype.js
 cases/array-index-assignment-function-effective-typed-array.js
 cases/array-index-assignment-proxy-above-array-prototype.js

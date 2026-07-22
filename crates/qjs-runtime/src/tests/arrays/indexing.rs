@@ -136,6 +136,43 @@ fn dense_index_store_preserves_prototype_set_semantics() {
 }
 
 #[test]
+fn numeric_looking_noncanonical_keys_remain_ordinary_array_properties() {
+    assert_eq!(
+        eval(
+            "let array = []; \
+             let keys = ['01', '1e0', '+1', '-0', ' 1', '4294967295']; \
+             for (let key of keys) array[key] = key; \
+             let before = array.length === 0 && Object.keys(array).length === keys.length; \
+             for (let key of keys) { \
+                 before = before \
+                     && Object.prototype.hasOwnProperty.call(array, key) \
+                     && array[key] === key; \
+             } \
+             array['1'] = 'indexed'; \
+             let indexed = array.length === 2 && array[1] === 'indexed'; \
+             array.length = 0; \
+             let deleted = []; deleted[1] = 'indexed'; deleted['01'] = 'named'; \
+             delete deleted['01']; \
+             let reflected = []; reflected[1] = 'indexed'; reflected['01'] = 'named'; \
+             let reflectedNamed = Reflect.deleteProperty(reflected, '01'); \
+             let reflectedIndex = Reflect.deleteProperty(reflected, '1'); \
+             let defined = []; \
+             Object.defineProperty(defined, '01', { value: 5, configurable: true }); \
+             before && indexed && array[1] === undefined \
+                 && Object.keys(array).length === keys.length \
+                 && array['01'] === '01' && array['4294967295'] === '4294967295' \
+                 && deleted.length === 2 && deleted[1] === 'indexed' \
+                 && !Object.prototype.hasOwnProperty.call(deleted, '01') \
+                 && reflectedNamed && reflectedIndex && reflected.length === 2 \
+                 && !Object.prototype.hasOwnProperty.call(reflected, '01') \
+                 && !Object.prototype.hasOwnProperty.call(reflected, '1') \
+                 && defined.length === 0 && defined['01'] === 5;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn dense_index_store_does_not_treat_holes_as_own_elements() {
     assert_eq!(
         eval(

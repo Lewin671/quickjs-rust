@@ -44,9 +44,13 @@ pub(crate) fn native_reflect_delete_property(
         },
         Value::Array(elements) => match key {
             crate::PropertyKey::String(key) => {
-                key != "length"
-                    && crate::array_own_property_descriptor(&elements, &key)
-                        .is_none_or(|property| property.configurable)
+                if key == "length" {
+                    false
+                } else if let Some(index) = crate::array_index_property_key(&key) {
+                    elements.delete_index(index)
+                } else {
+                    elements.delete_property(&key)
+                }
             }
             crate::PropertyKey::Symbol(symbol) => elements.delete_own_symbol_property(&symbol),
         },

@@ -954,10 +954,13 @@ fn ordinary_delete_property(target: Value, key: &PropertyKey) -> bool {
         (Value::Object(object), PropertyKey::Symbol(symbol)) => {
             object.delete_own_symbol_property(symbol)
         }
-        (Value::Array(array), PropertyKey::String(key)) => match key.parse::<usize>() {
-            Ok(index) => array.delete_index(index),
-            Err(_) => key != "length" && array.delete_property(key),
-        },
+        (Value::Array(array), PropertyKey::String(key)) => {
+            if let Some(index) = crate::array_index_property_key(key) {
+                array.delete_index(index)
+            } else {
+                key != "length" && array.delete_property(key)
+            }
+        }
         (Value::Array(array), PropertyKey::Symbol(symbol)) => {
             array.delete_own_symbol_property(symbol)
         }

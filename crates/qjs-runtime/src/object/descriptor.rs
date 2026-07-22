@@ -519,9 +519,7 @@ pub(crate) fn array_length_from_descriptor_value(
 }
 
 fn array_index_key(key: &str) -> Option<usize> {
-    key.parse::<usize>()
-        .ok()
-        .filter(|index| *index < u32::MAX as usize)
+    crate::array_index_property_key(key)
 }
 
 fn define_symbol_property_descriptor_on_value(

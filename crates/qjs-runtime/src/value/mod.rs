@@ -10,6 +10,7 @@ mod property;
 mod set;
 
 pub use array::ArrayRef;
+pub(crate) use array::array_index_property_key;
 pub use map::MapRef;
 pub(crate) use object::ObjectLiteralShape;
 pub use object::ObjectRef;

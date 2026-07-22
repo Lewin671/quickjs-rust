@@ -80,7 +80,10 @@ pub(crate) use property::{
 };
 pub(crate) use string::string_object_value;
 pub use value::Value;
-use value::{ArrayRef, MapRef, ModuleNamespaceBindings, ObjectRef, Property, Prototype, SetRef};
+use value::{
+    ArrayRef, MapRef, ModuleNamespaceBindings, ObjectRef, Property, Prototype, SetRef,
+    array_index_property_key,
+};
 
 pub use bytecode::{
     Bytecode, CompileError, EvalOutcome, compile_script, compile_script_classified, eval_bytecode,

@@ -433,9 +433,7 @@ impl Vm<'_> {
                 // Mirror the order in `property_value_key`: a present dense
                 // element wins, then an own (possibly accessor) descriptor, then
                 // the prototype chain. `data_property_value` bails on accessors.
-                let descriptor = key
-                    .parse::<usize>()
-                    .ok()
+                let descriptor = crate::array_index_property_key(key)
                     .and_then(|index| elements.get(index).map(Property::enumerable))
                     .or_else(|| elements.property(key));
                 if descriptor.is_some() {
@@ -1300,10 +1298,13 @@ fn delete_property(object: Value, key: &str, env: &mut CallEnv) -> Result<Value,
         )?)),
         Value::Map(map) => Ok(Value::Boolean(map.object().delete_own_property(key))),
         Value::Set(set) => Ok(Value::Boolean(set.object().delete_own_property(key))),
-        Value::Array(elements) => Ok(Value::Boolean(match key.parse::<usize>() {
-            Ok(index) => elements.delete_index(index),
-            Err(_) => elements.delete_property(key),
-        })),
+        Value::Array(elements) => Ok(Value::Boolean(
+            if let Some(index) = crate::array_index_property_key(key) {
+                elements.delete_index(index)
+            } else {
+                elements.delete_property(key)
+            },
+        )),
         Value::Function(function) => {
             Ok(Value::Boolean(function_delete_own_property(&function, key)))
         }

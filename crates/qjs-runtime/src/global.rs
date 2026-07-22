@@ -640,10 +640,13 @@ fn is_string_key_configurable(
 fn delete_string_key(target: &Value, key: &str) -> bool {
     match target {
         Value::Object(object) => object.delete_own_property(key),
-        Value::Array(elements) => match key.parse::<usize>() {
-            Ok(index) => elements.delete_index(index),
-            Err(_) => elements.delete_property(key),
-        },
+        Value::Array(elements) => {
+            if let Some(index) = crate::array_index_property_key(key) {
+                elements.delete_index(index)
+            } else {
+                elements.delete_property(key)
+            }
+        }
         Value::Function(function) => function_delete_own_property(function, key),
         _ => false,
     }

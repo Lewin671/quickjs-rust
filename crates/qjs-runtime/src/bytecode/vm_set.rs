@@ -163,10 +163,11 @@ pub(crate) fn set_property(
                         {
                             return Ok(false);
                         }
-                        match key.parse::<usize>() {
-                            Ok(index) => elements.set(index, value),
-                            Err(_) => elements.set_property(key, value),
-                        };
+                        if let Some(index) = crate::array_index_property_key(&key) {
+                            elements.set(index, value);
+                        } else {
+                            elements.set_property(key, value);
+                        }
                         Ok(true)
                     }
                 }
