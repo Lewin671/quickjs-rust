@@ -6110,6 +6110,62 @@ already used for cases whose exact checksum bounds cap safe iterations. This
 is a capacity repair only and is not counted as a runtime performance
 improvement.
 
+Follow-up trusted-main Performance Preview `29945099786` completed the repaired
+portfolio with 225/225 eligible formal measurements, all 75 linearity checks,
+and 3/3 valid blocks. Candidate and base runtime binaries were byte-identical,
+and candidate/base was 0.999766x with interval [0.993341x, 1.004445x], which
+confirms that this commit changed measurement capacity rather than runtime
+performance. The current hosted candidate/QuickJS-NG baseline is 0.212540x
+overall, but the strict every-case target remains open: `dynamic_method_call`
+is 7.3041x, `array_write` 2.1976x, `array_allocation` 1.3244x,
+`object_allocation` 0.9337x, `closure_allocation_call` 0.9094x, and
+`local_read` 0.5923x QuickJS-NG.
+
+The mandatory external preview remains the dominant structural gap. Its
+comparable candidate/QuickJS-NG diagnostics were 8.022x for the five-case
+JetStream 3 JavaScript subset, 4.834x for seven Kraken cases, and 7.218x for
+all 26 SunSpider cases. Broad raw/report SHA-256 values are
+`3de273d065c56a53fc29126436aa30363fa59330af67345ea891e81031f25acc`
+and `275054d48db7c3d167b9ccb126ce92bd16a15e5698ca8c6a2bdf552641fb11cc`;
+external raw/report values are
+`8aacd413c578dfa78887dfcdc83466de4c77665135a92df7d48238d0847dcd38`
+and `09c7f079b8c64e1f3da73f7ee645f546ce9889254b45d1bc57612c382de013d1`.
+The artifact digest is
+`77abb9859a48653796b89ac5e8f370a5b6ad00944473590d62bb88355d8c77f8`.
+
+### 2026-07-22 NewClass-only cold opcode payload accepted locally
+
+This runtime unit moves `NewClass`'s immutable, variable-sized definition
+behind `Rc<ClassDefinition>` while leaving `NewFunction` inline. The measured
+64-bit `Op` layout falls from 216 to 96 bytes. Compiler emission, VM execution,
+binding-write caches, closure-name scans, deferred computed keys, private
+elements, and global-name traversal retain the same inputs and order. The
+`NewClass` variant remains in its original enum position, and the ownership
+graph adds no back edge from child bytecode to its parent definition.
+
+The complete 25-case, two-role, three-block screen retained 150/150 eligible
+formal measurements and all 50 role/case linearity medians. Candidate/base was
+0.996210x overall with a 95% bootstrap interval of
+[0.967402x, 1.004527x]. Its raw SHA-256 is
+`a6560e735a57a7c2d9640f738fcb1fcf148dbbb6740469d6350cbcacd8d1853f`.
+A separate eight-case, seven-block control run retained 112/112 eligible
+measurements and all 16 linearity medians; its aggregate candidate/base result
+was 0.988805x with interval [0.962167x, 1.023236x]. Its raw SHA-256 is
+`96acb4992520343202b5d9ff5db7279957e4f24eb53596b18c3c91dadb03d68b`.
+Both intervals cross 1.0, so these runs establish a neutral local regression
+screen, not a throughput win.
+
+This is narrower than T011's rejected experiment, which boxed both
+`NewFunction` and `NewClass`, reduced `Op` to 80 bytes, but measured 1.0392x
+overall and 1.1796x for `many_locals_call`. Here `many_locals_call` measured
+1.002954x with interval [0.982683x, 1.051018x], so that regression did not
+recur. The branch passed all 1,534 runtime tests and `git diff --check`.
+
+The raw runs are receipt-less two-role diagnostics and correctly remain
+`claim_eligible: false`. Hosted broad, external-suite, and exact-main
+correctness evidence is still pending; this unit does not close any strict
+T018 target or establish an external win.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an

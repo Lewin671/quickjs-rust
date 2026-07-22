@@ -10,15 +10,15 @@ pub(super) fn collect_nested_global_names_from_ops(code: &[Op], names: &mut BTre
                     names.insert(name);
                 }
             }
-            Op::NewClass {
-                constructor,
-                elements,
-                ..
-            } => {
-                for name in constructor.bytecode.closure_referenced_global_names() {
+            Op::NewClass { definition } => {
+                for name in definition
+                    .constructor
+                    .bytecode
+                    .closure_referenced_global_names()
+                {
                     names.insert(name);
                 }
-                for element in elements {
+                for element in &definition.elements {
                     collect_class_element_global_names(element, names);
                 }
             }
@@ -38,15 +38,15 @@ pub(super) fn collect_nested_written_binding_names_from_ops(
                     names.insert(name);
                 }
             }
-            Op::NewClass {
-                constructor,
-                elements,
-                ..
-            } => {
-                for name in constructor.bytecode.closure_written_binding_names() {
+            Op::NewClass { definition } => {
+                for name in definition
+                    .constructor
+                    .bytecode
+                    .closure_written_binding_names()
+                {
                     names.insert(name);
                 }
-                for element in elements {
+                for element in &definition.elements {
                     collect_class_element_written_names(element, names);
                 }
             }
