@@ -764,6 +764,8 @@ pub struct Bytecode {
     pub(super) code: Vec<Op>,
     pub(super) numeric_leaf_plan: OnceCell<Option<super::vm_numeric_leaf::NumericLeafPlan>>,
     pub(super) numeric_loop_plans: OnceCell<Vec<super::vm_numeric_loop::NumericLoopPlan>>,
+    pub(super) selected_method_loop_plans:
+        OnceCell<Vec<super::vm_selected_method_loop::SelectedMethodLoopPlan>>,
     pub(super) control_loop_plans: OnceCell<Vec<super::vm_control_loop::ControlLoopPlan>>,
     pub(super) numeric_mutation_loop_plans:
         OnceCell<Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>>,
@@ -871,6 +873,7 @@ impl Bytecode {
             code,
             numeric_leaf_plan: OnceCell::new(),
             numeric_loop_plans: OnceCell::new(),
+            selected_method_loop_plans: OnceCell::new(),
             control_loop_plans: OnceCell::new(),
             numeric_mutation_loop_plans: OnceCell::new(),
             template_objects: RefCell::new(HashMap::new()),

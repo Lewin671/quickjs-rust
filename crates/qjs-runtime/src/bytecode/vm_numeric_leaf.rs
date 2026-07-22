@@ -583,6 +583,12 @@ impl NumericLoopCall {
         }
     }
 
+    /// Whether repeated evaluation cannot stage a captured write that would
+    /// need branch-sensitive commit ordering in a surrounding loop trace.
+    pub(super) fn is_read_only(&self) -> bool {
+        !matches!(self, Self::UpdateCapturedConstReturn { .. })
+    }
+
     // This executes once per admitted loop iteration. Small unrelated layout
     // changes can otherwise make LLVM outline it, adding a call to the hottest
     // part of the numeric-loop path.

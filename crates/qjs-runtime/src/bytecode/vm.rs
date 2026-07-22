@@ -1101,7 +1101,14 @@ impl<'a> Vm<'a> {
                             self, *target, backedge,
                         ) && !super::vm_control_loop::try_run_control_loop(
                             self, *target, backedge,
-                        ))
+                        ) && (self
+                            .bytecode
+                            .selected_method_loop_plans
+                            .get()
+                            .is_some_and(Vec::is_empty)
+                            || !super::vm_selected_method_loop::try_run_selected_method_loop(
+                                self, *target, backedge,
+                            )))
                     {
                         self.ip = *target;
                     }
