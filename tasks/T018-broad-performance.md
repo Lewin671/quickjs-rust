@@ -6274,6 +6274,28 @@ The 250 ms window still requires at least 25x startup amortization and matches
 the existing `top_level_function_call` capacity contract. This is a benchmark
 capacity repair only and is not counted as a runtime performance improvement.
 
+### 2026-07-22 array-write measurement-capacity repair
+
+The frozen dense-mutation seven-block screen made the checked-in
+`array_write` contract too small. The optimized candidate reached the
+20,000,000-iteration ceiling in about 246--250 ms, below the 500 ms formal
+window, so all seven candidate measurements were correctly classified as
+`timer_limited`. The five control cases remained eligible, and all 18
+role/case N/2N groups across the three roles passed, isolating the problem to
+this case's capacity.
+
+The measurement ceiling for `array_write` is therefore raised to 50,000,000,
+and its capacity-bound formal window becomes 250 ms with a 4% startup ceiling.
+The workload, operation count, checksum model, warmup, timeout, and analysis
+policy remain unchanged. Its maximum triangular checksum is
+1,250,000,025,000,000, below JavaScript's maximum safe integer. A hash-bound
+derived-manifest run with the same three binaries retained all 21 formal
+measurements and all 24 linearity samples; its raw and manifest SHA-256 values
+are `6d349a01ccc95320d4a4c5c9f71465238b753cfc6f654f4db5081159dbd21836`
+and `99ed0b1b6c58323bb9e595d4eb8077260d85241f4a7c87ea728f32cfa4648dbb`.
+This is a benchmark capacity repair only and is not counted as a runtime
+performance improvement.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
