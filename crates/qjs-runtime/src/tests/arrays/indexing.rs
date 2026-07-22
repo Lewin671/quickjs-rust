@@ -373,6 +373,22 @@ fn indexed_store_walks_native_error_constructor_parent() {
     );
 }
 
+#[test]
+fn native_error_constructor_explicit_array_prototype_intercepts_set() {
+    assert_eq!(
+        eval(
+            "let hit = 0, prototype = []; \
+             Object.defineProperty(prototype, 'x', { \
+                 set: function(value) { hit = value; }, configurable: true \
+             }); \
+             Reflect.setPrototypeOf(TypeError, prototype); \
+             TypeError.x = 7; \
+             hit + ':' + Object.prototype.hasOwnProperty.call(TypeError, 'x');"
+        ),
+        Ok(Value::String("7:false".to_owned().into()))
+    );
+}
+
 /// Computed compound assignments and updates cache a property key after
 /// `ToPropertyKey`. Canonical string indices may still use dense storage, but
 /// inherited setters and non-index strings must retain ordinary `[[Set]]`

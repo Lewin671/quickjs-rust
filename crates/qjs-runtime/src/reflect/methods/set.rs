@@ -76,9 +76,11 @@ pub(crate) fn ordinary_set(
     // the [[Prototype]] slot so a Proxy in the chain dispatches its `set` trap
     // with the original receiver, and a function prototype is walked too.
     // Native Error constructors expose the realm's Error constructor as their
-    // effective parent even though it is not stored in the ordinary function
-    // prototype slot; Get and GetPrototypeOf use the same special link.
+    // effective parent only while no explicit function [[Prototype]] override
+    // is installed. A user-supplied array, Proxy, or other live prototype must
+    // retain its own recursive [[Set]] behavior.
     if let Value::Function(function) = &target
+        && function.internal_prototype_slot().is_none()
         && let Some(parent) = crate::error::native_error_constructor_parent(function, env)
     {
         return ordinary_set(parent, key, value, receiver, env);
