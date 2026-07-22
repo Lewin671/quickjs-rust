@@ -372,6 +372,20 @@ fn iterator_from_accepts_direct_iterators_and_symbol_fallback() {
 }
 
 #[test]
+fn iterator_from_recognizes_iterator_through_an_array_prototype() {
+    assert_eq!(
+        eval(
+            "let bridge = []; \
+             Object.setPrototypeOf(bridge, Iterator.prototype); \
+             let iterator = Object.create(bridge); \
+             iterator.next = function() { return { done: true }; }; \
+             Iterator.from(iterator) === iterator;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn iterator_from_gets_direct_next_once() {
     assert_eq!(
         string(

@@ -1409,15 +1409,6 @@ impl Function {
             .with_cold(|cold| cold.map_or_else(Vec::new, |cold| cold.instance_elements.clone()))
     }
 
-    /// The explicit [[Prototype]] override as an object slot. A function-valued
-    /// override collapses to `Some(None)` here; callers that must observe the
-    /// function use [`Function::internal_prototype_slot`].
-    pub(crate) fn internal_prototype_override(&self) -> Option<Option<ObjectRef>> {
-        self.auxiliary
-            .with_cold(|cold| cold.and_then(|cold| cold.internal_prototype.clone()))
-            .map(|slot| slot.and_then(|prototype| prototype.as_object()))
-    }
-
     /// The raw [[Prototype]] override slot, preserving a function prototype.
     pub(crate) fn internal_prototype_slot(&self) -> Option<Option<Prototype>> {
         self.auxiliary

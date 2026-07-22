@@ -302,15 +302,6 @@ impl Prototype {
         }
     }
 
-    /// As an `ObjectRef`, if this prototype is an object (used where callers
-    /// still expect the legacy object-only prototype).
-    pub(crate) fn as_object(&self) -> Option<ObjectRef> {
-        match self {
-            Self::Object(object) => Some(object.clone()),
-            Self::Array(_) | Self::Function(_) | Self::Proxy(_) => None,
-        }
-    }
-
     /// The prototype as a JavaScript value, for `getPrototypeOf` and friends.
     pub(crate) fn to_value(&self) -> Value {
         match self {
@@ -1735,16 +1726,6 @@ impl ObjectRef {
                 .map(|(symbol, _)| symbol.clone())
                 .collect()
         })
-    }
-
-    /// The [[Prototype]] as an object, or `None` if absent or a function. Use
-    /// [`ObjectRef::prototype_slot`] when the function case matters.
-    pub(crate) fn prototype(&self) -> Option<ObjectRef> {
-        self.0
-            .prototype
-            .borrow()
-            .as_ref()
-            .and_then(Prototype::as_object)
     }
 
     pub(crate) fn set_prototype(&self, prototype: Option<ObjectRef>) -> Result<(), ()> {

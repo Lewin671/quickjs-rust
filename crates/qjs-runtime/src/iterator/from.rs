@@ -109,17 +109,31 @@ fn iterator_inherits_iterator_prototype(iterator: &Value, env: &CallEnv) -> bool
     let Some(target) = super::iterator_prototype(env) else {
         return false;
     };
-    let mut current = match iterator {
-        Value::Object(object) => object.prototype(),
-        _ => crate::value_prototype(iterator.clone(), env),
-    };
-    while let Some(prototype) = current {
-        if prototype.ptr_eq(&target) {
-            return true;
-        }
-        current = prototype.prototype();
+    let mut current = crate::value_prototype_slot(iterator.clone(), env);
+    loop {
+        current = match current {
+            Some(crate::Prototype::Object(object)) => {
+                if object.ptr_eq(&target) {
+                    return true;
+                }
+                object.prototype_slot()
+            }
+            Some(crate::Prototype::Array(array)) => array.effective_prototype_slot(),
+            Some(crate::Prototype::Function(function)) => {
+                match function.internal_prototype_slot() {
+                    Some(prototype) => prototype,
+                    None => crate::function_intrinsic_prototype_slot(env),
+                }
+            }
+            // OrdinaryHasInstance obtains the prototype of a Proxy target in
+            // this runtime's no-trap prototype helper. Preserve that behavior
+            // while retaining every first-class prototype variant.
+            Some(crate::Prototype::Proxy(proxy)) => {
+                crate::value_prototype_slot(proxy.target(), env)
+            }
+            None => return false,
+        };
     }
-    false
 }
 
 /// `%WrapForValidIteratorPrototype%`, installed eagerly under

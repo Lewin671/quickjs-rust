@@ -249,6 +249,49 @@ fn array_prototype_nodes_remain_live_after_installation() {
     );
 }
 
+#[test]
+fn live_array_prototype_preserves_proxy_internal_methods() {
+    assert_eq!(
+        eval(
+            "let original = Object.getPrototypeOf(Array.prototype), log = '', child; \
+             let symbol = Symbol('live'); \
+             let proxy = new Proxy(original, { \
+                 get: function(target, key, receiver) { \
+                     let name = key === symbol ? 'symbol' : key; \
+                     log += 'get:' + name + ':' + (receiver === child) + ';'; \
+                     if (key === 'answer') return 42; \
+                     if (key === symbol) return 41; \
+                     return Reflect.get(target, key, receiver); \
+                 }, \
+                 has: function(target, key) { \
+                     let name = key === symbol ? 'symbol' : key; \
+                     log += 'has:' + name + ';'; \
+                     return key === 'answer' || key === symbol || Reflect.has(target, key); \
+                 }, \
+                 set: function(_target, key, value, receiver) { \
+                     let name = key === symbol ? 'symbol' : key; \
+                     log += 'set:' + name + ':' + value + ':' + (receiver === child) + ';'; \
+                     return true; \
+                 } \
+             }); \
+             Object.setPrototypeOf(Array.prototype, proxy); \
+             let bridge = []; child = Object.create(bridge); \
+             let result = child.answer + ':' + child[symbol] + ':' \
+                 + ('answer' in child) + ':' + (symbol in child); \
+             child[0] = 7; child[symbol] = 9; \
+             Object.setPrototypeOf(Array.prototype, original); \
+             result + ':' + log + ':' \
+                 + Object.prototype.hasOwnProperty.call(child, '0') + ':' \
+                 + Object.prototype.hasOwnProperty.call(child, symbol);"
+        ),
+        Ok(Value::String(
+            "42:41:true:true:get:answer:true;get:symbol:true;has:answer;has:symbol;set:0:7:true;set:symbol:9:true;:false:false"
+                .to_owned()
+                .into()
+        ))
+    );
+}
+
 /// Computed compound assignments and updates cache a property key after
 /// `ToPropertyKey`. Canonical string indices may still use dense storage, but
 /// inherited setters and non-index strings must retain ordinary `[[Set]]`

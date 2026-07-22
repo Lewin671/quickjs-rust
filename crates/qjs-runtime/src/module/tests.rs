@@ -297,6 +297,40 @@ fn default_import_tracks_named_default_function_binding_updates() {
 }
 
 #[test]
+fn namespace_exports_stay_observable_through_live_array_prototypes() {
+    let namespace = run(
+        "import * as ns from \"dep\";\n\
+         const original = Object.getPrototypeOf(Array.prototype);\n\
+         Object.setPrototypeOf(Array.prototype, ns);\n\
+         const bridge = [];\n\
+         const child = Object.create(bridge);\n\
+         const directBefore = bridge.live;\n\
+         const before = child.live;\n\
+         ns.advance();\n\
+         const directAfter = bridge.live;\n\
+         const after = child.live;\n\
+         const array = [];\n\
+         array[0] = 9;\n\
+         const own = Object.prototype.hasOwnProperty.call(array, '0');\n\
+         Object.setPrototypeOf(Array.prototype, original);\n\
+         export const result = directBefore + ':' + before + ':' + directAfter + ':' + after \
+             + ':' + array[0] + ':' + own;",
+        &[(
+            "dep",
+            "const zero = 1;\n\
+             export { zero as \"0\" };\n\
+             export let live = 1;\n\
+             export function advance() { live = 2; }",
+        )],
+    )
+    .expect("module graph evaluates");
+    assert_eq!(
+        export(&namespace, "result"),
+        Value::String("1:1:2:2:9:true".to_owned().into())
+    );
+}
+
+#[test]
 fn typeof_imported_const_observes_live_tdz() {
     let source = "let caught = false;\n\
         try { typeof y; } catch (error) { caught = error instanceof ReferenceError; }\n\

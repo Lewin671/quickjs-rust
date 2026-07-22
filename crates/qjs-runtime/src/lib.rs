@@ -76,7 +76,7 @@ pub(crate) use property::{
     function_prototype_chain_descriptor, has_property, has_property_key,
     inherited_primitive_prototype_descriptor, native_construct_prototype_slot, object_prototype,
     property_value, property_value_key, property_value_key_with_receiver, string_prototype,
-    to_property_key_value, value_prototype, value_prototype_slot,
+    to_property_key_value, value_prototype_slot,
 };
 pub(crate) use string::string_object_value;
 pub use value::Value;

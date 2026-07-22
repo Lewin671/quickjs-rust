@@ -646,12 +646,6 @@ impl ArrayRef {
         !self.0.extensible.get() && self.0.sealed.get() && self.0.frozen.get()
     }
 
-    pub(crate) fn prototype_override(&self) -> Option<Option<ObjectRef>> {
-        self.0
-            .prototype_override()
-            .map(|prototype| prototype.and_then(|prototype| prototype.as_object()))
-    }
-
     pub(crate) fn prototype_slot_override(&self) -> Option<Option<Prototype>> {
         self.0.prototype_override()
     }

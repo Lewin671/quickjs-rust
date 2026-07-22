@@ -159,13 +159,6 @@ pub(crate) fn string_prototype(env: &CallEnv) -> Option<ObjectRef> {
     function_prototype(&string_function)
 }
 
-pub(crate) fn function_intrinsic_prototype(env: &CallEnv) -> Option<ObjectRef> {
-    match function_intrinsic_prototype_slot(env) {
-        Some(crate::Prototype::Object(prototype)) => Some(prototype),
-        _ => None,
-    }
-}
-
 /// The intrinsic `%Function%` constructor as a prototype slot. The
 /// `%GeneratorFunction%`, `%AsyncFunction%`, and `%AsyncGeneratorFunction%`
 /// constructors are subclasses of `Function`, so their `[[Prototype]]` is the
@@ -220,23 +213,6 @@ pub(crate) fn function_prototype(function: &Function) -> Option<ObjectRef> {
 /// descriptors.
 pub(crate) fn array_as_prototype_slot(array: &ArrayRef, env: &CallEnv) -> crate::Prototype {
     crate::Prototype::array(array.clone(), array_prototype(env))
-}
-
-pub(crate) fn value_prototype(value: Value, env: &CallEnv) -> Option<ObjectRef> {
-    match value {
-        Value::Object(object) => object.prototype(),
-        Value::Map(map) => map.object().prototype(),
-        Value::Set(set) => set.object().prototype(),
-        Value::Array(elements) => elements
-            .prototype_override()
-            .unwrap_or_else(|| array_prototype(env)),
-        Value::Function(function) => function
-            .internal_prototype_override()
-            .unwrap_or_else(|| function_intrinsic_prototype(env)),
-        Value::Proxy(proxy) => value_prototype(proxy.target(), env),
-        Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_) => None,
-        Value::Null | Value::Undefined => None,
-    }
 }
 
 /// The immediate [[Prototype]] slot of `value`, preserving a function
