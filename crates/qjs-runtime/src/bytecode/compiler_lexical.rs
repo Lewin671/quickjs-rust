@@ -32,6 +32,7 @@ impl Compiler {
         let slot = self.locals.len();
         self.locals.push(Local {
             name: storage_name.to_owned(),
+            compiler_temporary: false,
             hoisted: false,
             hoisted_function: false,
             parameter: false,
@@ -62,6 +63,7 @@ impl Compiler {
         let slot = self.locals.len();
         self.locals.push(Local {
             name: storage_name.to_owned(),
+            compiler_temporary: false,
             hoisted: false,
             hoisted_function: false,
             parameter: false,
@@ -120,6 +122,7 @@ impl Compiler {
         let slot = self.locals.len();
         self.locals.push(Local {
             name: name.to_owned(),
+            compiler_temporary: false,
             hoisted: false,
             hoisted_function: false,
             parameter: false,
@@ -609,6 +612,42 @@ mod tests {
         assert_eq!(
             upvalue_resolver::resolve_upvalues(outer).cell_slots,
             vec![var_slot]
+        );
+    }
+
+    #[test]
+    fn compiler_temporaries_never_enter_lexical_capture_plans() {
+        let script = qjs_parser::parse_script(
+            "var total = 0; for (var index = 0; index < 2; index++) { (function read() { return index; })(); total += index; }",
+        )
+        .expect("source should parse");
+        let bytecode =
+            super::super::compiler::compile_script(&script).expect("source should compile");
+        assert!(
+            bytecode.locals.iter().any(|local| local.compiler_temporary),
+            "loop compilation should allocate scratch locals"
+        );
+        assert!(
+            bytecode.local_names().all(|name| !name.starts_with("\0\0")),
+            "semantic local-name enumeration must hide scratch locals"
+        );
+        for op in &bytecode.code {
+            if let Op::NewFunction {
+                lexical_captures, ..
+            } = op
+            {
+                assert!(
+                    lexical_captures
+                        .iter()
+                        .all(|(_, slot)| { !bytecode.local_is_compiler_temporary(*slot) })
+                );
+            }
+        }
+        assert!(
+            upvalue_resolver::resolve_upvalues(&bytecode)
+                .cell_slots
+                .iter()
+                .all(|slot| !bytecode.local_is_compiler_temporary(*slot))
         );
     }
 

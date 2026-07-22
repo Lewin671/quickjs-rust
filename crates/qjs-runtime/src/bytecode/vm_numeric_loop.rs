@@ -6,7 +6,17 @@ use super::{
     ir::{Bytecode, NamedPropertyCache, Op, decode_index_receiver},
     vm::Vm,
     vm_numeric_leaf::NumericLoopCall,
+    vm_props::RealmGlobalLoopWrite,
 };
+
+#[cfg(test)]
+use std::cell::Cell;
+
+#[cfg(test)]
+thread_local! {
+    static NUMERIC_LOOP_ENTRY_HITS: Cell<usize> = const { Cell::new(0) };
+    static REALM_GLOBAL_LOOP_BATCH_COMMITS: Cell<usize> = const { Cell::new(0) };
+}
 
 #[derive(Clone, Copy, Debug)]
 enum NumericLoopArgument {
@@ -53,6 +63,7 @@ enum NumericLoopTerm {
     },
     NamedProperty {
         receiver_slot: usize,
+        key: std::rc::Rc<str>,
         cache: NamedPropertyCache,
     },
     ComputedProperty {
@@ -104,17 +115,76 @@ enum PreparedNumericLoopTerm {
     },
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum NumericLoopWrite {
+    Local { slot: usize },
+    RealmGlobal { slot: usize, name: String },
+}
+
+impl NumericLoopWrite {
+    fn compile(op: &Op, expected_slot: usize) -> Option<Self> {
+        match op {
+            Op::AssignLocal(slot) if *slot == expected_slot => Some(Self::Local { slot: *slot }),
+            Op::StoreGlobalSloppy { slot, name } if *slot == expected_slot => {
+                Some(Self::RealmGlobal {
+                    slot: *slot,
+                    name: name.clone(),
+                })
+            }
+            _ => None,
+        }
+    }
+
+    fn prepare(&self, vm: &Vm<'_>) -> Option<LoopWriteTarget> {
+        match self {
+            Self::Local { slot } if vm.slot_is_authoritative(*slot) => {
+                Some(LoopWriteTarget::Local { slot: *slot })
+            }
+            Self::RealmGlobal { slot, name } => vm
+                .prepare_realm_global_loop_write(*slot, name)
+                .map(LoopWriteTarget::RealmGlobal),
+            Self::Local { .. } => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+enum LoopWriteTarget {
+    Local { slot: usize },
+    RealmGlobal(RealmGlobalLoopWrite),
+}
+
+impl LoopWriteTarget {
+    fn realm_cell(&self) -> Option<crate::function::Upvalue> {
+        match self {
+            Self::Local { .. } => None,
+            Self::RealmGlobal(target) => Some(target.cell()),
+        }
+    }
+
+    fn number(&self, vm: &Vm<'_>) -> Option<f64> {
+        let value = match self {
+            Self::Local { slot } => vm.locals.get(*slot)?.as_ref()?.clone(),
+            Self::RealmGlobal(target) => target.cell().get(),
+        };
+        match value {
+            Value::Number(value) => Some(value),
+            _ => None,
+        }
+    }
+}
+
 /// Prevalidated counted loop whose body only adds stable numeric reads.
 #[derive(Clone, Debug)]
 pub(super) struct NumericLoopPlan {
     header: usize,
     backedge: usize,
     exit: usize,
-    counter_slot: usize,
+    counter_write: NumericLoopWrite,
     limit_slot: usize,
-    accumulator_slot: usize,
+    accumulator_write: NumericLoopWrite,
     block_result_slot: usize,
-    loop_result_slot: usize,
+    loop_result_slot: Option<usize>,
     terms: Vec<NumericLoopTerm>,
 }
 
@@ -145,16 +215,12 @@ impl NumericLoopPlan {
             Op::Binary(BinaryOp::Lt),
             Op::JumpIfFalse(exit),
             Op::Pop,
-            Op::LoadConst(_),
-            Op::StoreLocal(block_result_slot),
         ) = (
             code.get(header)?,
             code.get(header + 1)?,
             code.get(header + 2)?,
             code.get(header + 3)?,
             code.get(header + 4)?,
-            code.get(header + 5)?,
-            code.get(header + 6)?,
         )
         else {
             return None;
@@ -163,42 +229,91 @@ impl NumericLoopPlan {
             return None;
         }
 
-        let tail = backedge.checked_sub(8)?;
-        let (
-            Op::LoadLocal(tail_block_result_slot),
-            Op::StoreLocal(loop_result_slot),
-            Op::LoadLocal(tail_counter_slot),
-            Op::ToNumeric,
-            Op::Dup,
-            Op::Update(UpdateOp::Increment),
-            Op::AssignLocal(assigned_counter_slot),
-            Op::Pop,
-            Op::Jump(tail_header),
-        ) = (
-            code.get(tail)?,
-            code.get(tail + 1)?,
-            code.get(tail + 2)?,
-            code.get(tail + 3)?,
-            code.get(tail + 4)?,
-            code.get(tail + 5)?,
-            code.get(tail + 6)?,
-            code.get(tail + 7)?,
-            code.get(tail + 8)?,
-        )
-        else {
-            return None;
-        };
-        if tail + 8 != backedge
-            || tail_header != &header
-            || tail_block_result_slot != block_result_slot
-            || tail_counter_slot != counter_slot
-            || assigned_counter_slot != counter_slot
-        {
-            return None;
-        }
+        let (mut cursor, mut block_result_slot, compact_completion) =
+            match (code.get(header + 5), code.get(header + 6)) {
+                (Some(Op::LoadConst(_)), Some(Op::StoreLocal(slot))) => {
+                    (header + 7, Some(*slot), false)
+                }
+                _ => (header + 5, None, true),
+            };
 
-        let mut cursor = header + 7;
+        let full_tail = backedge.checked_sub(8).and_then(|tail| {
+            let (
+                Op::LoadLocal(tail_block_result_slot),
+                Op::StoreLocal(loop_result_slot),
+                Op::LoadLocal(tail_counter_slot),
+                Op::ToNumeric,
+                Op::Dup,
+                Op::Update(UpdateOp::Increment),
+                assigned_counter,
+                Op::Pop,
+                Op::Jump(tail_header),
+            ) = (
+                code.get(tail)?,
+                code.get(tail + 1)?,
+                code.get(tail + 2)?,
+                code.get(tail + 3)?,
+                code.get(tail + 4)?,
+                code.get(tail + 5)?,
+                code.get(tail + 6)?,
+                code.get(tail + 7)?,
+                code.get(tail + 8)?,
+            )
+            else {
+                return None;
+            };
+            if tail + 8 != backedge
+                || tail_header != &header
+                || Some(*tail_block_result_slot) != block_result_slot
+                || tail_counter_slot != counter_slot
+            {
+                return None;
+            }
+            Some((
+                tail,
+                NumericLoopWrite::compile(assigned_counter, *counter_slot)?,
+                Some(*loop_result_slot),
+            ))
+        });
+        let compact_tail = || {
+            let tail = backedge.checked_sub(6)?;
+            let (
+                Op::LoadLocal(tail_counter_slot),
+                Op::ToNumeric,
+                Op::Dup,
+                Op::Update(UpdateOp::Increment),
+                assigned_counter,
+                Op::Pop,
+                Op::Jump(tail_header),
+            ) = (
+                code.get(tail)?,
+                code.get(tail + 1)?,
+                code.get(tail + 2)?,
+                code.get(tail + 3)?,
+                code.get(tail + 4)?,
+                code.get(tail + 5)?,
+                code.get(tail + 6)?,
+            )
+            else {
+                return None;
+            };
+            if !compact_completion
+                || tail + 6 != backedge
+                || tail_header != &header
+                || tail_counter_slot != counter_slot
+            {
+                return None;
+            }
+            Some((
+                tail,
+                NumericLoopWrite::compile(assigned_counter, *counter_slot)?,
+                None,
+            ))
+        };
+        let (tail, counter_write, loop_result_slot) = full_tail.or_else(compact_tail)?;
+
         let mut accumulator_slot = None;
+        let mut accumulator_write = None;
         let mut terms = Vec::new();
         while cursor < tail {
             let accumulator_first = match code.get(cursor) {
@@ -219,35 +334,74 @@ impl NumericLoopPlan {
                 };
                 Some((*term_accumulator_slot, term, suffix + 1))
             })?;
-            let (
-                Op::Binary(BinaryOp::Add),
-                Op::Dup,
-                Op::AssignLocal(assigned_accumulator_slot),
-                Op::Dup,
-                Op::StoreLocal(term_block_result_slot),
-                Op::StoreLocal(term_loop_result_slot),
-            ) = (
-                code.get(suffix)?,
-                code.get(suffix + 1)?,
-                code.get(suffix + 2)?,
-                code.get(suffix + 3)?,
-                code.get(suffix + 4)?,
-                code.get(suffix + 5)?,
-            )
-            else {
-                return None;
-            };
+            let (assigned_accumulator, term_block_result_slot, term_loop_result_slot, next_cursor) =
+                if compact_completion {
+                    let (
+                        Op::Binary(BinaryOp::Add),
+                        Op::Dup,
+                        assigned_accumulator,
+                        Op::StoreLocal(term_block_result_slot),
+                    ) = (
+                        code.get(suffix)?,
+                        code.get(suffix + 1)?,
+                        code.get(suffix + 2)?,
+                        code.get(suffix + 3)?,
+                    )
+                    else {
+                        return None;
+                    };
+                    (
+                        assigned_accumulator,
+                        *term_block_result_slot,
+                        None,
+                        suffix + 4,
+                    )
+                } else {
+                    let (
+                        Op::Binary(BinaryOp::Add),
+                        Op::Dup,
+                        assigned_accumulator,
+                        Op::Dup,
+                        Op::StoreLocal(term_block_result_slot),
+                        Op::StoreLocal(term_loop_result_slot),
+                    ) = (
+                        code.get(suffix)?,
+                        code.get(suffix + 1)?,
+                        code.get(suffix + 2)?,
+                        code.get(suffix + 3)?,
+                        code.get(suffix + 4)?,
+                        code.get(suffix + 5)?,
+                    )
+                    else {
+                        return None;
+                    };
+                    (
+                        assigned_accumulator,
+                        *term_block_result_slot,
+                        Some(*term_loop_result_slot),
+                        suffix + 6,
+                    )
+                };
             if term_accumulator_slot == *counter_slot
-                || assigned_accumulator_slot != &term_accumulator_slot
-                || term_block_result_slot != block_result_slot
+                || block_result_slot.is_some_and(|slot| slot != term_block_result_slot)
                 || term_loop_result_slot != loop_result_slot
                 || accumulator_slot.is_some_and(|slot| slot != term_accumulator_slot)
             {
                 return None;
             }
+            block_result_slot.get_or_insert(term_block_result_slot);
+            let term_write =
+                NumericLoopWrite::compile(assigned_accumulator, term_accumulator_slot)?;
+            if accumulator_write
+                .as_ref()
+                .is_some_and(|existing| existing != &term_write)
+            {
+                return None;
+            }
             accumulator_slot = Some(term_accumulator_slot);
+            accumulator_write.get_or_insert(term_write);
             terms.push(term);
-            cursor = suffix + 6;
+            cursor = next_cursor;
         }
         if cursor != tail
             || terms.is_empty()
@@ -256,15 +410,32 @@ impl NumericLoopPlan {
             return None;
         }
 
+        let accumulator_slot = accumulator_slot?;
+        let accumulator_write = accumulator_write?;
+        let block_result_slot = block_result_slot?;
+        let mut mutable_slots = vec![*counter_slot, accumulator_slot, block_result_slot];
+        if let Some(loop_result_slot) = loop_result_slot {
+            mutable_slots.push(loop_result_slot);
+        }
+        if mutable_slots
+            .iter()
+            .enumerate()
+            .any(|(index, slot)| mutable_slots[..index].contains(slot))
+            || mutable_slots.contains(limit_slot)
+            || terms.iter().any(|term| term.reads_any_slot(&mutable_slots))
+        {
+            return None;
+        }
+
         Some(Self {
             header,
             backedge,
             exit: *exit,
-            counter_slot: *counter_slot,
+            counter_write,
             limit_slot: *limit_slot,
-            accumulator_slot: accumulator_slot?,
-            block_result_slot: *block_result_slot,
-            loop_result_slot: *loop_result_slot,
+            accumulator_write,
+            block_result_slot,
+            loop_result_slot,
             terms,
         })
     }
@@ -273,34 +444,71 @@ impl NumericLoopPlan {
         if vm.direct_eval_with_stack {
             return false;
         }
-        let required_slots = [
-            self.counter_slot,
-            self.accumulator_slot,
-            self.block_result_slot,
-            self.loop_result_slot,
-        ];
-        if required_slots
-            .into_iter()
-            .any(|slot| !vm.slot_is_authoritative(slot))
-        {
+        let Some(write_targets) = (|| {
+            let mut targets = vec![
+                self.counter_write.prepare(vm)?,
+                self.accumulator_write.prepare(vm)?,
+                NumericLoopWrite::Local {
+                    slot: self.block_result_slot,
+                }
+                .prepare(vm)?,
+            ];
+            if let Some(loop_result_slot) = self.loop_result_slot {
+                targets.push(
+                    NumericLoopWrite::Local {
+                        slot: loop_result_slot,
+                    }
+                    .prepare(vm)?,
+                );
+            }
+            Some(targets)
+        })() else {
             return false;
+        };
+        for (index, target) in write_targets.iter().enumerate() {
+            let LoopWriteTarget::RealmGlobal(target) = target else {
+                continue;
+            };
+            if write_targets[..index].iter().any(|previous| {
+                let LoopWriteTarget::RealmGlobal(previous) = previous else {
+                    return false;
+                };
+                target.name() == previous.name() || target.cell().ptr_eq(&previous.cell())
+            }) {
+                return false;
+            }
         }
-        let Some(mut counter) = local_number(vm, self.counter_slot) else {
+        let forbidden_cells = write_targets
+            .iter()
+            .filter_map(LoopWriteTarget::realm_cell)
+            .collect::<Vec<_>>();
+        let forbidden_realm_writes = write_targets
+            .iter()
+            .filter_map(|target| match target {
+                LoopWriteTarget::Local { .. } => None,
+                LoopWriteTarget::RealmGlobal(target) => Some(target.clone()),
+            })
+            .collect::<Vec<_>>();
+        let Some(mut counter) = write_targets.first().and_then(|target| target.number(vm)) else {
             return false;
         };
         let Some(limit) = local_number_read(vm, self.limit_slot) else {
             return false;
         };
-        let Some(mut accumulator) = local_number(vm, self.accumulator_slot) else {
+        let Some(mut accumulator) = write_targets.get(1).and_then(|target| target.number(vm))
+        else {
             return false;
         };
         let mut terms = Vec::with_capacity(self.terms.len());
         for term in &self.terms {
-            let Some(term) = term.prepare(vm) else {
+            let Some(term) = term.prepare(vm, &forbidden_cells, &forbidden_realm_writes) else {
                 return false;
             };
             terms.push(term);
         }
+
+        #[cfg(test)]
+        NUMERIC_LOOP_ENTRY_HITS.with(|hits| hits.set(hits.get() + 1));
 
         while counter < limit {
             for term in &mut terms {
@@ -308,14 +516,35 @@ impl NumericLoopPlan {
             }
             counter += 1.0;
         }
+
+        let mut values = vec![counter, accumulator, accumulator];
+        if self.loop_result_slot.is_some() {
+            values.push(accumulator);
+        }
+        let realm_writes = write_targets
+            .iter()
+            .zip(values.iter().copied())
+            .filter_map(|(target, value)| match target {
+                LoopWriteTarget::Local { .. } => None,
+                LoopWriteTarget::RealmGlobal(target) => Some((target.clone(), value)),
+            })
+            .collect::<Vec<_>>();
+        if !vm.commit_realm_global_loop_writes(&realm_writes) {
+            return false;
+        }
+        #[cfg(test)]
+        if !realm_writes.is_empty() {
+            REALM_GLOBAL_LOOP_BATCH_COMMITS.with(|commits| commits.set(commits.get() + 1));
+        }
+
+        for (target, value) in write_targets.into_iter().zip(values) {
+            if let LoopWriteTarget::Local { slot } = target {
+                set_local_number(vm, slot, value);
+            }
+        }
         for term in terms {
             term.commit();
         }
-
-        set_local_number(vm, self.counter_slot, counter);
-        set_local_number(vm, self.accumulator_slot, accumulator);
-        set_local_number(vm, self.block_result_slot, accumulator);
-        set_local_number(vm, self.loop_result_slot, accumulator);
         // A normal failing test leaves its boolean on the operand stack for
         // the exit Pop. The trace has already proved the same `counter < limit`
         // result, so resume immediately after that Pop.
@@ -363,9 +592,10 @@ impl NumericLoopTerm {
             {
                 Some((Self::LocalRead { slot: *slot }, cursor + 1))
             }
-            Op::GetPropNamed { cache, .. } => Some((
+            Op::GetPropNamed { key, cache, .. } => Some((
                 Self::NamedProperty {
                     receiver_slot: cache.local_slot()?,
+                    key: key.clone(),
                     cache: cache.clone(),
                 },
                 cursor + 1,
@@ -502,12 +732,47 @@ impl NumericLoopTerm {
         )
     }
 
-    fn prepare(&self, vm: &mut Vm<'_>) -> Option<PreparedNumericLoopTerm> {
+    fn reads_any_slot(&self, mutable_slots: &[usize]) -> bool {
+        let aliases = |slot: usize| mutable_slots.contains(&slot);
+        match self {
+            Self::LocalRead { slot }
+            | Self::NamedProperty {
+                receiver_slot: slot,
+                ..
+            }
+            | Self::DenseIndex {
+                receiver_slot: slot,
+                ..
+            }
+            | Self::LocalCall {
+                callee_slot: slot, ..
+            }
+            | Self::MethodCall {
+                receiver_slot: slot,
+                ..
+            }
+            | Self::StringSliceLength {
+                receiver_slot: slot,
+                ..
+            } => aliases(*slot),
+            Self::ComputedProperty {
+                receiver_slot,
+                key_slot,
+            } => aliases(*receiver_slot) || aliases(*key_slot),
+            Self::GlobalRead { .. } | Self::GlobalCall { .. } | Self::GlobalMethodCall { .. } => {
+                false
+            }
+        }
+    }
+
+    fn prepare(
+        &self,
+        vm: &mut Vm<'_>,
+        forbidden_cells: &[crate::function::Upvalue],
+        forbidden_realm_writes: &[RealmGlobalLoopWrite],
+    ) -> Option<PreparedNumericLoopTerm> {
         match self {
             Self::LocalRead { slot } => {
-                if !slot_is_stable_read(vm, *slot) {
-                    return None;
-                }
                 local_number_read(vm, *slot).map(PreparedNumericLoopTerm::Stable)
             }
             Self::GlobalRead { name } => {
@@ -524,14 +789,18 @@ impl NumericLoopTerm {
             }
             Self::NamedProperty {
                 receiver_slot,
+                key,
                 cache,
             } => {
-                if !slot_is_stable_read(vm, *receiver_slot) {
-                    return None;
-                }
-                let Some(Value::Object(object)) = vm.local_slot_value(*receiver_slot) else {
+                let Some(Value::Object(object)) = stable_slot_value(vm, *receiver_slot) else {
                     return None;
                 };
+                if forbidden_realm_writes
+                    .iter()
+                    .any(|write| write.aliases_property(&object, key))
+                {
+                    return None;
+                }
                 match cache.get(&object)? {
                     Value::Number(value) => Some(PreparedNumericLoopTerm::Stable(value)),
                     _ => None,
@@ -541,13 +810,16 @@ impl NumericLoopTerm {
                 receiver_slot,
                 key_slot,
             } => {
-                if !slot_is_stable_read(vm, *receiver_slot) || !slot_is_stable_read(vm, *key_slot) {
-                    return None;
-                }
-                let receiver = vm.local_slot_value(*receiver_slot)?;
-                let key = vm.local_slot_value(*key_slot)?;
+                let receiver = stable_slot_value(vm, *receiver_slot)?;
+                let key = stable_slot_value(vm, *key_slot)?;
                 match (&receiver, &key) {
                     (Value::Object(object), Value::String(key)) => {
+                        if forbidden_realm_writes
+                            .iter()
+                            .any(|write| write.aliases_property(object, key))
+                        {
+                            return None;
+                        }
                         match object.own_data_property_read(key) {
                             OwnDataPropertyRead::Data(Value::Number(value)) => {
                                 Some(PreparedNumericLoopTerm::Stable(value))
@@ -569,10 +841,7 @@ impl NumericLoopTerm {
                 receiver_slot,
                 index,
             } => {
-                if !slot_is_stable_read(vm, *receiver_slot) {
-                    return None;
-                }
-                let Some(Value::Array(array)) = vm.local_slot_value(*receiver_slot) else {
+                let Some(Value::Array(array)) = stable_slot_value(vm, *receiver_slot) else {
                     return None;
                 };
                 match array.direct_dense_index_value(*index)? {
@@ -584,7 +853,7 @@ impl NumericLoopTerm {
                 let Value::Function(function) = vm.env.get(name)? else {
                     return None;
                 };
-                Self::prepare_call(function, arguments, vm)
+                Self::prepare_call(function, arguments, vm, forbidden_cells)
             }
             Self::GlobalMethodCall {
                 receiver_name,
@@ -594,47 +863,53 @@ impl NumericLoopTerm {
                 let Value::Object(object) = vm.env.get(receiver_name)? else {
                     return None;
                 };
+                if forbidden_realm_writes
+                    .iter()
+                    .any(|write| write.aliases_property(&object, key))
+                {
+                    return None;
+                }
                 let OwnDataPropertyRead::Data(Value::Function(function)) =
                     object.own_data_property_read(key)
                 else {
                     return None;
                 };
-                Self::prepare_call(function, arguments, vm)
+                Self::prepare_call(function, arguments, vm, forbidden_cells)
             }
             Self::LocalCall {
                 callee_slot,
                 arguments,
             } => {
-                if !slot_is_stable_read(vm, *callee_slot) {
-                    return None;
-                }
-                let Some(Value::Function(function)) = vm.local_slot_value(*callee_slot) else {
+                let Some(Value::Function(function)) = stable_slot_value(vm, *callee_slot) else {
                     return None;
                 };
-                Self::prepare_call(function, arguments, vm)
+                Self::prepare_call(function, arguments, vm, forbidden_cells)
             }
             Self::MethodCall {
                 receiver_slot,
                 key,
                 arguments,
             } => {
-                if !slot_is_stable_read(vm, *receiver_slot) {
-                    return None;
-                }
                 if let Some(term) =
                     Self::prepare_dense_array_index_of(*receiver_slot, key, *arguments, vm)
                 {
                     return Some(term);
                 }
-                let Some(Value::Object(object)) = vm.local_slot_value(*receiver_slot) else {
+                let Some(Value::Object(object)) = stable_slot_value(vm, *receiver_slot) else {
                     return None;
                 };
+                if forbidden_realm_writes
+                    .iter()
+                    .any(|write| write.aliases_property(&object, key))
+                {
+                    return None;
+                }
                 let OwnDataPropertyRead::Data(Value::Function(function)) =
                     object.own_data_property_read(key)
                 else {
                     return None;
                 };
-                Self::prepare_call(function, arguments, vm)
+                Self::prepare_call(function, arguments, vm, forbidden_cells)
             }
             Self::StringSliceLength {
                 receiver_slot,
@@ -674,7 +949,7 @@ impl NumericLoopTerm {
         if key != "indexOf" || arguments.len() == 0 {
             return None;
         }
-        let Some(Some(Value::Array(array))) = vm.locals.get(receiver_slot) else {
+        let Some(Value::Array(array)) = stable_slot_value(vm, receiver_slot) else {
             return None;
         };
         if !array.uses_default_prototype() || array.property(key).is_some() {
@@ -701,9 +976,15 @@ impl NumericLoopTerm {
         function: crate::Function,
         arguments: &NumericLoopArguments,
         vm: &Vm<'_>,
+        forbidden_cells: &[crate::function::Upvalue],
     ) -> Option<PreparedNumericLoopTerm> {
         Some(PreparedNumericLoopTerm::Call {
-            call: NumericLoopCall::prepare(&function, arguments.len(), &vm.local_upvalues)?,
+            call: NumericLoopCall::prepare(
+                &function,
+                arguments.len(),
+                &vm.local_upvalues,
+                forbidden_cells,
+            )?,
             arguments: *arguments,
         })
     }
@@ -799,22 +1080,31 @@ pub(super) fn try_run_numeric_loop(vm: &mut Vm<'_>, header: usize, backedge: usi
     plan.is_some_and(|plan| plan.try_run(vm))
 }
 
-fn local_number(vm: &Vm<'_>, slot: usize) -> Option<f64> {
-    match vm.locals.get(slot)? {
-        Some(Value::Number(value)) => Some(*value),
-        _ => None,
-    }
-}
-
 fn local_number_read(vm: &Vm<'_>, slot: usize) -> Option<f64> {
+    if vm.bytecode.is_global_scope() && vm.slot_is_realm_binding(slot) {
+        vm.prepare_realm_global_loop_read(slot)?;
+    }
     match vm.local_slot_value(slot)? {
         Value::Number(value) => Some(value),
         _ => None,
     }
 }
 
-fn slot_is_stable_read(vm: &Vm<'_>, slot: usize) -> bool {
-    vm.slot_is_authoritative(slot) || vm.slot_is_realm_binding(slot)
+fn stable_slot_value(vm: &Vm<'_>, slot: usize) -> Option<Value> {
+    if vm.slot_is_authoritative(slot) {
+        return vm.local_slot_value(slot);
+    }
+    if !vm.slot_is_realm_binding(slot) {
+        return None;
+    }
+    // Nested functions already receive an exact realm-cell route for captured
+    // script globals. Preserve that established stable-read contract; only a
+    // root script can coexist with the new transactional realm-global writes
+    // and therefore needs the stronger property/cell revalidation.
+    if vm.bytecode.is_global_scope() {
+        vm.prepare_realm_global_loop_read(slot)?;
+    }
+    vm.local_slot_value(slot)
 }
 
 fn set_local_number(vm: &mut Vm<'_>, slot: usize, value: f64) {
@@ -825,7 +1115,19 @@ fn set_local_number(vm: &mut Vm<'_>, slot: usize, value: f64) {
 mod tests {
     use super::*;
     use crate::bytecode::compiler;
-    use crate::{Value, eval};
+    use crate::{Property, Value, eval};
+
+    fn reset_loop_counters() {
+        NUMERIC_LOOP_ENTRY_HITS.with(|hits| hits.set(0));
+        REALM_GLOBAL_LOOP_BATCH_COMMITS.with(|commits| commits.set(0));
+    }
+
+    fn loop_counters() -> (usize, usize) {
+        (
+            NUMERIC_LOOP_ENTRY_HITS.with(Cell::get),
+            REALM_GLOBAL_LOOP_BATCH_COMMITS.with(Cell::get),
+        )
+    }
 
     fn nested_function(source: &str) -> Bytecode {
         let script = qjs_parser::parse_script(source).expect("source should parse");
@@ -838,6 +1140,280 @@ mod tests {
                 _ => None,
             })
             .expect("function bytecode should be nested in the script")
+    }
+
+    fn top_level_plan_count(source: &str) -> usize {
+        let script = qjs_parser::parse_script(source).expect("source should parse");
+        let bytecode = compiler::compile_script(&script).expect("source should compile");
+        NumericLoopPlan::compile_all(&bytecode).len()
+    }
+
+    #[test]
+    fn top_level_var_loop_batches_realm_writes_once() {
+        reset_loop_counters();
+        assert_eq!(
+            eval(
+                "function addOne(value) { return value + 1; } \
+                 var limit = 1000; var checksum = 0; \
+                 for (var index = 0; index < limit; index++) checksum += addOne(index); \
+                 checksum + ':' + index + ':' + globalThis.checksum + ':' + \
+                   Object.getOwnPropertyNames(globalThis).filter(function (name) { \
+                     return name.length >= 2 && name.charCodeAt(0) === 0 && name.charCodeAt(1) === 0; \
+                   }).length;"
+            ),
+            Ok(Value::String("500500:1000:500500:0".to_owned().into()))
+        );
+        assert_eq!(loop_counters(), (1, 1));
+    }
+
+    #[test]
+    fn top_level_loop_plan_classifies_global_and_private_writes() {
+        let script = qjs_parser::parse_script(
+            "function addOne(value) { return value + 1; } var limit = 4, checksum = 0; for (var index = 0; index < limit; index++) checksum += addOne(index);",
+        )
+        .expect("source should parse");
+        let bytecode = compiler::compile_script(&script).expect("source should compile");
+        let plans = NumericLoopPlan::compile_all(&bytecode);
+        assert_eq!(plans.len(), 1, "{:?}", bytecode.code);
+        assert!(matches!(
+            plans[0].counter_write,
+            NumericLoopWrite::RealmGlobal { .. }
+        ));
+        assert!(matches!(
+            plans[0].accumulator_write,
+            NumericLoopWrite::RealmGlobal { .. }
+        ));
+        assert!(bytecode.local_is_compiler_temporary(plans[0].block_result_slot));
+        assert!(plans[0].loop_result_slot.is_none());
+        assert!(
+            bytecode
+                .hoisted_local_names()
+                .all(|name| !name.starts_with("\0\0"))
+        );
+        let vm = Vm::new(&bytecode).expect("top-level VM should initialize");
+        for (slot, local) in bytecode.locals.iter().enumerate() {
+            if !local.compiler_temporary {
+                continue;
+            }
+            assert!(vm.slot_is_authoritative(slot));
+            assert!(vm.local_upvalues.get(slot).is_none_or(Option::is_none));
+            assert_eq!(vm.locals[slot], Some(Value::Undefined));
+        }
+    }
+
+    #[test]
+    fn top_level_loop_rejects_aliasing_captured_global_reads() {
+        reset_loop_counters();
+        let source = "var limit = 4, sum = 0; function addCurrent(value) { return value + sum; } \
+             for (var index = 0; index < limit; index++) sum += addCurrent(index); \
+             sum + ':' + index;";
+        assert_eq!(top_level_plan_count(source), 1);
+        assert_eq!(eval(source), Ok(Value::String("11:4".to_owned().into())));
+        assert_eq!(loop_counters(), (0, 0));
+    }
+
+    #[test]
+    fn top_level_loop_rejects_global_object_property_aliases() {
+        for source in [
+            "var mirror = globalThis, limit = 4, sum = 0; for (var index = 0; index < limit; index++) sum += mirror.index; sum + ':' + index;",
+            "var mirror = globalThis, key = 'index', limit = 4, sum = 0; for (var index = 0; index < limit; index++) sum += mirror[key]; sum + ':' + index;",
+        ] {
+            reset_loop_counters();
+            assert_eq!(top_level_plan_count(source), 1, "{source}");
+            assert_eq!(
+                eval(source),
+                Ok(Value::String("6:4".to_owned().into())),
+                "{source}"
+            );
+            assert_eq!(loop_counters(), (0, 0), "{source}");
+        }
+    }
+
+    #[test]
+    fn top_level_loop_rejects_mutable_slot_aliases_at_compile_time() {
+        for source in [
+            "var sum = 0; for (var index = 0; index < index; index++) sum += 1;",
+            "function addOne(value) { return value + 1; } var limit = 4; for (var index = 0; index < limit; index++) limit += addOne(index);",
+            "function addOne(value) { return value + 1; } var sum = 0; for (var index = 0; index < 4; index++) sum += sum;",
+        ] {
+            let script = qjs_parser::parse_script(source).expect("source should parse");
+            let bytecode = compiler::compile_script(&script).expect("source should compile");
+            assert!(
+                NumericLoopPlan::compile_all(&bytecode).is_empty(),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn top_level_loop_descriptor_and_dynamic_scope_guards_fail_closed() {
+        for (source, expected, expect_candidate) in [
+            (
+                "function addOne(value) { return value + 1; } var limit = 4, sum = 0; Object.defineProperty(globalThis, 'sum', { writable: false }); for (var index = 0; index < limit; index++) sum += addOne(index); sum + ':' + index;",
+                "0:4",
+                true,
+            ),
+            (
+                "function addOne(value) { return value + 1; } var limit = 4, sum = 0; eval('sum = 5'); for (var index = 0; index < limit; index++) sum += addOne(index); sum + ':' + index;",
+                "15:4",
+                false,
+            ),
+            (
+                "function addOne(value) { return value + 1; } var limit = 4, sum = 0; (0, eval)('sum = 5'); for (var index = 0; index < limit; index++) sum += addOne(index); sum + ':' + index;",
+                "15:4",
+                true,
+            ),
+            (
+                "function addOne(value) { return value + 1; } var limit = 4, sum = 0; eval.call(undefined, 'sum = 5'); for (var index = 0; index < limit; index++) sum += addOne(index); sum + ':' + index;",
+                "15:4",
+                true,
+            ),
+            (
+                "function addOne(value) { return value + 1; } var limit = 4, sum = 0; Reflect.apply(eval, undefined, ['sum = 5']); for (var index = 0; index < limit; index++) sum += addOne(index); sum + ':' + index;",
+                "15:4",
+                true,
+            ),
+            (
+                "function addOne(value) { return value + 1; } var limit = 4, sum = 0; Function('sum = 5')(); for (var index = 0; index < limit; index++) sum += addOne(index); sum + ':' + index;",
+                "15:4",
+                true,
+            ),
+            (
+                "function addOne(value) { return value + 1; } var limit = 4, sum = 0; with ({}) {} for (var index = 0; index < limit; index++) sum += addOne(index); sum + ':' + index;",
+                "10:4",
+                false,
+            ),
+        ] {
+            reset_loop_counters();
+            if expect_candidate {
+                assert_eq!(top_level_plan_count(source), 1, "{source}");
+            }
+            assert_eq!(
+                eval(source),
+                Ok(Value::String(expected.to_owned().into())),
+                "{source}"
+            );
+            assert_eq!(loop_counters(), (0, 0), "{source}");
+        }
+    }
+
+    #[test]
+    fn eval_loops_never_publish_compiler_temporaries() {
+        let scratch_count = "Object.getOwnPropertyNames(globalThis).filter(function (name) { \
+            return name.length >= 2 && name.charCodeAt(0) === 0 && name.charCodeAt(1) === 0; \
+        }).length";
+        for eval_call in [
+            "eval('var evalTotal = 0; for (var evalIndex = 0; evalIndex < 4; evalIndex++) evalTotal += evalIndex;')",
+            "(0, eval)('var evalTotal = 0; for (var evalIndex = 0; evalIndex < 4; evalIndex++) evalTotal += evalIndex;')",
+        ] {
+            let source = format!("{eval_call}; evalTotal + ':' + ({scratch_count});");
+            assert_eq!(
+                eval(&source),
+                Ok(Value::String("6:0".to_owned().into())),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn direct_function_eval_loop_does_not_write_back_compiler_temporaries() {
+        let source = "function run() { \
+            var total = 10; \
+            eval('for (var inner = 0; inner < 4; inner++) total += inner;'); \
+            for (var outer = 0; outer < 3; outer++) total += outer; \
+            return total; \
+        } \
+        run() + ':' + Object.getOwnPropertyNames(globalThis).filter(function (name) { \
+            return name.length >= 2 && name.charCodeAt(0) === 0 && name.charCodeAt(1) === 0; \
+        }).length;";
+        assert_eq!(eval(source), Ok(Value::String("19:0".to_owned().into())));
+    }
+
+    #[test]
+    fn top_level_loop_accepts_value_only_global_redefinition() {
+        reset_loop_counters();
+        assert_eq!(
+            eval(
+                "function addOne(value) { return value + 1; } var limit = 4, sum = 0; \
+                 Object.defineProperty(globalThis, 'sum', { value: 5 }); \
+                 for (var index = 0; index < limit; index++) sum += addOne(index); \
+                 sum + ':' + globalThis.sum;"
+            ),
+            Ok(Value::String("15:15".to_owned().into()))
+        );
+        assert_eq!(loop_counters(), (1, 1));
+    }
+
+    #[test]
+    fn realm_global_loop_commit_revalidates_all_targets_before_mutation() {
+        let script = qjs_parser::parse_script("var first = 1, second = 2; first + second;")
+            .expect("source should parse");
+        let bytecode = compiler::compile_script(&script).expect("source should compile");
+        let mut vm = Vm::new(&bytecode).expect("script VM should initialize");
+        assert_eq!(vm.run(), Ok(Value::Number(3.0)));
+
+        let first_slot = bytecode
+            .local_slot("first")
+            .expect("first should have a slot");
+        let second_slot = bytecode
+            .local_slot("second")
+            .expect("second should have a slot");
+        let first = vm
+            .prepare_realm_global_loop_write(first_slot, "first")
+            .expect("first should initially be writable");
+        let second = vm
+            .prepare_realm_global_loop_write(second_slot, "second")
+            .expect("second should initially be writable");
+        let first_cell = first.cell();
+        let first_local_before = vm.locals[first_slot].clone();
+        let global_this = vm.cached_global_this().expect("global object should exist");
+        global_this.define_property(
+            "second".to_owned(),
+            Property::data(Value::Number(2.0), true, false, false),
+        );
+
+        assert!(!vm.commit_realm_global_loop_writes(&[(first, 10.0), (second, 20.0)]));
+        assert_eq!(
+            global_this
+                .own_property("first")
+                .map(|property| property.value),
+            Some(Value::Number(1.0))
+        );
+        assert_eq!(first_cell.get(), Value::Number(1.0));
+        assert_eq!(vm.locals[first_slot], first_local_before);
+    }
+
+    #[test]
+    fn top_level_sloppy_accessor_and_delete_paths_keep_observable_execution() {
+        reset_loop_counters();
+        let source = "var limit = 4, reads = 0; \
+             Object.defineProperty(globalThis, 'sloppySum', { configurable: true, \
+               get: function () { reads += 1; return 1; } }); \
+             for (var index = 0; index < limit; index++) sloppySum += index; \
+             delete globalThis.sloppySum; sloppySum = 9; \
+             reads + ':' + sloppySum;";
+        // An undeclared sloppy global has no indexed realm-binding slot, so
+        // this observable accessor/delete shape must fail closed at compile
+        // time rather than reach the transactional runtime guards.
+        assert_eq!(top_level_plan_count(source), 0);
+        assert_eq!(eval(source), Ok(Value::String("4:9".to_owned().into())));
+        assert_eq!(loop_counters(), (0, 0));
+    }
+
+    #[test]
+    fn top_level_zero_and_non_numeric_limits_keep_the_existing_path() {
+        for (limit, expected) in [("0", "0:0"), ("'3'", "6:3"), ("NaN", "0:0")] {
+            reset_loop_counters();
+            let source = format!(
+                "var sum = 0; for (var index = 0; index < {limit}; index++) sum += index + 1; sum + ':' + index;"
+            );
+            assert_eq!(
+                eval(&source),
+                Ok(Value::String(expected.to_owned().into())),
+                "{source}"
+            );
+            assert_eq!(loop_counters(), (0, 0), "{source}");
+        }
     }
 
     #[test]
@@ -968,6 +1544,38 @@ mod tests {
         ] {
             let bytecode = nested_function(source);
             assert_eq!(NumericLoopPlan::compile_all(&bytecode).len(), 1, "{source}");
+        }
+    }
+
+    #[test]
+    fn benchmark_function_loops_enter_the_numeric_trace() {
+        for (source, expected) in [
+            (
+                "function addOne(value) { return value + 1; } \
+                 function run(iterations) { var checksum = 0; \
+                   for (var i = 0; i < iterations; i++) checksum += addOne(i); \
+                   return checksum; } run(1000);",
+                Value::Number(500500.0),
+            ),
+            (
+                "function run(iterations) { \
+                   var receiver = { addOne: function (value) { return value + 1; } }; \
+                   var checksum = 0; \
+                   for (var i = 0; i < iterations; i++) checksum += receiver.addOne(i); \
+                   return checksum; } run(1000);",
+                Value::Number(500500.0),
+            ),
+            (
+                "var broadGlobalOne = 1; \
+                 function run(iterations) { var checksum = 0; \
+                   for (var i = 0; i < iterations; i++) checksum += broadGlobalOne; \
+                   return checksum; } run(1000);",
+                Value::Number(1000.0),
+            ),
+        ] {
+            reset_loop_counters();
+            assert_eq!(eval(source), Ok(expected), "{source}");
+            assert_eq!(loop_counters(), (1, 0), "{source}");
         }
     }
 

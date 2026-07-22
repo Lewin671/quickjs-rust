@@ -16,7 +16,177 @@ use super::vm_set::property_set_uses_setter;
 use crate::CallEnv;
 use std::rc::Rc;
 
+/// A top-level `var` write whose realm cell and ordinary global-object data
+/// property were proven to represent the same binding at loop entry.
+#[derive(Clone, Debug)]
+pub(super) struct RealmGlobalLoopWrite {
+    slot: usize,
+    name: String,
+    cell: crate::function::Upvalue,
+    global_this: ObjectRef,
+}
+
+impl RealmGlobalLoopWrite {
+    pub(super) fn cell(&self) -> crate::function::Upvalue {
+        self.cell.clone()
+    }
+
+    pub(super) fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub(super) fn aliases_property(&self, object: &ObjectRef, key: &str) -> bool {
+        self.name == key && self.global_this.ptr_eq(object)
+    }
+}
+
 impl Vm<'_> {
+    fn realm_global_loop_context_is_fixed(&self) -> bool {
+        self.transactional_realm_globals
+            && self.bytecode.is_global_scope()
+            && self.persist_global_lexicals
+            && !self.dynamic_code_executed
+            && !self.direct_eval_with_stack
+            && self.with_stack.is_empty()
+            && !self.bytecode.contains_direct_eval()
+            && !self.bytecode.contains_with()
+            // Calls forwarded through Function.prototype.call/apply or
+            // Reflect.apply do not expose their eventual native callee to this
+            // VM frame. Conservatively reject root scripts that can name a
+            // dynamic-code entry point, even when the actual call precedes the
+            // loop and the property/cell identity currently appears synchronized.
+            && !self
+                .bytecode
+                .global_names()
+                .iter()
+                .any(|name| matches!(name.as_str(), "eval" | "Function" | "$262"))
+            && self.env.deopt_bindings().is_none()
+            && !self.env.has_module_imports()
+            && self.env.dynamic_function_realm_global().is_none()
+    }
+
+    /// Validates a realm-backed slot as a stable ordinary global data read.
+    /// The returned cell is the exact canonical realm cell; accessors,
+    /// detached properties, dynamic realms, and compatibility environments
+    /// fail closed.
+    pub(super) fn prepare_realm_global_loop_read(
+        &self,
+        slot: usize,
+    ) -> Option<crate::function::Upvalue> {
+        if !self.realm_global_loop_context_is_fixed()
+            || !self.slot_is_realm_binding(slot)
+            || self.bytecode.local_is_compiler_temporary(slot)
+            || !self.bytecode.local_is_body_hoist_only(slot)
+            || self.bytecode.local_is_sloppy_global_fallback(slot)
+        {
+            return None;
+        }
+        let local = self.bytecode.locals.get(slot)?;
+        if self.bytecode.local_slot(&local.name) != Some(slot)
+            || self
+                .bytecode
+                .global_lexical_names()
+                .iter()
+                .any(|name| name == &local.name)
+            || self.env.has_local_binding(&local.name)
+            || self.env.has_module_import(&local.name)
+            || self.env.module_live_binding_cell(&local.name).is_some()
+            || self.env.is_global_lexical_binding(&local.name)
+            || self.env.is_immutable_lexical_binding(&local.name)
+            || self.env.is_immutable_function_name(&local.name)
+        {
+            return None;
+        }
+        let cell = self.local_upvalues.get(slot)?.as_ref()?.clone();
+        if !self.env.is_realm_binding_cell(&local.name, &cell) {
+            return None;
+        }
+        let global_this = self.cached_global_this()?;
+        let property = global_this.own_property(&local.name)?;
+        if property.is_accessor() {
+            return None;
+        }
+        let cell_value = cell.get();
+        if !property.value.same_value(&cell_value) {
+            return None;
+        }
+        // `locals[slot]` is only a coexistence mirror for a realm-backed
+        // binding and may legitimately lag a value-only `defineProperty`.
+        // `slot_is_realm_binding` proved that `local_slot_value` reads this
+        // canonical cell first; the property/cell pair is the authority.
+        Some(cell)
+    }
+
+    /// Prepares a mutable ordinary top-level `var` for one transactional loop
+    /// exit write. Function declarations, global lexicals, module bindings,
+    /// sloppy-created globals, and non-writable/incompatible descriptors retain
+    /// the normal per-iteration path.
+    pub(super) fn prepare_realm_global_loop_write(
+        &self,
+        slot: usize,
+        expected_name: &str,
+    ) -> Option<RealmGlobalLoopWrite> {
+        let local = self.bytecode.locals.get(slot)?;
+        if local.name != expected_name
+            || local.hoisted_function
+            || !local.mutable
+            || !self
+                .cached_global_this()?
+                .own_property(expected_name)?
+                .writable
+        {
+            return None;
+        }
+        let cell = self.prepare_realm_global_loop_read(slot)?;
+        Some(RealmGlobalLoopWrite {
+            slot,
+            name: expected_name.to_owned(),
+            cell,
+            global_this: self.cached_global_this()?,
+        })
+    }
+
+    /// Commits every prepared realm-global write as one guarded batch. All
+    /// guards are rechecked before the first mutation, so a failed recheck can
+    /// safely resume the ordinary interpreter without partial effects.
+    pub(super) fn commit_realm_global_loop_writes(
+        &mut self,
+        writes: &[(RealmGlobalLoopWrite, f64)],
+    ) -> bool {
+        for (target, _) in writes {
+            let Some(current) = self.prepare_realm_global_loop_write(target.slot, &target.name)
+            else {
+                return false;
+            };
+            if !current.cell.ptr_eq(&target.cell)
+                || !current.global_this.ptr_eq(&target.global_this)
+            {
+                return false;
+            }
+        }
+        for (target, number) in writes {
+            let value = Value::Number(*number);
+            match target
+                .global_this
+                .write_existing_own_data_property(&target.name, &value)
+            {
+                OwnDataPropertyWrite::Written => {}
+                OwnDataPropertyWrite::ReadOnly | OwnDataPropertyWrite::NeedsSlowPath => {
+                    unreachable!("revalidated realm-global loop target changed during commit")
+                }
+            }
+            let replaced = self.env.replace_existing_realm_with_cell(
+                &target.name,
+                value.clone(),
+                &target.cell,
+            );
+            debug_assert!(replaced, "revalidated realm binding cell must still exist");
+            self.locals[target.slot] = Some(value);
+            self.sync_marked_dynamic_global(&target.name);
+        }
+        true
+    }
+
     fn try_store_indexed_realm_global(
         &mut self,
         slot: usize,
@@ -555,7 +725,7 @@ impl Vm<'_> {
             self.env.insert(name.to_owned(), value.clone());
             if self.bytecode.global_scope
                 && self.bytecode.local_is_body_hoist_only(slot)
-                && !super::vm_bindings::is_compiler_temporary(name)
+                && !self.bytecode.local_is_compiler_temporary(slot)
             {
                 if self.realm.contains(name) {
                     self.env.insert_realm(name.to_owned(), value.clone());
@@ -681,7 +851,7 @@ impl Vm<'_> {
                 self.env.insert(name.to_owned(), value.clone());
                 if self.bytecode.global_scope
                     && self.bytecode.local_is_body_hoist_only(slot)
-                    && !super::vm_bindings::is_compiler_temporary(name)
+                    && !self.bytecode.local_is_compiler_temporary(slot)
                 {
                     if self.realm.contains(name) {
                         self.env.insert_realm(name.to_owned(), value.clone());

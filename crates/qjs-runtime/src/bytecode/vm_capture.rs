@@ -54,14 +54,13 @@ impl Vm<'_> {
                     .map(|(_, slot)| *slot)
                     .or_else(|| {
                         self.bytecode.local_slot(&local.name).filter(|slot| {
-                            !(self.bytecode.is_global_scope()
-                                && self.bytecode.local_is_body_hoist_only(*slot)
-                                && self.bytecode.local_name_at(*slot).is_some_and(|name| {
-                                    !super::vm_bindings::is_compiler_temporary(name)
-                                }))
+                            !(self.bytecode.local_is_compiler_temporary(*slot)
+                                || self.bytecode.is_global_scope()
+                                    && self.bytecode.local_is_body_hoist_only(*slot))
                         })
                     });
                 if let Some(slot) = parent_slot {
+                    debug_assert!(!self.bytecode.local_is_compiler_temporary(slot));
                     if self.bytecode.is_global_scope()
                         && self.bytecode.local_is_body_hoist_only(slot)
                     {

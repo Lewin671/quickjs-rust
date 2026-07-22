@@ -466,6 +466,7 @@ impl NumericLoopCall {
         function: &Function,
         argument_count: usize,
         caller_cells: &[Option<Upvalue>],
+        forbidden_cells: &[Upvalue],
     ) -> Option<Self> {
         if function.native == Some(NativeFunction::MathAbs) && argument_count >= 1 {
             return Some(Self::MathAbs);
@@ -476,6 +477,11 @@ impl NumericLoopCall {
         let bytecode = function.bytecode.as_ref()?;
         if bytecode.parameter_slots().len() != function.params.positional.len()
             || bytecode.received_upvalue_slots().len() != function.upvalues.len()
+            || function.upvalues.iter().any(|upvalue| {
+                forbidden_cells
+                    .iter()
+                    .any(|forbidden| forbidden.ptr_eq(upvalue))
+            })
         {
             return None;
         }

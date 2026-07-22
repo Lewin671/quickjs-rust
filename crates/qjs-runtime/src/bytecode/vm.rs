@@ -183,6 +183,14 @@ pub(super) struct FrameState<'a> {
     /// global lexical bindings. Indirect eval uses global-scope bytecode, but
     /// its lexical environment is ephemeral.
     pub(super) persist_global_lexicals: bool,
+    /// Only a fresh ordinary script VM may batch realm-global loop writes.
+    /// Eval, module, dynamic-function, and cross-realm entry points construct
+    /// their frames through `new_with_globals*` and leave this disabled.
+    pub(super) transactional_realm_globals: bool,
+    /// Dynamic source evaluation can replace global descriptors and binding
+    /// identities outside the current bytecode stream. Once observed, guarded
+    /// realm-global loop batching stays disabled for the rest of this frame.
+    pub(super) dynamic_code_executed: bool,
 }
 
 pub(super) struct Vm<'a> {
@@ -225,7 +233,9 @@ impl<'a> Vm<'a> {
         initialize_builtins(&mut env, &global_this);
         Self::initialize_script_global_bindings(bytecode, &realm)?;
         realm.refresh_dynamic_function_realm_global();
-        Ok(Self::new_with_globals(bytecode, env))
+        let mut vm = Self::new_with_globals(bytecode, env);
+        vm.transactional_realm_globals = true;
+        Ok(vm)
     }
 
     pub(super) fn new_with_globals(bytecode: &'a Bytecode, env: CallEnv) -> Self {
@@ -393,6 +403,8 @@ impl<'a> Vm<'a> {
                 direct_eval_with_stack: false,
                 disposable_scopes: Vec::new(),
                 persist_global_lexicals: true,
+                transactional_realm_globals: false,
+                dynamic_code_executed: false,
             },
         }
     }
@@ -454,6 +466,10 @@ impl<'a> Vm<'a> {
         let mut realm_binding_slots = 0_u128;
         let mut local_upvalues = Vec::with_capacity(bytecode.locals.len());
         for (slot, local) in bytecode.locals.iter().enumerate() {
+            if local.compiler_temporary {
+                local_upvalues.push(None);
+                continue;
+            }
             if has_module_imports && let Some(upvalue) = env.module_import_cell(&local.name) {
                 if local.is_received_upvalue() {
                     next_received += 1;
@@ -494,13 +510,11 @@ impl<'a> Vm<'a> {
         let deopt_bindings = self.frame_deopt_bindings();
         let mut env = self.attach_host(self.env.fork_current_frame_values());
         for index in 0..self.locals.len() {
-            if self.bytecode.local_is_sloppy_global_fallback(index)
+            if self.bytecode.local_is_compiler_temporary(index)
+                || self.bytecode.local_is_sloppy_global_fallback(index)
                 || (self.bytecode.is_global_scope()
                     && self.bytecode.local_is_body_hoist_only(index)
-                    && self
-                        .bytecode
-                        .local_name_at(index)
-                        .is_some_and(|name| !super::vm_bindings::is_compiler_temporary(name)))
+                    && !self.bytecode.local_is_compiler_temporary(index))
             {
                 continue;
             }
@@ -516,13 +530,11 @@ impl<'a> Vm<'a> {
         }
         for (index, upvalue) in self.local_upvalues.iter().enumerate() {
             let Some(upvalue) = upvalue else { continue };
-            if self.bytecode.local_is_sloppy_global_fallback(index)
+            if self.bytecode.local_is_compiler_temporary(index)
+                || self.bytecode.local_is_sloppy_global_fallback(index)
                 || (self.bytecode.is_global_scope()
                     && self.bytecode.local_is_body_hoist_only(index)
-                    && self
-                        .bytecode
-                        .local_name_at(index)
-                        .is_some_and(|name| !super::vm_bindings::is_compiler_temporary(name)))
+                    && !self.bytecode.local_is_compiler_temporary(index))
             {
                 continue;
             }
@@ -540,7 +552,7 @@ impl<'a> Vm<'a> {
         env.clear_direct_eval_var_conflicts();
         let in_parameter_prologue = self.in_parameter_prologue();
         for (index, local) in self.bytecode.locals.iter().enumerate() {
-            if super::vm_bindings::is_compiler_temporary(&local.name) {
+            if self.bytecode.local_is_compiler_temporary(index) {
                 continue;
             }
             if in_parameter_prologue && local.parameter {
@@ -565,10 +577,11 @@ impl<'a> Vm<'a> {
     pub(super) fn frame_deopt_bindings(&self) -> Option<DynamicBindings> {
         let bindings = self.env.deopt_bindings()?.clone();
         for (slot, local) in self.bytecode.locals.iter().enumerate() {
-            if local.sloppy_global_fallback
+            if self.bytecode.local_is_compiler_temporary(slot)
+                || local.sloppy_global_fallback
                 || (self.bytecode.is_global_scope()
                     && self.bytecode.local_is_body_hoist_only(slot)
-                    && !super::vm_bindings::is_compiler_temporary(&local.name))
+                    && !self.bytecode.local_is_compiler_temporary(slot))
             {
                 continue;
             }
@@ -1777,6 +1790,7 @@ mod tests {
     fn local(name: &str, from_env: bool) -> Local {
         Local {
             name: name.to_owned(),
+            compiler_temporary: false,
             hoisted: false,
             hoisted_function: false,
             parameter: false,

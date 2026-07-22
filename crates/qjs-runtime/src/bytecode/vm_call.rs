@@ -114,6 +114,23 @@ impl Vm<'_> {
         direct_eval: bool,
         direct_eval_strict: bool,
     ) -> Result<(), RuntimeError> {
+        if matches!(
+            &callee,
+            Value::Function(function)
+                if matches!(
+                    function.native,
+                    Some(
+                        NativeFunction::Eval
+                            | NativeFunction::EvalScript
+                            | NativeFunction::Function
+                            | NativeFunction::GeneratorFunction
+                            | NativeFunction::AsyncFunction
+                            | NativeFunction::AsyncGeneratorFunction
+                    )
+                )
+        ) {
+            self.dynamic_code_executed = true;
+        }
         if matches!(&callee, Value::Function(function) if function.native.is_some()) {
             let realm_env = self.realm_env();
             if let Some(result) =
