@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 
+use super::escapes::is_trailing_surrogate_position;
 use super::groups::group_alternatives;
 use super::{MatchOptions, MatchState, PropertyCache, match_pattern, match_pattern_reverse};
 
@@ -114,6 +115,9 @@ fn match_lookbehind_body(
     if !has_body_quantifier(pattern, body_start, body_end) {
         for (start, end) in group_alternatives(pattern, body_start, body_end) {
             for begin in (0..=target).rev() {
+                if options.unicode && is_trailing_surrogate_position(text, begin) {
+                    continue;
+                }
                 let probe = MatchState {
                     index: begin,
                     captures: state.captures.clone(),
@@ -137,6 +141,9 @@ fn match_lookbehind_body(
         return results;
     }
     for begin in 0..=target {
+        if options.unicode && is_trailing_surrogate_position(text, begin) {
+            continue;
+        }
         for (start, end) in group_alternatives(pattern, body_start, body_end) {
             let probe = MatchState {
                 index: begin,

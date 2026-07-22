@@ -5,6 +5,8 @@
   var point = String.fromCodePoint(0xF0000);
   var units = String.fromCharCode(0xDB80, 0xDC00);
   var lone = String.fromCharCode(0xD800);
+  var loneLow = String.fromCharCode(0xDC00);
+  var astralThenLow = "😀" + loneLow;
   function tag(strings) {
     return strings[0].length + ":" + strings.raw[0].length;
   }
@@ -75,6 +77,14 @@
     /󰀀{2}/u.test(direct + direct),
     /󰀀{2}/u.exec(direct + direct)[0].length,
     /\u{F0000}+/u.exec(direct + direct)[0].length,
-    /[󰀀]+/u.exec(direct + direct)[0].length
+    /[󰀀]+/u.exec(direct + direct)[0].length,
+    /😀/u.test(astralThenLow),
+    /\uDC00/u.test(astralThenLow),
+    astralThenLow.search(/\uDC00/u),
+    /^😀\uDC00$/u.test(astralThenLow),
+    /(?<=(.))$/u.exec(direct)[1].length,
+    /(?<=([\s\S]))$/u.exec(direct)[1].length,
+    /(?<=(.)\1)$/u.exec(direct + direct)[1].length,
+    /(?<=\1(.))$/u.exec(direct + direct)[1].length
   ].join(":");
 })()

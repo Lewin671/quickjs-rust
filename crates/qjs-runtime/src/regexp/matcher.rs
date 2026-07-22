@@ -15,9 +15,9 @@ mod tests;
 
 use classes::class_match;
 use escapes::{
-    ParsedEscape, ParsedPropertyEscape, PropertyCache, char_code_unit, chars_equal,
-    control_letter_escape, hex_escape, is_trailing_surrogate_position, legacy_octal_escape,
-    property_escape, regexp_control_escape, regexp_whitespace, regexp_word_char, unicode_escape,
+    ParsedEscape, ParsedPropertyEscape, PropertyCache, chars_equal, control_letter_escape,
+    hex_escape, is_trailing_surrogate_position, legacy_octal_escape, property_escape,
+    regexp_control_escape, regexp_whitespace, regexp_word_char, unicode_escape,
 };
 use fast_scan::{repeat_simple_atom, simple_atom_boundaries, simple_atom_matcher};
 use groups::{
@@ -888,13 +888,10 @@ fn match_any_reverse(
     mut state: MatchState,
     options: MatchOptions,
 ) -> Vec<MatchState> {
-    let Some(index) = state.index.checked_sub(1) else {
+    let Some((value, index)) = regexp_code_point_before(text, state.index, options.unicode) else {
         return Vec::new();
     };
-    let Some(value) = text.get(index) else {
-        return Vec::new();
-    };
-    if !options.dot_all && is_line_terminator(*value) {
+    if !options.dot_all && is_line_terminator(value) {
         return Vec::new();
     }
     state.index = index;
@@ -1145,10 +1142,7 @@ fn match_escape_reverse(
             options.unicode,
         );
     }
-    let Some(index) = state.index.checked_sub(1) else {
-        return Vec::new();
-    };
-    let Some(value) = text.get(index).copied() else {
+    let Some((value, index)) = regexp_code_point_before(text, state.index, options.unicode) else {
         return Vec::new();
     };
     let matched = match escaped {
@@ -1300,17 +1294,14 @@ fn match_unicode_escape_reverse(
     ignore_case: bool,
     unicode: bool,
 ) -> Vec<MatchState> {
-    let Some(index) = state.index.checked_sub(1) else {
+    let Some((current, index)) = regexp_code_point_before(text, state.index, unicode) else {
         return Vec::new();
     };
-    if text
-        .get(index)
-        .is_some_and(|current| chars_equal(*current, value, ignore_case, unicode))
-    {
-        state.index = index;
-        return vec![state];
+    if !chars_equal(current, value, ignore_case, unicode) {
+        return Vec::new();
     }
-    Vec::new()
+    state.index = index;
+    vec![state]
 }
 
 fn match_property_escape(
@@ -1334,12 +1325,10 @@ fn match_property_escape_reverse(
     mut state: MatchState,
     escape: &escapes::ParsedPropertyEscape,
 ) -> Vec<MatchState> {
-    let Some(index) = state.index.checked_sub(1) else {
+    let Some((value, index)) = regexp_code_point_before(text, state.index, true) else {
         return Vec::new();
     };
-    let Some(code_point) = text.get(index).map(|value| u32::from(*value)) else {
-        return Vec::new();
-    };
+    let code_point = u32::from(value);
     let matched = escape.set.contains(code_point);
     if matched == escape.negated {
         return Vec::new();
@@ -1385,10 +1374,7 @@ fn match_class_reverse(
     let Some(class_end) = class_end(pattern, pc) else {
         return Vec::new();
     };
-    let Some(index) = state.index.checked_sub(1) else {
-        return Vec::new();
-    };
-    let Some(value) = text.get(index).copied() else {
+    let Some((value, index)) = regexp_code_point_before(text, state.index, options.unicode) else {
         return Vec::new();
     };
     if !class_match(
@@ -1419,9 +1405,11 @@ pub(super) fn class_end(pattern: &[char], start: usize) -> Option<usize> {
 fn regexp_code_point_at(text: &[char], index: usize, unicode: bool) -> Option<(char, usize)> {
     let first = *text.get(index)?;
     if unicode
-        && let Some(high) = char_code_unit(first)
+        && let Some(high) = surrogate_escape_code_unit(first)
         && (0xD800..=0xDBFF).contains(&high)
-        && let Some(low) = text.get(index + 1).and_then(|value| char_code_unit(*value))
+        && let Some(low) = text
+            .get(index + 1)
+            .and_then(|value| surrogate_escape_code_unit(*value))
         && (0xDC00..=0xDFFF).contains(&low)
     {
         let code_point = 0x10000 + ((u32::from(high) - 0xD800) << 10) + u32::from(low) - 0xDC00;
@@ -1435,12 +1423,14 @@ fn regexp_code_point_at(text: &[char], index: usize, unicode: bool) -> Option<(c
 fn regexp_code_point_before(text: &[char], index: usize, unicode: bool) -> Option<(char, usize)> {
     let previous = index.checked_sub(1)?;
     if unicode
-        && let Some(low) = text.get(previous).and_then(|value| char_code_unit(*value))
+        && let Some(low) = text
+            .get(previous)
+            .and_then(|value| surrogate_escape_code_unit(*value))
         && (0xDC00..=0xDFFF).contains(&low)
         && let Some(high_index) = previous.checked_sub(1)
         && let Some(high) = text
             .get(high_index)
-            .and_then(|value| char_code_unit(*value))
+            .and_then(|value| surrogate_escape_code_unit(*value))
         && (0xD800..=0xDBFF).contains(&high)
     {
         let code_point = 0x10000 + ((u32::from(high) - 0xD800) << 10) + u32::from(low) - 0xDC00;
