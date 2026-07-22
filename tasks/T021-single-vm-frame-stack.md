@@ -135,6 +135,65 @@ If both external call cases fail to improve by at least 10%, stop extending
 the fast-path predicate. Retain a non-regressing explicit-frame foundation and
 move directly to compact dispatch in the same executor.
 
+### 2026-07-21 R2 result: correct foundation, not promoted
+
+R2 implemented the explicit single-VM frame scheduler on the existing
+`is_direct_leaf_function` boundary, including ordinary calls plus named,
+computed, and indexed direct getters. Focused coverage exercises 10,000-deep
+ordinary recursion and getter chains, zero-through-three argument ordering,
+parent operand preservation, thrown-value identity and `finally` ordering,
+fallback call kinds, and bounded frame-buffer reuse. The final branch passed
+1,433 `qjs-runtime` tests, Clippy, and the file-size guard before its complete
+repository gate.
+
+The first mailbox-based candidate was rejected immediately: against exact base
+`a9a752ec9f589e15017745a1a0cd7306a8ee304e`, its three-case screen measured
+`plain_function_call 0.99939x`, `top_level_function_call 1.06164x`, and
+`dynamic_method_call 1.15123x` candidate/base. Code-generation inspection then
+found two general costs rather than a semantic or eligibility problem:
+
+- the ordinary opcode backedge repeatedly decoded `BytecodeOwner` and reloaded
+  the VM pointer;
+- zero/one-argument numeric hits built and moved the scheduler's 56-byte owned
+  argument payload even though no child frame would be installed.
+
+The retained B+C repair resolves `BytecodeOwner` once, isolates the dispatch
+loop behind a stable bytecode pointer, probes numeric leaves through borrowed
+argument slices, and constructs owned arguments plus the call mailbox only on
+a miss. Its complete 27/27-eligible screen produced:
+
+| Case/scope | Candidate / base |
+| --- | ---: |
+| `plain_function_call` | 1.00500x |
+| `top_level_function_call` | 0.99456x |
+| `dynamic_method_call` | 1.08721x |
+| three-case geometric mean | 1.02810x |
+
+Candidate binary SHA-256 was
+`34624b735c8afbb13b9393f324a30ec9a2514a4e66ba9c6bf5286f6b59513b48`;
+raw JSONL SHA-256 was
+`8ac94a3ecb118a7843e862d283627144d3c4acf8a8b8cb60dddf70b93e512d3c`.
+Because the dynamic case and aggregate still exceed the `1.03x`/`1.02x`
+guardrails, the protocol stopped before external or full-portfolio measurement
+and R2 was not integrated into `main`.
+
+The retained experimental branch is
+`agent/direct-leaf-trampoline/hotpath-r2` at
+`2685051b4e70bd0ed5359661ece718c702464409`. It passed 11/11 focused
+direct-leaf tests, 1,433/1,433 `qjs-runtime` tests, the touched gate including
+116/116 selected Test262 cases, the complete repository gate including
+5,141/5,141 Test262 subset cases, and all 205 QuickJS-NG comparison fixtures.
+Its pushed CI run is `29898252281`; CI remains asynchronous evidence and did
+not delay the dependent R3 branch.
+
+A final attempt to merge the scheduler signal into the existing `Completion`
+enum was rejected without another benchmark: release machine code kept the
+same 98,508-byte inner loop, `0xeb0` stack frame, backedge pointer reloads, and
+instruction-for-instruction `GetPropNamed`/`CallResolved` hot paths. This is
+negative evidence, not an optimization result. The correctness-tested R2
+branch remains an experimental base for R3; promotion now requires compact
+dispatch to pay back its remaining ordinary-dispatch cost.
+
 ## R3: Compact Dispatch In The Same Executor
 
 Introduce a deterministic, fixed-width register or superinstruction form

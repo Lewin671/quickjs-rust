@@ -5808,6 +5808,52 @@ Evidence bindings:
 - external raw SHA-256:
   `fdaf6fa183ce067c99234c91072ac87317bb8be7fdf6ae12d35f886203bda110`.
 
+### Hosted confirmation at `a9a752ec`
+
+The informational hosted Performance Preview run `29893708879` independently
+confirmed the scalar numeric-leaf recovery on Linux x86-64. Its exact candidate
+was `a9a752ec9f589e15017745a1a0cd7306a8ee304e`, exact base was
+`00e72f743205cdd6c9afdbbf4c5ee8643b3cf639`, and pinned QuickJS-NG was
+`f7830186043e4488f2998759d60a514faf07cbc9`.
+
+The complete hosted broad diagnostic measured `0.95112x` candidate/base and
+`0.31888x` candidate/QuickJS-NG overall. Binding improved to `0.85562x`
+candidate/base and call to `0.94471x`; the strict every-case contract still had
+eight failures:
+
+| Case | Candidate / QuickJS-NG |
+| --- | ---: |
+| `top_level_function_call` | 9.45135x |
+| `dynamic_method_call` | 7.46955x |
+| `array_write` | 4.92542x |
+| `array_allocation` | 3.38184x |
+| `object_allocation` | 2.52945x |
+| `closure_allocation_call` | 1.75505x |
+| `string_slice` | 0.53327x |
+| `local_read` | 0.51566x |
+
+External suites remained essentially neutral candidate/base and far from the
+QuickJS-NG target: JetStream was `1.00443x` / `8.08784x`, Kraken was
+`1.00009x` / `4.78708x`, and SunSpider was `0.99908x` / `7.49692x`
+(candidate/base / candidate/QuickJS-NG). This confirms that the accepted unit
+recovered broad call/binding layout without yet changing the external
+dispatch, object, or allocation bottlenecks.
+
+The matching Test262 Coverage run `29893867661` preserved the correctness
+floor: 42,672/42,672 configured cases passed, with zero failures, timeouts,
+not-run cases, or actionable QuickJS-NG gaps. Evidence SHA-256 values:
+
+- hosted broad report:
+  `535c82136fc454ec059386fc9ffea68ffefb8c9f0aff3836650acecefaaa3a1a`;
+- hosted broad raw:
+  `959a27047ef3966740adbf0cd8866349970b3a7a887a022e216dc2cfa38edeb3`;
+- hosted external report:
+  `c0bdbadbfb5b43a5f26c5dbc5f2193118ff2a2130bbbb2cca5758843a37db125`;
+- hosted external raw:
+  `3ca84d2a7d8713f871aacb871731a0983c136af198baac6ca432297c77f56610`;
+- Test262 burndown:
+  `7e834737f584f43f2024cddc9bb3e6697865c9cbd8366ed8e4ebd270b4db35ad`.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
