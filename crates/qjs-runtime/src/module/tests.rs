@@ -152,6 +152,30 @@ fn host_utf8_module_boundaries_preserve_sentinel_range_scalars() {
 }
 
 #[test]
+fn module_resolver_keeps_lone_surrogate_and_replacement_keys_distinct() {
+    let resolver = MapResolver::new()
+        .with("\u{FFFD}", "export default 'replacement';")
+        .with_utf16_key(&[0xD800], "export default 'lone';");
+    let namespace = eval_module(
+        "import replacement from '\u{FFFD}';\n\
+         import lone from '\\uD800';\n\
+         const dynamicReplacement = await import('\u{FFFD}');\n\
+         const dynamicLone = await import('\\uD800');\n\
+         export const values = [\
+           replacement, lone,\
+           dynamicReplacement.default, dynamicLone.default\
+         ].join(':');",
+        "main",
+        Box::new(resolver),
+    )
+    .expect("distinct WTF-16 specifier keys should resolve independently");
+    assert_eq!(
+        export(&namespace, "values"),
+        Value::String("replacement:lone:replacement:lone".to_owned().into())
+    );
+}
+
+#[test]
 fn import_attribute_synthetic_modules_support_namespace_and_dynamic_idempotency() {
     let resolver = MapResolver::new()
         .with("data.json", "{}")

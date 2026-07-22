@@ -86,3 +86,16 @@ sameValue(new RegExp(direct + "{2}", "v").test(doubled), true, "unicode sets con
 sameValue(/󰀀+/v.exec(doubled)[0].length, 4, "unicode sets literal bare scalar plus atom");
 sameValue(/󰀀{2}/v.exec(doubled)[0].length, 4, "unicode sets literal bare scalar counted atom exec");
 sameValue(/[󰀀]+/v.exec(doubled)[0].length, 4, "unicode sets character class scalar control");
+
+var loneLow = String.fromCharCode(0xDC00);
+var astralThenLow = "😀" + loneLow;
+sameValue(/😀/u.test(astralThenLow), true, "astral scalar stays separate from following lone low surrogate");
+sameValue(/😀/u.exec(astralThenLow)[0].length, 2, "astral literal consumes one scalar");
+sameValue(/\uDC00/u.test(astralThenLow), true, "lone low surrogate remains searchable after astral scalar");
+sameValue(astralThenLow.search(/\uDC00/u), 2, "lone low surrogate starts at the third UTF-16 code unit");
+sameValue(/^😀\uDC00$/u.test(astralThenLow), true, "astral and lone surrogate remain two regexp atoms");
+
+sameValue(/(?<=(.))$/u.exec(direct)[1].length, 2, "lookbehind dot starts before the whole scalar");
+sameValue(/(?<=([\s\S]))$/u.exec(direct)[1].length, 2, "lookbehind class starts before the whole scalar");
+sameValue(/(?<=(.)\1)$/u.exec(doubled)[1].length, 2, "lookbehind backward reference captures the whole scalar");
+sameValue(/(?<=\1(.))$/u.exec(doubled)[1].length, 2, "lookbehind forward reference captures the whole scalar");

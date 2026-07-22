@@ -8,21 +8,12 @@ pub(super) fn is_trailing_surrogate_position(text: &[char], index: usize) -> boo
         return false;
     }
     matches!(
-        (char_code_unit(text[index - 1]), char_code_unit(text[index])),
+        (
+            surrogate_escape_code_unit(text[index - 1]),
+            surrogate_escape_code_unit(text[index])
+        ),
         (Some(0xD800..=0xDBFF), Some(0xDC00..=0xDFFF))
     )
-}
-
-pub(super) fn char_code_unit(value: char) -> Option<u16> {
-    if let Some(code_unit) = surrogate_escape_code_unit(value) {
-        return Some(code_unit);
-    }
-    let code_point = value as u32;
-    if code_point <= 0xFFFF {
-        return Some(code_point as u16);
-    }
-    let mut buffer = [0u16; 2];
-    value.encode_utf16(&mut buffer).first().copied()
 }
 
 /// Resolved `\p{...}` / `\P{...}` escapes for one pattern, keyed by the absolute

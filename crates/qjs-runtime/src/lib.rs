@@ -51,7 +51,7 @@ mod module;
 
 pub use module::{
     MapResolver, ModuleResolveError, ModuleResolver, ResolvedModule, eval_module,
-    eval_module_with_prelude,
+    eval_module_with_prelude, module_specifier_code_units, module_specifier_to_utf8_lossy,
 };
 
 use builtins::initialize_builtins;

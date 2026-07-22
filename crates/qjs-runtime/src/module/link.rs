@@ -164,15 +164,13 @@ impl ModuleGraph {
         referrer: &str,
         resolver: &mut dyn ModuleResolver,
     ) -> Result<Value, LinkError> {
-        let host_specifier = crate::string::string_to_utf8_lossy(specifier);
-        let resolved = resolver
-            .resolve(&host_specifier, referrer)
-            .map_err(|error| {
-                LinkError::syntax(format!(
-                    "{} (importing '{host_specifier}' from '{referrer}')",
-                    error.message
-                ))
-            })?;
+        let resolved = resolver.resolve(specifier, referrer).map_err(|error| {
+            let display_specifier = crate::string::string_to_utf8_lossy(specifier);
+            LinkError::syntax(format!(
+                "{} (importing '{display_specifier}' from '{referrer}')",
+                error.message
+            ))
+        })?;
         let request = ModuleRequest::from_type(resolved.key.clone(), module_type);
         let key = request.cache_key();
         if !self.modules.contains_key(&key) {
@@ -261,13 +259,15 @@ impl ModuleGraph {
             },
         );
         for request in requested {
-            let host_specifier = crate::string::string_to_utf8_lossy(&request.specifier);
-            let resolved = resolver.resolve(&host_specifier, &key).map_err(|error| {
-                LinkError::syntax(format!(
-                    "SyntaxError: {} (importing '{}' from '{key}')",
-                    error.message, host_specifier
-                ))
-            })?;
+            let resolved = resolver
+                .resolve(&request.specifier, &key)
+                .map_err(|error| {
+                    let display_specifier = crate::string::string_to_utf8_lossy(&request.specifier);
+                    LinkError::syntax(format!(
+                        "SyntaxError: {} (importing '{}' from '{key}')",
+                        error.message, display_specifier
+                    ))
+                })?;
             let resolved_key = match request.kind {
                 ModuleKind::SourceText => resolved.key.clone(),
                 ModuleKind::Bytes => format!("{}\0bytes", resolved.key),

@@ -46,7 +46,10 @@ mod tests;
 
 pub(crate) use host::{ImportErrorKind, ModuleHost, ModuleHostRef};
 pub(crate) use records::DEFAULT_BINDING;
-pub use resolver::{MapResolver, ModuleResolveError, ModuleResolver, ResolvedModule};
+pub use resolver::{
+    MapResolver, ModuleResolveError, ModuleResolver, ResolvedModule, module_specifier_code_units,
+    module_specifier_to_utf8_lossy,
+};
 
 use crate::{EvalError, EvalErrorKind, Value};
 

@@ -1328,6 +1328,41 @@ fn unicode_bare_sentinel_scalar_quantifiers_bind_the_whole_code_point() {
 }
 
 #[test]
+fn unicode_matching_keeps_rust_astral_scalars_separate_from_lone_surrogates() {
+    assert_eq!(
+        eval(
+            "let low = String.fromCharCode(0xDC00); \
+             let value = '😀' + low; \
+             [
+               /😀/u.test(value),
+               /😀/u.exec(value)[0].length,
+               /\\uDC00/u.test(value),
+               value.search(/\\uDC00/u),
+               /^😀\\uDC00$/u.test(value)
+             ].join(':');"
+        ),
+        Ok(Value::String("true:2:true:2:true".to_owned().into()))
+    );
+}
+
+#[test]
+fn unicode_lookbehind_never_starts_inside_a_canonical_surrogate_pair() {
+    assert_eq!(
+        eval(
+            "let scalar = '\u{F0000}'; \
+             let doubled = scalar + scalar; \
+             [
+               /(?<=(.))$/u.exec(scalar)[1].length,
+               /(?<=([\\s\\S]))$/u.exec(scalar)[1].length,
+               /(?<=(.)\\1)$/u.exec(doubled)[1].length,
+               /(?<=\\1(.))$/u.exec(doubled)[1].length
+             ].join(':');"
+        ),
+        Ok(Value::String("2:2:2:2".to_owned().into()))
+    );
+}
+
+#[test]
 fn non_unicode_astral_literal_matches_code_units() {
     assert_eq!(eval(r#"/𠮷/.test("𠮷");"#), Ok(Value::Boolean(true)));
     assert_eq!(eval(r#""𠮷".search(/𠮷/);"#), Ok(Value::Number(0.0)));
