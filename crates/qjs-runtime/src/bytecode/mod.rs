@@ -18,6 +18,7 @@ mod ir;
 mod ir_names;
 mod upvalue_resolver;
 mod util;
+mod virtual_object;
 mod vm;
 mod vm_bindings;
 mod vm_call;

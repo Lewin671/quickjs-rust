@@ -322,6 +322,20 @@ impl ObjectLiteralShape {
     pub(crate) fn unique_len(&self) -> usize {
         self.keys.len()
     }
+
+    /// Returns the input value that supplies `key` after duplicate literal
+    /// definitions have been applied from left to right.
+    ///
+    /// `input_slots` maps every source property to its shared storage slot,
+    /// while `lookup` maps the final key to that slot. Walking the input map
+    /// backwards therefore identifies the last source value without exposing
+    /// the shape's storage representation to bytecode analyses.
+    pub(crate) fn final_input_index(&self, key: &str) -> Option<usize> {
+        let slot = *self.lookup.get(key)?;
+        self.input_slots
+            .iter()
+            .rposition(|input_slot| *input_slot == slot)
+    }
 }
 
 /// Payload for the cold, unbounded property-storage path. Boxed so an
