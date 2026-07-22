@@ -6,8 +6,8 @@ use crate::{
 };
 
 use super::{
-    STRING_DATA_PROPERTY, string_code_unit_len, string_code_units, string_from_code_unit,
-    string_from_code_units,
+    STRING_DATA_PROPERTY, push_code_point, string_code_unit_len, string_code_units,
+    string_from_code_unit, string_from_code_units,
 };
 use crate::CallEnv;
 
@@ -137,34 +137,6 @@ fn from_code_point_range_error() -> RuntimeError {
         thrown: None,
         message: "RangeError: String.fromCodePoint code point must be an integer in [0, 0x10FFFF]"
             .to_owned(),
-    }
-}
-
-/// Appends `code_point` to `result` without an intermediate allocation. A BMP
-/// code point routes through the code-unit path so lone surrogates keep their
-/// sentinel escaping; anything else is a `char` pushed directly.
-fn push_code_point(result: &mut String, code_point: u32) {
-    // The internal lone-surrogate sentinels live at U+F0000..U+F07FF. Real
-    // scalar values in that range must use UTF-16 code units or they become
-    // indistinguishable from escaped surrogate code units.
-    if (0xF0000..0xF0800).contains(&code_point) {
-        let mut buffer = [0u16; 2];
-        for code_unit in char::from_u32(code_point)
-            .unwrap_or(char::REPLACEMENT_CHARACTER)
-            .encode_utf16(&mut buffer)
-        {
-            result.push_str(&string_from_code_unit(*code_unit));
-        }
-        return;
-    }
-    // A non-surrogate code point (BMP or supplementary) is a real scalar value
-    // and pushes as a `char`. Lone surrogates have no scalar value, so they keep
-    // the sentinel escaping the code-unit helper applies.
-    match char::from_u32(code_point) {
-        Some(character) => result.push(character),
-        // Only lone surrogates (and only values up to 0xFFFF) lack a scalar
-        // value, so the code-unit helper can apply its sentinel escaping.
-        None => result.push_str(&string_from_code_unit(code_point as u16)),
     }
 }
 

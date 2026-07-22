@@ -36,6 +36,9 @@ pub enum Value {
     /// lookup) is a refcount bump rather than a full heap copy. JavaScript
     /// strings are immutable, so sharing is safe; the in-place `+=` append fast
     /// path uses `Rc::make_mut` to mutate the buffer when it is uniquely held.
+    /// The buffer must already use the runtime's canonical WTF-16 sentinel
+    /// representation; host UTF-8 text should enter through
+    /// [`Value::string_from_utf8`].
     String(Rc<String>),
     /// Boolean value.
     Boolean(bool),
@@ -96,6 +99,12 @@ impl PartialEq for Value {
 }
 
 impl Value {
+    /// Constructs a JavaScript String from host UTF-8 scalar text while
+    /// preserving real scalars that overlap the runtime's surrogate sentinels.
+    pub fn string_from_utf8(value: &str) -> Self {
+        Self::String(Rc::new(string::string_from_utf8_scalars(value)))
+    }
+
     pub(crate) fn bigint(value: BigInt) -> Self {
         Self::BigInt(Rc::new(value))
     }
@@ -136,9 +145,18 @@ impl Value {
 #[cfg(test)]
 mod layout_tests {
     use super::Value;
+    use crate::string::string_code_units;
 
     #[test]
     fn value_stays_two_machine_words() {
         assert_eq!(std::mem::size_of::<Value>(), 16);
+    }
+
+    #[test]
+    fn host_utf8_string_constructor_preserves_sentinel_range_scalars() {
+        let Value::String(value) = Value::string_from_utf8("\u{F0000}") else {
+            unreachable!("constructor must return a string");
+        };
+        assert_eq!(string_code_units(&value), vec![0xDB80, 0xDC00]);
     }
 }

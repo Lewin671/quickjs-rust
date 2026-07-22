@@ -10,6 +10,42 @@ mod punctuators;
 
 use char_class::{is_identifier_start, is_js_whitespace_or_line_terminator};
 
+/// Runtime strings use real Rust scalar values except for lone UTF-16
+/// surrogates, which occupy this private-use sentinel range. A real scalar in
+/// the same range must therefore be expanded to its UTF-16 pair before it
+/// enters a string token; otherwise it is indistinguishable from one lone
+/// surrogate code unit.
+const SURROGATE_ESCAPE_SENTINEL_BASE: u32 = 0xF0000;
+
+pub(in crate::scanner) fn push_js_scalar(result: &mut String, character: char) {
+    if (SURROGATE_ESCAPE_SENTINEL_BASE..SURROGATE_ESCAPE_SENTINEL_BASE + 0x800)
+        .contains(&(character as u32))
+    {
+        let mut buffer = [0; 2];
+        for code_unit in character.encode_utf16(&mut buffer) {
+            push_js_code_unit(result, *code_unit);
+        }
+    } else {
+        result.push(character);
+    }
+}
+
+fn is_surrogate_escape_sentinel(character: char) -> bool {
+    (SURROGATE_ESCAPE_SENTINEL_BASE..SURROGATE_ESCAPE_SENTINEL_BASE + 0x800)
+        .contains(&(character as u32))
+}
+
+pub(in crate::scanner) fn push_js_code_unit(result: &mut String, code_unit: u16) {
+    if (0xD800..=0xDFFF).contains(&code_unit) {
+        let character =
+            char::from_u32(SURROGATE_ESCAPE_SENTINEL_BASE + u32::from(code_unit) - 0xD800)
+                .expect("surrogate sentinel is a valid scalar value");
+        result.push(character);
+    } else {
+        result.push(char::from_u32(u32::from(code_unit)).expect("BMP code unit is a valid scalar"));
+    }
+}
+
 pub(crate) struct Lexer<'src> {
     pub(in crate::scanner) source: &'src str,
     pub(in crate::scanner) cursor: usize,
@@ -147,5 +183,19 @@ impl<'src> Lexer<'src> {
         let ch = self.peek()?;
         self.cursor += ch.len_utf8();
         Some(ch)
+    }
+
+    pub(in crate::scanner) fn push_source_character(&self, result: &mut String, character: char) {
+        if self.options.wtf16_source && is_surrogate_escape_sentinel(character) {
+            result.push(character);
+        } else {
+            push_js_scalar(result, character);
+        }
+    }
+
+    pub(in crate::scanner) fn push_source_str(&self, result: &mut String, value: &str) {
+        for character in value.chars() {
+            self.push_source_character(result, character);
+        }
     }
 }

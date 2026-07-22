@@ -5,7 +5,7 @@ use crate::{RuntimeError, Value, to_js_string_with_env};
 use unicode_normalization::UnicodeNormalization;
 
 use super::super::indexing::this_string_value;
-use super::super::{string_code_units, string_from_code_unit};
+use super::super::{string_code_units, string_from_code_unit, surrogate_escape_code_unit};
 
 pub(crate) fn native_string_prototype_to_lower_case(
     this_value: Value,
@@ -104,7 +104,16 @@ fn decode_utf16_code_points(value: &str) -> String {
                 let code_point =
                     (u32::from(first) - 0xD800) * 1024 + (u32::from(second) - 0xDC00) + 0x10000;
                 if let Some(character) = char::from_u32(code_point) {
-                    result.push(character);
+                    // Preserve the canonical two-sentinel representation when
+                    // a real scalar overlaps the lone-surrogate sentinel
+                    // range. Private-use scalars have no case mapping, so the
+                    // case conversion does not need to combine this pair.
+                    if surrogate_escape_code_unit(character).is_some() {
+                        result.push_str(&string_from_code_unit(first));
+                        result.push_str(&string_from_code_unit(second));
+                    } else {
+                        result.push(character);
+                    }
                     index += 2;
                     continue;
                 }

@@ -187,6 +187,20 @@ fn json_stringify_escapes_strings_and_unpaired_surrogates() {
 }
 
 #[test]
+fn json_preserves_wtf16_at_the_surrogate_sentinel_boundary() {
+    let direct_source = format!(
+        "let direct = '{}'; let parsed = JSON.parse('\\\"{}\\\"'); let escaped = JSON.parse('\\\"\\\\udb80\\\\udc00\\\"'); let lone = JSON.parse('\\\"\\\\ud800\\\"'); [parsed === direct, parsed.length, escaped === direct, escaped.length, lone.length, lone.charCodeAt(0), JSON.parse(JSON.stringify(direct)) === direct].join(':');",
+        '\u{F0000}', '\u{F0000}'
+    );
+    assert_eq!(
+        eval(&direct_source),
+        Ok(Value::String(
+            "true:2:true:2:1:55296:true".to_owned().into()
+        ))
+    );
+}
+
+#[test]
 fn json_parse_reviver_observes_context_and_forward_modifications() {
     assert_eq!(
         eval(

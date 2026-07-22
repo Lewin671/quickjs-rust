@@ -201,6 +201,81 @@ fn evaluates_string_sequence_builtins() {
 }
 
 #[test]
+fn preserves_utf16_at_the_surrogate_sentinel_boundary() {
+    let direct_source = format!(
+        "let direct = '{}'; let escaped = '\\u{{F0000}}'; let point = String.fromCodePoint(0xF0000); let units = String.fromCharCode(0xDB80, 0xDC00); [direct.length, direct.codePointAt(0), direct.charCodeAt(0), direct.charCodeAt(1), direct === escaped, direct === point, direct === units].join(':');",
+        '\u{F0000}'
+    );
+    assert_eq!(
+        eval(&direct_source),
+        Ok(Value::String(
+            "2:983040:56192:56320:true:true:true".to_owned().into()
+        ))
+    );
+
+    assert_eq!(
+        eval(
+            "let value = '\\u{F0000}'; [value.slice(0, 1).charCodeAt(0), value.slice(1, 2).charCodeAt(0), value.substring(0, 1).charCodeAt(0), value.substring(1, 2).charCodeAt(0), value.substr(0, 1).charCodeAt(0), value.substr(1, 1).charCodeAt(0)].join(':');"
+        ),
+        Ok(Value::String(
+            "56192:56320:56192:56320:56192:56320".to_owned().into()
+        ))
+    );
+
+    assert_eq!(
+        eval(
+            "let lone = String.fromCharCode(0xD800); [lone.length, lone.codePointAt(0), lone.charCodeAt(0), lone.slice(0, 1) === lone, lone.substring(0, 1) === lone, lone.substr(0, 1) === lone].join(':');"
+        ),
+        Ok(Value::String(
+            "1:55296:55296:true:true:true".to_owned().into()
+        ))
+    );
+
+    let template_source = format!(
+        "function tag(strings) {{ return strings[0].length + ':' + strings.raw[0].length; }} [tag`{}`, tag`\\u{{F0000}}`].join(':');",
+        '\u{F0000}'
+    );
+    assert_eq!(
+        eval(&template_source),
+        Ok(Value::String("2:2:2:9".to_owned().into()))
+    );
+
+    assert_eq!(
+        eval(
+            "let value = '\\u{F0000}'; let iterated = Array.from(value)[0]; let decoded = decodeURIComponent('%F3%B0%80%80'); [iterated === value, iterated.length, value.toLowerCase() === value, value.toUpperCase() === value, decoded === value, decoded.length].join(':');"
+        ),
+        Ok(Value::String("true:2:true:true:true:2".to_owned().into()))
+    );
+
+    assert_eq!(
+        eval(
+            "let value = '\\u{F0000}'; [/.*/u.exec(value)[0] === value, /./u.exec(value)[0] === value, /./u.exec(value)[0].length, /./.exec(value)[0].charCodeAt(0), /^(.)$/u.exec(value)[1] === value, value.match(/./gu).length, value.match(/./g).length, new RegExp(value, 'u').test(value)].join(':');"
+        ),
+        Ok(Value::String(
+            "true:true:2:56192:true:1:2:true".to_owned().into()
+        ))
+    );
+
+    assert_eq!(
+        eval(
+            "let value = '\\u{F0000}'; let parts = value.split(''); [encodeURIComponent(value), String.raw({raw: [value]}) === value, value.concat(value).length, value.repeat(2).length, ''.padEnd(2, value) === value, value.replace(/(.)/u, '$1') === value, value.replaceAll(value, value) === value, parts.length, parts[0].charCodeAt(0), parts[1].charCodeAt(0)].join(':');"
+        ),
+        Ok(Value::String(
+            "%F3%B0%80%80:true:4:4:true:true:true:2:56192:56320"
+                .to_owned()
+                .into()
+        ))
+    );
+
+    assert_eq!(
+        eval(
+            "let value = '\\u{F0000}'; let lone = String.fromCharCode(0xD800); let fromEval = eval(\"'\" + value + \"'\"); let loneFromEval = eval(\"'\" + lone + \"'\"); let fromFunction = Function(\"return '\" + value + \"';\")(); [fromEval === value, fromEval.length, loneFromEval === lone, loneFromEval.length, fromFunction === value, fromFunction.length].join(':');"
+        ),
+        Ok(Value::String("true:2:true:1:true:2".to_owned().into()))
+    );
+}
+
+#[test]
 fn evaluates_string_html_builtins() {
     assert_eq!(
         eval("'x'.bold() + ':' + 'x'.italics() + ':' + 'x'.fixed();"),

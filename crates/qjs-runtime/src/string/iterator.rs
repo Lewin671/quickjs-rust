@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{ObjectRef, RuntimeError, Value};
 
-use super::{string_code_units, string_from_code_units};
+use super::{push_code_point, string_code_units, string_from_code_units};
 use crate::CallEnv;
 
 const STRING_ITERATOR_STRING: &str = "\0string_iterator_string";
@@ -124,7 +124,7 @@ fn is_trailing_surrogate(code_unit: u16) -> bool {
 
 fn string_from_surrogate_pair(high: u16, low: u16) -> String {
     let code_point = 0x10000 + ((u32::from(high) - 0xD800) << 10) + u32::from(low) - 0xDC00;
-    char::from_u32(code_point)
-        .unwrap_or(char::REPLACEMENT_CHARACTER)
-        .to_string()
+    let mut result = String::new();
+    push_code_point(&mut result, code_point);
+    result
 }

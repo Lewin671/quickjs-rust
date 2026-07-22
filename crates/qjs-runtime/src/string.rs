@@ -108,6 +108,14 @@ pub(crate) fn string_from_code_units(code_units: &[u16]) -> String {
     result
 }
 
+pub(crate) fn string_from_utf8_scalars(value: &str) -> String {
+    let mut result = String::with_capacity(value.len());
+    for character in value.chars() {
+        push_code_point(&mut result, character as u32);
+    }
+    result
+}
+
 pub(crate) fn surrogate_escape_code_unit(character: char) -> Option<u16> {
     let code = character as u32;
     if (SURROGATE_ESCAPE_SENTINEL_BASE..SURROGATE_ESCAPE_SENTINEL_BASE + 0x800).contains(&code) {
@@ -156,11 +164,32 @@ pub(crate) fn push_code_unit(result: &mut String, code_unit: u16) {
     result.push(char_from_code_unit(code_unit));
 }
 
+/// Appends one validated Unicode code point using the runtime's WTF-16 string
+/// representation. Real scalar values that overlap the lone-surrogate
+/// sentinel range are expanded into their UTF-16 pair so they cannot be
+/// mistaken for one surrogate code unit.
+pub(crate) fn push_code_point(result: &mut String, code_point: u32) {
+    if (0xD800..=0xDFFF).contains(&code_point) {
+        push_code_unit(result, code_point as u16);
+        return;
+    }
+
+    let character = char::from_u32(code_point).expect("caller validates Unicode code points");
+    if surrogate_escape_code_unit(character).is_some() {
+        let mut buffer = [0; 2];
+        for code_unit in character.encode_utf16(&mut buffer) {
+            push_code_unit(result, *code_unit);
+        }
+    } else {
+        result.push(character);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        char_from_code_unit, string_code_unit_at, string_code_unit_len, string_code_units,
-        string_from_code_units, surrogate_escape_code_unit,
+        char_from_code_unit, push_code_point, string_code_unit_at, string_code_unit_len,
+        string_code_units, string_from_code_units, surrogate_escape_code_unit,
     };
 
     #[test]
@@ -195,6 +224,22 @@ mod tests {
                 assert_eq!(string_code_unit_at(value, index), Some(*code_unit));
             }
             assert_eq!(string_code_unit_at(value, expected.len()), None);
+        }
+    }
+
+    #[test]
+    fn code_points_overlapping_the_surrogate_sentinel_expand_to_utf16() {
+        for code_point in 0xF0000..0xF0800 {
+            let mut value = String::new();
+            push_code_point(&mut value, code_point);
+
+            let mut buffer = [0; 2];
+            let expected = char::from_u32(code_point)
+                .expect("sentinel-range code point is valid")
+                .encode_utf16(&mut buffer)
+                .to_vec();
+            assert_eq!(string_code_units(&value), expected, "U+{code_point:05X}");
+            assert_eq!(string_code_unit_len(&value), 2, "U+{code_point:05X}");
         }
     }
 }
