@@ -203,6 +203,15 @@ impl Vm<'_> {
                     );
                 }
             }
+            // Only the realm's fixed global object participates. Dynamically
+            // constructed/synthetic realms carry an explicit object override
+            // and retain the full observable property path.
+            if !is_compiler_temporary(name)
+                && realm.dynamic_function_realm_global().is_none()
+                && let (Some(global_this), Some(cell)) = (global_this.as_ref(), realm.cell(name))
+            {
+                global_this.link_realm_global_data_property(name, &cell);
+            }
         }
         Ok(())
     }
@@ -937,6 +946,16 @@ impl Vm<'_> {
         if self.slot_is_realm_binding(slot)
             && let Some(cell) = self.local_upvalues.get(slot).and_then(Option::as_ref)
         {
+            if cell.is_detached_global() {
+                let name = self.bytecode.locals[slot].name.clone();
+                if let Some(value) = self.global_this_own_value(&name)? {
+                    return Ok(value);
+                }
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!("ReferenceError: undefined identifier `{name}`"),
+                });
+            }
             let value = cell.get();
             if !value.is_uninitialized_lexical_marker() {
                 return Ok(value);
@@ -1053,6 +1072,11 @@ impl Vm<'_> {
 
     #[inline(never)]
     fn store_local_slow(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
+        if let Some(result) =
+            self.try_store_linked_realm_cell(slot, &value, self.bytecode.is_strict())
+        {
+            return result;
+        }
         // Read only the `Copy` slot metadata up front so the hot local write
         // never clones the `Local` (its owned `name` would be a heap
         // allocation on every assignment); the binding name is resolved by

@@ -398,7 +398,11 @@ impl NumericLeafShortcut {
             }
         };
         let upvalue_number = |index: usize| -> Option<f64> {
-            upvalues.get(index)?.with_value(|value| match value {
+            let upvalue = upvalues.get(index)?;
+            if upvalue.is_detached_global() {
+                return None;
+            }
+            upvalue.with_value(|value| match value {
                 Value::Number(value) => Some(*value),
                 _ => None,
             })
@@ -452,9 +456,13 @@ impl NumericLeafShortcut {
                 op,
                 right,
             } => {
+                let upvalue = upvalues.get(*upvalue_index)?;
+                if upvalue.is_linked_global() || upvalue.is_detached_global() {
+                    return None;
+                }
                 let value = direct_number_binary(upvalue_number(*upvalue_index)?, *op, *right)?
                     .into_value()?;
-                upvalues.get(*upvalue_index)?.set(value.clone());
+                upvalue.set(value.clone());
                 Some(value)
             }
         }
@@ -486,13 +494,14 @@ impl NumericLoopCall {
             .shortcut
             .as_ref()?;
         let captured_number = |index: usize| -> Option<f64> {
-            function
-                .upvalues
-                .get(index)?
-                .with_value(|value| match value {
-                    Value::Number(value) => Some(*value),
-                    _ => None,
-                })
+            let upvalue = function.upvalues.get(index)?;
+            if upvalue.is_detached_global() {
+                return None;
+            }
+            upvalue.with_value(|value| match value {
+                Value::Number(value) => Some(*value),
+                _ => None,
+            })
         };
         match shortcut {
             NumericLeafShortcut::ArgumentConstChain {
@@ -563,6 +572,9 @@ impl NumericLoopCall {
                 right,
             } if argument_count == 0 => {
                 let upvalue = function.upvalues.get(*upvalue_index)?.clone();
+                if upvalue.is_linked_global() || upvalue.is_detached_global() {
+                    return None;
+                }
                 if caller_cells
                     .iter()
                     .flatten()
@@ -709,6 +721,12 @@ pub(crate) fn try_eval_numeric_leaf(
         .numeric_leaf_plan
         .get_or_init(|| NumericLeafPlan::compile(bytecode))
         .as_ref()?;
+    if upvalues.iter().any(Upvalue::is_detached_global) {
+        return None;
+    }
+    if plan.writes_received_upvalues && upvalues.iter().any(Upvalue::is_linked_global) {
+        return None;
+    }
     if plan.writes_received_upvalues {
         return try_eval_numeric_leaf_bytecode(bytecode, params, arguments, upvalues);
     }

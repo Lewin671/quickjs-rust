@@ -1836,4 +1836,48 @@ mod tests {
                 .is_some_and(|(local, exported)| local.ptr_eq(exported))
         );
     }
+
+    #[test]
+    fn global_link_installation_excludes_compiler_temporaries() {
+        let script = qjs_parser::parse_script("var linked = 1; linked;").unwrap();
+        let bytecode = crate::bytecode::compile_script(&script).unwrap();
+        let global = ObjectRef::new(HashMap::new());
+        let realm = new_realm(HashMap::from([(
+            crate::GLOBAL_THIS_BINDING.to_owned(),
+            Value::Object(global.clone()),
+        )]));
+
+        Vm::initialize_script_global_bindings(&bytecode, &realm).unwrap();
+
+        assert!(global.has_global_data_link("linked"));
+        for name in bytecode
+            .hoisted_local_names()
+            .filter(|name| super::super::vm_bindings::is_compiler_temporary(name))
+        {
+            assert!(!global.has_global_data_link(name));
+        }
+    }
+
+    #[test]
+    fn dynamic_realm_override_disables_global_link_installation() {
+        let script = qjs_parser::parse_script("var linked = 1;").unwrap();
+        let bytecode = crate::bytecode::compile_script(&script).unwrap();
+        let global = ObjectRef::new(HashMap::new());
+        let dynamic_global = ObjectRef::new(HashMap::new());
+        let realm = new_realm(HashMap::from([
+            (
+                crate::GLOBAL_THIS_BINDING.to_owned(),
+                Value::Object(global.clone()),
+            ),
+            (
+                "__quickjsRustDynamicFunctionRealm".to_owned(),
+                Value::Object(dynamic_global),
+            ),
+        ]));
+
+        Vm::initialize_script_global_bindings(&bytecode, &realm).unwrap();
+
+        assert!(global.has_own_property("linked"));
+        assert!(!global.has_global_data_link("linked"));
+    }
 }

@@ -69,7 +69,7 @@ pub(crate) use prototype::{
     native_generator_function, native_realm_throw_type_error, native_throw_type_error,
 };
 pub(crate) use strict::is_strict_function_body;
-pub(crate) use upvalue::Upvalue;
+pub(crate) use upvalue::{LinkedGlobalStore, Upvalue};
 pub(crate) use value::{
     CompiledUserFunction, Function, InstanceElementInitializer, InstanceFieldInitializer,
     InstancePrivateElement, PrivateFieldInit,

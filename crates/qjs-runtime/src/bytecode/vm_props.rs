@@ -13,11 +13,90 @@ use crate::{
 use super::vm::Vm;
 
 use super::ir::NamedPropertyCache;
-use super::vm_set::property_set_uses_setter;
-use crate::CallEnv;
+use super::vm_set::{property_set_uses_setter, set_property_key};
+use crate::{CallEnv, function::LinkedGlobalStore};
 use std::rc::Rc;
 
 impl Vm<'_> {
+    /// Stores through a realm slot whose binding cell is also the fixed global
+    /// object's own data-property storage. This path is intentionally
+    /// slot-only: no property HashMap, descriptor clone, realm name lookup, or
+    /// property revision update occurs after link installation.
+    pub(super) fn try_store_linked_realm_cell(
+        &mut self,
+        slot: usize,
+        value: &Value,
+        is_strict: bool,
+    ) -> Option<Result<(), RuntimeError>> {
+        if !self.slot_is_realm_binding(slot)
+            || self.direct_eval_with_stack
+            || self.env.deopt_bindings().is_some()
+            || self.env.dynamic_function_realm_global().is_some()
+        {
+            return None;
+        }
+        let cell = self.local_upvalues.get(slot).and_then(Option::as_ref)?;
+        let store = cell.try_store_linked_global(value.clone());
+        let detached = cell.is_detached_global();
+        match store {
+            LinkedGlobalStore::Written => {
+                self.locals[slot] = Some(value.clone());
+                Some(Ok(()))
+            }
+            LinkedGlobalStore::ReadOnly if is_strict => {
+                let name = &self.bytecode.locals[slot].name;
+                Some(Err(RuntimeError {
+                    thrown: None,
+                    message: format!("TypeError: Cannot assign to read only property '{name}'"),
+                }))
+            }
+            LinkedGlobalStore::ReadOnly => Some(Ok(())),
+            LinkedGlobalStore::NotLinked if detached => {
+                let name = self.bytecode.locals.get(slot)?.name.clone();
+                Some(self.store_detached_realm_global(&name, value.clone(), is_strict))
+            }
+            LinkedGlobalStore::NotLinked => None,
+        }
+    }
+
+    /// A low-level incompatible descriptor replacement can permanently detach
+    /// a formerly linked realm cell. Such a slot must use the full global
+    /// object's `[[Set]]` path (including accessors and Proxy-visible effects),
+    /// then synchronize or invalidate the old realm cell. Public
+    /// `Object.defineProperty` cannot reach this state for the linked
+    /// non-configurable property, but internal descriptor APIs fail closed here
+    /// instead of silently writing only the stale cell.
+    fn store_detached_realm_global(
+        &mut self,
+        name: &str,
+        value: Value,
+        is_strict: bool,
+    ) -> Result<(), RuntimeError> {
+        let Some(global_this) = self.cached_global_this() else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: format!("ReferenceError: undefined identifier `{name}`"),
+            });
+        };
+        let mut env = self.current_env();
+        let written = set_property_key(
+            Value::Object(global_this.clone()),
+            PropertyKey::String(name.to_owned()),
+            value,
+            &mut env,
+        )?;
+        self.apply_env(env);
+        self.env
+            .sync_realm_global_object_property(&global_this, name);
+        if !written && is_strict {
+            return Err(RuntimeError {
+                thrown: None,
+                message: format!("TypeError: Cannot assign to read only property '{name}'"),
+            });
+        }
+        Ok(())
+    }
+
     fn try_store_indexed_realm_global(
         &mut self,
         slot: usize,
@@ -27,6 +106,9 @@ impl Vm<'_> {
     ) -> Option<Result<(), RuntimeError>> {
         if !self.slot_is_realm_binding(slot) {
             return None;
+        }
+        if let Some(result) = self.try_store_linked_realm_cell(slot, value, is_strict) {
+            return Some(result);
         }
         let Some(Value::Object(global_this)) = self.env.global_this() else {
             return None;
@@ -349,6 +431,18 @@ impl Vm<'_> {
         {
             cache.clear();
             return self.try_direct_get_string(object, key);
+        }
+        // A linked global cell can change without bumping the object's
+        // descriptor revision. Never retain an exact value snapshot for that
+        // key; direct cell reads remain live for alias/globalThis access.
+        if object_ref.has_global_data_link(key) {
+            cache.clear();
+            return match object_ref.own_data_property_read(key) {
+                OwnDataPropertyRead::Data(value) => Some(value),
+                OwnDataPropertyRead::Missing | OwnDataPropertyRead::NeedsSlowPath => {
+                    self.try_direct_get_string(object, key)
+                }
+            };
         }
         if let Some(value) = cache.get(object_ref) {
             return Some(value);

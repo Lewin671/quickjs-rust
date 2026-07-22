@@ -10,6 +10,8 @@ use crate::{Function, RuntimeError, function::DynamicBindings, proxy::ProxyRef};
 
 use super::{Property, Value};
 
+mod global_data;
+
 type NamespaceBindingCell = DynamicBindings;
 type NamespaceAliasMap = HashMap<String, (NamespaceBindingCell, String)>;
 
@@ -197,6 +199,9 @@ struct ObjectData {
     /// Invalidates monomorphic named-read caches whenever an own string
     /// property's descriptor or value changes.
     property_revision: Cell<u64>,
+    /// Cheap guard for the cold name-to-cell table used only by fixed realm
+    /// global objects whose var bindings share storage with own properties.
+    has_global_data_links: Cell<bool>,
     /// Count of own string keys that parse as array indices. Maintained as keys
     /// are added and removed so `has_own_index_property` is an O(1) check; this
     /// keeps the `array[i] = x` fast path from scanning a prototype's keys on
@@ -221,6 +226,7 @@ struct ObjectData {
 
 #[derive(Default)]
 struct ObjectColdData {
+    global_data_links: RefCell<HashMap<Rc<str>, crate::function::Upvalue>>,
     symbol_properties: RefCell<Vec<(ObjectRef, Property)>>,
     to_string_tag: RefCell<Option<String>>,
     module_namespace_bindings: RefCell<Option<ModuleNamespaceBindings>>,
@@ -724,6 +730,7 @@ impl ObjectRef {
         Self(Rc::new(ObjectData {
             properties: RefCell::new(PropertyStorage::dynamic(properties, property_order)),
             property_revision: Cell::new(0),
+            has_global_data_links: Cell::new(false),
             index_property_count: Cell::new(index_property_count),
             extensible: Cell::new(true),
             prototype: RefCell::new(prototype),
@@ -770,6 +777,7 @@ impl ObjectRef {
         Self(Rc::new(ObjectData {
             properties: RefCell::new(properties),
             property_revision: Cell::new(0),
+            has_global_data_links: Cell::new(false),
             index_property_count: Cell::new(index_property_count),
             extensible: Cell::new(true),
             prototype: RefCell::new(prototype.map(Prototype::Object)),
@@ -797,6 +805,7 @@ impl ObjectRef {
         Self(Rc::new(ObjectData {
             properties: RefCell::new(PropertyStorage::ShapedPair { shape, values }),
             property_revision: Cell::new(0),
+            has_global_data_links: Cell::new(false),
             index_property_count: Cell::new(index_property_count),
             extensible: Cell::new(true),
             prototype: RefCell::new(prototype.map(Prototype::Object)),
@@ -1005,23 +1014,31 @@ impl ObjectRef {
     }
 
     pub(crate) fn get(&self, key: &str) -> Option<Value> {
-        self.0.properties.borrow().value(key).or_else(|| {
-            self.0
-                .prototype
-                .borrow()
-                .as_ref()
-                .and_then(|proto| proto.get(key))
-        })
+        if let Some(cell) = self.global_data_cell(key)
+            && cell.is_linked_global()
+        {
+            return Some(cell.get());
+        }
+        if let Some(value) = self.0.properties.borrow().value(key) {
+            return Some(value);
+        }
+        self.0
+            .prototype
+            .borrow()
+            .as_ref()
+            .and_then(|proto| proto.get(key))
     }
 
     pub(crate) fn property(&self, key: &str) -> Option<Property> {
-        self.0.properties.borrow().get(key).or_else(|| {
-            self.0
-                .prototype
-                .borrow()
-                .as_ref()
-                .and_then(|proto| proto.property(key))
-        })
+        if let Some(mut property) = self.0.properties.borrow().get(key) {
+            self.hydrate_global_data_property(key, &mut property);
+            return Some(property);
+        }
+        self.0
+            .prototype
+            .borrow()
+            .as_ref()
+            .and_then(|proto| proto.property(key))
     }
 
     /// Whether any own property key parses as an array index. Used to gate the
@@ -1077,6 +1094,11 @@ impl ObjectRef {
     pub(crate) fn set_shared_key(&self, key: Rc<str>, value: Value) {
         let establishes_realm_identity = key.as_ref() == "globalThis"
             && matches!(&value, Value::Object(global_this) if self.ptr_eq(global_this));
+        if let Some(result) = self.write_linked_global_data_property(&key, &value)
+            && !matches!(result, OwnDataPropertyWrite::NeedsSlowPath)
+        {
+            return;
+        }
         let mut properties = self.0.properties.borrow_mut();
         if let Some(property) = properties.get_mut(&key) {
             if property.writable {
@@ -1118,12 +1140,17 @@ impl ObjectRef {
         }
     }
 
-    pub(crate) fn define_property(&self, key: String, property: Property) {
+    pub(crate) fn define_property(&self, key: String, mut property: Property) {
         let establishes_realm_identity = key == "globalThis"
             && !property.is_accessor()
             && matches!(&property.value, Value::Object(global_this) if self.ptr_eq(global_this));
         let mut properties = self.0.properties.borrow_mut();
+        let mut bump_revision = true;
         if let Some(existing) = properties.get_mut(key.as_str()) {
+            bump_revision = !matches!(
+                self.synchronize_linked_definition(&key, existing, &mut property),
+                global_data::LinkedDefinition::ValueOnly
+            );
             *existing = property;
         } else {
             if is_array_index_key(&key) {
@@ -1134,7 +1161,9 @@ impl ObjectRef {
             let key: Rc<str> = key.into();
             properties.insert(key, property);
         }
-        self.bump_property_revision();
+        if bump_revision {
+            self.bump_property_revision();
+        }
         drop(properties);
         if establishes_realm_identity {
             self.capture_realm_intrinsic_identity();
@@ -1206,6 +1235,9 @@ impl ObjectRef {
     }
 
     pub(crate) fn append_string_property(&self, key: &str, suffix: &str) -> Option<Value> {
+        if let Some(result) = self.append_linked_global_data_string(key, suffix) {
+            return result;
+        }
         let mut properties = self.0.properties.borrow_mut();
         let property = properties.get_mut(key)?;
         if !property.writable || property.accessor {
@@ -1245,6 +1277,7 @@ impl ObjectRef {
                 property.freeze_data();
             }
         }
+        self.freeze_global_data_links();
     }
 
     pub(crate) fn is_frozen(&self) -> bool {
@@ -1271,12 +1304,18 @@ impl ObjectRef {
         {
             property.value = value.clone();
         }
+        self.hydrate_global_data_property(key, &mut property);
         Some(property)
     }
 
     pub(crate) fn own_data_property_read(&self, key: &str) -> OwnDataPropertyRead {
         if self.0.module_namespace_exotic.get() {
             return OwnDataPropertyRead::NeedsSlowPath;
+        }
+        if let Some(cell) = self.global_data_cell(key)
+            && cell.is_linked_global()
+        {
+            return OwnDataPropertyRead::Data(cell.get());
         }
         self.0.properties.borrow().own_data_read(key)
     }
@@ -1327,6 +1366,9 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return None;
         }
+        if let Some(value) = self.linked_global_data_number(key) {
+            return value;
+        }
         self.0.properties.borrow().writable_number(key)
     }
 
@@ -1340,6 +1382,9 @@ impl ObjectRef {
     ) -> OwnDataPropertyWrite {
         if self.0.module_namespace_exotic.get() {
             return OwnDataPropertyWrite::NeedsSlowPath;
+        }
+        if let Some(result) = self.write_linked_global_data_property(key, value) {
+            return result;
         }
         let establishes_realm_identity = key == "globalThis"
             && matches!(value, Value::Object(global_this) if self.ptr_eq(global_this));
@@ -1447,6 +1492,11 @@ impl ObjectRef {
             return false;
         }
         let removed = properties.remove(key);
+        if removed.is_some()
+            && let Some(cell) = self.global_data_cell(key)
+        {
+            self.detach_global_data_link(key, &cell);
+        }
         if removed.is_some() {
             self.bump_property_revision();
         }

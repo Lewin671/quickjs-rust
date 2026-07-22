@@ -212,6 +212,54 @@ impl Vm<'_> {
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
         }
+        if self
+            .local_upvalues
+            .get(slot)
+            .and_then(Option::as_ref)
+            .is_some_and(|cell| cell.is_detached_global())
+        {
+            let left = self.load_local(slot)?;
+            let mut env = self.current_env();
+            let result = operations::eval_binary(
+                left,
+                BinaryOp::Add,
+                Value::String(suffix.to_owned().into()),
+                &mut env,
+            )?;
+            self.apply_env(env);
+            self.store_local(slot, result.clone())?;
+            return Ok(result);
+        }
+        // A linked realm cell carries the global data descriptor's writable
+        // state. The in-place append below must not mutate a local mirror and
+        // then discover that Object.freeze/defineProperty made the binding
+        // read-only. Compute the assignment result first, preserving sloppy
+        // expression value semantics, and let strict mode report PutValue's
+        // failure without touching either mirror.
+        if let Some(cell) = self.local_upvalues.get(slot).and_then(Option::as_ref)
+            && cell.is_linked_global()
+            && !cell.is_linked_global_writable()
+        {
+            let left = cell.get();
+            let mut env = self.current_env();
+            let result = operations::eval_binary(
+                left,
+                BinaryOp::Add,
+                Value::String(suffix.to_owned().into()),
+                &mut env,
+            )?;
+            self.apply_env(env);
+            if self.bytecode.is_strict() {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!(
+                        "TypeError: Cannot assign to read only property '{}'",
+                        local_meta.name
+                    ),
+                });
+            }
+            return Ok(result);
+        }
         // The append opcode mutates the local string in place as a fast path.
         // A received capture's authoritative value is its shared cell, not the
         // compatibility slot snapshot left from function entry; refresh that
@@ -265,12 +313,19 @@ impl Vm<'_> {
         if let Some(global_this) = global_this
             && global_this.has_own_property(&local_meta.name)
         {
-            global_this
-                .append_string_property(&local_meta.name, suffix)
-                .unwrap_or_else(|| {
-                    global_this.set(local_meta.name.clone(), result.clone());
-                    result.clone()
-                });
+            let already_synced_by_link = self
+                .local_upvalues
+                .get(slot)
+                .and_then(Option::as_ref)
+                .is_some_and(|cell| global_this.global_data_link_matches(&local_meta.name, cell));
+            if !already_synced_by_link {
+                global_this
+                    .append_string_property(&local_meta.name, suffix)
+                    .unwrap_or_else(|| {
+                        global_this.set(local_meta.name.clone(), result.clone());
+                        result.clone()
+                    });
+            }
             if self.realm.contains(&local_meta.name) {
                 // A top-level reader may already hold the realm binding's
                 // shared cell even when this older from-env frame still uses a
@@ -296,18 +351,26 @@ impl Vm<'_> {
             // in place needs no separate cell refresh afterward — unlike the
             // old two-map realm model, where `Rc::make_mut` on the raw map's
             // copy could detach the value from an already-captured cell.
-            let appended = self.realm.cell(name).and_then(|cell| {
-                cell.with_value_mut(|value| {
-                    let Value::String(string) = value else {
-                        return None;
-                    };
-                    std::rc::Rc::make_mut(string).push_str(suffix);
-                    Some(value.clone())
-                })
-            });
+            let realm_cell = self.realm.cell(name);
+            let appended = realm_cell
+                .as_ref()
+                .filter(|cell| !cell.is_detached_global())
+                .and_then(|cell| {
+                    cell.with_value_mut(|value| {
+                        let Value::String(string) = value else {
+                            return None;
+                        };
+                        std::rc::Rc::make_mut(string).push_str(suffix);
+                        Some(value.clone())
+                    })
+                    .flatten()
+                });
             if let Some(result) = appended {
                 if let Some(global_this) = self.cached_global_this()
                     && global_this.has_own_property(name)
+                    && !realm_cell
+                        .as_ref()
+                        .is_some_and(|cell| global_this.global_data_link_matches(name, cell))
                 {
                     global_this
                         .append_string_property(name, suffix)
