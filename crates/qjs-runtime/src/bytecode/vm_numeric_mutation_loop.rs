@@ -9,6 +9,10 @@ use super::{
     vm::Vm,
 };
 
+mod dense;
+
+use dense::DenseNumericMutationLoopPlan;
+
 #[derive(Clone, Copy, Debug)]
 enum NumericMutationOp {
     Add,
@@ -36,10 +40,7 @@ struct NumericMutation {
 /// object. Every source iteration still performs each recurrence step; only
 /// the unobservable intermediate property storage is sunk to the loop exit.
 #[derive(Clone, Debug)]
-pub(super) struct NumericMutationLoopPlan {
-    header: usize,
-    backedge: usize,
-    exit: usize,
+struct NamedNumericMutationLoopPlan {
     counter_slot: usize,
     limit_slot: usize,
     accumulator_slot: usize,
@@ -49,6 +50,22 @@ pub(super) struct NumericMutationLoopPlan {
     fields: Vec<Rc<str>>,
     mutations: Vec<NumericMutation>,
     checksum_field: usize,
+}
+
+/// A fail-closed numeric property-mutation accelerator compiled from immutable
+/// source bytecode before virtual-object lowering.
+#[derive(Clone, Debug)]
+pub(super) struct NumericMutationLoopPlan {
+    header: usize,
+    backedge: usize,
+    exit: usize,
+    kind: NumericMutationLoopKind,
+}
+
+#[derive(Clone, Debug)]
+enum NumericMutationLoopKind {
+    Named(NamedNumericMutationLoopPlan),
+    Dense(Rc<DenseNumericMutationLoopPlan>),
 }
 
 impl NumericMutationLoopPlan {
@@ -71,6 +88,38 @@ impl NumericMutationLoopPlan {
     }
 
     fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<Self> {
+        if let Some(named) = NamedNumericMutationLoopPlan::compile(bytecode, header, backedge) {
+            return Some(Self {
+                header,
+                backedge,
+                exit: named.exit,
+                kind: NumericMutationLoopKind::Named(named.plan),
+            });
+        }
+        let dense = DenseNumericMutationLoopPlan::compile(bytecode, header, backedge)?;
+        Some(Self {
+            header,
+            backedge,
+            exit: dense.exit(),
+            kind: NumericMutationLoopKind::Dense(Rc::new(dense)),
+        })
+    }
+
+    fn try_run(&self, vm: &mut Vm<'_>) -> bool {
+        match &self.kind {
+            NumericMutationLoopKind::Named(plan) => plan.try_run(vm, self.exit),
+            NumericMutationLoopKind::Dense(plan) => plan.try_run(vm),
+        }
+    }
+}
+
+struct CompiledNamedPlan {
+    exit: usize,
+    plan: NamedNumericMutationLoopPlan,
+}
+
+impl NamedNumericMutationLoopPlan {
+    fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<CompiledNamedPlan> {
         let code = &bytecode.code;
         let (
             Op::LoadLocal(counter_slot),
@@ -185,23 +234,23 @@ impl NumericMutationLoopPlan {
         }
         let checksum_field = field_index(&mut fields, key);
 
-        Some(Self {
-            header,
-            backedge,
+        Some(CompiledNamedPlan {
             exit: *exit,
-            counter_slot: *counter_slot,
-            limit_slot: *limit_slot,
-            accumulator_slot: *accumulator_slot,
-            block_result_slot: *block_result_slot,
-            loop_result_slot: *loop_result_slot,
-            receiver_slot,
-            fields,
-            mutations,
-            checksum_field,
+            plan: Self {
+                counter_slot: *counter_slot,
+                limit_slot: *limit_slot,
+                accumulator_slot: *accumulator_slot,
+                block_result_slot: *block_result_slot,
+                loop_result_slot: *loop_result_slot,
+                receiver_slot,
+                fields,
+                mutations,
+                checksum_field,
+            },
         })
     }
 
-    fn try_run(&self, vm: &mut Vm<'_>) -> bool {
+    fn try_run(&self, vm: &mut Vm<'_>, exit: usize) -> bool {
         if vm.direct_eval_with_stack {
             return false;
         }
@@ -269,7 +318,7 @@ impl NumericMutationLoopPlan {
         set_local_number(vm, self.accumulator_slot, accumulator);
         set_local_number(vm, self.block_result_slot, accumulator);
         set_local_number(vm, self.loop_result_slot, accumulator);
-        vm.ip = self.exit + 1;
+        vm.ip = exit + 1;
         true
     }
 }
@@ -393,6 +442,226 @@ mod tests {
             "function run(n) { var o = { a: 0, b: 0, c: 0 }; var sum = 0; for (var i = 0; i < n; i++) { o.a = o.c + 1; o.b = o.a + 1; o.c = o.b - 1; sum += o.c; } return sum; }",
         );
         assert_eq!(NumericMutationLoopPlan::compile_all(&bytecode).len(), 1);
+    }
+
+    #[test]
+    fn recognizes_fixed_dense_numeric_recurrence() {
+        let bytecode = nested_function(
+            "function run(n) { var a = [0, 0, 0, 0]; var sum = 0; for (var i = 0; i < n; i++) { a[0] = a[3] + 1; a[1] = a[0] + 1; a[2] = a[1] - 1; a[3] = a[2]; sum += a[3]; } return sum; }",
+        );
+        let plans = NumericMutationLoopPlan::compile_all(&bytecode);
+        assert_eq!(plans.len(), 1, "{:#?}", bytecode.code);
+        assert!(matches!(plans[0].kind, NumericMutationLoopKind::Dense(_)));
+    }
+
+    #[test]
+    fn commits_fixed_dense_recurrence_at_loop_exit() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function run(n) { var a = [0, 0, 0, 0]; var sum = 0; for (var i = 0; i < n; i++) { a[0] = a[3] + 1; a[1] = a[0] + 1; a[2] = a[1] - 1; a[3] = a[2]; sum += a[3]; } return sum + ':' + a.join(':'); } run(1000);"
+            ),
+            Ok(Value::String(
+                "500500:1000:1001:1000:1000".to_owned().into()
+            ))
+        );
+        assert!(dense::test_iterations() > 0);
+    }
+
+    #[test]
+    fn fixed_dense_recurrence_preserves_self_and_overlapping_writes() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function run(n) { var a = [0, 0]; var sum = 0; for (var i = 0; i < n; i++) { a[0] = a[0] + 1; a[1] = a[0] + 1; a[0] = a[1] - 1; sum += a[0]; } return sum + ':' + a[0] + ':' + a[1]; } run(4);"
+            ),
+            Ok(Value::String("10:4:5".to_owned().into()))
+        );
+        assert!(dense::test_iterations() > 0);
+    }
+
+    #[test]
+    fn fixed_dense_recurrence_falls_back_for_non_number_elements() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function run(n) { var hits = 0; var marker = { valueOf: function () { hits += 1; return 1; } }; var a = [0, 0, marker]; var sum = 0; for (var i = 0; i < n; i++) { a[0] = a[0] + 1; a[1] = a[0] + 1; a[0] = a[1] - 1; sum += a[2]; } return sum + ':' + a[0] + ':' + a[1] + ':' + hits; } run(4);"
+            ),
+            Ok(Value::String("4:4:5:4".to_owned().into()))
+        );
+        assert_eq!(dense::test_iterations(), 0);
+    }
+
+    #[test]
+    fn recognizes_dynamic_dense_numeric_rmw() {
+        let bytecode = nested_function(
+            "function run(n) { var a = [255, 255, 255, 255, 255, 255, 255, 255]; for (var j = 0; j < n; j = j + 2) { a[j] &= ~(1 << (j & 31)); } return a[0]; }",
+        );
+        let plans = NumericMutationLoopPlan::compile_all(&bytecode);
+        assert_eq!(plans.len(), 1, "{:#?}", bytecode.code);
+        assert!(matches!(plans[0].kind, NumericMutationLoopKind::Dense(_)));
+    }
+
+    #[test]
+    fn runs_dynamic_dense_numeric_rmw() {
+        assert_eq!(
+            eval(
+                "function run(n) { var a = [255, 255, 255, 255, 255, 255, 255, 255]; for (var j = 0; j < n; j = j + 2) { a[j] &= ~(1 << (j & 31)); } return a.join(':'); } run(8);"
+            ),
+            Ok(Value::String(
+                "254:255:251:255:239:255:191:255".to_owned().into()
+            ))
+        );
+    }
+
+    #[test]
+    fn dynamic_dense_rmw_commits_user_local_writes_at_exit() {
+        let bytecode = nested_function(
+            "function run(n) { var a = [255, 255, 255, 255]; var last = -1; for (var j = 0; j < n; j = j + 1) { last = j; a[j] &= ~(1 << (j & 31)); } return last; }",
+        );
+        assert_eq!(
+            NumericMutationLoopPlan::compile_all(&bytecode).len(),
+            1,
+            "{:#?}",
+            bytecode.code
+        );
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function run(n) { var a = [255, 255, 255, 255]; var last = -1; for (var j = 0; j < n; j = j + 1) { last = j; a[j] &= ~(1 << (j & 31)); } return last; } run(4);"
+            ),
+            Ok(Value::Number(3.0))
+        );
+        assert!(dense::test_iterations() > 0);
+    }
+
+    #[test]
+    fn dynamic_dense_rmw_deoptimizes_before_observable_coercion() {
+        assert_eq!(
+            eval(
+                "function run() { var hits = 0; var bad = { valueOf: function () { hits += 1; return 7; } }; var a = [255, 255, bad, 255]; for (var j = 0; j < 4; j = j + 1) { a[j] &= ~(1 << (j & 31)); } return a.join(':') + ':' + hits; } run();"
+            ),
+            Ok(Value::String("254:253:3:247:1".to_owned().into()))
+        );
+    }
+
+    #[test]
+    fn dynamic_dense_rmw_deopt_replays_current_user_local_write_once() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "var hits = 0; var bad = { valueOf: function () { hits += 1; return 7; } }; function run(n) { var a = [255, 255, bad]; var last = -1; for (var j = 0; j < n; j = j + 1) { last = j; a[j] &= ~(1 << (j & 31)); } return last + ':' + hits + ':' + a.join(':'); } run(3);"
+            ),
+            Ok(Value::String("2:1:254:253:3".to_owned().into()))
+        );
+        assert!(dense::test_iterations() > 0);
+    }
+
+    #[test]
+    fn dynamic_dense_rmw_deoptimizes_before_out_of_range_store() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function run(n) { var a = [255, 255, 255, 255]; for (var j = 0; j < n; j = j + 2) { a[j] &= ~(1 << (j & 31)); } return a.length + ':' + a.join(':'); } run(6);"
+            ),
+            Ok(Value::String("5:254:255:251:255:0".to_owned().into()))
+        );
+        assert!(dense::test_iterations() > 0);
+    }
+
+    #[test]
+    fn sparse_dense_rmw_keeps_inherited_accessor_semantics() {
+        assert_eq!(
+            eval(
+                "function run(n) { var hits = 0; var proto = {}; Object.defineProperty(proto, '1', { get: function () { hits += 1; return 255; } }); var a = [255, , 255, 255]; Object.setPrototypeOf(a, proto); for (var j = 0; j < n; j = j + 1) { a[j] &= ~(1 << (j & 31)); } return hits + ':' + Object.hasOwn(a, '1'); } run(4);"
+            ),
+            Ok(Value::String("1:false".to_owned().into()))
+        );
+    }
+
+    #[test]
+    fn dynamic_dense_rmw_numeric_key_edges_fail_closed() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function negativeZero(n) { var a = [255]; for (var j = 0; j < n; j = j + 1) { a[j * -0] &= ~(1 << (j & 31)); } return a[0]; } negativeZero(3);"
+            ),
+            Ok(Value::Number(248.0))
+        );
+        assert!(dense::test_iterations() > 0);
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function nanKey(n) { var a = [1]; a.NaN = 7; for (var j = 0; j < n; j = j + 1) { a[0 / 0] &= ~(1 << (j & 31)); } return a.NaN; } nanKey(2);"
+            ),
+            Ok(Value::Number(4.0))
+        );
+        assert_eq!(dense::test_iterations(), 0);
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function bigintElement(n) { var a = [255, 255, 1n]; var caught = false; try { for (var j = 0; j < n; j = j + 1) { a[j] &= ~(1 << (j & 31)); } } catch (error) { caught = error instanceof TypeError; } return caught + ':' + a[0] + ':' + a[1] + ':' + a[2]; } bigintElement(3);"
+            ),
+            Ok(Value::String("true:254:253:1".to_owned().into()))
+        );
+        assert!(dense::test_iterations() > 0);
+    }
+
+    #[test]
+    fn unrelated_virtual_literal_coexists_with_dense_mutation_plan() {
+        let source = "function run(n) { var scratch = { x: 2, y: 3 }; var a = [0, 0, 0, 0]; var sum = 0; for (var i = 0; i < n; i++) { a[0] = a[3] + 1; a[1] = a[0] + 1; a[2] = a[1] - 1; a[3] = a[2]; sum += a[3]; } return sum + scratch.x + scratch.y; }";
+        let bytecode = nested_function(source);
+        let lowered = super::super::virtual_object::lower(&bytecode);
+        let lowered_code = lowered.code(&bytecode.code);
+        assert!(lowered_code.iter().any(|op| matches!(
+            op,
+            Op::InitVirtualObject { .. } | Op::InitVirtualConstants { .. }
+        )));
+        assert!(
+            lowered_code
+                .iter()
+                .any(|op| matches!(op, Op::NewArray { .. }))
+        );
+
+        dense::reset_test_iterations();
+        assert_eq!(eval(&format!("{source} run(4);")), Ok(Value::Number(15.0)));
+        assert!(dense::test_iterations() > 0);
+    }
+
+    #[test]
+    fn dynamic_dense_rmw_ignores_prototype_for_present_own_elements() {
+        assert_eq!(
+            eval(
+                "function run() { var hits = 0; var proto = {}; Object.defineProperty(proto, '1', { get: function () { hits += 1; return 0; } }); var a = [255, 255, 255, 255]; Object.setPrototypeOf(a, proto); for (var j = 0; j < 4; j = j + 1) { a[j] &= ~(1 << (j & 31)); } return a[0] + ':' + a[1] + ':' + a[2] + ':' + a[3] + ':' + hits; } run();"
+            ),
+            Ok(Value::String("254:253:251:247:0".to_owned().into()))
+        );
+    }
+
+    #[test]
+    fn dynamic_dense_rmw_preserves_array_integrity_rules() {
+        assert_eq!(
+            eval(
+                "function mutate(a) { for (var j = 0; j < 4; j = j + 1) { a[j] &= ~(1 << (j & 31)); } return a[0] + ':' + a[1] + ':' + a[2] + ':' + a[3]; } var sealed = [255, 255, 255, 255]; Object.seal(sealed); Object.defineProperty(sealed, 'length', { writable: false }); var frozen = [255, 255, 255, 255]; Object.freeze(frozen); mutate(sealed) + '|' + mutate(frozen);"
+            ),
+            Ok(Value::String(
+                "254:253:251:247|255:255:255:255".to_owned().into()
+            ))
+        );
+    }
+
+    #[test]
+    fn runs_nested_nsieve_style_dense_rmw() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function primes(n) { var bits = [-1, -1]; var count = 0; for (var i = 2; i < n; i = i + 1) { if (bits[i >> 5] & (1 << (i & 31))) { count = count + 1; for (var j = i + i; j < n; j = j + i) { bits[j >> 5] &= ~(1 << (j & 31)); } } } return count; } primes(64);"
+            ),
+            Ok(Value::Number(18.0))
+        );
+        assert!(dense::test_iterations() > 0);
     }
 
     #[test]
