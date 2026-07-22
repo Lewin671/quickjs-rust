@@ -231,17 +231,32 @@ impl SelectedMethodLoopPlan {
         else {
             return None;
         };
+        // The scalar executor evolves these slots independently. If two of
+        // them name one JS binding, separating that binding can change both
+        // the loop test and the value observed by the body. The two branch
+        // sources may alias each other because admitted calls are read-only,
+        // but neither source may alias independently scalarized state.
+        let scalarized_slots = [
+            *counter_slot,
+            *limit_slot,
+            *accumulator_slot,
+            *block_result_slot,
+            *loop_result_slot,
+            *receiver_slot,
+        ];
+        let scalarized_slots_are_distinct = scalarized_slots
+            .iter()
+            .enumerate()
+            .all(|(index, slot)| !scalarized_slots[..index].contains(slot));
+        let sources_are_disjoint = [*when_equal_slot, *when_not_equal_slot]
+            .into_iter()
+            .all(|slot| !scalarized_slots.contains(&slot));
         if suffix + 6 != tail
             || assigned_accumulator_slot != accumulator_slot
             || term_block_result_slot != block_result_slot
             || term_loop_result_slot != loop_result_slot
-            || receiver_slot == counter_slot
-            || receiver_slot == limit_slot
-            || receiver_slot == accumulator_slot
-            || receiver_slot == block_result_slot
-            || receiver_slot == loop_result_slot
-            || when_equal_slot == accumulator_slot
-            || when_not_equal_slot == accumulator_slot
+            || !scalarized_slots_are_distinct
+            || !sources_are_disjoint
         {
             return None;
         }
@@ -526,6 +541,67 @@ mod tests {
             ),
             Ok(Value::Number(27.0))
         );
+    }
+
+    #[test]
+    fn counter_accumulator_alias_forces_fallback() {
+        let source = "function run(n) { var first = { add: function (value) { return value + 1; } }; var second = { add: function (value) { return value + 1; } }; var receiver; for (var i = 0; i < n; i++) { receiver = (i & 1) === 0 ? first : second; i += receiver.add(i); } return i; }";
+        assert!(SelectedMethodLoopPlan::compile_all(&nested_function(source)).is_empty());
+        assert_eq!(eval(&format!("{source} run(10);")), Ok(Value::Number(14.0)));
+    }
+
+    #[test]
+    fn limit_accumulator_alias_forces_fallback() {
+        let source = "function run() { var first = { add: function (value) { return value - 2; } }; var second = { add: function (value) { return value - 2; } }; var receiver; var limit = 5; var i = 0; for (; i < limit; i++) { receiver = (i & 1) === 0 ? first : second; limit += receiver.add(i); } return limit + ':' + i; }";
+        assert!(SelectedMethodLoopPlan::compile_all(&nested_function(source)).is_empty());
+        assert_eq!(
+            eval(&format!("{source} run();")),
+            Ok(Value::String("2:2".to_owned().into()))
+        );
+    }
+
+    #[test]
+    fn rejects_every_accumulator_state_alias() {
+        let source = "function run(n) { var first = { add: function (value) { return value + 1; } }; var second = { add: function (value) { return value + 10; } }; var receiver; var sum = 0; for (var i = 0; i < n; i++) { receiver = (i & 3) === 2 ? first : second; sum += receiver.add(i); } return sum; }";
+        let bytecode = nested_function(source);
+        let plan = SelectedMethodLoopPlan::compile_all(&bytecode)
+            .pop()
+            .expect("baseline loop should have one selected-method plan");
+        for alias in [
+            plan.counter_slot,
+            plan.limit_slot,
+            plan.block_result_slot,
+            plan.loop_result_slot,
+            plan.receiver_slot,
+            plan.when_equal_slot,
+            plan.when_not_equal_slot,
+        ] {
+            let mut aliased = bytecode.clone();
+            for op in &mut aliased.code[plan.header..=plan.backedge] {
+                match op {
+                    Op::LoadLocal(slot) | Op::AssignLocal(slot)
+                        if *slot == plan.accumulator_slot =>
+                    {
+                        *slot = alias;
+                    }
+                    _ => {}
+                }
+            }
+            assert!(
+                SelectedMethodLoopPlan::compile_all(&aliased).is_empty(),
+                "accumulator alias with slot {alias} must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn allows_equal_read_only_branch_sources() {
+        let source = "function run(n) { var source = { add: function (value) { return value + 1; } }; var receiver; var sum = 0; for (var i = 0; i < n; i++) { receiver = (i & 1) === 0 ? source : source; sum += receiver.add(i); } return sum; }";
+        assert_eq!(
+            SelectedMethodLoopPlan::compile_all(&nested_function(source)).len(),
+            1
+        );
+        assert_eq!(eval(&format!("{source} run(6);")), Ok(Value::Number(21.0)));
     }
 
     #[test]
