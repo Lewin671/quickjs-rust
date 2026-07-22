@@ -75,6 +75,14 @@ pub(crate) fn ordinary_set(
     // OrdinarySet with no own descriptor: forward to the parent's [[Set]] via
     // the [[Prototype]] slot so a Proxy in the chain dispatches its `set` trap
     // with the original receiver, and a function prototype is walked too.
+    // Native Error constructors expose the realm's Error constructor as their
+    // effective parent even though it is not stored in the ordinary function
+    // prototype slot; Get and GetPrototypeOf use the same special link.
+    if let Value::Function(function) = &target
+        && let Some(parent) = crate::error::native_error_constructor_parent(function, env)
+    {
+        return ordinary_set(parent, key, value, receiver, env);
+    }
     if let Some(prototype) = crate::value_prototype_slot(target, env) {
         return ordinary_set(prototype.to_value(), key, value, receiver, env);
     }

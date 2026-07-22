@@ -69,6 +69,12 @@ pub(crate) fn set_property(
         }
         Value::Array(elements) => {
             if key == "length" {
+                // Assignment uses OrdinarySetWithOwnDescriptor semantics: an
+                // own non-writable length rejects before coercing the value,
+                // even when the requested numeric length would be unchanged.
+                if !elements.is_length_writable() {
+                    return Ok(false);
+                }
                 define_array_length_value(&elements, value, env)
             } else {
                 let receiver = Value::Array(elements.clone());

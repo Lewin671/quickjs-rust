@@ -335,6 +335,44 @@ fn live_array_prototype_preserves_proxy_internal_methods() {
     );
 }
 
+#[test]
+fn function_named_get_preserves_live_array_prototype_proxy_get() {
+    assert_eq!(
+        eval(
+            "let prototype = [], functionValue = function() {}, calls = 0, receiverOk = false; \
+             Object.setPrototypeOf(functionValue, prototype); \
+             Object.setPrototypeOf(prototype, new Proxy({}, { \
+                 get: function(target, key, receiver) { \
+                     calls += 1; receiverOk = receiver === functionValue; \
+                     return key === 'answer' ? 9 : Reflect.get(target, key, receiver); \
+                 } \
+             })); \
+             let typedArray = new Uint8Array([7]), typedPrototype = []; \
+             let typedFunction = function() {}; \
+             Object.setPrototypeOf(typedPrototype, typedArray); \
+             Object.setPrototypeOf(typedFunction, typedPrototype); \
+             functionValue.answer + ':' + calls + ':' + receiverOk + ':' \
+                 + typedFunction[0] + ':' + typedFunction[1];"
+        ),
+        Ok(Value::String("9:1:true:7:undefined".to_owned().into()))
+    );
+}
+
+#[test]
+fn indexed_store_walks_native_error_constructor_parent() {
+    assert_eq!(
+        eval(
+            "let seen = 0; \
+             Object.defineProperty(Error, '0', { \
+                 set: function(value) { seen = value; }, configurable: true \
+             }); \
+             let array = []; Object.setPrototypeOf(array, TypeError); array[0] = 7; \
+             seen + ':' + array.hasOwnProperty('0') + ':' + array[0];"
+        ),
+        Ok(Value::String("7:false:undefined".to_owned().into()))
+    );
+}
+
 /// Computed compound assignments and updates cache a property key after
 /// `ToPropertyKey`. Canonical string indices may still use dense storage, but
 /// inherited setters and non-index strings must retain ordinary `[[Set]]`

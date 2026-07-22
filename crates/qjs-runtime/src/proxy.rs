@@ -374,8 +374,9 @@ pub(crate) fn proxy_define_property(
     }
 
     // Target-consistency invariants (ECMA-262 10.5.6).
-    let target_descriptor = crate::object::own_property_descriptor_key(target.clone(), key, env)?;
-    let extensible_target = crate::object::ordinary_value_is_extensible(&target);
+    let target_descriptor =
+        crate::object::observable_own_property_descriptor(target.clone(), key, env)?;
+    let extensible_target = crate::object::value_is_extensible(&target, env)?;
     let setting_config_false = descriptor.configurable_field() == Some(false);
     match target_descriptor {
         None => {
@@ -454,42 +455,42 @@ pub(crate) fn proxy_get_own_property_descriptor(
         false,
     )?;
 
-    let target_descriptor = crate::object::own_property_descriptor_key(target.clone(), key, env)?;
-    let extensible_target = crate::object::ordinary_value_is_extensible(&target);
+    // ECMA-262 10.5.5 validates the trap's result type before observing the
+    // target's own descriptor. In particular, an invalid primitive result
+    // must not run an inner Proxy target's `getOwnPropertyDescriptor` trap.
+    if !matches!(&result, Value::Undefined) && !is_proxy_object_target(&result) {
+        return Err(invariant_error(
+            "getOwnPropertyDescriptor trap must return an object or undefined",
+        ));
+    }
 
-    let record = match &result {
-        Value::Undefined => {
-            // Trap returned undefined: the property must be absent or
-            // configurable on an extensible target.
-            match target_descriptor {
-                None => return Ok(None),
-                Some(target_descriptor) => {
-                    if !target_descriptor.configurable {
-                        return Err(invariant_error(
-                            "getOwnPropertyDescriptor trap hid a non-configurable target property",
-                        ));
-                    }
-                    if !extensible_target {
-                        return Err(invariant_error(
-                            "getOwnPropertyDescriptor trap hid a property of a non-extensible target",
-                        ));
-                    }
-                    return Ok(None);
-                }
-            }
-        }
-        Value::Object(object) if !crate::symbol::is_symbol_primitive(object) => {
-            crate::object::to_property_descriptor_record(result.clone(), env)?
-        }
-        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_) => {
-            crate::object::to_property_descriptor_record(result.clone(), env)?
-        }
-        _ => {
+    let target_descriptor =
+        crate::object::observable_own_property_descriptor(target.clone(), key, env)?;
+
+    if matches!(&result, Value::Undefined) {
+        // An absent target descriptor returns immediately. For a present
+        // descriptor, reject non-configurable properties before consulting
+        // [[IsExtensible]], preserving the specification's observable order.
+        let Some(target_descriptor) = target_descriptor else {
+            return Ok(None);
+        };
+        if !target_descriptor.configurable {
             return Err(invariant_error(
-                "getOwnPropertyDescriptor trap must return an object or undefined",
+                "getOwnPropertyDescriptor trap hid a non-configurable target property",
             ));
         }
-    };
+        if !crate::object::value_is_extensible(&target, env)? {
+            return Err(invariant_error(
+                "getOwnPropertyDescriptor trap hid a property of a non-extensible target",
+            ));
+        }
+        return Ok(None);
+    }
+
+    // A descriptor result always observes target extensibility before
+    // ToPropertyDescriptor, as required by ECMA-262 10.5.5 steps 11-12.
+    let extensible_target = crate::object::value_is_extensible(&target, env)?;
+    let record = crate::object::to_property_descriptor_record(result, env)?;
 
     // Trap returned a descriptor object: check it is compatible with the
     // target, and that a non-configurable claim is backed by the target.

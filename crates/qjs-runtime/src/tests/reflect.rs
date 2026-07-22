@@ -528,3 +528,92 @@ fn reflect_set_symbol_dispatches_proxy_receiver_internal_methods() {
         ))
     );
 }
+
+#[test]
+fn reflect_set_nested_proxy_receiver_invariants_dispatch_inner_methods() {
+    assert_eq!(
+        eval(
+            "function targetFor(key) { \
+                 let target = {}; \
+                 Object.defineProperty(target, key, { value: 0, writable: true }); \
+                 return target; \
+             } \
+             function getOwnThrows(key) { \
+                 let inner = new Proxy({}, { \
+                     getOwnPropertyDescriptor: function() { throw 41; } \
+                 }); \
+                 let outer = new Proxy(inner, { \
+                     getOwnPropertyDescriptor: function() { return undefined; } \
+                 }); \
+                 try { Reflect.set(targetFor(key), key, 1, outer); } \
+                 catch (error) { return error === 41; } \
+                 return false; \
+             } \
+             function invalidResultSkipsTarget(key) { \
+                 let reads = 0; \
+                 let inner = new Proxy({}, { \
+                     getOwnPropertyDescriptor: function() { reads += 1; throw 44; } \
+                 }); \
+                 let outer = new Proxy(inner, { \
+                     getOwnPropertyDescriptor: function() { return 1; } \
+                 }); \
+                 try { Object.getOwnPropertyDescriptor(outer, key); } \
+                 catch (error) { return error instanceof TypeError && reads === 0; } \
+                 return false; \
+             } \
+             function missingSkipsExtensible(key) { \
+                 let calls = 0; \
+                 let inner = new Proxy({}, { \
+                     isExtensible: function() { calls += 1; throw 42; } \
+                 }); \
+                 let outer = new Proxy(inner, { \
+                     getOwnPropertyDescriptor: function() { return undefined; } \
+                 }); \
+                 return Reflect.set(targetFor(key), key, 1, outer) && calls === 0; \
+             } \
+             function extensibleThrows(key) { \
+                 let target = {}; \
+                 Object.defineProperty(target, key, { \
+                     value: 0, writable: true, configurable: true \
+                 }); \
+                 let inner = new Proxy(target, { \
+                     isExtensible: function() { throw 42; } \
+                 }); \
+                 let outer = new Proxy(inner, { \
+                     getOwnPropertyDescriptor: function() { return undefined; } \
+                 }); \
+                 try { Reflect.set(targetFor(key), key, 1, outer); } \
+                 catch (error) { return error === 42; } \
+                 return false; \
+             } \
+             function defineInvariantThrows(key) { \
+                 let reads = 0; \
+                 let inner = new Proxy({}, { \
+                     getOwnPropertyDescriptor: function() { \
+                         reads += 1; if (reads === 2) throw 43; return undefined; \
+                     } \
+                 }); \
+                 let outer = new Proxy(inner, { \
+                     getOwnPropertyDescriptor: function() { return undefined; }, \
+                     defineProperty: function() { return true; } \
+                 }); \
+                 try { Reflect.set(targetFor(key), key, 1, outer); } \
+                 catch (error) { return error === 43 && reads === 2; } \
+                 return false; \
+             } \
+             let symbol = Symbol('nested'); \
+             getOwnThrows('string') + ':' + getOwnThrows(symbol) + ':' \
+                 + invalidResultSkipsTarget('string') + ':' \
+                 + invalidResultSkipsTarget(symbol) + ':' \
+                 + missingSkipsExtensible('string') + ':' \
+                 + missingSkipsExtensible(symbol) + ':' \
+                 + extensibleThrows('string') + ':' + extensibleThrows(symbol) + ':' \
+                 + defineInvariantThrows('string') + ':' + defineInvariantThrows(symbol);"
+        ),
+        Ok(Value::String(
+            "true:true:true:true:true:true:true:true:true:true"
+                .to_owned()
+                .into()
+        ))
+    );
+}

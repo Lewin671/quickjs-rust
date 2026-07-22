@@ -5,9 +5,8 @@ use crate::{
     GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
     array_prototype, function_delete_own_property, function_delete_own_symbol_property,
     function_own_property_descriptor, function_own_property_names,
-    function_prototype_chain_descriptor, inherited_primitive_prototype_descriptor, property_value,
-    property_value_key, property_value_key_with_receiver, string, symbol, to_int32_number,
-    to_uint32_number,
+    inherited_primitive_prototype_descriptor, property_value, property_value_key,
+    property_value_key_with_receiver, string, symbol, to_int32_number, to_uint32_number,
 };
 
 use super::vm::Vm;
@@ -289,16 +288,25 @@ impl Vm<'_> {
                 }
             }
             Value::Function(function) => {
-                let descriptor = function_own_property_descriptor(function, key).or_else(|| {
-                    function_prototype_chain_descriptor(function, &self.realm_env(), key)
-                });
+                let descriptor =
+                    if let Some(property) = function_own_property_descriptor(function, key) {
+                        Ok(Some(property))
+                    } else {
+                        let env = self.realm_env();
+                        let prototype = match function.internal_prototype_slot() {
+                            Some(prototype) => prototype,
+                            None => crate::function_intrinsic_prototype_slot(&env),
+                        };
+                        prototype_chain_property(prototype, key, Some(&env))
+                    };
                 match descriptor {
-                    Some(property) => data_property_value(Some(property)),
+                    Err(ProxyInChain) => None,
+                    Ok(Some(property)) => data_property_value(Some(property)),
                     // A function with no native-error parent (the only remaining
                     // generic branch) resolves to undefined; bail when a parent
                     // could contribute so the slow path stays authoritative.
-                    None if function.native.is_none() => Some(Value::Undefined),
-                    None => None,
+                    Ok(None) if function.native.is_none() => Some(Value::Undefined),
+                    Ok(None) => None,
                 }
             }
             Value::String(value) => {
@@ -847,7 +855,17 @@ pub(super) fn ordinary_chain_property(
     object: &ObjectRef,
     key: &str,
 ) -> Result<Option<Property>, ProxyInChain> {
-    let mut current = Some(crate::Prototype::Object(object.clone()));
+    prototype_chain_property(Some(crate::Prototype::Object(object.clone())), key, None)
+}
+
+/// Walks a first-class prototype chain without flattening observable exotic
+/// nodes. `function_env` preserves the realm used to resolve implicit
+/// `%Function.prototype%` links when a function is the original receiver.
+fn prototype_chain_property(
+    mut current: Option<crate::Prototype>,
+    key: &str,
+    function_env: Option<&CallEnv>,
+) -> Result<Option<Property>, ProxyInChain> {
     loop {
         match current {
             Some(crate::Prototype::Object(object)) => {
@@ -869,6 +887,13 @@ pub(super) fn ordinary_chain_property(
                 current = object.prototype_slot();
             }
             Some(crate::Prototype::Array(array)) => {
+                // A live array may later route through an exotic Proxy or
+                // integer-indexed TypedArray. Function direct reads must keep
+                // that entire node receiver-aware rather than flattening its
+                // current descriptor chain.
+                if function_env.is_some() {
+                    return Err(ProxyInChain);
+                }
                 if let Some(property) = crate::array_own_property_descriptor(&array.array(), key) {
                     return Ok(Some(property));
                 }
@@ -878,7 +903,12 @@ pub(super) fn ordinary_chain_property(
                 if let Some(property) = function_own_property_descriptor(&function, key) {
                     return Ok(Some(property));
                 }
-                current = function.effective_internal_prototype();
+                current = match function.internal_prototype_slot() {
+                    Some(prototype) => prototype,
+                    None => function_env
+                        .and_then(crate::function_intrinsic_prototype_slot)
+                        .or_else(|| function.effective_internal_prototype()),
+                };
             }
             Some(crate::Prototype::Proxy(_)) => return Err(ProxyInChain),
             None => return Ok(None),
