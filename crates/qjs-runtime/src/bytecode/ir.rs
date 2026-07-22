@@ -415,23 +415,10 @@ pub(super) enum Op {
     },
     /// Builds a class constructor function object, wires its `prototype` and
     /// `constructor` properties, and installs prototype methods. Pushes the
-    /// constructor function value.
+    /// constructor function value. The definition is shared so this cold,
+    /// variable-sized payload does not determine the size of every opcode.
     NewClass {
-        name: Option<String>,
-        constructor: ClassConstructorDef,
-        /// Class elements (methods, accessors, and fields) in source order.
-        elements: Vec<ClassElementDef>,
-        /// Private elements (fields, methods, accessors) in source order. These
-        /// are not ordinary properties; they install into per-object private
-        /// storage keyed by fresh per-evaluation private-name identities.
-        private_elements: Vec<ClassPrivateElementDef>,
-        /// Computed member keys in source order. Most are pre-evaluated by the
-        /// surrounding bytecode and left on the stack; keys that need the class
-        /// private environment are deferred until `NewClass` runs.
-        computed_keys: Vec<ClassComputedKeyDef>,
-        /// Whether the class has an `extends` heritage clause. When set, the
-        /// heritage value was pushed onto the stack before this op.
-        has_heritage: bool,
+        definition: Rc<ClassDefinition>,
     },
     /// Reads `super.<key>`: looks the property up on the current method's home
     /// object prototype, using `this` as the receiver. Pushes the value.
@@ -669,6 +656,26 @@ pub(super) enum Op {
         allocation_ip: usize,
         argc: usize,
     },
+}
+
+/// Cold, immutable payload used when evaluating a class definition.
+#[derive(Clone, Debug)]
+pub(super) struct ClassDefinition {
+    pub(super) name: Option<String>,
+    pub(super) constructor: ClassConstructorDef,
+    /// Class elements (methods, accessors, and fields) in source order.
+    pub(super) elements: Vec<ClassElementDef>,
+    /// Private elements (fields, methods, accessors) in source order. These are
+    /// not ordinary properties; they install into per-object private storage
+    /// keyed by fresh per-evaluation private-name identities.
+    pub(super) private_elements: Vec<ClassPrivateElementDef>,
+    /// Computed member keys in source order. Most are pre-evaluated by the
+    /// surrounding bytecode and left on the stack; keys that need the class
+    /// private environment are deferred until `NewClass` runs.
+    pub(super) computed_keys: Vec<ClassComputedKeyDef>,
+    /// Whether the class has an `extends` heritage clause. When set, the
+    /// heritage value was pushed onto the stack before this op.
+    pub(super) has_heritage: bool,
 }
 
 /// Compiled definition of a class constructor.
@@ -1370,19 +1377,16 @@ impl Bytecode {
                 Op::NewFunction { bytecode, .. } => {
                     set.extend(bytecode.cached_writes_binding_set.iter().cloned());
                 }
-                Op::NewClass {
-                    constructor,
-                    elements,
-                    ..
-                } => {
+                Op::NewClass { definition } => {
                     set.extend(
-                        constructor
+                        definition
+                            .constructor
                             .bytecode
                             .cached_writes_binding_set
                             .iter()
                             .cloned(),
                     );
-                    for element in elements {
+                    for element in &definition.elements {
                         collect_class_element_writes_binding(element, &mut set);
                     }
                 }
@@ -1529,20 +1533,21 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
             Op::NewFunction { bytecode, .. } => {
                 names.extend(bytecode.global_names().iter().cloned());
             }
-            Op::NewClass {
-                constructor,
-                elements,
-                private_elements,
-                computed_keys,
-                ..
-            } => {
-                names.extend(constructor.bytecode.global_names().iter().cloned());
-                for key in computed_keys {
+            Op::NewClass { definition } => {
+                names.extend(
+                    definition
+                        .constructor
+                        .bytecode
+                        .global_names()
+                        .iter()
+                        .cloned(),
+                );
+                for key in &definition.computed_keys {
                     if let ClassComputedKeyDef::Deferred { bytecode, .. } = key {
                         names.extend(bytecode.global_names().iter().cloned());
                     }
                 }
-                for element in elements {
+                for element in &definition.elements {
                     match element {
                         ClassElementDef::Method(method) => {
                             names.extend(method.bytecode.global_names().iter().cloned());
@@ -1571,7 +1576,7 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
                         }
                     }
                 }
-                for element in private_elements {
+                for element in &definition.private_elements {
                     match element {
                         ClassPrivateElementDef::Field { initializer, .. } => {
                             if let Some(initializer) = initializer {
@@ -1619,6 +1624,16 @@ mod tests {
     use super::*;
     use crate::Property;
     use crate::bytecode::compiler;
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn opcode_layout_keeps_cold_class_definitions_out_of_line() {
+        assert!(
+            std::mem::size_of::<Op>() <= 112,
+            "Op grew to {} bytes; cold payloads must stay out of line",
+            std::mem::size_of::<Op>()
+        );
+    }
 
     #[test]
     fn compiler_temporaries_are_excluded_from_written_binding_caches() {

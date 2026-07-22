@@ -991,21 +991,14 @@ impl<'a> Vm<'a> {
                     }
                     self.stack.push(Value::Function(function));
                 }
-                Op::NewClass {
-                    name,
-                    constructor,
-                    elements,
-                    private_elements,
-                    computed_keys,
-                    has_heritage,
-                } => {
+                Op::NewClass { definition } => {
                     let result = self.new_class(
-                        name.as_deref(),
-                        constructor,
-                        elements,
-                        private_elements,
-                        computed_keys,
-                        *has_heritage,
+                        definition.name.as_deref(),
+                        &definition.constructor,
+                        &definition.elements,
+                        &definition.private_elements,
+                        &definition.computed_keys,
+                        definition.has_heritage,
                     );
                     if let Some(value) = self.handle_runtime_result(result)? {
                         self.stack.push(value);

@@ -14,8 +14,8 @@ use crate::{
 use super::compiler::{Compiler, compile_function_body_with_strict};
 use super::compiler_lexical::LexicalCapture;
 use super::ir::{
-    Bytecode, ClassComputedKeyDef, ClassConstructorDef, ClassElementDef, ClassFieldDef,
-    ClassFieldInitializerDef, ClassMemberKeyDef, ClassMethodDef, ClassMethodKind,
+    Bytecode, ClassComputedKeyDef, ClassConstructorDef, ClassDefinition, ClassElementDef,
+    ClassFieldDef, ClassFieldInitializerDef, ClassMemberKeyDef, ClassMethodDef, ClassMethodKind,
     ClassPrivateElementDef, ClassStaticBlockDef, Op,
 };
 
@@ -239,12 +239,14 @@ impl Compiler {
         let constructor = constructor.unwrap_or_else(|| default_constructor(name, has_heritage));
 
         self.emit(Op::NewClass {
-            name: name.map(str::to_owned),
-            constructor,
-            elements,
-            private_elements,
-            computed_keys,
-            has_heritage,
+            definition: Rc::new(ClassDefinition {
+                name: name.map(str::to_owned),
+                constructor,
+                elements,
+                private_elements,
+                computed_keys,
+                has_heritage,
+            }),
         });
         Ok(())
     }
