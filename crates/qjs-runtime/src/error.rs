@@ -71,11 +71,19 @@ pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_proto
     };
 
     for (name, native) in NATIVE_ERRORS {
-        install_native_error(env, global_this, &error_prototype, name, *native);
+        install_native_error(
+            env,
+            global_this,
+            &error_function,
+            &error_prototype,
+            name,
+            *native,
+        );
     }
     install_native_error(
         env,
         global_this,
+        &error_function,
         &error_prototype,
         "AggregateError",
         NativeFunction::AggregateError,
@@ -83,6 +91,7 @@ pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_proto
     install_native_error(
         env,
         global_this,
+        &error_function,
         &error_prototype,
         "SuppressedError",
         NativeFunction::SuppressedError,
@@ -292,19 +301,6 @@ pub(crate) fn is_native_error(native: NativeFunction) -> bool {
     native_error_name(native).is_some()
 }
 
-/// Returns the synthetic `Error` parent of an unmodified native error
-/// constructor. Once user code installs an explicit raw [[Prototype]] slot,
-/// that slot is authoritative for every prototype-chain operation.
-pub(crate) fn native_error_constructor_parent(function: &Function, env: &CallEnv) -> Option<Value> {
-    if function.internal_prototype_slot().is_some() {
-        return None;
-    }
-    function
-        .native
-        .filter(|native| is_native_error(*native))
-        .and_then(|_| env.get("Error"))
-}
-
 pub(crate) fn native_error_prototype_to_string(
     this_value: Value,
     env: &mut CallEnv,
@@ -433,6 +429,7 @@ fn define_error_data(object: &ObjectRef) {
 fn install_native_error(
     env: &mut CallEnv,
     global_this: &Value,
+    error_function: &Function,
     error_prototype: &ObjectRef,
     name: &str,
     native: NativeFunction,
@@ -444,6 +441,11 @@ fn install_native_error(
         _ => 1,
     };
     let function = Function::new_native(Some(name), length, native, true);
+    // Native error constructors have the creating realm's `%Error%` as their
+    // real [[Prototype]]; global rebinding must not replace that fixed identity.
+    function
+        .set_internal_prototype_slot(Some(crate::Prototype::Function(error_function.clone())))
+        .expect("native Error constructor prototype initialized once");
     prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
     prototype.define_non_enumerable("name".to_owned(), Value::String(name.to_owned().into()));
     prototype.define_non_enumerable(

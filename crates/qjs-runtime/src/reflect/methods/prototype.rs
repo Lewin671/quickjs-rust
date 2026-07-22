@@ -1,5 +1,5 @@
 use crate::CallEnv;
-use crate::{RuntimeError, Value, array_prototype, error, symbol};
+use crate::{RuntimeError, Value, array_prototype, symbol};
 
 pub(crate) fn native_reflect_get_prototype_of(
     argument_values: &[Value],
@@ -35,16 +35,12 @@ pub(crate) fn native_reflect_get_prototype_of(
                 .map(Value::Object)
                 .unwrap_or(Value::Null),
         }),
-        Some(Value::Function(function)) => {
-            Ok(error::native_error_constructor_parent(function, env)
-                .or_else(|| match function.internal_prototype_slot() {
-                    Some(slot) => slot.map(|prototype| prototype.to_value()),
-                    None => {
-                        crate::function_intrinsic_prototype_slot(env).map(|slot| slot.to_value())
-                    }
-                })
-                .unwrap_or(Value::Null))
-        }
+        Some(Value::Function(function)) => Ok(crate::value_prototype_slot(
+            Value::Function(function.clone()),
+            env,
+        )
+        .map(|prototype| prototype.to_value())
+        .unwrap_or(Value::Null)),
         _ => Err(RuntimeError {
             thrown: None,
             message: "Reflect.getPrototypeOf target must be an object".to_owned(),

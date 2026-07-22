@@ -49,6 +49,17 @@ pub(crate) fn set_property(
                 Some(prototype) => prototype,
                 None => crate::function_intrinsic_prototype_slot(env),
             };
+            if crate::typed_array::canonical_numeric_index(&key).is_some()
+                && prototype_chain_has_typed_array(prototype.clone())
+            {
+                return crate::reflect::ordinary_set(
+                    receiver.clone(),
+                    &PropertyKey::String(key),
+                    value,
+                    receiver,
+                    env,
+                );
+            }
             if prototype_chain_needs_recursive_set(prototype) {
                 return crate::reflect::ordinary_set(
                     receiver.clone(),

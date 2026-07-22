@@ -597,3 +597,43 @@ fn object_create_accepts_an_array_prototype() {
         Ok(Value::String("3:8".to_owned().into()))
     );
 }
+
+#[test]
+fn nested_proxy_targets_participate_in_outer_invariants() {
+    assert_eq!(
+        eval(
+            "function invariant(operation) { \
+                 let calls = 0, target = {}; \
+                 Object.defineProperty(target, 'x', { value: 1, writable: false, configurable: false }); \
+                 let inner = new Proxy(target, { \
+                     getOwnPropertyDescriptor(t, key) { calls += 1; return Reflect.getOwnPropertyDescriptor(t, key); } \
+                 }); \
+                 let handler = {}; handler[operation] = function() { \
+                     return operation === 'get' ? 2 : operation === 'has' ? false : true; \
+                 }; \
+                 let outer = new Proxy(inner, handler), threw = false; \
+                 try { \
+                     if (operation === 'get') outer.x; \
+                     else if (operation === 'has') 'x' in outer; \
+                     else if (operation === 'set') Reflect.set(outer, 'x', 2); \
+                     else Reflect.deleteProperty(outer, 'x'); \
+                 } catch (error) { threw = error instanceof TypeError; } \
+                 return threw + ':' + calls; \
+             } \
+             function ownKeysOrder() { \
+                 let log = [], target = { x: 1 }; \
+                 let inner = new Proxy(target, { \
+                     isExtensible(t) { log.push('e'); return Reflect.isExtensible(t); }, \
+                     ownKeys(t) { log.push('k'); return Reflect.ownKeys(t); }, \
+                     getOwnPropertyDescriptor(t, key) { log.push('d'); return Reflect.getOwnPropertyDescriptor(t, key); } \
+                 }); \
+                 Reflect.ownKeys(new Proxy(inner, { ownKeys() { return []; } })); \
+                 return log.join(','); \
+             } \
+             [invariant('get'), invariant('has'), invariant('set'), invariant('deleteProperty'), ownKeysOrder()].join('|');"
+        ),
+        Ok(Value::String(
+            "true:1|true:1|true:1|true:1|e,k,d".to_owned().into()
+        ))
+    );
+}

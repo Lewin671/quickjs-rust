@@ -374,6 +374,21 @@ fn indexed_store_walks_native_error_constructor_parent() {
 }
 
 #[test]
+fn typed_array_prototypes_preserve_has_and_canonical_set_semantics() {
+    assert_eq!(
+        eval(
+            "let typedArray = new Uint8Array([7]), array = [], functionValue = function() {}; \
+             Object.setPrototypeOf(array, typedArray); \
+             Object.setPrototypeOf(functionValue, typedArray); \
+             functionValue[1] = 8; \
+             array[0] + ':' + ('0' in array) + ':' \
+                 + functionValue.hasOwnProperty('1') + ':' + functionValue[1];"
+        ),
+        Ok(Value::String("7:true:false:undefined".to_owned().into()))
+    );
+}
+
+#[test]
 fn native_error_constructor_explicit_array_prototype_intercepts_set() {
     assert_eq!(
         eval(
