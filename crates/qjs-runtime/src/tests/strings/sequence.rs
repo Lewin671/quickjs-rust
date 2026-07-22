@@ -162,7 +162,29 @@ fn evaluates_string_sequence_builtins() {
     );
     assert_eq!(
         eval("'a😀bc'.slice(1, 3) + ':' + 'a😀bc'.substr(1, 2) + ':' + 'a😀bc'.substring(3, 1);"),
-        Ok(Value::String("😀b:😀b:😀b".to_owned().into()))
+        Ok(Value::String("😀:😀:😀".to_owned().into()))
+    );
+    assert_eq!(
+        eval("'😀x'.slice(0, 1).charCodeAt(0) + ':' + '😀x'.slice(1, 2).charCodeAt(0);"),
+        Ok(Value::String("55357:56832".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "'abcdef'.slice(NaN, Infinity) + ':' + 'abcdef'.slice(-Infinity, -1) + ':' + 'abcdef'.slice(Infinity, -Infinity);"
+        ),
+        Ok(Value::String("abcdef:abcde:".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let log = ''; let receiver = { toString: function() { log += 'this'; return 'abcdef'; } }; let start = { valueOf: function() { log += ':start'; return 1; } }; let end = { valueOf: function() { log += ':end'; return 4; } }; let out = String.prototype.slice.call(receiver, start, end); out + ':' + log;"
+        ),
+        Ok(Value::String("bcd:this:start:end".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let converted = false; let index = { valueOf: function() { converted = true; return 1; } }; let caught = false; try { String.prototype.slice.call(Symbol('x'), index, 2); } catch (error) { caught = error instanceof TypeError; } caught + ':' + converted;"
+        ),
+        Ok(Value::String("true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
