@@ -271,8 +271,7 @@ impl Vm<'_> {
                     .or_else(|| elements.property(key))
                     .or_else(|| {
                         elements
-                            .prototype_override()
-                            .unwrap_or_else(|| array_prototype(&self.realm_env()))
+                            .effective_prototype_slot(&self.realm_env())
                             .and_then(|prototype| prototype.property(key))
                     });
                 data_property_value(descriptor)
@@ -434,7 +433,11 @@ impl Vm<'_> {
                     }
                     current = prototype.prototype_slot();
                 }
-                Some(crate::Prototype::Function(_) | crate::Prototype::Proxy(_)) => {
+                Some(
+                    crate::Prototype::Array(_)
+                    | crate::Prototype::Function(_)
+                    | crate::Prototype::Proxy(_),
+                ) => {
                     return false;
                 }
                 None => {
@@ -462,8 +465,7 @@ impl Vm<'_> {
             Value::Array(elements) => {
                 let descriptor = elements.symbol_property(symbol).or_else(|| {
                     elements
-                        .prototype_override()
-                        .unwrap_or_else(|| array_prototype(&self.realm_env()))
+                        .effective_prototype_slot(&self.realm_env())
                         .and_then(|prototype| prototype.symbol_property(symbol))
                 });
                 match descriptor {
@@ -805,6 +807,9 @@ fn ordinary_chain_data_value(
         }
         match current.prototype_slot() {
             Some(crate::Prototype::Object(next)) => current = next,
+            Some(crate::Prototype::Array(_)) => {
+                return Ok(DirectPropertyRead::NeedsSlowPath);
+            }
             Some(crate::Prototype::Function(function)) => {
                 return Ok(function
                     .chain_property(key)
@@ -837,6 +842,7 @@ pub(super) fn ordinary_chain_property(
         }
         match current.prototype_slot() {
             Some(crate::Prototype::Object(next)) => current = next,
+            Some(crate::Prototype::Array(array)) => return Ok(array.property(key)),
             Some(crate::Prototype::Function(function)) => {
                 return Ok(function.chain_property(key));
             }
@@ -854,8 +860,11 @@ pub(super) fn prototype_chain_has_proxy(slot: Option<crate::Prototype>) -> bool 
         match current {
             Some(crate::Prototype::Proxy(_)) => return true,
             Some(crate::Prototype::Object(object)) => current = object.prototype_slot(),
+            Some(crate::Prototype::Array(array)) => {
+                current = array.effective_prototype_slot();
+            }
             Some(crate::Prototype::Function(function)) => {
-                current = function.internal_prototype_slot().flatten();
+                current = function.effective_internal_prototype();
             }
             None => return false,
         }
@@ -877,6 +886,7 @@ fn prototype_chain_has_index_hazard(slot: Option<crate::Prototype>) -> bool {
                 }
                 current = object.prototype_slot();
             }
+            Some(crate::Prototype::Array(_)) => return true,
             Some(crate::Prototype::Function(_) | crate::Prototype::Proxy(_)) => return true,
             None => return false,
         }
@@ -897,8 +907,11 @@ pub(super) fn prototype_chain_has_typed_array(slot: Option<crate::Prototype>) ->
                 }
                 current = object.prototype_slot();
             }
+            Some(crate::Prototype::Array(array)) => {
+                current = array.effective_prototype_slot();
+            }
             Some(crate::Prototype::Function(function)) => {
-                current = function.internal_prototype_slot().flatten();
+                current = function.effective_internal_prototype();
             }
             Some(crate::Prototype::Proxy(_)) | None => return false,
         }
@@ -917,6 +930,7 @@ pub(super) fn ordinary_chain_symbol_property(
         }
         match current.prototype_slot() {
             Some(crate::Prototype::Object(next)) => current = next,
+            Some(crate::Prototype::Array(array)) => return Ok(array.symbol_property(symbol)),
             Some(crate::Prototype::Function(function)) => {
                 return Ok(function.chain_symbol_property(symbol));
             }

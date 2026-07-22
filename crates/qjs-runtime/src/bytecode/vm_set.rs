@@ -82,7 +82,10 @@ pub(crate) fn set_property(
                         // the object-only flat descriptor walk below. Defer
                         // both cases to recursive OrdinarySet.
                         if prototype_chain_has_proxy(prototype_slot.clone())
-                            || matches!(&prototype_slot, Some(crate::Prototype::Function(_)))
+                            || matches!(
+                                &prototype_slot,
+                                Some(crate::Prototype::Array(_) | crate::Prototype::Function(_))
+                            )
                         {
                             return crate::reflect::ordinary_set(
                                 Value::Array(elements.clone()),
@@ -96,7 +99,11 @@ pub(crate) fn set_property(
                             Some(crate::Prototype::Object(prototype)) => {
                                 ordinary_chain_property(&prototype, &key).ok().flatten()
                             }
-                            Some(crate::Prototype::Function(_) | crate::Prototype::Proxy(_)) => {
+                            Some(
+                                crate::Prototype::Array(_)
+                                | crate::Prototype::Function(_)
+                                | crate::Prototype::Proxy(_),
+                            ) => {
                                 unreachable!("special prototype routed through OrdinarySet")
                             }
                             None => None,
@@ -341,8 +348,7 @@ fn set_array_symbol_property(
 ) -> Result<bool, RuntimeError> {
     let inherited = array.symbol_property(&symbol).or_else(|| {
         array
-            .prototype_override()
-            .unwrap_or_else(|| array_prototype(env))
+            .effective_prototype_slot(env)
             .and_then(|prototype| prototype.symbol_property(&symbol))
     });
     match apply_set_step(inherited, receiver, value.clone(), env)? {
@@ -476,8 +482,7 @@ fn property_for_set(object: &Value, key: &PropertyKey, env: &CallEnv) -> Option<
         Value::Function(function) => function_property_for_set(function, env, key),
         Value::Array(elements) => elements.property(key).or_else(|| {
             elements
-                .prototype_override()
-                .unwrap_or_else(|| array_prototype(env))
+                .effective_prototype_slot(env)
                 .and_then(|prototype| prototype.property(key))
         }),
         Value::Map(map) => map.object().property(key),
@@ -506,8 +511,7 @@ fn symbol_property_for_set(object: &Value, key: &PropertyKey, env: &CallEnv) -> 
         Value::Set(set) => set.object().symbol_property(symbol),
         Value::Array(elements) => elements.symbol_property(symbol).or_else(|| {
             elements
-                .prototype_override()
-                .unwrap_or_else(|| array_prototype(env))
+                .effective_prototype_slot(env)
                 .and_then(|prototype| prototype.symbol_property(symbol))
         }),
         _ => None,

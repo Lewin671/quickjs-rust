@@ -340,6 +340,9 @@ fn install_function_has_instance(env: &CallEnv, symbol_function: &Function) {
     );
     match prototype {
         crate::Prototype::Object(prototype) => prototype.define_symbol_property(symbol, property),
+        crate::Prototype::Array(prototype) => {
+            prototype.array().define_symbol_property(symbol, property);
+        }
         crate::Prototype::Function(prototype) => {
             prototype.define_symbol_property(symbol, property);
         }

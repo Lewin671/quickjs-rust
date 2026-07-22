@@ -180,6 +180,7 @@ fn validate_copy_within_set(
 fn inherited_array_property(receiver: Value, env: &CallEnv, key: &str) -> Option<Property> {
     value_prototype_slot(receiver, env).and_then(|prototype| match prototype {
         crate::Prototype::Object(object) => object.property(key),
+        crate::Prototype::Array(array) => array.property(key),
         crate::Prototype::Function(function) => function.chain_property(key),
         crate::Prototype::Proxy(proxy) => proxy
             .target_result()

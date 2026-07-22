@@ -1,9 +1,4 @@
-use std::collections::HashMap;
-
-use crate::{
-    ArrayRef, Function, ObjectRef, Property, Value, array_own_property_descriptor,
-    array_own_property_names, symbol,
-};
+use crate::{ArrayRef, Function, ObjectRef, Property, Value, symbol};
 use crate::{CallEnv, NEW_TARGET_BINDING, NativeFunction, RuntimeError};
 
 const CROSS_REALM_MAP_PROTOTYPE: &str = "__quickjsRustRealmMapPrototype";
@@ -12,8 +7,8 @@ const CROSS_REALM_SET_PROTOTYPE: &str = "__quickjsRustRealmSetPrototype";
 const CROSS_REALM_WEAK_MAP_PROTOTYPE: &str = "__quickjsRustRealmWeakMapPrototype";
 const CROSS_REALM_WEAK_SET_PROTOTYPE: &str = "__quickjsRustRealmWeakSetPrototype";
 
-pub(crate) fn constructor_prototype(callee: &Value, env: &CallEnv) -> Option<ObjectRef> {
-    constructor_prototype_slot(callee, env).and_then(|prototype| prototype.as_object())
+pub(crate) fn constructor_prototype(callee: &Value, env: &CallEnv) -> Option<crate::Prototype> {
+    constructor_prototype_slot(callee, env)
 }
 
 pub(crate) fn native_construct_prototype_slot(
@@ -91,9 +86,7 @@ pub(crate) fn constructor_prototype_slot(
         Some(Property {
             value: Value::Array(array),
             ..
-        }) => Some(crate::Prototype::Object(array_as_object_prototype(
-            &array, env,
-        ))),
+        }) => Some(array_as_prototype_slot(&array, env)),
         _ => None,
     }
 }
@@ -104,9 +97,7 @@ fn prototype_value_to_slot(value: Value, env: &CallEnv) -> Option<crate::Prototy
             Some(crate::Prototype::Object(prototype))
         }
         Value::Function(prototype) => Some(crate::Prototype::Function(prototype)),
-        Value::Array(array) => Some(crate::Prototype::Object(array_as_object_prototype(
-            &array, env,
-        ))),
+        Value::Array(array) => Some(array_as_prototype_slot(&array, env)),
         Value::Proxy(prototype) => Some(crate::Prototype::Proxy(prototype)),
         _ => None,
     }
@@ -204,9 +195,7 @@ pub(crate) fn function_intrinsic_prototype_slot(env: &CallEnv) -> Option<crate::
         Some(Property {
             value: Value::Array(array),
             ..
-        }) => Some(crate::Prototype::Object(array_as_object_prototype(
-            &array, env,
-        ))),
+        }) => Some(array_as_prototype_slot(&array, env)),
         Some(Property {
             value: Value::Proxy(prototype),
             ..
@@ -225,19 +214,12 @@ pub(crate) fn function_prototype(function: &Function) -> Option<ObjectRef> {
     }
 }
 
-pub(crate) fn array_as_object_prototype(array: &ArrayRef, env: &CallEnv) -> ObjectRef {
-    let prototype = ObjectRef::with_prototype(
-        HashMap::new(),
-        array
-            .prototype_override()
-            .unwrap_or_else(|| array_prototype(env)),
-    );
-    for key in array_own_property_names(array) {
-        if let Some(descriptor) = array_own_property_descriptor(array, &key) {
-            prototype.define_property(key, descriptor);
-        }
-    }
-    prototype
+/// Preserve an array's live identity when it is installed in a [[Prototype]]
+/// slot. The realm fallback is captured separately so an implicit array
+/// prototype remains available without snapshotting the array's own
+/// descriptors.
+pub(crate) fn array_as_prototype_slot(array: &ArrayRef, env: &CallEnv) -> crate::Prototype {
+    crate::Prototype::array(array.clone(), array_prototype(env))
 }
 
 pub(crate) fn value_prototype(value: Value, env: &CallEnv) -> Option<ObjectRef> {
@@ -265,10 +247,7 @@ pub(crate) fn value_prototype_slot(value: Value, env: &CallEnv) -> Option<crate:
         Value::Object(object) => object.prototype_slot(),
         Value::Map(map) => map.object().prototype_slot(),
         Value::Set(set) => set.object().prototype_slot(),
-        Value::Array(elements) => match elements.prototype_slot_override() {
-            Some(slot) => slot,
-            None => array_prototype(env).map(crate::Prototype::Object),
-        },
+        Value::Array(elements) => elements.effective_prototype_slot(env),
         Value::Function(function) => match function.internal_prototype_slot() {
             Some(slot) => slot,
             None => function_intrinsic_prototype_slot(env),
@@ -307,6 +286,7 @@ pub(crate) fn function_prototype_chain_descriptor(
 ) -> Option<Property> {
     match function.internal_prototype_slot() {
         Some(Some(crate::Prototype::Object(prototype))) => prototype.property(key),
+        Some(Some(crate::Prototype::Array(array))) => array.property(key),
         Some(Some(crate::Prototype::Function(parent))) => parent.chain_property_with_env(key, env),
         Some(Some(crate::Prototype::Proxy(proxy))) => proxy
             .target_result()
@@ -315,6 +295,7 @@ pub(crate) fn function_prototype_chain_descriptor(
         Some(None) => None,
         None => function_intrinsic_prototype_slot(env).and_then(|prototype| match prototype {
             crate::Prototype::Object(prototype) => prototype.property(key),
+            crate::Prototype::Array(array) => array.property(key),
             crate::Prototype::Function(prototype) => prototype.chain_property_with_env(key, env),
             crate::Prototype::Proxy(proxy) => proxy
                 .target_result()

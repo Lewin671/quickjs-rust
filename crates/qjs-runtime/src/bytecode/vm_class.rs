@@ -1,7 +1,7 @@
 use std::{collections::HashMap, rc::Rc};
 
 use crate::{
-    Function, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_as_object_prototype,
+    Function, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_as_prototype_slot,
     function::{CompiledUserFunction, InstanceFieldInitializer, Upvalue},
     function_prototype, object, property_value,
     symbol::symbol_function_name_description,
@@ -830,9 +830,7 @@ fn class_heritage_prototype_slot(
         }
         Value::Object(prototype) => Ok(Some(crate::Prototype::Object(prototype))),
         Value::Function(prototype) => Ok(Some(crate::Prototype::Function(prototype))),
-        Value::Array(array) => Ok(Some(crate::Prototype::Object(array_as_object_prototype(
-            &array, env,
-        )))),
+        Value::Array(array) => Ok(Some(array_as_prototype_slot(&array, env))),
         _ => Err(class_heritage_prototype_error()),
     }
 }

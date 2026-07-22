@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::private::{PrivateEnvironment, PrivateStorage};
-use crate::{Function, RuntimeError, function::DynamicBindings, proxy::ProxyRef};
+use crate::{ArrayRef, Function, RuntimeError, function::DynamicBindings, proxy::ProxyRef};
 
 use super::{Property, Value};
 
@@ -61,14 +61,73 @@ impl ModuleNamespaceBindings {
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Prototype {
     Object(ObjectRef),
+    /// A live array object used as a [[Prototype]]. Keep the original
+    /// `ArrayRef`, rather than copying its current descriptors into an
+    /// `ObjectRef`, so later indexed-property mutations remain observable.
+    Array(ArrayPrototypeRef),
     Function(Function),
     Proxy(ProxyRef),
 }
 
+/// Live view of an array used as a [[Prototype]]. The fallback captures the
+/// array's realm-intrinsic prototype at the point the slot is installed; an
+/// explicit later `Object.setPrototypeOf(array, ...)` override still wins.
+/// Boxing the pair keeps `Prototype` pointer-sized per variant.
+#[derive(Clone)]
+pub(crate) struct ArrayPrototypeRef(Rc<ArrayPrototypeData>);
+
+struct ArrayPrototypeData {
+    array: ArrayRef,
+    default_prototype: Option<ObjectRef>,
+}
+
+impl ArrayPrototypeRef {
+    fn new(array: ArrayRef, default_prototype: Option<ObjectRef>) -> Self {
+        Self(Rc::new(ArrayPrototypeData {
+            array,
+            default_prototype,
+        }))
+    }
+
+    pub(crate) fn array(&self) -> ArrayRef {
+        self.0.array.clone()
+    }
+
+    pub(crate) fn effective_prototype_slot(&self) -> Option<Prototype> {
+        self.0
+            .array
+            .prototype_slot_override()
+            .unwrap_or_else(|| self.0.default_prototype.clone().map(Prototype::Object))
+    }
+
+    fn ptr_eq(&self, other: &Self) -> bool {
+        self.0.array.ptr_eq(&other.0.array)
+    }
+
+    pub(crate) fn property(&self, key: &str) -> Option<Property> {
+        crate::array_own_property_descriptor(&self.0.array, key).or_else(|| {
+            self.effective_prototype_slot()
+                .and_then(|prototype| prototype.property(key))
+        })
+    }
+
+    pub(crate) fn symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
+        self.0.array.own_symbol_property(symbol).or_else(|| {
+            self.effective_prototype_slot()
+                .and_then(|prototype| prototype.symbol_property(symbol))
+        })
+    }
+}
+
 impl Prototype {
+    pub(crate) fn array(array: ArrayRef, default_prototype: Option<ObjectRef>) -> Self {
+        Self::Array(ArrayPrototypeRef::new(array, default_prototype))
+    }
+
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Object(left), Self::Object(right)) => left.ptr_eq(right),
+            (Self::Array(left), Self::Array(right)) => left.ptr_eq(right),
             (Self::Function(left), Self::Function(right)) => left.ptr_eq(right),
             (Self::Proxy(left), Self::Proxy(right)) => left.ptr_eq(right),
             _ => false,
@@ -77,9 +136,10 @@ impl Prototype {
 
     /// Walks this prototype (and its own chain) for the data/accessor property
     /// `key`, returning the first match.
-    fn property(&self, key: &str) -> Option<Property> {
+    pub(crate) fn property(&self, key: &str) -> Option<Property> {
         match self {
             Self::Object(object) => object.property(key),
+            Self::Array(array) => array.property(key),
             Self::Function(function) => function.chain_property(key),
             Self::Proxy(proxy) => match proxy.target_result() {
                 Ok(target) => crate::property::own_or_inherited_descriptor(target, key),
@@ -92,9 +152,10 @@ impl Prototype {
         self.property(key).map(|property| property.value)
     }
 
-    fn symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
+    pub(crate) fn symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
         match self {
             Self::Object(object) => object.symbol_property(symbol),
+            Self::Array(array) => array.symbol_property(symbol),
             Self::Function(function) => function.chain_symbol_property(symbol),
             Self::Proxy(proxy) => match proxy.target_result() {
                 Ok(target) => crate::property::own_or_inherited_symbol_descriptor(target, symbol),
@@ -106,6 +167,7 @@ impl Prototype {
     fn to_string_tag(&self) -> Option<String> {
         match self {
             Self::Object(object) => object.to_string_tag(),
+            Self::Array(_) => None,
             // Functions never carry a Symbol.toStringTag in their own chain by
             // default; stop the search here.
             Self::Function(_) => None,
@@ -116,13 +178,14 @@ impl Prototype {
     /// Whether this prototype is (or descends to) the object `target`, used to
     /// reject prototype cycles.
     fn would_cycle(&self, target: &ObjectRef) -> bool {
-        self.would_cycle_inner(target, &mut Vec::new(), &mut Vec::new())
+        self.would_cycle_inner(target, &mut Vec::new(), &mut Vec::new(), &mut Vec::new())
     }
 
     fn would_cycle_inner(
         &self,
         target: &ObjectRef,
         seen_objects: &mut Vec<ObjectRef>,
+        seen_arrays: &mut Vec<ArrayRef>,
         seen_functions: &mut Vec<Function>,
     ) -> bool {
         match self {
@@ -135,7 +198,88 @@ impl Prototype {
                 }
                 seen_objects.push(object.clone());
                 object.prototype_slot().is_some_and(|prototype| {
-                    prototype.would_cycle_inner(target, seen_objects, seen_functions)
+                    prototype.would_cycle_inner(target, seen_objects, seen_arrays, seen_functions)
+                })
+            }
+            Self::Array(array_prototype) => {
+                let array = array_prototype.array();
+                if seen_arrays.iter().any(|seen| seen.ptr_eq(&array)) {
+                    return false;
+                }
+                seen_arrays.push(array);
+                array_prototype
+                    .effective_prototype_slot()
+                    .is_some_and(|prototype| {
+                        prototype.would_cycle_inner(
+                            target,
+                            seen_objects,
+                            seen_arrays,
+                            seen_functions,
+                        )
+                    })
+            }
+            Self::Function(function) => {
+                if seen_functions.iter().any(|seen| seen.ptr_eq(function)) {
+                    return false;
+                }
+                seen_functions.push(function.clone());
+                function
+                    .effective_internal_prototype()
+                    .is_some_and(|prototype| {
+                        prototype.would_cycle_inner(
+                            target,
+                            seen_objects,
+                            seen_arrays,
+                            seen_functions,
+                        )
+                    })
+            }
+            Self::Proxy(_) => false,
+        }
+    }
+
+    pub(crate) fn would_cycle_array(&self, target: &ArrayRef) -> bool {
+        self.would_cycle_array_inner(target, &mut Vec::new(), &mut Vec::new(), &mut Vec::new())
+    }
+
+    fn would_cycle_array_inner(
+        &self,
+        target: &ArrayRef,
+        seen_objects: &mut Vec<ObjectRef>,
+        seen_arrays: &mut Vec<ArrayRef>,
+        seen_functions: &mut Vec<Function>,
+    ) -> bool {
+        match self {
+            Self::Array(array) => {
+                let current = array.array();
+                if current.ptr_eq(target) {
+                    return true;
+                }
+                if seen_arrays.iter().any(|seen| seen.ptr_eq(&current)) {
+                    return false;
+                }
+                seen_arrays.push(current);
+                array.effective_prototype_slot().is_some_and(|prototype| {
+                    prototype.would_cycle_array_inner(
+                        target,
+                        seen_objects,
+                        seen_arrays,
+                        seen_functions,
+                    )
+                })
+            }
+            Self::Object(object) => {
+                if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
+                    return false;
+                }
+                seen_objects.push(object.clone());
+                object.prototype_slot().is_some_and(|prototype| {
+                    prototype.would_cycle_array_inner(
+                        target,
+                        seen_objects,
+                        seen_arrays,
+                        seen_functions,
+                    )
                 })
             }
             Self::Function(function) => {
@@ -146,7 +290,12 @@ impl Prototype {
                 function
                     .effective_internal_prototype()
                     .is_some_and(|prototype| {
-                        prototype.would_cycle_inner(target, seen_objects, seen_functions)
+                        prototype.would_cycle_array_inner(
+                            target,
+                            seen_objects,
+                            seen_arrays,
+                            seen_functions,
+                        )
                     })
             }
             Self::Proxy(_) => false,
@@ -158,7 +307,7 @@ impl Prototype {
     pub(crate) fn as_object(&self) -> Option<ObjectRef> {
         match self {
             Self::Object(object) => Some(object.clone()),
-            Self::Function(_) | Self::Proxy(_) => None,
+            Self::Array(_) | Self::Function(_) | Self::Proxy(_) => None,
         }
     }
 
@@ -166,6 +315,7 @@ impl Prototype {
     pub(crate) fn to_value(&self) -> Value {
         match self {
             Self::Object(object) => Value::Object(object.clone()),
+            Self::Array(array) => Value::Array(array.array()),
             Self::Function(function) => Value::Function(function.clone()),
             Self::Proxy(proxy) => Value::Proxy(proxy.clone()),
         }

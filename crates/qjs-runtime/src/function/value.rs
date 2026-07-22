@@ -1229,6 +1229,7 @@ impl Function {
         self.own_symbol_property(symbol).or_else(|| {
             match self.effective_internal_prototype_with_env(env) {
                 Some(Prototype::Object(prototype)) => prototype.symbol_property(symbol),
+                Some(Prototype::Array(array)) => array.symbol_property(symbol),
                 Some(Prototype::Function(parent)) => parent.chain_symbol_property(symbol),
                 Some(Prototype::Proxy(proxy)) => proxy.target_result().ok().and_then(|target| {
                     crate::property::own_or_inherited_symbol_descriptor(target, symbol)
@@ -1277,6 +1278,7 @@ impl Function {
         self.own_property(key)
             .or_else(|| match self.effective_internal_prototype_with_env(env) {
                 Some(Prototype::Object(prototype)) => prototype.property(key),
+                Some(Prototype::Array(array)) => array.property(key),
                 Some(Prototype::Function(parent)) => parent.chain_property_with_env(key, env),
                 Some(Prototype::Proxy(proxy)) => proxy
                     .target_result()
@@ -1290,6 +1292,7 @@ impl Function {
         self.own_symbol_property(symbol)
             .or_else(|| match self.effective_internal_prototype() {
                 Some(Prototype::Object(prototype)) => prototype.symbol_property(symbol),
+                Some(Prototype::Array(array)) => array.symbol_property(symbol),
                 Some(Prototype::Function(parent)) => parent.chain_symbol_property(symbol),
                 Some(Prototype::Proxy(proxy)) => proxy.target_result().ok().and_then(|target| {
                     crate::property::own_or_inherited_symbol_descriptor(target, symbol)
@@ -1547,6 +1550,14 @@ fn prototype_chain_contains_function_inner(
                 )
             })
         }
+        Prototype::Array(array) => array.effective_prototype_slot().is_some_and(|prototype| {
+            prototype_chain_contains_function_inner(
+                &prototype,
+                target,
+                seen_functions,
+                seen_objects,
+            )
+        }),
         Prototype::Proxy(_) => false,
     }
 }

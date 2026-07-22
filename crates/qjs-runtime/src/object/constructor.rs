@@ -177,9 +177,7 @@ pub(crate) fn native_object_create(
         )),
         Some(Value::Array(prototype)) => Value::Object(ObjectRef::with_prototype_slot(
             HashMap::new(),
-            Some(crate::Prototype::Object(crate::array_as_object_prototype(
-                prototype, env,
-            ))),
+            Some(crate::array_as_prototype_slot(prototype, env)),
         )),
         Some(Value::Null) => Value::Object(ObjectRef::new(HashMap::new())),
         _ => {

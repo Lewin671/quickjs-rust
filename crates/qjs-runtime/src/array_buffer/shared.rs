@@ -306,7 +306,7 @@ pub(crate) fn from_backing(
 ) -> ObjectRef {
     let constructor = env.get("SharedArrayBuffer").unwrap_or(Value::Undefined);
     let prototype = crate::constructor_prototype(&constructor, env);
-    let object = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
     object.set_shared_backing(backing);
     object.define_property(
         SHARED_ARRAY_BUFFER_DATA_PROPERTY.to_owned(),

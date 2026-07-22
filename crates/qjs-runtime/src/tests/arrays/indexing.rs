@@ -194,6 +194,61 @@ fn dense_index_store_checks_the_complete_prototype_chain() {
     );
 }
 
+#[test]
+fn indexed_store_walks_a_functions_effective_prototype_chain() {
+    assert_eq!(
+        eval(
+            "let original = Object.getPrototypeOf(Function.prototype), seen = 0, receiverOk = false; \
+             let proxy = new Proxy(original, { \
+                 set: function(_target, key, value, receiver) { \
+                     seen = key + ':' + value; receiverOk = receiver === array; return true; \
+                 } \
+             }); \
+             Object.setPrototypeOf(Function.prototype, proxy); \
+             function link() {} \
+             let bridge = Object.create(link), array = []; \
+             Object.setPrototypeOf(array, bridge); array[0] = 17; \
+             Object.setPrototypeOf(Function.prototype, original); \
+             seen + ':' + receiverOk + ':' + array.hasOwnProperty('0');"
+        ),
+        Ok(Value::String("0:17:true:false".to_owned().into()))
+    );
+
+    assert_eq!(
+        eval(
+            "let original = Object.getPrototypeOf(Function.prototype); \
+             Object.setPrototypeOf(Function.prototype, new Uint8Array(0)); \
+             function link() {} \
+             let bridge = Object.create(link), array = []; \
+             Object.setPrototypeOf(array, bridge); array[0] = 23; \
+             Object.setPrototypeOf(Function.prototype, original); \
+             array.hasOwnProperty('0') + ':' + array.length;"
+        ),
+        Ok(Value::String("false:0".to_owned().into()))
+    );
+}
+
+#[test]
+fn array_prototype_nodes_remain_live_after_installation() {
+    assert_eq!(
+        eval(
+            "let prototype = [], array = [], log = ''; \
+             Object.setPrototypeOf(array, prototype); \
+             let identity = Object.getPrototypeOf(array) === prototype; \
+             Object.defineProperty(prototype, '0', { \
+                 set: function() { log += 'first'; }, configurable: true \
+             }); \
+             array[0] = 1; \
+             Object.defineProperty(prototype, '0', { \
+                 set: function() { log += ':second'; }, configurable: true \
+             }); \
+             array[0] = 2; delete prototype[0]; array[0] = 3; \
+             identity + ':' + log + ':' + array[0] + ':' + array.hasOwnProperty('0');"
+        ),
+        Ok(Value::String("true:first:second:3:true".to_owned().into()))
+    );
+}
+
 /// Computed compound assignments and updates cache a property key after
 /// `ToPropertyKey`. Canonical string indices may still use dense storage, but
 /// inherited setters and non-index strings must retain ordinary `[[Set]]`

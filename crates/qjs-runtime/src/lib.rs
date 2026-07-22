@@ -66,7 +66,7 @@ pub(crate) use function::{
 };
 use function::{Function, NativeFunction};
 pub(crate) use property::{
-    PropertyKey, array_as_object_prototype, array_has_own_property, array_own_property_descriptor,
+    PropertyKey, array_as_prototype_slot, array_has_own_property, array_own_property_descriptor,
     array_own_property_keys, array_own_property_names, array_prototype,
     constructor_named_prototype, constructor_prototype, constructor_prototype_slot,
     function_constructor_as_prototype_slot, function_delete_own_property,

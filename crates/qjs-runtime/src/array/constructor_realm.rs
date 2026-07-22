@@ -39,9 +39,7 @@ fn array_prototype_slot_from_value(value: Value, env: &CallEnv) -> Option<Protot
             Some(Prototype::Object(prototype))
         }
         Value::Function(prototype) => Some(Prototype::Function(prototype)),
-        Value::Array(array) => Some(Prototype::Object(crate::array_as_object_prototype(
-            &array, env,
-        ))),
+        Value::Array(array) => Some(crate::array_as_prototype_slot(&array, env)),
         Value::Proxy(prototype) => Some(Prototype::Proxy(prototype)),
         _ => None,
     }

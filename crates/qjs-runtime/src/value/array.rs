@@ -656,6 +656,14 @@ impl ArrayRef {
         self.0.prototype_override()
     }
 
+    /// The effective [[Prototype]] slot, preserving array/function/proxy
+    /// identities and resolving the implicit realm Array.prototype only when
+    /// no explicit override is present.
+    pub(crate) fn effective_prototype_slot(&self, env: &CallEnv) -> Option<Prototype> {
+        self.prototype_slot_override()
+            .unwrap_or_else(|| crate::array_prototype(env).map(Prototype::Object))
+    }
+
     pub(crate) fn own_symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
         self.0.cold_if_present().and_then(|cold| {
             cold.symbol_properties
@@ -702,6 +710,12 @@ impl ArrayRef {
             return Ok(());
         }
         if !self.0.extensible.get() {
+            return Err(());
+        }
+        if prototype
+            .as_ref()
+            .is_some_and(|prototype| prototype.would_cycle_array(self))
+        {
             return Err(());
         }
         *self.0.cold().prototype.borrow_mut() = Some(prototype);

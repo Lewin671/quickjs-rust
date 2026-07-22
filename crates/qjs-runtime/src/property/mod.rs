@@ -17,7 +17,7 @@ pub(crate) use function::{
 };
 pub(crate) use key::{PropertyKey, to_property_key_value, try_to_property_key_without_coercion};
 pub(crate) use prototype::{
-    array_as_object_prototype, array_prototype, constructor_named_prototype, constructor_prototype,
+    array_as_prototype_slot, array_prototype, constructor_named_prototype, constructor_prototype,
     constructor_prototype_slot, function_constructor_as_prototype_slot,
     function_intrinsic_prototype_slot, function_prototype, function_prototype_chain_descriptor,
     inherited_primitive_prototype_descriptor, inherited_primitive_prototype_symbol_descriptor,
@@ -100,6 +100,7 @@ fn prototype_has_property(
 ) -> Result<bool, RuntimeError> {
     match prototype {
         Some(crate::Prototype::Object(object)) => object_has_property(&object, env, key),
+        Some(crate::Prototype::Array(array)) => has_property(Value::Array(array.array()), env, key),
         Some(crate::Prototype::Function(function)) => function_has_property(&function, env, key),
         Some(crate::Prototype::Proxy(proxy)) => {
             let mut proxy_env = env.clone();
@@ -162,6 +163,7 @@ pub(crate) fn own_or_inherited_descriptor(value: Value, key: &str) -> Option<Pro
 fn prototype_descriptor_without_traps(prototype: crate::Prototype, key: &str) -> Option<Property> {
     match prototype {
         crate::Prototype::Object(object) => object.property(key),
+        crate::Prototype::Array(array) => array.property(key),
         crate::Prototype::Function(function) => function.chain_property(key),
         crate::Prototype::Proxy(proxy) => proxy
             .target_result()
@@ -204,6 +206,7 @@ fn prototype_symbol_descriptor_without_traps(
 ) -> Option<Property> {
     match prototype {
         crate::Prototype::Object(object) => object.symbol_property(symbol),
+        crate::Prototype::Array(array) => array.symbol_property(symbol),
         crate::Prototype::Function(function) => function.chain_symbol_property(symbol),
         crate::Prototype::Proxy(proxy) => proxy
             .target_result()
@@ -231,8 +234,7 @@ fn has_symbol_property(
         Value::Function(function) => Ok(function.symbol_property(symbol, env).is_some()),
         Value::Array(elements) => Ok(elements.symbol_property(symbol).is_some()
             || elements
-                .prototype_override()
-                .unwrap_or_else(|| array_prototype(env))
+                .effective_prototype_slot(env)
                 .is_some_and(|prototype| prototype.symbol_property(symbol).is_some())),
         Value::String(_)
         | Value::Number(_)
@@ -324,8 +326,7 @@ pub(crate) fn property_value_key_with_receiver(
                     .or_else(|| elements.property(key))
                     .or_else(|| {
                         elements
-                            .prototype_override()
-                            .unwrap_or_else(|| array_prototype(env))
+                            .effective_prototype_slot(env)
                             .and_then(|prototype| prototype.property(key))
                     });
                 property_descriptor_value(descriptor, receiver, env)
@@ -398,8 +399,7 @@ fn symbol_property_value_with_receiver(
         Value::Array(elements) => property_descriptor_value(
             elements.symbol_property(symbol).or_else(|| {
                 elements
-                    .prototype_override()
-                    .unwrap_or_else(|| array_prototype(env))
+                    .effective_prototype_slot(env)
                     .and_then(|prototype| prototype.symbol_property(symbol))
             }),
             receiver,
