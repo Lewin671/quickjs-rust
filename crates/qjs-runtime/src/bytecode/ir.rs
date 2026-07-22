@@ -309,10 +309,10 @@ pub(super) enum Op {
         is_strict: bool,
     },
     /// Writes a computed numeric-literal property from `[object, value]`
-    /// without materializing or coercing the key. Dense ordinary arrays can
-    /// store the index directly; every other receiver falls back to ordinary
-    /// `[[Set]]` with the canonical decimal string key. Leaves the assigned
-    /// value on the stack.
+    /// without materializing or coercing the key. Dense ordinary arrays and
+    /// typed arrays can store the index directly; every other receiver falls
+    /// back to ordinary `[[Set]]` with the canonical decimal string key. Leaves
+    /// the assigned value on the stack.
     SetPropIndex {
         index: usize,
         is_strict: bool,
