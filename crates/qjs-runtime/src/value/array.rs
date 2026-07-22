@@ -359,6 +359,31 @@ impl ArrayRef {
         Some(mutate(&mut elements))
     }
 
+    /// Temporarily exposes fully dense indexed storage to a pure read-only
+    /// accelerator. The closure must not call back into JavaScript or access
+    /// this array while the element borrow is live. Prototype state is
+    /// deliberately irrelevant: every index in `0..length` is a present own
+    /// data property, so an inherited getter cannot intercept these reads.
+    pub(crate) fn with_dense_readable_elements<R>(
+        &self,
+        read: impl FnOnce(&[Value]) -> R,
+    ) -> Option<R> {
+        if self.0.cold_if_present().is_some_and(|cold| {
+            !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
+                || !cold
+                    .properties
+                    .try_borrow()
+                    .is_ok_and(|properties| properties.is_empty())
+        }) {
+            return None;
+        }
+        let elements = self.0.elements.try_borrow().ok()?;
+        if self.0.length.get() != elements.len() {
+            return None;
+        }
+        Some(read(&elements))
+    }
+
     /// Searches fully dense numeric storage without generic property lookup.
     /// Callers separately guard the resolved `Array.prototype.indexOf` identity;
     /// this method rejects holes, descriptors, and prototype overrides so the

@@ -10,8 +10,10 @@ use super::{
 };
 
 mod dense;
+mod predicate_scan;
 
 use dense::DenseNumericMutationLoopPlan;
+use predicate_scan::{DenseNumericPredicateScanPlan, PredicateScanRun};
 
 #[derive(Clone, Copy, Debug)]
 enum NumericMutationOp {
@@ -66,6 +68,7 @@ pub(super) struct NumericMutationLoopPlan {
 enum NumericMutationLoopKind {
     Named(NamedNumericMutationLoopPlan),
     Dense(Rc<DenseNumericMutationLoopPlan>),
+    PredicateScan(Rc<DenseNumericPredicateScanPlan>),
 }
 
 impl NumericMutationLoopPlan {
@@ -84,7 +87,12 @@ impl NumericMutationLoopPlan {
     }
 
     pub(super) fn contains_instruction(&self, ip: usize) -> bool {
-        (self.header..=self.backedge).contains(&ip)
+        match &self.kind {
+            NumericMutationLoopKind::PredicateScan(plan) => plan.contains_instruction(ip),
+            NumericMutationLoopKind::Named(_) | NumericMutationLoopKind::Dense(_) => {
+                (self.header..=self.backedge).contains(&ip)
+            }
+        }
     }
 
     fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<Self> {
@@ -96,19 +104,52 @@ impl NumericMutationLoopPlan {
                 kind: NumericMutationLoopKind::Named(named.plan),
             });
         }
-        let dense = DenseNumericMutationLoopPlan::compile(bytecode, header, backedge)?;
+        if let Some(dense) = DenseNumericMutationLoopPlan::compile(bytecode, header, backedge) {
+            return Some(Self {
+                header,
+                backedge,
+                exit: dense.exit(),
+                kind: NumericMutationLoopKind::Dense(Rc::new(dense)),
+            });
+        }
+        let predicate_scan = DenseNumericPredicateScanPlan::compile(bytecode, header, backedge)?;
         Some(Self {
             header,
             backedge,
-            exit: dense.exit(),
-            kind: NumericMutationLoopKind::Dense(Rc::new(dense)),
+            exit: predicate_scan.exit(),
+            kind: NumericMutationLoopKind::PredicateScan(Rc::new(predicate_scan)),
         })
     }
 
-    fn try_run(&self, vm: &mut Vm<'_>) -> bool {
+    fn try_run(&self, vm: &mut Vm<'_>) -> NumericMutationLoopRun {
         match &self.kind {
-            NumericMutationLoopKind::Named(plan) => plan.try_run(vm, self.exit),
-            NumericMutationLoopKind::Dense(plan) => plan.try_run(vm),
+            NumericMutationLoopKind::Named(plan) => {
+                NumericMutationLoopRun::from_handled(plan.try_run(vm, self.exit))
+            }
+            NumericMutationLoopKind::Dense(plan) => {
+                NumericMutationLoopRun::from_handled(plan.try_run(vm))
+            }
+            NumericMutationLoopKind::PredicateScan(plan) => match plan.try_run(vm) {
+                PredicateScanRun::Handled => NumericMutationLoopRun::Handled,
+                PredicateScanRun::Suppress => NumericMutationLoopRun::SuppressPredicate,
+            },
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NumericMutationLoopRun {
+    Handled,
+    Declined,
+    SuppressPredicate,
+}
+
+impl NumericMutationLoopRun {
+    fn from_handled(handled: bool) -> Self {
+        if handled {
+            Self::Handled
+        } else {
+            Self::Declined
         }
     }
 }
@@ -410,11 +451,26 @@ pub(super) fn try_run_numeric_mutation_loop(
     header: usize,
     backedge: usize,
 ) -> bool {
-    vm.numeric_mutation_loop_plans
+    let Some((index, plan)) = vm
+        .numeric_mutation_loop_plans
         .iter()
-        .find(|plan| plan.header == header && plan.backedge == backedge)
-        .cloned()
-        .is_some_and(|plan| plan.try_run(vm))
+        .enumerate()
+        .find(|(_, plan)| plan.header == header && plan.backedge == backedge)
+        .map(|(index, plan)| (index, plan.clone()))
+    else {
+        return false;
+    };
+    match plan.try_run(vm) {
+        NumericMutationLoopRun::Handled => true,
+        NumericMutationLoopRun::Declined => false,
+        NumericMutationLoopRun::SuppressPredicate => {
+            // Plans are already cloned into each frame. Removing a zero-
+            // progress predicate plan suppresses only this invocation and
+            // adds no state to the call-path-sensitive FrameState layout.
+            vm.numeric_mutation_loop_plans.remove(index);
+            false
+        }
+    }
 }
 
 #[cfg(test)]

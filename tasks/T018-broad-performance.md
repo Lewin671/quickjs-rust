@@ -6451,6 +6451,57 @@ tests, all 1,574 runtime tests, formatting, workspace clippy, branch-scope
 validation, and `check-touched` passed before integration. The integrated full
 Test262 and QuickJS-NG comparison gates remain mandatory before push.
 
+### 2026-07-22 dense bit predicate scans
+
+Agent commit `b1fb0b88` extends the numeric-mutation subsystem with a fail-closed
+dense bit predicate plan. It recognizes the general bytecode relation
+`array[index >> shift] & (base << (index & mask))` around a counted-loop
+predicate; the shift, mask, and base remain plan data rather than workload
+identities. Eligible loops lease fully dense Number storage once and scan
+packed words with integer bit operations. The executor stops before the first
+true predicate, releases the array borrow, publishes only completed counter
+progress, and hands the observable true body back to ordinary bytecode. Holes,
+special descriptors, non-Number elements, non-authoritative locals, direct
+`eval`, unsupported numeric ranges, aliasing counter/limit slots, or any
+failed entry guard retain the normal VM path. A zero-progress runtime mismatch
+removes only that frame's plan so repeated deopts do not become a new hot path.
+
+The first scalar scan prototype was rejected against its predeclared at-most
+0.70x gate: exact seven-block `bitops-nsieve-bits` measured 0.784x base. The
+packed-word refinement used the same frozen base and QuickJS-NG binaries and
+measured 30.601 ms versus 57.398 ms base, or 0.53314x, with a paired 95%
+interval of [0.532742x, 0.538585x]. Its six controls stayed below the 1.03x
+regression boundary. A standalone element-construction probe was inconclusive
+because all roles were dominated by constructing the 20,000-element input;
+the exact scalar-plan-to-word-plan movement, 45.036 ms to 30.601 ms, is the
+reliable executor-level diagnostic.
+
+After rebasing onto the accepted common-range `ToUint32` unit, the combined
+exact seven-block gate used candidate, frozen base, and QuickJS-NG binary
+SHA-256 values
+`7764eb7d0ba94d2cc90c12d7ca07ee64ce385b897df127c2cbc1d9640b551639`,
+`dcef12c705a1f0a862b74b7318dd7868a8e08e0822ae73c65a50bff14b84588a`,
+and `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+`bitops-nsieve-bits` measured 26.223 ms candidate, 57.000 ms base, and
+29.376 ms QuickJS-NG: 0.460x base and 0.893x QuickJS-NG. Paired 95%
+intervals were [0.456426x, 0.460999x] and [0.884138x, 0.901987x]. Control
+candidate/base point estimates were 1.006x for JetStream `hash-map`, 1.002x
+for Kraken `json-parse-financial`, 0.992x for `access-nsieve`, 0.843x for
+`bitops-3bit-bits-in-byte`, 0.959x for `bitops-bits-in-byte`, and 0.982x for
+`bitops-bitwise-and`; the largest paired interval upper bound was 1.01057x.
+Manifest/raw/report SHA-256 values are
+`5f4ed9bf8c2bc23742bc37e9038d3e71c324908f19a78cd70e9ff051955a4598`,
+`a53828c47ee6b37990881bfe05b86703a7b217d5f676f0ba08da772db47c805c`,
+and `0398bf4728b8134e398684d954e8e63cef8f85d437bee195e101394f8a86ce03`.
+
+The branch passed all 1,587 runtime tests, the related 65-case Test262 slice,
+formatting, workspace clippy, file-size checks, `check-touched`, and branch
+scope validation. Three independent review passes found no remaining P0--P2
+issue after fixes for counter/limit aliasing, zero-progress deopt suppression,
+and virtual-object lowering ranges. The mechanism therefore clears its local
+generalization gate, while B5 remains open because 0.893x QuickJS-NG is still
+above the final 0.50x every-case boundary.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
