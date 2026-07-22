@@ -6502,6 +6502,116 @@ and virtual-object lowering ranges. The mechanism therefore clears its local
 generalization gate, while B5 remains open because 0.893x QuickJS-NG is still
 above the final 0.50x every-case boundary.
 
+### 2026-07-22 dense-predicate hosted closure
+
+Main commit `7a9616af` closed the dense-predicate unit on hosted hardware.
+Performance Preview `29963227131` retained all 25 broad cases and measured an
+overall 0.9626x candidate/base ratio [0.9610x, 0.9672x] and 0.1522x
+candidate/QuickJS-NG [0.1495x, 0.1546x]. The four broad cases still above the
+strict 0.50x QuickJS-NG boundary were `local_read` at 0.5222x,
+`object_allocation` at 1.1066x, `array_allocation` at 1.4176x, and
+`closure_allocation_call` at 1.0912x. Hosted `bitops-nsieve-bits` moved to
+0.412x candidate/base and 1.475x candidate/QuickJS-NG. Broad raw/report
+SHA-256 values are
+`f1c665d90d81e22403c1c597305330fb9538f84a6585d0b6c822aa97d2605404`
+and `19e40359695933057594d35a7ce5103760b360fd84ade906d039fcd945086fad`.
+
+The same artifact kept the external campaign open: diagnostic geometric
+candidate/QuickJS-NG ratios were 7.543x for the five JetStream ports, 4.784x
+for the 9/14 comparable Kraken ports, and 6.690x for all 26 SunSpider ports.
+External raw/report SHA-256 values are
+`477db87ccd0bfcc6e51d16625a7bca6e2c35aef7d70f6904471cd410749e96b2`
+and `558bbf1ba8013bb79bd17a0c7ca086888d59b6876505526cd05f8ce401bc728f`.
+CI run `29963227127` passed. Test262 Coverage `29963409223` independently
+passed all 42,672/42,672 configured cases with zero failures, timeouts,
+not-run cases, or actionable gaps; its burndown SHA-256 is
+`32801f80331b523999ec14080dc102b588877353ffe043d39179f96871102171`.
+
+An all-`Stable` fixed-shape numeric-loop kernel was also measured and rejected
+without a commit. Its exact seven-block candidate/base ratios were 1.00086x
+for `local_read` [0.99887x, 1.00606x], 1.00215x for `property_read`, and
+1.00211x for `array_read`; the remaining controls were neutral. The mechanism
+therefore added code without measurable movement. Candidate, base, and
+QuickJS-NG binary SHA-256 values were
+`821b818cc928bb3872f2112517202d11b48e2707ddae723e93f6ac5d4b3d96a2`,
+`7764eb7d0ba94d2cc90c12d7ca07ee64ce385b897df127c2cbc1d9640b551639`,
+and `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+Raw, manifest, and workload SHA-256 values are
+`102d6695686a130d23af05b32d5fe855f6c427d195100c45ffdd06e05552ab0f`,
+`869042a8adbd0bf6e3cafd05adbc3ef6c0d7b6f3c927b7d8a3eadf75d45fdbe0`,
+and `e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c`.
+
+### 2026-07-22 multi-array numeric loop regions
+
+Agent commit `ef35008d` generalizes the computed-index dense mutation plan from
+one read/modify/write receiver to a bounded straight-line numeric region: up
+to eight distinct dense Array receivers, 32 ordered stores, 256 Number
+instructions, and 64 numeric locals. The translator records receiver identity
+and preserves ordinary expression results. The executor leases each distinct
+array once, forwards same-iteration staged stores to later loads in source
+order, preflights every current-iteration access, and commits all stores only
+after the final potentially failing instruction. Aliased receiver slots,
+holes, non-Number elements, special properties, frozen arrays, borrow
+conflicts, non-authoritative locals, direct `eval`, and unsupported bytecode
+all fail closed. A failed guard publishes only earlier complete iterations,
+releases every lease, and restarts the ordinary VM at the loop header for an
+exact replay of the first failed iteration.
+
+The common one-receiver/one-store path remains allocation-free. Programs up
+to 64 instructions use inline registers; larger admitted regions allocate an
+exact-size register vector. A unique store with no later array access is sunk
+after the Number program, while regions requiring store-to-load forwarding
+retain the transactional instruction. The final code-generation repair marks
+the shared binary-operation helper always-inline. This restores the old
+single-RMW hot loop's inlining while retaining one generic, monomorphized
+instruction executor for both Single and Multi access; release assembly
+changed from two hot `bl apply_binary` sites to zero.
+
+The performance screen was deliberately strict: both targets needed a
+candidate/base interval upper bound at most 0.95x, their geometric mean at
+most 0.90x, and every unrelated control at most 1.03x. Four earlier frozen
+seven-block candidates were rejected rather than relaxing it. They measured
+strong target movement but regressed `bitops-nsieve-bits`: `a88316cb` was
+1.108x [1.105x, 1.133x], `b76bfdbb` was 1.094x [1.083x, 1.098x],
+`284484c0` was 1.035x [1.031x, 1.039x], and `59752e2d` was 1.061x
+[1.057x, 1.068x]. Those iterations respectively exposed whole-register-file
+initialization, remaining Single-path allocation/abstraction, and the
+out-of-line binary helper. Each was kept out of history until the shared
+legacy control recovered.
+
+The accepted exact seven-block Gate5 used candidate, base, and QuickJS-NG
+binary SHA-256 values
+`ece6efd42c04b3f4e2772af74becc7ea0bdbe34d8dd603eb42b75a6041c3dc99`,
+`7764eb7d0ba94d2cc90c12d7ca07ee64ce385b897df127c2cbc1d9640b551639`,
+and `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+Candidate/base paired estimates with 95% intervals were:
+
+- Kraken `audio-fft`: 0.490253x [0.487265x, 0.492119x];
+- SunSpider `access-fannkuch`: 0.763370x [0.754279x, 0.763899x];
+- target geometric mean: 0.611755x [0.606245x, 0.613070x];
+- JetStream `hash-map`: 0.992550x [0.992020x, 0.996946x];
+- Kraken `json-parse-financial`: 1.003025x [1.001779x, 1.009403x];
+- SunSpider `bitops-nsieve-bits`: 0.993481x [0.987597x, 0.996616x];
+- Kraken `audio-dft`: 1.000543x [0.996702x, 1.021939x].
+
+The target candidate/QuickJS-NG ratios remain 1.632896x for `audio-fft` and
+2.341656x for `access-fannkuch`, so this unit materially reduces two external
+gaps but does not close B5. Manifest, raw, external-report, and paired-report
+SHA-256 values are
+`335eb1b4cbf23f2d94a55a3363b25e863ec9fabdb1c1dc8a92fffcb4c32e9c40`,
+`c71cde426f78959bcd76369d8d1b52f013e24e1aaa6be81a6cc65ae55883497c`,
+`e37c555dc4d05c067a406c60b927f4cc2d835d34a5a7e48f0afc4b0918399042`,
+and `47a13fb7e637ac2d479b0025f876399ea637dcfba1381a0935864877efe020bd`.
+
+Coverage includes multiple arrays, multiple ordered stores, same-array
+forwarding, runtime alias fallback, entry and mid-loop deoptimization,
+out-of-bounds preflight, store/load/replay ordering, sunk-store assignment
+results, and conflicting leases. The staged touched gate and commit hook each
+passed workspace formatting, clippy, file-size checks, all 1,597 runtime
+tests, and the related 65-case Test262 slice. Independent reviews found no
+remaining P0--P2 issue after fixes for integer progress overflow, register
+remapping, zero-allocation Single dispatch, and sunk-store replay ordering.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an

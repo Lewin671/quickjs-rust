@@ -571,6 +571,139 @@ mod tests {
     }
 
     #[test]
+    fn dynamic_dense_region_handles_renamed_multi_array_loads_and_stores() {
+        let source = "function project(signal, order, positive, negative, bound) { var cursor = 0; for (; cursor < bound; cursor = cursor + 3) { positive[cursor] = signal[order[cursor]] * 7 + 2; negative[cursor] = signal[order[cursor]] - 5; } return cursor + ':' + positive.join(',') + ':' + negative.join(','); }";
+        let bytecode = nested_function(source);
+        assert_eq!(
+            NumericMutationLoopPlan::compile_all(&bytecode).len(),
+            1,
+            "{:#?}",
+            bytecode.code
+        );
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "{source} project([4, 5, 6, 7], [2, 0, 0, 1, 0, 0, 3], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], 7);"
+            )),
+            Ok(Value::String(
+                "9:44,0,0,37,0,0,51,0:1,0,0,0,0,0,2,0".to_owned().into()
+            ))
+        );
+        assert!(dense::test_iterations() >= 2);
+    }
+
+    #[test]
+    fn dynamic_dense_region_forwards_ordered_same_array_stores() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function bump(values, bound) { for (var position = 0; position < bound; position++) { values[position] = values[position] + 1; values[position] = values[position] + 2; } return values.join(':'); } bump([1, 2, 3, 4], 4);"
+            ),
+            Ok(Value::String("4:5:6:7".to_owned().into()))
+        );
+        assert!(dense::test_iterations() > 0);
+    }
+
+    #[test]
+    fn dynamic_dense_region_rejects_runtime_receiver_aliases() {
+        let source = "function shift(destination, source, bound) { for (var offset = 0; offset < bound; offset++) { destination[offset + 1] = source[offset] + 1; } return destination.join(':'); }";
+        let bytecode = nested_function(source);
+        assert_eq!(
+            NumericMutationLoopPlan::compile_all(&bytecode).len(),
+            1,
+            "{:#?}",
+            bytecode.code
+        );
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "{source} var shared = [1, 0, 0, 0]; shift(shared, shared, 3);"
+            )),
+            Ok(Value::String("1:2:3:4".to_owned().into()))
+        );
+        assert_eq!(dense::test_iterations(), 0);
+    }
+
+    #[test]
+    fn dynamic_dense_region_replays_entry_and_mid_iteration_deopts() {
+        let source = "var coercions = 0; var marker = { valueOf: function () { coercions++; return 20; } }; function region(left, inputs, output, bound) { for (var index = 0; index < bound; index++) { left[index] = left[index] + 1; output[index] = inputs[index] + left[index]; } return left.join(':') + '|' + output.join(':') + '|' + coercions; }";
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "{source} region([10, 10, 10], [1, marker, 3], [0, 0, 0], 3);"
+            )),
+            Ok(Value::String("11:11:11|12:31:14|1".to_owned().into()))
+        );
+        assert!(dense::test_iterations() > 0);
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "{source} region([10, 10, 10, 10], [1, 2, marker, 4], [0, 0, 0, 0], 4);"
+            )),
+            Ok(Value::String("11:11:11:11|12:13:31:15|1".to_owned().into()))
+        );
+        assert!(dense::test_iterations() >= 2);
+    }
+
+    #[test]
+    fn dynamic_dense_region_preflights_every_store_before_commit() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function region(left, right, bound) { for (var index = 0; index < bound; index++) { left[index] = left[index] + 1; right[index] = left[index] + 2; } return left.join(':') + '|' + right.join(':'); } region([1, 1, 1], [0, 0], 3);"
+            ),
+            Ok(Value::String("2:2:2|4:4:4".to_owned().into()))
+        );
+        assert!(dense::test_iterations() > 0);
+    }
+
+    #[test]
+    fn dynamic_dense_single_path_discards_staged_store_before_later_guard_failure() {
+        let source = "function region(values, bound) { var observed = 0; for (var index = 0; index < bound; index++) { values[index] = values[index] + 1; observed = values[index] + values[index + 1]; } return values.join(':') + '|' + observed; }";
+        let bytecode = nested_function(source);
+        assert_eq!(
+            NumericMutationLoopPlan::compile_all(&bytecode).len(),
+            1,
+            "{:#?}",
+            bytecode.code
+        );
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!("{source} region([1, 2, 3], 3);")),
+            Ok(Value::String("2:3:4|NaN".to_owned().into()))
+        );
+        assert!(dense::test_iterations() > 0);
+        assert!(dense::test_single_path_hits() > 0);
+        assert_eq!(dense::test_sunk_store_hits(), 0);
+    }
+
+    #[test]
+    fn dynamic_dense_sinks_a_unique_store_without_changing_assignment_value() {
+        let source = "function shift(values, bound) { var last = 0; for (var index = 0; index < bound; index++) { last = (values[index] = values[index] + 3); } return values.join(':') + '|' + last; }";
+        let bytecode = nested_function(source);
+        assert_eq!(
+            NumericMutationLoopPlan::compile_all(&bytecode).len(),
+            1,
+            "{:#?}",
+            bytecode.code
+        );
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!("{source} shift([1, 2, 3, 4], 4);")),
+            Ok(Value::String("4:5:6:7|7".to_owned().into()))
+        );
+        assert!(dense::test_iterations() > 0);
+        assert!(dense::test_single_path_hits() > 0);
+        assert!(dense::test_sunk_store_hits() > 0);
+    }
+
+    #[test]
     fn dynamic_dense_rmw_commits_user_local_writes_at_exit() {
         let bytecode = nested_function(
             "function run(n) { var a = [255, 255, 255, 255]; var last = -1; for (var j = 0; j < n; j = j + 1) { last = j; a[j] &= ~(1 << (j & 31)); } return last; }",

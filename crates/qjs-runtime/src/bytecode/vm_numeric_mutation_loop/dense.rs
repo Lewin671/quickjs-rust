@@ -2,15 +2,19 @@
 //!
 //! Fixed-index recurrences scalar-replace a small set of Number elements.
 //! Computed-index loops translate one straight-line body into a bounded Number
-//! register program with one dense read/modify/write. The runtime checks every
-//! potentially observable condition before the current iteration's store, so a
-//! failed guard can publish completed iterations and restart at the header.
+//! register program spanning several distinct dense-array receivers. The
+//! runtime checks every potentially observable condition before publishing any
+//! current-iteration store, so a failed guard can publish only completed
+//! iterations and restart at the header.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    cell::RefMut,
+    collections::{BTreeMap, BTreeSet},
+};
 
-use qjs_ast::{BinaryOp, UnaryOp};
+use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
-use crate::{Value, to_int32_number, to_uint32_number};
+use crate::{Value, to_int32_number, to_uint32_number, value::ArrayRef};
 
 use super::super::{
     ir::{Bytecode, Op, decode_index_receiver},
@@ -18,19 +22,26 @@ use super::super::{
     vm_props::array_index_from_number,
 };
 
-const MAX_DENSE_OPS: usize = 64;
+const INLINE_DENSE_OPS: usize = 64;
+const MAX_DENSE_OPS: usize = 256;
 const MAX_DENSE_LOCALS: usize = 64;
 const MAX_DENSE_WRITES: usize = 64;
+const MAX_DENSE_RECEIVERS: usize = 8;
+const MAX_DENSE_STORES: usize = 32;
 const MAX_FIXED_MUTATIONS: usize = 16;
 
 #[cfg(test)]
 thread_local! {
     static DENSE_LOOP_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static SINGLE_DENSE_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static SUNK_DENSE_STORE_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
 pub(super) fn reset_test_iterations() {
     DENSE_LOOP_ITERATIONS.set(0);
+    SINGLE_DENSE_PATH_HITS.set(0);
+    SUNK_DENSE_STORE_HITS.set(0);
 }
 
 #[cfg(test)]
@@ -38,10 +49,32 @@ pub(super) fn test_iterations() -> usize {
     DENSE_LOOP_ITERATIONS.get()
 }
 
+#[cfg(test)]
+pub(super) fn test_single_path_hits() -> usize {
+    SINGLE_DENSE_PATH_HITS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_sunk_store_hits() -> usize {
+    SUNK_DENSE_STORE_HITS.get()
+}
+
 #[inline]
 fn record_iteration() {
     #[cfg(test)]
     DENSE_LOOP_ITERATIONS.set(DENSE_LOOP_ITERATIONS.get() + 1);
+}
+
+#[inline]
+fn record_single_path_hit() {
+    #[cfg(test)]
+    SINGLE_DENSE_PATH_HITS.set(SINGLE_DENSE_PATH_HITS.get() + 1);
+}
+
+#[inline]
+fn record_sunk_store_hit() {
+    #[cfg(test)]
+    SUNK_DENSE_STORE_HITS.set(SUNK_DENSE_STORE_HITS.get() + 1);
 }
 
 #[derive(Clone, Debug)]
@@ -87,11 +120,12 @@ struct FixedDensePlan {
 struct DynamicDensePlan {
     counter_local: usize,
     limit_local: usize,
-    receiver_slot: usize,
+    receiver_slots: Vec<usize>,
     local_slots: Vec<usize>,
     operations: Vec<NumberInstruction>,
     writes: Vec<LocalWrite>,
-    store: DenseStore,
+    store_count: usize,
+    sunk_store: Option<SunkDenseStore>,
     header: usize,
 }
 
@@ -102,7 +136,13 @@ enum NumberInstruction {
     Constant(f64),
     LoadLocal(usize),
     DenseLoad {
+        receiver: usize,
         index: Register,
+    },
+    DenseStore {
+        receiver: usize,
+        index: Register,
+        value: Register,
     },
     Binary {
         operation: BinaryOp,
@@ -111,6 +151,10 @@ enum NumberInstruction {
     },
     Unary {
         operation: UnaryOp,
+        value: Register,
+    },
+    Update {
+        operation: UpdateOp,
         value: Register,
     },
 }
@@ -122,9 +166,134 @@ struct LocalWrite {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct DenseStore {
+struct PendingDenseStore {
+    receiver: usize,
+    index: usize,
+    value: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct SunkDenseStore {
+    receiver: usize,
     index: Register,
     value: Register,
+}
+
+trait DenseAccess {
+    fn reset_iteration(&mut self);
+    fn load_number(&self, receiver: usize, index: usize) -> Option<f64>;
+    fn stage_store(&mut self, receiver: usize, index: usize, value: f64) -> bool;
+    fn staged_store_count(&self) -> usize;
+    fn commit_stores(&mut self);
+}
+
+struct SingleAccess<'a> {
+    elements: &'a mut [Value],
+    pending: Option<PendingDenseStore>,
+}
+
+impl DenseAccess for SingleAccess<'_> {
+    fn reset_iteration(&mut self) {
+        self.pending = None;
+    }
+
+    fn load_number(&self, receiver: usize, index: usize) -> Option<f64> {
+        if receiver != 0 {
+            return None;
+        }
+        if let Some(store) = self
+            .pending
+            .filter(|store| store.receiver == receiver && store.index == index)
+        {
+            return Some(store.value);
+        }
+        match self.elements.get(index)? {
+            Value::Number(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    fn stage_store(&mut self, receiver: usize, index: usize, value: f64) -> bool {
+        if receiver != 0 || self.pending.is_some() || index >= self.elements.len() {
+            return false;
+        }
+        self.pending = Some(PendingDenseStore {
+            receiver,
+            index,
+            value,
+        });
+        true
+    }
+
+    fn staged_store_count(&self) -> usize {
+        usize::from(self.pending.is_some())
+    }
+
+    fn commit_stores(&mut self) {
+        let store = self
+            .pending
+            .take()
+            .expect("single-store plan stages exactly one validated write");
+        self.elements[store.index] = Value::Number(store.value);
+    }
+}
+
+struct MultiAccess<'a, 'elements> {
+    elements: &'a mut [RefMut<'elements, Vec<Value>>],
+    pending: Vec<PendingDenseStore>,
+}
+
+impl DenseAccess for MultiAccess<'_, '_> {
+    fn reset_iteration(&mut self) {
+        self.pending.clear();
+    }
+
+    fn load_number(&self, receiver: usize, index: usize) -> Option<f64> {
+        if let Some(store) = self
+            .pending
+            .iter()
+            .rev()
+            .find(|store| store.receiver == receiver && store.index == index)
+        {
+            return Some(store.value);
+        }
+        match self.elements.get(receiver)?.get(index)? {
+            Value::Number(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    fn stage_store(&mut self, receiver: usize, index: usize, value: f64) -> bool {
+        if self
+            .elements
+            .get(receiver)
+            .is_none_or(|elements| index >= elements.len())
+        {
+            return false;
+        }
+        self.pending.push(PendingDenseStore {
+            receiver,
+            index,
+            value,
+        });
+        true
+    }
+
+    fn staged_store_count(&self) -> usize {
+        self.pending.len()
+    }
+
+    fn commit_stores(&mut self) {
+        for store in &self.pending {
+            self.elements[store.receiver][store.index] = Value::Number(store.value);
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct DynamicProgramRun {
+    deoptimized: bool,
+    made_progress: bool,
 }
 
 impl DenseNumericMutationLoopPlan {
@@ -441,8 +610,8 @@ struct Translator<'a> {
     writes: Vec<LocalWrite>,
     written_slots: BTreeSet<usize>,
     number_slots: BTreeSet<usize>,
-    receiver_slot: Option<usize>,
-    store: Option<DenseStore>,
+    receiver_slots: Vec<usize>,
+    store_count: usize,
 }
 
 impl<'a> Translator<'a> {
@@ -455,8 +624,8 @@ impl<'a> Translator<'a> {
             writes: Vec::new(),
             written_slots: BTreeSet::new(),
             number_slots: BTreeSet::new(),
-            receiver_slot: None,
-            store: None,
+            receiver_slots: Vec::new(),
+            store_count: 0,
         }
     }
 
@@ -489,6 +658,23 @@ impl<'a> Translator<'a> {
             AbstractValue::Local(slot) => Some(*slot),
             _ => None,
         }
+    }
+
+    fn receiver(&mut self, value: &AbstractValue) -> Option<usize> {
+        let slot = Self::original_local(value)?;
+        if let Some(receiver) = self
+            .receiver_slots
+            .iter()
+            .position(|existing| *existing == slot)
+        {
+            return Some(receiver);
+        }
+        if self.receiver_slots.len() >= MAX_DENSE_RECEIVERS {
+            return None;
+        }
+        let receiver = self.receiver_slots.len();
+        self.receiver_slots.push(slot);
+        Some(receiver)
     }
 
     fn translate(&mut self, op: &Op) -> Option<()> {
@@ -545,6 +731,11 @@ impl<'a> Translator<'a> {
                     return None;
                 }
             }
+            Op::ToNumeric => {
+                let value = self.pop()?;
+                let register = self.number(value)?;
+                self.stack.push(AbstractValue::Number(register));
+            }
             Op::ToPropertyKeyForAccess => {
                 let value = self.pop()?;
                 let register = self.number(value)?;
@@ -576,42 +767,149 @@ impl<'a> Translator<'a> {
                 })?;
                 self.stack.push(AbstractValue::Number(register));
             }
+            Op::Update(operation) => {
+                let value = self.pop()?;
+                let value = self.number(value)?;
+                let register = self.emit(NumberInstruction::Update {
+                    operation: *operation,
+                    value,
+                })?;
+                self.stack.push(AbstractValue::Number(register));
+            }
             Op::GetProp => {
                 let key = self.pop()?;
                 let object = self.pop()?;
-                let AbstractValue::Key(index) = key else {
-                    return None;
-                };
-                let receiver = Self::original_local(&object)?;
-                if self.receiver_slot.is_some_and(|slot| slot != receiver) {
-                    return None;
-                }
-                self.receiver_slot = Some(receiver);
-                let register = self.emit(NumberInstruction::DenseLoad { index })?;
+                let index = self.number(key)?;
+                let receiver = self.receiver(&object)?;
+                let register = self.emit(NumberInstruction::DenseLoad { receiver, index })?;
                 self.stack.push(AbstractValue::Number(register));
             }
             Op::SetProp { .. } => {
-                if self.store.is_some() {
+                if self.store_count >= MAX_DENSE_STORES {
                     return None;
                 }
                 let value = self.pop()?;
                 let key = self.pop()?;
                 let object = self.pop()?;
                 let value = self.number(value)?;
-                let AbstractValue::Key(index) = key else {
-                    return None;
-                };
-                let receiver = Self::original_local(&object)?;
-                if self.receiver_slot != Some(receiver) {
-                    return None;
-                }
-                self.store = Some(DenseStore { index, value });
+                let index = self.number(key)?;
+                let receiver = self.receiver(&object)?;
+                self.emit(NumberInstruction::DenseStore {
+                    receiver,
+                    index,
+                    value,
+                })?;
+                self.store_count += 1;
                 self.stack.push(AbstractValue::Number(value));
             }
             _ => return None,
         }
         Some(())
     }
+}
+
+fn instruction_uses_register(operation: &NumberInstruction, target: Register) -> bool {
+    match operation {
+        NumberInstruction::Constant(_) | NumberInstruction::LoadLocal(_) => false,
+        NumberInstruction::DenseLoad { index, .. } => *index == target,
+        NumberInstruction::DenseStore { index, value, .. }
+        | NumberInstruction::Binary {
+            left: index,
+            right: value,
+            ..
+        } => *index == target || *value == target,
+        NumberInstruction::Unary { value, .. } | NumberInstruction::Update { value, .. } => {
+            *value == target
+        }
+    }
+}
+
+fn remap_removed_register(register: &mut Register, removed: Register) -> bool {
+    if *register == removed {
+        return false;
+    }
+    if *register > removed {
+        *register -= 1;
+    }
+    true
+}
+
+fn remap_instruction_registers(operation: &mut NumberInstruction, removed: Register) -> bool {
+    match operation {
+        NumberInstruction::Constant(_) | NumberInstruction::LoadLocal(_) => true,
+        NumberInstruction::DenseLoad { index, .. } => remap_removed_register(index, removed),
+        NumberInstruction::DenseStore { index, value, .. }
+        | NumberInstruction::Binary {
+            left: index,
+            right: value,
+            ..
+        } => remap_removed_register(index, removed) && remap_removed_register(value, removed),
+        NumberInstruction::Unary { value, .. } | NumberInstruction::Update { value, .. } => {
+            remap_removed_register(value, removed)
+        }
+    }
+}
+
+fn sink_unique_store(
+    operations: &mut Vec<NumberInstruction>,
+    writes: &mut [LocalWrite],
+    store_count: usize,
+) -> Option<Option<SunkDenseStore>> {
+    if store_count != 1 {
+        return Some(None);
+    }
+    let (position, mut store) =
+        operations
+            .iter()
+            .enumerate()
+            .find_map(|(position, operation)| match operation {
+                NumberInstruction::DenseStore {
+                    receiver,
+                    index,
+                    value,
+                } => Some((
+                    position,
+                    SunkDenseStore {
+                        receiver: *receiver,
+                        index: *index,
+                        value: *value,
+                    },
+                )),
+                _ => None,
+            })?;
+    if operations[position + 1..].iter().any(|operation| {
+        matches!(
+            operation,
+            NumberInstruction::DenseLoad { .. } | NumberInstruction::DenseStore { .. }
+        )
+    }) {
+        return Some(None);
+    }
+
+    let store_result_is_used = operations.iter().enumerate().any(|(index, operation)| {
+        index != position && instruction_uses_register(operation, position)
+    }) || writes.iter().any(|write| write.value == position);
+    debug_assert!(
+        !store_result_is_used,
+        "SetProp keeps its input value as the expression result"
+    );
+    if store_result_is_used {
+        return None;
+    }
+
+    operations.remove(position);
+    if !operations
+        .iter_mut()
+        .all(|operation| remap_instruction_registers(operation, position))
+        || !writes
+            .iter_mut()
+            .all(|write| remap_removed_register(&mut write.value, position))
+        || !remap_removed_register(&mut store.index, position)
+        || !remap_removed_register(&mut store.value, position)
+    {
+        return None;
+    }
+    Some(Some(store))
 }
 
 fn compile_dynamic(
@@ -647,26 +945,32 @@ fn compile_dynamic(
     for op in &code[header + 5..backedge] {
         translator.translate(op)?;
     }
-    if !translator.stack.is_empty() || translator.store.is_none() {
-        return None;
-    }
-    let receiver_slot = translator.receiver_slot?;
-    if counter_slot == limit_slot
-        || counter_slot == &receiver_slot
-        || limit_slot == &receiver_slot
-        || translator.number_slots.contains(&receiver_slot)
-        || translator.written_slots.contains(&receiver_slot)
-        || translator.written_slots.contains(limit_slot)
-        || !translator.written_slots.contains(counter_slot)
-        || translator
+    if !translator.stack.is_empty()
+        || translator.store_count == 0
+        || !translator
             .operations
             .iter()
-            .filter(|operation| matches!(operation, NumberInstruction::DenseLoad { .. }))
-            .count()
-            != 1
+            .any(|operation| matches!(operation, NumberInstruction::DenseLoad { .. }))
     {
         return None;
     }
+    if counter_slot == limit_slot
+        || translator.receiver_slots.iter().any(|receiver| {
+            counter_slot == receiver
+                || limit_slot == receiver
+                || translator.number_slots.contains(receiver)
+                || translator.written_slots.contains(receiver)
+        })
+        || translator.written_slots.contains(limit_slot)
+        || !translator.written_slots.contains(counter_slot)
+    {
+        return None;
+    }
+    let sunk_store = sink_unique_store(
+        &mut translator.operations,
+        &mut translator.writes,
+        translator.store_count,
+    )?;
     translator.number_slots.insert(*counter_slot);
     translator.number_slots.insert(*limit_slot);
     let mut local_slots = translator.number_slots;
@@ -690,11 +994,12 @@ fn compile_dynamic(
         DynamicDensePlan {
             counter_local: local_index(*counter_slot)?,
             limit_local: local_index(*limit_slot)?,
-            receiver_slot,
+            receiver_slots: translator.receiver_slots,
             local_slots,
             operations: translator.operations,
             writes: translator.writes,
-            store: translator.store?,
+            store_count: translator.store_count,
+            sunk_store,
             header,
         },
     ))
@@ -718,6 +1023,103 @@ fn supported_binary(operation: BinaryOp) -> bool {
 }
 
 impl DynamicDensePlan {
+    fn run_program<A: DenseAccess>(
+        &self,
+        access: &mut A,
+        locals: &mut [f64; MAX_DENSE_LOCALS],
+        registers: &mut [f64],
+    ) -> DynamicProgramRun {
+        let mut made_progress = false;
+        loop {
+            let counter = locals[self.counter_local];
+            let limit = locals[self.limit_local];
+            if !matches!(counter.partial_cmp(&limit), Some(std::cmp::Ordering::Less)) {
+                return DynamicProgramRun {
+                    deoptimized: false,
+                    made_progress,
+                };
+            }
+            access.reset_iteration();
+            for (register, operation) in self.operations.iter().enumerate() {
+                let value = match *operation {
+                    NumberInstruction::Constant(value) => value,
+                    NumberInstruction::LoadLocal(local) => locals[local],
+                    NumberInstruction::DenseLoad { receiver, index } => {
+                        let Some(index) = array_index_from_number(registers[index]) else {
+                            return DynamicProgramRun {
+                                deoptimized: true,
+                                made_progress,
+                            };
+                        };
+                        let Some(value) = access.load_number(receiver, index) else {
+                            return DynamicProgramRun {
+                                deoptimized: true,
+                                made_progress,
+                            };
+                        };
+                        value
+                    }
+                    NumberInstruction::DenseStore {
+                        receiver,
+                        index,
+                        value,
+                    } => {
+                        let Some(index) = array_index_from_number(registers[index]) else {
+                            return DynamicProgramRun {
+                                deoptimized: true,
+                                made_progress,
+                            };
+                        };
+                        let value = registers[value];
+                        if !access.stage_store(receiver, index, value) {
+                            return DynamicProgramRun {
+                                deoptimized: true,
+                                made_progress,
+                            };
+                        }
+                        value
+                    }
+                    NumberInstruction::Binary {
+                        operation,
+                        left,
+                        right,
+                    } => apply_binary(operation, registers[left], registers[right])
+                        .expect("translator only admits Number binary operations"),
+                    NumberInstruction::Unary { operation, value } => {
+                        apply_unary(operation, registers[value])
+                            .expect("translator only admits Number unary operations")
+                    }
+                    NumberInstruction::Update { operation, value } => match operation {
+                        UpdateOp::Increment => registers[value] + 1.0,
+                        UpdateOp::Decrement => registers[value] - 1.0,
+                    },
+                };
+                registers[register] = value;
+            }
+            if let Some(store) = self.sunk_store {
+                let Some(index) = array_index_from_number(registers[store.index]) else {
+                    return DynamicProgramRun {
+                        deoptimized: true,
+                        made_progress,
+                    };
+                };
+                if !access.stage_store(store.receiver, index, registers[store.value]) {
+                    return DynamicProgramRun {
+                        deoptimized: true,
+                        made_progress,
+                    };
+                }
+            }
+            debug_assert_eq!(access.staged_store_count(), self.store_count);
+            access.commit_stores();
+            for write in &self.writes {
+                locals[write.local] = registers[write.value];
+            }
+            made_progress = true;
+            record_iteration();
+        }
+    }
+
     fn try_run(&self, vm: &mut Vm<'_>, exit: usize) -> bool {
         if vm.direct_eval_with_stack {
             return false;
@@ -726,7 +1128,7 @@ impl DynamicDensePlan {
             .local_slots
             .iter()
             .copied()
-            .chain(std::iter::once(self.receiver_slot))
+            .chain(self.receiver_slots.iter().copied())
         {
             if !vm.slot_is_authoritative(slot) {
                 return false;
@@ -739,75 +1141,72 @@ impl DynamicDensePlan {
             };
             locals[local] = value;
         }
-        let Some(Some(Value::Array(array))) = vm.locals.get(self.receiver_slot) else {
+        let mut inline_registers = [0.0; INLINE_DENSE_OPS];
+        let mut large_registers =
+            (self.operations.len() > INLINE_DENSE_OPS).then(|| vec![0.0; self.operations.len()]);
+        let registers = match large_registers.as_mut() {
+            Some(registers) => registers.as_mut_slice(),
+            None => &mut inline_registers[..self.operations.len()],
+        };
+
+        let ran = if self.receiver_slots.len() == 1 && self.store_count == 1 {
+            let Some(Some(Value::Array(array))) = vm.locals.get(self.receiver_slots[0]) else {
+                return false;
+            };
+            let array = array.clone();
+            let ran = array.with_dense_writable_elements(|elements| {
+                let mut access = SingleAccess {
+                    elements,
+                    pending: None,
+                };
+                self.run_program(&mut access, &mut locals, registers)
+            });
+            if ran.is_some_and(|run| run.made_progress) {
+                record_single_path_hit();
+            }
+            ran
+        } else {
+            let Some(arrays) = self
+                .receiver_slots
+                .iter()
+                .map(|slot| match vm.locals.get(*slot) {
+                    Some(Some(Value::Array(array))) => Some(array.clone()),
+                    _ => None,
+                })
+                .collect::<Option<Vec<_>>>()
+            else {
+                return false;
+            };
+            ArrayRef::with_distinct_dense_writable_elements(&arrays, |elements| {
+                let mut access = MultiAccess {
+                    elements,
+                    pending: Vec::with_capacity(self.store_count),
+                };
+                self.run_program(&mut access, &mut locals, registers)
+            })
+        };
+        let Some(run) = ran else {
             return false;
         };
-        let array = array.clone();
-        let mut deoptimized = false;
-        let mut registers = [0.0; MAX_DENSE_OPS];
-        let ran = array.with_dense_writable_elements(|elements| {
-            loop {
-                let counter = locals[self.counter_local];
-                let limit = locals[self.limit_local];
-                if !matches!(counter.partial_cmp(&limit), Some(std::cmp::Ordering::Less)) {
-                    return;
-                }
-                let mut loaded_index = None;
-                for (register, operation) in self.operations.iter().enumerate() {
-                    let value = match *operation {
-                        NumberInstruction::Constant(value) => value,
-                        NumberInstruction::LoadLocal(local) => locals[local],
-                        NumberInstruction::DenseLoad { index } => {
-                            let Some(index) = array_index_from_number(registers[index]) else {
-                                deoptimized = true;
-                                return;
-                            };
-                            let Some(Value::Number(value)) = elements.get(index) else {
-                                deoptimized = true;
-                                return;
-                            };
-                            loaded_index = Some(index);
-                            *value
-                        }
-                        NumberInstruction::Binary {
-                            operation,
-                            left,
-                            right,
-                        } => apply_binary(operation, registers[left], registers[right])
-                            .expect("translator only admits Number binary operations"),
-                        NumberInstruction::Unary { operation, value } => {
-                            apply_unary(operation, registers[value])
-                                .expect("translator only admits Number unary operations")
-                        }
-                    };
-                    registers[register] = value;
-                }
-                let Some(index) = array_index_from_number(registers[self.store.index]) else {
-                    deoptimized = true;
-                    return;
-                };
-                if loaded_index != Some(index) || index >= elements.len() {
-                    deoptimized = true;
-                    return;
-                }
-                elements[index] = Value::Number(registers[self.store.value]);
-                record_iteration();
-                for write in &self.writes {
-                    locals[write.local] = registers[write.value];
-                }
-            }
-        });
-        if ran.is_none() {
+        if self.sunk_store.is_some() && run.made_progress {
+            record_sunk_store_hit();
+        }
+        if run.deoptimized && !run.made_progress {
             return false;
         }
         for (slot, value) in self.local_slots.iter().copied().zip(locals) {
             set_local_number(vm, slot, value);
         }
-        vm.ip = if deoptimized { self.header } else { exit + 1 };
+        vm.ip = if run.deoptimized {
+            self.header
+        } else {
+            exit + 1
+        };
         true
     }
 }
 
+#[inline(always)]
 fn apply_binary(operation: BinaryOp, left: f64, right: f64) -> Option<f64> {
     Some(match operation {
         BinaryOp::Add => left + right,

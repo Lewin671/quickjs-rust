@@ -1,5 +1,5 @@
 use std::{
-    cell::{Cell, OnceCell, RefCell},
+    cell::{Cell, OnceCell, RefCell, RefMut},
     collections::{BTreeSet, HashMap},
     fmt,
     rc::Rc,
@@ -355,6 +355,43 @@ impl ArrayRef {
         let mut elements = self.0.elements.try_borrow_mut().ok()?;
         if self.0.length.get() != elements.len() {
             return None;
+        }
+        Some(mutate(&mut elements))
+    }
+
+    /// Temporarily exposes several distinct dense arrays to one numeric loop
+    /// region. Every receiver is validated before any element borrow is
+    /// returned, and duplicate object identities fail closed so the caller
+    /// never has to account for cross-receiver aliasing. A borrow conflict on
+    /// any receiver releases earlier leases without invoking `mutate`.
+    pub(crate) fn with_distinct_dense_writable_elements<'a, R>(
+        arrays: &'a [Self],
+        mutate: impl FnOnce(&mut [RefMut<'a, Vec<Value>>]) -> R,
+    ) -> Option<R> {
+        for (index, array) in arrays.iter().enumerate() {
+            if arrays[..index]
+                .iter()
+                .any(|existing| existing.ptr_eq(array))
+                || array.0.frozen.get()
+                || array.0.cold_if_present().is_some_and(|cold| {
+                    !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
+                        || !cold
+                            .properties
+                            .try_borrow()
+                            .is_ok_and(|properties| properties.is_empty())
+                })
+            {
+                return None;
+            }
+        }
+
+        let mut elements = Vec::with_capacity(arrays.len());
+        for array in arrays {
+            let lease = array.0.elements.try_borrow_mut().ok()?;
+            if array.0.length.get() != lease.len() {
+                return None;
+            }
+            elements.push(lease);
         }
         Some(mutate(&mut elements))
     }
@@ -845,6 +882,47 @@ mod tests {
         assert!(Rc::ptr_eq(&array.0, &cloned.0));
         assert!(array.ptr_eq(&cloned));
         assert_eq!(mem::size_of::<ArrayRef>(), mem::size_of::<Rc<ArrayData>>());
+    }
+
+    #[test]
+    fn distinct_dense_write_leases_fail_closed_for_aliases_and_borrow_conflicts() {
+        let first = ArrayRef::new(vec![Value::Number(1.0)]);
+        let second = ArrayRef::new(vec![Value::Number(2.0)]);
+
+        let mut invoked = false;
+        assert!(
+            ArrayRef::with_distinct_dense_writable_elements(
+                &[first.clone(), first.clone()],
+                |_| invoked = true,
+            )
+            .is_none()
+        );
+        assert!(!invoked);
+
+        let held_lease = second.0.elements.borrow_mut();
+        assert!(
+            ArrayRef::with_distinct_dense_writable_elements(
+                &[first.clone(), second.clone()],
+                |_| invoked = true,
+            )
+            .is_none()
+        );
+        assert!(!invoked);
+        drop(held_lease);
+        assert!(first.0.elements.try_borrow_mut().is_ok());
+
+        assert!(
+            ArrayRef::with_distinct_dense_writable_elements(
+                &[first.clone(), second.clone()],
+                |elements| {
+                    elements[0][0] = Value::Number(3.0);
+                    elements[1][0] = Value::Number(5.0);
+                },
+            )
+            .is_some()
+        );
+        assert_eq!(first.get(0), Some(Value::Number(3.0)));
+        assert_eq!(second.get(0), Some(Value::Number(5.0)));
     }
 
     #[test]
