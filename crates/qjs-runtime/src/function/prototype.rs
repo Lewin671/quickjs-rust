@@ -75,6 +75,7 @@ pub(crate) fn native_function(
         params,
         body,
         dynamic_function_scope_snapshot(env),
+        Rc::from(source),
     )?;
     // `new Function(...)` derives the [[Prototype]] from new.target, but a plain
     // `Function(...)` call must ignore the ambient new.target (e.g. when invoked
@@ -226,7 +227,7 @@ fn build_dynamic_function(
         module_host: None,
         module_imports: Default::default(),
         bytecode: Rc::new(bytecode),
-        source_text: None,
+        source_text: Some(Rc::from(source)),
         local_names: local_names.into(),
         constructable: false,
         is_strict,

@@ -99,6 +99,56 @@ fn unicode_bare_sentinel_scalar_is_one_quantified_atom() {
 }
 
 #[test]
+fn unicode_backreferences_compare_code_points_across_internal_representations() {
+    // A host scalar in the sentinel range and its canonical surrogate-pair
+    // representation denote the same ECMAScript code point. Backreferences in
+    // /u and /v mode (both use the matcher Unicode path) must compare the code
+    // point sequence, not the number or identity of Rust `char` slots.
+    let raw_scalar = "\u{F0000}";
+    let canonical_pair = string_from_utf8_scalars(raw_scalar);
+    for input in [
+        format!("{raw_scalar}{canonical_pair}"),
+        format!("{canonical_pair}{raw_scalar}"),
+    ] {
+        let matched = regexp_match_range(r"^(.)\1$", &input, 0, false, true, false)
+            .expect("equivalent scalar representations must match a backreference");
+        assert_eq!((matched.start, matched.end), (0, 3));
+    }
+
+    // The reverse matcher used by lookbehind must apply the same equivalence.
+    let reverse_input = format!("{canonical_pair}{raw_scalar}");
+    assert!(regexp_match_range(r"(?<=\1(.))$", &reverse_input, 0, false, true, false,).is_some());
+}
+
+#[test]
+fn unicode_backreferences_never_consume_half_a_canonical_pair() {
+    // U+10000's pair starts with D800. A captured lone D800 is not equal to the
+    // scalar U+10000 and must not let a forward backreference stop between the
+    // pair's two internal sentinel slots.
+    let canonical_pair = string_from_utf8_scalars("\u{10000}");
+    let lone_high = string_from_code_unit(0xD800);
+    let forward_input = format!("{lone_high}{canonical_pair}");
+    assert!(regexp_match_range(r"^(.)\1", &forward_input, 0, false, true, false).is_none());
+
+    // The reverse analogue used to compare the captured lone DC00 with the
+    // low half of the preceding pair and leave the cursor inside that pair.
+    let lone_low = string_from_code_unit(0xDC00);
+    let reverse_input = format!("{canonical_pair}{lone_low}");
+    assert!(regexp_match_range(r"(?<=\1(.))$", &reverse_input, 0, false, true, false,).is_none());
+}
+
+#[test]
+fn unicode_code_unit_escape_does_not_match_a_pair_high_half() {
+    // U+F0000 encodes as DB80 DC00. A lone `\uDB80` atom is a surrogate code
+    // point, not U+F0000, and cannot match the first internal slot of the pair.
+    let scalar = string_from_utf8_scalars("\u{F0000}");
+    assert!(regexp_match_range(r"^\uDB80", &scalar, 0, false, true, false).is_none());
+    // Exercise the quantified-single-atom fast path as well as the generic one.
+    assert!(regexp_match_range(r"^\uDB80+", &scalar, 0, false, true, false).is_none());
+    assert!(regexp_match_range(r"^\u{F0000}$", &scalar, 0, false, true, false).is_some());
+}
+
+#[test]
 fn counted_simple_atom_respects_bounds() {
     let matched = regexp_match_range(r"a{2,3}", "aaaa", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 3));

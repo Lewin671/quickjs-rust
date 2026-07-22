@@ -1363,6 +1363,26 @@ fn unicode_lookbehind_never_starts_inside_a_canonical_surrogate_pair() {
 }
 
 #[test]
+fn unicode_flags_do_not_match_fixed_high_surrogate_inside_scalar() {
+    assert_eq!(
+        eval(
+            "let scalar = '\u{F0000}'; \
+             [
+               /\\uDB80/u.test(scalar),
+               /\\uDB80+/u.test(scalar),
+               /\\uDB80/v.test(scalar),
+               /\\uDB80+/v.test(scalar),
+               /\\u{F0000}/u.test(scalar),
+               /\\u{F0000}/v.test(scalar)
+             ].join(':');"
+        ),
+        Ok(Value::String(
+            "false:false:false:false:true:true".to_owned().into()
+        ))
+    );
+}
+
+#[test]
 fn non_unicode_astral_literal_matches_code_units() {
     assert_eq!(eval(r#"/𠮷/.test("𠮷");"#), Ok(Value::Boolean(true)));
     assert_eq!(eval(r#""𠮷".search(/𠮷/);"#), Ok(Value::Number(0.0)));

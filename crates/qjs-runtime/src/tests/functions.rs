@@ -819,6 +819,43 @@ fn function_source_text_preserves_host_utf8_provenance() {
 }
 
 #[test]
+fn dynamic_function_constructors_preserve_their_complete_source_text() {
+    assert_eq!(
+        eval(
+            "let GeneratorFunction = (function* () {}).constructor; \
+             let AsyncFunction = (async function () {}).constructor; \
+             let AsyncGeneratorFunction = (async function* () {}).constructor; \
+             [
+               Function('a', 'return a;').toString() === \
+                 'function anonymous(a\\n) {\\nreturn a;\\n}',
+               GeneratorFunction('a', 'yield a;').toString() === \
+                 'function* anonymous(a\\n) {\\nyield a;\\n}',
+               AsyncFunction('a', 'return await a;').toString() === \
+                 'async function anonymous(a\\n) {\\nreturn await a;\\n}',
+               AsyncGeneratorFunction('a', 'yield await a;').toString() === \
+                 'async function* anonymous(a\\n) {\\nyield await a;\\n}'
+             ].join(':');"
+        ),
+        Ok(Value::String("true:true:true:true".to_owned().into()))
+    );
+
+    // Source assembled from JavaScript Strings is already canonical WTF-16;
+    // retaining it must preserve both a real sentinel-range scalar and a lone
+    // surrogate exactly rather than round-tripping through host UTF-8.
+    assert_eq!(
+        eval(
+            "let scalar = String.fromCodePoint(0xF0000); \
+             let lone = String.fromCharCode(0xD800); \
+             let body = `return '${scalar}${lone}';`; \
+             let source = Function(body).toString(); \
+             source === `function anonymous(\\n) {\\n${body}\\n}` && \
+               source.slice(source.indexOf(\"'\") + 1, source.lastIndexOf(\"'\")).length === 3;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn sloppy_function_this_keeps_internal_global_identity() {
     assert_eq!(
         eval(

@@ -9,7 +9,8 @@ use std::{
 
 use qjs_runtime::{
     EvalError, EvalErrorKind, ModuleResolveError, ModuleResolver, ResolvedModule, Value,
-    eval_classified_with_resolver, eval_module_with_prelude,
+    eval_classified_with_resolver, eval_module_with_prelude, module_specifier_code_units,
+    module_specifier_to_utf8_lossy,
 };
 
 fn usage(command: &str) -> String {
@@ -370,20 +371,40 @@ impl ModuleResolver for FsResolver {
         specifier: &str,
         referrer: &str,
     ) -> Result<ResolvedModule, ModuleResolveError> {
+        let host_specifier = module_specifier_to_host_path(specifier)?;
+        let display_specifier = module_specifier_to_utf8_lossy(specifier);
         let base_dir = Path::new(referrer)
             .parent()
             .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
-        let candidate = base_dir.join(specifier);
+        let candidate = base_dir.join(&host_specifier);
         let canonical = fs::canonicalize(&candidate).map_err(|error| ModuleResolveError {
-            message: format!("Cannot resolve module '{specifier}': {error}"),
+            message: format!("Cannot resolve module '{display_specifier}': {error}"),
         })?;
         let key = canonical.to_string_lossy().into_owned();
         let bytes = fs::read(&canonical).map_err(|error| ModuleResolveError {
-            message: format!("Cannot load module '{specifier}': {error}"),
+            message: format!("Cannot load module '{display_specifier}': {error}"),
         })?;
         let source = String::from_utf8_lossy(&bytes).into_owned();
         Ok(ResolvedModule { key, source, bytes })
     }
+}
+
+/// Decode an opaque canonical-WTF-16 module specifier for the filesystem host.
+/// Well-formed surrogate pairs become their real Unicode scalar (so an astral
+/// filename is addressed losslessly); isolated surrogates have no portable
+/// filesystem-string representation and are rejected instead of aliasing U+FFFD.
+fn module_specifier_to_host_path(specifier: &str) -> Result<String, ModuleResolveError> {
+    let display = module_specifier_to_utf8_lossy(specifier);
+    char::decode_utf16(module_specifier_code_units(specifier))
+        .map(|decoded| {
+            decoded.map_err(|error| ModuleResolveError {
+                message: format!(
+                    "Cannot resolve module '{display}': isolated UTF-16 surrogate U+{:04X} is not a valid host path",
+                    error.unpaired_surrogate()
+                ),
+            })
+        })
+        .collect()
 }
 
 fn format_test262_error(error: EvalError) -> CliError {
@@ -606,11 +627,43 @@ fn format_value(value: &Value, raw_output: bool) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
+    use std::{
+        fs,
+        io::Cursor,
+        path::{Path, PathBuf},
+        sync::atomic::{AtomicU64, Ordering},
+    };
 
-    use qjs_runtime::{EvalError, EvalErrorKind, Value};
+    use qjs_runtime::{EvalError, EvalErrorKind, ModuleResolver, Value};
 
-    use super::{format_test262_error, format_value, run_repl_with_io, with_script_args};
+    use super::{
+        FsResolver, eval_script, format_test262_error, format_value, run_module, run_repl_with_io,
+        with_script_args,
+    };
+
+    static TEST_DIRECTORY_ID: AtomicU64 = AtomicU64::new(0);
+
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn new(label: &str) -> Self {
+            let id = TEST_DIRECTORY_ID.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir()
+                .join(format!("quickjs-rust-{label}-{}-{id}", std::process::id()));
+            fs::create_dir(&path).expect("create isolated CLI test directory");
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
 
     #[test]
     fn formats_canonical_wtf16_as_host_utf8_bytes() {
@@ -636,6 +689,60 @@ mod tests {
                 b'S', b't', b'r', b'i', b'n', b'g', b'(', b'\"', 0xEF, 0xBF, 0xBD, b'\"', b')'
             ]
         );
+    }
+
+    #[test]
+    fn filesystem_resolver_loads_real_astral_filename_for_static_and_dynamic_imports() {
+        let directory = TestDirectory::new("astral-module");
+        let astral_filename = "\u{F0000}.mjs";
+        fs::write(
+            directory.path().join(astral_filename),
+            "export const value = 42;",
+        )
+        .expect("write astral-named module");
+
+        let root = directory.path().join("root.mjs");
+        fs::write(
+            &root,
+            format!(
+                "import {{ value }} from './{astral_filename}'; \
+                 if (value !== 42) throw new Error('wrong static import');"
+            ),
+        )
+        .expect("write static-import root");
+        run_module(root.to_str().expect("UTF-8 root path"), None, false)
+            .expect("static import should resolve the real astral filename");
+
+        // `eval_script` drains dynamic-import jobs before returning. The Set is
+        // returned by identity and mutated only by the fulfillment handler, so
+        // its post-drain debug length distinguishes fulfillment from rejection.
+        let dynamic_referrer = directory.path().join("dynamic.js");
+        let result = eval_script(
+            &format!(
+                "let loaded = new Set(); \
+                 import('./{astral_filename}').then(module => loaded.add(module.value)); \
+                 loaded;"
+            ),
+            dynamic_referrer.to_str().expect("UTF-8 dynamic referrer"),
+            false,
+            false,
+        )
+        .expect("dynamic import evaluation should complete");
+        assert_eq!(format!("{result:?}"), "Set(SetRef { len: 1 })");
+    }
+
+    #[test]
+    fn filesystem_resolver_rejects_isolated_surrogate_specifier() {
+        let Value::String(specifier) = qjs_runtime::eval("String.fromCharCode(0xD800) + '.mjs'")
+            .expect("build canonical lone-surrogate specifier")
+        else {
+            panic!("expected string specifier");
+        };
+        let mut resolver = FsResolver;
+        let error = resolver
+            .resolve(&specifier, "/tmp/quickjs-rust-root.mjs")
+            .expect_err("isolated surrogate must not alias a host filename");
+        assert!(error.message.contains("isolated UTF-16 surrogate U+D800"));
     }
 
     #[test]
