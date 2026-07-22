@@ -13,7 +13,9 @@ use crate::{
 };
 
 use super::compiler::Compiler;
-use super::ir::{ArrayElementKind, ComputedNameKind, ObjectPropertyMeta, Op};
+use super::ir::{
+    ArrayElementKind, ComputedNameKind, ObjectPropertyMeta, Op, encode_index_receiver,
+};
 use super::util::{parse_number_literal, unsupported_stmt};
 use super::vm_props::array_index_from_number;
 
@@ -229,20 +231,17 @@ impl Compiler {
                 if let Expr::Literal(Literal::Number { raw, .. }) = expr.as_ref() {
                     let number = parse_number_literal(raw)?;
                     if let Some(index) = array_index_from_number(number) {
-                        // Array indices occupy at most 32 bits. On wider hosts,
-                        // keep a fused local slot in the existing operand's
-                        // upper half so the hot `Op` layout stays unchanged.
-                        let encoded = if usize::BITS > u32::BITS
-                            && let Some(Op::LoadLocal(slot)) = self.code.last()
-                            && let Some(encoded) = slot
-                                .checked_add(1)
-                                .and_then(|slot| slot.checked_shl(u32::BITS))
-                                .map(|slot| slot | index)
+                        // Keep the hot `Op` layout unchanged by fusing a local
+                        // receiver into the index word when the shared IR
+                        // codec says the host representation can hold it.
+                        let encoded = if let Some(Op::LoadLocal(slot)) = self.code.last()
+                            && let Some(encoded) = encode_index_receiver(index, Some(*slot))
                         {
                             self.code.pop();
                             encoded
                         } else {
-                            index
+                            encode_index_receiver(index, None)
+                                .expect("an array index always fits without a fused receiver")
                         };
                         self.emit(Op::GetPropIndex(encoded));
                         return Ok(());
@@ -726,7 +725,10 @@ fn is_anonymous_function_definition(expr: &Expr) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{compiler, ir::Op};
+    use super::super::{
+        compiler,
+        ir::{Op, decode_index_receiver},
+    };
 
     #[test]
     fn static_member_reads_use_named_property_op() {
@@ -778,21 +780,19 @@ mod tests {
             bytecode
                 .code
                 .iter()
-                .filter(|op| {
-                    matches!(op, Op::GetPropIndex(encoded) if encoded & u32::MAX as usize <= 1)
-                })
+                .filter(|op| matches!(op, Op::GetPropIndex(encoded) if decode_index_receiver(*encoded).0 <= 1))
                 .count(),
             2
         );
         if usize::BITS > u32::BITS {
             assert_eq!(
                 bytecode
-                    .code
-                    .iter()
-                    .filter(
-                        |op| matches!(op, Op::GetPropIndex(encoded) if encoded >> u32::BITS != 0)
-                    )
-                    .count(),
+                .code
+                .iter()
+                .filter(|op| {
+                    matches!(op, Op::GetPropIndex(encoded) if decode_index_receiver(*encoded).1.is_some())
+                })
+                .count(),
                 2
             );
         }

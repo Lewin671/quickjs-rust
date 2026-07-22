@@ -3,7 +3,7 @@ use qjs_ast::{BinaryOp, UpdateOp};
 use crate::{NativeFunction, Value, value::OwnDataPropertyRead};
 
 use super::{
-    ir::{Bytecode, NamedPropertyCache, Op},
+    ir::{Bytecode, NamedPropertyCache, Op, decode_index_receiver},
     vm::Vm,
     vm_numeric_leaf::NumericLoopCall,
 };
@@ -384,12 +384,13 @@ impl NumericLoopTerm {
                     cursor + 3,
                 ))
             }
-            Op::GetPropIndex(encoded) if usize::BITS > u32::BITS => {
-                let receiver_slot = (encoded >> u32::BITS).checked_sub(1)?;
+            Op::GetPropIndex(encoded) => {
+                let (index, receiver_slot) = decode_index_receiver(*encoded);
+                let receiver_slot = receiver_slot?;
                 Some((
                     Self::DenseIndex {
                         receiver_slot,
-                        index: encoded & u32::MAX as usize,
+                        index,
                     },
                     cursor + 1,
                 ))

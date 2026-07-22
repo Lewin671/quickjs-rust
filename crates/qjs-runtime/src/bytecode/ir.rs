@@ -11,6 +11,38 @@ use crate::{
     value::{ObjectLiteralShape, ObjectWeakRef},
 };
 
+/// Packs a statically indexed property read together with an optional local
+/// receiver slot. The packed form is available only when the host word has a
+/// spare upper half; callers must retain the ordinary stack receiver when
+/// this returns `None`.
+pub(super) fn encode_index_receiver(index: usize, local_slot: Option<usize>) -> Option<usize> {
+    if index > u32::MAX as usize {
+        return None;
+    }
+    let Some(local_slot) = local_slot else {
+        return Some(index);
+    };
+    if usize::BITS <= u32::BITS {
+        return None;
+    }
+    local_slot
+        .checked_add(1)
+        .and_then(|slot| slot.checked_shl(u32::BITS))
+        .map(|slot| slot | index)
+}
+
+/// Unpacks the index and optional fused local receiver encoded by
+/// [`encode_index_receiver`]. Keeping this beside the IR definition prevents
+/// compiler, VM, and analysis consumers from drifting on the bit layout.
+pub(super) fn decode_index_receiver(encoded: usize) -> (usize, Option<usize>) {
+    if usize::BITS > u32::BITS {
+        let encoded_slot = encoded >> u32::BITS;
+        (encoded & u32::MAX as usize, encoded_slot.checked_sub(1))
+    } else {
+        (encoded, None)
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub(super) struct NamedPropertyCache(Rc<RefCell<NamedPropertyCacheState>>);
 
@@ -1475,6 +1507,20 @@ fn collect_sloppy_global_assignment_names_from_ops(code: &[Op], names: &mut BTre
 mod tests {
     use super::*;
     use crate::Property;
+
+    #[test]
+    fn index_receiver_codec_round_trips_shared_ir_layout() {
+        let plain = encode_index_receiver(7, None).expect("plain index");
+        assert_eq!(decode_index_receiver(plain), (7, None));
+
+        if usize::BITS > u32::BITS {
+            let fused = encode_index_receiver(11, Some(3)).expect("fused receiver");
+            assert_eq!(decode_index_receiver(fused), (11, Some(3)));
+            assert_eq!(encode_index_receiver(u32::MAX as usize + 1, None), None);
+        } else {
+            assert_eq!(encode_index_receiver(11, Some(3)), None);
+        }
+    }
 
     #[test]
     fn operand_stack_pool_reuses_cleared_bounded_storage() {

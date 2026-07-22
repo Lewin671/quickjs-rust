@@ -9,7 +9,7 @@ use super::vm_set::set_property_key;
 use super::vm_try::TryFrame;
 use super::{
     DirectCallSlots,
-    ir::{Bytecode, NamedPropertyCache, Op},
+    ir::{Bytecode, NamedPropertyCache, Op, decode_index_receiver},
 };
 use crate::{
     Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, ObjectRef, PropertyKey, RuntimeError,
@@ -1321,15 +1321,7 @@ impl<'a> Vm<'a> {
     }
 
     fn get_index_prop(&mut self, encoded_index: usize) -> Result<(), RuntimeError> {
-        let (index, local_slot) = if usize::BITS > u32::BITS {
-            let encoded_slot = encoded_index >> u32::BITS;
-            (
-                encoded_index & u32::MAX as usize,
-                encoded_slot.checked_sub(1),
-            )
-        } else {
-            (encoded_index, None)
-        };
+        let (index, local_slot) = decode_index_receiver(encoded_index);
         let object = if let Some(slot) = local_slot {
             let direct_eval_lookup =
                 self.direct_eval_with_stack && self.bytecode.local_is_from_env(slot);
