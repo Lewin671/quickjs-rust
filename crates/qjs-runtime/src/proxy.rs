@@ -199,7 +199,7 @@ pub(crate) fn proxy_get(
         && !target_descriptor.configurable
     {
         if target_descriptor.is_accessor() {
-            if target_descriptor.get.is_none() && !matches!(result, Value::Undefined) {
+            if target_descriptor.getter().is_none() && !matches!(result, Value::Undefined) {
                 return Err(invariant_error(
                     "get trap returned a value for a non-configurable accessor without a getter",
                 ));
@@ -285,7 +285,7 @@ pub(crate) fn proxy_set(
             && !target_descriptor.configurable
         {
             if target_descriptor.is_accessor() {
-                if target_descriptor.set.is_none() {
+                if target_descriptor.setter().is_none() {
                     return Err(invariant_error(
                         "set trap succeeded on a non-configurable accessor without a setter",
                     ));
@@ -404,7 +404,7 @@ pub(crate) fn proxy_define_property(
                 ));
             }
             if existing.configurable
-                && !existing.accessor
+                && !existing.is_accessor()
                 && setting_config_false
                 && descriptor.writable_field() == Some(false)
             {
@@ -415,7 +415,7 @@ pub(crate) fn proxy_define_property(
                 ));
             }
             if !existing.configurable
-                && !existing.accessor
+                && !existing.is_accessor()
                 && existing.writable
                 && descriptor.writable_field() == Some(false)
             {
@@ -512,7 +512,7 @@ pub(crate) fn proxy_get_own_property_descriptor(
         if record.writable_field() == Some(false) {
             let writable_backed = target_descriptor
                 .as_ref()
-                .is_some_and(|existing| !existing.accessor && !existing.writable);
+                .is_some_and(|existing| !existing.is_accessor() && !existing.writable);
             if !writable_backed {
                 return Err(invariant_error(
                     "getOwnPropertyDescriptor trap reported a non-configurable non-writable property not backed by the target",

@@ -974,8 +974,11 @@ fn set_object_array_of_length(
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     if let Some(existing) = existing {
-        if existing.accessor {
-            let Some(setter) = existing.set else {
+        if existing.is_accessor() {
+            let (_, setter) = existing
+                .into_accessor_parts()
+                .expect("accessor properties have accessor state");
+            let Some(setter) = setter else {
                 return Err(RuntimeError {
                     thrown: None,
                     message: "TypeError: length property has no setter".to_owned(),

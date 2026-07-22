@@ -535,7 +535,8 @@ impl Vm<'_> {
             return None;
         }
         let property = ordinary_chain_property(object, key).ok().flatten()?;
-        let getter = property.get?;
+        let (getter, _) = property.into_accessor_parts()?;
+        let getter = getter?;
         if !crate::function::is_direct_leaf_function(&getter) {
             return None;
         }
@@ -615,7 +616,7 @@ impl Vm<'_> {
                         return false;
                     }
                     if let Some(property) = prototype.own_property(&key) {
-                        if property.accessor || !property.writable {
+                        if property.is_accessor() || !property.writable {
                             return false;
                         }
                         object.set_shared_key(key, value.clone());
@@ -946,7 +947,7 @@ impl Vm<'_> {
 fn data_property_value(property: Option<Property>) -> Option<Value> {
     match property {
         None => Some(Value::Undefined),
-        Some(property) if property.get.is_some() || property.accessor => None,
+        Some(property) if property.is_accessor() => None,
         Some(property) => Some(property.value),
     }
 }
@@ -956,8 +957,8 @@ fn typed_array_default_length_accessor(object: &ObjectRef) -> bool {
         return false;
     };
     matches!(
-        property.get,
-        Some(Value::Function(ref getter))
+        property.getter(),
+        Some(Value::Function(getter))
             if getter.native_kind() == Some(NativeFunction::TypedArrayPrototypeLength)
     )
 }
@@ -974,7 +975,7 @@ enum DirectPropertyRead {
 }
 
 fn direct_property_read(property: Property) -> DirectPropertyRead {
-    if property.get.is_some() || property.accessor {
+    if property.is_accessor() {
         DirectPropertyRead::NeedsSlowPath
     } else {
         DirectPropertyRead::Data(property.value)

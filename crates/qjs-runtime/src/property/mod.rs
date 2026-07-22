@@ -560,8 +560,14 @@ fn property_descriptor_value(
     let Some(property) = property else {
         return Ok(Value::Undefined);
     };
-    if let Some(getter) = property.get {
-        return call_function(getter, receiver, Vec::new(), env, false);
+    if property.is_accessor() {
+        let (get, _) = property
+            .into_accessor_parts()
+            .expect("accessor properties have accessor state");
+        return match get {
+            Some(getter) => call_function(getter, receiver, Vec::new(), env, false),
+            None => Ok(Value::Undefined),
+        };
     }
     Ok(property.value)
 }

@@ -332,8 +332,7 @@ fn define_object_literal_property(
         }
         && existing.is_accessor()
     {
-        descriptor.get = descriptor.get.or(existing.get);
-        descriptor.set = descriptor.set.or(existing.set);
+        descriptor.merge_missing_accessor_halves(existing);
     }
     let success =
         object::define_property_on_value_key(Value::Object(object.clone()), key, descriptor, env)?;

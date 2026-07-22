@@ -350,8 +350,8 @@ fn mapped_argument_accessors(property: Option<&Property>) -> Option<MappedArgume
     if !property.is_accessor() {
         return None;
     }
-    let get = property.get.as_ref()?;
-    let set = property.set.as_ref()?;
+    let get = property.getter()?;
+    let set = property.setter()?;
     if is_mapped_argument_accessor(get, NativeFunction::MappedArgumentGet)
         && is_mapped_argument_accessor(set, NativeFunction::MappedArgumentSet)
     {
@@ -753,7 +753,7 @@ pub(crate) fn define_property_on_value_key(
                     elements.set_len(crate::to_length_with_env(descriptor.value, env)?);
                 }
                 elements.set_length_writable(descriptor.writable);
-            } else if !descriptor.accessor
+            } else if !descriptor.is_accessor()
                 && descriptor.enumerable
                 && descriptor.writable
                 && descriptor.configurable

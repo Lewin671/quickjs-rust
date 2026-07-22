@@ -33,15 +33,12 @@ fn resolve_existing_property_definition(
         ));
     }
     if descriptor.is_data_descriptor() && existing.is_accessor() {
-        return Some(Property {
-            value: descriptor.value.unwrap_or(Value::Undefined),
-            get: None,
-            set: None,
-            accessor: false,
-            writable: descriptor.writable.unwrap_or(false),
-            enumerable: descriptor.enumerable.unwrap_or(existing.enumerable),
-            configurable: descriptor.configurable.unwrap_or(existing.configurable),
-        });
+        return Some(Property::data(
+            descriptor.value.unwrap_or(Value::Undefined),
+            descriptor.enumerable.unwrap_or(existing.enumerable),
+            descriptor.writable.unwrap_or(false),
+            descriptor.configurable.unwrap_or(existing.configurable),
+        ));
     }
 
     let mut property = existing;
@@ -53,10 +50,10 @@ fn resolve_existing_property_definition(
     }
     if property.is_accessor() {
         if let Some(get) = descriptor.get {
-            property.get = get;
+            property.set_getter(get);
         }
         if let Some(set) = descriptor.set {
-            property.set = set;
+            property.set_setter(set);
         }
     } else {
         if let Some(value) = descriptor.value {
@@ -247,13 +244,18 @@ impl PropertyDescriptor {
 
     pub(crate) fn from_complete_property(property: Property) -> Self {
         if property.is_accessor() {
+            let enumerable = property.enumerable;
+            let configurable = property.configurable;
+            let (get, set) = property
+                .into_accessor_parts()
+                .expect("accessor properties have accessor state");
             return Self {
                 value: None,
                 writable: None,
-                get: Some(property.get),
-                set: Some(property.set),
-                enumerable: Some(property.enumerable),
-                configurable: Some(property.configurable),
+                get: Some(get),
+                set: Some(set),
+                enumerable: Some(enumerable),
+                configurable: Some(configurable),
             };
         }
         Self::data(
@@ -368,15 +370,12 @@ impl PropertyDescriptor {
                 self.configurable.unwrap_or(false),
             );
         }
-        Property {
-            value: self.value.unwrap_or(Value::Undefined),
-            get: None,
-            set: None,
-            accessor: false,
-            writable: self.writable.unwrap_or(false),
-            enumerable: self.enumerable.unwrap_or(false),
-            configurable: self.configurable.unwrap_or(false),
-        }
+        Property::data(
+            self.value.unwrap_or(Value::Undefined),
+            self.enumerable.unwrap_or(false),
+            self.writable.unwrap_or(false),
+            self.configurable.unwrap_or(false),
+        )
     }
 
     fn is_compatible_with_non_configurable(&self, existing: &Property) -> bool {
@@ -395,12 +394,12 @@ impl PropertyDescriptor {
         }
         if existing.is_accessor() {
             if let Some(get) = &self.get
-                && !same_optional_value(get, &existing.get)
+                && !same_optional_value(get.as_ref(), existing.getter())
             {
                 return false;
             }
             if let Some(set) = &self.set
-                && !same_optional_value(set, &existing.set)
+                && !same_optional_value(set.as_ref(), existing.setter())
             {
                 return false;
             }
@@ -420,7 +419,7 @@ impl PropertyDescriptor {
     }
 }
 
-fn same_optional_value(left: &Option<Value>, right: &Option<Value>) -> bool {
+fn same_optional_value(left: Option<&Value>, right: Option<&Value>) -> bool {
     match (left, right) {
         (Some(left), Some(right)) => left.same_value(right),
         (None, None) => true,
@@ -445,21 +444,34 @@ pub(crate) fn property_descriptor_object(
 ) -> ObjectRef {
     let result = ObjectRef::with_prototype(HashMap::new(), prototype);
     if property.is_accessor() {
+        let enumerable = property.enumerable;
+        let configurable = property.configurable;
+        let (get, set) = property
+            .into_accessor_parts()
+            .expect("accessor properties have accessor state");
         result.define_property(
             "get".to_owned(),
-            Property::enumerable(property.get.unwrap_or(Value::Undefined)),
+            Property::enumerable(get.unwrap_or(Value::Undefined)),
         );
         result.define_property(
             "set".to_owned(),
-            Property::enumerable(property.set.unwrap_or(Value::Undefined)),
+            Property::enumerable(set.unwrap_or(Value::Undefined)),
         );
-    } else {
-        result.define_property("value".to_owned(), Property::enumerable(property.value));
         result.define_property(
-            "writable".to_owned(),
-            Property::enumerable(Value::Boolean(property.writable)),
+            "enumerable".to_owned(),
+            Property::enumerable(Value::Boolean(enumerable)),
         );
+        result.define_property(
+            "configurable".to_owned(),
+            Property::enumerable(Value::Boolean(configurable)),
+        );
+        return result;
     }
+    result.define_property("value".to_owned(), Property::enumerable(property.value));
+    result.define_property(
+        "writable".to_owned(),
+        Property::enumerable(Value::Boolean(property.writable)),
+    );
     result.define_property(
         "enumerable".to_owned(),
         Property::enumerable(Value::Boolean(property.enumerable)),
