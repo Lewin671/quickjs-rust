@@ -1,6 +1,6 @@
 use super::regexp_match_range as regexp_match_range_inner;
 use super::{PreparedRegexp, RegexpMatch, regexp_match_at};
-use crate::string::{string_code_units, string_from_code_unit};
+use crate::string::{string_code_units, string_from_code_unit, string_from_utf8_scalars};
 
 /// Test wrapper keeping the historical six-argument signature (multiline off).
 fn regexp_match_range(
@@ -71,6 +71,31 @@ fn prepared_input_slices_reuse_unicode_and_code_unit_views() {
         string_code_units(&code_units.slice(1, 3)),
         vec![0xD83D, 0xDE00]
     );
+}
+
+#[test]
+fn unicode_bare_sentinel_scalar_is_one_quantified_atom() {
+    let scalar = string_from_utf8_scalars("\u{F0000}");
+    let input = scalar.repeat(2);
+
+    let plus = regexp_match_range(&format!("{scalar}+"), &input, 0, false, true, false)
+        .expect("plus must consume both scalar values");
+    assert_eq!((plus.start, plus.end), (0, 4));
+
+    let counted = regexp_match_range(&format!("{scalar}{{2}}"), &input, 0, false, true, false)
+        .expect("counted repetition must consume both scalar values");
+    assert_eq!((counted.start, counted.end), (0, 4));
+
+    let lookbehind = regexp_match_range(
+        &format!("(?<={scalar}{{2}})$"),
+        &input,
+        0,
+        false,
+        true,
+        false,
+    )
+    .expect("reverse matcher must treat the pair as one scalar atom");
+    assert_eq!((lookbehind.start, lookbehind.end), (4, 4));
 }
 
 #[test]

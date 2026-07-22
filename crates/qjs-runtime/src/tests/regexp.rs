@@ -1305,6 +1305,29 @@ fn unicode_sets_flag_uses_unicode_matching_mode() {
 }
 
 #[test]
+fn unicode_bare_sentinel_scalar_quantifiers_bind_the_whole_code_point() {
+    assert_eq!(
+        eval(
+            "var v = '\u{F0000}', x = v + v; \
+             /\u{F0000}+/u.exec(x)[0].length + ':' + \
+             /\u{F0000}{2}/u.test(x) + ':' + \
+             /\u{F0000}{2}/u.exec(x)[0].length + ':' + \
+             new RegExp(v + '+', 'u').exec(x)[0].length + ':' + \
+             /\\u{F0000}+/u.exec(x)[0].length + ':' + \
+             /[\u{F0000}]+/u.exec(x)[0].length + ':' + \
+             new RegExp(v + '+', 'v').exec(x)[0].length + ':' + \
+             new RegExp(v + '{2}', 'v').test(x) + ':' + \
+             /\u{F0000}+/v.exec(x)[0].length + ':' + \
+             /\u{F0000}{2}/v.exec(x)[0].length + ':' + \
+             /[\u{F0000}]+/v.exec(x)[0].length;"
+        ),
+        Ok(Value::String(
+            "4:true:4:4:4:4:4:true:4:4:4".to_owned().into()
+        ))
+    );
+}
+
+#[test]
 fn non_unicode_astral_literal_matches_code_units() {
     assert_eq!(eval(r#"/𠮷/.test("𠮷");"#), Ok(Value::Boolean(true)));
     assert_eq!(eval(r#""𠮷".search(/𠮷/);"#), Ok(Value::Number(0.0)));

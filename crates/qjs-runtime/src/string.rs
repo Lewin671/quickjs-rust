@@ -116,6 +116,15 @@ pub(crate) fn string_from_utf8_scalars(value: &str) -> String {
     result
 }
 
+/// Converts the runtime's canonical WTF-16 representation to host UTF-8.
+/// Valid surrogate pairs become their scalar value and isolated surrogates use
+/// U+FFFD, matching the lossless-where-possible boundary used by Rust strings.
+pub(crate) fn string_to_utf8_lossy(value: &str) -> String {
+    char::decode_utf16(string_code_units(value))
+        .map(|decoded| decoded.unwrap_or(char::REPLACEMENT_CHARACTER))
+        .collect()
+}
+
 pub(crate) fn surrogate_escape_code_unit(character: char) -> Option<u16> {
     let code = character as u32;
     if (SURROGATE_ESCAPE_SENTINEL_BASE..SURROGATE_ESCAPE_SENTINEL_BASE + 0x800).contains(&code) {
@@ -189,7 +198,8 @@ pub(crate) fn push_code_point(result: &mut String, code_point: u32) {
 mod tests {
     use super::{
         char_from_code_unit, push_code_point, string_code_unit_at, string_code_unit_len,
-        string_code_units, string_from_code_units, surrogate_escape_code_unit,
+        string_code_units, string_from_code_units, string_from_utf8_scalars, string_to_utf8_lossy,
+        surrogate_escape_code_unit,
     };
 
     #[test]
@@ -225,6 +235,16 @@ mod tests {
             }
             assert_eq!(string_code_unit_at(value, expected.len()), None);
         }
+    }
+
+    #[test]
+    fn host_utf8_egress_recombines_pairs_and_replaces_lone_surrogates() {
+        let canonical = string_from_code_units(&[0xDB80, 0xDC00, 0xD800, 0x41]);
+        assert_eq!(string_to_utf8_lossy(&canonical), "\u{F0000}\u{FFFD}A");
+        assert_eq!(
+            string_to_utf8_lossy(&string_from_utf8_scalars("\u{F07FF}")),
+            "\u{F07FF}"
+        );
     }
 
     #[test]

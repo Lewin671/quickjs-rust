@@ -3,9 +3,10 @@ use qjs_lexer::{Token, TokenKind};
 use crate::{ParseError, Parser};
 
 impl Parser {
-    pub(crate) fn new(tokens: Vec<Token>, source: String) -> Self {
+    pub(crate) fn new(tokens: Vec<Token>, source: String, source_is_wtf16: bool) -> Self {
         Self {
             source,
+            source_is_wtf16,
             tokens,
             cursor: 0,
             goal: crate::Goal::Script,

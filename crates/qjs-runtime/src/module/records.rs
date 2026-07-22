@@ -138,6 +138,7 @@ pub(super) fn build_record(source: &str) -> Result<ModuleRecord, String> {
         body: Script {
             body: Vec::new(),
             source: script.source.clone(),
+            source_is_wtf16: script.source_is_wtf16,
         },
     };
     for stmt in script.body {

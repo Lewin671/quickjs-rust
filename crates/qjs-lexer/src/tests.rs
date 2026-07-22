@@ -659,6 +659,55 @@ fn distinguishes_host_utf8_source_from_runtime_wtf16_source() {
         internal_string_code_units(runtime_value),
         vec![0xD800, 0xDB80, 0xDC00]
     );
+
+    let host_identity_source = format!("'\\{lone_high}'");
+    let TokenKind::String(host_identity) =
+        &lex(&host_identity_source).expect("host identity escape should lex")[0].kind
+    else {
+        panic!("expected host identity-escape string token");
+    };
+    assert_eq!(
+        internal_string_code_units(host_identity),
+        vec![0xDB80, 0xDC00]
+    );
+
+    let runtime_identity_source = format!("'\\{scalar_high}{scalar_low}\\{lone_high}'");
+    let runtime_identity_tokens = lex_with_options(
+        &runtime_identity_source,
+        LexOptions {
+            wtf16_source: true,
+            ..LexOptions::default()
+        },
+    )
+    .expect("runtime identity escapes should lex");
+    let TokenKind::String(runtime_identity) = &runtime_identity_tokens[0].kind else {
+        panic!("expected runtime identity-escape string token");
+    };
+    assert_eq!(
+        internal_string_code_units(runtime_identity),
+        vec![0xDB80, 0xDC00, 0xD800]
+    );
+
+    let runtime_template_source = format!("`\\{scalar_high}{scalar_low}\\{lone_high}`");
+    let runtime_template_tokens = lex_with_options(
+        &runtime_template_source,
+        LexOptions {
+            wtf16_source: true,
+            ..LexOptions::default()
+        },
+    )
+    .expect("runtime identity-escape template should lex");
+    let TokenKind::TemplateNoSubstitution(segment) = &runtime_template_tokens[0].kind else {
+        panic!("expected runtime template token");
+    };
+    assert_eq!(
+        internal_string_code_units(segment.cooked.as_deref().expect("valid cooked template")),
+        vec![0xDB80, 0xDC00, 0xD800]
+    );
+    assert_eq!(
+        internal_string_code_units(&segment.raw),
+        vec![0x5C, 0xDB80, 0xDC00, 0x5C, 0xD800]
+    );
 }
 
 #[test]

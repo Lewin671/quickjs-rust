@@ -9,4 +9,8 @@ pub struct Script {
     /// function's source for `Function.prototype.toString` (sliced by each
     /// function's span). Empty for synthesized scripts.
     pub source: std::rc::Rc<str>,
+    /// Whether `source` already uses the runtime's canonical WTF-16 sentinel
+    /// representation. Host UTF-8 source is retained verbatim for byte spans
+    /// and canonicalized only when a slice becomes a JavaScript String.
+    pub source_is_wtf16: bool,
 }

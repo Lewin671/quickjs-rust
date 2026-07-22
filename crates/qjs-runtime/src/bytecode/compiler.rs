@@ -65,6 +65,8 @@ pub(super) struct Compiler {
     /// unavailable (e.g. internally synthesized bodies), which falls back to the
     /// `[native code]` form.
     pub(super) source: std::rc::Rc<str>,
+    /// Mirrors `Script::source_is_wtf16` for nested source-text slices.
+    pub(super) source_is_wtf16: bool,
 }
 
 /// Tracks a try/catch/finally result slot for completion value propagation.
@@ -125,6 +127,7 @@ impl Default for Compiler {
             try_result_slots: Vec::new(),
             disposable_scope_depth: 0,
             source: std::rc::Rc::from(""),
+            source_is_wtf16: true,
         }
     }
 }
@@ -170,6 +173,7 @@ pub(super) fn compile_module_function_hoists(script: &Script) -> Result<Bytecode
         ..Compiler::default()
     };
     compiler.source = script.source.clone();
+    compiler.source_is_wtf16 = script.source_is_wtf16;
     compiler.collect_hoisted_locals(&script.body, false);
     compiler.predeclare_current_scope_lexicals(&script.body);
     let blocked = lexical_declared_names(&script.body);
@@ -260,6 +264,7 @@ impl Compiler {
         instantiate_hoisted_functions: bool,
     ) -> Result<Bytecode, RuntimeError> {
         self.source = script.source.clone();
+        self.source_is_wtf16 = script.source_is_wtf16;
         self.strict = self.strict || is_strict_function_body(&script.body);
         self.collect_hoisted_locals(&script.body, false);
         self.predeclare_current_scope_lexicals(&script.body);

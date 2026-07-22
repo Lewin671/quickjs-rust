@@ -16,7 +16,7 @@ use super::escapes::{
 use super::groups::{named_backreference, named_group_index};
 use super::{
     MatchOptions, MatchState, PropertyCache, Quantifier, class_end, class_match, code_unit_char,
-    is_line_terminator, regexp_code_point_at, regexp_property_code_point_at,
+    is_line_terminator, pattern_literal, regexp_code_point_at, regexp_property_code_point_at,
 };
 use crate::string::advance_string_index;
 
@@ -110,7 +110,8 @@ pub(super) fn simple_atom_matcher<'a>(
         }
         // Groups and anchors need the generic machinery.
         '(' | ')' | '^' | '$' | '|' => None,
-        literal => Some(SimpleAtom::Literal(literal)),
+        _ => pattern_literal(pattern, atom_pc, options.unicode)
+            .map(|(literal, _)| SimpleAtom::Literal(literal)),
     }
 }
 
@@ -132,9 +133,9 @@ impl SimpleAtom<'_> {
                 Some(advance_string_index(text, index, options.unicode))
             }
             SimpleAtom::Literal(literal) => {
-                let value = *text.get(index)?;
+                let (value, next_index) = regexp_code_point_at(text, index, options.unicode)?;
                 chars_equal(value, *literal, options.ignore_case, options.unicode)
-                    .then_some(index + 1)
+                    .then_some(next_index)
             }
             SimpleAtom::Class { class, base } => {
                 let (value, next_index) = regexp_code_point_at(text, index, options.unicode)?;

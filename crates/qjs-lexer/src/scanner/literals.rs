@@ -6,7 +6,7 @@ use super::{
     Lexer, TemplateState,
     char_class::{is_identifier_continue, is_identifier_start},
     keywords::identifier_or_keyword,
-    push_js_code_unit, push_js_scalar,
+    push_js_code_unit, push_js_scalar, surrogate_escape_code_unit,
 };
 
 #[derive(Clone, Copy)]
@@ -33,6 +33,16 @@ impl StringCharacter {
 }
 
 impl Lexer<'_> {
+    fn string_character_from_source(&self, character: char) -> StringCharacter {
+        if self.options.wtf16_source
+            && let Some(code_unit) = surrogate_escape_code_unit(character)
+        {
+            StringCharacter::CodeUnit(code_unit)
+        } else {
+            StringCharacter::Scalar(character)
+        }
+    }
+
     pub(super) fn identifier(&mut self) -> Result<(), LexError> {
         let start = self.cursor;
         let (name, had_escape) = self.identifier_name_from(start)?;
@@ -538,7 +548,7 @@ impl Lexer<'_> {
                 None
             }
             '\u{2028}' | '\u{2029}' => None,
-            other => Some(StringCharacter::Scalar(other)),
+            other => Some(self.string_character_from_source(other)),
         };
         Ok(escaped)
     }
@@ -584,7 +594,7 @@ impl Lexer<'_> {
                 None
             }
             '\u{2028}' | '\u{2029}' => None,
-            other => Some(StringCharacter::Scalar(other)),
+            other => Some(self.string_character_from_source(other)),
         };
         Ok(escaped)
     }

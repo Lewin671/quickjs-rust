@@ -226,12 +226,29 @@ fn validate_pattern_range(
                 }
             },
             _ => {
-                index += 1;
+                index = unicode_literal_end(pattern, index, unicode);
                 has_atom = true;
             }
         }
     }
     Ok(())
+}
+
+fn unicode_literal_end(pattern: &[char], index: usize, unicode: bool) -> usize {
+    if unicode
+        && let Some(high) = pattern
+            .get(index)
+            .and_then(|value| crate::string::surrogate_escape_code_unit(*value))
+        && (0xD800..=0xDBFF).contains(&high)
+        && let Some(low) = pattern
+            .get(index + 1)
+            .and_then(|value| crate::string::surrogate_escape_code_unit(*value))
+        && (0xDC00..=0xDFFF).contains(&low)
+    {
+        index + 2
+    } else {
+        index + 1
+    }
 }
 
 fn group_body_start(pattern: &[char], start: usize) -> Result<usize, RuntimeError> {

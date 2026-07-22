@@ -593,7 +593,9 @@ fn format_value(value: &Value, raw_output: bool) -> String {
         return format!("{value:?}");
     }
     match value {
-        Value::String(value) => value.to_string(),
+        Value::String(_) => value
+            .string_to_utf8_lossy()
+            .expect("string variant must expose host UTF-8"),
         Value::Number(value) => value.to_string(),
         Value::Boolean(value) => value.to_string(),
         Value::Null => "null".to_owned(),
@@ -606,9 +608,35 @@ fn format_value(value: &Value, raw_output: bool) -> String {
 mod tests {
     use std::io::Cursor;
 
-    use qjs_runtime::{EvalError, EvalErrorKind};
+    use qjs_runtime::{EvalError, EvalErrorKind, Value};
 
-    use super::{format_test262_error, run_repl_with_io, with_script_args};
+    use super::{format_test262_error, format_value, run_repl_with_io, with_script_args};
+
+    #[test]
+    fn formats_canonical_wtf16_as_host_utf8_bytes() {
+        let scalar = Value::string_from_utf8("\u{F0000}");
+        assert_eq!(
+            format_value(&scalar, true).as_bytes(),
+            [0xF3, 0xB0, 0x80, 0x80]
+        );
+        assert_eq!(
+            format_value(&scalar, false).as_bytes(),
+            [
+                b'S', b't', b'r', b'i', b'n', b'g', b'(', b'\"', b'\\', b'u', b'{', b'f', b'0',
+                b'0', b'0', b'0', b'}', b'\"', b')'
+            ]
+        );
+
+        let lone = qjs_runtime::eval("String.fromCharCode(0xD800)")
+            .expect("lone-surrogate source should evaluate");
+        assert_eq!(format_value(&lone, true).as_bytes(), [0xEF, 0xBF, 0xBD]);
+        assert_eq!(
+            format_value(&lone, false).as_bytes(),
+            [
+                b'S', b't', b'r', b'i', b'n', b'g', b'(', b'\"', 0xEF, 0xBF, 0xBD, b'\"', b')'
+            ]
+        );
+    }
 
     #[test]
     fn inserts_script_args_after_use_strict_directive() {

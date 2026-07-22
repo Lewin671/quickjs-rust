@@ -60,3 +60,29 @@ sameValue(direct.split("")[1].charCodeAt(0), 0xDC00, "split low surrogate");
 sameValue(eval("'" + direct + "'"), direct, "eval scalar source");
 sameValue(eval("'" + String.fromCharCode(0xD800) + "'").charCodeAt(0), 0xD800, "eval lone surrogate source");
 sameValue(Function("return '" + direct + "';")(), direct, "dynamic function scalar source");
+
+var slash = String.fromCharCode(0x5C);
+sameValue(eval("'" + slash + direct + "'"), direct, "eval identity-escaped scalar");
+sameValue(eval("'" + slash + String.fromCharCode(0xD800) + "'").charCodeAt(0), 0xD800, "eval identity-escaped lone surrogate");
+sameValue(Function("return '" + slash + direct + "';")(), direct, "dynamic function identity-escaped scalar");
+sameValue(Function("return '" + slash + String.fromCharCode(0xD800) + "';")().charCodeAt(0), 0xD800, "dynamic function identity-escaped lone surrogate");
+
+function identityTag(strings) {
+  return strings[0] + ":" + strings.raw[0];
+}
+sameValue(eval("identityTag`" + slash + direct + "`"), direct + ":" + slash + direct, "tagged template identity-escaped scalar cooked and raw");
+sameValue(eval("identityTag`" + slash + String.fromCharCode(0xD800) + "`").charCodeAt(0), 0xD800, "tagged template identity-escaped lone surrogate cooked");
+
+var doubled = direct + direct;
+sameValue(new RegExp(direct + "+", "u").exec(doubled)[0].length, 4, "constructor bare scalar plus atom");
+sameValue(new RegExp(direct + "{2}", "u").test(doubled), true, "constructor bare scalar counted atom");
+sameValue(/󰀀+/u.exec(doubled)[0].length, 4, "literal bare scalar plus atom");
+sameValue(/󰀀{2}/u.test(doubled), true, "literal bare scalar counted atom");
+sameValue(/󰀀{2}/u.exec(doubled)[0].length, 4, "literal bare scalar counted atom exec");
+sameValue(/\u{F0000}+/u.exec(doubled)[0].length, 4, "escaped scalar plus control");
+sameValue(/[󰀀]+/u.exec(doubled)[0].length, 4, "character class scalar control");
+sameValue(new RegExp(direct + "+", "v").exec(doubled)[0].length, 4, "unicode sets constructor bare scalar plus atom");
+sameValue(new RegExp(direct + "{2}", "v").test(doubled), true, "unicode sets constructor bare scalar counted atom");
+sameValue(/󰀀+/v.exec(doubled)[0].length, 4, "unicode sets literal bare scalar plus atom");
+sameValue(/󰀀{2}/v.exec(doubled)[0].length, 4, "unicode sets literal bare scalar counted atom exec");
+sameValue(/[󰀀]+/v.exec(doubled)[0].length, 4, "unicode sets character class scalar control");

@@ -164,12 +164,15 @@ impl ModuleGraph {
         referrer: &str,
         resolver: &mut dyn ModuleResolver,
     ) -> Result<Value, LinkError> {
-        let resolved = resolver.resolve(specifier, referrer).map_err(|error| {
-            LinkError::syntax(format!(
-                "{} (importing '{specifier}' from '{referrer}')",
-                error.message
-            ))
-        })?;
+        let host_specifier = crate::string::string_to_utf8_lossy(specifier);
+        let resolved = resolver
+            .resolve(&host_specifier, referrer)
+            .map_err(|error| {
+                LinkError::syntax(format!(
+                    "{} (importing '{host_specifier}' from '{referrer}')",
+                    error.message
+                ))
+            })?;
         let request = ModuleRequest::from_type(resolved.key.clone(), module_type);
         let key = request.cache_key();
         if !self.modules.contains_key(&key) {
@@ -258,14 +261,13 @@ impl ModuleGraph {
             },
         );
         for request in requested {
-            let resolved = resolver
-                .resolve(&request.specifier, &key)
-                .map_err(|error| {
-                    LinkError::syntax(format!(
-                        "SyntaxError: {} (importing '{}' from '{key}')",
-                        error.message, request.specifier
-                    ))
-                })?;
+            let host_specifier = crate::string::string_to_utf8_lossy(&request.specifier);
+            let resolved = resolver.resolve(&host_specifier, &key).map_err(|error| {
+                LinkError::syntax(format!(
+                    "SyntaxError: {} (importing '{}' from '{key}')",
+                    error.message, host_specifier
+                ))
+            })?;
             let resolved_key = match request.kind {
                 ModuleKind::SourceText => resolved.key.clone(),
                 ModuleKind::Bytes => format!("{}\0bytes", resolved.key),
@@ -310,7 +312,7 @@ impl ModuleGraph {
 
     fn insert_json_module(&mut self, key: String, source: &str) -> Result<(), LinkError> {
         let env = crate::CallEnv::new(self.realm.clone());
-        let value = crate::json::parse_json_text(source, &env).map_err(|error| LinkError {
+        let value = crate::json::parse_host_json_text(source, &env).map_err(|error| LinkError {
             kind: LinkErrorKind::Parse,
             message: error.message,
             thrown: error.thrown,
@@ -323,7 +325,7 @@ impl ModuleGraph {
 
     fn insert_text_module(&mut self, key: String, source: String) {
         let mut exports = HashMap::new();
-        exports.insert("default".to_owned(), Value::String(source.into()));
+        exports.insert("default".to_owned(), Value::string_from_utf8(&source));
         self.insert_synthetic_default_module(key, exports);
     }
 
@@ -349,6 +351,7 @@ impl ModuleGraph {
                     body: qjs_ast::Script {
                         body: Vec::new(),
                         source: String::new().into(),
+                        source_is_wtf16: true,
                     },
                 },
                 status: Status::Evaluated,

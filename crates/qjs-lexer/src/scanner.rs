@@ -30,9 +30,11 @@ pub(in crate::scanner) fn push_js_scalar(result: &mut String, character: char) {
     }
 }
 
-fn is_surrogate_escape_sentinel(character: char) -> bool {
+pub(in crate::scanner) fn surrogate_escape_code_unit(character: char) -> Option<u16> {
+    let code_point = character as u32;
     (SURROGATE_ESCAPE_SENTINEL_BASE..SURROGATE_ESCAPE_SENTINEL_BASE + 0x800)
-        .contains(&(character as u32))
+        .contains(&code_point)
+        .then(|| (0xD800 + code_point - SURROGATE_ESCAPE_SENTINEL_BASE) as u16)
 }
 
 pub(in crate::scanner) fn push_js_code_unit(result: &mut String, code_unit: u16) {
@@ -186,7 +188,7 @@ impl<'src> Lexer<'src> {
     }
 
     pub(in crate::scanner) fn push_source_character(&self, result: &mut String, character: char) {
-        if self.options.wtf16_source && is_surrogate_escape_sentinel(character) {
+        if self.options.wtf16_source && surrogate_escape_code_unit(character).is_some() {
             result.push(character);
         } else {
             push_js_scalar(result, character);

@@ -123,6 +123,35 @@ fn import_text_module_exports_source_without_parsing() {
 }
 
 #[test]
+fn host_utf8_module_boundaries_preserve_sentinel_range_scalars() {
+    let scalar = '\u{F0000}';
+    let dep_key = format!("dep{scalar}");
+    let json_key = format!("data{scalar}.json");
+    let text_key = format!("text{scalar}.txt");
+    let resolver = MapResolver::new()
+        .with(&dep_key, &format!("export default '{scalar}';"))
+        .with(&json_key, &format!("{{\"value\":\"{scalar}\"}}"))
+        .with(&text_key, &scalar.to_string());
+    let source = format!(
+        "import staticValue from '{dep_key}';\n\
+         import jsonValue from '{json_key}' with {{ type: 'json' }};\n\
+         import textValue from '{text_key}' with {{ type: 'text' }};\n\
+         const dynamicValue = await import('{dep_key}');\n\
+         export const values = staticValue + jsonValue.value + textValue + dynamicValue.default;"
+    );
+    let namespace = eval_module(&source, "main", Box::new(resolver)).expect("graph evaluates");
+    let Value::String(values) = export(&namespace, "values") else {
+        panic!("expected concatenated string export");
+    };
+    assert_eq!(
+        crate::string::string_code_units(&values),
+        vec![
+            0xDB80, 0xDC00, 0xDB80, 0xDC00, 0xDB80, 0xDC00, 0xDB80, 0xDC00
+        ]
+    );
+}
+
+#[test]
 fn import_attribute_synthetic_modules_support_namespace_and_dynamic_idempotency() {
     let resolver = MapResolver::new()
         .with("data.json", "{}")

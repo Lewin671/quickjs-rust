@@ -287,27 +287,41 @@ fn delete_property(target: Value, key: PropertyKey, env: &mut CallEnv) -> Result
 }
 
 pub(crate) fn parse_json_text(source: &str, env: &CallEnv) -> Result<Value, RuntimeError> {
-    JsonParser::new(source, env)
+    JsonParser::new(source, env, JsonSourceMode::RuntimeWtf16)
+        .parse::<false>()
+        .map(|node| node.value)
+}
+
+pub(crate) fn parse_host_json_text(source: &str, env: &CallEnv) -> Result<Value, RuntimeError> {
+    JsonParser::new(source, env, JsonSourceMode::HostUtf8)
         .parse::<false>()
         .map(|node| node.value)
 }
 
 fn parse_json_node(source: &str, env: &CallEnv) -> Result<JsonNode, RuntimeError> {
-    JsonParser::new(source, env).parse::<true>()
+    JsonParser::new(source, env, JsonSourceMode::RuntimeWtf16).parse::<true>()
+}
+
+#[derive(Clone, Copy)]
+enum JsonSourceMode {
+    RuntimeWtf16,
+    HostUtf8,
 }
 
 struct JsonParser<'a> {
     source: &'a str,
     cursor: usize,
     env: &'a CallEnv,
+    source_mode: JsonSourceMode,
 }
 
 impl<'a> JsonParser<'a> {
-    fn new(source: &'a str, env: &'a CallEnv) -> Self {
+    fn new(source: &'a str, env: &'a CallEnv, source_mode: JsonSourceMode) -> Self {
         Self {
             source,
             cursor: 0,
             env,
+            source_mode,
         }
     }
 
@@ -440,7 +454,12 @@ impl<'a> JsonParser<'a> {
                 '"' => return Ok(output),
                 '\\' => crate::string::push_code_unit(&mut output, self.escape()?),
                 ch if ch <= '\u{1f}' => return Err(self.syntax_error()),
-                ch => output.push(ch),
+                ch => match self.source_mode {
+                    JsonSourceMode::RuntimeWtf16 => output.push(ch),
+                    JsonSourceMode::HostUtf8 => {
+                        crate::string::push_code_point(&mut output, ch as u32);
+                    }
+                },
             }
         }
     }
@@ -597,10 +616,14 @@ mod tests {
         let source = r#"{"items":[1,"x",true,null]}"#;
         let env = test_env();
 
-        let plain = JsonParser::new(source, &env).parse::<false>().unwrap();
+        let plain = JsonParser::new(source, &env, JsonSourceMode::RuntimeWtf16)
+            .parse::<false>()
+            .unwrap();
         assert!(matches!(plain.children, JsonNodeChildren::None));
 
-        let reviver = JsonParser::new(source, &env).parse::<true>().unwrap();
+        let reviver = JsonParser::new(source, &env, JsonSourceMode::RuntimeWtf16)
+            .parse::<true>()
+            .unwrap();
         let JsonNodeChildren::Object(properties) = reviver.children else {
             panic!("reviver mode must retain object children");
         };
@@ -611,5 +634,31 @@ mod tests {
         assert_eq!(items[1].source.as_deref(), Some("\"x\""));
         assert_eq!(items[2].source.as_deref(), Some("true"));
         assert_eq!(items[3].source.as_deref(), Some("null"));
+    }
+
+    #[test]
+    fn distinguishes_host_utf8_json_from_runtime_wtf16_json() {
+        let env = test_env();
+        let host = parse_host_json_text("\"\u{F0000}\"", &env).expect("host JSON parses");
+        let Value::String(host) = host else {
+            panic!("host JSON string expected");
+        };
+        assert_eq!(
+            crate::string::string_code_units(&host),
+            vec![0xDB80, 0xDC00]
+        );
+
+        let high = crate::string::char_from_code_unit(0xDB80);
+        let low = crate::string::char_from_code_unit(0xDC00);
+        let lone = crate::string::char_from_code_unit(0xD800);
+        let source = format!("\"{high}{low}{lone}\"");
+        let runtime = parse_json_text(&source, &env).expect("runtime JSON parses");
+        let Value::String(runtime) = runtime else {
+            panic!("runtime JSON string expected");
+        };
+        assert_eq!(
+            crate::string::string_code_units(&runtime),
+            vec![0xDB80, 0xDC00, 0xD800]
+        );
     }
 }

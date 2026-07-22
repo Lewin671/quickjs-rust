@@ -1283,6 +1283,40 @@ fn eval_script_runs_global_declaration_instantiation_checks() {
 }
 
 #[test]
+fn runtime_wtf16_eval_entry_points_preserve_identity_escapes() {
+    assert_eq!(
+        eval(
+            "let scalar = '\u{F0000}'; \
+             let lone = String.fromCharCode(0xD800); \
+             let slash = String.fromCharCode(92); \
+             let scalarSource = \"'\" + slash + scalar + \"'\"; \
+             let loneSource = \"'\" + slash + lone + \"'\"; \
+             let evalScalar = eval(scalarSource); \
+             let evalLone = eval(loneSource); \
+             let functionScalar = Function('return ' + scalarSource)(); \
+             let functionLone = Function('return ' + loneSource)(); \
+             function tag(strings) { \
+               return strings[0] + ':' + strings.raw[0]; \
+             } \
+             let taggedScalar = eval('tag`' + slash + scalar + '`'); \
+             let taggedLone = eval('tag`' + slash + lone + '`'); \
+             __quickjsRustEvalScript(\
+               'globalThis.evalScriptScalar = ' + scalarSource + ';' + \
+               'globalThis.evalScriptLone = ' + loneSource + ';'\
+             ); \
+             [evalScalar === scalar, evalLone === lone, \
+              functionScalar === scalar, functionLone === lone, \
+              taggedScalar === scalar + ':' + slash + scalar, \
+              taggedLone === lone + ':' + slash + lone, \
+              evalScriptScalar === scalar, evalScriptLone === lone].join(':');"
+        ),
+        Ok(Value::String(
+            "true:true:true:true:true:true:true:true".to_owned().into()
+        ))
+    );
+}
+
+#[test]
 fn top_level_global_var_slot_tracks_realm_mutations() {
     assert_eq!(
         eval("var slotBackedGlobal = 1; eval('slotBackedGlobal = 3'); slotBackedGlobal;"),
