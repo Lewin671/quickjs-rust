@@ -328,6 +328,37 @@ impl ArrayRef {
         self.0.elements.borrow().get(index).cloned()
     }
 
+    /// Temporarily exposes fully dense, writable indexed storage to a
+    /// semantics-preserving numeric loop accelerator.
+    ///
+    /// The closure must not call back into JavaScript or access this array:
+    /// `elements` is mutably borrowed for its whole duration. Prototype state
+    /// is deliberately irrelevant because every index in `0..length` is a
+    /// present own data property. Sealed/non-extensible arrays and arrays with
+    /// a non-writable length still permit overwriting those existing elements;
+    /// frozen arrays do not.
+    pub(crate) fn with_dense_writable_elements<R>(
+        &self,
+        mutate: impl FnOnce(&mut [Value]) -> R,
+    ) -> Option<R> {
+        if self.0.frozen.get()
+            || self.0.cold_if_present().is_some_and(|cold| {
+                !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
+                    || !cold
+                        .properties
+                        .try_borrow()
+                        .is_ok_and(|properties| properties.is_empty())
+            })
+        {
+            return None;
+        }
+        let mut elements = self.0.elements.try_borrow_mut().ok()?;
+        if self.0.length.get() != elements.len() {
+            return None;
+        }
+        Some(mutate(&mut elements))
+    }
+
     /// Searches fully dense numeric storage without generic property lookup.
     /// Callers separately guard the resolved `Array.prototype.indexOf` identity;
     /// this method rejects holes, descriptors, and prototype overrides so the
@@ -837,5 +868,53 @@ mod tests {
         assert_eq!(array.direct_dense_index_value(1), None);
         assert_eq!(array.direct_dense_index_value(2), None);
         assert_eq!(array.direct_dense_index_value(3), None);
+    }
+
+    #[test]
+    fn dense_writable_lease_allows_existing_elements_on_sealed_arrays() {
+        let array = ArrayRef::new(vec![Value::Number(1.0), Value::Number(2.0)]);
+        array.seal();
+        array.set_length_writable(false);
+
+        assert_eq!(
+            array.with_dense_writable_elements(|elements| {
+                elements[1] = Value::Number(3.0);
+                elements.len()
+            }),
+            Some(2)
+        );
+        assert_eq!(array.get(1), Some(Value::Number(3.0)));
+    }
+
+    #[test]
+    fn dense_writable_lease_rejects_frozen_sparse_and_special_elements() {
+        let frozen = ArrayRef::new(vec![Value::Number(1.0)]);
+        frozen.freeze();
+        assert!(frozen.with_dense_writable_elements(|_| ()).is_none());
+
+        let sparse = ArrayRef::new(vec![Value::Number(1.0), Value::Number(2.0)]);
+        assert!(sparse.delete_index(1));
+        assert!(sparse.with_dense_writable_elements(|_| ()).is_none());
+
+        let described = ArrayRef::new(vec![Value::Number(1.0)]);
+        described.define_property(
+            "0".to_owned(),
+            Property::data(Value::Number(1.0), false, true, false),
+        );
+        assert!(described.with_dense_writable_elements(|_| ()).is_none());
+    }
+
+    #[test]
+    fn dense_writable_lease_fails_closed_on_borrow_conflict() {
+        let array = ArrayRef::new(vec![Value::Number(1.0)]);
+        let outstanding_read = array.0.elements.borrow();
+        assert!(array.with_dense_writable_elements(|_| ()).is_none());
+        drop(outstanding_read);
+        assert!(array.with_dense_writable_elements(|_| ()).is_some());
+
+        let cold = array.0.cold();
+        let outstanding_holes_write = cold.holes.borrow_mut();
+        assert!(array.with_dense_writable_elements(|_| ()).is_none());
+        drop(outstanding_holes_write);
     }
 }
