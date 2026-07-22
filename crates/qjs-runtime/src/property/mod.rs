@@ -1,5 +1,5 @@
 use crate::CallEnv;
-use crate::{Property, RuntimeError, Value, call_function, error};
+use crate::{Property, RuntimeError, Value, call_function};
 
 mod array;
 mod function;
@@ -17,12 +17,11 @@ pub(crate) use function::{
 };
 pub(crate) use key::{PropertyKey, to_property_key_value, try_to_property_key_without_coercion};
 pub(crate) use prototype::{
-    array_as_object_prototype, array_prototype, constructor_named_prototype, constructor_prototype,
+    array_as_prototype_slot, array_prototype, constructor_named_prototype, constructor_prototype,
     constructor_prototype_slot, function_constructor_as_prototype_slot,
     function_intrinsic_prototype_slot, function_prototype, function_prototype_chain_descriptor,
     inherited_primitive_prototype_descriptor, inherited_primitive_prototype_symbol_descriptor,
-    native_construct_prototype_slot, object_prototype, string_prototype, value_prototype,
-    value_prototype_slot,
+    native_construct_prototype_slot, object_prototype, string_prototype, value_prototype_slot,
 };
 
 pub(crate) fn has_property(value: Value, env: &CallEnv, key: &str) -> Result<bool, RuntimeError> {
@@ -38,18 +37,7 @@ pub(crate) fn has_property_key(
         return has_symbol_property(value, env, key);
     };
     match value {
-        Value::Object(object) => {
-            if crate::typed_array::is_typed_array_object(&object) {
-                return match crate::typed_array::indexed_element_value(&object, key) {
-                    crate::typed_array::IndexedRead::Present(_) => Ok(true),
-                    crate::typed_array::IndexedRead::Missing => Ok(false),
-                    crate::typed_array::IndexedRead::NotIndexed => {
-                        object_has_property(&object, env, key)
-                    }
-                };
-            }
-            object_has_property(&object, env, key)
-        }
+        Value::Object(object) => object_has_property(&object, env, key),
         Value::Map(map) => object_has_property(&map.object(), env, key),
         Value::Set(set) => object_has_property(&set.object(), env, key),
         Value::Proxy(proxy) => {
@@ -87,6 +75,19 @@ fn object_has_property(
     env: &CallEnv,
     key: &str,
 ) -> Result<bool, RuntimeError> {
+    if crate::typed_array::is_typed_array_object(object) {
+        return match crate::typed_array::indexed_element_value(object, key) {
+            crate::typed_array::IndexedRead::Present(_) => Ok(true),
+            crate::typed_array::IndexedRead::Missing => Ok(false),
+            crate::typed_array::IndexedRead::NotIndexed => {
+                if object.has_own_property(key) {
+                    Ok(true)
+                } else {
+                    prototype_has_property(object.prototype_slot(), env, key)
+                }
+            }
+        };
+    }
     if object.has_own_property(key) {
         return Ok(true);
     }
@@ -100,6 +101,7 @@ fn prototype_has_property(
 ) -> Result<bool, RuntimeError> {
     match prototype {
         Some(crate::Prototype::Object(object)) => object_has_property(&object, env, key),
+        Some(crate::Prototype::Array(array)) => has_property(Value::Array(array.array()), env, key),
         Some(crate::Prototype::Function(function)) => function_has_property(&function, env, key),
         Some(crate::Prototype::Proxy(proxy)) => {
             let mut proxy_env = env.clone();
@@ -114,9 +116,7 @@ fn function_has_property(
     env: &CallEnv,
     key: &str,
 ) -> Result<bool, RuntimeError> {
-    if function_own_property_descriptor(function, key).is_some()
-        || native_error_constructor_parent_descriptor(function, env, key).is_some()
-    {
+    if function_own_property_descriptor(function, key).is_some() {
         return Ok(true);
     }
     match function.internal_prototype_slot() {
@@ -162,6 +162,7 @@ pub(crate) fn own_or_inherited_descriptor(value: Value, key: &str) -> Option<Pro
 fn prototype_descriptor_without_traps(prototype: crate::Prototype, key: &str) -> Option<Property> {
     match prototype {
         crate::Prototype::Object(object) => object.property(key),
+        crate::Prototype::Array(array) => array.property(key),
         crate::Prototype::Function(function) => function.chain_property(key),
         crate::Prototype::Proxy(proxy) => proxy
             .target_result()
@@ -204,6 +205,7 @@ fn prototype_symbol_descriptor_without_traps(
 ) -> Option<Property> {
     match prototype {
         crate::Prototype::Object(object) => object.symbol_property(symbol),
+        crate::Prototype::Array(array) => array.symbol_property(symbol),
         crate::Prototype::Function(function) => function.chain_symbol_property(symbol),
         crate::Prototype::Proxy(proxy) => proxy
             .target_result()
@@ -221,19 +223,21 @@ fn has_symbol_property(
         unreachable!("symbol property helper should only receive symbol keys");
     };
     match value {
-        Value::Object(object) => Ok(object.symbol_property(symbol).is_some()),
-        Value::Map(map) => Ok(map.object().symbol_property(symbol).is_some()),
-        Value::Set(set) => Ok(set.object().symbol_property(symbol).is_some()),
+        Value::Object(object) => object_has_symbol_property(&object, env, symbol),
+        Value::Map(map) => object_has_symbol_property(&map.object(), env, symbol),
+        Value::Set(set) => object_has_symbol_property(&set.object(), env, symbol),
         Value::Proxy(proxy) => {
             let mut proxy_env = env.clone();
             crate::proxy::proxy_has(proxy, key, &mut proxy_env)
         }
-        Value::Function(function) => Ok(function.symbol_property(symbol, env).is_some()),
-        Value::Array(elements) => Ok(elements.symbol_property(symbol).is_some()
-            || elements
-                .prototype_override()
-                .unwrap_or_else(|| array_prototype(env))
-                .is_some_and(|prototype| prototype.symbol_property(symbol).is_some())),
+        Value::Function(function) => function_has_symbol_property(&function, env, symbol),
+        Value::Array(elements) => {
+            if elements.symbol_property(symbol).is_some() {
+                Ok(true)
+            } else {
+                prototype_has_symbol_property(elements.effective_prototype_slot(env), env, symbol)
+            }
+        }
         Value::String(_)
         | Value::Number(_)
         | Value::BigInt(_)
@@ -243,6 +247,55 @@ fn has_symbol_property(
             thrown: None,
             message: "property target must be an object".to_owned(),
         }),
+    }
+}
+
+fn object_has_symbol_property(
+    object: &crate::ObjectRef,
+    env: &CallEnv,
+    symbol: &crate::ObjectRef,
+) -> Result<bool, RuntimeError> {
+    if object.has_own_symbol_property(symbol) {
+        return Ok(true);
+    }
+    prototype_has_symbol_property(object.prototype_slot(), env, symbol)
+}
+
+fn function_has_symbol_property(
+    function: &crate::Function,
+    env: &CallEnv,
+    symbol: &crate::ObjectRef,
+) -> Result<bool, RuntimeError> {
+    if function.has_own_symbol_property(symbol) {
+        return Ok(true);
+    }
+    let prototype = match function.internal_prototype_slot() {
+        Some(slot) => slot,
+        None => function_intrinsic_prototype_slot(env),
+    };
+    prototype_has_symbol_property(prototype, env, symbol)
+}
+
+fn prototype_has_symbol_property(
+    prototype: Option<crate::Prototype>,
+    env: &CallEnv,
+    symbol: &crate::ObjectRef,
+) -> Result<bool, RuntimeError> {
+    match prototype {
+        Some(crate::Prototype::Object(object)) => object_has_symbol_property(&object, env, symbol),
+        Some(crate::Prototype::Array(array)) => has_symbol_property(
+            Value::Array(array.array()),
+            env,
+            &PropertyKey::Symbol(symbol.clone()),
+        ),
+        Some(crate::Prototype::Function(function)) => {
+            function_has_symbol_property(&function, env, symbol)
+        }
+        Some(crate::Prototype::Proxy(proxy)) => {
+            let mut proxy_env = env.clone();
+            crate::proxy::proxy_has(proxy, &PropertyKey::Symbol(symbol.clone()), &mut proxy_env)
+        }
+        None => Ok(false),
     }
 }
 
@@ -301,18 +354,29 @@ pub(crate) fn property_value_key_with_receiver(
                 None => Ok(Value::Undefined),
             }
         }
-        Value::Map(map) => property_descriptor_value(map.object().property(key), receiver, env),
-        Value::Set(set) => property_descriptor_value(set.object().property(key), receiver, env),
+        Value::Map(map) => ordinary_object_property_value(map.object(), key, receiver, env),
+        Value::Set(set) => ordinary_object_property_value(set.object(), key, receiver, env),
         Value::Proxy(proxy) => {
             crate::proxy::proxy_get(proxy, &PropertyKey::String(key.to_owned()), receiver, env)
         }
-        Value::Function(function) => property_descriptor_value(
-            function_own_property_descriptor(&function, key)
-                .or_else(|| native_error_constructor_parent_descriptor(&function, env, key))
-                .or_else(|| function_prototype_chain_descriptor(&function, env, key)),
-            receiver,
-            env,
-        ),
+        Value::Function(function) => {
+            if let Some(property) = function_own_property_descriptor(&function, key) {
+                return property_descriptor_value(Some(property), receiver, env);
+            }
+            let prototype = match function.internal_prototype_slot() {
+                Some(prototype) => prototype,
+                None => function_intrinsic_prototype_slot(env),
+            };
+            match prototype {
+                Some(prototype) => property_value_key_with_receiver(
+                    prototype.to_value(),
+                    &PropertyKey::String(key.to_owned()),
+                    receiver,
+                    env,
+                ),
+                None => Ok(Value::Undefined),
+            }
+        }
         Value::Array(elements) => {
             if key == "length" {
                 Ok(Value::Number(elements.len() as f64))
@@ -321,14 +385,20 @@ pub(crate) fn property_value_key_with_receiver(
                     .parse::<usize>()
                     .ok()
                     .and_then(|index| elements.get(index).map(Property::enumerable))
-                    .or_else(|| elements.property(key))
-                    .or_else(|| {
-                        elements
-                            .prototype_override()
-                            .unwrap_or_else(|| array_prototype(env))
-                            .and_then(|prototype| prototype.property(key))
-                    });
-                property_descriptor_value(descriptor, receiver, env)
+                    .or_else(|| elements.property(key));
+                if descriptor.is_some() {
+                    property_descriptor_value(descriptor, receiver, env)
+                } else {
+                    match elements.effective_prototype_slot(env) {
+                        Some(prototype) => property_value_key_with_receiver(
+                            prototype.to_value(),
+                            &PropertyKey::String(key.to_owned()),
+                            receiver,
+                            env,
+                        ),
+                        None => Ok(Value::Undefined),
+                    }
+                }
             }
         }
         Value::String(value) => {
@@ -386,25 +456,38 @@ fn symbol_property_value_with_receiver(
             }
         }
         Value::Proxy(proxy) => crate::proxy::proxy_get(proxy, key, receiver, env),
-        Value::Map(map) => {
-            property_descriptor_value(map.object().symbol_property(symbol), receiver, env)
-        }
-        Value::Set(set) => {
-            property_descriptor_value(set.object().symbol_property(symbol), receiver, env)
-        }
+        Value::Map(map) => ordinary_object_symbol_value(map.object(), key, receiver, env),
+        Value::Set(set) => ordinary_object_symbol_value(set.object(), key, receiver, env),
         Value::Function(function) => {
-            property_descriptor_value(function.symbol_property(symbol, env), receiver, env)
+            if let Some(property) = function.own_symbol_property(symbol) {
+                return property_descriptor_value(Some(property), receiver, env);
+            }
+            let prototype = match function.internal_prototype_slot() {
+                Some(prototype) => prototype,
+                None => function_intrinsic_prototype_slot(env),
+            };
+            match prototype {
+                Some(prototype) => {
+                    symbol_property_value_with_receiver(prototype.to_value(), key, receiver, env)
+                }
+                None => Ok(Value::Undefined),
+            }
         }
-        Value::Array(elements) => property_descriptor_value(
-            elements.symbol_property(symbol).or_else(|| {
-                elements
-                    .prototype_override()
-                    .unwrap_or_else(|| array_prototype(env))
-                    .and_then(|prototype| prototype.symbol_property(symbol))
-            }),
-            receiver,
-            env,
-        ),
+        Value::Array(elements) => {
+            if let Some(property) = elements.symbol_property(symbol) {
+                property_descriptor_value(Some(property), receiver, env)
+            } else {
+                match elements.effective_prototype_slot(env) {
+                    Some(prototype) => symbol_property_value_with_receiver(
+                        prototype.to_value(),
+                        key,
+                        receiver,
+                        env,
+                    ),
+                    None => Ok(Value::Undefined),
+                }
+            }
+        }
         Value::String(_) => property_descriptor_value(
             inherited_primitive_prototype_symbol_descriptor(env, "String", symbol),
             receiver,
@@ -429,15 +512,43 @@ fn symbol_property_value_with_receiver(
     }
 }
 
-fn native_error_constructor_parent_descriptor(
-    function: &crate::Function,
-    env: &CallEnv,
+fn ordinary_object_property_value(
+    object: crate::ObjectRef,
     key: &str,
-) -> Option<Property> {
-    match error::native_error_constructor_parent(function, env) {
-        Some(Value::Function(parent)) => function_own_property_descriptor(&parent, key),
-        Some(Value::Object(parent)) => parent.property(key),
-        _ => None,
+    receiver: Value,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    if let Some(property) = object.own_property(key) {
+        return property_descriptor_value(Some(property), receiver, env);
+    }
+    match object.prototype_slot() {
+        Some(prototype) => property_value_key_with_receiver(
+            prototype.to_value(),
+            &PropertyKey::String(key.to_owned()),
+            receiver,
+            env,
+        ),
+        None => Ok(Value::Undefined),
+    }
+}
+
+fn ordinary_object_symbol_value(
+    object: crate::ObjectRef,
+    key: &PropertyKey,
+    receiver: Value,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let PropertyKey::Symbol(symbol) = key else {
+        unreachable!("symbol property helper should only receive symbol keys");
+    };
+    if let Some(property) = object.own_symbol_property(symbol) {
+        return property_descriptor_value(Some(property), receiver, env);
+    }
+    match object.prototype_slot() {
+        Some(prototype) => {
+            symbol_property_value_with_receiver(prototype.to_value(), key, receiver, env)
+        }
+        None => Ok(Value::Undefined),
     }
 }
 

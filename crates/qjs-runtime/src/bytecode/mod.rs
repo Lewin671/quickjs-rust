@@ -62,6 +62,17 @@ pub(crate) use vm_private::apply_instance_private_element;
 pub(crate) use vm_result::FunctionBytecodeResult;
 pub(crate) use vm_set::set_property as set_object_property;
 
+pub(crate) fn delete_object_property(
+    object: Value,
+    key: &crate::PropertyKey,
+    env: &mut crate::CallEnv,
+) -> Result<bool, RuntimeError> {
+    match vm_props::delete_property_key(object, key, env)? {
+        Value::Boolean(deleted) => Ok(deleted),
+        _ => unreachable!("property deletion must return a Boolean value"),
+    }
+}
+
 /// Compiles an AST script into runtime bytecode.
 ///
 /// # Errors

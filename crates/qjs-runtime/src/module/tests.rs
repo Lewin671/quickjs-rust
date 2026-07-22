@@ -297,6 +297,93 @@ fn default_import_tracks_named_default_function_binding_updates() {
 }
 
 #[test]
+fn namespace_exports_stay_observable_through_live_array_prototypes() {
+    let namespace = run(
+        "import * as ns from \"dep\";\n\
+         const original = Object.getPrototypeOf(Array.prototype);\n\
+         Object.setPrototypeOf(Array.prototype, ns);\n\
+         const bridge = [];\n\
+         const child = Object.create(bridge);\n\
+         const directBefore = bridge.live;\n\
+         const before = child.live;\n\
+         ns.advance();\n\
+         const directAfter = bridge.live;\n\
+         const after = child.live;\n\
+         const array = [];\n\
+         let threw = false;\n\
+         try { array[0] = 9; } catch (error) { threw = error instanceof TypeError; }\n\
+         const value = array[0];\n\
+         const own = Object.prototype.hasOwnProperty.call(array, '0');\n\
+         Object.setPrototypeOf(Array.prototype, original);\n\
+         export const result = directBefore + ':' + before + ':' + directAfter + ':' + after \
+             + ':' + threw + ':' + value + ':' + own;",
+        &[(
+            "dep",
+            "const zero = 1;\n\
+             export { zero as \"0\" };\n\
+             export let live = 1;\n\
+             export function advance() { live = 2; }",
+        )],
+    )
+    .expect("module graph evaluates");
+    assert_eq!(
+        export(&namespace, "result"),
+        Value::String("1:1:2:2:true:1:false".to_owned().into())
+    );
+}
+
+#[test]
+fn namespace_without_numeric_exports_blocks_dense_array_store() {
+    let namespace = run(
+        "import * as ns from \"dep\";\n\
+         const directReceiver = {};\n\
+         const direct = Reflect.set(ns, '0', 7, directReceiver);\n\
+         const original = Object.getPrototypeOf(Array.prototype);\n\
+         Object.setPrototypeOf(Array.prototype, ns);\n\
+         const array = [];\n\
+         let threw = false;\n\
+         try { array[0] = 9; } catch (error) { threw = error instanceof TypeError; }\n\
+         const own = Object.prototype.hasOwnProperty.call(array, '0');\n\
+         const value = array[0];\n\
+         Object.setPrototypeOf(Array.prototype, original);\n\
+         export const result = direct + ':' \
+             + Object.prototype.hasOwnProperty.call(directReceiver, '0') + ':' \
+             + threw + ':' + own + ':' + value;",
+        &[("dep", "export const live = 1;")],
+    )
+    .expect("module graph evaluates");
+    assert_eq!(
+        export(&namespace, "result"),
+        Value::String("false:false:true:false:undefined".to_owned().into())
+    );
+}
+
+#[test]
+fn namespace_prototype_rejects_absent_symbol_set() {
+    let namespace = run(
+        "import * as ns from \"dep\";\n\
+         const key = Symbol('absent');\n\
+         const reflectTarget = Object.create(ns);\n\
+         const reflected = Reflect.set(reflectTarget, key, 7);\n\
+         const assignmentTarget = Object.create(ns);\n\
+         let threw = false;\n\
+         try { assignmentTarget[key] = 9; }\n\
+         catch (error) { threw = error instanceof TypeError; }\n\
+         export const result = reflected + ':' \
+             + Object.prototype.hasOwnProperty.call(reflectTarget, key) + ':' \
+             + threw + ':' \
+             + Object.prototype.hasOwnProperty.call(assignmentTarget, key) + ':' \
+             + assignmentTarget[key];",
+        &[("dep", "export const live = 1;")],
+    )
+    .expect("module graph evaluates");
+    assert_eq!(
+        export(&namespace, "result"),
+        Value::String("false:false:true:false:undefined".to_owned().into())
+    );
+}
+
+#[test]
 fn typeof_imported_const_observes_live_tdz() {
     let source = "let caught = false;\n\
         try { typeof y; } catch (error) { caught = error instanceof ReferenceError; }\n\

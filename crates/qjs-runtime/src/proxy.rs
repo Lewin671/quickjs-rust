@@ -194,7 +194,8 @@ pub(crate) fn proxy_get(
     // The trap result must agree with a non-configurable target property: a
     // non-writable data property's exact value, or undefined for an accessor
     // with no getter.
-    if let Some(target_descriptor) = crate::object::own_property_descriptor_key(target, key, env)?
+    if let Some(target_descriptor) =
+        crate::object::observable_own_property_descriptor(target, key, env)?
         && !target_descriptor.configurable
     {
         if target_descriptor.is_accessor() {
@@ -234,14 +235,14 @@ pub(crate) fn proxy_has(
         // non-configurable own property, or any own property of a
         // non-extensible target.
         if let Some(target_descriptor) =
-            crate::object::own_property_descriptor_key(target.clone(), key, env)?
+            crate::object::observable_own_property_descriptor(target.clone(), key, env)?
         {
             if !target_descriptor.configurable {
                 return Err(invariant_error(
                     "has trap returned false for a non-configurable target property",
                 ));
             }
-            if !crate::object::ordinary_value_is_extensible(&target) {
+            if !crate::object::value_is_extensible(&target, env)? {
                 return Err(invariant_error(
                     "has trap returned false for a property of a non-extensible target",
                 ));
@@ -280,7 +281,7 @@ pub(crate) fn proxy_set(
         // property: a non-writable data property keeps its value, and an
         // accessor with no setter cannot be assigned.
         if let Some(target_descriptor) =
-            crate::object::own_property_descriptor_key(target, key, env)?
+            crate::object::observable_own_property_descriptor(target, key, env)?
             && !target_descriptor.configurable
         {
             if target_descriptor.is_accessor() {
@@ -321,7 +322,7 @@ pub(crate) fn proxy_delete_property(
     )?;
     if is_truthy(&result)
         && let Some(target_descriptor) =
-            crate::object::own_property_descriptor_key(target.clone(), key, env)?
+            crate::object::observable_own_property_descriptor(target.clone(), key, env)?
     {
         // A reported deletion may not drop a property the target keeps: a
         // non-configurable property, or any property of a non-extensible target.
@@ -330,7 +331,7 @@ pub(crate) fn proxy_delete_property(
                 "deleteProperty trap reported deleting a non-configurable target property",
             ));
         }
-        if !crate::object::ordinary_value_is_extensible(&target) {
+        if !crate::object::value_is_extensible(&target, env)? {
             return Err(invariant_error(
                 "deleteProperty trap reported deleting a property of a non-extensible target",
             ));
@@ -374,8 +375,9 @@ pub(crate) fn proxy_define_property(
     }
 
     // Target-consistency invariants (ECMA-262 10.5.6).
-    let target_descriptor = crate::object::own_property_descriptor_key(target.clone(), key, env)?;
-    let extensible_target = crate::object::ordinary_value_is_extensible(&target);
+    let target_descriptor =
+        crate::object::observable_own_property_descriptor(target.clone(), key, env)?;
+    let extensible_target = crate::object::value_is_extensible(&target, env)?;
     let setting_config_false = descriptor.configurable_field() == Some(false);
     match target_descriptor {
         None => {
@@ -454,42 +456,42 @@ pub(crate) fn proxy_get_own_property_descriptor(
         false,
     )?;
 
-    let target_descriptor = crate::object::own_property_descriptor_key(target.clone(), key, env)?;
-    let extensible_target = crate::object::ordinary_value_is_extensible(&target);
+    // ECMA-262 10.5.5 validates the trap's result type before observing the
+    // target's own descriptor. In particular, an invalid primitive result
+    // must not run an inner Proxy target's `getOwnPropertyDescriptor` trap.
+    if !matches!(&result, Value::Undefined) && !is_proxy_object_target(&result) {
+        return Err(invariant_error(
+            "getOwnPropertyDescriptor trap must return an object or undefined",
+        ));
+    }
 
-    let record = match &result {
-        Value::Undefined => {
-            // Trap returned undefined: the property must be absent or
-            // configurable on an extensible target.
-            match target_descriptor {
-                None => return Ok(None),
-                Some(target_descriptor) => {
-                    if !target_descriptor.configurable {
-                        return Err(invariant_error(
-                            "getOwnPropertyDescriptor trap hid a non-configurable target property",
-                        ));
-                    }
-                    if !extensible_target {
-                        return Err(invariant_error(
-                            "getOwnPropertyDescriptor trap hid a property of a non-extensible target",
-                        ));
-                    }
-                    return Ok(None);
-                }
-            }
-        }
-        Value::Object(object) if !crate::symbol::is_symbol_primitive(object) => {
-            crate::object::to_property_descriptor_record(result.clone(), env)?
-        }
-        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_) => {
-            crate::object::to_property_descriptor_record(result.clone(), env)?
-        }
-        _ => {
+    let target_descriptor =
+        crate::object::observable_own_property_descriptor(target.clone(), key, env)?;
+
+    if matches!(&result, Value::Undefined) {
+        // An absent target descriptor returns immediately. For a present
+        // descriptor, reject non-configurable properties before consulting
+        // [[IsExtensible]], preserving the specification's observable order.
+        let Some(target_descriptor) = target_descriptor else {
+            return Ok(None);
+        };
+        if !target_descriptor.configurable {
             return Err(invariant_error(
-                "getOwnPropertyDescriptor trap must return an object or undefined",
+                "getOwnPropertyDescriptor trap hid a non-configurable target property",
             ));
         }
-    };
+        if !crate::object::value_is_extensible(&target, env)? {
+            return Err(invariant_error(
+                "getOwnPropertyDescriptor trap hid a property of a non-extensible target",
+            ));
+        }
+        return Ok(None);
+    }
+
+    // A descriptor result always observes target extensibility before
+    // ToPropertyDescriptor, as required by ECMA-262 10.5.5 steps 11-12.
+    let extensible_target = crate::object::value_is_extensible(&target, env)?;
+    let record = crate::object::to_property_descriptor_record(result, env)?;
 
     // Trap returned a descriptor object: check it is compatible with the
     // target, and that a non-configurable claim is backed by the target.
@@ -716,19 +718,24 @@ pub(crate) fn proxy_own_keys(
         }
     }
 
-    // Collect the target's own keys and split by configurability.
-    let target_keys = ordinary_own_keys(&target);
-    let extensible_target = crate::object::ordinary_value_is_extensible(&target);
+    // Collect the target's extensibility and own keys, then split the keys by
+    // configurability. These are target internal-method calls, not raw-storage
+    // reads: a Proxy target must observe its own `isExtensible`, `ownKeys`, and
+    // `getOwnPropertyDescriptor` traps in Proxy.[[OwnPropertyKeys]] order.
+    let extensible_target = crate::object::value_is_extensible(&target, env)?;
+    let target_keys = observable_own_keys(&target, env)?;
     let mut non_configurable: Vec<PropertyKey> = Vec::new();
     let mut configurable_count = 0usize;
     for key in &target_keys {
-        match crate::object::own_property_descriptor_key(target.clone(), key, env)? {
+        match crate::object::observable_own_property_descriptor(target.clone(), key, env)? {
             Some(descriptor) if !descriptor.configurable => non_configurable.push(key.clone()),
             Some(_) => configurable_count += 1,
-            None => {}
+            // Proxy.[[OwnPropertyKeys]] step 16.3 classifies a key whose
+            // descriptor disappeared after the target-key snapshot as
+            // configurable, so it still participates in the exact-key count.
+            None => configurable_count += 1,
         }
     }
-
     // Every non-configurable target key must be present in the trap result.
     for key in &non_configurable {
         if !keys.iter().any(|present| property_keys_equal(present, key)) {
@@ -788,6 +795,18 @@ fn ordinary_own_keys(target: &Value) -> Vec<PropertyKey> {
                 .map(PropertyKey::Symbol),
         )
         .collect()
+}
+
+/// The target's observable `[[OwnPropertyKeys]]`: nested Proxies retain their
+/// own trap and invariant semantics, while ordinary values use raw own keys.
+fn observable_own_keys(
+    target: &Value,
+    env: &mut CallEnv,
+) -> Result<Vec<PropertyKey>, RuntimeError> {
+    match target {
+        Value::Proxy(proxy) => proxy_own_keys(proxy.clone(), env),
+        _ => Ok(ordinary_own_keys(target)),
+    }
 }
 
 fn property_keys_equal(left: &PropertyKey, right: &PropertyKey) -> bool {

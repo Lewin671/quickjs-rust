@@ -414,7 +414,7 @@ pub(crate) fn native_array_buffer_prototype_slice_to_immutable(
 
     let constructor = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
     let prototype = crate::constructor_prototype(&constructor, env);
-    let result = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let result = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
     define_array_buffer_data(&result, slice);
     define_array_buffer_immutable(&result);
     Ok(Value::Object(result))
@@ -482,7 +482,7 @@ fn array_buffer_copy_and_detach(
 
     let constructor = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
     let prototype = crate::constructor_prototype(&constructor, env);
-    let result = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let result = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
     define_array_buffer_data(&result, bytes);
     match kind {
         TransferKind::PreserveResizable => {
@@ -737,7 +737,7 @@ pub(crate) fn mutate_array_buffer_bytes<T>(
 pub(crate) fn new_array_buffer(env: &CallEnv, length: usize) -> ObjectRef {
     let constructor = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
     let prototype = crate::constructor_prototype(&constructor, env);
-    let object = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
     define_array_buffer_data(&object, vec![0; length]);
     object
 }

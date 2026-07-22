@@ -3245,6 +3245,10 @@ cases/array-unshift-object-generic.js
 cases/array-unshift-prototype-setter-length.js
 cases/array-unshift-read-only-property.js
 cases/array-index-assignment-basic.js
+cases/array-index-assignment-function-effective-prototype.js
+cases/array-index-assignment-function-effective-typed-array.js
+cases/array-index-assignment-proxy-above-array-prototype.js
+cases/array-prototype-live-index-mutation.js
 cases/const-for-loop-body-reinitializes.js
 cases/boolean-constructor-basic.js
 cases/boolean-constructor-length.js

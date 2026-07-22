@@ -1,8 +1,4 @@
-use crate::{
-    Property, RuntimeError, Value, array_own_property_descriptor, array_prototype, call_function,
-    function_delete_own_property, function_own_property_descriptor, has_property, property_value,
-    to_length_with_env, value_prototype_slot,
-};
+use crate::{PropertyKey, RuntimeError, Value, has_property, property_value};
 
 use super::{
     array_like::array_like_length,
@@ -11,7 +7,6 @@ use super::{
 use crate::CallEnv;
 
 const MAX_SAFE_INTEGER_LENGTH: usize = 9_007_199_254_740_991;
-const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
 
 pub(crate) fn native_array_prototype_fill(
     this_value: Value,
@@ -91,101 +86,7 @@ pub(super) fn set_array_like_property(
     value: Value,
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
-    match receiver.clone() {
-        Value::Object(object) => {
-            if crate::typed_array::is_typed_array_object(&object) {
-                if let crate::typed_array::IndexedWrite::Handled =
-                    crate::typed_array::set_indexed_element(&object, &key, value.clone(), env)?
-                {
-                    return Ok(());
-                }
-            }
-            if validate_copy_within_set(object.property(&key), receiver, value.clone(), env)? {
-                return Ok(());
-            }
-            object.set(key, value);
-            Ok(())
-        }
-        Value::Array(elements) if key == "length" => {
-            if array_own_property_descriptor(&elements, &key)
-                .is_some_and(|property| !property.writable)
-            {
-                return Err(copy_within_set_error());
-            }
-            elements.set_len(to_length_with_env(value, env)?);
-            Ok(())
-        }
-        Value::Array(elements) => {
-            let property = array_own_property_descriptor(&elements, &key)
-                .or_else(|| elements.property(&key))
-                .or_else(|| inherited_array_property(receiver.clone(), env, &key));
-            if validate_copy_within_set(property, receiver, value.clone(), env)? {
-                return Ok(());
-            }
-            match key.parse::<usize>() {
-                Ok(index) => elements.set(index, value),
-                Err(_) => elements.set_property(key, value),
-            }
-            Ok(())
-        }
-        Value::Function(function) => {
-            if validate_copy_within_set(
-                function_own_property_descriptor(&function, &key),
-                receiver,
-                value.clone(),
-                env,
-            )? {
-                return Ok(());
-            }
-            function.set_property(key, value);
-            Ok(())
-        }
-        Value::Proxy(proxy) => {
-            let succeeded = crate::proxy::proxy_set(
-                proxy,
-                &crate::PropertyKey::String(key),
-                value,
-                receiver,
-                env,
-            )?;
-            if succeeded {
-                Ok(())
-            } else {
-                Err(copy_within_set_error())
-            }
-        }
-        _ => Ok(()),
-    }
-}
-
-fn validate_copy_within_set(
-    property: Option<Property>,
-    receiver: Value,
-    value: Value,
-    env: &mut CallEnv,
-) -> Result<bool, RuntimeError> {
-    let Some(property) = property else {
-        return Ok(false);
-    };
-    if let Some(setter) = property.set {
-        call_function(setter, receiver, vec![value], env, false)?;
-        return Ok(true);
-    }
-    if property.is_accessor() || !property.writable {
-        return Err(copy_within_set_error());
-    }
-    Ok(false)
-}
-
-fn inherited_array_property(receiver: Value, env: &CallEnv, key: &str) -> Option<Property> {
-    value_prototype_slot(receiver, env).and_then(|prototype| match prototype {
-        crate::Prototype::Object(object) => object.property(key),
-        crate::Prototype::Function(function) => function.chain_property(key),
-        crate::Prototype::Proxy(proxy) => proxy
-            .target_result()
-            .ok()
-            .and_then(|target| crate::property::own_or_inherited_descriptor(target, key)),
-    })
+    set_array_like_property_with_error(receiver, key, value, env, copy_within_set_error)
 }
 
 pub(super) fn delete_array_like_property(
@@ -193,40 +94,35 @@ pub(super) fn delete_array_like_property(
     key: &str,
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
-    match receiver {
-        Value::Object(object) if !object.delete_own_property(key) => {
-            return Err(copy_within_delete_error());
-        }
-        Value::Object(_) => {}
-        Value::Proxy(proxy)
-            if !crate::proxy::proxy_delete_property(
-                proxy.clone(),
-                &crate::PropertyKey::String(key.to_owned()),
-                env,
-            )? =>
-        {
-            return Err(copy_within_delete_error());
-        }
-        Value::Proxy(_) => {}
-        Value::Array(elements) => match key.parse::<usize>() {
-            Ok(index) => {
-                if !elements.delete_index(index) {
-                    return Err(copy_within_delete_error());
-                }
-            }
-            Err(_) => {
-                if !elements.delete_property(key) {
-                    return Err(copy_within_delete_error());
-                }
-            }
-        },
-        Value::Function(function) if !function_delete_own_property(&function, key) => {
-            return Err(copy_within_delete_error());
-        }
-        Value::Function(_) => {}
-        _ => {}
+    delete_array_like_property_with_error(receiver, key, env, copy_within_delete_error)
+}
+
+pub(super) fn set_array_like_property_with_error(
+    receiver: Value,
+    key: String,
+    value: Value,
+    env: &mut CallEnv,
+    error: fn() -> RuntimeError,
+) -> Result<(), RuntimeError> {
+    if crate::bytecode::set_object_property(receiver, key, value, env)? {
+        Ok(())
+    } else {
+        Err(error())
     }
-    Ok(())
+}
+
+pub(super) fn delete_array_like_property_with_error(
+    receiver: Value,
+    key: &str,
+    env: &mut CallEnv,
+    error: fn() -> RuntimeError,
+) -> Result<(), RuntimeError> {
+    if crate::bytecode::delete_object_property(receiver, &PropertyKey::String(key.to_owned()), env)?
+    {
+        Ok(())
+    } else {
+        Err(error())
+    }
 }
 
 fn copy_within_set_error() -> RuntimeError {
@@ -272,129 +168,17 @@ fn push_set_property(
     value: Value,
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
-    let key = index.to_string();
-    match receiver.clone() {
-        Value::Object(object) => {
-            if apply_push_setter(object.property(&key), receiver, value.clone(), env)? {
-                return Ok(());
-            }
-            validate_push_data_set(object.property(&key))?;
-            if object.own_property(&key).is_none() && !object.is_extensible() {
-                return Err(push_property_error());
-            }
-            object.set(key, value);
-            Ok(())
-        }
-        Value::Array(elements) => {
-            let property = array_own_property_descriptor(&elements, &key)
-                .or_else(|| elements.property(&key))
-                .or_else(|| array_prototype(env).and_then(|prototype| prototype.property(&key)));
-            if apply_push_setter(property.clone(), receiver, value.clone(), env)? {
-                return Ok(());
-            }
-            validate_push_data_set(property)?;
-            if array_own_property_descriptor(&elements, &key)
-                .is_some_and(|property| !property.writable)
-                || !elements.is_extensible() && index >= elements.len()
-            {
-                return Err(push_property_error());
-            }
-            elements.set(index, value);
-            Ok(())
-        }
-        Value::Function(function) => {
-            if apply_push_setter(
-                function_own_property_descriptor(&function, &key),
-                receiver,
-                value.clone(),
-                env,
-            )? {
-                return Ok(());
-            }
-            validate_push_data_set(function_own_property_descriptor(&function, &key))?;
-            function.set_property(key, value);
-            Ok(())
-        }
-        _ => Ok(()),
-    }
+    set_array_like_property_with_error(receiver, index.to_string(), value, env, push_property_error)
 }
 
 fn push_set_length(receiver: Value, length: usize, env: &mut CallEnv) -> Result<(), RuntimeError> {
-    let value = Value::Number(length as f64);
-    match receiver.clone() {
-        Value::Object(object) => {
-            if apply_push_setter(object.property("length"), receiver, value.clone(), env)? {
-                return Ok(());
-            }
-            validate_push_data_set(object.property("length"))?;
-            if object.own_property("length").is_none() && !object.is_extensible() {
-                return Err(push_length_error());
-            }
-            object.set("length".to_owned(), value);
-            Ok(())
-        }
-        Value::Array(elements) => {
-            if length > MAX_ARRAY_LENGTH {
-                return Err(RuntimeError {
-                    thrown: None,
-                    message: "RangeError: invalid array length".to_owned(),
-                });
-            }
-            if array_own_property_descriptor(&elements, "length")
-                .is_some_and(|property| !property.writable)
-            {
-                return Err(push_length_error());
-            }
-            elements.set_len(length);
-            if elements.len() == length {
-                Ok(())
-            } else {
-                Err(push_length_error())
-            }
-        }
-        Value::Function(function) => {
-            if apply_push_setter(
-                function_own_property_descriptor(&function, "length"),
-                receiver,
-                value.clone(),
-                env,
-            )? {
-                return Ok(());
-            }
-            validate_push_data_set(function_own_property_descriptor(&function, "length"))?;
-            function.set_property("length".to_owned(), value);
-            Ok(())
-        }
-        _ => Ok(()),
-    }
-}
-
-fn apply_push_setter(
-    property: Option<Property>,
-    receiver: Value,
-    value: Value,
-    env: &mut CallEnv,
-) -> Result<bool, RuntimeError> {
-    let Some(property) = property else {
-        return Ok(false);
-    };
-    if let Some(setter) = property.set {
-        call_function(setter, receiver, vec![value], env, false)?;
-        return Ok(true);
-    }
-    if property.is_accessor() {
-        Err(push_length_error())
-    } else {
-        Ok(false)
-    }
-}
-
-fn validate_push_data_set(property: Option<Property>) -> Result<(), RuntimeError> {
-    if property.is_some_and(|property| !property.writable || property.is_accessor()) {
-        Err(push_property_error())
-    } else {
-        Ok(())
-    }
+    set_array_like_property_with_error(
+        receiver,
+        "length".to_owned(),
+        Value::Number(length as f64),
+        env,
+        push_length_error,
+    )
 }
 
 fn push_property_error() -> RuntimeError {
@@ -433,106 +217,23 @@ pub(crate) fn native_array_prototype_pop(
     let new_length = length - 1;
     let key = new_length.to_string();
     let element = property_value(receiver.clone(), &key, env)?;
-    pop_delete_property(receiver.clone(), &key)?;
+    pop_delete_property(receiver.clone(), &key, env)?;
     pop_set_length(receiver, new_length, env)?;
     Ok(element)
 }
 
-fn pop_delete_property(receiver: Value, key: &str) -> Result<(), RuntimeError> {
-    let deleted = match receiver {
-        Value::Object(object) => object.delete_own_property(key),
-        Value::Array(elements) => {
-            if array_own_property_descriptor(&elements, key)
-                .is_some_and(|property| !property.configurable)
-            {
-                false
-            } else {
-                match key.parse::<usize>() {
-                    Ok(index) => elements.delete_index(index),
-                    Err(_) => elements.delete_property(key),
-                }
-            }
-        }
-        Value::Function(function) => function_delete_own_property(&function, key),
-        _ => true,
-    };
-    if deleted {
-        Ok(())
-    } else {
-        Err(pop_delete_error())
-    }
+fn pop_delete_property(receiver: Value, key: &str, env: &mut CallEnv) -> Result<(), RuntimeError> {
+    delete_array_like_property_with_error(receiver, key, env, pop_delete_error)
 }
 
 fn pop_set_length(receiver: Value, length: usize, env: &mut CallEnv) -> Result<(), RuntimeError> {
-    let value = Value::Number(length as f64);
-    match receiver.clone() {
-        Value::Object(object) => {
-            if apply_pop_setter(object.property("length"), receiver, value.clone(), env)? {
-                return Ok(());
-            }
-            validate_pop_data_set(object.property("length"))?;
-            if object.own_property("length").is_none() && !object.is_extensible() {
-                return Err(pop_length_error());
-            }
-            object.set("length".to_owned(), value);
-            Ok(())
-        }
-        Value::Array(elements) => {
-            if array_own_property_descriptor(&elements, "length")
-                .is_some_and(|property| !property.writable)
-            {
-                return Err(pop_length_error());
-            }
-            elements.set_len(length);
-            if elements.len() == length {
-                Ok(())
-            } else {
-                Err(pop_length_error())
-            }
-        }
-        Value::Function(function) => {
-            if apply_pop_setter(
-                function_own_property_descriptor(&function, "length"),
-                receiver,
-                value.clone(),
-                env,
-            )? {
-                return Ok(());
-            }
-            validate_pop_data_set(function_own_property_descriptor(&function, "length"))?;
-            function.set_property("length".to_owned(), value);
-            Ok(())
-        }
-        _ => Ok(()),
-    }
-}
-
-fn apply_pop_setter(
-    property: Option<Property>,
-    receiver: Value,
-    value: Value,
-    env: &mut CallEnv,
-) -> Result<bool, RuntimeError> {
-    let Some(property) = property else {
-        return Ok(false);
-    };
-    if let Some(setter) = property.set {
-        call_function(setter, receiver, vec![value], env, false)?;
-        return Ok(true);
-    }
-    if property.is_accessor() {
-        Err(pop_length_error())
-    } else {
-        Ok(false)
-    }
-}
-
-fn validate_pop_data_set(property: Option<Property>) -> Result<(), RuntimeError> {
-    if property.is_some_and(|property| !property.writable || property.is_accessor()) {
-        Err(pop_length_error())
-    } else {
-        Ok(())
-    }
+    set_array_like_property_with_error(
+        receiver,
+        "length".to_owned(),
+        Value::Number(length as f64),
+        env,
+        pop_length_error,
+    )
 }
 
 fn pop_delete_error() -> RuntimeError {

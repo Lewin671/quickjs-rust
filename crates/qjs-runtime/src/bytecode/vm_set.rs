@@ -7,7 +7,7 @@ use crate::{
 
 use super::vm_props::{
     ProxyInChain, ordinary_chain_property, ordinary_chain_symbol_property,
-    prototype_chain_has_proxy, prototype_chain_has_typed_array,
+    prototype_chain_has_typed_array, prototype_chain_needs_recursive_set,
 };
 
 pub(crate) fn set_property(
@@ -41,6 +41,34 @@ pub(crate) fn set_property(
         }
         Value::Function(function) => {
             let receiver = Value::Function(function.clone());
+            // A flat descriptor walk cannot preserve the [[Set]] semantics of
+            // first-class array prototypes, Proxies, or namespace objects.
+            // Keep ordinary function chains on the compact path, but recurse
+            // when an observable prototype node is reachable.
+            let prototype = match function.internal_prototype_slot() {
+                Some(prototype) => prototype,
+                None => crate::function_intrinsic_prototype_slot(env),
+            };
+            if crate::typed_array::canonical_numeric_index(&key).is_some()
+                && prototype_chain_has_typed_array(prototype.clone())
+            {
+                return crate::reflect::ordinary_set(
+                    receiver.clone(),
+                    &PropertyKey::String(key),
+                    value,
+                    receiver,
+                    env,
+                );
+            }
+            if prototype_chain_needs_recursive_set(prototype) {
+                return crate::reflect::ordinary_set(
+                    receiver.clone(),
+                    &PropertyKey::String(key),
+                    value,
+                    receiver,
+                    env,
+                );
+            }
             let inherited = function_property_for_set(&function, env, &key);
             match apply_set_step(inherited, receiver, value.clone(), env)? {
                 SetStep::Done(ok) => Ok(ok),
@@ -52,31 +80,28 @@ pub(crate) fn set_property(
         }
         Value::Array(elements) => {
             if key == "length" {
+                // Assignment uses OrdinarySetWithOwnDescriptor semantics: an
+                // own non-writable length rejects before coercing the value,
+                // even when the requested numeric length would be unchanged.
+                if !elements.is_length_writable() {
+                    return Ok(false);
+                }
                 define_array_length_value(&elements, value, env)
             } else {
                 let receiver = Value::Array(elements.clone());
-                // A typed array reachable as a prototype owns canonical numeric
-                // indices via its exotic [[Set]]; routing through the recursive
-                // OrdinarySet stops an invalid index before the array's own
-                // [[DefineOwnProperty]] creates an element.
-                if crate::typed_array::canonical_numeric_index(&key).is_some()
-                    && prototype_chain_has_typed_array(elements.prototype_slot_override().flatten())
-                {
-                    return crate::reflect::ordinary_set(
-                        Value::Array(elements.clone()),
-                        &PropertyKey::String(key),
-                        value,
-                        receiver,
-                        env,
-                    );
-                }
                 let property = match crate::array_own_property_descriptor(&elements, &key) {
                     Some(property) => Some(property),
                     None => {
-                        // No own element/property: a Proxy in a custom prototype
-                        // chain must run its `set` trap, so defer to the
-                        // proxy-aware OrdinarySet.
-                        if prototype_chain_has_proxy(elements.prototype_slot_override().flatten()) {
+                        let prototype_slot = elements
+                            .prototype_slot_override()
+                            .unwrap_or_else(|| array_prototype(env).map(crate::Prototype::Object));
+                        // A typed array reachable as a prototype owns canonical
+                        // numeric indices via its exotic [[Set]]; routing through
+                        // recursive OrdinarySet stops an invalid index before the
+                        // array's own [[DefineOwnProperty]] creates an element.
+                        if crate::typed_array::canonical_numeric_index(&key).is_some()
+                            && prototype_chain_has_typed_array(prototype_slot.clone())
+                        {
                             return crate::reflect::ordinary_set(
                                 Value::Array(elements.clone()),
                                 &PropertyKey::String(key),
@@ -85,12 +110,46 @@ pub(crate) fn set_property(
                                 env,
                             );
                         }
-                        elements
-                            .prototype_override()
-                            .unwrap_or_else(|| array_prototype(env))
-                            .and_then(|prototype| {
-                                ordinary_chain_property(&prototype, &key).ok().flatten()
-                            })
+                        // No own element/property: Array, Proxy, and namespace
+                        // nodes must retain their own [[Set]] behavior. An
+                        // explicit function prototype also remains on the
+                        // recursive path because native error constructors can
+                        // have a realm-specific parent.
+                        if prototype_chain_needs_recursive_set(prototype_slot.clone())
+                            || matches!(&prototype_slot, Some(crate::Prototype::Function(_)))
+                        {
+                            return crate::reflect::ordinary_set(
+                                Value::Array(elements.clone()),
+                                &PropertyKey::String(key),
+                                value,
+                                receiver,
+                                env,
+                            );
+                        }
+                        match prototype_slot {
+                            Some(crate::Prototype::Object(prototype)) => {
+                                match ordinary_chain_property(&prototype, &key) {
+                                    Ok(property) => property,
+                                    Err(ProxyInChain) => {
+                                        return crate::reflect::ordinary_set(
+                                            Value::Array(elements.clone()),
+                                            &PropertyKey::String(key),
+                                            value,
+                                            receiver,
+                                            env,
+                                        );
+                                    }
+                                }
+                            }
+                            Some(
+                                crate::Prototype::Array(_)
+                                | crate::Prototype::Function(_)
+                                | crate::Prototype::Proxy(_),
+                            ) => {
+                                unreachable!("special prototype routed through OrdinarySet")
+                            }
+                            None => None,
+                        }
                     }
                 };
                 match apply_set_step(property, receiver, value.clone(), env)? {
@@ -266,23 +325,13 @@ fn set_function_symbol_property(
     value: Value,
     env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
-    let inherited = function.symbol_property(&symbol, env);
-    match apply_set_step(inherited, receiver, value.clone(), env)? {
-        SetStep::Done(ok) => return Ok(ok),
-        SetStep::WriteData => {}
-    }
-    let descriptor = match function.own_symbol_property(&symbol) {
-        Some(existing) => Property::data(
-            value,
-            existing.enumerable,
-            existing.writable,
-            existing.configurable,
-        ),
-        None if !function.is_extensible() => return Ok(false),
-        None => Property::enumerable(value),
-    };
-    function.define_symbol_property(symbol, descriptor);
-    Ok(true)
+    crate::reflect::ordinary_set(
+        Value::Function(function),
+        &PropertyKey::Symbol(symbol),
+        value,
+        receiver,
+        env,
+    )
 }
 
 fn set_object_symbol_property(
@@ -329,28 +378,13 @@ fn set_array_symbol_property(
     value: Value,
     env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
-    let inherited = array.symbol_property(&symbol).or_else(|| {
-        array
-            .prototype_override()
-            .unwrap_or_else(|| array_prototype(env))
-            .and_then(|prototype| prototype.symbol_property(&symbol))
-    });
-    match apply_set_step(inherited, receiver, value.clone(), env)? {
-        SetStep::Done(ok) => return Ok(ok),
-        SetStep::WriteData => {}
-    }
-    let descriptor = match array.own_symbol_property(&symbol) {
-        Some(existing) => Property::data(
-            value,
-            existing.enumerable,
-            existing.writable,
-            existing.configurable,
-        ),
-        None if !array.is_extensible() => return Ok(false),
-        None => Property::enumerable(value),
-    };
-    array.define_symbol_property(symbol, descriptor);
-    Ok(true)
+    crate::reflect::ordinary_set(
+        Value::Array(array),
+        &PropertyKey::Symbol(symbol),
+        value,
+        receiver,
+        env,
+    )
 }
 
 /// Result of inspecting the resolved (own or inherited) property in the first
@@ -466,8 +500,7 @@ fn property_for_set(object: &Value, key: &PropertyKey, env: &CallEnv) -> Option<
         Value::Function(function) => function_property_for_set(function, env, key),
         Value::Array(elements) => elements.property(key).or_else(|| {
             elements
-                .prototype_override()
-                .unwrap_or_else(|| array_prototype(env))
+                .effective_prototype_slot(env)
                 .and_then(|prototype| prototype.property(key))
         }),
         Value::Map(map) => map.object().property(key),
@@ -496,8 +529,7 @@ fn symbol_property_for_set(object: &Value, key: &PropertyKey, env: &CallEnv) -> 
         Value::Set(set) => set.object().symbol_property(symbol),
         Value::Array(elements) => elements.symbol_property(symbol).or_else(|| {
             elements
-                .prototype_override()
-                .unwrap_or_else(|| array_prototype(env))
+                .effective_prototype_slot(env)
                 .and_then(|prototype| prototype.symbol_property(symbol))
         }),
         _ => None,

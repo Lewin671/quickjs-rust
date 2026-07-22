@@ -685,6 +685,35 @@ fn evaluates_for_in_statements() {
 }
 
 #[test]
+fn for_in_rechecks_proxy_descriptor_beneath_live_array_prototype() {
+    assert_eq!(
+        eval(
+            "let target = {}; \
+             Object.defineProperty(target, 'x', { \
+                 value: 1, enumerable: false, configurable: true \
+             }); \
+             let proxy = new Proxy(target, { \
+                 ownKeys() { return ['x']; }, \
+                 getOwnPropertyDescriptor() { \
+                     return { value: 1, enumerable: true, configurable: true }; \
+                 } \
+             }); \
+             let bridge = []; \
+             Object.setPrototypeOf(bridge, proxy); \
+             let object = Object.create(bridge); \
+             let ordinarySeen = ''; \
+             for (let key in object) { ordinarySeen += key; } \
+             let functionValue = function() {}; \
+             Object.setPrototypeOf(functionValue, bridge); \
+             let functionSeen = ''; \
+             for (let key in functionValue) { functionSeen += key; } \
+             ordinarySeen + ':' + functionSeen;"
+        ),
+        Ok(Value::String("x:x".to_owned().into()))
+    );
+}
+
+#[test]
 fn evaluates_for_of_statements() {
     assert_eq!(
         eval("let total = 0; for (var value of [1, 2, 3]) { total += value; } total;"),

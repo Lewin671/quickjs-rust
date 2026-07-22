@@ -199,6 +199,80 @@ fn evaluates_native_error_builtins() {
 }
 
 #[test]
+fn native_error_constructor_explicit_prototype_overrides_realm_error_parent() {
+    assert_eq!(
+        eval(
+            "let prototype = []; prototype.marker = 'array'; \
+             Reflect.setPrototypeOf(TypeError, prototype); \
+             [Reflect.getPrototypeOf(TypeError) === prototype, \
+              Object.getPrototypeOf(TypeError) === prototype, \
+              TypeError.__proto__ === prototype, \
+              TypeError.marker === 'array', \
+              TypeError.isError === undefined, \
+              !('isError' in TypeError)].join(':');"
+        ),
+        Ok(Value::String(
+            "true:true:true:true:true:true".to_owned().into()
+        ))
+    );
+}
+
+#[test]
+fn native_error_constructors_keep_their_realm_error_parent_after_rebinding() {
+    assert_eq!(
+        eval(
+            "let original = Error; Error = function FakeError() {}; \
+             [EvalError, RangeError, ReferenceError, SyntaxError, TypeError, URIError, AggregateError, SuppressedError] \
+                 .map(function(constructor) { return Object.getPrototypeOf(constructor) === original; }) \
+                 .join(':');"
+        ),
+        Ok(Value::String(
+            "true:true:true:true:true:true:true:true".to_owned().into()
+        ))
+    );
+}
+
+#[test]
+fn native_error_constructor_named_set_walks_realm_error_parent() {
+    assert_eq!(
+        eval(
+            "let seen = 0, receiverOk = false; \
+             Object.defineProperty(Error, 'x', { \
+                 get: function() { return 3; }, \
+                 set: function(value) { seen = value; receiverOk = this === TypeError; }, \
+                 configurable: true \
+             }); \
+             TypeError.x = 7; \
+             seen + ':' + receiverOk + ':' + TypeError.hasOwnProperty('x') + ':' + TypeError.x;"
+        ),
+        Ok(Value::String("7:true:false:3".to_owned().into()))
+    );
+}
+
+#[test]
+fn native_error_constructor_get_and_has_walk_full_error_parent_chain() {
+    assert_eq!(
+        eval(
+            "let key = Symbol('key'); Error[key] = 4; \
+             Reflect.setPrototypeOf(Error, new Proxy({ x: 2 }, {})); \
+             TypeError[key] + ':' + (key in TypeError) + ':' + TypeError.x + ':' + ('x' in TypeError);"
+        ),
+        Ok(Value::String("4:true:2:true".to_owned().into()))
+    );
+}
+
+#[test]
+fn for_in_walks_native_error_constructor_parent() {
+    assert_eq!(
+        eval(
+            "Error.enumProp = 1; let keys = ''; \
+             for (let key in TypeError) keys += key; keys;"
+        ),
+        Ok(Value::String("enumProp".to_owned().into()))
+    );
+}
+
+#[test]
 fn error_constructors_use_new_target_realm_default_prototype() {
     assert_eq!(
         eval(

@@ -535,8 +535,8 @@ pub(crate) fn native_test262_assert_null_proto_mutable_object(
 }
 
 fn object_uses_default_object_prototype(object: &ObjectRef, env: &CallEnv) -> bool {
-    match (object.prototype(), crate::object_prototype(env)) {
-        (Some(actual), Some(expected)) => actual.ptr_eq(&expected),
+    match (object.prototype_slot(), crate::object_prototype(env)) {
+        (Some(crate::Prototype::Object(actual)), Some(expected)) => actual.ptr_eq(&expected),
         _ => false,
     }
 }

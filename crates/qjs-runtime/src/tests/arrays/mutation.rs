@@ -259,3 +259,103 @@ fn evaluates_array_mutation_builtins() {
         Ok(Value::String("1".to_owned().into()))
     );
 }
+
+#[test]
+fn array_mutators_preserve_proxy_set_through_live_array_prototypes() {
+    assert_eq!(
+        eval(
+            "let push = Array.prototype.push; \
+             let fill = Array.prototype.fill; \
+             let copyWithin = Array.prototype.copyWithin; \
+             let hasOwn = Object.prototype.hasOwnProperty; \
+             let objectPushLog = '', objectPushBridge = [], objectPush; \
+             Object.setPrototypeOf(objectPushBridge, new Proxy({}, { \
+                 set: function(target, key, value, receiver) { \
+                     objectPushLog += key + ':' + value + ':' + (receiver === objectPush) + '|'; \
+                     return true; \
+                 } \
+             })); \
+             objectPush = Object.create(objectPushBridge); \
+             let objectPushLength = push.call(objectPush, 7); \
+             let objectFillLog = '', objectFillBridge = new Array(1), objectFill; \
+             Object.setPrototypeOf(objectFillBridge, new Proxy({}, { \
+                 set: function(target, key, value, receiver) { \
+                     objectFillLog += key + ':' + value + ':' + (receiver === objectFill) + '|'; \
+                     return true; \
+                 } \
+             })); \
+             objectFill = Object.create(objectFillBridge); \
+             fill.call(objectFill, 8); \
+             let objectCopyLog = '', objectCopyBridge = [], objectCopy; \
+             Object.setPrototypeOf(objectCopyBridge, new Proxy({}, { \
+                 set: function(target, key, value, receiver) { \
+                     objectCopyLog += key + ':' + value + ':' + (receiver === objectCopy) + '|'; \
+                     return true; \
+                 } \
+             })); \
+             objectCopy = Object.create(objectCopyBridge); \
+             objectCopy.length = 2; \
+             Object.defineProperty(objectCopy, '1', { \
+                 value: 5, writable: true, enumerable: true, configurable: true \
+             }); \
+             copyWithin.call(objectCopy, 0, 1, 2); \
+             let original = Object.getPrototypeOf(Array.prototype); \
+             function observeArray(receiver, method, args) { \
+                 let log = ''; \
+                 let proxy = new Proxy({}, { \
+                     set: function(target, key, value, actualReceiver) { \
+                         log += key + ':' + value + ':' + (actualReceiver === receiver) + '|'; \
+                         return true; \
+                     } \
+                 }); \
+                 let result; \
+                 Object.setPrototypeOf(Array.prototype, proxy); \
+                 try { result = method.apply(receiver, args); } \
+                 finally { Object.setPrototypeOf(Array.prototype, original); } \
+                 return log + ':' + (result === receiver || result) + ':' \
+                     + hasOwn.call(receiver, '0') + ':' + receiver.length; \
+             } \
+             let arrayPush = []; \
+             let arrayFill = new Array(1); \
+             let arrayCopy = new Array(2); arrayCopy[1] = 5; \
+             objectPushLength + ':' + objectPushLog + ':' \
+                 + hasOwn.call(objectPush, '0') + ':' + objectPush.length + ';' \
+                 + objectFillLog + ':' + hasOwn.call(objectFill, '0') + ';' \
+                 + objectCopyLog + ':' + hasOwn.call(objectCopy, '0') + ';' \
+                 + observeArray(arrayPush, push, [7]) + ';' \
+                 + observeArray(arrayFill, fill, [8]) + ';' \
+                 + observeArray(arrayCopy, copyWithin, [0, 1, 2]);"
+        ),
+        Ok(Value::String(
+            "1:0:7:true|:false:1;0:8:true|:false;0:5:true|:false;\
+             0:7:true|:1:false:1;0:8:true|:true:false:1;\
+             0:5:true|:true:false:2"
+                .replace("             ", "")
+                .into()
+        ))
+    );
+}
+
+#[test]
+fn array_mutators_dispatch_proxy_delete_internal_method() {
+    assert_eq!(
+        eval(
+            "function observe(method, target, args) { \
+                 let log = ''; \
+                 let proxy = new Proxy(target, { \
+                     deleteProperty: function(actualTarget, key) { \
+                         log += key + '|'; \
+                         return Reflect.deleteProperty(actualTarget, key); \
+                     } \
+                 }); \
+                 method.apply(proxy, args); \
+                 return log; \
+             } \
+             observe(Array.prototype.pop, { 0: 1, length: 1 }, []) + ':' \
+                 + observe(Array.prototype.shift, { 0: 1, length: 1 }, []) + ':' \
+                 + observe(Array.prototype.unshift, { 1: 2, length: 1 }, [3]) + ':' \
+                 + observe(Array.prototype.copyWithin, { 0: 1, length: 2 }, [0, 1, 2]);"
+        ),
+        Ok(Value::String("0|:0|:1|:0|".to_owned().into()))
+    );
+}

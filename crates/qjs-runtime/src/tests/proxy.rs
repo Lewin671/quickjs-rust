@@ -597,3 +597,91 @@ fn object_create_accepts_an_array_prototype() {
         Ok(Value::String("3:8".to_owned().into()))
     );
 }
+
+#[test]
+fn nested_proxy_targets_participate_in_outer_invariants() {
+    assert_eq!(
+        eval(
+            "function invariant(operation) { \
+                 let calls = 0, target = {}; \
+                 Object.defineProperty(target, 'x', { value: 1, writable: false, configurable: false }); \
+                 let inner = new Proxy(target, { \
+                     getOwnPropertyDescriptor(t, key) { calls += 1; return Reflect.getOwnPropertyDescriptor(t, key); } \
+                 }); \
+                 let handler = {}; handler[operation] = function() { \
+                     return operation === 'get' ? 2 : operation === 'has' ? false : true; \
+                 }; \
+                 let outer = new Proxy(inner, handler), threw = false; \
+                 try { \
+                     if (operation === 'get') outer.x; \
+                     else if (operation === 'has') 'x' in outer; \
+                     else if (operation === 'set') Reflect.set(outer, 'x', 2); \
+                     else Reflect.deleteProperty(outer, 'x'); \
+                 } catch (error) { threw = error instanceof TypeError; } \
+                 return threw + ':' + calls; \
+             } \
+             function ownKeysOrder() { \
+                 let log = [], target = { x: 1 }; \
+                 let inner = new Proxy(target, { \
+                     isExtensible(t) { log.push('e'); return Reflect.isExtensible(t); }, \
+                     ownKeys(t) { log.push('k'); return Reflect.ownKeys(t); }, \
+                     getOwnPropertyDescriptor(t, key) { log.push('d'); return Reflect.getOwnPropertyDescriptor(t, key); } \
+                 }); \
+                 Reflect.ownKeys(new Proxy(inner, { ownKeys() { return []; } })); \
+                 return log.join(','); \
+             } \
+             [invariant('get'), invariant('has'), invariant('set'), invariant('deleteProperty'), ownKeysOrder()].join('|');"
+        ),
+        Ok(Value::String(
+            "true:1|true:1|true:1|true:1|e,k,d".to_owned().into()
+        ))
+    );
+}
+
+#[test]
+fn proxy_own_keys_keeps_a_snapshot_key_deleted_during_descriptor_lookup() {
+    // ES2025 Proxy.[[OwnPropertyKeys]] step 16.3 treats an undefined
+    // descriptor as a configurable target key. The key came from the earlier
+    // [[OwnPropertyKeys]] snapshot and must still count when the target is
+    // non-extensible, even if a nested Proxy trap deletes it in between.
+    assert_eq!(
+        eval(
+            "let target = { x: 1 }; Object.preventExtensions(target); \
+             let inner = new Proxy(target, { \
+                 getOwnPropertyDescriptor(t, key) { delete t[key]; return undefined; } \
+             }); \
+             let outer = new Proxy(inner, { ownKeys() { return ['x']; } }); \
+             Reflect.ownKeys(outer).join(',');"
+        ),
+        Ok(Value::String("x".to_owned().into()))
+    );
+}
+
+#[test]
+fn proxy_own_keys_classifies_missing_symbol_with_all_snapshot_keys_in_order() {
+    assert_eq!(
+        eval(
+            "let symbol = Symbol('s'), target = { x: 1, y: 2 }, log = []; \
+             target[symbol] = 3; Object.preventExtensions(target); \
+             let inner = new Proxy(target, { \
+                 isExtensible(t) { log.push('e'); return Reflect.isExtensible(t); }, \
+                 ownKeys(t) { log.push('k'); return Reflect.ownKeys(t); }, \
+                 getOwnPropertyDescriptor(t, key) { \
+                     log.push('g:' + (key === symbol ? 's' : key)); \
+                     if (key === symbol) { delete t[key]; return undefined; } \
+                     return Reflect.getOwnPropertyDescriptor(t, key); \
+                 } \
+             }); \
+             let outer = new Proxy(inner, { \
+                 ownKeys() { log.push('o'); return [symbol, 'y', 'x']; } \
+             }); \
+             let keys = Reflect.ownKeys(outer).map(function(key) { \
+                 return key === symbol ? 's' : key; \
+             }).join(','); \
+             keys + '|' + log.join(',') + '|' + (symbol in target);"
+        ),
+        Ok(Value::String(
+            "s,y,x|o,e,k,g:x,g:y,g:s|false".to_owned().into()
+        ))
+    );
+}

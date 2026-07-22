@@ -27,8 +27,8 @@ pub(crate) use enumeration::{
     enumerable_property_entries, enumerable_property_entries_excluding,
     enumerable_property_entries_with_symbols, native_object_entries,
     native_object_get_own_property_names, native_object_get_own_property_symbols,
-    native_object_has_own, native_object_keys, native_object_values, own_property_names,
-    own_property_symbols,
+    native_object_has_own, native_object_keys, native_object_values,
+    observable_own_property_descriptor, own_property_names, own_property_symbols,
 };
 pub(crate) use from_entries::native_object_from_entries;
 pub(crate) use group_by::native_object_group_by;

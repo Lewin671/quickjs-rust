@@ -31,7 +31,7 @@ pub(super) fn native_iterator_from(
     let iterator = iterator_flattenable(object, env)?;
 
     // If the iterator already inherits %Iterator.prototype%, return it as-is.
-    if iterator_inherits_iterator_prototype(&iterator, env) {
+    if iterator_inherits_iterator_prototype(&iterator, env)? {
         return Ok(iterator);
     }
 
@@ -105,21 +105,25 @@ fn is_object_value(value: &Value) -> bool {
 
 /// `OrdinaryHasInstance(%Iterator%, iterator)`: walks the iterator's prototype
 /// chain looking for `%Iterator.prototype%`.
-fn iterator_inherits_iterator_prototype(iterator: &Value, env: &CallEnv) -> bool {
+fn iterator_inherits_iterator_prototype(
+    iterator: &Value,
+    env: &mut CallEnv,
+) -> Result<bool, RuntimeError> {
     let Some(target) = super::iterator_prototype(env) else {
-        return false;
+        return Ok(false);
     };
-    let mut current = match iterator {
-        Value::Object(object) => object.prototype(),
-        _ => crate::value_prototype(iterator.clone(), env),
-    };
-    while let Some(prototype) = current {
-        if prototype.ptr_eq(&target) {
-            return true;
+    let mut current =
+        crate::object::native_object_get_prototype_of(std::slice::from_ref(iterator), env)?;
+    loop {
+        if matches!(&current, Value::Object(object) if object.ptr_eq(&target)) {
+            return Ok(true);
         }
-        current = prototype.prototype();
+        if matches!(&current, Value::Null) {
+            return Ok(false);
+        }
+        current =
+            crate::object::native_object_get_prototype_of(std::slice::from_ref(&current), env)?;
     }
-    false
 }
 
 /// `%WrapForValidIteratorPrototype%`, installed eagerly under

@@ -1,8 +1,7 @@
 use crate::{
-    PropertyKey, RuntimeError, Value, array_as_object_prototype, array_has_own_property,
-    array_prototype, bigint, boolean, call_function, date, error,
-    function_intrinsic_prototype_slot, function_own_property_descriptor, function_prototype,
-    number, object, property_value, property_value_key, regexp, string, symbol,
+    PropertyKey, RuntimeError, Value, array_as_prototype_slot, array_has_own_property,
+    array_prototype, bigint, boolean, call_function, date, error, function_own_property_descriptor,
+    function_prototype, number, object, property_value, property_value_key, regexp, string, symbol,
     to_property_key_value, value_prototype_slot,
 };
 
@@ -42,11 +41,8 @@ pub(crate) fn native_object_get_prototype_of(
                 .unwrap_or(Value::Null),
         }),
         Some(Value::Function(function)) => {
-            Ok(error::native_error_constructor_parent(function, env)
-                .or_else(|| match function.internal_prototype_slot() {
-                    Some(slot) => slot.map(|prototype| prototype.to_value()),
-                    None => function_intrinsic_prototype_slot(env).map(|slot| slot.to_value()),
-                })
+            Ok(value_prototype_slot(Value::Function(function.clone()), env)
+                .map(|prototype| prototype.to_value())
                 .unwrap_or(Value::Null))
         }
         Some(Value::Boolean(_)) => Ok(constructor_prototype_value("Boolean", env)),
@@ -73,9 +69,7 @@ fn prototype_slot_from_value(
             message: format!("{operation} prototype must be an object or null"),
         }),
         Value::Object(prototype) => Ok(Some(crate::Prototype::Object(prototype))),
-        Value::Array(array) => Ok(Some(crate::Prototype::Object(array_as_object_prototype(
-            &array, env,
-        )))),
+        Value::Array(array) => Ok(Some(array_as_prototype_slot(&array, env))),
         Value::Function(function) => Ok(Some(crate::Prototype::Function(function))),
         Value::Proxy(proxy) => Ok(Some(crate::Prototype::Proxy(proxy))),
         Value::Null => Ok(None),

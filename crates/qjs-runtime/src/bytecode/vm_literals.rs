@@ -302,9 +302,7 @@ fn apply_object_literal_proto(
         Value::Object(object) if crate::symbol::is_symbol_primitive(&object) => None,
         Value::Object(object) => Some(Some(Prototype::Object(object))),
         Value::Function(function) => Some(Some(Prototype::Function(function))),
-        Value::Array(array) => Some(Some(Prototype::Object(crate::array_as_object_prototype(
-            &array, env,
-        )))),
+        Value::Array(array) => Some(Some(crate::array_as_prototype_slot(&array, env))),
         Value::Map(map) => Some(Some(Prototype::Object(map.object()))),
         Value::Set(set) => Some(Some(Prototype::Object(set.object()))),
         // Proxy and primitive proto values are ignored by the special form.

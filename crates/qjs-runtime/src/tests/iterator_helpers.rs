@@ -372,6 +372,44 @@ fn iterator_from_accepts_direct_iterators_and_symbol_fallback() {
 }
 
 #[test]
+fn iterator_from_recognizes_iterator_through_an_array_prototype() {
+    assert_eq!(
+        eval(
+            "let bridge = []; \
+             Object.setPrototypeOf(bridge, Iterator.prototype); \
+             let iterator = Object.create(bridge); \
+             iterator.next = function() { return { done: true }; }; \
+             Iterator.from(iterator) === iterator;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn iterator_from_observes_proxy_get_prototype_of() {
+    assert_eq!(
+        eval(
+            "let calls = 0; \
+             let bridge = new Proxy({}, { \
+                 getPrototypeOf: function() { calls++; return Iterator.prototype; } \
+             }); \
+             let iterator = Object.create(bridge); \
+             iterator.next = function() { return { done: true }; }; \
+             let same = Iterator.from(iterator) === iterator; \
+             let abrupt = Object.create(new Proxy({}, { \
+                 getPrototypeOf: function() { throw 42; } \
+             })); \
+             abrupt[Symbol.iterator] = null; \
+             abrupt.next = function() { return { done: true }; }; \
+             let thrown = false; \
+             try { Iterator.from(abrupt); } catch (error) { thrown = error === 42; } \
+             same + ':' + calls + ':' + thrown;"
+        ),
+        Ok(Value::String("true:1:true".to_owned().into()))
+    );
+}
+
+#[test]
 fn iterator_from_gets_direct_next_once() {
     assert_eq!(
         string(

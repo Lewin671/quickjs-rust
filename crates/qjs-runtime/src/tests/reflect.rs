@@ -449,3 +449,171 @@ fn evaluates_reflect_prototype_builtins() {
     assert!(eval("Reflect.setPrototypeOf(Symbol('target'), null);").is_err());
     assert!(eval("Reflect.setPrototypeOf({}, Symbol('proto'));").is_err());
 }
+
+#[test]
+fn reflect_set_honors_array_receiver_descriptors() {
+    assert_eq!(
+        eval(
+            "let calls = 0; \
+             const target = {}; \
+             Object.defineProperty(target, '0', { value: 1, writable: true }); \
+             const accessor = []; \
+             Object.defineProperty(accessor, '0', { \
+                 get: function() { return 3; }, \
+                 set: function(value) { calls += value; }, \
+                 configurable: true \
+             }); \
+             const accessorResult = Reflect.set(target, '0', 7, accessor); \
+             const accessorDescriptor = Object.getOwnPropertyDescriptor(accessor, '0'); \
+             const blocked = []; \
+             Object.defineProperty(blocked, '0', { \
+                 value: 4, writable: false, configurable: true \
+             }); \
+             const blockedResult = Reflect.set(target, '0', 8, blocked); \
+             const blockedDescriptor = Object.getOwnPropertyDescriptor(blocked, '0'); \
+             accessorResult + ':' + calls + ':' + accessor[0] + ':' \
+                 + (typeof accessorDescriptor.set) + ':' + blockedResult + ':' \
+                 + blocked[0] + ':' + blockedDescriptor.writable;"
+        ),
+        Ok(Value::String(
+            "false:0:3:function:false:4:false".to_owned().into()
+        ))
+    );
+}
+
+#[test]
+fn reflect_set_symbol_dispatches_proxy_receiver_internal_methods() {
+    assert_eq!(
+        eval(
+            "const key = Symbol('key'); \
+             const target = {}; \
+             Object.defineProperty(target, key, { value: 1, writable: true }); \
+             const backing = {}; \
+             Object.defineProperty(backing, key, { \
+                 value: 2, writable: true, configurable: true \
+             }); \
+             const log = []; \
+             const receiver = new Proxy(backing, { \
+                 getOwnPropertyDescriptor: function(object, property) { \
+                     log.push('get:' + (property === key)); \
+                     return Reflect.getOwnPropertyDescriptor(object, property); \
+                 }, \
+                 defineProperty: function(object, property, descriptor) { \
+                     log.push('define:' + (property === key) + ':' \
+                         + Object.keys(descriptor).join(',')); \
+                     return Reflect.defineProperty(object, property, descriptor); \
+                 } \
+             }); \
+             const success = Reflect.set(target, key, 7, receiver); \
+             let getThrew = false; \
+             try { \
+                 Reflect.set(target, key, 8, new Proxy({}, { \
+                     getOwnPropertyDescriptor: function() { throw 41; } \
+                 })); \
+             } catch (error) { getThrew = error === 41; } \
+             let defineThrew = false; \
+             try { \
+                 Reflect.set(target, key, 9, new Proxy({}, { \
+                     getOwnPropertyDescriptor: function() { return undefined; }, \
+                     defineProperty: function() { throw 43; } \
+                 })); \
+             } catch (error) { defineThrew = error === 43; } \
+             success + ':' + target[key] + ':' + backing[key] + ':' \
+                 + log.join('|') + ':' + getThrew + ':' + defineThrew;"
+        ),
+        Ok(Value::String(
+            "true:1:7:get:true|define:true:value:true:true"
+                .to_owned()
+                .into()
+        ))
+    );
+}
+
+#[test]
+fn reflect_set_nested_proxy_receiver_invariants_dispatch_inner_methods() {
+    assert_eq!(
+        eval(
+            "function targetFor(key) { \
+                 let target = {}; \
+                 Object.defineProperty(target, key, { value: 0, writable: true }); \
+                 return target; \
+             } \
+             function getOwnThrows(key) { \
+                 let inner = new Proxy({}, { \
+                     getOwnPropertyDescriptor: function() { throw 41; } \
+                 }); \
+                 let outer = new Proxy(inner, { \
+                     getOwnPropertyDescriptor: function() { return undefined; } \
+                 }); \
+                 try { Reflect.set(targetFor(key), key, 1, outer); } \
+                 catch (error) { return error === 41; } \
+                 return false; \
+             } \
+             function invalidResultSkipsTarget(key) { \
+                 let reads = 0; \
+                 let inner = new Proxy({}, { \
+                     getOwnPropertyDescriptor: function() { reads += 1; throw 44; } \
+                 }); \
+                 let outer = new Proxy(inner, { \
+                     getOwnPropertyDescriptor: function() { return 1; } \
+                 }); \
+                 try { Object.getOwnPropertyDescriptor(outer, key); } \
+                 catch (error) { return error instanceof TypeError && reads === 0; } \
+                 return false; \
+             } \
+             function missingSkipsExtensible(key) { \
+                 let calls = 0; \
+                 let inner = new Proxy({}, { \
+                     isExtensible: function() { calls += 1; throw 42; } \
+                 }); \
+                 let outer = new Proxy(inner, { \
+                     getOwnPropertyDescriptor: function() { return undefined; } \
+                 }); \
+                 return Reflect.set(targetFor(key), key, 1, outer) && calls === 0; \
+             } \
+             function extensibleThrows(key) { \
+                 let target = {}; \
+                 Object.defineProperty(target, key, { \
+                     value: 0, writable: true, configurable: true \
+                 }); \
+                 let inner = new Proxy(target, { \
+                     isExtensible: function() { throw 42; } \
+                 }); \
+                 let outer = new Proxy(inner, { \
+                     getOwnPropertyDescriptor: function() { return undefined; } \
+                 }); \
+                 try { Reflect.set(targetFor(key), key, 1, outer); } \
+                 catch (error) { return error === 42; } \
+                 return false; \
+             } \
+             function defineInvariantThrows(key) { \
+                 let reads = 0; \
+                 let inner = new Proxy({}, { \
+                     getOwnPropertyDescriptor: function() { \
+                         reads += 1; if (reads === 2) throw 43; return undefined; \
+                     } \
+                 }); \
+                 let outer = new Proxy(inner, { \
+                     getOwnPropertyDescriptor: function() { return undefined; }, \
+                     defineProperty: function() { return true; } \
+                 }); \
+                 try { Reflect.set(targetFor(key), key, 1, outer); } \
+                 catch (error) { return error === 43 && reads === 2; } \
+                 return false; \
+             } \
+             let symbol = Symbol('nested'); \
+             getOwnThrows('string') + ':' + getOwnThrows(symbol) + ':' \
+                 + invalidResultSkipsTarget('string') + ':' \
+                 + invalidResultSkipsTarget(symbol) + ':' \
+                 + missingSkipsExtensible('string') + ':' \
+                 + missingSkipsExtensible(symbol) + ':' \
+                 + extensibleThrows('string') + ':' + extensibleThrows(symbol) + ':' \
+                 + defineInvariantThrows('string') + ':' + defineInvariantThrows(symbol);"
+        ),
+        Ok(Value::String(
+            "true:true:true:true:true:true:true:true:true:true"
+                .to_owned()
+                .into()
+        ))
+    );
+}

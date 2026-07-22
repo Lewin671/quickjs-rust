@@ -3,8 +3,7 @@ use crate::reflect::target::ensure_reflect_object_target;
 use crate::{
     ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
     object::{
-        PropertyDescriptor, define_array_length_value, define_property_descriptor_on_value_key,
-        own_property_descriptor_key,
+        PropertyDescriptor, define_property_descriptor_on_value_key, own_property_descriptor_key,
     },
 };
 
@@ -38,6 +37,14 @@ pub(crate) fn ordinary_set(
 ) -> Result<bool, RuntimeError> {
     if let Value::Proxy(proxy) = &target {
         return crate::proxy::proxy_set(proxy.clone(), key, value, receiver, env);
+    }
+
+    // Module namespace exotic [[Set]] returns false for every property key and
+    // receiver. Do not expose its virtual writable export descriptors to
+    // OrdinarySetWithOwnDescriptor: those descriptors exist for reflection,
+    // but they never make assignment through the namespace succeed.
+    if matches!(&target, Value::Object(object) if object.is_module_namespace_exotic()) {
+        return Ok(false);
     }
 
     if let (Value::Object(object), PropertyKey::String(key)) = (&target, key) {
@@ -102,7 +109,7 @@ fn set_receiver_data_property(
     env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     let PropertyKey::String(key) = key else {
-        return set_receiver_symbol_data_property(receiver, key, value);
+        return set_receiver_symbol_data_property(receiver, key, value, env);
     };
     match receiver {
         Value::Object(object) => {
@@ -138,23 +145,28 @@ fn set_receiver_data_property(
             Ok(true)
         }
         Value::Array(elements) => {
-            if key == "length" {
-                define_array_length_value(&elements, value, env)
-            } else {
-                match key.parse::<usize>() {
-                    Ok(index) => {
-                        if index >= elements.len() && !elements.is_extensible() {
-                            return Ok(false);
-                        }
-                        if elements.is_frozen() {
-                            return Ok(false);
-                        }
-                        elements.set(index, value);
+            // OrdinarySetWithOwnDescriptor must inspect the Receiver's own
+            // descriptor before defining through it. In particular, a writable
+            // data property on the original target may not overwrite an
+            // accessor or non-writable property already owned by an Array
+            // receiver. Route the accepted write through Array
+            // [[DefineOwnProperty]] so index/length invariants remain intact.
+            let receiver = Value::Array(elements);
+            let property_key = PropertyKey::String(key.to_owned());
+            let descriptor =
+                match own_property_descriptor_key(receiver.clone(), &property_key, env)? {
+                    Some(existing) if existing.is_accessor() || !existing.writable => {
+                        return Ok(false);
                     }
-                    Err(_) => elements.set_property(key.to_owned(), value),
-                }
-                Ok(true)
-            }
+                    Some(existing) => PropertyDescriptor::data(
+                        value,
+                        existing.writable,
+                        existing.enumerable,
+                        existing.configurable,
+                    ),
+                    None => PropertyDescriptor::data(value, true, true, true),
+                };
+            define_property_descriptor_on_value_key(receiver, property_key, descriptor, env)
         }
         Value::Function(function) => {
             let descriptor = match crate::function_own_property_descriptor(&function, key) {
@@ -207,25 +219,7 @@ fn set_receiver_data_property(
             Ok(true)
         }
         Value::Proxy(proxy) => {
-            let receiver = Value::Proxy(proxy.clone());
-            let key = PropertyKey::String(key.to_owned());
-            let existing = crate::proxy::proxy_get_own_property_descriptor(
-                proxy,
-                &key,
-                env,
-                |target, env| crate::object::own_property_descriptor_key(target, &key, env),
-            )?;
-            let descriptor = match existing {
-                Some(existing) if !existing.writable => return Ok(false),
-                Some(existing) => PropertyDescriptor::data(
-                    value,
-                    existing.writable,
-                    existing.enumerable,
-                    existing.configurable,
-                ),
-                None => PropertyDescriptor::data(value, true, true, true),
-            };
-            define_property_descriptor_on_value_key(receiver, key, descriptor, env)
+            set_proxy_receiver_data_property(proxy, PropertyKey::String(key.to_owned()), value, env)
         }
         Value::String(_)
         | Value::Number(_)
@@ -240,6 +234,7 @@ fn set_receiver_symbol_data_property(
     receiver: Value,
     key: &PropertyKey,
     value: Value,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     let PropertyKey::Symbol(symbol) = key else {
         unreachable!("symbol set helper should only receive symbol keys");
@@ -278,7 +273,9 @@ fn set_receiver_symbol_data_property(
             elements.define_symbol_property(symbol.clone(), descriptor);
             Ok(true)
         }
-        Value::Proxy(proxy) => set_receiver_symbol_data_property(proxy.target(), key, value),
+        Value::Proxy(proxy) => {
+            set_proxy_receiver_data_property(proxy, PropertyKey::Symbol(symbol.clone()), value, env)
+        }
         Value::String(_)
         | Value::Number(_)
         | Value::BigInt(_)
@@ -286,6 +283,29 @@ fn set_receiver_symbol_data_property(
         | Value::Null
         | Value::Undefined => Ok(false),
     }
+}
+
+/// OrdinarySetWithOwnDescriptor's receiver update for an exotic Proxy.
+/// `[[GetOwnProperty]]` and `[[DefineOwnProperty]]` must both dispatch through
+/// the receiver, and updating an existing data property exposes a value-only
+/// descriptor to the `defineProperty` trap.
+fn set_proxy_receiver_data_property(
+    proxy: crate::proxy::ProxyRef,
+    key: PropertyKey,
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<bool, RuntimeError> {
+    let receiver = Value::Proxy(proxy.clone());
+    let existing =
+        crate::proxy::proxy_get_own_property_descriptor(proxy, &key, env, |target, env| {
+            crate::object::own_property_descriptor_key(target, &key, env)
+        })?;
+    let descriptor = match existing {
+        Some(existing) if existing.is_accessor() || !existing.writable => return Ok(false),
+        Some(_) => PropertyDescriptor::data_value(value),
+        None => PropertyDescriptor::data(value, true, true, true),
+    };
+    define_property_descriptor_on_value_key(receiver, key, descriptor, env)
 }
 
 fn set_object_symbol_data_property(

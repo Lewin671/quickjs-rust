@@ -322,8 +322,11 @@ impl ArrayRef {
         {
             return false;
         }
-        let within_length = index < self.0.length.get();
-        if !within_length && !self.0.extensible.get() {
+        // An index below `length` can still be a hole, and filling that hole
+        // creates a new own property. Non-extensible arrays may overwrite an
+        // existing dense element, but they may not materialize a hole merely
+        // because dense storage has a placeholder at that position.
+        if !self.0.extensible.get() && !self.has_index(index) {
             return false;
         }
         self.0.cold_if_present().is_none_or(|cold| {
@@ -544,9 +547,9 @@ impl ArrayRef {
             return;
         }
         let old_len = self.0.length.get();
-        if length > old_len && !self.0.extensible.get() {
-            return;
-        }
+        // ArraySetLength changes the existing non-configurable `length` data
+        // property. Growing it creates holes, not indexed properties, so a
+        // non-extensible array may still accept a larger writable length.
         self.0.length.set(length);
         if length < elements.len() {
             elements.truncate(length);
@@ -646,14 +649,16 @@ impl ArrayRef {
         !self.0.extensible.get() && self.0.sealed.get() && self.0.frozen.get()
     }
 
-    pub(crate) fn prototype_override(&self) -> Option<Option<ObjectRef>> {
-        self.0
-            .prototype_override()
-            .map(|prototype| prototype.and_then(|prototype| prototype.as_object()))
-    }
-
     pub(crate) fn prototype_slot_override(&self) -> Option<Option<Prototype>> {
         self.0.prototype_override()
+    }
+
+    /// The effective [[Prototype]] slot, preserving array/function/proxy
+    /// identities and resolving the implicit realm Array.prototype only when
+    /// no explicit override is present.
+    pub(crate) fn effective_prototype_slot(&self, env: &CallEnv) -> Option<Prototype> {
+        self.prototype_slot_override()
+            .unwrap_or_else(|| crate::array_prototype(env).map(Prototype::Object))
     }
 
     pub(crate) fn own_symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
@@ -702,6 +707,12 @@ impl ArrayRef {
             return Ok(());
         }
         if !self.0.extensible.get() {
+            return Err(());
+        }
+        if prototype
+            .as_ref()
+            .is_some_and(|prototype| prototype.would_cycle_array(self))
+        {
             return Err(());
         }
         *self.0.cold().prototype.borrow_mut() = Some(prototype);

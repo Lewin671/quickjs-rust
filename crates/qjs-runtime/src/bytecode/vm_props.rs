@@ -5,9 +5,8 @@ use crate::{
     GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
     array_prototype, function_delete_own_property, function_delete_own_symbol_property,
     function_own_property_descriptor, function_own_property_names,
-    function_prototype_chain_descriptor, inherited_primitive_prototype_descriptor, property_value,
-    property_value_key, property_value_key_with_receiver, string, symbol, to_int32_number,
-    to_uint32_number,
+    inherited_primitive_prototype_descriptor, property_value, property_value_key,
+    property_value_key_with_receiver, string, symbol, to_int32_number, to_uint32_number,
 };
 
 use super::vm::Vm;
@@ -69,17 +68,45 @@ impl Vm<'_> {
         }
     }
 
-    /// Whether the realm's intrinsic Array.prototype owns any indexed property.
-    /// Returns `None` when no intrinsic is available. The object is cached in
-    /// the VM so the hot path only reads the own-index count, itself O(1).
-    /// Rebinding the mutable `Array` global does not change this intrinsic.
-    pub(super) fn array_prototype_has_index_property(&mut self) -> Option<bool> {
+    /// Whether an indexed property or exotic object anywhere above an ordinary
+    /// array could intercept `array[index] = value`.
+    ///
+    /// The standard realm chain is always
+    /// `Array.prototype -> Object.prototype -> null`. Keep that overwhelmingly
+    /// common case O(1): both intrinsic identities are cached by the VM, and the
+    /// guard reads only two prototype slots plus the two maintained own-index
+    /// counters. If user code changes either prototype link, walk the custom
+    /// chain instead. Any Proxy, function, or integer-indexed exotic object is
+    /// conservatively hazardous because its `[[Set]]` cannot be reduced to an
+    /// ordinary own-index count.
+    ///
+    /// Rebinding the mutable `Array` or `Object` global does not change these
+    /// stable realm intrinsics.
+    pub(super) fn array_prototype_chain_has_index_hazard(&mut self) -> Option<bool> {
         if self.array_prototype_cache.is_none() {
             self.array_prototype_cache = array_prototype(&self.env);
         }
-        self.array_prototype_cache
-            .as_ref()
-            .map(ObjectRef::has_own_index_property)
+        if self.object_prototype_cache.is_none() {
+            self.object_prototype_cache = crate::object_prototype(&self.env);
+        }
+        let array_prototype = self.array_prototype_cache.as_ref()?;
+        let object_prototype = self.object_prototype_cache.as_ref()?;
+
+        if matches!(
+            array_prototype.prototype_slot(),
+            Some(crate::Prototype::Object(ref prototype))
+                if prototype.ptr_eq(object_prototype)
+        ) && object_prototype.prototype_slot().is_none()
+        {
+            return Some(
+                array_prototype.has_own_index_property()
+                    || object_prototype.has_own_index_property(),
+            );
+        }
+
+        Some(prototype_chain_has_index_hazard(Some(
+            crate::Prototype::Object(array_prototype.clone()),
+        )))
     }
 
     /// Whether an array uses this realm's ordinary Array.prototype, either via
@@ -240,26 +267,46 @@ impl Vm<'_> {
                     .parse::<usize>()
                     .ok()
                     .and_then(|index| elements.get(index).map(Property::enumerable))
-                    .or_else(|| elements.property(key))
-                    .or_else(|| {
-                        elements
-                            .prototype_override()
-                            .unwrap_or_else(|| array_prototype(&self.realm_env()))
-                            .and_then(|prototype| prototype.property(key))
-                    });
-                data_property_value(descriptor)
+                    .or_else(|| elements.property(key));
+                if descriptor.is_some() {
+                    return data_property_value(descriptor);
+                }
+                match elements.effective_prototype_slot(&self.realm_env()) {
+                    Some(crate::Prototype::Object(prototype)) => {
+                        match ordinary_chain_data_value(&prototype, key) {
+                            Err(ProxyInChain) | Ok(DirectPropertyRead::NeedsSlowPath) => None,
+                            Ok(DirectPropertyRead::Data(value)) => Some(value),
+                            Ok(DirectPropertyRead::Missing) => Some(Value::Undefined),
+                        }
+                    }
+                    Some(
+                        crate::Prototype::Array(_)
+                        | crate::Prototype::Function(_)
+                        | crate::Prototype::Proxy(_),
+                    ) => None,
+                    None => Some(Value::Undefined),
+                }
             }
             Value::Function(function) => {
-                let descriptor = function_own_property_descriptor(function, key).or_else(|| {
-                    function_prototype_chain_descriptor(function, &self.realm_env(), key)
-                });
+                let descriptor =
+                    if let Some(property) = function_own_property_descriptor(function, key) {
+                        Ok(Some(property))
+                    } else {
+                        let env = self.realm_env();
+                        let prototype = match function.internal_prototype_slot() {
+                            Some(prototype) => prototype,
+                            None => crate::function_intrinsic_prototype_slot(&env),
+                        };
+                        prototype_chain_property(prototype, key, Some(&env))
+                    };
                 match descriptor {
-                    Some(property) => data_property_value(Some(property)),
+                    Err(ProxyInChain) => None,
+                    Ok(Some(property)) => data_property_value(Some(property)),
                     // A function with no native-error parent (the only remaining
                     // generic branch) resolves to undefined; bail when a parent
                     // could contribute so the slow path stays authoritative.
-                    None if function.native.is_none() => Some(Value::Undefined),
-                    None => None,
+                    Ok(None) if function.native.is_none() => Some(Value::Undefined),
+                    Ok(None) => None,
                 }
             }
             Value::String(value) => {
@@ -406,7 +453,11 @@ impl Vm<'_> {
                     }
                     current = prototype.prototype_slot();
                 }
-                Some(crate::Prototype::Function(_) | crate::Prototype::Proxy(_)) => {
+                Some(
+                    crate::Prototype::Array(_)
+                    | crate::Prototype::Function(_)
+                    | crate::Prototype::Proxy(_),
+                ) => {
                     return false;
                 }
                 None => {
@@ -432,14 +483,21 @@ impl Vm<'_> {
                 Ok(property) => data_property_value(property),
             },
             Value::Array(elements) => {
-                let descriptor = elements.symbol_property(symbol).or_else(|| {
-                    elements
-                        .prototype_override()
-                        .unwrap_or_else(|| array_prototype(&self.realm_env()))
-                        .and_then(|prototype| prototype.symbol_property(symbol))
-                });
-                match descriptor {
-                    Some(property) => data_property_value(Some(property)),
+                if let Some(property) = elements.symbol_property(symbol) {
+                    return data_property_value(Some(property));
+                }
+                match elements.effective_prototype_slot(&self.realm_env()) {
+                    Some(crate::Prototype::Object(prototype)) => {
+                        match ordinary_chain_symbol_property(&prototype, symbol) {
+                            Err(ProxyInChain) => None,
+                            Ok(property) => data_property_value(property),
+                        }
+                    }
+                    Some(
+                        crate::Prototype::Array(_)
+                        | crate::Prototype::Function(_)
+                        | crate::Prototype::Proxy(_),
+                    ) => None,
                     None => Some(Value::Undefined),
                 }
             }
@@ -734,9 +792,9 @@ fn typed_array_default_length_accessor(object: &ObjectRef) -> bool {
     )
 }
 
-/// Signals that an inline [[Prototype]]-chain walk reached a Proxy. The VM fast
-/// paths cannot dispatch a Proxy's trap, so the caller defers to the slow path
-/// where the proxy-aware `get`/`set` semantics live.
+/// Signals that an inline [[Prototype]]-chain walk reached a node whose
+/// internal methods or virtual descriptors must remain observable. The VM fast
+/// paths defer Proxies and module namespaces to the generic path.
 pub(super) struct ProxyInChain;
 
 enum DirectPropertyRead {
@@ -777,10 +835,11 @@ fn ordinary_chain_data_value(
         }
         match current.prototype_slot() {
             Some(crate::Prototype::Object(next)) => current = next,
-            Some(crate::Prototype::Function(function)) => {
-                return Ok(function
-                    .chain_property(key)
-                    .map_or(DirectPropertyRead::Missing, direct_property_read));
+            Some(crate::Prototype::Array(_)) => {
+                return Ok(DirectPropertyRead::NeedsSlowPath);
+            }
+            Some(crate::Prototype::Function(_)) => {
+                return Ok(DirectPropertyRead::NeedsSlowPath);
             }
             Some(crate::Prototype::Proxy(_)) => return Err(ProxyInChain),
             None => return Ok(DirectPropertyRead::Missing),
@@ -796,21 +855,60 @@ pub(super) fn ordinary_chain_property(
     object: &ObjectRef,
     key: &str,
 ) -> Result<Option<Property>, ProxyInChain> {
-    let mut current = object.clone();
+    prototype_chain_property(Some(crate::Prototype::Object(object.clone())), key, None)
+}
+
+/// Walks a first-class prototype chain without flattening observable exotic
+/// nodes. `function_env` preserves the realm used to resolve implicit
+/// `%Function.prototype%` links when a function is the original receiver.
+fn prototype_chain_property(
+    mut current: Option<crate::Prototype>,
+    key: &str,
+    function_env: Option<&CallEnv>,
+) -> Result<Option<Property>, ProxyInChain> {
     loop {
-        if crate::typed_array::is_typed_array_object(&current)
-            && let Some(property) =
-                crate::typed_array::typed_array_own_property_descriptor(&current, key)
-        {
-            return Ok(Some(property));
-        }
-        if let Some(property) = current.own_property(key) {
-            return Ok(Some(property));
-        }
-        match current.prototype_slot() {
-            Some(crate::Prototype::Object(next)) => current = next,
+        match current {
+            Some(crate::Prototype::Object(object)) => {
+                // Namespace descriptors are virtual: their value is live and
+                // their reported writable attribute differs from the backing
+                // descriptor. Keep them on the observable path.
+                if object.is_module_namespace_exotic() {
+                    return Err(ProxyInChain);
+                }
+                if crate::typed_array::is_typed_array_object(&object)
+                    && let Some(property) =
+                        crate::typed_array::typed_array_own_property_descriptor(&object, key)
+                {
+                    return Ok(Some(property));
+                }
+                if let Some(property) = object.own_property(key) {
+                    return Ok(Some(property));
+                }
+                current = object.prototype_slot();
+            }
+            Some(crate::Prototype::Array(array)) => {
+                // A live array may later route through an exotic Proxy or
+                // integer-indexed TypedArray. Function direct reads must keep
+                // that entire node receiver-aware rather than flattening its
+                // current descriptor chain.
+                if function_env.is_some() {
+                    return Err(ProxyInChain);
+                }
+                if let Some(property) = crate::array_own_property_descriptor(&array.array(), key) {
+                    return Ok(Some(property));
+                }
+                current = array.effective_prototype_slot();
+            }
             Some(crate::Prototype::Function(function)) => {
-                return Ok(function.chain_property(key));
+                if let Some(property) = function_own_property_descriptor(&function, key) {
+                    return Ok(Some(property));
+                }
+                current = match function.internal_prototype_slot() {
+                    Some(prototype) => prototype,
+                    None => function_env
+                        .and_then(crate::function_intrinsic_prototype_slot)
+                        .or_else(|| function.effective_internal_prototype()),
+                };
             }
             Some(crate::Prototype::Proxy(_)) => return Err(ProxyInChain),
             None => return Ok(None),
@@ -826,9 +924,57 @@ pub(super) fn prototype_chain_has_proxy(slot: Option<crate::Prototype>) -> bool 
         match current {
             Some(crate::Prototype::Proxy(_)) => return true,
             Some(crate::Prototype::Object(object)) => current = object.prototype_slot(),
-            Some(crate::Prototype::Function(function)) => {
-                current = function.internal_prototype_slot().flatten();
+            Some(crate::Prototype::Array(array)) => {
+                current = array.effective_prototype_slot();
             }
+            Some(crate::Prototype::Function(function)) => {
+                current = function.effective_internal_prototype();
+            }
+            None => return false,
+        }
+    }
+}
+
+/// Whether descriptor flattening would skip an observable or newly first-class
+/// prototype node. Ordinary object/function chains stay on the compact set
+/// path; arrays, Proxies, and module namespaces use recursive OrdinarySet.
+pub(super) fn prototype_chain_needs_recursive_set(slot: Option<crate::Prototype>) -> bool {
+    let mut current = slot;
+    loop {
+        match current {
+            Some(crate::Prototype::Array(_) | crate::Prototype::Proxy(_)) => return true,
+            Some(crate::Prototype::Object(object)) => {
+                if object.is_module_namespace_exotic() {
+                    return true;
+                }
+                current = object.prototype_slot();
+            }
+            Some(crate::Prototype::Function(function)) => {
+                current = function.effective_internal_prototype();
+            }
+            None => return false,
+        }
+    }
+}
+
+/// Whether any object in a non-standard prototype chain can affect an indexed
+/// assignment. Ordinary objects expose an O(1) own-index count; unusual exotic
+/// nodes fail closed so the caller uses the fully observable `[[Set]]` path.
+fn prototype_chain_has_index_hazard(slot: Option<crate::Prototype>) -> bool {
+    let mut current = slot;
+    loop {
+        match current {
+            Some(crate::Prototype::Object(object)) => {
+                if object.is_module_namespace_exotic()
+                    || object.has_own_index_property()
+                    || crate::typed_array::is_typed_array_object(&object)
+                {
+                    return true;
+                }
+                current = object.prototype_slot();
+            }
+            Some(crate::Prototype::Array(_)) => return true,
+            Some(crate::Prototype::Function(_) | crate::Prototype::Proxy(_)) => return true,
             None => return false,
         }
     }
@@ -848,8 +994,11 @@ pub(super) fn prototype_chain_has_typed_array(slot: Option<crate::Prototype>) ->
                 }
                 current = object.prototype_slot();
             }
+            Some(crate::Prototype::Array(array)) => {
+                current = array.effective_prototype_slot();
+            }
             Some(crate::Prototype::Function(function)) => {
-                current = function.internal_prototype_slot().flatten();
+                current = function.effective_internal_prototype();
             }
             Some(crate::Prototype::Proxy(_)) | None => return false,
         }
@@ -861,15 +1010,32 @@ pub(super) fn ordinary_chain_symbol_property(
     object: &ObjectRef,
     symbol: &ObjectRef,
 ) -> Result<Option<Property>, ProxyInChain> {
-    let mut current = object.clone();
+    let mut current = Some(crate::Prototype::Object(object.clone()));
     loop {
-        if let Some(property) = current.own_symbol_property(symbol) {
-            return Ok(Some(property));
-        }
-        match current.prototype_slot() {
-            Some(crate::Prototype::Object(next)) => current = next,
+        match current {
+            Some(crate::Prototype::Object(object)) => {
+                // Module namespace [[Set]] rejects every property key, even an
+                // absent Symbol. Descriptor flattening would lose that exotic
+                // behavior and incorrectly create a property on the receiver.
+                if object.is_module_namespace_exotic() {
+                    return Err(ProxyInChain);
+                }
+                if let Some(property) = object.own_symbol_property(symbol) {
+                    return Ok(Some(property));
+                }
+                current = object.prototype_slot();
+            }
+            Some(crate::Prototype::Array(array)) => {
+                if let Some(property) = array.array().own_symbol_property(symbol) {
+                    return Ok(Some(property));
+                }
+                current = array.effective_prototype_slot();
+            }
             Some(crate::Prototype::Function(function)) => {
-                return Ok(function.chain_symbol_property(symbol));
+                if let Some(property) = function.own_symbol_property(symbol) {
+                    return Ok(Some(property));
+                }
+                current = function.effective_internal_prototype();
             }
             Some(crate::Prototype::Proxy(_)) => return Err(ProxyInChain),
             None => return Ok(None),
