@@ -61,6 +61,7 @@ class ManifestTests(unittest.TestCase):
             self.assertEqual(cases[case_id].checksum_model, "triangular")
             self.assertEqual(cases[case_id].checksum_factor, 1)
             self.assertEqual(cases[case_id].expected_checksum(1024), 524800)
+        self.assertEqual(cases["string_slice"].max_iterations, 400_000_000)
         self.assertTrue(
             all(
                 abs(case.expected_checksum(case.max_iterations)) <= (2**53 - 1)
