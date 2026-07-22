@@ -589,6 +589,19 @@ impl NumericLoopCall {
         }
     }
 
+    /// Whether repeated evaluation cannot stage a captured write whose commit
+    /// would depend on a selector arm's per-iteration ordering.
+    pub(super) fn is_read_only(&self) -> bool {
+        match self {
+            Self::MathAbs
+            | Self::ArgumentAddConstants { .. }
+            | Self::ArgumentConstChain { .. }
+            | Self::ArgumentCapturedBinary { .. }
+            | Self::ArgumentArgumentBinary { .. } => true,
+            Self::UpdateCapturedConstReturn { .. } => false,
+        }
+    }
+
     // This executes once per admitted loop iteration. Small unrelated layout
     // changes can otherwise make LLVM outline it, adding a call to the hottest
     // part of the numeric-loop path.
