@@ -83,6 +83,11 @@ Campaign working rules:
   costs two name-table hash lookups per store. Verified with the full test
   suite, Test262 subset, `compare-qjs.sh`, and exact gap scans across
   eval/module/global-code/with/for/Function; zero regressions.
+- `T021-single-vm-frame-stack.md` — active structural performance unit. Move
+  ordinary synchronous bytecode calls onto one explicit VM frame stack, then
+  compact that same execution core into register/superinstructions. This is
+  the next T018 unit; do not create a second independent VM or expand the
+  direct-leaf eligibility predicate in the frame-stack commit.
 - `T017-performance-benchmark-system.md` — versioned candidate/base/QuickJS-NG
   black-box benchmark platform. M0-M4 landed, including independent throughput,
   resource lanes, and diagnostic public-boundary Criterion lifecycle benches;

@@ -2,10 +2,13 @@
 
 ## Goal
 
-Beat the pinned QuickJS-NG reference by at least 2x on the repository's broad
-black-box throughput portfolio: candidate/QuickJS-NG overall geometric-mean
-wall ns/op must be at most 0.50x, while every critical family remains at or
-below 1.00x. This is explicitly a **general JavaScript-engine performance**
+Beat the pinned QuickJS-NG reference by at least 2x on every admitted benchmark
+case. For broad v2, each of the 25 case ratios, every family ratio, and the
+overall geometric-mean wall ns/op ratio must be at most 0.50x. For the external
+JetStream, Kraken, and SunSpider neutral-shell portfolios, every pinned case
+must become runnable and each candidate/QuickJS-NG ratio must be at most 0.50x;
+suite geometric means must therefore also be at most 0.50x. This is explicitly
+a **general JavaScript-engine performance**
 goal, not permission to optimize only the repository's internal benchmark
 shapes. The pinned external JetStream 3 JavaScript subset, Kraken 1.1, and
 SunSpider 1.0 neutral shell ports are an independent anti-overfitting boundary:
@@ -70,7 +73,8 @@ wall ns/op. Acceptance requires all of the following on a complete, healthy,
 same-host run:
 
 - overall geometric-mean ratio <= 0.50;
-- every critical family ratio <= 1.00;
+- every one of the 25 case ratios <= 0.50;
+- every critical family ratio <= 0.50;
 - no invalid block, failed linearity probe, checksum mismatch, or timer-limited
   case;
 - focused tests plus `scripts/check.sh` pass, preserving Test262 behavior;
@@ -94,11 +98,10 @@ results do not depend on the broad-micro workload.
 
 Completion additionally requires a repeatable final external preview in which:
 
-- the diagnostic geometric mean over comparable cases is <= 1.00x
-  qjs-rust/QuickJS-NG for each of the three pinned external suites;
-- no comparable external case is slower than 1.25x QuickJS-NG;
-- comparable coverage does not decrease to manufacture a better ratio, and
-  every unsupported case remains visible with its capability status;
+- every pinned external case is runnable and comparable; timeouts, unsupported
+  cases, and reduced coverage cannot manufacture a better ratio;
+- every external case is <= 0.50x qjs-rust/QuickJS-NG and the diagnostic
+  geometric mean is <= 0.50x for each of the three pinned suites;
 - the winning mechanisms are general runtime changes, with no benchmark-name,
   file-path, iteration-count, or checksum specialization;
 - an independent rerun confirms the final external result alongside the broad
@@ -116,9 +119,10 @@ an incomplete neutral shell port is an upstream suite score.
   identify the largest family/case gaps without excluding weak cases.
 - [ ] B3 optimize structural bottlenecks in separately verified commits,
   recording broad and external generalization evidence for each pushed unit.
-- [ ] B4 reach <= 0.50x overall and <= 1.00x for every critical family.
-- [ ] B5 reach <= 1.00x for every pinned external comparable-case geometric
-  mean with no comparable case above 1.25x and no coverage reduction.
+- [ ] B4 reach <= 0.50x overall, in every critical family, and in every one of
+  the 25 broad cases.
+- [ ] B5 make every pinned external case runnable, then reach <= 0.50x for each
+  case and each suite geometric mean with no coverage reduction.
 - [ ] B6 independently confirm both internal and external results and run the
   full correctness gate.
 
