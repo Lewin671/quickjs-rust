@@ -18,6 +18,10 @@ pub struct LexOptions {
     /// Whether Annex B HTML-like comments (`<!--` and line-start `-->`) are
     /// treated as line comments.
     pub html_comments: bool,
+    /// Whether `source` uses the runtime's canonical WTF-16 sentinel encoding
+    /// rather than ordinary host UTF-8 scalar text. This is used for `eval`
+    /// and dynamic-function source assembled from JavaScript String values.
+    pub wtf16_source: bool,
 }
 
 impl Default for LexOptions {
@@ -25,6 +29,7 @@ impl Default for LexOptions {
         Self {
             hashbang: true,
             html_comments: true,
+            wtf16_source: false,
         }
     }
 }

@@ -1061,6 +1061,12 @@ mod tests {
         );
         assert_eq!(
             eval(
+                "function sum(n) { var text = '\\u{F0000}x'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(i, 3).length; } return s; } sum(4);"
+            ),
+            Ok(Value::Number(6.0))
+        );
+        assert_eq!(
+            eval(
                 "function sum(n) { var text = 'abcdef'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(-3, -1).length; } return s; } sum(4);"
             ),
             Ok(Value::Number(8.0))

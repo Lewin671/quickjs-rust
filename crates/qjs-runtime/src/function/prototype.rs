@@ -1,7 +1,7 @@
 use std::{collections::HashMap, rc::Rc};
 
 use qjs_ast::Stmt;
-use qjs_parser::parse_dynamic_function_script;
+use qjs_parser::parse_dynamic_function_wtf16_script;
 
 use crate::CallEnv;
 use crate::function::CompiledUserFunction;
@@ -52,7 +52,7 @@ pub(crate) fn native_function(
 ) -> Result<Value, RuntimeError> {
     let (params, body) = function_source_parts(argument_values, env)?;
     let source = format!("function anonymous({params}\n) {{\n{body}\n}}");
-    let script = parse_dynamic_function_script(&source).map_err(|error| RuntimeError {
+    let script = parse_dynamic_function_wtf16_script(&source).map_err(|error| RuntimeError {
         thrown: None,
         message: format!(
             "SyntaxError: invalid Function constructor source: {}",
@@ -173,7 +173,7 @@ fn build_dynamic_function(
 ) -> Result<Function, RuntimeError> {
     let (params, body) = function_source_parts(argument_values, env)?;
     let source = format!("{function_prefix} anonymous({params}\n) {{\n{body}\n}}");
-    let script = parse_dynamic_function_script(&source).map_err(|error| RuntimeError {
+    let script = parse_dynamic_function_wtf16_script(&source).map_err(|error| RuntimeError {
         thrown: None,
         message: format!(
             "SyntaxError: invalid {constructor_name} constructor source: {}",

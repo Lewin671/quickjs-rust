@@ -210,12 +210,14 @@ fn assert_decode_uri_four_byte(component: bool) -> Result<Value, RuntimeError> {
                         + ((b2 & 0x3F) << 12)
                         + ((b3 & 0x3F) << 6)
                         + (b4 & 0x3F);
-                    let expected = char::from_u32(code_point)
-                        .ok_or_else(|| test262_error("invalid decoded URI code point"))?
-                        .to_string();
-                    if actual != expected {
+                    let character = char::from_u32(code_point)
+                        .ok_or_else(|| test262_error("invalid decoded URI code point"))?;
+                    let mut buffer = [0; 2];
+                    let expected = character.encode_utf16(&mut buffer);
+                    let actual_units = crate::string::string_code_units(&actual);
+                    if actual_units != expected {
                         return Err(test262_error(&format!(
-                            "#{code_point:X} expected {expected}, got {actual}",
+                            "#{code_point:X} expected {expected:?}, got {actual_units:?}",
                         )));
                     }
                 }

@@ -119,7 +119,7 @@ impl Lexer<'_> {
             }
 
             if escaped {
-                pattern.push(ch);
+                self.push_source_character(&mut pattern, ch);
                 self.advance();
                 escaped = false;
                 continue;
@@ -156,7 +156,7 @@ impl Lexer<'_> {
                     return Ok(());
                 }
                 _ => {
-                    pattern.push(ch);
+                    self.push_source_character(&mut pattern, ch);
                     self.advance();
                 }
             }

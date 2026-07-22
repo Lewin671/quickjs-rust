@@ -1,4 +1,4 @@
-use qjs_parser::{EvalParseContext, parse_direct_eval_script, parse_script};
+use qjs_parser::{EvalParseContext, parse_direct_eval_wtf16_script, parse_eval_script};
 use std::collections::HashSet;
 
 use crate::CallEnv;
@@ -11,7 +11,9 @@ use crate::{
     },
     function_delete_own_property, function_own_property_descriptor,
     object::define_property_on_value_key,
-    string::{string_code_units, string_from_code_unit, surrogate_escape_code_unit},
+    string::{
+        push_code_point, string_code_units, string_from_code_unit, surrogate_escape_code_unit,
+    },
     to_js_string_with_env, to_length_with_env, to_number_with_env,
 };
 use crate::{PropertyKey, property_value, property_value_key};
@@ -710,25 +712,6 @@ fn code_point_from_value(value: Value, env: &mut CallEnv) -> Result<u32, Runtime
     Ok(number as u32)
 }
 
-fn push_code_point(result: &mut String, code_point: u32) {
-    // Keep real private-use scalars distinct from the internal lone-surrogate
-    // sentinel range, which also starts at U+F0000.
-    if (0xF0000..0xF0800).contains(&code_point) {
-        let mut buffer = [0u16; 2];
-        for code_unit in char::from_u32(code_point)
-            .unwrap_or(char::REPLACEMENT_CHARACTER)
-            .encode_utf16(&mut buffer)
-        {
-            result.push_str(&string_from_code_unit(*code_unit));
-        }
-        return;
-    }
-    match char::from_u32(code_point) {
-        Some(character) => result.push(character),
-        None => result.push_str(&string_from_code_unit(code_point as u16)),
-    }
-}
-
 pub(super) fn native_global_is_finite(
     argument_values: &[Value],
     env: &mut CallEnv,
@@ -816,9 +799,9 @@ pub(super) fn native_global_eval(
         return Ok(Value::Undefined);
     }
     let script = if direct_eval {
-        parse_direct_eval_script(&source, direct_eval_parse_context(env))
+        parse_direct_eval_wtf16_script(&source, direct_eval_parse_context(env))
     } else {
-        parse_script(&source)
+        parse_eval_script(&source)
     }
     .map_err(|error| RuntimeError {
         thrown: None,
@@ -1134,7 +1117,7 @@ pub(super) fn native_eval_script(
     let Value::String(source) = value else {
         return Ok(value);
     };
-    let script = parse_script(&source).map_err(|error| RuntimeError {
+    let script = parse_eval_script(&source).map_err(|error| RuntimeError {
         thrown: None,
         message: format!("SyntaxError: {}", error.message),
     })?;
@@ -1830,7 +1813,9 @@ fn decode_uri(source: &str, kind: UriDecodeKind) -> Result<String, RuntimeError>
         if matches!(kind, UriDecodeKind::Uri) && decoded.chars().all(is_uri_reserved) {
             output.extend(chars[escape_start..index].iter());
         } else {
-            output.push_str(decoded);
+            for character in decoded.chars() {
+                push_code_point(&mut output, character as u32);
+            }
         }
     }
     Ok(output)
@@ -1867,7 +1852,9 @@ fn decode_ascii_uri(source: &str, kind: UriDecodeKind) -> Result<String, Runtime
         if matches!(kind, UriDecodeKind::Uri) && decoded.chars().all(is_uri_reserved) {
             output.push_str(&source[escape_start..index]);
         } else {
-            output.push_str(decoded);
+            for character in decoded.chars() {
+                push_code_point(&mut output, character as u32);
+            }
         }
     }
     Ok(output)

@@ -438,31 +438,31 @@ impl<'a> JsonParser<'a> {
             };
             match ch {
                 '"' => return Ok(output),
-                '\\' => output.push(self.escape()?),
+                '\\' => crate::string::push_code_unit(&mut output, self.escape()?),
                 ch if ch <= '\u{1f}' => return Err(self.syntax_error()),
                 ch => output.push(ch),
             }
         }
     }
 
-    fn escape(&mut self) -> Result<char, RuntimeError> {
+    fn escape(&mut self) -> Result<u16, RuntimeError> {
         let Some(ch) = self.next_char() else {
             return Err(self.syntax_error());
         };
         match ch {
-            '"' | '\\' | '/' => Ok(ch),
-            'b' => Ok('\u{08}'),
-            'f' => Ok('\u{0c}'),
-            'n' => Ok('\n'),
-            'r' => Ok('\r'),
-            't' => Ok('\t'),
+            '"' | '\\' | '/' => Ok(ch as u16),
+            'b' => Ok(0x08),
+            'f' => Ok(0x0c),
+            'n' => Ok(u16::from(b'\n')),
+            'r' => Ok(u16::from(b'\r')),
+            't' => Ok(u16::from(b'\t')),
             'u' => self.unicode_escape(),
             _ => Err(self.syntax_error()),
         }
     }
 
-    fn unicode_escape(&mut self) -> Result<char, RuntimeError> {
-        let mut value = 0u32;
+    fn unicode_escape(&mut self) -> Result<u16, RuntimeError> {
+        let mut value = 0u16;
         for _ in 0..4 {
             let Some(ch) = self.next_char() else {
                 return Err(self.syntax_error());
@@ -470,9 +470,9 @@ impl<'a> JsonParser<'a> {
             let Some(digit) = ch.to_digit(16) else {
                 return Err(self.syntax_error());
             };
-            value = value * 16 + digit;
+            value = value * 16 + digit as u16;
         }
-        char::from_u32(value).ok_or_else(|| self.syntax_error())
+        Ok(value)
     }
 
     fn number<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {

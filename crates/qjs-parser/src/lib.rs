@@ -6,7 +6,7 @@ mod helpers;
 mod statement;
 
 use qjs_ast::{Script, Span};
-use qjs_lexer::{LexOptions, Token, lex, lex_with_options};
+use qjs_lexer::{LexOptions, Token, lex_with_options};
 
 /// A parse error.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -26,6 +26,22 @@ pub fn parse_script(source: &str) -> Result<Script, ParseError> {
     parse_script_with_options(source, LexOptions::default())
 }
 
+/// Parses Script source held in a JavaScript String using the runtime's
+/// canonical WTF-16 sentinel representation.
+///
+/// # Errors
+///
+/// Returns a structured error for lexing or parsing failures.
+pub fn parse_eval_script(source: &str) -> Result<Script, ParseError> {
+    parse_script_with_options(
+        source,
+        LexOptions {
+            wtf16_source: true,
+            ..LexOptions::default()
+        },
+    )
+}
+
 /// Parses dynamically-created function source.
 ///
 /// Function constructor source is parsed through a synthetic function
@@ -40,6 +56,23 @@ pub fn parse_dynamic_function_script(source: &str) -> Result<Script, ParseError>
         source,
         LexOptions {
             hashbang: false,
+            ..LexOptions::default()
+        },
+    )
+}
+
+/// Parses dynamically-created function source assembled from JavaScript String
+/// values using the runtime's canonical WTF-16 sentinel representation.
+///
+/// # Errors
+///
+/// Returns a structured error for lexing or parsing failures.
+pub fn parse_dynamic_function_wtf16_script(source: &str) -> Result<Script, ParseError> {
+    parse_script_with_options(
+        source,
+        LexOptions {
+            hashbang: false,
+            wtf16_source: true,
             ..LexOptions::default()
         },
     )
@@ -82,7 +115,35 @@ pub fn parse_direct_eval_script(
     source: &str,
     context: EvalParseContext,
 ) -> Result<Script, ParseError> {
-    let tokens = lex(source).map_err(|error| ParseError {
+    parse_direct_eval_script_with_options(source, context, false)
+}
+
+/// Parses direct-eval source held in a JavaScript String using the runtime's
+/// canonical WTF-16 sentinel representation.
+///
+/// # Errors
+///
+/// Returns a structured error for lexing or parsing failures.
+pub fn parse_direct_eval_wtf16_script(
+    source: &str,
+    context: EvalParseContext,
+) -> Result<Script, ParseError> {
+    parse_direct_eval_script_with_options(source, context, true)
+}
+
+fn parse_direct_eval_script_with_options(
+    source: &str,
+    context: EvalParseContext,
+    wtf16_source: bool,
+) -> Result<Script, ParseError> {
+    let tokens = lex_with_options(
+        source,
+        LexOptions {
+            wtf16_source,
+            ..LexOptions::default()
+        },
+    )
+    .map_err(|error| ParseError {
         message: error.message,
         span: error.span,
     })?;

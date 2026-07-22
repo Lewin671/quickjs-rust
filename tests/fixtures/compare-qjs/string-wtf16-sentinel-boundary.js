@@ -1,0 +1,67 @@
+(function () {
+  var direct = "󰀀";
+  var escaped = "\u{F0000}";
+  var bracedSurrogate = "\u{D800}";
+  var point = String.fromCodePoint(0xF0000);
+  var units = String.fromCharCode(0xDB80, 0xDC00);
+  var lone = String.fromCharCode(0xD800);
+  function tag(strings) {
+    return strings[0].length + ":" + strings.raw[0].length;
+  }
+  return [
+    direct.length,
+    direct.codePointAt(0),
+    direct.charCodeAt(0),
+    direct.charCodeAt(1),
+    direct === escaped,
+    direct === point,
+    direct === units,
+    bracedSurrogate.length,
+    bracedSurrogate.charCodeAt(0),
+    direct.slice(0, 1).charCodeAt(0),
+    direct.slice(1, 2).charCodeAt(0),
+    direct.substring(0, 1).charCodeAt(0),
+    direct.substring(1, 2).charCodeAt(0),
+    direct.substr(0, 1).charCodeAt(0),
+    direct.substr(1, 1).charCodeAt(0),
+    tag`󰀀`,
+    tag`\u{F0000}`,
+    /󰀀/u.test(direct),
+    /\u{F0000}/u.test(direct),
+    Array.from(direct)[0] === direct,
+    Array.from(direct)[0].length,
+    direct.toLowerCase() === direct,
+    direct.toUpperCase() === direct,
+    decodeURIComponent("%F3%B0%80%80") === direct,
+    decodeURIComponent("%F3%B0%80%80").length,
+    JSON.parse(JSON.stringify(direct)) === direct,
+    JSON.parse('"\\udb80\\udc00"') === direct,
+    JSON.parse('"\\ud800"').charCodeAt(0),
+    /󰀀/.test(direct),
+    /./u.exec(direct)[0] === direct,
+    /./u.exec(direct)[0].length,
+    /./.exec(direct)[0].charCodeAt(0),
+    /^(.)$/u.exec(direct)[1] === direct,
+    direct.match(/./gu).length,
+    direct.match(/./g).length,
+    /󰀀/u.source.length,
+    new RegExp(direct, "u").test(direct),
+    new RegExp(units, "u").test(direct),
+    encodeURIComponent(direct),
+    String.raw({ raw: [direct] }) === direct,
+    direct.concat(direct).length,
+    direct.repeat(2).length,
+    "".padEnd(2, direct) === direct,
+    direct.replace(/(.)/u, "$1") === direct,
+    direct.replaceAll(direct, direct) === direct,
+    direct.split("").length,
+    direct.split("")[0].charCodeAt(0),
+    direct.split("")[1].charCodeAt(0),
+    eval("'" + direct + "'") === direct,
+    eval("'" + direct + "'").length,
+    eval("'" + lone + "'") === lone,
+    eval("'" + lone + "'").length,
+    Function("return '" + direct + "';")() === direct,
+    Function("return '" + direct + "';")().length
+  ].join(":");
+})()

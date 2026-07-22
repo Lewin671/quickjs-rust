@@ -10,6 +10,21 @@ fn kinds(source: &str) -> Vec<TokenKind> {
         .collect()
 }
 
+fn internal_string_code_units(value: &str) -> Vec<u16> {
+    value
+        .chars()
+        .flat_map(|character| {
+            let code = character as u32;
+            if (0xF0000..0xF0800).contains(&code) {
+                vec![(0xD800 + code - 0xF0000) as u16]
+            } else {
+                let mut buffer = [0; 2];
+                character.encode_utf16(&mut buffer).to_vec()
+            }
+        })
+        .collect()
+}
+
 #[test]
 fn lexes_unicode_escaped_identifier_four_digit_form() {
     // `abc` decodes to `abc`.
@@ -599,6 +614,76 @@ fn lexes_surrogate_unicode_escapes() {
         panic!("expected string token");
     };
     assert_eq!(value.chars().count(), 2);
+}
+
+#[test]
+fn separates_real_sentinel_range_scalars_from_surrogate_escapes() {
+    let source = format!(r#"'{}\u{{F0000}}\u{{D800}}\uD800'"#, '\u{F0000}');
+    let tokens = lex(&source).expect("source should lex");
+    let TokenKind::String(value) = &tokens[0].kind else {
+        panic!("expected string token");
+    };
+    assert_eq!(
+        internal_string_code_units(value),
+        vec![0xDB80, 0xDC00, 0xDB80, 0xDC00, 0xD800, 0xD800]
+    );
+}
+
+#[test]
+fn distinguishes_host_utf8_source_from_runtime_wtf16_source() {
+    let lone_high = char::from_u32(0xF0000).expect("sentinel is valid");
+    let scalar_high = char::from_u32(0xF0380).expect("sentinel is valid");
+    let scalar_low = char::from_u32(0xF0400).expect("sentinel is valid");
+
+    let host_source = format!("'{lone_high}'");
+    let TokenKind::String(host_value) = &lex(&host_source).expect("host source should lex")[0].kind
+    else {
+        panic!("expected host string token");
+    };
+    assert_eq!(internal_string_code_units(host_value), vec![0xDB80, 0xDC00]);
+
+    let runtime_source = format!("'{lone_high}{scalar_high}{scalar_low}'");
+    let TokenKind::String(runtime_value) = &lex_with_options(
+        &runtime_source,
+        LexOptions {
+            wtf16_source: true,
+            ..LexOptions::default()
+        },
+    )
+    .expect("runtime source should lex")[0]
+        .kind
+    else {
+        panic!("expected runtime string token");
+    };
+    assert_eq!(
+        internal_string_code_units(runtime_value),
+        vec![0xD800, 0xDB80, 0xDC00]
+    );
+}
+
+#[test]
+fn preserves_sentinel_range_scalars_in_template_and_regexp_tokens() {
+    let template_source = format!(r#"`{}\u{{F0000}}\u{{D800}}`"#, '\u{F0000}');
+    let template_tokens = lex(&template_source).expect("template should lex");
+    let TokenKind::TemplateNoSubstitution(segment) = &template_tokens[0].kind else {
+        panic!("expected template token");
+    };
+    assert_eq!(
+        internal_string_code_units(segment.cooked.as_deref().expect("valid cooked template")),
+        vec![0xDB80, 0xDC00, 0xDB80, 0xDC00, 0xD800]
+    );
+    assert_eq!(
+        &internal_string_code_units(&segment.raw)[..2],
+        &[0xDB80, 0xDC00]
+    );
+
+    let regexp_source = format!("/{}/u", '\u{F0000}');
+    let regexp_tokens = lex(&regexp_source).expect("regexp should lex");
+    let TokenKind::RegularExpression { pattern, flags } = &regexp_tokens[0].kind else {
+        panic!("expected regexp token");
+    };
+    assert_eq!(internal_string_code_units(pattern), vec![0xDB80, 0xDC00]);
+    assert_eq!(flags, "u");
 }
 
 #[test]
