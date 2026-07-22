@@ -245,6 +245,28 @@ R3b is therefore not promoted to `main`; the next slice must remove shared
 frame construction/call staging cost or broaden dispatch across the measured
 property/allocation operations, then repeat the same fail-fast gates.
 
+### 2026-07-22 R3c result: recursion improves, ordinary calls regress
+
+The follow-up `agent/compact-frame-setup/frame-r3c` experiment boxed active
+frames, recycled bounded frame/buffer storage, reset direct-leaf children in
+place, and read immutable loop plans from bytecode-owned `OnceCell`s instead
+of cloning them into every frame. It passed 1,453 runtime tests and the complete
+5,141-case Test262 subset, but remains local negative evidence and was not
+pushed or integrated.
+
+The clean external screen showed that the structural change was real:
+SunSpider `controlflow-recursive` improved to `0.85103x` candidate/R3b,
+JetStream `hash-map` to `0.93357x`, and Kraken `json-parse-financial` was
+neutral at `0.99819x`. The same clean eight-case call screen nevertheless
+measured a `1.02156x` geometric mean. Seven cases were between `0.99685x` and
+`1.01760x`, but `top_level_function_call` regressed to `1.14024x`, failing both
+the per-case and aggregate gates. The complete 507-sample run had no
+eligibility failures; raw JSONL SHA-256 was
+`45a1b0e4e478f91fb1e9ea4c28db5daf99980239283fa67da08dade3b05b44f9`.
+R3c is therefore not a promotion candidate. Its recursive-frame result may
+inform a later general executor rewrite, but the current reset/recycling layer
+cannot be stacked onto rejected R2/R3b merely to improve one external case.
+
 ## Final Acceptance
 
 - T018's strict contract is met: every broad and pinned external case is

@@ -5854,6 +5854,53 @@ not-run cases, or actionable QuickJS-NG gaps. Evidence SHA-256 values:
 - Test262 burndown:
   `7e834737f584f43f2024cddc9bb3e6697865c9cbd8366ed8e4ebd270b4db35ad`.
 
+### 2026-07-22 string R4 accepted; literal-allocation R4 rejected
+
+Commit `55c22dec0a914ca87b2b7c670da8c70d3988dad5` (integrated on `main` as
+`b569784173a973a1740d3685eaf9e75d852695ed`) corrected `slice`, `substring`,
+and `substr` to index UTF-16 code units and changed the already fail-closed
+numeric-loop `.slice(...).length` term to compute the selected code-unit range
+without allocating a temporary substring. The admission proof still requires
+an authoritative primitive-string slot, numeric arguments, and the unchanged
+intrinsic `String.prototype.slice`; method replacement, getters, object
+coercions, and dynamic scope stay on the ordinary path.
+
+The formal 20-million-iteration runner classified the candidate as
+`timer_limited`, so the result is not a formal portfolio claim. A separate
+role-rotated three-block 40M/80M confirmation retained correct operations,
+checksums, exits, and near-linear duration. Its median ratios were
+`0.07476x` candidate/base and `0.04677x` candidate/QuickJS-NG; incremental
+slopes were `0.07211x` and `0.04660x`. Independent external controls stayed
+within the unit guard: JetStream `string-fasta 0.990x`, Kraken
+`json-stringify-tinderbox 1.025x`, and JetStream `hash-map 0.990x`
+candidate/base. Candidate binary, raw, and summary SHA-256 values are
+`60bfe9a48c30c52f59753c77cc64fbff684e0dd9204e12adaa863ad8532b3b43`,
+`495813494142bbbe3e0c01851f2bad417c6e5bfb8bbd6b17e7d8ee59b90acadb`,
+and `a94327407ed57821da8a64cd9ad5b0d21c7fe9462a7fae3b915c7d52f77c1c5c`.
+The integrated unit passed 1,422 runtime tests, the complete 5,141-case local
+Test262 subset, and all QuickJS-NG comparison fixtures before push. Hosted
+confirmation remains asynchronous.
+
+The companion allocation experiment on
+`agent/allocation-hotpath/alloc-r4` at
+`d5ecfb3e8762a0295a17a5ef05d9bf721ca479e0` is explicitly rejected and was
+not integrated. Although its dead-literal loop replacement produced
+`0.05091x` object-allocation and `0.03259x` array-allocation ratios against
+QuickJS-NG, independent review found two blockers:
+
+- counter/accumulator aliasing changed a result from `12` to `17`, and
+  limit/accumulator aliasing changed `606` to `405`;
+- the planner matched the internal allocation cases' exact counted-loop,
+  completion-temporary, constant-literal, and `acc +=` bytecode grammar, while
+  three external controls remained neutral (`1.020x`, `1.003x`, `0.993x`).
+
+The second point violates this task's generalization rule even if the first is
+repaired. The experiment is retained only as an upper-bound diagnostic and a
+source of conservative escape/authoritative-slot tests. Any successor must use
+general CFG, def-use, alias, and virtual-object analysis with an independent
+external effect; it must not reuse the absolute-offset matcher or its
+single-expression substitute interpreter.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
