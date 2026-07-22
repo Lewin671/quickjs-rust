@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+mod compact;
 mod compiler;
 mod compiler_assign;
 mod compiler_binding;
@@ -14,11 +15,6 @@ mod compiler_params;
 mod compiler_pattern;
 mod compiler_try;
 mod compiler_values;
-// R3a intentionally stages the compact lowerer before R3b routes frames
-// through it. Keep the dormant implementation checked without exposing a
-// public API or maintaining a second execution engine.
-#[allow(dead_code)]
-mod compact;
 mod ir;
 mod ir_names;
 mod upvalue_resolver;

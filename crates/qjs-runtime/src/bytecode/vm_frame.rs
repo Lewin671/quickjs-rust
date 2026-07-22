@@ -184,6 +184,12 @@ pub(super) enum FrameRun {
     DirectCall,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum FrameExecution {
+    Ordinary,
+    Compact,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

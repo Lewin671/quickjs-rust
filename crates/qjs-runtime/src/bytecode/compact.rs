@@ -6,8 +6,8 @@ use super::ir::{Bytecode, Op};
 
 /// Fixed-width opcode for the first compact-dispatch slice.
 ///
-/// R3a only lowers and validates this representation. R3b will execute it in
-/// the existing VM/frame scheduler rather than introducing another VM.
+/// Completely lowered direct-leaf frames execute this representation in the
+/// existing VM/frame scheduler rather than introducing another VM.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub(super) enum CompactOpcode {

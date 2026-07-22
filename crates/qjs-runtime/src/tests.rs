@@ -10,6 +10,7 @@ mod class_fields;
 mod class_super;
 mod classes;
 mod closure_state;
+mod compact_dispatch;
 mod date;
 mod date_format;
 mod date_setters;

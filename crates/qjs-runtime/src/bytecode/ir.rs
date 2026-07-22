@@ -752,9 +752,9 @@ pub struct Bytecode {
     /// declaration instantiation environment.
     strict: bool,
     pub(super) code: Vec<Op>,
-    /// Lazy all-or-nothing fixed-width lowering. R3a populates and validates
-    /// this cache; R3b will opt eligible frames into its executor before any
-    /// observable instruction runs.
+    /// Lazy all-or-nothing fixed-width lowering. Eligible direct-leaf frames
+    /// select the compact executor before any observable instruction runs;
+    /// incomplete lowering keeps the ordinary executor.
     pub(super) compact_program: OnceCell<Option<Rc<super::compact::CompactProgram>>>,
     pub(super) numeric_leaf_plan: OnceCell<Option<super::vm_numeric_leaf::NumericLeafPlan>>,
     pub(super) numeric_loop_plans: OnceCell<Vec<super::vm_numeric_loop::NumericLoopPlan>>,

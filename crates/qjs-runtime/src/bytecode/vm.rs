@@ -1,6 +1,8 @@
+mod compact;
+
 use super::util::{stack_underflow, typeof_value};
 use super::vm_call::user_bytecode_function;
-use super::vm_frame::{BytecodeOwner, FrameBuffers, FrameRun, OperandStack};
+use super::vm_frame::{BytecodeOwner, FrameBuffers, FrameExecution, FrameRun, OperandStack};
 use super::vm_iter::DelegateStep;
 use super::vm_props::{
     array_index_from_number, array_index_from_string, get_property, get_property_key,
@@ -77,6 +79,7 @@ pub(super) fn eval_function_bytecode<'a>(
 
 pub(super) struct FrameState<'a> {
     pub(super) bytecode: BytecodeOwner<'a>,
+    pub(super) execution: FrameExecution,
     pub(super) ip: usize,
     pub(super) control_loop_plans: Vec<super::vm_control_loop::ControlLoopPlan>,
     pub(super) numeric_loop_plans: Vec<super::vm_numeric_loop::NumericLoopPlan>,
@@ -257,6 +260,7 @@ impl<'a> Vm<'a> {
             upvalues,
             with_stack,
             direct_call_slots,
+            FrameExecution::Ordinary,
             None,
         );
         Self {
@@ -267,6 +271,10 @@ impl<'a> Vm<'a> {
         }
     }
 
+    // Keep execution route independent from direct-call slots: independent
+    // function VMs also seed direct slots but must remain ordinary, whereas
+    // only scheduler-created children may select compact execution.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn build_frame(
         bytecode: &Bytecode,
         bytecode_owner: BytecodeOwner<'a>,
@@ -274,6 +282,7 @@ impl<'a> Vm<'a> {
         upvalues: Vec<Upvalue>,
         with_stack: Vec<Value>,
         direct_call_slots: Option<DirectCallSlots<'_>>,
+        execution: FrameExecution,
         recycled_buffers: Option<FrameBuffers>,
     ) -> FrameState<'a> {
         let reused_frame = recycled_buffers.is_some();
@@ -354,6 +363,7 @@ impl<'a> Vm<'a> {
         };
         FrameState {
             bytecode: bytecode_owner,
+            execution,
             ip: 0,
             control_loop_plans,
             numeric_loop_plans,
@@ -410,6 +420,7 @@ impl<'a> Vm<'a> {
         };
         let bytecode_owner = BytecodeOwner::shared(Rc::clone(bytecode));
         let recycled_buffers = self.recycled_frame_buffers.pop();
+        let execution = Self::direct_leaf_execution(bytecode);
         Self::build_frame(
             bytecode,
             bytecode_owner,
@@ -417,8 +428,17 @@ impl<'a> Vm<'a> {
             Vec::new(),
             Vec::new(),
             Some(direct_call_slots),
+            execution,
             recycled_buffers,
         )
+    }
+
+    fn direct_leaf_execution(bytecode: &Bytecode) -> FrameExecution {
+        if bytecode.compact_program().is_some() {
+            FrameExecution::Compact
+        } else {
+            FrameExecution::Ordinary
+        }
     }
 
     fn seed_direct_call_slots(
@@ -665,6 +685,9 @@ impl<'a> Vm<'a> {
             self.pending_direct_call.is_none(),
             "a frame resumed with an unconsumed direct-call mailbox"
         );
+        if self.execution == FrameExecution::Compact {
+            return self.run_compact_current_frame();
+        }
         let bytecode_owner = self.bytecode.clone();
         self.run_current_frame_with_bytecode(bytecode_owner.as_ref())
     }
