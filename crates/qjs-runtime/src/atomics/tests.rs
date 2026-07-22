@@ -95,6 +95,33 @@ fn worker_agent_shares_memory_and_reports_back() {
 
 #[cfg(feature = "agents")]
 #[test]
+fn worker_agent_parses_canonical_wtf16_source_without_reencoding() {
+    // The source string crossing into the worker contains one real astral
+    // scalar (two UTF-16 code units) followed by one isolated surrogate. It is
+    // already in the runtime's canonical representation and must not be parsed
+    // again as host UTF-8 scalar text on the worker thread.
+    assert_eq!(
+        eval_in_main_agent(
+            "let scalar = String.fromCodePoint(0xF0000); \
+             let lone = String.fromCharCode(0xD800); \
+             let value = scalar + lone; \
+             $262.agent.start(`\
+               $262.agent.report([\
+                 '${value}'.length, \
+                 '${value}'.codePointAt(0).toString(16), \
+                 '${value}'.charCodeAt(2).toString(16) \
+               ].join(':')); \
+             `); \
+             let report = $262.agent.getReport(); \
+             while (report === null) { $262.agent.sleep(1); report = $262.agent.getReport(); } \
+             report;"
+        ),
+        Ok(Value::String("3:f0000:d800".to_owned().into()))
+    );
+}
+
+#[cfg(feature = "agents")]
+#[test]
 fn worker_agents_report_in_fifo_order() {
     // Two workers each report once; getReport drains them in arrival order.
     assert_eq!(

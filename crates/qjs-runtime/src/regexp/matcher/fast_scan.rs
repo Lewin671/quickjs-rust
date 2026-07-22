@@ -142,6 +142,11 @@ impl SimpleAtom<'_> {
                 class_match(class, *base, value, properties, options).then_some(next_index)
             }
             SimpleAtom::UnicodeEscape(value) => {
+                if options.unicode {
+                    let (current, next_index) = regexp_code_point_at(text, index, true)?;
+                    return chars_equal(current, *value, options.ignore_case, true)
+                        .then_some(next_index);
+                }
                 let current = *text.get(index)?;
                 if chars_equal(current, *value, options.ignore_case, options.unicode) {
                     return Some(index + 1);

@@ -387,6 +387,13 @@ struct LexicalBindings {
     arguments: bool,
 }
 
+struct UserFunctionOptions {
+    bytecode: Option<Rc<Bytecode>>,
+    constructable: bool,
+    source_text: Rc<str>,
+    lexical_bindings: LexicalBindings,
+}
+
 impl fmt::Debug for Function {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -430,8 +437,9 @@ impl Function {
         params: FunctionParams,
         body: Vec<Stmt>,
         env: HashMap<String, Value>,
+        source_text: Rc<str>,
     ) -> Result<Self, crate::RuntimeError> {
-        Self::new_user_with_constructable(name, params, body, env, true)
+        Self::new_user_with_constructable(name, params, body, env, true, source_text)
     }
 
     pub(crate) fn new_user_with_constructable(
@@ -440,8 +448,9 @@ impl Function {
         body: Vec<Stmt>,
         env: HashMap<String, Value>,
         constructable: bool,
+        source_text: Rc<str>,
     ) -> Result<Self, crate::RuntimeError> {
-        Self::new_user_with_bytecode(name, params, body, env, None, constructable)
+        Self::new_user_with_bytecode(name, params, body, env, None, constructable, source_text)
     }
 
     pub(crate) fn new_user_with_bytecode(
@@ -451,30 +460,38 @@ impl Function {
         env: HashMap<String, Value>,
         bytecode: Option<Rc<Bytecode>>,
         constructable: bool,
+        source_text: Rc<str>,
     ) -> Result<Self, crate::RuntimeError> {
-        Self::new_user_with_bytecode_and_lexical_this(
+        Self::new_user_with_options(
             name,
             params,
             body,
             env,
-            bytecode,
-            constructable,
-            LexicalBindings {
-                this: false,
-                arguments: false,
+            UserFunctionOptions {
+                bytecode,
+                constructable,
+                source_text,
+                lexical_bindings: LexicalBindings {
+                    this: false,
+                    arguments: false,
+                },
             },
         )
     }
 
-    fn new_user_with_bytecode_and_lexical_this(
+    fn new_user_with_options(
         name: Option<String>,
         params: FunctionParams,
         body: Vec<Stmt>,
         env: HashMap<String, Value>,
-        bytecode: Option<Rc<Bytecode>>,
-        constructable: bool,
-        lexical_bindings: LexicalBindings,
+        options: UserFunctionOptions,
     ) -> Result<Self, crate::RuntimeError> {
+        let UserFunctionOptions {
+            bytecode,
+            constructable,
+            source_text,
+            lexical_bindings,
+        } = options;
         let realm = super::env::new_realm(env);
         let has_dynamic_function_realm = realm.dynamic_function_realm_global().is_some();
         let prototype = ObjectRef::with_prototype(
@@ -513,7 +530,7 @@ impl Function {
             realm_upvalue_slots: 0,
             local_names: Rc::new(local_names),
             bytecode: Some(bytecode),
-            source_text: None,
+            source_text: Some(source_text),
             native: None,
             constructable,
             is_strict,

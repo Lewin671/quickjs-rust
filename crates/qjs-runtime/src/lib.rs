@@ -247,7 +247,11 @@ pub(crate) fn eval_worker_source(
     source: &str,
     context: crate::agent::AgentContextRef,
 ) -> Result<Value, EvalError> {
-    let script = parse_script(source).map_err(|error| EvalError {
+    // `$262.agent.start` receives a JavaScript String, so `source` already uses
+    // the runtime's canonical WTF-16 sentinel representation. Parsing it as
+    // host UTF-8 would expand every sentinel-range scalar a second time and
+    // turn isolated surrogates into unrelated astral values.
+    let script = qjs_parser::parse_eval_script(source).map_err(|error| EvalError {
         kind: EvalErrorKind::Parse,
         message: error.message,
     })?;

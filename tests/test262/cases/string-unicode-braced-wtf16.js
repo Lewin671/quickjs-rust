@@ -99,3 +99,9 @@ sameValue(/(?<=(.))$/u.exec(direct)[1].length, 2, "lookbehind dot starts before 
 sameValue(/(?<=([\s\S]))$/u.exec(direct)[1].length, 2, "lookbehind class starts before the whole scalar");
 sameValue(/(?<=(.)\1)$/u.exec(doubled)[1].length, 2, "lookbehind backward reference captures the whole scalar");
 sameValue(/(?<=\1(.))$/u.exec(doubled)[1].length, 2, "lookbehind forward reference captures the whole scalar");
+sameValue(/(.)\1/u.test(doubled), true, "unicode backreference compares complete scalar captures");
+sameValue(/(.)\1/v.test(doubled), true, "unicode sets backreference compares complete scalar captures");
+sameValue(/\uDB80/u.test(direct), false, "unicode escape cannot match the scalar high surrogate");
+sameValue(/\uDB80+/u.test(direct), false, "quantified unicode escape cannot match the scalar high surrogate");
+sameValue(/\uDB80/v.test(direct), false, "unicode sets escape cannot match the scalar high surrogate");
+sameValue(/\uDB80+/v.test(direct), false, "quantified unicode sets escape cannot match the scalar high surrogate");

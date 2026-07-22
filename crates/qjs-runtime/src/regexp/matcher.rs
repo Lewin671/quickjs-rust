@@ -4,6 +4,7 @@ use crate::string::{
     advance_string_index, char_from_code_unit, string_code_units, surrogate_escape_code_unit,
 };
 
+mod backreferences;
 mod classes;
 mod escapes;
 mod fast_scan;
@@ -13,6 +14,7 @@ mod normalization;
 #[cfg(test)]
 mod tests;
 
+use backreferences::{match_unicode_backreference_forward, match_unicode_backreference_reverse};
 use classes::class_match;
 use escapes::{
     ParsedEscape, ParsedPropertyEscape, PropertyCache, chars_equal, control_letter_escape,
@@ -1209,6 +1211,15 @@ fn match_backreference(
     let Some((start, end)) = capture else {
         return vec![(next_pc, state)];
     };
+    if options.unicode {
+        let Some(next_index) =
+            match_unicode_backreference_forward(text, start, end, state.index, options.ignore_case)
+        else {
+            return Vec::new();
+        };
+        state.index = next_index;
+        return vec![(next_pc, state)];
+    }
     let capture_len = end - start;
     if state.index + capture_len > text.len() {
         return Vec::new();
@@ -1237,6 +1248,15 @@ fn match_backreference_reverse(
     let Some((start, end)) = capture else {
         return vec![state];
     };
+    if options.unicode {
+        let Some(begin) =
+            match_unicode_backreference_reverse(text, start, end, state.index, options.ignore_case)
+        else {
+            return Vec::new();
+        };
+        state.index = begin;
+        return vec![state];
+    }
     let capture_len = end - start;
     let Some(begin) = state.index.checked_sub(capture_len) else {
         return Vec::new();
@@ -1265,6 +1285,16 @@ fn match_unicode_escape(
     unicode: bool,
 ) -> Vec<(usize, MatchState)> {
     let mut matches = Vec::new();
+    if unicode {
+        if let Some((current, next_index)) = regexp_code_point_at(text, state.index, true)
+            && chars_equal(current, value, ignore_case, true)
+        {
+            let mut matched = state;
+            matched.index = next_index;
+            matches.push((next_pc, matched));
+        }
+        return matches;
+    }
     if text
         .get(state.index)
         .is_some_and(|current| chars_equal(*current, value, ignore_case, unicode))

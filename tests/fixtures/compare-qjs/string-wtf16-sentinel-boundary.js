@@ -85,6 +85,17 @@
     /(?<=(.))$/u.exec(direct)[1].length,
     /(?<=([\s\S]))$/u.exec(direct)[1].length,
     /(?<=(.)\1)$/u.exec(direct + direct)[1].length,
-    /(?<=\1(.))$/u.exec(direct + direct)[1].length
+    /(?<=\1(.))$/u.exec(direct + direct)[1].length,
+    /^(.)\1$/u.test(direct + direct),
+    /\uDB80/u.test(direct),
+    /\uDB80+/u.test(direct),
+    Function("a", "return a;").toString() ===
+      "function anonymous(a\n) {\nreturn a;\n}",
+    (function* () {}).constructor("a", "yield a;").toString() ===
+      "function* anonymous(a\n) {\nyield a;\n}",
+    (async function () {}).constructor("a", "return await a;").toString() ===
+      "async function anonymous(a\n) {\nreturn await a;\n}",
+    (async function* () {}).constructor("a", "yield await a;").toString() ===
+      "async function* anonymous(a\n) {\nyield await a;\n}"
   ].join(":");
 })()
