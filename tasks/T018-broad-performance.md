@@ -6002,6 +6002,69 @@ all 207 QuickJS-NG comparison fixtures. Hosted broad, external-suite, and
 full Test262 confirmation remains asynchronous; only that exact-main evidence
 can close the allocation cases in the strict every-case contract.
 
+The exact-main hosted closure for `17b89142c8978d6e8ed3d5ec2ffe4726d0e3eaf5`
+completed after that local acceptance. Test262 Coverage run `29923200787`
+reported all **42,672/42,672** configured Rust cases passing, with zero
+failures, timeouts, not-run cases, or actionable QuickJS-NG gaps. Performance
+Preview run `29922926945` retained all 25 broad cases, but was correctly
+classified `inconclusive`/`non_claim`. Object and array allocation measured
+0.8564x and 1.1640x QuickJS-NG on the hosted runner, while `property_read` and
+`array_read` regressed to 7.6165x and 5.0757x QuickJS-NG. The latter two
+regressions exposed a real compatibility bug: scalar replacement wrote
+`undefined` into the local aliases used by the precompiled numeric-loop
+planner, so the planner could no longer prepare its fast path. The hosted
+external preview remained far from the campaign goal at 8.170x for the
+JetStream subset, 4.796x for comparable Kraken cases, and 7.425x for
+SunSpider. Broad raw/report SHA-256 values are
+`e7856247c021fa3330abde2a8968691c624007474a740b6da0f07c038c6bc20e` and
+`1888fb6902cef9fa59c3157a4b5bcde2530f135e7aac825655b51fa1f46a9165`;
+external raw/report values are
+`6ef2c2971ed2dd3b96dfedc142ab3d4d16f25f35db7202a9350466354ae5c129` and
+`6ceb16e6a229d2a708e9e4ef9b7f2764786a516744b4fda93c4f7c0585a7d293`.
+
+### 2026-07-22 function-literal scalar replacement and loop compatibility
+
+Commits `20090831` and `2a544b11` extend the same general escape analysis to
+provably non-escaping function literals. Eligible literals are represented by
+frame-owned scalar metadata and called directly through the existing VM;
+ordinary function allocation and property materialization remain the fallback.
+Admission is fail-closed and does not inspect benchmark identities, source
+paths, checksums, or iteration counts.
+
+Two independent correctness reviews caught creation-context loss in the first
+implementation. A named function's immutable inner-name binding and direct
+`eval` frame bindings must remain observable to nested calls. The final runtime
+therefore selects full function SRA only when there are no deopt bindings,
+immutable function-name bindings, or active `with` environments; otherwise it
+uses a same-length data-only object/array stream or original bytecode. It also
+rejects any virtual candidate whose allocation or use overlaps a numeric,
+control, or numeric-mutation loop plan. This restores the exact precompiled
+loop plan instead of trying to reconstruct its aliases after lowering. Mixed
+functions can still scalar-replace an independent data literal while the
+context-sensitive function remains materialized.
+
+The final focused three-role run retained 45/45 eligible samples and all 120
+linearity checks. Its median candidate/QuickJS-NG ratios were 0.09003x for
+`property_read`, 0.05722x for `array_read`, and 0.41950x for
+`closure_allocation_call`. A separate allocation rerun measured 0.45564x for
+`object_allocation`, 0.50413x for `array_allocation`, and 0.41626x for
+`closure_allocation_call`; these remain local directional evidence because the
+array result is just above the strict 0.50x line and hosted exact-main evidence
+is authoritative. A role-reversed candidate/base run measured medians of
+1.01063x, 0.99464x, and 1.02414x for the same three allocation cases. The
+closure movement is below the predeclared 3% rejection line but remains a
+code-layout risk to verify on hosted Linux. Raw SHA-256 values are
+`9d17e1aa21de17d3a618ca89a498ddad5feb81db42384c9b970f39bdf0014d2c`,
+`289f70ea3789df667c0ba703c24de4ac0acca3441a72b432fb760a089fbf7469`,
+`e354b01e7c28e0b53e65f68484a16940ccba91ebd5d384802c726edcc7eca32d`, and
+`7e22e4bcce7c643912d2442cbf6acc791c1fed033f485bd7e5f84d2fd3f8b828`.
+
+Before integration, the combined branch passed 1,489 runtime tests, workspace
+Clippy, all QuickJS-NG comparisons, the touched 65-case eval/function Test262
+slice, and the full repository check including all 5,143 curated Test262 cases.
+Hosted branch CI and the exact-main broad, external, and full Test262 runs are
+asynchronous acceptance evidence; this local unit does not close B4 or B5.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
