@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use crate::{
     CallEnv, Function, NativeFunction, RuntimeError, Value, call_function,
-    function::{call_direct_leaf_function, is_direct_leaf_function},
+    function::{
+        DirectLeafArguments, is_direct_leaf_function, stage_direct_leaf_function,
+        try_eval_direct_leaf_numeric,
+    },
     to_int32_number,
 };
 
@@ -25,7 +28,7 @@ impl Vm<'_> {
         })
     }
 
-    pub(super) fn call(&mut self, argc: usize) -> Result<(), RuntimeError> {
+    pub(super) fn call(&mut self, argc: usize) -> Result<bool, RuntimeError> {
         let direct_leaf = argc <= 1
             && self
                 .stack
@@ -36,8 +39,16 @@ impl Vm<'_> {
         if direct_leaf {
             let argument = if argc == 1 { Some(self.pop()?) } else { None };
             let callee = self.pop()?;
-            let arguments = argument.as_slice();
-            return self.call_direct_leaf_callee(callee, Value::Undefined, arguments);
+            if let Some(value) = try_eval_direct_leaf_numeric(&callee, argument.as_slice()) {
+                self.stack.push(value);
+                return Ok(false);
+            }
+            let arguments = match argument {
+                Some(argument) => DirectLeafArguments::one(argument),
+                None => DirectLeafArguments::empty(),
+            };
+            self.stage_direct_leaf_callee(callee, Value::Undefined, arguments);
+            return Ok(true);
         }
         let fixed_multi_argument_direct_leaf = argc <= 3
             && self
@@ -58,20 +69,42 @@ impl Vm<'_> {
     // zero/one-argument path is hotter across the broad workload, and inlining
     // all three shapes makes that unrelated path measurably slower.
     #[inline(never)]
-    fn call_fixed_multi_argument_direct_leaf(&mut self, argc: usize) -> Result<(), RuntimeError> {
+    fn call_fixed_multi_argument_direct_leaf(&mut self, argc: usize) -> Result<bool, RuntimeError> {
         match argc {
             2 => {
                 let second = self.pop()?;
                 let first = self.pop()?;
                 let callee = self.pop()?;
-                self.call_direct_leaf_callee(callee, Value::Undefined, &[first, second])
+                let arguments = [first, second];
+                if let Some(value) = try_eval_direct_leaf_numeric(&callee, &arguments) {
+                    self.stack.push(value);
+                    return Ok(false);
+                }
+                let [first, second] = arguments;
+                self.stage_direct_leaf_callee(
+                    callee,
+                    Value::Undefined,
+                    DirectLeafArguments::two(first, second),
+                );
+                Ok(true)
             }
             3 => {
                 let third = self.pop()?;
                 let second = self.pop()?;
                 let first = self.pop()?;
                 let callee = self.pop()?;
-                self.call_direct_leaf_callee(callee, Value::Undefined, &[first, second, third])
+                let arguments = [first, second, third];
+                if let Some(value) = try_eval_direct_leaf_numeric(&callee, &arguments) {
+                    self.stack.push(value);
+                    return Ok(false);
+                }
+                let [first, second, third] = arguments;
+                self.stage_direct_leaf_callee(
+                    callee,
+                    Value::Undefined,
+                    DirectLeafArguments::three(first, second, third),
+                );
+                Ok(true)
             }
             _ => unreachable!("fixed multi-argument calls contain two or three values"),
         }
@@ -84,7 +117,10 @@ impl Vm<'_> {
     ) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
-        self.call_callee_with_direct_eval(callee, Value::Undefined, arguments, is_strict)
+        let staged =
+            self.call_callee_with_marker(callee, Value::Undefined, arguments, true, is_strict)?;
+        debug_assert!(!staged, "direct eval must stay on the fallback path");
+        Ok(())
     }
 
     fn call_callee(
@@ -92,18 +128,8 @@ impl Vm<'_> {
         callee: Value,
         this_value: Value,
         arguments: Vec<Value>,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<bool, RuntimeError> {
         self.call_callee_with_marker(callee, this_value, arguments, false, false)
-    }
-
-    fn call_callee_with_direct_eval(
-        &mut self,
-        callee: Value,
-        this_value: Value,
-        arguments: Vec<Value>,
-        is_strict: bool,
-    ) -> Result<(), RuntimeError> {
-        self.call_callee_with_marker(callee, this_value, arguments, true, is_strict)
     }
 
     fn call_callee_with_marker(
@@ -113,7 +139,7 @@ impl Vm<'_> {
         arguments: Vec<Value>,
         direct_eval: bool,
         direct_eval_strict: bool,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<bool, RuntimeError> {
         if matches!(&callee, Value::Function(function) if function.native.is_some()) {
             let realm_env = self.realm_env();
             if let Some(result) =
@@ -122,7 +148,7 @@ impl Vm<'_> {
                 if let Some(value) = self.handle_runtime_result(result)? {
                     self.stack.push(value);
                 }
-                return Ok(());
+                return Ok(false);
             }
         }
         // `fn.apply(this, denseArray)` for a self-contained native target reads
@@ -144,10 +170,19 @@ impl Vm<'_> {
             if let Some(value) = self.handle_runtime_result(result)? {
                 self.stack.push(value);
             }
-            return Ok(());
+            return Ok(false);
         }
         if !direct_eval && is_direct_leaf_function(&callee) {
-            return self.call_direct_leaf_callee(callee, this_value, &arguments);
+            if let Some(value) = try_eval_direct_leaf_numeric(&callee, &arguments) {
+                self.stack.push(value);
+                return Ok(false);
+            }
+            self.stage_direct_leaf_callee(
+                callee,
+                this_value,
+                DirectLeafArguments::from_vec(arguments),
+            );
+            return Ok(true);
         }
         let effective_direct_eval = direct_eval
             && matches!(&callee, Value::Function(function) if function.native == Some(NativeFunction::Eval));
@@ -202,7 +237,7 @@ impl Vm<'_> {
         if let Some(result) = self.handle_call_result(result)? {
             self.stack.push(result);
         }
-        Ok(())
+        Ok(false)
     }
 
     fn marked_dynamic_realm_snapshot(&self) -> Option<HashMap<String, Value>> {
@@ -250,7 +285,7 @@ impl Vm<'_> {
         }
     }
 
-    pub(super) fn call_spread(&mut self) -> Result<(), RuntimeError> {
+    pub(super) fn call_spread(&mut self) -> Result<bool, RuntimeError> {
         let arguments = self.pop_argument_array("function call spread")?;
         let callee = self.pop()?;
         self.call_callee(callee, Value::Undefined, arguments)
@@ -259,12 +294,15 @@ impl Vm<'_> {
     pub(super) fn call_direct_eval_spread(&mut self, is_strict: bool) -> Result<(), RuntimeError> {
         let arguments = self.pop_argument_array("direct eval spread")?;
         let callee = self.pop()?;
-        self.call_callee_with_direct_eval(callee, Value::Undefined, arguments, is_strict)
+        let staged =
+            self.call_callee_with_marker(callee, Value::Undefined, arguments, true, is_strict)?;
+        debug_assert!(!staged, "direct eval must stay on the fallback path");
+        Ok(())
     }
 
     /// Calls a pre-resolved callee whose receiver and callee are already on the
     /// stack as `[receiver, callee, args...]`.
-    pub(super) fn call_resolved(&mut self, argc: usize) -> Result<(), RuntimeError> {
+    pub(super) fn call_resolved(&mut self, argc: usize) -> Result<bool, RuntimeError> {
         let direct_leaf = argc <= 1
             && self
                 .stack
@@ -276,8 +314,16 @@ impl Vm<'_> {
             let argument = if argc == 1 { Some(self.pop()?) } else { None };
             let callee = self.pop()?;
             let this_value = self.pop()?;
-            let arguments = argument.as_slice();
-            return self.call_direct_leaf_callee(callee, this_value, arguments);
+            if let Some(value) = try_eval_direct_leaf_numeric(&callee, argument.as_slice()) {
+                self.stack.push(value);
+                return Ok(false);
+            }
+            let arguments = match argument {
+                Some(argument) => DirectLeafArguments::one(argument),
+                None => DirectLeafArguments::empty(),
+            };
+            self.stage_direct_leaf_callee(callee, this_value, arguments);
+            return Ok(true);
         }
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
@@ -285,32 +331,30 @@ impl Vm<'_> {
         self.call_callee(callee, this_value, arguments)
     }
 
-    pub(super) fn call_resolved_spread(&mut self) -> Result<(), RuntimeError> {
+    pub(super) fn call_resolved_spread(&mut self) -> Result<bool, RuntimeError> {
         let arguments = self.pop_argument_array("super method call spread")?;
         let callee = self.pop()?;
         let this_value = self.pop()?;
         self.call_callee(callee, this_value, arguments)
     }
 
-    fn call_direct_leaf_callee(
+    fn stage_direct_leaf_callee(
         &mut self,
         callee: Value,
         this_value: Value,
-        arguments: &[Value],
-    ) -> Result<(), RuntimeError> {
-        let result = call_direct_leaf_function(
+        arguments: DirectLeafArguments,
+    ) {
+        stage_direct_leaf_function(
             callee,
             this_value,
             arguments,
-            &self.env,
-            self.module_host.clone(),
+            &self.current.env,
+            self.current.module_host.clone(),
             #[cfg(feature = "agents")]
-            self.agent_context.clone(),
+            self.current.agent_context.clone(),
+            &mut self.pending_direct_call,
         );
-        if let Some(value) = self.handle_call_result(result)? {
-            self.stack.push(value);
-        }
-        Ok(())
+        debug_assert!(self.pending_direct_call.is_some());
     }
 }
 

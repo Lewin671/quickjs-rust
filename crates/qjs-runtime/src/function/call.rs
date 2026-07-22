@@ -40,6 +40,84 @@ const CROSS_REALM_SUPPRESSED_ERROR_PROTOTYPE: &str = "__quickjsRustRealmSuppress
 const CROSS_REALM_ITERATOR_PROTOTYPE: &str = "__quickjsRustRealmIteratorPrototype";
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
+/// Owned argument storage for a direct-leaf call suspended between VM frames.
+///
+/// The ordinary zero-to-three argument shapes stay inline. Calls that already
+/// materialized a larger or spread argument vector transfer that allocation
+/// into the prepared call instead of cloning it.
+pub(crate) enum DirectLeafArguments {
+    Inline { values: [Value; 3], len: usize },
+    Heap(Vec<Value>),
+}
+
+impl DirectLeafArguments {
+    pub(crate) fn empty() -> Self {
+        Self::Inline {
+            values: [Value::Undefined, Value::Undefined, Value::Undefined],
+            len: 0,
+        }
+    }
+
+    pub(crate) fn one(value: Value) -> Self {
+        Self::Inline {
+            values: [value, Value::Undefined, Value::Undefined],
+            len: 1,
+        }
+    }
+
+    pub(crate) fn two(first: Value, second: Value) -> Self {
+        Self::Inline {
+            values: [first, second, Value::Undefined],
+            len: 2,
+        }
+    }
+
+    pub(crate) fn three(first: Value, second: Value, third: Value) -> Self {
+        Self::Inline {
+            values: [first, second, third],
+            len: 3,
+        }
+    }
+
+    pub(crate) fn from_vec(values: Vec<Value>) -> Self {
+        if values.len() > 3 {
+            return Self::Heap(values);
+        }
+        let mut values = values.into_iter();
+        match values.len() {
+            0 => Self::empty(),
+            1 => Self::one(values.next().expect("one direct-call argument")),
+            2 => Self::two(
+                values.next().expect("first direct-call argument"),
+                values.next().expect("second direct-call argument"),
+            ),
+            3 => Self::three(
+                values.next().expect("first direct-call argument"),
+                values.next().expect("second direct-call argument"),
+                values.next().expect("third direct-call argument"),
+            ),
+            _ => unreachable!("small direct-call arguments are bounded above"),
+        }
+    }
+
+    pub(crate) fn as_slice(&self) -> &[Value] {
+        match self {
+            Self::Inline { values, len } => &values[..*len],
+            Self::Heap(values) => values,
+        }
+    }
+}
+
+/// A direct-leaf bytecode call whose observable call setup has completed but
+/// whose body has not started. Every field is owned so the VM scheduler can
+/// suspend the caller before installing the child frame.
+pub(crate) struct PreparedDirectLeafCall {
+    pub(crate) function: Function,
+    pub(crate) env: CallEnv,
+    pub(crate) this_value: Option<Value>,
+    pub(crate) arguments: DirectLeafArguments,
+}
+
 pub(crate) fn call_function(
     callee: Value,
     this_value: Value,
@@ -280,6 +358,74 @@ pub(crate) fn call_direct_leaf_function(
     }
     let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
     eval_function_bytecode_with_direct_call_slots(bytecode, call_env, true, direct_call_slots).value
+}
+
+/// Probes the allocation-free numeric leaf path without taking ownership of
+/// the callee or arguments. A miss leaves every value available for the
+/// scheduler's owned frame preparation.
+#[inline]
+pub(crate) fn try_eval_direct_leaf_numeric(
+    callee: &Value,
+    argument_values: &[Value],
+) -> Option<Value> {
+    let Value::Function(function) = callee else {
+        unreachable!("direct leaf predicate only accepts functions");
+    };
+    let bytecode = function
+        .bytecode
+        .as_ref()
+        .expect("direct leaf predicate requires bytecode");
+    try_eval_numeric_leaf(
+        bytecode,
+        &function.params,
+        argument_values,
+        &function.upvalues,
+    )
+}
+
+// Keep compatibility-environment construction and the 272-byte owned frame
+// payload out of the numeric-hit stack frame. Callers invoke this path only
+// after one borrowed numeric leaf probe declines the call.
+#[inline(never)]
+pub(crate) fn stage_direct_leaf_function(
+    callee: Value,
+    this_value: Value,
+    argument_values: DirectLeafArguments,
+    env: &CallEnv,
+    module_host: Option<crate::module::ModuleHostRef>,
+    #[cfg(feature = "agents")] agent_context: Option<crate::agent::AgentContextRef>,
+    pending_direct_call: &mut Option<PreparedDirectLeafCall>,
+) {
+    debug_assert!(
+        pending_direct_call.is_none(),
+        "direct-call staging requires an empty VM mailbox"
+    );
+    let Value::Function(function) = callee else {
+        unreachable!("direct leaf predicate only accepts functions");
+    };
+    let bytecode = function
+        .bytecode
+        .as_ref()
+        .expect("direct leaf predicate requires bytecode");
+    let (mut call_env, direct_this_value) =
+        direct_leaf_frame_env(&function, bytecode, this_value, env);
+    if call_env.module_host().is_none()
+        && let Some(host) = module_host
+    {
+        call_env.set_module_host(host);
+    }
+    #[cfg(feature = "agents")]
+    if let Some(context) = agent_context {
+        call_env.set_agent_context(context);
+    }
+
+    *pending_direct_call = Some(PreparedDirectLeafCall {
+        function,
+        env: call_env,
+        this_value: direct_this_value,
+        arguments: argument_values,
+    });
+    debug_assert!(pending_direct_call.is_some());
 }
 
 pub(crate) fn is_direct_leaf_function(callee: &Value) -> bool {
@@ -689,6 +835,25 @@ fn direct_leaf_function_env<'a>(
     argument_values: &'a [Value],
     env: &CallEnv,
 ) -> FunctionCallEnv<'a> {
+    let (frame_env, direct_this_value) = direct_leaf_frame_env(function, bytecode, this_value, env);
+    FunctionCallEnv {
+        env: frame_env,
+        direct_call_slots: Some(DirectCallSlots {
+            this_value: direct_this_value,
+            parameter_slots: bytecode.parameter_slots(),
+            arguments: argument_values,
+            upvalues: &function.upvalues,
+            realm_upvalue_slots: function.realm_upvalue_slots,
+        }),
+    }
+}
+
+fn direct_leaf_frame_env(
+    function: &Function,
+    bytecode: &Bytecode,
+    this_value: Value,
+    env: &CallEnv,
+) -> (CallEnv, Option<Value>) {
     debug_assert!(can_seed_direct_leaf_call(function, bytecode));
     let mut frame_env = env.new_direct_leaf_function_frame(function.module_imports.clone());
     let direct_this_value = if bytecode.uses_lexical_this() {
@@ -707,16 +872,7 @@ fn direct_leaf_function_env<'a>(
         frame_env.set_module_host(host);
     }
     frame_env.set_private_environment(function_private_environment(function));
-    FunctionCallEnv {
-        env: frame_env,
-        direct_call_slots: Some(DirectCallSlots {
-            this_value: direct_this_value,
-            parameter_slots: bytecode.parameter_slots(),
-            arguments: argument_values,
-            upvalues: &function.upvalues,
-            realm_upvalue_slots: function.realm_upvalue_slots,
-        }),
-    }
+    (frame_env, direct_this_value)
 }
 
 fn function_env<'a>(

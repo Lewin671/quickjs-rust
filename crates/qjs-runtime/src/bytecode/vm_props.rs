@@ -3,7 +3,9 @@ use qjs_ast::{BinaryOp, UnaryOp};
 use crate::value::{OwnDataPropertyRead, OwnDataPropertyWrite};
 use crate::{
     GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
-    array_prototype, function_delete_own_property, function_delete_own_symbol_property,
+    array_prototype,
+    function::{DirectLeafArguments, stage_direct_leaf_function, try_eval_direct_leaf_numeric},
+    function_delete_own_property, function_delete_own_symbol_property,
     function_own_property_descriptor, function_own_property_names,
     function_prototype_chain_descriptor, inherited_primitive_prototype_descriptor, property_value,
     property_value_key, property_value_key_with_receiver, string, symbol, to_int32_number,
@@ -297,17 +299,12 @@ impl Vm<'_> {
         }
     }
 
-    /// Invokes an ordinary object's getter without materializing the caller's
+    /// Prepares an ordinary object's getter without materializing the caller's
     /// compatibility environment when the getter already satisfies the direct
-    /// leaf contract. Such a getter cannot observe direct eval, `with`, or a
-    /// caller-local writeback channel; shared realm and upvalue state remains
-    /// live through the function object. Accessors outside that contract and
-    /// any exotic or Proxy-bearing chain retain the generic path.
-    pub(super) fn try_direct_leaf_getter(
-        &self,
-        receiver: &Value,
-        key: &str,
-    ) -> Option<Result<Value, RuntimeError>> {
+    /// leaf contract. The frame scheduler executes the prepared getter after
+    /// the property opcode releases its borrow. Accessors outside that contract
+    /// and any exotic or Proxy-bearing chain retain the generic path.
+    pub(super) fn try_direct_leaf_getter(&mut self, receiver: &Value, key: &str) -> Option<bool> {
         let Value::Object(object) = receiver else {
             return None;
         };
@@ -322,15 +319,22 @@ impl Vm<'_> {
         if !crate::function::is_direct_leaf_function(&getter) {
             return None;
         }
-        Some(crate::function::call_direct_leaf_function(
+        if let Some(value) = try_eval_direct_leaf_numeric(&getter, &[]) {
+            self.stack.push(value);
+            return Some(false);
+        }
+        stage_direct_leaf_function(
             getter,
             receiver.clone(),
-            &[],
-            &self.env,
-            self.module_host.clone(),
+            DirectLeafArguments::empty(),
+            &self.current.env,
+            self.current.module_host.clone(),
             #[cfg(feature = "agents")]
-            self.agent_context.clone(),
-        ))
+            self.current.agent_context.clone(),
+            &mut self.pending_direct_call,
+        );
+        debug_assert!(self.pending_direct_call.is_some());
+        Some(true)
     }
 
     pub(super) fn try_cached_get_string(

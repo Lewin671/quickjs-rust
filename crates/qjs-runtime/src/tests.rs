@@ -13,6 +13,7 @@ mod closure_state;
 mod date;
 mod date_format;
 mod date_setters;
+mod direct_leaf_trampoline;
 mod disposable_stacks;
 mod errors;
 mod expressions;

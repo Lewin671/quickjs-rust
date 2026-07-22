@@ -451,10 +451,16 @@ impl Vm<'_> {
     }
 
     pub(super) fn refresh_authoritative_slots(&mut self) {
-        self.authoritative_slots =
-            Self::initial_authoritative_slots(self.bytecode, &self.local_upvalues, &self.env);
-        self.realm_binding_slots =
-            Self::initial_realm_binding_slots(self.bytecode, &self.local_upvalues, &self.env);
+        self.authoritative_slots = Self::initial_authoritative_slots(
+            self.bytecode.as_ref(),
+            &self.local_upvalues,
+            &self.env,
+        );
+        self.realm_binding_slots = Self::initial_realm_binding_slots(
+            self.bytecode.as_ref(),
+            &self.local_upvalues,
+            &self.env,
+        );
     }
 
     /// Keeps a module's exported binding cell current for name-based writes.

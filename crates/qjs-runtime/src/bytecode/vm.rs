@@ -1,5 +1,6 @@
 use super::util::{stack_underflow, typeof_value};
 use super::vm_call::user_bytecode_function;
+use super::vm_frame::{BytecodeOwner, FrameBuffers, FrameRun, OperandStack};
 use super::vm_iter::DelegateStep;
 use super::vm_props::{
     array_index_from_number, array_index_from_string, get_property, get_property_key,
@@ -14,7 +15,10 @@ use super::{
 use crate::{
     Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, ObjectRef, PropertyKey, RuntimeError,
     SUPER_CONSTRUCTOR_BINDING, Value, construct_function,
-    function::{CallEnv, CompiledUserFunction, DynamicBindings, Realm, Upvalue, new_realm},
+    function::{
+        CallEnv, CompiledUserFunction, DynamicBindings, PreparedDirectLeafCall, Realm, Upvalue,
+        new_realm,
+    },
     initialize_builtins, is_truthy,
     property::try_to_property_key_without_coercion,
     to_js_string_with_env, to_property_key_value,
@@ -26,50 +30,6 @@ use std::{
     rc::Rc,
 };
 pub(super) type Slot = Option<Value>;
-
-pub(super) struct OperandStack<'a> {
-    bytecode: &'a Bytecode,
-    values: Vec<Value>,
-}
-
-impl<'a> OperandStack<'a> {
-    fn new(bytecode: &'a Bytecode) -> Self {
-        Self {
-            bytecode,
-            values: bytecode.take_operand_stack(),
-        }
-    }
-
-    pub(super) fn take(&mut self) -> Vec<Value> {
-        std::mem::take(&mut self.values)
-    }
-
-    pub(super) fn replace(&mut self, values: Vec<Value>) {
-        let previous = std::mem::replace(&mut self.values, values);
-        self.bytecode.recycle_operand_stack(previous);
-    }
-}
-
-impl Deref for OperandStack<'_> {
-    type Target = Vec<Value>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.values
-    }
-}
-
-impl DerefMut for OperandStack<'_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.values
-    }
-}
-
-impl Drop for OperandStack<'_> {
-    fn drop(&mut self) {
-        self.bytecode
-            .recycle_operand_stack(std::mem::take(&mut self.values));
-    }
-}
 
 pub(super) struct VmCallEnv {
     pub(super) env: CallEnv,
@@ -116,7 +76,7 @@ pub(super) fn eval_function_bytecode<'a>(
 }
 
 pub(super) struct FrameState<'a> {
-    pub(super) bytecode: &'a Bytecode,
+    pub(super) bytecode: BytecodeOwner<'a>,
     pub(super) ip: usize,
     pub(super) control_loop_plans: Vec<super::vm_control_loop::ControlLoopPlan>,
     pub(super) numeric_loop_plans: Vec<super::vm_numeric_loop::NumericLoopPlan>,
@@ -185,10 +145,21 @@ pub(super) struct FrameState<'a> {
 
 pub(super) struct Vm<'a> {
     pub(super) current: FrameState<'a>,
+    pub(super) frames: Vec<FrameState<'a>>,
+    pub(super) recycled_frame_buffers: Vec<FrameBuffers>,
+    pub(super) pending_direct_call: Option<PreparedDirectLeafCall>,
 }
 
 impl<'a> Vm<'a> {
     pub(super) fn into_frame(self) -> FrameState<'a> {
+        debug_assert!(
+            self.frames.is_empty(),
+            "completed VM retained caller frames"
+        );
+        debug_assert!(
+            self.pending_direct_call.is_none(),
+            "completed VM retained a prepared direct call"
+        );
         self.current
     }
 }
@@ -274,11 +245,46 @@ impl<'a> Vm<'a> {
 
     fn new_with_globals_upvalues_with_stack_and_direct_call_slots(
         bytecode: &'a Bytecode,
-        mut env: CallEnv,
+        env: CallEnv,
         upvalues: Vec<Upvalue>,
         with_stack: Vec<Value>,
         direct_call_slots: Option<DirectCallSlots<'_>>,
     ) -> Self {
+        let current = Self::build_frame(
+            bytecode,
+            BytecodeOwner::borrowed(bytecode),
+            env,
+            upvalues,
+            with_stack,
+            direct_call_slots,
+            None,
+        );
+        Self {
+            current,
+            frames: Vec::new(),
+            recycled_frame_buffers: Vec::new(),
+            pending_direct_call: None,
+        }
+    }
+
+    pub(super) fn build_frame(
+        bytecode: &Bytecode,
+        bytecode_owner: BytecodeOwner<'a>,
+        mut env: CallEnv,
+        upvalues: Vec<Upvalue>,
+        with_stack: Vec<Value>,
+        direct_call_slots: Option<DirectCallSlots<'_>>,
+        recycled_buffers: Option<FrameBuffers>,
+    ) -> FrameState<'a> {
+        let reused_frame = recycled_buffers.is_some();
+        let FrameBuffers {
+            stack: recycled_stack,
+            locals: recycled_locals,
+            local_upvalues: recycled_local_upvalues,
+            sloppy_global_names,
+            try_stack,
+            disposable_scopes,
+        } = recycled_buffers.unwrap_or_default();
         if (bytecode.contains_direct_eval() || bytecode.contains_with())
             && env.deopt_bindings().is_none()
         {
@@ -295,8 +301,9 @@ impl<'a> Vm<'a> {
         let agent_context = env.agent_context();
         let is_direct_call = direct_call_slots.is_some();
         let mut locals = if is_direct_call {
-            Self::initial_direct_call_slots(bytecode)
+            Self::initial_direct_call_slots(bytecode, recycled_locals)
         } else {
+            debug_assert!(!reused_frame, "only direct-leaf frames recycle buffers");
             Self::initial_slots(bytecode, &env)
         };
         let direct_upvalues = direct_call_slots
@@ -314,6 +321,7 @@ impl<'a> Vm<'a> {
                 direct_upvalues.unwrap_or(&upvalues),
                 direct_realm_upvalue_slots,
                 &env,
+                recycled_local_upvalues,
             )
         } else {
             (
@@ -339,41 +347,78 @@ impl<'a> Vm<'a> {
                 super::vm_numeric_mutation_loop::NumericMutationLoopPlan::compile_all(bytecode)
             })
             .clone();
-        Self {
-            current: FrameState {
-                bytecode,
-                ip: 0,
-                control_loop_plans,
-                numeric_loop_plans,
-                numeric_mutation_loop_plans,
-                stack: OperandStack::new(bytecode),
-                locals,
-                local_upvalues,
-                authoritative_slots,
-                realm_binding_slots,
-                upvalues,
-                env,
-                direct_this,
-                realm,
-                module_host,
-                #[cfg(feature = "agents")]
-                agent_context,
-                sloppy_global_names: Vec::new(),
-                try_stack: Vec::new(),
-                pending_throw: None,
-                pending_return: None,
-                pending_jump: None,
-                resume_mode: None,
-                stop_at_prologue: false,
-                array_prototype_cache: None,
-                array_literal_prototype_override,
-                object_prototype_cache: None,
-                with_stack,
-                direct_eval_with_stack: false,
-                disposable_scopes: Vec::new(),
-                persist_global_lexicals: true,
-            },
+        let stack = if reused_frame {
+            OperandStack::from_recycled(bytecode_owner.clone(), recycled_stack)
+        } else {
+            OperandStack::new(bytecode_owner.clone())
+        };
+        FrameState {
+            bytecode: bytecode_owner,
+            ip: 0,
+            control_loop_plans,
+            numeric_loop_plans,
+            numeric_mutation_loop_plans,
+            stack,
+            locals,
+            local_upvalues,
+            authoritative_slots,
+            realm_binding_slots,
+            upvalues,
+            env,
+            direct_this,
+            realm,
+            module_host,
+            #[cfg(feature = "agents")]
+            agent_context,
+            sloppy_global_names,
+            try_stack,
+            pending_throw: None,
+            pending_return: None,
+            pending_jump: None,
+            resume_mode: None,
+            stop_at_prologue: false,
+            array_prototype_cache: None,
+            array_literal_prototype_override,
+            object_prototype_cache: None,
+            with_stack,
+            direct_eval_with_stack: false,
+            disposable_scopes,
+            persist_global_lexicals: true,
         }
+    }
+
+    pub(super) fn build_direct_leaf_frame(
+        &mut self,
+        prepared: PreparedDirectLeafCall,
+    ) -> FrameState<'a> {
+        let PreparedDirectLeafCall {
+            function,
+            env,
+            this_value,
+            arguments,
+        } = prepared;
+        let bytecode = function
+            .bytecode
+            .as_ref()
+            .expect("prepared direct leaf requires bytecode");
+        let direct_call_slots = DirectCallSlots {
+            this_value,
+            parameter_slots: bytecode.parameter_slots(),
+            arguments: arguments.as_slice(),
+            upvalues: &function.upvalues,
+            realm_upvalue_slots: function.realm_upvalue_slots,
+        };
+        let bytecode_owner = BytecodeOwner::shared(Rc::clone(bytecode));
+        let recycled_buffers = self.recycled_frame_buffers.pop();
+        Self::build_frame(
+            bytecode,
+            bytecode_owner,
+            env,
+            Vec::new(),
+            Vec::new(),
+            Some(direct_call_slots),
+            recycled_buffers,
+        )
     }
 
     fn seed_direct_call_slots(
@@ -402,12 +447,15 @@ impl<'a> Vm<'a> {
         direct_this
     }
 
-    fn initial_direct_call_slots(bytecode: &Bytecode) -> Vec<Slot> {
-        bytecode
-            .locals
-            .iter()
-            .map(|local| local.hoisted.then_some(Value::Undefined))
-            .collect()
+    fn initial_direct_call_slots(bytecode: &Bytecode, mut slots: Vec<Slot>) -> Vec<Slot> {
+        debug_assert!(slots.is_empty(), "recycled local slots must be cleared");
+        slots.extend(
+            bytecode
+                .locals
+                .iter()
+                .map(|local| local.hoisted.then_some(Value::Undefined)),
+        );
+        slots
     }
 
     fn initial_direct_local_upvalues(
@@ -415,14 +463,19 @@ impl<'a> Vm<'a> {
         upvalues: &[Upvalue],
         received_realm_binding_slots: u128,
         env: &CallEnv,
+        mut local_upvalues: Vec<Option<Upvalue>>,
     ) -> (Vec<Option<Upvalue>>, Option<u128>) {
+        debug_assert!(
+            local_upvalues.is_empty(),
+            "recycled local upvalues must be cleared"
+        );
         // Most direct leaf calls have no captured, module, or sloppy-global
         // cells. An empty vector represents the all-None state for those
         // frames and avoids allocating one pointer-sized entry per local on
         // every call. Direct-call eligibility excludes operations that can
         // create cells later (closures, eval, and with).
         if !bytecode.has_direct_local_upvalue_routes() && !env.has_module_imports() {
-            return (Vec::new(), Some(0));
+            return (local_upvalues, Some(0));
         }
         let direct_eval_frame = matches!(
             env.get_local(crate::DIRECT_EVAL_BINDING),
@@ -431,7 +484,7 @@ impl<'a> Vm<'a> {
         let mut next_received = 0;
         let has_module_imports = env.has_module_imports();
         let mut realm_binding_slots = 0_u128;
-        let mut local_upvalues = Vec::with_capacity(bytecode.locals.len());
+        local_upvalues.reserve(bytecode.locals.len());
         for (slot, local) in bytecode.locals.iter().enumerate() {
             if has_module_imports && let Some(upvalue) = env.module_import_cell(&local.name) {
                 if local.is_received_upvalue() {
@@ -604,13 +657,29 @@ impl<'a> Vm<'a> {
         })
     }
 
-    /// Runs the bytecode loop until it returns or yields. Generator bodies
-    /// re-enter on each resume; ordinary functions/scripts run it once.
-    pub(super) fn run_completion(&mut self) -> Result<Completion, RuntimeError> {
+    /// Runs only the active frame until it completes, suspends, or requests an
+    /// eligible direct-leaf child. `run_completion` owns the surrounding frame
+    /// scheduler so opcode semantics stay centralized in this one loop.
+    pub(super) fn run_current_frame(&mut self) -> Result<FrameRun, RuntimeError> {
+        debug_assert!(
+            self.pending_direct_call.is_none(),
+            "a frame resumed with an unconsumed direct-call mailbox"
+        );
+        let bytecode_owner = self.bytecode.clone();
+        self.run_current_frame_with_bytecode(bytecode_owner.as_ref())
+    }
+
+    // Keep the owner/tag resolution in the small wrapper above. The dispatch
+    // loop receives a stable Bytecode pointer, so its backedge does not decode
+    // BytecodeOwner or reborrow it through the mutable active frame.
+    #[inline(never)]
+    fn run_current_frame_with_bytecode(
+        &mut self,
+        bytecode: &Bytecode,
+    ) -> Result<FrameRun, RuntimeError> {
         loop {
-            // Copy the shared bytecode reference out of the VM so the current
-            // instruction can stay borrowed while its handler mutates VM state.
-            let bytecode = self.bytecode;
+            // The wrapper keeps the owner alive, so this independent pointer's
+            // opcode may remain borrowed while the handler mutates the frame.
             let op = bytecode.code.get(self.ip).ok_or_else(|| RuntimeError {
                 thrown: None,
                 message: "bytecode instruction pointer out of bounds".to_owned(),
@@ -786,11 +855,15 @@ impl<'a> Vm<'a> {
                 Op::ForInKeyIsEnumerable => self.for_in_key_is_enumerable()?,
                 Op::GetPropNamed { key, cache } => {
                     let result = self.get_named_prop(key, cache);
-                    self.handle_runtime_result(result)?;
+                    if self.handle_runtime_result(result)?.unwrap_or(false) {
+                        return Ok(FrameRun::DirectCall);
+                    }
                 }
                 Op::GetPropIndex(index) => {
                     let result = self.get_index_prop(*index);
-                    self.handle_runtime_result(result)?;
+                    if self.handle_runtime_result(result)?.unwrap_or(false) {
+                        return Ok(FrameRun::DirectCall);
+                    }
                 }
                 Op::GetIterator => self.get_iterator()?,
                 Op::GetAsyncIterator => self.get_async_iterator()?,
@@ -803,7 +876,9 @@ impl<'a> Vm<'a> {
                 Op::RequireObjectCoercible => self.require_object_coercible()?,
                 Op::GetProp => {
                     let result = self.get_prop();
-                    self.handle_runtime_result(result)?;
+                    if self.handle_runtime_result(result)?.unwrap_or(false) {
+                        return Ok(FrameRun::DirectCall);
+                    }
                 }
                 Op::SetProp { is_strict } => {
                     let result = self.set_prop(*is_strict);
@@ -843,11 +918,19 @@ impl<'a> Vm<'a> {
                     let result = self.require_callable();
                     self.handle_runtime_result(result)?;
                 }
-                Op::Call(argc) => self.call(*argc)?,
+                Op::Call(argc) => {
+                    if self.call(*argc)? {
+                        return Ok(FrameRun::DirectCall);
+                    }
+                }
                 Op::CallDirectEval { argc, is_strict } => {
                     self.call_direct_eval(*argc, *is_strict)?
                 }
-                Op::CallSpread => self.call_spread()?,
+                Op::CallSpread => {
+                    if self.call_spread()? {
+                        return Ok(FrameRun::DirectCall);
+                    }
+                }
                 Op::CallDirectEvalSpread { is_strict } => {
                     self.call_direct_eval_spread(*is_strict)?
                 }
@@ -1023,8 +1106,16 @@ impl<'a> Vm<'a> {
                         self.handle_runtime_result(result)?;
                     }
                 }
-                Op::CallResolved(argc) => self.call_resolved(*argc)?,
-                Op::CallResolvedSpread => self.call_resolved_spread()?,
+                Op::CallResolved(argc) => {
+                    if self.call_resolved(*argc)? {
+                        return Ok(FrameRun::DirectCall);
+                    }
+                }
+                Op::CallResolvedSpread => {
+                    if self.call_resolved_spread()? {
+                        return Ok(FrameRun::DirectCall);
+                    }
+                }
                 Op::SuperCall(argc) => {
                     let arguments = self.pop_arguments(*argc)?;
                     self.super_call(arguments)?;
@@ -1130,7 +1221,7 @@ impl<'a> Vm<'a> {
                 Op::ExitTry => self.exit_try()?,
                 Op::EndFinally => {
                     if let Some(value) = self.end_finally()? {
-                        return Ok(Completion::Return(value));
+                        return Ok(FrameRun::Complete(Completion::Return(value)));
                     }
                 }
                 Op::DiscardPendingAbrupt => {
@@ -1140,7 +1231,7 @@ impl<'a> Vm<'a> {
                 Op::Return => {
                     let value = self.stack.pop().unwrap_or(Value::Undefined);
                     if let Some(value) = self.return_value(value)? {
-                        return Ok(Completion::Return(value));
+                        return Ok(FrameRun::Complete(Completion::Return(value)));
                     }
                 }
                 Op::Throw => {
@@ -1157,16 +1248,16 @@ impl<'a> Vm<'a> {
                     self.enter_body_deopt_scope();
                     if self.stop_at_prologue {
                         self.stop_at_prologue = false;
-                        return Ok(Completion::PrologueEnd);
+                        return Ok(FrameRun::Complete(Completion::PrologueEnd));
                     }
                 }
                 Op::Yield => {
                     let value = self.pop()?;
-                    return Ok(Completion::Yield(value));
+                    return Ok(FrameRun::Complete(Completion::Yield(value)));
                 }
                 Op::Await => {
                     let value = self.pop()?;
-                    return Ok(Completion::Await(value));
+                    return Ok(FrameRun::Complete(Completion::Await(value)));
                 }
                 Op::YieldDelegate {
                     iterator_slot,
@@ -1174,17 +1265,27 @@ impl<'a> Vm<'a> {
                     async_delegate,
                 } => match self.yield_delegate(*iterator_slot, *next_slot, *async_delegate)? {
                     DelegateStep::Suspend(value) if *async_delegate => {
-                        return Ok(Completion::YieldDelegateAsync(value));
+                        return Ok(FrameRun::Complete(Completion::YieldDelegateAsync(value)));
                     }
-                    DelegateStep::Suspend(value) => return Ok(Completion::YieldDelegate(value)),
-                    DelegateStep::Await(value) => return Ok(Completion::YieldDelegateAwait(value)),
+                    DelegateStep::Suspend(value) => {
+                        return Ok(FrameRun::Complete(Completion::YieldDelegate(value)));
+                    }
+                    DelegateStep::Await(value) => {
+                        return Ok(FrameRun::Complete(Completion::YieldDelegateAwait(value)));
+                    }
                     DelegateStep::AwaitReturn(value) => {
-                        return Ok(Completion::YieldDelegateAwaitReturn(value));
+                        return Ok(FrameRun::Complete(Completion::YieldDelegateAwaitReturn(
+                            value,
+                        )));
                     }
                     DelegateStep::AwaitReturnValue(value) => {
-                        return Ok(Completion::YieldDelegateAwaitReturnValue(value));
+                        return Ok(FrameRun::Complete(
+                            Completion::YieldDelegateAwaitReturnValue(value),
+                        ));
                     }
-                    DelegateStep::Return(value) => return Ok(Completion::Return(value)),
+                    DelegateStep::Return(value) => {
+                        return Ok(FrameRun::Complete(Completion::Return(value)));
+                    }
                     DelegateStep::Continue => {}
                 },
                 Op::ImportCall { has_options } => self.import_call(*has_options)?,
@@ -1203,7 +1304,7 @@ impl<'a> Vm<'a> {
         }
     }
 
-    fn get_prop(&mut self) -> Result<(), RuntimeError> {
+    fn get_prop(&mut self) -> Result<bool, RuntimeError> {
         let key_value = self.pop()?;
         let object = self.pop()?;
         if matches!(object, Value::Null | Value::Undefined) {
@@ -1234,7 +1335,7 @@ impl<'a> Vm<'a> {
             && let Some(value) = elements.direct_dense_index_value(index)
         {
             self.stack.push(value);
-            return Ok(());
+            return Ok(false);
         }
         // Typed-array integer-index read fast path: a non-negative integer index
         // is owned by the exotic [[Get]], so read it directly from the backing
@@ -1246,15 +1347,15 @@ impl<'a> Vm<'a> {
         {
             let value = crate::typed_array::integer_indexed_value(object, index);
             self.stack.push(value);
-            return Ok(());
+            return Ok(false);
         }
         let key = self.coerce_property_key(key_value)?;
         let value = if let Some(value) = self.try_direct_get(&object, &key) {
             value
         } else if let PropertyKey::String(key) = &key
-            && let Some(result) = self.try_direct_leaf_getter(&object, key)
+            && let Some(staged) = self.try_direct_leaf_getter(&object, key)
         {
-            result?
+            return Ok(staged);
         } else {
             let mut env = self.current_env();
             let value = get_property_key(object, &key, &mut env)?;
@@ -1262,14 +1363,14 @@ impl<'a> Vm<'a> {
             value
         };
         self.stack.push(value);
-        Ok(())
+        Ok(false)
     }
 
     fn get_named_prop(
         &mut self,
         key: &str,
         cache: &NamedPropertyCache,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<bool, RuntimeError> {
         let object = if let Some(slot) = cache.local_slot() {
             let direct_eval_lookup =
                 self.direct_eval_with_stack && self.bytecode.local_is_from_env(slot);
@@ -1283,7 +1384,7 @@ impl<'a> Vm<'a> {
                 && let Some(value) = self.try_cached_get_string(object, key, cache)
             {
                 self.stack.push(value);
-                return Ok(());
+                return Ok(false);
             }
             self.load_local(slot)?
         } else {
@@ -1304,8 +1405,8 @@ impl<'a> Vm<'a> {
         }
         let value = if let Some(value) = self.try_cached_get_string(&object, key, cache) {
             value
-        } else if let Some(result) = self.try_direct_leaf_getter(&object, key) {
-            result?
+        } else if let Some(staged) = self.try_direct_leaf_getter(&object, key) {
+            return Ok(staged);
         } else {
             let mut env = self.current_env();
             let value = get_property(object, key, &mut env)?;
@@ -1313,10 +1414,10 @@ impl<'a> Vm<'a> {
             value
         };
         self.stack.push(value);
-        Ok(())
+        Ok(false)
     }
 
-    fn get_index_prop(&mut self, encoded_index: usize) -> Result<(), RuntimeError> {
+    fn get_index_prop(&mut self, encoded_index: usize) -> Result<bool, RuntimeError> {
         let (index, local_slot) = if usize::BITS > u32::BITS {
             let encoded_slot = encoded_index >> u32::BITS;
             (
@@ -1342,7 +1443,7 @@ impl<'a> Vm<'a> {
                 };
                 if let Some(value) = value {
                     self.stack.push(value);
-                    return Ok(());
+                    return Ok(false);
                 }
             }
             self.load_local(slot)?
@@ -1366,27 +1467,30 @@ impl<'a> Vm<'a> {
             && let Some(value) = elements.direct_dense_index_value(index)
         {
             self.stack.push(value);
-            return Ok(());
+            return Ok(false);
         }
         if let Value::Object(object) = &object
             && crate::typed_array::is_typed_array_object(object)
         {
             let value = crate::typed_array::integer_indexed_value(object, index);
             self.stack.push(value);
-            return Ok(());
+            return Ok(false);
         }
 
-        let key = PropertyKey::String(index.to_string());
-        let value = if let Some(value) = self.try_direct_get(&object, &key) {
+        let key = index.to_string();
+        let property_key = PropertyKey::String(key.clone());
+        let value = if let Some(value) = self.try_direct_get(&object, &property_key) {
             value
+        } else if let Some(staged) = self.try_direct_leaf_getter(&object, &key) {
+            return Ok(staged);
         } else {
             let mut env = self.current_env();
-            let value = get_property_key(object, &key, &mut env)?;
+            let value = get_property_key(object, &property_key, &mut env)?;
             self.apply_env(env);
             value
         };
         self.stack.push(value);
-        Ok(())
+        Ok(false)
     }
 
     fn set_prop(&mut self, is_strict: bool) -> Result<(), RuntimeError> {
@@ -1713,7 +1817,7 @@ mod tests {
         let env = empty_env();
 
         let (local_upvalues, realm_binding_slots) =
-            Vm::initial_direct_local_upvalues(&bytecode, &[], 0, &env);
+            Vm::initial_direct_local_upvalues(&bytecode, &[], 0, &env, Vec::new());
 
         assert!(local_upvalues.is_empty());
         assert_eq!(realm_binding_slots, Some(0));
@@ -1729,8 +1833,13 @@ mod tests {
         let env = empty_env();
         let captured = Upvalue::new(Value::Number(42.0));
 
-        let (local_upvalues, realm_binding_slots) =
-            Vm::initial_direct_local_upvalues(&bytecode, std::slice::from_ref(&captured), 0, &env);
+        let (local_upvalues, realm_binding_slots) = Vm::initial_direct_local_upvalues(
+            &bytecode,
+            std::slice::from_ref(&captured),
+            0,
+            &env,
+            Vec::new(),
+        );
 
         assert_eq!(local_upvalues.len(), 1);
         assert_eq!(realm_binding_slots, Some(0));
@@ -1751,8 +1860,13 @@ mod tests {
         let env = CallEnv::new(realm);
         let captured = env.realm_binding_cell("captured").unwrap();
 
-        let (local_upvalues, realm_binding_slots) =
-            Vm::initial_direct_local_upvalues(&bytecode, std::slice::from_ref(&captured), 1, &env);
+        let (local_upvalues, realm_binding_slots) = Vm::initial_direct_local_upvalues(
+            &bytecode,
+            std::slice::from_ref(&captured),
+            1,
+            &env,
+            Vec::new(),
+        );
 
         assert_eq!(realm_binding_slots, Some(1));
         assert!(
@@ -1775,7 +1889,7 @@ mod tests {
         );
 
         let (local_upvalues, realm_binding_slots) =
-            Vm::initial_direct_local_upvalues(&bytecode, &[], 0, &env);
+            Vm::initial_direct_local_upvalues(&bytecode, &[], 0, &env, Vec::new());
 
         assert_eq!(local_upvalues.len(), 1);
         assert_eq!(realm_binding_slots, Some(0));
