@@ -6219,6 +6219,42 @@ Its artifact digest is
 Both hosted reports remain informational `inconclusive`/`non_claim` evidence
 on variable GitHub hardware and do not close a strict T018 case.
 
+### 2026-07-22 target-specific present-own dense array reads
+
+Commit `eabf2456` makes the existing numeric-index fast read depend only on the
+target array element. A present own dense data element shadows every prototype,
+so unrelated holes, cold descriptors, named properties, and custom or Proxy
+prototypes no longer force the read through numeric-to-string coercion. A hole
+or a special descriptor at the target index still falls back to ordinary
+property lookup. The target descriptor check formats the canonical decimal
+index into a fixed stack buffer and performs a borrowed hash lookup, avoiding
+a heap allocation on the cold-state guard itself.
+
+Focused coverage exercises filled `new Array(length)` storage, unrelated
+holes/descriptors, custom/null/Proxy prototypes, inherited hole lookup,
+target accessors, object-key `ToPropertyKey` side effects, and the transitional
+storage state where a dense write clears a hole while the same-index descriptor
+remains present. The branch passed 1,544 runtime tests, the complete
+5,148-case local Test262 subset, and all 218 QuickJS-NG comparisons.
+
+The final exact seven-block SunSpider `bitops-nsieve-bits` A/B measured
+0.709604x candidate/base with a 95% bootstrap interval of
+[0.706253x, 0.711776x], a 29.04% improvement. Internal controls remained
+neutral: `array_dynamic_read` was 0.997496x
+[0.987594x, 1.001215x], `array_read` 0.995710x
+[0.995420x, 0.999442x], and `property_dynamic_read` 0.999118x
+[0.996793x, 1.009020x]. Candidate/base binary SHA-256 values are
+`af2854e1241f6d23979126dc0e393c2a7008ccbe000a9ede467aeb79db1fe266`
+and `88c0fb379c3546a5820409943aacfdd0578081b9cef66adbd3dfc6db620473c8`.
+Internal raw, external raw, and external report SHA-256 values are
+`4f804db18b24c32f52c39c0d8f16f00a0a36d4b356eb951d640fc873b393d257`,
+`197b825f9fbfb397f5ba82ef10084437e6d28e92444f5a23691d2323eb55010c`,
+and `2daa9c75fb5bee728097915bddb2e02f7d0baa669134aed155cda30499823a58`.
+This closes a general coercion bottleneck but leaves nsieve well above the
+strict 0.50x QuickJS-NG boundary; typed dense numeric mutation remains the
+next structural step. Hosted broad/external and exact-main Test262 evidence is
+asynchronous and must confirm the local retain decision.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
