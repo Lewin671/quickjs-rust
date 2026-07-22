@@ -6255,6 +6255,25 @@ strict 0.50x QuickJS-NG boundary; typed dense numeric mutation remains the
 next structural step. Hosted broad/external and exact-main Test262 evidence is
 asynchronous and must confirm the local retain decision.
 
+### 2026-07-22 dynamic-method measurement-capacity repair
+
+The retained hash-bound selector/phi capacity run shows that the checked-in
+`dynamic_method_call` contract is too small for the optimized candidate. Its
+repeated N/2N samples were linear, and scaling those samples to the old
+50,000,000-iteration ceiling puts every one below the 500 ms formal window.
+The base and QuickJS-NG roles calibrated normally, while the other six cases
+remained complete. This isolates a case-specific measurement-capacity limit
+rather than a broad runner failure.
+
+The measurement ceiling for `dynamic_method_call` is therefore raised to
+130,000,000, and its capacity-bound formal window becomes 250 ms with a 4%
+startup ceiling. The workload, operation count, checksum model, warmup,
+timeout, and analysis policy remain unchanged. Its maximum triangular
+checksum is 8,450,000,065,000,000, below JavaScript's maximum safe integer.
+The 250 ms window still requires at least 25x startup amortization and matches
+the existing `top_level_function_call` capacity contract. This is a benchmark
+capacity repair only and is not counted as a runtime performance improvement.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
