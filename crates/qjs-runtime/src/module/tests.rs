@@ -310,11 +310,13 @@ fn namespace_exports_stay_observable_through_live_array_prototypes() {
          const directAfter = bridge.live;\n\
          const after = child.live;\n\
          const array = [];\n\
-         array[0] = 9;\n\
+         let threw = false;\n\
+         try { array[0] = 9; } catch (error) { threw = error instanceof TypeError; }\n\
+         const value = array[0];\n\
          const own = Object.prototype.hasOwnProperty.call(array, '0');\n\
          Object.setPrototypeOf(Array.prototype, original);\n\
          export const result = directBefore + ':' + before + ':' + directAfter + ':' + after \
-             + ':' + array[0] + ':' + own;",
+             + ':' + threw + ':' + value + ':' + own;",
         &[(
             "dep",
             "const zero = 1;\n\
@@ -326,7 +328,33 @@ fn namespace_exports_stay_observable_through_live_array_prototypes() {
     .expect("module graph evaluates");
     assert_eq!(
         export(&namespace, "result"),
-        Value::String("1:1:2:2:9:true".to_owned().into())
+        Value::String("1:1:2:2:true:1:false".to_owned().into())
+    );
+}
+
+#[test]
+fn namespace_without_numeric_exports_blocks_dense_array_store() {
+    let namespace = run(
+        "import * as ns from \"dep\";\n\
+         const directReceiver = {};\n\
+         const direct = Reflect.set(ns, '0', 7, directReceiver);\n\
+         const original = Object.getPrototypeOf(Array.prototype);\n\
+         Object.setPrototypeOf(Array.prototype, ns);\n\
+         const array = [];\n\
+         let threw = false;\n\
+         try { array[0] = 9; } catch (error) { threw = error instanceof TypeError; }\n\
+         const own = Object.prototype.hasOwnProperty.call(array, '0');\n\
+         const value = array[0];\n\
+         Object.setPrototypeOf(Array.prototype, original);\n\
+         export const result = direct + ':' \
+             + Object.prototype.hasOwnProperty.call(directReceiver, '0') + ':' \
+             + threw + ':' + own + ':' + value;",
+        &[("dep", "export const live = 1;")],
+    )
+    .expect("module graph evaluates");
+    assert_eq!(
+        export(&namespace, "result"),
+        Value::String("false:false:true:false:undefined".to_owned().into())
     );
 }
 

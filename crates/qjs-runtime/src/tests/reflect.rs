@@ -449,3 +449,34 @@ fn evaluates_reflect_prototype_builtins() {
     assert!(eval("Reflect.setPrototypeOf(Symbol('target'), null);").is_err());
     assert!(eval("Reflect.setPrototypeOf({}, Symbol('proto'));").is_err());
 }
+
+#[test]
+fn reflect_set_honors_array_receiver_descriptors() {
+    assert_eq!(
+        eval(
+            "let calls = 0; \
+             const target = {}; \
+             Object.defineProperty(target, '0', { value: 1, writable: true }); \
+             const accessor = []; \
+             Object.defineProperty(accessor, '0', { \
+                 get: function() { return 3; }, \
+                 set: function(value) { calls += value; }, \
+                 configurable: true \
+             }); \
+             const accessorResult = Reflect.set(target, '0', 7, accessor); \
+             const accessorDescriptor = Object.getOwnPropertyDescriptor(accessor, '0'); \
+             const blocked = []; \
+             Object.defineProperty(blocked, '0', { \
+                 value: 4, writable: false, configurable: true \
+             }); \
+             const blockedResult = Reflect.set(target, '0', 8, blocked); \
+             const blockedDescriptor = Object.getOwnPropertyDescriptor(blocked, '0'); \
+             accessorResult + ':' + calls + ':' + accessor[0] + ':' \
+                 + (typeof accessorDescriptor.set) + ':' + blockedResult + ':' \
+                 + blocked[0] + ':' + blockedDescriptor.writable;"
+        ),
+        Ok(Value::String(
+            "false:0:3:function:false:4:false".to_owned().into()
+        ))
+    );
+}

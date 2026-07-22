@@ -935,7 +935,8 @@ fn prototype_chain_has_index_hazard(slot: Option<crate::Prototype>) -> bool {
     loop {
         match current {
             Some(crate::Prototype::Object(object)) => {
-                if object.has_own_index_property()
+                if object.is_module_namespace_exotic()
+                    || object.has_own_index_property()
                     || crate::typed_array::is_typed_array_object(&object)
                 {
                     return true;

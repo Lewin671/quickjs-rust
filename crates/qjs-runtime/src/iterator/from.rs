@@ -31,7 +31,7 @@ pub(super) fn native_iterator_from(
     let iterator = iterator_flattenable(object, env)?;
 
     // If the iterator already inherits %Iterator.prototype%, return it as-is.
-    if iterator_inherits_iterator_prototype(&iterator, env) {
+    if iterator_inherits_iterator_prototype(&iterator, env)? {
         return Ok(iterator);
     }
 
@@ -105,34 +105,24 @@ fn is_object_value(value: &Value) -> bool {
 
 /// `OrdinaryHasInstance(%Iterator%, iterator)`: walks the iterator's prototype
 /// chain looking for `%Iterator.prototype%`.
-fn iterator_inherits_iterator_prototype(iterator: &Value, env: &CallEnv) -> bool {
+fn iterator_inherits_iterator_prototype(
+    iterator: &Value,
+    env: &mut CallEnv,
+) -> Result<bool, RuntimeError> {
     let Some(target) = super::iterator_prototype(env) else {
-        return false;
+        return Ok(false);
     };
-    let mut current = crate::value_prototype_slot(iterator.clone(), env);
+    let mut current =
+        crate::object::native_object_get_prototype_of(std::slice::from_ref(iterator), env)?;
     loop {
-        current = match current {
-            Some(crate::Prototype::Object(object)) => {
-                if object.ptr_eq(&target) {
-                    return true;
-                }
-                object.prototype_slot()
-            }
-            Some(crate::Prototype::Array(array)) => array.effective_prototype_slot(),
-            Some(crate::Prototype::Function(function)) => {
-                match function.internal_prototype_slot() {
-                    Some(prototype) => prototype,
-                    None => crate::function_intrinsic_prototype_slot(env),
-                }
-            }
-            // OrdinaryHasInstance obtains the prototype of a Proxy target in
-            // this runtime's no-trap prototype helper. Preserve that behavior
-            // while retaining every first-class prototype variant.
-            Some(crate::Prototype::Proxy(proxy)) => {
-                crate::value_prototype_slot(proxy.target(), env)
-            }
-            None => return false,
-        };
+        if matches!(&current, Value::Object(object) if object.ptr_eq(&target)) {
+            return Ok(true);
+        }
+        if matches!(&current, Value::Null) {
+            return Ok(false);
+        }
+        current =
+            crate::object::native_object_get_prototype_of(std::slice::from_ref(&current), env)?;
     }
 }
 
