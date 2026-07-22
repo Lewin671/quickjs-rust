@@ -6255,6 +6255,26 @@ strict 0.50x QuickJS-NG boundary; typed dense numeric mutation remains the
 next structural step. Hosted broad/external and exact-main Test262 evidence is
 asynchronous and must confirm the local retain decision.
 
+### 2026-07-22 selected numeric loop terms
+
+Commit `ef814c65` retains the selector/phi extension for the existing numeric
+loop executor. The compiler now accepts selected numeric loop terms without
+adding another VM or weakening the executor's runtime guards. The final exact
+seven-block capacity run measured `dynamic_method_call` at 0.023551x
+candidate/base with a 95% interval of [0.023490x, 0.023811x], and 0.080488x
+candidate/QuickJS-NG with [0.080348x, 0.080961x]. The six control cases had a
+1.001470x candidate/base geometric mean with [0.999853x, 1.002492x]. All
+147/147 formal measurements were eligible and every N/2N check passed. Raw
+and manifest SHA-256 values are
+`0c25436c78ddb9a81976d4e873c9129dcea36304ee16ddd6f5b723d3c144184c`
+and `57fa5fb0a48f09fe25b06547181a5447c65026fff2611868170f8d5157842919`.
+
+This is a general bytecode-shape improvement: receiver selection and numeric
+phi state are represented in the prevalidated loop plan, while any observable
+coercion, non-authoritative slot, or unsupported operation still declines to
+the normal VM. The branch passed the complete local correctness gate before
+integration; its remote CI also completed successfully.
+
 ### 2026-07-22 dynamic-method measurement-capacity repair
 
 The retained hash-bound selector/phi capacity run shows that the checked-in
@@ -6273,6 +6293,37 @@ checksum is 8,450,000,065,000,000, below JavaScript's maximum safe integer.
 The 250 ms window still requires at least 25x startup amortization and matches
 the existing `top_level_function_call` capacity contract. This is a benchmark
 capacity repair only and is not counted as a runtime performance improvement.
+
+### 2026-07-22 dense numeric mutation loops
+
+Commit `1e70253e` retains a prevalidated dense-Number mutation executor within
+the existing numeric mutation subsystem. It leases writable dense elements
+once, keeps loop-carried numeric state unboxed, executes supported numeric and
+bitwise operations without per-iteration `Value` or environment allocation,
+and publishes locals only after completed iterations. A failed entry guard
+declines before mutation. A mid-loop element, index, or storage guard failure
+publishes only completed iterations, releases the lease, and returns to the
+original loop header so the ordinary VM replays the current iteration exactly.
+
+The exact seven-block capacity run measured `array_write` at 0.047137x
+candidate/base with a 95% interval of [0.046923x, 0.047556x], and 0.070210x
+candidate/QuickJS-NG with [0.069951x, 0.070387x]. All 21 formal measurements
+and all 24 N/2N samples were eligible. The same exact binaries measured
+SunSpider `bitops-nsieve-bits` at 0.403949x candidate/base
+[0.402582x, 0.412155x] and 1.960948x candidate/QuickJS-NG
+[1.951412x, 1.969571x]; unrelated internal and external controls had no stable
+greater-than-3% regression. Capacity raw/manifest SHA-256 values are
+`6d349a01ccc95320d4a4c5c9f71465238b753cfc6f654f4db5081159dbd21836`
+and `99ed0b1b6c58323bb9e595d4eb8077260d85241f4a7c87ea728f32cfa4648dbb`.
+External raw/report values are
+`be3e8370bf7476785cbb3547bc3d052317d1ce627cb7bbcbd48796265b2f777f`
+and `84f3d911b38065f5e8cbad3969a698649309a9cfde149775f42211dbfceb1277`.
+
+The unit passed focused coverage, the complete runtime suite, the 5,148-case
+local Test262 subset, all 218 QuickJS-NG comparisons, `check-touched`, and the
+full local check before integration. The remaining nsieve gap therefore is not
+evidence that the dense mutation mechanism failed; it identifies the outer
+predicate scan as the next profile target.
 
 ### 2026-07-22 array-write measurement-capacity repair
 
@@ -6295,6 +6346,62 @@ are `6d349a01ccc95320d4a4c5c9f71465238b753cfc6f654f4db5081159dbd21836`
 and `99ed0b1b6c58323bb9e595d4eb8077260d85241f4a7c87ea728f32cfa4648dbb`.
 This is a benchmark capacity repair only and is not counted as a runtime
 performance improvement.
+
+### 2026-07-22 exact-main hosted closure and next hotspot
+
+Performance Preview `29958012732` is the first complete hosted artifact after
+the selector, dense mutation, and both capacity repairs. Its head is
+`2c6dcfff`; the exact base is `1e70253e`. Because `2c6dcfff` changes only the
+measurement contract, both roles correctly produced the same runtime binary
+SHA-256,
+`97829fd1b27f7fc065fa73e8317a2bc83c01fc0d7831ece64124011ce01e40e0`.
+All 225 measurements, 3/3 blocks, and 75 N/2N groups were valid. The hosted
+candidate/QuickJS-NG broad ratio was 0.1635x. Twenty-one of 25 cases met the
+strict 0.50x boundary; the remaining cases were `local_read` at 0.5461x,
+`object_allocation` at 1.0917x, `array_allocation` at 1.4454x, and
+`closure_allocation_call` at 1.1000x. The report remains
+`inconclusive`/`non_claim` because the GitHub runner is variable hardware, not
+because evidence was missing. Broad raw/report SHA-256 values are
+`ac34a31d6a514635b959275aa13a205a9247709e8f3eca40e635578b9ed691fb`
+and `c4a3c0af70159de1b59251607c9d80ed8a73059e88bb2e5461ea21e67b2a60c2`.
+
+The same artifact confirms that external performance, not broad v2, is now the
+dominant campaign risk. Candidate/QuickJS-NG diagnostic geometric ratios were
+7.7515x for all five JetStream ports, 4.8895x for 9/14 comparable Kraken
+ports, and 7.0550x for all 26 SunSpider ports. Five Kraken candidate cases
+timed out. No external case met the 0.50x goal; even the only QuickJS-NG win,
+`json-parse-financial` at 0.9664x, remained above it. Hosted
+`bitops-nsieve-bits` was 4.5456x QuickJS-NG. External raw/report SHA-256 values
+are `c6ad11a23e5e11514de3325ed183eec2d52247f6d585115784ab174063a6fd77`
+and `51b215e6d212be7c64c4c506b5c452b64ad0ef9f9db5cd30583f3a689a16d625`.
+
+Test262 Coverage `29958265493` independently closed correctness at the same
+`2c6dcfff` head: 42,672/42,672 configured cases passed, with zero failures,
+timeouts, not-run cases, or actionable gaps. Its burndown SHA-256 is
+`c827878cfeb2dd70746e0c24ae54cb2f0ae2faf4e68b66eb59d3f84a4ba85754`.
+
+A separate loop-plan ownership prototype removed per-frame plan-vector clones
+but missed its predeclared setup gate: one-plan `numeric`, `control`, and
+`dense` ratios were 0.891639x, 0.950275x, and 0.964203x, for a 0.934837x
+geometric mean versus the required at-most-0.90x. It was rejected without a
+commit. Result/workload SHA-256 values are
+`5d62fa02852221ee00039dee4a3ffad432d833d4d7cf7cb9ed5913f85e849ae7`
+and `0820d20cca5db747e6c6930ab021832ba989bc762f603179cb0d0aa02cb210fb`.
+This also rejects a unified plan index as the immediate priority unless a new
+profile shows repeated misses are hot.
+
+The post-dense nsieve decomposition used exact candidate binary SHA-256
+`dcef12c705a1f0a862b74b7318dd7868a8e08e0822ae73c65a50bff14b84588a`
+and preserved checksum `-1286749544853`. Thirty amplified exact rounds took
+52.33 ms each. Replaying only the same 160,000-step outer dense bit predicate
+scan took 28.64 ms per round, or 54.7% of the whole case; initialization was
+about 0.60 ms. A fixed 400,000-mutation diagnostic grew from 16 ms with one
+plan to 21 ms with 12,500 plans, placing the real workload's 7,837 active
+inner-plan setup cost at only a few milliseconds. The next retained experiment
+must therefore attack the general dense numeric predicate scan, fail closed at
+the first true predicate, and return to ordinary bytecode for the observable
+body. Plan ownership, object shapes, and benchmark-specific matching are not
+supported by this profile.
 
 ## Notes
 
