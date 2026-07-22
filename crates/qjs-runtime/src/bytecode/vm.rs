@@ -1430,7 +1430,9 @@ impl<'a> Vm<'a> {
             // loop avoids the string-key allocation and prototype walk of the
             // generic path.
             if self.array_uses_realm_prototype(&elements)
-                && !self.array_prototype_has_index_property().unwrap_or(true)
+                && !self
+                    .array_prototype_chain_has_index_hazard()
+                    .unwrap_or(true)
             {
                 self.pop()?;
                 elements.set(index, value.clone());
@@ -1466,7 +1468,9 @@ impl<'a> Vm<'a> {
             // descriptors, custom prototypes, and indexed Array.prototype
             // properties must retain the full OrdinarySet path below.
             if self.array_uses_realm_prototype(&elements)
-                && !self.array_prototype_has_index_property().unwrap_or(true)
+                && !self
+                    .array_prototype_chain_has_index_hazard()
+                    .unwrap_or(true)
             {
                 elements.set(index, value.clone());
                 self.stack.push(value);

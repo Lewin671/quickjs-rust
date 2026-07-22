@@ -69,17 +69,45 @@ impl Vm<'_> {
         }
     }
 
-    /// Whether the realm's intrinsic Array.prototype owns any indexed property.
-    /// Returns `None` when no intrinsic is available. The object is cached in
-    /// the VM so the hot path only reads the own-index count, itself O(1).
-    /// Rebinding the mutable `Array` global does not change this intrinsic.
-    pub(super) fn array_prototype_has_index_property(&mut self) -> Option<bool> {
+    /// Whether an indexed property or exotic object anywhere above an ordinary
+    /// array could intercept `array[index] = value`.
+    ///
+    /// The standard realm chain is always
+    /// `Array.prototype -> Object.prototype -> null`. Keep that overwhelmingly
+    /// common case O(1): both intrinsic identities are cached by the VM, and the
+    /// guard reads only two prototype slots plus the two maintained own-index
+    /// counters. If user code changes either prototype link, walk the custom
+    /// chain instead. Any Proxy, function, or integer-indexed exotic object is
+    /// conservatively hazardous because its `[[Set]]` cannot be reduced to an
+    /// ordinary own-index count.
+    ///
+    /// Rebinding the mutable `Array` or `Object` global does not change these
+    /// stable realm intrinsics.
+    pub(super) fn array_prototype_chain_has_index_hazard(&mut self) -> Option<bool> {
         if self.array_prototype_cache.is_none() {
             self.array_prototype_cache = array_prototype(&self.env);
         }
-        self.array_prototype_cache
-            .as_ref()
-            .map(ObjectRef::has_own_index_property)
+        if self.object_prototype_cache.is_none() {
+            self.object_prototype_cache = crate::object_prototype(&self.env);
+        }
+        let array_prototype = self.array_prototype_cache.as_ref()?;
+        let object_prototype = self.object_prototype_cache.as_ref()?;
+
+        if matches!(
+            array_prototype.prototype_slot(),
+            Some(crate::Prototype::Object(ref prototype))
+                if prototype.ptr_eq(object_prototype)
+        ) && object_prototype.prototype_slot().is_none()
+        {
+            return Some(
+                array_prototype.has_own_index_property()
+                    || object_prototype.has_own_index_property(),
+            );
+        }
+
+        Some(prototype_chain_has_index_hazard(Some(
+            crate::Prototype::Object(array_prototype.clone()),
+        )))
     }
 
     /// Whether an array uses this realm's ordinary Array.prototype, either via
@@ -829,6 +857,27 @@ pub(super) fn prototype_chain_has_proxy(slot: Option<crate::Prototype>) -> bool 
             Some(crate::Prototype::Function(function)) => {
                 current = function.internal_prototype_slot().flatten();
             }
+            None => return false,
+        }
+    }
+}
+
+/// Whether any object in a non-standard prototype chain can affect an indexed
+/// assignment. Ordinary objects expose an O(1) own-index count; unusual exotic
+/// nodes fail closed so the caller uses the fully observable `[[Set]]` path.
+fn prototype_chain_has_index_hazard(slot: Option<crate::Prototype>) -> bool {
+    let mut current = slot;
+    loop {
+        match current {
+            Some(crate::Prototype::Object(object)) => {
+                if object.has_own_index_property()
+                    || crate::typed_array::is_typed_array_object(&object)
+                {
+                    return true;
+                }
+                current = object.prototype_slot();
+            }
+            Some(crate::Prototype::Function(_) | crate::Prototype::Proxy(_)) => return true,
             None => return false,
         }
     }

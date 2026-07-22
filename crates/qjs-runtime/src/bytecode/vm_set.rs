@@ -55,28 +55,19 @@ pub(crate) fn set_property(
                 define_array_length_value(&elements, value, env)
             } else {
                 let receiver = Value::Array(elements.clone());
-                // A typed array reachable as a prototype owns canonical numeric
-                // indices via its exotic [[Set]]; routing through the recursive
-                // OrdinarySet stops an invalid index before the array's own
-                // [[DefineOwnProperty]] creates an element.
-                if crate::typed_array::canonical_numeric_index(&key).is_some()
-                    && prototype_chain_has_typed_array(elements.prototype_slot_override().flatten())
-                {
-                    return crate::reflect::ordinary_set(
-                        Value::Array(elements.clone()),
-                        &PropertyKey::String(key),
-                        value,
-                        receiver,
-                        env,
-                    );
-                }
                 let property = match crate::array_own_property_descriptor(&elements, &key) {
                     Some(property) => Some(property),
                     None => {
-                        // No own element/property: a Proxy in a custom prototype
-                        // chain must run its `set` trap, so defer to the
-                        // proxy-aware OrdinarySet.
-                        if prototype_chain_has_proxy(elements.prototype_slot_override().flatten()) {
+                        let prototype_slot = elements
+                            .prototype_slot_override()
+                            .unwrap_or_else(|| array_prototype(env).map(crate::Prototype::Object));
+                        // A typed array reachable as a prototype owns canonical
+                        // numeric indices via its exotic [[Set]]; routing through
+                        // recursive OrdinarySet stops an invalid index before the
+                        // array's own [[DefineOwnProperty]] creates an element.
+                        if crate::typed_array::canonical_numeric_index(&key).is_some()
+                            && prototype_chain_has_typed_array(prototype_slot.clone())
+                        {
                             return crate::reflect::ordinary_set(
                                 Value::Array(elements.clone()),
                                 &PropertyKey::String(key),
@@ -85,12 +76,31 @@ pub(crate) fn set_property(
                                 env,
                             );
                         }
-                        elements
-                            .prototype_override()
-                            .unwrap_or_else(|| array_prototype(env))
-                            .and_then(|prototype| {
+                        // No own element/property: a Proxy anywhere in the
+                        // effective chain must run its `set` trap, and an
+                        // explicit function prototype cannot be represented by
+                        // the object-only flat descriptor walk below. Defer
+                        // both cases to recursive OrdinarySet.
+                        if prototype_chain_has_proxy(prototype_slot.clone())
+                            || matches!(&prototype_slot, Some(crate::Prototype::Function(_)))
+                        {
+                            return crate::reflect::ordinary_set(
+                                Value::Array(elements.clone()),
+                                &PropertyKey::String(key),
+                                value,
+                                receiver,
+                                env,
+                            );
+                        }
+                        match prototype_slot {
+                            Some(crate::Prototype::Object(prototype)) => {
                                 ordinary_chain_property(&prototype, &key).ok().flatten()
-                            })
+                            }
+                            Some(crate::Prototype::Function(_) | crate::Prototype::Proxy(_)) => {
+                                unreachable!("special prototype routed through OrdinarySet")
+                            }
+                            None => None,
+                        }
                     }
                 };
                 match apply_set_step(property, receiver, value.clone(), env)? {

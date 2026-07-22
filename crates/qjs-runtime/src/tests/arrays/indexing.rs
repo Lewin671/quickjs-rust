@@ -135,6 +135,65 @@ fn dense_index_store_preserves_prototype_set_semantics() {
     );
 }
 
+#[test]
+fn dense_index_store_checks_the_complete_prototype_chain() {
+    assert_eq!(
+        eval(
+            "let hits = 0; \
+             Object.defineProperty(Object.prototype, '0', { \
+                 set: function(value) { hits += value; }, configurable: true \
+             }); \
+             let first = [], key = 0; first[key] = 7; \
+             let result = hits + ':' + first.hasOwnProperty('0'); \
+             delete Object.prototype['0']; \
+             let restored = []; restored[0] = 9; \
+             result + ':' + restored[0];"
+        ),
+        Ok(Value::String("7:false:9".to_owned().into()))
+    );
+
+    assert_eq!(
+        eval(
+            "let original = Object.getPrototypeOf(Array.prototype), log = ''; \
+             let middle = Object.create(original); \
+             Object.defineProperty(middle, '1', { \
+                 set: function(value) { log += 'middle:' + value; }, configurable: true \
+             }); \
+             Object.setPrototypeOf(Array.prototype, middle); \
+             let throughMiddle = []; throughMiddle[1] = 3; \
+             let proxy = new Proxy(original, { \
+                 set: function(_target, key, value, receiver) { \
+                     log += '|proxy:' + key + ':' + value + ':' + (receiver === throughProxy); \
+                     return true; \
+                 } \
+             }); \
+             Object.setPrototypeOf(Array.prototype, proxy); \
+             let throughProxy = []; throughProxy[2] = 5; \
+             Object.setPrototypeOf(Array.prototype, original); \
+             log + ':' + throughMiddle.hasOwnProperty('1') \
+                 + ':' + throughProxy.hasOwnProperty('2');"
+        ),
+        Ok(Value::String(
+            "middle:3|proxy:2:5:true:false:false".to_owned().into()
+        ))
+    );
+
+    assert_eq!(
+        eval(
+            "Object.defineProperty(Object.prototype, '3', { \
+                 value: 11, writable: false, configurable: true \
+             }); \
+             let blocked = [], strictThrew = false; \
+             blocked[3] = 17; \
+             try { (function() { 'use strict'; blocked[3] = 19; })(); } \
+             catch (error) { strictThrew = error instanceof TypeError; } \
+             let result = blocked[3] + ':' + blocked.hasOwnProperty('3') + ':' + strictThrew; \
+             delete Object.prototype['3']; result;"
+        ),
+        Ok(Value::String("11:false:true".to_owned().into()))
+    );
+}
+
 /// Computed compound assignments and updates cache a property key after
 /// `ToPropertyKey`. Canonical string indices may still use dense storage, but
 /// inherited setters and non-index strings must retain ordinary `[[Set]]`
