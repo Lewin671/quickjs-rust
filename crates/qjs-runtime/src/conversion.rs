@@ -387,10 +387,16 @@ pub(crate) fn to_int32_number(number: f64) -> i32 {
 }
 
 pub(crate) fn to_uint32_number(number: f64) -> u32 {
+    const TWO_32: f64 = 4_294_967_296.0;
+    if (-TWO_32..TWO_32).contains(&number) {
+        // The checked range fits in i64, whose float conversion truncates
+        // toward zero. Narrowing that integer to u32 then keeps the low 32
+        // bits, exactly matching the modulo step in ToUint32.
+        return number as i64 as u32;
+    }
     if !number.is_finite() || number == 0.0 {
         return 0;
     }
-    const TWO_32: f64 = 4_294_967_296.0;
     number.trunc().rem_euclid(TWO_32) as u32
 }
 
@@ -436,7 +442,15 @@ pub(crate) fn is_truthy(value: &Value) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::string_to_number;
+    use super::{string_to_number, to_uint32_number};
+
+    fn legacy_to_uint32_number(number: f64) -> u32 {
+        if !number.is_finite() || number == 0.0 {
+            return 0;
+        }
+        const TWO_32: f64 = 4_294_967_296.0;
+        number.trunc().rem_euclid(TWO_32) as u32
+    }
 
     #[test]
     fn string_to_number_fast_paths_long_zero_fraction() {
@@ -452,5 +466,77 @@ mod tests {
             string_to_number("0.000000000000000000001"),
             Ok(0.000000000000000000001)
         );
+    }
+
+    #[test]
+    fn to_uint32_number_preserves_ecmascript_boundaries() {
+        const TWO_31: f64 = 2_147_483_648.0;
+        const TWO_32: f64 = 4_294_967_296.0;
+        const TWO_53: f64 = 9_007_199_254_740_992.0;
+
+        let cases = [
+            (f64::NAN, 0),
+            (f64::INFINITY, 0),
+            (f64::NEG_INFINITY, 0),
+            (0.0, 0),
+            (-0.0, 0),
+            (0.25, 0),
+            (0.999_999_999, 0),
+            (1.25, 1),
+            (-0.25, 0),
+            (-0.999_999_999, 0),
+            (-1.25, u32::MAX),
+            (TWO_31 - 0.5, 0x7fff_ffff),
+            (TWO_31, 0x8000_0000),
+            (TWO_31 + 0.5, 0x8000_0000),
+            (-TWO_31 - 0.5, 0x8000_0000),
+            (-TWO_31, 0x8000_0000),
+            (-TWO_31 + 0.5, 0x8000_0001),
+            (f64::from_bits(TWO_32.to_bits() - 1), u32::MAX),
+            (TWO_32 - 0.5, u32::MAX),
+            (TWO_32, 0),
+            (TWO_32 + 0.5, 0),
+            (f64::from_bits(TWO_32.to_bits() + 1), 0),
+            (f64::from_bits((-TWO_32).to_bits() + 1), 0),
+            (-TWO_32 - 0.5, 0),
+            (-TWO_32, 0),
+            (-TWO_32 + 0.5, 1),
+            (f64::from_bits((-TWO_32).to_bits() - 1), 1),
+            (TWO_53 - 1.0, u32::MAX),
+            (TWO_53, 0),
+            (TWO_53 + 2.0, 2),
+            (-TWO_53 + 1.0, 1),
+            (-TWO_53, 0),
+            (-TWO_53 - 2.0, u32::MAX - 1),
+            (f64::MAX, 0),
+            (f64::MIN, 0),
+        ];
+
+        for (number, expected) in cases {
+            assert_eq!(
+                to_uint32_number(number),
+                expected,
+                "input {number:?} (bits {:016x})",
+                number.to_bits()
+            );
+        }
+    }
+
+    #[test]
+    fn to_uint32_number_matches_legacy_formula_across_f64_values() {
+        let mut state = 0xd1b5_4a32_d192_ed03_u64;
+        for _ in 0..100_000 {
+            // Xorshift64 deterministically samples the sign, exponent, and
+            // fraction fields; the boundary table covers exact special values.
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            let number = f64::from_bits(state);
+            assert_eq!(
+                to_uint32_number(number),
+                legacy_to_uint32_number(number),
+                "input {number:?} (bits {state:016x})"
+            );
+        }
     }
 }

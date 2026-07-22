@@ -6403,6 +6403,54 @@ the first true predicate, and return to ordinary bytecode for the observable
 body. Plan ownership, object shapes, and benchmark-specific matching are not
 supported by this profile.
 
+### 2026-07-22 common-range `ToUint32` conversion
+
+Agent commit `fab5a2b5` replaces the expensive floating-point modulo in the
+common `ToUint32` range with an equivalent checked conversion. Values in
+`[-2^32, 2^32)` are safely within `i64`: Rust's checked-range float conversion
+truncates toward zero, and narrowing the resulting integer to `u32` keeps the
+low 32 bits required by ECMA-262. NaN, infinities, the exact upper boundary,
+and all larger magnitudes retain the preceding `trunc().rem_euclid(2^32)`
+path. This is a shared conversion primitive used by ordinary VM bitwise
+operators and the prevalidated numeric loop executors; it contains no loop,
+workload, source-path, or checksum identity.
+
+The exact seven-block external gate used candidate, base, and QuickJS-NG
+binary SHA-256 values
+`053041633aff3067b7231516e4796895182854bf8c10c4ba15864b0f903a2274`,
+`dcef12c705a1f0a862b74b7318dd7868a8e08e0822ae73c65a50bff14b84588a`,
+and `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+Candidate/base paired ratios with 95% bootstrap intervals were:
+
+- SunSpider `bitops-nsieve-bits`: 0.856362x [0.848521x, 0.860219x];
+- `bitops-3bit-bits-in-byte`: 0.845193x [0.835896x, 0.850157x];
+- `bitops-bits-in-byte`: 0.957382x [0.936965x, 0.964626x];
+- `bitops-bitwise-and`: 0.991787x [0.982219x, 0.999090x];
+- `access-nsieve`: 0.989637x [0.988540x, 0.993571x].
+
+The unrelated `hash-map` and `json-parse-financial` controls had interval
+upper bounds of 1.01657x and 1.00620x. External manifest/raw/report SHA-256
+values are
+`5f4ed9bf8c2bc23742bc37e9038d3e71c324908f19a78cd70e9ff051955a4598`,
+`861d53e14e57375014a395fd2db4178175d9486f3ceea9ab66cfe4a590b245d8`,
+and `3cc1adf387c528031561e5e8f27226858024c5ef320a99bb27c5a2c3967a6746`.
+
+The seven-block internal gate measured `dynamic_method_call` at 0.016279x
+[0.016170x, 0.016364x] and `branch_arithmetic` at 0.868276x
+[0.866463x, 0.871576x]. `local_read`, `empty_loop`, `array_read`, and
+`array_write` ranged from 0.998160x to 1.003764x; every interval remained below
+the predeclared 1.03x regression boundary. Internal raw SHA-256 is
+`1028f7dd6ef9bf6b926c1d811b33739f85f66f90d53897ca1a8b4c1936a982e7`.
+
+Correctness coverage includes explicit expected results at NaN, infinities,
+signed zero, fractional values, both sides of the signed and unsigned 32-bit
+boundaries, adjacent representable values around `2^32`, `2^53`, and the
+largest finite magnitudes. A deterministic 100,000-pattern raw-f64 differential
+test supplements those independent expectations. The focused conversion
+tests, all 1,574 runtime tests, formatting, workspace clippy, branch-scope
+validation, and `check-touched` passed before integration. The integrated full
+Test262 and QuickJS-NG comparison gates remain mandatory before push.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
