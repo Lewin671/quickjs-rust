@@ -752,6 +752,7 @@ pub struct Bytecode {
     /// declaration instantiation environment.
     strict: bool,
     pub(super) code: Vec<Op>,
+    pub(super) allocation_loop_plans: OnceCell<Vec<super::vm_allocation_loop::AllocationLoopPlan>>,
     pub(super) numeric_leaf_plan: OnceCell<Option<super::vm_numeric_leaf::NumericLeafPlan>>,
     pub(super) numeric_loop_plans: OnceCell<Vec<super::vm_numeric_loop::NumericLoopPlan>>,
     pub(super) control_loop_plans: OnceCell<Vec<super::vm_control_loop::ControlLoopPlan>>,
@@ -859,6 +860,7 @@ impl Bytecode {
             global_scope,
             strict,
             code,
+            allocation_loop_plans: OnceCell::new(),
             numeric_leaf_plan: OnceCell::new(),
             numeric_loop_plans: OnceCell::new(),
             control_loop_plans: OnceCell::new(),

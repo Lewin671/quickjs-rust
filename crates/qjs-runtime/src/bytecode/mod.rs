@@ -19,6 +19,7 @@ mod ir_names;
 mod upvalue_resolver;
 mod util;
 mod vm;
+mod vm_allocation_loop;
 mod vm_bindings;
 mod vm_call;
 mod vm_capture;

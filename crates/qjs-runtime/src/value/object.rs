@@ -322,6 +322,16 @@ impl ObjectLiteralShape {
     pub(crate) fn unique_len(&self) -> usize {
         self.keys.len()
     }
+
+    /// Returns the source-value position that supplies the final value for a
+    /// statically named literal property. Duplicate keys share one storage
+    /// slot, so the last input targeting that slot is the observable value.
+    pub(crate) fn final_input_index(&self, key: &str) -> Option<usize> {
+        let slot = *self.lookup.get(key)?;
+        self.input_slots
+            .iter()
+            .rposition(|input_slot| *input_slot == slot)
+    }
 }
 
 /// Payload for the cold, unbounded property-storage path. Boxed so an
