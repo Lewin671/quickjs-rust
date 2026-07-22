@@ -637,3 +637,51 @@ fn nested_proxy_targets_participate_in_outer_invariants() {
         ))
     );
 }
+
+#[test]
+fn proxy_own_keys_keeps_a_snapshot_key_deleted_during_descriptor_lookup() {
+    // ES2025 Proxy.[[OwnPropertyKeys]] step 16.3 treats an undefined
+    // descriptor as a configurable target key. The key came from the earlier
+    // [[OwnPropertyKeys]] snapshot and must still count when the target is
+    // non-extensible, even if a nested Proxy trap deletes it in between.
+    assert_eq!(
+        eval(
+            "let target = { x: 1 }; Object.preventExtensions(target); \
+             let inner = new Proxy(target, { \
+                 getOwnPropertyDescriptor(t, key) { delete t[key]; return undefined; } \
+             }); \
+             let outer = new Proxy(inner, { ownKeys() { return ['x']; } }); \
+             Reflect.ownKeys(outer).join(',');"
+        ),
+        Ok(Value::String("x".to_owned().into()))
+    );
+}
+
+#[test]
+fn proxy_own_keys_classifies_missing_symbol_with_all_snapshot_keys_in_order() {
+    assert_eq!(
+        eval(
+            "let symbol = Symbol('s'), target = { x: 1, y: 2 }, log = []; \
+             target[symbol] = 3; Object.preventExtensions(target); \
+             let inner = new Proxy(target, { \
+                 isExtensible(t) { log.push('e'); return Reflect.isExtensible(t); }, \
+                 ownKeys(t) { log.push('k'); return Reflect.ownKeys(t); }, \
+                 getOwnPropertyDescriptor(t, key) { \
+                     log.push('g:' + (key === symbol ? 's' : key)); \
+                     if (key === symbol) { delete t[key]; return undefined; } \
+                     return Reflect.getOwnPropertyDescriptor(t, key); \
+                 } \
+             }); \
+             let outer = new Proxy(inner, { \
+                 ownKeys() { log.push('o'); return [symbol, 'y', 'x']; } \
+             }); \
+             let keys = Reflect.ownKeys(outer).map(function(key) { \
+                 return key === symbol ? 's' : key; \
+             }).join(','); \
+             keys + '|' + log.join(',') + '|' + (symbol in target);"
+        ),
+        Ok(Value::String(
+            "s,y,x|o,e,k,g:x,g:y,g:s|false".to_owned().into()
+        ))
+    );
+}

@@ -730,7 +730,10 @@ pub(crate) fn proxy_own_keys(
         match crate::object::observable_own_property_descriptor(target.clone(), key, env)? {
             Some(descriptor) if !descriptor.configurable => non_configurable.push(key.clone()),
             Some(_) => configurable_count += 1,
-            None => {}
+            // Proxy.[[OwnPropertyKeys]] step 16.3 classifies a key whose
+            // descriptor disappeared after the target-key snapshot as
+            // configurable, so it still participates in the exact-key count.
+            None => configurable_count += 1,
         }
     }
     // Every non-configurable target key must be present in the trap result.
