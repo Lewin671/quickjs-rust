@@ -98,7 +98,8 @@ impl Vm<'_> {
         cooked: &[Option<String>],
         raw: &[String],
     ) {
-        if let Some(value) = self.bytecode.template_objects.borrow().get(&site).cloned() {
+        let cached = self.bytecode.template_objects.borrow().get(&site).cloned();
+        if let Some(value) = cached {
             self.stack.push(value);
             return;
         }

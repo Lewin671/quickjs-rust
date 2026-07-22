@@ -104,16 +104,18 @@ pub(super) fn eval_function_bytecode<'a>(
     // needs generic load/store ops redirected through the caller's with stack.
     vm.direct_eval_with_stack = direct_eval_with_stack;
     let value = vm.run();
+    let frame = vm.into_frame();
     FunctionBytecodeResult {
         value,
         bytecode,
-        env: vm.env,
-        locals: vm.locals,
-        local_upvalues: vm.local_upvalues,
-        sloppy_global_names: vm.sloppy_global_names,
+        env: frame.env,
+        locals: frame.locals,
+        local_upvalues: frame.local_upvalues,
+        sloppy_global_names: frame.sloppy_global_names,
     }
 }
-pub(super) struct Vm<'a> {
+
+pub(super) struct FrameState<'a> {
     pub(super) bytecode: &'a Bytecode,
     pub(super) ip: usize,
     pub(super) control_loop_plans: Vec<super::vm_control_loop::ControlLoopPlan>,
@@ -179,6 +181,30 @@ pub(super) struct Vm<'a> {
     /// global lexical bindings. Indirect eval uses global-scope bytecode, but
     /// its lexical environment is ephemeral.
     pub(super) persist_global_lexicals: bool,
+}
+
+pub(super) struct Vm<'a> {
+    pub(super) current: FrameState<'a>,
+}
+
+impl<'a> Vm<'a> {
+    pub(super) fn into_frame(self) -> FrameState<'a> {
+        self.current
+    }
+}
+
+impl<'a> Deref for Vm<'a> {
+    type Target = FrameState<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.current
+    }
+}
+
+impl DerefMut for Vm<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.current
+    }
 }
 
 impl<'a> Vm<'a> {
@@ -314,37 +340,39 @@ impl<'a> Vm<'a> {
             })
             .clone();
         Self {
-            bytecode,
-            ip: 0,
-            control_loop_plans,
-            numeric_loop_plans,
-            numeric_mutation_loop_plans,
-            stack: OperandStack::new(bytecode),
-            locals,
-            local_upvalues,
-            authoritative_slots,
-            realm_binding_slots,
-            upvalues,
-            env,
-            direct_this,
-            realm,
-            module_host,
-            #[cfg(feature = "agents")]
-            agent_context,
-            sloppy_global_names: Vec::new(),
-            try_stack: Vec::new(),
-            pending_throw: None,
-            pending_return: None,
-            pending_jump: None,
-            resume_mode: None,
-            stop_at_prologue: false,
-            array_prototype_cache: None,
-            array_literal_prototype_override,
-            object_prototype_cache: None,
-            with_stack,
-            direct_eval_with_stack: false,
-            disposable_scopes: Vec::new(),
-            persist_global_lexicals: true,
+            current: FrameState {
+                bytecode,
+                ip: 0,
+                control_loop_plans,
+                numeric_loop_plans,
+                numeric_mutation_loop_plans,
+                stack: OperandStack::new(bytecode),
+                locals,
+                local_upvalues,
+                authoritative_slots,
+                realm_binding_slots,
+                upvalues,
+                env,
+                direct_this,
+                realm,
+                module_host,
+                #[cfg(feature = "agents")]
+                agent_context,
+                sloppy_global_names: Vec::new(),
+                try_stack: Vec::new(),
+                pending_throw: None,
+                pending_return: None,
+                pending_jump: None,
+                resume_mode: None,
+                stop_at_prologue: false,
+                array_prototype_cache: None,
+                array_literal_prototype_override,
+                object_prototype_cache: None,
+                with_stack,
+                direct_eval_with_stack: false,
+                disposable_scopes: Vec::new(),
+                persist_global_lexicals: true,
+            },
         }
     }
 
@@ -590,17 +618,16 @@ impl<'a> Vm<'a> {
             self.ip += 1;
             match op {
                 Op::LoadConst(index) => {
-                    self.stack
-                        .push(
-                            self.bytecode
-                                .constants
-                                .get(*index)
-                                .cloned()
-                                .ok_or_else(|| RuntimeError {
-                                    thrown: None,
-                                    message: "bytecode constant index out of bounds".to_owned(),
-                                })?,
-                        )
+                    let value =
+                        bytecode
+                            .constants
+                            .get(*index)
+                            .cloned()
+                            .ok_or_else(|| RuntimeError {
+                                thrown: None,
+                                message: "bytecode constant index out of bounds".to_owned(),
+                            })?;
+                    self.stack.push(value);
                 }
                 Op::LoadLocal(slot) => {
                     let result =
@@ -1162,15 +1189,15 @@ impl<'a> Vm<'a> {
                 },
                 Op::ImportCall { has_options } => self.import_call(*has_options)?,
                 Op::ImportMeta => {
-                    let Some(host) = self.module_host.as_ref() else {
+                    let Some(host) = self.current.module_host.as_ref() else {
                         return Err(RuntimeError {
                             thrown: None,
                             message: "SyntaxError: 'import.meta' is only valid in a module"
                                 .to_owned(),
                         });
                     };
-                    self.stack
-                        .push(Value::Object(host.borrow_mut().import_meta()));
+                    let import_meta = host.borrow_mut().import_meta();
+                    self.current.stack.push(Value::Object(import_meta));
                 }
             }
         }
@@ -1613,7 +1640,7 @@ impl<'a> Vm<'a> {
             if !self.bytecode.local_is_sloppy_global_fallback(index) {
                 continue;
             }
-            let Some(name) = self.bytecode.local_name_at(index) else {
+            let Some(name) = self.current.bytecode.local_name_at(index) else {
                 continue;
             };
             if !self
@@ -1632,8 +1659,10 @@ impl<'a> Vm<'a> {
             } else {
                 continue;
             };
-            self.locals[index] = Some(value.clone());
-            self.write_through_module_live_binding(name, value);
+            self.current.locals[index] = Some(value.clone());
+            if let Some(binding) = self.current.env.module_live_binding_cell(name) {
+                binding.set(value);
+            }
         }
     }
 

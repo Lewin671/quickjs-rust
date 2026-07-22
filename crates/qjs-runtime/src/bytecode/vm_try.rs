@@ -23,14 +23,16 @@ impl Vm<'_> {
         catch_scope: Option<CatchScope>,
         cleanup_slots: Vec<usize>,
     ) {
+        let stack_depth = self.stack.len();
+        let with_depth = self.with_stack.len();
         self.try_stack.push(TryFrame {
             catch,
             finally,
             catch_scope,
             cleanup_slots,
             catch_scope_active: false,
-            stack_depth: self.stack.len(),
-            with_depth: self.with_stack.len(),
+            stack_depth,
+            with_depth,
         });
     }
 
@@ -49,14 +51,27 @@ impl Vm<'_> {
         self.pending_throw = None;
         self.pending_return = None;
         self.pending_jump = None;
-        if let Some(frame) = self.try_stack.last_mut() {
-            self.stack.truncate(frame.stack_depth);
-            let with_depth = frame.with_depth;
-            if let Some(catch) = frame.catch.take() {
-                frame.catch_scope_active = true;
-                let cleanup_slots = frame.cleanup_slots.clone();
+        if !self.try_stack.is_empty() {
+            let (stack_depth, with_depth, catch, cleanup_slots) = {
+                let frame = self
+                    .try_stack
+                    .last_mut()
+                    .expect("non-empty try stack must have a final frame");
+                let catch = frame.catch.take();
+                if catch.is_some() {
+                    frame.catch_scope_active = true;
+                }
+                let cleanup_slots = catch.is_some().then(|| frame.cleanup_slots.clone());
+                (frame.stack_depth, frame.with_depth, catch, cleanup_slots)
+            };
+            self.stack.truncate(stack_depth);
+            if let Some(catch) = catch {
                 self.with_stack.truncate(with_depth);
-                self.cleanup_slots(&cleanup_slots)?;
+                self.cleanup_slots(
+                    cleanup_slots
+                        .as_deref()
+                        .expect("catch frames must retain their cleanup slots"),
+                )?;
                 self.stack.push(value);
                 self.ip = catch;
                 return Ok(());

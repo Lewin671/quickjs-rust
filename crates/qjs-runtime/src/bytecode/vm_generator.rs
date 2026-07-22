@@ -120,27 +120,28 @@ pub(crate) fn is_suspended_at_plain_yield(generator: &ObjectRef) -> bool {
 impl Vm<'_> {
     /// Captures the running generator body's state at a `yield`.
     fn into_snapshot(
-        mut self,
+        self,
         bytecode: Rc<Bytecode>,
         suspension: SuspensionKind,
     ) -> GeneratorSnapshot {
-        let immutable_function_name = self.env.immutable_function_name().map(str::to_owned);
+        let mut frame = self.into_frame();
+        let immutable_function_name = frame.env.immutable_function_name().map(str::to_owned);
         GeneratorSnapshot {
             bytecode,
-            ip: self.ip,
-            stack: self.stack.take(),
-            locals: self.locals,
-            local_upvalues: self.local_upvalues,
-            upvalues: self.upvalues,
-            env: self.env,
-            with_stack: self.with_stack,
+            ip: frame.ip,
+            stack: frame.stack.take(),
+            locals: frame.locals,
+            local_upvalues: frame.local_upvalues,
+            upvalues: frame.upvalues,
+            env: frame.env,
+            with_stack: frame.with_stack,
             immutable_function_name,
-            sloppy_global_names: self.sloppy_global_names,
-            try_stack: self.try_stack,
-            disposable_scopes: self.disposable_scopes,
-            pending_throw: self.pending_throw,
-            pending_return: self.pending_return,
-            pending_jump: self.pending_jump,
+            sloppy_global_names: frame.sloppy_global_names,
+            try_stack: frame.try_stack,
+            disposable_scopes: frame.disposable_scopes,
+            pending_throw: frame.pending_throw,
+            pending_return: frame.pending_return,
+            pending_jump: frame.pending_jump,
             suspension,
         }
     }

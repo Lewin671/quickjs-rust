@@ -1080,10 +1080,6 @@ impl Vm<'_> {
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
         }
-        let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
-            thrown: None,
-            message: "bytecode local index out of bounds".to_owned(),
-        })?;
         let upvalue_initialized = self
             .local_upvalues
             .get(slot)
@@ -1095,6 +1091,10 @@ impl Vm<'_> {
                     Value::Function(function) if function.is_uninitialized_lexical_marker()
                 )
             });
+        let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
+            thrown: None,
+            message: "bytecode local index out of bounds".to_owned(),
+        })?;
         if !mutable && (local.is_some() || upvalue_initialized) {
             return Err(RuntimeError {
                 thrown: None,
@@ -1415,10 +1415,14 @@ impl Vm<'_> {
             .locals
             .get(slot)
             .is_some_and(|local| !local.hoisted);
-        let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
-            thrown: None,
-            message: "bytecode local index out of bounds".to_owned(),
-        })?;
+        let local_is_some = self
+            .locals
+            .get(slot)
+            .ok_or_else(|| RuntimeError {
+                thrown: None,
+                message: "bytecode local index out of bounds".to_owned(),
+            })?
+            .is_some();
         let refresh_upvalue = self
             .bytecode
             .locals
@@ -1428,25 +1432,26 @@ impl Vm<'_> {
                 .local_upvalues
                 .get(slot)
                 .and_then(Option::as_ref)
-                .is_some_and(|upvalue| local.is_some() || !upvalue.is_shared());
-        *local = None;
+                .is_some_and(|upvalue| local_is_some || !upvalue.is_shared());
+        self.locals[slot] = None;
         if refresh_upvalue && let Some(upvalue) = self.local_upvalues.get_mut(slot) {
             *upvalue = Some(Upvalue::new(Value::Function(
                 crate::Function::uninitialized_lexical_marker(),
             )));
         }
-        if let Some(name) = self.bytecode.local_name_at(slot) {
+        if let Some(name) = self.current.bytecode.local_name_at(slot) {
             if deactivates_lexical && let Some(cell) = &deactivated_cell {
-                self.env.remove_deopt_cell_if(name, cell);
+                self.current.env.remove_deopt_cell_if(name, cell);
             }
             if self
+                .current
                 .bytecode
                 .locals
                 .get(slot)
                 .is_some_and(|local| local.catch_binding)
             {
-                self.env.remove(name);
-                self.env.unmark_catch_binding(name);
+                self.current.env.remove(name);
+                self.current.env.unmark_catch_binding(name);
             }
         }
         Ok(())
@@ -1766,17 +1771,18 @@ impl Vm<'_> {
     /// Replaces each captured loop binding with a fresh per-iteration cell.
     pub(super) fn fresh_iteration_scope(&mut self, slots: &[usize]) {
         for &slot in slots {
-            if let Some(upvalue) = self.local_upvalues.get_mut(slot)
-                && upvalue.is_some()
-            {
-                let value = self
-                    .locals
-                    .get(slot)
-                    .and_then(Option::as_ref)
-                    .cloned()
-                    .unwrap_or_else(|| {
-                        Value::Function(crate::Function::uninitialized_lexical_marker())
-                    });
+            if !self.local_upvalues.get(slot).is_some_and(Option::is_some) {
+                continue;
+            }
+            let value = self
+                .locals
+                .get(slot)
+                .and_then(Option::as_ref)
+                .cloned()
+                .unwrap_or_else(
+                    || Value::Function(crate::Function::uninitialized_lexical_marker()),
+                );
+            if let Some(upvalue) = self.local_upvalues.get_mut(slot) {
                 *upvalue = Some(Upvalue::new(value));
             }
         }
