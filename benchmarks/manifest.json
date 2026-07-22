@@ -108,8 +108,8 @@
       "measurement": {
         "initial_iterations": 1024,
         "max_iterations": 130000000,
-        "min_window_ms": 500,
-        "startup_max_fraction": 0.01,
+        "min_window_ms": 350,
+        "startup_max_fraction": 0.02,
         "calibration_safety_factor": 1.25,
         "warmup_runs": 1,
         "timeout_seconds": 30
@@ -126,8 +126,8 @@
       "measurement": {
         "initial_iterations": 1024,
         "max_iterations": 130000000,
-        "min_window_ms": 500,
-        "startup_max_fraction": 0.01,
+        "min_window_ms": 350,
+        "startup_max_fraction": 0.02,
         "calibration_safety_factor": 1.25,
         "warmup_runs": 1,
         "timeout_seconds": 30
@@ -198,8 +198,8 @@
       "measurement": {
         "initial_iterations": 1024,
         "max_iterations": 134000000,
-        "min_window_ms": 500,
-        "startup_max_fraction": 0.015,
+        "min_window_ms": 300,
+        "startup_max_fraction": 0.025,
         "calibration_safety_factor": 1.25,
         "warmup_runs": 1,
         "timeout_seconds": 30
@@ -397,7 +397,7 @@
         "initial_iterations": 1024,
         "max_iterations": 1000000000,
         "min_window_ms": 500,
-        "startup_max_fraction": 0.01,
+        "startup_max_fraction": 0.02,
         "calibration_safety_factor": 1.25,
         "warmup_runs": 1,
         "timeout_seconds": 30

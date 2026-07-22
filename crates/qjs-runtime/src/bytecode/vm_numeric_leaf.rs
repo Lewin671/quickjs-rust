@@ -1061,10 +1061,21 @@ fn direct_number_binary(left: f64, op: BinaryOp, right: f64) -> Option<FastValue
     Some(value)
 }
 
+// Keep the scalar-result arithmetic local to call-shaped plans. Inlining the
+// wider `direct_number_binary` helper bloats unrelated fast loops, while this
+// adapter only needs the five operations that always produce a Number.
+#[inline(always)]
 fn number_binary(left: f64, op: BinaryOp, right: f64) -> Option<f64> {
-    match direct_number_binary(left, op, right)? {
-        FastValue::Number(value) => Some(value),
-        _ => None,
+    match op {
+        BinaryOp::Add => Some(left + right),
+        BinaryOp::Sub => Some(left - right),
+        BinaryOp::Mul => Some(left * right),
+        BinaryOp::Div => Some(left / right),
+        BinaryOp::Rem => Some(left % right),
+        _ => match direct_number_binary(left, op, right)? {
+            FastValue::Number(value) => Some(value),
+            _ => None,
+        },
     }
 }
 

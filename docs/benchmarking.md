@@ -94,8 +94,18 @@ and replay.
 The safety factor changes only when calibration stops. Formal measurement
 eligibility is unchanged and still requires both conditions:
 
-- the outer window is at least the manifest's 500 ms minimum; and
-- median startup/setup is at most 1% of the outer window.
+- the outer window is at least that case's versioned `min_window_ms`; and
+- median startup/setup is at most that case's versioned
+  `startup_max_fraction` of the outer window.
+
+Most cases retain a 500 ms window and 1% startup ceiling. Cases whose exact
+checksum bounds cap the safe iteration count use explicit 250-350 ms windows
+and 2-4% ceilings; their formal windows still amortize startup by at least
+25x. `branch_arithmetic` retains a 500 ms minimum but permits a 2% startup
+fraction so an occasional process-start outlier does not invalidate an
+otherwise 1.4-second measurement at its iteration cap. These are per-case
+evidence-capacity settings, not relaxed result, linearity, checksum, or
+candidate/base acceptance rules.
 
 The manifest caps calibration. A measurement that misses either condition is
 recorded as `timer_limited`, not promoted to a precise comparison. Failures

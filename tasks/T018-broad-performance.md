@@ -5754,6 +5754,60 @@ raw SHA-256:
 report SHA-256:
 `3b6d44a8ab13bae223d8e0b59981b80b6ae5e45b1e10b35fba2d0d11f6285ed7`.
 
+## 2026-07-21 Scalar Numeric-Leaf Adapter Recovery
+
+The Realm-correctness units exposed a compiler-layout regression in three
+call-shaped numeric-leaf cases. Keeping only the scalar `number_binary`
+adapter inline, and spelling its five always-Number arithmetic operations in
+that adapter, restores the intended layout without inlining the wider
+`direct_number_binary` loop helper. The operations are the same Rust `f64`
+expressions as the canonical helper; comparison, bitwise, shift, and power
+operations still use the existing fallback.
+
+Against exact base `00e72f743205cdd6c9afdbbf4c5ee8643b3cf639`, the complete
+25-case, three-block candidate/base diagnostic produced these median ratios:
+
+| Scope | Candidate / base |
+| --- | ---: |
+| overall | 0.93182x |
+| call family | 0.88909x |
+| `function_call_two_args` | 0.48873x |
+| `captured_read` | 0.52959x |
+| `captured_write` | 0.68833x |
+| worst case (`plain_function_call`) | 1.01380x |
+| worst family (`control`) | 1.00407x |
+
+The full run had 147/150 eligible formal records. The only capacity miss was
+the candidate's three `branch_arithmetic` records: each formal window was
+1.45-1.47 seconds, but an 18.4 ms median process-start sample exceeded that
+case's former 1% ceiling. A same-binary supplemental run with only the startup
+ceiling raised to 2% made all 6/6 candidate/base records eligible and measured
+`1.00681x`. The checked-in capacity settings also lower the exact-number-capped
+captured/two-argument windows; they do not change workloads, checksums,
+linearity, result validation, or performance acceptance thresholds.
+
+The same candidate/base binaries passed the three-suite focused external
+guard: JetStream `hash-map 0.98483x`, Kraken `json-parse-financial 0.98747x`,
+and SunSpider `controlflow-recursive 1.00057x`, with all three engine
+capabilities still `ok`.
+
+Evidence bindings:
+
+- candidate binary SHA-256:
+  `8fbe9ac99123e2dc19e80e5165162aafdd3222d6a6102f14159d21a762ed4b28`;
+- base binary SHA-256:
+  `ded5c6e3c3d3b136b574a3f49e153a2b9fcf85a4df230bd295d5e70ce861640d`;
+- full diagnostic raw SHA-256:
+  `cb3a90807d8efea4ff7b25bfa58956162170b620a2cf2b840229568d9420e411`;
+- full analysis SHA-256:
+  `f66b89390f07ea963b451af92030e443ca54b4181ba6311a8694463b0e0e3f3c`;
+- supplemental raw SHA-256:
+  `1ac99cbc172c0e61ba6c265b3d2d5d6f7a146d3f80fa5e8c64ecbb6d031ccb3f`;
+- external report SHA-256:
+  `e3b6fe05f6f26c7fa1af3beb713558d4075c5f3709e0dd2757bc6eb7432a8357`;
+- external raw SHA-256:
+  `fdaf6fa183ce067c99234c91072ac87317bb8be7fdf6ae12d35f886203bda110`.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
