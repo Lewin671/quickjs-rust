@@ -86,6 +86,47 @@ fn evaluates_array_member_access() {
 }
 
 #[test]
+fn present_dense_reads_ignore_unrelated_array_and_prototype_state() {
+    assert_eq!(
+        eval(
+            "let filled = new Array(4); \
+             for (let i = 0; i < filled.length; i++) filled[i] = i + 10; \
+             delete filled[1]; \
+             Object.defineProperty(filled, '2', { value: 23, writable: false }); \
+             let prototypeHits = 0; \
+             let prototype = new Proxy({ 1: 17 }, { \
+                 get: function(target, key, receiver) { \
+                     prototypeHits++; return Reflect.get(target, key, receiver); \
+                 } \
+             }); \
+             Object.setPrototypeOf(filled, prototype); \
+             let present = filled[0] + ':' + prototypeHits; \
+             let inherited = filled[1] + ':' + prototypeHits; \
+             let described = filled[2]; \
+             let nullPrototype = [29]; Object.setPrototypeOf(nullPrototype, null); \
+             present + ':' + inherited + ':' + described + ':' + nullPrototype[0];"
+        ),
+        Ok(Value::String("10:0:17:1:23:29".to_owned().into()))
+    );
+}
+
+#[test]
+fn dense_read_falls_back_for_target_accessors_and_object_keys() {
+    assert_eq!(
+        eval(
+            "let getterHits = 0, keyHits = 0; \
+             let values = new Array(2); values[0] = 3; values[1] = 5; \
+             Object.defineProperty(values, '0', { \
+                 get: function() { getterHits++; return 31; }, configurable: true \
+             }); \
+             let key = { [Symbol.toPrimitive]: function() { keyHits++; return 1; } }; \
+             values[0] + ':' + getterHits + ':' + values[key] + ':' + keyHits;"
+        ),
+        Ok(Value::String("31:1:5:1".to_owned().into()))
+    );
+}
+
+#[test]
 fn numeric_literal_index_reads_preserve_generic_property_semantics() {
     assert_eq!(
         eval(

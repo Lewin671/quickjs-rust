@@ -57,6 +57,34 @@ impl ArrayData {
             .is_none_or(|cold| cold.properties.borrow().is_empty())
     }
 
+    fn has_property_at_index(&self, index: usize) -> bool {
+        self.cold_if_present().is_some_and(|cold| {
+            let properties = cold.properties.borrow();
+            if properties.is_empty() {
+                return false;
+            }
+
+            // Format the canonical decimal index into a stack buffer so a
+            // cold named property does not reintroduce a heap allocation on
+            // every otherwise-direct numeric read. Three bytes per pointer
+            // byte comfortably covers every supported `usize` decimal width.
+            let mut digits = [0_u8; std::mem::size_of::<usize>() * 3];
+            let mut cursor = digits.len();
+            let mut remaining = index;
+            loop {
+                cursor -= 1;
+                digits[cursor] = b'0' + (remaining % 10) as u8;
+                remaining /= 10;
+                if remaining == 0 {
+                    break;
+                }
+            }
+            let key = std::str::from_utf8(&digits[cursor..])
+                .expect("decimal array indices are valid UTF-8");
+            properties.contains_key(key)
+        })
+    }
+
     fn uses_default_prototype(&self) -> bool {
         self.cold_if_present()
             .is_none_or(|cold| cold.prototype.borrow().is_none())
@@ -284,17 +312,20 @@ impl ArrayRef {
 
     /// Reads a present dense element when ordinary `array[index]` lookup cannot
     /// observe a different value. Unlike absent-element reads, a present own
-    /// dense element always wins over the prototype chain, so the caller does
-    /// not need to inspect Array.prototype's indexed properties.
+    /// dense element always wins over the prototype chain, so unrelated holes,
+    /// descriptors, and prototype overrides do not block this target-specific
+    /// read. An own special descriptor at `index` still takes the generic
+    /// property path; the usual descriptor representation marks a dense hole,
+    /// while the explicit target-key check also protects transitional storage
+    /// states without making unrelated descriptors reject the read.
     pub(crate) fn direct_dense_index_value(&self, index: usize) -> Option<Value> {
-        let elements = self.0.elements.borrow();
-        if self.0.length.get() != elements.len() || !self.0.holes_are_empty() {
+        if index >= self.0.length.get()
+            || self.0.has_hole(index)
+            || self.0.has_property_at_index(index)
+        {
             return None;
         }
-        if !self.0.properties_are_empty() || !self.uses_default_prototype() {
-            return None;
-        }
-        elements.get(index).cloned()
+        self.0.elements.borrow().get(index).cloned()
     }
 
     /// Searches fully dense numeric storage without generic property lookup.
@@ -748,7 +779,7 @@ mod tests {
     use std::{mem, rc::Rc};
 
     use super::{ArrayData, ArrayRef};
-    use crate::Value;
+    use crate::{Property, Value};
 
     #[test]
     fn cloned_array_is_a_pointer_sized_shared_handle() {
@@ -783,5 +814,28 @@ mod tests {
         assert!(array.delete_index(1));
         assert!(array.0.cold.get().is_some());
         assert_eq!(array.get(1), None);
+    }
+
+    #[test]
+    fn direct_dense_index_read_only_checks_the_target_element() {
+        let array = ArrayRef::new(vec![
+            Value::Number(11.0),
+            Value::Number(13.0),
+            Value::Number(17.0),
+        ]);
+
+        assert!(array.delete_index(1));
+        array.define_property(
+            "2".to_owned(),
+            Property::data(Value::Number(19.0), false, false, false),
+        );
+        // Some generic mutation paths can materialize a dense value without
+        // dropping the cold descriptor. The target-key guard must still win.
+        array.set(2, Value::Number(23.0));
+
+        assert_eq!(array.direct_dense_index_value(0), Some(Value::Number(11.0)));
+        assert_eq!(array.direct_dense_index_value(1), None);
+        assert_eq!(array.direct_dense_index_value(2), None);
+        assert_eq!(array.direct_dense_index_value(3), None);
     }
 }
