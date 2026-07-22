@@ -3,10 +3,13 @@ use std::collections::HashMap;
 use qjs_ast::BindingPattern;
 
 use crate::{
-    Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, object_prototype, symbol,
+    Function, NativeFunction, ObjectRef, Property, Prototype, RuntimeError, Value,
+    object_prototype, symbol,
 };
 
 use super::{CallEnv, Upvalue};
+
+const CROSS_REALM_FUNCTION_PROTOTYPE: &str = "__quickjsRustRealmFunctionPrototype";
 
 pub(super) fn arguments_object(
     function: &Function,
@@ -167,6 +170,15 @@ fn cross_realm_throw_type_error(function: &Function) -> Option<Value> {
         vec![Value::Object(prototype.clone())],
         0,
     );
+    if let Some(property) = function.own_property(CROSS_REALM_FUNCTION_PROTOTYPE) {
+        if let Some(function_prototype) = cross_realm_function_prototype(&property.value) {
+            // The host's synthetic Realm functions execute on the caller's
+            // native Realm. Preserve the creation Realm's %Function.prototype%
+            // on the synthesized %ThrowTypeError% instead of letting its
+            // implicit prototype resolve through that caller Realm.
+            let _ = throw_type_error.set_internal_prototype_slot(Some(function_prototype));
+        }
+    }
     throw_type_error.freeze();
     let value = Value::Function(throw_type_error);
     prototype.define_property(
@@ -174,6 +186,13 @@ fn cross_realm_throw_type_error(function: &Function) -> Option<Value> {
         Property::fixed_non_enumerable(value.clone()),
     );
     Some(value)
+}
+
+fn cross_realm_function_prototype(value: &Value) -> Option<Prototype> {
+    let Value::Function(prototype) = value else {
+        return None;
+    };
+    Some(Prototype::Function(prototype.clone()))
 }
 
 fn define_arguments_iterator(object: &ObjectRef, function: &Function, env: &CallEnv) {

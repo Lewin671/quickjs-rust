@@ -394,6 +394,60 @@ fn realm_marked_strict_arguments_use_realm_throw_type_error() {
 }
 
 #[test]
+fn realm_marked_restricted_arguments_thrower_uses_realm_function_prototype() {
+    assert_eq!(
+        eval(
+            "var localFunctionPrototype = Function.prototype; \
+             var originalFunctionPrototype = function RealmFunctionPrototype() {}; \
+             var replacementFunctionPrototype = function ReplacementFunctionPrototype() {}; \
+             var typeErrorPrototype = {}; \
+             var realmGlobal = { Function: function RealmFunction() {} }; \
+             realmGlobal.Function.prototype = originalFunctionPrototype; \
+             function markRealm(functionObject) { \
+               Object.defineProperty(functionObject, '__quickjsRustRealmFunctionPrototype', { \
+                 value: realmGlobal.Function.prototype \
+               }); \
+               Object.defineProperty(functionObject, '__quickjsRustRealmTypeErrorPrototype', { \
+                 value: typeErrorPrototype \
+               }); \
+               return functionObject; \
+             } \
+             var strict = markRealm(Function('\"use strict\"; return arguments;')); \
+             var nonSimple = markRealm(Function('value = 1', 'return arguments;')); \
+             var mapped = markRealm(Function('return arguments;')); \
+             realmGlobal.Function.prototype = replacementFunctionPrototype; \
+             realmGlobal.Function = function ReplacementFunction() {}; \
+             var strictDescriptor = Object.getOwnPropertyDescriptor(strict(), 'callee'); \
+             var nonSimpleDescriptor = Object.getOwnPropertyDescriptor(nonSimple(), 'callee'); \
+             var mappedDescriptor = Object.getOwnPropertyDescriptor(mapped(), 'callee'); \
+             var strictThrow = strictDescriptor.get; \
+             var nonSimpleThrow = nonSimpleDescriptor.get; \
+             var strictThrownPrototype; \
+             var nonSimpleThrownPrototype; \
+             try { strictThrow(); } catch (error) { \
+               strictThrownPrototype = Object.getPrototypeOf(error); \
+             } \
+             try { nonSimpleThrow(); } catch (error) { \
+               nonSimpleThrownPrototype = Object.getPrototypeOf(error); \
+             } \
+             [ \
+               strictThrow === nonSimpleThrow, \
+               Object.getPrototypeOf(strictThrow) === originalFunctionPrototype, \
+               Object.getPrototypeOf(strictThrow) !== localFunctionPrototype, \
+               Object.getPrototypeOf(nonSimpleThrow) === originalFunctionPrototype, \
+               strictThrownPrototype === typeErrorPrototype, \
+               nonSimpleThrownPrototype === typeErrorPrototype, \
+               mappedDescriptor.get === undefined, \
+               mappedDescriptor.value === mapped \
+             ].join(':');"
+        ),
+        Ok(Value::String(
+            "true:true:true:true:true:true:true:true".to_owned().into()
+        ))
+    );
+}
+
+#[test]
 fn evaluates_destructured_parameters() {
     assert_eq!(
         eval(

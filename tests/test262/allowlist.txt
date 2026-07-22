@@ -3893,6 +3893,7 @@ test/language/arguments-object/mapped/nonconfigurable-nonenumerable-nonwritable-
 test/language/arguments-object/mapped/nonconfigurable-nonwritable-descriptors-define-property-consecutive.js
 test/language/arguments-object/mapped/nonconfigurable-nonwritable-descriptors-set-by-arguments.js
 test/language/arguments-object/mapped/nonconfigurable-nonwritable-descriptors-set-by-param.js
+cases/arguments-callee-cross-realm-prototype.js
 cases/arguments-empty-basic.js
 cases/arguments-index-basic.js
 cases/arguments-iterator-cross-realm-identity.js

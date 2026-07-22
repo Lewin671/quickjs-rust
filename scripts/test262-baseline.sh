@@ -404,7 +404,7 @@ var $262 = {
         value: crossRealmObject.prototype
       });
       Object.defineProperty(fn, "__quickjsRustRealmFunctionPrototype", {
-        value: crossRealmFunction.prototype
+        value: crossRealmFunctionPrototype
       });
       Object.defineProperty(fn, "__quickjsRustDynamicFunctionRealm", {
         value: __quickjsRustRealmGlobal
@@ -761,6 +761,9 @@ var $262 = {
         globalThis.__quickjsRustDynamicFunctionRealm = previousRealm;
       }
       if (typeof value === "function") {
+        Object.defineProperty(value, "__quickjsRustRealmFunctionPrototype", {
+          value: crossRealmFunctionPrototype
+        });
         Object.defineProperty(value, "__quickjsRustRealmTypeErrorPrototype", {
           value: crossRealmNativeErrorPrototypes.TypeError
         });
