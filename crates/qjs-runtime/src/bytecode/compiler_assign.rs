@@ -828,6 +828,36 @@ mod tests {
     }
 
     #[test]
+    fn typed_array_numeric_literal_assignment_materializes_no_key() {
+        let script = qjs_parser::parse_script(
+            "let typed = new Uint8Array(1); let result = (typed[0] = 257);",
+        )
+        .expect("source should parse");
+        let bytecode = compiler::compile_script(&script).expect("source should compile");
+
+        assert_eq!(
+            bytecode
+                .code
+                .iter()
+                .filter(|op| matches!(op, Op::SetPropIndex { index: 0, .. }))
+                .count(),
+            1
+        );
+        assert!(
+            bytecode
+                .code
+                .iter()
+                .all(|op| !matches!(op, Op::SetProp { .. }))
+        );
+        assert!(
+            bytecode
+                .constants
+                .iter()
+                .all(|value| !matches!(value, Value::Number(number) if *number == 0.0))
+        );
+    }
+
+    #[test]
     fn numeric_literal_assignment_captures_receiver_before_rhs() {
         assert_eq!(
             eval(
@@ -849,7 +879,7 @@ mod tests {
     }
 
     #[test]
-    fn index_store_falls_back_for_proxy_typed_array_and_custom_prototype() {
+    fn index_store_preserves_proxy_typed_array_and_custom_prototype_semantics() {
         assert_eq!(
             eval(
                 "let seen = ''; \
@@ -883,6 +913,43 @@ mod tests {
                    + ':' + sloppy + ':' + frozen[0] + ':' + strict;"
             ),
             Ok(Value::String("1:5:7:9:1:true".to_owned().into()))
+        );
+    }
+
+    #[test]
+    fn typed_array_index_store_preserves_integer_indexed_edge_semantics() {
+        assert_eq!(
+            eval(
+                "let log = ''; \
+                 let detached = new Uint8Array([1]); detached.buffer.transfer(); \
+                 let detachedValue = { valueOf() { log += 'd'; return 7; } }; \
+                 let detachedResult = (detached[0] = detachedValue); \
+                 let typed = new Uint8Array(1); \
+                 let outValue = { valueOf() { log += 'o'; return 9; } }; \
+                 let outResult = (typed[3] = outValue); \
+                 typed[4294967294] = { valueOf() { log += 'x'; return 1; } }; \
+                 typed[4294967295] = { valueOf() { log += 'y'; return 1; } }; \
+                 typed[-0] = 257; \
+                 typed['-0'] = { valueOf() { log += 'n'; return 5; } }; \
+                 let strictOk = true; \
+                 try { \
+                   (function() { \
+                     'use strict'; \
+                     typed[3] = { valueOf() { log += 's'; return 2; } }; \
+                   })(); \
+                 } catch (error) { strictOk = false; } \
+                 let mismatch = false; \
+                 try { (function() { 'use strict'; new BigInt64Array(1)[0] = 1; })(); } \
+                 catch (error) { mismatch = error instanceof TypeError; } \
+                 log + '|' + (detachedResult === detachedValue) \
+                   + ':' + (detached[0] === undefined) \
+                   + ':' + (outResult === outValue) \
+                   + ':' + (typed[3] === undefined) \
+                   + ':' + typed[0] + ':' + strictOk + ':' + mismatch;"
+            ),
+            Ok(Value::String(
+                "doxyns|true:true:true:true:1:true:true".to_owned().into()
+            ))
         );
     }
 }

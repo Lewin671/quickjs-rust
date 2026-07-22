@@ -1433,18 +1433,7 @@ impl<'a> Vm<'a> {
             && crate::typed_array::is_typed_array_object(object)
         {
             let object = object.clone();
-            if !crate::typed_array::try_set_integer_indexed_primitive_element(
-                &object, index, &value,
-            ) {
-                let mut env = self.current_env();
-                crate::typed_array::set_integer_indexed_element(
-                    &object,
-                    index,
-                    value.clone(),
-                    &mut env,
-                )?;
-                self.apply_env(env);
-            }
+            self.set_typed_array_index(&object, index, &value)?;
             self.pop()?;
             self.stack.push(value);
             return Ok(());
@@ -1474,12 +1463,41 @@ impl<'a> Vm<'a> {
             }
         }
 
+        if let Value::Object(typed_array) = &object
+            && crate::typed_array::is_typed_array_object(typed_array)
+        {
+            let typed_array = typed_array.clone();
+            self.set_typed_array_index(&typed_array, index, &value)?;
+            self.stack.push(value);
+            return Ok(());
+        }
+
         self.set_property_value(
             object,
             PropertyKey::String(index.to_string()),
             value,
             is_strict,
         )
+    }
+
+    /// Shared IntegerIndexedElementSet path for already-classified numeric
+    /// indices. Both computed numeric keys and numeric-literal bytecode call
+    /// this helper so primitive conversion, detached-buffer handling, and
+    /// object coercion cannot drift between the two fast paths.
+    fn set_typed_array_index(
+        &mut self,
+        object: &ObjectRef,
+        index: usize,
+        value: &Value,
+    ) -> Result<(), RuntimeError> {
+        if crate::typed_array::try_set_integer_indexed_primitive_element(object, index, value) {
+            return Ok(());
+        }
+
+        let mut env = self.current_env();
+        crate::typed_array::set_integer_indexed_element(object, index, value.clone(), &mut env)?;
+        self.apply_env(env);
+        Ok(())
     }
 
     fn set_named_prop(&mut self, key: &Rc<str>, is_strict: bool) -> Result<(), RuntimeError> {
