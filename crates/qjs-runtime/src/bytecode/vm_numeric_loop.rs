@@ -773,8 +773,7 @@ impl PreparedNumericLoopTerm {
             }
             Self::StringSliceLength { value, arguments } => {
                 let [start, end] = arguments.values(counter);
-                let sliced = crate::string::numeric_string_slice(value, start, end);
-                crate::string::string_code_unit_len(&sliced) as f64
+                crate::string::numeric_string_slice_code_unit_len(value, start, end) as f64
             }
         }
     }
@@ -1051,6 +1050,18 @@ mod tests {
         assert_eq!(
             eval(
                 "function sum(n) { var text = '😀x'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(0, 1).length; } return s; } sum(4);"
+            ),
+            Ok(Value::Number(4.0))
+        );
+        assert_eq!(
+            eval(
+                "function sum(n) { var text = '😀x'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(i, 3).length; } return s; } sum(4);"
+            ),
+            Ok(Value::Number(6.0))
+        );
+        assert_eq!(
+            eval(
+                "function sum(n) { var text = 'abcdef'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(-3, -1).length; } return s; } sum(4);"
             ),
             Ok(Value::Number(8.0))
         );

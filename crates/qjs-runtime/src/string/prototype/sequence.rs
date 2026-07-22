@@ -6,7 +6,10 @@ use crate::{
     to_uint32_number, to_uint32_with_env,
 };
 
-use super::super::indexing::{string_slice_index, string_substring_index, this_string_value};
+use super::super::{
+    indexing::{string_slice_index, string_substring_index, this_string_value},
+    push_code_unit, string_code_unit_len, surrogate_escape_code_unit,
+};
 use super::MAX_STRING_LENGTH;
 use crate::CallEnv;
 
@@ -65,7 +68,7 @@ pub(crate) fn native_string_prototype_slice(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = string_sequence_value(this_value, env)?;
-    let length = string_char_len(value.as_str());
+    let length = string_code_unit_len(value.as_str());
     let start = string_slice_index(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -81,27 +84,27 @@ pub(crate) fn native_string_prototype_slice(
     if end <= start {
         return Ok(Value::String(::std::rc::Rc::new(String::new())));
     }
-    Ok(Value::String(string_slice_chars(
+    Ok(Value::String(string_slice_code_units(
         &value, start, end, length,
     )))
 }
 
-pub(crate) fn numeric_string_slice(value: &Rc<String>, start: f64, end: f64) -> Rc<String> {
-    let value = StringSequenceValue::Shared(value.clone());
-    let length = string_char_len(value.as_str());
-    let normalize = |number: f64| {
-        if number.is_nan() {
-            0
-        } else {
-            let integer = number.trunc();
-            if integer < 0.0 {
-                (length as f64 + integer).max(0.0) as usize
-            } else {
-                integer.min(length as f64) as usize
-            }
-        }
-    };
-    string_slice_chars(&value, normalize(start), normalize(end), length)
+/// Returns the UTF-16 length of a numeric `String.prototype.slice` result.
+///
+/// The numeric-loop caller has already proved that the receiver is a stable
+/// primitive string, both arguments are numbers, and the intrinsic `slice`
+/// method is unchanged. Computing the selected code-unit range directly keeps
+/// that general admission contract while avoiding a temporary substring that
+/// would otherwise be allocated, copied, measured, and immediately dropped.
+pub(crate) fn numeric_string_slice_code_unit_len(
+    value: &Rc<String>,
+    start: f64,
+    end: f64,
+) -> usize {
+    let length = string_code_unit_len(value);
+    let start = numeric_string_slice_index(length, start);
+    let end = numeric_string_slice_index(length, end);
+    end.saturating_sub(start)
 }
 
 pub(crate) fn native_string_prototype_split(
@@ -315,7 +318,7 @@ pub(crate) fn native_string_prototype_substr(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = string_sequence_value(this_value, env)?;
-    let length = string_char_len(value.as_str());
+    let length = string_code_unit_len(value.as_str());
     let start = string_substr_start(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -327,7 +330,7 @@ pub(crate) fn native_string_prototype_substr(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    Ok(Value::String(string_slice_chars(
+    Ok(Value::String(string_slice_code_units(
         &value,
         start,
         start + count,
@@ -341,7 +344,7 @@ pub(crate) fn native_string_prototype_substring(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = string_sequence_value(this_value, env)?;
-    let length = string_char_len(value.as_str());
+    let length = string_code_unit_len(value.as_str());
     let start = string_substring_index(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -359,7 +362,9 @@ pub(crate) fn native_string_prototype_substring(
     } else {
         (end, start)
     };
-    Ok(Value::String(string_slice_chars(&value, from, to, length)))
+    Ok(Value::String(string_slice_code_units(
+        &value, from, to, length,
+    )))
 }
 
 enum StringSequenceValue {
@@ -386,15 +391,7 @@ fn string_sequence_value(
     }
 }
 
-fn string_char_len(value: &str) -> usize {
-    if value.is_ascii() {
-        value.len()
-    } else {
-        value.chars().count()
-    }
-}
-
-fn string_slice_chars(
+fn string_slice_code_units(
     value: &StringSequenceValue,
     start: usize,
     end: usize,
@@ -413,7 +410,51 @@ fn string_slice_chars(
     if value.is_ascii() {
         Rc::new(value[start..end].to_owned())
     } else {
-        Rc::new(value.chars().skip(start).take(end - start).collect())
+        let mut result = String::with_capacity(value.len().min((end - start).saturating_mul(4)));
+        let mut index = 0usize;
+        for character in value.chars() {
+            let character_units = if surrogate_escape_code_unit(character).is_some() {
+                1
+            } else {
+                character.len_utf16()
+            };
+            let character_end = index + character_units;
+            if character_end <= start {
+                index = character_end;
+                continue;
+            }
+            if index >= end {
+                break;
+            }
+
+            let selected_start = start.saturating_sub(index);
+            let selected_end = end.min(character_end) - index;
+            if selected_start == 0 && selected_end == character_units {
+                result.push(character);
+            } else if let Some(code_unit) = surrogate_escape_code_unit(character) {
+                push_code_unit(&mut result, code_unit);
+            } else {
+                let mut buffer = [0; 2];
+                let encoded = character.encode_utf16(&mut buffer);
+                for code_unit in &encoded[selected_start..selected_end] {
+                    push_code_unit(&mut result, *code_unit);
+                }
+            }
+            index = character_end;
+        }
+        Rc::new(result)
+    }
+}
+
+fn numeric_string_slice_index(length: usize, number: f64) -> usize {
+    if number.is_nan() {
+        return 0;
+    }
+    let integer = number.trunc();
+    if integer < 0.0 {
+        (length as f64 + integer).max(0.0) as usize
+    } else {
+        integer.min(length as f64) as usize
     }
 }
 
@@ -453,4 +494,62 @@ fn string_substr_count(
         return Ok(remaining);
     }
     Ok((number.trunc() as usize).min(remaining))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::numeric_string_slice_code_unit_len;
+
+    #[test]
+    fn numeric_slice_length_uses_utf16_code_units_without_materializing() {
+        let ascii = std::rc::Rc::new("abcdef".to_owned());
+        assert_eq!(numeric_string_slice_code_unit_len(&ascii, 1.0, 4.0), 3);
+        assert_eq!(numeric_string_slice_code_unit_len(&ascii, 1.9, 4.9), 3);
+        assert_eq!(numeric_string_slice_code_unit_len(&ascii, -4.0, -1.0), 3);
+        assert_eq!(numeric_string_slice_code_unit_len(&ascii, 4.0, 1.0), 0);
+
+        let supplementary = std::rc::Rc::new("😀x".to_owned());
+        assert_eq!(
+            numeric_string_slice_code_unit_len(&supplementary, 0.0, 1.0),
+            1
+        );
+        assert_eq!(
+            numeric_string_slice_code_unit_len(&supplementary, 0.0, 2.0),
+            2
+        );
+        assert_eq!(
+            numeric_string_slice_code_unit_len(&supplementary, 1.0, 2.0),
+            1
+        );
+
+        let escaped_surrogates = std::rc::Rc::new(crate::string::string_from_code_units(&[
+            0xD800, 0x61, 0xDC00,
+        ]));
+        assert_eq!(
+            numeric_string_slice_code_unit_len(&escaped_surrogates, 0.0, 1.0),
+            1
+        );
+        assert_eq!(
+            numeric_string_slice_code_unit_len(&escaped_surrogates, 0.0, 3.0),
+            3
+        );
+    }
+
+    #[test]
+    fn numeric_slice_length_normalizes_non_finite_and_out_of_range_indices() {
+        let value = std::rc::Rc::new("abcdef".to_owned());
+        assert_eq!(
+            numeric_string_slice_code_unit_len(&value, f64::NAN, f64::INFINITY),
+            6
+        );
+        assert_eq!(
+            numeric_string_slice_code_unit_len(&value, f64::NEG_INFINITY, -1.0),
+            5
+        );
+        assert_eq!(
+            numeric_string_slice_code_unit_len(&value, f64::INFINITY, f64::NEG_INFINITY),
+            0
+        );
+        assert_eq!(numeric_string_slice_code_unit_len(&value, -100.0, 100.0), 6);
+    }
 }
