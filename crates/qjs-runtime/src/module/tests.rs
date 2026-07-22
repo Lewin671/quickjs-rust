@@ -359,6 +359,31 @@ fn namespace_without_numeric_exports_blocks_dense_array_store() {
 }
 
 #[test]
+fn namespace_prototype_rejects_absent_symbol_set() {
+    let namespace = run(
+        "import * as ns from \"dep\";\n\
+         const key = Symbol('absent');\n\
+         const reflectTarget = Object.create(ns);\n\
+         const reflected = Reflect.set(reflectTarget, key, 7);\n\
+         const assignmentTarget = Object.create(ns);\n\
+         let threw = false;\n\
+         try { assignmentTarget[key] = 9; }\n\
+         catch (error) { threw = error instanceof TypeError; }\n\
+         export const result = reflected + ':' \
+             + Object.prototype.hasOwnProperty.call(reflectTarget, key) + ':' \
+             + threw + ':' \
+             + Object.prototype.hasOwnProperty.call(assignmentTarget, key) + ':' \
+             + assignmentTarget[key];",
+        &[("dep", "export const live = 1;")],
+    )
+    .expect("module graph evaluates");
+    assert_eq!(
+        export(&namespace, "result"),
+        Value::String("false:false:true:false:undefined".to_owned().into())
+    );
+}
+
+#[test]
 fn typeof_imported_const_observes_live_tdz() {
     let source = "let caught = false;\n\
         try { typeof y; } catch (error) { caught = error instanceof ReferenceError; }\n\

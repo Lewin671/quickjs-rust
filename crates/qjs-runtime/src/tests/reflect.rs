@@ -480,3 +480,51 @@ fn reflect_set_honors_array_receiver_descriptors() {
         ))
     );
 }
+
+#[test]
+fn reflect_set_symbol_dispatches_proxy_receiver_internal_methods() {
+    assert_eq!(
+        eval(
+            "const key = Symbol('key'); \
+             const target = {}; \
+             Object.defineProperty(target, key, { value: 1, writable: true }); \
+             const backing = {}; \
+             Object.defineProperty(backing, key, { \
+                 value: 2, writable: true, configurable: true \
+             }); \
+             const log = []; \
+             const receiver = new Proxy(backing, { \
+                 getOwnPropertyDescriptor: function(object, property) { \
+                     log.push('get:' + (property === key)); \
+                     return Reflect.getOwnPropertyDescriptor(object, property); \
+                 }, \
+                 defineProperty: function(object, property, descriptor) { \
+                     log.push('define:' + (property === key) + ':' \
+                         + Object.keys(descriptor).join(',')); \
+                     return Reflect.defineProperty(object, property, descriptor); \
+                 } \
+             }); \
+             const success = Reflect.set(target, key, 7, receiver); \
+             let getThrew = false; \
+             try { \
+                 Reflect.set(target, key, 8, new Proxy({}, { \
+                     getOwnPropertyDescriptor: function() { throw 41; } \
+                 })); \
+             } catch (error) { getThrew = error === 41; } \
+             let defineThrew = false; \
+             try { \
+                 Reflect.set(target, key, 9, new Proxy({}, { \
+                     getOwnPropertyDescriptor: function() { return undefined; }, \
+                     defineProperty: function() { throw 43; } \
+                 })); \
+             } catch (error) { defineThrew = error === 43; } \
+             success + ':' + target[key] + ':' + backing[key] + ':' \
+                 + log.join('|') + ':' + getThrew + ':' + defineThrew;"
+        ),
+        Ok(Value::String(
+            "true:1:7:get:true|define:true:value:true:true"
+                .to_owned()
+                .into()
+        ))
+    );
+}

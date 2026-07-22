@@ -984,6 +984,12 @@ pub(super) fn ordinary_chain_symbol_property(
     loop {
         match current {
             Some(crate::Prototype::Object(object)) => {
+                // Module namespace [[Set]] rejects every property key, even an
+                // absent Symbol. Descriptor flattening would lose that exotic
+                // behavior and incorrectly create a property on the receiver.
+                if object.is_module_namespace_exotic() {
+                    return Err(ProxyInChain);
+                }
                 if let Some(property) = object.own_symbol_property(symbol) {
                     return Ok(Some(property));
                 }

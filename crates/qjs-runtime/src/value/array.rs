@@ -322,8 +322,11 @@ impl ArrayRef {
         {
             return false;
         }
-        let within_length = index < self.0.length.get();
-        if !within_length && !self.0.extensible.get() {
+        // An index below `length` can still be a hole, and filling that hole
+        // creates a new own property. Non-extensible arrays may overwrite an
+        // existing dense element, but they may not materialize a hole merely
+        // because dense storage has a placeholder at that position.
+        if !self.0.extensible.get() && !self.has_index(index) {
             return false;
         }
         self.0.cold_if_present().is_none_or(|cold| {
@@ -544,9 +547,9 @@ impl ArrayRef {
             return;
         }
         let old_len = self.0.length.get();
-        if length > old_len && !self.0.extensible.get() {
-            return;
-        }
+        // ArraySetLength changes the existing non-configurable `length` data
+        // property. Growing it creates holes, not indexed properties, so a
+        // non-extensible array may still accept a larger writable length.
         self.0.length.set(length);
         if length < elements.len() {
             elements.truncate(length);

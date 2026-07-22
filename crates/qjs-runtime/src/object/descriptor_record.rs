@@ -290,7 +290,9 @@ impl PropertyDescriptor {
         }
     }
 
-    pub(super) fn data_value(value: Value) -> Self {
+    /// A partial data descriptor carrying only `[[Value]]`, as required when
+    /// OrdinarySetWithOwnDescriptor updates an existing receiver property.
+    pub(crate) fn data_value(value: Value) -> Self {
         Self {
             value: Some(value),
             writable: None,

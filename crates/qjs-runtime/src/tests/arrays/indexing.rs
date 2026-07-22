@@ -136,6 +136,49 @@ fn dense_index_store_preserves_prototype_set_semantics() {
 }
 
 #[test]
+fn dense_index_store_does_not_treat_holes_as_own_elements() {
+    assert_eq!(
+        eval(
+            "let sloppy = [,]; Object.preventExtensions(sloppy); \
+             let sloppyResult = Function('array', 'return (array[0] = 7)')(sloppy); \
+             let strict = [,]; Object.preventExtensions(strict); \
+             let strictThrew = false; \
+             try { \
+                 Function('array', '\"use strict\"; return (array[0] = 7)')(strict); \
+             } catch (error) { strictThrew = error instanceof TypeError; } \
+             sloppyResult + ':' \
+                 + Object.prototype.hasOwnProperty.call(sloppy, '0') + ':' \
+                 + sloppy[0] + ':' + strictThrew + ':' \
+                 + Object.prototype.hasOwnProperty.call(strict, '0') + ':' \
+                 + strict[0];"
+        ),
+        Ok(Value::String(
+            "7:false:undefined:true:false:undefined".to_owned().into()
+        ))
+    );
+}
+
+#[test]
+fn non_extensible_array_can_grow_writable_length() {
+    assert_eq!(
+        eval(
+            "let reflected = []; Object.preventExtensions(reflected); \
+             let reflectedResult = Reflect.set(reflected, 'length', 3); \
+             let sloppy = []; Object.preventExtensions(sloppy); sloppy.length = 4; \
+             let strict = []; Object.preventExtensions(strict); \
+             let strictThrew = false; \
+             try { Function('array', '\"use strict\"; array.length = 5')(strict); } \
+             catch (error) { strictThrew = error instanceof TypeError; } \
+             reflectedResult + ':' + reflected.length + ':' \
+                 + Object.keys(reflected).length + ':' + sloppy.length + ':' \
+                 + Object.keys(sloppy).length + ':' + strictThrew + ':' \
+                 + strict.length + ':' + Object.keys(strict).length;"
+        ),
+        Ok(Value::String("true:3:0:4:0:false:5:0".to_owned().into()))
+    );
+}
+
+#[test]
 fn dense_index_store_checks_the_complete_prototype_chain() {
     assert_eq!(
         eval(
