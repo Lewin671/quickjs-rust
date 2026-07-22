@@ -358,7 +358,7 @@ fn dynamic_function_scope_snapshot(env: &CallEnv) -> std::collections::HashMap<S
                 _ => None,
             })
         });
-    if let Some(global) = dynamic_realm_global {
+    if let Some(global) = &dynamic_realm_global {
         snapshot.insert(
             DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
             Value::Object(global.clone()),
@@ -373,7 +373,52 @@ fn dynamic_function_scope_snapshot(env: &CallEnv) -> std::collections::HashMap<S
             }
         }
     }
+    // A synthetic Test262 realm captures these identities when its
+    // self-referential globalThis is initialized. Never reconstruct them from
+    // the mutable Object/Array globals after that point: those bindings may be
+    // replaced without changing the Realm's intrinsic objects. The snapshot
+    // lookup remains only as compatibility fallback for older marked globals
+    // that predate the internal identity slot.
+    let dynamic_realm_intrinsics = dynamic_realm_global
+        .as_ref()
+        .and_then(|global| global.realm_intrinsic_prototype_identity());
+    let object_prototype = if let Some((object_prototype, _)) = &dynamic_realm_intrinsics {
+        Some(object_prototype.clone())
+    } else if dynamic_realm_global.is_some() {
+        snapshot_constructor_prototype(&snapshot, "Object")
+    } else {
+        env.realm().object_prototype()
+    };
+    let array_prototype = if let Some((_, array_prototype)) = &dynamic_realm_intrinsics {
+        Some(array_prototype.clone())
+    } else if dynamic_realm_global.is_some() {
+        snapshot_constructor_prototype(&snapshot, "Array")
+    } else {
+        env.realm().array_prototype()
+    };
+    if let Some(prototype) = object_prototype {
+        snapshot.insert(
+            super::env::REALM_OBJECT_PROTOTYPE_INTRINSIC.to_owned(),
+            Value::Object(prototype),
+        );
+    }
+    if let Some(prototype) = array_prototype {
+        snapshot.insert(
+            super::env::REALM_ARRAY_PROTOTYPE_INTRINSIC.to_owned(),
+            Value::Object(prototype),
+        );
+    }
     snapshot
+}
+
+fn snapshot_constructor_prototype(
+    snapshot: &HashMap<String, Value>,
+    name: &str,
+) -> Option<crate::ObjectRef> {
+    let Some(Value::Function(constructor)) = snapshot.get(name) else {
+        return None;
+    };
+    crate::function_prototype(constructor)
 }
 
 fn function_source_parts(

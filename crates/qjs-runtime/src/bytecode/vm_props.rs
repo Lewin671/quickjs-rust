@@ -33,7 +33,6 @@ impl Vm<'_> {
         };
         match global_this.write_existing_own_data_property(name, value) {
             OwnDataPropertyWrite::Written => {
-                self.invalidate_array_prototype_cache(name);
                 // `slot_is_realm_binding` only sets its bit when this slot's
                 // upvalue is exactly the realm's binding cell for `name`
                 // (`initial_realm_binding_slots`), so it's already at hand
@@ -70,14 +69,13 @@ impl Vm<'_> {
         }
     }
 
-    /// Whether the realm's current Array.prototype owns any indexed property.
-    /// Returns `None` when no Array.prototype is reachable. The Array.prototype
-    /// object is cached so the hot path skips the `Array`-binding lookup; the
-    /// cache is dropped when the `Array` global is reassigned. The own-index
-    /// count read is itself O(1).
+    /// Whether the realm's intrinsic Array.prototype owns any indexed property.
+    /// Returns `None` when no intrinsic is available. The object is cached in
+    /// the VM so the hot path only reads the own-index count, itself O(1).
+    /// Rebinding the mutable `Array` global does not change this intrinsic.
     pub(super) fn array_prototype_has_index_property(&mut self) -> Option<bool> {
         if self.array_prototype_cache.is_none() {
-            self.array_prototype_cache = Some(array_prototype(&self.realm_env())?);
+            self.array_prototype_cache = array_prototype(&self.env);
         }
         self.array_prototype_cache
             .as_ref()
@@ -92,11 +90,21 @@ impl Vm<'_> {
             return true;
         }
         if self.array_prototype_cache.is_none() {
-            self.array_prototype_cache = array_prototype(&self.realm_env());
+            self.array_prototype_cache = array_prototype(&self.env);
         }
         self.array_prototype_cache
             .as_ref()
             .is_some_and(|prototype| array.uses_prototype_object(prototype))
+    }
+
+    /// Returns the realm's intrinsic Object.prototype while keeping literal
+    /// allocation on the existing per-VM cached path. The stable realm slot is
+    /// resolved once and never invalidated by mutable global rebinding.
+    pub(super) fn cached_object_prototype(&mut self) -> Option<ObjectRef> {
+        if self.object_prototype_cache.is_none() {
+            self.object_prototype_cache = crate::object_prototype(&self.env);
+        }
+        self.object_prototype_cache.clone()
     }
 
     pub(super) fn symbol_primitive_set_fails(
@@ -132,28 +140,6 @@ impl Vm<'_> {
         };
         self.cached_global_this()
             .is_some_and(|global_object| object.ptr_eq(&global_object))
-    }
-
-    /// Drops the cached Array.prototype when the `Array` global binding itself is
-    /// rewritten, so a later index store resolves the replacement constructor's
-    /// prototype. Also drops the cached Object.prototype on the same global-store
-    /// path when `Object` is reassigned.
-    pub(super) fn invalidate_array_prototype_cache(&mut self, name: &str) {
-        if name == "Array" {
-            self.array_prototype_cache = None;
-        } else if name == "Object" {
-            self.object_prototype_cache = None;
-        }
-    }
-
-    /// The realm's current Object.prototype, cached like `array_prototype_cache`
-    /// so object-literal construction skips hashing the `Object` binding and
-    /// then its `prototype` own-property on every evaluation.
-    pub(super) fn cached_object_prototype(&mut self) -> Option<ObjectRef> {
-        if self.object_prototype_cache.is_none() {
-            self.object_prototype_cache = crate::object_prototype(&self.realm_env());
-        }
-        self.object_prototype_cache.clone()
     }
 
     pub(super) fn delete_prop(&mut self, is_strict: bool) -> Result<(), RuntimeError> {
@@ -557,7 +543,6 @@ impl Vm<'_> {
                 message: format!("ReferenceError: undefined identifier `{name}`"),
             });
         }
-        self.invalidate_array_prototype_cache(name);
         self.env.insert_realm(name.to_owned(), value.clone());
         self.write_through_module_live_binding(name, value.clone());
         let global_this = self.cached_global_this();
@@ -675,7 +660,6 @@ impl Vm<'_> {
             self.sync_marked_dynamic_global(name);
             return Ok(());
         }
-        self.invalidate_array_prototype_cache(name);
         if self.realm.contains(name) {
             self.env.insert_realm(name.to_owned(), value.clone());
             self.write_through_module_live_binding(name, value.clone());

@@ -6,6 +6,8 @@ use crate::{Function, NativeFunction, ObjectRef, Property, Value, symbol};
 pub(crate) fn install_array(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let array_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     array_prototype.mark_array_prototype_exotic();
+    env.realm()
+        .initialize_array_prototype(array_prototype.clone());
     let array_function = Function::new_native(Some("Array"), 1, NativeFunction::Array, true);
     array_prototype.define_property(
         "length".to_owned(),

@@ -156,11 +156,12 @@ pub(super) struct Vm<'a> {
     pub(super) resume_mode: Option<ResumeMode>,
     /// Cached realm Array.prototype for the `a[i] = x` fast path.
     pub(super) array_prototype_cache: Option<ObjectRef>,
-    /// Cached realm Object.prototype for object-literal construction. Every
-    /// `{...}` literal previously re-resolved this by hashing the `Object`
-    /// binding and then its `prototype` own-property on every evaluation;
-    /// dropped (like `array_prototype_cache`) whenever the `Object` global is
-    /// reassigned.
+    /// Explicit prototype required only for arrays created in a synthetic
+    /// cross-realm VM. Precomputed once so ordinary `[]` stays on a cheap
+    /// `None` branch instead of consulting realm metadata per allocation.
+    pub(super) array_literal_prototype_override: Option<ObjectRef>,
+    /// Cached intrinsic Object.prototype for object-literal construction.
+    /// Mutable `Object` global rebinding does not invalidate the realm slot.
     pub(super) object_prototype_cache: Option<ObjectRef>,
     /// Makes generators run parameter prologues before first suspension.
     pub(super) stop_at_prologue: bool,
@@ -259,6 +260,11 @@ impl<'a> Vm<'a> {
         }
         let realm = env.realm_rc();
         let module_host = env.module_host();
+        let array_literal_prototype_override = env
+            .dynamic_function_realm_global()
+            .is_some()
+            .then(|| crate::array_prototype(&env))
+            .flatten();
         #[cfg(feature = "agents")]
         let agent_context = env.agent_context();
         let is_direct_call = direct_call_slots.is_some();
@@ -333,6 +339,7 @@ impl<'a> Vm<'a> {
             resume_mode: None,
             stop_at_prologue: false,
             array_prototype_cache: None,
+            array_literal_prototype_override,
             object_prototype_cache: None,
             with_stack,
             direct_eval_with_stack: false,
@@ -1519,7 +1526,6 @@ impl<'a> Vm<'a> {
             && wrote_data
             && let crate::PropertyKey::String(key) = key
         {
-            self.invalidate_array_prototype_cache(&key);
             self.env.insert_realm(key, value.clone());
         }
         self.stack.push(value);

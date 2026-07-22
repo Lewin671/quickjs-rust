@@ -247,6 +247,12 @@ struct ObjectColdData {
     /// helpers store their records here so advancement does not round-trip
     /// through observable-looking property storage.
     iterator_zip_state: RefCell<Option<crate::iterator::ZipState>>,
+    /// Stable intrinsic identity for a synthetic realm global. The Test262
+    /// host represents additional realms as ordinary self-referential
+    /// `globalThis` objects; capture their Object/Array prototypes once when
+    /// that identity is established so later global rebinding cannot change
+    /// the realm intrinsics used by dynamic code.
+    realm_intrinsic_identity: OnceCell<RealmIntrinsicIdentity>,
     /// Cross-thread backing for a `SharedArrayBuffer` under the Test262
     /// `$262.agent` harness. When present, the buffer's bytes live in this
     /// `Arc`-shared store (so a worker agent on another OS thread observes the
@@ -254,6 +260,11 @@ struct ObjectColdData {
     /// object layout is unchanged.
     #[cfg(feature = "agents")]
     shared_backing: RefCell<Option<crate::array_buffer::SharedBackingRef>>,
+}
+
+struct RealmIntrinsicIdentity {
+    object_prototype: ObjectRef,
+    array_prototype: ObjectRef,
 }
 
 impl ObjectData {
@@ -1064,11 +1075,17 @@ impl ObjectRef {
     /// Sets a statically owned property key without copying it out of bytecode.
     /// Existing properties still retain their original insertion-order key.
     pub(crate) fn set_shared_key(&self, key: Rc<str>, value: Value) {
+        let establishes_realm_identity = key.as_ref() == "globalThis"
+            && matches!(&value, Value::Object(global_this) if self.ptr_eq(global_this));
         let mut properties = self.0.properties.borrow_mut();
         if let Some(property) = properties.get_mut(&key) {
             if property.writable {
                 property.value = value;
                 self.bump_property_revision();
+                drop(properties);
+                if establishes_realm_identity {
+                    self.capture_realm_intrinsic_identity();
+                }
             }
             return;
         }
@@ -1095,9 +1112,16 @@ impl ObjectRef {
         }
         properties.insert(key, Property::enumerable(value));
         self.bump_property_revision();
+        drop(properties);
+        if establishes_realm_identity {
+            self.capture_realm_intrinsic_identity();
+        }
     }
 
     pub(crate) fn define_property(&self, key: String, property: Property) {
+        let establishes_realm_identity = key == "globalThis"
+            && !property.is_accessor()
+            && matches!(&property.value, Value::Object(global_this) if self.ptr_eq(global_this));
         let mut properties = self.0.properties.borrow_mut();
         if let Some(existing) = properties.get_mut(key.as_str()) {
             *existing = property;
@@ -1111,6 +1135,10 @@ impl ObjectRef {
             properties.insert(key, property);
         }
         self.bump_property_revision();
+        drop(properties);
+        if establishes_realm_identity {
+            self.capture_realm_intrinsic_identity();
+        }
     }
 
     pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
@@ -1313,6 +1341,8 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return OwnDataPropertyWrite::NeedsSlowPath;
         }
+        let establishes_realm_identity = key == "globalThis"
+            && matches!(value, Value::Object(global_this) if self.ptr_eq(global_this));
         let result = self
             .0
             .properties
@@ -1320,8 +1350,56 @@ impl ObjectRef {
             .write_existing_data(key, value);
         if matches!(result, OwnDataPropertyWrite::Written) {
             self.bump_property_revision();
+            if establishes_realm_identity {
+                self.capture_realm_intrinsic_identity();
+            }
         }
         result
+    }
+
+    /// Returns the stable Object/Array prototype identity captured for a
+    /// synthetic realm global. This metadata is an internal slot: it never
+    /// participates in property reflection, enumeration, or snapshots.
+    pub(crate) fn realm_intrinsic_prototype_identity(&self) -> Option<(ObjectRef, ObjectRef)> {
+        let identity = &self.0.cold_if_present()?.realm_intrinsic_identity;
+        let identity = identity.get()?;
+        Some((
+            identity.object_prototype.clone(),
+            identity.array_prototype.clone(),
+        ))
+    }
+
+    fn capture_realm_intrinsic_identity(&self) {
+        if self
+            .0
+            .cold_if_present()
+            .is_some_and(|cold| cold.realm_intrinsic_identity.get().is_some())
+        {
+            return;
+        }
+        let object_prototype = self.own_constructor_prototype("Object");
+        let array_prototype = self.own_constructor_prototype("Array");
+        let (Some(object_prototype), Some(array_prototype)) = (object_prototype, array_prototype)
+        else {
+            return;
+        };
+        let initialized = self
+            .0
+            .cold()
+            .realm_intrinsic_identity
+            .set(RealmIntrinsicIdentity {
+                object_prototype,
+                array_prototype,
+            })
+            .is_ok();
+        debug_assert!(initialized, "realm intrinsic identity initialized twice");
+    }
+
+    fn own_constructor_prototype(&self, name: &str) -> Option<ObjectRef> {
+        let Value::Function(constructor) = self.own_property(name)?.value else {
+            return None;
+        };
+        crate::function_prototype(&constructor)
     }
 
     pub(crate) fn module_namespace_export_property(

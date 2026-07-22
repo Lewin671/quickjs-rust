@@ -20,7 +20,7 @@
 //! copy the needed value out, drop the borrow, then call.
 
 use std::{
-    cell::RefCell,
+    cell::{OnceCell, RefCell},
     collections::{HashMap, HashSet},
     fmt,
     ops::Deref,
@@ -30,6 +30,8 @@ use std::{
 use crate::{Function, ObjectRef, Value, function::Upvalue, private::PrivateEnvironment};
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
+pub(super) const REALM_OBJECT_PROTOTYPE_INTRINSIC: &str = "\0realm:Object.prototype";
+pub(super) const REALM_ARRAY_PROTOTYPE_INTRINSIC: &str = "\0realm:Array.prototype";
 
 /// Shared realm state: intrinsics, true globals, and captured-global cells.
 ///
@@ -42,6 +44,11 @@ const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 /// sync, which the old two-map design required on every store.
 pub(crate) struct RealmState {
     bindings: DynamicBindings,
+    /// Stable realm intrinsics are separate from the mutable global bindings.
+    /// Rebinding `Object` or `Array` must not change the default prototype used
+    /// by literals, classes, or abstract operations that name an intrinsic.
+    object_prototype: OnceCell<ObjectRef>,
+    array_prototype: OnceCell<ObjectRef>,
     /// Canonical empty copy-on-write name set for ordinary frames. Sharing it
     /// avoids allocating catch/eval metadata that most calls never mutate.
     empty_name_set: Rc<HashSet<String>>,
@@ -50,7 +57,15 @@ pub(crate) struct RealmState {
 }
 
 impl RealmState {
-    fn new(bindings: HashMap<String, Value>) -> Self {
+    fn new(mut bindings: HashMap<String, Value>) -> Self {
+        // Dynamic Function construction still enters through a compact flat
+        // snapshot. Consume its internal-only intrinsic handoff markers before
+        // the remaining values become ordinary realm bindings, so the marker
+        // names can never become JavaScript-visible globals.
+        let object_prototype =
+            take_intrinsic_prototype(&mut bindings, REALM_OBJECT_PROTOTYPE_INTRINSIC);
+        let array_prototype =
+            take_intrinsic_prototype(&mut bindings, REALM_ARRAY_PROTOTYPE_INTRINSIC);
         let global_this = bindings.get(crate::GLOBAL_THIS_BINDING).cloned();
         let dynamic_function_realm_global =
             bindings
@@ -59,12 +74,43 @@ impl RealmState {
                     Value::Object(global) => Some(global.clone()),
                     _ => None,
                 });
-        Self {
+        let realm = Self {
             bindings: DynamicBindings::from_values(bindings),
+            object_prototype: OnceCell::new(),
+            array_prototype: OnceCell::new(),
             empty_name_set: Rc::new(HashSet::new()),
             global_this,
             dynamic_function_realm_global: RefCell::new(dynamic_function_realm_global),
+        };
+        if let Some(prototype) = object_prototype {
+            let _ = realm.object_prototype.set(prototype);
         }
+        if let Some(prototype) = array_prototype {
+            let _ = realm.array_prototype.set(prototype);
+        }
+        realm
+    }
+
+    pub(crate) fn initialize_object_prototype(&self, prototype: ObjectRef) {
+        assert!(
+            self.object_prototype.set(prototype).is_ok(),
+            "realm Object.prototype intrinsic initialized twice"
+        );
+    }
+
+    pub(crate) fn initialize_array_prototype(&self, prototype: ObjectRef) {
+        assert!(
+            self.array_prototype.set(prototype).is_ok(),
+            "realm Array.prototype intrinsic initialized twice"
+        );
+    }
+
+    pub(crate) fn object_prototype(&self) -> Option<ObjectRef> {
+        self.object_prototype.get().cloned()
+    }
+
+    pub(crate) fn array_prototype(&self) -> Option<ObjectRef> {
+        self.array_prototype.get().cloned()
     }
 
     pub(crate) fn get_value(&self, name: &str) -> Option<Value> {
@@ -134,6 +180,16 @@ impl RealmState {
 
     fn empty_name_set(&self) -> Rc<HashSet<String>> {
         Rc::clone(&self.empty_name_set)
+    }
+}
+
+fn take_intrinsic_prototype(
+    bindings: &mut HashMap<String, Value>,
+    name: &str,
+) -> Option<ObjectRef> {
+    match bindings.remove(name) {
+        Some(Value::Object(prototype)) => Some(prototype),
+        Some(_) | None => None,
     }
 }
 
@@ -1090,6 +1146,20 @@ impl CallEnv {
             };
         }
         self.realm.dynamic_function_realm_global()
+    }
+
+    pub(crate) fn object_prototype_intrinsic_override(&self) -> Option<ObjectRef> {
+        match self.get_local(REALM_OBJECT_PROTOTYPE_INTRINSIC) {
+            Some(Value::Object(prototype)) => Some(prototype),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn array_prototype_intrinsic_override(&self) -> Option<ObjectRef> {
+        match self.get_local(REALM_ARRAY_PROTOTYPE_INTRINSIC) {
+            Some(Value::Object(prototype)) => Some(prototype),
+            _ => None,
+        }
     }
 
     /// Returns the realm's internal global-this slot without hashing its

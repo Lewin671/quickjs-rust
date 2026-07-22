@@ -631,7 +631,6 @@ impl Vm<'_> {
             self.sync_marked_dynamic_global(&name);
             return Ok(());
         }
-        self.invalidate_array_prototype_cache(&name);
         if self.realm.contains(&name) {
             self.env.insert_realm(name.clone(), value.clone());
             if self.env.has_local_binding(&name) {
@@ -1340,7 +1339,6 @@ impl Vm<'_> {
         {
             match global_this.write_existing_own_data_property(name, &value) {
                 OwnDataPropertyWrite::Written => {
-                    self.invalidate_array_prototype_cache(name);
                     if !self.env.replace_existing_realm(name, value.clone()) {
                         self.env.insert_realm(name.to_owned(), value.clone());
                     }
@@ -1471,7 +1469,6 @@ impl Vm<'_> {
                 .own_property(&name)
                 .map(|property| property.value)
                 .unwrap_or(value);
-            self.invalidate_array_prototype_cache(&name);
             self.env.insert_realm(name.clone(), value.clone());
             if self.env.has_local_binding(&name) {
                 self.env.insert(name.clone(), value.clone());
@@ -1484,7 +1481,6 @@ impl Vm<'_> {
             name.clone(),
             Property::data(value.clone(), true, true, false),
         );
-        self.invalidate_array_prototype_cache(&name);
         self.env.insert_realm(name.clone(), value.clone());
         if self.env.has_local_binding(&name) {
             self.env.insert(name.clone(), value.clone());

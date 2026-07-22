@@ -740,6 +740,11 @@ fn function_env<'a>(
     } else {
         env.new_function_frame_with_capacity(function.params.positional.len().saturating_add(4))
     };
+    // Install the synthetic realm snapshot before creating any real function
+    // bindings. Parameters, `this`, `arguments`, and internal bindings then
+    // shadow global names normally, while their intrinsic lookup already sees
+    // the function's creation realm.
+    insert_marked_call_realm(function, &mut frame_env);
     let mut direct_this_value = None;
     if function.has_name_binding
         && let Some(name) = &function.name
@@ -835,10 +840,9 @@ fn function_env<'a>(
             .skip(function.params.positional.len())
             .cloned()
             .collect();
-        frame_env.insert(
-            rest_parameter_binding_name(rest),
-            Value::Array(ArrayRef::new(values)),
-        );
+        let array = ArrayRef::new(values);
+        apply_marked_realm_array_prototype(&array, &frame_env);
+        frame_env.insert(rest_parameter_binding_name(rest), Value::Array(array));
     }
     if has_own_arguments_object || parameter_shadows_arguments {
         frame_env.insert(
@@ -865,7 +869,6 @@ fn function_env<'a>(
             frame_env.insert(name.clone(), value);
         }
     }
-    insert_marked_call_realm(function, &mut frame_env);
     if function.immutable_name_binding
         && let Some(name) = &function.name
     {
@@ -898,6 +901,22 @@ fn function_env<'a>(
         env: frame_env,
         direct_call_slots,
     }
+}
+
+fn apply_marked_realm_array_prototype(array: &ArrayRef, env: &CallEnv) {
+    if env.dynamic_function_realm_global().is_none() {
+        return;
+    }
+    let Some(prototype) = crate::array_prototype(env) else {
+        return;
+    };
+    let initialized = array
+        .set_prototype_slot(Some(crate::Prototype::Object(prototype)))
+        .is_ok();
+    debug_assert!(
+        initialized,
+        "new rest parameter array rejected its realm prototype"
+    );
 }
 
 fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode) -> bool {
@@ -987,6 +1006,22 @@ fn insert_marked_call_realm(function: &Function, frame_env: &mut CallEnv) {
     let Some(global) = own_global.flatten().or_else(|| realm_global.flatten()) else {
         return;
     };
+    if function.has_dynamic_function_realm
+        && let Some(realm) = &function.realm
+    {
+        if let Some(prototype) = realm.object_prototype() {
+            frame_env.insert(
+                super::env::REALM_OBJECT_PROTOTYPE_INTRINSIC.to_owned(),
+                Value::Object(prototype),
+            );
+        }
+        if let Some(prototype) = realm.array_prototype() {
+            frame_env.insert(
+                super::env::REALM_ARRAY_PROTOTYPE_INTRINSIC.to_owned(),
+                Value::Object(prototype),
+            );
+        }
+    }
     frame_env.insert(
         DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
         Value::Object(global.clone()),

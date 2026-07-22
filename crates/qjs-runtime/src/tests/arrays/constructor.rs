@@ -57,6 +57,63 @@ fn array_constructor_uses_new_target_array_prototype() {
 }
 
 #[test]
+fn default_array_prototype_is_stable_after_global_rebinding() {
+    assert_eq!(
+        eval(
+            "var getPrototypeOf = Object.getPrototypeOf; \
+             var create = Object.create; \
+             var defineProperty = Object.defineProperty; \
+             var intrinsic = Array.prototype; \
+             var setterHits = 0; \
+             var replacementPrototype = create(null); \
+             defineProperty(replacementPrototype, '0', { \
+               set: function() { setterHits += 1; } \
+             }); \
+             Array = function ReplacementArray() {}; \
+             Array.prototype = replacementPrototype; \
+             var literal = []; \
+             literal[0] = 1; \
+             var make = Function('return [];'); \
+             setterHits === 0 \
+               && literal[0] === 1 \
+               && getPrototypeOf(literal) === intrinsic \
+               && getPrototypeOf(make()) === intrinsic;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn ordinary_array_literal_keeps_implicit_default_prototype_slot() {
+    let Ok(Value::Array(array)) = eval("[]") else {
+        panic!("array literal did not evaluate to an array");
+    };
+    assert!(array.uses_default_prototype());
+}
+
+#[test]
+fn marked_dynamic_function_array_literal_uses_legacy_constructor_fallback() {
+    assert_eq!(
+        eval(
+            "var __quickjsRustDynamicFunctionRealm; \
+             var realmGlobal = Object.create(null); \
+             var realmArray = function Array() {}; \
+             realmArray.prototype = Object.create(Array.prototype); \
+             realmGlobal.Object = Object; \
+             realmGlobal.Array = realmArray; \
+             realmGlobal.Function = Function; \
+             __quickjsRustDynamicFunctionRealm = realmGlobal; \
+             globalThis.__quickjsRustDynamicFunctionRealm = realmGlobal; \
+             var make = Function('return [];'); \
+             __quickjsRustDynamicFunctionRealm = undefined; \
+             globalThis.__quickjsRustDynamicFunctionRealm = undefined; \
+             Object.getPrototypeOf(make()) === realmArray.prototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_array_of_static_constructor() {
     assert_eq!(eval("Array.of.length;"), Ok(Value::Number(0.0)));
     assert_eq!(

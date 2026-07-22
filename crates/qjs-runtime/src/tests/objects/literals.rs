@@ -61,6 +61,122 @@ fn evaluates_object_literals_and_member_access() {
 }
 
 #[test]
+fn default_object_prototypes_are_stable_after_global_rebinding() {
+    assert_eq!(
+        eval(
+            "var getPrototypeOf = Object.getPrototypeOf; \
+             var create = Object.create; \
+             var intrinsic = Object.prototype; \
+             Object = function ReplacementObject() {}; \
+             Object.prototype = create(null); \
+             var empty = {}; \
+             var data = { first: 1, second: 2 }; \
+             var source = { drop: 0, keep: 1 }; \
+             var { drop, ...rest } = source; \
+             class C {} \
+             var make = Function('return {};'); \
+             getPrototypeOf(empty) === intrinsic \
+               && getPrototypeOf(data) === intrinsic \
+               && getPrototypeOf(rest) === intrinsic \
+               && getPrototypeOf(C.prototype) === intrinsic \
+               && getPrototypeOf(make()) === intrinsic;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn cross_realm_dynamic_function_keeps_intrinsics_after_target_global_rebinding() {
+    assert_eq!(
+        eval(
+            "var __quickjsRustDynamicFunctionRealm; \
+             var getPrototypeOf = Object.getPrototypeOf; \
+             var create = Object.create; \
+             var realmGlobal = create(globalThis); \
+             var realmObject = function RealmObject(value) { return globalThis.Object(value); }; \
+             realmObject.prototype = create(Object.prototype); \
+             var realmArray = function RealmArray() {}; \
+             realmArray.prototype = create(Array.prototype); \
+             var realmFunction = function RealmFunction() { \
+               var previousRealm = __quickjsRustDynamicFunctionRealm; \
+               __quickjsRustDynamicFunctionRealm = realmGlobal; \
+               globalThis.__quickjsRustDynamicFunctionRealm = realmGlobal; \
+               try { return globalThis.Function.apply(null, arguments); } \
+               finally { \
+                 __quickjsRustDynamicFunctionRealm = previousRealm; \
+                 globalThis.__quickjsRustDynamicFunctionRealm = previousRealm; \
+               } \
+             }; \
+             realmGlobal.Object = realmObject; \
+             realmGlobal.Array = realmArray; \
+             realmGlobal.Function = realmFunction; \
+             realmGlobal.globalThis = realmGlobal; \
+             realmGlobal.eval = function(source) { \
+               var previousRealm = __quickjsRustDynamicFunctionRealm; \
+               __quickjsRustDynamicFunctionRealm = realmGlobal; \
+               globalThis.__quickjsRustDynamicFunctionRealm = realmGlobal; \
+               try { return (0, eval)(source); } \
+               finally { \
+                 __quickjsRustDynamicFunctionRealm = previousRealm; \
+                 globalThis.__quickjsRustDynamicFunctionRealm = previousRealm; \
+               } \
+             }; \
+             var expectedObjectPrototype = realmObject.prototype; \
+             var expectedArrayPrototype = realmArray.prototype; \
+             realmGlobal.Object = function ReplacementObject() {}; \
+             realmGlobal.Object.prototype = create(null); \
+             realmGlobal.Array = function ReplacementArray() {}; \
+             realmGlobal.Array.prototype = create(null); \
+             realmGlobal.globalThis = realmGlobal; \
+             var make = realmGlobal.eval(\"Function('return [{}, []];')\"); \
+             var values = make(); \
+             var makeTemplate = realmGlobal.eval(\
+               \"Function('return (function(strings) { return strings; })`head${1}tail`;')\"\
+             ); \
+             var template = makeTemplate(); \
+             var makeRests = realmGlobal.eval(\
+               \"Function('var [...values] = [1, 2]; var [...empty] = []; return { values: values, empty: empty };')\"\
+             ); \
+             var rests = makeRests(); \
+             var makeRestParameter = realmGlobal.eval(\
+               \"Function('head', '...tail', 'return tail;')\"\
+             ); \
+             var restParameter = makeRestParameter(0, 1, 2); \
+             var makeArguments = realmGlobal.eval(\
+               \"Function('return arguments;')\"\
+             ); \
+             var args = makeArguments(1, 2); \
+             var directEvalArray = (function() { \
+               var previousRealm = __quickjsRustDynamicFunctionRealm; \
+               __quickjsRustDynamicFunctionRealm = realmGlobal; \
+               globalThis.__quickjsRustDynamicFunctionRealm = realmGlobal; \
+               try { return eval('[]'); } \
+               finally { \
+                 __quickjsRustDynamicFunctionRealm = previousRealm; \
+                 globalThis.__quickjsRustDynamicFunctionRealm = previousRealm; \
+               } \
+             })(); \
+             var parameterSentinel = {}; \
+             var echoObject = realmGlobal.eval(\
+               \"Function('Object', 'return Object === arguments[0] ? Object : null;')\"\
+             ); \
+             getPrototypeOf(values[0]) === expectedObjectPrototype \
+               && getPrototypeOf(values[1]) === expectedArrayPrototype \
+               && getPrototypeOf(template) === expectedArrayPrototype \
+               && getPrototypeOf(template.raw) === expectedArrayPrototype \
+               && getPrototypeOf(rests.values) === expectedArrayPrototype \
+               && getPrototypeOf(rests.empty) === expectedArrayPrototype \
+               && getPrototypeOf(restParameter) === expectedArrayPrototype \
+               && getPrototypeOf(args) === expectedObjectPrototype \
+               && getPrototypeOf(directEvalArray) === expectedArrayPrototype \
+               && echoObject(parameterSentinel) === parameterSentinel \
+               && Object.getOwnPropertyNames(realmGlobal).length === 5;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn static_data_literal_bulk_path_preserves_order_duplicates_and_evaluation() {
     assert_eq!(
         eval(

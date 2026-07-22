@@ -146,7 +146,7 @@ impl Vm<'_> {
         let next = self.pop()?;
         let iterator = self.pop()?;
         if matches!(self.load_local(done_slot)?, Value::Boolean(true)) {
-            self.stack.push(Value::Array(ArrayRef::new(Vec::new())));
+            self.push_array_literal(ArrayRef::new(Vec::new()));
             return Ok(());
         }
         self.store_local(done_slot, Value::Boolean(true))?;
@@ -154,7 +154,7 @@ impl Vm<'_> {
         let result = iterator_rest_values(&iterator, &next, &mut env);
         self.apply_env(env);
         if let Some(values) = self.handle_runtime_result(result)? {
-            self.stack.push(Value::Array(ArrayRef::new(values)));
+            self.push_array_literal(ArrayRef::new(values));
         }
         Ok(())
     }

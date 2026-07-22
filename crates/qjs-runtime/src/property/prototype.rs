@@ -113,6 +113,20 @@ fn prototype_value_to_slot(value: Value, env: &CallEnv) -> Option<crate::Prototy
 }
 
 pub(crate) fn object_prototype(env: &CallEnv) -> Option<ObjectRef> {
+    if let Some(prototype) = env.object_prototype_intrinsic_override() {
+        return Some(prototype);
+    }
+    if let Some(global) = env.dynamic_function_realm_global() {
+        if let Some((prototype, _)) = global.realm_intrinsic_prototype_identity() {
+            return Some(prototype);
+        }
+        if let Some(prototype) = marked_global_constructor_prototype(&global, "Object") {
+            return Some(prototype);
+        }
+    }
+    if let Some(prototype) = env.realm().object_prototype() {
+        return Some(prototype);
+    }
     let Some(Value::Function(object_function)) = env.get("Object") else {
         return None;
     };
@@ -120,10 +134,31 @@ pub(crate) fn object_prototype(env: &CallEnv) -> Option<ObjectRef> {
 }
 
 pub(crate) fn array_prototype(env: &CallEnv) -> Option<ObjectRef> {
+    if let Some(prototype) = env.array_prototype_intrinsic_override() {
+        return Some(prototype);
+    }
+    if let Some(global) = env.dynamic_function_realm_global() {
+        if let Some((_, prototype)) = global.realm_intrinsic_prototype_identity() {
+            return Some(prototype);
+        }
+        if let Some(prototype) = marked_global_constructor_prototype(&global, "Array") {
+            return Some(prototype);
+        }
+    }
+    if let Some(prototype) = env.realm().array_prototype() {
+        return Some(prototype);
+    }
     let Some(Value::Function(array_function)) = env.get("Array") else {
         return None;
     };
     function_prototype(&array_function)
+}
+
+fn marked_global_constructor_prototype(global: &ObjectRef, name: &str) -> Option<ObjectRef> {
+    let Value::Function(constructor) = global.own_property(name)?.value else {
+        return None;
+    };
+    function_prototype(&constructor)
 }
 
 pub(crate) fn string_prototype(env: &CallEnv) -> Option<ObjectRef> {

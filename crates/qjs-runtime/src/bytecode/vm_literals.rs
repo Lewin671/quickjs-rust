@@ -35,7 +35,7 @@ impl Vm<'_> {
                 .iter()
                 .all(|element| matches!(element, ArrayElementKind::Expr))
         {
-            self.stack.push(Value::Array(ArrayRef::new(element_values)));
+            self.push_array_literal(ArrayRef::new(element_values));
             return Ok(());
         }
 
@@ -67,9 +67,29 @@ impl Vm<'_> {
                 }
             }
         }
-        self.stack
-            .push(Value::Array(ArrayRef::new_sparse(values, holes)));
+        self.push_array_literal(ArrayRef::new_sparse(values, holes));
         Ok(())
+    }
+
+    pub(super) fn push_array_literal(&mut self, array: ArrayRef) {
+        self.apply_array_literal_prototype_override(&array);
+        self.stack.push(Value::Array(array));
+    }
+
+    fn apply_array_literal_prototype_override(&self, array: &ArrayRef) {
+        // Ordinary arrays keep the compact implicit-default slot. A synthetic
+        // cross-realm array must carry its creation realm's intrinsic
+        // explicitly so observing it later from another realm cannot reinterpret
+        // the default as the caller's Array.prototype.
+        if let Some(prototype) = &self.array_literal_prototype_override {
+            let initialized = array
+                .set_prototype_slot(Some(Prototype::Object(prototype.clone())))
+                .is_ok();
+            debug_assert!(
+                initialized,
+                "new array literal rejected its realm prototype"
+            );
+        }
     }
 
     pub(super) fn new_template_object(
@@ -98,6 +118,8 @@ impl Vm<'_> {
             .collect::<Vec<_>>();
         let cooked_array = ArrayRef::new(cooked_values);
         let raw_array = ArrayRef::new(raw_values);
+        self.apply_array_literal_prototype_override(&cooked_array);
+        self.apply_array_literal_prototype_override(&raw_array);
         raw_array.freeze();
         cooked_array.define_property(
             "raw".to_owned(),
