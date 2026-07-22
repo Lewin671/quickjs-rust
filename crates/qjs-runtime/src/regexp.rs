@@ -537,7 +537,7 @@ pub(crate) fn default_regexp_source_accessor_value(
         _ => return None,
     };
     let descriptor = prototype.own_property("source")?;
-    match descriptor.get {
+    match descriptor.getter() {
         Some(Value::Function(getter))
             if getter.native_kind() == Some(NativeFunction::RegExpPrototypeSource) =>
         {

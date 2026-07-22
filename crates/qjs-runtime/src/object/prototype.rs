@@ -457,12 +457,10 @@ fn lookup_prototype_value(value: Value, env: &mut CallEnv) -> Result<Value, Runt
 }
 
 fn lookup_accessor_half(property: Property, half: AccessorHalf) -> Option<Value> {
-    if !property.accessor {
-        return None;
-    }
+    let (get, set) = property.into_accessor_parts()?;
     match half {
-        AccessorHalf::Getter => property.get,
-        AccessorHalf::Setter => property.set,
+        AccessorHalf::Getter => get,
+        AccessorHalf::Setter => set,
     }
 }
 

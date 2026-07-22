@@ -90,7 +90,10 @@ fn ordinary_set_with_descriptor(
     env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     if property.is_accessor() {
-        let Some(setter) = property.set else {
+        let (_, setter) = property
+            .into_accessor_parts()
+            .expect("accessor properties have accessor state");
+        let Some(setter) = setter else {
             return Ok(false);
         };
         call_function(setter, receiver, vec![value], env, false)?;

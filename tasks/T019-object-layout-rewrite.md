@@ -65,19 +65,18 @@ promptly so hosted CI records the formal three-role evidence.
   covers. Do not re-attempt bitset-packing of scattered single-byte `Cell`
   fields in this codebase without first confirming the struct's *unpacked*
   field sum crosses an alignment boundary the packed version would avoid.
-- [ ] **S4 — deferred, not started this session.** Audit and narrow
-  `Property`'s 56-byte footprint (`value: Value` 16B + `get: Option<Value>`
-  16B + `set: Option<Value>` 16B + 4 packed bools, padded to 56). Unlike S2/
-  S3, this one has real headroom: `get`/`set` are `None` for the overwhelming
-  majority of properties (plain data properties), so boxing them behind an
-  `Option<Box<AccessorState { get, set }>>` could shrink `Property` toward
-  ~32 bytes for the common case. Not attempted this session because
-  `Property`'s fields are `pub(crate)` and read directly (not through
-  accessor methods) from roughly 100+ call sites across `bytecode/**`,
-  `property/**`, and other crate modules outside T019's `value/**` scope
-  boundary — this needs its own scope-justified slice (or its own task) with
-  enough budget to update every direct field-read site and re-verify the
-  full descriptor/accessor Test262 surface, not a rushed mid-session change.
+- [x] **S4 — move accessor state out of every `Property`.** `Property` now
+  keeps its hot `Value` and descriptor flags inline and stores the cold
+  `{ get, set }` pair behind a private `Option<Rc<AccessorState>>`, shrinking
+  the exact layout from 56 to 32 bytes. Plain data properties allocate no
+  accessor state. Clones share immutable accessor state, while setter/getter
+  mutation uses `Rc::make_mut` so cloned descriptors retain value semantics.
+  The mechanical call-site migration spans the runtime modules that directly
+  inspected the old fields; focused tests cover empty accessors, exact size,
+  shared clones, and copy-on-write isolation. Branch CI, 1,539 runtime tests,
+  the 5,147-case Test262 subset, and QuickJS-NG comparisons passed. Local A/B
+  found no credible property or control regression; hosted full/external
+  evidence remains the rollback gate.
 - [ ] **S5 (open, gate on a fresh measurement first) — evaluate whether
   `Rc`'s strong/weak refcount block is avoidable for object kinds never
   targeted by `Weak`.**
@@ -166,6 +165,34 @@ single-byte fields into existing alignment padding, so consolidating them
 into an explicit `Cell<u8>` only helps when the *unpacked* field sum crosses
 an alignment boundary the packed form would avoid. Verify this arithmetic
 before proposing another bitset-packing slice.
+
+### S4 local evidence: cold accessor state
+
+The first seven-case run was invalid and remains diagnostic only: 70/98
+formal measurements were eligible, 28 were timer-limited, and its apparent
+`object_allocation` ratio of 1.057750 therefore cannot accept or reject the
+change (raw SHA-256
+`4cc608b654ee33630a59711a02e6a9382489508ccca6583fa7fa9be8afe37ac`).
+
+A fresh five-case rescreen (seven blocks, seed `20250714`) produced 70/70
+eligible formal measurements and all 80 expected linearity records; every
+official median linearity ratio was inside `[0.85, 1.15]`. The frozen
+shared-block bootstrap primitive gave:
+
+- property aggregate: **1.000457x**, 95% CI `[0.994979, 1.009800]`;
+- all five selected cases: **1.000911x**, 95% CI
+  `[0.996003, 1.015615]`;
+- controls: **1.001592x**, 95% CI `[0.995575, 1.029001]`;
+- per-case paired ratios: `property_read` 0.999463,
+  `property_dynamic_read` 0.999063, `property_write` 1.002849,
+  `object_allocation` 1.003722, and `plain_function_call` 0.999466.
+
+All intervals cross 1.0 and no control has a stable >3% regression. The raw
+evidence SHA-256 is
+`883dce6d95b1579b4d99255ff62dce4265169bdacfdcbd4cfcd0d3b8fc1866ab`.
+Because this deliberately focused selection is not the complete 25-case
+portfolio, it is not represented as a portfolio-complete report; hosted full
+and external suites remain required generalization evidence.
 
 ### A much larger lever found outside this campaign's scope: global `var` sync
 

@@ -930,8 +930,7 @@ fn merge_accessor(target: &Value, key: &PropertyKey, mut descriptor: Property) -
     if let Some(existing) = own_property_for_key(target, key)
         && existing.is_accessor()
     {
-        descriptor.get = descriptor.get.or(existing.get);
-        descriptor.set = descriptor.set.or(existing.set);
+        descriptor.merge_missing_accessor_halves(existing);
     }
     descriptor
 }

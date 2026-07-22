@@ -790,9 +790,7 @@ impl PropertyStorage {
 fn data_property_read(property: Option<&Property>) -> OwnDataPropertyRead {
     match property {
         None => OwnDataPropertyRead::Missing,
-        Some(property) if property.get.is_some() || property.accessor => {
-            OwnDataPropertyRead::NeedsSlowPath
-        }
+        Some(property) if property.is_accessor() => OwnDataPropertyRead::NeedsSlowPath,
         Some(property) => OwnDataPropertyRead::Data(property.value.clone()),
     }
 }
@@ -1363,7 +1361,7 @@ impl ObjectRef {
     pub(crate) fn append_string_property(&self, key: &str, suffix: &str) -> Option<Value> {
         let mut properties = self.0.properties.borrow_mut();
         let property = properties.get_mut(key)?;
-        if !property.writable || property.accessor {
+        if !property.writable || property.is_accessor() {
             return None;
         }
         let Value::String(string) = &mut property.value else {

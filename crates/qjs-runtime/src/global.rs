@@ -542,7 +542,7 @@ fn object_uses_default_object_prototype(object: &ObjectRef, env: &CallEnv) -> bo
 }
 
 fn is_default_enumerable_data_property(property: &Property) -> bool {
-    !property.accessor && property.writable && property.enumerable && property.configurable
+    !property.is_accessor() && property.writable && property.enumerable && property.configurable
 }
 
 fn optional_bool_descriptor_field(
@@ -1447,7 +1447,7 @@ fn can_declare_global_function(global_this: &ObjectRef, name: &str) -> bool {
     let Some(existing) = global_this.own_property(name) else {
         return global_this.is_extensible();
     };
-    existing.configurable || (!existing.accessor && existing.writable && existing.enumerable)
+    existing.configurable || (!existing.is_accessor() && existing.writable && existing.enumerable)
 }
 
 fn initialize_direct_eval_bindings(

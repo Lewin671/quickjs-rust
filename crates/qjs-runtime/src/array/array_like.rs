@@ -221,8 +221,7 @@ fn object_array_like_values(
     for index in 0..length {
         let key = index.to_string();
         if let Some(property) = object.own_property(&key)
-            && !property.accessor
-            && property.get.is_none()
+            && !property.is_accessor()
         {
             values.push(property.value);
         } else {

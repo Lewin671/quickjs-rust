@@ -411,7 +411,10 @@ fn apply_set_step(
     };
     if property.is_accessor() {
         // Accessor property: succeed only when a setter exists.
-        return match property.set {
+        let (_, setter) = property
+            .into_accessor_parts()
+            .expect("accessor properties have accessor state");
+        return match setter {
             Some(setter) => {
                 call_function(setter, receiver, vec![value], env, false)?;
                 Ok(SetStep::Done(true))
@@ -485,7 +488,7 @@ fn ordinary_set_object(
 }
 
 pub(super) fn property_set_uses_setter(object: &Value, key: &PropertyKey, env: &CallEnv) -> bool {
-    property_for_set(object, key, env).is_some_and(|property| property.set.is_some())
+    property_for_set(object, key, env).is_some_and(|property| property.setter().is_some())
 }
 
 fn property_for_set(object: &Value, key: &PropertyKey, env: &CallEnv) -> Option<Property> {

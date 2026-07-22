@@ -26,7 +26,7 @@ pub(crate) fn array_iterator_next_is_native(env: &CallEnv) -> bool {
     let Some(property) = prototype.own_property("next") else {
         return false;
     };
-    if property.accessor {
+    if property.is_accessor() {
         return false;
     }
     matches!(

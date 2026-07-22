@@ -214,7 +214,7 @@ fn original_native_regexp(regexp: &Value, env: &CallEnv) -> Option<(ObjectRef, S
         return None;
     }
     let exec = prototype.own_property("exec")?;
-    if exec.accessor
+    if exec.is_accessor()
         || !matches!(
             exec.value,
             Value::Function(function)

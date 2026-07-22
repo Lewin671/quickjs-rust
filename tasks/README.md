@@ -75,7 +75,9 @@ Campaign working rules:
   `ArrayData`/`PropertyStorage` layout to close the `allocation` critical
   family's persistent QuickJS-NG gap, as a narrower alternative to a full
   GC/arena rewrite (`docs/design/object-layout-rewrite.md`). S1 (box the cold
-  `PropertyStorage::Dynamic` payload) landed. Serialize on one branch.
+  `PropertyStorage::Dynamic` payload) and S4 (`Property` 56B -> 32B with cold
+  accessor state) landed; S2/S3 proved bit packing could not reduce aligned
+  layouts. Serialize on one branch.
 - `T020-realm-binding-cell-unification.md` — **landed** (`bfcd53da`). Feeds
   T018's `call`/global-var families. `RealmState`'s raw
   `HashMap<String, Value>` and its separate `binding_cells` registry are

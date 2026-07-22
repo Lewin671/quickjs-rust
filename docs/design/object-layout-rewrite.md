@@ -1,7 +1,8 @@
 # Runtime value object-layout rewrite
 
-Status: in progress, S1 landed. Campaign verification is recorded in
-`tasks/T019-object-layout-rewrite.md`.
+Status: in progress; S1 and S4 landed, S2 was rejected after measuring no
+size reduction, and S3 was skipped for the same layout reason. Campaign
+verification is recorded in `tasks/T019-object-layout-rewrite.md`.
 
 ## Why this campaign exists
 
@@ -39,6 +40,7 @@ campaign per `AGENTS.md` — this doc does not pre-authorize that larger change.
 | Type | Size (bytes) |
 | --- | ---: |
 | `Value` | 16 |
+| `Property` (pre-S4) | 56 |
 | `PropertyStorage` (pre-S1) | 72 |
 | `ObjectData` (pre-S1) | 136 |
 
@@ -75,20 +77,19 @@ promptly so hosted CI records the formal three-role evidence.
   active), at the cost of one extra pointer indirection only on the already-
   cold dynamic path. No behavior change; existing `PropertyStorage` unit tests
   and the `ObjectData` size-guard test cover it.
-- [ ] **S2 — Pack `ObjectData`'s single-bit `Cell<bool>` fields.** `extensible`,
-  `raw_json`, `array_prototype_exotic`, `typed_array_exotic`,
-  `immutable_prototype_exotic`, `module_namespace_exotic`, and `symbol_brand`
-  (a 3-state enum) are each a separate `Cell`, paying independent padding.
-  Consolidate into one `Cell<u8>` bitset/tag with typed accessor methods, and
-  keep every existing call site's behavior identical.
-- [ ] **S3 — Apply the same treatment to `ArrayData`.** `length_writable`,
-  `extensible`, `sealed`, and `frozen` are four separate `Cell<bool>` fields;
-  fold them into one `Cell<u8>` bitset. Measure `array_allocation` and any
-  array-heavy external case before/after.
-- [ ] **S4 — Audit `Property`'s 56-byte footprint.** Used by the `Small` and
-  `Shaped` variants (the common growth paths past two properties). Identify
-  which fields (getter/setter `Option`s, flags) can be narrowed or folded
-  without changing observable descriptor semantics.
+- [x] **S2 — rejected after measurement.** Packing `ObjectData`'s single-bit
+  fields left `ObjectData` at 104 bytes because Rust already placed them in
+  alignment padding; the attempted indirection was reverted.
+- [x] **S3 — skipped after layout arithmetic.** `ArrayData`'s four booleans
+  already fit in the padding of its 56-byte aligned layout, so the proposed
+  bitset could not shrink it.
+- [x] **S4 — move accessor state out of `Property`.** Keep the hot value and
+  flags inline; place the cold getter/setter pair behind
+  `Option<Rc<AccessorState>>`. This shrinks `Property` from 56 to exactly 32
+  bytes, allocates nothing for ordinary data properties, and uses
+  `Rc::make_mut` to preserve descriptor clone isolation on mutation. Full
+  correctness gates and a valid focused A/B passed; hosted full/external
+  evidence remains the generalization gate.
 - [ ] **S5 (open, larger blast radius, do not start without a fresh
   measurement showing it still matters) — evaluate whether `Rc`'s separate
   strong/weak count block is avoidable** for object kinds that are never
