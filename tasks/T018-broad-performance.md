@@ -6062,8 +6062,34 @@ code-layout risk to verify on hosted Linux. Raw SHA-256 values are
 Before integration, the combined branch passed 1,489 runtime tests, workspace
 Clippy, all QuickJS-NG comparisons, the touched 65-case eval/function Test262
 slice, and the full repository check including all 5,143 curated Test262 cases.
-Hosted branch CI and the exact-main broad, external, and full Test262 runs are
-asynchronous acceptance evidence; this local unit does not close B4 or B5.
+Branch CI `29929244064` and exact-main CI `29929669969` passed.
+
+The exact-main hosted closure for
+`a716aa442c43fa160c60fd62d47f5d01949a9500` confirms both the compatibility
+repair and the remaining structural gap. Test262 Coverage run `29929967481`
+reported all **42,672/42,672** configured Rust cases passing, with zero
+failures, timeouts, not-run cases, or actionable QuickJS-NG gaps. Its burndown
+SHA-256 is
+`3899c0f2a6f212c60a06acf79e29abac1d5477ba18b9d9a6314f97e56a90a934`.
+
+Performance Preview run `29929668597` retained all 25 broad cases and measured
+an informational candidate/QuickJS-NG geometric mean of 0.2756x. The repaired
+`property_read` and `array_read` cases measured 0.2757x and 0.1990x, while
+`property_write` measured 0.1438x. This closes the loop-plan compatibility bug,
+but not the every-case contract: `top_level_function_call` remains 9.8544x,
+`dynamic_method_call` 7.4783x, `array_write` 2.5116x, `object_allocation`
+1.1130x, `array_allocation` 1.6318x, and `closure_allocation_call` 0.9426x
+QuickJS-NG. The external preview is likewise still structural rather than
+incremental: the comparable JetStream subset is 8.060x, Kraken 4.785x, and
+SunSpider 7.555x QuickJS-NG. Broad raw/report SHA-256 values are
+`0ad2a05ed3f0b29d2eb8c290e1fd20d0607afba5a73bb4aa6744ac3b1c685422` and
+`0b6ee86c177f94b52f1cba5acf136e38b62c5aa589611597129ad0a8b3e043f2`;
+external raw/report values are
+`de4ff4b70df0669e9650204806604d9f7a56bf393cd6a50300d3876aefbc439d` and
+`1242413c9af1723684793ec7d650a6e8c1dec08f5482f55f5b091c5bc3b0fb48`.
+The preview remains `inconclusive`/`non_claim` because it ran on variable
+GitHub-hosted hardware, so it is prioritization evidence rather than a public
+fixed-hardware claim. B4 and B5 remain open.
 
 ## Notes
 
