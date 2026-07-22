@@ -809,6 +809,10 @@ impl<'a> Vm<'a> {
                     let result = self.set_prop(*is_strict);
                     self.handle_runtime_result(result)?;
                 }
+                Op::SetPropIndex { index, is_strict } => {
+                    let result = self.set_index_prop(*index, *is_strict);
+                    self.handle_runtime_result(result)?;
+                }
                 Op::SetPropNamed { key, is_strict } => {
                     let result = self.set_named_prop(key, *is_strict);
                     self.handle_runtime_result(result)?;
@@ -1448,6 +1452,34 @@ impl<'a> Vm<'a> {
         let key = self.coerce_property_key(key_value)?;
         let object = self.pop()?;
         self.set_property_value(object, key, value, is_strict)
+    }
+
+    fn set_index_prop(&mut self, index: usize, is_strict: bool) -> Result<(), RuntimeError> {
+        let value = self.pop()?;
+        let object = self.pop()?;
+
+        if let Value::Array(elements) = &object
+            && elements.dense_index_store_eligible(index)
+        {
+            let elements = elements.clone();
+            // Mirror `set_prop`'s dense-array eligibility exactly. Custom own
+            // descriptors, custom prototypes, and indexed Array.prototype
+            // properties must retain the full OrdinarySet path below.
+            if self.array_uses_realm_prototype(&elements)
+                && !self.array_prototype_has_index_property().unwrap_or(true)
+            {
+                elements.set(index, value.clone());
+                self.stack.push(value);
+                return Ok(());
+            }
+        }
+
+        self.set_property_value(
+            object,
+            PropertyKey::String(index.to_string()),
+            value,
+            is_strict,
+        )
     }
 
     fn set_named_prop(&mut self, key: &Rc<str>, is_strict: bool) -> Result<(), RuntimeError> {

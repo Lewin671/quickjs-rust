@@ -4,7 +4,8 @@ use crate::{RuntimeError, Value};
 
 use super::compiler::Compiler;
 use super::ir::Op;
-use super::util::{assignment_binary_op, unsupported_target};
+use super::util::{assignment_binary_op, parse_number_literal, unsupported_target};
+use super::vm_props::array_index_from_number;
 
 impl Compiler {
     pub(super) fn compile_assign(
@@ -117,8 +118,27 @@ impl Compiler {
                 Ok(())
             }
             AssignmentTarget::Member {
-                object, property, ..
+                object,
+                property: property @ qjs_ast::MemberProperty::Computed(index),
+                ..
             } => {
+                if let Expr::Literal(Literal::Number { raw, .. }) = index.as_ref() {
+                    let number = parse_number_literal(raw)?;
+                    if let Some(index) = array_index_from_number(number) {
+                        // A numeric literal has no observable key-evaluation or
+                        // ToPropertyKey side effects. Keep the receiver below the
+                        // RHS on the operand stack, exactly as named assignment
+                        // does, so an RHS rebind still writes the original value.
+                        self.compile_expr(object)?;
+                        self.compile_expr(value)?;
+                        self.emit(Op::SetPropIndex {
+                            index,
+                            is_strict: self.strict,
+                        });
+                        return Ok(());
+                    }
+                }
+
                 let object_slot = self.temp_local("assign_object");
                 let key_slot = self.temp_local("assign_key");
                 self.compile_member_reference(object, property, object_slot, key_slot, false)?;
@@ -772,5 +792,97 @@ impl Compiler {
     pub(super) fn emit_load_undefined(&mut self) {
         let slot = self.const_slot(Value::Undefined);
         self.emit(Op::LoadConst(slot));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{compiler, ir::Op};
+    use crate::{Value, eval};
+
+    #[test]
+    fn numeric_literal_assignment_uses_index_store_without_assignment_temps() {
+        let script = qjs_parser::parse_script("let array = [0, 0]; array[0] = 1; array[0x1] = 2;")
+            .expect("source should parse");
+        let bytecode = compiler::compile_script(&script).expect("source should compile");
+
+        assert_eq!(
+            bytecode
+                .code
+                .iter()
+                .filter(|op| matches!(op, Op::SetPropIndex { .. }))
+                .count(),
+            2
+        );
+        assert!(
+            bytecode
+                .code
+                .iter()
+                .all(|op| !matches!(op, Op::SetProp { .. }))
+        );
+        assert!(
+            bytecode
+                .local_names()
+                .all(|name| !name.starts_with("\0\0assign_"))
+        );
+    }
+
+    #[test]
+    fn numeric_literal_assignment_captures_receiver_before_rhs() {
+        assert_eq!(
+            eval(
+                "let first = [0], second = [0], receiver = first; \
+                 let assigned = (receiver[0] = (receiver = second, 7)); \
+                 let target = [0], order = ''; \
+                 let holder = { get current() { order += 'getter,'; return target; } }; \
+                 holder.current[0] = (order += 'rhs,', 4); \
+                 function base() { order += 'base,'; return null; } \
+                 function rhs() { order += 'rhs2,'; return 1; } \
+                 try { base()[0] = rhs(); } \
+                 catch (error) { order += error instanceof TypeError ? 'type' : 'other'; } \
+                 order + '|' + target[0] + ':' + first[0] + ':' + second[0] + ':' + assigned;"
+            ),
+            Ok(Value::String(
+                "getter,rhs,base,rhs2,type|4:7:0:7".to_owned().into()
+            ))
+        );
+    }
+
+    #[test]
+    fn index_store_falls_back_for_proxy_typed_array_and_custom_prototype() {
+        assert_eq!(
+            eval(
+                "let seen = ''; \
+                 let proxy = new Proxy([], { \
+                   set(target, key, value) { \
+                     seen += key + ':' + value; target[key] = value; return true; \
+                   } \
+                 }); \
+                 let proxyResult = (proxy[0] = 7); \
+                 let typed = new Uint8Array(1); typed[0] = 257; \
+                 let proto = {}; \
+                 Object.defineProperty(proto, '0', { set(value) { seen += '|setter:' + value; } }); \
+                 let custom = []; Object.setPrototypeOf(custom, proto); custom[0] = 9; \
+                 seen + '|' + proxyResult + ':' + proxy[0] + ':' + typed[0] \
+                   + ':' + custom.hasOwnProperty('0');"
+            ),
+            Ok(Value::String("0:7|setter:9|7:7:1:false".to_owned().into()))
+        );
+    }
+
+    #[test]
+    fn index_store_preserves_boundary_and_frozen_array_semantics() {
+        assert_eq!(
+            eval(
+                "let array = []; array[-0] = 5; array[4294967295] = 7; \
+                 let frozen = [1]; Object.freeze(frozen); \
+                 let sloppy = (frozen[0] = 9), strict = false; \
+                 try { (function() { 'use strict'; frozen[0] = 9; })(); } \
+                 catch (error) { strict = error instanceof TypeError; } \
+                 array.length + ':' + array[0] + ':' + array[4294967295] \
+                   + ':' + sloppy + ':' + frozen[0] + ':' + strict;"
+            ),
+            Ok(Value::String("1:5:7:9:1:true".to_owned().into()))
+        );
     }
 }
