@@ -308,15 +308,6 @@ pub(super) enum Op {
     SetProp {
         is_strict: bool,
     },
-    /// Writes a computed numeric-literal property from `[object, value]`
-    /// without materializing or coercing the key. Dense ordinary arrays and
-    /// typed arrays can store the index directly; every other receiver falls
-    /// back to ordinary `[[Set]]` with the canonical decimal string key. Leaves
-    /// the assigned value on the stack.
-    SetPropIndex {
-        index: usize,
-        is_strict: bool,
-    },
     /// Writes a statically named property from `[object, value]`, avoiding the
     /// temporary key/local sequence and runtime ToPropertyKey coercion used by
     /// computed assignment. Leaves the assigned value on the stack.
@@ -545,6 +536,16 @@ pub(super) enum Op {
     /// `import.meta`. Only meaningful in module code; reported as a SyntaxError
     /// in a script (where no module host is installed).
     ImportMeta,
+    /// Writes a computed numeric-literal property from `[object, value]`
+    /// without materializing or coercing the key. Dense ordinary arrays and
+    /// typed arrays can store the index directly; every other receiver falls
+    /// back to ordinary `[[Set]]` with the canonical decimal string key. Leaves
+    /// the assigned value on the stack. Keep new opcodes appended so existing
+    /// hot dispatch discriminants stay stable.
+    SetPropIndex {
+        index: usize,
+        is_strict: bool,
+    },
 }
 
 /// Compiled definition of a class constructor.
