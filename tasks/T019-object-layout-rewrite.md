@@ -75,8 +75,9 @@ promptly so hosted CI records the formal three-role evidence.
   inspected the old fields; focused tests cover empty accessors, exact size,
   shared clones, and copy-on-write isolation. Branch CI, 1,539 runtime tests,
   the 5,147-case Test262 subset, and QuickJS-NG comparisons passed. Local A/B
-  found no credible property or control regression; hosted full/external
-  evidence remains the rollback gate.
+  found no credible property or control regression. Hosted full/external
+  evidence subsequently passed the generalization gate; exact results are
+  recorded below and in T018.
 - [ ] **S5 (open, gate on a fresh measurement first) — evaluate whether
   `Rc`'s strong/weak refcount block is avoidable for object kinds never
   targeted by `Weak`.**
@@ -191,8 +192,29 @@ All intervals cross 1.0 and no control has a stable >3% regression. The raw
 evidence SHA-256 is
 `883dce6d95b1579b4d99255ff62dce4265169bdacfdcbd4cfcd0d3b8fc1866ab`.
 Because this deliberately focused selection is not the complete 25-case
-portfolio, it is not represented as a portfolio-complete report; hosted full
-and external suites remain required generalization evidence.
+portfolio, it is not represented as a portfolio-complete report.
+
+Hosted Performance Preview `29948718553` compared exact S4 candidate
+`fb3d7645` with parent `089e4920`. It retained all 225 formal measurements,
+3/3 valid blocks, and all 75 linearity checks. Candidate/base was 0.992252x
+overall with interval [0.989354x, 0.993247x], 0.984654x for the allocation
+family, and 0.964732x for `closure_allocation_call`; the property family was
+neutral at 1.000312x and the largest internal regression was
+`dynamic_method_call` at 1.018922x. External suite geometric means all moved
+in the improving direction: 0.985069x for JetStream, 0.991548x for Kraken,
+and 0.994892x for SunSpider. CI `29948717681` and Test262 Coverage
+`29948984533` passed, so S4 clears its hosted rollback/generalization gate.
+
+Broad raw/report SHA-256 values are
+`8104130fd38bee11b393c51bdb89211b381554aafc416df03d815957b10c1e4d`
+and `925ba557f3802907eee8e34f90807b916cf3e2fe9978c710ed887256a751f41e`;
+external raw/report values are
+`a1bebe13313a85ca51f8ff054cc44b5a60056d5be4bfa15f3ea95f330d0bba07`
+and `335c599108285e36e2b64f2ccc6a776a2a6ae998121900b73529b5539241d10b`.
+The artifact digest is
+`3ed6be7438b8037003012c34a1fc4d4eb8299283fbe4f1c973dd792458eeda8e`.
+The hosted run remains informational `inconclusive`/`non_claim` evidence on
+variable hardware rather than a fixed-host public claim.
 
 ### A much larger lever found outside this campaign's scope: global `var` sync
 

@@ -6162,9 +6162,62 @@ overall and 1.1796x for `many_locals_call`. Here `many_locals_call` measured
 recur. The branch passed all 1,534 runtime tests and `git diff --check`.
 
 The raw runs are receipt-less two-role diagnostics and correctly remain
-`claim_eligible: false`. Hosted broad, external-suite, and exact-main
-correctness evidence is still pending; this unit does not close any strict
-T018 target or establish an external win.
+`claim_eligible: false`.
+
+Hosted Performance Preview `29948189616` compared exact candidate `089e4920`
+with parent `2e7ac71c`. It retained 225/225 formal measurements, 3/3 valid
+blocks, and all 75 linearity checks. Candidate/base was 0.984050x overall with
+interval [0.982250x, 0.992158x], while `object_allocation` and
+`array_allocation` improved to 0.801767x and 0.800388x. The unit nevertheless
+failed its predeclared standalone no-regression gate:
+`closure_allocation_call` was a stable 1.036896x with interval
+[1.031255x, 1.056660x]. The external candidate/base suite diagnostics were
+neutral at 1.002667x for JetStream, 0.998406x for Kraken, and 1.001564x for
+SunSpider. CI `29948189614` and Test262 Coverage `29948452652` passed.
+
+The immediately following cold-accessor layout unit at `fb3d7645` supplied
+the missing cumulative evidence. Performance Preview `29948718553`, with
+`089e4920` as its exact base, again retained 225/225 measurements, 3/3 valid
+blocks, and all 75 linearity checks. It measured 0.992252x overall
+[0.989354x, 0.993247x], 0.984654x for the allocation family, and 0.964732x
+for `closure_allocation_call`; its largest internal regression was
+`dynamic_method_call` at 1.018922x. All three external suite geometric means
+improved: JetStream 0.985069x, Kraken 0.991548x, and SunSpider 0.994892x.
+SunSpider `crypto-sha1` was a one-run 1.054829x diagnostic without a per-case
+interval and remains a repeat-watch item rather than a rollback signal. CI
+`29948717681` and Test262 Coverage `29948984533` passed.
+
+Multiplying the two exact-parent comparisons gives a directional cumulative
+point estimate of 0.976426x overall, 0.798864x for `object_allocation`,
+0.794915x for `array_allocation`, and 1.000327x for
+`closure_allocation_call`. The corresponding external suite estimates are
+0.987696x, 0.989967x, and 0.996448x. These cross-run products do not replace a
+same-host direct comparison, so `NewClass` is not credited as a standalone
+accepted performance unit. The current pair is retained for ROI because the
+successor removes the only stable >3% internal regression while preserving
+the allocation gain; a direct current-HEAD versus `2e7ac71c` A/B remains the
+final retain-or-revert audit.
+
+NewClass broad raw/report/status SHA-256 values are
+`0006a3f5e2154319aaa9f05c88461812a7a30668567673ef0daf1a5ba67affeb`,
+`3c8ab9c119b55f0235abbab7d295898dd49bba60c17a9374576b1dc350449c60`,
+and `4913c9f4ad08eaf4542b771a9079f08510332cb6e5004da26fff904ff339ce28`;
+external raw/report values are
+`ca1176babb17c1ca11d1fd43fdb5ec5be91dce44227da088eecb81e8730f8ae9`
+and `0fa2900e56f604029594cae7fc799b76c66542e7ecc8cb6f6c66cea921ca3b5e`.
+Its artifact digest is
+`0448ce08702564b5da28819b924005b78c93b57bd2f92ea8727ab4b2856e4908`.
+The Property unit broad raw/report/status values are
+`8104130fd38bee11b393c51bdb89211b381554aafc416df03d815957b10c1e4d`,
+`925ba557f3802907eee8e34f90807b916cf3e2fe9978c710ed887256a751f41e`,
+and `3b93c414c8583d85c502cbb2c96ea7a716b77f5a122a8341d22467d907d7b7a6`;
+external raw/report values are
+`a1bebe13313a85ca51f8ff054cc44b5a60056d5be4bfa15f3ea95f330d0bba07`
+and `335c599108285e36e2b64f2ccc6a776a2a6ae998121900b73529b5539241d10b`.
+Its artifact digest is
+`3ed6be7438b8037003012c34a1fc4d4eb8299283fbe4f1c973dd792458eeda8e`.
+Both hosted reports remain informational `inconclusive`/`non_claim` evidence
+on variable GitHub hardware and do not close a strict T018 case.
 
 ## Notes
 

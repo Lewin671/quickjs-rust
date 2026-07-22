@@ -88,8 +88,9 @@ promptly so hosted CI records the formal three-role evidence.
   `Option<Rc<AccessorState>>`. This shrinks `Property` from 56 to exactly 32
   bytes, allocates nothing for ordinary data properties, and uses
   `Rc::make_mut` to preserve descriptor clone isolation on mutation. Full
-  correctness gates and a valid focused A/B passed; hosted full/external
-  evidence remains the generalization gate.
+  correctness gates and a valid focused A/B passed. Hosted full/external run
+  `29948718553` also passed the generalization gate: overall candidate/base was
+  0.992252x and all three external suite geometric means improved.
 - [ ] **S5 (open, larger blast radius, do not start without a fresh
   measurement showing it still matters) — evaluate whether `Rc`'s separate
   strong/weak count block is avoidable** for object kinds that are never
