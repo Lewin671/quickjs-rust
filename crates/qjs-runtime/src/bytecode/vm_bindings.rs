@@ -455,6 +455,7 @@ impl Vm<'_> {
             Self::initial_authoritative_slots(self.bytecode, &self.local_upvalues, &self.env);
         self.realm_binding_slots =
             Self::initial_realm_binding_slots(self.bytecode, &self.local_upvalues, &self.env);
+        self.refresh_virtual_object_execution();
     }
 
     /// Keeps a module's exported binding cell current for name-based writes.

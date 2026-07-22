@@ -117,11 +117,13 @@ pub(super) fn eval_function_bytecode<'a>(
 
 pub(super) struct FrameState<'a> {
     pub(super) bytecode: &'a Bytecode,
+    pub(super) execution_code: &'a [Op],
     pub(super) ip: usize,
     pub(super) control_loop_plans: Vec<super::vm_control_loop::ControlLoopPlan>,
     pub(super) numeric_loop_plans: Vec<super::vm_numeric_loop::NumericLoopPlan>,
     pub(super) numeric_mutation_loop_plans:
         Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>,
+    pub(super) virtual_values: Vec<Value>,
     pub(super) stack: OperandStack<'a>,
     pub(super) locals: Vec<Slot>,
     pub(super) local_upvalues: Vec<Option<Upvalue>>,
@@ -339,13 +341,28 @@ impl<'a> Vm<'a> {
                 super::vm_numeric_mutation_loop::NumericMutationLoopPlan::compile_all(bytecode)
             })
             .clone();
+        let virtual_object_program = bytecode
+            .virtual_object_program
+            .get_or_init(|| super::virtual_object::lower(bytecode));
+        let virtual_object_enabled =
+            virtual_object_program.is_frame_compatible(authoritative_slots);
+        let execution_code = if virtual_object_enabled {
+            virtual_object_program.code(&bytecode.code)
+        } else {
+            &bytecode.code
+        };
+        // Keep cold virtual candidates allocation-free. Their first
+        // initializer grows this bank only as far as the candidate needs.
+        let virtual_values = Vec::new();
         Self {
             current: FrameState {
                 bytecode,
+                execution_code,
                 ip: 0,
                 control_loop_plans,
                 numeric_loop_plans,
                 numeric_mutation_loop_plans,
+                virtual_values,
                 stack: OperandStack::new(bytecode),
                 locals,
                 local_upvalues,
@@ -611,7 +628,8 @@ impl<'a> Vm<'a> {
             // Copy the shared bytecode reference out of the VM so the current
             // instruction can stay borrowed while its handler mutates VM state.
             let bytecode = self.bytecode;
-            let op = bytecode.code.get(self.ip).ok_or_else(|| RuntimeError {
+            let execution_code = self.execution_code;
+            let op = execution_code.get(self.ip).ok_or_else(|| RuntimeError {
                 thrown: None,
                 message: "bytecode instruction pointer out of bounds".to_owned(),
             })?;
@@ -773,6 +791,17 @@ impl<'a> Vm<'a> {
                 Op::NewObjectDataLiteral { shape } => {
                     self.new_object_data_literal(shape.clone())?
                 }
+                op @ (Op::InitVirtualObject { .. }
+                | Op::InitVirtualConstants { .. }
+                | Op::LoadVirtualValue { .. }
+                | Op::StoreVirtualValue { .. }
+                | Op::LoadVirtualLength { .. }
+                | Op::GuardVirtualObject
+                | Op::LoadVirtualBinary { .. }
+                | Op::BinaryAssignLocals { .. }
+                | Op::IncrementLocal { .. }
+                | Op::CopyLocal { .. }
+                | Op::CompareLocalsJumpFalse { .. }) => self.run_virtual_object_op(op)?,
                 op @ (Op::EnterDisposableScope
                 | Op::RegisterDisposable
                 | Op::RegisterAsyncDisposable
@@ -1094,17 +1123,7 @@ impl<'a> Vm<'a> {
                 }
                 Op::Jump(target) => {
                     let backedge = self.ip - 1;
-                    if *target >= backedge
-                        || (!super::vm_numeric_mutation_loop::try_run_numeric_mutation_loop(
-                            self, *target, backedge,
-                        ) && !super::vm_numeric_loop::try_run_numeric_loop(
-                            self, *target, backedge,
-                        ) && !super::vm_control_loop::try_run_control_loop(
-                            self, *target, backedge,
-                        ))
-                    {
-                        self.ip = *target;
-                    }
+                    self.jump_with_loop_plans(*target, backedge);
                 }
                 Op::AbruptJump(target) => {
                     self.abrupt_jump(*target)?;
@@ -1710,6 +1729,19 @@ impl<'a> Vm<'a> {
 
     pub(super) fn pop(&mut self) -> Result<Value, RuntimeError> {
         self.stack.pop().ok_or_else(stack_underflow)
+    }
+
+    /// Performs one bytecode jump while preserving the shared counted-loop
+    /// accelerators attached to ordinary backward edges.
+    pub(super) fn jump_with_loop_plans(&mut self, target: usize, backedge: usize) {
+        if target >= backedge
+            || (!super::vm_numeric_mutation_loop::try_run_numeric_mutation_loop(
+                self, target, backedge,
+            ) && !super::vm_numeric_loop::try_run_numeric_loop(self, target, backedge)
+                && !super::vm_control_loop::try_run_control_loop(self, target, backedge))
+        {
+            self.ip = target;
+        }
     }
 
     fn captured_immutable_function_name(

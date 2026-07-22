@@ -43,6 +43,7 @@ mod vm_result;
 mod vm_set;
 mod vm_string_append;
 mod vm_try;
+mod vm_virtual_object;
 
 use qjs_ast::{FunctionParams, Script};
 use qjs_parser::parse_script;

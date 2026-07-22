@@ -550,16 +550,22 @@ fn assign_local_rejects_immutable_and_tdz_sensitive_slots() {
 }
 
 #[test]
-fn indexed_store_contract_matches_pending_set_prop_index_stack_semantics() {
+fn indexed_store_contract_matches_set_prop_index_stack_semantics() {
     let bytecode = named_function(
         r#"
             function indexed(value) {
                 var array = [0];
-                array["0"] = value;
+                array[0] = value;
                 return array[0];
             }
             "#,
         "indexed",
+    );
+    assert!(
+        bytecode
+            .code
+            .iter()
+            .any(|op| matches!(op, Op::SetPropIndex { index: 0, .. }))
     );
     let analysis = analyze(&bytecode);
     let arrays = dense_array_candidates(&analysis);

@@ -16,10 +16,19 @@ use super::ir::{Bytecode, Op};
 
 mod cfg;
 mod flow;
+mod lower;
 #[cfg(test)]
 mod tests;
 
 use cfg::ControlFlowGraph;
+
+pub(super) fn analyze(bytecode: &Bytecode) -> VirtualObjectAnalysis {
+    flow::analyze(bytecode)
+}
+
+#[cfg(test)]
+pub(super) use lower::record_virtual_init_for_test;
+pub(super) use lower::{VirtualObjectProgram, lower};
 
 type CandidateId = usize;
 

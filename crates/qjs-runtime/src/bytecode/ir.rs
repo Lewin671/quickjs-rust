@@ -578,6 +578,82 @@ pub(super) enum Op {
         index: usize,
         is_strict: bool,
     },
+    /// Replaces a proven non-escaping object/array allocation. Pops `count`
+    /// initializer values into frame-owned scalar slots and pushes an
+    /// unobservable placeholder for ordinary alias stores/discards.
+    InitVirtualObject {
+        slot: usize,
+        count: usize,
+        local: Option<usize>,
+        skip: usize,
+    },
+    /// Pushes one frame-owned virtual field after discarding any explicit
+    /// receiver/key operands retained by the original property-read shape.
+    LoadVirtualValue {
+        slot: usize,
+        discard: usize,
+    },
+    /// Stores and re-pushes the assignment value after discarding the original
+    /// receiver and optional computed-key operands.
+    StoreVirtualValue {
+        slot: usize,
+        discard: usize,
+    },
+    /// Pushes the immutable length of a virtual dense array.
+    LoadVirtualLength {
+        length: usize,
+        discard: usize,
+    },
+    /// A proven virtual literal is always object-coercible.
+    GuardVirtualObject,
+    /// Initializes a virtual literal directly from bytecode constants and
+    /// optionally stores its unobservable alias placeholder.
+    InitVirtualConstants {
+        slot: usize,
+        constants: Vec<usize>,
+        local: Option<usize>,
+        skip: usize,
+    },
+    /// Fuses two virtual loads with the binary operation that consumes them.
+    LoadVirtualBinary {
+        left: usize,
+        right: usize,
+        op: BinaryOp,
+        skip: usize,
+    },
+    /// Fuses a binary expression result into one assignment and two completion
+    /// temporaries proven to be authoritative frame slots.
+    BinaryAssignLocals {
+        op: BinaryOp,
+        target: usize,
+        stores: [usize; 2],
+        skip: usize,
+    },
+    /// Fuses the canonical postfix increment sequence for one local while
+    /// preserving the ordinary coercion and assignment helpers.
+    IncrementLocal {
+        slot: usize,
+        skip: usize,
+        jump: Option<usize>,
+    },
+    /// Copies one authoritative local into another without operand-stack
+    /// round-tripping.
+    CopyLocal {
+        from: usize,
+        to: usize,
+        skip: usize,
+    },
+    /// Fuses two local loads, a binary operation, and its conditional jump.
+    /// `discard` is set when both control-flow successors immediately discard
+    /// the condition, allowing the fused op to bypass both Pops.
+    CompareLocalsJumpFalse {
+        left: usize,
+        right: usize,
+        op: BinaryOp,
+        target: usize,
+        skip: usize,
+        discard: bool,
+    },
 }
 
 /// Compiled definition of a class constructor.
@@ -799,6 +875,7 @@ pub struct Bytecode {
     pub(super) control_loop_plans: OnceCell<Vec<super::vm_control_loop::ControlLoopPlan>>,
     pub(super) numeric_mutation_loop_plans:
         OnceCell<Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>>,
+    pub(super) virtual_object_program: OnceCell<super::virtual_object::VirtualObjectProgram>,
     pub(super) template_objects: RefCell<HashMap<usize, Value>>,
     /// One cleared operand-stack allocation retained for the next invocation
     /// of this compiled body. Sequential calls are the common case, so a
@@ -905,6 +982,7 @@ impl Bytecode {
             numeric_loop_plans: OnceCell::new(),
             control_loop_plans: OnceCell::new(),
             numeric_mutation_loop_plans: OnceCell::new(),
+            virtual_object_program: OnceCell::new(),
             template_objects: RefCell::new(HashMap::new()),
             operand_stack_pool: Rc::new(RefCell::new(None)),
             cached_closure_referenced_global_names: Vec::new(),

@@ -431,6 +431,12 @@ impl<'a> Analyzer<'a> {
                 self.store_named_value(ip, &receiver, &value, &key);
                 state.stack.push(value);
             }
+            Op::SetPropIndex { index, .. } => {
+                let value = Self::pop(state, ip)?;
+                let receiver = Self::pop(state, ip)?;
+                self.store_indexed_value(ip, &receiver, &value, index);
+                state.stack.push(value);
+            }
             Op::GetProp => {
                 let key = Self::pop(state, ip)?;
                 let receiver = Self::pop(state, ip)?;
@@ -626,7 +632,20 @@ impl<'a> Analyzer<'a> {
             | Op::IteratorClose { .. }
             | Op::YieldDelegate { .. }
             | Op::ImportCall { .. }
-            | Op::ImportMeta => return Err(AnalysisFailure::Unsupported(ip)),
+            | Op::ImportMeta
+            | Op::InitVirtualObject { .. }
+            | Op::LoadVirtualValue { .. }
+            | Op::StoreVirtualValue { .. }
+            | Op::LoadVirtualLength { .. }
+            | Op::GuardVirtualObject
+            | Op::InitVirtualConstants { .. }
+            | Op::LoadVirtualBinary { .. }
+            | Op::BinaryAssignLocals { .. }
+            | Op::IncrementLocal { .. }
+            | Op::CopyLocal { .. }
+            | Op::CompareLocalsJumpFalse { .. } => {
+                return Err(AnalysisFailure::Unsupported(ip));
+            }
         }
         Ok(())
     }
