@@ -16,16 +16,43 @@ use crate::bytecode::ir::{Bytecode, Op, decode_index_receiver};
 
 #[derive(Clone, Debug)]
 pub(in crate::bytecode) struct VirtualObjectProgram {
+    full: VirtualObjectVariant,
+    data_only: VirtualObjectVariant,
+}
+
+#[derive(Clone, Debug)]
+struct VirtualObjectVariant {
     lowered_code: Option<Rc<[Op]>>,
     required_authoritative_slots: u128,
 }
 
 impl VirtualObjectProgram {
     pub(in crate::bytecode) fn code<'a>(&'a self, original: &'a [Op]) -> &'a [Op] {
+        self.full.code(original)
+    }
+
+    pub(in crate::bytecode) fn code_for_frame<'a>(
+        &'a self,
+        original: &'a [Op],
+        authoritative_slots: u128,
+        allow_virtual_functions: bool,
+    ) -> &'a [Op] {
+        if allow_virtual_functions && self.full.is_frame_compatible(authoritative_slots) {
+            return self.full.code(original);
+        }
+        if self.data_only.is_frame_compatible(authoritative_slots) {
+            return self.data_only.code(original);
+        }
+        original
+    }
+}
+
+impl VirtualObjectVariant {
+    fn code<'a>(&'a self, original: &'a [Op]) -> &'a [Op] {
         self.lowered_code.as_deref().unwrap_or(original)
     }
 
-    pub(in crate::bytecode) fn is_frame_compatible(&self, authoritative_slots: u128) -> bool {
+    fn is_frame_compatible(&self, authoritative_slots: u128) -> bool {
         authoritative_slots & self.required_authoritative_slots == self.required_authoritative_slots
     }
 }
@@ -36,27 +63,91 @@ pub(in crate::bytecode) fn lower(bytecode: &Bytecode) -> VirtualObjectProgram {
         return original_program();
     }
 
+    // Loop plans are compiled from the immutable source stream and prepare
+    // stable receivers/callees from their real local values. Replacing one of
+    // those aliases with an undefined placeholder would make preparation fail
+    // and silently discard an already-proven faster execution route. Keep any
+    // candidate touched by a specialized loop materialized until the plans can
+    // consume virtual slots directly.
+    let numeric_loop_plans = bytecode
+        .numeric_loop_plans
+        .get_or_init(|| super::super::vm_numeric_loop::NumericLoopPlan::compile_all(bytecode));
+    let control_loop_plans = bytecode
+        .control_loop_plans
+        .get_or_init(|| super::super::vm_control_loop::ControlLoopPlan::compile_all(bytecode));
+    let numeric_mutation_loop_plans = bytecode.numeric_mutation_loop_plans.get_or_init(|| {
+        super::super::vm_numeric_mutation_loop::NumericMutationLoopPlan::compile_all(bytecode)
+    });
+
+    let full = lower_variant(
+        bytecode,
+        &analysis,
+        numeric_loop_plans,
+        control_loop_plans,
+        numeric_mutation_loop_plans,
+        true,
+    );
+    let has_virtual_function = analysis.candidates.iter().any(|candidate| {
+        candidate.is_virtualizable()
+            && matches!(candidate.kind, VirtualKind::Function(_))
+            && !candidate_intersects_specialized_loop(
+                candidate,
+                numeric_loop_plans,
+                control_loop_plans,
+                numeric_mutation_loop_plans,
+            )
+    });
+    let data_only = if has_virtual_function {
+        lower_variant(
+            bytecode,
+            &analysis,
+            numeric_loop_plans,
+            control_loop_plans,
+            numeric_mutation_loop_plans,
+            false,
+        )
+    } else {
+        full.clone()
+    };
+    VirtualObjectProgram { full, data_only }
+}
+
+fn lower_variant(
+    bytecode: &Bytecode,
+    analysis: &super::VirtualObjectAnalysis,
+    numeric_loop_plans: &[super::super::vm_numeric_loop::NumericLoopPlan],
+    control_loop_plans: &[super::super::vm_control_loop::ControlLoopPlan],
+    numeric_mutation_loop_plans: &[
+        super::super::vm_numeric_mutation_loop::NumericMutationLoopPlan
+    ],
+    include_functions: bool,
+) -> VirtualObjectVariant {
     let mut replacements = BTreeMap::new();
     let mut required_authoritative_slots = BTreeSet::new();
     let mut slot_count = 0usize;
-    for candidate in analysis
-        .candidates
-        .iter()
-        .filter(|candidate| candidate.is_virtualizable())
-    {
+    for candidate in analysis.candidates.iter().filter(|candidate| {
+        candidate.is_virtualizable()
+            && (include_functions || !matches!(candidate.kind, VirtualKind::Function(_)))
+            && !candidate_intersects_specialized_loop(
+                candidate,
+                numeric_loop_plans,
+                control_loop_plans,
+                numeric_mutation_loop_plans,
+            )
+    }) {
         let Some(candidate_replacements) = candidate_replacements(bytecode, candidate, slot_count)
         else {
             continue;
         };
         let input_count = candidate_input_count(candidate);
         let Some(next_slot_count) = slot_count.checked_add(input_count) else {
-            return original_program();
+            return original_variant();
         };
         if candidate_replacements
             .iter()
             .any(|(ip, _)| replacements.contains_key(ip))
         {
-            return original_program();
+            return original_variant();
         }
         replacements.extend(candidate_replacements);
         required_authoritative_slots.extend(candidate.uses.iter().filter_map(|use_kind| {
@@ -69,17 +160,17 @@ pub(in crate::bytecode) fn lower(bytecode: &Bytecode) -> VirtualObjectProgram {
         slot_count = next_slot_count;
     }
     if replacements.is_empty() {
-        return original_program();
+        return original_variant();
     }
 
     let mut code = bytecode.code.clone();
     for (ip, replacement) in replacements {
         let Some(op) = code.get_mut(ip) else {
-            return original_program();
+            return original_variant();
         };
         *op = replacement;
     }
-    fuse_superinstructions(bytecode, &analysis, &mut code);
+    fuse_superinstructions(bytecode, analysis, &mut code);
     collect_superinstruction_authority(&code, &mut required_authoritative_slots);
     let Some(required_authoritative_slots) =
         required_authoritative_slots
@@ -91,16 +182,51 @@ pub(in crate::bytecode) fn lower(bytecode: &Bytecode) -> VirtualObjectProgram {
                     .map(|bit| mask | bit)
             })
     else {
-        return original_program();
+        return original_variant();
     };
-    VirtualObjectProgram {
+    VirtualObjectVariant {
         lowered_code: Some(Rc::from(code.into_boxed_slice())),
         required_authoritative_slots,
     }
 }
 
+fn candidate_intersects_specialized_loop(
+    candidate: &VirtualCandidate,
+    numeric: &[super::super::vm_numeric_loop::NumericLoopPlan],
+    control: &[super::super::vm_control_loop::ControlLoopPlan],
+    mutation: &[super::super::vm_numeric_mutation_loop::NumericMutationLoopPlan],
+) -> bool {
+    let in_plan = |ip| {
+        numeric.iter().any(|plan| plan.contains_instruction(ip))
+            || control.iter().any(|plan| plan.contains_instruction(ip))
+            || mutation.iter().any(|plan| plan.contains_instruction(ip))
+    };
+    in_plan(candidate.allocation_ip) || candidate.uses.iter().map(virtual_use_ip).any(in_plan)
+}
+
+fn virtual_use_ip(use_kind: &VirtualUse) -> usize {
+    match use_kind {
+        VirtualUse::Alias { ip, .. }
+        | VirtualUse::Discard { ip }
+        | VirtualUse::FieldRead { ip, .. }
+        | VirtualUse::FieldWrite { ip, .. }
+        | VirtualUse::ObjectGuard { ip }
+        | VirtualUse::ArrayLengthRead { ip }
+        | VirtualUse::ElementRead { ip, .. }
+        | VirtualUse::ElementWrite { ip, .. }
+        | VirtualUse::DirectCall { ip, .. } => *ip,
+    }
+}
+
 fn original_program() -> VirtualObjectProgram {
     VirtualObjectProgram {
+        full: original_variant(),
+        data_only: original_variant(),
+    }
+}
+
+fn original_variant() -> VirtualObjectVariant {
+    VirtualObjectVariant {
         lowered_code: None,
         required_authoritative_slots: 0,
     }
@@ -625,6 +751,67 @@ mod tests {
     }
 
     #[test]
+    fn preserves_materialized_aliases_used_by_specialized_numeric_loops() {
+        let object = nested_function(
+            "function run(n) { var value = { a: 1, b: 2, c: 3 }; var total = 0; for (var i = 0; i < n; i++) { total += value.a; total += value.b; total += value.c; } return total; }",
+        );
+        assert!(
+            !super::super::super::vm_numeric_loop::NumericLoopPlan::compile_all(&object).is_empty()
+        );
+        let object_program = lower(&object);
+        let object_code = object_program.code(&object.code);
+        assert!(
+            object_code
+                .iter()
+                .any(|op| matches!(op, Op::NewObjectDataLiteral { .. }))
+        );
+        assert!(
+            !object_code
+                .iter()
+                .any(|op| matches!(op, Op::InitVirtualObject { .. }))
+        );
+
+        let array = nested_function(
+            "function run(n) { var value = [1, 2, 3, 4]; var total = 0; for (var i = 0; i < n; i++) { total += value[0]; total += value[1]; total += value[2]; total += value[3]; } return total; }",
+        );
+        assert!(
+            !super::super::super::vm_numeric_loop::NumericLoopPlan::compile_all(&array).is_empty()
+        );
+        let array_program = lower(&array);
+        let array_code = array_program.code(&array.code);
+        assert!(
+            array_code
+                .iter()
+                .any(|op| matches!(op, Op::NewArray { .. }))
+        );
+        assert!(
+            !array_code
+                .iter()
+                .any(|op| matches!(op, Op::InitVirtualObject { .. }))
+        );
+
+        let function = nested_function(
+            "function run(n) { var add = function (value) { return value + 1; }; var total = 0; for (var i = 0; i < n; i++) { total += add(i); } return total; }",
+        );
+        assert!(
+            !super::super::super::vm_numeric_loop::NumericLoopPlan::compile_all(&function)
+                .is_empty()
+        );
+        let function_program = lower(&function);
+        let function_code = function_program.code(&function.code);
+        assert!(
+            function_code
+                .iter()
+                .any(|op| matches!(op, Op::NewFunction { .. }))
+        );
+        assert!(
+            !function_code
+                .iter()
+                .any(|op| matches!(op, Op::InitVirtualFunction { .. }))
+        );
+    }
+
+    #[test]
     fn lowers_general_non_escaping_function_literal_calls_in_the_shared_stream() {
         let bytecode = nested_function(
             "function run(n) { var total = 0; for (var i = 0; i < n; i++) { var add = function (value) { return value + 1; }; total += add(0); } return total; }",
@@ -708,6 +895,60 @@ mod tests {
         let error = eval("(function () { throw 7; })();").expect_err("call should throw");
         assert!(error.message.contains('7'), "{}", error.message);
         assert_eq!(virtual_function_test_hits(), 1);
+    }
+
+    #[test]
+    fn runtime_creation_contexts_keep_function_literals_materialized() {
+        reset_virtual_function_test_hits();
+        assert_eq!(
+            eval(
+                "var outer = function named() { return (function () { return typeof named; })(); }; outer();"
+            ),
+            Ok(Value::String("function".to_owned().into()))
+        );
+        assert_eq!(virtual_function_test_hits(), 0);
+
+        reset_virtual_function_test_hits();
+        assert_eq!(
+            eval(
+                "function outer() { let x = 7; return eval('(function () { return x; })()'); } outer();"
+            ),
+            Ok(Value::Number(7.0))
+        );
+        assert_eq!(virtual_function_test_hits(), 0);
+
+        reset_virtual_function_test_hits();
+        assert_eq!(
+            eval(
+                "function outer() { with ({ x: 9 }) { return eval('(function () { return x; })()'); } } outer();"
+            ),
+            Ok(Value::Number(9.0))
+        );
+        assert_eq!(virtual_function_test_hits(), 0);
+
+        // The data-only stream keeps unrelated scalar replacement enabled even
+        // when the same frame must materialize a function literal.
+        reset_test_hits();
+        reset_virtual_function_test_hits();
+        assert_eq!(
+            eval(
+                "var outer = function named() { return ({ x: 4 }).x + ((function () { return typeof named; })() === 'function' ? 1 : 0); }; outer();"
+            ),
+            Ok(Value::Number(5.0))
+        );
+        assert_eq!(test_hits(), 1);
+        assert_eq!(virtual_function_test_hits(), 0);
+
+        reset_test_hits();
+        reset_virtual_function_test_hits();
+        assert_eq!(
+            eval(
+                "function outer() { let x = 7; return eval('({ y: 2 }).y + (function () { return x; })()'); } outer();"
+            ),
+            Ok(Value::Number(9.0))
+        );
+        assert_eq!(test_hits(), 1);
+        assert_eq!(virtual_function_test_hits(), 0);
     }
 
     #[test]

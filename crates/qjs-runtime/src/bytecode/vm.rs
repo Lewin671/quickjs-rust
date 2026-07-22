@@ -344,13 +344,17 @@ impl<'a> Vm<'a> {
         let virtual_object_program = bytecode
             .virtual_object_program
             .get_or_init(|| super::virtual_object::lower(bytecode));
-        let virtual_object_enabled =
-            virtual_object_program.is_frame_compatible(authoritative_slots);
-        let execution_code = if virtual_object_enabled {
-            virtual_object_program.code(&bytecode.code)
-        } else {
-            &bytecode.code
-        };
+        // Ordinary function creation captures these runtime-only contexts.
+        // The data-only variant keeps object/array SRA available while leaving
+        // function literals materialized in a frame that needs those captures.
+        let virtual_function_context_safe = env.deopt_bindings().is_none()
+            && env.immutable_function_name().is_none()
+            && with_stack.is_empty();
+        let execution_code = virtual_object_program.code_for_frame(
+            &bytecode.code,
+            authoritative_slots,
+            virtual_function_context_safe,
+        );
         // Keep cold virtual candidates allocation-free. Their first
         // initializer grows this bank only as far as the candidate needs.
         let virtual_values = Vec::new();

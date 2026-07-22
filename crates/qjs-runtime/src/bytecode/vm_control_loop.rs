@@ -49,6 +49,10 @@ impl ControlLoopPlan {
             .collect()
     }
 
+    pub(super) fn contains_instruction(&self, ip: usize) -> bool {
+        (self.header..=self.backedge).contains(&ip)
+    }
+
     fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<Self> {
         Self::compile_empty(bytecode, header, backedge)
             .or_else(|| Self::compile_bitwise_branch(bytecode, header, backedge))

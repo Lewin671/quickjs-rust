@@ -16,13 +16,15 @@ impl<'a> Vm<'a> {
             .bytecode
             .virtual_object_program
             .get_or_init(|| super::virtual_object::lower(self.bytecode));
-        if program.is_frame_compatible(self.authoritative_slots) {
-            self.execution_code = program.code(&self.bytecode.code);
-            self.virtual_values.clear();
-        } else {
-            self.execution_code = &self.bytecode.code;
-            self.virtual_values.clear();
-        }
+        let virtual_function_context_safe = self.env.deopt_bindings().is_none()
+            && self.env.immutable_function_name().is_none()
+            && self.with_stack.is_empty();
+        self.execution_code = program.code_for_frame(
+            &self.bytecode.code,
+            self.authoritative_slots,
+            virtual_function_context_safe,
+        );
+        self.virtual_values.clear();
     }
 
     pub(super) fn run_virtual_object_op(&mut self, op: &Op) -> Result<(), RuntimeError> {

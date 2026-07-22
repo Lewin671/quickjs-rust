@@ -133,6 +133,10 @@ impl NumericLoopPlan {
             .collect()
     }
 
+    pub(super) fn contains_instruction(&self, ip: usize) -> bool {
+        (self.header..=self.backedge).contains(&ip)
+    }
+
     fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<Self> {
         let code = &bytecode.code;
         let (
