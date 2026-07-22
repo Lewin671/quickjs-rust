@@ -5878,8 +5878,30 @@ candidate/base. Candidate binary, raw, and summary SHA-256 values are
 `495813494142bbbe3e0c01851f2bad417c6e5bfb8bbd6b17e7d8ee59b90acadb`,
 and `a94327407ed57821da8a64cd9ad5b0d21c7fe9462a7fae3b915c7d52f77c1c5c`.
 The integrated unit passed 1,422 runtime tests, the complete 5,141-case local
-Test262 subset, and all QuickJS-NG comparison fixtures before push. Hosted
-confirmation remains asynchronous.
+Test262 subset, and all QuickJS-NG comparison fixtures before push.
+
+Hosted Performance Preview `29903567325` completed against exact base
+`57ae2dee63fddd3bb3e15bdfc3e5e7da8f4f6259`, but correctly produced **no
+formal performance conclusion**: the optimized candidate reached the frozen
+20-million iteration ceiling in all three `string_slice` blocks at roughly
+0.318 seconds, below the 0.6-second eligibility floor. Candidate coverage was
+therefore 24/25 while base and QuickJS-NG retained eligible `string_slice`
+records, making the portfolio comparison input incomplete. This is a harness
+capacity boundary, not an execution failure or a regression.
+
+The retained diagnostic samples measured median `string_slice` cost at
+15.8701 ns/op for the candidate, 50.1272 ns/op for the exact base, and 95.1165
+ns/op for pinned QuickJS-NG: diagnostic ratios of 0.31660x candidate/base and
+0.16685x candidate/QuickJS-NG. Across the 24 formally common cases, the
+diagnostic geometric means were 1.00550x candidate/base and 0.31797x
+candidate/QuickJS-NG; `top_level_function_call` remained the worst strict-goal
+gap at 9.86565x QuickJS-NG. The separate 40M/80M confirmation above remains
+the admissible direction check for the timer-limited string mechanism.
+Hosted raw, placeholder report, status, and manifest SHA-256 values are
+`c00b16a8a09bd0d41b1d69bed750c6e683d1ad5e3fd364c4cd5bb410763daf95`,
+`c1aa3862d7f75bb0b68c76e7e32d109917e922c0bcc8e4b919d72db64630c120`,
+`adbc36d63ba49e88ae19939da0cf36d5b03097edf93a56a83f52ba0eed395f70`,
+and `d5315473824f62466e2bb127329489d27eb4b26605f94b62bfe68ce0e2f98572`.
 
 The companion allocation experiment on
 `agent/allocation-hotpath/alloc-r4` at
@@ -5900,6 +5922,85 @@ source of conservative escape/authoritative-slot tests. Any successor must use
 general CFG, def-use, alias, and virtual-object analysis with an independent
 external effect; it must not reuse the absolute-offset matcher or its
 single-expression substitute interpreter.
+
+### 2026-07-22 static numeric-index stores accepted
+
+The three-commit array R5 unit (`e113e76c`, `56553683`, and `bd973aff` on
+`main`) lowers simple assignments through a side-effect-free numeric literal
+key to `SetPropIndex`. It preserves receiver-before-RHS evaluation, leaves the
+assignment result on the operand stack, uses the existing dense-array and
+integer-indexed TypedArray guards, and falls back to complete `[[Set]]`
+semantics for proxies, special descriptors, custom prototypes, frozen arrays,
+and other receivers. Detached/out-of-bounds TypedArrays, numeric-versus-BigInt
+coercion, and strict/sloppy failure behavior have focused coverage.
+
+The first build inserted the new opcode between existing hot enum variants.
+Although the new compiler lowering could be disabled without changing the
+Kraken result, that build regressed `audio-fft` by about 4.3%. Appending the
+opcode to the enum instead preserved every existing discriminant and removed
+that layout effect. The final three-block focused diagnostic measured:
+
+| Case | Candidate / base | Candidate / QuickJS-NG |
+| --- | ---: | ---: |
+| `array_write` | 0.70280x | 1.58543x |
+| `array_read` control | 0.99012x | 0.05589x |
+| `property_write` control | 1.01748x | 0.15809x |
+
+Role-reversed direct-bundle screening then bounded Kraken `audio-fft` at
+1.022x and `audio-dft` at 0.985x candidate/base by median process CPU time.
+These external numbers are diagnostic controls, not a formal portfolio claim;
+they show that preserving opcode layout removed the earlier over-3% regression.
+Candidate, base, QuickJS-NG binary SHA-256 values are
+`46536489762d8f02dd9ccf898aa5e43d55b4d717c7fbbfbcccee68c1b7b8b7d5`,
+`3ec36e1bafa4d0bfc9353e3a20c0656c6965d0cc55dae78bac555856facf3f6f`,
+and `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`;
+focused raw SHA-256 is
+`9b30cfff49f7a6f2c507ce670779974ae0b2e92905372b211a092f6fa51f2285`.
+The strict target remains open because `array_write` is still 1.585x slower
+than QuickJS-NG locally.
+
+### 2026-07-22 virtual-object scalar replacement accepted
+
+Commits `bb631582`, `13ad60ce`, and `c704cc71` replace provably non-escaping
+dense object and array literals with frame-owned scalar slots. Admission is a
+general CFG, def-use, and alias proof: candidates fail closed on escaping
+values, unknown control flow, suspension, unsupported coercion, or more than
+the 128 runtime-authority slots. The lowering retains original bytecode
+offsets and executes through the existing `Vm::run_completion` dispatch; it
+does not add a benchmark-specific matcher or a second executor.
+
+Two independent reviews found and drove fixes for four correctness or
+architecture hazards before integration:
+
+- generator start and resume now refresh the selected execution stream and
+  clear frame-owned virtual state;
+- the virtual increment back edge uses the same loop-plan dispatch as the
+  original `Jump`, avoiding an unrelated empty-loop regression;
+- the scalar bank is lazy, so cold calls do not pay an allocation, and it only
+  grows so a later small plan cannot truncate higher live slots;
+- runtime authority is a bounded `u128` mask rather than a per-operation
+  collection walk.
+
+The final role-rotated focused run
+`67bb3f9e-7bc2-40a6-96a8-d3d7a9a469d6` retained 20/20 eligible formal
+samples and 32/32 valid linearity samples. It measured:
+
+| Case | Candidate ns/op | QuickJS-NG ns/op | Candidate / QuickJS-NG |
+| --- | ---: | ---: | ---: |
+| `object_allocation` | 73.0989 | 175.0023 | 0.41812x |
+| `array_allocation` | 76.5649 | 160.1440 | 0.47711x |
+
+Every individual block stayed below 0.427x and 0.485x respectively, and all
+linearity medians remained inside the frozen 0.85--1.15 interval. Because the
+run intentionally covered only two of 25 broad cases, these values are focused
+admission evidence rather than a complete-portfolio claim. Its raw SHA-256 is
+`00f56449f6ec0fc8109da34c9e5d11df326087b33f610b67737b77fe41e5ccc8`.
+
+After integration, the main worktree passed 1,478 runtime tests, all 198
+benchmark protocol tests, the complete 5,143-case local Test262 subset, and
+all 207 QuickJS-NG comparison fixtures. Hosted broad, external-suite, and
+full Test262 confirmation remains asynchronous; only that exact-main evidence
+can close the allocation cases in the strict every-case contract.
 
 ## Notes
 
