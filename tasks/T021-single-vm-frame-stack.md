@@ -206,6 +206,45 @@ Do not close T021 merely because a subset improves. R3 remains open until its
 benefit generalizes across at least two independent external suites and the
 next dominant shared runtime cost is outside dispatch/call-frame mechanics.
 
+### 2026-07-22 R3b result: isolated dispatch works, total call cost still dominates
+
+The first R3 slice is preserved on `agent/compact-dispatch/r3b-executor` as
+prevalidated compact IR `0a11a5354971e62ec1ba62b03a24db575af93e6d` plus the
+same-VM compact executor `ec79ca72f657e3f4dd8f6cbdb4b31b21eaf8bb0b`, based
+on final R2 `2685051b4e70bd0ed5359661ece718c702464409`. Only
+scheduler-created direct-leaf child frames select compact execution; roots,
+standalone VMs, and incompletely lowered functions remain ordinary before any
+observable instruction. The branch passed 31/31 focused compact/trampoline
+tests, 1,453/1,453 runtime tests, 65/65 touched Test262 cases, and the complete
+5,141/5,141 Test262 subset gate. CI run `29898665752` was queued
+asynchronously.
+
+An independent release-code review confirmed that the dispatch loops are
+actually isolated. The ordinary loop is 89,364 bytes with a 3,904-byte total
+stack frame, down from final R2's 98,508 bytes and 3,920 bytes. The compact loop
+is a separate 5,380-byte symbol with a 992-byte total stack frame; an explicit
+scheduler branch calls one loop or the other. Candidate binary SHA-256 is
+`3d827fe05181836e562bbdbc2e3108277352474f99f2550263c9aad61f11486d`.
+
+The mechanism did not yet pay back whole-call overhead. An eight-case call
+screen against exact final R2 measured a `1.01525x` geometric mean, with
+`dynamic_method_call 1.06613x`, `top_level_function_call 1.04304x`, and
+`closure_allocation_call 1.03269x`; the other five cases ranged from
+`0.99400x` to `0.99906x`. Raw JSONL SHA-256 is
+`3a06852477256fd797eff4b6c2fe3906488c2414b50072d7d6655c13a521c486`.
+
+The focused external gate confirmed that this is a structural ceiling, not a
+codegen failure: JetStream `hash-map` was `0.98745x`, Kraken
+`json-parse-financial` was `1.01211x`, and SunSpider
+`controlflow-recursive` was only `0.97103x` candidate/R2. Their
+candidate/QuickJS-NG ratios were `8.39617x`, `0.77808x`, and `7.39349x`.
+External report/raw SHA-256 values are
+`d626f82950e43386674b06ec6fac5bbe08c21611231aa58fc4c0975c5e6c1205` and
+`d93b84c1c362e29900feafe3a4b61404dd41a2432e4efbf0d7185a22f1591864`.
+R3b is therefore not promoted to `main`; the next slice must remove shared
+frame construction/call staging cost or broaden dispatch across the measured
+property/allocation operations, then repeat the same fail-fast gates.
+
 ## Final Acceptance
 
 - T018's strict contract is met: every broad and pinned external case is
