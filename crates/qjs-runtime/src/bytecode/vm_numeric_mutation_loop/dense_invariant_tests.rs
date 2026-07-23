@@ -69,7 +69,7 @@ fn writable_dense_region_hoists_own_data_arrays_numbers_and_math_round() {
 }
 
 #[test]
-fn writable_dense_region_suppresses_fresh_hole_retries_per_invocation() {
+fn writable_dense_region_appends_fresh_holes_then_reuses_the_dense_lease() {
     let source = "function fill() { for (var index = 0; index < this.size; index++) this.output[index] = this.input[index] + this.bias; return this.output.join(':'); }";
     let bytecode = nested_function(source);
     assert_eq!(
@@ -90,9 +90,12 @@ fn writable_dense_region_suppresses_fresh_hole_retries_per_invocation() {
                 .into()
         ))
     );
-    assert_eq!(dense::test_writable_lease_suppressions(), 1);
-    assert_eq!(dense::test_iterations(), 9);
-    assert_eq!(dense::test_writable_path_hits(), 1);
+    assert_eq!(dense::test_writable_lease_suppressions(), 0);
+    assert_eq!(dense::test_hole_tail_append_attempts(), 1);
+    assert_eq!(dense::test_hole_tail_append_path_hits(), 1);
+    assert_eq!(dense::test_hole_tail_append_iterations(), 9);
+    assert_eq!(dense::test_iterations(), 18);
+    assert_eq!(dense::test_writable_path_hits(), 2);
 }
 
 #[test]
@@ -503,8 +506,8 @@ fn fannkuch_hole_dense_reentry_and_swap_lifecycle_uses_both_compact_contracts() 
         Ok(Value::Number(10.0))
     );
     assert!(dense::test_compact_dynamic_attempts() > 0);
-    assert!(dense::test_compact_dynamic_declines() > 0);
     assert!(dense::test_compact_dynamic_hits() > 0);
+    assert!(dense::test_hole_tail_append_path_hits() > 0);
     assert!(dense::test_iterations() > 0);
     assert!(dense::test_writable_path_hits() > 0);
 }

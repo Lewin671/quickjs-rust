@@ -24,9 +24,11 @@ use super::super::{
 };
 
 mod compiler;
+mod hole_tail_append;
 mod invariants;
 mod legacy;
 
+use hole_tail_append::{HoleTailAppendAccess, HoleTailAppendPlan};
 use invariants::{
     ArraySource, DynamicLimit, OwnDataOwner, OwnDataSource, native_math_round_is_current,
 };
@@ -74,6 +76,10 @@ thread_local! {
     static TYPED_ARRAY_DENSE_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static TYPED_ARRAY_DENSE_SUPPRESSIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static TYPED_ARRAY_DENSE_ATTEMPTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static HOLE_TAIL_APPEND_ATTEMPTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static HOLE_TAIL_APPEND_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static HOLE_TAIL_APPEND_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static HOLE_TAIL_APPEND_STAGED_DISCARDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -100,6 +106,10 @@ pub(super) fn reset_test_iterations() {
     TYPED_ARRAY_DENSE_PATH_HITS.set(0);
     TYPED_ARRAY_DENSE_SUPPRESSIONS.set(0);
     TYPED_ARRAY_DENSE_ATTEMPTS.set(0);
+    HOLE_TAIL_APPEND_ATTEMPTS.set(0);
+    HOLE_TAIL_APPEND_PATH_HITS.set(0);
+    HOLE_TAIL_APPEND_ITERATIONS.set(0);
+    HOLE_TAIL_APPEND_STAGED_DISCARDS.set(0);
 }
 
 #[cfg(test)]
@@ -213,6 +223,26 @@ pub(super) fn test_typed_array_dense_attempts() -> usize {
 }
 
 #[cfg(test)]
+pub(super) fn test_hole_tail_append_attempts() -> usize {
+    HOLE_TAIL_APPEND_ATTEMPTS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_hole_tail_append_path_hits() -> usize {
+    HOLE_TAIL_APPEND_PATH_HITS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_hole_tail_append_iterations() -> usize {
+    HOLE_TAIL_APPEND_ITERATIONS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_hole_tail_append_staged_discards() -> usize {
+    HOLE_TAIL_APPEND_STAGED_DISCARDS.get()
+}
+
+#[cfg(test)]
 pub(super) fn test_checked_array_index_product(left: usize, right: usize) -> Option<usize> {
     legacy::test_checked_array_index_product(left, right)
 }
@@ -284,6 +314,30 @@ fn record_typed_array_dense_suppression() {
 fn record_typed_array_dense_attempt() {
     #[cfg(test)]
     TYPED_ARRAY_DENSE_ATTEMPTS.set(TYPED_ARRAY_DENSE_ATTEMPTS.get() + 1);
+}
+
+#[inline]
+fn record_hole_tail_append_attempt() {
+    #[cfg(test)]
+    HOLE_TAIL_APPEND_ATTEMPTS.set(HOLE_TAIL_APPEND_ATTEMPTS.get() + 1);
+}
+
+#[inline]
+fn record_hole_tail_append_path_hit() {
+    #[cfg(test)]
+    HOLE_TAIL_APPEND_PATH_HITS.set(HOLE_TAIL_APPEND_PATH_HITS.get() + 1);
+}
+
+#[inline]
+fn record_hole_tail_append_iteration() {
+    #[cfg(test)]
+    HOLE_TAIL_APPEND_ITERATIONS.set(HOLE_TAIL_APPEND_ITERATIONS.get() + 1);
+}
+
+#[cfg(test)]
+#[inline]
+fn record_hole_tail_append_staged_discard() {
+    HOLE_TAIL_APPEND_STAGED_DISCARDS.set(HOLE_TAIL_APPEND_STAGED_DISCARDS.get() + 1);
 }
 
 #[inline]
@@ -421,6 +475,7 @@ struct DynamicDensePlan {
     writes: Vec<LocalWrite>,
     store_count: usize,
     sunk_store: Option<SunkDenseStore>,
+    hole_tail_append: Option<HoleTailAppendPlan>,
     uses_math_round: bool,
     header: usize,
 }
@@ -1123,6 +1178,52 @@ impl DynamicDensePlan {
         }
     }
 
+    fn try_run_hole_tail_append(
+        &self,
+        vm: &mut Vm<'_>,
+        arrays: &[ArrayRef],
+        locals: &mut [f64; MAX_DENSE_LOCALS],
+        invariant_numbers: &[f64],
+        registers: &mut [f64],
+        limit: Option<f64>,
+    ) -> Option<DynamicProgramRun> {
+        let append = self.hole_tail_append?;
+        record_hole_tail_append_attempt();
+        let writer_receiver = append.writer_receiver();
+        let writer = arrays.get(writer_receiver)?;
+        let start_index = array_index_from_number(locals[self.counter_local])?;
+
+        // ArrayRef owns the storage/integrity checks, but only the VM can
+        // validate the effective realm prototype chain. Custom prototypes are
+        // conservatively rejected; the standard chain is walked in full when
+        // either intrinsic link has changed.
+        if !vm.array_uses_realm_prototype(writer)
+            || vm.array_prototype_chain_has_index_hazard().unwrap_or(true)
+        {
+            return None;
+        }
+
+        let ran = ArrayRef::with_dense_hole_tail_append_and_readable_elements(
+            arrays,
+            writer_receiver,
+            start_index,
+            |writer, readable, logical_length| {
+                let mut access = HoleTailAppendAccess::new(
+                    writer_receiver,
+                    writer,
+                    readable,
+                    logical_length,
+                    limit.expect("append plans use less-than control"),
+                );
+                self.run_program(&mut access, locals, invariant_numbers, registers, limit)
+            },
+        );
+        if ran.is_some_and(|run| run.made_progress) {
+            record_hole_tail_append_path_hit();
+        }
+        ran
+    }
+
     #[inline(never)]
     fn try_run(&self, vm: &mut Vm<'_>, exit: usize) -> DenseNumericMutationLoopRun {
         if vm.direct_eval_with_stack {
@@ -1247,7 +1348,7 @@ impl DynamicDensePlan {
             let Some(array) = self.receiver_sources[0].resolve(vm) else {
                 return DenseNumericMutationLoopRun::Declined;
             };
-            let ran = array.with_dense_writable_elements(|elements| {
+            let mut ran = array.with_dense_writable_elements(|elements| {
                 let mut access = SingleAccess {
                     elements,
                     pending: None,
@@ -1260,6 +1361,16 @@ impl DynamicDensePlan {
                     limit,
                 )
             });
+            if ran.is_none() {
+                ran = self.try_run_hole_tail_append(
+                    vm,
+                    std::slice::from_ref(&array),
+                    &mut locals,
+                    &invariant_numbers,
+                    registers,
+                    limit,
+                );
+            }
             if ran.is_some_and(|run| run.made_progress) {
                 record_single_path_hit();
             }
@@ -1277,7 +1388,7 @@ impl DynamicDensePlan {
             else {
                 return DenseNumericMutationLoopRun::Declined;
             };
-            let ran = ArrayRef::with_distinct_dense_writable_elements(&arrays, |elements| {
+            let mut ran = ArrayRef::with_distinct_dense_writable_elements(&arrays, |elements| {
                 let mut access = MultiAccess {
                     elements,
                     pending: Vec::with_capacity(self.store_count),
@@ -1290,6 +1401,16 @@ impl DynamicDensePlan {
                     limit,
                 )
             });
+            if ran.is_none() {
+                ran = self.try_run_hole_tail_append(
+                    vm,
+                    &arrays,
+                    &mut locals,
+                    &invariant_numbers,
+                    registers,
+                    limit,
+                );
+            }
             if ran.is_none() {
                 record_writable_lease_suppression();
                 return DenseNumericMutationLoopRun::Suppress;

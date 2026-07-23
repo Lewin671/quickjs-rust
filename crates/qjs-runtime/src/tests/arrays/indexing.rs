@@ -525,3 +525,17 @@ fn dense_compound_index_store_preserves_property_semantics() {
         Ok(Value::String("1:7".to_owned().into()))
     );
 }
+
+#[test]
+fn indexed_assignment_below_non_writable_length_materializes_without_extending() {
+    assert_eq!(
+        eval(
+            "let values = new Array(2); \
+             Object.defineProperty(values, 'length', { writable: false }); \
+             values[0] = 7; values[2] = 11; \
+             values.length + ':' + values[0] + ':' + values[2] + ':' \
+                 + values.hasOwnProperty('0') + ':' + values.hasOwnProperty('2');"
+        ),
+        Ok(Value::String("2:7:undefined:true:false".to_owned().into()))
+    );
+}

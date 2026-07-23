@@ -8,7 +8,7 @@ use std::{
 use super::{ObjectRef, Property, Prototype, Value};
 use crate::CallEnv;
 
-const MAX_DENSE_STORAGE_LENGTH: usize = 1_000_000;
+pub(crate) const MAX_DENSE_STORAGE_LENGTH: usize = 1_000_000;
 const MAX_ARRAY_INDEX: usize = u32::MAX as usize - 1;
 
 /// Array storage reference.
@@ -396,6 +396,85 @@ impl ArrayRef {
         Some(mutate(&mut elements))
     }
 
+    /// Temporarily leases one implicit hole tail for append-only writes and
+    /// every other receiver for fully-dense reads.
+    ///
+    /// The writer must be an extensible ordinary Array whose materialized
+    /// prefix has neither holes nor special indexed descriptors. `start_index`
+    /// must equal that prefix length and remain below the array's existing
+    /// logical length, so the closure can only materialize existing holes and
+    /// must not change `length`. A non-writable length is therefore safe: an
+    /// indexed property below the current length does not invoke
+    /// ArraySetLength. The caller must separately guard the writer's effective
+    /// prototype chain because that requires realm/VM state.
+    ///
+    /// The writer may not alias a readable receiver. Read/read aliases are
+    /// allowed. All structural checks and element borrows finish before
+    /// `mutate` runs; any conflict releases prior borrows and fails closed.
+    pub(crate) fn with_dense_hole_tail_append_and_readable_elements<'a, R>(
+        arrays: &'a [Self],
+        writer_receiver: usize,
+        start_index: usize,
+        mutate: impl FnOnce(&mut Vec<Value>, &[Ref<'a, Vec<Value>>], usize) -> R,
+    ) -> Option<R> {
+        let writer = arrays.get(writer_receiver)?;
+        if arrays
+            .iter()
+            .enumerate()
+            .any(|(receiver, array)| receiver != writer_receiver && writer.ptr_eq(array))
+            || !writer.0.extensible.get()
+            || writer.0.frozen.get()
+            || start_index >= MAX_DENSE_STORAGE_LENGTH
+        {
+            return None;
+        }
+        if writer.0.cold_if_present().is_some_and(|cold| {
+            !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
+                || !cold
+                    .properties
+                    .try_borrow()
+                    .is_ok_and(|properties| properties.is_empty())
+        }) {
+            return None;
+        }
+        for (receiver, array) in arrays.iter().enumerate() {
+            if receiver == writer_receiver {
+                continue;
+            }
+            if array.0.cold_if_present().is_some_and(|cold| {
+                !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
+                    || !cold
+                        .properties
+                        .try_borrow()
+                        .is_ok_and(|properties| properties.is_empty())
+            }) {
+                return None;
+            }
+        }
+
+        let logical_length = writer.0.length.get();
+        let mut writer_elements = writer.0.elements.try_borrow_mut().ok()?;
+        if writer_elements.len() != start_index || start_index >= logical_length {
+            return None;
+        }
+
+        let mut readable_elements = Vec::with_capacity(arrays.len().saturating_sub(1));
+        for (receiver, array) in arrays.iter().enumerate() {
+            if receiver == writer_receiver {
+                continue;
+            }
+            let elements = array.0.elements.try_borrow().ok()?;
+            if array.0.length.get() != elements.len() {
+                return None;
+            }
+            readable_elements.push(elements);
+        }
+
+        let result = mutate(&mut writer_elements, &readable_elements, logical_length);
+        debug_assert_eq!(writer.0.length.get(), logical_length);
+        Some(result)
+    }
+
     /// Temporarily exposes fully dense indexed storage to a pure read-only
     /// accelerator. The closure must not call back into JavaScript or access
     /// this array while the element borrow is live. Prototype state is
@@ -474,10 +553,15 @@ impl ArrayRef {
     }
 
     pub(crate) fn dense_index_store_eligible(&self, index: usize) -> bool {
-        if index >= MAX_DENSE_STORAGE_LENGTH || self.0.frozen.get() || !self.0.length_writable.get()
+        if index >= MAX_DENSE_STORAGE_LENGTH
+            || self.0.frozen.get()
+            || (index >= self.0.length.get() && !self.0.length_writable.get())
         {
             return false;
         }
+        // A non-writable length blocks only stores that would extend the
+        // array. Materializing a hole below the existing logical length leaves
+        // the length descriptor untouched and remains an ordinary indexed set.
         // An index below `length` can still be a hole, and filling that hole
         // creates a new own property. Non-extensible arrays may overwrite an
         // existing dense element, but they may not materialize a hole merely
@@ -903,7 +987,7 @@ fn same_prototype_slot(left: Option<&Prototype>, right: Option<&Prototype>) -> b
 mod tests {
     use std::{mem, rc::Rc};
 
-    use super::{ArrayData, ArrayRef};
+    use super::{ArrayData, ArrayRef, MAX_DENSE_STORAGE_LENGTH};
     use crate::{Property, Value};
 
     #[test]
@@ -1077,5 +1161,157 @@ mod tests {
         let outstanding_holes_write = cold.holes.borrow_mut();
         assert!(array.with_dense_writable_elements(|_| ()).is_none());
         drop(outstanding_holes_write);
+    }
+
+    #[test]
+    fn dense_index_store_allows_holes_below_a_non_writable_length_only() {
+        let array = ArrayRef::new_with_length(2);
+        array.set_length_writable(false);
+
+        assert!(array.dense_index_store_eligible(0));
+        assert!(array.dense_index_store_eligible(1));
+        assert!(!array.dense_index_store_eligible(2));
+
+        array.set(0, Value::Number(7.0));
+        array.set(2, Value::Number(11.0));
+        assert_eq!(array.len(), 2);
+        assert_eq!(array.get(0), Some(Value::Number(7.0)));
+        assert_eq!(array.get(2), None);
+    }
+
+    #[test]
+    fn hole_tail_append_lease_materializes_only_below_the_existing_length() {
+        let writer = ArrayRef::new_with_length(3);
+        writer.set_length_writable(false);
+        let source = ArrayRef::new(vec![
+            Value::Number(2.0),
+            Value::Number(3.0),
+            Value::Number(5.0),
+        ]);
+
+        assert_eq!(
+            ArrayRef::with_dense_hole_tail_append_and_readable_elements(
+                &[source.clone(), writer.clone()],
+                1,
+                0,
+                |writer, readable, logical_length| {
+                    assert_eq!(logical_length, 3);
+                    writer.extend(readable[0].iter().cloned());
+                    writer.len()
+                },
+            ),
+            Some(3)
+        );
+        assert_eq!(writer.len(), 3);
+        assert_eq!(writer.to_vec(), source.to_vec());
+        assert!(!writer.is_length_writable());
+
+        assert!(
+            ArrayRef::with_dense_hole_tail_append_and_readable_elements(
+                &[source, writer],
+                1,
+                3,
+                |_, _, _| (),
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn hole_tail_append_lease_rejects_integrity_shape_and_descriptor_hazards() {
+        let readable = ArrayRef::new(vec![Value::Number(1.0)]);
+        let invoke = |writer: ArrayRef, start_index| {
+            let mut invoked = false;
+            let result = ArrayRef::with_dense_hole_tail_append_and_readable_elements(
+                &[readable.clone(), writer],
+                1,
+                start_index,
+                |_, _, _| invoked = true,
+            );
+            (result, invoked)
+        };
+
+        let non_extensible = ArrayRef::new_with_length(1);
+        non_extensible.prevent_extensions();
+        assert_eq!(invoke(non_extensible, 0), (None, false));
+
+        let sealed = ArrayRef::new_with_length(1);
+        sealed.seal();
+        assert_eq!(invoke(sealed, 0), (None, false));
+
+        let frozen = ArrayRef::new_with_length(1);
+        frozen.freeze();
+        assert_eq!(invoke(frozen, 0), (None, false));
+
+        let sparse_prefix =
+            ArrayRef::new_sparse(vec![Value::Number(1.0), Value::Undefined], vec![1]);
+        sparse_prefix.set_len(3);
+        assert_eq!(invoke(sparse_prefix, 2), (None, false));
+
+        let described = ArrayRef::new_with_length(1);
+        described.define_property(
+            "0".to_owned(),
+            Property::data(Value::Number(7.0), true, true, true),
+        );
+        assert_eq!(invoke(described, 1), (None, false));
+
+        let wrong_start = ArrayRef::new_with_length(2);
+        wrong_start.set(0, Value::Number(1.0));
+        assert_eq!(invoke(wrong_start, 0), (None, false));
+
+        let oversized = ArrayRef::new_with_length(MAX_DENSE_STORAGE_LENGTH + 1);
+        assert_eq!(invoke(oversized, MAX_DENSE_STORAGE_LENGTH), (None, false));
+    }
+
+    #[test]
+    fn hole_tail_append_lease_rejects_aliases_and_borrow_conflicts() {
+        let writer = ArrayRef::new_with_length(2);
+        assert!(
+            ArrayRef::with_dense_hole_tail_append_and_readable_elements(
+                &[writer.clone(), writer.clone()],
+                1,
+                0,
+                |_, _, _| (),
+            )
+            .is_none()
+        );
+
+        let readable = ArrayRef::new(vec![Value::Number(1.0)]);
+        let held_writer_read = writer.0.elements.borrow();
+        assert!(
+            ArrayRef::with_dense_hole_tail_append_and_readable_elements(
+                &[readable.clone(), writer.clone()],
+                1,
+                0,
+                |_, _, _| (),
+            )
+            .is_none()
+        );
+        drop(held_writer_read);
+
+        let held_readable_write = readable.0.elements.borrow_mut();
+        assert!(
+            ArrayRef::with_dense_hole_tail_append_and_readable_elements(
+                &[readable.clone(), writer.clone()],
+                1,
+                0,
+                |_, _, _| (),
+            )
+            .is_none()
+        );
+        drop(held_readable_write);
+
+        let cold = writer.0.cold();
+        let held_holes = cold.holes.borrow_mut();
+        assert!(
+            ArrayRef::with_dense_hole_tail_append_and_readable_elements(
+                &[readable, writer.clone()],
+                1,
+                0,
+                |_, _, _| (),
+            )
+            .is_none()
+        );
+        drop(held_holes);
     }
 }

@@ -574,13 +574,11 @@ pub(super) fn compile_dynamic(
     for op in &code[body_start..backedge] {
         translator.translate(op)?;
     }
-    if !translator.stack.is_empty()
-        || translator.own_data_reads.iter().any(|used| !used)
-        || !translator
-            .operations
-            .iter()
-            .any(|operation| matches!(operation, NumberInstruction::DenseLoad { .. }))
-    {
+    let has_dense_load = translator
+        .operations
+        .iter()
+        .any(|operation| matches!(operation, NumberInstruction::DenseLoad { .. }));
+    if !translator.stack.is_empty() || translator.own_data_reads.iter().any(|used| !used) {
         return None;
     }
     let limit = control.limit();
@@ -648,11 +646,23 @@ pub(super) fn compile_dynamic(
     for write in &mut translator.writes {
         write.local = local_index(write.local)?;
     }
+    let counter_local = local_index(*counter_slot)?;
+    let hole_tail_append = HoleTailAppendPlan::compile(
+        &control,
+        counter_local,
+        &translator.operations,
+        &translator.writes,
+        translator.store_count,
+        sunk_store,
+    );
+    if !has_dense_load && hole_tail_append.is_none() {
+        return None;
+    }
 
     Some((
         exit,
         DynamicDensePlan {
-            counter_local: local_index(*counter_slot)?,
+            counter_local,
             control: match control {
                 DynamicControl::LessThan(DynamicLimit::LocalNumber(slot)) => {
                     DynamicControl::LessThan(DynamicLimit::LocalNumber(local_index(slot)?))
@@ -673,6 +683,7 @@ pub(super) fn compile_dynamic(
             writes: translator.writes,
             store_count: translator.store_count,
             sunk_store,
+            hole_tail_append,
             uses_math_round: translator.uses_math_round,
             header,
         },

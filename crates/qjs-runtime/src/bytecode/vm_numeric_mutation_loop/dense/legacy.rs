@@ -17,11 +17,12 @@ use super::super::super::vm::Vm;
 use super::invariants::{ArraySource as ExtendedArraySource, DynamicLimit, OwnDataOwner};
 use super::{
     DenseAccess, DenseNumericMutationLoopRun, DynamicControl, DynamicDensePlan, DynamicProgramRun,
-    INLINE_DENSE_OPS, LocalWrite, MAX_DENSE_LOCALS, MAX_SAFE_INTEGER, MultiAccess,
-    NumberInstruction as ExtendedInstruction, ReadAccess, SingleAccess, SunkDenseStore,
-    apply_binary, apply_unary, array_index_from_number, descending_counter_is_valid, local_number,
-    record_countdown_iteration, record_countdown_path_hit, record_iteration,
-    record_read_only_bailout, record_read_only_path_hit, record_single_path_hit,
+    HoleTailAppendAccess, HoleTailAppendPlan, INLINE_DENSE_OPS, LocalWrite, MAX_DENSE_LOCALS,
+    MAX_SAFE_INTEGER, MultiAccess, NumberInstruction as ExtendedInstruction, ReadAccess,
+    SingleAccess, SunkDenseStore, apply_binary, apply_unary, array_index_from_number,
+    descending_counter_is_valid, local_number, record_countdown_iteration,
+    record_countdown_path_hit, record_hole_tail_append_attempt, record_hole_tail_append_path_hit,
+    record_iteration, record_read_only_bailout, record_read_only_path_hit, record_single_path_hit,
     record_sunk_store_hit, record_writable_lease_suppression, record_writable_path_hit,
     set_local_number,
 };
@@ -238,6 +239,7 @@ pub(super) struct LegacyDynamicDensePlan {
     writes: Vec<LocalWrite>,
     store_count: usize,
     sunk_store: Option<SunkDenseStore>,
+    hole_tail_append: Option<HoleTailAppendPlan>,
     reduction: Option<reduction::LegacyReductionPlan>,
     header: usize,
 }
@@ -277,6 +279,7 @@ impl LegacyDynamicDensePlan {
             writes,
             store_count,
             sunk_store,
+            hole_tail_append,
             uses_math_round: _,
             header,
         } = plan;
@@ -327,6 +330,7 @@ impl LegacyDynamicDensePlan {
             writes,
             store_count,
             sunk_store,
+            hole_tail_append,
             reduction,
             header,
         }
@@ -471,6 +475,46 @@ impl LegacyDynamicDensePlan {
             made_progress = true;
             record_iteration();
         }
+    }
+
+    fn try_run_hole_tail_append(
+        &self,
+        vm: &mut Vm<'_>,
+        arrays: &[ArrayRef],
+        locals: &mut [f64; MAX_DENSE_LOCALS],
+        registers: &mut [f64],
+        limit: Option<f64>,
+    ) -> Option<DynamicProgramRun> {
+        let append = self.hole_tail_append?;
+        record_hole_tail_append_attempt();
+        let writer_receiver = append.writer_receiver();
+        let writer = arrays.get(writer_receiver)?;
+        let start_index = array_index_from_number(locals[self.counter_local])?;
+        if !vm.array_uses_realm_prototype(writer)
+            || vm.array_prototype_chain_has_index_hazard().unwrap_or(true)
+        {
+            return None;
+        }
+
+        let ran = ArrayRef::with_dense_hole_tail_append_and_readable_elements(
+            arrays,
+            writer_receiver,
+            start_index,
+            |writer, readable, logical_length| {
+                let mut access = HoleTailAppendAccess::new(
+                    writer_receiver,
+                    writer,
+                    readable,
+                    logical_length,
+                    limit.expect("append plans use less-than control"),
+                );
+                self.run_program(&mut access, locals, registers, limit)
+            },
+        );
+        if ran.is_some_and(|run| run.made_progress) {
+            record_hole_tail_append_path_hit();
+        }
+        ran
     }
 
     #[inline(never)]
@@ -658,13 +702,22 @@ impl LegacyDynamicDensePlan {
                 return DenseNumericMutationLoopRun::Declined;
             };
             let array = array.clone();
-            let ran = array.with_dense_writable_elements(|elements| {
+            let mut ran = array.with_dense_writable_elements(|elements| {
                 let mut access = SingleAccess {
                     elements,
                     pending: None,
                 };
                 self.run_program(&mut access, &mut locals, registers, limit)
             });
+            if ran.is_none() {
+                ran = self.try_run_hole_tail_append(
+                    vm,
+                    std::slice::from_ref(&array),
+                    &mut locals,
+                    registers,
+                    limit,
+                );
+            }
             if ran.is_some_and(|run| run.made_progress) {
                 record_single_path_hit();
             }
@@ -693,15 +746,25 @@ impl LegacyDynamicDensePlan {
                 }
                 return DenseNumericMutationLoopRun::Declined;
             };
-            ArrayRef::with_distinct_dense_writable_elements(&arrays, |elements| {
+            let mut ran = ArrayRef::with_distinct_dense_writable_elements(&arrays, |elements| {
                 let mut access = MultiAccess {
                     elements,
                     pending: Vec::with_capacity(self.store_count),
                 };
                 self.run_program(&mut access, &mut locals, registers, limit)
-            })
+            });
+            if ran.is_none() {
+                ran = self.try_run_hole_tail_append(vm, &arrays, &mut locals, registers, limit);
+            }
+            ran
         };
         let Some(run) = ran else {
+            if self.hole_tail_append.is_some() {
+                record_writable_lease_suppression();
+                #[cfg(test)]
+                run_guard.suppressed();
+                return DenseNumericMutationLoopRun::Suppress;
+            }
             return DenseNumericMutationLoopRun::Declined;
         };
         if self.control.is_countdown() && run.made_progress {
