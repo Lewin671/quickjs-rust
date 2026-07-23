@@ -1,5 +1,5 @@
 use std::{
-    cell::{Cell, OnceCell, RefCell, RefMut},
+    cell::{Cell, OnceCell, Ref, RefCell, RefMut},
     collections::{BTreeSet, HashMap},
     fmt,
     rc::Rc,
@@ -417,6 +417,38 @@ impl ArrayRef {
         let elements = self.0.elements.try_borrow().ok()?;
         if self.0.length.get() != elements.len() {
             return None;
+        }
+        Some(read(&elements))
+    }
+
+    /// Temporarily exposes several dense arrays to one pure read-only region.
+    /// Receiver aliases are deliberately allowed because shared element
+    /// borrows observe the same immutable storage safely. Every receiver is
+    /// validated and borrowed before `read` runs; a mutable-borrow conflict on
+    /// any receiver releases earlier leases and fails closed.
+    pub(crate) fn with_dense_readable_element_sets<'a, R>(
+        arrays: &'a [Self],
+        read: impl FnOnce(&[Ref<'a, Vec<Value>>]) -> R,
+    ) -> Option<R> {
+        for array in arrays {
+            if array.0.cold_if_present().is_some_and(|cold| {
+                !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
+                    || !cold
+                        .properties
+                        .try_borrow()
+                        .is_ok_and(|properties| properties.is_empty())
+            }) {
+                return None;
+            }
+        }
+
+        let mut elements = Vec::with_capacity(arrays.len());
+        for array in arrays {
+            let lease = array.0.elements.try_borrow().ok()?;
+            if array.0.length.get() != lease.len() {
+                return None;
+            }
+            elements.push(lease);
         }
         Some(read(&elements))
     }
@@ -923,6 +955,32 @@ mod tests {
         );
         assert_eq!(first.get(0), Some(Value::Number(3.0)));
         assert_eq!(second.get(0), Some(Value::Number(5.0)));
+    }
+
+    #[test]
+    fn dense_read_leases_allow_aliases_and_fail_closed_on_mutable_borrows() {
+        let first = ArrayRef::new(vec![Value::Number(1.0)]);
+        let second = ArrayRef::new(vec![Value::Number(2.0)]);
+
+        assert_eq!(
+            ArrayRef::with_dense_readable_element_sets(
+                &[first.clone(), first.clone()],
+                |elements| elements[0][0].clone() == elements[1][0].clone(),
+            ),
+            Some(true)
+        );
+
+        let held_lease = second.0.elements.borrow_mut();
+        let mut invoked = false;
+        assert!(
+            ArrayRef::with_dense_readable_element_sets(&[first.clone(), second.clone()], |_| {
+                invoked = true
+            },)
+            .is_none()
+        );
+        assert!(!invoked);
+        drop(held_lease);
+        assert!(second.0.elements.try_borrow_mut().is_ok());
     }
 
     #[test]

@@ -6612,6 +6612,102 @@ tests, and the related 65-case Test262 slice. Independent reviews found no
 remaining P0--P2 issue after fixes for integer progress overflow, register
 remapping, zero-allocation Single dispatch, and sunk-store replay ordering.
 
+### 2026-07-22 multi-array hosted closure
+
+Main commit `aafdd827` closed the multi-array unit on trusted hosted state.
+CI run `29967261430` passed. Test262 Coverage `29967443565` independently
+passed all 42,672/42,672 configured cases with zero failures, timeouts,
+not-run cases, or actionable gaps; its burndown SHA-256 is
+`b546b6989a32a312b7268ae1b2f11b915853c19beb6b7cfed5c81333f0c5f0a0`.
+
+Performance Preview `29967261448` completed with all three blocks and all
+75 N/2N groups valid. The non-fixed hosted runner measured broad-v2 at
+1.02616x candidate/base [1.01018x, 1.02616x] and 0.15648x
+candidate/QuickJS-NG [0.15551x, 0.15680x]. This run also exposed the explicit
+tradeoff behind retaining the unit: several already-leading call micros moved
+backward, while the external bottlenecks moved materially. Kraken `audio-fft`
+changed from a base timeout to a runnable candidate at 3.184x QuickJS-NG, and
+SunSpider `access-fannkuch` measured 0.683x candidate/base. Both remain above
+the final 0.50x QuickJS-NG boundary, so the campaign stays open and the exact
+local Gate5 remains the controlled acceptance evidence for this mechanism.
+Broad raw/report SHA-256 values are
+`6f9682e6f58d2394a857eb0a30083a202cb12c2ef2721d14f378379c48c9f7a5`
+and `f09f6cf96f285e80ba9cd2e51081c242e35102b0c5094d9b6633aaf420b71876`;
+external raw/report SHA-256 values are
+`b8a4f81452d6b097a0b5956f0ebfe4b03d4fe8645923aa3f8c24ffe494c98fba`
+and `8c9953769f853b7390dc3e8ff859dfd76bc91ca56bf941bdce4c6c300bf9ba76`.
+
+### 2026-07-22 read-only dense numeric reductions
+
+The dynamic dense region now admits straight-line Number programs with dense
+loads and scalar writes but no array stores. It resolves up to eight local
+Array receivers, validates holes, special properties, and storage/length
+consistency, then holds shared immutable element leases for the complete
+region. Shared leases deliberately allow receiver aliases and frozen arrays;
+borrow conflicts, non-Array receivers, non-Number elements, out-of-bounds
+indices, non-authoritative locals, captures, or direct `eval` fail closed. A
+failed current iteration publishes no scalar writes. Earlier complete scalar
+iterations are published only after all leases drop, and ordinary bytecode
+replays the failed iteration from the loop header. The existing writable
+Single and Multi paths are unchanged.
+
+Temporary path instrumentation was removed before measurement. It proved that
+the mechanism, rather than unrelated code layout, covered the pinned targets:
+JetStream AES recorded 12,600 region entries, 126,000 accelerated iterations,
+and 2,520,000 dense loads; Kraken AES recorded 33,248 entries, 340,224
+iterations, and 6,804,480 loads. Both had zero bailout. Gaussian blur,
+`audio-fft`, `json-parse-financial`, and `bitops-nsieve-bits` recorded no
+read-only-region hit under the same instrumentation.
+
+Exact-binary discipline rejected two tempting shortcuts. The first successful
+seven-block screen used release SHA-256
+`4100a7c5e281d4a69cc91764909351d98636a6b94dad412e4b769f9d1b7a2030`,
+but post-review test hardening changed the final release identity, so that run
+was not used to accept the commit. The first seven-block screen of the final
+`326b4be49746e9b2220d3f599b35ee7f32fc8b94125118ab440b9b90ff307a9b`
+binary kept both targets below 0.84x base, but `json-parse-financial` and
+`bitops-nsieve-bits` had wide control intervals above 1.03x. That run is
+durably retained as a failed gate; its raw, report, and paired-report SHA-256
+values are
+`ea6c8078c564bedcc379b650e54c7b5299c34f170dd1ae1b799cfbe5d54c5958`,
+`3a3c49517164df55f5c1f93e868fbe42ab8461233e94e48ac151467559944b54`,
+and `61f7f0e04253ca5ad76a49389782b65855d70da714e6c95dc5147db38f3160ab`.
+
+A predeclared 21-block precision confirmation then retained the same six
+cases, order, three binaries, thresholds, and all 378 measurement samples.
+Candidate, base, and QuickJS-NG SHA-256 values were
+`326b4be49746e9b2220d3f599b35ee7f32fc8b94125118ab440b9b90ff307a9b`,
+`ece6efd42c04b3f4e2772af74becc7ea0bdbe34d8dd603eb42b75a6041c3dc99`,
+and `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+Paired candidate/base estimates with 95% intervals were:
+
+- JetStream `stanford-crypto-aes`: 0.829944x [0.827313x, 0.831558x];
+- Kraken `stanford-crypto-aes`: 0.809532x [0.806625x, 0.812977x];
+- target geometric mean: 0.819674x [0.817546x, 0.821712x];
+- JetStream `gaussian-blur`: 0.998374x [0.995020x, 1.001739x];
+- Kraken `audio-fft`: 1.003798x [0.993454x, 1.007382x];
+- Kraken `json-parse-financial`: 1.005040x [1.003566x, 1.006793x];
+- SunSpider `bitops-nsieve-bits`: 0.994412x [0.990522x, 1.004535x].
+
+The target candidate/QuickJS-NG estimates remain 2.790117x and 2.801455x,
+so B5 remains open. The 21-block manifest, receipt, raw, external report, and
+paired-report SHA-256 values are
+`d8c58ba36efe5e02215420851f94c19989e5fd80dcaf2c4f98e67d4d28b66bc2`,
+`10bf8f41d9c9a8af70ddc27cbc0d65457fb132c9fcc560eaebea214a4b897a35`,
+`e0428311e75f43081a61f6ab6cc3cec7f11591b8bc812a7efcf22d34f9e36caf`,
+`25c61837eeab2f11d46c41bbd3eb82729f1838b246f9eafc4650ade64dffaef9`,
+and `ce96ffda381d355c8df92e88fc6b435265e86408fbab71254e4addb6dc3c00c4`.
+
+Coverage includes aliased and distinct five-array AES-shaped rounds, comma
+sequencing, frozen arrays, unrelated outer captures, rejected captured
+receivers and direct `eval`, holes with observable prototype getters, borrow
+conflicts, and zero- and mid-progress replay after non-Number or out-of-bounds
+loads. The branch passed 8/8 focused read-only tests, the immutable-lease test,
+16/16 existing mutable dense regressions, all 1,606 runtime tests, the related
+65-case Test262 slice, formatting, workspace clippy, file-size checks,
+`check-touched`, and branch-scope validation. Three independent final reviews
+reported no remaining P0--P2 issue.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an

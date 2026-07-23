@@ -571,6 +571,164 @@ mod tests {
     }
 
     #[test]
+    fn read_only_dense_region_accelerates_aliased_multi_array_rounds() {
+        let source = "function round(a, q, v, w, d, e, f, g, b, n, p) { var h, k, l, m; for (m = 0; m < n; m++) { h = a[e >>> 24] ^ q[(f >> 16) & 255] ^ v[(g >> 8) & 255] ^ w[b & 255] ^ d[p]; k = a[f >>> 24] ^ q[(g >> 16) & 255] ^ v[(b >> 8) & 255] ^ w[e & 255] ^ d[p + 1]; l = a[g >>> 24] ^ q[(b >> 16) & 255] ^ v[(e >> 8) & 255] ^ w[f & 255] ^ d[p + 2]; b = a[b >>> 24] ^ q[(e >> 16) & 255] ^ v[(f >> 8) & 255] ^ w[g & 255] ^ d[p + 3]; p += 4; e = h; f = k; g = l; } return e ^ f ^ g ^ b ^ p; }";
+        let bytecode = nested_function(source);
+        let plans = NumericMutationLoopPlan::compile_all(&bytecode);
+        assert_eq!(plans.len(), 1, "{:#?}", bytecode.code);
+        assert!(matches!(plans[0].kind, NumericMutationLoopKind::Dense(_)));
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "{source} var table = []; for (var i = 0; i < 256; i++) table.push(i | 0); round(table, table, table, table, table, 0, 0, 0, 0, 10, 0);"
+            )),
+            Ok(Value::Number(40.0))
+        );
+        assert_eq!(dense::test_read_only_path_hits(), 1);
+        assert_eq!(dense::test_read_only_iterations(), 9);
+        assert_eq!(dense::test_read_only_bailouts(), 0);
+    }
+
+    #[test]
+    fn read_only_dense_region_accepts_comma_sequenced_rounds() {
+        let source = "function round(a, q, v, w, d, e, f, g, b, n, p) { var h, k, l, m; for (m = 0; m < n; m++) h = a[e >>> 24] ^ q[(f >> 16) & 255] ^ v[(g >> 8) & 255] ^ w[b & 255] ^ d[p], k = a[f >>> 24] ^ q[(g >> 16) & 255] ^ v[(b >> 8) & 255] ^ w[e & 255] ^ d[p + 1], l = a[g >>> 24] ^ q[(b >> 16) & 255] ^ v[(e >> 8) & 255] ^ w[f & 255] ^ d[p + 2], b = a[b >>> 24] ^ q[(e >> 16) & 255] ^ v[(f >> 8) & 255] ^ w[g & 255] ^ d[p + 3], p += 4, e = h, f = k, g = l; return e ^ f ^ g ^ b ^ p; }";
+        let bytecode = nested_function(source);
+        let plans = NumericMutationLoopPlan::compile_all(&bytecode);
+        assert_eq!(plans.len(), 1, "{:#?}", bytecode.code);
+        assert!(matches!(plans[0].kind, NumericMutationLoopKind::Dense(_)));
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "{source} var a = [], q = [], v = [], w = [], d = []; for (var i = 0; i < 256; i++) {{ a.push(i | 0); q.push(i | 0); v.push(i | 0); w.push(i | 0); d.push(i | 0); }} round(a, q, v, w, d, 0, 0, 0, 0, 10, 0);"
+            )),
+            Ok(Value::Number(40.0))
+        );
+        assert_eq!(dense::test_read_only_path_hits(), 1);
+        assert_eq!(dense::test_read_only_iterations(), 9);
+        assert_eq!(dense::test_read_only_bailouts(), 0);
+    }
+
+    #[test]
+    fn read_only_dense_region_rejects_captured_receiver() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function makeReduce() { var values = [1, 2, 3]; return function (bound) { var total = 0; for (var index = 0; index < bound; index++) total += values[index]; return total; }; } makeReduce()(3);"
+            ),
+            Ok(Value::Number(6.0))
+        );
+        assert_eq!(dense::test_iterations(), 0);
+        assert_eq!(dense::test_read_only_path_hits(), 0);
+        assert_eq!(dense::test_read_only_iterations(), 0);
+        assert_eq!(dense::test_read_only_bailouts(), 0);
+    }
+
+    #[test]
+    fn read_only_dense_region_accepts_unrelated_outer_capture() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function makeReduce() { var outer = 40; return function (values, bound) { var total = 0; for (var index = 0; index < bound; index++) total += values[index]; return total + outer; }; } makeReduce()([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 10);"
+            ),
+            Ok(Value::Number(95.0))
+        );
+        assert_eq!(dense::test_read_only_path_hits(), 1);
+        assert_eq!(dense::test_read_only_iterations(), 9);
+        assert_eq!(dense::test_read_only_bailouts(), 0);
+    }
+
+    #[test]
+    fn read_only_dense_region_replays_only_the_failed_iteration() {
+        let source = "function reduce(values, bound) { var total = 0; for (var index = 0; index < bound; index++) { total += values[index]; } return index + ':' + total; }";
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "var coercions = 0; var marker = {{ valueOf: function () {{ coercions++; return 20; }} }}; {source} reduce([1, marker, 3, 4], 4) + ':' + coercions;"
+            )),
+            Ok(Value::String("4:28:1".to_owned().into()))
+        );
+        assert_eq!(dense::test_iterations(), 2);
+        assert!(dense::test_read_only_path_hits() > 0);
+        assert!(dense::test_read_only_bailouts() > 0);
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "var coercions = 0; var marker = {{ valueOf: function () {{ coercions++; return 20; }} }}; {source} reduce([1, 2, marker, 4], 4) + ':' + coercions;"
+            )),
+            Ok(Value::String("4:27:1".to_owned().into()))
+        );
+        assert!(dense::test_iterations() >= 2);
+        assert!(dense::test_read_only_path_hits() > 0);
+        assert!(dense::test_read_only_bailouts() > 0);
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!("{source} reduce([1, 2], 3);")),
+            Ok(Value::String("3:NaN".to_owned().into()))
+        );
+        assert_eq!(dense::test_iterations(), 1);
+        assert!(dense::test_read_only_path_hits() > 0);
+        assert!(dense::test_read_only_bailouts() > 0);
+    }
+
+    #[test]
+    fn read_only_dense_region_rejects_holes_before_observable_reads() {
+        let source = "function reduce(values, bound) { var total = 0; for (var index = 0; index < bound; index++) { total += values[index]; } return index + ':' + total; }";
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "var hits = 0; var proto = {{}}; Object.defineProperty(proto, '1', {{ get: function () {{ hits++; return 5; }} }}); var values = [1, , 3]; Object.setPrototypeOf(values, proto); {source} reduce(values, 3) + ':' + hits;"
+            )),
+            Ok(Value::String("3:9:1".to_owned().into()))
+        );
+        assert_eq!(dense::test_iterations(), 0);
+        assert_eq!(dense::test_read_only_path_hits(), 0);
+        assert!(dense::test_read_only_bailouts() > 0);
+    }
+
+    #[test]
+    fn read_only_dense_region_accepts_frozen_arrays() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function reduce(values, bound) { var total = 0; for (var index = 0; index < bound; index++) total += values[index]; return total; } var values = [1, 2, 3, 4]; Object.freeze(values); reduce(values, 4);"
+            ),
+            Ok(Value::Number(10.0))
+        );
+        assert!(dense::test_read_only_path_hits() > 0);
+        assert_eq!(dense::test_read_only_bailouts(), 0);
+    }
+
+    #[test]
+    fn read_only_dense_region_fails_closed_for_eval_and_captured_locals() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function direct(values, bound) { var total = 0; eval(''); for (var index = 0; index < bound; index++) total += values[index]; return index + ':' + total; } direct([1, 2, 3], 3);"
+            ),
+            Ok(Value::String("3:6".to_owned().into()))
+        );
+        assert_eq!(dense::test_iterations(), 0);
+        assert_eq!(dense::test_read_only_path_hits(), 0);
+        assert_eq!(dense::test_read_only_bailouts(), 0);
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function captured(values, bound) { var total = 0; function read() { return index + bound; } for (var index = 0; index < bound; index++) total += values[index]; return read() + ':' + total; } captured([1, 2, 3], 3);"
+            ),
+            Ok(Value::String("6:6".to_owned().into()))
+        );
+        assert_eq!(dense::test_iterations(), 0);
+        assert_eq!(dense::test_read_only_path_hits(), 0);
+        assert_eq!(dense::test_read_only_bailouts(), 0);
+    }
+
+    #[test]
     fn dynamic_dense_region_handles_renamed_multi_array_loads_and_stores() {
         let source = "function project(signal, order, positive, negative, bound) { var cursor = 0; for (; cursor < bound; cursor = cursor + 3) { positive[cursor] = signal[order[cursor]] * 7 + 2; negative[cursor] = signal[order[cursor]] - 5; } return cursor + ':' + positive.join(',') + ':' + negative.join(','); }";
         let bytecode = nested_function(source);

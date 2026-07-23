@@ -2,13 +2,14 @@
 //!
 //! Fixed-index recurrences scalar-replace a small set of Number elements.
 //! Computed-index loops translate one straight-line body into a bounded Number
-//! register program spanning several distinct dense-array receivers. The
-//! runtime checks every potentially observable condition before publishing any
-//! current-iteration store, so a failed guard can publish only completed
-//! iterations and restart at the header.
+//! register program spanning several dense-array receivers. Writable regions
+//! require distinct receivers and stage every store; pure-read reductions use
+//! shared immutable leases and safely accept receiver aliases. A failed guard
+//! can publish only completed scalar iterations before replaying the current
+//! iteration at the header.
 
 use std::{
-    cell::RefMut,
+    cell::{Ref, RefMut},
     collections::{BTreeMap, BTreeSet},
 };
 
@@ -35,6 +36,9 @@ thread_local! {
     static DENSE_LOOP_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static SINGLE_DENSE_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static SUNK_DENSE_STORE_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static READ_ONLY_DENSE_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static READ_ONLY_DENSE_BAILOUTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static READ_ONLY_DENSE_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -42,6 +46,9 @@ pub(super) fn reset_test_iterations() {
     DENSE_LOOP_ITERATIONS.set(0);
     SINGLE_DENSE_PATH_HITS.set(0);
     SUNK_DENSE_STORE_HITS.set(0);
+    READ_ONLY_DENSE_PATH_HITS.set(0);
+    READ_ONLY_DENSE_BAILOUTS.set(0);
+    READ_ONLY_DENSE_ITERATIONS.set(0);
 }
 
 #[cfg(test)]
@@ -57,6 +64,21 @@ pub(super) fn test_single_path_hits() -> usize {
 #[cfg(test)]
 pub(super) fn test_sunk_store_hits() -> usize {
     SUNK_DENSE_STORE_HITS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_read_only_path_hits() -> usize {
+    READ_ONLY_DENSE_PATH_HITS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_read_only_bailouts() -> usize {
+    READ_ONLY_DENSE_BAILOUTS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_read_only_iterations() -> usize {
+    READ_ONLY_DENSE_ITERATIONS.get()
 }
 
 #[inline]
@@ -75,6 +97,24 @@ fn record_single_path_hit() {
 fn record_sunk_store_hit() {
     #[cfg(test)]
     SUNK_DENSE_STORE_HITS.set(SUNK_DENSE_STORE_HITS.get() + 1);
+}
+
+#[inline]
+fn record_read_only_path_hit() {
+    #[cfg(test)]
+    READ_ONLY_DENSE_PATH_HITS.set(READ_ONLY_DENSE_PATH_HITS.get() + 1);
+}
+
+#[inline]
+fn record_read_only_bailout() {
+    #[cfg(test)]
+    READ_ONLY_DENSE_BAILOUTS.set(READ_ONLY_DENSE_BAILOUTS.get() + 1);
+}
+
+#[cfg(test)]
+#[inline]
+fn record_read_only_iteration() {
+    READ_ONLY_DENSE_ITERATIONS.set(READ_ONLY_DENSE_ITERATIONS.get() + 1);
 }
 
 #[derive(Clone, Debug)]
@@ -241,6 +281,36 @@ impl DenseAccess for SingleAccess<'_> {
 struct MultiAccess<'a, 'elements> {
     elements: &'a mut [RefMut<'elements, Vec<Value>>],
     pending: Vec<PendingDenseStore>,
+}
+
+struct ReadAccess<'a, 'elements> {
+    elements: &'a [Ref<'elements, Vec<Value>>],
+}
+
+impl DenseAccess for ReadAccess<'_, '_> {
+    #[inline]
+    fn reset_iteration(&mut self) {}
+
+    #[inline]
+    fn load_number(&self, receiver: usize, index: usize) -> Option<f64> {
+        match self.elements.get(receiver)?.get(index)? {
+            Value::Number(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    fn stage_store(&mut self, _receiver: usize, _index: usize, _value: f64) -> bool {
+        false
+    }
+
+    #[inline]
+    fn staged_store_count(&self) -> usize {
+        0
+    }
+
+    #[inline]
+    fn commit_stores(&mut self) {}
 }
 
 impl DenseAccess for MultiAccess<'_, '_> {
@@ -946,7 +1016,6 @@ fn compile_dynamic(
         translator.translate(op)?;
     }
     if !translator.stack.is_empty()
-        || translator.store_count == 0
         || !translator
             .operations
             .iter()
@@ -1115,6 +1184,10 @@ impl DynamicDensePlan {
             for write in &self.writes {
                 locals[write.local] = registers[write.value];
             }
+            #[cfg(test)]
+            if self.store_count == 0 {
+                record_read_only_iteration();
+            }
             made_progress = true;
             record_iteration();
         }
@@ -1149,7 +1222,36 @@ impl DynamicDensePlan {
             None => &mut inline_registers[..self.operations.len()],
         };
 
-        let ran = if self.receiver_slots.len() == 1 && self.store_count == 1 {
+        let ran = if self.store_count == 0 {
+            let Some(arrays) = self
+                .receiver_slots
+                .iter()
+                .map(|slot| match vm.locals.get(*slot) {
+                    Some(Some(Value::Array(array))) => Some(array.clone()),
+                    _ => None,
+                })
+                .collect::<Option<Vec<_>>>()
+            else {
+                record_read_only_bailout();
+                return false;
+            };
+            let ran = ArrayRef::with_dense_readable_element_sets(&arrays, |elements| {
+                let mut access = ReadAccess { elements };
+                self.run_program(&mut access, &mut locals, registers)
+            });
+            match ran {
+                Some(run) => {
+                    if run.made_progress {
+                        record_read_only_path_hit();
+                    }
+                    if run.deoptimized {
+                        record_read_only_bailout();
+                    }
+                }
+                None => record_read_only_bailout(),
+            }
+            ran
+        } else if self.receiver_slots.len() == 1 && self.store_count == 1 {
             let Some(Some(Value::Array(array))) = vm.locals.get(self.receiver_slots[0]) else {
                 return false;
             };
