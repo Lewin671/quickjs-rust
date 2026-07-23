@@ -19,13 +19,15 @@ use super::{
     DenseAccess, DenseNumericMutationLoopRun, DynamicControl, DynamicDensePlan, DynamicProgramRun,
     INLINE_DENSE_OPS, LocalWrite, MAX_DENSE_LOCALS, MAX_SAFE_INTEGER, MultiAccess,
     NumberInstruction as ExtendedInstruction, ReadAccess, SingleAccess, SunkDenseStore,
-    apply_binary, apply_unary, array_index_from_number, local_number, record_countdown_iteration,
-    record_countdown_path_hit, record_iteration, record_read_only_bailout,
-    record_read_only_path_hit, record_single_path_hit, record_sunk_store_hit,
-    record_writable_lease_suppression, record_writable_path_hit, set_local_number,
+    apply_binary, apply_unary, array_index_from_number, descending_counter_is_valid, local_number,
+    record_countdown_iteration, record_countdown_path_hit, record_iteration,
+    record_read_only_bailout, record_read_only_path_hit, record_single_path_hit,
+    record_sunk_store_hit, record_writable_lease_suppression, record_writable_path_hit,
+    set_local_number,
 };
 
 mod reduction;
+mod typed_array;
 
 #[cfg(test)]
 use super::{
@@ -146,6 +148,7 @@ enum LocalLimit {
 #[derive(Clone, Copy, Debug)]
 enum LocalControl {
     LessThan(LocalLimit),
+    AtLeastZero,
     Countdown,
 }
 
@@ -153,7 +156,7 @@ impl LocalControl {
     fn array_length_slot(self) -> Option<usize> {
         match self {
             Self::LessThan(LocalLimit::ArrayLength(slot)) => Some(slot),
-            Self::LessThan(LocalLimit::Number(_)) | Self::Countdown => None,
+            Self::LessThan(LocalLimit::Number(_)) | Self::AtLeastZero | Self::Countdown => None,
         }
     }
 
@@ -284,6 +287,7 @@ impl LegacyDynamicDensePlan {
             DynamicControl::LessThan(DynamicLimit::LocalArrayLength(slot)) => {
                 LocalControl::LessThan(LocalLimit::ArrayLength(slot))
             }
+            DynamicControl::AtLeastZero => LocalControl::AtLeastZero,
             DynamicControl::Countdown => LocalControl::Countdown,
             DynamicControl::LessThan(DynamicLimit::OwnDataNumber(_)) => {
                 unreachable!("own-data limits are rejected before conversion")
@@ -376,6 +380,15 @@ impl LegacyDynamicDensePlan {
                     }
                     None
                 }
+                LocalControl::AtLeastZero => {
+                    if counter < 0.0 {
+                        return DynamicProgramRun {
+                            deoptimized: false,
+                            made_progress,
+                        };
+                    }
+                    None
+                }
                 LocalControl::Countdown => {
                     if counter == 0.0 {
                         // The failed postfix test still stores the decremented
@@ -461,12 +474,12 @@ impl LegacyDynamicDensePlan {
     }
 
     #[inline(never)]
-    pub(super) fn try_run(&self, vm: &mut Vm<'_>, exit: usize) -> bool {
+    pub(super) fn try_run(&self, vm: &mut Vm<'_>, exit: usize) -> DenseNumericMutationLoopRun {
         debug_assert!(self.store_count <= 1);
         #[cfg(test)]
         let mut run_guard = CompactRunGuard::new();
         if vm.direct_eval_with_stack {
-            return false;
+            return DenseNumericMutationLoopRun::Declined;
         }
         for slot in self
             .local_slots
@@ -480,13 +493,13 @@ impl LegacyDynamicDensePlan {
             .chain(self.control.array_length_slot())
         {
             if !vm.slot_is_authoritative(slot) {
-                return false;
+                return DenseNumericMutationLoopRun::Declined;
             }
         }
         let mut locals = [0.0; MAX_DENSE_LOCALS];
         for (local, slot) in self.local_slots.iter().enumerate() {
             let Some(value) = local_number(vm, *slot) else {
-                return false;
+                return DenseNumericMutationLoopRun::Declined;
             };
             locals[local] = value;
         }
@@ -497,15 +510,33 @@ impl LegacyDynamicDensePlan {
                 || counter.fract() != 0.0
                 || counter > MAX_SAFE_INTEGER
             {
-                return false;
+                return DenseNumericMutationLoopRun::Declined;
+            }
+        }
+        if matches!(self.control, LocalControl::AtLeastZero) {
+            let counter = locals[self.counter_local];
+            if !descending_counter_is_valid(counter) {
+                return DenseNumericMutationLoopRun::Declined;
             }
         }
         let limit = match self.control {
             LocalControl::LessThan(LocalLimit::Number(local)) => Some(locals[local]),
             LocalControl::LessThan(LocalLimit::ArrayLength(slot)) => match vm.locals.get(slot) {
                 Some(Some(Value::Array(array))) => Some(array.len() as f64),
-                _ => return false,
+                _ => {
+                    if let Some(run) = typed_array::try_run(self, vm, exit) {
+                        #[cfg(test)]
+                        match run {
+                            DenseNumericMutationLoopRun::Handled => run_guard.handled(),
+                            DenseNumericMutationLoopRun::Suppress => run_guard.suppressed(),
+                            DenseNumericMutationLoopRun::Declined => {}
+                        }
+                        return run;
+                    }
+                    return DenseNumericMutationLoopRun::Declined;
+                }
             },
+            LocalControl::AtLeastZero => None,
             LocalControl::Countdown => None,
         };
         if let Some(reduction) = &self.reduction {
@@ -516,7 +547,16 @@ impl LegacyDynamicDensePlan {
                 .collect::<Option<Vec<_>>>()
             else {
                 record_read_only_bailout();
-                return false;
+                if let Some(run) = typed_array::try_run(self, vm, exit) {
+                    #[cfg(test)]
+                    match run {
+                        DenseNumericMutationLoopRun::Handled => run_guard.handled(),
+                        DenseNumericMutationLoopRun::Suppress => run_guard.suppressed(),
+                        DenseNumericMutationLoopRun::Declined => {}
+                    }
+                    return run;
+                }
+                return DenseNumericMutationLoopRun::Declined;
             };
             let ran = ArrayRef::with_dense_readable_element_sets(&arrays, |elements| {
                 let access = ReadAccess { elements };
@@ -539,10 +579,10 @@ impl LegacyDynamicDensePlan {
                 None => record_read_only_bailout(),
             }
             let Some(run) = ran else {
-                return false;
+                return DenseNumericMutationLoopRun::Declined;
             };
             if run.deoptimized && !run.made_progress {
-                return false;
+                return DenseNumericMutationLoopRun::Declined;
             }
             if run.made_progress {
                 for (slot, value) in self.local_slots.iter().copied().zip(locals) {
@@ -556,7 +596,7 @@ impl LegacyDynamicDensePlan {
             };
             #[cfg(test)]
             run_guard.handled();
-            return true;
+            return DenseNumericMutationLoopRun::Handled;
         }
         let mut inline_registers = [0.0; INLINE_DENSE_OPS];
         let mut large_registers =
@@ -574,7 +614,16 @@ impl LegacyDynamicDensePlan {
                 .collect::<Option<Vec<_>>>()
             else {
                 record_read_only_bailout();
-                return false;
+                if let Some(run) = typed_array::try_run(self, vm, exit) {
+                    #[cfg(test)]
+                    match run {
+                        DenseNumericMutationLoopRun::Handled => run_guard.handled(),
+                        DenseNumericMutationLoopRun::Suppress => run_guard.suppressed(),
+                        DenseNumericMutationLoopRun::Declined => {}
+                    }
+                    return run;
+                }
+                return DenseNumericMutationLoopRun::Declined;
             };
             let ran = ArrayRef::with_dense_readable_element_sets(&arrays, |elements| {
                 let mut access = ReadAccess { elements };
@@ -594,10 +643,19 @@ impl LegacyDynamicDensePlan {
             ran
         } else if self.receiver_sources.len() == 1 && self.store_count == 1 {
             let Some(slot) = self.receiver_sources[0].local_slot() else {
-                return false;
+                return DenseNumericMutationLoopRun::Declined;
             };
             let Some(Some(Value::Array(array))) = vm.locals.get(slot) else {
-                return false;
+                if let Some(run) = typed_array::try_run(self, vm, exit) {
+                    #[cfg(test)]
+                    match run {
+                        DenseNumericMutationLoopRun::Handled => run_guard.handled(),
+                        DenseNumericMutationLoopRun::Suppress => run_guard.suppressed(),
+                        DenseNumericMutationLoopRun::Declined => {}
+                    }
+                    return run;
+                }
+                return DenseNumericMutationLoopRun::Declined;
             };
             let array = array.clone();
             let ran = array.with_dense_writable_elements(|elements| {
@@ -624,7 +682,16 @@ impl LegacyDynamicDensePlan {
                 })
                 .collect::<Option<Vec<_>>>()
             else {
-                return false;
+                if let Some(run) = typed_array::try_run(self, vm, exit) {
+                    #[cfg(test)]
+                    match run {
+                        DenseNumericMutationLoopRun::Handled => run_guard.handled(),
+                        DenseNumericMutationLoopRun::Suppress => run_guard.suppressed(),
+                        DenseNumericMutationLoopRun::Declined => {}
+                    }
+                    return run;
+                }
+                return DenseNumericMutationLoopRun::Declined;
             };
             ArrayRef::with_distinct_dense_writable_elements(&arrays, |elements| {
                 let mut access = MultiAccess {
@@ -635,7 +702,7 @@ impl LegacyDynamicDensePlan {
             })
         };
         let Some(run) = ran else {
-            return false;
+            return DenseNumericMutationLoopRun::Declined;
         };
         if self.control.is_countdown() && run.made_progress {
             record_countdown_path_hit();
@@ -644,7 +711,7 @@ impl LegacyDynamicDensePlan {
             record_sunk_store_hit();
         }
         if run.deoptimized && !run.made_progress {
-            return false;
+            return DenseNumericMutationLoopRun::Declined;
         }
         for (slot, value) in self.local_slots.iter().copied().zip(locals) {
             set_local_number(vm, slot, value);
@@ -656,7 +723,7 @@ impl LegacyDynamicDensePlan {
         };
         #[cfg(test)]
         run_guard.handled();
-        true
+        DenseNumericMutationLoopRun::Handled
     }
 
     #[inline(never)]
@@ -703,6 +770,15 @@ impl LegacyDynamicDensePlan {
             })
             .collect::<Option<Vec<_>>>()
         else {
+            if let Some(run) = typed_array::try_run(self, vm, exit) {
+                #[cfg(test)]
+                match run {
+                    DenseNumericMutationLoopRun::Handled => run_guard.handled(),
+                    DenseNumericMutationLoopRun::Suppress => run_guard.suppressed(),
+                    DenseNumericMutationLoopRun::Declined => {}
+                }
+                return run;
+            }
             #[cfg(test)]
             run_guard.suppressed();
             return DenseNumericMutationLoopRun::Suppress;
@@ -724,12 +800,19 @@ impl LegacyDynamicDensePlan {
                 return DenseNumericMutationLoopRun::Declined;
             }
         }
+        if matches!(self.control, LocalControl::AtLeastZero) {
+            let counter = locals[self.counter_local];
+            if !descending_counter_is_valid(counter) {
+                return DenseNumericMutationLoopRun::Declined;
+            }
+        }
         let limit = match self.control {
             LocalControl::LessThan(LocalLimit::Number(local)) => Some(locals[local]),
             LocalControl::LessThan(LocalLimit::ArrayLength(slot)) => match vm.locals.get(slot) {
                 Some(Some(Value::Array(array))) => Some(array.len() as f64),
                 _ => return DenseNumericMutationLoopRun::Declined,
             },
+            LocalControl::AtLeastZero => None,
             LocalControl::Countdown => None,
         };
         let mut inline_registers = [0.0; INLINE_DENSE_OPS];

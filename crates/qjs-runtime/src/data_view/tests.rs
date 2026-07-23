@@ -56,6 +56,20 @@ fn data_view_accepts_shared_array_buffer() {
 }
 
 #[test]
+fn data_view_tracks_growable_shared_buffer_only_without_explicit_length() {
+    assert_eq!(
+        eval(
+            "let buffer = new SharedArrayBuffer(2, { maxByteLength: 8 }); \
+             let tracking = new DataView(buffer); \
+             let fixed = new DataView(buffer, 0, 2); \
+             buffer.grow(6); \
+             [tracking.byteLength, fixed.byteLength].join(':');"
+        ),
+        Ok(Value::String("6:2".to_owned().into()))
+    );
+}
+
+#[test]
 fn data_view_requires_array_buffer() {
     assert!(eval("new DataView({});").is_err());
     assert!(eval("new DataView(new Uint8Array(8));").is_err());

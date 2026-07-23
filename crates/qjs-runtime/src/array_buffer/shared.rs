@@ -10,9 +10,6 @@ use super::{
     species_constructor, to_index, to_index_unbounded,
 };
 
-const SHARED_ARRAY_BUFFER_DATA_PROPERTY: &str = "\0SharedArrayBufferData";
-const SHARED_ARRAY_BUFFER_MAX_BYTE_LENGTH_PROPERTY: &str = "\0SharedArrayBufferMaxByteLength";
-
 pub(crate) fn install_shared_array_buffer(
     env: &mut CallEnv,
     global_this: &Value,
@@ -247,18 +244,12 @@ fn define_data(object: &ObjectRef, bytes: Vec<u8>) {
     object.set_shared_backing(crate::array_buffer::SharedBacking::new(bytes));
     #[cfg(not(feature = "agents"))]
     object.set_internal_bytes(bytes);
-    object.define_property(
-        SHARED_ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::String(::std::rc::Rc::new(String::new()))),
-    );
+    object.install_shared_array_buffer_state(None);
     object.set_to_string_tag("SharedArrayBuffer");
 }
 
 fn define_max_byte_length(object: &ObjectRef, max_byte_length: usize) {
-    object.define_property(
-        SHARED_ARRAY_BUFFER_MAX_BYTE_LENGTH_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::Number(max_byte_length as f64)),
-    );
+    object.set_array_buffer_max_byte_length(max_byte_length);
 }
 
 pub(crate) fn set_bytes(object: &ObjectRef, bytes: Vec<u8>) {
@@ -270,10 +261,6 @@ pub(crate) fn set_bytes(object: &ObjectRef, bytes: Vec<u8>) {
     }
     #[cfg(not(feature = "agents"))]
     object.set_internal_bytes(bytes);
-    object.define_property(
-        SHARED_ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::String(::std::rc::Rc::new(String::new()))),
-    );
 }
 
 pub(crate) fn buffer_bytes(object: &ObjectRef) -> Vec<u8> {
@@ -308,29 +295,17 @@ pub(crate) fn from_backing(
     let prototype = crate::constructor_prototype(&constructor, env);
     let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
     object.set_shared_backing(backing);
-    object.define_property(
-        SHARED_ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::String(::std::rc::Rc::new(String::new()))),
-    );
+    object.install_shared_array_buffer_state(max);
     object.set_to_string_tag("SharedArrayBuffer");
-    if let Some(max) = max {
-        define_max_byte_length(&object, max);
-    }
     object
 }
 
 fn max_byte_length(object: &ObjectRef) -> Option<usize> {
-    match object.own_property(SHARED_ARRAY_BUFFER_MAX_BYTE_LENGTH_PROPERTY) {
-        Some(Property {
-            value: Value::Number(length),
-            ..
-        }) => Some(length as usize),
-        _ => None,
-    }
+    object.array_buffer_max_byte_length()
 }
 
 pub(crate) fn is_object(object: &ObjectRef) -> bool {
-    object.has_own_property(SHARED_ARRAY_BUFFER_DATA_PROPERTY)
+    object.is_shared_array_buffer_object()
 }
 
 fn object(value: &Value) -> Result<ObjectRef, RuntimeError> {

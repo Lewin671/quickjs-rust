@@ -39,16 +39,35 @@ pub(crate) fn ordinary_value_is_extensible(value: &Value) -> bool {
     }
 }
 
-/// Ordinary `[[PreventExtensions]]` over a value without trap dispatch.
-pub(crate) fn ordinary_prevent_extensions(value: &Value) {
+/// `[[PreventExtensions]]` over a non-Proxy value. Integer-indexed exotics can
+/// reject the operation when their indexed property set can still change.
+pub(crate) fn ordinary_prevent_extensions(value: &Value) -> bool {
     match value {
-        Value::Object(object) => object.prevent_extensions(),
-        Value::Map(map) => map.object().prevent_extensions(),
-        Value::Set(set) => set.object().prevent_extensions(),
-        Value::Array(elements) => elements.prevent_extensions(),
-        Value::Function(function) => function.prevent_extensions(),
+        Value::Object(object) if crate::typed_array::is_typed_array_object(object) => {
+            prevent_extensions_typed_array_object(object)
+        }
+        Value::Object(object) => {
+            object.prevent_extensions();
+            true
+        }
+        Value::Map(map) => {
+            map.object().prevent_extensions();
+            true
+        }
+        Value::Set(set) => {
+            set.object().prevent_extensions();
+            true
+        }
+        Value::Array(elements) => {
+            elements.prevent_extensions();
+            true
+        }
+        Value::Function(function) => {
+            function.prevent_extensions();
+            true
+        }
         Value::Proxy(proxy) => ordinary_prevent_extensions(&proxy.target()),
-        _ => {}
+        _ => true,
     }
 }
 
@@ -76,7 +95,12 @@ pub(crate) fn native_object_prevent_extensions(
         }
         return Ok(target);
     }
-    ordinary_prevent_extensions(&target);
+    if !ordinary_prevent_extensions(&target) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "Object.preventExtensions failed".to_owned(),
+        });
+    }
     Ok(target)
 }
 
@@ -85,6 +109,9 @@ pub(crate) fn native_object_is_sealed(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     Ok(Value::Boolean(match argument_values.first() {
+        Some(Value::Object(object)) if crate::typed_array::is_typed_array_object(object) => {
+            typed_array_is_sealed(object)
+        }
         Some(Value::Object(object)) => object.is_sealed(),
         Some(Value::Map(map)) => map.object().is_sealed(),
         Some(Value::Set(set)) => set.object().is_sealed(),
@@ -114,6 +141,9 @@ pub(crate) fn native_object_is_frozen(
             if object.is_module_namespace_exotic() && !object.own_property_names().is_empty() =>
         {
             false
+        }
+        Some(Value::Object(object)) if crate::typed_array::is_typed_array_object(object) => {
+            typed_array_is_frozen(object)
         }
         Some(Value::Object(object)) => object.is_frozen(),
         Some(Value::Map(map)) => map.object().is_frozen(),
@@ -153,6 +183,9 @@ pub(crate) fn native_object_seal(
         return Ok(target);
     }
     match &target {
+        Value::Object(object) if crate::typed_array::is_typed_array_object(object) => {
+            seal_typed_array_object(object)?;
+        }
         Value::Object(object) => object.seal(),
         Value::Map(map) => map.object().seal(),
         Value::Set(set) => set.object().seal(),
@@ -191,6 +224,49 @@ pub(crate) fn native_object_freeze(
         _ => {}
     }
     Ok(target)
+}
+
+/// TypedArray integer indices are virtual rather than stored in `ObjectRef`.
+/// Every live index has the same integrity attributes, so index zero is a
+/// constant-time representative of the current effective view length.
+fn typed_array_is_sealed(object: &crate::ObjectRef) -> bool {
+    object.is_sealed()
+        && crate::typed_array::typed_array_own_property_descriptor(object, "0")
+            .is_none_or(|property| !property.configurable)
+}
+
+fn typed_array_is_frozen(object: &crate::ObjectRef) -> bool {
+    object.is_frozen()
+        && crate::typed_array::typed_array_own_property_descriptor(object, "0")
+            .is_none_or(|property| !property.configurable && !property.writable)
+}
+
+fn prevent_extensions_typed_array_object(object: &crate::ObjectRef) -> bool {
+    if !crate::typed_array::typed_array_is_fixed_length(object) {
+        return false;
+    }
+    object.prevent_extensions();
+    true
+}
+
+fn seal_typed_array_object(object: &crate::ObjectRef) -> Result<(), RuntimeError> {
+    if !prevent_extensions_typed_array_object(object) {
+        return Err(integrity_failed_error("Object.seal"));
+    }
+    let backing = crate::typed_array::typed_array_buffer(object);
+    let immutable_backing = backing
+        .as_ref()
+        .is_some_and(crate::array_buffer::is_immutable);
+    if !immutable_backing
+        && (backing
+            .as_ref()
+            .is_some_and(crate::array_buffer::is_resizable)
+            || crate::typed_array::typed_array_length(object) > 0)
+    {
+        return Err(integrity_failed_error("Object.seal"));
+    }
+    object.seal();
+    Ok(())
 }
 
 /// SetIntegrityLevel(O, level) for an exotic Proxy: it runs through the
@@ -277,10 +353,18 @@ fn freeze_typed_array_object(
 ) -> Result<(), RuntimeError> {
     use crate::object::{PropertyDescriptor, define_property_descriptor_on_value_key};
 
-    object.prevent_extensions();
-    if crate::typed_array::typed_array_buffer(&object)
-        .is_some_and(|buffer| crate::array_buffer::is_resizable(&buffer))
-        || crate::typed_array::typed_array_length(&object) > 0
+    if !prevent_extensions_typed_array_object(&object) {
+        return Err(integrity_failed_error("Object.freeze"));
+    }
+    let backing = crate::typed_array::typed_array_buffer(&object);
+    let immutable_backing = backing
+        .as_ref()
+        .is_some_and(crate::array_buffer::is_immutable);
+    if !immutable_backing
+        && (backing
+            .as_ref()
+            .is_some_and(crate::array_buffer::is_resizable)
+            || crate::typed_array::typed_array_length(&object) > 0)
     {
         return Err(integrity_failed_error("Object.freeze"));
     }

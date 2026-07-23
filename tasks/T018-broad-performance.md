@@ -7135,6 +7135,169 @@ are respectively
 `882caebdf326c3cd7d1f3e5a52ca37324ae9527f2a3b02c2c452f409b8cccbeb`,
 and `de89869b44fd3c2261a81dc4ac5074899d149a9d02022dde203c72f751bbe1ea`.
 
+### Fixed Number TypedArray dense backing lease
+
+The next unit attacks the fixed Number TypedArray backing traffic exposed by
+hosted `gaussian-blur`. A compiled dense numeric region now resolves its fixed,
+in-bounds Number TypedArray views once, acquires one stable mutable byte lease
+per distinct non-shared backing, lowers typed loads, stores, arithmetic, and
+control to a compact typed program, and executes forward `< limit` and exact
+descending `>= 0` loops without repeating observable property or backing
+lookups per element. Aliased views, shared or resizable backing, detached or
+immutable buffers, unsupported element kinds, borrow conflicts, invalid
+geometry, non-number live-ins, and any unsupported operation fail closed to
+ordinary bytecode. Stores remain iteration-atomic: pending bytes publish only
+after every load and operation in the iteration succeeds, and a deopt replays
+the first uncommitted iteration through the ordinary VM.
+
+The supporting ArrayBuffer and TypedArray state is explicit rather than a
+benchmark-local shortcut. Stable fixed-buffer leases share the same detach,
+resize, immutable, and shared-backing guards used by ordinary runtime
+operations. Integer-indexed `set`, `defineProperty`, integrity-level, proxy,
+Reflect, DataView, resizable-buffer, growable-shared-buffer, and immutable
+ArrayBuffer behavior was tightened and covered at the ordinary runtime layer.
+The mechanism is independent of benchmark names, source text, sizes, and
+checksums.
+
+The forward Gaussian form initially exceeded the dense compiler's live-out
+limit because repeated stores appended one `LocalWrite` per bytecode store,
+even when every write targeted the same local slot. The compiler now coalesces
+live-out publication by local slot with last-write-wins ordering. This is a
+general correctness-preserving representation change: a focused test compiles
+and executes more than 64 repeated writes to one slot, while a Gaussian-shaped
+multi-store case proves that unsafe publication patterns remain suppressed.
+The repaired forward plan has 97 operations, two receivers, four stores per
+iteration, and 33 unique live-outs; the descending plan has 124 operations,
+three receivers, one store, and 28 live-outs.
+
+To keep first-party files reviewable, the stable ArrayBuffer and TypedArray
+`ObjectRef` inherent methods were token-equivalently moved from `object.rs` to
+private child modules. Three independent reviews found no P0-P2 issue in the
+whole unit and two token-normalized split reviews found no semantic, visibility,
+feature-gate, or API drift. The final files are 1,910 lines for `object.rs`, 129
+for `array_buffer_methods.rs`, and 26 for `typed_array_methods.rs`, all below
+the source-size guard.
+
+#### Rejected reverse-only candidate and repaired path proof
+
+The first frozen candidate was not accepted even though its 21-block timing
+gate passed. Its source and release binary SHA-256 values were
+`932b69aef4594870281ae09f14bc4031e052fd877a92078060cc0fd082a5dbbb`
+and `59d1c572dc418cf82565b62122298b9021d18cb558145e28a05791c21630d6a8`.
+The exact combined Gaussian proof observed only the 1,250 descending regions,
+718,750 iterations, 3,593,750 loads, and 718,750 stores; all 1,250 forward
+regions stayed on ordinary bytecode. The preregistered requirement was 2,500
+regions covering both directions, so protocol verdict SHA-256
+`0e1c7b7715e7b80942886144bb245f0257299f4e788c6412d48f78870a6ad8a8`
+rejected it despite Gaussian candidate/base upper 0.540061 and six clean
+controls. Timing alone was not allowed to hide missing mechanism coverage.
+
+After the unique-local compiler repair, the exact bundle produced 2,500/2,500
+attempts, hits, normal exits, and lease sets; 6,250 leased views and backings;
+1,437,500 iterations; 4,312,500 loads; and 3,593,750 stores. Declines,
+suppressions, lease failures, and deopts were all zero. The 1,250 forward and
+1,250 reverse regions each executed 718,750 iterations. The authoritative
+pre-split source diff, release binary, proof binary, and path receipt SHA-256
+values are
+`1582e1b9b5de15066b31eefabdc70a19d3739c24916ae2dd57b8a0622fe33726`,
+`59801e9ef58081a17702e392c5acebb13345f6209282ac718cd602156fe62ca1`,
+`5f2d17bbdb8ffb69a3396e15479451111f47f8486b428e45c89bb5392aa92dc1`,
+and `e322cf5d6fe39c167e2b840a3224b221a851d528b67d92dfb0b19fb942d96620`.
+
+One attempted formal invocation was stopped when unrelated same-host profiling
+was discovered. No raw timing file, report, or numeric result was produced or
+used. Contamination verdict SHA-256
+`bd7349988ea7350d1ef69c14cf7169a2e7888c001d2421b30f0fa5f99b84ef2f`
+preserves that rejection. A fresh preregistration and seed were then used for
+the isolated run below; the stopped invocation was never retried in place.
+
+#### Accepted pre-split performance gate
+
+The fresh isolated 21-block invocation completed all 462/462 rows: 21
+capability probes and 441 measurements, with no error, timeout, truncation,
+missing row, duplicate key, identity mismatch, or order drift. Median paired
+whole-block log effects with 20,000 bootstrap draws produced:
+
+- JetStream `gaussian-blur`: 0.190134x preceding base
+  [0.189688x, 0.191482x] and 0.633386x QuickJS-NG
+  [0.631898x, 0.644209x];
+- Kraken `audio-dft`: 0.990976x base [0.979970x, 0.999511x];
+- Kraken `audio-fft`: 0.985489x base [0.981525x, 0.990693x];
+- Kraken `audio-oscillator`: 0.990542x base [0.989024x, 0.995501x];
+- Kraken `imaging-desaturate`: 0.973103x base
+  [0.970536x, 0.976498x];
+- Kraken `json-parse-financial`: 0.997738x base
+  [0.993051x, 1.004524x];
+- SunSpider `bitops-nsieve-bits`: 0.999675x base
+  [0.992072x, 1.002693x].
+
+Thus Gaussian retains an approximately 5.26x improvement over the exact
+preceding base and all six unrelated controls remain under the preregistered
+1.03 upper bound. Gaussian is still above the campaign's final 0.50x
+QuickJS-NG boundary, so this accepts the mechanism without claiming B5
+completion. Raw, external report, external summary, paired report, paired
+summary, formal audit, and protocol verdict SHA-256 values are respectively
+`d56dfd2c56135ddbdcd6705463a922ceabd882f118d60e369987c46995e651af`,
+`c8355b37750ea1623ab4b93b1321cc902823fbb72cf05369057c0a475e2d1890`,
+`7bfef52d09f2b3c0883c308681d0f41488b57ec9b4c87e876a9d3a4773b7f267`,
+`2d945b92d8a5e02e5e88f7c609e2947454133bbe5149940b42a1c95dcb1be731`,
+`408050e4961ef7c04ef3421e4012cac7582e27e911461072089a5ce44c680dfa`,
+`1f9d15e111f51e5a18c2e4ca7a8302c7d6e0321c9a5b703d73b2bc5794b5183b`,
+and `45b509f3171872566c8f6f3b45aa2faf3386ec6ae564efc51206e42a71073153`.
+Independent reconstruction matched every paired estimate and interval with
+maximum absolute difference zero.
+
+#### Final source-layout equivalence closure
+
+The final staged source diff and release binary SHA-256 values after the
+token-equivalent file split are
+`503755aebf1169f0bbe439099562dde0ed0c19b91b66ccb9bffb2d27eb692e99`
+and `cf3969a96b5897248bfa12a633d4c8f692fac8fd11774b87054129f0e31690d6`.
+A post-preregistration proof reproduced every combined-path count above; its
+proof binary and receipt SHA-256 values are
+`0f4c9275069a8fb55186472e4ec805057d677b0e442bfe162ccd4c5875119a5b`
+and `02380c8eb43a3a9b82656245d74dbbc93baa04fce2c9968fb7733ce3415665bb`.
+
+One seven-block final/pre-split equivalence invocation then completed all
+168/168 rows. Every preregistered final/pre-split 95% upper bound was at most
+1.03:
+
+- `gaussian-blur`: 0.990905x [0.976301x, 1.010137x];
+- `audio-dft`: 0.993802x [0.980025x, 1.023387x];
+- `audio-fft`: 0.994995x [0.990382x, 1.007792x];
+- `audio-oscillator`: 0.993171x [0.989366x, 1.006249x];
+- `imaging-desaturate`: 0.998168x [0.991705x, 1.003325x];
+- `json-parse-financial`: 1.000068x [0.994647x, 1.012162x];
+- `bitops-nsieve-bits`: 0.996471x [0.993607x, 1.003464x].
+
+Gaussian final/QuickJS-NG was 0.636052x [0.635545x, 0.641217x], below the
+0.70 retention ceiling. Raw, report, summary, paired report, paired summary,
+formal audit, and final protocol verdict SHA-256 values are respectively
+`18a0a5c2441344bb09dde6a0acb7db8b10668c769024713f8e6ba435f3d3701b`,
+`89fe1fd7fac49da6311b7f8569d0b3e1a5e56e20ebaa7c30ab6abad5d83dbfd2`,
+`6d0dee88404e1add75b7385d43b4d5af38963064b5879498c48686eb583dbc63`,
+`3bb8d462768a587b33756d1e8317719bf9f60ceff1769a9cc97815404cd726f8`,
+`7396c3f4e8d950175421722406c95902c0b8a855d339c6328bfa29d583abfeb6`,
+`4046637effc16d895b038c7c1c8e996c2ead0c2ae680e045c62a96bd2843bc87`,
+and `e73444ee5ef5615d21ff9e0bb80cd5c28b8b0b32fd9042d727711fbb475853b2`.
+Two independent raw reconstructions matched the generated external and paired
+reports with maximum absolute difference zero.
+
+Commit-eligible verification passed `check-touched` with 1,698 runtime tests
+and 65 selected Test262 cases, the full repository gate with all 5,148 curated
+Test262 cases, the all-features runtime suite with 1,709 tests, and all 218
+QuickJS-NG comparison fixtures. The branch source commit is `55795330`.
+
+The next high-ROI slice is not another TypedArray special case. Exact
+`audio-oscillator` instrumentation shows 1,500 dense attempts but only 999
+hits: 501 invocations are suppressed because `new Array(N)` has a logical
+length of `N` while its dense vector initially materializes only the first
+zero or one elements. A guarded implicit-hole-tail append lease can cover
+those ordinary arrays with forward `+1`, exact append-index, extensibility,
+prototype-index, descriptor, alias, and iteration-atomic publication guards.
+This is the next general mechanism before broader transition-shape/slot and
+full-frame register work.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an

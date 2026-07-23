@@ -31,7 +31,17 @@ pub(crate) fn coerce_element(
 }
 
 fn coerce_number_element(native: NativeFunction, number: f64) -> Value {
-    let value = match native {
+    Value::Number(
+        coerce_number_for_storage(native, number).expect("non-bigint typed array native expected"),
+    )
+}
+
+/// Applies the exact Number TypedArray storage conversion without consulting a
+/// JavaScript environment. Dense numeric loops only admit Number registers, so
+/// this is both the conversion guard and the converted value that subsequent
+/// same-iteration loads must observe.
+fn coerce_number_for_storage(native: NativeFunction, number: f64) -> Option<f64> {
+    Some(match native {
         NativeFunction::Uint8Array => modulo_integer(number, 256.0),
         NativeFunction::Int8Array => signed_integer(number, 8),
         NativeFunction::Uint8ClampedArray => clamp_uint8(number),
@@ -41,9 +51,8 @@ fn coerce_number_element(native: NativeFunction, number: f64) -> Value {
         NativeFunction::Int32Array => signed_integer(number, 32),
         NativeFunction::Float32Array => f32_round(number),
         NativeFunction::Float64Array => number,
-        _ => unreachable!("non-bigint typed array native expected"),
-    };
-    Value::Number(value)
+        _ => return None,
+    })
 }
 
 fn coerce_big_int_element(
@@ -210,9 +219,10 @@ pub(crate) fn canonical_numeric_index(key: &str) -> Option<f64> {
 /// (IntegerIndexedElementSet, ES2024 10.4.5.16).
 pub(crate) enum IndexedWrite {
     /// `key` was a canonical numeric index; the write was fully handled here
-    /// (value coerced and, when in range with an attached buffer, stored). The
-    /// ordinary property path must not run.
-    Handled,
+    /// (value coerced and, when in range with an attached mutable buffer,
+    /// stored). Immutable storage reports `false` before coercion. The ordinary
+    /// property path must not run.
+    Handled(bool),
     /// `key` is not a canonical numeric index; the caller should fall back to
     /// the ordinary property-set path.
     NotIndexed,
@@ -283,6 +293,13 @@ pub(crate) fn set_indexed_element(
         return Ok(IndexedWrite::NotIndexed);
     };
 
+    // Immutable ArrayBuffer integer-indexed [[Set]] rejects every canonical
+    // numeric key before ToNumber/ToBigInt. Non-canonical keys remain ordinary
+    // object properties and therefore do not take this branch.
+    if super::typed_array_buffer(object).is_some_and(|buffer| array_buffer::is_immutable(&buffer)) {
+        return Ok(IndexedWrite::Handled(false));
+    }
+
     let native = typed_array_kind(object);
     // ToNumber/ToBigInt side effects run regardless of whether the slot is in
     // range; a coercion that throws propagates.
@@ -292,14 +309,14 @@ pub(crate) fn set_indexed_element(
     // writes through a detached buffer, are all dropped without creating a
     // property — but only after the coercion above has run.
     if super::typed_array_buffer_detached(object) {
-        return Ok(IndexedWrite::Handled);
+        return Ok(IndexedWrite::Handled(true));
     }
     let Some(index) = valid_integer_index(object, number) else {
-        return Ok(IndexedWrite::Handled);
+        return Ok(IndexedWrite::Handled(true));
     };
 
     set_view_element(object, index, coerced);
-    Ok(IndexedWrite::Handled)
+    Ok(IndexedWrite::Handled(true))
 }
 
 /// IntegerIndexedElementSet by a `usize` index, skipping the string round-trip
@@ -311,25 +328,31 @@ pub(crate) fn set_integer_indexed_element(
     index: usize,
     value: Value,
     env: &mut CallEnv,
-) -> Result<(), RuntimeError> {
+) -> Result<bool, RuntimeError> {
+    if super::typed_array_buffer(object).is_some_and(|buffer| array_buffer::is_immutable(&buffer)) {
+        return Ok(false);
+    }
     let native = typed_array_kind(object);
     let coerced = coerce_element(native, value, env)?;
     if super::typed_array_buffer_detached(object) || index >= typed_array_length(object) {
-        return Ok(());
+        return Ok(true);
     }
     set_view_element(object, index, coerced);
-    Ok(())
+    Ok(true)
 }
 
 /// Attempts IntegerIndexedElementSet for primitive values that need no
-/// environment-backed coercion. Returning `false` means the caller must use the
-/// generic path so objects and cross-kind BigInt/Number errors keep their
-/// observable conversion behavior.
+/// environment-backed coercion. `None` means the caller must use the generic
+/// path so objects and cross-kind BigInt/Number errors keep their observable
+/// conversion behavior; `Some(false)` is an immutable-storage rejection.
 pub(crate) fn try_set_integer_indexed_primitive_element(
     object: &ObjectRef,
     index: usize,
     value: &Value,
-) -> bool {
+) -> Option<bool> {
+    if super::typed_array_buffer(object).is_some_and(|buffer| array_buffer::is_immutable(&buffer)) {
+        return Some(false);
+    }
     let native = typed_array_kind(object);
     let coerced = match (is_big_int_kind(native), value) {
         (false, Value::Number(number)) => coerce_number_element(native, *number),
@@ -338,18 +361,18 @@ pub(crate) fn try_set_integer_indexed_primitive_element(
         (false, Value::Undefined) => coerce_number_element(native, f64::NAN),
         (false, Value::String(value)) => {
             let Ok(number) = string_to_number(value) else {
-                return false;
+                return None;
             };
             coerce_number_element(native, number)
         }
         (true, Value::BigInt(big)) => Value::bigint(wrap_big_int(native, big.as_ref().clone())),
-        _ => return false,
+        _ => return None,
     };
     if super::typed_array_buffer_detached(object) || index >= typed_array_length(object) {
-        return true;
+        return Some(true);
     }
     set_view_element(object, index, coerced);
-    true
+    Some(true)
 }
 
 /// Defines the value descriptor used by OrdinarySet when a typed array is the
@@ -365,6 +388,9 @@ pub(crate) fn define_indexed_element_value(
     let Some(number) = canonical_numeric_index(key) else {
         return Ok(IndexedDefine::NotIndexed);
     };
+    if super::typed_array_buffer(object).is_some_and(|buffer| array_buffer::is_immutable(&buffer)) {
+        return Ok(IndexedDefine::Rejected);
+    }
     let Some(index) = valid_integer_index(object, number) else {
         return Ok(IndexedDefine::Rejected);
     };
@@ -385,8 +411,21 @@ pub(crate) fn define_indexed_property_descriptor(
     let Some(number) = canonical_numeric_index(key) else {
         return Ok(IndexedDefine::NotIndexed);
     };
-    if valid_integer_index(object, number).is_none() {
+    let Some(index) = valid_integer_index(object, number) else {
         return Ok(IndexedDefine::Rejected);
+    };
+    if super::typed_array_buffer(object).is_some_and(|buffer| array_buffer::is_immutable(&buffer)) {
+        if descriptor.is_accessor_descriptor()
+            || descriptor.configurable_field() == Some(true)
+            || descriptor.enumerable_field() == Some(false)
+            || descriptor.writable_field() == Some(true)
+            || descriptor
+                .value_field()
+                .is_some_and(|value| !value.same_value(&get_view_element(object, index)))
+        {
+            return Ok(IndexedDefine::Rejected);
+        }
+        return Ok(IndexedDefine::Defined);
     }
     if descriptor.is_accessor_descriptor()
         || descriptor.configurable_field() == Some(false)
@@ -396,9 +435,13 @@ pub(crate) fn define_indexed_property_descriptor(
         return Ok(IndexedDefine::Rejected);
     }
     if let Some(value) = descriptor.value_field() {
-        let IndexedWrite::Handled = set_indexed_element(object, key, value.clone(), env)? else {
+        let IndexedWrite::Handled(written) = set_indexed_element(object, key, value.clone(), env)?
+        else {
             unreachable!("canonical numeric index must be handled by typed-array setter");
         };
+        if !written {
+            return Ok(IndexedDefine::Rejected);
+        }
     }
     Ok(IndexedDefine::Defined)
 }

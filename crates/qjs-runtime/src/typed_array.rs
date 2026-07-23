@@ -56,6 +56,45 @@ impl TypedArraySlots {
     }
 }
 
+/// Cached geometry for a fixed-length Number TypedArray over an ordinary fixed
+/// ArrayBuffer. The byte range is revalidated against the leased backing before
+/// optimized execution starts.
+#[derive(Clone)]
+pub(crate) struct FixedNumberTypedArrayView {
+    pub(crate) kind: NativeFunction,
+    pub(crate) buffer: ObjectRef,
+    pub(crate) byte_offset: usize,
+    pub(crate) length: usize,
+}
+
+/// Resolves the structural portion of a dense TypedArray lease without
+/// borrowing its bytes. Living views (RAB/length-tracking), SharedArrayBuffer,
+/// detached buffers, and BigInt kinds remain on the generic path.
+pub(crate) fn fixed_number_typed_array_view(
+    object: &ObjectRef,
+) -> Option<FixedNumberTypedArrayView> {
+    let slots = object.typed_array_slots()?;
+    if is_big_int_kind(slots.kind)
+        || slots.length_tracking
+        || !array_buffer::is_array_buffer_object(&slots.buffer)
+        || array_buffer::is_shared_array_buffer_object(&slots.buffer)
+        || array_buffer::is_detached(&slots.buffer)
+        || array_buffer::is_resizable(&slots.buffer)
+    {
+        return None;
+    }
+    slots
+        .fixed_length
+        .checked_mul(bytes_per_element(slots.kind))?
+        .checked_add(slots.byte_offset)?;
+    Some(FixedNumberTypedArrayView {
+        kind: slots.kind,
+        buffer: slots.buffer.clone(),
+        byte_offset: slots.byte_offset,
+        length: slots.fixed_length,
+    })
+}
+
 /// Whether `object` carries the TypedArray brand.
 pub(crate) fn is_typed_array_object(object: &ObjectRef) -> bool {
     object.is_typed_array_exotic()
@@ -668,6 +707,19 @@ pub(crate) fn typed_array_is_length_tracking(object: &ObjectRef) -> bool {
         .is_some_and(|slots| slots.length_tracking)
 }
 
+/// ECMA-262 IsTypedArrayFixedLength. Views over a resizable ordinary
+/// ArrayBuffer are never fixed because the buffer can shrink and regrow.
+/// A growable SharedArrayBuffer cannot shrink, so only its omitted-length
+/// (length-tracking) views remain variable-length.
+pub(crate) fn typed_array_is_fixed_length(object: &ObjectRef) -> bool {
+    let Some(buffer) = typed_array_buffer(object) else {
+        return true;
+    };
+    !(array_buffer::is_resizable(&buffer)
+        || array_buffer::is_resizable_or_growable(&buffer)
+            && typed_array_is_length_tracking(object))
+}
+
 pub(crate) fn typed_array_is_out_of_bounds(object: &ObjectRef) -> bool {
     let Some(buffer) = typed_array_buffer(object) else {
         return false;
@@ -723,7 +775,11 @@ pub(crate) fn typed_array_own_property_descriptor(
     key: &str,
 ) -> Option<Property> {
     match indexed_element_value(object, key) {
-        IndexedRead::Present(value) => Some(Property::data(*value, true, true, true)),
+        IndexedRead::Present(value) => {
+            let immutable = typed_array_buffer(object)
+                .is_some_and(|buffer| array_buffer::is_immutable(&buffer));
+            Some(Property::data(*value, true, !immutable, !immutable))
+        }
         IndexedRead::Missing => None,
         IndexedRead::NotIndexed => object.own_property(key),
     }

@@ -27,6 +27,244 @@ fn indexed_write_routes_through_per_kind_conversion() {
 }
 
 #[test]
+fn immutable_typed_array_indexed_assignment_rejects_before_value_coercion() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array(new Uint8Array([3]).buffer.transferToImmutable()); \
+             let sloppy = (a[0] = 9); \
+             let strict = false; \
+             try { (function () { 'use strict'; a[0] = 10; })(); } \
+             catch (error) { strict = error instanceof TypeError; } \
+             sloppy + ':' + strict + ':' + a[0];"
+        ),
+        Ok(Value::String("9:true:3".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array(new ArrayBuffer(1).transferToImmutable()); \
+             let calls = 0, poison = { valueOf() { calls++; throw 'coerced'; } }; \
+             let integerResult = (a[0] = poison); \
+             let key = '0', stringResult = (a[key] = poison); \
+             (integerResult === poison) + ':' + (stringResult === poison) + ':' + calls + ':' + a[0];"
+        ),
+        Ok(Value::String("true:true:0:0".to_owned().into()))
+    );
+}
+
+#[test]
+fn reflect_set_immutable_typed_array_canonical_keys_return_false_without_coercion() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array(new ArrayBuffer(2).transferToImmutable()); \
+             let calls = 0, poison = { valueOf() { calls++; throw 'coerced'; } }; \
+             let results = ['0', '99', '1.5', '-0'].map(key => Reflect.set(a, key, poison)); \
+             results.join(':') + ':' + calls + ':' + a[0];"
+        ),
+        Ok(Value::String(
+            "false:false:false:false:0:0".to_owned().into()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array(new ArrayBuffer(1).transferToImmutable()); \
+             Reflect.set(a, '01', 7) + ':' + Reflect.set(a, 'foo', 8) + ':' + a['01'] + ':' + a.foo;"
+        ),
+        Ok(Value::String("true:true:7:8".to_owned().into()))
+    );
+}
+
+#[test]
+fn mutable_typed_array_invalid_index_sets_still_coerce_and_succeed() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array(1), calls = 0; \
+             let value = { valueOf() { calls++; return 7; } }; \
+             let out = Reflect.set(a, '99', value); \
+             let fractional = Reflect.set(a, '1.5', value); \
+             a.buffer.transfer(); \
+             let detached = Reflect.set(a, '0', value); \
+             out + ':' + fractional + ':' + detached + ':' + calls;"
+        ),
+        Ok(Value::String("true:true:true:3".to_owned().into()))
+    );
+}
+
+#[test]
+fn reflect_set_rejects_immutable_typed_array_receiver_before_coercion() {
+    assert_eq!(
+        eval(
+            "let target = new Uint8Array([1]); \
+             let receiver = new Uint8Array(new Uint8Array([2]).buffer.transferToImmutable()); \
+             let calls = 0, poison = { valueOf() { calls++; throw 'coerced'; } }; \
+             Reflect.set(target, '0', poison, receiver) + ':' + calls + ':' + target[0] + ':' + receiver[0];"
+        ),
+        Ok(Value::String("false:0:1:2".to_owned().into()))
+    );
+}
+
+#[test]
+fn immutable_typed_array_define_accepts_only_compatible_descriptors() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array(new Uint8Array([3]).buffer.transferToImmutable()); \
+             let same = Object.defineProperty(a, '0', {}) === a; \
+             let compatible = Reflect.defineProperty(a, '0', { value: 3, enumerable: true, writable: false, configurable: false }); \
+             let changed = Reflect.defineProperty(a, '0', { value: 4 }); \
+             let writable = Reflect.defineProperty(a, '0', { writable: true }); \
+             let configurable = Reflect.defineProperty(a, '0', { configurable: true }); \
+             let hidden = Reflect.defineProperty(a, '0', { enumerable: false }); \
+             let descriptor = Object.getOwnPropertyDescriptor(a, '0'); \
+             same + ':' + compatible + ':' + changed + ':' + writable + ':' + configurable + ':' + hidden + '|' \
+             + descriptor.value + ':' + descriptor.enumerable + ':' + descriptor.writable + ':' + descriptor.configurable;"
+        ),
+        Ok(Value::String(
+            "true:true:false:false:false:false|3:true:false:false"
+                .to_owned()
+                .into()
+        ))
+    );
+    assert!(
+        eval(
+            "let a = new Uint8Array(new Uint8Array([3]).buffer.transferToImmutable()); Object.defineProperty(a, '0', { value: 4 });"
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn immutable_array_buffer_state_is_not_a_javascript_property() {
+    assert_eq!(
+        eval(
+            "let buffer = new Uint8Array([3]).buffer.transferToImmutable(); \
+             let key = '\\0ArrayBufferImmutable'; \
+             let hidden = Object.getOwnPropertyNames(buffer).indexOf(key) === -1; \
+             buffer[key] = false; delete buffer[key]; \
+             Object.defineProperty(buffer, key, { value: false, configurable: true }); \
+             let view = new Uint8Array(buffer); view[0] = 9; \
+             hidden + ':' + buffer.immutable + ':' + view[0];"
+        ),
+        Ok(Value::String("true:true:3".to_owned().into()))
+    );
+}
+
+#[test]
+fn immutable_typed_arrays_freeze_directly_and_through_proxy() {
+    assert_eq!(
+        eval(
+            "function immutableView(value) { \
+                 return new Uint8Array(new Uint8Array([value]).buffer.transferToImmutable()); \
+             } \
+             let direct = immutableView(3); \
+             let target = immutableView(4), proxy = new Proxy(target, {}); \
+             let directResult = Object.freeze(direct) === direct; \
+             let proxyResult = Object.freeze(proxy) === proxy; \
+             [directResult, Object.isFrozen(direct), proxyResult, Object.isFrozen(proxy), Object.isFrozen(target), direct[0], proxy[0]].join(':');"
+        ),
+        Ok(Value::String(
+            "true:true:true:true:true:3:4".to_owned().into()
+        ))
+    );
+    assert!(eval("Object.freeze(new Uint8Array([1]));").is_err());
+}
+
+#[test]
+fn mutable_typed_array_integrity_accounts_for_virtual_indices_after_failure() {
+    assert_eq!(
+        eval(
+            "function state(value) { return [Object.isExtensible(value), Object.isSealed(value), Object.isFrozen(value)].join(':'); } \
+             let sealed = new Uint8Array([1]), sealThrew = false; \
+             try { Object.seal(sealed); } catch (_) { sealThrew = true; } \
+             sealed[0] = 7; \
+             let frozen = new Uint8Array([2]), freezeThrew = false; \
+             try { Object.freeze(frozen); } catch (_) { freezeThrew = true; } \
+             frozen[0] = 8; \
+             let prevented = new Uint8Array([3]); Object.preventExtensions(prevented); \
+             let sealTarget = new Uint8Array([4]), sealProxy = new Proxy(sealTarget, {}), proxySealThrew = false; \
+             try { Object.seal(sealProxy); } catch (_) { proxySealThrew = true; } \
+             let freezeTarget = new Uint8Array([5]), freezeProxy = new Proxy(freezeTarget, {}), proxyFreezeThrew = false; \
+             try { Object.freeze(freezeProxy); } catch (_) { proxyFreezeThrew = true; } \
+             [sealThrew, state(sealed), sealed[0], freezeThrew, state(frozen), frozen[0], state(prevented), \
+              proxySealThrew, state(sealTarget), Object.isSealed(sealProxy), Object.isFrozen(sealProxy), \
+              proxyFreezeThrew, state(freezeTarget), Object.isSealed(freezeProxy), Object.isFrozen(freezeProxy)].join('|');"
+        ),
+        Ok(Value::String(
+            "true|false:false:false|7|true|false:false:false|8|false:false:false|true|false:false:false|false|false|true|false:false:false|false|false"
+                .to_owned()
+                .into()
+        ))
+    );
+}
+
+#[test]
+fn typed_array_integrity_tracks_empty_and_detached_views() {
+    assert_eq!(
+        eval(
+            "function state(value) { return [Object.isExtensible(value), Object.isSealed(value), Object.isFrozen(value)].join(':'); } \
+             let emptySeal = new Uint8Array(0); Object.seal(emptySeal); \
+             let emptyFreeze = new Uint8Array(0); Object.freeze(emptyFreeze); \
+             let emptyPrevent = new Uint8Array(0); Object.preventExtensions(emptyPrevent); \
+             let detachedSeal = new Uint8Array(2); __quickjsRustDetachArrayBuffer(detachedSeal.buffer); Object.seal(detachedSeal); \
+             let detachedFreeze = new Uint8Array(2); __quickjsRustDetachArrayBuffer(detachedFreeze.buffer); Object.freeze(detachedFreeze); \
+             let detachedPrevent = new Uint8Array(2); __quickjsRustDetachArrayBuffer(detachedPrevent.buffer); Object.preventExtensions(detachedPrevent); \
+             [state(emptySeal), state(emptyFreeze), state(emptyPrevent), state(detachedSeal), state(detachedFreeze), state(detachedPrevent)].join('|');"
+        ),
+        Ok(Value::String(
+            "false:true:true|false:true:true|false:true:true|false:true:true|false:true:true|false:true:true"
+                .to_owned()
+                .into()
+        ))
+    );
+}
+
+#[test]
+fn variable_length_typed_arrays_reject_integrity_without_side_effects() {
+    assert_eq!(
+        eval(
+            "function probe(make) { \
+                 let objectTarget = make(), objectThrew = false; \
+                 try { Object.preventExtensions(objectTarget); } catch (_) { objectThrew = true; } \
+                 let reflectTarget = make(), reflectResult = Reflect.preventExtensions(reflectTarget); \
+                 let sealTarget = make(), sealThrew = false; \
+                 try { Object.seal(sealTarget); } catch (_) { sealThrew = true; } \
+                 let freezeTarget = make(), freezeThrew = false; \
+                 try { Object.freeze(freezeTarget); } catch (_) { freezeThrew = true; } \
+                 return [objectThrew, Object.isExtensible(objectTarget), reflectResult, Object.isExtensible(reflectTarget), \
+                         sealThrew, Object.isExtensible(sealTarget), Object.isSealed(sealTarget), Object.isFrozen(sealTarget), \
+                         freezeThrew, Object.isExtensible(freezeTarget), Object.isSealed(freezeTarget), Object.isFrozen(freezeTarget)].join(':'); \
+             } \
+             function rabFixedZero() { let buffer = new ArrayBuffer(4, { maxByteLength: 8 }); return new Uint8Array(buffer, 0, 0); } \
+             function rabTracking() { let buffer = new ArrayBuffer(4, { maxByteLength: 8 }); return new Uint8Array(buffer); } \
+             function gsabFixedZero() { let buffer = new SharedArrayBuffer(0, { maxByteLength: 8 }); return new Uint8Array(buffer, 0, 0); } \
+             function gsabTracking() { let buffer = new SharedArrayBuffer(0, { maxByteLength: 8 }); return new Uint8Array(buffer); } \
+             [probe(rabFixedZero), probe(rabTracking), probe(gsabFixedZero), probe(gsabTracking)].join('|');"
+        ),
+        Ok(Value::String(
+            "true:true:false:true:true:true:false:false:true:true:false:false|true:true:false:true:true:true:false:false:true:true:false:false|false:false:true:false:false:false:true:true:false:false:true:true|true:true:false:true:true:true:false:false:true:true:false:false"
+                .to_owned()
+                .into()
+        ))
+    );
+}
+
+#[test]
+fn immutable_typed_arrays_seal_directly_and_through_proxy() {
+    assert_eq!(
+        eval(
+            "function immutableView(value) { return new Uint8Array(new Uint8Array([value]).buffer.transferToImmutable()); } \
+             let direct = immutableView(3), target = immutableView(4), proxy = new Proxy(target, {}), prevented = immutableView(5); \
+             let directResult = Object.seal(direct) === direct, proxyResult = Object.seal(proxy) === proxy; \
+             Object.preventExtensions(prevented); \
+             [directResult, Object.isSealed(direct), Object.isFrozen(direct), proxyResult, Object.isSealed(proxy), Object.isFrozen(proxy), Object.isSealed(target), Object.isFrozen(target), Object.isSealed(prevented), Object.isFrozen(prevented)].join(':');"
+        ),
+        Ok(Value::String(
+            "true:true:true:true:true:true:true:true:true:true"
+                .to_owned()
+                .into()
+        ))
+    );
+}
+
+#[test]
 fn numeric_index_loop_writes_through_backing_buffer() {
     assert_eq!(
         eval(

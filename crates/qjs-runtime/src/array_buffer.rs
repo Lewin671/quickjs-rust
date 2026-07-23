@@ -1,4 +1,5 @@
 use crate::CallEnv;
+use std::cell::RefMut;
 use std::collections::HashMap;
 
 use crate::{
@@ -27,17 +28,6 @@ pub(crate) use shared::{
     native_shared_array_buffer_prototype_slice, set_bytes as set_shared_array_buffer_bytes,
 };
 
-/// Internal slot holding the backing bytes of an `ArrayBuffer`, encoded as a
-/// Latin-1 string (one `char` per byte). Absent on detached buffers.
-pub(crate) const ARRAY_BUFFER_DATA_PROPERTY: &str = "\0ArrayBufferData";
-/// Internal marker set on a detached `ArrayBuffer`. Once set, the data slot is
-/// cleared and every accessor that reaches the buffer observes a detached
-/// state.
-pub(crate) const ARRAY_BUFFER_DETACHED_PROPERTY: &str = "\0ArrayBufferDetached";
-/// Internal slot holding the maximum byte length for resizable ArrayBuffers.
-pub(crate) const ARRAY_BUFFER_MAX_BYTE_LENGTH_PROPERTY: &str = "\0ArrayBufferMaxByteLength";
-/// Internal marker set on immutable ArrayBuffers.
-pub(crate) const ARRAY_BUFFER_IMMUTABLE_PROPERTY: &str = "\0ArrayBufferImmutable";
 const MAX_ARRAY_BUFFER_LENGTH: usize = 1_000_000;
 const MAX_SAFE_INTEGER_LENGTH: usize = 9_007_199_254_740_991;
 
@@ -500,7 +490,7 @@ fn array_buffer_copy_and_detach(
         TransferKind::FixedLength => {}
         TransferKind::Immutable => define_array_buffer_immutable(&result),
     }
-    detach(&object);
+    detach(&object)?;
     Ok(Value::Object(result))
 }
 
@@ -565,37 +555,27 @@ fn is_object_value(value: &Value) -> bool {
 }
 
 fn define_array_buffer_data(object: &ObjectRef, bytes: Vec<u8>) {
+    object.install_array_buffer_state(None);
     object.set_internal_bytes(bytes);
-    object.define_property(
-        ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::String(::std::rc::Rc::new(String::new()))),
-    );
     object.set_to_string_tag("ArrayBuffer");
 }
 
 fn define_array_buffer_max_byte_length(object: &ObjectRef, max_byte_length: usize) {
-    object.define_property(
-        ARRAY_BUFFER_MAX_BYTE_LENGTH_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::Number(max_byte_length as f64)),
-    );
+    object.set_array_buffer_max_byte_length(max_byte_length);
 }
 
 fn define_array_buffer_immutable(object: &ObjectRef) {
-    object.define_property(
-        ARRAY_BUFFER_IMMUTABLE_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::Boolean(true)),
-    );
+    object.mark_array_buffer_immutable();
 }
 
 pub(crate) fn mark_immutable(object: &ObjectRef) {
     define_array_buffer_immutable(object);
 }
 
-/// Whether `object` carries the `ArrayBuffer` brand (data slot or detached
-/// marker), used for brand checks and `ArrayBuffer.isView` consumers.
+/// Whether `object` carries the stable ordinary `ArrayBuffer` internal brand,
+/// used for receiver checks and `ArrayBuffer.isView` consumers.
 pub(crate) fn is_array_buffer_object(object: &ObjectRef) -> bool {
-    object.has_own_property(ARRAY_BUFFER_DATA_PROPERTY)
-        || object.has_own_property(ARRAY_BUFFER_DETACHED_PROPERTY)
+    object.is_array_buffer_object()
 }
 
 /// The `ArrayBuffer` receiver as an object, after a brand check.
@@ -612,62 +592,38 @@ pub(crate) fn is_array_buffer_or_shared_array_buffer_object(object: &ObjectRef) 
 
 /// Whether `object` is a detached `ArrayBuffer`.
 pub(crate) fn is_detached(object: &ObjectRef) -> bool {
-    if is_shared_array_buffer_object(object) {
-        return false;
-    }
-    object.has_own_property(ARRAY_BUFFER_DETACHED_PROPERTY)
-        || !object.has_own_property(ARRAY_BUFFER_DATA_PROPERTY)
+    object.is_array_buffer_detached()
 }
 
 pub(crate) fn is_resizable(object: &ObjectRef) -> bool {
-    object.has_own_property(ARRAY_BUFFER_MAX_BYTE_LENGTH_PROPERTY)
+    object.is_array_buffer_object() && object.array_buffer_max_byte_length().is_some()
+}
+
+/// Whether the backing can change length: a resizable ordinary ArrayBuffer or
+/// a growable SharedArrayBuffer. Omitted-length TypedArray and DataView
+/// constructors use this to select their length-tracking internal state.
+pub(crate) fn is_resizable_or_growable(object: &ObjectRef) -> bool {
+    (object.is_array_buffer_object() || object.is_shared_array_buffer_object())
+        && object.array_buffer_max_byte_length().is_some()
 }
 
 pub(crate) fn is_immutable(object: &ObjectRef) -> bool {
-    object.has_own_property(ARRAY_BUFFER_IMMUTABLE_PROPERTY)
+    object.is_array_buffer_immutable()
 }
 
 pub(crate) fn array_buffer_max_byte_length(object: &ObjectRef) -> Option<usize> {
-    match object.own_property(ARRAY_BUFFER_MAX_BYTE_LENGTH_PROPERTY) {
-        Some(Property {
-            value: Value::Number(length),
-            ..
-        }) => Some(length as usize),
-        _ => None,
-    }
+    object.array_buffer_max_byte_length()
 }
 
 /// The backing bytes of a (non-detached) `ArrayBuffer`.
 pub(crate) fn array_buffer_bytes(object: &ObjectRef) -> Vec<u8> {
-    if let Some(bytes) = object.internal_bytes() {
-        return bytes;
-    }
-    match object.own_property(ARRAY_BUFFER_DATA_PROPERTY) {
-        Some(Property {
-            value: Value::String(data),
-            ..
-        }) => string_to_bytes(&data),
-        _ => Vec::new(),
-    }
+    object.internal_bytes().unwrap_or_default()
 }
 
 /// Borrows the backing bytes of a non-detached `ArrayBuffer` for the duration
-/// of `f`. New buffers use `ObjectRef`'s internal byte slot; the string fallback
-/// only exists for older objects built before that slot was introduced.
+/// of `f` through `ObjectRef`'s internal byte slot.
 pub(crate) fn with_array_buffer_bytes<T>(object: &ObjectRef, f: impl FnOnce(&[u8]) -> T) -> T {
-    object.with_internal_bytes(|bytes| match bytes {
-        Some(bytes) => f(bytes),
-        None => {
-            let bytes = match object.own_property(ARRAY_BUFFER_DATA_PROPERTY) {
-                Some(Property {
-                    value: Value::String(data),
-                    ..
-                }) => string_to_bytes(&data),
-                _ => Vec::new(),
-            };
-            f(&bytes)
-        }
-    })
+    object.with_internal_bytes(|bytes| f(bytes.unwrap_or_default()))
 }
 
 pub(crate) fn buffer_byte_length(object: &ObjectRef) -> usize {
@@ -705,10 +661,6 @@ pub(crate) fn with_buffer_bytes<T>(object: &ObjectRef, f: impl FnOnce(&[u8]) -> 
 /// Replaces the backing bytes of an `ArrayBuffer` (used by typed-array writes).
 pub(crate) fn set_array_buffer_bytes(object: &ObjectRef, bytes: Vec<u8>) {
     object.set_internal_bytes(bytes);
-    object.define_property(
-        ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::String(::std::rc::Rc::new(String::new()))),
-    );
 }
 
 pub(crate) fn set_buffer_bytes(object: &ObjectRef, bytes: Vec<u8>) {
@@ -732,6 +684,25 @@ pub(crate) fn mutate_array_buffer_bytes<T>(
     object.with_internal_bytes_mut(f)
 }
 
+/// Tries to lease the in-place bytes of an attached, fixed, mutable ordinary
+/// `ArrayBuffer`. Shared, resizable, and immutable storage deliberately stay on
+/// their synchronization/resizing/read-only paths. Returning `None` also covers
+/// an active `RefCell` borrow, allowing optimized callers to fall back without
+/// panicking or copying.
+pub(crate) fn try_borrow_fixed_array_buffer_bytes_mut(
+    object: &ObjectRef,
+) -> Option<RefMut<'_, Vec<u8>>> {
+    if !is_array_buffer_object(object)
+        || is_shared_array_buffer_object(object)
+        || is_detached(object)
+        || is_resizable(object)
+        || is_immutable(object)
+    {
+        return None;
+    }
+    object.try_borrow_internal_bytes_mut()
+}
+
 /// Builds a fresh, zero-initialized `ArrayBuffer` inheriting from
 /// `%ArrayBuffer.prototype%`. Used when a TypedArray allocates its own buffer.
 pub(crate) fn new_array_buffer(env: &CallEnv, length: usize) -> ObjectRef {
@@ -745,13 +716,19 @@ pub(crate) fn new_array_buffer(env: &CallEnv, length: usize) -> ObjectRef {
 /// DetachArrayBuffer: clears the backing data and marks `object` detached.
 /// Idempotent; a non-ArrayBuffer argument is ignored. Used by the Test262 host
 /// `$262.detachArrayBuffer` hook.
-pub(crate) fn detach(object: &ObjectRef) {
+pub(crate) fn detach(object: &ObjectRef) -> Result<(), RuntimeError> {
+    if !is_array_buffer_object(object) {
+        return Ok(());
+    }
+    if is_immutable(object) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: immutable ArrayBuffer cannot be detached".to_owned(),
+        });
+    }
     object.clear_internal_bytes();
-    object.delete_own_property(ARRAY_BUFFER_DATA_PROPERTY);
-    object.define_property(
-        ARRAY_BUFFER_DETACHED_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::Boolean(true)),
-    );
+    object.mark_array_buffer_detached();
+    Ok(())
 }
 
 /// Host hook backing `$262.detachArrayBuffer(buffer)`: detaches `buffer` when
@@ -760,7 +737,7 @@ pub(crate) fn detach(object: &ObjectRef) {
 pub(crate) fn native_detach_array_buffer(argument_values: &[Value]) -> Result<Value, RuntimeError> {
     if let Some(Value::Object(object)) = argument_values.first() {
         if is_array_buffer_object(object) {
-            detach(object);
+            detach(object)?;
         }
     }
     Ok(Value::Null)
@@ -824,10 +801,6 @@ pub(super) fn slice_index(
     } else {
         Ok(integer.min(length as f64) as usize)
     }
-}
-
-fn string_to_bytes(value: &str) -> Vec<u8> {
-    value.chars().map(|character| character as u8).collect()
 }
 
 #[cfg(test)]
