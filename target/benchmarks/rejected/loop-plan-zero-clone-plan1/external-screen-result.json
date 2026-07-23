@@ -1,0 +1,51 @@
+{
+  "base_commit": "b420c81ed9b9e94f2ee1edbfc668825611ec5bfc",
+  "binary_sha256": {
+    "base": "b914394dad9a3a54db5df36508e4b6be7d4082e15e68fd89961aef8b6e21d0a5",
+    "candidate": "6daf3f3d8d5c00a7aa9b02f373b9c4930831f83d40d440f059b6a5b512d45bb0",
+    "quickjs_ng": "cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0"
+  },
+  "blocks": 1,
+  "candidate_diff_sha256": "bf14d1a2c55b4db8024ef333fc1378fa70162cb075278f472bbf9b7b614d8de6",
+  "cases": {
+    "jetstream3-js-subset/gaussian-blur": {
+      "candidate_over_base": 1.0470322861675858,
+      "candidate_over_quickjs_ng": 0.6703061932839379
+    },
+    "kraken-1.1/audio-dft": {
+      "candidate_over_base": 1.0248119718323412,
+      "candidate_over_quickjs_ng": 0.42672999121201854
+    },
+    "kraken-1.1/audio-fft": {
+      "candidate_over_base": 1.0068349708436604,
+      "candidate_over_quickjs_ng": 1.5676769910189763
+    },
+    "kraken-1.1/audio-oscillator": {
+      "candidate_over_base": 0.9973401085597434,
+      "candidate_over_quickjs_ng": 0.41499284839911155
+    },
+    "kraken-1.1/imaging-desaturate": {
+      "candidate_over_base": 1.0234374202785699,
+      "candidate_over_quickjs_ng": 0.4443466423090066
+    },
+    "kraken-1.1/json-parse-financial": {
+      "candidate_over_base": 1.047257342057445,
+      "candidate_over_quickjs_ng": 0.7903951914414448
+    },
+    "sunspider-1.0/bitops-nsieve-bits": {
+      "candidate_over_base": 0.9992891008152303,
+      "candidate_over_quickjs_ng": 0.9013807685206182
+    }
+  },
+  "gate": {
+    "formal_fft_candidate_over_base_ci_upper_required_max": 0.95,
+    "formal_run_started": false,
+    "passed_screen": false,
+    "reason": "The one-block direction screen measured audio-fft at 1.006835x base, so the candidate could not justify the seven-block formal gate requiring at least a five-percent win."
+  },
+  "manifest_sha256": "4f3eb760b567d44eaf8fca20690c978a3d6a4d011b1dfb3c18898be5b1767768",
+  "raw_sha256": "359aacaab1df3aafaeac1680c64e90f794ce80fd484b1f120e047dc84644c1ae",
+  "report_sha256": "32fa41b85c68d8d56ac456ba399a35b9406cb098fbed6b8c1aa683c140fa4e06",
+  "schema": 1,
+  "seed": 20260726
+}

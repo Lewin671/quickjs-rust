@@ -7308,9 +7308,11 @@ while the runtime's immutable indexed-descriptor and rejected-write behavior
 was correct. Official upstream commit
 `250f204f23a9249ff204be2baec29600faae7b75` adds those exclusions. Main commit
 `c119c897` backports exactly the corresponding metadata for 11 affected tests
-without skipping their mutable-factory assertions. Its complete hosted
-Test262 artifact is still pending, so neither the c8da run nor the local
-backport checks close the still-open 100% Test262 campaign.
+without skipping their mutable-factory assertions. Hosted Test262 workflow
+`30022997362` then ran all 42,672 configured cases at exact commit `c119c897`:
+all 42,672 passed, with zero failures, timeouts, not-run cases, or actionable
+gaps. Its burndown JSON SHA-256 is
+`81b9c6dc85ce1dc49caef332e5e7f1aa68758167c2da149214226a3280f9537e`.
 
 Performance Preview workflow `30015374367` completed successfully. Its
 informational three-block internal portfolio measured candidate/base at
@@ -7425,20 +7427,113 @@ Focused hole-tail tests passed 15/15, the runtime release suite passed all
 1,715 tests, and 14 focused Array semantics Test262 cases passed. The staged
 touched gate passed formatting, workspace Clippy, the source-size guard, all
 1,715 runtime tests, and 65 selected Test262 cases. The final three-reviewer
-snapshot was clean. Full repository and QuickJS-NG comparison gates remain the
-pre-commit handoff step.
+snapshot was clean. The full repository gate passed all 5,159 curated Test262
+cases, and all 218 QuickJS-NG comparison fixtures passed. Branch commit
+`36905b7c` passed CI `30023617310`; it integrated on main as `b420c81e`, whose
+CI `30024220377` also passed.
 
-This local oscillator performance gate is independent of the full conformance
-closure. Main commit `c119c897` has the exact upstream metadata backport, but
-its complete hosted Test262 artifact is still pending; until that artifact
-passes, this unit has no remote full-Test262 closure claim.
+Hosted Test262 workflow `30024516032` closed the append unit at exact main
+commit `b420c81e`: all 42,672 configured cases passed, with zero failures,
+timeouts, not-run cases, or actionable gaps. The burndown JSON SHA-256 is
+`c427b71c4cb87eae12922e0c4b9975d09e5001963938d4fd04c7ad80d976b5bf`.
+
+Performance Preview workflow `30024220328` failed closed on attempt 1 because
+QuickJS-NG's `plain_function_call` block 0 was `timer_limited`; candidate and
+base measured all 25 cases, but the common set was only 24/25. The failed
+status, raw rows, and partial report SHA-256 values were
+`bac9f0bf6f0ca6f75997c0a6e42081fdf93b30412d05945b65b69d1e922686d1`,
+`7cdc055ce047077268eb462c145686fcb4bde37f670234bde9387d88b1efafce`,
+and `6ed790a998a3162798fcdc1f7b8c4493063fe4f2f0b40bcae3fe5c06c0db8b00`.
+Attempt 2 then completed successfully with all 25 internal cases, all three
+roles, all three blocks, and passing linearity. Its informational hosted
+candidate/base aggregate was 0.9862x [0.9828x, 0.9873x]. The external preview
+remained partial at 43/45 comparable cases because `ai-astar` and
+`imaging-gaussian-blur` timed out for qjs-rust; `audio-oscillator` measured
+0.133x base and 0.514x QuickJS-NG on that variable runner. The attempt-2
+status, raw, report, external raw, and external report SHA-256 values were
+`69dac8c08c6c3cc2472f804fcbd4987f9188cc64f080a753197cf4a90c34a35a`,
+`dda35829d33235e02dfdf1728cd74e1c3bebe1a7120d6b99381994d30113c18b`,
+`7777c728168e2f24511376adee95ba997b52f46661b14a6d401ef1cd710a867c`,
+`652dbb5ed9e4f3f5b020a271b5d942a1a843cb73b8f8b887c94bd50abff8654d`,
+and `7fefeb25b52f5696b2b75a5107845f89e8c4afa2d3c9794b0bfb1eb445024380`.
+The hosted profile is explicitly `inconclusive`/non-claim and does not replace
+the isolated local seven-block acceptance gate above.
 
 This closes the local `audio-oscillator` performance gate, not B5 or the
 correctness campaign. The same formal matrix still places Gaussian at
 0.641878x, FFT at 1.542264x, JSON parse at 0.765637x, and nsieve at 0.886772x
-QuickJS-NG. The next ROI work should target transition-shape/slot property
-access and full-frame register execution rather than another benchmark-local
-dense-array special case.
+QuickJS-NG. Subsequent profiling below supersedes the earlier
+transition-shape/full-frame hypothesis: the next ROI work targets the repeated
+entry boundary around an already-general dense numeric loop, not another
+benchmark-local array case.
+
+### Immutable loop-plan zero-clone screen (rejected)
+
+A follow-up prototype replaced the three per-frame owned loop-plan vectors
+with slices borrowed from the immutable `Bytecode` `OnceCell` caches. Numeric
+and mutation selected plans were borrowed instead of cloned; control plans
+were changed to execute by reference. Numeric-mutation zero-progress
+suppression moved to a normally empty frame-local sparse vector and was carried
+through generator snapshots. Three independent reviewers converged cleanly
+after fixing two review findings: suppression lookup now filters by backedge
+before consulting the sparse set, and control execution no longer implicitly
+copies its selected plan. The final uncommitted diff SHA-256 was
+`bf14d1a2c55b4db8024ef333fc1378fa70162cb075278f472bbf9b7b614d8de6`.
+
+The predeclared acceptance rule required the seven-block FFT candidate/base
+95% interval upper bound to be at most 0.95x; a one-block seven-case direction
+screen had to justify paying for that formal run. Exact candidate, base, and
+QuickJS-NG executable SHA-256 values were
+`6daf3f3d8d5c00a7aa9b02f373b9c4930831f83d40d440f059b6a5b512d45bb0`,
+`b914394dad9a3a54db5df36508e4b6be7d4082e15e68fd89961aef8b6e21d0a5`,
+and `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+The screen measured `audio-fft` at **1.006835x base**, so it showed no target
+benefit and could not reach the required five-percent win. Controls were
+Gaussian 1.047032x, DFT 1.024812x, oscillator 0.997340x, desaturate 1.023437x,
+JSON parse 1.047257x, and nsieve 0.999289x base. The formal seven-block and
+25-case runs were therefore not started, and the runtime change was rejected
+without a commit.
+
+The frozen screen manifest, raw rows, and report SHA-256 values are
+`4f3eb760b567d44eaf8fca20690c978a3d6a4d011b1dfb3c18898be5b1767768`,
+`359aacaab1df3aafaeac1680c64e90f794ce80fd484b1f120e047dc84644c1ae`,
+and `32fa41b85c68d8d56ac456ba399a35b9406cb098fbed6b8c1aa683c140fa4e06`.
+The compact rejection record is
+`target/benchmarks/rejected/loop-plan-zero-clone-plan1/external-screen-result.json`.
+This confirms the earlier setup-only rejection on a real external workload:
+plan ownership is not the current FFT bottleneck. The next FFT unit must start
+from a profile of the dense/register execution path instead of adding frame or
+locals pooling.
+
+### `audio-fft` nested-dense ROI selection
+
+A two-run macOS sample of the exact `b420c81e` base executable
+(`b914394dad9a3a54db5df36508e4b6be7d4082e15e68fd89961aef8b6e21d0a5`)
+used the unmodified external bundle with SHA-256
+`07fd2de1a2d39f430923300a61bda3a67f34b0e68b855fde10162f36c387147a`.
+The two sample artifacts have SHA-256 values
+`5234dc93de2c8707fb54cdfadbe8224474b3585de614d47ac336595c4b52501a` and
+`90cec2ddc00d756a92c56c9c0a0df6ccf027076d22d19462e39003db44a21c7b`.
+Pooled self samples assigned 46.04% to `Vm::run_completion`, 15.68% to the
+dense register program, 6.96% to `Value::drop`, 4.01% to `Value::clone`, and
+3.50% to fast numeric binary operations. Plan search itself was only 0.35%,
+confirming that changing immutable plan ownership could not provide material
+FFT benefit.
+
+Static path counting and region-isolation timing identified the butterfly as
+about 86% of `FFT.forward`; the final spectrum/square-root loop was about 12%,
+and initial reordering was under 2%. Each of 1,000 forward calls enters the
+existing dense inner plan 1,023 times but executes only 5,120 butterflies,
+averaging five useful iterations per entry. A general two-level region that
+fuses one numeric outer loop around one existing dense inner loop can reduce
+the target's total entries from 1,023,000 to 10,000 without absorbing the full
+function or any benchmark identity. Because takeover occurs after one seeded
+ordinary butterfly per entry, the path proof must report exactly 10,000 nested
+entries, 1,023,000 completed outer iterations, 5,110,000 native inner commits,
+10,000 seeded ordinary inner iterations, 5,120,000 total butterflies, and zero
+steady-state bailouts. The direction screen is preregistered to require
+`audio-fft` candidate/base at most 0.80x while keeping all six controls at most
+1.03x; failure rejects the unit before a formal run.
 
 ## Notes
 
