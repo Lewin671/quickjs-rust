@@ -6915,6 +6915,184 @@ passed, and two independent final reviews reported no remaining P0--P2 issue.
 This closes `imaging-desaturate` below the final 0.50x QuickJS-NG boundary;
 B5 remains open until every admitted benchmark reaches the same boundary.
 
+### 2026-07-22 postfix countdown hosted closure
+
+Main commit `0f1e147d` closed the postfix-countdown unit on trusted hosted
+state. CI run `29975064583` passed. Test262 Coverage `29975194172`
+independently passed all 42,672/42,672 configured cases with zero failures,
+timeouts, not-run cases, or actionable gaps; its burndown SHA-256 is
+`15bc10937515649895736d9639132ed154423c76f7464d64df441708fff19400`.
+
+Performance Preview `29975064579` completed all three broad blocks, all 225
+measurements, and all 75 N/2N groups. The variable hosted runner measured
+0.953803x candidate/base [0.949188x, 0.953803x] and 0.155544x
+candidate/QuickJS-NG [0.153824x, 0.156196x]; the workflow correctly retained
+the result as inconclusive rather than replacing the exact local gate. The
+external inventory completed 5/5 JetStream cases, 11/14 Kraken candidate/base
+comparisons, 12/14 Kraken candidate/QuickJS-NG comparisons, and 26/26
+SunSpider cases. Diagnostic suite geometric ratios were 0.997605x base and
+6.963502x QuickJS-NG for JetStream, 1.002429x base and 3.086192x QuickJS-NG
+for Kraken, and 0.992223x base and 6.371524x QuickJS-NG for SunSpider.
+`imaging-desaturate` remained ahead of QuickJS-NG at 0.689456x on that runner,
+while `audio-oscillator` remained a major 8.819397x deficit.
+
+Broad raw/report SHA-256 values are
+`1605e55cd626ed9f8dbe9cb9d96e3dac4e8efeda5eef7191a23d2d4e54502519`
+and `1f08a4507d57d10f8eee248b24e8c38f30f1c6b533d89e40ffc4720215d512e7`.
+External raw/report and summary SHA-256 values are
+`760723072c83eda8e622397fd21ac2d0bb5bf7b38b0679573cfb15bac37291f7`,
+`8cfba7c725d5ab91e3ad779d32be2485c035025fce0f0c28b3083d4f0e0ff707`,
+and `8610551730bd73926a9c36d12b191e1ef1e89ac23f362fad6822c8a64988f701`.
+
+### 2026-07-22 own-data dense regions and exact shared reductions
+
+The next runtime unit extends the dynamic dense numeric region in two related
+ways. Writable regions may resolve ordinary own-data Array and Number sources
+from either direct `this` or an authoritative local once per region, and may
+execute the exact native `Math.round` while the global `Math` object and its
+own `round` data property still resolve to the native identity. Proxy,
+accessor, inherited, symbol-primitive, typed-array, and module-namespace
+owners fail closed. Replaced or inherited `Math.round`, direct `eval`, captured
+or non-authoritative locals, holes, borrow conflicts, aliases between readable
+and writable arrays, and non-Number elements retain ordinary bytecode. A
+zero-progress stable lease failure suppresses only the current invocation;
+progressed failures publish only complete earlier iterations and replay the
+failing iteration from the original header.
+
+Pure read-only regions additionally recognize one to eight ordered
+multiply-add reduction lanes followed by the ordinary counter increment. The
+generic reduction kernel preserves source operand and lane order, publishes
+all accumulators and counter shadows only after a complete iteration, and
+deoptimizes before exposing partial lane work. The highest-value two-lane
+strided form uses checked integer Array indices when counter and strides are
+exact non-negative indices. When both lanes have the same compiled sample
+receiver, stride, and current coefficient index, it loads that immutable
+sample once, advances one checked coefficient recurrence, and still performs
+the two separate multiply-then-add operations in source order. It does not use
+FMA, reassociate arithmetic, skip iterations, or key behavior to a benchmark
+name, input size, checksum, or source path. Fractional, out-of-range,
+overflowing, sparse, accessor-backed, captured, or otherwise unsupported
+states fall back to the existing floating-index or ordinary bytecode paths.
+
+The dense compiler, invariant resolution, and compact legacy executor were
+split into semantic submodules as part of the same unit so the new guards did
+not push the original source file past the first-party size limit. The compact
+legacy representation remains the executor for existing simple dense regions;
+the reduction is an optional read-only plan, not a second general VM.
+
+#### Rejected candidates and measurement discipline
+
+A general last-write-wins publication prototype was evaluated and removed. It
+deduplicated repeated staged writes without recognizing a benchmark, and its
+focused correctness tests passed, but exact same-host A/B evidence made Kraken
+`audio-dft` **5.81% slower**: new/old was 1.058090x with a 95% interval of
+[1.032014x, 1.114149x]. `gaussian-blur` and `bitops-nsieve-bits` also had
+interval uppers above the 1.03 control ceiling. The paired-report SHA-256 is
+`c52ddff5195305657c9c1d97350fc2b5e898786b337d8773cf548686e484713c`;
+the prototype was reverted rather than hidden inside the final candidate.
+
+The first two-lane strided reduction candidate was also rejected by its hard
+retention gate. Its frozen executable SHA-256 was
+`9990f1bc7ade452b1e602f426a2d7180f9d78767cda62629a810f8c3e1a93e08`.
+All base and control gates passed, but `audio-dft` candidate/QuickJS-NG was
+0.502310x [0.501167x, 0.510874x], above the required 0.50 interval upper
+bound. Raw, external-report, external-summary, paired-report, and
+paired-summary SHA-256 values are
+`12e64a5128cdedf907aea63561b7512637d2c8b83720eb0b645a1e3a698dea3d`,
+`d85eaf80b6b4b84eedb80b6b9e266efc43fd3c03c8e6829398e017e5da3efd75`,
+`3503faea71ba27dedc9dac59c19f2b61b14b7f644ff8ab906424b1b3214c232d`,
+`1d78cd80a1489e7bdcfc20d6920512b5dc76ac20c402d220ba3ac7905b3c63d0`,
+and `8df10dd4b71f24dec15e9f7637e3dfa9f33ac171b1c2816b7e19284517062517`.
+The exact-index and shared-sample tuning runs were used only to select the
+successor; they remain explicitly non-claim discovery evidence and were not
+substituted for the final single-shot gate.
+
+#### Accepted single-shot gate and path proof
+
+The final candidate, preceding base, and pinned QuickJS-NG executable SHA-256
+values are
+`9b987cbcba67fa564237ddbcc94ceb244a13c907f7ee6a2064cc7e855729cf93`,
+`085e5346a0e7d42d1ddf122a61786be5daa7b9a212a20b426f4f0e279879b327`,
+and `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+A fresh preregistration froze one seven-block run, exact source/binary pins,
+the two targets, five unrelated controls, and every interval threshold before
+measurement. All 168/168 rows completed in that one formal invocation. Paired
+estimates with 95% intervals were:
+
+- Kraken `audio-dft`: 0.552633x base [0.550112x, 0.557935x] and
+  **0.491273x QuickJS-NG [0.477951x, 0.495005x]**;
+- Kraken `audio-oscillator`: 0.467067x base [0.465550x, 0.467774x];
+- JetStream `gaussian-blur`: upper control bound 1.008600x;
+- Kraken `audio-fft`: upper control bound 0.961257x;
+- Kraken `json-parse-financial`: upper control bound 0.998499x;
+- SunSpider `access-fannkuch`: upper control bound 1.001892x;
+- SunSpider `bitops-nsieve-bits`: upper control bound 1.008186x.
+
+Thus `audio-dft` now crosses the final 0.50x QuickJS-NG boundary and
+`audio-oscillator` is cut by more than half relative to the exact preceding
+base. This accepts the general mechanisms in this unit; it does not imply B5
+completion because oscillator and many other admitted external cases remain
+above 0.50x QuickJS-NG.
+
+Preregistration SHA-256 is
+`75cfb9b2c25844d9c408ab668ac087355bef536931dbb8940aeb9ec4094e4f45`.
+Manifest, raw, external-report, external-summary, paired-report, and
+paired-summary SHA-256 values are
+`114a64feea29d270245077e7939fcfb6b54e0a126bcf0dc2e9437db90c0e478b`,
+`213e232edc380d05bcf73c6b1613e28007ba2c232a0728e6090632631667323f`,
+`d191e540b58f413cb69f63d3b77989fcf38142f3f43a0b0cb1172b8595b5a613`,
+`93141db34fef001921a8f0d1fea81da17b1a2b61425efa7e5028aaec6db8074b`,
+`531d5f1d19e4621bbcf7ccda35566168a157943682bdb776fe8a127ca83b80e9`,
+and `723394492c05f29f1455522366e4fc6070c41b84b914cae12ef4780f533b048c`.
+Independent reconstruction from the 168 raw rows reproduced every paired
+estimate and confidence interval with a maximum floating-point difference of
+`7.55e-15`; no second formal output exists.
+
+Compile-time-only, release-only, runtime-gated instrumentation was then built
+in a fresh Cargo target and removed with reverse patches before verification.
+Per-iteration proof counters stayed invocation-local and merged into TLS only
+once at exit; both targets also had a post-marker overflow guard. On the
+exact `audio-dft` bundle it recorded 10,240 dispatcher entries, all 10,240 on
+the exact shared-sample kernel, 10,475,520 committed iterations, and
+10,475,520 loads at each of the first coefficient, shared sample, and second
+coefficient sites. Exact-nonshared selection, floating fallback, load failure,
+deopt, replay, decline, and lease failure were all zero. On the exact
+`audio-oscillator` bundle it recorded 1,500 attempts, 999 handled entries, 501
+invocation-local suppressions, 8,182,809 committed iterations and stores,
+12,278,309 physical dense loads, 4,087,309 native round operations, and zero
+decline or deopt. Both processes exited zero and wrote exactly the two expected
+external-success lines to stdout.
+
+The authoritative v5 proof binary SHA-256 is
+`be0d40896bf5ecdce69c206cd22f9fc712e0c3d22ee4d45a9655f61461471d75`;
+DFT bundle/stdout/stderr SHA-256 values are
+`57fcc07e83044e5552d83e4bf13a1e10af6e71357dddf28ea3c64de8dbd0bbda`,
+`f5bc4f369844bf414bcaa550808d7e5406037ad4da77bde3ae30fcaa7701bdfc`,
+and `7c1662c8af7275d52c3b65aa72e7e1556a77c704846e5366ed3b190c66f1f53b`.
+Oscillator bundle/stdout/stderr SHA-256 values are
+`b302c0457bc183da4106148640e17964033829769da144f537d2d7180a44c1df`,
+`f5bc4f369844bf414bcaa550808d7e5406037ad4da77bde3ae30fcaa7701bdfc`,
+and `a46f1fdc7a9d003130c025377794efae902236169589303c8c5e393646eb3421`.
+The preceding v4 proof is retained as rejected protocol evidence because its
+oscillator hot loop accessed TLS for each operation; none of its binaries or
+outputs is used for the accepted path claim.
+Post-proof source, staged/unstaged diff, and frozen-binary sentinels all
+returned to their pre-proof SHA-256 values, and every proof-only symbol is
+absent from the source tree.
+
+Focused coverage exercises native-round identity and edge values including
+NaN, infinities, negative zero, adjacent half ties, own-data owner hazards,
+lease suppression, and one- through three-lane reductions. The implementation
+caps plans at eight lanes. Coverage also includes exact-index overflow,
+operand order, sample aliasing, sparse/prototype access, zero- and mid-progress
+replay, direct `eval`, capture guards, and borrow conflicts. The restored
+candidate passes formatting and all 1,662 `qjs-runtime` release tests. The
+staged touched gate passed formatting, clippy, the source-size guard, all 1,662
+runtime tests, and its 65 selected Test262 cases. The complete workspace check
+also passed, including all 5,148 curated Test262 cases, and all 218 current
+QuickJS-NG comparison fixtures passed. Trusted-main hosted closure remains the
+post-push step.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an

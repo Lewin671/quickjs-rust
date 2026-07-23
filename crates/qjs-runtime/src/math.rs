@@ -239,16 +239,26 @@ pub(super) fn native_math_round(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
+    Ok(Value::Number(round_number(number)))
+}
+
+/// ECMAScript `Math.round` for an already-coerced Number.
+///
+/// Rust's `f64::round` rounds negative ties away from zero, while JavaScript
+/// rounds ties toward positive infinity and preserves negative zero. Keeping
+/// the Number-only operation here lets guarded bytecode fast paths share the
+/// exact builtin semantics without repeating that distinction.
+pub(super) fn round_number(number: f64) -> f64 {
     if number.is_nan() || number.is_infinite() || number == 0.0 {
-        return Ok(Value::Number(number));
+        return number;
     }
     let floored = number.floor();
     let frac = number - floored;
     let rounded = if frac >= 0.5 { floored + 1.0 } else { floored };
     if rounded == 0.0 && number < 0.0 {
-        Ok(Value::Number(-0.0))
+        -0.0
     } else {
-        Ok(Value::Number(rounded))
+        rounded
     }
 }
 
@@ -607,5 +617,51 @@ fn round_ties_to_even(value: f64) -> f64 {
         lower
     } else {
         lower + 1.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::round_number;
+
+    fn adjacent(number: f64) -> (f64, f64) {
+        let bits = number.to_bits();
+        if number.is_sign_negative() {
+            (f64::from_bits(bits + 1), f64::from_bits(bits - 1))
+        } else {
+            (f64::from_bits(bits - 1), f64::from_bits(bits + 1))
+        }
+    }
+
+    fn assert_same_number(actual: f64, expected: f64) {
+        assert_eq!(actual.to_bits(), expected.to_bits());
+    }
+
+    #[test]
+    fn round_number_handles_non_finite_large_and_adjacent_tie_values() {
+        assert!(round_number(f64::NAN).is_nan());
+        assert_eq!(round_number(f64::INFINITY), f64::INFINITY);
+        assert_eq!(round_number(f64::NEG_INFINITY), f64::NEG_INFINITY);
+        for integer in [
+            9_007_199_254_740_991.0,
+            9_007_199_254_740_992.0,
+            -9_007_199_254_740_992.0,
+            f64::MAX,
+            -f64::MAX,
+        ] {
+            assert_eq!(round_number(integer), integer);
+        }
+
+        for (tie, below, exact, above) in [
+            (0.5, 0.0, 1.0, 1.0),
+            (-0.5, -1.0, -0.0, -0.0),
+            (1.5, 1.0, 2.0, 2.0),
+            (-1.5, -2.0, -1.0, -1.0),
+        ] {
+            let (next_down, next_up) = adjacent(tie);
+            assert_same_number(round_number(next_down), below);
+            assert_same_number(round_number(tie), exact);
+            assert_same_number(round_number(next_up), above);
+        }
     }
 }

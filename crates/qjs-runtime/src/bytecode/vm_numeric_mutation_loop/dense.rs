@@ -10,20 +10,25 @@
 
 use std::{
     cell::{Ref, RefMut},
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeSet,
 };
 
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
-use crate::{
-    Value, to_int32_number, to_uint32_number,
-    value::{ArrayRef, OwnDataPropertyRead},
-};
+use crate::{Value, to_int32_number, to_uint32_number, value::ArrayRef};
 
 use super::super::{
     ir::{Bytecode, Op, decode_index_receiver},
     vm::Vm,
     vm_props::array_index_from_number,
+};
+
+mod compiler;
+mod invariants;
+mod legacy;
+
+use invariants::{
+    ArraySource, DynamicLimit, OwnDataOwner, OwnDataSource, native_math_round_is_current,
 };
 
 const INLINE_DENSE_OPS: usize = 64;
@@ -45,6 +50,17 @@ thread_local! {
     static READ_ONLY_DENSE_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static COUNTDOWN_DENSE_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static COUNTDOWN_DENSE_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static WRITABLE_DENSE_LEASE_SUPPRESSIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static WRITABLE_DENSE_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static MATH_ROUND_OPERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static COMPACT_DYNAMIC_ATTEMPTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static COMPACT_DYNAMIC_DECLINES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static COMPACT_DYNAMIC_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static COMPACT_DYNAMIC_SUPPRESSIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static REDUCTION_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static REDUCTION_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static EXACT_INDEX_REDUCTION_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static SHARED_SAMPLE_STRIDE_REDUCTION_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -57,6 +73,17 @@ pub(super) fn reset_test_iterations() {
     READ_ONLY_DENSE_ITERATIONS.set(0);
     COUNTDOWN_DENSE_PATH_HITS.set(0);
     COUNTDOWN_DENSE_ITERATIONS.set(0);
+    WRITABLE_DENSE_LEASE_SUPPRESSIONS.set(0);
+    WRITABLE_DENSE_PATH_HITS.set(0);
+    MATH_ROUND_OPERATIONS.set(0);
+    COMPACT_DYNAMIC_ATTEMPTS.set(0);
+    COMPACT_DYNAMIC_DECLINES.set(0);
+    COMPACT_DYNAMIC_HITS.set(0);
+    COMPACT_DYNAMIC_SUPPRESSIONS.set(0);
+    REDUCTION_PATH_HITS.set(0);
+    REDUCTION_ITERATIONS.set(0);
+    EXACT_INDEX_REDUCTION_PATH_HITS.set(0);
+    SHARED_SAMPLE_STRIDE_REDUCTION_PATH_HITS.set(0);
 }
 
 #[cfg(test)]
@@ -97,6 +124,117 @@ pub(super) fn test_countdown_path_hits() -> usize {
 #[cfg(test)]
 pub(super) fn test_countdown_iterations() -> usize {
     COUNTDOWN_DENSE_ITERATIONS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_writable_lease_suppressions() -> usize {
+    WRITABLE_DENSE_LEASE_SUPPRESSIONS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_writable_path_hits() -> usize {
+    WRITABLE_DENSE_PATH_HITS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_math_round_operations() -> usize {
+    MATH_ROUND_OPERATIONS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_compact_dynamic_attempts() -> usize {
+    COMPACT_DYNAMIC_ATTEMPTS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_compact_dynamic_declines() -> usize {
+    COMPACT_DYNAMIC_DECLINES.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_compact_dynamic_hits() -> usize {
+    COMPACT_DYNAMIC_HITS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_compact_dynamic_suppressions() -> usize {
+    COMPACT_DYNAMIC_SUPPRESSIONS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_reduction_path_hits() -> usize {
+    REDUCTION_PATH_HITS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_reduction_iterations() -> usize {
+    REDUCTION_ITERATIONS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_exact_index_reduction_path_hits() -> usize {
+    EXACT_INDEX_REDUCTION_PATH_HITS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_shared_sample_stride_reduction_path_hits() -> usize {
+    SHARED_SAMPLE_STRIDE_REDUCTION_PATH_HITS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_checked_array_index_product(left: usize, right: usize) -> Option<usize> {
+    legacy::test_checked_array_index_product(left, right)
+}
+
+#[cfg(test)]
+pub(super) fn test_checked_next_array_index(index: usize, step: usize) -> Option<usize> {
+    legacy::test_checked_next_array_index(index, step)
+}
+
+#[cfg(test)]
+pub(super) fn test_legacy_direct_this_array_source_resolves(value: &Value, key: &str) -> bool {
+    legacy::test_direct_this_own_data_array_resolves(value, key)
+}
+
+#[cfg(test)]
+fn record_compact_dynamic_attempt() {
+    COMPACT_DYNAMIC_ATTEMPTS.set(COMPACT_DYNAMIC_ATTEMPTS.get() + 1);
+}
+
+#[cfg(test)]
+fn record_compact_dynamic_decline() {
+    COMPACT_DYNAMIC_DECLINES.set(COMPACT_DYNAMIC_DECLINES.get() + 1);
+}
+
+#[cfg(test)]
+fn record_compact_dynamic_hit() {
+    COMPACT_DYNAMIC_HITS.set(COMPACT_DYNAMIC_HITS.get() + 1);
+}
+
+#[cfg(test)]
+fn record_compact_dynamic_suppression() {
+    COMPACT_DYNAMIC_SUPPRESSIONS.set(COMPACT_DYNAMIC_SUPPRESSIONS.get() + 1);
+}
+
+fn record_reduction_path_hit() {
+    #[cfg(test)]
+    REDUCTION_PATH_HITS.set(REDUCTION_PATH_HITS.get() + 1);
+}
+
+fn record_reduction_iteration() {
+    #[cfg(test)]
+    REDUCTION_ITERATIONS.set(REDUCTION_ITERATIONS.get() + 1);
+}
+
+#[cfg(test)]
+fn record_exact_index_reduction_path_hit() {
+    EXACT_INDEX_REDUCTION_PATH_HITS.set(EXACT_INDEX_REDUCTION_PATH_HITS.get() + 1);
+}
+
+#[cfg(test)]
+fn record_shared_sample_stride_reduction_path_hit() {
+    SHARED_SAMPLE_STRIDE_REDUCTION_PATH_HITS
+        .set(SHARED_SAMPLE_STRIDE_REDUCTION_PATH_HITS.get() + 1);
 }
 
 #[inline]
@@ -147,6 +285,41 @@ fn record_countdown_iteration() {
     COUNTDOWN_DENSE_ITERATIONS.set(COUNTDOWN_DENSE_ITERATIONS.get() + 1);
 }
 
+#[inline]
+fn record_writable_lease_suppression() {
+    #[cfg(test)]
+    WRITABLE_DENSE_LEASE_SUPPRESSIONS.set(WRITABLE_DENSE_LEASE_SUPPRESSIONS.get() + 1);
+}
+
+#[inline]
+fn record_writable_path_hit() {
+    #[cfg(test)]
+    WRITABLE_DENSE_PATH_HITS.set(WRITABLE_DENSE_PATH_HITS.get() + 1);
+}
+
+#[inline]
+fn record_math_round_operation() {
+    #[cfg(test)]
+    MATH_ROUND_OPERATIONS.set(MATH_ROUND_OPERATIONS.get() + 1);
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum DenseNumericMutationLoopRun {
+    Handled,
+    Declined,
+    Suppress,
+}
+
+impl DenseNumericMutationLoopRun {
+    fn from_handled(handled: bool) -> Self {
+        if handled {
+            Self::Handled
+        } else {
+            Self::Declined
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(super) struct DenseNumericMutationLoopPlan {
     exit: usize,
@@ -156,6 +329,8 @@ pub(super) struct DenseNumericMutationLoopPlan {
 #[derive(Clone, Debug)]
 enum DensePlanKind {
     Fixed(FixedDensePlan),
+    LegacyDynamic(legacy::LegacyDynamicDensePlan),
+    LegacySuppressingDynamic(legacy::LegacyDynamicDensePlan),
     Dynamic(DynamicDensePlan),
 }
 
@@ -191,96 +366,32 @@ struct DynamicDensePlan {
     counter_local: usize,
     control: DynamicControl,
     receiver_sources: Vec<ArraySource>,
+    number_sources: Vec<OwnDataSource>,
     local_slots: Vec<usize>,
     operations: Vec<NumberInstruction>,
     writes: Vec<LocalWrite>,
     store_count: usize,
     sunk_store: Option<SunkDenseStore>,
+    uses_math_round: bool,
     header: usize,
 }
 
-#[derive(Clone, Copy, Debug)]
-enum DynamicLimit {
-    LocalNumber(usize),
-    LocalArrayLength(usize),
-}
-
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 enum DynamicControl {
     LessThan(DynamicLimit),
     Countdown,
 }
 
 impl DynamicControl {
-    fn limit(self) -> Option<DynamicLimit> {
+    fn limit(&self) -> Option<&DynamicLimit> {
         match self {
             Self::LessThan(limit) => Some(limit),
             Self::Countdown => None,
         }
     }
 
-    fn array_length_slot(self) -> Option<usize> {
-        self.limit().and_then(DynamicLimit::array_length_slot)
-    }
-
-    fn is_countdown(self) -> bool {
+    fn is_countdown(&self) -> bool {
         matches!(self, Self::Countdown)
-    }
-}
-
-impl DynamicLimit {
-    fn source_slot(self) -> usize {
-        match self {
-            Self::LocalNumber(slot) | Self::LocalArrayLength(slot) => slot,
-        }
-    }
-
-    fn array_length_slot(self) -> Option<usize> {
-        match self {
-            Self::LocalNumber(_) => None,
-            Self::LocalArrayLength(slot) => Some(slot),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum ArraySource {
-    Local(usize),
-    DirectThisOwnData(std::rc::Rc<str>),
-}
-
-impl ArraySource {
-    fn local_slot(&self) -> Option<usize> {
-        match self {
-            Self::Local(slot) => Some(*slot),
-            Self::DirectThisOwnData(_) => None,
-        }
-    }
-
-    fn resolve_read_only(&self, vm: &Vm<'_>) -> Option<ArrayRef> {
-        match self {
-            Self::Local(slot) => match vm.locals.get(*slot) {
-                Some(Some(Value::Array(array))) => Some(array.clone()),
-                _ => None,
-            },
-            Self::DirectThisOwnData(key) => {
-                let Value::Object(object) = vm.direct_this.as_ref()? else {
-                    return None;
-                };
-                if crate::symbol::is_symbol_primitive(object)
-                    || crate::typed_array::is_typed_array_object(object)
-                    || object.is_module_namespace_exotic()
-                {
-                    return None;
-                }
-                match object.own_data_property_read(key) {
-                    OwnDataPropertyRead::Data(Value::Array(array)) => Some(array),
-                    OwnDataPropertyRead::Data(_)
-                    | OwnDataPropertyRead::Missing
-                    | OwnDataPropertyRead::NeedsSlowPath => None,
-                }
-            }
-        }
     }
 }
 
@@ -290,6 +401,7 @@ type Register = usize;
 enum NumberInstruction {
     Constant(f64),
     LoadLocal(usize),
+    LoadInvariant(usize),
     DenseLoad {
         receiver: usize,
         index: Register,
@@ -310,6 +422,9 @@ enum NumberInstruction {
     },
     Update {
         operation: UpdateOp,
+        value: Register,
+    },
+    MathRound {
         value: Register,
     },
 }
@@ -484,9 +599,19 @@ struct DynamicProgramRun {
 impl DenseNumericMutationLoopPlan {
     pub(super) fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<Self> {
         compile_fixed(bytecode, header, backedge).or_else(|| {
-            compile_dynamic(bytecode, header, backedge).map(|(exit, plan)| Self {
-                exit,
-                kind: DensePlanKind::Dynamic(plan),
+            compiler::compile_dynamic(bytecode, header, backedge).map(|(exit, plan)| {
+                let kind = if legacy::LegacyDynamicDensePlan::supports(&plan) {
+                    let requires_suppression = plan.store_count > 1;
+                    let plan = legacy::LegacyDynamicDensePlan::from_extended(plan);
+                    if requires_suppression {
+                        DensePlanKind::LegacySuppressingDynamic(plan)
+                    } else {
+                        DensePlanKind::LegacyDynamic(plan)
+                    }
+                } else {
+                    DensePlanKind::Dynamic(plan)
+                };
+                Self { exit, kind }
             })
         })
     }
@@ -495,9 +620,43 @@ impl DenseNumericMutationLoopPlan {
         self.exit
     }
 
-    pub(super) fn try_run(&self, vm: &mut Vm<'_>) -> bool {
+    #[cfg(test)]
+    pub(super) fn is_legacy_dynamic(&self) -> bool {
+        matches!(self.kind, DensePlanKind::LegacyDynamic(_))
+    }
+
+    #[cfg(test)]
+    pub(super) fn is_suppressing_legacy_dynamic(&self) -> bool {
+        matches!(self.kind, DensePlanKind::LegacySuppressingDynamic(_))
+    }
+
+    #[cfg(test)]
+    pub(super) fn is_legacy_reduction(&self) -> bool {
+        matches!(
+            &self.kind,
+            DensePlanKind::LegacyDynamic(plan) if plan.is_reduction()
+        )
+    }
+
+    #[cfg(test)]
+    pub(super) fn is_two_lane_strided_reduction(&self) -> bool {
+        matches!(
+            &self.kind,
+            DensePlanKind::LegacyDynamic(plan) if plan.is_two_lane_strided_reduction()
+        )
+    }
+
+    pub(super) fn try_run(&self, vm: &mut Vm<'_>) -> DenseNumericMutationLoopRun {
         match &self.kind {
-            DensePlanKind::Fixed(plan) => plan.try_run(vm, self.exit),
+            DensePlanKind::Fixed(plan) => {
+                DenseNumericMutationLoopRun::from_handled(plan.try_run(vm, self.exit))
+            }
+            DensePlanKind::LegacyDynamic(plan) => {
+                DenseNumericMutationLoopRun::from_handled(plan.try_run(vm, self.exit))
+            }
+            DensePlanKind::LegacySuppressingDynamic(plan) => {
+                plan.try_run_suppressing(vm, self.exit)
+            }
             DensePlanKind::Dynamic(plan) => plan.try_run(vm, self.exit),
         }
     }
@@ -714,6 +873,7 @@ fn compile_fixed_mutation(
 }
 
 impl FixedDensePlan {
+    #[inline(never)]
     fn try_run(&self, vm: &mut Vm<'_>, exit: usize) -> bool {
         if vm.direct_eval_with_stack {
             return false;
@@ -779,508 +939,6 @@ impl FixedDensePlan {
     }
 }
 
-#[derive(Clone, Debug)]
-enum AbstractValue {
-    Local(usize),
-    Number(Register),
-    Key(Register),
-    DirectThis,
-    ArraySource(ArraySource),
-    Other,
-}
-
-struct Translator<'a> {
-    bytecode: &'a Bytecode,
-    stack: Vec<AbstractValue>,
-    locals: BTreeMap<usize, AbstractValue>,
-    operations: Vec<NumberInstruction>,
-    writes: Vec<LocalWrite>,
-    written_slots: BTreeSet<usize>,
-    number_slots: BTreeSet<usize>,
-    receiver_sources: Vec<ArraySource>,
-    store_count: usize,
-}
-
-impl<'a> Translator<'a> {
-    fn new(bytecode: &'a Bytecode) -> Self {
-        Self {
-            bytecode,
-            stack: Vec::new(),
-            locals: BTreeMap::new(),
-            operations: Vec::new(),
-            writes: Vec::new(),
-            written_slots: BTreeSet::new(),
-            number_slots: BTreeSet::new(),
-            receiver_sources: Vec::new(),
-            store_count: 0,
-        }
-    }
-
-    fn emit(&mut self, operation: NumberInstruction) -> Option<Register> {
-        if self.operations.len() >= MAX_DENSE_OPS {
-            return None;
-        }
-        let register = self.operations.len();
-        self.operations.push(operation);
-        Some(register)
-    }
-
-    fn pop(&mut self) -> Option<AbstractValue> {
-        self.stack.pop()
-    }
-
-    fn number(&mut self, value: AbstractValue) -> Option<Register> {
-        match value {
-            AbstractValue::Number(register) | AbstractValue::Key(register) => Some(register),
-            AbstractValue::Local(slot) => {
-                self.number_slots.insert(slot);
-                self.emit(NumberInstruction::LoadLocal(slot))
-            }
-            AbstractValue::DirectThis | AbstractValue::ArraySource(_) | AbstractValue::Other => {
-                None
-            }
-        }
-    }
-
-    fn receiver(&mut self, value: &AbstractValue) -> Option<usize> {
-        let source = match value {
-            AbstractValue::Local(slot) => ArraySource::Local(*slot),
-            AbstractValue::ArraySource(source) => source.clone(),
-            AbstractValue::Number(_)
-            | AbstractValue::Key(_)
-            | AbstractValue::DirectThis
-            | AbstractValue::Other => return None,
-        };
-        if let Some(receiver) = self
-            .receiver_sources
-            .iter()
-            .position(|existing| existing == &source)
-        {
-            return Some(receiver);
-        }
-        if self.receiver_sources.len() >= MAX_DENSE_RECEIVERS {
-            return None;
-        }
-        let receiver = self.receiver_sources.len();
-        self.receiver_sources.push(source);
-        Some(receiver)
-    }
-
-    fn translate(&mut self, op: &Op) -> Option<()> {
-        match op {
-            Op::LoadLocal(slot) => self.stack.push(
-                self.locals
-                    .get(slot)
-                    .cloned()
-                    .unwrap_or(AbstractValue::Local(*slot)),
-            ),
-            Op::LoadGlobal(name) if name == "this" && !self.bytecode.is_global_scope() => {
-                self.stack.push(AbstractValue::DirectThis);
-            }
-            Op::LoadConst(index) => match self.bytecode.constants.get(*index)? {
-                Value::Number(value) => {
-                    let register = self.emit(NumberInstruction::Constant(*value))?;
-                    self.stack.push(AbstractValue::Number(register));
-                }
-                _ => self.stack.push(AbstractValue::Other),
-            },
-            Op::Dup => self.stack.push(self.stack.last()?.clone()),
-            Op::Pop => {
-                if matches!(
-                    self.pop()?,
-                    AbstractValue::DirectThis | AbstractValue::ArraySource(_)
-                ) {
-                    return None;
-                }
-            }
-            Op::StoreLocal(slot) | Op::AssignLocal(slot) => {
-                let mut value = self.pop()?;
-                self.written_slots.insert(*slot);
-                let register = match &value {
-                    AbstractValue::Number(register) | AbstractValue::Key(register) => {
-                        Some(*register)
-                    }
-                    AbstractValue::Local(_)
-                        if !self.bytecode.local_is_compiler_temporary(*slot) =>
-                    {
-                        let register = self.number(value.clone())?;
-                        value = AbstractValue::Number(register);
-                        Some(register)
-                    }
-                    AbstractValue::DirectThis | AbstractValue::ArraySource(_) => return None,
-                    AbstractValue::Other if !self.bytecode.local_is_compiler_temporary(*slot) => {
-                        return None;
-                    }
-                    AbstractValue::Local(_) | AbstractValue::Other => None,
-                };
-                if let Some(register) = register {
-                    if self.writes.len() >= MAX_DENSE_WRITES {
-                        return None;
-                    }
-                    self.writes.push(LocalWrite {
-                        local: *slot,
-                        value: register,
-                    });
-                }
-                self.locals.insert(*slot, value);
-            }
-            Op::RequireObjectCoercible => {
-                if matches!(self.stack.last(), Some(AbstractValue::Other) | None) {
-                    return None;
-                }
-            }
-            Op::ToNumeric => {
-                let value = self.pop()?;
-                let register = self.number(value)?;
-                self.stack.push(AbstractValue::Number(register));
-            }
-            Op::ToPropertyKeyForAccess => {
-                let value = self.pop()?;
-                let register = self.number(value)?;
-                self.stack.push(AbstractValue::Key(register));
-            }
-            Op::Binary(operation) if supported_binary(*operation) => {
-                let right = self.pop()?;
-                let left = self.pop()?;
-                let right = self.number(right)?;
-                let left = self.number(left)?;
-                let register = self.emit(NumberInstruction::Binary {
-                    operation: *operation,
-                    left,
-                    right,
-                })?;
-                self.stack.push(AbstractValue::Number(register));
-            }
-            Op::Unary(operation)
-                if matches!(
-                    operation,
-                    UnaryOp::Plus | UnaryOp::Minus | UnaryOp::BitwiseNot
-                ) =>
-            {
-                let value = self.pop()?;
-                let value = self.number(value)?;
-                let register = self.emit(NumberInstruction::Unary {
-                    operation: *operation,
-                    value,
-                })?;
-                self.stack.push(AbstractValue::Number(register));
-            }
-            Op::Update(operation) => {
-                let value = self.pop()?;
-                let value = self.number(value)?;
-                let register = self.emit(NumberInstruction::Update {
-                    operation: *operation,
-                    value,
-                })?;
-                self.stack.push(AbstractValue::Number(register));
-            }
-            Op::GetPropNamed { key, cache } if cache.local_slot().is_none() => {
-                let AbstractValue::DirectThis = self.pop()? else {
-                    return None;
-                };
-                self.stack
-                    .push(AbstractValue::ArraySource(ArraySource::DirectThisOwnData(
-                        key.clone(),
-                    )));
-            }
-            Op::GetProp => {
-                let key = self.pop()?;
-                let object = self.pop()?;
-                let index = self.number(key)?;
-                let receiver = self.receiver(&object)?;
-                let register = self.emit(NumberInstruction::DenseLoad { receiver, index })?;
-                self.stack.push(AbstractValue::Number(register));
-            }
-            Op::SetProp { .. } => {
-                if self.store_count >= MAX_DENSE_STORES {
-                    return None;
-                }
-                let value = self.pop()?;
-                let key = self.pop()?;
-                let object = self.pop()?;
-                let value = self.number(value)?;
-                let index = self.number(key)?;
-                let receiver = self.receiver(&object)?;
-                self.emit(NumberInstruction::DenseStore {
-                    receiver,
-                    index,
-                    value,
-                })?;
-                self.store_count += 1;
-                self.stack.push(AbstractValue::Number(value));
-            }
-            _ => return None,
-        }
-        Some(())
-    }
-}
-
-fn instruction_uses_register(operation: &NumberInstruction, target: Register) -> bool {
-    match operation {
-        NumberInstruction::Constant(_) | NumberInstruction::LoadLocal(_) => false,
-        NumberInstruction::DenseLoad { index, .. } => *index == target,
-        NumberInstruction::DenseStore { index, value, .. }
-        | NumberInstruction::Binary {
-            left: index,
-            right: value,
-            ..
-        } => *index == target || *value == target,
-        NumberInstruction::Unary { value, .. } | NumberInstruction::Update { value, .. } => {
-            *value == target
-        }
-    }
-}
-
-fn remap_removed_register(register: &mut Register, removed: Register) -> bool {
-    if *register == removed {
-        return false;
-    }
-    if *register > removed {
-        *register -= 1;
-    }
-    true
-}
-
-fn remap_instruction_registers(operation: &mut NumberInstruction, removed: Register) -> bool {
-    match operation {
-        NumberInstruction::Constant(_) | NumberInstruction::LoadLocal(_) => true,
-        NumberInstruction::DenseLoad { index, .. } => remap_removed_register(index, removed),
-        NumberInstruction::DenseStore { index, value, .. }
-        | NumberInstruction::Binary {
-            left: index,
-            right: value,
-            ..
-        } => remap_removed_register(index, removed) && remap_removed_register(value, removed),
-        NumberInstruction::Unary { value, .. } | NumberInstruction::Update { value, .. } => {
-            remap_removed_register(value, removed)
-        }
-    }
-}
-
-fn sink_unique_store(
-    operations: &mut Vec<NumberInstruction>,
-    writes: &mut [LocalWrite],
-    store_count: usize,
-) -> Option<Option<SunkDenseStore>> {
-    if store_count != 1 {
-        return Some(None);
-    }
-    let (position, mut store) =
-        operations
-            .iter()
-            .enumerate()
-            .find_map(|(position, operation)| match operation {
-                NumberInstruction::DenseStore {
-                    receiver,
-                    index,
-                    value,
-                } => Some((
-                    position,
-                    SunkDenseStore {
-                        receiver: *receiver,
-                        index: *index,
-                        value: *value,
-                    },
-                )),
-                _ => None,
-            })?;
-    if operations[position + 1..].iter().any(|operation| {
-        matches!(
-            operation,
-            NumberInstruction::DenseLoad { .. } | NumberInstruction::DenseStore { .. }
-        )
-    }) {
-        return Some(None);
-    }
-
-    let store_result_is_used = operations.iter().enumerate().any(|(index, operation)| {
-        index != position && instruction_uses_register(operation, position)
-    }) || writes.iter().any(|write| write.value == position);
-    debug_assert!(
-        !store_result_is_used,
-        "SetProp keeps its input value as the expression result"
-    );
-    if store_result_is_used {
-        return None;
-    }
-
-    operations.remove(position);
-    if !operations
-        .iter_mut()
-        .all(|operation| remap_instruction_registers(operation, position))
-        || !writes
-            .iter_mut()
-            .all(|write| remap_removed_register(&mut write.value, position))
-        || !remap_removed_register(&mut store.index, position)
-        || !remap_removed_register(&mut store.value, position)
-    {
-        return None;
-    }
-    Some(Some(store))
-}
-
-fn compile_dynamic(
-    bytecode: &Bytecode,
-    header: usize,
-    backedge: usize,
-) -> Option<(usize, DynamicDensePlan)> {
-    let code = &bytecode.code;
-    let Op::LoadLocal(counter_slot) = code.get(header)? else {
-        return None;
-    };
-    let less_than_header = (|| {
-        let limit = match code.get(header + 1)? {
-            Op::LoadLocal(slot) => DynamicLimit::LocalNumber(*slot),
-            Op::GetPropNamed { key, cache } if key.as_ref() == "length" => {
-                DynamicLimit::LocalArrayLength(cache.local_slot()?)
-            }
-            _ => return None,
-        };
-        let (Op::Binary(BinaryOp::Lt), Op::JumpIfFalse(exit), Op::Pop) = (
-            code.get(header + 2)?,
-            code.get(header + 3)?,
-            code.get(header + 4)?,
-        ) else {
-            return None;
-        };
-        Some((DynamicControl::LessThan(limit), header + 5, *exit))
-    })();
-    let countdown_header = (|| {
-        let (
-            Op::ToNumeric,
-            Op::Dup,
-            Op::Update(UpdateOp::Decrement),
-            Op::AssignLocal(assigned_counter_slot),
-            Op::JumpIfFalse(exit),
-            Op::Pop,
-        ) = (
-            code.get(header + 1)?,
-            code.get(header + 2)?,
-            code.get(header + 3)?,
-            code.get(header + 4)?,
-            code.get(header + 5)?,
-            code.get(header + 6)?,
-        )
-        else {
-            return None;
-        };
-        if assigned_counter_slot != counter_slot {
-            return None;
-        }
-        Some((DynamicControl::Countdown, header + 7, *exit))
-    })();
-    let (control, body_start, exit) = less_than_header.or(countdown_header)?;
-    if exit <= backedge
-        || !matches!(code.get(exit), Some(Op::Pop))
-        || !matches!(code.get(backedge), Some(Op::Jump(target)) if *target == header)
-    {
-        return None;
-    }
-
-    let mut translator = Translator::new(bytecode);
-    for op in &code[body_start..backedge] {
-        translator.translate(op)?;
-    }
-    if !translator.stack.is_empty()
-        || !translator
-            .operations
-            .iter()
-            .any(|operation| matches!(operation, NumberInstruction::DenseLoad { .. }))
-    {
-        return None;
-    }
-    let limit = control.limit();
-    let limit_slot = limit.map(DynamicLimit::source_slot);
-    if limit_slot.is_some_and(|limit_slot| counter_slot == &limit_slot)
-        || translator.receiver_sources.iter().any(|receiver| {
-            receiver.local_slot().is_some_and(|receiver| {
-                counter_slot == &receiver
-                    || matches!(limit, Some(DynamicLimit::LocalNumber(slot)) if slot == receiver)
-                    || translator.number_slots.contains(&receiver)
-                    || translator.written_slots.contains(&receiver)
-            })
-        })
-        || limit_slot.is_some_and(|slot| translator.written_slots.contains(&slot))
-        || matches!(limit, Some(DynamicLimit::LocalArrayLength(slot)) if translator.number_slots.contains(&slot))
-        || match control {
-            DynamicControl::LessThan(_) => !translator.written_slots.contains(counter_slot),
-            DynamicControl::Countdown => translator.written_slots.contains(counter_slot),
-        }
-        || translator.store_count != 0
-            && (matches!(limit, Some(DynamicLimit::LocalArrayLength(_)))
-                || translator
-                    .receiver_sources
-                    .iter()
-                    .any(|source| !matches!(source, ArraySource::Local(_))))
-    {
-        return None;
-    }
-    let sunk_store = sink_unique_store(
-        &mut translator.operations,
-        &mut translator.writes,
-        translator.store_count,
-    )?;
-    translator.number_slots.insert(*counter_slot);
-    if let Some(DynamicLimit::LocalNumber(limit_slot)) = limit {
-        translator.number_slots.insert(limit_slot);
-    }
-    let mut local_slots = translator.number_slots;
-    local_slots.extend(translator.writes.iter().map(|write| write.local));
-    let local_slots: Vec<_> = local_slots.into_iter().collect();
-    if local_slots.len() > MAX_DENSE_LOCALS {
-        return None;
-    }
-    let local_index = |slot| local_slots.binary_search(&slot).ok();
-    for operation in &mut translator.operations {
-        if let NumberInstruction::LoadLocal(slot) = operation {
-            *slot = local_index(*slot)?;
-        }
-    }
-    for write in &mut translator.writes {
-        write.local = local_index(write.local)?;
-    }
-
-    Some((
-        exit,
-        DynamicDensePlan {
-            counter_local: local_index(*counter_slot)?,
-            control: match control {
-                DynamicControl::LessThan(DynamicLimit::LocalNumber(slot)) => {
-                    DynamicControl::LessThan(DynamicLimit::LocalNumber(local_index(slot)?))
-                }
-                DynamicControl::LessThan(DynamicLimit::LocalArrayLength(slot)) => {
-                    DynamicControl::LessThan(DynamicLimit::LocalArrayLength(slot))
-                }
-                DynamicControl::Countdown => DynamicControl::Countdown,
-            },
-            receiver_sources: translator.receiver_sources,
-            local_slots,
-            operations: translator.operations,
-            writes: translator.writes,
-            store_count: translator.store_count,
-            sunk_store,
-            header,
-        },
-    ))
-}
-
-fn supported_binary(operation: BinaryOp) -> bool {
-    matches!(
-        operation,
-        BinaryOp::Add
-            | BinaryOp::Sub
-            | BinaryOp::Mul
-            | BinaryOp::Div
-            | BinaryOp::Rem
-            | BinaryOp::Shl
-            | BinaryOp::Shr
-            | BinaryOp::UShr
-            | BinaryOp::BitwiseAnd
-            | BinaryOp::BitwiseXor
-            | BinaryOp::BitwiseOr
-    )
-}
-
 impl DynamicDensePlan {
     fn deoptimized_run(
         &self,
@@ -1301,6 +959,7 @@ impl DynamicDensePlan {
         &self,
         access: &mut A,
         locals: &mut [f64; MAX_DENSE_LOCALS],
+        invariant_numbers: &[f64],
         registers: &mut [f64],
         limit: Option<f64>,
     ) -> DynamicProgramRun {
@@ -1337,6 +996,7 @@ impl DynamicDensePlan {
                 let value = match *operation {
                     NumberInstruction::Constant(value) => value,
                     NumberInstruction::LoadLocal(local) => locals[local],
+                    NumberInstruction::LoadInvariant(source) => invariant_numbers[source],
                     NumberInstruction::DenseLoad { receiver, index } => {
                         let Some(index) = array_index_from_number(registers[index]) else {
                             return self.deoptimized_run(locals, countdown_old, made_progress);
@@ -1374,6 +1034,10 @@ impl DynamicDensePlan {
                         UpdateOp::Increment => registers[value] + 1.0,
                         UpdateOp::Decrement => registers[value] - 1.0,
                     },
+                    NumberInstruction::MathRound { value } => {
+                        record_math_round_operation();
+                        crate::math::round_number(registers[value])
+                    }
                 };
                 registers[register] = value;
             }
@@ -1402,9 +1066,13 @@ impl DynamicDensePlan {
         }
     }
 
-    fn try_run(&self, vm: &mut Vm<'_>, exit: usize) -> bool {
+    #[inline(never)]
+    fn try_run(&self, vm: &mut Vm<'_>, exit: usize) -> DenseNumericMutationLoopRun {
         if vm.direct_eval_with_stack {
-            return false;
+            return DenseNumericMutationLoopRun::Declined;
+        }
+        if self.uses_math_round && !native_math_round_is_current(vm) {
+            return DenseNumericMutationLoopRun::Declined;
         }
         for slot in self
             .local_slots
@@ -1415,16 +1083,25 @@ impl DynamicDensePlan {
                     .iter()
                     .filter_map(ArraySource::local_slot),
             )
-            .chain(self.control.array_length_slot())
+            .chain(
+                self.number_sources
+                    .iter()
+                    .filter_map(|source| source.owner.local_slot()),
+            )
+            .chain(
+                self.control
+                    .limit()
+                    .and_then(DynamicLimit::additional_authority_slot),
+            )
         {
             if !vm.slot_is_authoritative(slot) {
-                return false;
+                return DenseNumericMutationLoopRun::Declined;
             }
         }
         let mut locals = [0.0; MAX_DENSE_LOCALS];
         for (local, slot) in self.local_slots.iter().enumerate() {
             let Some(value) = local_number(vm, *slot) else {
-                return false;
+                return DenseNumericMutationLoopRun::Declined;
             };
             locals[local] = value;
         }
@@ -1435,16 +1112,30 @@ impl DynamicDensePlan {
                 || counter.fract() != 0.0
                 || counter > MAX_SAFE_INTEGER
             {
-                return false;
+                return DenseNumericMutationLoopRun::Declined;
             }
         }
-        let limit = match self.control {
-            DynamicControl::LessThan(DynamicLimit::LocalNumber(local)) => Some(locals[local]),
+        let invariant_numbers = self
+            .number_sources
+            .iter()
+            .map(|source| source.resolve_number(vm))
+            .collect::<Option<Vec<_>>>();
+        let Some(invariant_numbers) = invariant_numbers else {
+            return DenseNumericMutationLoopRun::Declined;
+        };
+        let limit = match &self.control {
+            DynamicControl::LessThan(DynamicLimit::LocalNumber(local)) => Some(locals[*local]),
             DynamicControl::LessThan(DynamicLimit::LocalArrayLength(slot)) => {
-                match vm.locals.get(slot) {
+                match vm.locals.get(*slot) {
                     Some(Some(Value::Array(array))) => Some(array.len() as f64),
-                    _ => return false,
+                    _ => return DenseNumericMutationLoopRun::Declined,
                 }
+            }
+            DynamicControl::LessThan(DynamicLimit::OwnDataNumber(source)) => {
+                let Some(limit) = source.resolve_number(vm) else {
+                    return DenseNumericMutationLoopRun::Declined;
+                };
+                Some(limit)
             }
             DynamicControl::Countdown => None,
         };
@@ -1460,15 +1151,21 @@ impl DynamicDensePlan {
             let Some(arrays) = self
                 .receiver_sources
                 .iter()
-                .map(|source| source.resolve_read_only(vm))
+                .map(|source| source.resolve(vm))
                 .collect::<Option<Vec<_>>>()
             else {
                 record_read_only_bailout();
-                return false;
+                return DenseNumericMutationLoopRun::Declined;
             };
             let ran = ArrayRef::with_dense_readable_element_sets(&arrays, |elements| {
                 let mut access = ReadAccess { elements };
-                self.run_program(&mut access, &mut locals, registers, limit)
+                self.run_program(
+                    &mut access,
+                    &mut locals,
+                    &invariant_numbers,
+                    registers,
+                    limit,
+                )
             });
             match ran {
                 Some(run) => {
@@ -1483,49 +1180,60 @@ impl DynamicDensePlan {
             }
             ran
         } else if self.receiver_sources.len() == 1 && self.store_count == 1 {
-            let Some(slot) = self.receiver_sources[0].local_slot() else {
-                return false;
+            let Some(array) = self.receiver_sources[0].resolve(vm) else {
+                return DenseNumericMutationLoopRun::Declined;
             };
-            let Some(Some(Value::Array(array))) = vm.locals.get(slot) else {
-                return false;
-            };
-            let array = array.clone();
             let ran = array.with_dense_writable_elements(|elements| {
                 let mut access = SingleAccess {
                     elements,
                     pending: None,
                 };
-                self.run_program(&mut access, &mut locals, registers, limit)
+                self.run_program(
+                    &mut access,
+                    &mut locals,
+                    &invariant_numbers,
+                    registers,
+                    limit,
+                )
             });
             if ran.is_some_and(|run| run.made_progress) {
                 record_single_path_hit();
+            }
+            if ran.is_none() {
+                record_writable_lease_suppression();
+                return DenseNumericMutationLoopRun::Suppress;
             }
             ran
         } else {
             let Some(arrays) = self
                 .receiver_sources
                 .iter()
-                .map(|source| match source.local_slot() {
-                    Some(slot) => match vm.locals.get(slot) {
-                        Some(Some(Value::Array(array))) => Some(array.clone()),
-                        _ => None,
-                    },
-                    None => None,
-                })
+                .map(|source| source.resolve(vm))
                 .collect::<Option<Vec<_>>>()
             else {
-                return false;
+                return DenseNumericMutationLoopRun::Declined;
             };
-            ArrayRef::with_distinct_dense_writable_elements(&arrays, |elements| {
+            let ran = ArrayRef::with_distinct_dense_writable_elements(&arrays, |elements| {
                 let mut access = MultiAccess {
                     elements,
                     pending: Vec::with_capacity(self.store_count),
                 };
-                self.run_program(&mut access, &mut locals, registers, limit)
-            })
+                self.run_program(
+                    &mut access,
+                    &mut locals,
+                    &invariant_numbers,
+                    registers,
+                    limit,
+                )
+            });
+            if ran.is_none() {
+                record_writable_lease_suppression();
+                return DenseNumericMutationLoopRun::Suppress;
+            }
+            ran
         };
         let Some(run) = ran else {
-            return false;
+            return DenseNumericMutationLoopRun::Declined;
         };
         if self.control.is_countdown() && run.made_progress {
             record_countdown_path_hit();
@@ -1533,8 +1241,11 @@ impl DynamicDensePlan {
         if self.sunk_store.is_some() && run.made_progress {
             record_sunk_store_hit();
         }
+        if self.store_count != 0 && run.made_progress {
+            record_writable_path_hit();
+        }
         if run.deoptimized && !run.made_progress {
-            return false;
+            return DenseNumericMutationLoopRun::Declined;
         }
         for (slot, value) in self.local_slots.iter().copied().zip(locals) {
             set_local_number(vm, slot, value);
@@ -1544,7 +1255,7 @@ impl DynamicDensePlan {
         } else {
             exit + 1
         };
-        true
+        DenseNumericMutationLoopRun::Handled
     }
 }
 

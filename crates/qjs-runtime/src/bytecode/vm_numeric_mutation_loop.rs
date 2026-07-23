@@ -10,9 +10,13 @@ use super::{
 };
 
 mod dense;
+#[cfg(test)]
+mod dense_invariant_tests;
+#[cfg(test)]
+mod dense_reduction_tests;
 mod predicate_scan;
 
-use dense::DenseNumericMutationLoopPlan;
+use dense::{DenseNumericMutationLoopPlan, DenseNumericMutationLoopRun};
 use predicate_scan::{DenseNumericPredicateScanPlan, PredicateScanRun};
 
 #[derive(Clone, Copy, Debug)]
@@ -126,12 +130,14 @@ impl NumericMutationLoopPlan {
             NumericMutationLoopKind::Named(plan) => {
                 NumericMutationLoopRun::from_handled(plan.try_run(vm, self.exit))
             }
-            NumericMutationLoopKind::Dense(plan) => {
-                NumericMutationLoopRun::from_handled(plan.try_run(vm))
-            }
+            NumericMutationLoopKind::Dense(plan) => match plan.try_run(vm) {
+                DenseNumericMutationLoopRun::Handled => NumericMutationLoopRun::Handled,
+                DenseNumericMutationLoopRun::Declined => NumericMutationLoopRun::Declined,
+                DenseNumericMutationLoopRun::Suppress => NumericMutationLoopRun::SuppressPlan,
+            },
             NumericMutationLoopKind::PredicateScan(plan) => match plan.try_run(vm) {
                 PredicateScanRun::Handled => NumericMutationLoopRun::Handled,
-                PredicateScanRun::Suppress => NumericMutationLoopRun::SuppressPredicate,
+                PredicateScanRun::Suppress => NumericMutationLoopRun::SuppressPlan,
             },
         }
     }
@@ -141,7 +147,7 @@ impl NumericMutationLoopPlan {
 enum NumericMutationLoopRun {
     Handled,
     Declined,
-    SuppressPredicate,
+    SuppressPlan,
 }
 
 impl NumericMutationLoopRun {
@@ -463,9 +469,9 @@ pub(super) fn try_run_numeric_mutation_loop(
     match plan.try_run(vm) {
         NumericMutationLoopRun::Handled => true,
         NumericMutationLoopRun::Declined => false,
-        NumericMutationLoopRun::SuppressPredicate => {
+        NumericMutationLoopRun::SuppressPlan => {
             // Plans are already cloned into each frame. Removing a zero-
-            // progress predicate plan suppresses only this invocation and
+            // progress plan suppresses only this invocation and
             // adds no state to the call-path-sensitive FrameState layout.
             vm.numeric_mutation_loop_plans.remove(index);
             false
@@ -940,18 +946,6 @@ mod tests {
         assert_eq!(dense::test_read_only_path_hits(), 1);
         assert_eq!(dense::test_read_only_iterations(), 2);
         assert_eq!(dense::test_read_only_bailouts(), 1);
-    }
-
-    #[test]
-    fn named_array_sources_do_not_extend_writable_dense_regions() {
-        let bytecode = nested_function(
-            "function copy(buffer) { for (var index = 0; index < buffer.length; index++) this.values[index] = buffer[index] + 1; }",
-        );
-        assert!(
-            NumericMutationLoopPlan::compile_all(&bytecode).is_empty(),
-            "{:#?}",
-            bytecode.code
-        );
     }
 
     #[test]
