@@ -183,10 +183,18 @@ verify_source() {
 CURRENT_PHASE="source_validation"
 verify_source "$CANDIDATE_SOURCE" "$CANDIDATE_REVISION"
 verify_source "$BASE_SOURCE" "$BASE_REVISION"
+EXPECTED_CARGO_CONFIG="$HARNESS_ROOT/.cargo/config.toml"
 for source in "$CANDIDATE_SOURCE" "$BASE_SOURCE"; do
-  if [ -e "$source/.cargo/config" ] || [ -e "$source/.cargo/config.toml" ]; then
-    echo "error: source-local Cargo config is not allowed in hosted preview" >&2
+  if [ -e "$source/.cargo/config" ]; then
+    echo "error: legacy source-local Cargo config is not allowed in hosted preview" >&2
     exit 2
+  fi
+  if [ -e "$source/.cargo/config.toml" ]; then
+    if [ ! -f "$EXPECTED_CARGO_CONFIG" ] \
+      || ! cmp -s "$source/.cargo/config.toml" "$EXPECTED_CARGO_CONFIG"; then
+      echo "error: source-local Cargo config does not match the trusted harness" >&2
+      exit 2
+    fi
   fi
 done
 

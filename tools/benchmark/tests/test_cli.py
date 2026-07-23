@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -22,6 +23,7 @@ class CliTests(unittest.TestCase):
         )
         self.assertIsNotNone(benchmark_case)
         assert benchmark_case is not None
+        self.assertIn(".cargo/config.toml", benchmark_case.group(0))
         self.assertIn("tools/__init__.py", benchmark_case.group(0))
         self.assertIn("scripts/resource-benchmark*.sh", benchmark_case.group(0))
         self.assertIn("scripts/lifecycle-bench.sh", benchmark_case.group(0))
@@ -29,6 +31,92 @@ class CliTests(unittest.TestCase):
         self.assertIn("scripts/performance-policy-audit.sh", benchmark_case.group(0))
         self.assertIn("scripts/performance-preview.sh", benchmark_case.group(0))
         self.assertIn(".github/workflows/performance-smoke.yml", benchmark_case.group(0))
+
+    def test_cargo_config_runs_cargo_and_benchmark_gates(self) -> None:
+        script = (ROOT / "scripts/check-touched.sh").read_text(encoding="utf-8")
+        cargo_case = re.search(
+            r"\.cargo/config\.toml\|.*?\)\s*\n\s*has_cargo=1",
+            script,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(cargo_case)
+
+    def test_staged_cargo_config_removal_runs_benchmark_gate(self) -> None:
+        for action in ("delete", "rename-away"):
+            with self.subTest(action=action), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                scripts = root / "scripts"
+                tests = root / "tools" / "benchmark" / "tests"
+                scripts.mkdir(parents=True)
+                tests.mkdir(parents=True)
+                (tests / "test_placeholder.py").write_text(
+                    "import unittest\n\n"
+                    "class PlaceholderTests(unittest.TestCase):\n"
+                    "    def test_placeholder(self):\n"
+                    "        self.assertTrue(True)\n",
+                    encoding="utf-8",
+                )
+                shutil.copy2(ROOT / "scripts/check-touched.sh", scripts)
+                (scripts / "lib.sh").write_text(
+                    'qjs_resolve_cargo() { printf "%s\\n" "$CARGO"; }\n',
+                    encoding="utf-8",
+                )
+                stub_names = (
+                    "check-file-size.sh",
+                    "benchmark.sh",
+                    "benchmark-report.sh",
+                    "resource-benchmark.sh",
+                    "resource-benchmark-report.sh",
+                    "lifecycle-bench.sh",
+                    "external-corpus-audit.sh",
+                    "performance-policy-audit.sh",
+                    "performance-preview.sh",
+                )
+                for name in stub_names:
+                    stub = scripts / name
+                    stub.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+                    stub.chmod(0o755)
+                config = root / ".cargo" / "config.toml"
+                config.parent.mkdir()
+                config.write_text("[build]\n", encoding="utf-8")
+                subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+                subprocess.run(
+                    ["git", "config", "user.email", "benchmark-test@example.invalid"],
+                    cwd=root,
+                    check=True,
+                )
+                subprocess.run(
+                    ["git", "config", "user.name", "Benchmark Test"],
+                    cwd=root,
+                    check=True,
+                )
+                subprocess.run(
+                    ["git", "add", ".cargo/config.toml"], cwd=root, check=True
+                )
+                subprocess.run(
+                    ["git", "commit", "-qm", "seed cargo config"],
+                    cwd=root,
+                    check=True,
+                )
+                if action == "delete":
+                    config.unlink()
+                else:
+                    config.rename(root / "retired-config.toml")
+                subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+                env = os.environ.copy()
+                env["CARGO"] = "/usr/bin/true"
+                result = subprocess.run(
+                    [str(scripts / "check-touched.sh"), "--staged", "--explain"],
+                    cwd=root,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=False,
+                )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("  .cargo/config.toml", result.stdout)
+            self.assertIn("python3 -m unittest discover", result.stdout)
 
     def test_benchmark_shells_are_in_syntax_gate(self) -> None:
         for script_name in ("check-touched.sh", "check.sh"):

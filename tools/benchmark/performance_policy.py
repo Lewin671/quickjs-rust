@@ -61,6 +61,7 @@ EXPECTED_WORKFLOW_SHA256 = "72ce394337ab94b0c9436c714da7beefab44c39b409b55f89bcd
 PREVIEW_ORCHESTRATOR = "scripts/performance-preview.sh"
 PREVIEW_ROLES = ("candidate", "base", "quickjs-ng")
 PREVIEW_IMPLEMENTATION_FILES = (
+    ".cargo/config.toml",
     ".github/actions/setup-rust/action.yml",
     ".github/workflows/performance-smoke.yml",
     "benchmarks/external-corpora.json",

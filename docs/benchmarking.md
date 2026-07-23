@@ -186,7 +186,7 @@ Receipt shape (values must describe the actual build):
     "toolchain": "rustc 1.95.0 (59807616e 2026-04-14); cargo 1.95.0 (f2d3ce0bd 2026-03-21); LLVM 22.1.2",
     "target": "aarch64-apple-darwin",
     "features": [],
-    "flags": [],
+    "flags": ["-Cllvm-args=-align-all-functions=4"],
     "lto": "off",
     "strip": "none",
     "allocator": "system",
@@ -679,10 +679,10 @@ checked-in trust root from any working directory with:
 
 The audit cross-checks all four current measurement/analysis protocol hashes,
 the pinned QuickJS-NG repository/revision, and an aggregate hash over the full
-hosted control/audit chain: workflow, Rust setup action, preview orchestrator,
-renderer, admission/failure-evidence helper, both audit wrappers and both audit
-validators, plus the external-corpus registry. It also requires that registry
-to remain non-claim and zero-admitted.
+hosted control/audit chain: the trusted Cargo codegen config, workflow, Rust
+setup action, preview orchestrator, renderer, admission/failure-evidence
+helper, both audit wrappers and both audit validators, plus the external-corpus
+registry. It also requires that registry to remain non-claim and zero-admitted.
 It reports `claim_eligible=false`, no fixed hardware, no evidence entries, and
 all `nightly`, `release`, and `pr_sentinel` gates disabled. Every
 `--require-gate` request therefore exits 2. A custom `--policy` is structural
@@ -775,8 +775,12 @@ measurement/report health fails, while partial or malformed entries are never
 saved. Cache backend restore/save errors are non-fatal: they degrade to
 rebuild/no-save without changing benchmark failure semantics.
 
-It rejects repository Cargo config overrides, forces the recorded Cargo release
-profile and generic CPU flags, and verifies that every source tree remains at
+It rejects unrecognized repository Cargo config overrides. The only accepted
+source-local config is the exact trusted `.cargo/config.toml`, which aligns
+functions to 16-byte boundaries; absence remains valid for a transition base.
+Hosted builds override source config with the equivalent recorded alignment
+flag plus the generic CPU flag, force the recorded Cargo release profile, and
+verify that every source tree remains at
 the requested clean revision before and after builds and again after
 measurement. Allocator selection for all engines is recorded as
 source-controlled and not independently verified. Before candidate build or
@@ -788,6 +792,14 @@ code into an adversarial sandbox. The script generates a Linux-hosted dynamic ma
 verified receipts bound to the actual source SHAs, binary hashes, toolchains,
 targets, and build flags. It then runs the complete 25-case portfolio for
 three blocks, validates raw JSONL, and creates the deterministic report.
+
+The first main push that introduces this trusted config is a deliberate
+transition: its older base may omit the file, but both candidate and base are
+built with the harness-owned encoded alignment flag. That hosted
+candidate/base comparison is therefore alignment-normalized A/A evidence, not
+evidence for the alignment change itself. Same-repository PRs based on an older
+harness cannot introduce the config because the base-owned script rejects it;
+land the trust-root transition from `main`, then use later hosted runs normally.
 
 The measurement step is bounded below the 45-minute job timeout. A pending
 summary/status is written before setup/audit and replaced on success or

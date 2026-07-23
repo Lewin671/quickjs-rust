@@ -32,7 +32,14 @@ CACHE_SCHEMA_VERSION = 1
 CACHE_MISS = 10
 RUST_KIND = "rust-qjs-cli"
 QUICKJS_KIND = "quickjs-ng"
-SOURCE_PATHS = ("Cargo.toml", "Cargo.lock", "rust-toolchain", "rust-toolchain.toml", "crates")
+SOURCE_PATHS = (
+    ".cargo",
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain",
+    "rust-toolchain.toml",
+    "crates",
+)
 RUST_RECIPE = {
     "cargo_args": [
         "--locked", "--release", "-p", "qjs-cli",
@@ -48,7 +55,9 @@ RUST_RECIPE = {
     ],
     "environment": {
         "CARGO_INCREMENTAL": "0",
-        "CARGO_ENCODED_RUSTFLAGS": "-Ctarget-cpu=generic",
+        "CARGO_ENCODED_RUSTFLAGS": (
+            "-Ctarget-cpu=generic\x1f-Cllvm-args=-align-all-functions=4"
+        ),
     },
     "binary": "qjs",
 }

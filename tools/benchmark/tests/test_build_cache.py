@@ -11,6 +11,7 @@ from unittest.mock import patch
 from tools.benchmark.build_cache import (
     CACHE_SCHEMA_VERSION,
     RUST_KIND,
+    RUST_RECIPE,
     _spec,
     materialize,
     quickjs_spec,
@@ -33,6 +34,10 @@ class BuildCacheTests(unittest.TestCase):
         subprocess.run(["git", "-C", str(root), "config", "user.email", "test@example.com"], check=True)
         subprocess.run(["git", "-C", str(root), "config", "user.name", "Test"], check=True)
         files = {
+            ".cargo/config.toml": (
+                "[build]\n"
+                'rustflags = ["-Cllvm-args=-align-all-functions=4"]\n'
+            ),
             "Cargo.toml": "[workspace]\nmembers = [\"crates/a\"]\n",
             "Cargo.lock": "version = 4\n",
             "crates/a/Cargo.toml": "[package]\nname = \"a\"\nversion = \"0.1.0\"\n",
@@ -55,9 +60,29 @@ class BuildCacheTests(unittest.TestCase):
             (repo / ".github/workflows/ci.yml").write_text("name: changed\n", encoding="utf-8")
             subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
             self.assertEqual(rust_source_digest(repo), original)
+            (repo / ".cargo/config.toml").write_text(
+                "[build]\nrustflags = []\n", encoding="utf-8"
+            )
+            subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+            self.assertNotEqual(rust_source_digest(repo), original)
+            (repo / ".cargo/config.toml").write_text(
+                "[build]\n"
+                'rustflags = ["-Cllvm-args=-align-all-functions=4"]\n',
+                encoding="utf-8",
+            )
+            subprocess.run(
+                ["git", "-C", str(repo), "add", ".cargo/config.toml"], check=True
+            )
             (repo / "crates/a/src/lib.rs").write_text("pub fn answer() -> u8 { 43 }\n", encoding="utf-8")
             subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
             self.assertNotEqual(rust_source_digest(repo), original)
+
+    def test_hosted_rust_recipe_forces_generic_cpu_and_function_alignment(self) -> None:
+        encoded = RUST_RECIPE["environment"]["CARGO_ENCODED_RUSTFLAGS"]
+        self.assertEqual(
+            encoded.split("\x1f"),
+            ["-Ctarget-cpu=generic", "-Cllvm-args=-align-all-functions=4"],
+        )
 
     def test_key_binds_toolchain_target_platform_and_recipe(self) -> None:
         base = {"source_sha256": "a" * 64, "platform": "linux", "target": "x86", "toolchain": "rust", "recipe": ["release"]}

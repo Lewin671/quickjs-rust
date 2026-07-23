@@ -1,0 +1,2 @@
+[build]
+rustflags = ["-Cllvm-args=-align-all-functions=4"]

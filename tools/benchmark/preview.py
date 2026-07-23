@@ -30,6 +30,8 @@ class PreviewError(ValueError):
 
 
 RUST_BUILD_FLAGS = (
+    "-Ctarget-cpu=generic",
+    "-Cllvm-args=-align-all-functions=4",
     "--locked", "--release", "-p", "qjs-cli",
     "--config=profile.release.opt-level=3",
     "--config=profile.release.debug=false",
@@ -254,7 +256,10 @@ def prepare(args: argparse.Namespace) -> None:
         lto="off-forced-by-cargo-config",
         strip="none-forced-by-cargo-config",
         allocator="source-controlled-not-independently-verified",
-        host_features="generic-cpu-forced-by-cargo-encoded-rustflags",
+        host_features=(
+            "generic-cpu-and-16-byte-function-alignment-forced-by-"
+            "cargo-encoded-rustflags"
+        ),
     )
     quickjs_recipe = _recipe(
         template.reference_identity,

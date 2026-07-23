@@ -35,6 +35,10 @@ class BuildCacheOrchestratorTests(unittest.TestCase):
             base = base.resolve()
             mock_bin = mock_bin.resolve()
             (harness / "scripts").mkdir()
+            (harness / ".cargo").mkdir()
+            (harness / ".cargo/config.toml").write_bytes(
+                (ROOT / ".cargo/config.toml").read_bytes()
+            )
             (harness / "third_party/quickjs-ng").mkdir(parents=True)
             (harness / "tools").symlink_to(ROOT / "tools", target_is_directory=True)
             (harness / "benchmarks").symlink_to(ROOT / "benchmarks", target_is_directory=True)
@@ -42,6 +46,7 @@ class BuildCacheOrchestratorTests(unittest.TestCase):
             preview_script.write_bytes((ROOT / "scripts/performance-preview.sh").read_bytes())
             preview_script.chmod(0o755)
             log = temp / "builds.log"
+            rustflags_log = temp / "rustflags.log"
 
             self._executable(mock_bin / "git", f'''
 case " $* " in
@@ -75,6 +80,7 @@ echo 'host: x86_64-unknown-linux-gnu'
 if [ "${1:-}" = "-V" ]; then echo 'cargo 1.95.0 (mock)'; exit 0; fi
 if [ "${1:-}" = "build" ]; then
   echo cargo >> "$TEST_BUILD_LOG"
+  printf '%s' "$CARGO_ENCODED_RUSTFLAGS" > "$TEST_RUSTFLAGS_LOG"
   output="$CARGO_TARGET_DIR/$CARGO_BUILD_TARGET/release/qjs"
   mkdir -p "$(dirname "$output")"
   printf '%s\n' '#!/bin/sh' 'exit 0' > "$output"
@@ -121,6 +127,7 @@ exec "$TEST_REAL_PYTHON" "$@"
                 "TEST_MOCK_BIN": str(mock_bin),
                 "TEST_QUICKJS": str(harness / "third_party/quickjs-ng"),
                 "TEST_REAL_PYTHON": real_python,
+                "TEST_RUSTFLAGS_LOG": str(rustflags_log),
                 "ImageOS": "ubuntu24",
                 "ImageVersion": "mock-image-1",
             })
@@ -159,6 +166,10 @@ exec "$TEST_REAL_PYTHON" "$@"
             first, first_cache = invoke("first")
             self.assertEqual(first.returncode, 42, first.stderr)
             self.assertEqual(log.read_text(encoding="utf-8").splitlines(), ["cargo", "make"])
+            self.assertEqual(
+                rustflags_log.read_text(encoding="utf-8").split("\x1f"),
+                ["-Ctarget-cpu=generic", "-Cllvm-args=-align-all-functions=4"],
+            )
             self.assertEqual(first_cache["roles"]["candidate"]["status"], "rebuilt")
             self.assertEqual(first_cache["roles"]["base"]["status"], "hit")
             self.assertEqual(first_cache["roles"]["quickjs-ng"]["status"], "rebuilt")
@@ -200,6 +211,21 @@ exec "$TEST_REAL_PYTHON" "$@"
             dirty_entry = dirty_cache / "rust" / dirty_spec["key_sha256"]
             self.assertFalse(dirty_entry.exists())
             self.assertFalse(ready_entry(dirty_entry, dirty_spec)[0])
+
+            environment.pop("TEST_DIRTY_BUILD")
+            (base / ".cargo").mkdir()
+            (base / ".cargo/config.toml").write_text(
+                "[build]\nrustc-wrapper = \"untrusted\"\n", encoding="utf-8"
+            )
+            mismatch, mismatch_provenance = invoke(
+                "mismatched-config", require_provenance=False
+            )
+            self.assertNotEqual(mismatch.returncode, 0)
+            self.assertIsNone(mismatch_provenance)
+            self.assertIn(
+                "source-local Cargo config does not match the trusted harness",
+                mismatch.stderr,
+            )
 
 
 if __name__ == "__main__":

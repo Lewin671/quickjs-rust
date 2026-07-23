@@ -62,9 +62,9 @@ fi
 
 changed_files="$(
   if [ "$MODE" = "staged" ]; then
-    git -C "$ROOT_DIR" diff --cached --name-only --diff-filter=ACMRT
+    git -C "$ROOT_DIR" diff --cached --name-only --no-renames --diff-filter=ACDMRT
   else
-    git -C "$ROOT_DIR" diff --name-only --diff-filter=ACMRT "$BASE_REF"...HEAD
+    git -C "$ROOT_DIR" diff --name-only --no-renames --diff-filter=ACDMRT "$BASE_REF"...HEAD
   fi
 )"
 
@@ -130,7 +130,10 @@ while IFS= read -r path; do
   [ -z "$path" ] && continue
   case "$path" in
     *.rs) has_rust=1; has_docs_only=0 ;;
-    Cargo.toml|Cargo.lock|rust-toolchain.toml) has_cargo=1; has_docs_only=0 ;;
+    .cargo/config.toml|Cargo.toml|Cargo.lock|rust-toolchain.toml)
+      has_cargo=1
+      has_docs_only=0
+      ;;
     scripts/*|.github/*) has_scripts=1; has_docs_only=0 ;;
     tests/test262/allowlist.txt|tests/test262/expected-failures.txt|tests/test262/cases/*)
       touches_test262_config=1; has_docs_only=0 ;;
@@ -144,7 +147,7 @@ while IFS= read -r path; do
     crates/qjs-lexer/*) touches_lexer=1 ;;
     crates/qjs-ast/*) touches_ast=1 ;;
     crates/qjs-cli/*) touches_cli=1 ;;
-    benchmarks/*|tools/__init__.py|tools/benchmark/*|scripts/benchmark*.sh|scripts/resource-benchmark*.sh|scripts/lifecycle-bench.sh|scripts/external-corpus-audit.sh|scripts/performance-policy-audit.sh|scripts/performance-preview.sh|.github/workflows/performance-smoke.yml)
+    benchmarks/*|.cargo/config.toml|tools/__init__.py|tools/benchmark/*|scripts/benchmark*.sh|scripts/resource-benchmark*.sh|scripts/lifecycle-bench.sh|scripts/external-corpus-audit.sh|scripts/performance-policy-audit.sh|scripts/performance-preview.sh|.github/workflows/performance-smoke.yml)
       touches_benchmark=1
       ;;
   esac

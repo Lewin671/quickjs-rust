@@ -37,6 +37,7 @@
   },
   "hosted_implementation": {
     "files": [
+      ".cargo/config.toml",
       ".github/actions/setup-rust/action.yml",
       ".github/workflows/performance-smoke.yml",
       "benchmarks/external-corpora.json",
@@ -54,7 +55,7 @@
       "tools/benchmark/performance_policy.py",
       "tools/benchmark/preview.py"
     ],
-    "aggregate_sha256": "0f52fe116c9981c30826467bcf8f9f2732051c23084bc5a0400fd247400a25e9"
+    "aggregate_sha256": "dd45037731ee85c1a34c264a15b53dc6649ecf0f82cfb61c135a763998e36d41"
   },
   "hosted_pr": {
     "tier": "informational_preview",
