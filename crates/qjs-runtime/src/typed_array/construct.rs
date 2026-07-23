@@ -174,7 +174,8 @@ fn initialize_from_buffer(
     }
     let buffer_byte_length = array_buffer::buffer_bytes(&buffer).len();
 
-    let length_tracking = explicit_length.is_none() && array_buffer::is_resizable(&buffer);
+    let variable_length_buffer = array_buffer::is_resizable_or_growable(&buffer);
+    let length_tracking = explicit_length.is_none() && variable_length_buffer;
     let (length, byte_length) = match explicit_length {
         Some(length) => {
             let byte_length = length
@@ -190,7 +191,7 @@ fn initialize_from_buffer(
             (length, byte_length)
         }
         None => {
-            if !array_buffer::is_resizable(&buffer) && buffer_byte_length % element != 0 {
+            if !variable_length_buffer && buffer_byte_length % element != 0 {
                 return Err(range_error("buffer length is not aligned to element size"));
             }
             if offset > buffer_byte_length {

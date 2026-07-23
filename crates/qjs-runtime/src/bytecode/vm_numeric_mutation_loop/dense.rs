@@ -40,6 +40,16 @@ const MAX_DENSE_STORES: usize = 32;
 const MAX_FIXED_MUTATIONS: usize = 16;
 const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
 
+#[inline]
+fn descending_counter_is_valid(counter: f64) -> bool {
+    counter.is_finite() && counter.fract() == 0.0 && (-1.0..=MAX_SAFE_INTEGER).contains(&counter)
+}
+
+#[cfg(test)]
+pub(super) fn test_descending_counter_is_valid(counter: f64) -> bool {
+    descending_counter_is_valid(counter)
+}
+
 #[cfg(test)]
 thread_local! {
     static DENSE_LOOP_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -61,6 +71,9 @@ thread_local! {
     static REDUCTION_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static EXACT_INDEX_REDUCTION_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static SHARED_SAMPLE_STRIDE_REDUCTION_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TYPED_ARRAY_DENSE_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TYPED_ARRAY_DENSE_SUPPRESSIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TYPED_ARRAY_DENSE_ATTEMPTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -84,6 +97,9 @@ pub(super) fn reset_test_iterations() {
     REDUCTION_ITERATIONS.set(0);
     EXACT_INDEX_REDUCTION_PATH_HITS.set(0);
     SHARED_SAMPLE_STRIDE_REDUCTION_PATH_HITS.set(0);
+    TYPED_ARRAY_DENSE_PATH_HITS.set(0);
+    TYPED_ARRAY_DENSE_SUPPRESSIONS.set(0);
+    TYPED_ARRAY_DENSE_ATTEMPTS.set(0);
 }
 
 #[cfg(test)]
@@ -182,6 +198,21 @@ pub(super) fn test_shared_sample_stride_reduction_path_hits() -> usize {
 }
 
 #[cfg(test)]
+pub(super) fn test_typed_array_dense_path_hits() -> usize {
+    TYPED_ARRAY_DENSE_PATH_HITS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_typed_array_dense_suppressions() -> usize {
+    TYPED_ARRAY_DENSE_SUPPRESSIONS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_typed_array_dense_attempts() -> usize {
+    TYPED_ARRAY_DENSE_ATTEMPTS.get()
+}
+
+#[cfg(test)]
 pub(super) fn test_checked_array_index_product(left: usize, right: usize) -> Option<usize> {
     legacy::test_checked_array_index_product(left, right)
 }
@@ -235,6 +266,24 @@ fn record_exact_index_reduction_path_hit() {
 fn record_shared_sample_stride_reduction_path_hit() {
     SHARED_SAMPLE_STRIDE_REDUCTION_PATH_HITS
         .set(SHARED_SAMPLE_STRIDE_REDUCTION_PATH_HITS.get() + 1);
+}
+
+#[inline]
+fn record_typed_array_dense_path_hit() {
+    #[cfg(test)]
+    TYPED_ARRAY_DENSE_PATH_HITS.set(TYPED_ARRAY_DENSE_PATH_HITS.get() + 1);
+}
+
+#[inline]
+fn record_typed_array_dense_suppression() {
+    #[cfg(test)]
+    TYPED_ARRAY_DENSE_SUPPRESSIONS.set(TYPED_ARRAY_DENSE_SUPPRESSIONS.get() + 1);
+}
+
+#[inline]
+fn record_typed_array_dense_attempt() {
+    #[cfg(test)]
+    TYPED_ARRAY_DENSE_ATTEMPTS.set(TYPED_ARRAY_DENSE_ATTEMPTS.get() + 1);
 }
 
 #[inline]
@@ -379,6 +428,7 @@ struct DynamicDensePlan {
 #[derive(Clone, Debug)]
 enum DynamicControl {
     LessThan(DynamicLimit),
+    AtLeastZero,
     Countdown,
 }
 
@@ -386,7 +436,7 @@ impl DynamicControl {
     fn limit(&self) -> Option<&DynamicLimit> {
         match self {
             Self::LessThan(limit) => Some(limit),
-            Self::Countdown => None,
+            Self::AtLeastZero | Self::Countdown => None,
         }
     }
 
@@ -651,9 +701,7 @@ impl DenseNumericMutationLoopPlan {
             DensePlanKind::Fixed(plan) => {
                 DenseNumericMutationLoopRun::from_handled(plan.try_run(vm, self.exit))
             }
-            DensePlanKind::LegacyDynamic(plan) => {
-                DenseNumericMutationLoopRun::from_handled(plan.try_run(vm, self.exit))
-            }
+            DensePlanKind::LegacyDynamic(plan) => plan.try_run(vm, self.exit),
             DensePlanKind::LegacySuppressingDynamic(plan) => {
                 plan.try_run_suppressing(vm, self.exit)
             }
@@ -977,6 +1025,15 @@ impl DynamicDensePlan {
                     }
                     None
                 }
+                DynamicControl::AtLeastZero => {
+                    if counter < 0.0 {
+                        return DynamicProgramRun {
+                            deoptimized: false,
+                            made_progress,
+                        };
+                    }
+                    None
+                }
                 DynamicControl::Countdown => {
                     if counter == 0.0 {
                         // The failed postfix test still stores the decremented
@@ -1115,6 +1172,12 @@ impl DynamicDensePlan {
                 return DenseNumericMutationLoopRun::Declined;
             }
         }
+        if matches!(&self.control, DynamicControl::AtLeastZero) {
+            let counter = locals[self.counter_local];
+            if !descending_counter_is_valid(counter) {
+                return DenseNumericMutationLoopRun::Declined;
+            }
+        }
         let invariant_numbers = self
             .number_sources
             .iter()
@@ -1137,6 +1200,7 @@ impl DynamicDensePlan {
                 };
                 Some(limit)
             }
+            DynamicControl::AtLeastZero => None,
             DynamicControl::Countdown => None,
         };
         let mut inline_registers = [0.0; INLINE_DENSE_OPS];

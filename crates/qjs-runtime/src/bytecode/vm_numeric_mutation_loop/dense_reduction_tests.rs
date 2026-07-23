@@ -380,6 +380,9 @@ fn reduction_rejects_extra_arithmetic_shared_accumulators_cross_lane_writes_and_
     assert_reduction_rejected(
         "function countdown(a, b, bound) { var sum = 0; while (bound--) sum += a[bound] * b[bound]; return sum; }",
     );
+    assert_reduction_rejected(
+        "function descending(a, b, index) { var sum = 0; for (; index >= 0; index--) sum += a[index] * b[index]; return sum; }",
+    );
 }
 
 #[test]

@@ -25,10 +25,10 @@ pub(crate) fn set_property(
             // per-kind numeric conversion and the backing buffer
             // (IntegerIndexedElementSet) before the ordinary property path.
             if crate::typed_array::is_typed_array_object(&object) {
-                if let crate::typed_array::IndexedWrite::Handled =
+                if let crate::typed_array::IndexedWrite::Handled(written) =
                     crate::typed_array::set_indexed_element(&object, &key, value.clone(), env)?
                 {
-                    return Ok(true);
+                    return Ok(written);
                 }
             }
             match object.write_existing_own_data_property(&key, &value) {

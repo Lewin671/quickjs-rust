@@ -189,13 +189,16 @@ impl<'a> Translator<'a> {
                     AbstractValue::Local(_) | AbstractValue::Other => None,
                 };
                 if let Some(register) = register {
-                    if self.writes.len() >= MAX_DENSE_WRITES {
+                    if let Some(write) = self.writes.iter_mut().find(|write| write.local == *slot) {
+                        write.value = register;
+                    } else if self.writes.len() >= MAX_DENSE_WRITES {
                         return None;
+                    } else {
+                        self.writes.push(LocalWrite {
+                            local: *slot,
+                            value: register,
+                        });
                     }
-                    self.writes.push(LocalWrite {
-                        local: *slot,
-                        value: register,
-                    });
                 }
                 self.locals.insert(*slot, value);
             }
@@ -476,6 +479,63 @@ pub(super) fn compile_dynamic(
         };
         Some((DynamicControl::LessThan(limit), cursor + 3, *exit))
     })();
+    let at_least_zero_header = (|| {
+        let Op::LoadConst(zero_constant) = code.get(header + 1)? else {
+            return None;
+        };
+        let Some(Value::Number(zero)) = bytecode.constants.get(*zero_constant) else {
+            return None;
+        };
+        if *zero != 0.0 {
+            return None;
+        }
+        let comparison = if matches!(code.get(header + 2), Some(Op::Unary(UnaryOp::Minus))) {
+            header + 3
+        } else {
+            header + 2
+        };
+        let (Op::Binary(BinaryOp::Ge), Op::JumpIfFalse(exit), Op::Pop) = (
+            code.get(comparison)?,
+            code.get(comparison + 1)?,
+            code.get(comparison + 2)?,
+        ) else {
+            return None;
+        };
+
+        let tail = backedge.checked_sub(6)?;
+        let (
+            Op::LoadLocal(tail_counter_slot),
+            Op::ToNumeric,
+            Op::Dup,
+            Op::Update(UpdateOp::Decrement),
+            Op::AssignLocal(assigned_counter_slot),
+            Op::Pop,
+        ) = (
+            code.get(tail)?,
+            code.get(tail + 1)?,
+            code.get(tail + 2)?,
+            code.get(tail + 3)?,
+            code.get(tail + 4)?,
+            code.get(tail + 5)?,
+        )
+        else {
+            return None;
+        };
+        let body_start = comparison + 3;
+        if tail < body_start
+            || tail_counter_slot != counter_slot
+            || assigned_counter_slot != counter_slot
+            || code[body_start..tail].iter().any(|op| {
+                matches!(
+                    op,
+                    Op::StoreLocal(slot) | Op::AssignLocal(slot) if slot == counter_slot
+                )
+            })
+        {
+            return None;
+        }
+        Some((DynamicControl::AtLeastZero, body_start, *exit))
+    })();
     let countdown_header = (|| {
         let (
             Op::ToNumeric,
@@ -500,7 +560,9 @@ pub(super) fn compile_dynamic(
         }
         Some((DynamicControl::Countdown, header + 7, *exit))
     })();
-    let (control, body_start, exit) = less_than_header.or(countdown_header)?;
+    let (control, body_start, exit) = less_than_header
+        .or(at_least_zero_header)
+        .or(countdown_header)?;
     if exit <= backedge
         || !matches!(code.get(exit), Some(Op::Pop))
         || !matches!(code.get(backedge), Some(Op::Jump(target)) if *target == header)
@@ -554,7 +616,9 @@ pub(super) fn compile_dynamic(
         })
         || writes_array_length_source
         || match control {
-            DynamicControl::LessThan(_) => !translator.written_slots.contains(counter_slot),
+            DynamicControl::LessThan(_) | DynamicControl::AtLeastZero => {
+                !translator.written_slots.contains(counter_slot)
+            }
             DynamicControl::Countdown => translator.written_slots.contains(counter_slot),
         }
     {
@@ -599,6 +663,7 @@ pub(super) fn compile_dynamic(
                 DynamicControl::LessThan(DynamicLimit::OwnDataNumber(source)) => {
                     DynamicControl::LessThan(DynamicLimit::OwnDataNumber(source))
                 }
+                DynamicControl::AtLeastZero => DynamicControl::AtLeastZero,
                 DynamicControl::Countdown => DynamicControl::Countdown,
             },
             receiver_sources: translator.receiver_sources,

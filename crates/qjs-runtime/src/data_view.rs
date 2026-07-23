@@ -194,7 +194,7 @@ pub(crate) fn native_data_view(
     // Steps 9-12: resolve the view byte length before prototype access.
     let length_arg = argument_values.get(2).cloned().unwrap_or(Value::Undefined);
     let byte_length_tracking =
-        matches!(length_arg, Value::Undefined) && array_buffer::is_resizable(&buffer);
+        matches!(length_arg, Value::Undefined) && array_buffer::is_resizable_or_growable(&buffer);
     let fixed_byte_length = if matches!(length_arg, Value::Undefined) {
         None
     } else {

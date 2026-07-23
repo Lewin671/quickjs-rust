@@ -560,8 +560,7 @@ pub(crate) fn proxy_prevent_extensions(
         if let Value::Proxy(inner) = target {
             return proxy_prevent_extensions(inner, env);
         }
-        crate::object::ordinary_prevent_extensions(&target);
-        return Ok(true);
+        return Ok(crate::object::ordinary_prevent_extensions(&target));
     };
     let result = call_function(trap, handler, vec![target.clone()], env, false)?;
     if !is_truthy(&result) {

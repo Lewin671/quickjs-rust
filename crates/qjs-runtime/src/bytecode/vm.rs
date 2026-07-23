@@ -1458,7 +1458,7 @@ impl<'a> Vm<'a> {
             && crate::typed_array::is_typed_array_object(object)
         {
             let object = object.clone();
-            self.set_typed_array_index(&object, index, &value)?;
+            self.set_typed_array_index(&object, index, &value, is_strict)?;
             self.pop()?;
             self.stack.push(value);
             return Ok(());
@@ -1494,7 +1494,7 @@ impl<'a> Vm<'a> {
             && crate::typed_array::is_typed_array_object(typed_array)
         {
             let typed_array = typed_array.clone();
-            self.set_typed_array_index(&typed_array, index, &value)?;
+            self.set_typed_array_index(&typed_array, index, &value, is_strict)?;
             self.stack.push(value);
             return Ok(());
         }
@@ -1516,14 +1516,30 @@ impl<'a> Vm<'a> {
         object: &ObjectRef,
         index: usize,
         value: &Value,
+        is_strict: bool,
     ) -> Result<(), RuntimeError> {
-        if crate::typed_array::try_set_integer_indexed_primitive_element(object, index, value) {
-            return Ok(());
+        let written = match crate::typed_array::try_set_integer_indexed_primitive_element(
+            object, index, value,
+        ) {
+            Some(written) => written,
+            None => {
+                let mut env = self.current_env();
+                let written = crate::typed_array::set_integer_indexed_element(
+                    object,
+                    index,
+                    value.clone(),
+                    &mut env,
+                )?;
+                self.apply_env(env);
+                written
+            }
+        };
+        if !written && is_strict {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: cannot set property".to_owned(),
+            });
         }
-
-        let mut env = self.current_env();
-        crate::typed_array::set_integer_indexed_element(object, index, value.clone(), &mut env)?;
-        self.apply_env(env);
         Ok(())
     }
 

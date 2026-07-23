@@ -10,6 +10,9 @@ use crate::{ArrayRef, Function, RuntimeError, function::DynamicBindings, proxy::
 
 use super::{Property, Value};
 
+mod array_buffer_methods;
+mod typed_array_methods;
+
 type NamespaceBindingCell = DynamicBindings;
 type NamespaceAliasMap = HashMap<String, (NamespaceBindingCell, String)>;
 
@@ -376,10 +379,22 @@ struct ObjectColdData {
     /// prototype objects, the private environment their members resolve `#x`
     /// references through. Lazily populated.
     private_state: RefCell<crate::private::PrivateState>,
-    /// Opaque byte storage for ArrayBuffer objects. The public ArrayBuffer brand
-    /// remains a hidden property; bytes live here so typed-array element access
-    /// does not have to encode and decode a string on every read or write.
+    /// Opaque byte storage for ArrayBuffer objects. The buffer brand and state
+    /// are internal slots below; typed-array element access never round-trips
+    /// through observable string-keyed properties.
     internal_bytes: RefCell<Option<Vec<u8>>>,
+    /// Stable ArrayBuffer/SharedArrayBuffer brand. NUL-prefixed ordinary
+    /// properties are observable and mutable JavaScript state, so they cannot
+    /// be authoritative for buffer validation or optimized backing leases.
+    array_buffer_kind: Cell<ArrayBufferKind>,
+    /// Ordinary ArrayBuffer detach state. SharedArrayBuffer never detaches.
+    array_buffer_detached: Cell<bool>,
+    /// Resizable/growable maximum. `None` denotes fixed-length storage.
+    array_buffer_max_byte_length: Cell<Option<usize>>,
+    /// True for immutable ArrayBuffer backing stores. This is a real internal
+    /// slot rather than a NUL-prefixed ordinary property, so JavaScript cannot
+    /// delete or overwrite the state that guards indexed writes and leases.
+    array_buffer_immutable: Cell<bool>,
     /// TypedArray internal slots. Keeping these out of string-keyed property
     /// storage avoids repeated hashing on every indexed access and prevents
     /// guessed property names from mutating spec-internal view metadata.
@@ -406,6 +421,14 @@ struct ObjectColdData {
 struct RealmIntrinsicIdentity {
     object_prototype: ObjectRef,
     array_prototype: ObjectRef,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum ArrayBufferKind {
+    #[default]
+    None,
+    Ordinary,
+    Shared,
 }
 
 impl ObjectData {
@@ -1001,57 +1024,6 @@ impl ObjectRef {
             .and_then(|cold| cold.private_state.borrow().environment.clone())
     }
 
-    pub(crate) fn internal_bytes(&self) -> Option<Vec<u8>> {
-        self.0
-            .cold_if_present()
-            .and_then(|cold| cold.internal_bytes.borrow().clone())
-    }
-
-    pub(crate) fn with_internal_bytes<T>(&self, f: impl FnOnce(Option<&[u8]>) -> T) -> T {
-        let Some(cold) = self.0.cold_if_present() else {
-            return f(None);
-        };
-        let bytes = cold.internal_bytes.borrow();
-        f(bytes.as_deref())
-    }
-
-    pub(crate) fn set_internal_bytes(&self, bytes: Vec<u8>) {
-        *self.0.cold().internal_bytes.borrow_mut() = Some(bytes);
-    }
-
-    pub(crate) fn clear_internal_bytes(&self) {
-        if let Some(cold) = self.0.cold_if_present() {
-            *cold.internal_bytes.borrow_mut() = None;
-        }
-    }
-
-    pub(crate) fn with_internal_bytes_mut<T>(
-        &self,
-        f: impl FnOnce(&mut Vec<u8>) -> T,
-    ) -> Option<T> {
-        self.0
-            .cold_if_present()?
-            .internal_bytes
-            .borrow_mut()
-            .as_mut()
-            .map(f)
-    }
-
-    /// The cross-thread `SharedArrayBuffer` backing for this object, if one was
-    /// installed (agents harness only).
-    #[cfg(feature = "agents")]
-    pub(crate) fn shared_backing(&self) -> Option<crate::array_buffer::SharedBackingRef> {
-        self.0
-            .cold_if_present()
-            .and_then(|cold| cold.shared_backing.borrow().clone())
-    }
-
-    /// Installs the cross-thread `SharedArrayBuffer` backing for this object.
-    #[cfg(feature = "agents")]
-    pub(crate) fn set_shared_backing(&self, backing: crate::array_buffer::SharedBackingRef) {
-        *self.0.cold().shared_backing.borrow_mut() = Some(backing);
-    }
-
     pub(crate) fn set_iterator_zip_state(&self, state: crate::iterator::ZipState) {
         *self.0.cold().iterator_zip_state.borrow_mut() = Some(state);
     }
@@ -1100,29 +1072,6 @@ impl ObjectRef {
 
     pub(crate) fn is_array_prototype_exotic(&self) -> bool {
         self.0.array_prototype_exotic.get()
-    }
-
-    fn mark_typed_array_exotic(&self) {
-        self.0.typed_array_exotic.set(true);
-    }
-
-    pub(crate) fn install_typed_array_slots(&self, slots: crate::typed_array::TypedArraySlots) {
-        self.mark_typed_array_exotic();
-        let installed = self.0.cold().typed_array_slots.set(slots);
-        debug_assert!(
-            installed.is_ok(),
-            "TypedArray internal slots must only be installed once"
-        );
-    }
-
-    pub(crate) fn typed_array_slots(&self) -> Option<&crate::typed_array::TypedArraySlots> {
-        self.0
-            .cold_if_present()
-            .and_then(|cold| cold.typed_array_slots.get())
-    }
-
-    pub(crate) fn is_typed_array_exotic(&self) -> bool {
-        self.0.typed_array_exotic.get()
     }
 
     pub(crate) fn mark_symbol_primitive(&self) {

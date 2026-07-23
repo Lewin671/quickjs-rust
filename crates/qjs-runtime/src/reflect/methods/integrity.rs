@@ -23,6 +23,5 @@ pub(crate) fn native_reflect_prevent_extensions(
             env,
         )?));
     }
-    ordinary_prevent_extensions(&target);
-    Ok(Value::Boolean(true))
+    Ok(Value::Boolean(ordinary_prevent_extensions(&target)))
 }

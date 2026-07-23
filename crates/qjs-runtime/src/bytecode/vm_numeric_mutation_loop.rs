@@ -14,6 +14,8 @@ mod dense;
 mod dense_invariant_tests;
 #[cfg(test)]
 mod dense_reduction_tests;
+#[cfg(test)]
+mod dense_typed_array_tests;
 mod predicate_scan;
 
 use dense::{DenseNumericMutationLoopPlan, DenseNumericMutationLoopRun};
@@ -536,6 +538,114 @@ mod tests {
         let plans = NumericMutationLoopPlan::compile_all(&bytecode);
         assert_eq!(plans.len(), 1, "{:#?}", bytecode.code);
         assert!(matches!(plans[0].kind, NumericMutationLoopKind::Dense(_)));
+    }
+
+    #[test]
+    fn recognizes_only_canonical_at_least_zero_dense_regions() {
+        for zero in ["0", "-0"] {
+            let source = format!(
+                "function run(index, input, output) {{ for (; index >= {zero}; index--) output[index] = input[index] + 1; return index; }}"
+            );
+            let bytecode = nested_function(&source);
+            let plans = NumericMutationLoopPlan::compile_all(&bytecode);
+            assert_eq!(plans.len(), 1, "{:#?}", bytecode.code);
+            assert!(matches!(plans[0].kind, NumericMutationLoopKind::Dense(_)));
+        }
+
+        for source in [
+            "function run(index, input, output) { for (; index > 0; index--) output[index] = input[index] + 1; }",
+            "function run(index, bound, input, output) { for (; index >= bound; index--) output[index] = input[index] + 1; }",
+            "function run(index, input, output) { for (; 0 <= index; index--) output[index] = input[index] + 1; }",
+            "function run(index, input, output) { for (; index >= 0; index++) output[index] = input[index] + 1; }",
+            "function run(index, input, output) { for (; index >= 0; index -= 2) output[index] = input[index] + 1; }",
+            "function run(index, input, output) { for (; index >= 0; index--) { index = index; output[index] = input[index] + 1; } }",
+        ] {
+            let bytecode = nested_function(source);
+            assert!(
+                NumericMutationLoopPlan::compile_all(&bytecode).is_empty(),
+                "{:#?}",
+                bytecode.code
+            );
+        }
+    }
+
+    #[test]
+    fn at_least_zero_dense_region_commits_zero_index_and_final_decrement() {
+        let source = "function run(index, input, output) { for (; index >= 0; index--) { output[index] = output[index] + 1; output[index] = output[index] + input[index]; } return index + ':' + output.join(':'); }";
+        let bytecode = nested_function(source);
+        assert_eq!(
+            NumericMutationLoopPlan::compile_all(&bytecode).len(),
+            1,
+            "{:#?}",
+            bytecode.code
+        );
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!("{source} run(4, [1,2,3,4,5], [10,10,10,10,10]);")),
+            Ok(Value::String("-1:12:13:14:15:16".to_owned().into()))
+        );
+        assert_eq!(dense::test_iterations(), 4);
+        assert_eq!(dense::test_writable_path_hits(), 1);
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!("{source} run(1, [1,2], [10,10]);")),
+            Ok(Value::String("-1:12:13".to_owned().into()))
+        );
+        assert_eq!(dense::test_iterations(), 1);
+        assert_eq!(dense::test_writable_path_hits(), 1);
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!("{source} run(0, [1], [10]);")),
+            Ok(Value::String("-1:12".to_owned().into()))
+        );
+        assert_eq!(dense::test_iterations(), 0);
+    }
+
+    #[test]
+    fn at_least_zero_dense_region_replays_deopt_without_leaking_store_or_double_decrement() {
+        let source = "var coercions = 0; var marker = { valueOf: function () { coercions += 1; return 7; } }; function run(index, input, output) { for (; index >= 0; index--) { output[index] = output[index] + 1; output[index] = output[index] + input[index]; } return index + '|' + output.join(':') + '|' + coercions; }";
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "{source} run(4, [1,marker,3,4,5], [10,10,10,10,10]);"
+            )),
+            Ok(Value::String("-1|12:18:14:15:16|1".to_owned().into()))
+        );
+        assert_eq!(dense::test_iterations(), 3);
+        assert_eq!(dense::test_writable_path_hits(), 2);
+    }
+
+    #[test]
+    fn at_least_zero_dense_region_declines_fractional_counter() {
+        let source = "function run(index, input, output) { for (; index >= 0; index--) output[0] = output[0] + input[0]; return index + ':' + output[0]; }";
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!("{source} run(2.5, [1], [0]);")),
+            Ok(Value::String("-0.5:3".to_owned().into()))
+        );
+        assert_eq!(dense::test_iterations(), 0);
+        assert_eq!(dense::test_writable_path_hits(), 0);
+    }
+
+    #[test]
+    fn at_least_zero_counter_guard_admits_only_safe_terminal_range_integers() {
+        for value in [-1.0, -0.0, 0.0, 1.0, 9_007_199_254_740_991.0] {
+            assert!(dense::test_descending_counter_is_valid(value), "{value}");
+        }
+        for value in [
+            -2.0,
+            -0.5,
+            0.5,
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            9_007_199_254_740_992.0,
+        ] {
+            assert!(!dense::test_descending_counter_is_valid(value), "{value}");
+        }
     }
 
     #[test]

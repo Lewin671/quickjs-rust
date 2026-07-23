@@ -13,6 +13,87 @@ fn array_buffer_constructor_and_byte_length() {
 }
 
 #[test]
+fn buffer_brands_cannot_be_forged_with_legacy_nul_properties() {
+    assert_eq!(
+        eval(
+            "let fake = { \
+                 '\\0ArrayBufferData': '', \
+                 '\\0ArrayBufferMaxByteLength': 8, \
+                 '\\0SharedArrayBufferData': '', \
+                 '\\0SharedArrayBufferMaxByteLength': 8 \
+             }; \
+             let resizeCalls = 0, arrayRejected = false, sharedRejected = false; \
+             try { ArrayBuffer.prototype.resize.call(fake, { valueOf() { resizeCalls++; return 1; } }); } \
+             catch (_) { arrayRejected = true; } \
+             try { SharedArrayBuffer.prototype.byteLength.call(fake); } \
+             catch (_) { sharedRejected = true; } \
+             let view = new Uint8Array(fake); \
+             [arrayRejected, sharedRejected, resizeCalls, view.length, view.buffer === fake].join(':');"
+        ),
+        Ok(Value::String("true:true:0:0:false".to_owned().into()))
+    );
+}
+
+#[test]
+fn detached_array_buffer_state_cannot_be_revived_with_legacy_nul_properties() {
+    assert_eq!(
+        eval(
+            "let source = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             new Uint8Array(source)[0] = 7; \
+             let moved = source.transfer(); \
+             for (let key of ['\\0ArrayBufferData', '\\0ArrayBufferDetached', '\\0ArrayBufferMaxByteLength']) { \
+                 delete source[key]; source[key] = key.endsWith('MaxByteLength') ? 8 : ''; \
+             } \
+             let constructRejected = false, resizeRejected = false; \
+             try { new Uint8Array(source); } catch (_) { constructRejected = true; } \
+             try { source.resize(1); } catch (_) { resizeRejected = true; } \
+             [source.detached, source.byteLength, constructRejected, resizeRejected, moved.byteLength, new Uint8Array(moved)[0]].join(':');"
+        ),
+        Ok(Value::String("true:0:true:true:4:7".to_owned().into()))
+    );
+}
+
+#[test]
+fn resizable_and_shared_buffer_state_survives_legacy_marker_mutation() {
+    assert_eq!(
+        eval(
+            "let rab = new ArrayBuffer(2, { maxByteLength: 6 }); \
+             delete rab['\\0ArrayBufferMaxByteLength']; \
+             rab['\\0ArrayBufferData'] = ''; \
+             let tracked = new Uint8Array(rab); \
+             rab.resize(4); \
+             let sab = new SharedArrayBuffer(2, { maxByteLength: 6 }); \
+             delete sab['\\0SharedArrayBufferData']; \
+             delete sab['\\0SharedArrayBufferMaxByteLength']; \
+             sab['\\0ArrayBufferData'] = ''; \
+             let sharedTracked = new Uint8Array(sab); \
+             let sharedFixed = new Uint8Array(sab, 0, 2); \
+             sab.grow(4); \
+             let ordinaryRejected = false; \
+             try { ArrayBuffer.prototype.byteLength.call(sab); } catch (_) { ordinaryRejected = true; } \
+             [rab.resizable, rab.maxByteLength, tracked.length, sab.growable, sab.maxByteLength, sab.byteLength, sharedTracked.length, sharedFixed.length, ordinaryRejected].join(':');"
+        ),
+        Ok(Value::String(
+            "true:6:4:true:6:4:4:2:true".to_owned().into()
+        ))
+    );
+}
+
+#[test]
+fn buffer_internal_state_is_not_exposed_as_nul_properties() {
+    assert_eq!(
+        eval(
+            "let abNames = Object.getOwnPropertyNames(new ArrayBuffer(1, { maxByteLength: 2 })); \
+             let sabNames = Object.getOwnPropertyNames(new SharedArrayBuffer(1, { maxByteLength: 2 })); \
+             let stale = ['\\0ArrayBufferData', '\\0ArrayBufferDetached', '\\0ArrayBufferMaxByteLength', \
+                          '\\0SharedArrayBufferData', '\\0SharedArrayBufferMaxByteLength']; \
+             stale.every(key => abNames.indexOf(key) < 0 && sabNames.indexOf(key) < 0);"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn array_buffer_slice_resolves_bounds() {
     assert_eq!(
         eval("new ArrayBuffer(8).slice(2, 6).byteLength;"),
@@ -530,6 +611,19 @@ fn detach_array_buffer_host_hook_marks_detached() {
     );
     // A non-ArrayBuffer argument is ignored and the hook returns null.
     assert_eq!(eval("__quickjsRustDetachArrayBuffer({});"), Ok(Value::Null));
+}
+
+#[test]
+fn detach_array_buffer_host_hook_rejects_immutable_without_clearing_bytes() {
+    assert_eq!(
+        eval(
+            "let b = new Uint8Array([7]).buffer.transferToImmutable(); \
+             let threw = false; \
+             try { __quickjsRustDetachArrayBuffer(b); } catch (_) { threw = true; } \
+             [threw, b.immutable, b.detached, b.byteLength, new Uint8Array(b)[0]].join(':');"
+        ),
+        Ok(Value::String("true:true:false:1:7".to_owned().into()))
+    );
 }
 
 #[test]

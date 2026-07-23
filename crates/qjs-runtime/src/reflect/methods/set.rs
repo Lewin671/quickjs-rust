@@ -55,11 +55,21 @@ pub(crate) fn ordinary_set(
         // *invalid* canonical index returns true without writing or consulting
         // the prototype/receiver.
         if crate::typed_array::is_typed_array_object(object) {
+            if crate::typed_array::canonical_numeric_index(key).is_some()
+                && crate::typed_array::typed_array_buffer(object)
+                    .is_some_and(|buffer| crate::array_buffer::is_immutable(&buffer))
+            {
+                return Ok(false);
+            }
             if let Some(index_valid) = crate::typed_array::canonical_index_is_valid(object, key) {
                 let same_receiver = matches!(&receiver, Value::Object(r) if object.ptr_eq(r));
                 if same_receiver {
-                    crate::typed_array::set_indexed_element(object, key, value.clone(), env)?;
-                    return Ok(true);
+                    let crate::typed_array::IndexedWrite::Handled(written) =
+                        crate::typed_array::set_indexed_element(object, key, value.clone(), env)?
+                    else {
+                        unreachable!("canonical numeric key must be handled");
+                    };
+                    return Ok(written);
                 }
                 if !index_valid {
                     return Ok(true);
