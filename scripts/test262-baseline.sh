@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$ROOT_DIR/scripts/lib.sh"
 TEST262_DIR="$ROOT_DIR/third_party/test262"
+. "$ROOT_DIR/scripts/test262-upstream-amendments.sh"
 QUICKJS_NG_DIR="$ROOT_DIR/third_party/quickjs-ng"
 QUICKJS_NG_RUNNER="$QUICKJS_NG_DIR/build/run-test262"
 RUN_WITH_TIMEOUT="$ROOT_DIR/scripts/run-with-timeout.sh"
@@ -1171,6 +1172,7 @@ make_case() {
         emit_test262_decimal_hex_fast_paths
         printf '\n'
       fi
+      emit_test262_upstream_metadata_amendments "$source"
       emit_quickjs_rust_case_source "$source"
     fi
   } >"$output"
@@ -1677,6 +1679,7 @@ if [ "$run" -gt 0 ]; then
   export -f includes_decimal_hex_utils
   export -f includes_property_helper
   export -f emit_test262_host_shim
+  export -f emit_test262_upstream_metadata_amendments
   export -f emit_quickjs_rust_case_source
   export -f regexp_source_loop_kind
   export -f is_regexp_whitespace_loop
@@ -1700,6 +1703,7 @@ if [ "$run" -gt 0 ]; then
   export -f rust_error_field
   export -f rust_negative_matches
   export -f split_entries
+  export -f test262_case_excludes_immutable_typed_array_factory
   set +e
   xargs -0 -n 9 -P "$TEST262_BASELINE_JOBS" bash -c 'run_case_worker "$@"' _ <"$QUEUE_FILE"
   worker_status=$?

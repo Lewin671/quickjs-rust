@@ -355,6 +355,15 @@ runs keep the 10-second default for tighter interactive probes. Allowlist
 validation and case execution both run in parallel;
 `TEST262_JOBS` overrides the default of one worker per online CPU.
 
+The pinned Test262 revision predates the official immutable-ArrayBuffer
+metadata fix in `tc39/test262@250f204f23a9249ff204be2baec29600faae7b75`.
+Both runners source `scripts/test262-upstream-amendments.sh` to backport exactly
+the eleven upstream `["immutable"]` TypedArray factory exclusions until the
+gitlink advances past that fix. The affected files still execute every mutable
+constructor-argument factory and every assertion; no test file is skipped, and
+immutable-ArrayBuffer-specific coverage remains unchanged. Remove the backport
+when the pinned submodule contains the upstream commit.
+
 `scripts/test262-baseline.sh` scans upstream Test262 coverage. It can run a
 bounded sample, a full scan with `--all`, a shard with `--shard I/N`, and a
 quickjs-rust/QuickJS-NG comparison with `--engine both`. In that mode QuickJS-NG

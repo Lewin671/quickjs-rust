@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$ROOT_DIR/scripts/lib.sh"
 TEST262_DIR="${TEST262_DIR:-$ROOT_DIR/third_party/test262}"
+. "$ROOT_DIR/scripts/test262-upstream-amendments.sh"
 ALLOWLIST="${TEST262_ALLOWLIST:-$ROOT_DIR/tests/test262/allowlist.txt}"
 EXPECTED_FAILURES="${TEST262_EXPECTED_FAILURES:-$ROOT_DIR/tests/test262/expected-failures.txt}"
 LOCAL_CASE_DIR="${TEST262_LOCAL_CASE_DIR:-$ROOT_DIR/tests/test262}"
@@ -961,6 +962,7 @@ make_upstream_case() {
     if includes_iterator_zip_utils "$includes"; then
       emit_test262_iterator_zip_fast_paths
     fi
+    emit_test262_upstream_metadata_amendments "$source"
     emit_quickjs_rust_case_source "$source"
   } >"$output"
 }
@@ -1159,6 +1161,7 @@ export EXPECTED_FAILURE_SET
 export PRELUDE_FILE
 export QJS_CLI_BIN
 export RUN_WITH_TIMEOUT
+export -f emit_test262_upstream_metadata_amendments
 export -f emit_quickjs_rust_case_source
 export -f regexp_source_loop_kind
 export -f is_regexp_whitespace_loop
@@ -1180,6 +1183,7 @@ export -f is_expected_failure
 export -f make_upstream_case
 export -f needs_test262_prelude
 export -f run_test262_case
+export -f test262_case_excludes_immutable_typed_array_factory
 
 set +e
 for index in "${!allowlist_entries[@]}"; do

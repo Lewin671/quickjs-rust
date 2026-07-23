@@ -416,6 +416,16 @@ test/built-ins/TypedArrayConstructors/internals/Set/key-is-canonical-invalid-ind
 test/built-ins/TypedArrayConstructors/internals/Set/key-is-out-of-bounds-receiver-is-not-object.js
 test/built-ins/TypedArrayConstructors/internals/Set/BigInt/key-is-canonical-invalid-index-prototype-chain-set.js
 test/built-ins/TypedArrayConstructors/internals/Set/BigInt/key-is-canonical-invalid-index-reflect-set.js
+test/built-ins/TypedArrayConstructors/internals/GetOwnProperty/BigInt/index-prop-desc.js
+test/built-ins/TypedArrayConstructors/internals/GetOwnProperty/index-prop-desc.js
+test/built-ins/TypedArrayConstructors/internals/Set/BigInt/null-tobigint.js
+test/built-ins/TypedArrayConstructors/internals/Set/BigInt/number-tobigint.js
+test/built-ins/TypedArrayConstructors/internals/Set/BigInt/string-nan-tobigint.js
+test/built-ins/TypedArrayConstructors/internals/Set/BigInt/symbol-tobigint.js
+test/built-ins/TypedArrayConstructors/internals/Set/BigInt/tonumber-value-throws.js
+test/built-ins/TypedArrayConstructors/internals/Set/BigInt/undefined-tobigint.js
+test/built-ins/TypedArrayConstructors/internals/Set/bigint-tonumber.js
+test/built-ins/TypedArrayConstructors/internals/Set/tonumber-value-throws.js
 test/built-ins/TypedArrayConstructors/of/BigInt/argument-number-value-throws.js
 test/built-ins/TypedArrayConstructors/of/BigInt/custom-ctor-does-not-instantiate-ta-throws.js
 test/built-ins/TypedArrayConstructors/of/BigInt/custom-ctor-returns-smaller-instance-throws.js
@@ -450,6 +460,7 @@ test/built-ins/TypedArray/prototype/lastIndexOf/tointeger-fromindex.js
 test/built-ins/TypedArray/prototype/filter/speciesctor-destination-backed-by-immutable-buffer.js
 test/built-ins/TypedArray/prototype/map/speciesctor-resizable-buffer-grow.js
 test/built-ins/TypedArray/prototype/map/speciesctor-resizable-buffer-shrink.js
+test/built-ins/TypedArray/prototype/slice/speciesctor-return-same-buffer-with-offset.js
 test/built-ins/TypedArray/prototype/subarray/byteoffset-with-detached-buffer.js
 test/built-ins/TypedArray/prototype/subarray/resizable-buffer.js
 test/built-ins/TypedArray/prototype/subarray/result-byteOffset-from-out-of-bounds.js
