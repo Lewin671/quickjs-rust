@@ -7093,6 +7093,48 @@ also passed, including all 5,148 curated Test262 cases, and all 218 current
 QuickJS-NG comparison fixtures passed. Trusted-main hosted closure remains the
 post-push step.
 
+#### Trusted-main hosted closure
+
+Main commit `5d6bb73080095812678247e2e22cc6bc6a497d2e` closed the
+own-data/shared-reduction unit on trusted hosted hardware. Test262 workflow
+`29998583152` completed all **42,672/42,672** pinned cases with zero failures,
+timeouts, not-run cases, or actionable gap. The downloaded burndown JSON
+SHA-256 is
+`10eee6df4b84210d2bfe70b4f01404a55f85b869c75313b9575a1db541bcb276`.
+
+Performance Preview workflow `29998334159` completed successfully with exact
+candidate, base, and QuickJS-NG source revisions `5d6bb730`, `0f1e147d`, and
+`f7830186`; their hosted executable SHA-256 values are respectively
+`d9a93a5acb7a3a4b738c75ab67de96b2c4c060bc6a34a65e135ada304cf46d46`,
+`10279d035c94c74adbb1bc19cc7d446f38bdd5372027db73420c700b34eba446`,
+and `8614a5a91e3476db1a1300b0969387b85e0716a836f799cf243a80d4d1f27699`.
+All 225/225 broad measurements, all three blocks, and all 75 linearity checks
+completed. The three-block profile is intentionally informational and its
+health verdict remained `inconclusive`/`non_claim`: broad candidate/base was
+1.017537x [1.017495x, 1.020194x], while candidate/QuickJS-NG was 0.162868x
+[0.162849x, 0.164279x]. These hosted broad ratios do not replace the exact
+same-host seven-block acceptance gate above.
+
+The external inventory completed all five JetStream ports, 12/14 comparable
+Kraken cases, and all 26 SunSpider cases. Candidate/base diagnostic geometric
+means were 1.002209x, 0.881338x, and 0.992857x; candidate/QuickJS-NG means were
+7.181513x, 2.693966x, and 6.579981x. The targeted directions reproduced more
+strongly than the local gate: Kraken `audio-dft` was 0.444368x base and
+0.377408x QuickJS-NG, while `audio-oscillator` was 0.439941x base. JetStream
+`gaussian-blur` remained 1.001763x base and 6.601032x QuickJS-NG, identifying
+fixed TypedArray backing access as the next high-ROI path. `ai-astar` and
+`imaging-gaussian-blur` timed out for both qjs-rust roles and remain capability
+gaps rather than comparable performance results.
+
+Downloaded raw/report, external raw/report/summary, and status SHA-256 values
+are respectively
+`bae227308d9c2ec9bbf5efde49caa2568e0ed105ab11850c9b6fc41b18722e17`,
+`30b51c95fbc6a50f99c4c8c564c8177cdac14bd169e9a00135cfe9aafb413bec`,
+`fbc8eafb3645dd8465d49b2ff72fee3079b9195f1cec74e65b950c652b9e23d4`,
+`5ea31647c8e345a174881a103ba238da1311c67ee3621d829e37d5b923086435`,
+`882caebdf326c3cd7d1f3e5a52ca37324ae9527f2a3b02c2c452f409b8cccbeb`,
+and `de89869b44fd3c2261a81dc4ac5074899d149a9d02022dde203c72f751bbe1ea`.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
