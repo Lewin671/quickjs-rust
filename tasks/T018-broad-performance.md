@@ -6708,6 +6708,91 @@ loads. The branch passed 8/8 focused read-only tests, the immutable-lease test,
 `check-touched`, and branch-scope validation. Three independent final reviews
 reported no remaining P0--P2 issue.
 
+### 2026-07-22 read-only dense hosted closure
+
+Main commit `3cbc57a7` closed the read-only dense reduction unit on trusted
+hosted state. CI run `29970185890` passed. Test262 Coverage
+`29970329829` independently passed all 42,672/42,672 configured cases with
+zero failures, timeouts, not-run cases, or actionable gaps; its burndown
+SHA-256 is
+`f5cf8465e42842e7a797030a7d4cd62367929bc83cdbe70efee571a7b79cffee`.
+
+Performance Preview `29970185871` completed all three hosted blocks. The
+informational 25-case micro portfolio measured 1.053555x candidate/base
+[1.050604x, 1.059878x] and 0.162611x candidate/QuickJS-NG
+[0.161718x, 0.162639x], but classified the result as inconclusive on variable
+GitHub hardware. The intended external AES targets did move in the same
+direction as the exact local gate: JetStream AES measured 0.824x base and
+4.626x QuickJS-NG, while Kraken AES measured 0.813x base and 4.541x
+QuickJS-NG. Unrelated hosted allocation and dynamic-array rows moved much
+more than their source paths justify, so this run is closure evidence rather
+than the acceptance gate; the exact local 21-block result above remains the
+mechanism decision. Broad raw/report SHA-256 values are
+`d3a2b1e335380b53d3defa63e876fbeed476930cebc0d82de8c30ae20f7b692b`
+and `9b4b5e60041d7a2c5303ffc4555e1b414afcb685f6784e9f2dbc13cfc567cb07`;
+external raw/report SHA-256 values are
+`0f897ecac27874beb402b8d32438172264371b02678473266155518df33231f4`
+and `067924546e151a28b27344b6c7c92b9a00ac5652f9fe02aaf34dccaa80c1d308`.
+
+### 2026-07-22 invariant dense sources and Array length
+
+Agent commit `5824d1dc` extends read-only dense numeric regions beyond local
+array receivers. A non-global direct-leaf frame may now resolve
+`this.<name>` once when `<name>` is an own ordinary data property containing
+an Array; a fused local `array.length` may supply the loop bound. Named
+sources are rejected for Proxy, accessor, inherited, symbol-primitive,
+typed-array, or module-namespace behavior, and both forms remain unavailable
+to writable regions. Captured or lexical `this`, direct `eval`,
+non-authoritative slots, holes, special indexed properties, non-Number
+elements, out-of-bounds reads, or borrow conflicts fail closed. A progressed
+failure publishes only earlier complete scalar iterations, drops all leases,
+and replays the failed iteration from the ordinary header; named sources and
+the Array length are resolved again on the next entry.
+
+Temporary instrumentation on the pinned Kraken `audio-dft` case recorded
+10,240 region entries, 10,475,520 accelerated iterations, 41,902,080 dense
+loads, and zero bailout. The final source patch SHA-256 is
+`e8dd66e5ca971d403ffd306bffc27db7cabff605abc93f3d6f6e2f7c3b1e561b`;
+candidate, base, and QuickJS-NG executable SHA-256 values are
+`a4acc55ffdd01272e6df5be8a6a697da07d16c0d77935971e2a146a6212f4602`,
+`326b4be49746e9b2220d3f599b35ee7f32fc8b94125118ab440b9b90ff307a9b`,
+and `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
+The predeclared seven-block gate required the `audio-dft` candidate/base
+interval upper bound to be at most 0.60x and four unrelated control upper
+bounds to be at most 1.03x. Final paired candidate/base estimates with 95%
+intervals were:
+
+- Kraken `audio-dft`: 0.216137x [0.214294x, 0.223564x];
+- JetStream `gaussian-blur`: 1.002355x [0.983471x, 1.008128x];
+- Kraken `audio-fft`: 1.005669x [0.999845x, 1.007458x];
+- Kraken `json-parse-financial`: 0.990914x [0.990337x, 0.995326x];
+- SunSpider `bitops-nsieve-bits`: 0.994169x [0.976582x, 1.000244x].
+
+The target candidate/QuickJS-NG estimate is 0.878929x
+[0.865767x, 0.903991x]: this unit turns the previous `audio-dft` deficit into
+a lead, but it does not reach the final 0.50x boundary. Manifest, raw,
+external-report, paired-report, and summary SHA-256 values are
+`70ff53124f08970475037be4021d01149a268efe2fb280dd82ad9e07a3991ffc`,
+`76ccbb2ea6d2d605ae0efc04b3adaa02f83b6a5ea7284babfbd2404cbd68c8cb`,
+`d3680757baf6bb9bfe532b86ba5a9aee0c61ca5a12671f219bdb30d33a472fdc`,
+`7f60b1093f67db50a306d66e3dc8f859cdaa578a8e58db91ebbfc52587ff7d87`,
+and `3c37e853ef0fc9e400fddd4649a11464c55688b4119dd143ed22c9bf0da0e841`.
+
+Exact-binary review discipline rejected an earlier passing candidate rather
+than accepting its speed. Independent review found that an unused
+`this.tick;` expression could leave an unresolved named source for `Pop` to
+discard, skipping an observable getter in accelerated iterations. The final
+translator rejects discarded `DirectThis` or `ArraySource` values, and the
+regression proves ten generic getter calls with no compiled region. Two
+earlier invocations also stopped before any timing sample because one corpus
+SHA was mistyped in the first manifest; the corrected manifest changed only
+that validated source hash and retained the same cases, seed, blocks, and
+thresholds. The final branch passed all 1,614 runtime tests, all 5,148 curated
+Test262 cases, the 65-case touched slice, formatting, clippy, file-size and
+branch-scope checks. The reviewer that found the P1 and a separate final
+reviewer found no remaining P0--P2 after the repair.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an

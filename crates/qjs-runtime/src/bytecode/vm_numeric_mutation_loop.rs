@@ -611,6 +611,158 @@ mod tests {
     }
 
     #[test]
+    fn read_only_dense_region_hoists_direct_this_arrays_and_array_length() {
+        let source = "function transform(buffer, stride) { var real = 0, imag = 0; for (var index = 0; index < buffer.length; index++) { real += this.positive[stride * index] * buffer[index]; imag += this.negative[stride * index] * buffer[index]; } return real + ':' + imag; }";
+        let bytecode = nested_function(source);
+        let plans = NumericMutationLoopPlan::compile_all(&bytecode);
+        assert_eq!(plans.len(), 1, "{:#?}", bytecode.code);
+        assert!(matches!(plans[0].kind, NumericMutationLoopKind::Dense(_)));
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "{source} var owner = {{ positive: [1,2,3,4,5,6,7,8,9,10], negative: [10,9,8,7,6,5,4,3,2,1] }}; transform.call(owner, [1,2,3,4,5,6,7,8,9,10], 1);"
+            )),
+            Ok(Value::String("385:220".to_owned().into()))
+        );
+        assert_eq!(dense::test_read_only_path_hits(), 1);
+        assert_eq!(dense::test_read_only_iterations(), 9);
+        assert_eq!(dense::test_read_only_bailouts(), 0);
+    }
+
+    #[test]
+    fn read_only_dense_region_hoisted_sources_allow_runtime_aliases() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function transform(buffer) { var total = 0; for (var index = 0; index < buffer.length; index++) total += this.first[index] * this.second[index] * buffer[index]; return total; } var shared = [1,2,3,4,5,6,7,8,9,10]; transform.call({ first: shared, second: shared }, shared);"
+            ),
+            Ok(Value::Number(3025.0))
+        );
+        assert_eq!(dense::test_read_only_path_hits(), 1);
+        assert_eq!(dense::test_read_only_iterations(), 9);
+        assert_eq!(dense::test_read_only_bailouts(), 0);
+    }
+
+    #[test]
+    fn read_only_dense_region_rejects_observable_hoisted_sources() {
+        let source = "function transform(buffer) { var total = 0; for (var index = 0; index < buffer.length; index++) total += this.values[index] * buffer[index]; return total; }";
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "{source} var hits = 0, table = [1,2,3,4]; var owner = {{}}; Object.defineProperty(owner, 'values', {{ get: function () {{ hits++; return table; }} }}); transform.call(owner, [1,2,3,4]) + ':' + hits;"
+            )),
+            Ok(Value::String("30:4".to_owned().into()))
+        );
+        assert_eq!(dense::test_read_only_path_hits(), 0);
+        assert_eq!(dense::test_read_only_iterations(), 0);
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "{source} var hits = 0, table = [1,2,3,4]; var proto = {{}}; Object.defineProperty(proto, 'values', {{ get: function () {{ hits++; return table; }} }}); transform.call(Object.create(proto), [1,2,3,4]) + ':' + hits;"
+            )),
+            Ok(Value::String("30:4".to_owned().into()))
+        );
+        assert_eq!(dense::test_read_only_path_hits(), 0);
+        assert_eq!(dense::test_read_only_iterations(), 0);
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "{source} var hits = 0, target = {{ values: [1,2,3,4] }}; var owner = new Proxy(target, {{ get: function (object, key) {{ if (key === 'values') hits++; return object[key]; }} }}); transform.call(owner, [1,2,3,4]) + ':' + hits;"
+            )),
+            Ok(Value::String("30:4".to_owned().into()))
+        );
+        assert_eq!(dense::test_read_only_path_hits(), 0);
+        assert_eq!(dense::test_read_only_iterations(), 0);
+    }
+
+    #[test]
+    fn read_only_dense_region_rejects_discarded_direct_this_property_read() {
+        let source = "function reduce(values) { var total = 0; for (var index = 0; index < values.length; index++) { this.tick; total += values[index]; } return total; }";
+        let bytecode = nested_function(source);
+        assert!(
+            NumericMutationLoopPlan::compile_all(&bytecode).is_empty(),
+            "{:#?}",
+            bytecode.code
+        );
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "{source} var hits = 0; var owner = {{}}; Object.defineProperty(owner, 'tick', {{ get: function () {{ hits++; return 1; }} }}); reduce.call(owner, [1,2,3,4,5,6,7,8,9,10]) + ':' + hits;"
+            )),
+            Ok(Value::String("55:10".to_owned().into()))
+        );
+        assert_eq!(dense::test_read_only_path_hits(), 0);
+        assert_eq!(dense::test_read_only_iterations(), 0);
+    }
+
+    #[test]
+    fn read_only_dense_region_rejects_observable_array_length_bound() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function reduce(values, bound) { var total = 0; for (var index = 0; index < bound.length; index++) total += values[index]; return total; } var hits = 0; var bound = {}; Object.defineProperty(bound, 'length', { get: function () { hits++; return 4; } }); reduce([1,2,3,4], bound) + ':' + hits;"
+            ),
+            Ok(Value::String("10:5".to_owned().into()))
+        );
+        assert_eq!(dense::test_read_only_path_hits(), 0);
+        assert_eq!(dense::test_read_only_iterations(), 0);
+    }
+
+    #[test]
+    fn read_only_dense_region_rejects_captured_this_and_direct_eval() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function make() { return (buffer) => { var total = 0; for (var index = 0; index < buffer.length; index++) total += this.values[index] * buffer[index]; return total; }; } var run = make.call({ values: [1,2,3,4] }); run([1,2,3,4]);"
+            ),
+            Ok(Value::Number(30.0))
+        );
+        assert_eq!(dense::test_read_only_path_hits(), 0);
+        assert_eq!(dense::test_read_only_iterations(), 0);
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function transform(buffer) { eval(''); var total = 0; for (var index = 0; index < buffer.length; index++) total += this.values[index] * buffer[index]; return total; } transform.call({ values: [1,2,3,4] }, [1,2,3,4]);"
+            ),
+            Ok(Value::Number(30.0))
+        );
+        assert_eq!(dense::test_read_only_path_hits(), 0);
+        assert_eq!(dense::test_read_only_iterations(), 0);
+    }
+
+    #[test]
+    fn read_only_dense_region_re_resolves_hoisted_source_after_replay() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function transform(buffer) { var total = 0; for (var index = 0; index < buffer.length; index++) total += this.values[index] * buffer[index]; return index + ':' + total; } var owner, coercions = 0, replacement = [10,20,30,40]; var marker = { valueOf: function () { coercions++; owner.values = replacement; return 2; } }; owner = { values: [1, marker, 3, 4] }; transform.call(owner, [1,2,3,4]) + ':' + coercions;"
+            ),
+            Ok(Value::String("4:255:1".to_owned().into()))
+        );
+        assert_eq!(dense::test_read_only_path_hits(), 1);
+        assert_eq!(dense::test_read_only_iterations(), 2);
+        assert_eq!(dense::test_read_only_bailouts(), 1);
+    }
+
+    #[test]
+    fn named_array_sources_do_not_extend_writable_dense_regions() {
+        let bytecode = nested_function(
+            "function copy(buffer) { for (var index = 0; index < buffer.length; index++) this.values[index] = buffer[index] + 1; }",
+        );
+        assert!(
+            NumericMutationLoopPlan::compile_all(&bytecode).is_empty(),
+            "{:#?}",
+            bytecode.code
+        );
+    }
+
+    #[test]
     fn read_only_dense_region_rejects_captured_receiver() {
         dense::reset_test_iterations();
         assert_eq!(

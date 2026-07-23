@@ -15,7 +15,10 @@ use std::{
 
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
-use crate::{Value, to_int32_number, to_uint32_number, value::ArrayRef};
+use crate::{
+    Value, to_int32_number, to_uint32_number,
+    value::{ArrayRef, OwnDataPropertyRead},
+};
 
 use super::super::{
     ir::{Bytecode, Op, decode_index_receiver},
@@ -159,14 +162,76 @@ struct FixedDensePlan {
 #[derive(Clone, Debug)]
 struct DynamicDensePlan {
     counter_local: usize,
-    limit_local: usize,
-    receiver_slots: Vec<usize>,
+    limit: DynamicLimit,
+    receiver_sources: Vec<ArraySource>,
     local_slots: Vec<usize>,
     operations: Vec<NumberInstruction>,
     writes: Vec<LocalWrite>,
     store_count: usize,
     sunk_store: Option<SunkDenseStore>,
     header: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum DynamicLimit {
+    LocalNumber(usize),
+    LocalArrayLength(usize),
+}
+
+impl DynamicLimit {
+    fn source_slot(self) -> usize {
+        match self {
+            Self::LocalNumber(slot) | Self::LocalArrayLength(slot) => slot,
+        }
+    }
+
+    fn array_length_slot(self) -> Option<usize> {
+        match self {
+            Self::LocalNumber(_) => None,
+            Self::LocalArrayLength(slot) => Some(slot),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ArraySource {
+    Local(usize),
+    DirectThisOwnData(std::rc::Rc<str>),
+}
+
+impl ArraySource {
+    fn local_slot(&self) -> Option<usize> {
+        match self {
+            Self::Local(slot) => Some(*slot),
+            Self::DirectThisOwnData(_) => None,
+        }
+    }
+
+    fn resolve_read_only(&self, vm: &Vm<'_>) -> Option<ArrayRef> {
+        match self {
+            Self::Local(slot) => match vm.locals.get(*slot) {
+                Some(Some(Value::Array(array))) => Some(array.clone()),
+                _ => None,
+            },
+            Self::DirectThisOwnData(key) => {
+                let Value::Object(object) = vm.direct_this.as_ref()? else {
+                    return None;
+                };
+                if crate::symbol::is_symbol_primitive(object)
+                    || crate::typed_array::is_typed_array_object(object)
+                    || object.is_module_namespace_exotic()
+                {
+                    return None;
+                }
+                match object.own_data_property_read(key) {
+                    OwnDataPropertyRead::Data(Value::Array(array)) => Some(array),
+                    OwnDataPropertyRead::Data(_)
+                    | OwnDataPropertyRead::Missing
+                    | OwnDataPropertyRead::NeedsSlowPath => None,
+                }
+            }
+        }
+    }
 }
 
 type Register = usize;
@@ -669,6 +734,8 @@ enum AbstractValue {
     Local(usize),
     Number(Register),
     Key(Register),
+    DirectThis,
+    ArraySource(ArraySource),
     Other,
 }
 
@@ -680,7 +747,7 @@ struct Translator<'a> {
     writes: Vec<LocalWrite>,
     written_slots: BTreeSet<usize>,
     number_slots: BTreeSet<usize>,
-    receiver_slots: Vec<usize>,
+    receiver_sources: Vec<ArraySource>,
     store_count: usize,
 }
 
@@ -694,7 +761,7 @@ impl<'a> Translator<'a> {
             writes: Vec::new(),
             written_slots: BTreeSet::new(),
             number_slots: BTreeSet::new(),
-            receiver_slots: Vec::new(),
+            receiver_sources: Vec::new(),
             store_count: 0,
         }
     }
@@ -719,31 +786,33 @@ impl<'a> Translator<'a> {
                 self.number_slots.insert(slot);
                 self.emit(NumberInstruction::LoadLocal(slot))
             }
-            AbstractValue::Other => None,
-        }
-    }
-
-    fn original_local(value: &AbstractValue) -> Option<usize> {
-        match value {
-            AbstractValue::Local(slot) => Some(*slot),
-            _ => None,
+            AbstractValue::DirectThis | AbstractValue::ArraySource(_) | AbstractValue::Other => {
+                None
+            }
         }
     }
 
     fn receiver(&mut self, value: &AbstractValue) -> Option<usize> {
-        let slot = Self::original_local(value)?;
+        let source = match value {
+            AbstractValue::Local(slot) => ArraySource::Local(*slot),
+            AbstractValue::ArraySource(source) => source.clone(),
+            AbstractValue::Number(_)
+            | AbstractValue::Key(_)
+            | AbstractValue::DirectThis
+            | AbstractValue::Other => return None,
+        };
         if let Some(receiver) = self
-            .receiver_slots
+            .receiver_sources
             .iter()
-            .position(|existing| *existing == slot)
+            .position(|existing| existing == &source)
         {
             return Some(receiver);
         }
-        if self.receiver_slots.len() >= MAX_DENSE_RECEIVERS {
+        if self.receiver_sources.len() >= MAX_DENSE_RECEIVERS {
             return None;
         }
-        let receiver = self.receiver_slots.len();
-        self.receiver_slots.push(slot);
+        let receiver = self.receiver_sources.len();
+        self.receiver_sources.push(source);
         Some(receiver)
     }
 
@@ -755,6 +824,9 @@ impl<'a> Translator<'a> {
                     .cloned()
                     .unwrap_or(AbstractValue::Local(*slot)),
             ),
+            Op::LoadGlobal(name) if name == "this" && !self.bytecode.is_global_scope() => {
+                self.stack.push(AbstractValue::DirectThis);
+            }
             Op::LoadConst(index) => match self.bytecode.constants.get(*index)? {
                 Value::Number(value) => {
                     let register = self.emit(NumberInstruction::Constant(*value))?;
@@ -764,7 +836,12 @@ impl<'a> Translator<'a> {
             },
             Op::Dup => self.stack.push(self.stack.last()?.clone()),
             Op::Pop => {
-                self.pop()?;
+                if matches!(
+                    self.pop()?,
+                    AbstractValue::DirectThis | AbstractValue::ArraySource(_)
+                ) {
+                    return None;
+                }
             }
             Op::StoreLocal(slot) | Op::AssignLocal(slot) => {
                 let mut value = self.pop()?;
@@ -780,6 +857,7 @@ impl<'a> Translator<'a> {
                         value = AbstractValue::Number(register);
                         Some(register)
                     }
+                    AbstractValue::DirectThis | AbstractValue::ArraySource(_) => return None,
                     AbstractValue::Other if !self.bytecode.local_is_compiler_temporary(*slot) => {
                         return None;
                     }
@@ -845,6 +923,15 @@ impl<'a> Translator<'a> {
                     value,
                 })?;
                 self.stack.push(AbstractValue::Number(register));
+            }
+            Op::GetPropNamed { key, cache } if cache.local_slot().is_none() => {
+                let AbstractValue::DirectThis = self.pop()? else {
+                    return None;
+                };
+                self.stack
+                    .push(AbstractValue::ArraySource(ArraySource::DirectThisOwnData(
+                        key.clone(),
+                    )));
             }
             Op::GetProp => {
                 let key = self.pop()?;
@@ -988,20 +1075,21 @@ fn compile_dynamic(
     backedge: usize,
 ) -> Option<(usize, DynamicDensePlan)> {
     let code = &bytecode.code;
-    let (
-        Op::LoadLocal(counter_slot),
-        Op::LoadLocal(limit_slot),
-        Op::Binary(BinaryOp::Lt),
-        Op::JumpIfFalse(exit),
-        Op::Pop,
-    ) = (
-        code.get(header)?,
-        code.get(header + 1)?,
+    let Op::LoadLocal(counter_slot) = code.get(header)? else {
+        return None;
+    };
+    let limit = match code.get(header + 1)? {
+        Op::LoadLocal(slot) => DynamicLimit::LocalNumber(*slot),
+        Op::GetPropNamed { key, cache } if key.as_ref() == "length" => {
+            DynamicLimit::LocalArrayLength(cache.local_slot()?)
+        }
+        _ => return None,
+    };
+    let (Op::Binary(BinaryOp::Lt), Op::JumpIfFalse(exit), Op::Pop) = (
         code.get(header + 2)?,
         code.get(header + 3)?,
         code.get(header + 4)?,
-    )
-    else {
+    ) else {
         return None;
     };
     if *exit <= backedge
@@ -1023,15 +1111,26 @@ fn compile_dynamic(
     {
         return None;
     }
-    if counter_slot == limit_slot
-        || translator.receiver_slots.iter().any(|receiver| {
-            counter_slot == receiver
-                || limit_slot == receiver
-                || translator.number_slots.contains(receiver)
-                || translator.written_slots.contains(receiver)
+    let limit_slot = limit.source_slot();
+    if counter_slot == &limit_slot
+        || translator.receiver_sources.iter().any(|receiver| {
+            receiver.local_slot().is_some_and(|receiver| {
+                counter_slot == &receiver
+                    || matches!(limit, DynamicLimit::LocalNumber(slot) if slot == receiver)
+                    || translator.number_slots.contains(&receiver)
+                    || translator.written_slots.contains(&receiver)
+            })
         })
-        || translator.written_slots.contains(limit_slot)
+        || translator.written_slots.contains(&limit_slot)
+        || matches!(limit, DynamicLimit::LocalArrayLength(_))
+            && translator.number_slots.contains(&limit_slot)
         || !translator.written_slots.contains(counter_slot)
+        || translator.store_count != 0
+            && (matches!(limit, DynamicLimit::LocalArrayLength(_))
+                || translator
+                    .receiver_sources
+                    .iter()
+                    .any(|source| !matches!(source, ArraySource::Local(_))))
     {
         return None;
     }
@@ -1041,7 +1140,9 @@ fn compile_dynamic(
         translator.store_count,
     )?;
     translator.number_slots.insert(*counter_slot);
-    translator.number_slots.insert(*limit_slot);
+    if let DynamicLimit::LocalNumber(limit_slot) = limit {
+        translator.number_slots.insert(limit_slot);
+    }
     let mut local_slots = translator.number_slots;
     local_slots.extend(translator.writes.iter().map(|write| write.local));
     let local_slots: Vec<_> = local_slots.into_iter().collect();
@@ -1062,8 +1163,11 @@ fn compile_dynamic(
         *exit,
         DynamicDensePlan {
             counter_local: local_index(*counter_slot)?,
-            limit_local: local_index(*limit_slot)?,
-            receiver_slots: translator.receiver_slots,
+            limit: match limit {
+                DynamicLimit::LocalNumber(slot) => DynamicLimit::LocalNumber(local_index(slot)?),
+                DynamicLimit::LocalArrayLength(slot) => DynamicLimit::LocalArrayLength(slot),
+            },
+            receiver_sources: translator.receiver_sources,
             local_slots,
             operations: translator.operations,
             writes: translator.writes,
@@ -1097,11 +1201,11 @@ impl DynamicDensePlan {
         access: &mut A,
         locals: &mut [f64; MAX_DENSE_LOCALS],
         registers: &mut [f64],
+        limit: f64,
     ) -> DynamicProgramRun {
         let mut made_progress = false;
         loop {
             let counter = locals[self.counter_local];
-            let limit = locals[self.limit_local];
             if !matches!(counter.partial_cmp(&limit), Some(std::cmp::Ordering::Less)) {
                 return DynamicProgramRun {
                     deoptimized: false,
@@ -1201,7 +1305,12 @@ impl DynamicDensePlan {
             .local_slots
             .iter()
             .copied()
-            .chain(self.receiver_slots.iter().copied())
+            .chain(
+                self.receiver_sources
+                    .iter()
+                    .filter_map(ArraySource::local_slot),
+            )
+            .chain(self.limit.array_length_slot())
         {
             if !vm.slot_is_authoritative(slot) {
                 return false;
@@ -1214,6 +1323,13 @@ impl DynamicDensePlan {
             };
             locals[local] = value;
         }
+        let limit = match self.limit {
+            DynamicLimit::LocalNumber(local) => locals[local],
+            DynamicLimit::LocalArrayLength(slot) => match vm.locals.get(slot) {
+                Some(Some(Value::Array(array))) => array.len() as f64,
+                _ => return false,
+            },
+        };
         let mut inline_registers = [0.0; INLINE_DENSE_OPS];
         let mut large_registers =
             (self.operations.len() > INLINE_DENSE_OPS).then(|| vec![0.0; self.operations.len()]);
@@ -1224,12 +1340,9 @@ impl DynamicDensePlan {
 
         let ran = if self.store_count == 0 {
             let Some(arrays) = self
-                .receiver_slots
+                .receiver_sources
                 .iter()
-                .map(|slot| match vm.locals.get(*slot) {
-                    Some(Some(Value::Array(array))) => Some(array.clone()),
-                    _ => None,
-                })
+                .map(|source| source.resolve_read_only(vm))
                 .collect::<Option<Vec<_>>>()
             else {
                 record_read_only_bailout();
@@ -1237,7 +1350,7 @@ impl DynamicDensePlan {
             };
             let ran = ArrayRef::with_dense_readable_element_sets(&arrays, |elements| {
                 let mut access = ReadAccess { elements };
-                self.run_program(&mut access, &mut locals, registers)
+                self.run_program(&mut access, &mut locals, registers, limit)
             });
             match ran {
                 Some(run) => {
@@ -1251,8 +1364,11 @@ impl DynamicDensePlan {
                 None => record_read_only_bailout(),
             }
             ran
-        } else if self.receiver_slots.len() == 1 && self.store_count == 1 {
-            let Some(Some(Value::Array(array))) = vm.locals.get(self.receiver_slots[0]) else {
+        } else if self.receiver_sources.len() == 1 && self.store_count == 1 {
+            let Some(slot) = self.receiver_sources[0].local_slot() else {
+                return false;
+            };
+            let Some(Some(Value::Array(array))) = vm.locals.get(slot) else {
                 return false;
             };
             let array = array.clone();
@@ -1261,7 +1377,7 @@ impl DynamicDensePlan {
                     elements,
                     pending: None,
                 };
-                self.run_program(&mut access, &mut locals, registers)
+                self.run_program(&mut access, &mut locals, registers, limit)
             });
             if ran.is_some_and(|run| run.made_progress) {
                 record_single_path_hit();
@@ -1269,11 +1385,14 @@ impl DynamicDensePlan {
             ran
         } else {
             let Some(arrays) = self
-                .receiver_slots
+                .receiver_sources
                 .iter()
-                .map(|slot| match vm.locals.get(*slot) {
-                    Some(Some(Value::Array(array))) => Some(array.clone()),
-                    _ => None,
+                .map(|source| match source.local_slot() {
+                    Some(slot) => match vm.locals.get(slot) {
+                        Some(Some(Value::Array(array))) => Some(array.clone()),
+                        _ => None,
+                    },
+                    None => None,
                 })
                 .collect::<Option<Vec<_>>>()
             else {
@@ -1284,7 +1403,7 @@ impl DynamicDensePlan {
                     elements,
                     pending: Vec::with_capacity(self.store_count),
                 };
-                self.run_program(&mut access, &mut locals, registers)
+                self.run_program(&mut access, &mut locals, registers, limit)
             })
         };
         let Some(run) = ran else {
