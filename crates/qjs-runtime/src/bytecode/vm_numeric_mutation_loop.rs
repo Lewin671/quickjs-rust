@@ -493,6 +493,198 @@ mod tests {
     }
 
     #[test]
+    fn recognizes_postfix_countdown_dense_region() {
+        let bytecode = nested_function(
+            "function run(p) { var values = [1, 2, 3]; while (p--) { values[p] = values[p] + 1; } return p; }",
+        );
+        let (backedge, header) = bytecode
+            .code
+            .iter()
+            .enumerate()
+            .find_map(|(index, op)| match op {
+                Op::Jump(target) if *target < index => Some((index, *target)),
+                _ => None,
+            })
+            .expect("countdown bytecode should have a backward edge");
+        assert!(matches!(bytecode.code.get(header), Some(Op::LoadLocal(_))));
+        assert!(matches!(bytecode.code.get(header + 1), Some(Op::ToNumeric)));
+        assert!(matches!(bytecode.code.get(header + 2), Some(Op::Dup)));
+        assert!(matches!(
+            bytecode.code.get(header + 3),
+            Some(Op::Update(UpdateOp::Decrement))
+        ));
+        assert!(matches!(
+            bytecode.code.get(header + 4),
+            Some(Op::AssignLocal(_))
+        ));
+        assert!(matches!(
+            bytecode.code.get(header + 5),
+            Some(Op::JumpIfFalse(_))
+        ));
+        assert!(matches!(bytecode.code.get(header + 6), Some(Op::Pop)));
+        assert!(matches!(
+            bytecode.code.get(backedge),
+            Some(Op::Jump(target)) if *target == header
+        ));
+
+        let plans = NumericMutationLoopPlan::compile_all(&bytecode);
+        assert_eq!(plans.len(), 1, "{:#?}", bytecode.code);
+        assert!(matches!(plans[0].kind, NumericMutationLoopKind::Dense(_)));
+    }
+
+    #[test]
+    fn countdown_dense_region_commits_three_same_array_stores_and_final_decrement() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function run(p) { var values = [1, 2, 3, 4]; while (p--) { values[p] = values[p] + 1; values[p] = values[p] + 2; values[p] = values[p] + 3; } return p + ':' + values.join(':'); } run(4);"
+            ),
+            Ok(Value::String("-1:7:8:9:10".to_owned().into()))
+        );
+        assert_eq!(dense::test_countdown_path_hits(), 1);
+        assert_eq!(dense::test_countdown_iterations(), 3);
+    }
+
+    #[test]
+    fn countdown_dense_region_runs_desaturate_shaped_chained_stores() {
+        let source = "function process(data, w, h) { var p = w * h; var pix = p * 4, pix1, pix2; while (p--) data[pix -= 4] = data[pix1 = pix + 1] = data[pix2 = pix + 2] = (data[pix] + data[pix1] + data[pix2]) / 3; return p + ':' + pix + ':' + pix1 + ':' + pix2 + ':' + data.join(':'); }";
+        let bytecode = nested_function(source);
+        assert_eq!(
+            NumericMutationLoopPlan::compile_all(&bytecode).len(),
+            1,
+            "{:#?}",
+            bytecode.code
+        );
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "{source} process([10, 20, 30, 40, 50, 60, 70, 80], 2, 1);"
+            )),
+            Ok(Value::String(
+                "-1:0:1:2:20:20:20:40:60:60:60:80".to_owned().into()
+            ))
+        );
+        assert_eq!(dense::test_countdown_path_hits(), 1);
+        assert_eq!(dense::test_countdown_iterations(), 1);
+    }
+
+    #[test]
+    fn countdown_dense_region_preserves_single_iteration_semantics() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function run(p) { var values = [1]; while (p--) { values[p] = values[p] + 1; } return p + ':' + values[0]; } run(1);"
+            ),
+            Ok(Value::String("-1:2".to_owned().into()))
+        );
+        assert_eq!(dense::test_countdown_path_hits(), 0);
+        assert_eq!(dense::test_countdown_iterations(), 0);
+    }
+
+    #[test]
+    fn countdown_dense_region_replays_mid_body_deopt_without_double_decrement() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "var coercions = 0; var marker = { valueOf: function () { coercions += 1; return 7; } }; function run(p, input, output) { while (p--) { output[p] = output[p] + 1; output[p] = output[p] + input[p]; } return p + '|' + output.join(':') + '|' + coercions; } run(4, [1, marker, 3, 4], [10, 10, 10, 10]);"
+            ),
+            Ok(Value::String("-1|12:18:14:15|1".to_owned().into()))
+        );
+        assert_eq!(dense::test_countdown_path_hits(), 2);
+        assert_eq!(dense::test_countdown_iterations(), 2);
+    }
+
+    #[test]
+    fn countdown_dense_region_rejects_unsafe_entry_numbers() {
+        let source = "function run(p, firstKey, secondKey) { var calls = 0; var marker = { valueOf: function () { calls += 1; if (calls > 1) throw 1; return 5; } }; var input = []; var output = []; input[firstKey] = marker; input[secondKey] = marker; var caught = false; try { while (p--) { output[p] = input[p] + 1; } } catch (error) { caught = true; } return caught + ':' + calls; }";
+
+        for (arguments, expected) in [
+            ("2.5, '1.5', '0.5'", "true:2"),
+            ("-1, '-2', '-3'", "true:2"),
+            ("Infinity, 'Infinity', 'Infinity'", "true:2"),
+            (
+                "9007199254740994, '9007199254740992', '9007199254740991'",
+                "true:2",
+            ),
+        ] {
+            dense::reset_test_iterations();
+            assert_eq!(
+                eval(&format!("{source} run({arguments});")),
+                Ok(Value::String(expected.to_owned().into())),
+                "arguments: {arguments}"
+            );
+            assert_eq!(
+                dense::test_countdown_path_hits(),
+                0,
+                "arguments: {arguments}"
+            );
+            assert_eq!(
+                dense::test_countdown_iterations(),
+                0,
+                "arguments: {arguments}"
+            );
+        }
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function run(p) { var values = [1]; while (p--) { values[0] = values[0] + 1; } return p + ':' + values[0]; } run(NaN);"
+            ),
+            Ok(Value::String("NaN:1".to_owned().into()))
+        );
+        assert_eq!(dense::test_countdown_path_hits(), 0);
+        assert_eq!(dense::test_countdown_iterations(), 0);
+    }
+
+    #[test]
+    fn countdown_dense_region_fails_closed_for_non_authoritative_counter() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function direct(p) { var values = [1, 2, 3, 4]; eval(''); while (p--) { values[p] = values[p] + 1; } return p + ':' + values.join(':'); } direct(4);"
+            ),
+            Ok(Value::String("-1:2:3:4:5".to_owned().into()))
+        );
+        assert_eq!(dense::test_countdown_path_hits(), 0);
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function captured(p) { var values = [1, 2, 3, 4]; function read() { return p; } while (p--) { values[p] = values[p] + 1; } return read() + ':' + values.join(':'); } captured(4);"
+            ),
+            Ok(Value::String("-1:2:3:4:5".to_owned().into()))
+        );
+        assert_eq!(dense::test_countdown_path_hits(), 0);
+    }
+
+    #[test]
+    fn countdown_dense_region_rejects_body_counter_writes() {
+        let bytecode = nested_function(
+            "function run(p) { var values = [1, 2, 3, 4]; while (p--) { p = p; values[p] = values[p] + 1; } return p; }",
+        );
+        assert!(
+            NumericMutationLoopPlan::compile_all(&bytecode).is_empty(),
+            "{:#?}",
+            bytecode.code
+        );
+    }
+
+    #[test]
+    fn less_than_dense_region_is_unchanged_by_countdown_control() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function run(bound) { var values = [1, 2, 3, 4]; for (var index = 0; index < bound; index++) values[index] = values[index] + 1; return index + ':' + values.join(':'); } run(4);"
+            ),
+            Ok(Value::String("4:2:3:4:5".to_owned().into()))
+        );
+        assert!(dense::test_iterations() > 0);
+        assert_eq!(dense::test_countdown_path_hits(), 0);
+        assert_eq!(dense::test_countdown_iterations(), 0);
+    }
+
+    #[test]
     fn recognizes_named_numeric_recurrence() {
         let bytecode = nested_function(
             "function run(n) { var o = { a: 0, b: 0, c: 0 }; var sum = 0; for (var i = 0; i < n; i++) { o.a = o.c + 1; o.b = o.a + 1; o.c = o.b - 1; sum += o.c; } return sum; }",

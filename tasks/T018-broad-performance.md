@@ -6793,6 +6793,128 @@ Test262 cases, the 65-case touched slice, formatting, clippy, file-size and
 branch-scope checks. The reviewer that found the P1 and a separate final
 reviewer found no remaining P0--P2 after the repair.
 
+### 2026-07-22 invariant dense sources hosted closure
+
+Main commit `330602b3` closed the invariant-source unit on trusted hosted
+state. CI run `29972324830` passed. Test262 Coverage `29972462375`
+independently passed all 42,672/42,672 configured cases with zero failures,
+timeouts, not-run cases, or actionable gaps; its burndown SHA-256 is
+`69de8dca08da1a6426e75dba22a3579e87c89ead7733c6a88d0f18c8d9f4ed86`.
+
+Performance Preview `29972324836` completed all three hosted blocks. The
+informational 25-case micro portfolio measured 1.000504x candidate/base
+[0.998863x, 1.007477x] and 0.159378x candidate/QuickJS-NG
+[0.158126x, 0.161083x], and correctly classified the variable-host result as
+inconclusive. The admitted external suites reported 5/5 JetStream cases,
+11/14 Kraken cases, and 26/26 SunSpider cases. The local exact-binary gate
+above remains the mechanism acceptance evidence; the hosted run supplies
+post-integration conformance and build closure. Broad raw/report SHA-256 values
+are
+`fb9709d44ea6f31205d901895b7a50d32275f7441a8d55a9543b58b4bbde3e09`
+and `c00f1cf34e9d0aef1f88b267f82750185876aaf1d11b2e6d6c9b58706e34841f`;
+external raw/report SHA-256 values are
+`e99187fe21990699671aeba2dc948be5ef2f14528d06e6ae436949778dfa04f6`
+and `57eaa7f5d00c20d2a873ca28bae98b728c0cbf34ae3e41c92e52f2a1dc94c40c`.
+
+### 2026-07-22 rejected virtual scalar allocation regions
+
+A general virtual-scalar prototype was evaluated and removed without commit.
+It first proved that a loop-local object or Array did not escape through
+identity, capture, property-key coercion, calls, or unsupported control flow,
+then represented Number-only fields and elements as transactional scalar state
+inside the existing numeric-region machinery. The prototype matched structure
+and safety properties rather than benchmark names, and retained ordinary
+bytecode replay on every failed guard.
+
+The predeclared discovery rule formed a high-reuse set `H` from external cases
+with at least 10,000 candidate iterations. Across the fixed 45-case external
+corpus, all 44 measurable cases recorded exactly zero compiled entries and zero
+accelerated iterations. The only non-completing case, Kraken
+`imaging-gaussian-blur`, timed out again in an isolated 15-second retry after
+15.018748 seconds with exit status -9 and empty output. Therefore `H` was empty:
+the mechanism had no demonstrated external reuse and was rejected before any
+timing gate, despite being semantically general.
+
+The rejected candidate executable SHA-256 is
+`04798f7d7f28195b16b35f4f0944860e2e61d896932a447a97d42cfc46cec7d3`.
+Manifest, raw, external-report, and summary SHA-256 values are
+`a8ddeded582573bc676bf3f7bbbaf2625f6dfa7742f07bcdd6aaa26366f4e6c4`,
+`bb9ea6845837813d1bac55476848c80d968e6d43aced1bd37060ea6e06852f07`,
+`477856a3a7962c4dc81f122125e0de4599b495eb75655a060d18f3a9285fc13b`,
+and `3191ac4bc14225f8c437a21def2a24322daf091e85d8e23bf262ba5d8da3010e`.
+The isolated retry bundle and result SHA-256 values are
+`54a60944b49ce59f85524db09ea4eba6f2137036e19487a45844d728b843bd38`
+and `3205d31d0bd4236c869816fb993ce1a8c2aaabccb116d9a970a162a20ae2b8e1`.
+This negative result redirects ROI toward bytecode shapes already proven hot
+in admitted workloads; it is not evidence against a future allocation model
+rewrite with independently demonstrated coverage.
+
+### 2026-07-22 postfix countdown dense regions
+
+Agent commit `bba359fb` extends the existing dynamic dense numeric region to
+the exact bytecode semantics of `while (local--)`. The plan recognizes
+`LoadLocal`, `ToNumeric`, `Dup`, decrement, assignment to the same local,
+`JumpIfFalse`, and `Pop`; it accepts only positive safe-integer Numbers at the
+accelerated entry and leaves BigInt, non-finite, fractional, negative, and
+larger-than-safe values to ordinary bytecode. The body may not write or capture
+the counter, and direct `eval`, non-authoritative slots, unsupported control
+flow, holes, non-Number elements, or failed array leases continue to fail
+closed.
+
+Each fast iteration stages the old counter, makes the decremented value visible
+to the body, and commits the counter and array stores only after the complete
+iteration succeeds. A mid-body deopt restores the old value before replaying
+the header, preventing a double decrement. A clean exit still performs the
+observable final `0 -> -1` update and skips the bytecode exit `Pop`. The
+existing less-than control path remains distinct and unchanged.
+
+Temporary instrumentation on pinned Kraken `imaging-desaturate` proved 200
+region entries, 21,359,800 accelerated iterations, 64,079,400 dense loads,
+64,079,400 committed stores, and zero deopt or bailout. The process returned
+Boolean `true` with exit status zero. The trace, aggregate, and evidence
+manifest SHA-256 values are
+`761382d9882b280ae12347700459d81a12754980e52a79c664c66d00ac8551bb`,
+`3bdeed3278f33d974a93cc265131955620e32381456dbea3627c6dd23ff9d219`,
+and `6fd551ad1744c5c7291c717a5e76eddfc9c4be94d11b6a440e22473e2a9fcd5f`.
+The final production patch SHA-256 is
+`c289f21cf69810020742782c15d46975a78e323a529562182409b781d3dfdb51`;
+candidate, base, and QuickJS-NG executable SHA-256 values are
+`085e5346a0e7d42d1ddf122a61786be5daa7b9a212a20b426f4f0e279879b327`,
+`a4acc55ffdd01272e6df5be8a6a697da07d16c0d77935971e2a146a6212f4602`,
+and `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+
+The predeclared seven-block gate required the target candidate/base interval
+upper bound to be at most 0.50x and six unrelated control upper bounds to be at
+most 1.03x. Final paired estimates with 95% intervals were:
+
+- Kraken `imaging-desaturate`: 0.169857x base [0.168010x, 0.172582x]
+  and 0.425978x QuickJS-NG [0.424679x, 0.436486x];
+- JetStream `gaussian-blur`: 0.989485x base [0.982999x, 1.012773x];
+- Kraken `audio-dft`: 1.012521x base [0.998715x, 1.022641x];
+- Kraken `audio-fft`: 1.006229x base [0.992373x, 1.007871x];
+- Kraken `json-parse-financial`: 1.006163x base [1.001847x, 1.014894x];
+- SunSpider `access-fannkuch`: 0.998539x base [0.989274x, 1.000700x];
+- SunSpider `bitops-nsieve-bits`: 0.986930x base [0.919044x, 0.998935x].
+
+The target medians were 8.940103 seconds for base, 1.515023 seconds for the
+candidate, and 3.539484 seconds for QuickJS-NG. Manifest, raw, external-report,
+and paired-report SHA-256 values are
+`421b3b3cfe521fe29db350912f0193944f03331e33f9723e5da23cfa6578347e`,
+`4fe0b8600f1be82ed3bb9052f8555e723556cc13839ae669d02a783754b034af`,
+`17b526b0c62e96e7884680335c3a276d7e762df835f75f03c85620ac65c7aa50`,
+and `56f5c7705c4acedfbfa513ee1dd89e9bd41996310b1d722ad7ac3e65fd7cde58`.
+
+Coverage includes the exact countdown shape, post-decrement value visibility,
+the final `-1`, zero and mid-progress replay, holes, getters, prototype hazards,
+Proxy and frozen arrays, captured counters, direct `eval`, body writes, and all
+rejected Number forms. The branch passed 8/8 focused countdown tests, the
+existing less-than control test, all 1,623 runtime tests, the related postfix
+decrement Test262 case, formatting, clippy, file-size checks, the 65-case
+touched Test262 slice, and the complete `check.sh` gate. Branch-scope validation
+passed, and two independent final reviews reported no remaining P0--P2 issue.
+This closes `imaging-desaturate` below the final 0.50x QuickJS-NG boundary;
+B5 remains open until every admitted benchmark reaches the same boundary.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
