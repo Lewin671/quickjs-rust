@@ -1233,6 +1233,223 @@ mod tests {
     }
 
     #[test]
+    fn dense_hole_tail_append_preserves_logical_length_and_exact_path() {
+        let source = "function fill(output, input, bound) { for (var index = 0; index < bound; index++) { output[index] = input[index] * 2; } return output.length + ':' + output.join(','); }";
+        let bytecode = nested_function(source);
+        assert_eq!(
+            NumericMutationLoopPlan::compile_all(&bytecode).len(),
+            1,
+            "{:#?}",
+            bytecode.code
+        );
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "{source} var output = new Array(4); Object.defineProperty(output, 'length', {{ writable: false }}); fill(output, [1, 2, 3, 4], 4);"
+            )),
+            Ok(Value::String("4:2,4,6,8".to_owned().into()))
+        );
+        assert_eq!(dense::test_hole_tail_append_attempts(), 1);
+        assert_eq!(dense::test_hole_tail_append_path_hits(), 1);
+        // Loop plans attach to the backward edge, after the first ordinary
+        // iteration has materialized index 0.
+        assert_eq!(dense::test_hole_tail_append_iterations(), 3);
+        assert_eq!(dense::test_writable_lease_suppressions(), 0);
+    }
+
+    #[test]
+    fn dense_hole_tail_append_handles_a_single_store_only_receiver() {
+        let source = "function fill(bound) { var output = new Array(bound); for (var index = 0; index < bound; index++) { output[index] = index * 3; } return output.join(','); }";
+        let bytecode = nested_function(source);
+        assert_eq!(
+            NumericMutationLoopPlan::compile_all(&bytecode).len(),
+            1,
+            "{:#?}",
+            bytecode.code
+        );
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!("{source} fill(4);")),
+            Ok(Value::String("0,3,6,9".to_owned().into()))
+        );
+        assert_eq!(dense::test_hole_tail_append_attempts(), 1);
+        assert_eq!(dense::test_hole_tail_append_path_hits(), 1);
+        assert_eq!(dense::test_hole_tail_append_iterations(), 3);
+    }
+
+    #[test]
+    fn store_only_hole_tail_compilation_requires_the_exact_append_shape() {
+        let exact = nested_function(
+            "function fill(output, bound) { for (var index = 0; index < bound; index++) output[index] = index * 3; }",
+        );
+        assert_eq!(
+            NumericMutationLoopPlan::compile_all(&exact).len(),
+            1,
+            "{:#?}",
+            exact.code
+        );
+
+        for source in [
+            "function fill(output, bound) { for (var index = 0; index < bound; index = index + 2) output[index] = index; }",
+            "function fill(output, bound) { for (var index = 0; index < bound; index++) output[index + 1] = index; }",
+            "function fill(left, right, bound) { for (var index = 0; index < bound; index++) { left[index] = index; right[index] = index + 1; } }",
+        ] {
+            let bytecode = nested_function(source);
+            assert!(
+                NumericMutationLoopPlan::compile_all(&bytecode).is_empty(),
+                "unexpected no-load plan for {source}: {:#?}",
+                bytecode.code
+            );
+        }
+    }
+
+    #[test]
+    fn store_only_hole_tail_hazard_suppresses_the_current_invocation() {
+        let source = "function fill(bound) { var output = new Array(bound); for (var index = 0; index < bound; index++) output[index] = index + 10; return output; } var setterHits = 0; Object.defineProperty(Array.prototype, '1', { set: function (value) { setterHits += value; }, configurable: true }); var output = fill(3); var result = setterHits + ':' + Object.hasOwn(output, '1') + ':' + Object.hasOwn(output, '2'); delete Array.prototype[1]; result;";
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(source),
+            Ok(Value::String("11:false:true".to_owned().into()))
+        );
+        assert_eq!(dense::test_hole_tail_append_attempts(), 1);
+        assert_eq!(dense::test_hole_tail_append_path_hits(), 0);
+        assert_eq!(dense::test_writable_lease_suppressions(), 1);
+        assert_eq!(dense::test_compact_dynamic_attempts(), 1);
+        assert_eq!(dense::test_compact_dynamic_declines(), 0);
+        assert_eq!(dense::test_compact_dynamic_hits(), 0);
+        assert_eq!(dense::test_compact_dynamic_suppressions(), 1);
+    }
+
+    #[test]
+    fn oscillator_shaped_hole_tails_replace_the_former_suppressions() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function Oscillator(size) { this.size = size; this.scale = 2; this.source = [1, 2, 3, 4]; this.signal = new Array(size); } Oscillator.prototype.generate = function () { var offset = 0; for (var index = 0; index < this.size; index++) { offset = Math.round(index); this.signal[index] = this.source[offset] * this.scale; } return this.signal[3]; }; var total = 0; for (var run = 0; run < 501; run++) { total += new Oscillator(4).generate(); } total;"
+            ),
+            Ok(Value::Number(4008.0))
+        );
+        assert_eq!(dense::test_hole_tail_append_attempts(), 501);
+        assert_eq!(dense::test_hole_tail_append_path_hits(), 501);
+        assert_eq!(dense::test_hole_tail_append_iterations(), 1_503);
+        assert_eq!(dense::test_writable_lease_suppressions(), 0);
+        assert_eq!(dense::test_compact_dynamic_suppressions(), 0);
+    }
+
+    #[test]
+    fn dense_hole_tail_append_rejects_indexed_prototype_chain_hazards() {
+        let setter_case = "function fill(output, input, bound) { for (var index = 0; index < bound; index++) { output[index] = input[index] * 2; } } var setterHits = 0; Object.defineProperty(Array.prototype, '1', { set: function (value) { setterHits += value; }, configurable: true }); var output = new Array(3); fill(output, [2, 3, 5], 3); var result = setterHits + ':' + Object.hasOwn(output, '0') + ':' + Object.hasOwn(output, '1') + ':' + Object.hasOwn(output, '2'); delete Array.prototype[1]; result;";
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(setter_case),
+            Ok(Value::String("6:true:false:true".to_owned().into()))
+        );
+        assert!(dense::test_hole_tail_append_attempts() > 0);
+        assert_eq!(dense::test_hole_tail_append_path_hits(), 0);
+
+        let data_case = "function fill(output, input, bound) { for (var index = 0; index < bound; index++) { output[index] = input[index] + 1; } } Object.defineProperty(Array.prototype, '1', { value: 19, writable: false, configurable: true }); var output = new Array(3); fill(output, [2, 3, 5], 3); var result = output[0] + ':' + output[1] + ':' + output[2] + ':' + Object.hasOwn(output, '1'); delete Array.prototype[1]; result;";
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(data_case),
+            Ok(Value::String("3:19:6:false".to_owned().into()))
+        );
+        assert!(dense::test_hole_tail_append_attempts() > 0);
+        assert_eq!(dense::test_hole_tail_append_path_hits(), 0);
+
+        let object_prototype_case = "function fill(output, input, bound) { for (var index = 0; index < bound; index++) { output[index] = input[index] + 1; } } var setterHits = 0; Object.defineProperty(Object.prototype, '2', { set: function (value) { setterHits += value; }, configurable: true }); var output = new Array(4); fill(output, [2, 3, 5, 7], 4); var result = setterHits + ':' + Object.hasOwn(output, '2') + ':' + output[3]; delete Object.prototype[2]; result;";
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(object_prototype_case),
+            Ok(Value::String("6:false:8".to_owned().into()))
+        );
+        assert!(dense::test_hole_tail_append_attempts() > 0);
+        assert_eq!(dense::test_hole_tail_append_path_hits(), 0);
+    }
+
+    #[test]
+    fn dense_hole_tail_append_fails_closed_for_array_integrity_and_special_indices() {
+        let source = "function fill(output, input, bound) { for (var index = 0; index < bound; index++) { output[index] = input[index] * 2; } } var nonextensible = new Array(3); Object.preventExtensions(nonextensible); fill(nonextensible, [1, 2, 3], 3); var sealed = new Array(3); Object.seal(sealed); fill(sealed, [1, 2, 3], 3); var frozen = new Array(3); Object.freeze(frozen); fill(frozen, [1, 2, 3], 3); var setterHits = 0; var described = new Array(3); Object.defineProperty(described, '1', { set: function (value) { setterHits += value; }, configurable: true }); fill(described, [1, 2, 3], 3); var sparse = [0, , 0]; fill(sparse, [1, 2, 3], 3); Object.keys(nonextensible).length + ':' + Object.keys(sealed).length + ':' + Object.keys(frozen).length + ':' + setterHits + ':' + Object.hasOwn(described, '1') + ':' + sparse.join(',');";
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(source),
+            Ok(Value::String("0:0:0:4:true:2,4,6".to_owned().into()))
+        );
+        assert!(dense::test_hole_tail_append_attempts() > 0);
+        assert_eq!(dense::test_hole_tail_append_path_hits(), 0);
+    }
+
+    #[test]
+    fn dense_hole_tail_append_rejects_aliases_and_non_exact_induction_shapes() {
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function aliasCopy(output, input, bound) { for (var index = 0; index < bound; index++) { output[index] = input[index] + 1; } return output.join(','); } var shared = new Array(4); aliasCopy(shared, shared, 4);"
+            ),
+            Ok(Value::String("NaN,NaN,NaN,NaN".to_owned().into()))
+        );
+        assert!(dense::test_hole_tail_append_attempts() > 0);
+        assert_eq!(dense::test_hole_tail_append_path_hits(), 0);
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function stride(input) { var output = new Array(4); for (var index = 0; index < 4; index = index + 2) { output[index] = input[index] + 1; } return output.join(','); } stride([1, 2, 3, 4]);"
+            ),
+            Ok(Value::String("2,,4,".to_owned().into()))
+        );
+        assert_eq!(dense::test_hole_tail_append_attempts(), 0);
+        assert_eq!(dense::test_hole_tail_append_path_hits(), 0);
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(
+                "function shifted(input) { var output = new Array(4); for (var index = 0; index < 3; index++) { output[index + 1] = input[index] + 1; } return output.join(','); } shifted([1, 2, 3]);"
+            ),
+            Ok(Value::String(",2,3,4".to_owned().into()))
+        );
+        assert_eq!(dense::test_hole_tail_append_attempts(), 0);
+        assert_eq!(dense::test_hole_tail_append_path_hits(), 0);
+    }
+
+    #[test]
+    fn dense_hole_tail_append_discards_incomplete_iterations_and_replays_once() {
+        let source = "var coercions = 0; var marker = { valueOf: function () { coercions++; return 7; } }; function fill(output, input, guards, bound) { var observed = 0; for (var index = 0; index < bound; index++) { output[index] = input[index] * 2; observed = guards[index] + 1; } return output.join(',') + ':' + observed + ':' + coercions; }";
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "{source} fill(new Array(4), [1, 2, 3, 4], [1, 2, marker, 4], 4);"
+            )),
+            Ok(Value::String("2,4,6,8:5:1".to_owned().into()))
+        );
+        assert_eq!(dense::test_hole_tail_append_attempts(), 2);
+        assert_eq!(dense::test_hole_tail_append_path_hits(), 2);
+        assert_eq!(dense::test_hole_tail_append_iterations(), 2);
+        assert_eq!(dense::test_hole_tail_append_staged_discards(), 1);
+
+        dense::reset_test_iterations();
+        assert_eq!(
+            eval(&format!(
+                "{source} fill(new Array(4), [1, 2, 3, 4], [1, marker, 3, 4], 4);"
+            )),
+            Ok(Value::String("2,4,6,8:5:1".to_owned().into()))
+        );
+        assert_eq!(dense::test_hole_tail_append_attempts(), 2);
+        assert_eq!(dense::test_hole_tail_append_path_hits(), 1);
+        assert_eq!(dense::test_hole_tail_append_iterations(), 2);
+        assert_eq!(dense::test_hole_tail_append_staged_discards(), 1);
+        assert_eq!(dense::test_writable_lease_suppressions(), 0);
+        assert_eq!(dense::test_compact_dynamic_attempts(), 2);
+        assert_eq!(dense::test_compact_dynamic_declines(), 1);
+        assert_eq!(dense::test_compact_dynamic_hits(), 1);
+        assert_eq!(dense::test_compact_dynamic_suppressions(), 0);
+    }
+
+    #[test]
     fn dynamic_dense_region_replays_entry_and_mid_iteration_deopts() {
         let source = "var coercions = 0; var marker = { valueOf: function () { coercions++; return 20; } }; function region(left, inputs, output, bound) { for (var index = 0; index < bound; index++) { left[index] = left[index] + 1; output[index] = inputs[index] + left[index]; } return left.join(':') + '|' + output.join(':') + '|' + coercions; }";
 

@@ -7288,15 +7288,157 @@ and 65 selected Test262 cases, the full repository gate with all 5,148 curated
 Test262 cases, the all-features runtime suite with 1,709 tests, and all 218
 QuickJS-NG comparison fixtures. The branch source commit is `55795330`.
 
-The next high-ROI slice is not another TypedArray special case. Exact
-`audio-oscillator` instrumentation shows 1,500 dense attempts but only 999
-hits: 501 invocations are suppressed because `new Array(N)` has a logical
-length of `N` while its dense vector initially materializes only the first
-zero or one elements. A guarded implicit-hole-tail append lease can cover
-those ordinary arrays with forward `+1`, exact append-index, extensibility,
-prototype-index, descriptor, alias, and iteration-atomic publication guards.
-This is the next general mechanism before broader transition-shape/slot and
-full-frame register work.
+Exact `audio-oscillator` instrumentation then identified the next high-ROI
+slice: 1,500 dense attempts but only 999 hits. The remaining 501 invocations
+were suppressed because `new Array(N)` has a logical length of `N` while its
+dense vector initially materializes only the first zero or one elements. The
+ordinary-Array mechanism that closes this gap is recorded below.
+
+#### Trusted-main performance evidence for the fixed TypedArray unit
+
+Main commit `c8da917bdaa98981cc2c0882f660066378abc766` passed hosted CI workflow
+`30015374254`. Full pinned Test262 workflow `30015693597` completed all 42,672
+configured cases with 42,662 passes, 10 failures, zero timeouts, and an
+`actionable_gap` of 8; the same run recorded QuickJS-NG at 42,602 passes and 70
+failures. The downloaded burndown JSON SHA-256 is
+`3090757a4cb1e9bf8f7161b7a7e6266d2201bbdda5c2b3284ef020778f993a35`.
+The 10 failures were a pinned-Test262 metadata mismatch: those tests omitted
+the immutable TypedArray factory exclusions required by the runtime semantics,
+while the runtime's immutable indexed-descriptor and rejected-write behavior
+was correct. Official upstream commit
+`250f204f23a9249ff204be2baec29600faae7b75` adds those exclusions. Main commit
+`c119c897` backports exactly the corresponding metadata for 11 affected tests
+without skipping their mutable-factory assertions. Its complete hosted
+Test262 artifact is still pending, so neither the c8da run nor the local
+backport checks close the still-open 100% Test262 campaign.
+
+Performance Preview workflow `30015374367` completed successfully. Its
+informational three-block internal portfolio measured candidate/base at
+0.9924x [0.9885x, 0.9924x] and candidate/QuickJS-NG at 0.1624x. The external
+inventory reproduced the intended Gaussian direction at 0.15156x base and
+0.97952x QuickJS-NG, while `audio-oscillator` remained 1.01171x base and
+3.97017x QuickJS-NG, confirming the ordinary Array tail as the next target.
+The status, external report, and external summary SHA-256 values are
+`a3edb3434adaa2500b3bac4585c3db50ea1bbec032068e72caf20b18ac35cb45`,
+`8dd126c1a028ef167b0d1f087320e07a1575f4f62d4995cfb3127464a7af10fc`,
+and `00f355355354a7a66b6509d3cff1542224c248674d2bee3c006a4582100e7ab6`.
+
+### Ordinary Array implicit-hole-tail append lease
+
+A dynamic numeric region may now lease one extensible ordinary Array for
+append-only materialization of an existing implicit hole tail. Compilation
+admits only a single store at the exact induction index of a forward `<`
+loop whose counter advances by exactly one. Runtime requires that the index
+equal the materialized dense prefix length and remain below both the existing
+logical length and the one-million-element dense-storage cap. Every other
+receiver is fully dense and read-only, the writer cannot alias a reader, all
+element borrows must be stable, the writer has no explicit holes or indexed
+descriptors, and its effective realm prototype chain has no indexed hazard.
+A non-writable length is intentionally allowed below the existing logical
+length because this creates an indexed property without extending `length`.
+Non-extensible, sealed, frozen, described, aliased, borrowed, custom-prototype,
+and overflow states, plus arrays with explicit holes or non-tail sparse state,
+fail closed to ordinary bytecode.
+
+Stores remain iteration-atomic. The append adapter stages exactly one Number
+write and pushes only after the complete iteration has validated; a deopt
+publishes complete earlier iterations and replays the first uncommitted one.
+For fresh tails, one opportunistic `try_reserve_exact` is bounded by
+`min(ceil(loop endpoint), logical length, dense cap) - current prefix`; NaN,
+negative, exhausted, and allocation-failure cases reserve nothing or continue
+through normal `Vec::push`. Fully dense regions never execute this reserve
+path. Store-only stride, shifted-index, and multi-store loops are rejected at
+compile time instead of repeatedly probing an inapplicable lease.
+
+The first independent performance review found two issues before freeze: the
+compact legacy executor could retry a structurally impossible store-only plan
+at every backedge, and fresh 8,192-element tails incurred repeated geometric
+growth. The compiler now rejects non-append store-only shapes, exact append
+structural failure suppresses only the current invocation, zero-progress
+deopt remains `Declined` for replay, and the bounded reserve removes repeated
+growth. A second full review by three independent reviewers was clean with no
+P0-P2 findings. Production fast-path code contains no benchmark/source/
+checksum/expected-result detection and no branch on known benchmark input
+sizes; all size-dependent logic is generic bounds and reservation logic.
+
+#### Exact path proof and accepted formal gate
+
+The exact Kraken `audio-oscillator` bundle was run with a separate release
+proof binary using per-invocation local counters. It recorded exactly 1,500
+attempts and 1,500 writable hits: 999 fully dense entries plus 501 append
+entries. The append path made 4,103,691 pushes; the combined regions executed
+12,286,500 committed iterations and stores, 16,382,000 dense loads, 8,191,000
+native round operations, and 1,500 sunk-store hits. Append failure,
+single-receiver hit, suppression, decline, progressed deopt, and zero-progress
+deopt were all zero. The production staged diff at proof freeze had SHA-256
+`2800dbd124222d96f117007bbe8206cf661211c6c9e648425415cf3ccf80bb26`,
+with no unstaged tracked diff or proof symbol. Proof receipt, proof binary,
+instrumentation patch, and bundle SHA-256 values are
+`e81c8f7eaadced13805cf6bec14cacb72a5549a9a5ae3a50c46bf3639af468f9`,
+`0a91421a76d2a09b85eff8a9de338332f2127d180d5fb0a3d90267dc144fcb60`,
+`79021bcc0b174610e54d5c4106800f27c35461e08808df1301a3d408548c895f`,
+and `b302c0457bc183da4106148640e17964033829769da144f537d2d7180a44c1df`.
+
+A separate three-block discovery run was used only to freeze the formal block
+count and thresholds. Preregistration SHA-256
+`f31daff239fe7b4e95882a61db5c4543f12efe272ca96fd71ad7095ad4086d44`
+then pinned one seven-block invocation, seed 20260725, exact candidate/base/
+QuickJS-NG binary SHA-256 values
+`b914394dad9a3a54db5df36508e4b6be7d4082e15e68fd89961aef8b6e21d0a5`,
+`cf3969a96b5897248bfa12a633d4c8f692fac8fd11774b87054129f0e31690d6`,
+and `cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`,
+plus the target upper bounds of 0.20x base and 0.50x QuickJS-NG. It also pinned
+six preregistered non-target controls with 1.03x base upper bounds. No build,
+test, profile, or other benchmark overlapped the single formal invocation.
+
+All 168/168 rows completed: 21 capability probes and 147 measurements, with
+zero missing or duplicate keys, errors, nonzero exits, timeouts, truncation,
+identity drift, source drift, or schedule drift. Median paired whole-block log
+effects with 20,000 bootstrap draws produced:
+
+- Kraken `audio-oscillator`: **0.154588x base [0.152603x, 0.159224x]** and
+  **0.418002x QuickJS-NG [0.408291x, 0.426792x]**;
+- JetStream `gaussian-blur`: base upper bound 1.022352x;
+- Kraken `audio-dft`: base upper bound 1.003201x;
+- Kraken `audio-fft`: base upper bound 1.005371x;
+- Kraken `imaging-desaturate`: base upper bound 1.014987x;
+- Kraken `json-parse-financial`: base upper bound 1.001058x;
+- SunSpider `bitops-nsieve-bits`: base upper bound 0.994521x.
+
+Thus `audio-oscillator` is approximately 6.47x as fast as the exact preceding
+base, using 84.5% less wall time, and approximately 2.39x as fast as QuickJS-NG,
+using 58.2% less wall time. Its entire confidence interval is below the
+campaign's final 0.50x boundary, and all six control gates pass.
+Independent reconstruction from the raw rows matched every estimate and bound
+with maximum absolute difference zero. Raw, external report, external summary,
+paired report, paired summary, formal audit, and protocol-verdict SHA-256 values
+are respectively
+`9ac6d4347bde7d53cd5b3e10107d4ddf5342c97a6fe016c922fa5d49e203cd10`,
+`8a3a282dd83731f895bf0bde581e8f1dbcb0ba9f4b7c45c2f4cadaf37019b5ca`,
+`9722d193f29970b0e14fbba8aad5499c13f4a956d6698e1a26c0427c30091503`,
+`c7858758afeebad1769104c4b80f926572950df9ab38f2410a81e63e0f5f8553`,
+`01b521e04970afaf52f1967662d500904374745df42367d46397d71b366d8c6d`,
+`1e4ba15353e91f73b4ba85c4d6e674afaa134491d03280c258691d3b473d91e6`,
+and `45d22112d1eafe9c95e4eead1b336d2923bcc242b361b76ad230e7f0aa352fbd`.
+
+Focused hole-tail tests passed 15/15, the runtime release suite passed all
+1,715 tests, and 14 focused Array semantics Test262 cases passed. The staged
+touched gate passed formatting, workspace Clippy, the source-size guard, all
+1,715 runtime tests, and 65 selected Test262 cases. The final three-reviewer
+snapshot was clean. Full repository and QuickJS-NG comparison gates remain the
+pre-commit handoff step.
+
+This local oscillator performance gate is independent of the full conformance
+closure. Main commit `c119c897` has the exact upstream metadata backport, but
+its complete hosted Test262 artifact is still pending; until that artifact
+passes, this unit has no remote full-Test262 closure claim.
+
+This closes the local `audio-oscillator` performance gate, not B5 or the
+correctness campaign. The same formal matrix still places Gaussian at
+0.641878x, FFT at 1.542264x, JSON parse at 0.765637x, and nsieve at 0.886772x
+QuickJS-NG. The next ROI work should target transition-shape/slot property
+access and full-frame register execution rather than another benchmark-local
+dense-array special case.
 
 ## Notes
 
