@@ -33,6 +33,7 @@ const MAX_DENSE_WRITES: usize = 64;
 const MAX_DENSE_RECEIVERS: usize = 8;
 const MAX_DENSE_STORES: usize = 32;
 const MAX_FIXED_MUTATIONS: usize = 16;
+const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
 
 #[cfg(test)]
 thread_local! {
@@ -42,6 +43,8 @@ thread_local! {
     static READ_ONLY_DENSE_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static READ_ONLY_DENSE_BAILOUTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static READ_ONLY_DENSE_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static COUNTDOWN_DENSE_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static COUNTDOWN_DENSE_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -52,6 +55,8 @@ pub(super) fn reset_test_iterations() {
     READ_ONLY_DENSE_PATH_HITS.set(0);
     READ_ONLY_DENSE_BAILOUTS.set(0);
     READ_ONLY_DENSE_ITERATIONS.set(0);
+    COUNTDOWN_DENSE_PATH_HITS.set(0);
+    COUNTDOWN_DENSE_ITERATIONS.set(0);
 }
 
 #[cfg(test)]
@@ -82,6 +87,16 @@ pub(super) fn test_read_only_bailouts() -> usize {
 #[cfg(test)]
 pub(super) fn test_read_only_iterations() -> usize {
     READ_ONLY_DENSE_ITERATIONS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_countdown_path_hits() -> usize {
+    COUNTDOWN_DENSE_PATH_HITS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_countdown_iterations() -> usize {
+    COUNTDOWN_DENSE_ITERATIONS.get()
 }
 
 #[inline]
@@ -118,6 +133,18 @@ fn record_read_only_bailout() {
 #[inline]
 fn record_read_only_iteration() {
     READ_ONLY_DENSE_ITERATIONS.set(READ_ONLY_DENSE_ITERATIONS.get() + 1);
+}
+
+#[inline]
+fn record_countdown_path_hit() {
+    #[cfg(test)]
+    COUNTDOWN_DENSE_PATH_HITS.set(COUNTDOWN_DENSE_PATH_HITS.get() + 1);
+}
+
+#[inline]
+fn record_countdown_iteration() {
+    #[cfg(test)]
+    COUNTDOWN_DENSE_ITERATIONS.set(COUNTDOWN_DENSE_ITERATIONS.get() + 1);
 }
 
 #[derive(Clone, Debug)]
@@ -162,7 +189,7 @@ struct FixedDensePlan {
 #[derive(Clone, Debug)]
 struct DynamicDensePlan {
     counter_local: usize,
-    limit: DynamicLimit,
+    control: DynamicControl,
     receiver_sources: Vec<ArraySource>,
     local_slots: Vec<usize>,
     operations: Vec<NumberInstruction>,
@@ -176,6 +203,29 @@ struct DynamicDensePlan {
 enum DynamicLimit {
     LocalNumber(usize),
     LocalArrayLength(usize),
+}
+
+#[derive(Clone, Copy, Debug)]
+enum DynamicControl {
+    LessThan(DynamicLimit),
+    Countdown,
+}
+
+impl DynamicControl {
+    fn limit(self) -> Option<DynamicLimit> {
+        match self {
+            Self::LessThan(limit) => Some(limit),
+            Self::Countdown => None,
+        }
+    }
+
+    fn array_length_slot(self) -> Option<usize> {
+        self.limit().and_then(DynamicLimit::array_length_slot)
+    }
+
+    fn is_countdown(self) -> bool {
+        matches!(self, Self::Countdown)
+    }
 }
 
 impl DynamicLimit {
@@ -1078,29 +1128,57 @@ fn compile_dynamic(
     let Op::LoadLocal(counter_slot) = code.get(header)? else {
         return None;
     };
-    let limit = match code.get(header + 1)? {
-        Op::LoadLocal(slot) => DynamicLimit::LocalNumber(*slot),
-        Op::GetPropNamed { key, cache } if key.as_ref() == "length" => {
-            DynamicLimit::LocalArrayLength(cache.local_slot()?)
+    let less_than_header = (|| {
+        let limit = match code.get(header + 1)? {
+            Op::LoadLocal(slot) => DynamicLimit::LocalNumber(*slot),
+            Op::GetPropNamed { key, cache } if key.as_ref() == "length" => {
+                DynamicLimit::LocalArrayLength(cache.local_slot()?)
+            }
+            _ => return None,
+        };
+        let (Op::Binary(BinaryOp::Lt), Op::JumpIfFalse(exit), Op::Pop) = (
+            code.get(header + 2)?,
+            code.get(header + 3)?,
+            code.get(header + 4)?,
+        ) else {
+            return None;
+        };
+        Some((DynamicControl::LessThan(limit), header + 5, *exit))
+    })();
+    let countdown_header = (|| {
+        let (
+            Op::ToNumeric,
+            Op::Dup,
+            Op::Update(UpdateOp::Decrement),
+            Op::AssignLocal(assigned_counter_slot),
+            Op::JumpIfFalse(exit),
+            Op::Pop,
+        ) = (
+            code.get(header + 1)?,
+            code.get(header + 2)?,
+            code.get(header + 3)?,
+            code.get(header + 4)?,
+            code.get(header + 5)?,
+            code.get(header + 6)?,
+        )
+        else {
+            return None;
+        };
+        if assigned_counter_slot != counter_slot {
+            return None;
         }
-        _ => return None,
-    };
-    let (Op::Binary(BinaryOp::Lt), Op::JumpIfFalse(exit), Op::Pop) = (
-        code.get(header + 2)?,
-        code.get(header + 3)?,
-        code.get(header + 4)?,
-    ) else {
-        return None;
-    };
-    if *exit <= backedge
-        || !matches!(code.get(*exit), Some(Op::Pop))
+        Some((DynamicControl::Countdown, header + 7, *exit))
+    })();
+    let (control, body_start, exit) = less_than_header.or(countdown_header)?;
+    if exit <= backedge
+        || !matches!(code.get(exit), Some(Op::Pop))
         || !matches!(code.get(backedge), Some(Op::Jump(target)) if *target == header)
     {
         return None;
     }
 
     let mut translator = Translator::new(bytecode);
-    for op in &code[header + 5..backedge] {
+    for op in &code[body_start..backedge] {
         translator.translate(op)?;
     }
     if !translator.stack.is_empty()
@@ -1111,22 +1189,25 @@ fn compile_dynamic(
     {
         return None;
     }
-    let limit_slot = limit.source_slot();
-    if counter_slot == &limit_slot
+    let limit = control.limit();
+    let limit_slot = limit.map(DynamicLimit::source_slot);
+    if limit_slot.is_some_and(|limit_slot| counter_slot == &limit_slot)
         || translator.receiver_sources.iter().any(|receiver| {
             receiver.local_slot().is_some_and(|receiver| {
                 counter_slot == &receiver
-                    || matches!(limit, DynamicLimit::LocalNumber(slot) if slot == receiver)
+                    || matches!(limit, Some(DynamicLimit::LocalNumber(slot)) if slot == receiver)
                     || translator.number_slots.contains(&receiver)
                     || translator.written_slots.contains(&receiver)
             })
         })
-        || translator.written_slots.contains(&limit_slot)
-        || matches!(limit, DynamicLimit::LocalArrayLength(_))
-            && translator.number_slots.contains(&limit_slot)
-        || !translator.written_slots.contains(counter_slot)
+        || limit_slot.is_some_and(|slot| translator.written_slots.contains(&slot))
+        || matches!(limit, Some(DynamicLimit::LocalArrayLength(slot)) if translator.number_slots.contains(&slot))
+        || match control {
+            DynamicControl::LessThan(_) => !translator.written_slots.contains(counter_slot),
+            DynamicControl::Countdown => translator.written_slots.contains(counter_slot),
+        }
         || translator.store_count != 0
-            && (matches!(limit, DynamicLimit::LocalArrayLength(_))
+            && (matches!(limit, Some(DynamicLimit::LocalArrayLength(_)))
                 || translator
                     .receiver_sources
                     .iter()
@@ -1140,7 +1221,7 @@ fn compile_dynamic(
         translator.store_count,
     )?;
     translator.number_slots.insert(*counter_slot);
-    if let DynamicLimit::LocalNumber(limit_slot) = limit {
+    if let Some(DynamicLimit::LocalNumber(limit_slot)) = limit {
         translator.number_slots.insert(limit_slot);
     }
     let mut local_slots = translator.number_slots;
@@ -1160,12 +1241,17 @@ fn compile_dynamic(
     }
 
     Some((
-        *exit,
+        exit,
         DynamicDensePlan {
             counter_local: local_index(*counter_slot)?,
-            limit: match limit {
-                DynamicLimit::LocalNumber(slot) => DynamicLimit::LocalNumber(local_index(slot)?),
-                DynamicLimit::LocalArrayLength(slot) => DynamicLimit::LocalArrayLength(slot),
+            control: match control {
+                DynamicControl::LessThan(DynamicLimit::LocalNumber(slot)) => {
+                    DynamicControl::LessThan(DynamicLimit::LocalNumber(local_index(slot)?))
+                }
+                DynamicControl::LessThan(DynamicLimit::LocalArrayLength(slot)) => {
+                    DynamicControl::LessThan(DynamicLimit::LocalArrayLength(slot))
+                }
+                DynamicControl::Countdown => DynamicControl::Countdown,
             },
             receiver_sources: translator.receiver_sources,
             local_slots,
@@ -1196,22 +1282,56 @@ fn supported_binary(operation: BinaryOp) -> bool {
 }
 
 impl DynamicDensePlan {
+    fn deoptimized_run(
+        &self,
+        locals: &mut [f64; MAX_DENSE_LOCALS],
+        countdown_old: Option<f64>,
+        made_progress: bool,
+    ) -> DynamicProgramRun {
+        if let Some(old) = countdown_old {
+            locals[self.counter_local] = old;
+        }
+        DynamicProgramRun {
+            deoptimized: true,
+            made_progress,
+        }
+    }
+
     fn run_program<A: DenseAccess>(
         &self,
         access: &mut A,
         locals: &mut [f64; MAX_DENSE_LOCALS],
         registers: &mut [f64],
-        limit: f64,
+        limit: Option<f64>,
     ) -> DynamicProgramRun {
         let mut made_progress = false;
         loop {
             let counter = locals[self.counter_local];
-            if !matches!(counter.partial_cmp(&limit), Some(std::cmp::Ordering::Less)) {
-                return DynamicProgramRun {
-                    deoptimized: false,
-                    made_progress,
-                };
-            }
+            let countdown_old = match self.control {
+                DynamicControl::LessThan(_) => {
+                    let limit = limit.expect("less-than controls always resolve a limit");
+                    if !matches!(counter.partial_cmp(&limit), Some(std::cmp::Ordering::Less)) {
+                        return DynamicProgramRun {
+                            deoptimized: false,
+                            made_progress,
+                        };
+                    }
+                    None
+                }
+                DynamicControl::Countdown => {
+                    if counter == 0.0 {
+                        // The failed postfix test still stores the decremented
+                        // value before branching out of the loop.
+                        locals[self.counter_local] = -1.0;
+                        return DynamicProgramRun {
+                            deoptimized: false,
+                            made_progress,
+                        };
+                    }
+                    locals[self.counter_local] = counter - 1.0;
+                    Some(counter)
+                }
+            };
             access.reset_iteration();
             for (register, operation) in self.operations.iter().enumerate() {
                 let value = match *operation {
@@ -1219,16 +1339,10 @@ impl DynamicDensePlan {
                     NumberInstruction::LoadLocal(local) => locals[local],
                     NumberInstruction::DenseLoad { receiver, index } => {
                         let Some(index) = array_index_from_number(registers[index]) else {
-                            return DynamicProgramRun {
-                                deoptimized: true,
-                                made_progress,
-                            };
+                            return self.deoptimized_run(locals, countdown_old, made_progress);
                         };
                         let Some(value) = access.load_number(receiver, index) else {
-                            return DynamicProgramRun {
-                                deoptimized: true,
-                                made_progress,
-                            };
+                            return self.deoptimized_run(locals, countdown_old, made_progress);
                         };
                         value
                     }
@@ -1238,17 +1352,11 @@ impl DynamicDensePlan {
                         value,
                     } => {
                         let Some(index) = array_index_from_number(registers[index]) else {
-                            return DynamicProgramRun {
-                                deoptimized: true,
-                                made_progress,
-                            };
+                            return self.deoptimized_run(locals, countdown_old, made_progress);
                         };
                         let value = registers[value];
                         if !access.stage_store(receiver, index, value) {
-                            return DynamicProgramRun {
-                                deoptimized: true,
-                                made_progress,
-                            };
+                            return self.deoptimized_run(locals, countdown_old, made_progress);
                         }
                         value
                     }
@@ -1271,16 +1379,10 @@ impl DynamicDensePlan {
             }
             if let Some(store) = self.sunk_store {
                 let Some(index) = array_index_from_number(registers[store.index]) else {
-                    return DynamicProgramRun {
-                        deoptimized: true,
-                        made_progress,
-                    };
+                    return self.deoptimized_run(locals, countdown_old, made_progress);
                 };
                 if !access.stage_store(store.receiver, index, registers[store.value]) {
-                    return DynamicProgramRun {
-                        deoptimized: true,
-                        made_progress,
-                    };
+                    return self.deoptimized_run(locals, countdown_old, made_progress);
                 }
             }
             debug_assert_eq!(access.staged_store_count(), self.store_count);
@@ -1291,6 +1393,9 @@ impl DynamicDensePlan {
             #[cfg(test)]
             if self.store_count == 0 {
                 record_read_only_iteration();
+            }
+            if self.control.is_countdown() {
+                record_countdown_iteration();
             }
             made_progress = true;
             record_iteration();
@@ -1310,7 +1415,7 @@ impl DynamicDensePlan {
                     .iter()
                     .filter_map(ArraySource::local_slot),
             )
-            .chain(self.limit.array_length_slot())
+            .chain(self.control.array_length_slot())
         {
             if !vm.slot_is_authoritative(slot) {
                 return false;
@@ -1323,12 +1428,25 @@ impl DynamicDensePlan {
             };
             locals[local] = value;
         }
-        let limit = match self.limit {
-            DynamicLimit::LocalNumber(local) => locals[local],
-            DynamicLimit::LocalArrayLength(slot) => match vm.locals.get(slot) {
-                Some(Some(Value::Array(array))) => array.len() as f64,
-                _ => return false,
-            },
+        if self.control.is_countdown() {
+            let counter = locals[self.counter_local];
+            if !counter.is_finite()
+                || counter <= 0.0
+                || counter.fract() != 0.0
+                || counter > MAX_SAFE_INTEGER
+            {
+                return false;
+            }
+        }
+        let limit = match self.control {
+            DynamicControl::LessThan(DynamicLimit::LocalNumber(local)) => Some(locals[local]),
+            DynamicControl::LessThan(DynamicLimit::LocalArrayLength(slot)) => {
+                match vm.locals.get(slot) {
+                    Some(Some(Value::Array(array))) => Some(array.len() as f64),
+                    _ => return false,
+                }
+            }
+            DynamicControl::Countdown => None,
         };
         let mut inline_registers = [0.0; INLINE_DENSE_OPS];
         let mut large_registers =
@@ -1409,6 +1527,9 @@ impl DynamicDensePlan {
         let Some(run) = ran else {
             return false;
         };
+        if self.control.is_countdown() && run.made_progress {
+            record_countdown_path_hit();
+        }
         if self.sunk_store.is_some() && run.made_progress {
             record_sunk_store_hit();
         }
