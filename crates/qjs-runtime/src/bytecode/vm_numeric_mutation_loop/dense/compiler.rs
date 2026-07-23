@@ -11,6 +11,7 @@ enum AbstractValue {
     OwnData { source: OwnDataSource, read: usize },
     MathObject,
     MathRoundFunction,
+    Undefined,
     Other,
 }
 
@@ -21,12 +22,15 @@ struct Translator<'a> {
     operations: Vec<NumberInstruction>,
     writes: Vec<LocalWrite>,
     written_slots: BTreeSet<usize>,
+    invalidated_slots: BTreeSet<usize>,
     number_slots: BTreeSet<usize>,
     receiver_sources: Vec<ArraySource>,
     number_sources: Vec<OwnDataSource>,
     own_data_reads: Vec<bool>,
     store_count: usize,
     uses_math_round: bool,
+    materialize_compiler_temporaries: bool,
+    saw_other: bool,
 }
 
 impl<'a> Translator<'a> {
@@ -38,13 +42,22 @@ impl<'a> Translator<'a> {
             operations: Vec::new(),
             writes: Vec::new(),
             written_slots: BTreeSet::new(),
+            invalidated_slots: BTreeSet::new(),
             number_slots: BTreeSet::new(),
             receiver_sources: Vec::new(),
             number_sources: Vec::new(),
             own_data_reads: Vec::new(),
             store_count: 0,
             uses_math_round: false,
+            materialize_compiler_temporaries: false,
+            saw_other: false,
         }
+    }
+
+    fn new_scalar(bytecode: &'a Bytecode) -> Self {
+        let mut translator = Self::new(bytecode);
+        translator.materialize_compiler_temporaries = true;
+        translator
     }
 
     fn emit(&mut self, operation: NumberInstruction) -> Option<Register> {
@@ -95,6 +108,7 @@ impl<'a> Translator<'a> {
             AbstractValue::DirectThis
             | AbstractValue::MathObject
             | AbstractValue::MathRoundFunction
+            | AbstractValue::Undefined
             | AbstractValue::Other => None,
         }
     }
@@ -111,6 +125,7 @@ impl<'a> Translator<'a> {
             | AbstractValue::DirectThis
             | AbstractValue::MathObject
             | AbstractValue::MathRoundFunction
+            | AbstractValue::Undefined
             | AbstractValue::Other => return None,
         };
         if let Some(receiver) = self
@@ -147,7 +162,11 @@ impl<'a> Translator<'a> {
                     let register = self.emit(NumberInstruction::Constant(*value))?;
                     self.stack.push(AbstractValue::Number(register));
                 }
-                _ => self.stack.push(AbstractValue::Other),
+                Value::Undefined => self.stack.push(AbstractValue::Undefined),
+                _ => {
+                    self.saw_other = true;
+                    self.stack.push(AbstractValue::Other);
+                }
             },
             Op::Dup => self.stack.push(self.stack.last()?.clone()),
             Op::Pop => {
@@ -161,6 +180,9 @@ impl<'a> Translator<'a> {
                 }
             }
             Op::StoreLocal(slot) | Op::AssignLocal(slot) => {
+                if matches!(op, Op::AssignLocal(_)) && !self.bytecode.local_is_mutable(*slot) {
+                    return None;
+                }
                 let mut value = self.pop()?;
                 self.written_slots.insert(*slot);
                 let register = match &value {
@@ -168,7 +190,8 @@ impl<'a> Translator<'a> {
                         Some(*register)
                     }
                     AbstractValue::Local(_)
-                        if !self.bytecode.local_is_compiler_temporary(*slot) =>
+                        if self.materialize_compiler_temporaries
+                            || !self.bytecode.local_is_compiler_temporary(*slot) =>
                     {
                         let register = self.number(value.clone())?;
                         value = AbstractValue::Number(register);
@@ -183,12 +206,19 @@ impl<'a> Translator<'a> {
                     | AbstractValue::OwnData { .. }
                     | AbstractValue::MathObject
                     | AbstractValue::MathRoundFunction => return None,
+                    AbstractValue::Undefined
+                        if !self.bytecode.local_is_compiler_temporary(*slot) =>
+                    {
+                        return None;
+                    }
+                    AbstractValue::Undefined => None,
                     AbstractValue::Other if !self.bytecode.local_is_compiler_temporary(*slot) => {
                         return None;
                     }
                     AbstractValue::Local(_) | AbstractValue::Other => None,
                 };
                 if let Some(register) = register {
+                    self.invalidated_slots.remove(slot);
                     if let Some(write) = self.writes.iter_mut().find(|write| write.local == *slot) {
                         write.value = register;
                     } else if self.writes.len() >= MAX_DENSE_WRITES {
@@ -199,6 +229,9 @@ impl<'a> Translator<'a> {
                             value: register,
                         });
                     }
+                } else if matches!(value, AbstractValue::Undefined) {
+                    self.writes.retain(|write| write.local != *slot);
+                    self.invalidated_slots.insert(*slot);
                 }
                 self.locals.insert(*slot, value);
             }
@@ -426,11 +459,73 @@ fn sink_unique_store(
     Some(Some(store))
 }
 
+pub(super) fn compile_scalar(
+    bytecode: &Bytecode,
+    start: usize,
+    end: usize,
+) -> Option<ScalarDenseProgram> {
+    if start > end || end > bytecode.code.len() {
+        return None;
+    }
+    let mut translator = Translator::new_scalar(bytecode);
+    for op in &bytecode.code[start..end] {
+        translator.translate(op)?;
+    }
+    if !translator.stack.is_empty()
+        || !translator.receiver_sources.is_empty()
+        || !translator.number_sources.is_empty()
+        || !translator.own_data_reads.is_empty()
+        || translator.store_count != 0
+        || translator.uses_math_round
+        || translator.saw_other
+        || translator.operations.iter().any(|operation| {
+            matches!(
+                operation,
+                NumberInstruction::LoadInvariant(_)
+                    | NumberInstruction::DenseLoad { .. }
+                    | NumberInstruction::DenseStore { .. }
+                    | NumberInstruction::MathRound { .. }
+            )
+        })
+    {
+        return None;
+    }
+
+    let mut local_slots = translator.number_slots;
+    local_slots.extend(translator.writes.iter().map(|write| write.local));
+    local_slots.extend(translator.invalidated_slots.iter().copied());
+    let local_slots: Vec<_> = local_slots.into_iter().collect();
+    if local_slots.len() > MAX_DENSE_LOCALS {
+        return None;
+    }
+    let local_index = |slot| local_slots.binary_search(&slot).ok();
+    for operation in &mut translator.operations {
+        if let NumberInstruction::LoadLocal(slot) = operation {
+            *slot = local_index(*slot)?;
+        }
+    }
+    for write in &mut translator.writes {
+        write.local = local_index(write.local)?;
+    }
+    let invalidations = translator
+        .invalidated_slots
+        .into_iter()
+        .map(local_index)
+        .collect::<Option<Vec<_>>>()?;
+    Some(ScalarDenseProgram {
+        local_slots,
+        operations: translator.operations,
+        writes: translator.writes,
+        invalidations,
+    })
+}
+
 pub(super) fn compile_dynamic(
     bytecode: &Bytecode,
     header: usize,
     backedge: usize,
 ) -> Option<(usize, DynamicDensePlan)> {
+    record_dynamic_dense_compilation();
     let code = &bytecode.code;
     let Op::LoadLocal(counter_slot) = code.get(header)? else {
         return None;

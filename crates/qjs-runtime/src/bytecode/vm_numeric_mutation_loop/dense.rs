@@ -27,11 +27,18 @@ mod compiler;
 mod hole_tail_append;
 mod invariants;
 mod legacy;
+mod nested;
 
 use hole_tail_append::{HoleTailAppendAccess, HoleTailAppendPlan};
 use invariants::{
     ArraySource, DynamicLimit, OwnDataOwner, OwnDataSource, native_math_round_is_current,
 };
+pub(super) use nested::{
+    EnclosingOuter, NestedDensePlan, NestedDensePlanRun, NestedDenseProbe,
+    discover_enclosing_outers,
+};
+#[cfg(test)]
+pub(super) use nested::{test_discover_enclosing_bytecode, test_discover_enclosing_intervals};
 
 const INLINE_DENSE_OPS: usize = 64;
 const MAX_DENSE_OPS: usize = 256;
@@ -80,6 +87,13 @@ thread_local! {
     static HOLE_TAIL_APPEND_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static HOLE_TAIL_APPEND_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static HOLE_TAIL_APPEND_STAGED_DISCARDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static NESTED_DENSE_ENTRIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static NESTED_DENSE_OUTER_COMPLETIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static NESTED_DENSE_INNER_COMMITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static NESTED_DENSE_SEEDED_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static NESTED_DENSE_BAILOUTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static NESTED_DENSE_DISCOVERY_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static DYNAMIC_DENSE_COMPILATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -110,6 +124,13 @@ pub(super) fn reset_test_iterations() {
     HOLE_TAIL_APPEND_PATH_HITS.set(0);
     HOLE_TAIL_APPEND_ITERATIONS.set(0);
     HOLE_TAIL_APPEND_STAGED_DISCARDS.set(0);
+    NESTED_DENSE_ENTRIES.set(0);
+    NESTED_DENSE_OUTER_COMPLETIONS.set(0);
+    NESTED_DENSE_INNER_COMMITS.set(0);
+    NESTED_DENSE_SEEDED_ITERATIONS.set(0);
+    NESTED_DENSE_BAILOUTS.set(0);
+    NESTED_DENSE_DISCOVERY_WORK.set(0);
+    DYNAMIC_DENSE_COMPILATIONS.set(0);
 }
 
 #[cfg(test)]
@@ -243,6 +264,41 @@ pub(super) fn test_hole_tail_append_staged_discards() -> usize {
 }
 
 #[cfg(test)]
+pub(super) fn test_nested_dense_entries() -> usize {
+    NESTED_DENSE_ENTRIES.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_nested_dense_outer_completions() -> usize {
+    NESTED_DENSE_OUTER_COMPLETIONS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_nested_dense_inner_commits() -> usize {
+    NESTED_DENSE_INNER_COMMITS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_nested_dense_seeded_iterations() -> usize {
+    NESTED_DENSE_SEEDED_ITERATIONS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_nested_dense_bailouts() -> usize {
+    NESTED_DENSE_BAILOUTS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_nested_dense_discovery_work() -> usize {
+    NESTED_DENSE_DISCOVERY_WORK.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_dynamic_dense_compilations() -> usize {
+    DYNAMIC_DENSE_COMPILATIONS.get()
+}
+
+#[cfg(test)]
 pub(super) fn test_checked_array_index_product(left: usize, right: usize) -> Option<usize> {
     legacy::test_checked_array_index_product(left, right)
 }
@@ -338,6 +394,48 @@ fn record_hole_tail_append_iteration() {
 #[inline]
 fn record_hole_tail_append_staged_discard() {
     HOLE_TAIL_APPEND_STAGED_DISCARDS.set(HOLE_TAIL_APPEND_STAGED_DISCARDS.get() + 1);
+}
+
+#[inline]
+fn record_nested_dense_entry() {
+    #[cfg(test)]
+    NESTED_DENSE_ENTRIES.set(NESTED_DENSE_ENTRIES.get() + 1);
+}
+
+#[inline]
+fn record_nested_dense_outer_completion() {
+    #[cfg(test)]
+    NESTED_DENSE_OUTER_COMPLETIONS.set(NESTED_DENSE_OUTER_COMPLETIONS.get() + 1);
+}
+
+#[inline]
+fn record_nested_dense_inner_commit() {
+    #[cfg(test)]
+    NESTED_DENSE_INNER_COMMITS.set(NESTED_DENSE_INNER_COMMITS.get() + 1);
+}
+
+#[inline]
+fn record_nested_dense_seeded_iteration() {
+    #[cfg(test)]
+    NESTED_DENSE_SEEDED_ITERATIONS.set(NESTED_DENSE_SEEDED_ITERATIONS.get() + 1);
+}
+
+#[inline]
+fn record_nested_dense_bailout() {
+    #[cfg(test)]
+    NESTED_DENSE_BAILOUTS.set(NESTED_DENSE_BAILOUTS.get() + 1);
+}
+
+#[inline]
+pub(super) fn record_nested_dense_discovery_work(_amount: usize) {
+    #[cfg(test)]
+    NESTED_DENSE_DISCOVERY_WORK.set(NESTED_DENSE_DISCOVERY_WORK.get() + _amount);
+}
+
+#[inline]
+fn record_dynamic_dense_compilation() {
+    #[cfg(test)]
+    DYNAMIC_DENSE_COMPILATIONS.set(DYNAMIC_DENSE_COMPILATIONS.get() + 1);
 }
 
 #[inline]
@@ -478,6 +576,14 @@ struct DynamicDensePlan {
     hole_tail_append: Option<HoleTailAppendPlan>,
     uses_math_round: bool,
     header: usize,
+}
+
+#[derive(Clone, Debug)]
+struct ScalarDenseProgram {
+    local_slots: Vec<usize>,
+    operations: Vec<NumberInstruction>,
+    writes: Vec<LocalWrite>,
+    invalidations: Vec<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -702,23 +808,36 @@ struct DynamicProgramRun {
 }
 
 impl DenseNumericMutationLoopPlan {
-    pub(super) fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<Self> {
-        compile_fixed(bytecode, header, backedge).or_else(|| {
-            compiler::compile_dynamic(bytecode, header, backedge).map(|(exit, plan)| {
-                let kind = if legacy::LegacyDynamicDensePlan::supports(&plan) {
-                    let requires_suppression = plan.store_count > 1;
-                    let plan = legacy::LegacyDynamicDensePlan::from_extended(plan);
-                    if requires_suppression {
-                        DensePlanKind::LegacySuppressingDynamic(plan)
-                    } else {
-                        DensePlanKind::LegacyDynamic(plan)
-                    }
-                } else {
-                    DensePlanKind::Dynamic(plan)
-                };
-                Self { exit, kind }
-            })
-        })
+    pub(super) fn compile_fixed_only(
+        bytecode: &Bytecode,
+        header: usize,
+        backedge: usize,
+    ) -> Option<Self> {
+        compile_fixed(bytecode, header, backedge)
+    }
+
+    pub(super) fn compile_dynamic_only(
+        bytecode: &Bytecode,
+        header: usize,
+        backedge: usize,
+    ) -> Option<Self> {
+        compiler::compile_dynamic(bytecode, header, backedge)
+            .map(|(exit, plan)| Self::from_dynamic(exit, plan))
+    }
+
+    fn from_dynamic(exit: usize, plan: DynamicDensePlan) -> Self {
+        let kind = if legacy::LegacyDynamicDensePlan::supports(&plan) {
+            let requires_suppression = plan.store_count > 1;
+            let plan = legacy::LegacyDynamicDensePlan::from_extended(plan);
+            if requires_suppression {
+                DensePlanKind::LegacySuppressingDynamic(plan)
+            } else {
+                DensePlanKind::LegacyDynamic(plan)
+            }
+        } else {
+            DensePlanKind::Dynamic(plan)
+        };
+        Self { exit, kind }
     }
 
     pub(super) fn exit(&self) -> usize {

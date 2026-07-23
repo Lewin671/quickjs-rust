@@ -165,6 +165,7 @@ pub(super) struct TypedProgram {
 }
 
 impl TypedProgram {
+    #[inline(never)]
     pub(super) fn lower(plan: &LegacyDynamicDensePlan, views: &[ViewGeometry]) -> Option<Self> {
         let mut operations = Vec::with_capacity(plan.operations.len());
         for operation in &plan.operations {

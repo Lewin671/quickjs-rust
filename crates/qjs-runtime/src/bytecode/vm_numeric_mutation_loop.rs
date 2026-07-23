@@ -16,9 +16,14 @@ mod dense_invariant_tests;
 mod dense_reduction_tests;
 #[cfg(test)]
 mod dense_typed_array_tests;
+#[cfg(test)]
+mod nested_dense_tests;
 mod predicate_scan;
 
-use dense::{DenseNumericMutationLoopPlan, DenseNumericMutationLoopRun};
+use dense::{
+    DenseNumericMutationLoopPlan, DenseNumericMutationLoopRun, EnclosingOuter, NestedDensePlan,
+    NestedDensePlanRun, NestedDenseProbe, discover_enclosing_outers,
+};
 use predicate_scan::{DenseNumericPredicateScanPlan, PredicateScanRun};
 
 #[derive(Clone, Copy, Debug)]
@@ -74,34 +79,84 @@ pub(super) struct NumericMutationLoopPlan {
 enum NumericMutationLoopKind {
     Named(NamedNumericMutationLoopPlan),
     Dense(Rc<DenseNumericMutationLoopPlan>),
-    PredicateScan(Rc<DenseNumericPredicateScanPlan>),
+    Special(Rc<SpecialPlan>),
+}
+
+#[derive(Clone, Debug)]
+enum SpecialPlan {
+    PredicateScan(DenseNumericPredicateScanPlan),
+    NestedDense {
+        plan: NestedDensePlan,
+        fallback: Rc<DenseNumericMutationLoopPlan>,
+    },
+}
+
+impl SpecialPlan {
+    #[inline(never)]
+    fn contains_instruction(&self, ip: usize) -> bool {
+        match self {
+            Self::PredicateScan(plan) => plan.contains_instruction(ip),
+            Self::NestedDense { plan, .. } => plan.contains_instruction(ip),
+        }
+    }
+
+    #[inline(never)]
+    fn try_run(&self, vm: &mut Vm<'_>) -> NumericMutationLoopRun {
+        match self {
+            Self::PredicateScan(plan) => match plan.try_run(vm) {
+                PredicateScanRun::Handled => NumericMutationLoopRun::Handled,
+                PredicateScanRun::Suppress => NumericMutationLoopRun::SuppressPlan,
+            },
+            Self::NestedDense { plan, fallback } => match plan.try_run(vm) {
+                NestedDensePlanRun::Handled => NumericMutationLoopRun::Handled,
+                NestedDensePlanRun::HandledAndSuppress => {
+                    NumericMutationLoopRun::HandledAndSuppressPlan
+                }
+                NestedDensePlanRun::Suppress => {
+                    NumericMutationLoopRun::SwitchToDense(fallback.clone())
+                }
+            },
+        }
+    }
 }
 
 impl NumericMutationLoopPlan {
     pub(super) fn compile_all(bytecode: &Bytecode) -> Vec<Self> {
-        bytecode
+        let backedges: Vec<_> = bytecode
             .code
             .iter()
             .enumerate()
             .filter_map(|(backedge, op)| match op {
-                Op::Jump(header) if *header < backedge => {
-                    Self::compile(bytecode, *header, backedge)
-                }
+                Op::Jump(header) if *header < backedge => Some((*header, backedge)),
                 _ => None,
+            })
+            .collect();
+        dense::record_nested_dense_discovery_work(bytecode.code.len());
+        let enclosing_outers = discover_enclosing_outers(bytecode, &backedges);
+        backedges
+            .into_iter()
+            .zip(enclosing_outers)
+            .filter_map(|((header, backedge), enclosing_outer)| {
+                Self::compile(bytecode, header, backedge, enclosing_outer)
             })
             .collect()
     }
 
     pub(super) fn contains_instruction(&self, ip: usize) -> bool {
         match &self.kind {
-            NumericMutationLoopKind::PredicateScan(plan) => plan.contains_instruction(ip),
             NumericMutationLoopKind::Named(_) | NumericMutationLoopKind::Dense(_) => {
                 (self.header..=self.backedge).contains(&ip)
             }
+            NumericMutationLoopKind::Special(plan) => plan.contains_instruction(ip),
         }
     }
 
-    fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<Self> {
+    fn compile(
+        bytecode: &Bytecode,
+        header: usize,
+        backedge: usize,
+        enclosing_outer: Option<EnclosingOuter>,
+    ) -> Option<Self> {
         if let Some(named) = NamedNumericMutationLoopPlan::compile(bytecode, header, backedge) {
             return Some(Self {
                 header,
@@ -110,7 +165,45 @@ impl NumericMutationLoopPlan {
                 kind: NumericMutationLoopKind::Named(named.plan),
             });
         }
-        if let Some(dense) = DenseNumericMutationLoopPlan::compile(bytecode, header, backedge) {
+        if let Some(dense) =
+            DenseNumericMutationLoopPlan::compile_fixed_only(bytecode, header, backedge)
+        {
+            return Some(Self {
+                header,
+                backedge,
+                exit: dense.exit(),
+                kind: NumericMutationLoopKind::Dense(Rc::new(dense)),
+            });
+        }
+        if let Some(enclosing_outer) = enclosing_outer {
+            match NestedDensePlan::probe(bytecode, header, backedge, enclosing_outer) {
+                NestedDenseProbe::Nested {
+                    plan: nested,
+                    fallback,
+                } => {
+                    return Some(Self {
+                        header,
+                        backedge,
+                        exit: nested.exit(),
+                        kind: NumericMutationLoopKind::Special(Rc::new(SpecialPlan::NestedDense {
+                            plan: nested,
+                            fallback,
+                        })),
+                    });
+                }
+                NestedDenseProbe::DenseOnly(dynamic) => {
+                    return Some(Self {
+                        header,
+                        backedge,
+                        exit: dynamic.exit(),
+                        kind: NumericMutationLoopKind::Dense(Rc::new(dynamic)),
+                    });
+                }
+                NestedDenseProbe::NoDynamic => {}
+            }
+        } else if let Some(dense) =
+            DenseNumericMutationLoopPlan::compile_dynamic_only(bytecode, header, backedge)
+        {
             return Some(Self {
                 header,
                 backedge,
@@ -123,7 +216,9 @@ impl NumericMutationLoopPlan {
             header,
             backedge,
             exit: predicate_scan.exit(),
-            kind: NumericMutationLoopKind::PredicateScan(Rc::new(predicate_scan)),
+            kind: NumericMutationLoopKind::Special(Rc::new(SpecialPlan::PredicateScan(
+                predicate_scan,
+            ))),
         })
     }
 
@@ -137,19 +232,18 @@ impl NumericMutationLoopPlan {
                 DenseNumericMutationLoopRun::Declined => NumericMutationLoopRun::Declined,
                 DenseNumericMutationLoopRun::Suppress => NumericMutationLoopRun::SuppressPlan,
             },
-            NumericMutationLoopKind::PredicateScan(plan) => match plan.try_run(vm) {
-                PredicateScanRun::Handled => NumericMutationLoopRun::Handled,
-                PredicateScanRun::Suppress => NumericMutationLoopRun::SuppressPlan,
-            },
+            NumericMutationLoopKind::Special(plan) => plan.try_run(vm),
         }
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 enum NumericMutationLoopRun {
     Handled,
     Declined,
     SuppressPlan,
+    HandledAndSuppressPlan,
+    SwitchToDense(Rc<DenseNumericMutationLoopPlan>),
 }
 
 impl NumericMutationLoopRun {
@@ -477,6 +571,29 @@ pub(super) fn try_run_numeric_mutation_loop(
             // adds no state to the call-path-sensitive FrameState layout.
             vm.numeric_mutation_loop_plans.remove(index);
             false
+        }
+        NumericMutationLoopRun::HandledAndSuppressPlan => {
+            vm.numeric_mutation_loop_plans.remove(index);
+            true
+        }
+        NumericMutationLoopRun::SwitchToDense(fallback) => {
+            let run = fallback.try_run(vm);
+            if !matches!(run, DenseNumericMutationLoopRun::Suppress) {
+                vm.numeric_mutation_loop_plans[index] = NumericMutationLoopPlan {
+                    header: plan.header,
+                    backedge: plan.backedge,
+                    exit: fallback.exit(),
+                    kind: NumericMutationLoopKind::Dense(fallback),
+                };
+            }
+            match run {
+                DenseNumericMutationLoopRun::Handled => true,
+                DenseNumericMutationLoopRun::Declined => false,
+                DenseNumericMutationLoopRun::Suppress => {
+                    vm.numeric_mutation_loop_plans.remove(index);
+                    false
+                }
+            }
         }
     }
 }
