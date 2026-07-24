@@ -159,6 +159,30 @@ fn json_parse_duplicate_heavy_object_keeps_first_order_and_last_values() {
 }
 
 #[test]
+fn json_parse_converts_object_inputs_once_before_parsing() {
+    assert_eq!(
+        eval(
+            r#"
+            let calls = [];
+            let input = {
+                toString: function() {
+                    calls.push('toString');
+                    return '{"value": 7}';
+                },
+                valueOf: function() {
+                    calls.push('valueOf');
+                    return '0';
+                }
+            };
+            let parsed = JSON.parse(input);
+            parsed.value + '|' + calls.join(',');
+            "#,
+        ),
+        Ok(Value::String("7|toString".to_owned().into()))
+    );
+}
+
+#[test]
 fn json_stringify_observes_replacer_and_wrapper_semantics() {
     assert_eq!(
         eval(
@@ -308,6 +332,16 @@ fn json_parse_reviver_observes_context_and_forward_modifications() {
             "let wrapper; JSON.parse('2', function() { wrapper = this; }); Object.getPrototypeOf(wrapper) === Object.prototype && Object.getOwnPropertyNames(wrapper).join() === '' && Object.getOwnPropertyDescriptor(wrapper, '').value === 2;"
         ),
         Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let sources = []; let values = JSON.parse('[-0,9007199254740991,9007199254740992,1.25,-0e0]', function(k, v, c) { if (k !== '') sources.push(c.source); return v; }); sources.join('|') + ':' + Object.is(values[0], -0) + ':' + Object.is(values[4], -0);"
+        ),
+        Ok(Value::String(
+            "-0|9007199254740991|9007199254740992|1.25|-0e0:true:true"
+                .to_owned()
+                .into()
+        ))
     );
 }
 

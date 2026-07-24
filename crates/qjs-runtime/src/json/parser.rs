@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{borrow::Cow, collections::HashMap, rc::Rc};
 
 use crate::CallEnv;
 use crate::value::OrderedDataPropertyBuilder;
@@ -7,14 +7,27 @@ use crate::{
     to_js_string_with_env, to_length_with_env,
 };
 
+#[cfg(test)]
+thread_local! {
+    static ASCII_BYTES_CONSUMED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static CHAR_SCALARS_CONSUMED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static SAFE_INTEGER_FAST_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static GENERIC_NUMBER_FALLBACKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+fn reset_test_counters() {
+    ASCII_BYTES_CONSUMED.set(0);
+    CHAR_SCALARS_CONSUMED.set(0);
+    SAFE_INTEGER_FAST_PATH_HITS.set(0);
+    GENERIC_NUMBER_FALLBACKS.set(0);
+}
+
 pub(crate) fn native_json_parse(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let source = to_js_string_with_env(
-        argument_values.first().cloned().unwrap_or(Value::Undefined),
-        env,
-    )?;
+    let source = json_parse_source(argument_values, env)?;
     let reviver = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     if is_callable(&reviver) {
         let node = parse_json_node(&source, env)?;
@@ -29,6 +42,17 @@ pub(crate) fn native_json_parse(
         internalize_json_property(&root, "", &node, &reviver, env)
     } else {
         parse_json_text(&source, env)
+    }
+}
+
+fn json_parse_source<'a>(
+    argument_values: &'a [Value],
+    env: &mut CallEnv,
+) -> Result<Cow<'a, str>, RuntimeError> {
+    match argument_values.first() {
+        Some(Value::String(source)) => Ok(Cow::Borrowed(source.as_str())),
+        Some(value) => to_js_string_with_env(value.clone(), env).map(Cow::Owned),
+        None => Ok(Cow::Borrowed("undefined")),
     }
 }
 
@@ -309,6 +333,8 @@ enum JsonSourceMode {
     HostUtf8,
 }
 
+const MAX_SAFE_INTEGER_MAGNITUDE: u64 = 9_007_199_254_740_991;
+
 #[derive(Debug, PartialEq, Eq)]
 enum JsonStringScan {
     Direct {
@@ -355,24 +381,24 @@ impl<'a> JsonParser<'a> {
 
     fn value<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
         self.skip_whitespace();
-        match self.peek() {
-            Some('"') => self.string_node::<PRESERVE_METADATA>(),
-            Some('[') => self.array::<PRESERVE_METADATA>(),
-            Some('{') => self.object::<PRESERVE_METADATA>(),
-            Some('t') => self.literal::<PRESERVE_METADATA>("true", Value::Boolean(true)),
-            Some('f') => self.literal::<PRESERVE_METADATA>("false", Value::Boolean(false)),
-            Some('n') => self.literal::<PRESERVE_METADATA>("null", Value::Null),
-            Some('-' | '0'..='9') => self.number::<PRESERVE_METADATA>(),
+        match self.peek_ascii_byte() {
+            Some(b'"') => self.string_node::<PRESERVE_METADATA>(),
+            Some(b'[') => self.array::<PRESERVE_METADATA>(),
+            Some(b'{') => self.object::<PRESERVE_METADATA>(),
+            Some(b't') => self.literal::<PRESERVE_METADATA>("true", Value::Boolean(true)),
+            Some(b'f') => self.literal::<PRESERVE_METADATA>("false", Value::Boolean(false)),
+            Some(b'n') => self.literal::<PRESERVE_METADATA>("null", Value::Null),
+            Some(b'-' | b'0'..=b'9') => self.number::<PRESERVE_METADATA>(),
             _ => Err(self.syntax_error()),
         }
     }
 
     fn array<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
-        self.expect_char('[')?;
+        self.expect_ascii_byte(b'[')?;
         let mut values = Vec::new();
         let mut children = PRESERVE_METADATA.then(Vec::new);
         self.skip_whitespace();
-        if self.consume_char(']') {
+        if self.consume_ascii_byte(b']') {
             return Ok(JsonNode {
                 value: Value::Array(ArrayRef::new(Vec::new())),
                 source: None,
@@ -391,10 +417,10 @@ impl<'a> JsonParser<'a> {
                 values.push(child.value);
             }
             self.skip_whitespace();
-            if self.consume_char(']') {
+            if self.consume_ascii_byte(b']') {
                 break;
             }
-            self.expect_char(',')?;
+            self.expect_ascii_byte(b',')?;
         }
         Ok(JsonNode {
             value: Value::Array(ArrayRef::new(values)),
@@ -406,11 +432,11 @@ impl<'a> JsonParser<'a> {
     }
 
     fn object<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
-        self.expect_char('{')?;
+        self.expect_ascii_byte(b'{')?;
         let mut properties = OrderedDataPropertyBuilder::new();
         let mut children = PRESERVE_METADATA.then(Vec::new);
         self.skip_whitespace();
-        if self.consume_char('}') {
+        if self.consume_ascii_byte(b'}') {
             return Ok(JsonNode {
                 value: Value::Object(properties.finish(object_prototype(self.env))),
                 source: None,
@@ -422,12 +448,12 @@ impl<'a> JsonParser<'a> {
 
         loop {
             self.skip_whitespace();
-            if self.peek() != Some('"') {
+            if self.peek_ascii_byte() != Some(b'"') {
                 return Err(self.syntax_error());
             }
             let key = self.string_rc()?;
             self.skip_whitespace();
-            self.expect_char(':')?;
+            self.expect_ascii_byte(b':')?;
             let child = self.value::<PRESERVE_METADATA>()?;
             if let Some(children) = children.as_mut() {
                 properties.insert(key.clone(), child.value.clone());
@@ -436,10 +462,10 @@ impl<'a> JsonParser<'a> {
                 properties.insert(key, child.value);
             }
             self.skip_whitespace();
-            if self.consume_char('}') {
+            if self.consume_ascii_byte(b'}') {
                 break;
             }
-            self.expect_char(',')?;
+            self.expect_ascii_byte(b',')?;
         }
         Ok(JsonNode {
             value: Value::Object(properties.finish(object_prototype(self.env))),
@@ -499,7 +525,7 @@ impl<'a> JsonParser<'a> {
     /// backslash, or control bytes, so a byte scan is sufficient except for
     /// the runtime's narrow Host UTF-8 sentinel-overlap range.
     fn scan_string(&mut self) -> Result<JsonStringScan, RuntimeError> {
-        self.expect_char('"')?;
+        self.expect_ascii_byte(b'"')?;
         let bytes = self.source.as_bytes();
         let content_start = self.cursor;
         let check_host_sentinel = matches!(self.source_mode, JsonSourceMode::HostUtf8);
@@ -627,47 +653,73 @@ impl<'a> JsonParser<'a> {
 
     fn number<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
         let start = self.cursor;
-        self.consume_char('-');
-        match self.peek() {
-            Some('0') => {
-                self.next_char();
-                if matches!(self.peek(), Some('0'..='9')) {
+        let negative = self.consume_ascii_byte(b'-');
+        let mut magnitude = Some(0_u64);
+        match self.peek_ascii_byte() {
+            Some(b'0') => {
+                self.advance_ascii(1);
+                if matches!(self.peek_ascii_byte(), Some(b'0'..=b'9')) {
                     return Err(self.syntax_error());
                 }
             }
-            Some('1'..='9') => {
-                self.next_char();
-                while matches!(self.peek(), Some('0'..='9')) {
-                    self.next_char();
+            Some(b'1'..=b'9') => {
+                while let Some(digit @ b'0'..=b'9') = self.peek_ascii_byte() {
+                    if let Some(current) = magnitude {
+                        magnitude = current
+                            .checked_mul(10)
+                            .and_then(|value| value.checked_add(u64::from(digit - b'0')));
+                    }
+                    self.advance_ascii(1);
                 }
             }
             _ => return Err(self.syntax_error()),
         }
 
-        if self.consume_char('.') {
-            if !matches!(self.peek(), Some('0'..='9')) {
+        let mut requires_generic_parse = false;
+        if self.consume_ascii_byte(b'.') {
+            requires_generic_parse = true;
+            if !matches!(self.peek_ascii_byte(), Some(b'0'..=b'9')) {
                 return Err(self.syntax_error());
             }
-            while matches!(self.peek(), Some('0'..='9')) {
-                self.next_char();
+            while matches!(self.peek_ascii_byte(), Some(b'0'..=b'9')) {
+                self.advance_ascii(1);
             }
         }
 
-        if matches!(self.peek(), Some('e' | 'E')) {
-            self.next_char();
-            if matches!(self.peek(), Some('+' | '-')) {
-                self.next_char();
+        if matches!(self.peek_ascii_byte(), Some(b'e' | b'E')) {
+            requires_generic_parse = true;
+            self.advance_ascii(1);
+            if matches!(self.peek_ascii_byte(), Some(b'+' | b'-')) {
+                self.advance_ascii(1);
             }
-            if !matches!(self.peek(), Some('0'..='9')) {
+            if !matches!(self.peek_ascii_byte(), Some(b'0'..=b'9')) {
                 return Err(self.syntax_error());
             }
-            while matches!(self.peek(), Some('0'..='9')) {
-                self.next_char();
+            while matches!(self.peek_ascii_byte(), Some(b'0'..=b'9')) {
+                self.advance_ascii(1);
             }
         }
 
         let source = &self.source[start..self.cursor];
-        let value = source.parse::<f64>().map_err(|_| self.syntax_error())?;
+        let value = match magnitude {
+            Some(magnitude)
+                if !requires_generic_parse && magnitude <= MAX_SAFE_INTEGER_MAGNITUDE =>
+            {
+                #[cfg(test)]
+                SAFE_INTEGER_FAST_PATH_HITS.set(SAFE_INTEGER_FAST_PATH_HITS.get() + 1);
+                if negative {
+                    -(magnitude as f64)
+                } else {
+                    magnitude as f64
+                }
+            }
+            _ => {
+                let value = source.parse::<f64>().map_err(|_| self.syntax_error())?;
+                #[cfg(test)]
+                GENERIC_NUMBER_FALLBACKS.set(GENERIC_NUMBER_FALLBACKS.get() + 1);
+                value
+            }
+        };
         Ok(JsonNode {
             value: Value::Number(value),
             source: PRESERVE_METADATA.then(|| source.to_owned()),
@@ -680,8 +732,8 @@ impl<'a> JsonParser<'a> {
         literal: &str,
         value: Value,
     ) -> Result<JsonNode, RuntimeError> {
-        if self.source[self.cursor..].starts_with(literal) {
-            self.cursor += literal.len();
+        if self.source.as_bytes()[self.cursor..].starts_with(literal.as_bytes()) {
+            self.advance_ascii(literal.len());
             Ok(JsonNode {
                 value,
                 source: PRESERVE_METADATA.then(|| literal.to_owned()),
@@ -692,17 +744,18 @@ impl<'a> JsonParser<'a> {
         }
     }
 
-    fn expect_char(&mut self, expected: char) -> Result<(), RuntimeError> {
-        if self.consume_char(expected) {
+    fn expect_ascii_byte(&mut self, expected: u8) -> Result<(), RuntimeError> {
+        if self.consume_ascii_byte(expected) {
             Ok(())
         } else {
             Err(self.syntax_error())
         }
     }
 
-    fn consume_char(&mut self, expected: char) -> bool {
-        if self.peek() == Some(expected) {
-            self.next_char();
+    fn consume_ascii_byte(&mut self, expected: u8) -> bool {
+        debug_assert!(expected.is_ascii());
+        if self.peek_ascii_byte() == Some(expected) {
+            self.advance_ascii(1);
             true
         } else {
             false
@@ -710,18 +763,33 @@ impl<'a> JsonParser<'a> {
     }
 
     fn skip_whitespace(&mut self) {
-        while matches!(self.peek(), Some('\t' | '\n' | '\r' | ' ')) {
-            self.next_char();
+        while matches!(self.peek_ascii_byte(), Some(b'\t' | b'\n' | b'\r' | b' ')) {
+            self.advance_ascii(1);
         }
     }
 
-    fn peek(&self) -> Option<char> {
-        self.source[self.cursor..].chars().next()
+    #[inline]
+    fn peek_ascii_byte(&self) -> Option<u8> {
+        self.source.as_bytes().get(self.cursor).copied()
+    }
+
+    #[inline]
+    fn advance_ascii(&mut self, count: usize) {
+        debug_assert!(
+            self.cursor
+                .checked_add(count)
+                .is_some_and(|end| end <= self.source.len())
+        );
+        self.cursor += count;
+        #[cfg(test)]
+        ASCII_BYTES_CONSUMED.set(ASCII_BYTES_CONSUMED.get() + count);
     }
 
     fn next_char(&mut self) -> Option<char> {
-        let ch = self.peek()?;
+        let ch = self.source[self.cursor..].chars().next()?;
         self.cursor += ch.len_utf8();
+        #[cfg(test)]
+        CHAR_SCALARS_CONSUMED.set(CHAR_SCALARS_CONSUMED.get() + 1);
         Some(ch)
     }
 
@@ -747,6 +815,140 @@ mod tests {
         JsonParser::new(source, &env, mode)
             .scan_string()
             .expect("test source starts with a quote")
+    }
+
+    fn parsed_number(source: &str, env: &CallEnv) -> f64 {
+        match parse_json_text(source, env) {
+            Ok(Value::Number(value)) => value,
+            result => panic!("expected {source:?} to parse as a number, got {result:?}"),
+        }
+    }
+
+    fn assert_number_matches_generic(source: &str, env: &CallEnv) -> f64 {
+        let expected = source.parse::<f64>().expect("valid JSON number");
+        let actual = parsed_number(source, env);
+        assert_eq!(actual.to_bits(), expected.to_bits(), "{source}");
+        actual
+    }
+
+    #[test]
+    fn json_parse_source_borrows_string_primitives_and_owns_conversions() {
+        let mut env = test_env();
+        let backing = Rc::new(r#"{"value":1}"#.to_owned());
+        let arguments = [Value::String(Rc::clone(&backing))];
+        let source = json_parse_source(&arguments, &mut env).expect("string source");
+        assert!(matches!(source, Cow::Borrowed(_)));
+        assert_eq!(source.as_ptr(), backing.as_ptr());
+
+        let arguments = [Value::Number(12.0)];
+        let source = json_parse_source(&arguments, &mut env).expect("converted source");
+        assert!(matches!(source, Cow::Owned(_)));
+        assert_eq!(source, "12");
+    }
+
+    #[test]
+    fn ascii_byte_cursor_handles_structure_literals_whitespace_and_numbers() {
+        reset_test_counters();
+        let env = test_env();
+        let parsed = parse_json_text(
+            " \n {\"items\" : [ true, false, null, -12.5e+2 ] } \r\t",
+            &env,
+        )
+        .expect("ASCII JSON should parse");
+        let Value::Object(parsed) = parsed else {
+            panic!("object expected");
+        };
+        assert!(matches!(parsed.get("items"), Some(Value::Array(_))));
+        assert!(ASCII_BYTES_CONSUMED.get() > 0);
+        assert_eq!(CHAR_SCALARS_CONSUMED.get(), 0);
+    }
+
+    #[test]
+    fn safe_integer_fast_path_preserves_zero_sign_and_exact_bounds() {
+        reset_test_counters();
+        let env = test_env();
+        let sources = [
+            "0",
+            "-0",
+            "1",
+            "-1",
+            "9007199254740991",
+            "-9007199254740991",
+        ];
+        for source in sources {
+            let value = assert_number_matches_generic(source, &env);
+            if source == "-0" {
+                assert_eq!(value.to_bits(), (-0.0_f64).to_bits());
+            }
+        }
+        assert_eq!(SAFE_INTEGER_FAST_PATH_HITS.get(), sources.len());
+        assert_eq!(GENERIC_NUMBER_FALLBACKS.get(), 0);
+    }
+
+    #[test]
+    fn unsafe_and_oversized_integers_fall_back_without_rounding_changes() {
+        reset_test_counters();
+        let env = test_env();
+        let hundreds = "9".repeat(400);
+        let negative_hundreds = format!("-{hundreds}");
+        let sources = [
+            "9007199254740992",
+            "-9007199254740992",
+            "9007199254740993",
+            "-9007199254740993",
+            "18446744073709551615",
+            "18446744073709551616",
+            hundreds.as_str(),
+            negative_hundreds.as_str(),
+        ];
+        for source in sources {
+            assert_number_matches_generic(source, &env);
+        }
+        assert_eq!(SAFE_INTEGER_FAST_PATH_HITS.get(), 0);
+        assert_eq!(GENERIC_NUMBER_FALLBACKS.get(), sources.len());
+    }
+
+    #[test]
+    fn fractions_and_exponents_use_the_generic_number_parser() {
+        reset_test_counters();
+        let env = test_env();
+        let sources = ["0.0", "-0.0", "0e0", "-0e0", "0.125", "6.02e23", "-4.5E-2"];
+        for source in sources {
+            let value = assert_number_matches_generic(source, &env);
+            if matches!(source, "-0.0" | "-0e0") {
+                assert_eq!(value.to_bits(), (-0.0_f64).to_bits());
+            }
+        }
+        assert_eq!(SAFE_INTEGER_FAST_PATH_HITS.get(), 0);
+        assert_eq!(GENERIC_NUMBER_FALLBACKS.get(), sources.len());
+    }
+
+    #[test]
+    fn ascii_number_scanner_rejects_invalid_grammar() {
+        reset_test_counters();
+        let env = test_env();
+        for source in [
+            "-", "+1", ".1", "01", "-01", "1.", "-0.", "1e", "1e+", "1E-", "--1", "1x", "1 2",
+        ] {
+            assert!(parse_json_text(source, &env).is_err(), "{source}");
+        }
+    }
+
+    #[test]
+    fn escaped_and_unicode_strings_preserve_the_decoder_boundary() {
+        reset_test_counters();
+        let env = test_env();
+        let parsed = parse_json_text(r#"{"文😀":"line\n\u0041"}"#, &env)
+            .expect("Unicode and escaped JSON should parse");
+        let Value::Object(parsed) = parsed else {
+            panic!("object expected");
+        };
+        assert_eq!(
+            parsed.get("文😀"),
+            Some(Value::String(Rc::new("line\nA".to_owned())))
+        );
+        assert!(ASCII_BYTES_CONSUMED.get() > 0);
+        assert!(CHAR_SCALARS_CONSUMED.get() > 0);
     }
 
     #[test]
@@ -889,6 +1091,34 @@ mod tests {
         assert_eq!(items[1].source.as_deref(), Some("\"x\""));
         assert_eq!(items[2].source.as_deref(), Some("true"));
         assert_eq!(items[3].source.as_deref(), Some("null"));
+    }
+
+    #[test]
+    fn number_fast_path_preserves_reviver_source_slices() {
+        reset_test_counters();
+        let source = "[-0,9007199254740991,9007199254740992,1.25,-0e0]";
+        let env = test_env();
+        let parsed = JsonParser::new(source, &env, JsonSourceMode::RuntimeWtf16)
+            .parse::<true>()
+            .expect("numeric array parses with metadata");
+        let JsonNodeChildren::Array(items) = parsed.children else {
+            panic!("reviver mode must retain array children");
+        };
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.source.as_deref())
+                .collect::<Vec<_>>(),
+            vec![
+                Some("-0"),
+                Some("9007199254740991"),
+                Some("9007199254740992"),
+                Some("1.25"),
+                Some("-0e0")
+            ]
+        );
+        assert_eq!(SAFE_INTEGER_FAST_PATH_HITS.get(), 2);
+        assert_eq!(GENERIC_NUMBER_FALLBACKS.get(), 3);
     }
 
     #[test]
