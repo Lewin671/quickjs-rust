@@ -396,6 +396,65 @@ impl ArrayRef {
         Some(mutate(&mut elements))
     }
 
+    /// Temporarily leases several identity-distinct dense Arrays for writes
+    /// and any remaining dense Arrays for reads in one fail-closed batch.
+    ///
+    /// Read/read aliases are safe and deliberately allowed. Writers may not
+    /// alias another writer or any reader. Every structural check and borrow
+    /// succeeds before `access` runs, so a failed batch cannot publish work.
+    pub(crate) fn with_distinct_dense_writable_and_readable_elements<'a, R>(
+        writers: &'a [Self],
+        readers: &'a [Self],
+        access: impl FnOnce(&mut [RefMut<'a, Vec<Value>>], &[Ref<'a, Vec<Value>>]) -> R,
+    ) -> Option<R> {
+        for (index, writer) in writers.iter().enumerate() {
+            if writers[..index]
+                .iter()
+                .any(|existing| existing.ptr_eq(writer))
+                || readers.iter().any(|reader| reader.ptr_eq(writer))
+                || writer.0.frozen.get()
+                || writer.0.cold_if_present().is_some_and(|cold| {
+                    !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
+                        || !cold
+                            .properties
+                            .try_borrow()
+                            .is_ok_and(|properties| properties.is_empty())
+                })
+            {
+                return None;
+            }
+        }
+        for reader in readers {
+            if reader.0.cold_if_present().is_some_and(|cold| {
+                !cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
+                    || !cold
+                        .properties
+                        .try_borrow()
+                        .is_ok_and(|properties| properties.is_empty())
+            }) {
+                return None;
+            }
+        }
+
+        let mut writable_elements = Vec::with_capacity(writers.len());
+        for writer in writers {
+            let lease = writer.0.elements.try_borrow_mut().ok()?;
+            if writer.0.length.get() != lease.len() {
+                return None;
+            }
+            writable_elements.push(lease);
+        }
+        let mut readable_elements = Vec::with_capacity(readers.len());
+        for reader in readers {
+            let lease = reader.0.elements.try_borrow().ok()?;
+            if reader.0.length.get() != lease.len() {
+                return None;
+            }
+            readable_elements.push(lease);
+        }
+        Some(access(&mut writable_elements, &readable_elements))
+    }
+
     /// Temporarily leases one implicit hole tail for append-only writes and
     /// every other receiver for fully-dense reads.
     ///
@@ -1039,6 +1098,106 @@ mod tests {
         );
         assert_eq!(first.get(0), Some(Value::Number(3.0)));
         assert_eq!(second.get(0), Some(Value::Number(5.0)));
+    }
+
+    #[test]
+    fn dense_read_write_batch_allows_frozen_duplicate_readers_and_sealed_writers() {
+        let writer = ArrayRef::new(vec![Value::Number(1.0), Value::Number(2.0)]);
+        writer.seal();
+        writer.set_length_writable(false);
+        let reader = ArrayRef::new(vec![Value::Number(3.0), Value::Number(5.0)]);
+        reader.freeze();
+
+        assert_eq!(
+            ArrayRef::with_distinct_dense_writable_and_readable_elements(
+                std::slice::from_ref(&writer),
+                &[reader.clone(), reader.clone()],
+                |writers, readers| {
+                    writers[0][1] = readers[0][0].clone();
+                    readers[0][1].clone() == readers[1][1].clone()
+                },
+            ),
+            Some(true)
+        );
+        assert_eq!(writer.get(1), Some(Value::Number(3.0)));
+    }
+
+    #[test]
+    fn dense_read_write_batch_rejects_aliases_invalid_storage_and_borrow_conflicts() {
+        let first = ArrayRef::new(vec![Value::Number(1.0)]);
+        let second = ArrayRef::new(vec![Value::Number(2.0)]);
+        let mut invoked = false;
+
+        for result in [
+            ArrayRef::with_distinct_dense_writable_and_readable_elements(
+                &[first.clone(), first.clone()],
+                &[],
+                |_, _| invoked = true,
+            ),
+            ArrayRef::with_distinct_dense_writable_and_readable_elements(
+                std::slice::from_ref(&first),
+                std::slice::from_ref(&first),
+                |_, _| invoked = true,
+            ),
+        ] {
+            assert!(result.is_none());
+        }
+        assert!(!invoked);
+
+        let frozen_writer = ArrayRef::new(vec![Value::Number(3.0)]);
+        frozen_writer.freeze();
+        assert!(
+            ArrayRef::with_distinct_dense_writable_and_readable_elements(
+                std::slice::from_ref(&frozen_writer),
+                std::slice::from_ref(&second),
+                |_, _| invoked = true,
+            )
+            .is_none()
+        );
+
+        let sparse_reader = ArrayRef::new(vec![Value::Number(5.0), Value::Number(7.0)]);
+        assert!(sparse_reader.delete_index(1));
+        assert!(
+            ArrayRef::with_distinct_dense_writable_and_readable_elements(
+                std::slice::from_ref(&first),
+                std::slice::from_ref(&sparse_reader),
+                |_, _| invoked = true,
+            )
+            .is_none()
+        );
+
+        let accessor_reader = ArrayRef::new(vec![Value::Number(11.0)]);
+        accessor_reader.define_property("0".to_owned(), Property::accessor(None, None, true, true));
+        assert!(
+            ArrayRef::with_distinct_dense_writable_and_readable_elements(
+                std::slice::from_ref(&first),
+                std::slice::from_ref(&accessor_reader),
+                |_, _| invoked = true,
+            )
+            .is_none()
+        );
+
+        let held_writer_read = first.0.elements.borrow();
+        assert!(
+            ArrayRef::with_distinct_dense_writable_and_readable_elements(
+                std::slice::from_ref(&first),
+                std::slice::from_ref(&second),
+                |_, _| invoked = true,
+            )
+            .is_none()
+        );
+        drop(held_writer_read);
+        let held_reader_write = second.0.elements.borrow_mut();
+        assert!(
+            ArrayRef::with_distinct_dense_writable_and_readable_elements(
+                std::slice::from_ref(&first),
+                std::slice::from_ref(&second),
+                |_, _| invoked = true,
+            )
+            .is_none()
+        );
+        drop(held_reader_write);
+        assert!(!invoked);
     }
 
     #[test]

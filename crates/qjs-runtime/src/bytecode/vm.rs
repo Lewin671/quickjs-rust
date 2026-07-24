@@ -238,6 +238,30 @@ impl<'a> Vm<'a> {
         Ok(vm)
     }
 
+    #[cfg(test)]
+    pub(super) fn new_test_direct_call(
+        bytecode: &'a Bytecode,
+        arguments: &[Value],
+    ) -> Result<Self, RuntimeError> {
+        let FrameState { env, .. } = Self::new(bytecode)?.into_frame();
+        let upvalues = [];
+        Ok(
+            Self::new_with_globals_upvalues_with_stack_and_direct_call_slots(
+                bytecode,
+                env,
+                Vec::new(),
+                Vec::new(),
+                Some(DirectCallSlots {
+                    this_value: None,
+                    parameter_slots: bytecode.parameter_slots(),
+                    arguments,
+                    upvalues: &upvalues,
+                    realm_upvalue_slots: 0,
+                }),
+            ),
+        )
+    }
+
     pub(super) fn new_with_globals(bytecode: &'a Bytecode, env: CallEnv) -> Self {
         Self::new_with_globals_and_with_stack(bytecode, env, Vec::new())
     }

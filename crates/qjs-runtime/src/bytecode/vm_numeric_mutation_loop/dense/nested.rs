@@ -65,6 +65,26 @@ pub(in super::super) struct EnclosingOuter {
     limit_slot: usize,
 }
 
+impl EnclosingOuter {
+    pub(in super::super) fn new(
+        header: usize,
+        backedge: usize,
+        exit: usize,
+        body_start: usize,
+        counter_slot: usize,
+        limit_slot: usize,
+    ) -> Self {
+        Self {
+            header,
+            backedge,
+            exit,
+            body_start,
+            counter_slot,
+            limit_slot,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 struct DiscoveryInterval {
     source_index: usize,
@@ -163,7 +183,7 @@ impl NestedDensePlan {
         }
     }
 
-    fn compile_pretranslated(
+    pub(super) fn compile_pretranslated(
         bytecode: &Bytecode,
         inner_header: usize,
         inner_backedge: usize,

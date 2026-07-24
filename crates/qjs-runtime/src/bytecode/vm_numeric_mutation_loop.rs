@@ -20,6 +20,7 @@ mod dense_typed_array_tests;
 mod nested_dense_tests;
 mod predicate_scan;
 mod scalar_bitwise;
+mod trace;
 
 use dense::{
     DenseNumericMutationLoopPlan, DenseNumericMutationLoopRun, EnclosingOuter, NestedDensePlan,
@@ -27,6 +28,7 @@ use dense::{
 };
 use predicate_scan::{DenseNumericPredicateScanPlan, PredicateScanRun};
 use scalar_bitwise::{ScalarBitwiseLoopPlan, ScalarBitwiseLoopRun};
+use trace::{NumericTracePlan, NumericTraceRun};
 
 #[derive(Clone, Copy, Debug)]
 enum NumericMutationOp {
@@ -89,8 +91,12 @@ enum SpecialPlan {
     PredicateScan(DenseNumericPredicateScanPlan),
     ScalarBitwise(ScalarBitwiseLoopPlan),
     NestedDense {
-        plan: NestedDensePlan,
+        plan: Rc<NestedDensePlan>,
         fallback: Rc<DenseNumericMutationLoopPlan>,
+    },
+    NumericTrace {
+        plan: Rc<NumericTracePlan>,
+        fallback: Rc<dense::TraceFallback>,
     },
 }
 
@@ -101,6 +107,7 @@ impl SpecialPlan {
             Self::PredicateScan(plan) => plan.contains_instruction(ip),
             Self::ScalarBitwise(plan) => plan.contains_instruction(ip),
             Self::NestedDense { plan, .. } => plan.contains_instruction(ip),
+            Self::NumericTrace { plan, .. } => plan.contains_instruction(ip),
         }
     }
 
@@ -122,6 +129,12 @@ impl SpecialPlan {
                 }
                 NestedDensePlanRun::Suppress => {
                     NumericMutationLoopRun::SwitchToDense(fallback.clone())
+                }
+            },
+            Self::NumericTrace { plan, fallback } => match plan.try_run(vm) {
+                NumericTraceRun::CompletedOuter => NumericMutationLoopRun::Handled,
+                NumericTraceRun::DeclinedNoProgress => {
+                    NumericMutationLoopRun::SwitchToNested(fallback.clone())
                 }
             },
         }
@@ -191,6 +204,18 @@ impl NumericMutationLoopPlan {
                 kind: NumericMutationLoopKind::Dense(Rc::new(dense)),
             });
         }
+        if let Some(probe) = NumericTracePlan::compile(bytecode, header, backedge) {
+            let exit = probe.plan.exit();
+            return Some(Self {
+                header,
+                backedge,
+                exit,
+                kind: NumericMutationLoopKind::Special(Rc::new(SpecialPlan::NumericTrace {
+                    plan: Rc::new(probe.plan),
+                    fallback: Rc::new(probe.fallback),
+                })),
+            });
+        }
         if let Some(enclosing_outer) = enclosing_outer {
             match NestedDensePlan::probe(bytecode, header, backedge, enclosing_outer) {
                 NestedDenseProbe::Nested {
@@ -202,7 +227,7 @@ impl NumericMutationLoopPlan {
                         backedge,
                         exit: nested.exit(),
                         kind: NumericMutationLoopKind::Special(Rc::new(SpecialPlan::NestedDense {
-                            plan: nested,
+                            plan: Rc::new(nested),
                             fallback,
                         })),
                     });
@@ -260,6 +285,7 @@ enum NumericMutationLoopRun {
     SuppressPlan,
     HandledAndSuppressPlan,
     SwitchToDense(Rc<DenseNumericMutationLoopPlan>),
+    SwitchToNested(Rc<dense::TraceFallback>),
 }
 
 impl NumericMutationLoopRun {
@@ -608,6 +634,48 @@ pub(super) fn try_run_numeric_mutation_loop(
                 DenseNumericMutationLoopRun::Suppress => {
                     vm.numeric_mutation_loop_plans.remove(index);
                     false
+                }
+            }
+        }
+        NumericMutationLoopRun::SwitchToNested(trace_fallback) => {
+            let nested = &trace_fallback.nested;
+            let fallback = &trace_fallback.dense;
+            // Install the existing two-level plan before running it so this
+            // invocation and every later backedge observe the same atomic
+            // fallback state and never retry the trace.
+            vm.numeric_mutation_loop_plans[index] = NumericMutationLoopPlan {
+                header: plan.header,
+                backedge: plan.backedge,
+                exit: nested.exit(),
+                kind: NumericMutationLoopKind::Special(Rc::new(SpecialPlan::NestedDense {
+                    plan: nested.clone(),
+                    fallback: fallback.clone(),
+                })),
+            };
+            match nested.try_run(vm) {
+                NestedDensePlanRun::Handled => true,
+                NestedDensePlanRun::HandledAndSuppress => {
+                    vm.numeric_mutation_loop_plans.remove(index);
+                    true
+                }
+                NestedDensePlanRun::Suppress => {
+                    let run = fallback.try_run(vm);
+                    if !matches!(run, DenseNumericMutationLoopRun::Suppress) {
+                        vm.numeric_mutation_loop_plans[index] = NumericMutationLoopPlan {
+                            header: plan.header,
+                            backedge: plan.backedge,
+                            exit: fallback.exit(),
+                            kind: NumericMutationLoopKind::Dense(fallback.clone()),
+                        };
+                    }
+                    match run {
+                        DenseNumericMutationLoopRun::Handled => true,
+                        DenseNumericMutationLoopRun::Declined => false,
+                        DenseNumericMutationLoopRun::Suppress => {
+                            vm.numeric_mutation_loop_plans.remove(index);
+                            false
+                        }
+                    }
                 }
             }
         }

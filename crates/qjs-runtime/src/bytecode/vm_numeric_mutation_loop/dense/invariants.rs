@@ -80,7 +80,7 @@ impl OwnDataOwner {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct OwnDataSource {
+pub(in super::super) struct OwnDataSource {
     pub(super) owner: OwnDataOwner,
     pub(super) key: Rc<str>,
 }
@@ -109,20 +109,20 @@ impl OwnDataSource {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum ArraySource {
+pub(in super::super) enum ArraySource {
     Local(usize),
     OwnData(OwnDataSource),
 }
 
 impl ArraySource {
-    pub(super) fn local_slot(&self) -> Option<usize> {
+    pub(in super::super) fn local_slot(&self) -> Option<usize> {
         match self {
             Self::Local(slot) => Some(*slot),
             Self::OwnData(source) => source.owner.local_slot(),
         }
     }
 
-    pub(super) fn resolve(&self, vm: &Vm<'_>) -> Option<ArrayRef> {
+    pub(in super::super) fn resolve(&self, vm: &Vm<'_>) -> Option<ArrayRef> {
         match self {
             Self::Local(slot) => match vm.locals.get(*slot) {
                 Some(Some(Value::Array(array))) => Some(array.clone()),
