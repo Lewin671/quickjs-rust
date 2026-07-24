@@ -83,6 +83,9 @@ thread_local! {
     static TYPED_ARRAY_DENSE_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static TYPED_ARRAY_DENSE_SUPPRESSIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static TYPED_ARRAY_DENSE_ATTEMPTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TYPED_CONSTANT_PREFIX_LOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TYPED_LOCAL_PREFIX_LOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TYPED_DYNAMIC_DISPATCHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static HOLE_TAIL_APPEND_ATTEMPTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static HOLE_TAIL_APPEND_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static HOLE_TAIL_APPEND_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -120,6 +123,9 @@ pub(super) fn reset_test_iterations() {
     TYPED_ARRAY_DENSE_PATH_HITS.set(0);
     TYPED_ARRAY_DENSE_SUPPRESSIONS.set(0);
     TYPED_ARRAY_DENSE_ATTEMPTS.set(0);
+    TYPED_CONSTANT_PREFIX_LOADS.set(0);
+    TYPED_LOCAL_PREFIX_LOADS.set(0);
+    TYPED_DYNAMIC_DISPATCHES.set(0);
     HOLE_TAIL_APPEND_ATTEMPTS.set(0);
     HOLE_TAIL_APPEND_PATH_HITS.set(0);
     HOLE_TAIL_APPEND_ITERATIONS.set(0);
@@ -241,6 +247,21 @@ pub(super) fn test_typed_array_dense_suppressions() -> usize {
 #[cfg(test)]
 pub(super) fn test_typed_array_dense_attempts() -> usize {
     TYPED_ARRAY_DENSE_ATTEMPTS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_typed_constant_prefix_loads() -> usize {
+    TYPED_CONSTANT_PREFIX_LOADS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_typed_local_prefix_loads() -> usize {
+    TYPED_LOCAL_PREFIX_LOADS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_typed_dynamic_dispatches() -> usize {
+    TYPED_DYNAMIC_DISPATCHES.get()
 }
 
 #[cfg(test)]
@@ -370,6 +391,30 @@ fn record_typed_array_dense_suppression() {
 fn record_typed_array_dense_attempt() {
     #[cfg(test)]
     TYPED_ARRAY_DENSE_ATTEMPTS.set(TYPED_ARRAY_DENSE_ATTEMPTS.get() + 1);
+}
+
+#[inline]
+fn record_typed_constant_prefix_loads(count: usize) {
+    #[cfg(test)]
+    TYPED_CONSTANT_PREFIX_LOADS.set(TYPED_CONSTANT_PREFIX_LOADS.get() + count);
+    #[cfg(not(test))]
+    let _ = count;
+}
+
+#[inline]
+fn record_typed_local_prefix_loads(count: usize) {
+    #[cfg(test)]
+    TYPED_LOCAL_PREFIX_LOADS.set(TYPED_LOCAL_PREFIX_LOADS.get() + count);
+    #[cfg(not(test))]
+    let _ = count;
+}
+
+#[inline]
+fn record_typed_dynamic_dispatches(count: usize) {
+    #[cfg(test)]
+    TYPED_DYNAMIC_DISPATCHES.set(TYPED_DYNAMIC_DISPATCHES.get() + count);
+    #[cfg(not(test))]
+    let _ = count;
 }
 
 #[inline]
@@ -641,6 +686,7 @@ enum NumberInstruction {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 struct LocalWrite {
     local: usize,
     value: Register,
@@ -654,6 +700,7 @@ struct PendingDenseStore {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 struct SunkDenseStore {
     receiver: usize,
     index: Register,
@@ -868,6 +915,16 @@ impl DenseNumericMutationLoopPlan {
             &self.kind,
             DensePlanKind::LegacyDynamic(plan) if plan.is_two_lane_strided_reduction()
         )
+    }
+
+    #[cfg(test)]
+    pub(super) fn legacy_input_layout(&self) -> Option<(usize, usize, usize)> {
+        match &self.kind {
+            DensePlanKind::LegacyDynamic(plan) | DensePlanKind::LegacySuppressingDynamic(plan) => {
+                plan.input_layout()
+            }
+            DensePlanKind::Fixed(_) | DensePlanKind::Dynamic(_) => None,
+        }
     }
 
     pub(super) fn try_run(&self, vm: &mut Vm<'_>) -> DenseNumericMutationLoopRun {

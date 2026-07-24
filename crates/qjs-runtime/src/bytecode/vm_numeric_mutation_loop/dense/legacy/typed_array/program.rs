@@ -161,12 +161,16 @@ pub(super) struct TypedSunkStore {
 
 pub(super) struct TypedProgram {
     pub(super) operations: Vec<TypedInstruction>,
+    pub(super) constant_count: usize,
+    pub(super) dynamic_start: usize,
     pub(super) sunk_store: Option<TypedSunkStore>,
 }
 
 impl TypedProgram {
     #[inline(never)]
     pub(super) fn lower(plan: &LegacyDynamicDensePlan, views: &[ViewGeometry]) -> Option<Self> {
+        let input_prefix = plan.input_prefix?;
+        let dynamic_start = input_prefix.validated_dynamic_start(plan.operations.len())?;
         let mut operations = Vec::with_capacity(plan.operations.len());
         for operation in &plan.operations {
             operations.push(match *operation {
@@ -278,6 +282,8 @@ impl TypedProgram {
         };
         Some(Self {
             operations,
+            constant_count: input_prefix.constant_count,
+            dynamic_start,
             sunk_store,
         })
     }

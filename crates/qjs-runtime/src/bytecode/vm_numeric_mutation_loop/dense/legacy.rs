@@ -18,8 +18,8 @@ use super::invariants::{ArraySource as ExtendedArraySource, DynamicLimit, OwnDat
 use super::{
     DenseAccess, DenseNumericMutationLoopRun, DynamicControl, DynamicDensePlan, DynamicProgramRun,
     HoleTailAppendAccess, HoleTailAppendPlan, INLINE_DENSE_OPS, LocalWrite, MAX_DENSE_LOCALS,
-    MAX_SAFE_INTEGER, MultiAccess, NumberInstruction as ExtendedInstruction, ReadAccess,
-    SingleAccess, SunkDenseStore, apply_binary, apply_unary, array_index_from_number,
+    MAX_DENSE_OPS, MAX_SAFE_INTEGER, MultiAccess, NumberInstruction as ExtendedInstruction,
+    ReadAccess, SingleAccess, SunkDenseStore, apply_binary, apply_unary, array_index_from_number,
     descending_counter_is_valid, local_number, record_countdown_iteration,
     record_countdown_path_hit, record_hole_tail_append_attempt, record_hole_tail_append_path_hit,
     record_iteration, record_read_only_bailout, record_read_only_path_hit, record_single_path_hit,
@@ -167,6 +167,7 @@ impl LocalControl {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 enum NumberInstruction {
     Constant(f64),
     LoadLocal(usize),
@@ -192,6 +193,351 @@ enum NumberInstruction {
         operation: UpdateOp,
         value: Register,
     },
+}
+
+#[derive(Clone, Copy, Debug)]
+struct NumberInputPrefix {
+    constant_count: usize,
+    local_count: usize,
+}
+
+impl NumberInputPrefix {
+    fn validated_dynamic_start(self, operation_count: usize) -> Option<usize> {
+        self.constant_count
+            .checked_add(self.local_count)
+            .filter(|dynamic_start| *dynamic_start <= operation_count)
+    }
+}
+
+fn operation_registers_are_valid(operation: &NumberInstruction, destination: usize) -> bool {
+    let valid = |register: Register| register < destination;
+    match operation {
+        NumberInstruction::Constant(_) | NumberInstruction::LoadLocal(_) => true,
+        NumberInstruction::DenseLoad { index, .. } => valid(*index),
+        NumberInstruction::DenseStore { index, value, .. }
+        | NumberInstruction::Binary {
+            left: index,
+            right: value,
+            ..
+        } => valid(*index) && valid(*value),
+        NumberInstruction::Unary { value, .. } | NumberInstruction::Update { value, .. } => {
+            valid(*value)
+        }
+    }
+}
+
+fn remap_operation_registers(operation: &mut NumberInstruction, remap: &[usize]) {
+    let remap_register = |register: &mut Register| *register = remap[*register];
+    match operation {
+        NumberInstruction::Constant(_) | NumberInstruction::LoadLocal(_) => {}
+        NumberInstruction::DenseLoad { index, .. } => remap_register(index),
+        NumberInstruction::DenseStore { index, value, .. }
+        | NumberInstruction::Binary {
+            left: index,
+            right: value,
+            ..
+        } => {
+            remap_register(index);
+            remap_register(value);
+        }
+        NumberInstruction::Unary { value, .. } | NumberInstruction::Update { value, .. } => {
+            remap_register(value);
+        }
+    }
+}
+
+/// Canonicalizes the pure iteration inputs ahead of the effectful instruction
+/// stream. Constants are keyed by their exact IEEE-754 bits, while local loads
+/// are keyed by local index. The translator's SSA map guarantees that an
+/// emitted `LoadLocal` always reads the iteration-entry snapshot; reads after a
+/// same-body write already refer to that write's result register.
+fn compact_number_inputs(
+    operations: &mut Vec<NumberInstruction>,
+    writes: &mut [LocalWrite],
+    sunk_store: &mut Option<SunkDenseStore>,
+) -> Option<NumberInputPrefix> {
+    let operation_count = operations.len();
+    if operation_count > MAX_DENSE_OPS
+        || operations
+            .iter()
+            .enumerate()
+            .any(|(destination, operation)| !operation_registers_are_valid(operation, destination))
+        || writes.iter().any(|write| write.value >= operation_count)
+        || sunk_store
+            .is_some_and(|store| store.index >= operation_count || store.value >= operation_count)
+    {
+        return None;
+    }
+
+    let mut constant_bits = [0_u64; MAX_DENSE_OPS];
+    let mut constant_count = 0;
+    let mut local_indices = [0_usize; MAX_DENSE_OPS];
+    let mut local_count = 0;
+    for operation in operations.iter() {
+        match *operation {
+            NumberInstruction::Constant(value) => {
+                let bits = value.to_bits();
+                if !constant_bits[..constant_count].contains(&bits) {
+                    constant_bits[constant_count] = bits;
+                    constant_count += 1;
+                }
+            }
+            NumberInstruction::LoadLocal(local) => {
+                if !local_indices[..local_count].contains(&local) {
+                    local_indices[local_count] = local;
+                    local_count += 1;
+                }
+            }
+            NumberInstruction::DenseLoad { .. }
+            | NumberInstruction::DenseStore { .. }
+            | NumberInstruction::Binary { .. }
+            | NumberInstruction::Unary { .. }
+            | NumberInstruction::Update { .. } => {}
+        }
+    }
+
+    let prefix = NumberInputPrefix {
+        constant_count,
+        local_count,
+    };
+    let mut remap = [usize::MAX; MAX_DENSE_OPS];
+    let mut next_dynamic = prefix.validated_dynamic_start(operation_count)?;
+    for (old_register, operation) in operations.iter().enumerate() {
+        remap[old_register] = match *operation {
+            NumberInstruction::Constant(value) => constant_bits[..constant_count]
+                .iter()
+                .position(|bits| *bits == value.to_bits())?,
+            NumberInstruction::LoadLocal(local) => {
+                constant_count
+                    + local_indices[..local_count]
+                        .iter()
+                        .position(|candidate| *candidate == local)?
+            }
+            NumberInstruction::DenseLoad { .. }
+            | NumberInstruction::DenseStore { .. }
+            | NumberInstruction::Binary { .. }
+            | NumberInstruction::Unary { .. }
+            | NumberInstruction::Update { .. } => {
+                let register = next_dynamic;
+                next_dynamic += 1;
+                register
+            }
+        };
+    }
+
+    let old_operations = std::mem::take(operations);
+    operations.reserve(next_dynamic);
+    operations.extend(
+        constant_bits[..constant_count]
+            .iter()
+            .copied()
+            .map(f64::from_bits)
+            .map(NumberInstruction::Constant),
+    );
+    operations.extend(
+        local_indices[..local_count]
+            .iter()
+            .copied()
+            .map(NumberInstruction::LoadLocal),
+    );
+    for (old_register, mut operation) in old_operations.into_iter().enumerate() {
+        if matches!(
+            operation,
+            NumberInstruction::Constant(_) | NumberInstruction::LoadLocal(_)
+        ) {
+            continue;
+        }
+        debug_assert_eq!(operations.len(), remap[old_register]);
+        remap_operation_registers(&mut operation, &remap[..operation_count]);
+        operations.push(operation);
+    }
+    for write in writes {
+        write.value = remap[write.value];
+    }
+    if let Some(store) = sunk_store {
+        store.index = remap[store.index];
+        store.value = remap[store.value];
+    }
+    debug_assert_eq!(operations.len(), next_dynamic);
+    Some(prefix)
+}
+
+#[cfg(test)]
+mod input_prefix_tests {
+    use super::*;
+
+    fn valid_inputs() -> (
+        Vec<NumberInstruction>,
+        Vec<LocalWrite>,
+        Option<SunkDenseStore>,
+    ) {
+        (
+            vec![
+                NumberInstruction::Constant(1.0),
+                NumberInstruction::LoadLocal(2),
+                NumberInstruction::Binary {
+                    operation: BinaryOp::Add,
+                    left: 0,
+                    right: 1,
+                },
+            ],
+            vec![LocalWrite { local: 3, value: 2 }],
+            Some(SunkDenseStore {
+                receiver: 0,
+                index: 1,
+                value: 2,
+            }),
+        )
+    }
+
+    fn assert_rejected_without_mutation(
+        mut operations: Vec<NumberInstruction>,
+        mut writes: Vec<LocalWrite>,
+        mut sunk_store: Option<SunkDenseStore>,
+    ) {
+        let operations_before = operations.clone();
+        let writes_before = writes.clone();
+        let sunk_store_before = sunk_store;
+
+        assert!(compact_number_inputs(&mut operations, &mut writes, &mut sunk_store).is_none());
+        assert_eq!(operations, operations_before);
+        assert_eq!(writes, writes_before);
+        assert_eq!(sunk_store, sunk_store_before);
+    }
+
+    #[test]
+    fn input_prefix_deduplicates_exact_bits_and_remaps_every_output() {
+        let first_nan = f64::from_bits(0x7ff8_0000_0000_0001);
+        let second_nan = f64::from_bits(0x7ff8_0000_0000_0002);
+        let mut operations = vec![
+            NumberInstruction::Constant(0.0),
+            NumberInstruction::Constant(-0.0),
+            NumberInstruction::Constant(first_nan),
+            NumberInstruction::Constant(first_nan),
+            NumberInstruction::Constant(second_nan),
+            NumberInstruction::LoadLocal(3),
+            NumberInstruction::LoadLocal(3),
+            NumberInstruction::LoadLocal(4),
+            NumberInstruction::Binary {
+                operation: BinaryOp::Add,
+                left: 0,
+                right: 1,
+            },
+            NumberInstruction::Binary {
+                operation: BinaryOp::Mul,
+                left: 3,
+                right: 6,
+            },
+        ];
+        let mut writes = [LocalWrite { local: 7, value: 9 }];
+        let mut sunk_store = Some(SunkDenseStore {
+            receiver: 0,
+            index: 5,
+            value: 8,
+        });
+
+        let prefix = compact_number_inputs(&mut operations, &mut writes, &mut sunk_store)
+            .expect("well-formed input stream should compact");
+
+        assert_eq!(prefix.constant_count, 4);
+        assert_eq!(prefix.local_count, 2);
+        assert_eq!(operations.len(), 8);
+        let constant_bits = operations[..4]
+            .iter()
+            .map(|operation| match operation {
+                NumberInstruction::Constant(value) => value.to_bits(),
+                _ => panic!("expected constant prefix"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            constant_bits,
+            vec![
+                0.0_f64.to_bits(),
+                (-0.0_f64).to_bits(),
+                first_nan.to_bits(),
+                second_nan.to_bits(),
+            ]
+        );
+        assert!(matches!(operations[4], NumberInstruction::LoadLocal(3)));
+        assert!(matches!(operations[5], NumberInstruction::LoadLocal(4)));
+        assert!(matches!(
+            operations[6],
+            NumberInstruction::Binary {
+                operation: BinaryOp::Add,
+                left: 0,
+                right: 1,
+            }
+        ));
+        assert!(matches!(
+            operations[7],
+            NumberInstruction::Binary {
+                operation: BinaryOp::Mul,
+                left: 2,
+                right: 4,
+            }
+        ));
+        assert_eq!(writes[0].value, 7);
+        let sunk_store = sunk_store.expect("sunk store should remain present");
+        assert_eq!(sunk_store.index, 4);
+        assert_eq!(sunk_store.value, 6);
+    }
+
+    #[test]
+    fn input_prefix_rejects_non_topological_registers_without_mutation() {
+        let (mut operations, writes, sunk_store) = valid_inputs();
+        operations[1] = NumberInstruction::Binary {
+            operation: BinaryOp::Add,
+            left: 2,
+            right: 0,
+        };
+        assert_rejected_without_mutation(operations, writes, sunk_store);
+    }
+
+    #[test]
+    fn input_prefix_rejects_invalid_write_register_without_mutation() {
+        let (operations, mut writes, sunk_store) = valid_inputs();
+        writes[0].value = operations.len();
+        assert_rejected_without_mutation(operations, writes, sunk_store);
+    }
+
+    #[test]
+    fn input_prefix_rejects_invalid_sunk_store_registers_without_mutation() {
+        let (operations, writes, mut sunk_store) = valid_inputs();
+        sunk_store.as_mut().expect("fixture has a sunk store").index = operations.len();
+        assert_rejected_without_mutation(operations, writes, sunk_store);
+
+        let (operations, writes, mut sunk_store) = valid_inputs();
+        sunk_store.as_mut().expect("fixture has a sunk store").value = operations.len();
+        assert_rejected_without_mutation(operations, writes, sunk_store);
+    }
+
+    #[test]
+    fn input_prefix_bounds_validation_is_constant_time_and_fail_closed() {
+        assert_eq!(
+            NumberInputPrefix {
+                constant_count: 2,
+                local_count: 3,
+            }
+            .validated_dynamic_start(8),
+            Some(5)
+        );
+        assert_eq!(
+            NumberInputPrefix {
+                constant_count: 2,
+                local_count: 3,
+            }
+            .validated_dynamic_start(4),
+            None
+        );
+        assert_eq!(
+            NumberInputPrefix {
+                constant_count: usize::MAX,
+                local_count: 1,
+            }
+            .validated_dynamic_start(usize::MAX),
+            None
+        );
+    }
 }
 
 impl NumberInstruction {
@@ -236,6 +582,7 @@ pub(super) struct LegacyDynamicDensePlan {
     receiver_sources: Vec<ArraySource>,
     local_slots: Vec<usize>,
     operations: Vec<NumberInstruction>,
+    input_prefix: Option<NumberInputPrefix>,
     writes: Vec<LocalWrite>,
     store_count: usize,
     sunk_store: Option<SunkDenseStore>,
@@ -308,10 +655,12 @@ impl LegacyDynamicDensePlan {
                 },
             })
             .collect();
-        let operations = operations
+        let mut operations = operations
             .into_iter()
             .map(NumberInstruction::from_extended)
             .collect::<Vec<_>>();
+        let mut writes = writes;
+        let mut sunk_store = sunk_store;
         let reduction = reduction::LegacyReductionPlan::compile(
             counter_local,
             control,
@@ -320,6 +669,7 @@ impl LegacyDynamicDensePlan {
             store_count,
             sunk_store,
         );
+        let input_prefix = compact_number_inputs(&mut operations, &mut writes, &mut sunk_store);
 
         Self {
             counter_local,
@@ -327,6 +677,7 @@ impl LegacyDynamicDensePlan {
             receiver_sources,
             local_slots,
             operations,
+            input_prefix,
             writes,
             store_count,
             sunk_store,
@@ -346,6 +697,17 @@ impl LegacyDynamicDensePlan {
         self.reduction
             .as_ref()
             .is_some_and(reduction::LegacyReductionPlan::is_two_lane_strided_counter)
+    }
+
+    #[cfg(test)]
+    pub(super) fn input_layout(&self) -> Option<(usize, usize, usize)> {
+        let prefix = self.input_prefix?;
+        let dynamic_start = prefix.validated_dynamic_start(self.operations.len())?;
+        Some((
+            prefix.constant_count,
+            prefix.local_count,
+            self.operations.len() - dynamic_start,
+        ))
     }
 
     fn deoptimized_run(

@@ -16,7 +16,8 @@ use super::super::{
     DenseNumericMutationLoopRun, DynamicProgramRun, array_index_from_number,
     descending_counter_is_valid, record_iteration, record_typed_array_dense_attempt,
     record_typed_array_dense_path_hit, record_typed_array_dense_suppression,
-    record_writable_path_hit, set_local_number,
+    record_typed_constant_prefix_loads, record_typed_dynamic_dispatches,
+    record_typed_local_prefix_loads, record_writable_path_hit, set_local_number,
 };
 use super::{
     ArraySource, INLINE_DENSE_OPS, LegacyDynamicDensePlan, LocalControl, LocalLimit,
@@ -422,6 +423,40 @@ macro_rules! stage_typed_store {
 
 impl TypedProgram {
     #[inline(always)]
+    fn should_continue<const AT_LEAST_ZERO: bool>(counter: f64, limit: f64) -> bool {
+        if AT_LEAST_ZERO {
+            counter >= 0.0
+        } else {
+            matches!(counter.partial_cmp(&limit), Some(std::cmp::Ordering::Less))
+        }
+    }
+
+    #[inline(always)]
+    fn initialize_constants(&self, registers: &mut [f64]) {
+        for (register, operation) in self.operations[..self.constant_count].iter().enumerate() {
+            let TypedInstruction::Constant(value) = *operation else {
+                unreachable!("typed constant prefix was validated while lowering")
+            };
+            registers[register] = value;
+        }
+        record_typed_constant_prefix_loads(self.constant_count);
+    }
+
+    #[inline(always)]
+    fn copy_entry_locals(&self, locals: &[f64; MAX_DENSE_LOCALS], registers: &mut [f64]) {
+        for (offset, operation) in self.operations[self.constant_count..self.dynamic_start]
+            .iter()
+            .enumerate()
+        {
+            let TypedInstruction::LoadLocal(local) = *operation else {
+                unreachable!("typed local prefix was validated while lowering")
+            };
+            registers[self.constant_count + offset] = locals[local];
+        }
+        record_typed_local_prefix_loads(self.dynamic_start - self.constant_count);
+    }
+
+    #[inline(always)]
     fn stage_store(
         access: &mut TypedDenseAccess<'_, '_>,
         kind: NumberViewKind,
@@ -451,21 +486,19 @@ impl TypedProgram {
         limit: f64,
     ) -> DynamicProgramRun {
         let mut made_progress = false;
-        loop {
-            let counter = locals[plan.counter_local];
-            let continue_loop = if AT_LEAST_ZERO {
-                counter >= 0.0
-            } else {
-                matches!(counter.partial_cmp(&limit), Some(std::cmp::Ordering::Less))
+        if !Self::should_continue::<AT_LEAST_ZERO>(locals[plan.counter_local], limit) {
+            return DynamicProgramRun {
+                deoptimized: false,
+                made_progress,
             };
-            if !continue_loop {
-                return DynamicProgramRun {
-                    deoptimized: false,
-                    made_progress,
-                };
-            }
+        }
+        self.initialize_constants(registers);
+        loop {
             access.reset_iteration();
-            for (register, operation) in self.operations.iter().enumerate() {
+            self.copy_entry_locals(locals, registers);
+            for (offset, operation) in self.operations[self.dynamic_start..].iter().enumerate() {
+                record_typed_dynamic_dispatches(1);
+                let register = self.dynamic_start + offset;
                 let value = match *operation {
                     TypedInstruction::Constant(value) => value,
                     TypedInstruction::LoadLocal(local) => locals[local],
@@ -773,6 +806,12 @@ impl TypedProgram {
             }
             made_progress = true;
             record_iteration();
+            if !Self::should_continue::<AT_LEAST_ZERO>(locals[plan.counter_local], limit) {
+                return DynamicProgramRun {
+                    deoptimized: false,
+                    made_progress,
+                };
+            }
         }
     }
 }
