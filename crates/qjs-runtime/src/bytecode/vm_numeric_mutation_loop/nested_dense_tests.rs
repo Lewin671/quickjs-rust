@@ -666,7 +666,9 @@ fn nested_dense_region_counts_each_generic_two_level_stage() {
 function transform(real, imag, size) {
   var half = 1, stepReal, stepImag, phaseReal, phaseImag, off, tr, ti, tmp, i;
   while (half < size) {
-    stepReal = 0.5;
+    // Keep this a NestedDense-specific fixture now that the three-level
+    // Numeric Trace owns the fully static form of the same loop nest.
+    stepReal = Math.abs(0.5);
     stepImag = 0.25;
     phaseReal = 1;
     phaseImag = 0;

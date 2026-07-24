@@ -11,6 +11,7 @@
 use std::{
     cell::{Ref, RefMut},
     collections::BTreeSet,
+    rc::Rc,
 };
 
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
@@ -29,10 +30,10 @@ mod invariants;
 mod legacy;
 mod nested;
 
+pub(super) use compiler::compile_trace_program;
 use hole_tail_append::{HoleTailAppendAccess, HoleTailAppendPlan};
-use invariants::{
-    ArraySource, DynamicLimit, OwnDataOwner, OwnDataSource, native_math_round_is_current,
-};
+pub(super) use invariants::ArraySource;
+use invariants::{DynamicLimit, OwnDataOwner, OwnDataSource, native_math_round_is_current};
 pub(super) use nested::{
     EnclosingOuter, NestedDensePlan, NestedDensePlanRun, NestedDenseProbe,
     discover_enclosing_outers,
@@ -41,8 +42,8 @@ pub(super) use nested::{
 pub(super) use nested::{test_discover_enclosing_bytecode, test_discover_enclosing_intervals};
 
 const INLINE_DENSE_OPS: usize = 64;
-const MAX_DENSE_OPS: usize = 256;
-const MAX_DENSE_LOCALS: usize = 64;
+pub(super) const MAX_DENSE_OPS: usize = 256;
+pub(super) const MAX_DENSE_LOCALS: usize = 64;
 const MAX_DENSE_WRITES: usize = 64;
 const MAX_DENSE_RECEIVERS: usize = 8;
 const MAX_DENSE_STORES: usize = 32;
@@ -685,6 +686,157 @@ struct ScalarDenseProgram {
 }
 
 #[derive(Clone, Debug)]
+pub(super) struct TraceProgramSource {
+    pub(super) local_slots: Vec<usize>,
+    pub(super) receiver_sources: Vec<ArraySource>,
+    pub(super) operations: Vec<NumberInstruction>,
+    pub(super) writes: Vec<LocalWrite>,
+    pub(super) invalidations: Vec<usize>,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct TraceInnerSource {
+    pub(super) program: TraceProgramSource,
+    pub(super) counter_local: usize,
+    pub(super) limit_local: usize,
+    pub(super) counter_write: Register,
+    pub(super) store_count: usize,
+    #[cfg(test)]
+    pub(super) materialized_live_out_alias_slots: Vec<usize>,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct TraceFallback {
+    pub(super) nested: Rc<NestedDensePlan>,
+    pub(super) dense: Rc<DenseNumericMutationLoopPlan>,
+}
+
+pub(super) fn compile_trace_inner(
+    bytecode: &Bytecode,
+    header: usize,
+    backedge: usize,
+    enclosing_outer: EnclosingOuter,
+    successor_reads: &BTreeSet<usize>,
+) -> Option<(usize, TraceInnerSource, TraceFallback)> {
+    let (fallback_exit, fallback_compiled) =
+        compiler::compile_dynamic_probe_for_trace(bytecode, header, backedge)?;
+    let mut trace_live_outs = successor_reads.clone();
+    trace_live_outs.extend(fallback_compiled.plan.local_slots.iter().copied());
+    close_trace_alias_dependencies(
+        bytecode,
+        &mut trace_live_outs,
+        &fallback_compiled.alias_dependencies,
+    );
+    let (exit, compiled) =
+        compiler::compile_dynamic_for_trace(bytecode, header, backedge, &trace_live_outs)?;
+    let fallback_inner = fallback_compiled.plan;
+    if exit != fallback_exit {
+        return None;
+    }
+    let inner = compiled.plan;
+    let old_limit_local = match &inner.control {
+        DynamicControl::LessThan(DynamicLimit::LocalNumber(limit)) => *limit,
+        DynamicControl::LessThan(_) | DynamicControl::AtLeastZero | DynamicControl::Countdown => {
+            return None;
+        }
+    };
+    if inner.store_count == 0
+        || inner.sunk_store.is_some()
+        || inner.hole_tail_append.is_some()
+        || inner.uses_math_round
+        || !inner.number_sources.is_empty()
+        || !inner
+            .receiver_sources
+            .iter()
+            .all(|source| matches!(source, ArraySource::Local(_)))
+    {
+        return None;
+    }
+    let counter_write = inner
+        .writes
+        .iter()
+        .find(|write| write.local == inner.counter_local)?
+        .value;
+    let mut local_slots = inner.local_slots.clone();
+    local_slots.extend(compiled.invalidated_slots.iter().copied());
+    local_slots.sort_unstable();
+    local_slots.dedup();
+    if local_slots.len() > MAX_DENSE_LOCALS {
+        return None;
+    }
+    let remap_local = |old_local: usize| {
+        let slot = *inner.local_slots.get(old_local)?;
+        local_slots.binary_search(&slot).ok()
+    };
+    let mut operations = inner.operations.clone();
+    for operation in &mut operations {
+        if let NumberInstruction::LoadLocal(local) = operation {
+            *local = remap_local(*local)?;
+        }
+    }
+    let mut writes = inner.writes.clone();
+    for write in &mut writes {
+        write.local = remap_local(write.local)?;
+    }
+    let invalidations = compiled
+        .invalidated_slots
+        .iter()
+        .map(|slot| local_slots.binary_search(slot).ok())
+        .collect::<Option<Vec<_>>>()?;
+    let counter_local = remap_local(inner.counter_local)?;
+    let limit_local = remap_local(old_limit_local)?;
+    let source = TraceInnerSource {
+        program: TraceProgramSource {
+            local_slots,
+            receiver_sources: inner.receiver_sources.clone(),
+            operations,
+            writes,
+            invalidations,
+        },
+        counter_local,
+        limit_local,
+        counter_write,
+        store_count: inner.store_count,
+        #[cfg(test)]
+        materialized_live_out_alias_slots: compiled.materialized_live_out_alias_slots,
+    };
+    let nested = NestedDensePlan::compile_pretranslated(
+        bytecode,
+        header,
+        backedge,
+        enclosing_outer,
+        fallback_exit,
+        &fallback_inner,
+    )?;
+    let fallback = TraceFallback {
+        nested: Rc::new(nested),
+        dense: Rc::new(DenseNumericMutationLoopPlan::from_dynamic(
+            fallback_exit,
+            fallback_inner,
+        )),
+    };
+    Some((exit, source, fallback))
+}
+
+fn close_trace_alias_dependencies(
+    bytecode: &Bytecode,
+    live_outs: &mut BTreeSet<usize>,
+    alias_dependencies: &[(usize, usize)],
+) {
+    loop {
+        let previous_len = live_outs.len();
+        for (target, source) in alias_dependencies {
+            if live_outs.contains(target) && bytecode.local_is_compiler_temporary(*source) {
+                live_outs.insert(*source);
+            }
+        }
+        if live_outs.len() == previous_len {
+            return;
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 enum DynamicControl {
     LessThan(DynamicLimit),
     AtLeastZero,
@@ -704,10 +856,10 @@ impl DynamicControl {
     }
 }
 
-type Register = usize;
+pub(super) type Register = usize;
 
 #[derive(Clone, Debug)]
-enum NumberInstruction {
+pub(super) enum NumberInstruction {
     Constant(f64),
     LoadLocal(usize),
     LoadInvariant(usize),
@@ -740,9 +892,9 @@ enum NumberInstruction {
 
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(test, derive(PartialEq))]
-struct LocalWrite {
-    local: usize,
-    value: Register,
+pub(super) struct LocalWrite {
+    pub(super) local: usize,
+    pub(super) value: Register,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1684,7 +1836,7 @@ impl DynamicDensePlan {
 }
 
 #[inline(always)]
-fn apply_binary(operation: BinaryOp, left: f64, right: f64) -> Option<f64> {
+pub(super) fn apply_binary(operation: BinaryOp, left: f64, right: f64) -> Option<f64> {
     Some(match operation {
         BinaryOp::Add => left + right,
         BinaryOp::Sub => left - right,
@@ -1701,13 +1853,18 @@ fn apply_binary(operation: BinaryOp, left: f64, right: f64) -> Option<f64> {
     })
 }
 
-fn apply_unary(operation: UnaryOp, value: f64) -> Option<f64> {
+pub(super) fn apply_unary(operation: UnaryOp, value: f64) -> Option<f64> {
     Some(match operation {
         UnaryOp::Plus => value,
         UnaryOp::Minus => -value,
         UnaryOp::BitwiseNot => f64::from(!to_int32_number(value)),
         _ => return None,
     })
+}
+
+#[inline(always)]
+pub(super) fn trace_array_index(value: f64) -> Option<usize> {
+    array_index_from_number(value)
 }
 
 fn local_number(vm: &Vm<'_>, slot: usize) -> Option<f64> {

@@ -30,6 +30,9 @@ struct Translator<'a> {
     store_count: usize,
     uses_math_round: bool,
     materialize_compiler_temporaries: bool,
+    trace_live_out_slots: Option<BTreeSet<usize>>,
+    materialized_live_out_aliases: BTreeSet<usize>,
+    alias_dependencies: BTreeSet<(usize, usize)>,
     saw_other: bool,
 }
 
@@ -50,6 +53,9 @@ impl<'a> Translator<'a> {
             store_count: 0,
             uses_math_round: false,
             materialize_compiler_temporaries: false,
+            trace_live_out_slots: None,
+            materialized_live_out_aliases: BTreeSet::new(),
+            alias_dependencies: BTreeSet::new(),
             saw_other: false,
         }
     }
@@ -58,6 +64,18 @@ impl<'a> Translator<'a> {
         let mut translator = Self::new(bytecode);
         translator.materialize_compiler_temporaries = true;
         translator
+    }
+
+    fn new_trace(bytecode: &'a Bytecode, live_out_slots: &BTreeSet<usize>) -> Self {
+        let mut translator = Self::new(bytecode);
+        translator.trace_live_out_slots = Some(live_out_slots.clone());
+        translator
+    }
+
+    fn trace_materializes(&self, slot: usize) -> bool {
+        self.trace_live_out_slots
+            .as_ref()
+            .is_some_and(|slots| slots.contains(&slot))
     }
 
     fn emit(&mut self, operation: NumberInstruction) -> Option<Register> {
@@ -185,9 +203,23 @@ impl<'a> Translator<'a> {
                 }
                 let mut value = self.pop()?;
                 self.written_slots.insert(*slot);
+                if let AbstractValue::Local(source) = &value
+                    && self.bytecode.local_is_compiler_temporary(*slot)
+                {
+                    self.alias_dependencies.insert((*slot, *source));
+                }
                 let register = match &value {
                     AbstractValue::Number(register) | AbstractValue::Key(register) => {
                         Some(*register)
+                    }
+                    AbstractValue::Local(_)
+                        if self.trace_materializes(*slot)
+                            && self.bytecode.local_is_compiler_temporary(*slot) =>
+                    {
+                        let register = self.number(value.clone())?;
+                        value = AbstractValue::Number(register);
+                        self.materialized_live_out_aliases.insert(*slot);
+                        Some(register)
                     }
                     AbstractValue::Local(_)
                         if self.materialize_compiler_temporaries
@@ -196,6 +228,12 @@ impl<'a> Translator<'a> {
                         let register = self.number(value.clone())?;
                         value = AbstractValue::Number(register);
                         Some(register)
+                    }
+                    AbstractValue::OwnData { .. }
+                        if self.trace_materializes(*slot)
+                            && self.bytecode.local_is_compiler_temporary(*slot) =>
+                    {
+                        return None;
                     }
                     AbstractValue::OwnData { .. }
                         if self.bytecode.local_is_compiler_temporary(*slot) =>
@@ -215,6 +253,7 @@ impl<'a> Translator<'a> {
                     AbstractValue::Other if !self.bytecode.local_is_compiler_temporary(*slot) => {
                         return None;
                     }
+                    AbstractValue::Other if self.trace_materializes(*slot) => return None,
                     AbstractValue::Local(_) | AbstractValue::Other => None,
                 };
                 if let Some(register) = register {
@@ -348,6 +387,25 @@ impl<'a> Translator<'a> {
             _ => return None,
         }
         Some(())
+    }
+
+    fn validate_trace_live_outs(&self) -> Option<usize> {
+        let required = self.trace_live_out_slots.as_ref()?;
+        for (slot, value) in self.locals.iter().filter(|(slot, _)| {
+            required.contains(slot) && self.bytecode.local_is_compiler_temporary(**slot)
+        }) {
+            match value {
+                AbstractValue::Number(_) | AbstractValue::Key(_) | AbstractValue::Undefined => {}
+                AbstractValue::Local(_) if self.materialized_live_out_aliases.contains(slot) => {}
+                AbstractValue::DirectThis
+                | AbstractValue::Local(_)
+                | AbstractValue::OwnData { .. }
+                | AbstractValue::MathObject
+                | AbstractValue::MathRoundFunction
+                | AbstractValue::Other => return None,
+            }
+        }
+        Some(self.materialized_live_out_aliases.len())
     }
 }
 
@@ -520,12 +578,110 @@ pub(super) fn compile_scalar(
     })
 }
 
+pub(in super::super) fn compile_trace_program(
+    bytecode: &Bytecode,
+    start: usize,
+    end: usize,
+) -> Option<TraceProgramSource> {
+    if start > end || end > bytecode.code.len() {
+        return None;
+    }
+    let mut translator = Translator::new_scalar(bytecode);
+    for op in &bytecode.code[start..end] {
+        translator.translate(op)?;
+    }
+    if !translator.stack.is_empty()
+        || !translator.number_sources.is_empty()
+        || translator.own_data_reads.iter().any(|used| !used)
+        || translator.store_count != 0
+        || translator.uses_math_round
+        || translator.saw_other
+        || translator.operations.iter().any(|operation| {
+            matches!(
+                operation,
+                NumberInstruction::LoadInvariant(_)
+                    | NumberInstruction::DenseStore { .. }
+                    | NumberInstruction::MathRound { .. }
+            )
+        })
+    {
+        return None;
+    }
+
+    let mut local_slots = translator.number_slots;
+    local_slots.extend(translator.writes.iter().map(|write| write.local));
+    local_slots.extend(translator.invalidated_slots.iter().copied());
+    let local_slots: Vec<_> = local_slots.into_iter().collect();
+    if local_slots.len() > MAX_DENSE_LOCALS {
+        return None;
+    }
+    let local_index = |slot| local_slots.binary_search(&slot).ok();
+    for operation in &mut translator.operations {
+        if let NumberInstruction::LoadLocal(slot) = operation {
+            *slot = local_index(*slot)?;
+        }
+    }
+    for write in &mut translator.writes {
+        write.local = local_index(write.local)?;
+    }
+    let invalidations = translator
+        .invalidated_slots
+        .into_iter()
+        .map(local_index)
+        .collect::<Option<Vec<_>>>()?;
+    Some(TraceProgramSource {
+        local_slots,
+        receiver_sources: translator.receiver_sources,
+        operations: translator.operations,
+        writes: translator.writes,
+        invalidations,
+    })
+}
+
+pub(super) struct CompiledDynamic {
+    pub(super) plan: DynamicDensePlan,
+    pub(super) invalidated_slots: Vec<usize>,
+    pub(super) alias_dependencies: Vec<(usize, usize)>,
+    #[cfg(test)]
+    pub(super) materialized_live_out_alias_slots: Vec<usize>,
+}
+
 pub(super) fn compile_dynamic(
     bytecode: &Bytecode,
     header: usize,
     backedge: usize,
 ) -> Option<(usize, DynamicDensePlan)> {
-    record_dynamic_dense_compilation();
+    let (exit, compiled) = compile_dynamic_probe_for_trace(bytecode, header, backedge)?;
+    Some((exit, compiled.plan))
+}
+
+pub(super) fn compile_dynamic_probe_for_trace(
+    bytecode: &Bytecode,
+    header: usize,
+    backedge: usize,
+) -> Option<(usize, CompiledDynamic)> {
+    compile_dynamic_with_mode(bytecode, header, backedge, None, true)
+}
+
+pub(super) fn compile_dynamic_for_trace(
+    bytecode: &Bytecode,
+    header: usize,
+    backedge: usize,
+    successor_reads: &BTreeSet<usize>,
+) -> Option<(usize, CompiledDynamic)> {
+    compile_dynamic_with_mode(bytecode, header, backedge, Some(successor_reads), false)
+}
+
+fn compile_dynamic_with_mode(
+    bytecode: &Bytecode,
+    header: usize,
+    backedge: usize,
+    trace_successor_reads: Option<&BTreeSet<usize>>,
+    record_compilation: bool,
+) -> Option<(usize, CompiledDynamic)> {
+    if record_compilation {
+        record_dynamic_dense_compilation();
+    }
     let code = &bytecode.code;
     let Op::LoadLocal(counter_slot) = code.get(header)? else {
         return None;
@@ -665,10 +821,22 @@ pub(super) fn compile_dynamic(
         return None;
     }
 
-    let mut translator = Translator::new(bytecode);
+    let mut translator = match trace_successor_reads {
+        Some(live_outs) => Translator::new_trace(bytecode, live_outs),
+        None => Translator::new(bytecode),
+    };
     for op in &code[body_start..backedge] {
         translator.translate(op)?;
     }
+    if trace_successor_reads.is_some() {
+        translator.validate_trace_live_outs()?;
+    }
+    #[cfg(test)]
+    let materialized_live_out_alias_slots = translator
+        .materialized_live_out_aliases
+        .iter()
+        .copied()
+        .collect();
     let has_dense_load = translator
         .operations
         .iter()
@@ -726,6 +894,8 @@ pub(super) fn compile_dynamic(
     if let Some(limit_slot) = limit_number_slot {
         translator.number_slots.insert(limit_slot);
     }
+    let trace_invalidated_slots = translator.invalidated_slots.iter().copied().collect();
+    let alias_dependencies = translator.alias_dependencies.iter().copied().collect();
     let mut local_slots = translator.number_slots;
     local_slots.extend(translator.writes.iter().map(|write| write.local));
     let local_slots: Vec<_> = local_slots.into_iter().collect();
@@ -756,31 +926,37 @@ pub(super) fn compile_dynamic(
 
     Some((
         exit,
-        DynamicDensePlan {
-            counter_local,
-            control: match control {
-                DynamicControl::LessThan(DynamicLimit::LocalNumber(slot)) => {
-                    DynamicControl::LessThan(DynamicLimit::LocalNumber(local_index(slot)?))
-                }
-                DynamicControl::LessThan(DynamicLimit::LocalArrayLength(slot)) => {
-                    DynamicControl::LessThan(DynamicLimit::LocalArrayLength(slot))
-                }
-                DynamicControl::LessThan(DynamicLimit::OwnDataNumber(source)) => {
-                    DynamicControl::LessThan(DynamicLimit::OwnDataNumber(source))
-                }
-                DynamicControl::AtLeastZero => DynamicControl::AtLeastZero,
-                DynamicControl::Countdown => DynamicControl::Countdown,
+        CompiledDynamic {
+            plan: DynamicDensePlan {
+                counter_local,
+                control: match control {
+                    DynamicControl::LessThan(DynamicLimit::LocalNumber(slot)) => {
+                        DynamicControl::LessThan(DynamicLimit::LocalNumber(local_index(slot)?))
+                    }
+                    DynamicControl::LessThan(DynamicLimit::LocalArrayLength(slot)) => {
+                        DynamicControl::LessThan(DynamicLimit::LocalArrayLength(slot))
+                    }
+                    DynamicControl::LessThan(DynamicLimit::OwnDataNumber(source)) => {
+                        DynamicControl::LessThan(DynamicLimit::OwnDataNumber(source))
+                    }
+                    DynamicControl::AtLeastZero => DynamicControl::AtLeastZero,
+                    DynamicControl::Countdown => DynamicControl::Countdown,
+                },
+                receiver_sources: translator.receiver_sources,
+                number_sources: translator.number_sources,
+                local_slots,
+                operations: translator.operations,
+                writes: translator.writes,
+                store_count: translator.store_count,
+                sunk_store,
+                hole_tail_append,
+                uses_math_round: translator.uses_math_round,
+                header,
             },
-            receiver_sources: translator.receiver_sources,
-            number_sources: translator.number_sources,
-            local_slots,
-            operations: translator.operations,
-            writes: translator.writes,
-            store_count: translator.store_count,
-            sunk_store,
-            hole_tail_append,
-            uses_math_round: translator.uses_math_round,
-            header,
+            invalidated_slots: trace_invalidated_slots,
+            alias_dependencies,
+            #[cfg(test)]
+            materialized_live_out_alias_slots,
         },
     ))
 }
@@ -801,3 +977,7 @@ fn supported_binary(operation: BinaryOp) -> bool {
             | BinaryOp::BitwiseOr
     )
 }
+
+#[cfg(test)]
+#[path = "compiler_trace_tests.rs"]
+mod trace_tests;
