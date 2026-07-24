@@ -16,14 +16,16 @@ use super::super::{
     DenseNumericMutationLoopRun, DynamicProgramRun, array_index_from_number,
     descending_counter_is_valid, record_iteration, record_typed_array_dense_attempt,
     record_typed_array_dense_path_hit, record_typed_array_dense_suppression,
-    record_typed_constant_prefix_loads, record_typed_dynamic_dispatches,
-    record_typed_local_prefix_loads, record_writable_path_hit, set_local_number,
+    record_typed_constant_prefix_loads, record_typed_executor_steps,
+    record_typed_local_prefix_loads, record_typed_logical_operations, record_writable_path_hit,
+    set_local_number,
 };
 use super::{
     ArraySource, INLINE_DENSE_OPS, LegacyDynamicDensePlan, LocalControl, LocalLimit,
     MAX_DENSE_LOCALS, local_number,
 };
 
+mod bundle_executor;
 mod program;
 
 use program::{TypedInstruction, TypedProgram};
@@ -485,6 +487,9 @@ impl TypedProgram {
         registers: &mut [f64],
         limit: f64,
     ) -> DynamicProgramRun {
+        if !self.binary_bundles.is_empty() {
+            return self.run_bundled::<AT_LEAST_ZERO>(plan, access, locals, registers, limit);
+        }
         let mut made_progress = false;
         if !Self::should_continue::<AT_LEAST_ZERO>(locals[plan.counter_local], limit) {
             return DynamicProgramRun {
@@ -497,7 +502,8 @@ impl TypedProgram {
             access.reset_iteration();
             self.copy_entry_locals(locals, registers);
             for (offset, operation) in self.operations[self.dynamic_start..].iter().enumerate() {
-                record_typed_dynamic_dispatches(1);
+                record_typed_logical_operations(1);
+                record_typed_executor_steps(1);
                 let register = self.dynamic_start + offset;
                 let value = match *operation {
                     TypedInstruction::Constant(value) => value,

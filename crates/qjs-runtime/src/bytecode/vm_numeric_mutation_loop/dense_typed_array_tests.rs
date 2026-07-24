@@ -43,6 +43,17 @@ fn typed_dense_input_layout(source: &str) -> (usize, usize, usize) {
     layouts[0]
 }
 
+fn typed_dense_binary_bundle_layouts(source: &str) -> Vec<Vec<(usize, usize, usize)>> {
+    let bytecode = nested_function(source);
+    NumericMutationLoopPlan::compile_all(&bytecode)
+        .iter()
+        .filter_map(|plan| match &plan.kind {
+            NumericMutationLoopKind::Dense(plan) => plan.legacy_binary_bundle_layouts(),
+            _ => None,
+        })
+        .collect()
+}
+
 fn assert_suppressing_typed_dense_plan(source: &str) {
     let bytecode = nested_function(source);
     let plans = NumericMutationLoopPlan::compile_all(&bytecode);
@@ -239,6 +250,11 @@ fn gaussian_forward_shape_compiles_and_runs_the_typed_multi_store_path() {
     "#;
     assert_suppressing_typed_dense_plan(function);
     assert_eq!(typed_dense_input_layout(function), (8, 19, 46));
+    assert!(
+        typed_dense_binary_bundle_layouts(function)[0]
+            .iter()
+            .any(|&(_, lanes, chain_length)| lanes == 4 && chain_length == 7)
+    );
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -253,6 +269,13 @@ fn gaussian_forward_shape_compiles_and_runs_the_typed_multi_store_path() {
     assert_eq!(dense::test_typed_array_dense_attempts(), 1);
     assert_eq!(dense::test_typed_array_dense_path_hits(), 1);
     assert_eq!(dense::test_typed_array_dense_suppressions(), 0);
+    assert_eq!(dense::test_typed_binary_bundle_iterations(), 1);
+    assert!(dense::test_typed_binary_bundle_steps() > 0);
+    assert!(dense::test_typed_binary_bundle_lane_ops() > dense::test_typed_binary_bundle_steps());
+    assert_eq!(
+        dense::test_typed_logical_operations() - dense::test_typed_executor_steps(),
+        dense::test_typed_binary_bundle_lane_ops() - dense::test_typed_binary_bundle_steps()
+    );
 }
 
 #[test]
@@ -383,6 +406,330 @@ fn gaussian_bidirectional_shapes_keep_the_expected_compact_input_layouts() {
         typed_dense_input_layouts(function),
         vec![(8, 19, 46), (9, 25, 58)]
     );
+    let bundle_layouts = typed_dense_binary_bundle_layouts(function);
+    assert_eq!(bundle_layouts.len(), 2);
+    assert!(bundle_layouts.iter().all(|layouts| {
+        layouts
+            .iter()
+            .any(|&(_, lanes, chain_length)| lanes == 4 && chain_length == 7)
+    }));
+
+    dense::reset_test_iterations();
+    assert_eq!(
+        eval(&format!(
+            "{function} \
+             var src = new Uint32Array([0x04030201, 0x08070605, 0x0c0b0a09]); \
+             var out = new Uint32Array(3); \
+             var line = new Float32Array(12); \
+             var coeff = new Float64Array([1, 0, 1, 0, 0, 0, 1, 1]); \
+             convolveRGBA(src, out, line, coeff, 3, 1); \
+             out.join(':');"
+        )),
+        Ok(Value::String(
+            "201984006:336728078:404100114".to_owned().into()
+        ))
+    );
+    assert_eq!(dense::test_typed_array_dense_path_hits(), 2);
+    assert_eq!(dense::test_typed_array_dense_suppressions(), 0);
+    assert!(dense::test_typed_binary_bundle_iterations() >= 2);
+    assert!(dense::test_typed_executor_steps() < dense::test_typed_logical_operations());
+}
+
+#[test]
+fn typed_binary_bundle_preserves_float64_nan_infinity_and_negative_zero() {
+    let function = r#"
+        function recur(input, output, bound, factor, carry) {
+            var a = -0, b = Infinity, c = -Infinity, d = NaN, sample = 0;
+            for (var index = 0; index < bound; index++) {
+                sample = input[index];
+                a = sample * factor + a * carry;
+                b = sample * factor + b * carry;
+                c = sample * factor + c * carry;
+                d = sample * factor + d * carry;
+                output[index * 4] = a;
+                output[index * 4 + 1] = b;
+                output[index * 4 + 2] = c;
+                output[index * 4 + 3] = d;
+            }
+            return [Object.is(output[8], -0), output[9] === Infinity,
+                output[10] === -Infinity, output[11] !== output[11]].join(':');
+        }
+    "#;
+    assert!(
+        typed_dense_binary_bundle_layouts(function)[0]
+            .iter()
+            .any(|&(_, lanes, chain_length)| lanes == 4 && chain_length == 3)
+    );
+
+    dense::reset_test_iterations();
+    assert_eq!(
+        eval(&format!(
+            "{function} recur(new Float64Array([-0, -0, -0]), new Float64Array(12), 3, 1, 1);"
+        )),
+        Ok(Value::String("true:true:true:true".to_owned().into()))
+    );
+    assert_eq!(dense::test_typed_array_dense_path_hits(), 1);
+    assert!(dense::test_typed_binary_bundle_iterations() > 0);
+    assert!(dense::test_typed_executor_steps() < dense::test_typed_logical_operations());
+}
+
+#[test]
+fn typed_binary_bundle_uses_exact_to_int32_and_to_uint32_shift_semantics() {
+    let function = r#"
+        function bitwise(input, output, bound, shift, mask, zero) {
+            var a = 0, b = 0, c = 0, d = 0;
+            var x0 = 0, x1 = 0, x2 = 0, x3 = 0;
+            for (var index = 0; index < bound; index++) {
+                var base = index * 4;
+                x0 = input[base];
+                x1 = input[base + 1];
+                x2 = input[base + 2];
+                x3 = input[base + 3];
+                a = ((x0 << shift) ^ mask) >>> zero;
+                b = ((x1 << shift) ^ mask) >>> zero;
+                c = ((x2 << shift) ^ mask) >>> zero;
+                d = ((x3 << shift) ^ mask) >>> zero;
+                output[base] = a;
+                output[base + 1] = b;
+                output[base + 2] = c;
+                output[base + 3] = d;
+            }
+            return output.join(':');
+        }
+    "#;
+    assert!(
+        typed_dense_binary_bundle_layouts(function)[0]
+            .iter()
+            .any(|&(_, lanes, chain_length)| lanes == 4 && chain_length == 3)
+    );
+
+    dense::reset_test_iterations();
+    assert_eq!(
+        eval(&format!(
+            "{function} \
+             bitwise(new Float64Array([4294967295, 2147483648, NaN, -1, \
+                 4294967295, 2147483648, NaN, -1]), new Uint32Array(8), 2, 1, \
+                 2147483648, 0);"
+        )),
+        Ok(Value::String(
+            "2147483646:2147483648:2147483648:2147483646:2147483646:2147483648:2147483648:2147483646"
+                .to_owned()
+                .into()
+        ))
+    );
+    assert_eq!(dense::test_typed_array_dense_path_hits(), 1);
+    assert!(dense::test_typed_binary_bundle_lane_ops() >= 12);
+}
+
+#[test]
+fn typed_binary_bundle_executes_three_two_step_lanes() {
+    let function = r#"
+        function affine3(input, output, bound, factor, bias) {
+            var x0 = 0, x1 = 0, x2 = 0;
+            var a = 0, b = 0, c = 0;
+            for (var index = 0; index < bound; index++) {
+                var base = index * 3;
+                x0 = input[base];
+                x1 = input[base + 1];
+                x2 = input[base + 2];
+                a = x0 * factor + bias;
+                b = x1 * factor + bias;
+                c = x2 * factor + bias;
+                output[base] = a;
+                output[base + 1] = b;
+                output[base + 2] = c;
+            }
+            return output.join(':');
+        }
+    "#;
+    assert!(
+        typed_dense_binary_bundle_layouts(function)[0]
+            .iter()
+            .any(|&(_, lanes, chain_length)| lanes == 3 && chain_length == 2)
+    );
+
+    dense::reset_test_iterations();
+    assert_eq!(
+        eval(&format!(
+            "{function} affine3(new Float64Array([1,-2,3,4,-4,6,7,8,-1]), new Float64Array(9), 3, 2, 1);"
+        )),
+        Ok(Value::String("3:-3:7:9:-7:13:15:17:-1".to_owned().into()))
+    );
+    // The first iteration reaches the backedge normally; the bundle executor
+    // consumes the two remaining iterations.
+    assert_eq!(dense::test_typed_array_dense_path_hits(), 1);
+    assert_eq!(dense::test_typed_binary_bundle_iterations(), 2);
+    assert_eq!(dense::test_typed_binary_bundle_steps(), 4);
+    assert_eq!(dense::test_typed_binary_bundle_lane_ops(), 12);
+    assert_eq!(
+        dense::test_typed_logical_operations() - dense::test_typed_executor_steps(),
+        dense::test_typed_binary_bundle_lane_ops() - dense::test_typed_binary_bundle_steps()
+    );
+}
+
+#[test]
+fn typed_binary_bundle_executes_two_four_step_lanes_at_minimum_savings() {
+    let function = r#"
+        function affine2(input, output, bound, factor, bias, divisor, subtractor) {
+            var x0 = 0, x1 = 0;
+            var a = 0, b = 0;
+            for (var index = 0; index < bound; index++) {
+                var base = index * 2;
+                x0 = input[base];
+                x1 = input[base + 1];
+                a = ((x0 * factor + bias) / divisor) - subtractor;
+                b = ((x1 * factor + bias) / divisor) - subtractor;
+                output[base] = a;
+                output[base + 1] = b;
+            }
+            return output.join(':');
+        }
+    "#;
+    let layouts = typed_dense_binary_bundle_layouts(function);
+    assert_eq!(layouts.len(), 1);
+    assert_eq!(layouts[0].len(), 1, "layouts={:?}", layouts[0]);
+    assert_eq!((layouts[0][0].1, layouts[0][0].2), (2, 4));
+
+    dense::reset_test_iterations();
+    assert_eq!(
+        eval(&format!(
+            "{function} affine2(new Float64Array([1,-2,5,-0,9,-6]), new Float64Array(6), 3, 2, 4, 2, 3);"
+        )),
+        Ok(Value::String("0:-3:4:-1:8:-7".to_owned().into()))
+    );
+    // The first iteration reaches the backedge normally; the bundle executor
+    // consumes the two remaining iterations.
+    assert_eq!(dense::test_typed_array_dense_path_hits(), 1);
+    assert_eq!(dense::test_typed_binary_bundle_iterations(), 2);
+    assert_eq!(dense::test_typed_binary_bundle_steps(), 8);
+    assert_eq!(dense::test_typed_binary_bundle_lane_ops(), 16);
+    assert_eq!(
+        dense::test_typed_logical_operations() - dense::test_typed_executor_steps(),
+        dense::test_typed_binary_bundle_lane_ops() - dense::test_typed_binary_bundle_steps()
+    );
+}
+
+#[test]
+fn typed_binary_bundle_executes_all_remaining_admitted_binary_operations() {
+    let function = r#"
+        function remainingOps(input, output, bound, subtractor, divisor,
+                remainderDivisor, shift, andMask, orMask) {
+            var x0 = 0, x1 = 0, x2 = 0, x3 = 0;
+            var x4 = 0, x5 = 0, x6 = 0, x7 = 0;
+            var x8 = 0, x9 = 0, x10 = 0, x11 = 0;
+            var a = 0, b = 0, c = 0, d = 0;
+            for (var index = 0; index < bound; index++) {
+                var base = index * 12;
+                x0 = input[base];
+                x1 = input[base + 1];
+                x2 = input[base + 2];
+                x3 = input[base + 3];
+                x4 = input[base + 4];
+                x5 = input[base + 5];
+                x6 = input[base + 6];
+                x7 = input[base + 7];
+                x8 = input[base + 8];
+                x9 = input[base + 9];
+                x10 = input[base + 10];
+                x11 = input[base + 11];
+
+                a = (x0 - subtractor) / divisor;
+                b = (x1 - subtractor) / divisor;
+                c = (x2 - subtractor) / divisor;
+                d = (x3 - subtractor) / divisor;
+                output[base] = a;
+                output[base + 1] = b;
+                output[base + 2] = c;
+                output[base + 3] = d;
+
+                a = (x4 % remainderDivisor) >> shift;
+                b = (x5 % remainderDivisor) >> shift;
+                c = (x6 % remainderDivisor) >> shift;
+                d = (x7 % remainderDivisor) >> shift;
+                output[base + 4] = a;
+                output[base + 5] = b;
+                output[base + 6] = c;
+                output[base + 7] = d;
+
+                a = (x8 & andMask) | orMask;
+                b = (x9 & andMask) | orMask;
+                c = (x10 & andMask) | orMask;
+                d = (x11 & andMask) | orMask;
+                output[base + 8] = a;
+                output[base + 9] = b;
+                output[base + 10] = c;
+                output[base + 11] = d;
+            }
+            return [output[12] === -Infinity, output[13] === Infinity,
+                output[14] === 2.5, Object.is(output[15], -0),
+                output[16] === -1, output[17] === 0, output[18] === 0,
+                output[19] === 0, output[20] === 511, output[21] === 256,
+                output[22] === 256, output[23] === 511].join(':');
+        }
+    "#;
+    let layouts = typed_dense_binary_bundle_layouts(function);
+    assert_eq!(layouts.len(), 1);
+    assert!(
+        layouts[0]
+            .iter()
+            .filter(|&&(_, lanes, chain_length)| lanes == 4 && chain_length == 2)
+            .count()
+            >= 3,
+        "layouts={:?}",
+        layouts[0]
+    );
+
+    dense::reset_test_iterations();
+    assert_eq!(
+        eval(&format!(
+            "{function} remainingOps(new Float64Array([Infinity,-Infinity,-0,5,-9,9,Infinity,-0,4294967295,2147483648,NaN,511,Infinity,-Infinity,-0,5,-9,9,Infinity,-0,4294967295,2147483648,NaN,511]), new Float64Array(24), 2, 5, -2, 4, 1, 255, 256);"
+        )),
+        Ok(Value::String(
+            "true:true:true:true:true:true:true:true:true:true:true:true"
+                .to_owned()
+                .into()
+        ))
+    );
+    assert_eq!(dense::test_typed_array_dense_path_hits(), 1);
+    assert!(dense::test_typed_binary_bundle_iterations() > 0);
+    assert!(dense::test_typed_binary_bundle_steps() >= 6);
+    assert!(dense::test_typed_binary_bundle_lane_ops() >= 24);
+    assert!(dense::test_typed_executor_steps() < dense::test_typed_logical_operations());
+}
+
+#[test]
+fn typed_binary_bundle_discards_staged_stores_before_oob_replay() {
+    let function = r#"
+        function mutate(output, probe, bound, factor, zero) {
+            var a = 0, b = 0, c = 0, d = 0, sample = 0;
+            for (var index = 0; index < bound; index++) {
+                sample = output[index];
+                a = sample * factor + a * zero;
+                b = sample * factor + b * zero;
+                c = sample * factor + c * zero;
+                d = sample * factor + d * zero;
+                output[index] = output[index] + a + b + c + d;
+                probe[index * 2] = probe[index * 2] + 1;
+            }
+            return output.join(':') + '|' + probe.join(':');
+        }
+    "#;
+    assert!(
+        typed_dense_binary_bundle_layouts(function)[0]
+            .iter()
+            .any(|&(_, lanes, chain_length)| lanes == 4 && chain_length == 3)
+    );
+
+    dense::reset_test_iterations();
+    assert_eq!(
+        eval(&format!(
+            "{function} mutate(new Float64Array([1,2,3]), new Float64Array(4), 3, 1, 0);"
+        )),
+        Ok(Value::String("5:10:15|1:0:1:0".to_owned().into()))
+    );
+    assert_eq!(dense::test_typed_array_dense_path_hits(), 1);
+    assert_eq!(dense::test_typed_array_dense_suppressions(), 0);
+    assert!(dense::test_typed_binary_bundle_iterations() >= 2);
 }
 
 #[test]
@@ -417,8 +764,13 @@ fn typed_dense_input_prefix_refreshes_loop_carried_locals_across_entries() {
         local_count * iterations
     );
     assert_eq!(
-        dense::test_typed_dynamic_dispatches(),
+        dense::test_typed_logical_operations(),
         dynamic_count * iterations
+    );
+    assert_eq!(dense::test_typed_binary_bundle_iterations(), 0);
+    assert_eq!(
+        dense::test_typed_executor_steps(),
+        dense::test_typed_logical_operations()
     );
 }
 
@@ -439,7 +791,7 @@ fn typed_dense_input_prefix_does_not_run_when_the_first_guard_fails() {
     assert_eq!(dense::test_typed_array_dense_path_hits(), 0);
     assert_eq!(dense::test_typed_constant_prefix_loads(), 0);
     assert_eq!(dense::test_typed_local_prefix_loads(), 0);
-    assert_eq!(dense::test_typed_dynamic_dispatches(), 0);
+    assert_eq!(dense::test_typed_logical_operations(), 0);
 }
 
 #[test]
@@ -466,7 +818,7 @@ fn typed_dense_input_prefix_preserves_staged_store_rollback_before_oob_replay() 
         dense::test_typed_local_prefix_loads(),
         local_count * (committed_iterations + 1)
     );
-    assert!(dense::test_typed_dynamic_dispatches() > dynamic_count * committed_iterations);
+    assert!(dense::test_typed_logical_operations() > dynamic_count * committed_iterations);
 }
 
 #[test]

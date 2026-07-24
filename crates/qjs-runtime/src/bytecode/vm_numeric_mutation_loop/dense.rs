@@ -85,7 +85,11 @@ thread_local! {
     static TYPED_ARRAY_DENSE_ATTEMPTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static TYPED_CONSTANT_PREFIX_LOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static TYPED_LOCAL_PREFIX_LOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    static TYPED_DYNAMIC_DISPATCHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TYPED_LOGICAL_OPERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TYPED_EXECUTOR_STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TYPED_BINARY_BUNDLE_STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TYPED_BINARY_BUNDLE_LANE_OPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TYPED_BINARY_BUNDLE_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static HOLE_TAIL_APPEND_ATTEMPTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static HOLE_TAIL_APPEND_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static HOLE_TAIL_APPEND_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -125,7 +129,11 @@ pub(super) fn reset_test_iterations() {
     TYPED_ARRAY_DENSE_ATTEMPTS.set(0);
     TYPED_CONSTANT_PREFIX_LOADS.set(0);
     TYPED_LOCAL_PREFIX_LOADS.set(0);
-    TYPED_DYNAMIC_DISPATCHES.set(0);
+    TYPED_LOGICAL_OPERATIONS.set(0);
+    TYPED_EXECUTOR_STEPS.set(0);
+    TYPED_BINARY_BUNDLE_STEPS.set(0);
+    TYPED_BINARY_BUNDLE_LANE_OPS.set(0);
+    TYPED_BINARY_BUNDLE_ITERATIONS.set(0);
     HOLE_TAIL_APPEND_ATTEMPTS.set(0);
     HOLE_TAIL_APPEND_PATH_HITS.set(0);
     HOLE_TAIL_APPEND_ITERATIONS.set(0);
@@ -260,8 +268,28 @@ pub(super) fn test_typed_local_prefix_loads() -> usize {
 }
 
 #[cfg(test)]
-pub(super) fn test_typed_dynamic_dispatches() -> usize {
-    TYPED_DYNAMIC_DISPATCHES.get()
+pub(super) fn test_typed_logical_operations() -> usize {
+    TYPED_LOGICAL_OPERATIONS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_typed_executor_steps() -> usize {
+    TYPED_EXECUTOR_STEPS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_typed_binary_bundle_steps() -> usize {
+    TYPED_BINARY_BUNDLE_STEPS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_typed_binary_bundle_lane_ops() -> usize {
+    TYPED_BINARY_BUNDLE_LANE_OPS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_typed_binary_bundle_iterations() -> usize {
+    TYPED_BINARY_BUNDLE_ITERATIONS.get()
 }
 
 #[cfg(test)]
@@ -410,11 +438,36 @@ fn record_typed_local_prefix_loads(count: usize) {
 }
 
 #[inline]
-fn record_typed_dynamic_dispatches(count: usize) {
+fn record_typed_logical_operations(count: usize) {
     #[cfg(test)]
-    TYPED_DYNAMIC_DISPATCHES.set(TYPED_DYNAMIC_DISPATCHES.get() + count);
+    TYPED_LOGICAL_OPERATIONS.set(TYPED_LOGICAL_OPERATIONS.get() + count);
     #[cfg(not(test))]
     let _ = count;
+}
+
+#[inline]
+fn record_typed_executor_steps(count: usize) {
+    #[cfg(test)]
+    TYPED_EXECUTOR_STEPS.set(TYPED_EXECUTOR_STEPS.get() + count);
+    #[cfg(not(test))]
+    let _ = count;
+}
+
+#[inline]
+fn record_typed_binary_bundle_step(lane_count: usize) {
+    #[cfg(test)]
+    {
+        TYPED_BINARY_BUNDLE_STEPS.set(TYPED_BINARY_BUNDLE_STEPS.get() + 1);
+        TYPED_BINARY_BUNDLE_LANE_OPS.set(TYPED_BINARY_BUNDLE_LANE_OPS.get() + lane_count);
+    }
+    #[cfg(not(test))]
+    let _ = lane_count;
+}
+
+#[inline]
+fn record_typed_binary_bundle_iteration() {
+    #[cfg(test)]
+    TYPED_BINARY_BUNDLE_ITERATIONS.set(TYPED_BINARY_BUNDLE_ITERATIONS.get() + 1);
 }
 
 #[inline]
@@ -922,6 +975,16 @@ impl DenseNumericMutationLoopPlan {
         match &self.kind {
             DensePlanKind::LegacyDynamic(plan) | DensePlanKind::LegacySuppressingDynamic(plan) => {
                 plan.input_layout()
+            }
+            DensePlanKind::Fixed(_) | DensePlanKind::Dynamic(_) => None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn legacy_binary_bundle_layouts(&self) -> Option<Vec<(usize, usize, usize)>> {
+        match &self.kind {
+            DensePlanKind::LegacyDynamic(plan) | DensePlanKind::LegacySuppressingDynamic(plan) => {
+                Some(plan.binary_bundle_layouts())
             }
             DensePlanKind::Fixed(_) | DensePlanKind::Dynamic(_) => None,
         }

@@ -27,6 +27,7 @@ use super::{
     set_local_number,
 };
 
+mod binary_bundle;
 mod reduction;
 mod typed_array;
 
@@ -583,6 +584,7 @@ pub(super) struct LegacyDynamicDensePlan {
     local_slots: Vec<usize>,
     operations: Vec<NumberInstruction>,
     input_prefix: Option<NumberInputPrefix>,
+    binary_bundles: Vec<binary_bundle::BinaryBundle>,
     writes: Vec<LocalWrite>,
     store_count: usize,
     sunk_store: Option<SunkDenseStore>,
@@ -670,6 +672,11 @@ impl LegacyDynamicDensePlan {
             sunk_store,
         );
         let input_prefix = compact_number_inputs(&mut operations, &mut writes, &mut sunk_store);
+        let binary_bundles = input_prefix
+            .and_then(|prefix| prefix.validated_dynamic_start(operations.len()))
+            .map_or_else(Vec::new, |dynamic_start| {
+                binary_bundle::detect(&operations, dynamic_start)
+            });
 
         Self {
             counter_local,
@@ -678,6 +685,7 @@ impl LegacyDynamicDensePlan {
             local_slots,
             operations,
             input_prefix,
+            binary_bundles,
             writes,
             store_count,
             sunk_store,
@@ -708,6 +716,14 @@ impl LegacyDynamicDensePlan {
             prefix.local_count,
             self.operations.len() - dynamic_start,
         ))
+    }
+
+    #[cfg(test)]
+    pub(super) fn binary_bundle_layouts(&self) -> Vec<(usize, usize, usize)> {
+        self.binary_bundles
+            .iter()
+            .map(|bundle| (bundle.start, bundle.lane_count, bundle.chain_length))
+            .collect()
     }
 
     fn deoptimized_run(
