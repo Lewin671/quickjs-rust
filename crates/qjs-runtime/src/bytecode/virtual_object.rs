@@ -28,7 +28,10 @@ pub(super) fn analyze(bytecode: &Bytecode) -> VirtualObjectAnalysis {
 
 pub(super) use lower::{VirtualObjectProgram, lower};
 #[cfg(test)]
-pub(super) use lower::{record_virtual_function_init_for_test, record_virtual_init_for_test};
+pub(super) use lower::{
+    record_virtual_function_init_for_test, record_virtual_init_for_test,
+    record_virtual_load_for_test,
+};
 
 type CandidateId = usize;
 
