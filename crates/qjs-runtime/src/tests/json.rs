@@ -87,6 +87,78 @@ fn evaluates_json_builtins() {
 }
 
 #[test]
+fn json_parse_preserves_ordered_data_property_semantics() {
+    assert_eq!(
+        eval(
+            r#"
+            let setterCalls = 0;
+            Object.defineProperty(Object.prototype, 'inherited', {
+                set: function() { setterCalls++; },
+                configurable: true
+            });
+            let value = JSON.parse('{"b":1,"2":2,"a":3,"1":4,"b":5,"__proto__":6,"inherited":7,"01":8,"4294967295":9}');
+            let descriptor = Object.getOwnPropertyDescriptor(value, 'b');
+            let result = [
+                Object.getOwnPropertyNames(value).join(','),
+                value.b,
+                descriptor.writable + ':' + descriptor.enumerable + ':' + descriptor.configurable,
+                Object.getPrototypeOf(value) === Object.prototype,
+                setterCalls,
+                value.__proto__,
+                value.inherited
+            ].join('|');
+            delete Object.prototype.inherited;
+            result;
+            "#,
+        ),
+        Ok(Value::String(
+            "1,2,b,a,__proto__,inherited,01,4294967295|5|true:true:true|true|0|6|7"
+                .to_owned()
+                .into(),
+        ))
+    );
+}
+
+#[test]
+fn json_parse_preserves_small_and_dynamic_storage_order_after_mutation() {
+    assert_eq!(
+        eval(
+            r#"
+            let small = JSON.parse('{"2":2,"b":2,"1":1,"c":3,"d":4,"e":5,"f":6,"g":7}');
+            let large = JSON.parse('{"a":1,"b":2,"c":3,"d":4,"e":5,"f":6,"g":7,"h":8,"i":9}');
+            let collapsed = JSON.parse('{"a":1,"b":2,"c":3,"d":4,"e":5,"f":6,"g":7,"h":8,"a":9}');
+            delete small.b;
+            small.b = 8;
+            delete large.a;
+            large.a = 10;
+            delete collapsed.b;
+            collapsed.b = 10;
+            Object.keys(small).join(',') + '|' + Object.keys(large).join(',') + '|' +
+                Object.keys(collapsed).join(',') + ':' + collapsed.a;
+            "#,
+        ),
+        Ok(Value::String(
+            "1,2,c,d,e,f,g,b|b,c,d,e,f,g,h,i,a|a,c,d,e,f,g,h,b:9"
+                .to_owned()
+                .into(),
+        ))
+    );
+}
+
+#[test]
+fn json_parse_duplicate_heavy_object_keeps_first_order_and_last_values() {
+    assert_eq!(
+        eval(
+            r#"
+            let value = JSON.parse('{"a":0,"b":1,"c":2,"d":3,"a":4,"b":5,"c":6,"d":7,"a":8,"b":9,"c":10,"d":11,"a":12,"b":13,"c":14,"d":15,"a":16,"b":17,"c":18,"d":19,"a":20,"b":21,"c":22,"d":23,"a":24,"b":25,"c":26,"d":27,"a":28,"b":29,"c":30,"d":31}');
+            Object.keys(value).join(',') + '|' + [value.a, value.b, value.c, value.d].join(',');
+            "#,
+        ),
+        Ok(Value::String("a,b,c,d|28,29,30,31".to_owned().into()))
+    );
+}
+
+#[test]
 fn json_stringify_observes_replacer_and_wrapper_semantics() {
     assert_eq!(
         eval(
@@ -202,6 +274,19 @@ fn json_preserves_wtf16_at_the_surrogate_sentinel_boundary() {
 
 #[test]
 fn json_parse_reviver_observes_context_and_forward_modifications() {
+    assert_eq!(
+        eval(
+            r#"
+            let log = [];
+            let value = JSON.parse('{"a":1,"b":2,"a":3}', function(key, value, context) {
+                if (key !== '') log.push(key + ':' + value + ':' + context.source);
+                return value;
+            });
+            value.a + '|' + log.join(',');
+            "#,
+        ),
+        Ok(Value::String("3|a:3:3,b:2:2".to_owned().into()))
+    );
     assert_eq!(
         eval(
             "let log = []; JSON.parse('{\"a\":1,\"b\":[2]}', function(k, v, c) { log.push(k + ':' + String(c.source)); return v; }); log.join('|');"

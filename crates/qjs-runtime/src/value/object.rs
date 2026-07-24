@@ -11,7 +11,10 @@ use crate::{ArrayRef, Function, RuntimeError, function::DynamicBindings, proxy::
 use super::{Property, Value};
 
 mod array_buffer_methods;
+mod ordered_data_builder;
 mod typed_array_methods;
+
+pub(crate) use ordered_data_builder::OrderedDataPropertyBuilder;
 
 type NamespaceBindingCell = DynamicBindings;
 type NamespaceAliasMap = HashMap<String, (NamespaceBindingCell, String)>;

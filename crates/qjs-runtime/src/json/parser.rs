@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use crate::CallEnv;
+use crate::value::OrderedDataPropertyBuilder;
 use crate::{
     ArrayRef, ObjectRef, Property, PropertyKey, RuntimeError, Value, object_prototype,
     to_js_string_with_env, to_length_with_env,
@@ -42,7 +43,7 @@ struct JsonNode {
 enum JsonNodeChildren {
     None,
     Array(Vec<JsonNode>),
-    Object(Vec<(String, JsonNode)>),
+    Object(Vec<(Rc<str>, JsonNode)>),
 }
 
 fn internalize_json_property(
@@ -156,7 +157,7 @@ fn object_child_node(
         if let Some((_, child)) = children
             .iter()
             .rev()
-            .find(|(child_key, _)| child_key == key)
+            .find(|(child_key, _)| child_key.as_ref() == key)
         {
             return child_for_current_value(child, holder, key, env);
         }
@@ -308,6 +309,22 @@ enum JsonSourceMode {
     HostUtf8,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum JsonStringScan {
+    Direct {
+        start: usize,
+        end: usize,
+    },
+    /// Decode from `resume`, seeding the output with the source bytes between
+    /// `content_start` and `resume`. Confirmed Host sentinels set both offsets
+    /// to `content_start` so normalization covers the complete string.
+    Decode {
+        content_start: usize,
+        resume: usize,
+        potential_host_sentinel: bool,
+    },
+}
+
 struct JsonParser<'a> {
     source: &'a str,
     cursor: usize,
@@ -390,12 +407,12 @@ impl<'a> JsonParser<'a> {
 
     fn object<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
         self.expect_char('{')?;
-        let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(self.env));
+        let mut properties = OrderedDataPropertyBuilder::new();
         let mut children = PRESERVE_METADATA.then(Vec::new);
         self.skip_whitespace();
         if self.consume_char('}') {
             return Ok(JsonNode {
-                value: Value::Object(object),
+                value: Value::Object(properties.finish(object_prototype(self.env))),
                 source: None,
                 children: children
                     .map(JsonNodeChildren::Object)
@@ -408,15 +425,15 @@ impl<'a> JsonParser<'a> {
             if self.peek() != Some('"') {
                 return Err(self.syntax_error());
             }
-            let key = self.string()?;
+            let key = self.string_rc()?;
             self.skip_whitespace();
             self.expect_char(':')?;
             let child = self.value::<PRESERVE_METADATA>()?;
             if let Some(children) = children.as_mut() {
-                object.set(key.clone(), child.value.clone());
+                properties.insert(key.clone(), child.value.clone());
                 children.push((key, child));
             } else {
-                object.set(key, child.value);
+                properties.insert(key, child.value);
             }
             self.skip_whitespace();
             if self.consume_char('}') {
@@ -425,7 +442,7 @@ impl<'a> JsonParser<'a> {
             self.expect_char(',')?;
         }
         Ok(JsonNode {
-            value: Value::Object(object),
+            value: Value::Object(properties.finish(object_prototype(self.env))),
             source: None,
             children: children
                 .map(JsonNodeChildren::Object)
@@ -435,17 +452,131 @@ impl<'a> JsonParser<'a> {
 
     fn string_node<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
         let start = self.cursor;
-        let value = self.string()?;
+        let value = self.string_value_rc()?;
         Ok(JsonNode {
-            value: Value::String(value.into()),
+            value: Value::String(value),
             source: PRESERVE_METADATA.then(|| self.source[start..self.cursor].to_owned()),
             children: JsonNodeChildren::None,
         })
     }
 
-    fn string(&mut self) -> Result<String, RuntimeError> {
+    fn string_rc(&mut self) -> Result<Rc<str>, RuntimeError> {
+        match self.scan_string()? {
+            JsonStringScan::Direct { start, end } => {
+                let value = Rc::from(&self.source[start..end]);
+                self.cursor = end + 1;
+                Ok(value)
+            }
+            JsonStringScan::Decode {
+                content_start,
+                resume,
+                potential_host_sentinel,
+            } => self
+                .decode_string(content_start, resume, potential_host_sentinel)
+                .map(Rc::from),
+        }
+    }
+
+    fn string_value_rc(&mut self) -> Result<Rc<String>, RuntimeError> {
+        match self.scan_string()? {
+            JsonStringScan::Direct { start, end } => {
+                let value = Rc::new(self.source[start..end].to_owned());
+                self.cursor = end + 1;
+                Ok(value)
+            }
+            JsonStringScan::Decode {
+                content_start,
+                resume,
+                potential_host_sentinel,
+            } => self
+                .decode_string(content_start, resume, potential_host_sentinel)
+                .map(Rc::new),
+        }
+    }
+
+    /// Scans to the first byte that requires decoding without changing the
+    /// cursor. UTF-8 continuation bytes cannot alias JSON's ASCII quote,
+    /// backslash, or control bytes, so a byte scan is sufficient except for
+    /// the runtime's narrow Host UTF-8 sentinel-overlap range.
+    fn scan_string(&mut self) -> Result<JsonStringScan, RuntimeError> {
         self.expect_char('"')?;
-        let mut output = String::new();
+        let bytes = self.source.as_bytes();
+        let content_start = self.cursor;
+        let check_host_sentinel = matches!(self.source_mode, JsonSourceMode::HostUtf8);
+        let mut possible_host_sentinel = false;
+        for (index, byte) in bytes.iter().copied().enumerate().skip(content_start) {
+            if check_host_sentinel && byte == 0xf3 && bytes.get(index + 1).copied() == Some(0xb0) {
+                possible_host_sentinel = true;
+            }
+
+            match byte {
+                b'"' => {
+                    if possible_host_sentinel {
+                        let contains_sentinel = self.source[content_start..index]
+                            .chars()
+                            .any(|ch| crate::string::surrogate_escape_code_unit(ch).is_some());
+                        if contains_sentinel {
+                            return Ok(JsonStringScan::Decode {
+                                content_start,
+                                resume: content_start,
+                                potential_host_sentinel: true,
+                            });
+                        }
+                        return Ok(JsonStringScan::Direct {
+                            start: content_start,
+                            end: index,
+                        });
+                    }
+                    return Ok(JsonStringScan::Direct {
+                        start: content_start,
+                        end: index,
+                    });
+                }
+                b'\\' => {
+                    let contains_sentinel = possible_host_sentinel
+                        && self.source[content_start..index]
+                            .chars()
+                            .any(|ch| crate::string::surrogate_escape_code_unit(ch).is_some());
+                    return Ok(JsonStringScan::Decode {
+                        content_start,
+                        resume: if contains_sentinel {
+                            content_start
+                        } else {
+                            index
+                        },
+                        potential_host_sentinel: contains_sentinel,
+                    });
+                }
+                0x00..=0x1f => {
+                    return Ok(JsonStringScan::Decode {
+                        content_start,
+                        resume: index,
+                        potential_host_sentinel: false,
+                    });
+                }
+                _ => {}
+            }
+        }
+        Ok(JsonStringScan::Decode {
+            content_start,
+            resume: bytes.len(),
+            potential_host_sentinel: false,
+        })
+    }
+
+    fn decode_string(
+        &mut self,
+        content_start: usize,
+        resume: usize,
+        potential_host_sentinel: bool,
+    ) -> Result<String, RuntimeError> {
+        debug_assert!(!potential_host_sentinel || resume == content_start);
+        let output = self.source[content_start..resume].to_owned();
+        self.cursor = resume;
+        self.string_tail(output)
+    }
+
+    fn string_tail(&mut self, mut output: String) -> Result<String, RuntimeError> {
         loop {
             let Some(ch) = self.next_char() else {
                 return Err(self.syntax_error());
@@ -609,6 +740,130 @@ mod tests {
 
     fn test_env() -> CallEnv {
         CallEnv::new(new_realm(HashMap::new()))
+    }
+
+    fn scan(source: &str, mode: JsonSourceMode) -> JsonStringScan {
+        let env = test_env();
+        JsonParser::new(source, &env, mode)
+            .scan_string()
+            .expect("test source starts with a quote")
+    }
+
+    #[test]
+    fn unescaped_string_fast_path_accepts_direct_runtime_content() {
+        let ascii = r#""plain ASCII""#;
+        assert_eq!(
+            scan(ascii, JsonSourceMode::HostUtf8),
+            JsonStringScan::Direct {
+                start: 1,
+                end: ascii.len() - 1
+            }
+        );
+        let unicode = r#""文😀""#;
+        assert_eq!(
+            scan(unicode, JsonSourceMode::RuntimeWtf16),
+            JsonStringScan::Direct {
+                start: 1,
+                end: unicode.len() - 1
+            }
+        );
+
+        let sentinel = crate::string::char_from_code_unit(0xD800);
+        let source = format!("\"{sentinel}\"");
+        assert_eq!(
+            scan(&source, JsonSourceMode::RuntimeWtf16),
+            JsonStringScan::Direct {
+                start: 1,
+                end: source.len() - 1
+            }
+        );
+
+        // U+F0800 shares the two-byte candidate prefix but is outside the
+        // runtime sentinel range, so the rare character check returns Direct.
+        let host_non_sentinel = "\"\u{F0800}\"";
+        assert_eq!(
+            scan(host_non_sentinel, JsonSourceMode::HostUtf8),
+            JsonStringScan::Direct {
+                start: 1,
+                end: host_non_sentinel.len() - 1
+            }
+        );
+    }
+
+    #[test]
+    fn unescaped_string_fast_path_defers_to_the_existing_decoder() {
+        let escaped = r#""line\nfeed""#;
+        assert_eq!(
+            scan(escaped, JsonSourceMode::RuntimeWtf16),
+            JsonStringScan::Decode {
+                content_start: 1,
+                resume: escaped.find('\\').unwrap(),
+                potential_host_sentinel: false
+            }
+        );
+        let control = "\"bad\u{0001}\"";
+        assert_eq!(
+            scan(control, JsonSourceMode::RuntimeWtf16),
+            JsonStringScan::Decode {
+                content_start: 1,
+                resume: control.find('\u{0001}').unwrap(),
+                potential_host_sentinel: false
+            }
+        );
+        let unterminated = "\"unterminated";
+        assert_eq!(
+            scan(unterminated, JsonSourceMode::RuntimeWtf16),
+            JsonStringScan::Decode {
+                content_start: 1,
+                resume: unterminated.len(),
+                potential_host_sentinel: false
+            }
+        );
+        let host_sentinel = "\"\u{F0000}\"";
+        assert_eq!(
+            scan(host_sentinel, JsonSourceMode::HostUtf8),
+            JsonStringScan::Decode {
+                content_start: 1,
+                resume: 1,
+                potential_host_sentinel: true
+            }
+        );
+    }
+
+    #[test]
+    fn string_decoder_resumes_at_tail_errors_without_rescanning_prefix() {
+        let env = test_env();
+        let trailing_escape = "\"long scanned prefix\\";
+        let mut parser = JsonParser::new(trailing_escape, &env, JsonSourceMode::RuntimeWtf16);
+        assert!(parser.string_value_rc().is_err());
+        assert_eq!(parser.cursor, trailing_escape.len());
+
+        let unterminated = format!("\"{}", "x".repeat(4096));
+        assert_eq!(
+            scan(&unterminated, JsonSourceMode::RuntimeWtf16),
+            JsonStringScan::Decode {
+                content_start: 1,
+                resume: unterminated.len(),
+                potential_host_sentinel: false
+            }
+        );
+        let mut parser = JsonParser::new(&unterminated, &env, JsonSourceMode::RuntimeWtf16);
+        assert!(parser.string_value_rc().is_err());
+        assert_eq!(parser.cursor, unterminated.len());
+    }
+
+    #[test]
+    fn unescaped_string_fast_path_preserves_parsed_keys_and_values() {
+        let env = test_env();
+        let value =
+            parse_json_text(r#"{"文😀":"plain value"}"#, &env).expect("unescaped object parses");
+        let Value::Object(value) = value else {
+            panic!("object expected");
+        };
+        assert_eq!(
+            value.get("文😀"),
+            Some(Value::String(Rc::new("plain value".to_owned())))
+        );
     }
 
     #[test]

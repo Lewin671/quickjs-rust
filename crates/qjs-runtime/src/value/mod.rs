@@ -12,12 +12,12 @@ mod set;
 pub use array::ArrayRef;
 pub(crate) use array::{MAX_DENSE_STORAGE_LENGTH, array_index_property_key};
 pub use map::MapRef;
-pub(crate) use object::ObjectLiteralShape;
 pub use object::ObjectRef;
 pub(crate) use object::Prototype;
 pub(crate) use object::{
     ModuleNamespaceBindings, ObjectWeakRef, OwnDataPropertyRead, OwnDataPropertyWrite,
 };
+pub(crate) use object::{ObjectLiteralShape, OrderedDataPropertyBuilder};
 pub(crate) use property::Property;
 pub use set::SetRef;
 
