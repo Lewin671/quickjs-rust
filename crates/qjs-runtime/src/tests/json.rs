@@ -315,6 +315,26 @@ fn json_parse_reviver_observes_context_and_forward_modifications() {
 fn json_parse_reviver_uses_property_internal_methods() {
     assert_eq!(
         eval(
+            r#"
+            let gets = 0;
+            let observed = '';
+            JSON.parse('[0,1]', function(k, v, c) {
+                if (k === '0') {
+                    Object.defineProperty(this, '1', {
+                        configurable: true,
+                        get: function() { gets++; return 1; }
+                    });
+                }
+                if (k === '1') observed = gets + ':' + v + ':' + c.source;
+                return v;
+            });
+            observed + '|' + gets;
+            "#,
+        ),
+        Ok(Value::String("1:1:1|1".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
             "let object = JSON.parse('{\"a\":1,\"b\":2}', function(k, v) { if (k === 'a') Object.defineProperty(this, 'b', { configurable: false }); if (k === 'b') return 22; return v; }); object.a + ':' + object.b;"
         ),
         Ok(Value::String("1:2".to_owned().into()))

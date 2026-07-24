@@ -54,14 +54,28 @@ fn internalize_json_property(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = crate::property_value(holder.clone(), name, env)?;
+    internalize_json_property_with_value(holder, name, node, value, reviver, env)
+}
+
+fn internalize_json_property_with_value(
+    holder: &Value,
+    name: &str,
+    node: &JsonNode,
+    value: Value,
+    reviver: &Value,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     if is_object_like(&value) {
         if is_array_object(&value)? {
             let len =
                 to_length_with_env(crate::property_value(value.clone(), "length", env)?, env)?;
             for i in 0..len {
                 let key = i.to_string();
-                let child = array_child_node(node, i, &value, &key, env)?;
-                let new_element = internalize_json_property(&value, &key, &child, reviver, env)?;
+                let current = crate::property_value(value.clone(), &key, env)?;
+                let child = array_child_node(node, i, &current);
+                let new_element = internalize_json_property_with_value(
+                    &value, &key, &child, current, reviver, env,
+                )?;
                 if matches!(new_element, Value::Undefined) {
                     delete_property(value.clone(), PropertyKey::String(key), env)?;
                 } else {
@@ -76,8 +90,11 @@ fn internalize_json_property(
         } else {
             let keys = enumerable_own_string_keys(value.clone(), env)?;
             for key in keys {
-                let child = object_child_node(node, &key, &value, env)?;
-                let new_element = internalize_json_property(&value, &key, &child, reviver, env)?;
+                let current = crate::property_value(value.clone(), &key, env)?;
+                let child = object_child_node(node, &key, &current);
+                let new_element = internalize_json_property_with_value(
+                    &value, &key, &child, current, reviver, env,
+                )?;
                 if matches!(new_element, Value::Undefined) {
                     delete_property(value.clone(), PropertyKey::String(key), env)?;
                 } else {
@@ -132,50 +149,33 @@ fn is_array_object(value: &Value) -> Result<bool, RuntimeError> {
     }
 }
 
-fn array_child_node(
-    node: &JsonNode,
-    index: usize,
-    holder: &Value,
-    key: &str,
-    env: &mut CallEnv,
-) -> Result<JsonNode, RuntimeError> {
+fn array_child_node(node: &JsonNode, index: usize, current: &Value) -> JsonNode {
     if let JsonNodeChildren::Array(children) = &node.children
         && let Some(child) = children.get(index)
     {
-        return child_for_current_value(child, holder, key, env);
+        return child_for_current_value(child, current);
     }
-    Ok(empty_node(crate::property_value(holder.clone(), key, env)?))
+    empty_node(current.clone())
 }
 
-fn object_child_node(
-    node: &JsonNode,
-    key: &str,
-    holder: &Value,
-    env: &mut CallEnv,
-) -> Result<JsonNode, RuntimeError> {
+fn object_child_node(node: &JsonNode, key: &str, current: &Value) -> JsonNode {
     if let JsonNodeChildren::Object(children) = &node.children {
         if let Some((_, child)) = children
             .iter()
             .rev()
             .find(|(child_key, _)| child_key.as_ref() == key)
         {
-            return child_for_current_value(child, holder, key, env);
+            return child_for_current_value(child, current);
         }
     }
-    Ok(empty_node(crate::property_value(holder.clone(), key, env)?))
+    empty_node(current.clone())
 }
 
-fn child_for_current_value(
-    child: &JsonNode,
-    holder: &Value,
-    key: &str,
-    env: &mut CallEnv,
-) -> Result<JsonNode, RuntimeError> {
-    let current = crate::property_value(holder.clone(), key, env)?;
+fn child_for_current_value(child: &JsonNode, current: &Value) -> JsonNode {
     if current.same_value(&child.value) {
-        Ok(child.clone())
+        child.clone()
     } else {
-        Ok(empty_node(current))
+        empty_node(current.clone())
     }
 }
 
