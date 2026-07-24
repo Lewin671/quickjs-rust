@@ -197,9 +197,9 @@ every round's resulting state to a triangular checksum. Focused three-role
 diagnostics at the v2 contract show exact operation/checksum agreement,
 eligible measurement windows, and N/2N linearity for both cases. The current
 measurement identity is `quickjs-measurement-protocol-v7`, protocol SHA-256
-`dd5225ed8b8ce4b29535d1654b0ad692583aaed95e498491890804bff070c111`,
+`c5e5d263ef908ef39a0f5e65f3866af77885a2854ce37edaf60dc63aa28dec3c`,
 and checked-in manifest SHA-256
-`c4c9834b6676a56e2e8fef35ec15352257730bb2048345e8503d2a4f8b19fbf8`.
+`3cd50cac6e421ef43507b80257fa9acfa37eda64036f5acb2be4dbfdce75eb9d`.
 
 ## Initial Broad V2 Baseline
 

@@ -94,7 +94,8 @@ class ResourceSystemTests(unittest.TestCase):
         stdout: str | None = None,
     ) -> ProcessResult:
         return ProcessResult(
-            started_at="2026-07-13T00:00:00+00:00", duration_ns=duration,
+            started_at="2026-07-13T00:00:00+00:00",
+            timer_started_ns=0, timer_finished_ns=duration, duration_ns=duration,
             exit_code=exit_code, timed_out=False,
             stdout=self._stdout(argv) if stdout is None and exit_code == 0 else (stdout or ""),
             stderr="", stdout_truncated=False, stderr_truncated=False,

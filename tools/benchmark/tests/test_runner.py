@@ -61,6 +61,8 @@ class RunnerTests(unittest.TestCase):
     ) -> ProcessResult:
         return ProcessResult(
             started_at="2026-01-01T00:00:00+00:00",
+            timer_started_ns=0,
+            timer_finished_ns=duration_ns,
             duration_ns=duration_ns,
             exit_code=exit_code,
             timed_out=timed_out,
@@ -678,6 +680,8 @@ class RunnerTests(unittest.TestCase):
             )
             return ProcessResult(
                 started_at="2026-01-01T00:00:00+00:00",
+                timer_started_ns=0,
+                timer_finished_ns=1_000_000,
                 duration_ns=1_000_000,
                 exit_code=0,
                 timed_out=False,

@@ -190,6 +190,19 @@ class ExternalPreviewTests(unittest.TestCase):
                 json.loads(line)
                 for line in (output / "external-raw.jsonl").read_text().splitlines()
             ]
+            self.assertTrue(all(row["schema_version"] == 2 for row in records))
+            for row in records:
+                self.assertIs(type(row["timer_started_ns"]), int)
+                self.assertIs(type(row["timer_finished_ns"]), int)
+                self.assertGreater(row["timer_finished_ns"], row["timer_started_ns"])
+                self.assertEqual(
+                    row["duration_ns"],
+                    row["timer_finished_ns"] - row["timer_started_ns"],
+                )
+            for previous, current in zip(records, records[1:]):
+                self.assertGreaterEqual(
+                    current["timer_started_ns"], previous["timer_finished_ns"]
+                )
             measurements = [row for row in records if row["phase"] == "measurement"]
             self.assertEqual(len(measurements), 9)
             self.assertEqual(

@@ -621,6 +621,12 @@ startup, parsing, execution, and shutdown. A seeded three-role Latin-square
 rotation gives every engine each order position once across the three
 measurement blocks.
 
+External raw sample schema v2 records both `timer_started_ns` and
+`timer_finished_ns` from that same monotonic clock. `duration_ns` is required
+to equal their difference, and adjacent samples can therefore be audited for
+overlap without mixing the monotonic timer with the diagnostic UTC
+`started_at` timestamp.
+
 The frozen suite inventory is:
 
 - **SunSpider 1.0:** all 26 upstream cases;

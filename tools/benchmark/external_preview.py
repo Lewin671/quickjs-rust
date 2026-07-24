@@ -435,7 +435,7 @@ def _record(
 ) -> dict[str, Any]:
     status, error = _sample_status(result)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "record_type": "sample",
         "preview_id": manifest.preview_id,
         "manifest_sha256": manifest.sha256,
@@ -449,6 +449,8 @@ def _record(
         "metric": manifest.measurement.metric,
         "timer": "python.perf_counter_ns",
         "timer_phase_boundary": manifest.measurement.phase_boundary,
+        "timer_started_ns": result.timer_started_ns,
+        "timer_finished_ns": result.timer_finished_ns,
         "duration_ns": result.duration_ns,
         "started_at": result.started_at,
         "status": status,

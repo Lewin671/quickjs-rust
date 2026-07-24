@@ -90,6 +90,8 @@ class ReportTests(unittest.TestCase):
             duration = startup_ns if iterations == 0 else per_op[role] * operations
             return ProcessResult(
                 started_at="2026-01-01T00:00:00+00:00",
+                timer_started_ns=0,
+                timer_finished_ns=duration,
                 duration_ns=duration,
                 exit_code=0,
                 timed_out=False,

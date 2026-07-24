@@ -16,6 +16,8 @@ OUTPUT_LIMIT = 64 * 1024
 @dataclass(frozen=True)
 class ProcessResult:
     started_at: str
+    timer_started_ns: int
+    timer_finished_ns: int
     duration_ns: int
     exit_code: int | None
     timed_out: bool
@@ -57,7 +59,7 @@ class _Capture:
 def run_process(argv: list[str], timeout_seconds: float) -> ProcessResult:
     """Run a process with bounded capture and whole-process-group timeout."""
     started_at = datetime.now(timezone.utc).isoformat()
-    started = time.perf_counter_ns()
+    timer_started_ns = time.perf_counter_ns()
     try:
         process = subprocess.Popen(
             argv,
@@ -67,9 +69,12 @@ def run_process(argv: list[str], timeout_seconds: float) -> ProcessResult:
         )
     except OSError as error:
         spawn_error = str(error) or error.__class__.__name__
+        timer_finished_ns = time.perf_counter_ns()
         return ProcessResult(
             started_at=started_at,
-            duration_ns=time.perf_counter_ns() - started,
+            timer_started_ns=timer_started_ns,
+            timer_finished_ns=timer_finished_ns,
+            duration_ns=timer_finished_ns - timer_started_ns,
             exit_code=None,
             timed_out=False,
             stdout="",
@@ -104,7 +109,8 @@ def run_process(argv: list[str], timeout_seconds: float) -> ProcessResult:
     watchdog.daemon = True
     watchdog.start()
     exit_code = process.wait()
-    duration_ns = time.perf_counter_ns() - started
+    timer_finished_ns = time.perf_counter_ns()
+    duration_ns = timer_finished_ns - timer_started_ns
     watchdog.cancel()
     stdout_thread.join(timeout=0.1)
     stderr_thread.join(timeout=0.1)
@@ -125,6 +131,8 @@ def run_process(argv: list[str], timeout_seconds: float) -> ProcessResult:
     process.stderr.close()
     return ProcessResult(
         started_at=started_at,
+        timer_started_ns=timer_started_ns,
+        timer_finished_ns=timer_finished_ns,
         duration_ns=duration_ns,
         exit_code=exit_code,
         timed_out=expired.is_set(),
