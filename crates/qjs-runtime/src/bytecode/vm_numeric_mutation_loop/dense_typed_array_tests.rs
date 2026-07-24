@@ -25,6 +25,24 @@ fn assert_typed_dense_plan(source: &str) {
     assert!(plan.is_legacy_dynamic() || plan.is_suppressing_legacy_dynamic());
 }
 
+fn typed_dense_input_layouts(source: &str) -> Vec<(usize, usize, usize)> {
+    let bytecode = nested_function(source);
+    let plans = NumericMutationLoopPlan::compile_all(&bytecode);
+    plans
+        .iter()
+        .filter_map(|plan| match &plan.kind {
+            NumericMutationLoopKind::Dense(plan) => plan.legacy_input_layout(),
+            _ => None,
+        })
+        .collect()
+}
+
+fn typed_dense_input_layout(source: &str) -> (usize, usize, usize) {
+    let layouts = typed_dense_input_layouts(source);
+    assert_eq!(layouts.len(), 1, "expected one legacy dense plan");
+    layouts[0]
+}
+
 fn assert_suppressing_typed_dense_plan(source: &str) {
     let bytecode = nested_function(source);
     let plans = NumericMutationLoopPlan::compile_all(&bytecode);
@@ -220,6 +238,7 @@ fn gaussian_forward_shape_compiles_and_runs_the_typed_multi_store_path() {
         }
     "#;
     assert_suppressing_typed_dense_plan(function);
+    assert_eq!(typed_dense_input_layout(function), (8, 19, 46));
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -234,6 +253,234 @@ fn gaussian_forward_shape_compiles_and_runs_the_typed_multi_store_path() {
     assert_eq!(dense::test_typed_array_dense_attempts(), 1);
     assert_eq!(dense::test_typed_array_dense_path_hits(), 1);
     assert_eq!(dense::test_typed_array_dense_suppressions(), 0);
+}
+
+#[test]
+fn gaussian_bidirectional_shapes_keep_the_expected_compact_input_layouts() {
+    let function = r#"
+        function convolveRGBA(src, out, line, coeff, width, height) {
+            var rgba;
+            var prev_src_r, prev_src_g, prev_src_b, prev_src_a;
+            var curr_src_r, curr_src_g, curr_src_b, curr_src_a;
+            var curr_out_r, curr_out_g, curr_out_b, curr_out_a;
+            var prev_out_r, prev_out_g, prev_out_b, prev_out_a;
+            var prev_prev_out_r, prev_prev_out_g, prev_prev_out_b, prev_prev_out_a;
+            var src_index, out_index, line_index;
+            var i, j;
+            var coeff_a0, coeff_a1, coeff_b1, coeff_b2;
+
+            for (i = 0; i < height; i++) {
+                src_index = i * width;
+                out_index = i;
+                line_index = 0;
+                rgba = src[src_index];
+                prev_src_r = rgba & 0xff;
+                prev_src_g = (rgba >> 8) & 0xff;
+                prev_src_b = (rgba >> 16) & 0xff;
+                prev_src_a = (rgba >> 24) & 0xff;
+                prev_prev_out_r = prev_src_r * coeff[6];
+                prev_prev_out_g = prev_src_g * coeff[6];
+                prev_prev_out_b = prev_src_b * coeff[6];
+                prev_prev_out_a = prev_src_a * coeff[6];
+                prev_out_r = prev_prev_out_r;
+                prev_out_g = prev_prev_out_g;
+                prev_out_b = prev_prev_out_b;
+                prev_out_a = prev_prev_out_a;
+                coeff_a0 = coeff[0];
+                coeff_a1 = coeff[1];
+                coeff_b1 = coeff[4];
+                coeff_b2 = coeff[5];
+
+                for (j = 0; j < width; j++) {
+                    rgba = src[src_index];
+                    curr_src_r = rgba & 0xff;
+                    curr_src_g = (rgba >> 8) & 0xff;
+                    curr_src_b = (rgba >> 16) & 0xff;
+                    curr_src_a = (rgba >> 24) & 0xff;
+                    curr_out_r = curr_src_r * coeff_a0 + prev_src_r * coeff_a1 + prev_out_r * coeff_b1 + prev_prev_out_r * coeff_b2;
+                    curr_out_g = curr_src_g * coeff_a0 + prev_src_g * coeff_a1 + prev_out_g * coeff_b1 + prev_prev_out_g * coeff_b2;
+                    curr_out_b = curr_src_b * coeff_a0 + prev_src_b * coeff_a1 + prev_out_b * coeff_b1 + prev_prev_out_b * coeff_b2;
+                    curr_out_a = curr_src_a * coeff_a0 + prev_src_a * coeff_a1 + prev_out_a * coeff_b1 + prev_prev_out_a * coeff_b2;
+                    prev_prev_out_r = prev_out_r;
+                    prev_prev_out_g = prev_out_g;
+                    prev_prev_out_b = prev_out_b;
+                    prev_prev_out_a = prev_out_a;
+                    prev_out_r = curr_out_r;
+                    prev_out_g = curr_out_g;
+                    prev_out_b = curr_out_b;
+                    prev_out_a = curr_out_a;
+                    prev_src_r = curr_src_r;
+                    prev_src_g = curr_src_g;
+                    prev_src_b = curr_src_b;
+                    prev_src_a = curr_src_a;
+                    line[line_index] = prev_out_r;
+                    line[line_index + 1] = prev_out_g;
+                    line[line_index + 2] = prev_out_b;
+                    line[line_index + 3] = prev_out_a;
+                    line_index += 4;
+                    src_index++;
+                }
+
+                src_index--;
+                line_index -= 4;
+                out_index += height * (width - 1);
+                rgba = src[src_index];
+                prev_src_r = rgba & 0xff;
+                prev_src_g = (rgba >> 8) & 0xff;
+                prev_src_b = (rgba >> 16) & 0xff;
+                prev_src_a = (rgba >> 24) & 0xff;
+                prev_prev_out_r = prev_src_r * coeff[7];
+                prev_prev_out_g = prev_src_g * coeff[7];
+                prev_prev_out_b = prev_src_b * coeff[7];
+                prev_prev_out_a = prev_src_a * coeff[7];
+                prev_out_r = prev_prev_out_r;
+                prev_out_g = prev_prev_out_g;
+                prev_out_b = prev_prev_out_b;
+                prev_out_a = prev_prev_out_a;
+                curr_src_r = prev_src_r;
+                curr_src_g = prev_src_g;
+                curr_src_b = prev_src_b;
+                curr_src_a = prev_src_a;
+                coeff_a0 = coeff[2];
+                coeff_a1 = coeff[3];
+
+                for (j = width - 1; j >= 0; j--) {
+                    curr_out_r = curr_src_r * coeff_a0 + prev_src_r * coeff_a1 + prev_out_r * coeff_b1 + prev_prev_out_r * coeff_b2;
+                    curr_out_g = curr_src_g * coeff_a0 + prev_src_g * coeff_a1 + prev_out_g * coeff_b1 + prev_prev_out_g * coeff_b2;
+                    curr_out_b = curr_src_b * coeff_a0 + prev_src_b * coeff_a1 + prev_out_b * coeff_b1 + prev_prev_out_b * coeff_b2;
+                    curr_out_a = curr_src_a * coeff_a0 + prev_src_a * coeff_a1 + prev_out_a * coeff_b1 + prev_prev_out_a * coeff_b2;
+                    prev_prev_out_r = prev_out_r;
+                    prev_prev_out_g = prev_out_g;
+                    prev_prev_out_b = prev_out_b;
+                    prev_prev_out_a = prev_out_a;
+                    prev_out_r = curr_out_r;
+                    prev_out_g = curr_out_g;
+                    prev_out_b = curr_out_b;
+                    prev_out_a = curr_out_a;
+                    prev_src_r = curr_src_r;
+                    prev_src_g = curr_src_g;
+                    prev_src_b = curr_src_b;
+                    prev_src_a = curr_src_a;
+                    rgba = src[src_index];
+                    curr_src_r = rgba & 0xff;
+                    curr_src_g = (rgba >> 8) & 0xff;
+                    curr_src_b = (rgba >> 16) & 0xff;
+                    curr_src_a = (rgba >> 24) & 0xff;
+                    rgba = ((line[line_index] + prev_out_r) << 0) +
+                        ((line[line_index + 1] + prev_out_g) << 8) +
+                        ((line[line_index + 2] + prev_out_b) << 16) +
+                        ((line[line_index + 3] + prev_out_a) << 24);
+                    out[out_index] = rgba;
+                    src_index--;
+                    line_index -= 4;
+                    out_index -= height;
+                }
+            }
+        }
+    "#;
+
+    assert_eq!(
+        typed_dense_input_layouts(function),
+        vec![(8, 19, 46), (9, 25, 58)]
+    );
+}
+
+#[test]
+fn typed_dense_input_prefix_refreshes_loop_carried_locals_across_entries() {
+    let function = "function recur(input, output, bound, factor) { var carried = factor; for (var index = 0; index < bound; index++) { output[index] = input[index] * factor + carried + 1; carried = output[index]; factor = factor + 1; } return factor + '|' + carried + '|' + output.join(':'); }";
+    let (constant_count, local_count, dynamic_count) = typed_dense_input_layout(function);
+    assert!(constant_count > 0);
+    assert!(local_count > 0);
+    assert!(dynamic_count > 0);
+
+    dense::reset_test_iterations();
+    assert_eq!(
+        eval(&format!(
+            "{function} \
+             recur(new Float64Array([1,2,3,4]), new Float64Array(4), 4, 2) + ';' + \
+             recur(new Float64Array([-1,0,Infinity,NaN]), new Float64Array(4), 4, -0);"
+        )),
+        Ok(Value::String(
+            "6|46|5:12:25:46;4|NaN|1:2:Infinity:NaN".to_owned().into()
+        ))
+    );
+    let iterations = dense::test_iterations();
+    assert!(iterations > 2);
+    assert_eq!(dense::test_typed_array_dense_attempts(), 2);
+    assert_eq!(dense::test_typed_array_dense_path_hits(), 2);
+    assert_eq!(
+        dense::test_typed_constant_prefix_loads(),
+        constant_count * 2
+    );
+    assert_eq!(
+        dense::test_typed_local_prefix_loads(),
+        local_count * iterations
+    );
+    assert_eq!(
+        dense::test_typed_dynamic_dispatches(),
+        dynamic_count * iterations
+    );
+}
+
+#[test]
+fn typed_dense_input_prefix_does_not_run_when_the_first_guard_fails() {
+    let function = "function once(input, output, bound, factor) { for (var index = 0; index < bound; index++) { output[index] = input[index] * factor + 1; factor = factor + 1; } return factor + '|' + output.join(':'); }";
+    assert_typed_dense_plan(function);
+
+    dense::reset_test_iterations();
+    assert_eq!(
+        eval(&format!(
+            "{function} once(new Float64Array([2]), new Float64Array(1), 1, 3);"
+        )),
+        Ok(Value::String("4|7".to_owned().into()))
+    );
+    assert_eq!(dense::test_iterations(), 0);
+    assert_eq!(dense::test_typed_array_dense_attempts(), 1);
+    assert_eq!(dense::test_typed_array_dense_path_hits(), 0);
+    assert_eq!(dense::test_typed_constant_prefix_loads(), 0);
+    assert_eq!(dense::test_typed_local_prefix_loads(), 0);
+    assert_eq!(dense::test_typed_dynamic_dispatches(), 0);
+}
+
+#[test]
+fn typed_dense_input_prefix_preserves_staged_store_rollback_before_oob_replay() {
+    let function = "function mutate(input, output, probe, bound, factor) { for (var index = 0; index < bound; index++) { output[index] = output[index] + input[index] * factor; probe[index * 2] = probe[index * 2] + 1; } return output.join(':') + '|' + probe.join(':'); }";
+    let (constant_count, local_count, dynamic_count) = typed_dense_input_layout(function);
+
+    dense::reset_test_iterations();
+    assert_eq!(
+        eval(&format!(
+            "{function} mutate(new Float64Array([1,2,3]), new Float64Array([10,10,10]), new Float64Array(4), 3, 2);"
+        )),
+        Ok(Value::String("12:14:16|1:0:1:0".to_owned().into()))
+    );
+    let committed_iterations = dense::test_iterations();
+    assert!(committed_iterations > 0);
+    // The successful region deoptimizes on the last probe, then the replayed
+    // backedge performs one final zero-iteration attempt.
+    assert_eq!(dense::test_typed_array_dense_attempts(), 2);
+    assert_eq!(dense::test_typed_array_dense_path_hits(), 1);
+    assert_eq!(dense::test_typed_array_dense_suppressions(), 0);
+    assert_eq!(dense::test_typed_constant_prefix_loads(), constant_count);
+    assert_eq!(
+        dense::test_typed_local_prefix_loads(),
+        local_count * (committed_iterations + 1)
+    );
+    assert!(dense::test_typed_dynamic_dispatches() > dynamic_count * committed_iterations);
+}
+
+#[test]
+fn compact_array_executor_preserves_the_reordered_input_prefix() {
+    let function = "function recur(input, output, bound, factor) { var carried = factor; for (var index = 0; index < bound; index++) { output[index] = input[index] * factor + carried + 1; carried = output[index]; factor = factor + 1; } return factor + '|' + carried + '|' + output.join(':'); }";
+    assert_typed_dense_plan(function);
+
+    dense::reset_test_iterations();
+    assert_eq!(
+        eval(&format!("{function} recur([1,2,3,4], [0,0,0,0], 4, 2);")),
+        Ok(Value::String("6|46|5:12:25:46".to_owned().into()))
+    );
+    assert!(dense::test_compact_dynamic_hits() > 0);
+    assert_eq!(dense::test_typed_array_dense_path_hits(), 0);
 }
 
 #[test]
