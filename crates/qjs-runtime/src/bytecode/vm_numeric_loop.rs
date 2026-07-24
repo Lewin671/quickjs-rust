@@ -119,13 +119,13 @@ enum PreparedNumericLoopTerm {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum NumericLoopWrite {
+pub(super) enum NumericLoopWrite {
     Local { slot: usize },
     RealmGlobal { slot: usize, name: String },
 }
 
 impl NumericLoopWrite {
-    fn compile(op: &Op, expected_slot: usize) -> Option<Self> {
+    pub(super) fn compile(op: &Op, expected_slot: usize) -> Option<Self> {
         match op {
             Op::AssignLocal(slot) if *slot == expected_slot => Some(Self::Local { slot: *slot }),
             Op::StoreGlobalSloppy { slot, name } if *slot == expected_slot => {
@@ -138,7 +138,7 @@ impl NumericLoopWrite {
         }
     }
 
-    fn prepare(&self, vm: &Vm<'_>) -> Option<LoopWriteTarget> {
+    pub(super) fn prepare(&self, vm: &Vm<'_>) -> Option<LoopWriteTarget> {
         match self {
             Self::Local { slot } if vm.slot_is_authoritative(*slot) => {
                 Some(LoopWriteTarget::Local { slot: *slot })
@@ -150,7 +150,7 @@ impl NumericLoopWrite {
         }
     }
 
-    fn slot(&self) -> usize {
+    pub(super) fn slot(&self) -> usize {
         match self {
             Self::Local { slot } | Self::RealmGlobal { slot, .. } => *slot,
         }
@@ -158,20 +158,20 @@ impl NumericLoopWrite {
 }
 
 #[derive(Clone, Debug)]
-enum LoopWriteTarget {
+pub(super) enum LoopWriteTarget {
     Local { slot: usize },
     RealmGlobal(RealmGlobalLoopWrite),
 }
 
 impl LoopWriteTarget {
-    fn realm_cell(&self) -> Option<crate::function::Upvalue> {
+    pub(super) fn realm_cell(&self) -> Option<crate::function::Upvalue> {
         match self {
             Self::Local { .. } => None,
             Self::RealmGlobal(target) => Some(target.cell()),
         }
     }
 
-    fn number(&self, vm: &Vm<'_>) -> Option<f64> {
+    pub(super) fn number(&self, vm: &Vm<'_>) -> Option<f64> {
         let value = match self {
             Self::Local { slot } => vm.locals.get(*slot)?.as_ref()?.clone(),
             Self::RealmGlobal(target) => target.cell().get(),

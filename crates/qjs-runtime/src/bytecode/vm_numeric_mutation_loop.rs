@@ -19,12 +19,14 @@ mod dense_typed_array_tests;
 #[cfg(test)]
 mod nested_dense_tests;
 mod predicate_scan;
+mod scalar_bitwise;
 
 use dense::{
     DenseNumericMutationLoopPlan, DenseNumericMutationLoopRun, EnclosingOuter, NestedDensePlan,
     NestedDensePlanRun, NestedDenseProbe, discover_enclosing_outers,
 };
 use predicate_scan::{DenseNumericPredicateScanPlan, PredicateScanRun};
+use scalar_bitwise::{ScalarBitwiseLoopPlan, ScalarBitwiseLoopRun};
 
 #[derive(Clone, Copy, Debug)]
 enum NumericMutationOp {
@@ -85,6 +87,7 @@ enum NumericMutationLoopKind {
 #[derive(Clone, Debug)]
 enum SpecialPlan {
     PredicateScan(DenseNumericPredicateScanPlan),
+    ScalarBitwise(ScalarBitwiseLoopPlan),
     NestedDense {
         plan: NestedDensePlan,
         fallback: Rc<DenseNumericMutationLoopPlan>,
@@ -96,6 +99,7 @@ impl SpecialPlan {
     fn contains_instruction(&self, ip: usize) -> bool {
         match self {
             Self::PredicateScan(plan) => plan.contains_instruction(ip),
+            Self::ScalarBitwise(plan) => plan.contains_instruction(ip),
             Self::NestedDense { plan, .. } => plan.contains_instruction(ip),
         }
     }
@@ -106,6 +110,10 @@ impl SpecialPlan {
             Self::PredicateScan(plan) => match plan.try_run(vm) {
                 PredicateScanRun::Handled => NumericMutationLoopRun::Handled,
                 PredicateScanRun::Suppress => NumericMutationLoopRun::SuppressPlan,
+            },
+            Self::ScalarBitwise(plan) => match plan.try_run(vm) {
+                ScalarBitwiseLoopRun::Handled => NumericMutationLoopRun::Handled,
+                ScalarBitwiseLoopRun::Suppress => NumericMutationLoopRun::SuppressPlan,
             },
             Self::NestedDense { plan, fallback } => match plan.try_run(vm) {
                 NestedDensePlanRun::Handled => NumericMutationLoopRun::Handled,
@@ -163,6 +171,14 @@ impl NumericMutationLoopPlan {
                 backedge,
                 exit: named.exit,
                 kind: NumericMutationLoopKind::Named(named.plan),
+            });
+        }
+        if let Some(plan) = ScalarBitwiseLoopPlan::compile(bytecode, header, backedge) {
+            return Some(Self {
+                header,
+                backedge,
+                exit: plan.exit(),
+                kind: NumericMutationLoopKind::Special(Rc::new(SpecialPlan::ScalarBitwise(plan))),
             });
         }
         if let Some(dense) =
@@ -915,6 +931,39 @@ mod tests {
         assert!(dense::test_iterations() > 0);
         assert_eq!(dense::test_countdown_path_hits(), 0);
         assert_eq!(dense::test_countdown_iterations(), 0);
+    }
+
+    #[test]
+    fn scalar_bitwise_plan_does_not_claim_ordinary_numeric_loops() {
+        let source = "function sum(limit) { var value = 0; for (var index = 0; index < limit; index++) value += index; return value + ':' + index; }";
+        let bytecode = nested_function(source);
+        let plans = NumericMutationLoopPlan::compile_all(&bytecode);
+        assert!(
+            plans.iter().all(|plan| !matches!(
+                &plan.kind,
+                NumericMutationLoopKind::Special(special)
+                    if matches!(special.as_ref(), SpecialPlan::ScalarBitwise(_))
+            )),
+            "{:#?}",
+            bytecode.code
+        );
+        assert_eq!(
+            eval(&format!("{source} sum(9);")),
+            Ok(Value::String("36:9".to_owned().into()))
+        );
+    }
+
+    #[test]
+    fn scalar_bitwise_plan_defers_indexed_bitwise_loops_to_dense_planning() {
+        let source = "function mask(values, limit, bits) { for (var index = 0; index < limit; index++) values[index] &= bits; return values.join(':') + ':' + index; }";
+        let bytecode = nested_function(source);
+        let plans = NumericMutationLoopPlan::compile_all(&bytecode);
+        assert_eq!(plans.len(), 1, "{:#?}", bytecode.code);
+        assert!(matches!(plans[0].kind, NumericMutationLoopKind::Dense(_)));
+        assert_eq!(
+            eval(&format!("{source} mask([15,10,7,4,9], 4, 6);")),
+            Ok(Value::String("6:2:6:4:9:4".to_owned().into()))
+        );
     }
 
     #[test]
