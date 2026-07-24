@@ -12,6 +12,7 @@ use std::{
 };
 
 use super::{VirtualCandidate, VirtualKind, VirtualUse, analyze};
+use crate::Value;
 use crate::bytecode::ir::{Bytecode, Op, decode_index_receiver};
 
 #[derive(Clone, Debug)]
@@ -371,6 +372,7 @@ fn fuse_superinstructions(
 ) {
     fuse_virtual_initializers(bytecode, analysis, code);
     fuse_virtual_binaries(analysis, code);
+    forward_read_only_virtual_constants(bytecode, code);
     fuse_binary_assignments(bytecode, analysis, code);
     fuse_local_increments(bytecode, analysis, code);
     fuse_local_copies(analysis, code);
@@ -514,6 +516,168 @@ fn fuse_virtual_binaries(analysis: &super::VirtualObjectAnalysis, code: &mut [Op
                 op: *op,
                 skip: 2,
             };
+        }
+    }
+}
+
+/// Forwards pointer-free constants through a proven read-only virtual literal.
+///
+/// Initializer fusion has already removed the original literal inputs from the
+/// dispatch stream. When every later scalar read can use `LoadConst` directly,
+/// the alias-only initializer no longer needs to clone constants into the
+/// frame's virtual-value bank. Mutable candidates, explicit-stack receiver
+/// reads, and binary superinstructions retain the established storage path.
+fn forward_read_only_virtual_constants(bytecode: &Bytecode, code: &mut [Op]) {
+    #[derive(Clone, Copy)]
+    struct Candidate {
+        initializer_ip: usize,
+        slot: usize,
+        end: usize,
+        eligible: bool,
+    }
+
+    fn owner_for_slot(candidates: &[Candidate], ranges: &[usize], slot: usize) -> Option<usize> {
+        let insertion = ranges.partition_point(|index| candidates[*index].slot <= slot);
+        let owner = *ranges.get(insertion.checked_sub(1)?)?;
+        (slot < candidates[owner].end).then_some(owner)
+    }
+
+    let mut malformed_range = false;
+    let mut candidates = code
+        .iter()
+        .enumerate()
+        .filter_map(|(initializer_ip, op)| {
+            let Op::InitVirtualConstants {
+                slot, constants, ..
+            } = op
+            else {
+                return None;
+            };
+            let Some(end) = slot.checked_add(constants.len()) else {
+                malformed_range = true;
+                return None;
+            };
+            let eligible = constants.iter().all(|index| {
+                bytecode.constants.get(*index).is_some_and(|value| {
+                    matches!(
+                        value,
+                        Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined
+                    )
+                })
+            });
+            Some(Candidate {
+                initializer_ip,
+                slot: *slot,
+                end,
+                eligible,
+            })
+        })
+        .collect::<Vec<_>>();
+    if malformed_range || candidates.is_empty() {
+        return;
+    }
+
+    // Sort only indexes: the constant vectors stay owned by their bytecode
+    // instructions. Non-empty ranges must be disjoint before any forwarding;
+    // an overlap makes every participating candidate fail closed.
+    let mut ranges = (0..candidates.len())
+        .filter(|index| candidates[*index].slot < candidates[*index].end)
+        .collect::<Vec<_>>();
+    ranges.sort_unstable_by_key(|index| {
+        let candidate = candidates[*index];
+        (candidate.slot, candidate.end, candidate.initializer_ip)
+    });
+    let mut active = None;
+    for &index in &ranges {
+        let Some(previous) = active else {
+            active = Some(index);
+            continue;
+        };
+        if candidates[index].slot < candidates[previous].end {
+            candidates[index].eligible = false;
+            candidates[previous].eligible = false;
+            if candidates[index].end > candidates[previous].end {
+                active = Some(index);
+            }
+        } else {
+            active = Some(index);
+        }
+    }
+    ranges.retain(|index| candidates[*index].eligible);
+    if !candidates.iter().any(|candidate| candidate.eligible) {
+        return;
+    }
+
+    let mut loads = Vec::new();
+    for (ip, op) in code.iter().enumerate() {
+        #[cfg(test)]
+        record_virtual_forward_scan_for_test();
+        // Keep every virtual-slot consumer in this fail-closed classifier. A
+        // new consumer must either be forwarded explicitly or disqualify its
+        // owner so the slot range remains materialized.
+        match op {
+            Op::LoadVirtualValue {
+                slot: source,
+                discard,
+            } => {
+                let Some(owner) = owner_for_slot(&candidates, &ranges, *source) else {
+                    continue;
+                };
+                if *discard != 0 {
+                    candidates[owner].eligible = false;
+                    continue;
+                }
+                let constant = match &code[candidates[owner].initializer_ip] {
+                    Op::InitVirtualConstants { constants, .. } => {
+                        constants.get(*source - candidates[owner].slot).copied()
+                    }
+                    _ => None,
+                };
+                let Some(constant) = constant else {
+                    candidates[owner].eligible = false;
+                    continue;
+                };
+                loads.push((ip, owner, constant));
+            }
+            Op::StoreVirtualValue { slot, .. } => {
+                if let Some(owner) = owner_for_slot(&candidates, &ranges, *slot) {
+                    candidates[owner].eligible = false;
+                }
+            }
+            Op::LoadVirtualBinary { left, right, .. } => {
+                if let Some(owner) = owner_for_slot(&candidates, &ranges, *left) {
+                    candidates[owner].eligible = false;
+                }
+                if let Some(owner) = owner_for_slot(&candidates, &ranges, *right) {
+                    candidates[owner].eligible = false;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    for (ip, owner, constant) in loads {
+        if candidates[owner].eligible {
+            code[ip] = Op::LoadConst(constant);
+        }
+    }
+    for candidate in candidates
+        .into_iter()
+        .filter(|candidate| candidate.eligible)
+    {
+        let replacement = match &code[candidate.initializer_ip] {
+            Op::InitVirtualConstants {
+                slot, local, skip, ..
+            } if *slot == candidate.slot => Some(Op::InitVirtualObject {
+                slot: *slot,
+                count: 0,
+                local: *local,
+                skip: *skip,
+            }),
+            _ => None,
+        };
+        if let Some(replacement) = replacement {
+            code[candidate.initializer_ip] = replacement;
         }
     }
 }
@@ -698,12 +862,30 @@ fn set_receiver_input_count(op: &Op) -> Option<usize> {
 #[cfg(test)]
 thread_local! {
     static TEST_VIRTUAL_INIT_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TEST_VIRTUAL_INIT_SLOT_WRITES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TEST_VIRTUAL_LOAD_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TEST_VIRTUAL_FORWARD_SCAN_OPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static TEST_VIRTUAL_FUNCTION_INIT_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
-pub(in crate::bytecode) fn record_virtual_init_for_test() {
+pub(in crate::bytecode) fn record_virtual_init_for_test(slot_writes: usize) {
     TEST_VIRTUAL_INIT_HITS.set(TEST_VIRTUAL_INIT_HITS.get() + 1);
+    TEST_VIRTUAL_INIT_SLOT_WRITES.set(
+        TEST_VIRTUAL_INIT_SLOT_WRITES
+            .get()
+            .saturating_add(slot_writes),
+    );
+}
+
+#[cfg(test)]
+pub(in crate::bytecode) fn record_virtual_load_for_test(loads: usize) {
+    TEST_VIRTUAL_LOAD_HITS.set(TEST_VIRTUAL_LOAD_HITS.get().saturating_add(loads));
+}
+
+#[cfg(test)]
+fn record_virtual_forward_scan_for_test() {
+    TEST_VIRTUAL_FORWARD_SCAN_OPS.set(TEST_VIRTUAL_FORWARD_SCAN_OPS.get().saturating_add(1));
 }
 
 #[cfg(test)]
@@ -714,11 +896,33 @@ pub(in crate::bytecode) fn record_virtual_function_init_for_test() {
 #[cfg(test)]
 fn reset_test_hits() {
     TEST_VIRTUAL_INIT_HITS.set(0);
+    TEST_VIRTUAL_INIT_SLOT_WRITES.set(0);
+    TEST_VIRTUAL_LOAD_HITS.set(0);
 }
 
 #[cfg(test)]
 fn test_hits() -> usize {
     TEST_VIRTUAL_INIT_HITS.get()
+}
+
+#[cfg(test)]
+fn test_slot_writes() -> usize {
+    TEST_VIRTUAL_INIT_SLOT_WRITES.get()
+}
+
+#[cfg(test)]
+fn test_load_hits() -> usize {
+    TEST_VIRTUAL_LOAD_HITS.get()
+}
+
+#[cfg(test)]
+fn reset_virtual_forward_scan_ops() {
+    TEST_VIRTUAL_FORWARD_SCAN_OPS.set(0);
+}
+
+#[cfg(test)]
+fn virtual_forward_scan_ops() -> usize {
+    TEST_VIRTUAL_FORWARD_SCAN_OPS.get()
 }
 
 #[cfg(test)]
@@ -1103,6 +1307,330 @@ mod tests {
     }
 
     #[test]
+    fn forwards_read_only_array_constants_without_virtual_storage() {
+        let bytecode = nested_function(
+            "function run(n) { var sum = 0; for (var i = 0; i < n; i++) { var values = [1, 2, 3]; sum += values[2]; } return sum; }",
+        );
+        let program = lower(&bytecode);
+        let code = program.code(&bytecode.code);
+        assert!(
+            code.iter()
+                .any(|op| matches!(op, Op::InitVirtualObject { count: 0, .. }))
+        );
+        assert!(
+            !code
+                .iter()
+                .any(|op| matches!(op, Op::InitVirtualConstants { .. }))
+        );
+        assert!(
+            !code
+                .iter()
+                .any(|op| matches!(op, Op::LoadVirtualValue { .. }))
+        );
+
+        reset_test_hits();
+        assert_eq!(
+            eval(
+                "function run(n) { var sum = 0; for (var i = 0; i < n; i++) { var values = [1, 2, 3]; sum += values[2]; } return sum; } run(5);"
+            ),
+            Ok(Value::Number(15.0))
+        );
+        assert_eq!(test_hits(), 5);
+        assert_eq!(test_slot_writes(), 0);
+        assert_eq!(test_load_hits(), 0);
+    }
+
+    #[test]
+    fn lowering_preserves_nan_infinity_and_negative_zero_constant_bits() {
+        let nan = f64::from_bits(0x7ff8_0000_0000_1234);
+        let negative_zero = -0.0_f64;
+        let infinity = f64::INFINITY;
+        let bytecode = Bytecode::new(
+            vec![
+                Value::Number(nan),
+                Value::Number(negative_zero),
+                Value::Number(infinity),
+            ],
+            Vec::new(),
+            Vec::new(),
+        );
+        let mut code = vec![
+            Op::InitVirtualConstants {
+                slot: 4,
+                constants: vec![0, 1, 2],
+                local: None,
+                skip: 0,
+            },
+            Op::LoadVirtualValue {
+                slot: 4,
+                discard: 0,
+            },
+            Op::LoadVirtualValue {
+                slot: 5,
+                discard: 0,
+            },
+            Op::LoadVirtualValue {
+                slot: 6,
+                discard: 0,
+            },
+        ];
+        forward_read_only_virtual_constants(&bytecode, &mut code);
+        assert!(matches!(
+            code[0],
+            Op::InitVirtualObject {
+                slot: 4,
+                count: 0,
+                ..
+            }
+        ));
+        assert!(matches!(code[1], Op::LoadConst(0)));
+        assert!(matches!(code[2], Op::LoadConst(1)));
+        assert!(matches!(code[3], Op::LoadConst(2)));
+        let Value::Number(forwarded_nan) = bytecode.constants[0] else {
+            panic!("expected Number constant");
+        };
+        let Value::Number(forwarded_zero) = bytecode.constants[1] else {
+            panic!("expected Number constant");
+        };
+        let Value::Number(forwarded_infinity) = bytecode.constants[2] else {
+            panic!("expected Number constant");
+        };
+        assert_eq!(forwarded_nan.to_bits(), nan.to_bits());
+        assert_eq!(forwarded_zero.to_bits(), negative_zero.to_bits());
+        assert_eq!(forwarded_infinity.to_bits(), infinity.to_bits());
+    }
+
+    #[test]
+    fn classifies_many_constant_ranges_with_one_consumer_scan() {
+        const CANDIDATE_COUNT: usize = 64;
+        const MUTABLE_CANDIDATE: usize = 17;
+        let constants = (0..CANDIDATE_COUNT * 2)
+            .map(|value| Value::Number(value as f64))
+            .collect();
+        let bytecode = Bytecode::new(constants, Vec::new(), Vec::new());
+        let mut code = Vec::new();
+        for candidate in 0..CANDIDATE_COUNT {
+            code.push(Op::InitVirtualConstants {
+                slot: candidate * 2,
+                constants: vec![candidate * 2, candidate * 2 + 1],
+                local: None,
+                skip: 0,
+            });
+        }
+        for candidate in 0..CANDIDATE_COUNT {
+            code.push(Op::LoadVirtualValue {
+                slot: candidate * 2 + 1,
+                discard: 0,
+            });
+        }
+        code.push(Op::StoreVirtualValue {
+            slot: MUTABLE_CANDIDATE * 2,
+            discard: 0,
+        });
+
+        let operation_count = code.len();
+        reset_virtual_forward_scan_ops();
+        forward_read_only_virtual_constants(&bytecode, &mut code);
+        assert_eq!(virtual_forward_scan_ops(), operation_count);
+        for candidate in 0..CANDIDATE_COUNT {
+            if candidate == MUTABLE_CANDIDATE {
+                assert!(matches!(code[candidate], Op::InitVirtualConstants { .. }));
+                assert!(matches!(
+                    code[CANDIDATE_COUNT + candidate],
+                    Op::LoadVirtualValue { .. }
+                ));
+            } else {
+                assert!(matches!(
+                    code[candidate],
+                    Op::InitVirtualObject {
+                        count: 0,
+                        slot,
+                        ..
+                    } if slot == candidate * 2
+                ));
+                assert!(matches!(
+                    code[CANDIDATE_COUNT + candidate],
+                    Op::LoadConst(index) if index == candidate * 2 + 1
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn overlapping_and_malformed_constant_ranges_fail_closed() {
+        let bytecode = Bytecode::new(
+            vec![
+                Value::Number(1.0),
+                Value::Number(2.0),
+                Value::Number(3.0),
+                Value::Number(4.0),
+            ],
+            Vec::new(),
+            Vec::new(),
+        );
+        let mut overlapping = vec![
+            Op::InitVirtualConstants {
+                slot: 10,
+                constants: vec![0, 1],
+                local: None,
+                skip: 0,
+            },
+            Op::InitVirtualConstants {
+                slot: 11,
+                constants: vec![2, 3],
+                local: None,
+                skip: 0,
+            },
+            Op::LoadVirtualValue {
+                slot: 10,
+                discard: 0,
+            },
+            Op::LoadVirtualValue {
+                slot: 12,
+                discard: 0,
+            },
+        ];
+        forward_read_only_virtual_constants(&bytecode, &mut overlapping);
+        assert!(matches!(overlapping[0], Op::InitVirtualConstants { .. }));
+        assert!(matches!(overlapping[1], Op::InitVirtualConstants { .. }));
+        assert!(matches!(overlapping[2], Op::LoadVirtualValue { .. }));
+        assert!(matches!(overlapping[3], Op::LoadVirtualValue { .. }));
+
+        let mut malformed = vec![
+            Op::InitVirtualConstants {
+                slot: usize::MAX,
+                constants: vec![0, 1],
+                local: None,
+                skip: 0,
+            },
+            Op::InitVirtualConstants {
+                slot: 0,
+                constants: vec![2],
+                local: None,
+                skip: 0,
+            },
+            Op::LoadVirtualValue {
+                slot: 0,
+                discard: 0,
+            },
+        ];
+        forward_read_only_virtual_constants(&bytecode, &mut malformed);
+        assert!(matches!(malformed[0], Op::InitVirtualConstants { .. }));
+        assert!(matches!(malformed[1], Op::InitVirtualConstants { .. }));
+        assert!(matches!(malformed[2], Op::LoadVirtualValue { .. }));
+    }
+
+    #[test]
+    fn mutable_and_explicit_receiver_literals_keep_virtual_storage() {
+        let mutable = nested_function(
+            "function run(n) { var sum = 0; for (var i = 0; i < n; i++) { var values = [1, 2, 3]; values[2] = i; sum += values[2]; } return sum; }",
+        );
+        let mutable_program = lower(&mutable);
+        let mutable_code = mutable_program.code(&mutable.code);
+        assert!(
+            mutable_code
+                .iter()
+                .any(|op| matches!(op, Op::InitVirtualConstants { .. }))
+        );
+        assert!(
+            mutable_code
+                .iter()
+                .any(|op| matches!(op, Op::StoreVirtualValue { .. }))
+        );
+        assert!(
+            mutable_code
+                .iter()
+                .any(|op| matches!(op, Op::LoadVirtualValue { .. }))
+        );
+
+        reset_test_hits();
+        assert_eq!(
+            eval(
+                "function run(n) { var sum = 0; for (var i = 0; i < n; i++) { var values = [1, 2, 3]; values[2] = i; sum += values[2]; } return sum; } run(5);"
+            ),
+            Ok(Value::Number(10.0))
+        );
+        assert_eq!(test_hits(), 5);
+        assert_eq!(test_slot_writes(), 15);
+        assert_eq!(test_load_hits(), 5);
+
+        let explicit = nested_function(
+            "function run(n) { var sum = 0; for (var i = 0; i < n; i++) sum += [1, 2, 3][2]; return sum; }",
+        );
+        let explicit_program = lower(&explicit);
+        let explicit_code = explicit_program.code(&explicit.code);
+        assert!(explicit_code.iter().any(|op| matches!(
+            op,
+            Op::LoadVirtualValue { discard, .. } if *discard != 0
+        )));
+        assert!(
+            explicit_code
+                .iter()
+                .any(|op| matches!(op, Op::InitVirtualConstants { .. }))
+        );
+
+        reset_test_hits();
+        assert_eq!(
+            eval(
+                "function run(n) { var sum = 0; for (var i = 0; i < n; i++) sum += [1, 2, 3][2]; return sum; } run(5);"
+            ),
+            Ok(Value::Number(15.0))
+        );
+        assert_eq!(test_hits(), 5);
+        assert_eq!(test_slot_writes(), 15);
+        assert_eq!(test_load_hits(), 5);
+    }
+
+    #[test]
+    fn heap_backed_constants_and_virtual_binaries_keep_their_existing_paths() {
+        let string = nested_function(
+            "function run(n) { var value = ''; for (var i = 0; i < n; i++) { var values = ['x']; value = values[0]; } return value; }",
+        );
+        let string_program = lower(&string);
+        let string_code = string_program.code(&string.code);
+        assert!(
+            string_code
+                .iter()
+                .any(|op| matches!(op, Op::InitVirtualConstants { .. }))
+        );
+        assert!(
+            string_code
+                .iter()
+                .any(|op| matches!(op, Op::LoadVirtualValue { .. }))
+        );
+
+        let bigint = nested_function("function run() { var values = [1n]; return values[0]; }");
+        let bigint_program = lower(&bigint);
+        let bigint_code = bigint_program.code(&bigint.code);
+        assert!(
+            bigint_code
+                .iter()
+                .any(|op| matches!(op, Op::InitVirtualConstants { .. }))
+        );
+        assert!(
+            bigint_code
+                .iter()
+                .any(|op| matches!(op, Op::LoadVirtualValue { .. }))
+        );
+
+        let binary = nested_function(
+            "function run(n) { var sum = 0; for (var i = 0; i < n; i++) { var point = { x: 1, y: 2 }; sum += point.x + point.y; } return sum; }",
+        );
+        let binary_program = lower(&binary);
+        let binary_code = binary_program.code(&binary.code);
+        assert!(
+            binary_code
+                .iter()
+                .any(|op| matches!(op, Op::InitVirtualConstants { .. }))
+        );
+        assert!(
+            binary_code
+                .iter()
+                .any(|op| matches!(op, Op::LoadVirtualBinary { .. }))
+        );
+    }
+
+    #[test]
     fn lowers_object_and_array_literals_without_a_second_executor() {
         reset_test_hits();
         let source = r#"
@@ -1175,6 +1703,8 @@ mod tests {
         "#;
         assert_eq!(eval(source), Ok(Value::Number(3.0)));
         assert_eq!(test_hits(), 0);
+        assert_eq!(test_slot_writes(), 0);
+        assert_eq!(test_load_hits(), 0);
     }
 
     #[test]
@@ -1198,6 +1728,36 @@ mod tests {
             Ok(Value::String("true:abc".to_owned().into()))
         );
         assert_eq!(test_hits(), 0);
+        assert_eq!(test_slot_writes(), 0);
+        assert_eq!(test_load_hits(), 0);
+    }
+
+    #[test]
+    fn capture_eval_and_with_keep_literals_on_the_allocation_path() {
+        for (source, expected) in [
+            (
+                "function run() { var values = [1, 2, 3]; function read() { return values[2]; } return read(); } run();",
+                Value::Number(3.0),
+            ),
+            (
+                "function run() { var values = [1, 2, 3]; eval(''); return values[2]; } run();",
+                Value::Number(3.0),
+            ),
+            (
+                "function run() { with ({}) { var values = [1, 2, 3]; return values[2]; } } run();",
+                Value::Number(3.0),
+            ),
+            (
+                "function make() { var values = [1, 2, 3]; return values; } var a = make(); var b = make(); a !== b && a[2] === 3 && b[2] === 3;",
+                Value::Boolean(true),
+            ),
+        ] {
+            reset_test_hits();
+            assert_eq!(eval(source), Ok(expected), "{source}");
+            assert_eq!(test_hits(), 0, "{source}");
+            assert_eq!(test_slot_writes(), 0, "{source}");
+            assert_eq!(test_load_hits(), 0, "{source}");
+        }
     }
 
     #[test]

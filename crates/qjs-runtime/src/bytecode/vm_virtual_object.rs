@@ -35,16 +35,18 @@ impl<'a> Vm<'a> {
                 local,
                 skip,
             } => {
-                let end = slot.checked_add(*count).ok_or_else(|| RuntimeError {
-                    thrown: None,
-                    message: "virtual object slot range out of bounds".to_owned(),
-                })?;
-                if self.virtual_values.len() < end {
-                    self.virtual_values.resize(end, Value::Undefined);
-                }
-                for target in (*slot..end).rev() {
-                    let value = self.pop()?;
-                    self.virtual_values[target] = value;
+                if *count != 0 {
+                    let end = slot.checked_add(*count).ok_or_else(|| RuntimeError {
+                        thrown: None,
+                        message: "virtual object slot range out of bounds".to_owned(),
+                    })?;
+                    if self.virtual_values.len() < end {
+                        self.virtual_values.resize(end, Value::Undefined);
+                    }
+                    for target in (*slot..end).rev() {
+                        let value = self.pop()?;
+                        self.virtual_values[target] = value;
+                    }
                 }
                 if let Some(local) = local {
                     let target = self.locals.get_mut(*local).ok_or_else(|| RuntimeError {
@@ -57,7 +59,7 @@ impl<'a> Vm<'a> {
                 }
                 self.ip += *skip;
                 #[cfg(test)]
-                super::virtual_object::record_virtual_init_for_test();
+                super::virtual_object::record_virtual_init_for_test(*count);
             }
             Op::InitVirtualConstants {
                 slot,
@@ -97,7 +99,7 @@ impl<'a> Vm<'a> {
                 }
                 self.ip += *skip;
                 #[cfg(test)]
-                super::virtual_object::record_virtual_init_for_test();
+                super::virtual_object::record_virtual_init_for_test(constants.len());
             }
             Op::InitVirtualFunction { local, skip } => {
                 if let Some(local) = local {
@@ -114,6 +116,8 @@ impl<'a> Vm<'a> {
                 super::virtual_object::record_virtual_function_init_for_test();
             }
             Op::LoadVirtualValue { slot, discard } => {
+                #[cfg(test)]
+                super::virtual_object::record_virtual_load_for_test(1);
                 for _ in 0..*discard {
                     self.pop()?;
                 }
@@ -155,6 +159,8 @@ impl<'a> Vm<'a> {
                 op,
                 skip,
             } => {
+                #[cfg(test)]
+                super::virtual_object::record_virtual_load_for_test(2);
                 let direct = self
                     .virtual_values
                     .get(*left)
