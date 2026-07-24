@@ -753,6 +753,9 @@ pub(super) fn compile_dynamic(
     if !has_dense_load && hole_tail_append.is_none() {
         return None;
     }
+    let compact_program =
+        CompactProgram::lower(&translator.operations, &translator.writes, sunk_store, &[])
+            .map(Box::new);
 
     Some((
         exit,
@@ -775,6 +778,7 @@ pub(super) fn compile_dynamic(
             number_sources: translator.number_sources,
             local_slots,
             operations: translator.operations,
+            compact_program,
             writes: translator.writes,
             store_count: translator.store_count,
             sunk_store,

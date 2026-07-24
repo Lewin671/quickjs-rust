@@ -32,6 +32,8 @@ pub(in super::super) struct NestedDensePlan {
     receiver_slots: Vec<usize>,
     prelude: ScalarProgram,
     inner_operations: Vec<NumberInstruction>,
+    inner_compact_program: Option<Box<CompactProgram>>,
+    inner_compact_counter_write: Option<usize>,
     inner_writes: Vec<LocalWrite>,
     inner_counter_write: Register,
     inner_store_count: usize,
@@ -265,6 +267,19 @@ impl NestedDensePlan {
         let mut inner_writes = inner.writes.clone();
         remap_operations(&mut inner_operations, &inner.local_slots, &local_slots)?;
         remap_writes(&mut inner_writes, &inner.local_slots, &local_slots)?;
+        // The ordinary plan's compact program was lowered against its own
+        // local bank. Re-lower only after nested local remapping so LoadLocal
+        // operands and transactional writes address the merged bank.
+        let inner_compact_program = CompactProgram::lower(
+            &inner_operations,
+            &inner_writes,
+            None,
+            &[inner_counter_write],
+        )
+        .map(Box::new);
+        let inner_compact_counter_write = inner_compact_program
+            .as_ref()
+            .and_then(|program| program.number_output(inner_counter_write));
         let max_operations = prelude
             .operations
             .len()
@@ -284,6 +299,8 @@ impl NestedDensePlan {
             receiver_slots,
             prelude,
             inner_operations,
+            inner_compact_program,
+            inner_compact_counter_write,
             inner_writes,
             inner_counter_write,
             inner_store_count: inner.store_count,
@@ -355,15 +372,58 @@ impl NestedDensePlan {
             Some(registers) => registers.as_mut_slice(),
             None => &mut inline_registers[..self.max_operations],
         };
-        let outcome = ArrayRef::with_distinct_dense_writable_elements(&arrays, |elements| {
-            record_nested_dense_entry();
-            record_nested_dense_seeded_iteration();
-            let mut access = MultiAccess {
-                elements,
-                pending: Vec::with_capacity(self.inner_store_count),
-            };
-            self.run_region(&mut access, bank, registers)
-        });
+        let outcome = match (
+            self.inner_compact_program.as_ref(),
+            self.inner_compact_counter_write,
+        ) {
+            (Some(program), Some(counter_write)) => {
+                let mut scratch = CompactScratch::new(program);
+                let (numbers, words) = scratch.banks(program);
+                ArrayRef::with_distinct_dense_writable_elements(&arrays, |elements| {
+                    record_nested_dense_entry();
+                    record_nested_dense_seeded_iteration();
+                    let mut access = MultiAccess {
+                        elements,
+                        pending: Vec::with_capacity(self.inner_store_count),
+                    };
+                    self.run_region_with(
+                        &mut access,
+                        bank,
+                        registers,
+                        numbers,
+                        words,
+                        |plan, access, bank, _, numbers, words| {
+                            plan.run_compact_inner_iteration(
+                                program,
+                                counter_write,
+                                access,
+                                bank,
+                                numbers,
+                                words,
+                            )
+                        },
+                    )
+                })
+            }
+            _ => ArrayRef::with_distinct_dense_writable_elements(&arrays, |elements| {
+                record_nested_dense_entry();
+                record_nested_dense_seeded_iteration();
+                let mut access = MultiAccess {
+                    elements,
+                    pending: Vec::with_capacity(self.inner_store_count),
+                };
+                self.run_region_with(
+                    &mut access,
+                    bank,
+                    registers,
+                    &mut [],
+                    &mut [],
+                    |plan, access, bank, registers, _, _| {
+                        plan.run_inner_iteration(access, bank, registers)
+                    },
+                )
+            }),
+        };
         let Some(outcome) = outcome else {
             return NestedDensePlanRun::Suppress;
         };
@@ -389,12 +449,25 @@ impl NestedDensePlan {
         }
     }
 
-    fn run_region(
+    fn run_region_with<F>(
         &self,
         access: &mut MultiAccess<'_, '_>,
         mut bank: LocalBank,
         registers: &mut [f64],
-    ) -> RegionOutcome {
+        numbers: &mut [f64],
+        words: &mut [u32],
+        mut run_inner: F,
+    ) -> RegionOutcome
+    where
+        F: FnMut(
+            &Self,
+            &mut MultiAccess<'_, '_>,
+            &mut LocalBank,
+            &mut [f64],
+            &mut [f64],
+            &mut [u32],
+        ) -> bool,
+    {
         // Entry is the first inner backedge: one interpreted iteration has
         // already committed in this outer iteration.
         let mut resumed_inner = true;
@@ -433,7 +506,7 @@ impl NestedDensePlan {
                     }
                     break;
                 }
-                if !self.run_inner_iteration(access, &mut bank, registers) {
+                if !run_inner(self, access, &mut bank, registers, numbers, words) {
                     return if resumed_inner || native_inner_commits != 0 {
                         RegionOutcome::ReplayInner(bank)
                     } else {
@@ -485,6 +558,37 @@ impl NestedDensePlan {
         for write in &self.inner_writes {
             bank.write_number(write.local, registers[write.value]);
         }
+        true
+    }
+
+    fn run_compact_inner_iteration(
+        &self,
+        program: &CompactProgram,
+        counter_write: usize,
+        access: &mut MultiAccess<'_, '_>,
+        bank: &mut LocalBank,
+        numbers: &mut [f64],
+        words: &mut [u32],
+    ) -> bool {
+        let old_counter = match bank.number(self.inner_counter) {
+            Some(counter) => counter,
+            None => return false,
+        };
+        access.reset_iteration();
+        if !program.run_iteration(access, |local| bank.number(local), &[], numbers, words) {
+            return false;
+        }
+        debug_assert_eq!(access.staged_store_count(), self.inner_store_count);
+        let next_counter = numbers[counter_write];
+        if !valid_counted_value(Some(next_counter)) || next_counter <= old_counter {
+            return false;
+        }
+
+        access.commit_stores();
+        for write in program.writes() {
+            bank.write_number(write.local, numbers[write.value]);
+        }
+        record_compact_word_iteration();
         true
     }
 

@@ -28,6 +28,7 @@ mod hole_tail_append;
 mod invariants;
 mod legacy;
 mod nested;
+mod program;
 
 use hole_tail_append::{HoleTailAppendAccess, HoleTailAppendPlan};
 use invariants::{
@@ -39,6 +40,7 @@ pub(super) use nested::{
 };
 #[cfg(test)]
 pub(super) use nested::{test_discover_enclosing_bytecode, test_discover_enclosing_intervals};
+use program::{CompactProgram, CompactScratch};
 
 const INLINE_DENSE_OPS: usize = 64;
 const MAX_DENSE_OPS: usize = 256;
@@ -94,6 +96,7 @@ thread_local! {
     static NESTED_DENSE_BAILOUTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static NESTED_DENSE_DISCOVERY_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static DYNAMIC_DENSE_COMPILATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static COMPACT_WORD_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -131,6 +134,7 @@ pub(super) fn reset_test_iterations() {
     NESTED_DENSE_BAILOUTS.set(0);
     NESTED_DENSE_DISCOVERY_WORK.set(0);
     DYNAMIC_DENSE_COMPILATIONS.set(0);
+    COMPACT_WORD_ITERATIONS.set(0);
 }
 
 #[cfg(test)]
@@ -299,6 +303,11 @@ pub(super) fn test_dynamic_dense_compilations() -> usize {
 }
 
 #[cfg(test)]
+pub(super) fn test_compact_word_iterations() -> usize {
+    COMPACT_WORD_ITERATIONS.get()
+}
+
+#[cfg(test)]
 pub(super) fn test_checked_array_index_product(left: usize, right: usize) -> Option<usize> {
     legacy::test_checked_array_index_product(left, right)
 }
@@ -439,6 +448,12 @@ fn record_dynamic_dense_compilation() {
 }
 
 #[inline]
+fn record_compact_word_iteration() {
+    #[cfg(test)]
+    COMPACT_WORD_ITERATIONS.set(COMPACT_WORD_ITERATIONS.get() + 1);
+}
+
+#[inline]
 fn record_iteration() {
     #[cfg(test)]
     DENSE_LOOP_ITERATIONS.set(DENSE_LOOP_ITERATIONS.get() + 1);
@@ -570,6 +585,7 @@ struct DynamicDensePlan {
     number_sources: Vec<OwnDataSource>,
     local_slots: Vec<usize>,
     operations: Vec<NumberInstruction>,
+    compact_program: Option<Box<CompactProgram>>,
     writes: Vec<LocalWrite>,
     store_count: usize,
     sunk_store: Option<SunkDenseStore>,
@@ -1297,6 +1313,105 @@ impl DynamicDensePlan {
         }
     }
 
+    fn run_compact_program<A: DenseAccess>(
+        &self,
+        program: &CompactProgram,
+        scratch: &mut CompactScratch,
+        access: &mut A,
+        locals: &mut [f64; MAX_DENSE_LOCALS],
+        invariant_numbers: &[f64],
+        limit: Option<f64>,
+    ) -> DynamicProgramRun {
+        let (numbers, words) = scratch.banks(program);
+        let mut made_progress = false;
+        loop {
+            let counter = locals[self.counter_local];
+            let countdown_old = match self.control {
+                DynamicControl::LessThan(_) => {
+                    let limit = limit.expect("less-than controls always resolve a limit");
+                    if !matches!(counter.partial_cmp(&limit), Some(std::cmp::Ordering::Less)) {
+                        return DynamicProgramRun {
+                            deoptimized: false,
+                            made_progress,
+                        };
+                    }
+                    None
+                }
+                DynamicControl::AtLeastZero => {
+                    if counter < 0.0 {
+                        return DynamicProgramRun {
+                            deoptimized: false,
+                            made_progress,
+                        };
+                    }
+                    None
+                }
+                DynamicControl::Countdown => {
+                    if counter == 0.0 {
+                        locals[self.counter_local] = -1.0;
+                        return DynamicProgramRun {
+                            deoptimized: false,
+                            made_progress,
+                        };
+                    }
+                    locals[self.counter_local] = counter - 1.0;
+                    Some(counter)
+                }
+            };
+            access.reset_iteration();
+            if !program.run_iteration(
+                access,
+                |local| Some(locals[local]),
+                invariant_numbers,
+                numbers,
+                words,
+            ) {
+                return self.deoptimized_run(locals, countdown_old, made_progress);
+            }
+            if let Some(store) = program.sunk_store() {
+                let Some(index) = array_index_from_number(numbers[store.index]) else {
+                    return self.deoptimized_run(locals, countdown_old, made_progress);
+                };
+                if !access.stage_store(store.receiver, index, numbers[store.value]) {
+                    return self.deoptimized_run(locals, countdown_old, made_progress);
+                }
+            }
+            debug_assert_eq!(access.staged_store_count(), self.store_count);
+            access.commit_stores();
+            for write in program.writes() {
+                locals[write.local] = numbers[write.value];
+            }
+            #[cfg(test)]
+            if self.store_count == 0 {
+                record_read_only_iteration();
+            }
+            if self.control.is_countdown() {
+                record_countdown_iteration();
+            }
+            made_progress = true;
+            record_compact_word_iteration();
+            record_iteration();
+        }
+    }
+
+    #[inline]
+    fn run_selected_program<A: DenseAccess>(
+        &self,
+        access: &mut A,
+        locals: &mut [f64; MAX_DENSE_LOCALS],
+        invariant_numbers: &[f64],
+        registers: &mut [f64],
+        compact_scratch: &mut Option<CompactScratch>,
+        limit: Option<f64>,
+    ) -> DynamicProgramRun {
+        match (&self.compact_program, compact_scratch) {
+            (Some(program), Some(scratch)) => {
+                self.run_compact_program(program, scratch, access, locals, invariant_numbers, limit)
+            }
+            _ => self.run_program(access, locals, invariant_numbers, registers, limit),
+        }
+    }
+
     fn try_run_hole_tail_append(
         &self,
         vm: &mut Vm<'_>,
@@ -1307,6 +1422,7 @@ impl DynamicDensePlan {
         limit: Option<f64>,
     ) -> Option<DynamicProgramRun> {
         let append = self.hole_tail_append?;
+        let mut compact_scratch = self.compact_program.as_deref().map(CompactScratch::new);
         record_hole_tail_append_attempt();
         let writer_receiver = append.writer_receiver();
         let writer = arrays.get(writer_receiver)?;
@@ -1334,7 +1450,14 @@ impl DynamicDensePlan {
                     logical_length,
                     limit.expect("append plans use less-than control"),
                 );
-                self.run_program(&mut access, locals, invariant_numbers, registers, limit)
+                self.run_selected_program(
+                    &mut access,
+                    locals,
+                    invariant_numbers,
+                    registers,
+                    &mut compact_scratch,
+                    limit,
+                )
             },
         );
         if ran.is_some_and(|run| run.made_progress) {
@@ -1424,12 +1547,15 @@ impl DynamicDensePlan {
             DynamicControl::Countdown => None,
         };
         let mut inline_registers = [0.0; INLINE_DENSE_OPS];
-        let mut large_registers =
-            (self.operations.len() > INLINE_DENSE_OPS).then(|| vec![0.0; self.operations.len()]);
+        let mut large_registers = (self.compact_program.is_none()
+            && self.operations.len() > INLINE_DENSE_OPS)
+            .then(|| vec![0.0; self.operations.len()]);
         let registers = match large_registers.as_mut() {
             Some(registers) => registers.as_mut_slice(),
+            None if self.compact_program.is_some() => &mut inline_registers[..0],
             None => &mut inline_registers[..self.operations.len()],
         };
+        let mut compact_scratch = self.compact_program.as_deref().map(CompactScratch::new);
 
         let ran = if self.store_count == 0 {
             let Some(arrays) = self
@@ -1443,11 +1569,12 @@ impl DynamicDensePlan {
             };
             let ran = ArrayRef::with_dense_readable_element_sets(&arrays, |elements| {
                 let mut access = ReadAccess { elements };
-                self.run_program(
+                self.run_selected_program(
                     &mut access,
                     &mut locals,
                     &invariant_numbers,
                     registers,
+                    &mut compact_scratch,
                     limit,
                 )
             });
@@ -1472,11 +1599,12 @@ impl DynamicDensePlan {
                     elements,
                     pending: None,
                 };
-                self.run_program(
+                self.run_selected_program(
                     &mut access,
                     &mut locals,
                     &invariant_numbers,
                     registers,
+                    &mut compact_scratch,
                     limit,
                 )
             });
@@ -1512,11 +1640,12 @@ impl DynamicDensePlan {
                     elements,
                     pending: Vec::with_capacity(self.store_count),
                 };
-                self.run_program(
+                self.run_selected_program(
                     &mut access,
                     &mut locals,
                     &invariant_numbers,
                     registers,
+                    &mut compact_scratch,
                     limit,
                 )
             });

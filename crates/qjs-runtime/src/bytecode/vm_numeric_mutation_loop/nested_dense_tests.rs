@@ -83,6 +83,37 @@ function slowRegion(left, right, size, outerLimit, stride, start) {
 }
 "#;
 
+const WORD_REGION: &str = r#"
+function wordRegion(left, right, size, outerLimit) {
+  var i;
+  for (var outer = 0; outer < outerLimit; outer++) {
+    i = outer;
+    while (i < size) {
+      left[i] = (left[i] ^ (i << 1)) >>> 0;
+      right[i] = ~(right[i] & left[i]);
+      i += outerLimit;
+    }
+  }
+  return left.join(':') + '|' + right.join(':');
+}
+"#;
+
+const SLOW_WORD_REGION: &str = r#"
+function slowWordRegion(left, right, size, outerLimit) {
+  var i;
+  for (var outer = 0; outer < outerLimit; outer++) {
+    i = outer;
+    while (i < size) {
+      void String;
+      left[i] = (left[i] ^ (i << 1)) >>> 0;
+      right[i] = ~(right[i] & left[i]);
+      i += outerLimit;
+    }
+  }
+  return left.join(':') + '|' + right.join(':');
+}
+"#;
+
 fn nested_function(source: &str, name: &str) -> Bytecode {
     let script = qjs_parser::parse_script(source).expect("source should parse");
     let bytecode = compiler::compile_script(&script).expect("source should compile");
@@ -201,6 +232,34 @@ fn nested_dense_region_preserves_same_iteration_store_load_forwarding() {
     assert_eq!(dense::test_nested_dense_outer_completions(), 2);
     assert_eq!(dense::test_nested_dense_inner_commits(), 7);
     assert_eq!(dense::test_nested_dense_bailouts(), 0);
+}
+
+#[test]
+fn nested_dense_region_relowers_word_program_after_local_remap() {
+    dense::reset_test_iterations();
+    let source = format!(
+        "{WORD_REGION}{SLOW_WORD_REGION} var a=[1,2,3,4,5,6,7,8], b=[10,20,30,40,50,60,70,80], c=a.slice(), d=b.slice(); wordRegion(a,b,8,2) === slowWordRegion(c,d,8,2);"
+    );
+    assert_eq!(eval(&source), Ok(Value::Boolean(true)));
+    assert_eq!(dense::test_nested_dense_entries(), 1);
+    assert!(dense::test_nested_dense_inner_commits() > 0);
+    assert!(dense::test_compact_word_iterations() > 0);
+    assert_eq!(dense::test_nested_dense_bailouts(), 0);
+}
+
+#[test]
+fn nested_word_program_discards_stores_before_mid_iteration_deopt() {
+    dense::reset_test_iterations();
+    let source = format!(
+        "{WORD_REGION} var hits=0, marker={{valueOf:function(){{hits++;return 7;}}}}; wordRegion([1,2,3,4], [10,20,marker,40], 4, 2) + '|' + hits;"
+    );
+    assert_eq!(
+        eval(&source),
+        Ok(Value::String("1:0:7:2|-1:-1:-8:-1|1".to_owned().into()))
+    );
+    assert_eq!(dense::test_nested_dense_entries(), 1);
+    assert_eq!(dense::test_nested_dense_inner_commits(), 0);
+    assert_eq!(dense::test_nested_dense_bailouts(), 1);
 }
 
 #[test]

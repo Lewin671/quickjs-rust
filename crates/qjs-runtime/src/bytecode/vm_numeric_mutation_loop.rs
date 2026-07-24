@@ -17,6 +17,8 @@ mod dense_reduction_tests;
 #[cfg(test)]
 mod dense_typed_array_tests;
 #[cfg(test)]
+mod dense_word_tests;
+#[cfg(test)]
 mod nested_dense_tests;
 mod predicate_scan;
 
@@ -1791,6 +1793,7 @@ mod tests {
             Ok(Value::Number(18.0))
         );
         assert!(dense::test_iterations() > 0);
+        assert!(dense::test_compact_word_iterations() > 0);
     }
 
     #[test]
