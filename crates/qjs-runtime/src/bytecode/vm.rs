@@ -104,14 +104,24 @@ pub(super) fn eval_function_bytecode<'a>(
     // needs generic load/store ops redirected through the caller's with stack.
     vm.direct_eval_with_stack = direct_eval_with_stack;
     let value = vm.run();
-    let frame = vm.into_frame();
+    // Move the four fields the caller needs straight out of the frame. Binding
+    // the whole `FrameState` first materializes several hundred bytes of it in
+    // this function's own frame, which a profile charges to `memmove` on every
+    // call.
+    let FrameState {
+        env,
+        locals,
+        local_upvalues,
+        sloppy_global_names,
+        ..
+    } = vm.current;
     FunctionBytecodeResult {
         value,
         bytecode,
-        env: frame.env,
-        locals: frame.locals,
-        local_upvalues: frame.local_upvalues,
-        sloppy_global_names: frame.sloppy_global_names,
+        env,
+        locals,
+        local_upvalues,
+        sloppy_global_names,
     }
 }
 
