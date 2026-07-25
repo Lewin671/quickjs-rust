@@ -744,3 +744,75 @@ fn for_let_head_allocates_a_cell_after_the_initializer_and_each_back_edge() {
         Ok(Value::String("0:0,1,2".to_owned().into()))
     );
 }
+
+#[test]
+fn direct_call_frames_host_only_non_capturing_closures() {
+    // A function whose closures capture nothing may use the slot-seeded direct
+    // call frame; one whose closure captures a local, `this`, `arguments`, its
+    // own name, or a class must not, because that frame never promotes a slot
+    // to an upvalue cell.
+    assert_eq!(
+        eval("function f() { var g = function () { return 7; }; return g(); } f() + ':' + f();"),
+        Ok(Value::String("7:7".to_owned().into()))
+    );
+    // Captured parameter and captured local must stay live and per-call.
+    assert_eq!(
+        eval(
+            "function f(a) { var g = function () { return a; }; a = a + 1; return g(); } f(1) + ':' + f(10);"
+        ),
+        Ok(Value::String("2:11".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function f() { var n = 0; var inc = function () { n = n + 1; return n; }; inc(); inc(); return n; } f() + ':' + f();"
+        ),
+        Ok(Value::String("2:2".to_owned().into()))
+    );
+    // Each call's closure must see its own frame, not a shared one.
+    assert_eq!(
+        eval(
+            "function mk(v) { return function () { return v; }; } var a = mk(1), b = mk(2); a() + ':' + b();"
+        ),
+        Ok(Value::String("1:2".to_owned().into()))
+    );
+    // An arrow captures `this` from the frame.
+    assert_eq!(
+        eval("var o = { v: 5, get: function () { var a = () => this.v; return a(); } }; o.get();"),
+        Ok(Value::Number(5.0))
+    );
+    // A nested closure over `arguments`.
+    assert_eq!(
+        eval(
+            "function f() { var g = function () { return arguments.length; }; return g(1, 2) + ':' + arguments.length; } f(9);"
+        ),
+        Ok(Value::String("2:1".to_owned().into()))
+    );
+    // A closure over the enclosing function expression's own name.
+    assert_eq!(
+        eval(
+            "var f = function self(n) { var g = function () { return typeof self; }; return n ? g() : 'x'; }; f(1);"
+        ),
+        Ok(Value::String("function".to_owned().into()))
+    );
+    // A closure created inside a loop captures the per-iteration binding.
+    assert_eq!(
+        eval(
+            "function f() { var out = []; for (let i = 0; i < 3; i++) { out.push(function () { return i; }); } return out.map(function (g) { return g(); }).join(','); } f();"
+        ),
+        Ok(Value::String("0,1,2".to_owned().into()))
+    );
+    // A class declared inside a call frame.
+    assert_eq!(
+        eval(
+            "function f(v) { class C { get() { return v; } } return new C().get(); } f(3) + ':' + f(4);"
+        ),
+        Ok(Value::String("3:4".to_owned().into()))
+    );
+    // A non-capturing closure alongside a captured local in the same body.
+    assert_eq!(
+        eval(
+            "function f(a) { var pure = function () { return 1; }; var cap = function () { return a; }; return pure() + cap(); } f(41);"
+        ),
+        Ok(Value::Number(42.0))
+    );
+}

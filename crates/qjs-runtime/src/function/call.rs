@@ -954,7 +954,7 @@ fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode) -> bool {
         && !bytecode.contains_direct_eval()
         && !bytecode.contains_with()
         && !bytecode.contains_super_operation()
-        && !bytecode.creates_closures()
+        && !bytecode.creates_capturing_closures()
 }
 
 fn parameter_list_contains_name(params: &FunctionParams, expected: &str) -> bool {

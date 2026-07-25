@@ -961,6 +961,7 @@ pub struct Bytecode {
     cached_closure_written_binding_names: Vec<String>,
     cached_writes_binding_set: HashSet<String>,
     cached_creates_closures: bool,
+    cached_creates_capturing_closures: bool,
     cached_needs_arguments_object: bool,
     cached_contains_direct_eval: bool,
     cached_contains_with: bool,
@@ -1057,6 +1058,7 @@ impl Bytecode {
             cached_closure_written_binding_names: Vec::new(),
             cached_writes_binding_set: HashSet::new(),
             cached_creates_closures: false,
+            cached_creates_capturing_closures: false,
             cached_needs_arguments_object: false,
             cached_contains_direct_eval: false,
             cached_contains_with: false,
@@ -1074,6 +1076,7 @@ impl Bytecode {
             bytecode.compute_closure_written_binding_names();
         bytecode.cached_writes_binding_set = bytecode.compute_writes_binding_set();
         bytecode.cached_creates_closures = bytecode.compute_creates_closures();
+        bytecode.cached_creates_capturing_closures = bytecode.compute_creates_capturing_closures();
         bytecode.cached_needs_arguments_object = bytecode.compute_needs_arguments_object();
         bytecode.cached_contains_direct_eval = bytecode.code.iter().any(|op| {
             matches!(
@@ -1315,6 +1318,33 @@ impl Bytecode {
         self.code
             .iter()
             .any(|op| matches!(op, Op::NewFunction { .. } | Op::NewClass { .. }))
+    }
+
+    /// Whether any closure this body creates needs a cell from this frame.
+    ///
+    /// The slot-seeded direct call path stores locals in frame slots and never
+    /// promotes them to upvalue cells, so it cannot host a closure that
+    /// captures one. A closure that captures nothing -- a callback built from
+    /// constants and its own parameters, which is most of them -- imposes no
+    /// such requirement, and neither does a body that creates no closure at
+    /// all. Classes and `this`-carrying function literals are excluded
+    /// wholesale: they reach for home object, super constructor, private
+    /// environment, and `new.target` cells that the direct frame does not
+    /// install.
+    pub(crate) fn creates_capturing_closures(&self) -> bool {
+        self.cached_creates_capturing_closures
+    }
+
+    fn compute_creates_capturing_closures(&self) -> bool {
+        self.code.iter().any(|op| match op {
+            Op::NewFunction {
+                lexical_captures,
+                lexical_this,
+                ..
+            } => *lexical_this || !lexical_captures.is_empty(),
+            Op::NewClass { .. } => true,
+            _ => false,
+        })
     }
 
     /// Whether this body contains a top-level `await` (`Op::Await`). Nested
