@@ -22,6 +22,9 @@ use std::hash::{BuildHasherDefault, Hasher};
 /// [`std::collections::HashMap`] over engine-internal string keys.
 pub(crate) type NameMap<K, V> = std::collections::HashMap<K, V, BuildHasherDefault<NameHasher>>;
 
+/// [`std::collections::HashSet`] over engine-internal string keys.
+pub(crate) type NameSet<K> = std::collections::HashSet<K, BuildHasherDefault<NameHasher>>;
+
 /// The golden-ratio-derived odd multiplier used by FxHash.
 const SEED: u64 = 0x51_7c_c1_b7_27_22_0a_95;
 const ROTATE: u32 = 5;

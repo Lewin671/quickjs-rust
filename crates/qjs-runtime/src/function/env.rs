@@ -207,14 +207,15 @@ pub(crate) type Realm = Rc<RealmState>;
 pub(crate) fn new_realm(bindings: HashMap<String, Value>) -> Realm {
     Rc::new(RealmState::new(bindings))
 }
-pub(crate) type GlobalLexicalBindings = Rc<RefCell<HashSet<String>>>;
-pub(crate) type GlobalLexicalValues = Rc<RefCell<HashMap<String, Value>>>;
-pub(crate) type ImmutableLexicalBindings = Rc<RefCell<HashSet<String>>>;
+pub(crate) type GlobalLexicalBindings = Rc<RefCell<crate::value::name_hash::NameSet<String>>>;
+pub(crate) type GlobalLexicalValues = Rc<RefCell<crate::value::name_hash::NameMap<String, Value>>>;
+pub(crate) type ImmutableLexicalBindings = Rc<RefCell<crate::value::name_hash::NameSet<String>>>;
 /// Structurally immutable module-import routing shared by function objects and
 /// call frames. Module setup uses copy-on-write so environment clones preserve
 /// their previous routing table while ordinary scripts and nested functions
 /// retain only one pointer-sized empty map.
-pub(crate) type ModuleImports = Rc<HashMap<String, (DynamicBindings, String)>>;
+pub(crate) type ModuleImports =
+    Rc<crate::value::name_hash::NameMap<String, (DynamicBindings, String)>>;
 
 #[derive(Clone)]
 enum FrameBindingValue {
@@ -680,10 +681,10 @@ impl CallEnv {
     pub(crate) fn new(realm: Realm) -> Self {
         Self {
             realm,
-            global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
-            global_lexical_values: Rc::new(RefCell::new(HashMap::new())),
+            global_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
+            global_lexical_values: Rc::new(RefCell::new(HashMap::default())),
             expose_global_lexical_values: false,
-            immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
+            immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
             frame_bindings: FrameBindings::default(),
             new_target: None,
             deopt_bindings: None,
@@ -788,10 +789,10 @@ impl CallEnv {
     pub(crate) fn detached() -> Self {
         Self {
             realm: new_realm(HashMap::new()),
-            global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
-            global_lexical_values: Rc::new(RefCell::new(HashMap::new())),
+            global_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
+            global_lexical_values: Rc::new(RefCell::new(HashMap::default())),
             expose_global_lexical_values: false,
-            immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
+            immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
             frame_bindings: FrameBindings::default(),
             new_target: None,
             deopt_bindings: None,
@@ -814,10 +815,10 @@ impl CallEnv {
     pub(crate) fn from_map(map: HashMap<String, Value>) -> Self {
         Self {
             realm: new_realm(map),
-            global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
-            global_lexical_values: Rc::new(RefCell::new(HashMap::new())),
+            global_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
+            global_lexical_values: Rc::new(RefCell::new(HashMap::default())),
             expose_global_lexical_values: false,
-            immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
+            immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
             frame_bindings: FrameBindings::default(),
             new_target: None,
             deopt_bindings: None,
@@ -838,10 +839,10 @@ impl CallEnv {
     pub(crate) fn with_locals(realm: Realm, locals: HashMap<String, Value>) -> Self {
         Self {
             realm,
-            global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
-            global_lexical_values: Rc::new(RefCell::new(HashMap::new())),
+            global_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
+            global_lexical_values: Rc::new(RefCell::new(HashMap::default())),
             expose_global_lexical_values: false,
-            immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
+            immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
             frame_bindings: FrameBindings::from_values(locals),
             new_target: None,
             deopt_bindings: None,
@@ -1501,7 +1502,7 @@ mod tests {
     #[test]
     fn direct_leaf_frames_share_empty_metadata_until_mutation() {
         let caller = CallEnv::new(new_realm(HashMap::new()));
-        let imports = Rc::new(HashMap::new());
+        let imports: super::ModuleImports = Rc::new(Default::default());
         let mut first = caller.new_direct_leaf_function_frame(Rc::clone(&imports));
         let second = caller.new_direct_leaf_function_frame(Rc::clone(&imports));
 
