@@ -597,3 +597,100 @@ fn destructured_parameter_function_length_skips_defaults() {
         Ok(Value::Number(0.0))
     );
 }
+
+#[test]
+fn default_initializers_run_on_the_direct_call_path() {
+    // A parameter list whose only complication is a default initializer is now
+    // seeded straight into frame slots, with the compiled prologue filling the
+    // defaults. Every observable behavior of such a list must be unchanged.
+    assert_eq!(
+        eval("function f(a, b) { if (b === undefined) { b = 1; } return a + b; } f(2);"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("function f(a, b = 1) { return a + b; } f(2);"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("function f(a, b = 1) { return a + b; } f(2, 10);"),
+        Ok(Value::Number(12.0))
+    );
+    // An explicit `undefined` still triggers the default; `null` does not.
+    assert_eq!(
+        eval("function f(a = 1) { return a; } f(undefined);"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("function f(a = 1) { return a; } f(null);"),
+        Ok(Value::Null)
+    );
+    // A later default sees an earlier parameter.
+    assert_eq!(
+        eval("function f(a, b = a + 1) { return b; } f(4);"),
+        Ok(Value::Number(5.0))
+    );
+    // Defaults are evaluated per call, left to right, only when needed.
+    assert_eq!(
+        eval(
+            "var n = 0; function d() { n = n + 1; return n; } function f(a = d(), b = d()) { return a + ':' + b; } f() + '|' + f(9) + '|' + n;"
+        ),
+        Ok(Value::String("1:2|9:3|3".to_owned().into()))
+    );
+    // `arguments` reflects only the passed arguments, and is unmapped.
+    assert_eq!(
+        eval("function f(a = 1) { return arguments.length; } f();"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval(
+            "function f(a = 1) { a = 5; return arguments.length + ':' + typeof arguments[0]; } f(2);"
+        ),
+        Ok(Value::String("1:number".to_owned().into()))
+    );
+    assert_eq!(
+        eval("function f(a, b = 1) { return f.length; } f(1);"),
+        Ok(Value::Number(1.0))
+    );
+    // A body `var` of the same name starts from the parameter's value.
+    assert_eq!(
+        eval("function f(a = 1) { var a; return a; } f();"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("function f(a = 1) { var a = 2; return a; } f();"),
+        Ok(Value::Number(2.0))
+    );
+    // A default that throws propagates, and a default may reference the callee.
+    assert_eq!(
+        eval(
+            "function f(a = (function () { throw new RangeError('d'); })()) { return a; } var caught = ''; try { f(); } catch (e) { caught = e.constructor.name; } caught;"
+        ),
+        Ok(Value::String("RangeError".to_owned().into()))
+    );
+    assert_eq!(
+        eval("function f(a = f.name) { return a; } f();"),
+        Ok(Value::String("f".to_owned().into()))
+    );
+    // A rest parameter and a destructuring parameter keep the general path.
+    assert_eq!(
+        eval("function f(a, ...rest) { return a + ':' + rest.join(','); } f(1, 2, 3);"),
+        Ok(Value::String("1:2,3".to_owned().into()))
+    );
+    assert_eq!(
+        eval("function f({ x, y = 2 }) { return x + y; } f({ x: 1 });"),
+        Ok(Value::Number(3.0))
+    );
+    // Methods and arrows with defaults.
+    assert_eq!(
+        eval("var o = { v: 3, m(a = 1) { return this.v + a; } }; o.m();"),
+        Ok(Value::Number(4.0))
+    );
+    assert_eq!(
+        eval("class C { m(a = 1) { return a * 2; } } (new C()).m();"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("var g = (a = 1) => a + 1; g();"),
+        Ok(Value::Number(2.0))
+    );
+}

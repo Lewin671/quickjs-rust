@@ -935,6 +935,22 @@ fn apply_marked_realm_array_prototype(array: &ArrayRef, env: &CallEnv) {
     );
 }
 
+/// Whether a parameter list can be seeded straight into frame slots.
+///
+/// A list of plain identifiers can, and so can one whose only complication is
+/// a default initializer: the compiled prologue reads the parameter's slot,
+/// finds the `undefined` that a missing argument seeds, and evaluates the
+/// initializer into the same slot. A rest parameter or a destructuring pattern
+/// has no single receiving slot per positional argument, so those keep the
+/// general path.
+fn direct_seedable_parameter_list(params: &FunctionParams) -> bool {
+    params.rest.is_none()
+        && params
+            .positional
+            .iter()
+            .all(|element| matches!(element.binding, BindingPattern::Identifier { .. }))
+}
+
 fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode) -> bool {
     // Ordinary constructors use the same slot-backed parameter and receiver
     // model as ordinary calls. Constructor-only state such as `new.target`
@@ -949,7 +965,7 @@ fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode) -> bool {
         && (function.immutable_env_binding.is_none() || function.is_field_initializer)
         && function.deopt_bindings.is_none()
         && function.with_stack.is_empty()
-        && function.params.is_simple()
+        && direct_seedable_parameter_list(&function.params)
         && !bytecode.needs_arguments_object()
         && !bytecode.contains_direct_eval()
         && !bytecode.contains_with()
