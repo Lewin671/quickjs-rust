@@ -93,3 +93,67 @@ fn class_members_keep_inner_name_binding_after_outer_mutation() {
         Ok(Value::String("true:true:true:true".to_owned().into()))
     );
 }
+
+#[test]
+fn class_inner_name_stays_visible_to_every_member_that_uses_it() {
+    // A class body's inner name is an immutable binding in scope for every
+    // member. Members that never mention it no longer carry the binding, so
+    // every route by which a member can reach it must still work.
+    assert_eq!(
+        eval(
+            "class A { self() { return A; } } var K = A; A = 1; (K.prototype.self() === K) + ':' + A;"
+        ),
+        Ok(Value::String("true:1".to_owned().into()))
+    );
+    assert_eq!(
+        eval("class A { name2() { return A.name; } } A.prototype.name2();"),
+        Ok(Value::String("A".to_owned().into()))
+    );
+    // Through a nested closure.
+    assert_eq!(
+        eval(
+            "class A { boxed() { var f = function () { return A; }; return f(); } } var K = A; A = 0; K.prototype.boxed() === K;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // Through a direct eval.
+    assert_eq!(
+        eval("class A { ev() { return eval('A'); } } var K = A; A = 0; K.prototype.ev() === K;"),
+        Ok(Value::Boolean(true))
+    );
+    // Static methods, accessors, constructors, and field initializers.
+    assert_eq!(
+        eval(
+            "class A { static make() { return new A(); } } var K = A; A = 0; K.make() instanceof K;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("class A { get own() { return A; } } var K = A; A = 0; (new K()).own === K;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("class A { constructor() { this.k = A; } } var K = A; A = 0; (new K()).k === K;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("class A { k = A; } var K = A; A = 0; (new K()).k === K;"),
+        Ok(Value::Boolean(true))
+    );
+    // A named class expression, and a member that shadows the inner name.
+    assert_eq!(
+        eval("var C = class Inner { self() { return Inner; } }; C.prototype.self() === C;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("class A { shadow(A) { return A; } } A.prototype.shadow(7);"),
+        Ok(Value::Number(7.0))
+    );
+    // The common case: a member that never mentions the name still runs.
+    assert_eq!(
+        eval(
+            "class A { constructor(v) { this.v = v; } get2() { return this.v * 2; } } (new A(21)).get2();"
+        ),
+        Ok(Value::Number(42.0))
+    );
+}

@@ -1400,6 +1400,17 @@ impl Bytecode {
             })
     }
 
+    /// Whether any instruction in this body reads or writes the local slot
+    /// named `binding_name`. A class member's bytecode declares the class inner
+    /// name as a slot whether or not the member mentions it, so slot existence
+    /// alone cannot answer "does this body use the name".
+    pub(crate) fn uses_local_binding(&self, binding_name: &str) -> bool {
+        let Some(slot) = self.local_slot(binding_name) else {
+            return false;
+        };
+        self.code.iter().any(|op| op_touches_local_slot(op, slot))
+    }
+
     pub(crate) fn writes_binding(&self, binding_name: &str) -> bool {
         self.cached_writes_binding_set.contains(binding_name)
     }
@@ -1490,6 +1501,28 @@ fn collect_private_class_element_writes_binding(
         | ClassPrivateElementDef::Setter { def, .. } => {
             set.extend(def.bytecode.cached_writes_binding_set.iter().cloned());
         }
+    }
+}
+
+/// Whether `op` names `slot` as a frame local it reads or writes.
+fn op_touches_local_slot(op: &Op, slot: usize) -> bool {
+    match op {
+        Op::LoadLocal(index)
+        | Op::LoadLocalOrUndefined(index)
+        | Op::StoreLocal(index)
+        | Op::AssignLocal(index)
+        | Op::ClearLocal(index) => *index == slot,
+        Op::StoreGlobalSloppy { slot: index, .. }
+        | Op::StoreLocalOrGlobalSloppy { slot: index, .. } => *index == slot,
+        Op::LoadIdentWith { slot: index, .. }
+        | Op::StoreIdentWith { slot: index, .. }
+        | Op::TypeofIdentWith { slot: index, .. }
+        | Op::ResolveIdentWith { slot: index, .. }
+        | Op::DeleteIdentWith { slot: index, .. } => *index == Some(slot),
+        Op::LoadResolvedIdentWith { slot: index, .. }
+        | Op::StoreResolvedIdentWith { slot: index, .. } => *index == Some(slot),
+        Op::FreshIterationScope(slots) => slots.contains(&slot),
+        _ => false,
     }
 }
 
