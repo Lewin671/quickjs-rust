@@ -4,8 +4,8 @@ use qjs_ast::{BindingPattern, FunctionParams};
 
 use crate::{
     ArrayRef, Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING, DIRECT_EVAL_FUNCTION_CONTEXT_BINDING,
-    FIELD_INITIALIZER_EVAL_BINDING, Function, GLOBAL_THIS_BINDING, NEW_TARGET_BINDING,
-    NativeFunction, ObjectRef, RuntimeError, Value,
+    FIELD_INITIALIZER_EVAL_BINDING, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef,
+    RuntimeError, Value,
     bytecode::{
         DirectCallSlots, eval_function_bytecode, eval_function_bytecode_with_direct_call_slots,
         try_eval_numeric_leaf,
@@ -499,7 +499,7 @@ pub(crate) fn construct_function(
 
     // Make `new.target` visible to the constructor frame (and, via `super(...)`,
     // to ancestor constructors) so subclass instances get the right prototype.
-    let previous_new_target = env.insert(NEW_TARGET_BINDING.to_owned(), new_target.clone());
+    let previous_new_target = env.set_new_target(Some(new_target.clone()));
 
     // A derived constructor must create its `this` through `super(...)`, so it
     // receives no pre-built receiver. Some native constructors also need to run
@@ -517,14 +517,7 @@ pub(crate) fn construct_function(
 
     let result = call_function(target, this_value.clone(), argument_values, env, true);
 
-    match previous_new_target {
-        Some(previous) => {
-            env.insert(NEW_TARGET_BINDING.to_owned(), previous);
-        }
-        None => {
-            env.remove(NEW_TARGET_BINDING);
-        }
-    }
+    env.set_new_target(previous_new_target);
     let result = result?;
 
     match result {
@@ -1124,10 +1117,10 @@ fn insert_super_bindings(
     // calls see `new.target` undefined.
     if function.lexical_this {
         if let Some(new_target) = &function.lexical_new_target {
-            frame_env.insert(NEW_TARGET_BINDING.to_owned(), new_target.get());
+            frame_env.set_new_target(Some(new_target.get()));
         }
     } else if is_construct && let Some(new_target) = caller_env.get(NEW_TARGET_BINDING) {
-        frame_env.insert(NEW_TARGET_BINDING.to_owned(), new_target);
+        frame_env.set_new_target(Some(new_target));
     }
 }
 

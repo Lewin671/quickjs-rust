@@ -289,3 +289,65 @@ fn derived_constructor_return_waits_for_lexical_super_in_cleanup() {
         Ok(Value::String("object".to_owned().into()))
     );
 }
+
+#[test]
+fn new_target_is_visible_exactly_where_the_spec_requires() {
+    // `new.target` now lives in a dedicated frame slot rather than a
+    // NUL-prefixed frame binding. It must still be the constructor under
+    // `new`, `undefined` in an ordinary call and in a nested call made from a
+    // constructor, the original target through `super()`, and whatever
+    // `Reflect.construct` was given.
+    assert_eq!(
+        eval("function F() { return typeof new.target; } (new F()).valueOf ? 'obj' : 'obj';"),
+        Ok(Value::String("obj".to_owned().into()))
+    );
+    assert_eq!(
+        eval("function F() { this.t = new.target; } (new F()).t === F;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("function F() { return new.target; } F();"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval(
+            "function inner() { return new.target; } function F() { this.t = inner(); } (new F()).t;"
+        ),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval(
+            "class A { constructor() { this.t = new.target; } } class B extends A {} (new B()).t === B;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function A() { this.t = new.target; } function B() {} Reflect.construct(A, [], B).t === B;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("class A { constructor() { this.t = new.target.name; } } (new A()).t;"),
+        Ok(Value::String("A".to_owned().into()))
+    );
+    // A construct nested inside another construct restores the outer value.
+    assert_eq!(
+        eval(
+            "function Inner() { this.t = new.target; } function Outer() { this.inner = new Inner(); this.t = new.target; } var o = new Outer(); (o.t === Outer) + ':' + (o.inner.t === Inner);"
+        ),
+        Ok(Value::String("true:true".to_owned().into()))
+    );
+    // A constructor that throws must not leave the caller's value behind.
+    assert_eq!(
+        eval(
+            "function Bad() { throw 'x'; } function Outer() { try { new Bad(); } catch (e) {} this.t = new.target; } (new Outer()).t === Outer;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // Arrow functions take `new.target` from their enclosing frame.
+    assert_eq!(
+        eval("function F() { var a = () => new.target; this.t = a(); } (new F()).t === F;"),
+        Ok(Value::Boolean(true))
+    );
+}

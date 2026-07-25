@@ -560,6 +560,13 @@ pub(crate) struct CallEnv {
     expose_global_lexical_values: bool,
     immutable_lexical_bindings: ImmutableLexicalBindings,
     frame_bindings: FrameBindings,
+    /// `new.target` for this frame. It used to travel as a NUL-prefixed frame
+    /// binding, which cost a name allocation and a linear frame-binding scan on
+    /// entry and exit of every `new`, and left the caller's binding vector
+    /// non-empty for the duration. A dedicated slot removes all of that; the
+    /// name-keyed accessors below still answer for it so every reader is
+    /// unchanged.
+    new_target: Option<Value>,
     deopt_bindings: Option<DynamicBindings>,
     /// Dynamic-scope metadata is inherited by nested execution views but is
     /// mutated only by catch setup. Share the ordinary call path and
@@ -619,6 +626,7 @@ impl Clone for CallEnv {
             // cells themselves are shared only when a direct-eval/with deopt
             // path explicitly requests that identity.
             frame_bindings: self.frame_bindings.clone(),
+            new_target: self.new_target.clone(),
             deopt_bindings: self.deopt_bindings.clone(),
             catch_bindings: self.catch_bindings.clone(),
             immutable_function_name: self.immutable_function_name.clone(),
@@ -677,6 +685,7 @@ impl CallEnv {
             expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             frame_bindings: FrameBindings::default(),
+            new_target: None,
             deopt_bindings: None,
             catch_bindings: Default::default(),
             immutable_function_name: None,
@@ -784,6 +793,7 @@ impl CallEnv {
             expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             frame_bindings: FrameBindings::default(),
+            new_target: None,
             deopt_bindings: None,
             catch_bindings: Default::default(),
             immutable_function_name: None,
@@ -809,6 +819,7 @@ impl CallEnv {
             expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             frame_bindings: FrameBindings::default(),
+            new_target: None,
             deopt_bindings: None,
             catch_bindings: Default::default(),
             immutable_function_name: None,
@@ -832,6 +843,7 @@ impl CallEnv {
             expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             frame_bindings: FrameBindings::from_values(locals),
+            new_target: None,
             deopt_bindings: None,
             catch_bindings: Default::default(),
             immutable_function_name: None,
@@ -878,6 +890,7 @@ impl CallEnv {
             expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
             frame_bindings: FrameBindings::with_capacity(capacity),
+            new_target: None,
             deopt_bindings: None,
             catch_bindings: self.catch_bindings.clone(),
             immutable_function_name: None,
@@ -906,6 +919,7 @@ impl CallEnv {
             expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
             frame_bindings: FrameBindings::default(),
+            new_target: None,
             deopt_bindings: None,
             catch_bindings: Rc::clone(&empty_name_set),
             immutable_function_name: None,
@@ -1102,6 +1116,9 @@ impl CallEnv {
     /// an owned value because a value behind the realm `RefCell` cannot be
     /// handed out by reference.
     pub(crate) fn get(&self, name: &str) -> Option<Value> {
+        if name == crate::NEW_TARGET_BINDING {
+            return self.new_target.clone();
+        }
         if let Some(value) = self.frame_bindings.get(name) {
             return Some(value);
         }
@@ -1209,7 +1226,20 @@ impl CallEnv {
     /// Inserts a frame-local binding (`this`, params, captures, caller-scope
     /// bindings). The VM write-back routes these to real locals-or-globals via
     /// `local_slot`. Realm/global definitions use [`CallEnv::insert_realm`].
+    /// Installs `new.target` for this frame, returning the previous value.
+    /// `construct_function` restores it on the way out, so the ordinary call
+    /// path never allocates a binding name for it.
+    pub(crate) fn set_new_target(&mut self, value: Option<Value>) -> Option<Value> {
+        match value {
+            Some(value) => self.new_target.replace(value),
+            None => self.new_target.take(),
+        }
+    }
+
     pub(crate) fn insert(&mut self, name: String, value: Value) -> Option<Value> {
+        if name == crate::NEW_TARGET_BINDING {
+            return self.new_target.replace(value);
+        }
         if let Some(bindings) = &self.deopt_bindings
             && bindings.contains_key(&name)
         {
@@ -1316,6 +1346,9 @@ impl CallEnv {
 
     /// Removes a frame-local binding.
     pub(crate) fn remove(&mut self, name: &str) -> Option<Value> {
+        if name == crate::NEW_TARGET_BINDING {
+            return self.new_target.take();
+        }
         if let Some(bindings) = &self.deopt_bindings
             && bindings.contains_key(name)
         {
@@ -1399,6 +1432,7 @@ impl CallEnv {
             expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
             frame_bindings: self.frame_bindings.fork_values(),
+            new_target: self.new_target.clone(),
             deopt_bindings: None,
             catch_bindings: self.catch_bindings.clone(),
             immutable_function_name: self.immutable_function_name.clone(),
