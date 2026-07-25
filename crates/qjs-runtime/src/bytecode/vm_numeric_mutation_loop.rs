@@ -569,8 +569,11 @@ pub(super) fn try_run_numeric_mutation_loop(
     header: usize,
     backedge: usize,
 ) -> bool {
-    let Some((index, plan)) = vm
+    let plans = vm
         .numeric_mutation_loop_plans
+        .as_deref()
+        .unwrap_or(vm.shared_numeric_mutation_loop_plans);
+    let Some((index, plan)) = plans
         .iter()
         .enumerate()
         .find(|(_, plan)| plan.header == header && plan.backedge == backedge)
@@ -585,17 +588,17 @@ pub(super) fn try_run_numeric_mutation_loop(
             // Plans are already cloned into each frame. Removing a zero-
             // progress plan suppresses only this invocation and
             // adds no state to the call-path-sensitive FrameState layout.
-            vm.numeric_mutation_loop_plans.remove(index);
+            vm.frame_numeric_mutation_loop_plans().remove(index);
             false
         }
         NumericMutationLoopRun::HandledAndSuppressPlan => {
-            vm.numeric_mutation_loop_plans.remove(index);
+            vm.frame_numeric_mutation_loop_plans().remove(index);
             true
         }
         NumericMutationLoopRun::SwitchToDense(fallback) => {
             let run = fallback.try_run(vm);
             if !matches!(run, DenseNumericMutationLoopRun::Suppress) {
-                vm.numeric_mutation_loop_plans[index] = NumericMutationLoopPlan {
+                vm.frame_numeric_mutation_loop_plans()[index] = NumericMutationLoopPlan {
                     header: plan.header,
                     backedge: plan.backedge,
                     exit: fallback.exit(),
@@ -606,7 +609,7 @@ pub(super) fn try_run_numeric_mutation_loop(
                 DenseNumericMutationLoopRun::Handled => true,
                 DenseNumericMutationLoopRun::Declined => false,
                 DenseNumericMutationLoopRun::Suppress => {
-                    vm.numeric_mutation_loop_plans.remove(index);
+                    vm.frame_numeric_mutation_loop_plans().remove(index);
                     false
                 }
             }

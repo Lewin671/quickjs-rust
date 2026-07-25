@@ -201,3 +201,42 @@ fn call_loop_trace_rejects_captured_writes_into_the_caller_frame() {
         Ok(Value::String("3:3".to_owned().into()))
     );
 }
+
+#[test]
+fn loop_plan_deoptimization_stays_local_to_one_invocation() {
+    // Loop plans live in the shared bytecode and are only copied into a frame
+    // when a deoptimization rewrites or suppresses one. A suppression in one
+    // call must not leak into later calls of the same function, and repeated
+    // calls that alternate between plan-eligible and ineligible inputs must
+    // keep producing spec results.
+    assert_eq!(
+        eval(
+            "function accumulate(values, n) { \
+               var sum = 0; \
+               for (var i = 0; i < n; i++) { sum += values[i]; } \
+               return sum; \
+             } \
+             var numbers = [1, 2, 3, 4]; \
+             var mixed = [1, 'a', 3, 4]; \
+             var out = []; \
+             for (var round = 0; round < 3; round++) { \
+               out.push(accumulate(numbers, 4)); \
+               out.push(accumulate(mixed, 4)); \
+             } \
+             out.join(',');"
+        ),
+        Ok(Value::String("10,1a34,10,1a34,10,1a34".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function mutate(values, n) { \
+               for (var i = 0; i < n; i++) { values[i] = values[i] * 2; } \
+               return values.join('-'); \
+             } \
+             var first = [1, 2, 3]; \
+             var second = [1, 2, 3]; \
+             mutate(first, 3) + '|' + mutate(second, 3) + '|' + mutate(first, 3);"
+        ),
+        Ok(Value::String("2-4-6|2-4-6|4-8-12".to_owned().into()))
+    );
+}

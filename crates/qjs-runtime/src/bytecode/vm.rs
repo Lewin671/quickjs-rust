@@ -119,10 +119,18 @@ pub(super) struct FrameState<'a> {
     pub(super) bytecode: &'a Bytecode,
     pub(super) execution_code: &'a [Op],
     pub(super) ip: usize,
-    pub(super) control_loop_plans: Vec<super::vm_control_loop::ControlLoopPlan>,
-    pub(super) numeric_loop_plans: Vec<super::vm_numeric_loop::NumericLoopPlan>,
+    /// Borrowed views of the bytecode's compiled loop plans. The plans are
+    /// immutable once compiled and outlive every frame over that bytecode, so
+    /// a call no longer clones a plan vector into its frame.
+    pub(super) control_loop_plans: &'a [super::vm_control_loop::ControlLoopPlan],
+    pub(super) numeric_loop_plans: &'a [super::vm_numeric_loop::NumericLoopPlan],
+    pub(super) shared_numeric_mutation_loop_plans:
+        &'a [super::vm_numeric_mutation_loop::NumericMutationLoopPlan],
+    /// Frame-local override of the shared numeric mutation loop plans,
+    /// materialized only when a deoptimization suppresses or rewrites one for
+    /// this invocation. Ordinary frames leave this `None`.
     pub(super) numeric_mutation_loop_plans:
-        Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>,
+        Option<Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>>,
     pub(super) virtual_values: Vec<Value>,
     pub(super) stack: OperandStack<'a>,
     pub(super) locals: Vec<Slot>,
@@ -337,20 +345,6 @@ impl<'a> Vm<'a> {
             Self::initial_authoritative_slots(bytecode, &local_upvalues, &env);
         let realm_binding_slots = direct_realm_binding_slots
             .unwrap_or_else(|| Self::initial_realm_binding_slots(bytecode, &local_upvalues, &env));
-        let numeric_loop_plans = bytecode
-            .numeric_loop_plans
-            .get_or_init(|| super::vm_numeric_loop::NumericLoopPlan::compile_all(bytecode))
-            .clone();
-        let control_loop_plans = bytecode
-            .control_loop_plans
-            .get_or_init(|| super::vm_control_loop::ControlLoopPlan::compile_all(bytecode))
-            .clone();
-        let numeric_mutation_loop_plans = bytecode
-            .numeric_mutation_loop_plans
-            .get_or_init(|| {
-                super::vm_numeric_mutation_loop::NumericMutationLoopPlan::compile_all(bytecode)
-            })
-            .clone();
         let virtual_object_program = bytecode
             .virtual_object_program
             .get_or_init(|| super::virtual_object::lower(bytecode));
@@ -373,9 +367,20 @@ impl<'a> Vm<'a> {
                 bytecode,
                 execution_code,
                 ip: 0,
-                control_loop_plans,
-                numeric_loop_plans,
-                numeric_mutation_loop_plans,
+                control_loop_plans: bytecode
+                    .control_loop_plans
+                    .get_or_init(|| super::vm_control_loop::ControlLoopPlan::compile_all(bytecode)),
+                numeric_loop_plans: bytecode
+                    .numeric_loop_plans
+                    .get_or_init(|| super::vm_numeric_loop::NumericLoopPlan::compile_all(bytecode)),
+                shared_numeric_mutation_loop_plans: bytecode
+                    .numeric_mutation_loop_plans
+                    .get_or_init(|| {
+                        super::vm_numeric_mutation_loop::NumericMutationLoopPlan::compile_all(
+                            bytecode,
+                        )
+                    }),
+                numeric_mutation_loop_plans: None,
                 virtual_values,
                 stack: OperandStack::new(bytecode),
                 locals,
@@ -1761,6 +1766,19 @@ impl<'a> Vm<'a> {
 
     pub(super) fn pop(&mut self) -> Result<Value, RuntimeError> {
         self.stack.pop().ok_or_else(stack_underflow)
+    }
+
+    /// Frame-local numeric mutation loop plans, materialized from the shared
+    /// bytecode plans on first deoptimization. Suppressing or rewriting a plan
+    /// must not affect other invocations of the same function, so the frame
+    /// takes its own copy exactly when it first needs to diverge.
+    pub(super) fn frame_numeric_mutation_loop_plans(
+        &mut self,
+    ) -> &mut Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan> {
+        let shared = self.current.shared_numeric_mutation_loop_plans;
+        self.current
+            .numeric_mutation_loop_plans
+            .get_or_insert_with(|| shared.to_vec())
     }
 
     /// Performs one bytecode jump while preserving the shared counted-loop

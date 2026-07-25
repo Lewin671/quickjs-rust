@@ -1200,12 +1200,17 @@ impl PreparedNumericLoopTerm {
 }
 
 pub(super) fn try_run_numeric_loop(vm: &mut Vm<'_>, header: usize, backedge: usize) -> bool {
-    let plan = vm
+    // The plans are immutable once compiled and live in the bytecode, whose
+    // borrow outlives the frame. Reading them there keeps the frame free of a
+    // per-call plan-vector clone.
+    let Some(plan) = vm
         .numeric_loop_plans
         .iter()
         .find(|plan| plan.header == header && plan.backedge == backedge)
-        .cloned();
-    plan.is_some_and(|plan| plan.try_run(vm))
+    else {
+        return false;
+    };
+    plan.clone().try_run(vm)
 }
 
 fn local_number_read(vm: &Vm<'_>, slot: usize) -> Option<f64> {
