@@ -240,3 +240,49 @@ fn loop_plan_deoptimization_stays_local_to_one_invocation() {
         Ok(Value::String("2-4-6|2-4-6|4-8-12".to_owned().into()))
     );
 }
+
+#[test]
+fn counted_loop_headers_fuse_without_changing_semantics() {
+    // The compare-and-branch superinstruction now applies to functions with no
+    // virtualizable object literal. It must preserve the loop's observable
+    // behavior for zero, one, and many iterations, for a non-numeric operand
+    // that leaves the fast path, for a comparison whose operands are captured
+    // by a closure, and for a `break`/`continue` that leaves the fused header.
+    assert_eq!(
+        eval(
+            "function run(n) { var s = 0; for (var i = 0; i < n; i++) { s += 2; } return s; } run(0) + ':' + run(1) + ':' + run(5);"
+        ),
+        Ok(Value::String("0:2:10".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function run(limit) { var s = 0; for (var i = 0; i < limit; i++) { s += 1; } return s; } run('3');"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval(
+            "function run(n) { var s = 0; for (var i = 0; i < n; i++) { if (i === 2) { continue; } if (i === 4) { break; } s += i; } return s; } run(9);"
+        ),
+        Ok(Value::Number(4.0))
+    );
+    assert_eq!(
+        eval(
+            "function run(n) { var fns = []; for (let i = 0; i < n; i++) { fns.push(function () { return i; }); } return fns.map(function (f) { return f(); }).join(','); } run(3);"
+        ),
+        Ok(Value::String("0,1,2".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function run(n) { var s = 0; var i = 0; while (i < n) { s += i; i = i + 1; } return s + ':' + i; } run(4);"
+        ),
+        Ok(Value::String("6:4".to_owned().into()))
+    );
+    // An operand that throws on coercion must still throw from the fused op.
+    assert_eq!(
+        eval(
+            "function run(n) { var s = 0; for (var i = 0; i < n; i++) { s += 1; } return s; } var bad = { valueOf: function () { throw new RangeError('x'); } }; var caught = ''; try { run(bad); } catch (e) { caught = e.constructor.name; } caught;"
+        ),
+        Ok(Value::String("RangeError".to_owned().into()))
+    );
+}

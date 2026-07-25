@@ -160,10 +160,7 @@ fn lower_variant(
         }));
         slot_count = next_slot_count;
     }
-    if replacements.is_empty() {
-        return original_variant();
-    }
-
+    let has_replacements = !replacements.is_empty();
     let mut code = bytecode.code.clone();
     for (ip, replacement) in replacements {
         let Some(op) = code.get_mut(ip) else {
@@ -171,7 +168,17 @@ fn lower_variant(
         };
         *op = replacement;
     }
-    fuse_superinstructions(bytecode, analysis, &mut code);
+    let fused = fuse_superinstructions(bytecode, analysis, &mut code, has_replacements);
+    // A function with no virtualizable object literal used to skip lowering
+    // entirely, which also skipped every shared-dispatch superinstruction --
+    // so ordinary code never got one. The compare-and-branch fusion depends on
+    // nothing but slot authority and basic-block shape, so it now runs for
+    // every analyzable function. The remaining fusions stay tied to scalar
+    // replacement: measured on their own they cost more than they save on
+    // loops the specialized loop plans already execute natively.
+    if !has_replacements && !fused {
+        return original_variant();
+    }
     collect_superinstruction_authority(&code, &mut required_authoritative_slots);
     let Some(required_authoritative_slots) =
         required_authoritative_slots
@@ -365,19 +372,50 @@ fn candidate_replacements(
     Some(replacements)
 }
 
+/// Returns whether any superinstruction replaced an opcode.
 fn fuse_superinstructions(
     bytecode: &Bytecode,
     analysis: &super::VirtualObjectAnalysis,
     code: &mut [Op],
-) {
-    fuse_virtual_initializers(bytecode, analysis, code);
-    fuse_virtual_binaries(analysis, code);
-    forward_read_only_virtual_constants(bytecode, code);
-    fuse_binary_assignments(bytecode, analysis, code);
-    fuse_local_increments(bytecode, analysis, code);
-    fuse_local_copies(analysis, code);
-    fold_redundant_completion_copies(code);
+    has_replacements: bool,
+) -> bool {
+    let before = superinstruction_count(code);
+    if has_replacements {
+        // Scalar-replacement-dependent passes, plus the fusions that measured
+        // as regressions when applied to functions the analysis found nothing
+        // to virtualize in.
+        fuse_virtual_initializers(bytecode, analysis, code);
+        fuse_virtual_binaries(analysis, code);
+        forward_read_only_virtual_constants(bytecode, code);
+        fuse_binary_assignments(bytecode, analysis, code);
+        fuse_local_increments(bytecode, analysis, code);
+        fuse_local_copies(analysis, code);
+        fold_redundant_completion_copies(code);
+    }
     fuse_local_comparisons(analysis, code);
+    superinstruction_count(code) != before
+}
+
+fn superinstruction_count(code: &[Op]) -> usize {
+    code.iter()
+        .filter(|op| {
+            matches!(
+                op,
+                Op::InitVirtualObject { .. }
+                    | Op::InitVirtualConstants { .. }
+                    | Op::InitVirtualFunction { .. }
+                    | Op::LoadVirtualValue { .. }
+                    | Op::StoreVirtualValue { .. }
+                    | Op::LoadVirtualLength { .. }
+                    | Op::LoadVirtualBinary { .. }
+                    | Op::BinaryAssignLocals { .. }
+                    | Op::IncrementLocal { .. }
+                    | Op::CopyLocal { .. }
+                    | Op::CompareLocalsJumpFalse { .. }
+                    | Op::CallVirtualFunction { .. }
+            )
+        })
+        .count()
 }
 
 fn fuse_virtual_initializers(
