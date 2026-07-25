@@ -439,3 +439,28 @@ materialization, so making binding names `Rc<str>` end to end turns the
 dominant allocation into a refcount bump. That touches `Local`, `FrameBindings`,
 and about 63 `insert`/`insert_frame_cell` call sites, and it is the highest
 expected-value unit currently identified.
+
+### 2026-07-25 `Rc<str>` binding names: migrated, measured, rejected
+
+The `Rc<str>` binding-name unit named above was implemented end to end:
+`Local::name`, `Bytecode::local_slots`, `FrameBindings`, and the `CallEnv`
+`insert` / `insert_frame` / `insert_frame_cell` signatures, with the roughly
+one hundred call sites converted from compiler diagnostics. All 1,802
+`qjs-runtime` tests passed.
+
+It measured **15% slower** on interleaved A/B: `crypto-aes` +73%,
+`date-format-tofte` +75%, `3d-cube` +36%, and every remaining case between
++1% and +21%. Nothing got faster.
+
+Two things went wrong, and a retry must address both:
+
+- The mechanical conversion inserted about forty `Rc::from(<literal>)` calls,
+  many of them in `function/call.rs` on the ordinary call path. `Rc::from` of
+  a `&str` allocates and copies exactly like `String::from`, so those sites
+  kept their allocation and added an indirection. Interned statics, not
+  per-call construction, are what a shared name needs.
+- The premise itself is unconfirmed. Skipping the frame snapshot entirely for
+  native calls also regressed (+1.9%, `string-base64` +41%), so the model that
+  says "the snapshot's `String` clones dominate" does not predict either
+  result. Establish *why* the builtin path depends on the snapshot, with a
+  targeted experiment, before rebuilding around it.
