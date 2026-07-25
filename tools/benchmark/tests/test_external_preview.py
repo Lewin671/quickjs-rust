@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tools.benchmark.external_preview import (
+    SENTINEL,
     Case,
     ExternalPreviewError,
     Manifest,
@@ -19,9 +20,11 @@ from tools.benchmark.external_preview import (
     SourceFile,
     Suite,
     _raw_url,
+    _sample_status,
     load_manifest,
     run_preview,
 )
+from tools.benchmark.process import ProcessResult
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -36,6 +39,20 @@ class ExternalPreviewTests(unittest.TestCase):
         path = directory / "external.json"
         path.write_text(json.dumps(data, sort_keys=True) + "\n", encoding="utf-8")
         return path
+
+    def _process_result(self, stdout: str) -> ProcessResult:
+        return ProcessResult(
+            started_at="2026-07-24T00:00:00+00:00",
+            timer_started_ns=1,
+            timer_finished_ns=2,
+            duration_ns=1,
+            exit_code=0,
+            timed_out=False,
+            stdout=stdout,
+            stderr="",
+            stdout_truncated=False,
+            stderr_truncated=False,
+        )
 
     def test_exact_three_suite_inventory_is_non_claim(self) -> None:
         manifest = load_manifest(MANIFEST)
@@ -112,6 +129,59 @@ class ExternalPreviewTests(unittest.TestCase):
             "b7babdf323e64e69bd2f6c376189c15825f5c73a/cdjs/constants.js",
         )
 
+    def test_stdout_health_is_exact_and_role_specific(self) -> None:
+        sentinel_line = f"{SENTINEL}\n"
+        for role, stdout in (
+            ("candidate", sentinel_line * 2),
+            ("base", sentinel_line * 2),
+            ("quickjs-ng", sentinel_line),
+        ):
+            with self.subTest(role=role):
+                self.assertEqual(
+                    _sample_status(self._process_result(stdout), role),
+                    ("ok", None),
+                )
+
+    def test_stdout_health_rejects_missing_or_extra_bytes(self) -> None:
+        sentinel_line = f"{SENTINEL}\n"
+        invalid_transcripts = {
+            "candidate": (
+                "",
+                sentinel_line,
+                sentinel_line * 3,
+                sentinel_line * 2 + "\n",
+                f"noise\n{sentinel_line * 2}",
+                f"{sentinel_line * 2}noise\n",
+                (sentinel_line * 2).rstrip("\n"),
+            ),
+            "base": (
+                "",
+                sentinel_line,
+                sentinel_line * 3,
+                sentinel_line * 2 + "\n",
+                f"noise\n{sentinel_line * 2}",
+                f"{sentinel_line * 2}noise\n",
+                (sentinel_line * 2).rstrip("\n"),
+            ),
+            "quickjs-ng": (
+                "",
+                sentinel_line * 2,
+                sentinel_line + "\n",
+                f"noise\n{sentinel_line}",
+                f"{sentinel_line}noise\n",
+                sentinel_line.rstrip("\n"),
+            ),
+        }
+        for role, transcripts in invalid_transcripts.items():
+            for stdout in transcripts:
+                with self.subTest(role=role, stdout=repr(stdout)):
+                    status, error = _sample_status(self._process_result(stdout), role)
+                    self.assertEqual(status, "invalid")
+                    self.assertEqual(
+                        error,
+                        f"stdout did not match the exact {role} sentinel contract",
+                    )
+
     def test_fake_three_engine_run_emits_same_run_base_report_and_removes_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
             directory = Path(directory_name)
@@ -149,7 +219,16 @@ class ExternalPreviewTests(unittest.TestCase):
                 (suite,),
             )
             engine = directory / "engine.sh"
-            engine.write_text("#!/bin/sh\nprintf '%s\\n' '__QJS_EXTERNAL_OK__'\n", encoding="utf-8")
+            engine.write_text(
+                "#!/bin/sh\n"
+                "case \"$1\" in\n"
+                "  --raw) printf '%s\\n%s\\n' '__QJS_EXTERNAL_OK__' "
+                "'__QJS_EXTERNAL_OK__' ;;\n"
+                "  --script) printf '%s\\n' '__QJS_EXTERNAL_OK__' ;;\n"
+                "  *) exit 64 ;;\n"
+                "esac\n",
+                encoding="utf-8",
+            )
             engine.chmod(0o755)
             output = directory / "evidence"
             work = directory / "work"
@@ -192,6 +271,10 @@ class ExternalPreviewTests(unittest.TestCase):
             ]
             self.assertTrue(all(row["schema_version"] == 2 for row in records))
             for row in records:
+                expected_sentinel_count = 1 if row["role"] == "quickjs-ng" else 2
+                self.assertEqual(
+                    row["stdout"], f"{SENTINEL}\n" * expected_sentinel_count
+                )
                 self.assertIs(type(row["timer_started_ns"]), int)
                 self.assertIs(type(row["timer_finished_ns"]), int)
                 self.assertGreater(row["timer_finished_ns"], row["timer_started_ns"])

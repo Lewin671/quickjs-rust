@@ -25,6 +25,11 @@ from .planning import role_orders
 
 SENTINEL = "__QJS_EXTERNAL_OK__"
 EXTERNAL_ROLES = ("candidate", "base", "quickjs-ng")
+_EXPECTED_STDOUT_BY_ROLE = {
+    "candidate": f"{SENTINEL}\n{SENTINEL}\n",
+    "base": f"{SENTINEL}\n{SENTINEL}\n",
+    "quickjs-ng": f"{SENTINEL}\n",
+}
 _ID = re.compile(r"[a-z0-9][a-z0-9.-]*\Z")
 _REVISION = re.compile(r"[0-9a-f]{40}\Z")
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -407,16 +412,17 @@ def _command(role: str, binary: Path, bundle: Path) -> list[str]:
     raise ExternalPreviewError(f"unknown engine role {role}")
 
 
-def _sample_status(result: ProcessResult) -> tuple[str, str | None]:
+def _sample_status(result: ProcessResult, role: str) -> tuple[str, str | None]:
     if result.timed_out:
         return "timeout", "process exceeded the case timeout"
     if result.exit_code != 0:
         return "failed", f"process exited with status {result.exit_code}"
     if result.stdout_truncated or result.stderr_truncated:
         return "invalid", "process output exceeded the capture limit"
-    lines = result.stdout.rstrip().splitlines()
-    if not lines or lines[-1] != SENTINEL:
-        return "invalid", "success sentinel was missing"
+    if role not in _EXPECTED_STDOUT_BY_ROLE:
+        raise ExternalPreviewError(f"unknown engine role {role}")
+    if result.stdout != _EXPECTED_STDOUT_BY_ROLE[role]:
+        return "invalid", f"stdout did not match the exact {role} sentinel contract"
     return "ok", None
 
 
@@ -433,7 +439,7 @@ def _record(
     result: ProcessResult,
     argv: list[str],
 ) -> dict[str, Any]:
-    status, error = _sample_status(result)
+    status, error = _sample_status(result, role)
     return {
         "schema_version": 2,
         "record_type": "sample",

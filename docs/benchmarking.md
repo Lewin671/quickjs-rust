@@ -635,11 +635,15 @@ The frozen suite inventory is:
   `stanford-crypto-aes`, and `raytrace-public-class-fields`, each invoking one
   upstream `Benchmark.runIteration` plus its validation hook.
 
-Capability probes run before measurement. A failed or timed-out engine remains
-visible for that frozen case and is excluded only from comparisons that require
-that role; the other supported roles are still measured. The report may show a
-diagnostic geometric mean over explicitly comparable cases, but an incomplete
-suite has no suite score. JetStream output is always named **JetStream 3
+Capability probes run before measurement. Stdout health is byte-exact for each
+shell adapter: qjs-rust candidate/base runs must emit the two sentinel lines
+produced by the explicit host `print` and raw completion value, while QuickJS-NG
+`--script` runs must emit exactly one sentinel line. Missing or additional bytes,
+including blank lines, invalidate that role. A failed, invalid, or timed-out
+engine remains visible for that frozen case and is excluded only from comparisons
+that require that role; the other supported roles are still measured. The report
+may show a diagnostic geometric mean over explicitly comparable cases, but an
+incomplete suite has no suite score. JetStream output is always named **JetStream 3
 JavaScript subset** and never an official JetStream score. All hosted output
 keeps `claim_eligible=false`. The GitHub Step Summary shows both the three-suite
 overview and every named external case with candidate, base, and QuickJS-NG
