@@ -960,9 +960,21 @@ impl ArrayRef {
 /// such as `"01"`, `"1e0"`, and `"4294967295"` are ordinary string keys:
 /// only the canonical decimal spelling of a uint32 below 2^32 - 1 is indexed.
 pub(crate) fn array_index_property_key(key: &str) -> Option<usize> {
+    // An array index is the canonical decimal form of its value, so the key
+    // must be ASCII digits with no leading zero. Checking that directly avoids
+    // formatting the parsed number back into a fresh `String` to compare --
+    // an allocation this function used to pay on every string-keyed array
+    // property access.
+    let bytes = key.as_bytes();
+    if bytes.is_empty()
+        || !bytes.iter().all(u8::is_ascii_digit)
+        || (bytes[0] == b'0' && bytes.len() > 1)
+    {
+        return None;
+    }
     key.parse::<u32>()
         .ok()
-        .filter(|index| *index < u32::MAX && index.to_string() == key)
+        .filter(|index| *index < u32::MAX)
         .map(|index| index as usize)
 }
 

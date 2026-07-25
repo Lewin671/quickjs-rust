@@ -803,9 +803,16 @@ fn typed_array_own_property_strings(object: &ObjectRef, enumerable_only: bool) -
 }
 
 fn array_index_property_key(key: &str) -> Option<u32> {
-    key.parse::<u32>()
-        .ok()
-        .filter(|index| *index < u32::MAX && index.to_string() == key)
+    // Canonical decimal form: ASCII digits, no leading zero. Checking that
+    // directly avoids formatting the parsed number back into a `String`.
+    let bytes = key.as_bytes();
+    if bytes.is_empty()
+        || !bytes.iter().all(u8::is_ascii_digit)
+        || (bytes[0] == b'0' && bytes.len() > 1)
+    {
+        return None;
+    }
+    key.parse::<u32>().ok().filter(|index| *index < u32::MAX)
 }
 
 // --- Element coercion --------------------------------------------------------
