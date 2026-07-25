@@ -1284,3 +1284,68 @@ fn finally_override_supersedes_pending_completion() {
         Ok(Value::String("t,cf,t,cf".to_owned().into()))
     );
 }
+
+#[test]
+fn completion_values_stay_observable_only_where_the_spec_requires_them() {
+    // Script and `eval` code yield their last statement's completion value,
+    // including through blocks, loops, `if`, `try`, and `switch`, and
+    // including from inside a function body via a direct or indirect `eval`.
+    assert_eq!(
+        eval("var total = 0; for (var i = 0; i < 3; i++) { total += i; }"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(eval("{ 1; 2; }"), Ok(Value::Number(2.0)));
+    assert_eq!(
+        eval("if (true) { 'yes'; } else { 'no'; }"),
+        Ok(Value::String("yes".to_owned().into()))
+    );
+    assert_eq!(
+        eval("var i = 0; while (i < 2) { i++; 'body'; }"),
+        Ok(Value::String("body".to_owned().into()))
+    );
+    assert_eq!(
+        eval("switch (1) { case 1: 'one'; break; default: 'other'; }"),
+        Ok(Value::String("one".to_owned().into()))
+    );
+    assert_eq!(
+        eval("try { 'body'; } finally { 'cleanup'; }"),
+        Ok(Value::String("body".to_owned().into()))
+    );
+    assert_eq!(
+        eval("for (var i = 0; i < 3; i++) { if (i === 1) { continue; } i; }"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval(
+            "function f() { return eval('var s = 0; for (var i = 0; i < 3; i++) { s += i; }'); } f();"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("function f() { var g = eval; return g('{ 7; }'); } f();"),
+        Ok(Value::Number(7.0))
+    );
+    // A function body's own completion value is never observable: only an
+    // explicit `return` (or `undefined`) escapes.
+    assert_eq!(eval("function f() { 1; 2; } f();"), Ok(Value::Undefined));
+    assert_eq!(
+        eval("function f() { for (var i = 0; i < 3; i++) { i; } } f();"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("function f() { var s = 0; for (var i = 0; i < 4; i++) { s += i; } return s; } f();"),
+        Ok(Value::Number(6.0))
+    );
+    assert_eq!(
+        eval(
+            "function f(n) { outer: for (var i = 0; i < n; i++) { for (var j = 0; j < n; j++) { if (j === 1) { continue outer; } if (i === 2) { break outer; } } } return i; } f(5);"
+        ),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval(
+            "function* g() { for (var i = 0; i < 3; i++) { yield i; } } Array.from(g()).join(',');"
+        ),
+        Ok(Value::String("0,1,2".to_owned().into()))
+    );
+}

@@ -47,8 +47,16 @@ impl Compiler {
                 }
                 compiler.compile_hoisted_function_decls(body)?;
                 let result_slot = compiler.temp_local("block_result");
-                compiler.emit_load_undefined();
-                compiler.emit(Op::StoreLocal(result_slot));
+                if compiler.tracks_completion_values {
+                    compiler.emit_load_undefined();
+                    compiler.emit(Op::StoreLocal(result_slot));
+                }
+                // When nothing observes the completion value the slot only has
+                // to keep the operand-stack contract, so the two-instruction
+                // "seed with undefined" prologue is dead work. Reading the
+                // compiler temporary before any statement writes it yields
+                // `undefined` rather than a TDZ error, so an empty completion
+                // path stays well defined.
                 for stmt in body {
                     compiler.compile_stmt(stmt)?;
                     if stmt_updates_statement_list_completion(stmt) {

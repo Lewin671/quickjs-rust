@@ -210,8 +210,7 @@ impl Compiler {
 
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.push_loop(result_slot);
-            compiler.compile_stmt(body)?;
-            compiler.emit(Op::StoreLocal(result_slot));
+            compiler.compile_loop_body(body, result_slot)?;
             Ok(())
         })?;
         let context = self.pop_loop();
@@ -339,8 +338,7 @@ impl Compiler {
                 )?;
             } else {
                 compiler.compile_for_in_left(left, value_slot)?;
-                compiler.compile_stmt(body)?;
-                compiler.emit(Op::StoreLocal(result_slot));
+                compiler.compile_loop_body(body, result_slot)?;
             }
             Ok(())
         })
@@ -365,8 +363,7 @@ impl Compiler {
         self.disposable_scope_depth += 1;
         let body_result = (|| {
             self.compile_for_in_left(left, value_slot)?;
-            self.compile_stmt(body)?;
-            self.emit(Op::StoreLocal(result_slot));
+            self.compile_loop_body(body, result_slot)?;
             Ok(())
         })();
         self.disposable_scope_depth -= 1;

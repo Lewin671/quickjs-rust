@@ -34,6 +34,14 @@ pub(super) struct ControlLoopPlan {
     kind: ControlLoopKind,
 }
 
+struct ControlLoopHeader {
+    counter_slot: usize,
+    limit_slot: usize,
+    exit: usize,
+    body_start: usize,
+    seeded_block_result_slot: Option<usize>,
+}
+
 impl ControlLoopPlan {
     pub(super) fn compile_all(bytecode: &Bytecode) -> Vec<Self> {
         bytecode
@@ -58,7 +66,7 @@ impl ControlLoopPlan {
             .or_else(|| Self::compile_bitwise_branch(bytecode, header, backedge))
     }
 
-    fn compile_header(bytecode: &Bytecode, header: usize) -> Option<(usize, usize, usize, usize)> {
+    fn compile_header(bytecode: &Bytecode, header: usize) -> Option<ControlLoopHeader> {
         let code = &bytecode.code;
         let (
             Op::LoadLocal(counter_slot),
@@ -66,31 +74,73 @@ impl ControlLoopPlan {
             Op::Binary(BinaryOp::Lt),
             Op::JumpIfFalse(exit),
             Op::Pop,
-            Op::LoadConst(_),
-            Op::StoreLocal(block_result_slot),
         ) = (
             code.get(header)?,
             code.get(header + 1)?,
             code.get(header + 2)?,
             code.get(header + 3)?,
             code.get(header + 4)?,
-            code.get(header + 5)?,
-            code.get(header + 6)?,
         )
         else {
             return None;
         };
-        matches!(code.get(*exit), Some(Op::Pop)).then_some((
-            *counter_slot,
-            *limit_slot,
-            *exit,
-            *block_result_slot,
-        ))
+        // The block-result seed prologue is emitted only where a statement
+        // completion value is observable; a function body starts its loop body
+        // directly and names the same slot at its first completion store.
+        let (body_start, seeded_block_result_slot) =
+            match (code.get(header + 5), code.get(header + 6)) {
+                (Some(Op::LoadConst(_)), Some(Op::StoreLocal(slot))) => (header + 7, Some(*slot)),
+                _ => (header + 5, None),
+            };
+        matches!(code.get(*exit), Some(Op::Pop)).then_some(ControlLoopHeader {
+            counter_slot: *counter_slot,
+            limit_slot: *limit_slot,
+            exit: *exit,
+            body_start,
+            seeded_block_result_slot,
+        })
+    }
+
+    /// Skips the two-instruction `undefined` seed a statement list emits for a
+    /// result slot when completion values are observable. Function bodies omit
+    /// it, so the sequence is optional.
+    fn skip_optional_seed(code: &[Op], cursor: usize) -> usize {
+        match (code.get(cursor), code.get(cursor + 1)) {
+            (Some(Op::LoadConst(_)), Some(Op::StoreLocal(_))) => cursor + 2,
+            _ => cursor,
+        }
+    }
+
+    /// Matches the stores that follow a value-producing statement: the block
+    /// and loop result slots where completion values are observable, and only
+    /// the block slot inside a function body. Returns the cursor past the
+    /// stores and the block slot written.
+    fn match_completion_stores(
+        code: &[Op],
+        cursor: usize,
+        expected_loop_result_slot: Option<usize>,
+    ) -> Option<(usize, usize)> {
+        if let (Some(Op::Dup), Some(Op::StoreLocal(block)), Some(Op::StoreLocal(loop_slot))) =
+            (code.get(cursor), code.get(cursor + 1), code.get(cursor + 2))
+            && expected_loop_result_slot.is_none_or(|slot| slot == *loop_slot)
+        {
+            return Some((cursor + 3, *block));
+        }
+        match code.get(cursor)? {
+            Op::StoreLocal(block) => Some((cursor + 1, *block)),
+            _ => None,
+        }
     }
 
     fn compile_empty(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<Self> {
-        let (counter_slot, limit_slot, exit, block_result_slot) =
-            Self::compile_header(bytecode, header)?;
+        let ControlLoopHeader {
+            counter_slot,
+            limit_slot,
+            exit,
+            body_start,
+            seeded_block_result_slot,
+        } = Self::compile_header(bytecode, header)?;
+        let block_result_slot = seeded_block_result_slot?;
         let code = &bytecode.code;
         let (
             Op::LoadLocal(tail_counter_slot),
@@ -101,18 +151,18 @@ impl ControlLoopPlan {
             Op::Pop,
             Op::Jump(tail_header),
         ) = (
-            code.get(header + 7)?,
-            code.get(header + 8)?,
-            code.get(header + 9)?,
-            code.get(header + 10)?,
-            code.get(header + 11)?,
-            code.get(header + 12)?,
-            code.get(header + 13)?,
+            code.get(body_start)?,
+            code.get(body_start + 1)?,
+            code.get(body_start + 2)?,
+            code.get(body_start + 3)?,
+            code.get(body_start + 4)?,
+            code.get(body_start + 5)?,
+            code.get(body_start + 6)?,
         )
         else {
             return None;
         };
-        if backedge != header + 13
+        if backedge != body_start + 6
             || tail_header != &header
             || tail_counter_slot != &counter_slot
             || assigned_counter_slot != &counter_slot
@@ -130,10 +180,15 @@ impl ControlLoopPlan {
     }
 
     fn compile_bitwise_branch(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<Self> {
-        let (counter_slot, limit_slot, exit, block_result_slot) =
-            Self::compile_header(bytecode, header)?;
+        let ControlLoopHeader {
+            counter_slot,
+            limit_slot,
+            exit,
+            body_start,
+            seeded_block_result_slot,
+        } = Self::compile_header(bytecode, header)?;
         let code = &bytecode.code;
-        let cursor = header + 7;
+        let cursor = body_start;
         let (
             Op::LoadLocal(condition_counter_slot),
             Op::LoadConst(mask_index),
@@ -142,20 +197,6 @@ impl ControlLoopPlan {
             Op::Binary(BinaryOp::StrictEq),
             Op::JumpIfFalse(else_start),
             Op::Pop,
-            Op::LoadConst(_),
-            Op::StoreLocal(loop_result_slot),
-            Op::LoadConst(_),
-            Op::StoreLocal(then_result_slot),
-            Op::LoadLocal(accumulator_slot),
-            Op::LoadConst(then_delta_index),
-            Op::Binary(BinaryOp::Add),
-            Op::Dup,
-            Op::AssignLocal(then_accumulator_slot),
-            Op::Dup,
-            Op::StoreLocal(stored_then_result_slot),
-            Op::StoreLocal(then_loop_result_slot),
-            Op::LoadLocal(loaded_then_result_slot),
-            Op::Jump(join),
         ) = (
             code.get(cursor)?,
             code.get(cursor + 1)?,
@@ -164,92 +205,92 @@ impl ControlLoopPlan {
             code.get(cursor + 4)?,
             code.get(cursor + 5)?,
             code.get(cursor + 6)?,
-            code.get(cursor + 7)?,
-            code.get(cursor + 8)?,
-            code.get(cursor + 9)?,
-            code.get(cursor + 10)?,
-            code.get(cursor + 11)?,
-            code.get(cursor + 12)?,
-            code.get(cursor + 13)?,
-            code.get(cursor + 14)?,
-            code.get(cursor + 15)?,
-            code.get(cursor + 16)?,
-            code.get(cursor + 17)?,
-            code.get(cursor + 18)?,
-            code.get(cursor + 19)?,
-            code.get(cursor + 20)?,
         )
         else {
             return None;
         };
-        if condition_counter_slot != &counter_slot
-            || else_start != &(cursor + 21)
-            || then_accumulator_slot != accumulator_slot
-            || stored_then_result_slot != then_result_slot
-            || then_loop_result_slot != loop_result_slot
-            || loaded_then_result_slot != then_result_slot
-            || join != &(cursor + 35)
+        if condition_counter_slot != &counter_slot {
+            return None;
+        }
+
+        // Each arm optionally seeds the loop and branch result slots, applies a
+        // constant delta to the accumulator, records the statement completion,
+        // and reloads the branch result as the arm's value.
+        let mut then_cursor = Self::skip_optional_seed(code, cursor + 7);
+        then_cursor = Self::skip_optional_seed(code, then_cursor);
+        let (
+            Op::LoadLocal(accumulator_slot),
+            Op::LoadConst(then_delta_index),
+            Op::Binary(BinaryOp::Add),
+            Op::Dup,
+            Op::AssignLocal(then_accumulator_slot),
+        ) = (
+            code.get(then_cursor)?,
+            code.get(then_cursor + 1)?,
+            code.get(then_cursor + 2)?,
+            code.get(then_cursor + 3)?,
+            code.get(then_cursor + 4)?,
+        )
+        else {
+            return None;
+        };
+        let (then_cursor, then_result_slot) =
+            Self::match_completion_stores(code, then_cursor + 5, None)?;
+        let (Op::LoadLocal(loaded_then_result_slot), Op::Jump(join)) =
+            (code.get(then_cursor)?, code.get(then_cursor + 1)?)
+        else {
+            return None;
+        };
+        if then_accumulator_slot != accumulator_slot
+            || loaded_then_result_slot != &then_result_slot
+            || else_start != &(then_cursor + 2)
         {
             return None;
         }
 
-        let else_cursor = *else_start;
+        let mut else_cursor = *else_start;
+        if !matches!(code.get(else_cursor), Some(Op::Pop)) {
+            return None;
+        }
+        else_cursor = Self::skip_optional_seed(code, else_cursor + 1);
+        else_cursor = Self::skip_optional_seed(code, else_cursor);
         let (
-            Op::Pop,
-            Op::LoadConst(_),
-            Op::StoreLocal(else_loop_result_slot),
-            Op::LoadConst(_),
-            Op::StoreLocal(else_result_slot),
             Op::LoadLocal(else_accumulator_slot),
             Op::LoadConst(else_delta_index),
             Op::Binary(BinaryOp::Add),
             Op::Dup,
             Op::AssignLocal(assigned_else_accumulator_slot),
-            Op::Dup,
-            Op::StoreLocal(stored_else_result_slot),
-            Op::StoreLocal(stored_else_loop_result_slot),
-            Op::LoadLocal(loaded_else_result_slot),
-            Op::Dup,
-            Op::StoreLocal(stored_block_result_slot),
-            Op::StoreLocal(join_loop_result_slot),
         ) = (
             code.get(else_cursor)?,
             code.get(else_cursor + 1)?,
             code.get(else_cursor + 2)?,
             code.get(else_cursor + 3)?,
             code.get(else_cursor + 4)?,
-            code.get(else_cursor + 5)?,
-            code.get(else_cursor + 6)?,
-            code.get(else_cursor + 7)?,
-            code.get(else_cursor + 8)?,
-            code.get(else_cursor + 9)?,
-            code.get(else_cursor + 10)?,
-            code.get(else_cursor + 11)?,
-            code.get(else_cursor + 12)?,
-            code.get(else_cursor + 13)?,
-            code.get(else_cursor + 14)?,
-            code.get(else_cursor + 15)?,
-            code.get(else_cursor + 16)?,
         )
         else {
             return None;
         };
-        if else_loop_result_slot != loop_result_slot
-            || else_accumulator_slot != accumulator_slot
+        let (else_cursor, else_result_slot) =
+            Self::match_completion_stores(code, else_cursor + 5, None)?;
+        let Op::LoadLocal(loaded_else_result_slot) = code.get(else_cursor)? else {
+            return None;
+        };
+        if else_accumulator_slot != accumulator_slot
             || assigned_else_accumulator_slot != accumulator_slot
-            || stored_else_result_slot != else_result_slot
-            || stored_else_loop_result_slot != loop_result_slot
-            || loaded_else_result_slot != else_result_slot
-            || stored_block_result_slot != &block_result_slot
-            || join_loop_result_slot != loop_result_slot
+            || loaded_else_result_slot != &else_result_slot
+            || join != &(else_cursor + 1)
         {
             return None;
         }
 
-        let tail = else_cursor + 17;
+        // The join records the `if` statement's own completion value.
+        let (tail, block_result_slot) = Self::match_completion_stores(code, *join, None)?;
+        if seeded_block_result_slot.is_some_and(|slot| slot != block_result_slot) {
+            return None;
+        }
         let (
             Op::LoadLocal(tail_block_result_slot),
-            Op::StoreLocal(tail_loop_result_slot),
+            Op::StoreLocal(loop_result_slot),
             Op::LoadLocal(tail_counter_slot),
             Op::ToNumeric,
             Op::Dup,
@@ -273,7 +314,6 @@ impl ControlLoopPlan {
         };
         if tail + 8 != backedge
             || tail_block_result_slot != &block_result_slot
-            || tail_loop_result_slot != loop_result_slot
             || tail_counter_slot != &counter_slot
             || assigned_counter_slot != &counter_slot
             || tail_header != &header
@@ -395,7 +435,7 @@ mod tests {
     use super::*;
     use crate::bytecode::compiler;
 
-    fn nested_function(source: &str) -> Bytecode {
+    pub(super) fn nested_function(source: &str) -> Bytecode {
         let script = qjs_parser::parse_script(source).expect("source should parse");
         let bytecode = compiler::compile_script(&script).expect("source should compile");
         bytecode

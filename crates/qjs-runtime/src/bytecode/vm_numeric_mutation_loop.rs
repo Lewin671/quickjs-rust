@@ -277,6 +277,30 @@ struct CompiledNamedPlan {
     plan: NamedNumericMutationLoopPlan,
 }
 
+/// Matches the completion suffix a loop body emits after a value-producing
+/// statement. Where a statement completion value is observable the statement
+/// duplicates its value into the block and loop result slots; inside a
+/// function body only the block slot is written. Returns the cursor just past
+/// the suffix.
+fn match_completion_suffix(
+    code: &[Op],
+    cursor: usize,
+    block_result_slot: usize,
+    loop_result_slot: usize,
+) -> Option<usize> {
+    if let (Some(Op::Dup), Some(Op::StoreLocal(block)), Some(Op::StoreLocal(loop_slot))) =
+        (code.get(cursor), code.get(cursor + 1), code.get(cursor + 2))
+        && *block == block_result_slot
+        && *loop_slot == loop_result_slot
+    {
+        return Some(cursor + 3);
+    }
+    match code.get(cursor)? {
+        Op::StoreLocal(block) if *block == block_result_slot => Some(cursor + 1),
+        _ => None,
+    }
+}
+
 impl NamedNumericMutationLoopPlan {
     fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<CompiledNamedPlan> {
         let code = &bytecode.code;
@@ -286,16 +310,12 @@ impl NamedNumericMutationLoopPlan {
             Op::Binary(BinaryOp::Lt),
             Op::JumpIfFalse(exit),
             Op::Pop,
-            Op::LoadConst(_),
-            Op::StoreLocal(block_result_slot),
         ) = (
             code.get(header)?,
             code.get(header + 1)?,
             code.get(header + 2)?,
             code.get(header + 3)?,
             code.get(header + 4)?,
-            code.get(header + 5)?,
-            code.get(header + 6)?,
         )
         else {
             return None;
@@ -303,6 +323,13 @@ impl NamedNumericMutationLoopPlan {
         if !matches!(code.get(*exit), Some(Op::Pop)) {
             return None;
         }
+        // The block-result seed is only emitted where a statement completion
+        // value is observable. Its slot is always named again by the loop tail.
+        let (body_start, seeded_block_result_slot) =
+            match (code.get(header + 5), code.get(header + 6)) {
+                (Some(Op::LoadConst(_)), Some(Op::StoreLocal(slot))) => (header + 7, Some(*slot)),
+                _ => (header + 5, None),
+            };
 
         let tail = backedge.checked_sub(8)?;
         let (
@@ -331,14 +358,15 @@ impl NamedNumericMutationLoopPlan {
         };
         if tail + 8 != backedge
             || tail_header != &header
-            || tail_block_result_slot != block_result_slot
+            || seeded_block_result_slot.is_some_and(|slot| slot != *tail_block_result_slot)
             || tail_counter_slot != counter_slot
             || assigned_counter_slot != counter_slot
         {
             return None;
         }
+        let block_result_slot = tail_block_result_slot;
 
-        let mut cursor = header + 7;
+        let mut cursor = body_start;
         let mut receiver_slot = None;
         let mut fields = Vec::new();
         let mut mutations = Vec::new();
@@ -366,28 +394,22 @@ impl NamedNumericMutationLoopPlan {
             Op::Binary(BinaryOp::Add),
             Op::Dup,
             Op::AssignLocal(assigned_accumulator_slot),
-            Op::Dup,
-            Op::StoreLocal(accumulator_block_result_slot),
-            Op::StoreLocal(accumulator_loop_result_slot),
         ) = (
             code.get(cursor)?,
             code.get(cursor + 1)?,
             code.get(cursor + 2)?,
             code.get(cursor + 3)?,
             code.get(cursor + 4)?,
-            code.get(cursor + 5)?,
-            code.get(cursor + 6)?,
-            code.get(cursor + 7)?,
         )
         else {
             return None;
         };
+        let accumulator_end =
+            match_completion_suffix(code, cursor + 5, *block_result_slot, *loop_result_slot)?;
         let receiver_slot = receiver_slot?;
-        if cursor + 8 != tail
+        if accumulator_end != tail
             || cache.local_slot() != Some(receiver_slot)
             || assigned_accumulator_slot != accumulator_slot
-            || accumulator_block_result_slot != block_result_slot
-            || accumulator_loop_result_slot != loop_result_slot
         {
             return None;
         }
@@ -501,26 +523,18 @@ fn compile_mutation(
         Op::SetPropNamed {
             key: target_key, ..
         },
-        Op::Dup,
-        Op::StoreLocal(write_block_result_slot),
-        Op::StoreLocal(write_loop_result_slot),
     ) = (
         code.get(cursor)?,
         code.get(cursor + 1)?,
         code.get(cursor + 2)?,
         code.get(cursor + 3)?,
         code.get(cursor + 4)?,
-        code.get(cursor + 5)?,
-        code.get(cursor + 6)?,
-        code.get(cursor + 7)?,
     )
     else {
         return None;
     };
-    if cache.local_slot() != Some(*receiver_slot)
-        || write_block_result_slot != &block_result_slot
-        || write_loop_result_slot != &loop_result_slot
-    {
+    let write_end = match_completion_suffix(code, cursor + 5, block_result_slot, loop_result_slot)?;
+    if cache.local_slot() != Some(*receiver_slot) {
         return None;
     }
     let Value::Number(constant) = bytecode.constants.get(*constant_index)? else {
@@ -540,7 +554,7 @@ fn compile_mutation(
             operation,
             constant: *constant,
         },
-        cursor + 8,
+        write_end,
         *receiver_slot,
     ))
 }

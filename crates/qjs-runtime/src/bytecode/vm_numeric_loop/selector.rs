@@ -88,9 +88,9 @@ impl NumericLoopSelector {
             let Op::StoreLocal(block_result_slot) = code.get(cursor + 13)? else {
                 return None;
             };
-            if expected_block_result_slot.is_some_and(|slot| slot != *block_result_slot)
-                || loop_result_slot.is_some()
-            {
+            // A compact selection stores only the block result; the loop
+            // result, when the loop has one, is propagated by the loop tail.
+            if expected_block_result_slot.is_some_and(|slot| slot != *block_result_slot) {
                 return None;
             }
             (*block_result_slot, cursor + 14)
@@ -107,7 +107,7 @@ impl NumericLoopSelector {
             else {
                 return None;
             };
-            if expected_block_result_slot != Some(*block_result_slot)
+            if expected_block_result_slot.is_some_and(|slot| slot != *block_result_slot)
                 || loop_result_slot != Some(*selection_loop_result_slot)
             {
                 return None;

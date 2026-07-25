@@ -247,6 +247,10 @@ impl NumericLoopPlan {
                 _ => (header + 5, None, true),
             };
 
+        // The block-result seed prologue is only emitted where a statement
+        // completion value is observable, so a loop whose body never seeds one
+        // still ends with the block-result-to-loop-result propagation. Let the
+        // tail supply the slot the prologue used to name.
         let full_tail = backedge.checked_sub(8).and_then(|tail| {
             let (
                 Op::LoadLocal(tail_block_result_slot),
@@ -274,7 +278,7 @@ impl NumericLoopPlan {
             };
             if tail + 8 != backedge
                 || tail_header != &header
-                || Some(*tail_block_result_slot) != block_result_slot
+                || block_result_slot.is_some_and(|slot| slot != *tail_block_result_slot)
                 || tail_counter_slot != counter_slot
             {
                 return None;
@@ -283,6 +287,7 @@ impl NumericLoopPlan {
                 tail,
                 NumericLoopWrite::compile(assigned_counter, *counter_slot)?,
                 Some(*loop_result_slot),
+                Some(*tail_block_result_slot),
             ))
         });
         let compact_tail = || {
@@ -318,9 +323,14 @@ impl NumericLoopPlan {
                 tail,
                 NumericLoopWrite::compile(assigned_counter, *counter_slot)?,
                 None,
+                None,
             ))
         };
-        let (tail, counter_write, loop_result_slot) = full_tail.or_else(compact_tail)?;
+        let (tail, counter_write, loop_result_slot, tail_block_result_slot) =
+            full_tail.or_else(compact_tail)?;
+        if let Some(slot) = tail_block_result_slot {
+            block_result_slot.get_or_insert(slot);
+        }
 
         let selector = NumericLoopSelector::compile(
             bytecode,
@@ -408,7 +418,7 @@ impl NumericLoopPlan {
                 };
             if term_accumulator_slot == *counter_slot
                 || block_result_slot.is_some_and(|slot| slot != term_block_result_slot)
-                || term_loop_result_slot != loop_result_slot
+                || (term_loop_result_slot.is_some() && term_loop_result_slot != loop_result_slot)
                 || accumulator_slot.is_some_and(|slot| slot != term_accumulator_slot)
             {
                 return None;

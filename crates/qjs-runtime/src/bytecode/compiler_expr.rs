@@ -75,8 +75,7 @@ impl Compiler {
         self.emit(Op::Pop);
         self.push_loop(result_slot);
         let body_start = self.code.len();
-        self.compile_stmt(body)?;
-        self.emit(Op::StoreLocal(result_slot));
+        self.compile_loop_body(body, result_slot)?;
         let context = self.pop_loop();
         // A `continue` (and the fall-through after the body) must pass through
         // the per-iteration environment refresh, so the refresh — when needed —
@@ -137,8 +136,7 @@ impl Compiler {
         let loop_start = self.code.len();
         self.push_loop(result_slot);
         let body_start = self.code.len();
-        self.compile_stmt(body)?;
-        self.emit(Op::StoreLocal(result_slot));
+        self.compile_loop_body(body, result_slot)?;
         let context = self.pop_loop();
         // The refresh (when needed) sits before the test so both the
         // fall-through and a `continue` (which targets the test) run it.
@@ -326,8 +324,7 @@ impl Compiler {
         let body_start = self.code.len();
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.push_loop(result_slot);
-            compiler.compile_stmt(body)?;
-            compiler.emit(Op::StoreLocal(result_slot));
+            compiler.compile_loop_body(body, result_slot)?;
             Ok(())
         })?;
         let context = self.pop_loop();

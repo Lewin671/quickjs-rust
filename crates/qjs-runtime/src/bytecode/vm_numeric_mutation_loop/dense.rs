@@ -1062,16 +1062,19 @@ fn compile_fixed(
         return None;
     }
 
-    let (Op::LoadConst(_), Op::StoreLocal(block_result_slot)) =
-        (code.get(header + 5)?, code.get(header + 6)?)
-    else {
-        return None;
+    // The block-result seed prologue only exists where a statement completion
+    // value is observable; the loop tail always names the same slot.
+    let (body_start, seeded_block_result_slot) = match (code.get(header + 5), code.get(header + 6))
+    {
+        (Some(Op::LoadConst(_)), Some(Op::StoreLocal(slot))) => (header + 7, Some(*slot)),
+        _ => (header + 5, None),
     };
-    if tail_block_result_slot != block_result_slot {
+    if seeded_block_result_slot.is_some_and(|slot| slot != *tail_block_result_slot) {
         return None;
     }
+    let block_result_slot = tail_block_result_slot;
 
-    let mut cursor = header + 7;
+    let mut cursor = body_start;
     let mut receiver_slot = None;
     let mut raw_mutations = Vec::new();
     while let Some((mutation, slot, next)) =
@@ -1094,22 +1097,18 @@ fn compile_fixed(
         Op::Binary(BinaryOp::Add),
         Op::Dup,
         Op::AssignLocal(assigned_accumulator_slot),
-        Op::Dup,
-        Op::StoreLocal(accumulator_block_result_slot),
-        Op::StoreLocal(accumulator_loop_result_slot),
     ) = (
         code.get(cursor)?,
         code.get(cursor + 1)?,
         code.get(cursor + 2)?,
         code.get(cursor + 3)?,
         code.get(cursor + 4)?,
-        code.get(cursor + 5)?,
-        code.get(cursor + 6)?,
-        code.get(cursor + 7)?,
     )
     else {
         return None;
     };
+    let accumulator_end =
+        super::match_completion_suffix(code, cursor + 5, *block_result_slot, *loop_result_slot)?;
     let (checksum_index, checksum_receiver) = decode_index_receiver(*encoded_checksum);
     let receiver_slot = receiver_slot?;
     let required_distinct_slots = [
@@ -1120,11 +1119,9 @@ fn compile_fixed(
         *loop_result_slot,
         receiver_slot,
     ];
-    if cursor + 8 != tail
+    if accumulator_end != tail
         || checksum_receiver != Some(receiver_slot)
         || assigned_accumulator_slot != accumulator_slot
-        || accumulator_block_result_slot != block_result_slot
-        || accumulator_loop_result_slot != loop_result_slot
         || required_distinct_slots
             .iter()
             .enumerate()
@@ -1204,13 +1201,12 @@ fn compile_fixed_mutation(
     let Op::SetPropIndex { index: target, .. } = code.get(cursor + set_offset)? else {
         return None;
     };
-    let next = cursor + set_offset + 4;
-    if !matches!(code.get(cursor + set_offset + 1), Some(Op::Dup))
-        || !matches!(code.get(cursor + set_offset + 2), Some(Op::StoreLocal(slot)) if *slot == block_result_slot)
-        || !matches!(code.get(cursor + set_offset + 3), Some(Op::StoreLocal(slot)) if *slot == loop_result_slot)
-    {
-        return None;
-    }
+    let next = super::match_completion_suffix(
+        code,
+        cursor + set_offset + 1,
+        block_result_slot,
+        loop_result_slot,
+    )?;
     Some(((source, *target, operation), *receiver_slot, next))
 }
 

@@ -687,37 +687,37 @@ fn fuse_binary_assignments(
     analysis: &super::VirtualObjectAnalysis,
     code: &mut [Op],
 ) {
-    for ip in 0..code.len().saturating_sub(5) {
-        let (
-            Op::Binary(op),
-            Op::Dup,
-            Op::AssignLocal(target),
-            Op::Dup,
-            Op::StoreLocal(first),
-            Op::StoreLocal(second),
-        ) = (
-            &code[ip],
-            &code[ip + 1],
-            &code[ip + 2],
-            &code[ip + 3],
-            &code[ip + 4],
-            &code[ip + 5],
-        )
+    for ip in 0..code.len().saturating_sub(3) {
+        let (Op::Binary(op), Op::Dup, Op::AssignLocal(target)) =
+            (&code[ip], &code[ip + 1], &code[ip + 2])
         else {
             continue;
+        };
+        // A compound assignment is followed by the statement-completion stores
+        // its context needs: both the block and loop result slots where a
+        // completion value is observable, and only the block slot inside a
+        // function body. Repeating the single slot keeps one fused opcode
+        // shape for both, since storing the same value twice to one slot is
+        // indistinguishable from storing it once.
+        let (stores, skip) = match (code.get(ip + 3), code.get(ip + 4), code.get(ip + 5)) {
+            (Some(Op::Dup), Some(Op::StoreLocal(first)), Some(Op::StoreLocal(second))) => {
+                ([*first, *second], 5)
+            }
+            (Some(Op::StoreLocal(only)), _, _) => ([*only, *only], 3),
+            _ => continue,
         };
         if analysis
             .slot_authority
             .is_assignment_authoritative(bytecode, *target)
-            && analysis.slot_authority.is_authoritative(*first)
-            && analysis.slot_authority.is_authoritative(*second)
-            && range_is_linear(analysis, ip, ip + 5)
+            && analysis.slot_authority.is_authoritative(stores[0])
+            && analysis.slot_authority.is_authoritative(stores[1])
+            && range_is_linear(analysis, ip, ip + skip)
         {
             code[ip] = Op::BinaryAssignLocals {
                 op: *op,
                 target: *target,
-                stores: [*first, *second],
-                skip: 5,
+                stores,
+                skip,
             };
         }
     }

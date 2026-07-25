@@ -49,6 +49,15 @@ pub(super) struct Compiler {
     /// Whether the current function body is an async generator. `yield*` uses
     /// the async iterator protocol only in this context.
     pub(super) async_generator_body: bool,
+    /// Whether statement completion values are observable in the code being
+    /// compiled. Global script and `eval` code yield their last statement
+    /// value, so every statement list must thread one through a result slot
+    /// and every loop must maintain its own UpdateEmpty accumulator. A
+    /// function body's completion value is never observable -- `[[Call]]`
+    /// yields `undefined` or the explicit `return` argument -- so that
+    /// bookkeeping is dead code there, and skipping it removes several
+    /// executed instructions per statement inside every loop.
+    pub(super) tracks_completion_values: bool,
     /// Stack of try/catch/finally result slot contexts. When a `break` or
     /// `continue` crosses a try boundary, the innermost try result slot must
     /// be propagated to the target loop's result slot so UpdateEmpty semantics
@@ -124,6 +133,7 @@ impl Default for Compiler {
             with_base_depth: 0,
             regexp_literal_error: false,
             async_generator_body: false,
+            tracks_completion_values: true,
             try_result_slots: Vec::new(),
             disposable_scope_depth: 0,
             source: std::rc::Rc::from(""),
@@ -298,6 +308,7 @@ impl Compiler {
         body: &[Stmt],
     ) -> Result<Bytecode, RuntimeError> {
         self.global_scope = false;
+        self.tracks_completion_values = false;
         self.strict = self.strict || is_strict_function_body(body);
         let mut direct_parameter_slots = Vec::with_capacity(params.positional.len());
         for (index, element) in params.positional.iter().enumerate() {
@@ -1088,7 +1099,23 @@ impl Compiler {
         Ok(())
     }
 
+    /// Compiles a loop body. When completion values are unobservable the body
+    /// leaves nothing on the operand stack, so the loop needs neither the
+    /// per-iteration result store nor the block's own result slot.
+    pub(super) fn compile_loop_body(
+        &mut self,
+        body: &Stmt,
+        result_slot: usize,
+    ) -> Result<(), RuntimeError> {
+        self.compile_stmt(body)?;
+        self.emit(Op::StoreLocal(result_slot));
+        Ok(())
+    }
+
     pub(super) fn reset_current_loop_completion_to_undefined(&mut self) {
+        if !self.tracks_completion_values {
+            return;
+        }
         if let Some(result_slot) = self.current_loop_result_slot() {
             self.emit_load_undefined();
             self.emit(Op::StoreLocal(result_slot));
@@ -1096,7 +1123,7 @@ impl Compiler {
     }
 
     pub(super) fn store_statement_list_completion(&mut self, result_slot: usize) {
-        if self.current_loop_result_slot().is_some() {
+        if self.tracks_completion_values && self.current_loop_result_slot().is_some() {
             self.emit(Op::Dup);
             self.emit(Op::StoreLocal(result_slot));
             let loop_slot = self
