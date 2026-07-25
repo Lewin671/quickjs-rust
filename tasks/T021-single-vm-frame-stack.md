@@ -407,3 +407,35 @@ Local single-shot timings drift 3-5% between builds on the development host,
 which is larger than most candidate effects and produced two contradictory
 verdicts on one change. Interleaved A/B is the minimum bar for a local
 decision; the hosted preview protocol remains the authority.
+
+### 2026-07-25 the next structural target: per-call environment materialization
+
+Profiling the worst external ratio (`date-format-tofte`, a builtin- and
+string-heavy workload) attributes about 40% of its time to `malloc`/`free`,
+about 17% to `Vm::frame_call_env` plus `CallEnv::apply_env` plus
+`FrameBindings::insert`, and about 12% to `memcmp`.
+
+The cause is `Vm::call_env`. Calling a **native builtin** takes the
+`self.current_env()` branch, which materializes every visible frame local into
+a name-keyed compatibility frame -- one `String` allocation per local, appended
+to a `Vec<(String, FrameBindingValue)>` that `insert` scans linearly with
+`memcmp` -- and then writes the whole thing back through `apply_env`. Every
+`Math.floor`, `charAt`, `push`, or `getTime` pays it.
+
+Two attempts to remove it were measured and rejected:
+
+- Routing every native call through `realm_env()` breaks direct `eval`, which
+  does read the caller's scope through this path (27 tests).
+- Gating that on the frame's compile-time `contains_direct_eval` /
+  `contains_with` / deopt-bindings properties passes all 1,802 tests, the
+  5,159-case Test262 subset, and all 218 QuickJS-NG fixtures, but measured
+  +1.9% overall: `string-base64` +41%, `crypto-md5` +18%, against
+  `crypto-aes` -18%. Something on the builtin path depends on the snapshot
+  beyond name resolution; find it before retrying.
+
+The promising direction is instead to make the snapshot itself cheap rather
+than to skip it: `Local::name` is a `String` cloned per local per
+materialization, so making binding names `Rc<str>` end to end turns the
+dominant allocation into a refcount bump. That touches `Local`, `FrameBindings`,
+and about 63 `insert`/`insert_frame_cell` call sites, and it is the highest
+expected-value unit currently identified.
