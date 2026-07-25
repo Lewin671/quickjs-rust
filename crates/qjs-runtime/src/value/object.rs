@@ -344,6 +344,12 @@ struct ObjectData {
     /// Invalidates monomorphic named-read caches whenever an own string
     /// property's descriptor or value changes.
     property_revision: Cell<u64>,
+    /// Invalidates cached own-property *slots* only when the property table's
+    /// layout changes: an insert, a delete, or a descriptor replacement.
+    /// Overwriting an existing data property's value leaves every slot index
+    /// valid, so a slot-keyed read cache survives ordinary field assignment --
+    /// the case `property_revision` deliberately cannot express.
+    layout_revision: Cell<u64>,
     /// Count of own string keys that parse as array indices. Maintained as keys
     /// are added and removed so `has_own_index_property` is an O(1) check; this
     /// keeps the `array[i] = x` fast path from scanning a prototype's keys on
@@ -903,6 +909,7 @@ impl ObjectRef {
         Self(Rc::new(ObjectData {
             properties: RefCell::new(PropertyStorage::dynamic(properties, property_order)),
             property_revision: Cell::new(0),
+            layout_revision: Cell::new(0),
             index_property_count: Cell::new(index_property_count),
             extensible: Cell::new(true),
             prototype: RefCell::new(prototype),
@@ -949,6 +956,7 @@ impl ObjectRef {
         Self(Rc::new(ObjectData {
             properties: RefCell::new(properties),
             property_revision: Cell::new(0),
+            layout_revision: Cell::new(0),
             index_property_count: Cell::new(index_property_count),
             extensible: Cell::new(true),
             prototype: RefCell::new(prototype.map(Prototype::Object)),
@@ -976,6 +984,7 @@ impl ObjectRef {
         Self(Rc::new(ObjectData {
             properties: RefCell::new(PropertyStorage::ShapedPair { shape, values }),
             property_revision: Cell::new(0),
+            layout_revision: Cell::new(0),
             index_property_count: Cell::new(index_property_count),
             extensible: Cell::new(true),
             prototype: RefCell::new(prototype.map(Prototype::Object)),
@@ -1055,7 +1064,22 @@ impl ObjectRef {
         self.0.property_revision.get()
     }
 
+    pub(crate) fn layout_revision(&self) -> u64 {
+        self.0.layout_revision.get()
+    }
+
+    /// Records a change that keeps every own-property slot index valid: the
+    /// value of an existing data property was overwritten in place.
+    fn bump_value_revision(&self) {
+        self.0
+            .property_revision
+            .set(self.0.property_revision.get().wrapping_add(1));
+    }
+
     fn bump_property_revision(&self) {
+        self.0
+            .layout_revision
+            .set(self.0.layout_revision.get().wrapping_add(1));
         self.0
             .property_revision
             .set(self.0.property_revision.get().wrapping_add(1));
@@ -1186,7 +1210,7 @@ impl ObjectRef {
         if let Some(property) = properties.get_mut(&key) {
             if property.writable {
                 property.value = value;
-                self.bump_property_revision();
+                self.bump_value_revision();
                 drop(properties);
                 if establishes_realm_identity {
                     self.capture_realm_intrinsic_identity();
@@ -1320,7 +1344,7 @@ impl ObjectRef {
             return None;
         };
         std::rc::Rc::make_mut(string).push_str(suffix);
-        self.bump_property_revision();
+        self.bump_value_revision();
         Some(Value::String(string.clone()))
     }
 
@@ -1384,6 +1408,41 @@ impl ObjectRef {
             return OwnDataPropertyRead::NeedsSlowPath;
         }
         self.0.properties.borrow().own_data_read(key)
+    }
+
+    /// Resolves `key` to a stable own-property slot in this object's compact
+    /// storage. Callers pair the slot with [`Self::layout_revision`]: the pair
+    /// stays valid across ordinary value assignment, so a monomorphic read
+    /// cache keeps hitting while a field is written every iteration.
+    pub(crate) fn own_data_slot(&self, key: &str) -> Option<usize> {
+        if self.0.module_namespace_exotic.get() {
+            return None;
+        }
+        match &*self.0.properties.borrow() {
+            PropertyStorage::Small { entries } => {
+                entries.iter().position(|(candidate, property)| {
+                    candidate.as_ref() == key && !property.is_accessor()
+                })
+            }
+            PropertyStorage::Dynamic(_)
+            | PropertyStorage::Shaped { .. }
+            | PropertyStorage::ShapedPair { .. } => None,
+        }
+    }
+
+    /// Reads a slot previously resolved by [`Self::own_data_slot`]. The storage
+    /// kind is re-checked so a layout the revision counter cannot describe
+    /// simply misses the cache instead of reading the wrong property.
+    pub(crate) fn own_data_slot_value(&self, slot: usize) -> Option<Value> {
+        match &*self.0.properties.borrow() {
+            PropertyStorage::Small { entries } => {
+                let (_, property) = entries.get(slot)?;
+                (!property.is_accessor()).then(|| property.value.clone())
+            }
+            PropertyStorage::Dynamic(_)
+            | PropertyStorage::Shaped { .. }
+            | PropertyStorage::ShapedPair { .. } => None,
+        }
     }
 
     /// Returns the shared literal shape and storage slot for an unmodified
@@ -1454,7 +1513,7 @@ impl ObjectRef {
             .borrow_mut()
             .write_existing_data(key, value);
         if matches!(result, OwnDataPropertyWrite::Written) {
-            self.bump_property_revision();
+            self.bump_value_revision();
             if establishes_realm_identity {
                 self.capture_realm_intrinsic_identity();
             }

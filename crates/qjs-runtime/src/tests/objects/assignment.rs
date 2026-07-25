@@ -200,3 +200,64 @@ fn put_value_on_primitive_base_routes_through_wrapper_prototype() {
     assert!(eval("'use strict'; (5).foo = 1;").is_err());
     assert!(eval("'use strict'; Symbol().foo = 1;").is_err());
 }
+
+#[test]
+fn cached_property_reads_track_writes_deletes_and_descriptor_changes() {
+    // A named-read site caches an own-property slot once it observes that the
+    // field it reads is also written. The slot must follow later value writes,
+    // and must be abandoned when the property table's layout changes.
+    assert_eq!(
+        eval(
+            "function Point(x, y) { this.x = x; this.y = y; } \
+             function run(point, n) { \
+               var total = 0; \
+               for (var i = 0; i < n; i++) { point.x = point.x + 1; total += point.x + point.y; } \
+               return total; \
+             } \
+             run(new Point(0, 10), 4);"
+        ),
+        Ok(Value::Number(50.0))
+    );
+    // Deleting and re-adding a property shifts storage slots.
+    assert_eq!(
+        eval(
+            "var object = { a: 1, b: 2 }; \
+             function read(target) { return target.b; } \
+             var out = [read(object), read(object)]; \
+             object.b = 20; \
+             out.push(read(object)); \
+             delete object.a; \
+             out.push(read(object)); \
+             object.c = 3; \
+             out.push(read(object)); \
+             out.join(',');"
+        ),
+        Ok(Value::String("2,2,20,20,20".to_owned().into()))
+    );
+    // Replacing a data property with an accessor must stop the slot read.
+    assert_eq!(
+        eval(
+            "var object = { v: 1 }; \
+             function read(target) { return target.v; } \
+             var out = [read(object)]; \
+             object.v = 2; \
+             out.push(read(object)); \
+             Object.defineProperty(object, 'v', { get: function() { return 99; }, configurable: true }); \
+             out.push(read(object)); \
+             out.join(',');"
+        ),
+        Ok(Value::String("1,2,99".to_owned().into()))
+    );
+    // A frozen field keeps reading its last value through the cached slot.
+    assert_eq!(
+        eval(
+            "var object = { v: 5 }; \
+             function read(target) { return target.v; } \
+             read(object); object.v = 6; read(object); \
+             Object.freeze(object); \
+             object.v = 7; \
+             read(object);"
+        ),
+        Ok(Value::Number(6.0))
+    );
+}

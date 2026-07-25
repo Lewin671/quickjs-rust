@@ -44,6 +44,7 @@ impl OrderedDataPropertyBuilder {
         ObjectRef(Rc::new(ObjectData {
             properties: RefCell::new(self.properties),
             property_revision: Cell::new(0),
+            layout_revision: Cell::new(0),
             index_property_count: Cell::new(self.index_property_count),
             extensible: Cell::new(true),
             prototype: RefCell::new(prototype.map(Prototype::Object)),

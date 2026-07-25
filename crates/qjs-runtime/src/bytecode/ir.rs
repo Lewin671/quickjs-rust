@@ -72,6 +72,17 @@ enum NamedPropertyCacheEntry {
         shape: Rc<ObjectLiteralShape>,
         slot: usize,
     },
+    /// An own data property resolved to a storage slot. Unlike `Exact`, this
+    /// entry survives ordinary value assignment to the object, because a slot
+    /// index is only invalidated by a layout change (insert, delete, or
+    /// descriptor replacement). Read-modify-write field code -- the common
+    /// shape of numeric object algorithms -- keeps hitting the cache instead
+    /// of re-resolving the property name on every iteration.
+    OwnSlot {
+        object: ObjectWeakRef,
+        layout_revision: u64,
+        slot: usize,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -120,6 +131,16 @@ impl NamedPropertyCache {
             NamedPropertyCacheEntry::LiteralShape { shape, slot } => {
                 return object.literal_data_slot_value(shape, *slot);
             }
+            NamedPropertyCacheEntry::OwnSlot {
+                object: cached_object,
+                layout_revision,
+                slot,
+            } => {
+                if !cached_object.ptr_eq(object) || *layout_revision != object.layout_revision() {
+                    return None;
+                }
+                return object.own_data_slot_value(*slot);
+            }
         };
         Some(match value {
             CachedValue::Undefined => Value::Undefined,
@@ -131,8 +152,28 @@ impl NamedPropertyCache {
     }
 
     pub(super) fn update(&self, object: &ObjectRef, key: &str, value: &Value) {
+        // A cached value is the cheapest hit -- it answers without touching the
+        // object's property table at all -- but any assignment to the object
+        // invalidates it. Start there, and promote a site to the slot-keyed
+        // entry only once a stale value entry for the same object proves the
+        // site reads a field that is also being written.
+        let value_entry_went_stale = self.0.borrow().entries.iter().flatten().any(|entry| {
+            matches!(
+                entry,
+                NamedPropertyCacheEntry::Exact { object: cached, .. } if cached.ptr_eq(object)
+            )
+        });
         let entry = if let Some((shape, slot)) = object.literal_data_slot(key) {
             NamedPropertyCacheEntry::LiteralShape { shape, slot }
+        } else if let Some(slot) = value_entry_went_stale
+            .then(|| object.own_data_slot(key))
+            .flatten()
+        {
+            NamedPropertyCacheEntry::OwnSlot {
+                object: object.downgrade(),
+                layout_revision: object.layout_revision(),
+                slot,
+            }
         } else {
             let value = match value {
                 Value::Undefined => CachedValue::Undefined,
