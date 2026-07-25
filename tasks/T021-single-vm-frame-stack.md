@@ -581,3 +581,34 @@ per-call cost by rearranging the frame -- pooling its slot storage, inlining
 its constructor, caching its authority mask, shrinking its environment -- has
 now measured neutral or worse. What remains is the count of operations a call
 performs, not how they are laid out, which is the R1/R2 trampoline design.
+
+### 2026-07-25 direct-call eligibility audit: five real defects, one non-defect
+
+Profiling the shapes the external suites are built from led to the richest
+vein of the campaign: functions the slot-seeded direct call path declined for
+a reason that did not apply to them. Each was a defect rather than a tuning
+knob, and each is measured against QuickJS-NG on an isolated shape.
+
+| Excluded by | Why it did not apply | Commit | Shape result |
+| --- | --- | --- | ---: |
+| `immutable_env_binding` | every class member carried the class inner name, used or not | `7cb3e6e4` | -46.6% (13.8x -> 7.7x) |
+| `has_name_binding` | every named function expression carried its own name, used or not | `72fc4947` | -44.5% (12.0x -> 6.7x) |
+| named `new.target` binding | it needed no name at all | `b5e2e06d` | -10.7% |
+| `creates_closures` | only a closure that *captures* needs frame cells | `1521cba4` | -41.8% (2.33x -> 1.36x) |
+| `params.is_simple()` | a default initializer fills the parameter's own slot | `21b97f07` | -50.9% (12.8x -> 5.9x) |
+
+The reference test in every case is "does the body actually use the name", and
+**slot existence is not that test** -- the compiler declares the slot
+regardless, so `Bytecode::uses_local_binding` scans the instructions. Each fix
+keeps the exclusion whenever the body could reach the name by a route the
+compiler does not record: a capturing closure, a direct `eval`, or a `with`.
+
+`needs_arguments_object` was audited and is **not** actionable: reading
+`arguments` costs 3.9x here against 3.8x in the reference, so the penalty is
+proportionate and the ratio is inherited from the base method shape.
+
+A prototype-chain read cache was also built and rejected. Method lookup on a
+prototype was genuinely uncached -- `try_cached_get_string` cleared the cache
+and re-walked the chain on every access -- but caching the immediate
+prototype's slot measured 0.7% slower overall: the added entry kind costs the
+cache scan more than the one-level walk it replaces.
