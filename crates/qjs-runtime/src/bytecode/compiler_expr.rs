@@ -529,12 +529,25 @@ impl Compiler {
                         &local_names,
                     )?;
                 }
+                // A named function expression's inner name binding is
+                // immutable, and it only exists for a body that can reach the
+                // name. Carrying an unused one excludes the function from the
+                // slot-seeded direct call path, which made a named function
+                // expression measurably slower than the identical anonymous
+                // one. A body that creates a closure, runs a direct `eval`, or
+                // has a `with` can reach the name by a route the compiler does
+                // not record, and such a body is declined by that path anyway.
+                let needs_name_binding = name.as_deref().is_some_and(|name| {
+                    bytecode.creates_closures()
+                        || bytecode.contains_direct_eval()
+                        || bytecode.contains_with()
+                        || bytecode.uses_local_binding(name)
+                        || bytecode.global_names().iter().any(|global| global == name)
+                });
                 self.emit(Op::NewFunction {
                     name: name.clone(),
-                    has_name_binding: name.is_some(),
-                    // A named function expression's inner name binding is
-                    // immutable; an anonymous one has no binding.
-                    immutable_name_binding: name.is_some(),
+                    has_name_binding: needs_name_binding,
+                    immutable_name_binding: needs_name_binding,
                     params: Rc::new(params.clone()),
                     local_names: Rc::new(local_names),
                     lexical_captures,

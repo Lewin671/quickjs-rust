@@ -273,3 +273,63 @@ fn anonymous_class_name_is_own_configurable_property() {
         "false,false,true,D"
     );
 }
+
+#[test]
+fn named_function_expression_binding_survives_every_use_route() {
+    // The inner name binding of a named function expression is now emitted
+    // only for a body that can reach the name. Every route by which a body
+    // reaches it must still work, and the binding must stay immutable.
+    assert_eq!(
+        eval("var f = function g() { return typeof g; }; f();"),
+        Ok(Value::String("function".to_owned().into()))
+    );
+    assert_eq!(
+        eval("var f = function k(n) { return n <= 0 ? 0 : k(n - 1) + 1; }; f(3);"),
+        Ok(Value::Number(3.0))
+    );
+    // Sloppy assignment to the inner name is a silent no-op; strict throws.
+    assert_eq!(
+        eval("var f = function n() { n = 5; return typeof n; }; f();"),
+        Ok(Value::String("function".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var f = function s() { 'use strict'; try { s = 1; return 'no-throw'; } catch (e) { return e.constructor.name; } }; f();"
+        ),
+        Ok(Value::String("TypeError".to_owned().into()))
+    );
+    // Through a nested closure and through a direct eval.
+    assert_eq!(
+        eval(
+            "var f = function g() { var inner = function () { return typeof g; }; return inner(); }; f();"
+        ),
+        Ok(Value::String("function".to_owned().into()))
+    );
+    assert_eq!(
+        eval("var f = function g() { return eval('typeof g'); }; f();"),
+        Ok(Value::String("function".to_owned().into()))
+    );
+    // A body-local declaration shadows the inner name.
+    assert_eq!(
+        eval("var f = function t() { var t = 9; return t; }; f();"),
+        Ok(Value::Number(9.0))
+    );
+    assert_eq!(
+        eval("var f = function t(t) { return t; }; f(4);"),
+        Ok(Value::Number(4.0))
+    );
+    // The `name` property is independent of the inner binding.
+    assert_eq!(
+        eval("var f = function q() { return 1; }; f.name;"),
+        Ok(Value::String("q".to_owned().into()))
+    );
+    assert_eq!(
+        eval("var f = function q() { return q.name; }; f();"),
+        Ok(Value::String("q".to_owned().into()))
+    );
+    // The common case: a body that never mentions the name still runs.
+    assert_eq!(
+        eval("var o = { v: 21 }; o.get = function named() { return this.v * 2; }; o.get();"),
+        Ok(Value::Number(42.0))
+    );
+}
