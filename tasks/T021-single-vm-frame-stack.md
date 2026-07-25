@@ -382,3 +382,28 @@ loop-specialization tier, not benchmark fitting. Their cost is brittleness:
 every codegen change must also make them shape-tolerant, which is roughly an
 hour of work across the five matcher sites when done with running cursors and
 optional prologue/suffix helpers rather than fixed offsets.
+
+### 2026-07-24 addendum: opcode-count levers and how to measure them
+
+Two further negative results, both from interleaved A/B runs (both binaries
+built first, then alternated per case, min of five to seven rounds):
+
+- Adding any variant to `Op` costs about 2-3%, including a variant that is
+  never constructed or executed. The discriminant is niche-encoded inside the
+  first field, so the variant count perturbs the encoding every fetch pays for.
+  `#[repr(u8)]` recovers most of that but is not itself a measurable win. A
+  superinstruction needing a new opcode therefore starts about 2% behind;
+  `BinaryLocals`, fusing the most frequent triple in real code, never caught up.
+- Moving 54 cold opcodes out of the dispatch `match` behind one
+  `#[inline(never)]` fallback measured neutral. Arm count is not the lever.
+
+One real gap was found and closed instead. `virtual_object::lower` returned the
+original instruction stream whenever scalar replacement found no candidate,
+which also skipped every shared-dispatch superinstruction, so an ordinary
+function never received one. The compare-and-branch fusion now runs for every
+analyzable function.
+
+Local single-shot timings drift 3-5% between builds on the development host,
+which is larger than most candidate effects and produced two contradictory
+verdicts on one change. Interleaved A/B is the minimum bar for a local
+decision; the hosted preview protocol remains the authority.
