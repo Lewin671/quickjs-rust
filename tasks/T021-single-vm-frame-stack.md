@@ -634,3 +634,15 @@ The transferable lesson: a measured failure refutes a *mechanism*, not the
 returning by value, `CallEnv`'s seven reference-count pairs -- should be
 re-attacked the same way, by removing the materialization rather than by
 rearranging it.
+
+### 2026-07-25 measurement hygiene: always rebuild the base
+
+Marking `vm::eval_function_bytecode` `#[inline]`, so the caller's `CallEnv`
+flows into the frame instead of crossing two non-inlined boundaries, looked
+like a 5-8% win against remembered numbers. Against a base rebuilt from the
+current `main` it measured **1.1% slower** and was reverted: the remembered
+numbers predated the previous commit, which had already taken that gain.
+
+Rebuild the base binary from `HEAD` for every A/B. Comparing against numbers
+from an earlier build attributes the previous commit's gain to the current
+experiment.
