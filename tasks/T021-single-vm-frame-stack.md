@@ -557,3 +557,27 @@ parent on an ordinary call (`global_lexical_bindings`, `global_lexical_values`,
 one `Rc<InheritedEnv>` would cut `CallEnv` by roughly a third and replace seven
 reference-count pairs per call with one. `module_imports` is a per-frame
 parameter and needs care.
+
+### 2026-07-25 grouping `CallEnv`'s inherited handles: measured, rejected
+
+The unit named above was implemented. Two shapes were tried:
+
+- Grouping all six inherited handles is not possible without a per-call
+  allocation: a direct leaf frame deliberately *resets* `catch_bindings` and
+  `direct_eval_var_conflicts` to the realm's shared empty set, so putting them
+  in the shared group forces the group to be rebuilt for every call. The
+  existing test `direct_leaf_frames_share_empty_metadata_until_mutation`
+  catches exactly this.
+- Grouping only the four handles every frame does inherit unchanged
+  (`global_lexical_bindings`, `global_lexical_values`,
+  `immutable_lexical_bindings`, `module_host`) compiles, passes all 1,804
+  tests, and shrinks `CallEnv` from 192 to 168 bytes and `FrameState` from 704
+  to 688. It measured **2.8% slower**: `access-binary-trees` +6.6%, recursion
+  +7.4%, `t3` +10.8%. Twenty-four bytes off a frame copy does not pay for an
+  extra indirection on every read of those handles.
+
+Frame size is therefore not the lever either. Every attempt to reduce the
+per-call cost by rearranging the frame -- pooling its slot storage, inlining
+its constructor, caching its authority mask, shrinking its environment -- has
+now measured neutral or worse. What remains is the count of operations a call
+performs, not how they are laid out, which is the R1/R2 trampoline design.
