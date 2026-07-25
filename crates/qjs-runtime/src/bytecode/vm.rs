@@ -1743,8 +1743,30 @@ impl<'a> Vm<'a> {
             let env = self.attach_host(self.env.new_function_frame());
             return VmCallEnv { env };
         }
+        // A native builtin has no closure over the caller's frame: it resolves
+        // names through the realm. Snapshotting every caller slot into a
+        // name-keyed compatibility frame -- and writing the whole thing back
+        // afterwards -- is therefore unobservable work for most calls, and it
+        // dominated builtin-heavy workloads.
+        //
+        // Three kinds of caller keep the snapshot. A frame that can resolve
+        // names dynamically needs it for itself: a direct `eval`, a `with`
+        // body, or one already carrying deoptimized bindings. A frame that
+        // creates a closure needs it for the callee's sake, because that
+        // closure may be handed to the builtin and may run a direct `eval`,
+        // which resolves free names through the environment the builtin was
+        // invoked with.
+        if self.bytecode.contains_direct_eval()
+            || self.bytecode.contains_with()
+            || self.bytecode.creates_closures()
+            || self.env.deopt_bindings().is_some()
+        {
+            return VmCallEnv {
+                env: self.current_env(),
+            };
+        }
         VmCallEnv {
-            env: self.current_env(),
+            env: self.realm_env(),
         }
     }
 

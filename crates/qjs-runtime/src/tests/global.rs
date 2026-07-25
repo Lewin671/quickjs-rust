@@ -1631,3 +1631,69 @@ fn test262_verify_property_host_helper_checks_data_descriptors() {
         Ok(Value::Boolean(false))
     );
 }
+
+#[test]
+fn native_callees_see_the_realm_not_the_caller_frame() {
+    // A native builtin resolves names through the realm; the callback it
+    // invokes carries its own closure. A frame that can resolve names
+    // dynamically -- a direct `eval`, a `with` body, or one already carrying
+    // deoptimized bindings -- keeps the full compatibility frame.
+    assert_eq!(
+        eval(
+            "function f() { var local = 5; return [1, 2].map(function (x) { return x + local; }).join(','); } f();"
+        ),
+        Ok(Value::String("6,7".to_owned().into()))
+    );
+    assert_eq!(
+        eval("function f() { var local = 3; return eval('local + 1'); } f();"),
+        Ok(Value::Number(4.0))
+    );
+    assert_eq!(
+        eval("function f() { var local = 3; var g = eval; return typeof g('typeof local'); } f();"),
+        Ok(Value::String("string".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function f() { var scope = { a: 7 }; with (scope) { return [0].map(function () { return a; })[0]; } } f();"
+        ),
+        Ok(Value::Number(7.0))
+    );
+    // A direct `eval` inside a callback passed to a builtin cannot see the
+    // enclosing function's locals. That is a pre-existing divergence from the
+    // reference implementation, unchanged by the environment used to invoke
+    // the builtin; it is pinned here so a later environment-model fix has a
+    // regression to flip rather than a silent behavior change.
+    assert!(
+        eval("function f() { var local = 2; return [3].map(function (x) { return eval('x * local'); })[0]; } f();")
+            .is_err()
+    );
+    // A native that calls back into a class method and a getter.
+    assert_eq!(
+        eval(
+            "class C { constructor(v) { this.v = v; } double() { return this.v * 2; } } var c = new C(4); [0].map(function () { return c.double(); })[0];"
+        ),
+        Ok(Value::Number(8.0))
+    );
+    assert_eq!(
+        eval("var o = { get v() { return 11; } }; Object.keys(o).length + ':' + o.v;"),
+        Ok(Value::String("1:11".to_owned().into()))
+    );
+    // A native that throws, and a native reached from a direct-eval frame.
+    assert_eq!(
+        eval("function f() { try { null.x; } catch (e) { return e.constructor.name; } } f();"),
+        Ok(Value::String("TypeError".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function f() { var n = 4; return eval('[1].map(function (x) { return x + n; })[0]'); } f();"
+        ),
+        Ok(Value::Number(5.0))
+    );
+    // Sorting with a comparator closing over a caller local.
+    assert_eq!(
+        eval(
+            "function f() { var k = 1; return [3, 1, 2].sort(function (a, b) { return (a - b) * k; }).join(','); } f();"
+        ),
+        Ok(Value::String("1,2,3".to_owned().into()))
+    );
+}
