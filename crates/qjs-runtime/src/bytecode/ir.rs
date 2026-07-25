@@ -948,7 +948,11 @@ pub struct Bytecode {
     /// of this compiled body. Sequential calls are the common case, so a
     /// single slot removes their allocator traffic without retaining every
     /// stack created by deep recursion. Cloned bytecode shares the same slot.
-    operand_stack_pool: Rc<RefCell<Option<Vec<Value>>>>,
+    /// Recycled operand stacks. A recursive or otherwise deeply nested call
+    /// has every enclosing frame holding its own stack at once, so a
+    /// single-slot pool only ever served the outermost frame and every nested
+    /// call allocated and freed one.
+    operand_stack_pool: Rc<RefCell<Vec<Vec<Value>>>>,
     /// Per-call metadata precomputed once at construction. Each of these used to
     /// be recomputed on every call by recursively walking `code` (and nested
     /// function/class op trees) and materializing a fresh `BTreeSet`/`Vec`,
@@ -1052,7 +1056,7 @@ impl Bytecode {
             numeric_mutation_loop_plans: OnceCell::new(),
             virtual_object_program: OnceCell::new(),
             template_objects: RefCell::new(HashMap::new()),
-            operand_stack_pool: Rc::new(RefCell::new(None)),
+            operand_stack_pool: Rc::new(RefCell::new(Vec::new())),
             cached_closure_referenced_global_names: Vec::new(),
             cached_written_binding_names: Vec::new(),
             cached_closure_written_binding_names: Vec::new(),
@@ -1108,11 +1112,15 @@ impl Bytecode {
 
     const INITIAL_OPERAND_STACK_CAPACITY: usize = 64;
     const MAX_RECYCLED_OPERAND_STACK_CAPACITY: usize = 256;
+    /// How many operand stacks one bytecode keeps for reuse. Deep recursion
+    /// holds one per active frame, and the bound keeps a runaway depth from
+    /// retaining unbounded storage after it unwinds.
+    const MAX_POOLED_OPERAND_STACKS: usize = 32;
 
     pub(super) fn take_operand_stack(&self) -> Vec<Value> {
         self.operand_stack_pool
             .borrow_mut()
-            .take()
+            .pop()
             .unwrap_or_else(|| Vec::with_capacity(Self::INITIAL_OPERAND_STACK_CAPACITY))
     }
 
@@ -1122,8 +1130,8 @@ impl Bytecode {
             return;
         }
         let mut pooled = self.operand_stack_pool.borrow_mut();
-        if pooled.is_none() {
-            *pooled = Some(stack);
+        if pooled.len() < Self::MAX_POOLED_OPERAND_STACKS {
+            pooled.push(stack);
         }
     }
 
@@ -1800,7 +1808,19 @@ mod tests {
         let _active = bytecode.take_operand_stack();
         let oversized = Vec::with_capacity(Bytecode::MAX_RECYCLED_OPERAND_STACK_CAPACITY + 1);
         bytecode.recycle_operand_stack(oversized);
-        assert!(bytecode.operand_stack_pool.borrow().is_none());
+        assert!(bytecode.operand_stack_pool.borrow().is_empty());
+
+        // Nested frames each get their own recycled stack, up to the bound.
+        let nested: Vec<_> = (0..Bytecode::MAX_POOLED_OPERAND_STACKS + 2)
+            .map(|_| bytecode.take_operand_stack())
+            .collect();
+        for stack in nested {
+            bytecode.recycle_operand_stack(stack);
+        }
+        assert_eq!(
+            bytecode.operand_stack_pool.borrow().len(),
+            Bytecode::MAX_POOLED_OPERAND_STACKS
+        );
     }
 
     #[test]
