@@ -641,13 +641,13 @@ impl<'a> Vm<'a> {
             | Value::Array(_)
             | Value::Map(_)
             | Value::Set(_) => {
-                let mut key_env = self.current_env();
+                let mut key_env = self.callee_env();
                 let key = to_property_key_value(value, &mut key_env)?;
                 self.apply_env(key_env);
                 Ok(key)
             }
             value => {
-                let mut key_env = self.current_env();
+                let mut key_env = self.callee_env();
                 to_property_key_value(value, &mut key_env)
             }
         }
@@ -1548,7 +1548,7 @@ impl<'a> Vm<'a> {
         ) {
             Some(written) => written,
             None => {
-                let mut env = self.current_env();
+                let mut env = self.callee_env();
                 let written = crate::typed_array::set_integer_indexed_element(
                     object,
                     index,
@@ -1728,7 +1728,9 @@ impl<'a> Vm<'a> {
 
     pub(super) fn pop_argument_array(&mut self, context: &str) -> Result<Vec<Value>, RuntimeError> {
         let value = self.pop()?;
-        let mut env = self.current_env();
+        // Spreading walks the iterable's own iterator protocol, so it runs on
+        // the callee's behalf rather than in the caller's lexical scope.
+        let mut env = self.callee_env();
         let arguments = crate::array::array_like_values_with_env(value, context, &mut env)?;
         self.apply_env(env);
         Ok(arguments)

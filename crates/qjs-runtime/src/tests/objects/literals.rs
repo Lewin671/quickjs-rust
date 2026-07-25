@@ -333,3 +333,79 @@ fn object_prototype_proto_accessor_descriptor() {
             .is_err()
     );
 }
+
+#[test]
+fn spread_runs_the_iterable_protocol_on_the_realm_environment() {
+    // Array and object spread, and a spread call's argument collection, walk
+    // the operand's own iterator or own keys. Those belong to the operand, not
+    // to the spreading frame, so the frame's slots are not materialized for
+    // them. Every observable part of the protocol must be unchanged.
+    assert_eq!(
+        eval("function f() { return [...[1, 2], 3].join(','); } f();"),
+        Ok(Value::String("1,2,3".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function f(a, b, c) { return a + b + c; } function g() { var args = [1, 2, 3]; return f(...args); } g();"
+        ),
+        Ok(Value::Number(6.0))
+    );
+    assert_eq!(
+        eval(
+            "function f() { var base = { a: 1, b: 2 }; var o = { ...base, c: 3 }; return o.a + o.b + o.c; } f();"
+        ),
+        Ok(Value::Number(6.0))
+    );
+    // Spread of a string, a Set, a generator, and a custom iterable.
+    assert_eq!(
+        eval("function f() { return [...'abc'].join('-'); } f();"),
+        Ok(Value::String("a-b-c".to_owned().into()))
+    );
+    assert_eq!(
+        eval("function f() { return [...new Set([1, 1, 2])].join(','); } f();"),
+        Ok(Value::String("1,2".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function* g() { yield 1; yield 2; } function f() { return [...g()].join(','); } f();"
+        ),
+        Ok(Value::String("1,2".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function f() { var calls = 0; var it = { [Symbol.iterator]() { var i = 0; return { next() { calls++; i++; return { value: i, done: i > 2 }; } }; } }; var out = [...it]; return out.join(',') + ':' + calls; } f();"
+        ),
+        Ok(Value::String("1,2:3".to_owned().into()))
+    );
+    // A replaced Array.prototype[Symbol.iterator] must be observed.
+    assert_eq!(
+        eval(
+            "function f() { var a = [1, 2]; a[Symbol.iterator] = function () { var i = 0; return { next() { i++; return { value: i * 10, done: i > 2 }; } }; }; return [...a].join(','); } f();"
+        ),
+        Ok(Value::String("10,20".to_owned().into()))
+    );
+    // Object spread copies own enumerable properties, including getters' values.
+    assert_eq!(
+        eval(
+            "function f() { var base = Object.create({ inherited: 1 }); base.own = 2; Object.defineProperty(base, 'hidden', { value: 3, enumerable: false }); var o = { ...base }; return Object.keys(o).join(','); } f();"
+        ),
+        Ok(Value::String("own".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function f() { var reads = 0; var base = { get v() { reads++; return 7; } }; var o = { ...base }; return o.v + ':' + reads; } f();"
+        ),
+        Ok(Value::String("7:1".to_owned().into()))
+    );
+    // A throwing iterator propagates, and spread inside a direct-eval frame works.
+    assert_eq!(
+        eval(
+            "function f() { var it = { [Symbol.iterator]() { return { next() { throw new RangeError('s'); } }; } }; try { return [...it]; } catch (e) { return e.constructor.name; } } f();"
+        ),
+        Ok(Value::String("RangeError".to_owned().into()))
+    );
+    assert_eq!(
+        eval("function f() { var n = 3; return eval('[...[1, 2], n].join(\",\")'); } f();"),
+        Ok(Value::String("1,2,3".to_owned().into()))
+    );
+}

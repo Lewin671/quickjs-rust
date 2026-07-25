@@ -53,7 +53,7 @@ impl Vm<'_> {
                 }
                 ArrayElementKind::Spread => {
                     let value = next_value.next().ok_or_else(stack_underflow)?;
-                    let mut env = self.current_env();
+                    let mut env = self.callee_env();
                     let result = iterable_values_with_env(value, "array spread", &mut env);
                     self.apply_env(env);
                     // Route an iterator error through the try-handler stack so a
@@ -195,7 +195,7 @@ impl Vm<'_> {
     ) -> Result<(), RuntimeError> {
         let value = self.pop()?;
         let key_value = self.pop()?;
-        let mut key_env = self.current_env();
+        let mut key_env = self.callee_env();
         let key = to_property_key_value(key_value, &mut key_env)?;
         self.apply_env(key_env);
         if let Value::Function(ref function) = value {
@@ -233,7 +233,7 @@ impl Vm<'_> {
                 function.set_home_object(Value::Object(object.clone()));
             }
         }
-        let mut key_env = self.current_env();
+        let mut key_env = self.callee_env();
         let key = to_property_key_value(key_value, &mut key_env)?;
         self.apply_env(key_env);
         let descriptor = object_property_descriptor(meta.kind, value)?;
@@ -247,7 +247,7 @@ impl Vm<'_> {
             return Ok(());
         }
         let object = self.object_literal_target()?;
-        let mut env = self.current_env();
+        let mut env = self.callee_env();
         let result = object::enumerable_property_entries_with_symbols(source, &mut env);
         self.apply_env(env);
         // A getter invoked while gathering `{...source}` properties may throw;
