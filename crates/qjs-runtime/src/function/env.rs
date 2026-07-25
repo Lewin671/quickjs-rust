@@ -387,7 +387,7 @@ impl FrameBindings {
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct DynamicBindings(Rc<RefCell<HashMap<String, Upvalue>>>);
+pub(crate) struct DynamicBindings(Rc<RefCell<crate::value::name_hash::NameMap<String, Upvalue>>>);
 
 impl DynamicBindings {
     pub(crate) fn new() -> Self {

@@ -457,14 +457,17 @@ impl ObjectData {
 pub(crate) struct ObjectLiteralShape {
     keys: Rc<[Rc<str>]>,
     input_slots: Rc<[usize]>,
-    lookup: HashMap<Rc<str>, usize>,
+    lookup: crate::value::name_hash::NameMap<Rc<str>, usize>,
     index_property_count: usize,
 }
 
 impl ObjectLiteralShape {
     pub(crate) fn new(input_keys: Vec<Rc<str>>) -> Rc<Self> {
         let mut keys = Vec::with_capacity(input_keys.len());
-        let mut lookup = HashMap::with_capacity(input_keys.len());
+        let mut lookup = crate::value::name_hash::NameMap::with_capacity_and_hasher(
+            input_keys.len(),
+            <_>::default(),
+        );
         let mut input_slots = Vec::with_capacity(input_keys.len());
         for key in input_keys {
             let slot = match lookup.get(key.as_ref()) {
@@ -517,7 +520,7 @@ impl ObjectLiteralShape {
 /// otherwise governed by its largest variant even when that variant is
 /// inactive).
 struct DynamicPropertyStorage {
-    properties: HashMap<Rc<str>, Property>,
+    properties: crate::value::name_hash::NameMap<Rc<str>, Property>,
     order: Vec<Rc<str>>,
 }
 
@@ -543,7 +546,10 @@ enum PropertyStorage {
 impl PropertyStorage {
     const SMALL_LIMIT: usize = 8;
 
-    fn dynamic(properties: HashMap<Rc<str>, Property>, order: Vec<Rc<str>>) -> Self {
+    fn dynamic(
+        properties: crate::value::name_hash::NameMap<Rc<str>, Property>,
+        order: Vec<Rc<str>>,
+    ) -> Self {
         if properties.len() <= Self::SMALL_LIMIT {
             let mut properties = properties;
             let entries = order
@@ -896,7 +902,7 @@ impl ObjectRef {
         properties: HashMap<String, Value>,
         prototype: Option<Prototype>,
     ) -> Self {
-        let properties: HashMap<Rc<str>, Property> = properties
+        let properties: crate::value::name_hash::NameMap<Rc<str>, Property> = properties
             .into_iter()
             .map(|(key, value)| (Rc::from(key), Property::enumerable(value)))
             .collect();

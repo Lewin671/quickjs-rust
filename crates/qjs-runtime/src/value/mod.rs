@@ -5,6 +5,7 @@ use num_bigint::BigInt;
 
 mod array;
 mod map;
+pub(crate) mod name_hash;
 mod object;
 mod property;
 mod set;
