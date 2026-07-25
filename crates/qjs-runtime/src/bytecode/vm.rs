@@ -1109,7 +1109,7 @@ impl<'a> Vm<'a> {
                 }
                 Op::ToString => {
                     let value = self.pop()?;
-                    let mut env = self.current_env();
+                    let mut env = self.callee_env();
                     let result = to_js_string_with_env(value, &mut env);
                     self.apply_env(env);
                     // Route a throwing toString/Symbol.toPrimitive through the
@@ -1316,7 +1316,7 @@ impl<'a> Vm<'a> {
         {
             result?
         } else {
-            let mut env = self.current_env();
+            let mut env = self.callee_env();
             let value = get_property_key(object, &key, &mut env)?;
             self.apply_env(env);
             value
@@ -1367,7 +1367,7 @@ impl<'a> Vm<'a> {
         } else if let Some(result) = self.try_direct_leaf_getter(&object, key) {
             result?
         } else {
-            let mut env = self.current_env();
+            let mut env = self.callee_env();
             let value = get_property(object, key, &mut env)?;
             self.apply_env(env);
             value
@@ -1432,7 +1432,7 @@ impl<'a> Vm<'a> {
         let value = if let Some(value) = self.try_direct_get(&object, &key) {
             value
         } else {
-            let mut env = self.current_env();
+            let mut env = self.callee_env();
             let value = get_property_key(object, &key, &mut env)?;
             self.apply_env(env);
             value
@@ -1658,7 +1658,7 @@ impl<'a> Vm<'a> {
                 }
             }
         }
-        let mut env = self.current_env();
+        let mut env = self.callee_env();
         let wrote_data = set_property_key(object, key.clone(), value.clone(), &mut env)?;
         self.apply_env(env);
         if !wrote_data && is_strict {
@@ -1756,18 +1756,28 @@ impl<'a> Vm<'a> {
         // closure may be handed to the builtin and may run a direct `eval`,
         // which resolves free names through the environment the builtin was
         // invoked with.
+        VmCallEnv {
+            env: self.callee_env(),
+        }
+    }
+
+    /// The environment to hand to code that runs on this frame's behalf but
+    /// does not close over it: a native builtin, a getter or setter, a Proxy
+    /// trap, or a `toString`/`valueOf` hook. Such code resolves names through
+    /// the realm, so the caller's slots need not be materialized as a
+    /// name-keyed frame -- unless this frame can resolve names dynamically
+    /// (direct `eval`, `with`, or deoptimized bindings), or it creates a
+    /// closure that could be handed onward and run a direct `eval`, which
+    /// resolves free names through the environment it was invoked with.
+    pub(super) fn callee_env(&self) -> CallEnv {
         if self.bytecode.contains_direct_eval()
             || self.bytecode.contains_with()
             || self.bytecode.creates_closures()
             || self.env.deopt_bindings().is_some()
         {
-            return VmCallEnv {
-                env: self.current_env(),
-            };
+            return self.current_env();
         }
-        VmCallEnv {
-            env: self.realm_env(),
-        }
+        self.realm_env()
     }
 
     pub(super) fn apply_call_env(&mut self, env: VmCallEnv) {
