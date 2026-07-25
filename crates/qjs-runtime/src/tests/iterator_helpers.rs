@@ -702,3 +702,74 @@ fn iterator_prototype_symbol_dispose_invokes_return_and_returns_undefined() {
         "true:true:true"
     );
 }
+
+#[test]
+fn iteration_runs_hooks_on_the_realm_environment() {
+    // Iterator protocol steps invoke `next`, `return`, and `Symbol.iterator`
+    // on the object being iterated. Those are the iterable's own methods, not
+    // the iterating frame's, so the frame's slots need not be materialized for
+    // them. Every observable part of the protocol must be unchanged.
+    assert_eq!(
+        eval("function f() { var t = 0; for (const v of [1, 2, 3]) { t += v; } return t; } f();"),
+        Ok(Value::Number(6.0))
+    );
+    // A closure in the loop body capturing the per-iteration binding.
+    assert_eq!(
+        eval(
+            "function f() { var out = []; for (const v of [1, 2]) { out.push(function () { return v; }); } return out.map(function (g) { return g(); }).join(','); } f();"
+        ),
+        Ok(Value::String("1,2".to_owned().into()))
+    );
+    // A user iterator whose `next` closes over its own state.
+    assert_eq!(
+        eval(
+            "function f() { var it = { i: 0, [Symbol.iterator]() { var self = this; return { next() { self.i++; return { value: self.i, done: self.i > 3 }; } }; } }; var t = 0; for (const v of it) { t += v; } return t + ':' + it.i; } f();"
+        ),
+        Ok(Value::String("6:4".to_owned().into()))
+    );
+    // `break` must call `return` on the iterator.
+    assert_eq!(
+        eval(
+            "function f() { var closed = false; var it = { [Symbol.iterator]() { return { next() { return { value: 1, done: false }; }, return() { closed = true; return { done: true }; } }; } }; for (const v of it) { break; } return closed; } f();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // A throwing `next` propagates, and a generator drives the same path.
+    assert_eq!(
+        eval(
+            "function f() { var it = { [Symbol.iterator]() { return { next() { throw new RangeError('n'); } }; } }; try { for (const v of it) {} } catch (e) { return e.constructor.name; } } f();"
+        ),
+        Ok(Value::String("RangeError".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function* g() { yield 1; yield 2; } function f() { var t = 0; for (const v of g()) { t += v; } return t; } f();"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    // Destructuring and spread use the same protocol.
+    assert_eq!(
+        eval(
+            "function f() { var [a, ...rest] = [1, 2, 3]; return a + ':' + rest.join(','); } f();"
+        ),
+        Ok(Value::String("1:2,3".to_owned().into()))
+    );
+    assert_eq!(
+        eval("function f() { return Math.max(...[1, 5, 3]); } f();"),
+        Ok(Value::Number(5.0))
+    );
+    // `for-in` over an object with an inherited enumerable property.
+    assert_eq!(
+        eval(
+            "function f() { var base = { a: 1 }; var o = Object.create(base); o.b = 2; var keys = []; for (const k in o) { keys.push(k); } return keys.sort().join(','); } f();"
+        ),
+        Ok(Value::String("a,b".to_owned().into()))
+    );
+    // Iteration inside a frame that also runs a direct eval keeps full scope.
+    assert_eq!(
+        eval(
+            "function f() { var local = 10; var t = 0; for (const v of [1, 2]) { t += eval('v + local'); } return t; } f();"
+        ),
+        Ok(Value::Number(23.0))
+    );
+}
