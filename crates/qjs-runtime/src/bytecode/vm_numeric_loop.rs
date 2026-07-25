@@ -1233,15 +1233,32 @@ pub(super) fn try_run_numeric_loop(vm: &mut Vm<'_>, header: usize, backedge: usi
     // The plans are immutable once compiled and live in the bytecode, whose
     // borrow outlives the frame. Reading them there keeps the frame free of a
     // per-call plan-vector clone.
-    let Some(plan) = vm
+    let Some((index, plan)) = vm
         .numeric_loop_plans
         .iter()
-        .find(|plan| plan.header == header && plan.backedge == backedge)
-        .cloned()
+        .enumerate()
+        .find(|(_, plan)| plan.header == header && plan.backedge == backedge)
+        .map(|(index, plan)| (index, plan.clone()))
     else {
         return false;
     };
-    plan.try_run(vm)
+    const DECLINE_LIMIT: u128 = 3;
+    let counter_shift = (index < 64).then(|| index * 2);
+    if counter_shift
+        .is_some_and(|shift| (vm.declined_numeric_loop_plans >> shift) & 0b11 == DECLINE_LIMIT)
+    {
+        return false;
+    }
+    if plan.try_run(vm) {
+        return true;
+    }
+    if let Some(shift) = counter_shift {
+        let declined = (vm.declined_numeric_loop_plans >> shift) & 0b11;
+        if declined < DECLINE_LIMIT {
+            vm.declined_numeric_loop_plans += 1 << shift;
+        }
+    }
+    false
 }
 
 fn local_number_read(vm: &Vm<'_>, slot: usize) -> Option<f64> {

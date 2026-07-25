@@ -124,6 +124,15 @@ pub(super) struct FrameState<'a> {
     /// a call no longer clones a plan vector into its frame.
     pub(super) control_loop_plans: &'a [super::vm_control_loop::ControlLoopPlan],
     pub(super) numeric_loop_plans: &'a [super::vm_numeric_loop::NumericLoopPlan],
+    /// Two saturating decline counters per numeric loop plan, for the first
+    /// 64 plans. A plan that matched an instruction range but could not run
+    /// rebuilds its whole preparation state -- write targets, forbidden cells,
+    /// prepared terms -- before discovering that again on the next backedge,
+    /// which is every iteration of a loop containing a call. Plans are pure
+    /// accelerators, so a frame stops retrying one after it has declined
+    /// three times; the retries cover a plan that only becomes admissible once
+    /// the loop's values settle.
+    pub(super) declined_numeric_loop_plans: u128,
     pub(super) shared_numeric_mutation_loop_plans:
         &'a [super::vm_numeric_mutation_loop::NumericMutationLoopPlan],
     /// Frame-local override of the shared numeric mutation loop plans,
@@ -370,6 +379,7 @@ impl<'a> Vm<'a> {
                 control_loop_plans: bytecode
                     .control_loop_plans
                     .get_or_init(|| super::vm_control_loop::ControlLoopPlan::compile_all(bytecode)),
+                declined_numeric_loop_plans: 0,
                 numeric_loop_plans: bytecode
                     .numeric_loop_plans
                     .get_or_init(|| super::vm_numeric_loop::NumericLoopPlan::compile_all(bytecode)),

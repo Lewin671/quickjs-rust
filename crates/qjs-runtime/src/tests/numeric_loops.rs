@@ -286,3 +286,47 @@ fn counted_loop_headers_fuse_without_changing_semantics() {
         Ok(Value::String("RangeError".to_owned().into()))
     );
 }
+
+#[test]
+fn loops_stay_correct_when_a_plan_is_retired_after_repeated_declines() {
+    // A numeric loop plan that keeps declining is retired for the rest of the
+    // frame, so the loop simply runs on the ordinary interpreter. That is a
+    // speed decision with no semantic content, and these loops must produce
+    // the same results either way: one that never admits the plan, one that
+    // admits it only after several iterations, and one that alternates.
+    assert_eq!(
+        eval(
+            "function helper(v) { return { n: v }; } \
+             function run(n) { var s = 0; for (var i = 0; i < n; i++) { s += helper(i).n; } return s; } \
+             run(50);"
+        ),
+        Ok(Value::Number(1225.0))
+    );
+    assert_eq!(
+        eval(
+            "function run(n) { var s = 0; var t = 'x'; \
+               for (var i = 0; i < n; i++) { if (i === 5) { t = 2; } s += (typeof t === 'number' ? t : 0); } \
+               return s; } \
+             run(20);"
+        ),
+        Ok(Value::Number(30.0))
+    );
+    assert_eq!(
+        eval(
+            "var values = [1, 2, 3, 4, 5, 6, 7, 8]; \
+             function run(n) { var s = 0; \
+               for (var i = 0; i < n; i++) { values[i % 8] = i % 2 === 0 ? i : 'skip'; s += (i % 2 === 0 ? i : 0); } \
+               return s; } \
+             run(40);"
+        ),
+        Ok(Value::Number(380.0))
+    );
+    // Repeated invocations must each start with a fresh retry budget.
+    assert_eq!(
+        eval(
+            "function run(n) { var s = 0; for (var i = 0; i < n; i++) { s += i; } return s; } \
+             run(10) + ':' + run(10) + ':' + run(100);"
+        ),
+        Ok(Value::String("45:45:4950".to_owned().into()))
+    );
+}
