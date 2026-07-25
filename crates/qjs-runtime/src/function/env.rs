@@ -300,6 +300,10 @@ impl FrameBindings {
         }
     }
 
+    fn is_empty(&self) -> bool {
+        self.0.borrow().is_empty()
+    }
+
     fn contains_key(&self, name: &str) -> bool {
         self.0
             .borrow()
@@ -1051,6 +1055,14 @@ impl CallEnv {
     /// Collects visible bindings in a sequential writeback buffer. Unlike a
     /// compatibility snapshot, this does not allocate or hash a temporary
     /// name-to-value map before the VM immediately iterates the result.
+    /// Whether this frame carries any binding a write-back could observe. A
+    /// realm-only environment -- what an ordinary frame now hands to builtins,
+    /// accessors, coercion hooks, and iteration -- carries none, so its
+    /// write-back has nothing to do.
+    pub(crate) fn has_writable_frame_state(&self) -> bool {
+        !self.frame_bindings.is_empty() || self.deopt_bindings.is_some()
+    }
+
     pub(crate) fn visible_local_entries(&self) -> Vec<(String, Value)> {
         let mut entries = Vec::new();
         self.for_each_visible_local_binding(|name, value| {

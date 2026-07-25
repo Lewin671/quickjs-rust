@@ -1544,6 +1544,14 @@ impl Vm<'_> {
     }
 
     pub(super) fn apply_env(&mut self, env: CallEnv) {
+        // A realm-only environment carries no frame binding to write back, and
+        // the write-back path allocates a name vector and a conflict set before
+        // discovering that. Ordinary frames hand builtins, accessors, coercion
+        // hooks, and iteration exactly such an environment, so this is the
+        // common case now rather than a corner.
+        if !env.has_writable_frame_state() {
+            return;
+        }
         // The realm layer is shared by `Rc`, so global writes are already live.
         // Write each non-realm local back to its slot, to the frame's own
         // internal/caller-scope binding layer, or (for a genuinely new binding)
