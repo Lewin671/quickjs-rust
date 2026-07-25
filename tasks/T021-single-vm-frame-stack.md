@@ -498,3 +498,36 @@ So the call-setup cost is not one allocation to remove; it is the total work of
 building `Vm`/`FrameState`/`CallEnv` per call. That is the structure the
 original T021 R1/R2 aimed at, and it remains the only identified route to the
 10x shapes.
+
+### 2026-07-25 declining loop plans were the dominant cost of calls in loops
+
+Profiling the 9.8x method-call shape found that its largest non-dispatch cost
+was not the call at all. A backward edge whose instruction range matches a
+compiled numeric loop plan ran that plan's full preparation every iteration --
+write targets for counter, accumulator, and result slots, the forbidden-cell
+and forbidden-realm-write sets derived from them, and a prepared copy of every
+term, plus a deep clone of the plan itself -- and a loop containing a call
+fails that preparation every time, because a call is not an admissible term.
+
+Two commits removed it:
+
+- `04bbb420` shares the plan's term vector (`Rc<[NumericLoopTerm]>`) so the
+  per-backedge plan copy stops allocating. Running the plan through a borrow
+  of the bytecode instead was tried and measured 14% *slower* on a
+  read-modify-write property loop: the executor then reloads the plan's fields
+  across the `&mut Vm` writes in the loop it drives.
+- `432a707c` retires a plan in a frame after it declines three times. The
+  retry budget covers a plan that only becomes admissible once the loop's
+  values settle; a fresh invocation starts fresh. Plans are accelerators, so
+  retirement is unobservable.
+
+A method call in a counted loop went from 9.8x to **6.4x** against the
+reference (4.40s to 2.80s, ng 0.44s). Extending retirement to the mutation and
+control loop plans was tried and reverted: net neutral, and
+`math-spectral-norm` regressed 4.5% reproducibly because its mutation plan
+becomes admissible only after more than three iterations.
+
+After this, the same shape's profile is roughly 33% `Vm`/`CallEnv`
+construction and teardown and the rest dispatch, with the allocator no longer
+in the top twelve symbols. That is T021 R1/R2 territory again, now without the
+plan-preparation noise on top of it.
