@@ -58,7 +58,9 @@ impl Compiler {
                 // `undefined` rather than a TDZ error, so an empty completion
                 // path stays well defined.
                 for stmt in body {
-                    compiler.compile_stmt(stmt)?;
+                    if !compiler.compile_statement_list_entry(stmt)? {
+                        continue;
+                    }
                     if stmt_updates_statement_list_completion(stmt) {
                         compiler.store_statement_list_completion(result_slot);
                     } else {

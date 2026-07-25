@@ -13,6 +13,29 @@ impl Compiler {
         target: &AssignmentTarget,
         value: &Expr,
     ) -> Result<(), RuntimeError> {
+        self.compile_assign_with_value(target, value, true)
+    }
+
+    /// Compiles an assignment whose result value nobody reads, leaving nothing
+    /// on the operand stack. An assignment expression normally duplicates the
+    /// assigned value so the expression evaluates to it; an expression
+    /// statement in code whose completion value is unobservable discards that
+    /// duplicate immediately, so both the `Dup` and the discarding store are
+    /// dead instructions in the most frequent statement form there.
+    pub(super) fn compile_assign_discarded(
+        &mut self,
+        target: &AssignmentTarget,
+        value: &Expr,
+    ) -> Result<(), RuntimeError> {
+        self.compile_assign_with_value(target, value, false)
+    }
+
+    fn compile_assign_with_value(
+        &mut self,
+        target: &AssignmentTarget,
+        value: &Expr,
+        produce_value: bool,
+    ) -> Result<(), RuntimeError> {
         match target {
             AssignmentTarget::Identifier {
                 name,
@@ -35,7 +58,9 @@ impl Compiler {
                     } else {
                         self.compile_named_expr(value, name)?;
                     }
-                    self.emit(Op::Dup);
+                    if produce_value {
+                        self.emit(Op::Dup);
+                    }
                     self.emit(Op::StoreResolvedIdentWith {
                         name: name.clone(),
                         slot,
@@ -50,7 +75,9 @@ impl Compiler {
                     } else {
                         self.compile_named_expr(value, name)?;
                     }
-                    self.emit(Op::Dup);
+                    if produce_value {
+                        self.emit(Op::Dup);
+                    }
                     self.emit_store_unresolved_identifier(name, None);
                     return Ok(());
                 };
@@ -59,7 +86,9 @@ impl Compiler {
                 } else {
                     self.compile_named_expr(value, name)?;
                 }
-                self.emit(Op::Dup);
+                if produce_value {
+                    self.emit(Op::Dup);
+                }
                 self.emit_store_unresolved_identifier(name, Some(slot));
                 Ok(())
             }

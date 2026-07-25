@@ -1122,6 +1122,31 @@ impl Compiler {
         }
     }
 
+    /// Compiles one statement of a statement list, returning whether it left
+    /// its completion value on the operand stack. Where the completion value is
+    /// unobservable, a plain identifier assignment statement -- the most
+    /// frequent statement form in ordinary code -- is compiled to the store
+    /// alone, dropping both the value duplication and the store that would
+    /// discard it.
+    pub(super) fn compile_statement_list_entry(
+        &mut self,
+        stmt: &Stmt,
+    ) -> Result<bool, RuntimeError> {
+        if !self.tracks_completion_values
+            && let Stmt::Expr(qjs_ast::Expr::Assignment {
+                target: target @ qjs_ast::AssignmentTarget::Identifier { .. },
+                op: qjs_ast::AssignmentOp::Assign,
+                value,
+                ..
+            }) = stmt
+        {
+            self.compile_assign_discarded(target, value)?;
+            return Ok(false);
+        }
+        self.compile_stmt(stmt)?;
+        Ok(true)
+    }
+
     pub(super) fn store_statement_list_completion(&mut self, result_slot: usize) {
         if self.tracks_completion_values && self.current_loop_result_slot().is_some() {
             self.emit(Op::Dup);

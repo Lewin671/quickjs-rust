@@ -40,7 +40,7 @@ impl NumericLoopSelector {
         compact_completion: bool,
         expected_block_result_slot: Option<usize>,
         loop_result_slot: Option<usize>,
-    ) -> Option<(Self, usize, usize)> {
+    ) -> Option<(Self, usize, Option<usize>)> {
         let code = &bytecode.code;
         let (
             Op::LoadLocal(condition_counter_slot),
@@ -54,8 +54,6 @@ impl NumericLoopSelector {
             Op::Jump(join),
             Op::Pop,
             Op::LoadLocal(alternate_slot),
-            Op::Dup,
-            Op::AssignLocal(target_slot),
         ) = (
             code.get(cursor)?,
             code.get(cursor + 1)?,
@@ -68,12 +66,20 @@ impl NumericLoopSelector {
             code.get(cursor + 8)?,
             code.get(cursor + 9)?,
             code.get(cursor + 10)?,
-            code.get(cursor + 11)?,
-            code.get(cursor + 12)?,
         )
         else {
             return None;
         };
+        // An assignment statement whose value nobody reads is compiled without
+        // the duplication that would feed a completion store, so the selection
+        // ends either `Dup; AssignLocal; <completion stores>` or just
+        // `AssignLocal`.
+        let (target_slot, assignment_end, produces_value) =
+            match (code.get(cursor + 11)?, code.get(cursor + 12)) {
+                (Op::Dup, Some(Op::AssignLocal(target_slot))) => (target_slot, cursor + 13, true),
+                (Op::AssignLocal(target_slot), _) => (target_slot, cursor + 12, false),
+                _ => return None,
+            };
         if *condition_counter_slot != counter_slot
             || *alternate_start != cursor + 9
             || *join != cursor + 11
@@ -84,8 +90,10 @@ impl NumericLoopSelector {
             return None;
         }
 
-        let (block_result_slot, next_cursor) = if compact_completion {
-            let Op::StoreLocal(block_result_slot) = code.get(cursor + 13)? else {
+        let (block_result_slot, next_cursor) = if !produces_value {
+            (None, assignment_end)
+        } else if compact_completion {
+            let Op::StoreLocal(block_result_slot) = code.get(assignment_end)? else {
                 return None;
             };
             // A compact selection stores only the block result; the loop
@@ -93,16 +101,16 @@ impl NumericLoopSelector {
             if expected_block_result_slot.is_some_and(|slot| slot != *block_result_slot) {
                 return None;
             }
-            (*block_result_slot, cursor + 14)
+            (Some(*block_result_slot), assignment_end + 1)
         } else {
             let (
                 Op::Dup,
                 Op::StoreLocal(block_result_slot),
                 Op::StoreLocal(selection_loop_result_slot),
             ) = (
-                code.get(cursor + 13)?,
-                code.get(cursor + 14)?,
-                code.get(cursor + 15)?,
+                code.get(assignment_end)?,
+                code.get(assignment_end + 1)?,
+                code.get(assignment_end + 2)?,
             )
             else {
                 return None;
@@ -112,7 +120,7 @@ impl NumericLoopSelector {
             {
                 return None;
             }
-            (*block_result_slot, cursor + 16)
+            (Some(*block_result_slot), assignment_end + 3)
         };
 
         Some((

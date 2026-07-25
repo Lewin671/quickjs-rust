@@ -1349,3 +1349,59 @@ fn completion_values_stay_observable_only_where_the_spec_requires_them() {
         Ok(Value::String("0,1,2".to_owned().into()))
     );
 }
+
+#[test]
+fn discarded_assignment_statements_keep_assignment_semantics() {
+    // A plain identifier assignment used as a statement in code whose
+    // completion value is unobservable compiles without producing its value.
+    // Every other position -- a nested assignment, a chained assignment, an
+    // assignment used as an expression, and script/`eval` code where the
+    // completion value *is* observable -- must be unchanged.
+    assert_eq!(
+        eval("function f() { var a = 0; a = 5; return a; } f();"),
+        Ok(Value::Number(5.0))
+    );
+    assert_eq!(
+        eval("function f() { var a = 0, b = 0; a = b = 7; return a + ':' + b; } f();"),
+        Ok(Value::String("7:7".to_owned().into()))
+    );
+    assert_eq!(
+        eval("function f() { var a = 0; var t = (a = 3); return t + ':' + a; } f();"),
+        Ok(Value::String("3:3".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function f() { var a = 0; function g(x) { return x * 2; } return g(a = 4) + ':' + a; } f();"
+        ),
+        Ok(Value::String("8:4".to_owned().into()))
+    );
+    assert_eq!(
+        eval("function f() { var a = 1; { a = 2; } return a; } f();"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval(
+            "function f(n) { var s = 0; for (var i = 0; i < n; i++) { s = s + i; } return s; } f(5);"
+        ),
+        Ok(Value::Number(10.0))
+    );
+    assert_eq!(
+        eval(
+            "function f() { var a = 0; try { a = 1; throw 'x'; } catch (e) { a = 2; } finally { a = a + 10; } return a; } f();"
+        ),
+        Ok(Value::Number(12.0))
+    );
+    // Script completion values still observe the assignment's value.
+    assert_eq!(eval("var a = 0; a = 9;"), Ok(Value::Number(9.0)));
+    assert_eq!(
+        eval("function f() { return eval('var b = 0; b = 6;'); } f();"),
+        Ok(Value::Number(6.0))
+    );
+    // Assignment to a const binding must still throw from the discarded form.
+    assert_eq!(
+        eval(
+            "function f() { const c = 1; var caught = ''; try { c = 2; } catch (e) { caught = e.constructor.name; } return caught; } f();"
+        ),
+        Ok(Value::String("TypeError".to_owned().into()))
+    );
+}

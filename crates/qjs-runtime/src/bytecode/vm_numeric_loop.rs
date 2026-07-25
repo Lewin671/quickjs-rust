@@ -342,7 +342,9 @@ impl NumericLoopPlan {
         );
         let selector = selector.map(|(selector, next_cursor, selector_block_result_slot)| {
             cursor = next_cursor;
-            block_result_slot.get_or_insert(selector_block_result_slot);
+            if let Some(slot) = selector_block_result_slot {
+                block_result_slot.get_or_insert(slot);
+            }
             selector
         });
 
@@ -368,8 +370,17 @@ impl NumericLoopPlan {
                 };
                 Some((*term_accumulator_slot, term, suffix + 1))
             })?;
+            // An accumulation statement whose value nobody reads is compiled
+            // without the duplication a completion store would consume, so the
+            // term can end right after the assignment.
+            let discarded_term = matches!(code.get(suffix), Some(Op::Binary(BinaryOp::Add)))
+                && !matches!(code.get(suffix + 1), Some(Op::Dup))
+                && NumericLoopWrite::compile(code.get(suffix + 1)?, term_accumulator_slot)
+                    .is_some();
             let (assigned_accumulator, term_block_result_slot, term_loop_result_slot, next_cursor) =
-                if compact_completion {
+                if discarded_term {
+                    (code.get(suffix + 1)?, None, None, suffix + 2)
+                } else if compact_completion {
                     let (
                         Op::Binary(BinaryOp::Add),
                         Op::Dup,
@@ -386,7 +397,7 @@ impl NumericLoopPlan {
                     };
                     (
                         assigned_accumulator,
-                        *term_block_result_slot,
+                        Some(*term_block_result_slot),
                         None,
                         suffix + 4,
                     )
@@ -411,19 +422,23 @@ impl NumericLoopPlan {
                     };
                     (
                         assigned_accumulator,
-                        *term_block_result_slot,
+                        Some(*term_block_result_slot),
                         Some(*term_loop_result_slot),
                         suffix + 6,
                     )
                 };
             if term_accumulator_slot == *counter_slot
-                || block_result_slot.is_some_and(|slot| slot != term_block_result_slot)
+                || (term_block_result_slot.is_some()
+                    && block_result_slot.is_some()
+                    && block_result_slot != term_block_result_slot)
                 || (term_loop_result_slot.is_some() && term_loop_result_slot != loop_result_slot)
                 || accumulator_slot.is_some_and(|slot| slot != term_accumulator_slot)
             {
                 return None;
             }
-            block_result_slot.get_or_insert(term_block_result_slot);
+            if let Some(slot) = term_block_result_slot {
+                block_result_slot.get_or_insert(slot);
+            }
             let term_write =
                 NumericLoopWrite::compile(assigned_accumulator, term_accumulator_slot)?;
             if accumulator_write
