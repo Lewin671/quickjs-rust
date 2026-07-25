@@ -612,3 +612,25 @@ prototype was genuinely uncached -- `try_cached_get_string` cleared the cache
 and re-walked the chain on every access -- but caching the immediate
 prototype's slot measured 0.7% slower overall: the added entry kind costs the
 cache scan more than the one-level walk it replaces.
+
+### 2026-07-25 correction: the frame copy was removable after all
+
+Four attempts to reduce the per-call frame cost by changing how the frame is
+moved -- pooling its slot storage, inlining its constructor, caching its
+authority mask, grouping its environment handles -- all measured neutral or
+worse, and the earlier entries here concluded that frame layout was not the
+lever.
+
+That conclusion was wrong about the cost, right about those mechanisms.
+`eval_function_bytecode` bound the whole `FrameState` as a local before moving
+four fields into the result, and a 704-byte binding materializes in the
+caller's own stack frame. Destructuring those four fields directly out of the
+VM (`b390cf40`) never creates the temporary at all: 1.3% geometric mean over
+21 cases, with a plain method call 5.5%, a class method 6.0%, recursion 5.0%,
+and no case outside the noise band.
+
+The transferable lesson: a measured failure refutes a *mechanism*, not the
+*cost* it was aimed at. The remaining per-call frame costs -- `Vm::new_*`
+returning by value, `CallEnv`'s seven reference-count pairs -- should be
+re-attacked the same way, by removing the materialization rather than by
+rearranging it.
