@@ -464,3 +464,37 @@ Two things went wrong, and a retry must address both:
   says "the snapshot's `String` clones dominate" does not predict either
   result. Establish *why* the builtin path depends on the snapshot, with a
   targeted experiment, before rebuilding around it.
+
+### 2026-07-25 where the remaining external gap actually lives
+
+Measured against QuickJS-NG on four call shapes, to locate the 3.8x:
+
+| shape | qjs-rust | QuickJS-NG | ratio |
+| --- | ---: | ---: | ---: |
+| leaf numeric call in a counted loop | 0.05s | 0.89s | **0.06x** |
+| function returning an object literal | 1.74s | 0.89s | 1.96x |
+| recursion (`fib`) | 0.76s | 0.08s | 9.4x |
+| method call returning `this.v` | 4.40s | 0.45s | 9.8x |
+
+The gap is not uniform interpreter overhead. Shapes the numeric-leaf and
+loop-plan fast paths accept are already far ahead of the reference; the ~10x
+sits entirely in calls those paths decline — method calls and recursion —
+which is exactly the profile of the worst external cases (`access-nbody`,
+`raytrace-public-class-fields`, `controlflow-recursive`, `date-format-tofte`).
+
+A `sample` profile of the method-call case attributes about 23% to call setup
+and teardown (`call_direct_leaf_function`, `eval_function_bytecode`,
+`Vm::new_with_globals_*`, dropping `CallEnv`), about 13% to the allocator, and
+25% to the dispatch loop. Note that on this platform `free` dominates the
+allocator cost and itself calls `mach_absolute_time`.
+
+Pooling the frame's slot vector on the bytecode, mirroring the existing
+operand-stack pool, was implemented and measured **0.8% slower** (method call
++3.4%, recursion +4.5%): the `Rc<RefCell<Option<Vec<_>>>>` handshake costs
+more than the platform allocator's thread-cached small allocation it replaces.
+`local_upvalues` already avoids its allocation for direct leaf calls.
+
+So the call-setup cost is not one allocation to remove; it is the total work of
+building `Vm`/`FrameState`/`CallEnv` per call. That is the structure the
+original T021 R1/R2 aimed at, and it remains the only identified route to the
+10x shapes.
