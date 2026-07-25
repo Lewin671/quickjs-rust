@@ -353,3 +353,43 @@ fn evaluates_number_builtins() {
     assert!(eval("new parseInt('10');").is_err());
     assert!(eval("new isNaN(1);").is_err());
 }
+
+#[test]
+fn number_remainder_matches_ieee_fmod() {
+    // The integer fast path must reproduce `fmod` exactly, including the sign
+    // of a zero result and the deoptimizations for zero, overflow, and
+    // non-integral or out-of-range operands.
+    assert_eq!(eval("5 % 3;"), Ok(Value::Number(2.0)));
+    assert_eq!(eval("-5 % 3;"), Ok(Value::Number(-2.0)));
+    assert_eq!(eval("5 % -3;"), Ok(Value::Number(2.0)));
+    assert_eq!(eval("-5 % -3;"), Ok(Value::Number(-2.0)));
+    assert_eq!(eval("Object.is(-4 % 2, -0);"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("Object.is(4 % 2, 0);"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("Object.is(-0 % 3, -0);"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("Object.is(0 % 3, 0);"), Ok(Value::Boolean(true)));
+    // Beyond the i32 range the fast path must defer to `fmod`.
+    assert_eq!(eval("2147483648 % 7;"), Ok(Value::Number(2.0)));
+    assert_eq!(eval("-2147483649 % 7;"), Ok(Value::Number(-3.0)));
+    assert_eq!(
+        eval("Object.is(-2147483648 % -1, -0);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(eval("5.5 % 2;"), Ok(Value::Number(1.5)));
+    assert_eq!(eval("5 % 2.5;"), Ok(Value::Number(0.0)));
+    assert_eq!(eval("(5 % 0) !== (5 % 0);"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval("(Infinity % 2) !== (Infinity % 2);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(eval("5 % Infinity;"), Ok(Value::Number(5.0)));
+    assert_eq!(eval("(NaN % 2) !== (NaN % 2);"), Ok(Value::Boolean(true)));
+    // The compound-assignment and loop paths share the same helper.
+    assert_eq!(
+        eval("var total = 0; for (var i = 0; i < 10; i++) { total += i % 4; } total;"),
+        Ok(Value::Number(13.0))
+    );
+    assert_eq!(
+        eval("var x = -9; x %= 4; Object.is(x, -1);"),
+        Ok(Value::Boolean(true))
+    );
+}

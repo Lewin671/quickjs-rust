@@ -1690,7 +1690,7 @@ fn apply_binary(operation: BinaryOp, left: f64, right: f64) -> Option<f64> {
         BinaryOp::Sub => left - right,
         BinaryOp::Mul => left * right,
         BinaryOp::Div => left / right,
-        BinaryOp::Rem => left % right,
+        BinaryOp::Rem => crate::operations::number_remainder(left, right),
         BinaryOp::Shl => f64::from(to_int32_number(left) << (to_uint32_number(right) & 0x1f)),
         BinaryOp::Shr => f64::from(to_int32_number(left) >> (to_uint32_number(right) & 0x1f)),
         BinaryOp::UShr => f64::from(to_uint32_number(left) >> (to_uint32_number(right) & 0x1f)),

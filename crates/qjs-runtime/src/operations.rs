@@ -103,7 +103,7 @@ pub(crate) fn eval_binary(
         BinaryOp::Mul => left * right,
         BinaryOp::Pow => number_exponentiate(left, right),
         BinaryOp::Div => left / right,
-        BinaryOp::Rem => left % right,
+        BinaryOp::Rem => number_remainder(left, right),
         BinaryOp::Shl => {
             return Ok(Value::Number(f64::from(
                 to_int32_number(left) << (to_uint32_number(right) & 0x1f),
@@ -149,6 +149,33 @@ pub(crate) fn eval_binary(
         | BinaryOp::NullishCoalescing => unreachable!("handled before numeric binary evaluation"),
     };
     Ok(Value::Number(value))
+}
+
+/// Number::remainder (the `%` operator). Integer-valued operands take the
+/// hardware integer remainder instead of a libm `fmod` call, which costs a
+/// function call plus a full IEEE reduction loop even for small operands.
+/// The results agree exactly: for integers representable in `i32`, `fmod`
+/// returns the truncated remainder, which is what `i32::wrapping_rem`
+/// computes. The one place the two disagree is the sign of a zero result —
+/// `(-4) % 2` is `-0` — so a zero result keeps the dividend's sign.
+#[inline]
+pub(crate) fn number_remainder(left: f64, right: f64) -> f64 {
+    let left_int = left as i32;
+    let right_int = right as i32;
+    if f64::from(left_int) == left
+        && f64::from(right_int) == right
+        && right_int != 0
+        && !(left_int == i32::MIN && right_int == -1)
+    {
+        let remainder = left_int % right_int;
+        if remainder == 0 {
+            // JavaScript keeps the dividend's sign on a zero remainder, and
+            // `f64::from(0i32)` cannot express `-0`.
+            return if left.is_sign_negative() { -0.0 } else { 0.0 };
+        }
+        return f64::from(remainder);
+    }
+    left % right
 }
 
 /// Number::exponentiate (the `**` operator and `Math.pow`). A NaN exponent, or

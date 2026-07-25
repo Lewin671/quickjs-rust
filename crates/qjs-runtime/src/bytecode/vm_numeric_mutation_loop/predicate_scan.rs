@@ -946,7 +946,7 @@ fn apply_binary(operation: BinaryOp, left: f64, right: f64) -> Option<ScanValue>
         BinaryOp::Sub => ScanValue::Number(left - right),
         BinaryOp::Mul => ScanValue::Number(left * right),
         BinaryOp::Div => ScanValue::Number(left / right),
-        BinaryOp::Rem => ScanValue::Number(left % right),
+        BinaryOp::Rem => ScanValue::Number(crate::operations::number_remainder(left, right)),
         BinaryOp::Shl => ScanValue::Number(f64::from(
             to_int32_number(left) << (to_uint32_number(right) & 0x1f),
         )),

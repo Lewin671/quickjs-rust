@@ -206,7 +206,11 @@ impl TypedProgram {
             BinaryOp::Sub => execute_lanes!(left, right, left - right),
             BinaryOp::Mul => execute_lanes!(left, right, left * right),
             BinaryOp::Div => execute_lanes!(left, right, left / right),
-            BinaryOp::Rem => execute_lanes!(left, right, left % right),
+            BinaryOp::Rem => execute_lanes!(
+                left,
+                right,
+                crate::operations::number_remainder(left, right)
+            ),
             BinaryOp::Shl => execute_lanes!(
                 left,
                 right,

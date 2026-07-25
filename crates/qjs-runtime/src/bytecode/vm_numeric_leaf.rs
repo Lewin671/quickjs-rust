@@ -1065,7 +1065,7 @@ fn direct_number_binary(left: f64, op: BinaryOp, right: f64) -> Option<FastValue
         BinaryOp::Sub => FastValue::Number(left - right),
         BinaryOp::Mul => FastValue::Number(left * right),
         BinaryOp::Div => FastValue::Number(left / right),
-        BinaryOp::Rem => FastValue::Number(left % right),
+        BinaryOp::Rem => FastValue::Number(crate::operations::number_remainder(left, right)),
         BinaryOp::Eq | BinaryOp::StrictEq => FastValue::Boolean(left == right),
         BinaryOp::Ne | BinaryOp::StrictNe => FastValue::Boolean(left != right),
         BinaryOp::Lt => FastValue::Boolean(left < right),
@@ -1090,7 +1090,7 @@ fn number_binary(left: f64, op: BinaryOp, right: f64) -> Option<f64> {
         BinaryOp::Sub => Some(left - right),
         BinaryOp::Mul => Some(left * right),
         BinaryOp::Div => Some(left / right),
-        BinaryOp::Rem => Some(left % right),
+        BinaryOp::Rem => Some(crate::operations::number_remainder(left, right)),
         _ => match direct_number_binary(left, op, right)? {
             FastValue::Number(value) => Some(value),
             _ => None,
