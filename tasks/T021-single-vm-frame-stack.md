@@ -531,3 +531,29 @@ After this, the same shape's profile is roughly 33% `Vm`/`CallEnv`
 construction and teardown and the rest dispatch, with the allocator no longer
 in the top twelve symbols. That is T021 R1/R2 territory again, now without the
 plan-preparation noise on top of it.
+
+### 2026-07-25 frame size is the next measurable per-call cost
+
+With the plan-preparation overhead removed, a recursion profile attributes
+about 15% to `Vm::new_with_globals_*`, about 13% to the allocator, and about
+4% to `_platform_memmove` charged directly to `eval_function_bytecode`. That
+last one is the frame itself: `FrameState` is **704 bytes**, of which
+`CallEnv` is 192, and a call constructs it, moves it into `Vm`, moves it back
+out through `into_frame`, and then moves four fields into
+`FunctionBytecodeResult`.
+
+Marking the constructor `#[inline]` so the frame is built in place was tried
+and measured 0.9% *slower* — it bloats the caller more than it saves. Caching
+the direct-call authoritative-slot mask on the bytecode (for a direct leaf
+call `CallEnv::slot_is_authoritative` provably does not depend on the name, so
+the mask is a bytecode constant) was also tried and measured 0.3% slower: the
+guard conditions cost as much as the loop over a handful of locals.
+
+What is left is to make the frame smaller rather than to move it differently.
+The concrete unit: `CallEnv` inherits seven `Rc` fields unchanged from its
+parent on an ordinary call (`global_lexical_bindings`, `global_lexical_values`,
+`immutable_lexical_bindings`, `catch_bindings`, `direct_eval_var_conflicts`,
+`module_host`, and for non-module code `module_imports`). Grouping them behind
+one `Rc<InheritedEnv>` would cut `CallEnv` by roughly a third and replace seven
+reference-count pairs per call with one. `module_imports` is a per-frame
+parameter and needs care.
