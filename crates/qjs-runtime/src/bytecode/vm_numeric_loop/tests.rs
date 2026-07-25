@@ -333,7 +333,7 @@ fn recognizes_stable_global_read_accumulation_loop() {
     let bytecode = nested_function(source);
     let plans = NumericLoopPlan::compile_all(&bytecode);
     assert_eq!(plans.len(), 1);
-    let [NumericLoopTerm::LocalRead { slot }] = plans[0].terms.as_slice() else {
+    let [NumericLoopTerm::LocalRead { slot }] = plans[0].terms.as_ref() else {
         panic!("read-only global should compile as a realm-cell local read");
     };
     assert!(bytecode.local_is_from_env(*slot));

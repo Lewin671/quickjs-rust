@@ -221,7 +221,7 @@ impl NumericLoopPlan {
         let alternate_override = prepared_selector.alternate_override();
         let mut consequent_terms = Vec::with_capacity(self.terms.len());
         let mut alternate_terms = Vec::with_capacity(self.terms.len());
-        for term in &self.terms {
+        for term in self.terms.iter() {
             let Some(consequent) = term.prepare_with_slot_override(
                 vm,
                 forbidden_cells,
@@ -442,7 +442,7 @@ mod tests {
             .pop()
             .expect("computed selector loop should compile");
         assert!(matches!(
-            computed_plan.terms.as_slice(),
+            computed_plan.terms.as_ref(),
             [NumericLoopTerm::ComputedProperty { .. }]
         ));
         assert_traced(computed, "run(6);", Value::Number(21.0));
@@ -452,7 +452,7 @@ mod tests {
             .pop()
             .expect("local-call selector loop should compile");
         assert!(matches!(
-            local_call_plan.terms.as_slice(),
+            local_call_plan.terms.as_ref(),
             [NumericLoopTerm::LocalCall { .. }]
         ));
         assert_traced(local_call, "run(6);", Value::Number(48.0));
@@ -462,7 +462,7 @@ mod tests {
             .pop()
             .expect("string-slice selector loop should compile");
         assert!(matches!(
-            string_plan.terms.as_slice(),
+            string_plan.terms.as_ref(),
             [NumericLoopTerm::StringSliceLength { .. }]
         ));
         assert_traced(string_slice, "run(6);", Value::Number(6.0));
@@ -472,7 +472,7 @@ mod tests {
             .pop()
             .expect("array-indexOf selector loop should compile");
         assert!(matches!(
-            array_plan.terms.as_slice(),
+            array_plan.terms.as_ref(),
             [NumericLoopTerm::MethodCall { .. }]
         ));
         assert_traced(array_index_of, "run(6);", Value::Number(3.0));

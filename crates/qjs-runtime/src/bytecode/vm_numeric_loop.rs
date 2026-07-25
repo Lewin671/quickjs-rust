@@ -1,4 +1,5 @@
 use qjs_ast::{BinaryOp, UpdateOp};
+use std::rc::Rc;
 
 mod selector;
 
@@ -195,7 +196,11 @@ pub(super) struct NumericLoopPlan {
     block_result_slot: usize,
     loop_result_slot: Option<usize>,
     selector: Option<NumericLoopSelector>,
-    terms: Vec<NumericLoopTerm>,
+    /// Shared so the per-backedge plan copy is a refcount bump rather than a
+    /// fresh term vector. The copy itself is kept: running the plan through a
+    /// borrow of the bytecode makes the executor reload its fields across the
+    /// `&mut Vm` writes in the loop it drives.
+    terms: Rc<[NumericLoopTerm]>,
 }
 
 impl NumericLoopPlan {
@@ -493,7 +498,7 @@ impl NumericLoopPlan {
             block_result_slot,
             loop_result_slot,
             selector,
-            terms,
+            terms: terms.into(),
         })
     }
 
@@ -598,7 +603,7 @@ impl NumericLoopPlan {
             );
         }
         let mut terms = Vec::with_capacity(self.terms.len());
-        for term in &self.terms {
+        for term in self.terms.iter() {
             let Some(term) = term.prepare(vm, &forbidden_cells, &forbidden_realm_writes) else {
                 return false;
             };
@@ -1232,10 +1237,11 @@ pub(super) fn try_run_numeric_loop(vm: &mut Vm<'_>, header: usize, backedge: usi
         .numeric_loop_plans
         .iter()
         .find(|plan| plan.header == header && plan.backedge == backedge)
+        .cloned()
     else {
         return false;
     };
-    plan.clone().try_run(vm)
+    plan.try_run(vm)
 }
 
 fn local_number_read(vm: &Vm<'_>, slot: usize) -> Option<f64> {
