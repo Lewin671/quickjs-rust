@@ -346,3 +346,39 @@ The first correctness prerequisite is stable Realm intrinsic prototype
 identity. Object and array literals must not follow a later reassignment of the
 global `Object` or `Array` binding; land that regression fix before extracting
 VM frames so the structural rewrite starts from correct semantics.
+
+### 2026-07-24 dispatch-cost measurement and the codegen-cliff constraint
+
+An instruction-level profile of the release binary (`sample` plus `objdump`
+against the sampled offsets) attributes the ordinary dispatch loop's self time
+to two instructions:
+
+- about 46% to the jump-table indirect branch that selects an opcode handler,
+- about 14% to the reload of `self.ip`, which is written to memory at the end
+  of one instruction and read back at the start of the next.
+
+Three negative results follow from that shape and should not be repeated:
+
+- `Op` is 96 bytes, but padding it to 168 bytes changed nothing measurable.
+  Instruction-stream size is not a bottleneck; do not spend time shrinking it.
+- The loop sits on a codegen cliff. Adding a single `unreachable!()` match arm
+  cost about 17%. `lto = "fat"`, `codegen-units = 1`, and outlining the two
+  largest cold arms (`NewFunction`, `TypeofGlobal`) each made it slower.
+- One new superinstruction is a net loss. `BinaryLocals`, fusing
+  `LoadLocal; LoadLocal; Binary` — the most frequent triple in real code at
+  8-10% of executed opcode pairs — measured a 28-case local corpus 2.2%
+  slower, uniformly. Fusion has to arrive as a batch large enough to pay for
+  the extra dispatch arm, or after the dispatch itself is restructured.
+
+Removing work in the *compiler* does pay, and fusions added inside
+`virtual_object::lower` do not disturb the loop-plan matchers, because plans
+compile from `bytecode.code` while the VM runs the lowered stream and lowering
+preserves instruction offsets. That is the cheap place to experiment.
+
+The loop-plan matchers are worth keeping. Reducing `jump_with_loop_plans` to a
+plain `self.ip = target` measured the same corpus 9.7% slower, with
+`bitops-nsieve-bits` 5.3x slower and `access-fannkuch` 1.3x slower. They are a
+loop-specialization tier, not benchmark fitting. Their cost is brittleness:
+every codegen change must also make them shape-tolerant, which is roughly an
+hour of work across the five matcher sites when done with running cursors and
+optional prologue/suffix helpers rather than fixed offsets.
