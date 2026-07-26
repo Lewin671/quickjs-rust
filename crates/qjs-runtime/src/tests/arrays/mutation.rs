@@ -421,3 +421,25 @@ fn dense_structural_mutations_match_the_generic_algorithm() {
         Ok(Value::String("set7:1:proto".to_owned().into()))
     );
 }
+
+#[test]
+fn dense_pop_matches_the_generic_algorithm() {
+    assert_eq!(
+        eval("var a = [1, 2, 3]; [a.pop(), a.length, a.join(','), [].pop()].join('|');"),
+        Ok(Value::String("3|2|1,2|".to_owned().into()))
+    );
+    // A hole at the end, a frozen array, and a non-writable length keep the
+    // observable path.
+    assert_eq!(
+        eval("var a = [1, , ]; [a.length, a.pop(), a.length].join(':');"),
+        Ok(Value::String("2::1".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var a = Object.freeze([1]); var threw = false;\
+             try { a.pop(); } catch (error) { threw = error instanceof TypeError; }\
+             threw + ':' + a.length;"
+        ),
+        Ok(Value::String("true:1".to_owned().into()))
+    );
+}

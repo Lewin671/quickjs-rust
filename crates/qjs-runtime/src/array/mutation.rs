@@ -215,6 +215,12 @@ pub(crate) fn native_array_prototype_pop(
         return Err(pop_length_error());
     }
 
+    if let Value::Array(array) = &this_value
+        && let Some(last) = array.with_plain_dense_mutation(env, 0, |elements| elements.pop())
+    {
+        return Ok(last.unwrap_or(Value::Undefined));
+    }
+
     let source = array_like_length(this_value, "Array.prototype.pop", env)?;
     let receiver = source.receiver;
     let length = source.length;
