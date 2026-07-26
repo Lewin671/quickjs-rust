@@ -68,6 +68,8 @@ pub(super) struct NumericLeafPlan {
 
 #[derive(Clone, Debug)]
 enum NumericLeafShortcut {
+    /// `return <literal>` — the whole body.
+    Constant(FastValue),
     ArgumentConstChain {
         argument_index: usize,
         operations: Vec<(BinaryOp, f64)>,
@@ -103,6 +105,8 @@ enum NumericLeafShortcut {
 #[derive(Clone, Debug)]
 pub(super) enum NumericLoopCall {
     MathAbs,
+    /// The callee returns the same number every time.
+    Constant(f64),
     ArgumentAddConstants {
         argument_index: usize,
         constants: Vec<f64>,
@@ -315,9 +319,12 @@ impl NumericLeafShortcut {
         let core = &ops[ops
             .iter()
             .position(|op| !matches!(op, FastOp::LoadConst(_)))?..];
+        if let [FastOp::ReturnConst(value)] = core {
+            return Some(Self::Constant(*value));
+        }
+        // An empty chain is `return a`, the most common leaf body there is.
         if let [FastOp::LoadLocal(slot), middle @ .., FastOp::Return] = core
             && let Some(argument_index) = parameter_index(bytecode, *slot)
-            && !middle.is_empty()
             && middle
                 .iter()
                 .all(|op| matches!(op, FastOp::BinaryConstRight(_, _)))
@@ -391,6 +398,9 @@ impl NumericLeafShortcut {
     }
 
     fn eval(&self, arguments: &[Value], upvalues: &[Upvalue]) -> Option<Value> {
+        if let Self::Constant(value) = self {
+            return value.into_value();
+        }
         let argument_number = |index: usize| -> Option<f64> {
             match arguments.get(index)? {
                 Value::Number(value) => Some(*value),
@@ -404,6 +414,8 @@ impl NumericLeafShortcut {
             })
         };
         match self {
+            // Handled above, before the numeric accessors.
+            Self::Constant(value) => value.into_value(),
             Self::ArgumentConstChain {
                 argument_index,
                 operations,
@@ -501,6 +513,8 @@ impl NumericLoopCall {
                 })
         };
         match shortcut {
+            NumericLeafShortcut::Constant(FastValue::Number(value)) => Some(Self::Constant(*value)),
+            NumericLeafShortcut::Constant(_) => None,
             NumericLeafShortcut::ArgumentConstChain {
                 argument_index,
                 operations,
@@ -594,6 +608,7 @@ impl NumericLoopCall {
     pub(super) fn is_read_only(&self) -> bool {
         match self {
             Self::MathAbs
+            | Self::Constant(_)
             | Self::ArgumentAddConstants { .. }
             | Self::ArgumentConstChain { .. }
             | Self::ArgumentCapturedBinary { .. }
@@ -616,6 +631,7 @@ impl NumericLoopCall {
         };
         match self {
             Self::MathAbs => first_argument.abs(),
+            Self::Constant(value) => *value,
             Self::ArgumentAddConstants {
                 argument_index,
                 constants,

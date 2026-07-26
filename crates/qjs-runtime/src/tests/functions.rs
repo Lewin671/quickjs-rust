@@ -1649,3 +1649,45 @@ fn arrow_functions_inherit_their_call_context() {
         Ok(Value::Number(4.0))
     );
 }
+
+/// The leaf-call fast path recognizes a body that returns a parameter or a
+/// literal, so a counted loop calling one runs without building a frame. Each of
+/// these has to keep answering what the ordinary path answers.
+#[test]
+fn identity_and_constant_leaf_calls_keep_their_semantics() {
+    assert_eq!(
+        eval("function id(a) { return a; } String(id()) + ':' + id('x') + ':' + String(id(null));"),
+        Ok(Value::String("undefined:x:null".to_owned().into()))
+    );
+    // Inlined into a counted loop, both shapes at once.
+    assert_eq!(
+        eval(
+            "function id(a) { return a; } function one() { return 1; }\
+             var s = 0; for (var i = 0; i < 40; i++) { s += id(i) + one(); } s;"
+        ),
+        Ok(Value::Number(820.0))
+    );
+    // A non-numeric argument mid-loop leaves the fast path.
+    assert_eq!(
+        eval(
+            "function id(a) { return a; }\
+             var m = 0; for (var q = 0; q < 5; q++) { m += id(q === 3 ? 'z' : q); } String(m);"
+        ),
+        Ok(Value::String("3z4".to_owned().into()))
+    );
+    // An object argument is returned by reference, not coerced.
+    assert_eq!(
+        eval(
+            "function id(o) { return o; } var arr = [{ v: 1 }, { v: 2 }], z = 0;\
+             for (var r = 0; r < 20; r++) { z += id(arr[r % 2]).v; } z;"
+        ),
+        Ok(Value::Number(30.0))
+    );
+    // A constant that is not a number still returns itself.
+    assert_eq!(
+        eval(
+            "function t() { return true; } var b = 0; for (var j = 0; j < 10; j++) { b += t() ? 1 : 0; } b;"
+        ),
+        Ok(Value::Number(10.0))
+    );
+}
