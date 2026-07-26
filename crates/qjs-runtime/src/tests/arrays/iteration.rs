@@ -532,3 +532,51 @@ fn evaluates_array_iteration_builtins() {
             .is_err()
     );
 }
+
+#[test]
+fn dense_iteration_reads_still_observe_holes_and_mutation() {
+    // A dense element is read from storage; a hole, an inherited element, an
+    // accessor, and mutation during iteration must behave exactly as the
+    // HasProperty/Get pair does.
+    assert_eq!(
+        eval(
+            "var out = []; [1, , 3].forEach(function (v, i) { out.push(i + ':' + v); }); out.join(',');"
+        ),
+        Ok(Value::String("0:1,2:3".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "Array.prototype[1] = 'proto'; var out = [];\
+             [1, , 3].forEach(function (v, i) { out.push(i + ':' + v); });\
+             delete Array.prototype[1]; out.join(',');"
+        ),
+        Ok(Value::String("0:1,1:proto,2:3".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var a = [1, 2, 3]; var out = [];\
+             a.forEach(function (v, i) { out.push(v); if (i === 0) { a[1] = 20; a[2] = 30; } });\
+             out.join(',');"
+        ),
+        Ok(Value::String("1,20,30".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var a = [1]; Object.defineProperty(a, '1', { get: function () { return 9; }, enumerable: true, configurable: true });\
+             a.length = 2; a.map(function (v) { return v * 2; }).join(',');"
+        ),
+        Ok(Value::String("2,18".to_owned().into()))
+    );
+    // reduce, some, every, and find take the same read path.
+    assert_eq!(
+        eval(
+            "var a = [1, , 3];\
+             [a.reduce(function (t, v) { return t + v; }, 0),\
+              a.some(function (v) { return v === 3; }),\
+              a.every(function (v) { return v > 0; }),\
+              a.find(function (v) { return v > 1; }),\
+              a.filter(function (v) { return true; }).length].join(':');"
+        ),
+        Ok(Value::String("4:true:true:3:2".to_owned().into()))
+    );
+}

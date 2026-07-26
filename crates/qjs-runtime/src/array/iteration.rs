@@ -117,6 +117,30 @@ fn call_reduction_callback(
     )
 }
 
+/// Reads element `index` of an iteration receiver.
+///
+/// The iteration methods are specified as `HasProperty` followed by `Get`, and
+/// both went through the generic property protocol with the index formatted
+/// into a string. A dense array element cannot observe the difference, so it is
+/// read straight from storage; every other receiver, and every hole, keeps the
+/// observable pair.
+fn iteration_element(
+    receiver: &Value,
+    index: usize,
+    env: &mut CallEnv,
+) -> Result<Option<Value>, RuntimeError> {
+    if let Value::Array(array) = receiver
+        && let Some(value) = array.dense_index_value(index, env)
+    {
+        return Ok(Some(value));
+    }
+    let key = index.to_string();
+    if !has_property(receiver.clone(), env, &key)? {
+        return Ok(None);
+    }
+    property_value(receiver.clone(), &key, env).map(Some)
+}
+
 pub(crate) fn native_array_prototype_map(
     this_value: Value,
     argument_values: &[Value],
@@ -126,11 +150,9 @@ pub(crate) fn native_array_prototype_map(
     let result =
         array_species_create(iteration.receiver.clone(), iteration.source_len, "map", env)?;
     for index in dynamic_iteration_indices(&iteration, env) {
-        let key = index.to_string();
-        if has_property(iteration.receiver.clone(), env, &key)? {
-            let value = property_value(iteration.receiver.clone(), &key, env)?;
+        if let Some(value) = iteration_element(&iteration.receiver, index, env)? {
             let mapped = call_iteration_callback(&iteration, value, index, env)?;
-            create_data_property_or_throw(result.clone(), key, mapped, env)?;
+            create_data_property_or_throw(result.clone(), index.to_string(), mapped, env)?;
         }
     }
 
@@ -188,9 +210,7 @@ pub(crate) fn native_array_prototype_filter(
     let result = array_species_create(iteration.receiver.clone(), 0, "filter", env)?;
     let mut target_index = 0;
     for index in dynamic_iteration_indices(&iteration, env) {
-        let key = index.to_string();
-        if has_property(iteration.receiver.clone(), env, &key)? {
-            let value = property_value(iteration.receiver.clone(), &key, env)?;
+        if let Some(value) = iteration_element(&iteration.receiver, index, env)? {
             let selected = call_iteration_callback(&iteration, value.clone(), index, env)?;
             if is_truthy(&selected) {
                 create_data_property_or_throw(
@@ -282,9 +302,7 @@ pub(crate) fn native_array_prototype_for_each(
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_array_iteration("forEach", this_value, argument_values, env)?;
     for index in dynamic_iteration_indices(&iteration, env) {
-        let key = index.to_string();
-        if has_property(iteration.receiver.clone(), env, &key)? {
-            let value = property_value(iteration.receiver.clone(), &key, env)?;
+        if let Some(value) = iteration_element(&iteration.receiver, index, env)? {
             call_iteration_callback(&iteration, value, index, env)?;
         }
     }
@@ -299,9 +317,7 @@ pub(crate) fn native_array_prototype_some(
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_array_iteration("some", this_value, argument_values, env)?;
     for index in dynamic_iteration_indices(&iteration, env) {
-        let key = index.to_string();
-        if has_property(iteration.receiver.clone(), env, &key)? {
-            let value = property_value(iteration.receiver.clone(), &key, env)?;
+        if let Some(value) = iteration_element(&iteration.receiver, index, env)? {
             let selected = call_iteration_callback(&iteration, value, index, env)?;
             if is_truthy(&selected) {
                 return Ok(Value::Boolean(true));
@@ -319,9 +335,7 @@ pub(crate) fn native_array_prototype_every(
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_array_iteration("every", this_value, argument_values, env)?;
     for index in dynamic_iteration_indices(&iteration, env) {
-        let key = index.to_string();
-        if has_property(iteration.receiver.clone(), env, &key)? {
-            let value = property_value(iteration.receiver.clone(), &key, env)?;
+        if let Some(value) = iteration_element(&iteration.receiver, index, env)? {
             let selected = call_iteration_callback(&iteration, value, index, env)?;
             if !is_truthy(&selected) {
                 return Ok(Value::Boolean(false));
@@ -351,9 +365,7 @@ pub(crate) fn native_array_prototype_reduce(
     };
 
     for index in start_index..reduction.source_len {
-        let key = index.to_string();
-        if has_property(reduction.receiver.clone(), env, &key)? {
-            let value = property_value(reduction.receiver.clone(), &key, env)?;
+        if let Some(value) = iteration_element(&reduction.receiver, index, env)? {
             accumulator = call_reduction_callback(&reduction, accumulator, value, index, env)?;
         }
     }
@@ -380,9 +392,7 @@ pub(crate) fn native_array_prototype_reduce_right(
     };
 
     for index in (0..next_index).rev() {
-        let key = index.to_string();
-        if has_property(reduction.receiver.clone(), env, &key)? {
-            let value = property_value(reduction.receiver.clone(), &key, env)?;
+        if let Some(value) = iteration_element(&reduction.receiver, index, env)? {
             accumulator = call_reduction_callback(&reduction, accumulator, value, index, env)?;
         }
     }
