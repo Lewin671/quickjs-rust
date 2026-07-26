@@ -553,6 +553,16 @@ fn eval_instanceof(left: Value, right: Value, env: &mut CallEnv) -> Result<Value
 
     if let Some(symbol) = symbol::has_instance_symbol(env) {
         let method = crate::property_value_key(right.clone(), &PropertyKey::Symbol(symbol), env)?;
+        // `Function.prototype[Symbol.hasInstance]` is OrdinaryHasInstance, so
+        // invoking it observably does nothing the direct call does not. Skipping
+        // the call keeps the whole operation off the native-call path.
+        if matches!(
+            &method,
+            Value::Function(function)
+                if function.native == Some(crate::function::NativeFunction::FunctionPrototypeHasInstance)
+        ) {
+            return ordinary_has_instance(left, right, env).map(Value::Boolean);
+        }
         if !matches!(method, Value::Undefined | Value::Null) {
             let Value::Function(_) = method else {
                 return Err(RuntimeError {

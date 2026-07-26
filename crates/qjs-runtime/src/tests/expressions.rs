@@ -1485,3 +1485,52 @@ fn reference_and_string_comparisons_keep_their_spec_results() {
         ))
     );
 }
+
+#[test]
+fn instanceof_respects_a_custom_has_instance() {
+    // The intrinsic `Function.prototype[Symbol.hasInstance]` is skipped in
+    // favour of OrdinaryHasInstance, but any replacement must still run.
+    assert_eq!(
+        eval(
+            "function C() {} var c = new C();\
+             var plain = c instanceof C;\
+             function D() {}\
+             Object.defineProperty(D, Symbol.hasInstance, { value: function () { return true; } });\
+             var custom = ({}) instanceof D;\
+             var Always = { [Symbol.hasInstance]: function () { return 'truthy'; } };\
+             var object = 1 instanceof Always;\
+             function E() {}\
+             Object.defineProperty(E, Symbol.hasInstance, { value: function () { return false; } });\
+             var forced = new E() instanceof E;\
+             [plain, custom, object, forced].join(':');"
+        ),
+        Ok(Value::String("true:true:true:false".to_owned().into()))
+    );
+    // A non-callable `Symbol.hasInstance` is a TypeError; a bound function
+    // still resolves through its target.
+    assert_eq!(
+        eval(
+            // `Function.prototype[Symbol.hasInstance]` is non-writable, so the
+            // sloppy assignment is ignored and the intrinsic still answers.
+            "function F() {} F[Symbol.hasInstance] = 1; var threw = false;\
+             try { ({}) instanceof F; } catch (error) { threw = error instanceof TypeError; }\
+             var own = Object.getOwnPropertyDescriptor(F, Symbol.hasInstance) === undefined;\
+             function H() {} Object.defineProperty(H, Symbol.hasInstance, { value: 1 });\
+             var threwDefined = false;\
+             try { ({}) instanceof H; } catch (error) { threwDefined = error instanceof TypeError; }\
+             function G() {} var bound = G.bind(null);\
+             [threw, own, threwDefined, new G() instanceof bound].join(':');"
+        ),
+        Ok(Value::String("false:true:true:true".to_owned().into()))
+    );
+    // The intrinsic method is non-configurable, so it cannot be replaced.
+    assert_eq!(
+        eval(
+            "var threw = false;\
+             try { Object.defineProperty(Function.prototype, Symbol.hasInstance, { value: 1, configurable: true }); }\
+             catch (error) { threw = error instanceof TypeError; }\
+             function H() {} threw + ':' + (new H() instanceof H);"
+        ),
+        Ok(Value::String("true:true".to_owned().into()))
+    );
+}
