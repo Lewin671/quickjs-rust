@@ -424,13 +424,20 @@ fn set_dense_index_cache(operation: &mut NestedInstruction, index_cache: Option<
     }
 }
 
-pub(super) trait IndexResolver {
+pub(super) trait IndexResolver: Sized {
+    fn fresh() -> Self;
+
     fn resolve(&mut self, slot: Option<u8>, value: f64) -> Option<usize>;
 }
 
 pub(super) struct NoIndexCache;
 
 impl IndexResolver for NoIndexCache {
+    #[inline(always)]
+    fn fresh() -> Self {
+        Self
+    }
+
     #[inline(always)]
     fn resolve(&mut self, _slot: Option<u8>, value: f64) -> Option<usize> {
         array_index_from_number(value)
@@ -452,6 +459,11 @@ impl IndexCache {
 }
 
 impl IndexResolver for IndexCache {
+    #[inline(always)]
+    fn fresh() -> Self {
+        Self::new()
+    }
+
     #[inline(always)]
     fn resolve(&mut self, slot: Option<u8>, value: f64) -> Option<usize> {
         let Some(slot) = slot else {
@@ -736,7 +748,7 @@ mod tests {
         assert_eq!(cache.resolve(Some(0), 3.0), Some(3));
         assert_eq!(cache.resolve(Some(1), -1.0), None);
 
-        let mut next_iteration = IndexCache::new();
+        let mut next_iteration = IndexCache::fresh();
         assert_eq!(next_iteration.resolve(Some(0), 7.0), Some(7));
     }
 }

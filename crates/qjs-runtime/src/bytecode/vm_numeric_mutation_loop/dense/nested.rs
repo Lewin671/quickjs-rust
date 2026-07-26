@@ -421,6 +421,19 @@ impl NestedDensePlan {
     fn run_region(
         &self,
         access: &mut MultiAccess<'_, '_>,
+        bank: LocalBank,
+        registers: &mut [f64],
+    ) -> RegionOutcome {
+        if self.has_cached_indices {
+            self.run_region_with_indices::<IndexCache>(access, bank, registers)
+        } else {
+            self.run_region_with_indices::<NoIndexCache>(access, bank, registers)
+        }
+    }
+
+    fn run_region_with_indices<I: IndexResolver>(
+        &self,
+        access: &mut MultiAccess<'_, '_>,
         mut bank: LocalBank,
         registers: &mut [f64],
     ) -> RegionOutcome {
@@ -476,12 +489,14 @@ impl NestedDensePlan {
                     };
                 }
                 outer_inputs_initialized = true;
-                if !self.run_inner_iteration(
+                let mut indices = I::fresh();
+                if !self.run_inner_iteration_with_indices(
                     access,
                     &mut bank,
                     registers,
                     inner_input_prefix,
                     dynamic_start,
+                    &mut indices,
                 ) {
                     return if resumed_inner || native_inner_commits != 0 {
                         RegionOutcome::ReplayInner(bank)
@@ -504,37 +519,6 @@ impl NestedDensePlan {
             }
             record_nested_dense_outer_completion();
             resumed_inner = false;
-        }
-    }
-
-    fn run_inner_iteration(
-        &self,
-        access: &mut MultiAccess<'_, '_>,
-        bank: &mut LocalBank,
-        registers: &mut [f64],
-        input_prefix: Option<NestedInputPrefix>,
-        dynamic_start: usize,
-    ) -> bool {
-        if self.has_cached_indices {
-            let mut indices = IndexCache::new();
-            self.run_inner_iteration_with_indices(
-                access,
-                bank,
-                registers,
-                input_prefix,
-                dynamic_start,
-                &mut indices,
-            )
-        } else {
-            let mut indices = NoIndexCache;
-            self.run_inner_iteration_with_indices(
-                access,
-                bank,
-                registers,
-                input_prefix,
-                dynamic_start,
-                &mut indices,
-            )
         }
     }
 

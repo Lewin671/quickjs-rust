@@ -7827,6 +7827,43 @@ the report, raw rows, and frozen manifest SHA-256 values are
 `1c90b9db0ea1ae5e57b901546cb32500b03ab37fed981cdbab27683d415513fd`, and
 `68f6e3e8beb1f2b7415003310ff9d28628ff2107f5e7c2db130256f9a9168ae7`.
 
+### 2026-07-26 specialize nested index-resolver regions
+
+After terminal-store fusion, a fresh `audio-fft` sample still attributed 231
+direct self samples to the nested dense region. Each native inner iteration
+entered a helper that branched on the plan's immutable `has_cached_indices`
+flag before selecting `IndexCache` or `NoIndexCache`. The region now chooses
+that strategy once at entry and dispatches to a monomorphized
+`run_region_with_indices<I>` body. `IndexResolver::fresh()` constructs the
+same cache type for each native iteration: cached indices remain local to that
+iteration, while the no-cache path remains zero-sized. Thus the change removes
+a repeated static branch without broadening plan admission, altering array
+semantics, or allowing an index conversion to cross an iteration boundary.
+
+The focused index-cache test now exercises the per-iteration `fresh()` path;
+the nested suite continues to cover cached and uncached plans, forwarding,
+transactional replay, aliases, holes, accessors, and capture rejection. The
+complete `qjs-runtime` suite passed 1,871 tests and the QuickJS-NG comparison
+smoke suite passed before the staged full gate.
+
+The final same-host, interleaved seven-block external diagnostic compared
+release candidate SHA-256
+`ea8df6fb4b81d5b877fa84c47d367316a6c6b0aecf35a913ea403de768143333`
+against preceding-base SHA-256
+`93ce91470a438a025faf03692ec18abed872d2a564ca62aee41cb1a82e440d75`
+and QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+All capability probes completed. Candidate/base medians were 1.00582x for
+Gaussian blur, **0.99088x for Kraken `audio-fft`**, 0.99672x for JSON
+financial parsing, and 1.01618x for `bitops-nsieve-bits`. FFT reached
+**0.57810x candidate/QuickJS-NG**, a stable 0.9% local improvement with no
+control above the 1.03x regression ceiling. This remains a diagnostic partial
+portfolio rather than a suite or final-goal claim (`claim_eligible: false`);
+the report, raw rows, and frozen manifest SHA-256 values are
+`dd31fda18d65960bbbc42fa7bbcf435ff2a25c6f562cf10e6ea15c1981c41f29`,
+`41c4d929043e36c3bd325c365e9a7c3688b4eaec0af5c710582153caf807b499`, and
+`68f6e3e8beb1f2b7415003310ff9d28628ff2107f5e7c2db130256f9a9168ae7`.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
