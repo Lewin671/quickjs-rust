@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::CallEnv;
 use crate::{
-    ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value,
+    Function, NativeFunction, ObjectRef, RuntimeError, Value,
     array::for_each_iterable_value_with_env, call_function, property_value, symbol,
 };
 
@@ -89,9 +89,11 @@ pub(crate) fn native_weak_map(
     );
     object.set_to_string_tag("WeakMap");
     object.define_non_enumerable(WEAK_MAP_BRAND.to_owned(), Value::Boolean(true));
+    // The entries live in the same indexed storage a `Map` uses, so a lookup
+    // is a hash probe instead of a scan over a copy of every pair.
     object.define_non_enumerable(
         WEAK_MAP_ENTRIES.to_owned(),
-        Value::Array(ArrayRef::new(Vec::new())),
+        Value::Map(crate::MapRef::new(None)),
     );
     let weak_map = Value::Object(object);
 
@@ -265,12 +267,12 @@ fn weak_map_object(value: &Value) -> Result<ObjectRef, RuntimeError> {
     }
 }
 
-fn weak_map_entries(object: &ObjectRef) -> Result<ArrayRef, RuntimeError> {
+fn weak_map_entries(object: &ObjectRef) -> Result<crate::MapRef, RuntimeError> {
     match object
         .own_property(WEAK_MAP_ENTRIES)
         .map(|property| property.value)
     {
-        Some(Value::Array(entries)) => Ok(entries),
+        Some(Value::Map(entries)) => Ok(entries),
         _ => Err(RuntimeError {
             thrown: None,
             message: "WeakMap is missing internal state".to_owned(),
@@ -279,20 +281,7 @@ fn weak_map_entries(object: &ObjectRef) -> Result<ArrayRef, RuntimeError> {
 }
 
 fn weak_map_get(object: ObjectRef, key: &Value) -> Option<Value> {
-    weak_map_entries(&object)
-        .ok()?
-        .to_vec()
-        .into_iter()
-        .find_map(|entry| match entry {
-            Value::Array(pair)
-                if pair
-                    .get(0)
-                    .is_some_and(|entry_key| entry_key.same_value(key)) =>
-            {
-                pair.get(1)
-            }
-            _ => None,
-        })
+    weak_map_entries(&object).ok()?.get(key)
 }
 
 fn weak_map_has(object: ObjectRef, key: &Value) -> bool {
@@ -311,42 +300,12 @@ fn weak_map_set(
             message: "TypeError: WeakMap key must be an object".to_owned(),
         });
     }
-    let entries = weak_map_entries(&object)?;
-    let mut values = entries.to_vec();
-    if let Some(pair) = values.iter_mut().find_map(|entry| match entry {
-        Value::Array(pair)
-            if pair
-                .get(0)
-                .is_some_and(|entry_key| entry_key.same_value(&key)) =>
-        {
-            Some(pair)
-        }
-        _ => None,
-    }) {
-        pair.set(1, value);
-        return Ok(());
-    }
-    values.push(Value::Array(ArrayRef::new(vec![key, value])));
-    entries.replace_with(values);
+    weak_map_entries(&object)?.set(key, value);
     Ok(())
 }
 
 fn weak_map_delete(object: ObjectRef, key: &Value) -> bool {
-    let Ok(entries) = weak_map_entries(&object) else {
-        return false;
-    };
-    let mut values = entries.to_vec();
-    let Some(index) = values.iter().position(|entry| match entry {
-        Value::Array(pair) => pair
-            .get(0)
-            .is_some_and(|entry_key| entry_key.same_value(key)),
-        _ => false,
-    }) else {
-        return false;
-    };
-    values.remove(index);
-    entries.replace_with(values);
-    true
+    weak_map_entries(&object).is_ok_and(|entries| entries.delete(key))
 }
 
 fn is_weak_map_key(value: &Value) -> bool {

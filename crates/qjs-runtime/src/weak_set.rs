@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::CallEnv;
 use crate::{
-    ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value,
+    Function, NativeFunction, ObjectRef, RuntimeError, Value,
     array::for_each_iterable_value_with_env, call_function, property_value, symbol,
 };
 
@@ -71,9 +71,13 @@ pub(crate) fn native_weak_set(
     );
     object.set_to_string_tag("WeakSet");
     object.define_non_enumerable(WEAK_SET_BRAND.to_owned(), Value::Boolean(true));
+    // The values live in the same indexed storage a `Set` uses, so membership
+
+    // is a hash probe instead of a scan over a copy of every value.
+
     object.define_non_enumerable(
         WEAK_SET_ENTRIES.to_owned(),
-        Value::Array(ArrayRef::new(Vec::new())),
+        Value::Set(crate::SetRef::new(None)),
     );
     let weak_set = Value::Object(object);
 
@@ -147,12 +151,12 @@ fn weak_set_object(value: &Value) -> Result<ObjectRef, RuntimeError> {
     }
 }
 
-fn weak_set_entries(object: &ObjectRef) -> Result<ArrayRef, RuntimeError> {
+fn weak_set_entries(object: &ObjectRef) -> Result<crate::SetRef, RuntimeError> {
     match object
         .own_property(WEAK_SET_ENTRIES)
         .map(|property| property.value)
     {
-        Some(Value::Array(entries)) => Ok(entries),
+        Some(Value::Set(entries)) => Ok(entries),
         _ => Err(RuntimeError {
             thrown: None,
             message: "WeakSet is missing internal state".to_owned(),
@@ -161,9 +165,7 @@ fn weak_set_entries(object: &ObjectRef) -> Result<ArrayRef, RuntimeError> {
 }
 
 fn weak_set_has(object: ObjectRef, value: &Value) -> bool {
-    weak_set_entries(&object)
-        .ok()
-        .is_some_and(|entries| entries.to_vec().iter().any(|entry| entry.same_value(value)))
+    weak_set_entries(&object).is_ok_and(|entries| entries.has(value))
 }
 
 fn weak_set_add(object: ObjectRef, value: Value, env: &CallEnv) -> Result<(), RuntimeError> {
@@ -173,26 +175,12 @@ fn weak_set_add(object: ObjectRef, value: Value, env: &CallEnv) -> Result<(), Ru
             message: "TypeError: WeakSet value must be an object".to_owned(),
         });
     }
-    let entries = weak_set_entries(&object)?;
-    let mut values = entries.to_vec();
-    if !values.iter().any(|entry| entry.same_value(&value)) {
-        values.push(value);
-        entries.replace_with(values);
-    }
+    weak_set_entries(&object)?.add(value);
     Ok(())
 }
 
 fn weak_set_delete(object: ObjectRef, value: &Value) -> bool {
-    let Ok(entries) = weak_set_entries(&object) else {
-        return false;
-    };
-    let mut values = entries.to_vec();
-    let Some(index) = values.iter().position(|entry| entry.same_value(value)) else {
-        return false;
-    };
-    values.remove(index);
-    entries.replace_with(values);
-    true
+    weak_set_entries(&object).is_ok_and(|entries| entries.delete(value))
 }
 
 fn is_weak_set_value(value: &Value) -> bool {

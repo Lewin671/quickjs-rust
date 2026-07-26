@@ -241,3 +241,52 @@ fn rejects_weak_map_invalid_receivers_and_primitive_set_keys() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn weak_collections_keep_identity_semantics_on_indexed_storage() {
+    assert_eq!(
+        eval(
+            "var a = {}, b = {}, fn = function () {};\
+             var wm = new WeakMap([[a, 1]]);\
+             wm.set(b, 2).set(fn, 3); wm.set(a, 10);\
+             var before = [wm.get(a), wm.get(b), wm.get(fn), wm.has({}), wm.get({}) === undefined].join(':');\
+             var deleted = wm.delete(b);\
+             [before, deleted, wm.has(b), wm.get(b) === undefined, wm.delete(b)].join('|');"
+        ),
+        Ok(Value::String(
+            "10:2:3:false:true|true|false|true|false".to_owned().into()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "var s = Symbol('k'); var wm = new WeakMap(); wm.set(s, 1);\
+             var threwPrimitive = false;\
+             try { wm.set(1, 1); } catch (error) { threwPrimitive = error instanceof TypeError; }\
+             var threwRegistered = false;\
+             try { wm.set(Symbol.for('r'), 1); } catch (error) { threwRegistered = error instanceof TypeError; }\
+             [wm.get(s), threwPrimitive, threwRegistered].join(':');"
+        ),
+        Ok(Value::String("1:true:true".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var a = {}, b = {}; var ws = new WeakSet([a]);\
+             ws.add(b); ws.add(a);\
+             [ws.has(a), ws.has(b), ws.has({}), ws.delete(a), ws.has(a), ws.delete(a)].join(':');"
+        ),
+        Ok(Value::String(
+            "true:true:false:true:false:false".to_owned().into()
+        ))
+    );
+    // Repeated add/delete cycles stay correct.
+    assert_eq!(
+        eval(
+            "var wm = new WeakMap(); var keys = [];\
+             for (var i = 0; i < 100; i++) { var k = {}; keys.push(k); wm.set(k, i); if (i % 2 === 0) wm.delete(k); }\
+             var total = 0, present = 0;\
+             for (var i = 0; i < 100; i++) if (wm.has(keys[i])) { present++; total += wm.get(keys[i]); }\
+             present + ':' + total;"
+        ),
+        Ok(Value::String("50:2500".to_owned().into()))
+    );
+}
