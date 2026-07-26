@@ -248,7 +248,7 @@ pub(super) fn native_math_round(
 /// rounds ties toward positive infinity and preserves negative zero. Keeping
 /// the Number-only operation here lets guarded bytecode fast paths share the
 /// exact builtin semantics without repeating that distinction.
-pub(super) fn round_number(number: f64) -> f64 {
+pub(crate) fn round_number(number: f64) -> f64 {
     if number.is_nan() || number.is_infinite() || number == 0.0 {
         return number;
     }

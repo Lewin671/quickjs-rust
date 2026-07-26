@@ -104,7 +104,9 @@ enum NumericLeafShortcut {
 /// cells owned by the active frame before constructing this plan.
 #[derive(Clone, Debug)]
 pub(super) enum NumericLoopCall {
-    MathAbs,
+    /// A `Math` intrinsic whose whole effect is a floating-point computation of
+    /// its first argument.
+    MathUnary(NativeFunction),
     /// The callee returns the same number every time.
     Constant(f64),
     ArgumentAddConstants {
@@ -473,6 +475,27 @@ impl NumericLeafShortcut {
     }
 }
 
+/// A `Math` function of one argument whose entire effect is a floating-point
+/// computation. Anything that can observe an object, allocate, or depend on
+/// state stays out.
+fn math_unary(native: NativeFunction, argument: f64) -> Option<f64> {
+    let value = match native {
+        NativeFunction::MathAbs => argument.abs(),
+        NativeFunction::MathSqrt => argument.sqrt(),
+        NativeFunction::MathFloor => argument.floor(),
+        NativeFunction::MathCeil => argument.ceil(),
+        NativeFunction::MathTrunc => argument.trunc(),
+        NativeFunction::MathRound => crate::math::round_number(argument),
+        NativeFunction::MathSin => argument.sin(),
+        NativeFunction::MathCos => argument.cos(),
+        NativeFunction::MathTan => argument.tan(),
+        NativeFunction::MathExp => argument.exp(),
+        NativeFunction::MathLog => argument.ln(),
+        _ => return None,
+    };
+    Some(value)
+}
+
 impl NumericLoopCall {
     pub(super) fn prepare(
         function: &Function,
@@ -480,8 +503,12 @@ impl NumericLoopCall {
         caller_cells: &[Option<Upvalue>],
         forbidden_cells: &[Upvalue],
     ) -> Option<Self> {
-        if function.native == Some(NativeFunction::MathAbs) && argument_count >= 1 {
-            return Some(Self::MathAbs);
+        if let Some(native) = function.native {
+            if argument_count >= 1 && math_unary(native, 0.0).is_some() {
+                return Some(Self::MathUnary(native));
+            }
+            // Any other native is outside this tier: it may observe the world.
+            return None;
         }
         if argument_count > 2 || !is_direct_leaf_function(&Value::Function(function.clone())) {
             return None;
@@ -607,7 +634,7 @@ impl NumericLoopCall {
     /// would depend on a selector arm's per-iteration ordering.
     pub(super) fn is_read_only(&self) -> bool {
         match self {
-            Self::MathAbs
+            Self::MathUnary(_)
             | Self::Constant(_)
             | Self::ArgumentAddConstants { .. }
             | Self::ArgumentConstChain { .. }
@@ -630,7 +657,9 @@ impl NumericLoopCall {
             }
         };
         match self {
-            Self::MathAbs => first_argument.abs(),
+            Self::MathUnary(native) => {
+                math_unary(*native, first_argument).expect("validated numeric intrinsic")
+            }
             Self::Constant(value) => *value,
             Self::ArgumentAddConstants {
                 argument_index,

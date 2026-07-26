@@ -1691,3 +1691,37 @@ fn identity_and_constant_leaf_calls_keep_their_semantics() {
         Ok(Value::Number(10.0))
     );
 }
+
+/// A counted loop evaluates a `Math` intrinsic of one argument without leaving
+/// the loop, so each intrinsic has to keep its exact result — including
+/// `Math.round`'s tie direction and its negative zero.
+#[test]
+fn math_intrinsics_inline_into_counted_loops() {
+    assert_eq!(
+        eval(
+            "var s = 0; for (var i = 0; i < 40; i++) { s += Math.sqrt(i) + Math.floor(i / 3) + Math.abs(-i); }\
+             s.toFixed(4);"
+        ),
+        Ok(Value::String("1192.2912".to_owned().into()))
+    );
+    assert_eq!(
+        eval("var t = 0; for (var j = 0; j < 20; j++) { t += Math.round(j - 0.5); } t;"),
+        Ok(Value::Number(190.0))
+    );
+    assert_eq!(
+        eval(
+            "var u = 0; for (var k = 0; k < 10; k++) { u += Math.sin(k) + Math.cos(k) + Math.exp(k * 0.1) + Math.log(k + 1); }\
+             u.toFixed(6);"
+        ),
+        Ok(Value::String("33.819240".to_owned().into()))
+    );
+    assert_eq!(
+        eval("1 / Math.round(-0.5);"),
+        Ok(Value::Number(f64::NEG_INFINITY))
+    );
+    // A string argument still coerces the way the ordinary call does.
+    assert_eq!(
+        eval("var w = ''; for (var r = 0; r < 3; r++) { w += String(Math.sqrt('4')); } w;"),
+        Ok(Value::String("222".to_owned().into()))
+    );
+}
