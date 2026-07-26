@@ -1752,3 +1752,24 @@ fn two_argument_math_intrinsics_inline_into_counted_loops() {
         Ok(Value::String("555".to_owned().into()))
     );
 }
+
+/// `Math.sign` returns its argument unchanged for NaN and for either zero, and
+/// `Math.fround` narrows through `f32`; both inline into a counted loop.
+#[test]
+fn sign_and_fround_inline_without_losing_their_edges() {
+    assert_eq!(
+        eval("(1 / Math.sign(-0)) + ':' + (1 / Math.sign(0)) + ':' + String(Math.sign(NaN));"),
+        Ok(Value::String("-Infinity:Infinity:NaN".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var s = 0; for (var i = 0; i < 40; i++) { s += Math.sign(i - 20) + Math.fround(i / 3); }\
+             s.toFixed(6);"
+        ),
+        Ok(Value::String("259.000000".to_owned().into()))
+    );
+    assert_eq!(
+        eval("Math.fround(5.05);"),
+        Ok(Value::Number(5.050000190734863))
+    );
+}

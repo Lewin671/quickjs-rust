@@ -509,6 +509,18 @@ fn math_unary(native: NativeFunction, argument: f64) -> Option<f64> {
         NativeFunction::MathLog2 => argument.log2(),
         NativeFunction::MathSinh => argument.sinh(),
         NativeFunction::MathTanh => argument.tanh(),
+        // `sign` returns its argument unchanged for NaN and for either zero, so
+        // both signed zeros survive.
+        NativeFunction::MathSign => {
+            if argument.is_nan() || argument == 0.0 {
+                argument
+            } else if argument.is_sign_negative() {
+                -1.0
+            } else {
+                1.0
+            }
+        }
+        NativeFunction::MathFround => f64::from(argument as f32),
         _ => return None,
     };
     Some(value)
