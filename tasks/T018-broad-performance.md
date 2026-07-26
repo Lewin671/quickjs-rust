@@ -7598,6 +7598,42 @@ report SHA-256 values are
 `68f6e3e8beb1f2b7415003310ff9d28628ff2107f5e7c2db130256f9a9168ae7`
 and `35cb2339ccb0aecd32279a0e2a984d55a84e6e17a947a81aff787811484ed2be`.
 
+### 2026-07-26 transactional redundant dense-load compaction
+
+The dynamic dense compiler now coalesces a repeated `DenseLoad` of the exact
+same leased receiver and already-computed index into its first Number register.
+The transformation happens before unique-store sinking and remaps every later
+instruction and local live-out, so ordinary, multi-array, and nested dense
+plans all retain the existing executors. A staged store clears every cached
+load, rather than relying on an alias or index-disjointness proof, because the
+transactional access layer must forward that write to every later source read.
+Thus no source name, input size, benchmark output, or special arithmetic is
+recognized; the compiler only removes duplicate pure reads within an otherwise
+unchanged numeric program.
+
+`dense/compiler/load_cse.rs` isolates the register-compaction pass from the
+translator. Its focused unit proves that duplicate loads share a register and
+that a following same-index load remains distinct after a store, including all
+dependent binary operands and local-write remapping. The existing nested
+forwarding integration test covers the corresponding runtime rule: a load
+after a staged store observes the forwarded value, not an old cache. The
+complete `qjs-runtime` suite passed 1,861 tests.
+
+The final same-host, interleaved seven-block external diagnostic compared
+release candidate SHA-256
+`52c6a3da2d2e7766fedf0a1893bae6e6ebf82a80829a265a63aca6973f21451b`
+against preceding-base SHA-256
+`f939a21874b68a92873c55dd02921e372aeb26af49aa7aa74efef828f72bdcfb`.
+All capability probes completed. Candidate/base medians were 1.00329x for
+Gaussian blur, **0.98191x for Kraken `audio-fft`**, 1.00235x for JSON
+financial parsing, and 1.00065x for `bitops-nsieve-bits`; the FFT case reached
+0.65116x candidate/QuickJS-NG. This is a 1.8% local FFT improvement with no
+control beyond the 1.03x ceiling, not a suite or final-goal claim
+(`claim_eligible: false`). The report, raw rows, and frozen manifest SHA-256
+values are `04c260467302d174163ac8445544eed1217c828a7ddfe7e0fd6d9c5d8e37cbf2`,
+`15ce05a6d832db0a9db19fd0b5b66e5a9c110f037815c3c0e66d8430c8c6a99e`, and
+`68f6e3e8beb1f2b7415003310ff9d28628ff2107f5e7c2db130256f9a9168ae7`.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an

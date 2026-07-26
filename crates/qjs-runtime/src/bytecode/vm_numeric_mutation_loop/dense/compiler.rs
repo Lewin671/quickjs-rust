@@ -1,6 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::*;
+use load_cse::eliminate_redundant_dense_loads;
+
+mod load_cse;
 
 #[derive(Clone, Debug)]
 enum AbstractValue {
@@ -717,6 +720,7 @@ pub(super) fn compile_dynamic(
     {
         return None;
     }
+    eliminate_redundant_dense_loads(&mut translator.operations, &mut translator.writes)?;
     let sunk_store = sink_unique_store(
         &mut translator.operations,
         &mut translator.writes,
