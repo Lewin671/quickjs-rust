@@ -157,6 +157,10 @@ pub(super) struct TypedLoopProgram {
     written_locals: Vec<u16>,
     /// Slots that must hold a dense-readable array on entry.
     receiver_slots: Vec<u32>,
+    /// Global bindings the region reads, in register order. The region provably
+    /// writes no global, so reading each one once on entry is equivalent to
+    /// reading it per iteration.
+    global_reads: Vec<(u16, String)>,
 }
 
 impl TypedLoopProgram {
@@ -203,6 +207,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         local_slots,
         written_locals,
         receiver_slots,
+        global_reads,
         ..
     } = builder;
     // A region that never leaves through its header test cannot be entered
@@ -219,6 +224,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         local_slots,
         written_locals,
         receiver_slots,
+        global_reads,
     })
 }
 
@@ -240,6 +246,7 @@ struct Builder<'a> {
     local_slots: Vec<(u16, u32)>,
     written_locals: Vec<u16>,
     receiver_slots: Vec<u32>,
+    global_reads: Vec<(u16, String)>,
     /// Abstract operand stack of (register, origin).
     stack: Vec<(u16, Origin)>,
     /// Stack depth recorded for each bytecode index reached by a jump, so a
@@ -262,6 +269,7 @@ impl<'a> Builder<'a> {
             local_slots: Vec::new(),
             written_locals: Vec::new(),
             receiver_slots: Vec::new(),
+            global_reads: Vec::new(),
             stack: Vec::new(),
             depths: vec![None; span],
             program_index: vec![None; span],
@@ -446,6 +454,37 @@ impl<'a> Builder<'a> {
         Some(Some(value_store + 5))
     }
 
+    /// Register seeded from the global binding `name`, allocating one if new.
+    fn global_register(&mut self, name: &str) -> Option<u16> {
+        if let Some((register, _)) = self
+            .global_reads
+            .iter()
+            .find(|(_, candidate)| candidate == name)
+        {
+            return Some(*register);
+        }
+        let register = self.fresh()?;
+        self.global_reads.push((register, name.to_owned()));
+        Some(register)
+    }
+
+    /// Whether the region contains any instruction that could write a global,
+    /// which would make a hoisted read observably stale.
+    fn region_writes_a_global(&self) -> bool {
+        self.bytecode.code[self.header..=self.backedge]
+            .iter()
+            .any(|op| {
+                matches!(
+                    op,
+                    Op::StoreGlobalStrict(_)
+                        | Op::StoreGlobalSloppy { .. }
+                        | Op::StoreLocalOrGlobalSloppy { .. }
+                        | Op::DefineGlobalVar(_)
+                        | Op::AppendStringLiteralGlobal { .. }
+                )
+            })
+    }
+
     /// Index of `slot` in the program's receiver list, adding it if new.
     fn receiver_index(&mut self, slot: u32) -> Option<u16> {
         if let Some(index) = self
@@ -555,6 +594,17 @@ impl<'a> Builder<'a> {
                     receiver,
                     index,
                 });
+                self.push(dst, Origin::Computed);
+            }
+            Op::LoadGlobal(name) => {
+                // A global read is hoisted to loop entry, which is only
+                // equivalent while the region writes no global at all.
+                if self.region_writes_a_global() {
+                    return None;
+                }
+                let register = self.global_register(name)?;
+                let dst = self.fresh()?;
+                self.emit(TypedOp::Move { dst, src: register });
                 self.push(dst, Origin::Computed);
             }
             Op::JumpIfFalse(target) => {
@@ -856,6 +906,18 @@ fn seed_registers(
             return None;
         }
     }
+    for (register, name) in &program.global_reads {
+        // The realm binding is the authority for a global; an accessor on the
+        // global object would be observable per read, so it declines.
+        if vm
+            .global_this_own_property(name)
+            .is_some_and(|property| property.is_accessor())
+        {
+            return None;
+        }
+        let value = vm.realm_binding_value(name)?;
+        registers[*register as usize] = Typed::from_value(&value)?;
+    }
     Some((registers, receivers))
 }
 
@@ -1066,6 +1128,41 @@ mod tests {
                 "function run() { var a = [1, 2];                   Object.defineProperty(a, '1', { value: 5, writable: false, configurable: true, enumerable: true });                   for (var i = 0; i < 2; i++) { a[i] = i + 10; }                   return a.join(','); }                 run();"
             ),
             Ok(Value::String("10,5".to_owned().into()))
+        );
+    }
+
+    #[test]
+    fn typed_loops_read_globals_only_when_that_is_equivalent() {
+        // A global read is hoisted to loop entry, which is equivalent because
+        // the region provably writes no global and cannot call user code.
+        assert_eq!(
+            eval(
+                "var k = 3; function run(n) { var s = 0;                   for (var i = 0; i < n; i++) { if (i % 7 > k) { s += k; } else { s -= k; } }                   return s; }                 run(14);"
+            ),
+            Ok(Value::Number(-6.0))
+        );
+        // Each entry re-reads, so a value changed between loops is picked up.
+        assert_eq!(
+            eval(
+                "var k = 1; function run() { var s = 0;                   for (var i = 0; i < 3; i++) { if (i > 0) { s += k; } else { s -= k; } }                   return s; }                 var first = run(); k = 10; first + ':' + run();"
+            ),
+            Ok(Value::String("1:10".to_owned().into()))
+        );
+        // A region that writes a global keeps the observable path, so every
+        // iteration sees the previous one's write.
+        assert_eq!(
+            eval(
+                "var g = 5; function run() { var s = 0; for (var i = 0; i < 4; i++) { s += g; g = g + 1; } return s + ':' + g; } run();"
+            ),
+            Ok(Value::String("26:9".to_owned().into()))
+        );
+        // An accessor on the global object is called once per read, so the
+        // region declines.
+        assert_eq!(
+            eval(
+                "var calls = 0;                 Object.defineProperty(globalThis, 'probe', { get: function () { calls++; return 2; }, configurable: true });                 function run() { var s = 0; for (var i = 0; i < 5; i++) { if (i > 1) { s += probe; } else { s -= probe; } } return s; }                 var result = run(); result + ':' + calls;"
+            ),
+            Ok(Value::String("2:5".to_owned().into()))
         );
     }
 
