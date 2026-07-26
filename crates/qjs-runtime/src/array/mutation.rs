@@ -148,6 +148,18 @@ pub(crate) fn native_array_prototype_push(
         return Err(push_length_error());
     }
 
+    // An ordinary dense array cannot observe the per-index property protocol
+    // the specification describes, so append straight to its elements.
+    if let Value::Array(array) = &this_value
+        && let Some(length) =
+            array.with_plain_dense_mutation(env, argument_values.len(), |elements| {
+                elements.extend(argument_values.iter().cloned());
+                elements.len()
+            })
+    {
+        return Ok(Value::Number(length as f64));
+    }
+
     let source = array_like_length(this_value, "Array.prototype.push", env)?;
     let receiver = source.receiver;
     let length = source.length;

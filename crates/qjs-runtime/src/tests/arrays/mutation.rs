@@ -359,3 +359,65 @@ fn array_mutators_dispatch_proxy_delete_internal_method() {
         Ok(Value::String("0|:0|:1|:0|".to_owned().into()))
     );
 }
+
+#[test]
+fn dense_structural_mutations_match_the_generic_algorithm() {
+    // The dense fast path must produce exactly what the per-index algorithm
+    // does, including return values, length updates, and argument order.
+    assert_eq!(
+        eval(
+            "var a = [1, 2, 3];\
+             var pushed = a.push(4, 5);\
+             var shifted = a.shift();\
+             var unshifted = a.unshift(0, -1);\
+             [pushed, shifted, unshifted, a.join(','), a.length].join('|');"
+        ),
+        Ok(Value::String("5|1|6|0,-1,2,3,4,5|6".to_owned().into()))
+    );
+    assert_eq!(
+        eval("var a = []; [a.shift(), a.length, a.push(), a.unshift()].join(':');"),
+        Ok(Value::String(":0:0:0".to_owned().into()))
+    );
+    // A hole, an own indexed descriptor, a frozen array, and a non-writable
+    // length all keep the observable path.
+    assert_eq!(
+        eval("var a = [1, , 3]; a.shift(); [a.length, 0 in a, a[1]].join(':');"),
+        Ok(Value::String("2:false:3".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var a = [1, 2]; Object.defineProperty(a, '0', { value: 9, writable: false, configurable: false });\
+             var threw = false; try { a.shift(); } catch (error) { threw = error instanceof TypeError; }\
+             threw + ':' + a.join(',');"
+        ),
+        Ok(Value::String("true:9,2".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var a = Object.freeze([1, 2]); var threw = false;\
+             try { a.push(3); } catch (error) { threw = error instanceof TypeError; }\
+             threw + ':' + a.length;"
+        ),
+        Ok(Value::String("true:2".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var a = [1]; Object.preventExtensions(a); var threw = false;\
+             try { a.push(2); } catch (error) { threw = error instanceof TypeError; }\
+             threw + ':' + a.length;"
+        ),
+        Ok(Value::String("true:1".to_owned().into()))
+    );
+    // An indexed property anywhere on the prototype chain must still intercept
+    // the newly created index.
+    assert_eq!(
+        eval(
+            "var log = '';\
+             Object.defineProperty(Object.prototype, '0', { configurable: true,\
+               set: function (value) { log += 'set' + value; }, get: function () { return 'proto'; } });\
+             var a = []; a.push(7); var result = log + ':' + a.length + ':' + a[0];\
+             delete Object.prototype[0]; result;"
+        ),
+        Ok(Value::String("set7:1:proto".to_owned().into()))
+    );
+}

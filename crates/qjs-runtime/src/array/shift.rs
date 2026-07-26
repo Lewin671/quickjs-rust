@@ -14,6 +14,18 @@ pub(crate) fn native_array_prototype_shift(
         return Err(shift_length_error());
     }
 
+    if let Value::Array(array) = &this_value
+        && let Some(first) = array.with_plain_dense_mutation(env, 0, |elements| {
+            if elements.is_empty() {
+                Value::Undefined
+            } else {
+                elements.remove(0)
+            }
+        })
+    {
+        return Ok(first);
+    }
+
     let source = array_like_length(this_value, "Array.prototype.shift", env)?;
     let receiver = source.receiver;
     let length = source.length;

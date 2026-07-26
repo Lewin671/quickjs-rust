@@ -17,6 +17,16 @@ pub(crate) fn native_array_prototype_unshift(
         return Err(unshift_length_error());
     }
 
+    if let Value::Array(array) = &this_value
+        && let Some(length) =
+            array.with_plain_dense_mutation(env, argument_values.len(), |elements| {
+                elements.splice(0..0, argument_values.iter().cloned());
+                elements.len()
+            })
+    {
+        return Ok(Value::Number(length as f64));
+    }
+
     let source = array_like_length(this_value, "Array.prototype.unshift", env)?;
     let receiver = source.receiver;
     let length = source.length;

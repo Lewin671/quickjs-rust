@@ -289,6 +289,76 @@ impl ArrayRef {
         Some(read(&elements))
     }
 
+    /// Exposes the element vector for a structural mutation — `push`, `shift`,
+    /// `unshift` — when nothing observable can intercept it.
+    ///
+    /// The generic algorithms those methods are specified with move elements
+    /// one property at a time, formatting every index into a string. That is
+    /// only observable for an exotic receiver: an array with fully dense
+    /// storage, no own indexed or named descriptors, a writable length, an
+    /// extensible body, and a prototype chain free of indexed properties
+    /// behaves identically when its element vector is edited directly.
+    ///
+    /// `growth` is the largest number of elements the mutation may add; the
+    /// fast path declines rather than growing past the dense-storage limit,
+    /// and a growing mutation additionally requires a prototype chain that
+    /// cannot intercept the new indexed properties.
+    pub(crate) fn with_plain_dense_mutation<R>(
+        &self,
+        env: &CallEnv,
+        growth: usize,
+        mutate: impl FnOnce(&mut Vec<Value>) -> R,
+    ) -> Option<R> {
+        if self.0.frozen.get()
+            || self.0.sealed.get()
+            || !self.0.extensible.get()
+            || !self.0.length_writable.get()
+            || !self.0.holes_are_empty()
+            || !self.0.properties_are_empty()
+        {
+            return None;
+        }
+        if growth > 0 {
+            match self.0.prototype_override() {
+                Some(Some(Prototype::Object(prototype))) => {
+                    if prototype.chain_intercepts_index_write() {
+                        return None;
+                    }
+                }
+                Some(Some(_)) => return None,
+                Some(None) => {}
+                None => {
+                    if crate::array_prototype(env)
+                        .is_none_or(|prototype| prototype.chain_intercepts_index_write())
+                    {
+                        return None;
+                    }
+                }
+            }
+        } else {
+            match self.0.prototype_override() {
+                Some(Some(_)) => return None,
+                Some(None) => {}
+                None => {
+                    if crate::array_prototype(env)
+                        .is_some_and(|prototype| prototype.has_own_index_property())
+                    {
+                        return None;
+                    }
+                }
+            }
+        }
+        let mut elements = self.0.elements.try_borrow_mut().ok()?;
+        if self.0.length.get() != elements.len()
+            || elements.len().checked_add(growth)? > MAX_DENSE_STORAGE_LENGTH
+        {
+            return None;
+        }
+        let result = mutate(&mut elements);
+        self.0.length.set(elements.len());
+        Some(result)
+    }
+
     /// Reads one element directly when ordinary property lookup cannot observe a
     /// different value. Callers should re-check this per access because arrays
     /// can become sparse or gain intercepting descriptors while iteration is in

@@ -1173,6 +1173,29 @@ impl ObjectRef {
         self.0.index_property_count.get() > 0
     }
 
+    /// Whether creating a new indexed property on an object with this
+    /// prototype could be intercepted anywhere up the chain.
+    ///
+    /// `CreateDataProperty` on a receiver that has no own property at the key
+    /// still walks the prototype chain looking for a setter or a non-writable
+    /// data property, so a fast path that writes an element directly may only
+    /// run when the whole chain is ordinary and indexless. An exotic link — a
+    /// proxy, a callable, or a live array prototype — declines.
+    pub(crate) fn chain_intercepts_index_write(&self) -> bool {
+        let mut current = self.clone();
+        for _ in 0..16 {
+            if current.has_own_index_property() {
+                return true;
+            }
+            match current.prototype_slot() {
+                None => return false,
+                Some(Prototype::Object(next)) => current = next,
+                Some(_) => return true,
+            }
+        }
+        true
+    }
+
     pub(crate) fn symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
         self.own_symbol_property(symbol).or_else(|| {
             self.0
