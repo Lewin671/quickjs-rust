@@ -355,24 +355,24 @@ impl<'a> JsonParser<'a> {
 
     fn value<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
         self.skip_whitespace();
-        match self.peek() {
-            Some('"') => self.string_node::<PRESERVE_METADATA>(),
-            Some('[') => self.array::<PRESERVE_METADATA>(),
-            Some('{') => self.object::<PRESERVE_METADATA>(),
-            Some('t') => self.literal::<PRESERVE_METADATA>("true", Value::Boolean(true)),
-            Some('f') => self.literal::<PRESERVE_METADATA>("false", Value::Boolean(false)),
-            Some('n') => self.literal::<PRESERVE_METADATA>("null", Value::Null),
-            Some('-' | '0'..='9') => self.number::<PRESERVE_METADATA>(),
+        match self.peek_byte() {
+            Some(b'"') => self.string_node::<PRESERVE_METADATA>(),
+            Some(b'[') => self.array::<PRESERVE_METADATA>(),
+            Some(b'{') => self.object::<PRESERVE_METADATA>(),
+            Some(b't') => self.literal::<PRESERVE_METADATA>("true", Value::Boolean(true)),
+            Some(b'f') => self.literal::<PRESERVE_METADATA>("false", Value::Boolean(false)),
+            Some(b'n') => self.literal::<PRESERVE_METADATA>("null", Value::Null),
+            Some(b'-' | b'0'..=b'9') => self.number::<PRESERVE_METADATA>(),
             _ => Err(self.syntax_error()),
         }
     }
 
     fn array<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
-        self.expect_char('[')?;
+        self.expect_byte(b'[')?;
         let mut values = Vec::new();
         let mut children = PRESERVE_METADATA.then(Vec::new);
         self.skip_whitespace();
-        if self.consume_char(']') {
+        if self.consume_byte(b']') {
             return Ok(JsonNode {
                 value: Value::Array(ArrayRef::new(Vec::new())),
                 source: None,
@@ -391,10 +391,10 @@ impl<'a> JsonParser<'a> {
                 values.push(child.value);
             }
             self.skip_whitespace();
-            if self.consume_char(']') {
+            if self.consume_byte(b']') {
                 break;
             }
-            self.expect_char(',')?;
+            self.expect_byte(b',')?;
         }
         Ok(JsonNode {
             value: Value::Array(ArrayRef::new(values)),
@@ -406,11 +406,11 @@ impl<'a> JsonParser<'a> {
     }
 
     fn object<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
-        self.expect_char('{')?;
+        self.expect_byte(b'{')?;
         let mut properties = OrderedDataPropertyBuilder::new();
         let mut children = PRESERVE_METADATA.then(Vec::new);
         self.skip_whitespace();
-        if self.consume_char('}') {
+        if self.consume_byte(b'}') {
             return Ok(JsonNode {
                 value: Value::Object(properties.finish(object_prototype(self.env))),
                 source: None,
@@ -422,12 +422,12 @@ impl<'a> JsonParser<'a> {
 
         loop {
             self.skip_whitespace();
-            if self.peek() != Some('"') {
+            if self.peek_byte() != Some(b'"') {
                 return Err(self.syntax_error());
             }
             let key = self.string_rc()?;
             self.skip_whitespace();
-            self.expect_char(':')?;
+            self.expect_byte(b':')?;
             let child = self.value::<PRESERVE_METADATA>()?;
             if let Some(children) = children.as_mut() {
                 properties.insert(key.clone(), child.value.clone());
@@ -436,10 +436,10 @@ impl<'a> JsonParser<'a> {
                 properties.insert(key, child.value);
             }
             self.skip_whitespace();
-            if self.consume_char('}') {
+            if self.consume_byte(b'}') {
                 break;
             }
-            self.expect_char(',')?;
+            self.expect_byte(b',')?;
         }
         Ok(JsonNode {
             value: Value::Object(properties.finish(object_prototype(self.env))),
@@ -499,7 +499,7 @@ impl<'a> JsonParser<'a> {
     /// backslash, or control bytes, so a byte scan is sufficient except for
     /// the runtime's narrow Host UTF-8 sentinel-overlap range.
     fn scan_string(&mut self) -> Result<JsonStringScan, RuntimeError> {
-        self.expect_char('"')?;
+        self.expect_byte(b'"')?;
         let bytes = self.source.as_bytes();
         let content_start = self.cursor;
         let check_host_sentinel = matches!(self.source_mode, JsonSourceMode::HostUtf8);
@@ -627,42 +627,42 @@ impl<'a> JsonParser<'a> {
 
     fn number<const PRESERVE_METADATA: bool>(&mut self) -> Result<JsonNode, RuntimeError> {
         let start = self.cursor;
-        self.consume_char('-');
-        match self.peek() {
-            Some('0') => {
-                self.next_char();
-                if matches!(self.peek(), Some('0'..='9')) {
+        self.consume_byte(b'-');
+        match self.peek_byte() {
+            Some(b'0') => {
+                self.advance_ascii();
+                if matches!(self.peek_byte(), Some(b'0'..=b'9')) {
                     return Err(self.syntax_error());
                 }
             }
-            Some('1'..='9') => {
-                self.next_char();
-                while matches!(self.peek(), Some('0'..='9')) {
-                    self.next_char();
+            Some(b'1'..=b'9') => {
+                self.advance_ascii();
+                while matches!(self.peek_byte(), Some(b'0'..=b'9')) {
+                    self.advance_ascii();
                 }
             }
             _ => return Err(self.syntax_error()),
         }
 
-        if self.consume_char('.') {
-            if !matches!(self.peek(), Some('0'..='9')) {
+        if self.consume_byte(b'.') {
+            if !matches!(self.peek_byte(), Some(b'0'..=b'9')) {
                 return Err(self.syntax_error());
             }
-            while matches!(self.peek(), Some('0'..='9')) {
-                self.next_char();
+            while matches!(self.peek_byte(), Some(b'0'..=b'9')) {
+                self.advance_ascii();
             }
         }
 
-        if matches!(self.peek(), Some('e' | 'E')) {
-            self.next_char();
-            if matches!(self.peek(), Some('+' | '-')) {
-                self.next_char();
+        if matches!(self.peek_byte(), Some(b'e' | b'E')) {
+            self.advance_ascii();
+            if matches!(self.peek_byte(), Some(b'+' | b'-')) {
+                self.advance_ascii();
             }
-            if !matches!(self.peek(), Some('0'..='9')) {
+            if !matches!(self.peek_byte(), Some(b'0'..=b'9')) {
                 return Err(self.syntax_error());
             }
-            while matches!(self.peek(), Some('0'..='9')) {
-                self.next_char();
+            while matches!(self.peek_byte(), Some(b'0'..=b'9')) {
+                self.advance_ascii();
             }
         }
 
@@ -692,35 +692,54 @@ impl<'a> JsonParser<'a> {
         }
     }
 
-    fn expect_char(&mut self, expected: char) -> Result<(), RuntimeError> {
-        if self.consume_char(expected) {
+    #[inline(always)]
+    fn expect_byte(&mut self, expected: u8) -> Result<(), RuntimeError> {
+        if self.consume_byte(expected) {
             Ok(())
         } else {
             Err(self.syntax_error())
         }
     }
 
-    fn consume_char(&mut self, expected: char) -> bool {
-        if self.peek() == Some(expected) {
-            self.next_char();
+    #[inline(always)]
+    fn consume_byte(&mut self, expected: u8) -> bool {
+        debug_assert!(expected.is_ascii());
+        if self.peek_byte() == Some(expected) {
+            self.cursor += 1;
             true
         } else {
             false
         }
     }
 
+    #[inline(always)]
+    fn advance_ascii(&mut self) {
+        debug_assert!(self.peek_byte().is_some_and(|byte| byte.is_ascii()));
+        self.cursor += 1;
+    }
+
+    /// JSON's structural syntax and number grammar are ASCII. Keeping those
+    /// scans in bytes avoids repeatedly constructing a UTF-8 character
+    /// iterator, while string decoding below remains Unicode-aware.
+    #[inline(always)]
     fn skip_whitespace(&mut self) {
-        while matches!(self.peek(), Some('\t' | '\n' | '\r' | ' ')) {
-            self.next_char();
+        while matches!(self.peek_byte(), Some(b'\t' | b'\n' | b'\r' | b' ')) {
+            self.advance_ascii();
         }
     }
 
-    fn peek(&self) -> Option<char> {
-        self.source[self.cursor..].chars().next()
+    #[inline(always)]
+    fn peek_byte(&self) -> Option<u8> {
+        self.source.as_bytes().get(self.cursor).copied()
     }
 
     fn next_char(&mut self) -> Option<char> {
-        let ch = self.peek()?;
+        let byte = self.peek_byte()?;
+        if byte.is_ascii() {
+            self.cursor += 1;
+            return Some(char::from(byte));
+        }
+        let ch = self.source[self.cursor..].chars().next()?;
         self.cursor += ch.len_utf8();
         Some(ch)
     }
@@ -864,6 +883,17 @@ mod tests {
             value.get("文😀"),
             Some(Value::String(crate::JsString::from("plain value")))
         );
+    }
+
+    #[test]
+    fn ascii_syntax_scanning_never_steps_into_utf8_content() {
+        let env = test_env();
+        assert!(parse_json_text(r#" { "文" : [ 12, "😀" ] } "#, &env).is_ok());
+
+        let mut parser = JsonParser::new("12文", &env, JsonSourceMode::RuntimeWtf16);
+        assert!(parser.value::<false>().is_ok());
+        assert_eq!(parser.cursor, 2);
+        assert!(parser.source.is_char_boundary(parser.cursor));
     }
 
     #[test]

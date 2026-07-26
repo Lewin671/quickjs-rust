@@ -7634,6 +7634,41 @@ values are `04c260467302d174163ac8445544eed1217c828a7ddfe7e0fd6d9c5d8e37cbf2`,
 `15ce05a6d832db0a9db19fd0b5b66e5a9c110f037815c3c0e66d8430c8c6a99e`, and
 `68f6e3e8beb1f2b7415003310ff9d28628ff2107f5e7c2db130256f9a9168ae7`.
 
+### 2026-07-26 ASCII JSON syntax scanning
+
+The JSON parser's structural-token and number scanner previously advanced its
+UTF-8 cursor through repeated one-character iterator construction. JSON
+punctuation, whitespace, literals, and number grammar are all ASCII, so this
+unit uses a bounded byte cursor for those paths. String decoding remains
+Unicode-aware: non-ASCII string content still goes through the existing
+character-aware decoder, including the Runtime WTF-16 and Host UTF-8 sentinel
+rules. A non-ASCII byte outside an ASCII grammar token is never advanced over
+by the fast path, so parsing retains the existing syntax-error behavior.
+
+The focused parser regression mixes ASCII syntax with Unicode keys and values,
+then verifies that a number followed by UTF-8 content stops at a character
+boundary. The focused JSON suite passed 19 tests, and the full
+`qjs-runtime` suite later passed 1,862 tests.
+
+The final same-host, interleaved seven-block external diagnostic compared
+release candidate SHA-256
+`ea8be2c069f82d1ee78001d5b22c21c4f8da00645d56da94a0bde0069171ee50`
+against preceding-base SHA-256
+`52c6a3da2d2e7766fedf0a1893bae6e6ebf82a80829a265a63aca6973f21451b`
+and QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+All capability probes completed. Candidate/base medians were 0.98896x for
+Gaussian blur, 0.99580x for audio FFT, **0.83533x for Kraken
+`json-parse-financial`**, and 1.00255x for `bitops-nsieve-bits`. JSON
+financial parsing reached **0.44772x candidate/QuickJS-NG**, crossing the
+2x-per-case threshold through a parser mechanism shared by all JSON input,
+not a workload-specific fast path. This remains a diagnostic partial
+portfolio rather than a suite or final-goal claim (`claim_eligible: false`);
+the report, raw rows, and frozen manifest SHA-256 values are
+`d5c89bb04accedafcff643534d873fc54b283fad926bcf048fffa1a577aacfd0`,
+`163d543c93f75c92f3f9ced14afe5e75d47fab9a198d9a903547c5bbacbdea1c`, and
+`68f6e3e8beb1f2b7415003310ff9d28628ff2107f5e7c2db130256f9a9168ae7`.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
