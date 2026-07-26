@@ -1107,7 +1107,13 @@ impl Compiler {
         body: &Stmt,
         result_slot: usize,
     ) -> Result<(), RuntimeError> {
-        self.compile_stmt(body)?;
+        // A brace-less body is one statement, not a statement list, so it takes
+        // the same discarded-value treatment a braced body's statements get.
+        // Without it `for (...) s += "x";` produced a value the loop stored,
+        // which kept the string alive and made the append quadratic.
+        if !self.compile_statement_list_entry(body)? {
+            return Ok(());
+        }
         self.emit(Op::StoreLocal(result_slot));
         Ok(())
     }

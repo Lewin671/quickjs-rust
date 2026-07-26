@@ -378,3 +378,34 @@ fn counted_loops_with_literal_bounds_match_local_bound_results() {
         Ok(Value::String("6:4".to_owned().into()))
     );
 }
+
+#[test]
+fn brace_less_loop_bodies_match_braced_ones() {
+    // A brace-less body is one statement, not a statement list, and used to
+    // keep its value in the loop's completion temporary — which made a string
+    // append quadratic and hid the body from the specialized loop tiers.
+    assert_eq!(
+        eval("function m(){ var s = ''; for (var i = 0; i < 4; i++) s += 'ab'; return s; } m();"),
+        Ok(Value::String("abababab".to_owned().into()))
+    );
+    assert_eq!(
+        eval("function m(){ var s = 0; for (var i = 0; i < 5; i++) s += i; return s; } m();"),
+        Ok(Value::Number(10.0))
+    );
+    // The loop's own completion value is still observable at script level.
+    assert_eq!(
+        eval("var t = 0; for (var i = 0; i < 3; i++) t += i;"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("eval('var u = 0; for (var i = 0; i < 3; i++) u += i;');"),
+        Ok(Value::Number(3.0))
+    );
+    // `break`, `continue`, and a nested brace-less body keep working.
+    assert_eq!(
+        eval(
+            "function m(){ var s = ''; outer: for (var i = 0; i < 4; i++) for (var j = 0; j < 4; j++) { if (j > i) continue outer; s += i + '' + j; } return s; } m();"
+        ),
+        Ok(Value::String("00101120212230313233".to_owned().into()))
+    );
+}

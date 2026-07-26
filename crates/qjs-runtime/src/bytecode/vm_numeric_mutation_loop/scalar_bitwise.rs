@@ -509,7 +509,10 @@ pub(super) struct ScalarBitwiseLoopPlan {
     exit: usize,
     counter_slot: usize,
     accumulator_slot: usize,
-    result_slot: usize,
+    /// Slot the loop body's statement completion is stored in, where the body
+    /// produces one. A brace-less body whose value nobody observes writes no
+    /// completion at all.
+    result_slot: Option<usize>,
     limit: NumericSource,
     operand: NumericSource,
     recurrence: BitwiseRecurrence,
@@ -558,22 +561,23 @@ impl ScalarBitwiseLoopPlan {
             return None;
         };
         let recurrence = BitwiseRecurrence::compile(*recurrence)?;
-        if !matches!(code.get(cursor + 3), Some(Op::Dup)) {
-            return None;
-        }
+        let (write_op, result_slot, tail) = if matches!(code.get(cursor + 3), Some(Op::Dup)) {
+            let Some(Op::StoreLocal(result_slot)) = code.get(cursor + 5) else {
+                return None;
+            };
+            (code.get(cursor + 4)?, Some(*result_slot), cursor + 6)
+        } else {
+            (code.get(cursor + 3)?, None, cursor + 4)
+        };
         let accumulator_write =
-            ScalarWrite::compile_accumulator(bytecode, &accumulator_read, code.get(cursor + 4)?)?;
+            ScalarWrite::compile_accumulator(bytecode, &accumulator_read, write_op)?;
         let accumulator_slot = accumulator_write.slot();
         if accumulator_slot == *counter_slot
             || matches!(limit, NumericSource::Local(slot) if slot == *counter_slot || slot == accumulator_slot)
         {
             return None;
         }
-        let Op::StoreLocal(result_slot) = code.get(cursor + 5)? else {
-            return None;
-        };
 
-        let tail = cursor + 6;
         if !matches!(code.get(tail), Some(Op::LoadLocal(slot)) if slot == counter_slot)
             || !matches!(code.get(tail + 1), Some(Op::ToNumeric))
             || !matches!(code.get(tail + 2), Some(Op::Dup))
@@ -588,8 +592,8 @@ impl ScalarBitwiseLoopPlan {
         if !matches!(code.get(tail + 5), Some(Op::Pop))
             || !matches!(code.get(tail + 6), Some(Op::Jump(target)) if target == &header)
             || tail + 6 != backedge
-            || *result_slot == *counter_slot
-            || *result_slot == accumulator_slot
+            || result_slot.is_some_and(|slot| slot == *counter_slot)
+            || result_slot.is_some_and(|slot| slot == accumulator_slot)
         {
             return None;
         }
@@ -600,7 +604,7 @@ impl ScalarBitwiseLoopPlan {
             exit: *exit,
             counter_slot: *counter_slot,
             accumulator_slot,
-            result_slot: *result_slot,
+            result_slot,
             limit,
             operand,
             recurrence,
@@ -621,7 +625,9 @@ impl ScalarBitwiseLoopPlan {
         if vm.direct_eval_with_stack
             || vm.bytecode.contains_direct_eval()
             || vm.bytecode.contains_with()
-            || !vm.slot_is_authoritative(self.result_slot)
+            || self
+                .result_slot
+                .is_some_and(|slot| !vm.slot_is_authoritative(slot))
         {
             return ScalarBitwiseLoopRun::suppress();
         }
@@ -722,7 +728,9 @@ impl ScalarBitwiseLoopPlan {
         }
         counter_write.commit_non_realm(vm, counter);
         accumulator_write.commit_non_realm(vm, accumulator);
-        vm.locals[self.result_slot] = Some(Value::Number(accumulator));
+        if let Some(slot) = self.result_slot {
+            vm.locals[slot] = Some(Value::Number(accumulator));
+        }
         vm.ip = self.exit + 1;
         #[cfg(test)]
         SCALAR_BITWISE_PUBLICATION_COMMITS.with(|commits| commits.set(commits.get() + 1));
@@ -969,7 +977,10 @@ mod tests {
         if let Some(slot) = plan.limit_slot() {
             vm.locals[slot] = Some(Value::Number(4.0));
         }
-        let result_before = vm.locals[plan.result_slot].clone();
+        let result_slot = plan
+            .result_slot
+            .expect("tracked script loop stores a completion");
+        let result_before = vm.locals[result_slot].clone();
         let ip_before = vm.ip;
         SCALAR_BITWISE_PRECOMMIT_REALM_IDENTITY_SWAP.with(|swap| swap.set(Some("identityValue")));
 
@@ -979,7 +990,7 @@ mod tests {
         assert_eq!(publication_commits(), 0);
         assert_eq!(deopts(), 1);
         assert_eq!(vm.ip, ip_before);
-        assert_eq!(vm.locals[plan.result_slot], result_before);
+        assert_eq!(vm.locals[result_slot], result_before);
         assert_eq!(vm.locals[plan.counter_slot], Some(Value::Number(1.0)));
         assert_eq!(vm.locals[plan.accumulator_slot], Some(Value::Number(0.0)));
         assert_eq!(

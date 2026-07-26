@@ -193,7 +193,10 @@ pub(super) struct NumericLoopPlan {
     counter_write: NumericLoopWrite,
     limit_slot: usize,
     accumulator_write: NumericLoopWrite,
-    block_result_slot: usize,
+    /// Slot the body's statement completion is stored in, where the body
+    /// produces one. A brace-less body whose value nobody observes writes no
+    /// completion at all.
+    block_result_slot: Option<usize>,
     loop_result_slot: Option<usize>,
     selector: Option<NumericLoopSelector>,
     /// Shared so the per-backedge plan copy is a refcount bump rather than a
@@ -240,7 +243,10 @@ impl NumericLoopPlan {
         else {
             return None;
         };
-        if !matches!(code.get(*exit), Some(Op::Pop)) || backedge < header + 16 {
+        // Smallest recognizable body: the five-instruction header, one term
+        // reading a binding, its accumulation and discarded write, and the
+        // six-instruction counter tail.
+        if !matches!(code.get(*exit), Some(Op::Pop)) || backedge < header + 15 {
             return None;
         }
 
@@ -466,8 +472,10 @@ impl NumericLoopPlan {
 
         let accumulator_slot = accumulator_slot?;
         let accumulator_write = accumulator_write?;
-        let block_result_slot = block_result_slot?;
-        let mut mutable_slots = vec![*counter_slot, accumulator_slot, block_result_slot];
+        let mut mutable_slots = vec![*counter_slot, accumulator_slot];
+        if let Some(block_result_slot) = block_result_slot {
+            mutable_slots.push(block_result_slot);
+        }
         if let Some(loop_result_slot) = loop_result_slot {
             mutable_slots.push(loop_result_slot);
         }
@@ -510,11 +518,15 @@ impl NumericLoopPlan {
             let mut targets = vec![
                 self.counter_write.prepare(vm)?,
                 self.accumulator_write.prepare(vm)?,
-                NumericLoopWrite::Local {
-                    slot: self.block_result_slot,
-                }
-                .prepare(vm)?,
             ];
+            if let Some(block_result_slot) = self.block_result_slot {
+                targets.push(
+                    NumericLoopWrite::Local {
+                        slot: block_result_slot,
+                    }
+                    .prepare(vm)?,
+                );
+            }
             if let Some(loop_result_slot) = self.loop_result_slot {
                 targets.push(
                     NumericLoopWrite::Local {
@@ -549,8 +561,10 @@ impl NumericLoopPlan {
                 self.counter_write.slot(),
                 self.limit_slot,
                 self.accumulator_write.slot(),
-                self.block_result_slot,
             ];
+            if let Some(block_result_slot) = self.block_result_slot {
+                scalar_slots.push(block_result_slot);
+            }
             if let Some(loop_result_slot) = self.loop_result_slot {
                 scalar_slots.push(loop_result_slot);
             }

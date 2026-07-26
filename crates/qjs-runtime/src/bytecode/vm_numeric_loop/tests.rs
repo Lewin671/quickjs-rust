@@ -68,7 +68,13 @@ fn top_level_loop_plan_classifies_global_and_private_writes() {
         plans[0].accumulator_write,
         NumericLoopWrite::RealmGlobal { .. }
     ));
-    assert!(bytecode.local_is_compiler_temporary(plans[0].block_result_slot));
+    assert!(
+        bytecode.local_is_compiler_temporary(
+            plans[0]
+                .block_result_slot
+                .expect("a braced body stores its completion")
+        )
+    );
     assert!(plans[0].loop_result_slot.is_none());
     assert!(
         bytecode
