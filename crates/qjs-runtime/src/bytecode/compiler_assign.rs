@@ -3,7 +3,7 @@ use qjs_ast::{AssignmentOp, AssignmentTarget, Expr, Literal, UpdateOp};
 use crate::{RuntimeError, Value};
 
 use super::compiler::Compiler;
-use super::ir::Op;
+use super::ir::{NamedPropertyCache, Op};
 use super::util::{assignment_binary_op, parse_number_literal, unsupported_target};
 use super::vm_props::array_index_from_number;
 
@@ -476,6 +476,9 @@ impl Compiler {
         if matches!(object.as_ref(), Expr::Super { .. }) {
             return self.compile_super_member_compound_assign(property, op, value);
         }
+        if let qjs_ast::MemberProperty::Named(name) = property {
+            return self.compile_named_member_compound_assign(object, name, op, value);
+        }
         let object_slot = self.temp_local("assign_object");
         let key_slot = self.temp_local("assign_key");
         let value_slot = self.temp_local("assign_value");
@@ -505,6 +508,55 @@ impl Compiler {
                 self.emit(Op::Binary(assignment_binary_op(op)?));
                 self.emit(Op::StoreLocal(value_slot));
                 self.emit_member_store(object_slot, key_slot, value_slot);
+            }
+        }
+        Ok(())
+    }
+
+    /// Compiles `obj.name <op>= value` without materializing a static key.
+    ///
+    /// Named keys have no evaluation or ToPropertyKey side effects, but the
+    /// generic compound-assignment path still used to create a string local,
+    /// coerce it, and use `GetProp`/`SetProp`.  Capture the receiver once just
+    /// as that path does, then reuse the named property operations for both
+    /// sides of the read-modify-write sequence.
+    fn compile_named_member_compound_assign(
+        &mut self,
+        object: &Expr,
+        name: &str,
+        op: AssignmentOp,
+        value: &Expr,
+    ) -> Result<(), RuntimeError> {
+        let object_slot = self.temp_local("assign_object");
+        let value_slot = self.temp_local("assign_value");
+        self.compile_expr(object)?;
+        self.emit(Op::StoreLocal(object_slot));
+        self.emit(Op::GetPropNamed {
+            key: name.into(),
+            cache: NamedPropertyCache::for_local(object_slot),
+        });
+        match op {
+            AssignmentOp::LogicalAndAssign
+            | AssignmentOp::LogicalOrAssign
+            | AssignmentOp::NullishAssign => {
+                let jump = match op {
+                    AssignmentOp::LogicalAndAssign => self.emit(Op::JumpIfFalse(usize::MAX)),
+                    AssignmentOp::LogicalOrAssign => self.emit(Op::JumpIfTrue(usize::MAX)),
+                    AssignmentOp::NullishAssign => self.emit(Op::JumpIfNotNullish(usize::MAX)),
+                    _ => unreachable!(),
+                };
+                self.emit(Op::Pop);
+                self.compile_expr(value)?;
+                self.emit(Op::StoreLocal(value_slot));
+                self.emit_named_member_store(object_slot, name, value_slot);
+                let end = self.code.len();
+                self.patch_jump(jump, end);
+            }
+            _ => {
+                self.compile_expr(value)?;
+                self.emit(Op::Binary(assignment_binary_op(op)?));
+                self.emit(Op::StoreLocal(value_slot));
+                self.emit_named_member_store(object_slot, name, value_slot);
             }
         }
         Ok(())
@@ -617,6 +669,9 @@ impl Compiler {
         if matches!(object.as_ref(), Expr::Super { .. }) {
             return self.compile_super_member_update(property, op, prefix);
         }
+        if let qjs_ast::MemberProperty::Named(name) = property {
+            return self.compile_named_member_update(object, name, op, prefix);
+        }
         let object_slot = self.temp_local("update_object");
         let key_slot = self.temp_local("update_key");
         let old_slot = self.temp_local("update_old");
@@ -634,6 +689,43 @@ impl Compiler {
         self.emit(Op::Pop);
         self.emit(Op::LoadLocal(if prefix { new_slot } else { old_slot }));
         Ok(())
+    }
+
+    /// Compiles `obj.name++` / `++obj.name` without a temporary named key.
+    fn compile_named_member_update(
+        &mut self,
+        object: &Expr,
+        name: &str,
+        op: UpdateOp,
+        prefix: bool,
+    ) -> Result<(), RuntimeError> {
+        let object_slot = self.temp_local("update_object");
+        let old_slot = self.temp_local("update_old");
+        let new_slot = self.temp_local("update_new");
+        self.compile_expr(object)?;
+        self.emit(Op::StoreLocal(object_slot));
+        self.emit(Op::GetPropNamed {
+            key: name.into(),
+            cache: NamedPropertyCache::for_local(object_slot),
+        });
+        self.emit(Op::ToNumeric);
+        self.emit(Op::StoreLocal(old_slot));
+        self.emit(Op::LoadLocal(old_slot));
+        self.emit(Op::Update(op));
+        self.emit(Op::StoreLocal(new_slot));
+        self.emit_named_member_store(object_slot, name, new_slot);
+        self.emit(Op::Pop);
+        self.emit(Op::LoadLocal(if prefix { new_slot } else { old_slot }));
+        Ok(())
+    }
+
+    fn emit_named_member_store(&mut self, object_slot: usize, name: &str, value_slot: usize) {
+        self.emit(Op::LoadLocal(object_slot));
+        self.emit(Op::LoadLocal(value_slot));
+        self.emit(Op::SetPropNamed {
+            key: name.into(),
+            is_strict: self.strict,
+        });
     }
 
     pub(super) fn emit_member_store(
@@ -920,6 +1012,72 @@ mod tests {
                 .constants
                 .iter()
                 .all(|value| !matches!(value, Value::Number(number) if *number == 0.0))
+        );
+    }
+
+    #[test]
+    fn named_member_compound_assignments_and_updates_use_named_ops() {
+        let script = qjs_parser::parse_script(
+            "let object = { value: 1 }; object.value += 2; object.value &&= 4; object.value++; --object.value;",
+        )
+        .expect("source should parse");
+        let bytecode = compiler::compile_script(&script).expect("source should compile");
+
+        assert_eq!(
+            bytecode
+                .code
+                .iter()
+                .filter(|op| matches!(op, Op::GetPropNamed { .. }))
+                .count(),
+            4
+        );
+        assert_eq!(
+            bytecode
+                .code
+                .iter()
+                .filter(|op| matches!(op, Op::SetPropNamed { .. }))
+                .count(),
+            4
+        );
+        assert!(
+            bytecode
+                .code
+                .iter()
+                .all(|op| !matches!(op, Op::GetProp | Op::SetProp { .. }))
+        );
+        assert!(
+            bytecode
+                .local_names()
+                .all(|name| !name.starts_with("\0\0assign_key")
+                    && !name.starts_with("\0\0update_key"))
+        );
+    }
+
+    #[test]
+    fn named_member_compound_assignments_and_updates_preserve_receiver_and_access_order() {
+        assert_eq!(
+            eval(
+                "let first = { value: 1 }, second = { value: 10 }, receiver = first; \
+                 let assigned = (receiver.value += (receiver = second, 4)); \
+                 let order = ''; \
+                 let target = { \
+                   _value: 2, \
+                   get value() { order += 'get,'; return this._value; }, \
+                   set value(value) { order += 'set:' + value + ','; this._value = value; } \
+                 }; \
+                 let before = target.value++; \
+                 let lazy = { value: 0 }; \
+                 lazy.value &&= (order += 'rhs,', 1); \
+                 function base() { order += 'base,'; return null; } \
+                 function rhs() { order += 'rhs2,'; return 1; } \
+                 try { base().value += rhs(); } \
+                 catch (error) { order += error instanceof TypeError ? 'type,' : 'other,'; } \
+                 order + '|' + assigned + ':' + first.value + ':' + second.value \
+                   + ':' + before + ':' + target._value + ':' + lazy.value;"
+            ),
+            Ok(Value::String(
+                "get,set:3,base,type,|5:5:10:2:3:0".to_owned().into()
+            ))
         );
     }
 

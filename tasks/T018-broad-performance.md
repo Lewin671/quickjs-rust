@@ -7864,6 +7864,58 @@ the report, raw rows, and frozen manifest SHA-256 values are
 `41c4d929043e36c3bd325c365e9a7c3688b4eaec0af5c710582153caf807b499`, and
 `68f6e3e8beb1f2b7415003310ff9d28628ff2107f5e7c2db130256f9a9168ae7`.
 
+### 2026-07-26 specialize named compound property access
+
+Static property names have no observable `ToPropertyKey` work, but before this
+unit `obj.name += value`, logical compound assignments, and `obj.name++` still
+captured a string key in a compiler temporary, coerced it, and dispatched
+through generic `GetProp`/`SetProp`. The compiler now captures the receiver
+once and emits the existing `GetPropNamed` (with a local-receiver
+`NamedPropertyCache`) and `SetPropNamed` operations for these named,
+non-`super`, non-private forms. Computed keys, private fields, and `super`
+continue through their existing paths. Accessors, proxies, exotic objects, and
+failed/null receivers remain protected by the named operations' existing
+fallback behavior; no workload identity, result, or iteration count is part of
+the admission rule.
+
+Focused compiler coverage proves that named compound assignments and updates
+emit no generic property op or `assign_key`/`update_key` temporary. Runtime
+coverage verifies receiver capture across RHS rebinding, getter/setter order,
+lazy logical assignment, and a null receiver throwing before its RHS executes.
+The complete `qjs-runtime` suite passed 1,873 tests, and the curated Test262
+subset passed 5,159/5,159 cases.
+
+The complete three-block external preview compared candidate SHA-256
+`e72fe8cd70141c85ece3f12ac0abd365561a9e5a7081569f26c01645b7eca49b`
+against exact preceding-base SHA-256
+`ea8df6fb4b81d5b877fa84c47d367316a6c6b0aecf35a913ea403de768143333`
+and pinned QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+All 44 comparable candidate/base cases ran successfully. Suite geometric
+candidate/base ratios were 0.992x for the JetStream subset, 0.998x for Kraken,
+and 0.974x for SunSpider; the largest candidate/base movement in the full
+portfolio was a 1.016x `imaging-desaturate` regression. `imaging-gaussian-blur`
+remained uncomparable because both candidate and exact base hit the existing
+15-second timeout, while QuickJS-NG completed, so it is explicitly not counted
+as a win. The independently repeated seven-block three-case screen measured
+**0.94529x** for JetStream `hash-map`, **0.99867x** for Kraken `audio-fft`,
+and **0.57861x** for SunSpider `access-nbody`; the last is a 42.1% reduction
+in wall time from the general static read-modify-write mechanism. The final
+screen report, raw rows, and frozen manifest SHA-256 values are
+`382ddc1ef31904fb4539dff642202a4091f18613af52213d416713833ed02845`,
+`f3671defa1d49d3903aed5e37e70f1eeb28f21f2f4bb92ad6bc4d228a5f52c85`, and
+`e4cab2fd747b992bdc6f11ac6646fccf97d246927e6db02105043e0b293737a3`.
+
+The complete 25-case broad-v2 local diagnostic also completed all 225 formal
+measurement rows with `ok` status. Its candidate/base geometric mean was
+0.997282x, with no case above 1.00348x; this confirms the external gain does
+not hide a broad-micro regression. Its raw SHA-256 is
+`ff753aa33de46c8356011776b4e40a31df6b7e73c36300b280af5795f97afebb`.
+That run deliberately remains non-claim diagnostic evidence: the shared worktree
+contained pre-existing user state and no clean build receipts were supplied, so
+the strict report correctly marked provenance unverified rather than emitting
+a report-grade conclusion.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
