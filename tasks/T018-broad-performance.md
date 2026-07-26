@@ -7749,6 +7749,46 @@ the report, raw rows, and frozen manifest SHA-256 values are
 `e5d463c63b8c34834dd4035af767c0fb7f8fa68b4d11d3261c27b7669e2b13b4`, and
 `68f6e3e8beb1f2b7415003310ff9d28628ff2107f5e7c2db130256f9a9168ae7`.
 
+### 2026-07-26 cache repeated nested dense array indices
+
+After instruction predecoding, profiles of eligible nested dense regions still
+showed repeated conversion of the same SSA Number register into an ordinary
+Array index. The nested-program compiler now counts dense load/store index
+register uses and assigns a cache slot only to a repeated register (up to eight
+slots). Each native inner-loop iteration gets a fresh `IndexCache`; its first
+use continues through the existing `array_index_from_number` conversion and
+later uses reuse only that validated result. Registers used once, and repeated
+registers beyond the fixed cache capacity, keep the direct conversion path.
+This is a program-shape property of every eligible nested dense plan, not a
+workload, source, or result detector.
+
+An invalid first conversion still declines the native iteration and takes the
+existing transactional fallback/replay path; the cache neither turns an
+invalid number into an index nor survives into a later iteration. Focused
+program tests cover repeated-register assignment, single-use exclusion, cache
+capacity, invalid conversion, and per-iteration freshness. The nested executor
+suite still covers store forwarding, replay, aliases, holes, accessors, and
+capture rejection. The complete `qjs-runtime` suite passed 1,869 tests and
+the QuickJS-NG comparison smoke suite passed before the final full gate.
+
+The final same-host, interleaved seven-block external diagnostic compared
+release candidate SHA-256
+`3d89913e8921344e4f86fadd6aa131206ad35489ed1329ed6ce85cd29c2ba446`
+against preceding-base SHA-256
+`9d51211efad575c2b7f86f10194842a57eb4376053e319a2ba2bea2f027de801`
+and QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+All capability probes completed. Candidate/base medians were 0.99600x for
+Gaussian blur, **0.97881x for Kraken `audio-fft`**, 1.00393x for JSON
+financial parsing, and 0.99853x for `bitops-nsieve-bits`. FFT reached
+**0.60077x candidate/QuickJS-NG**, a further 2.1% local improvement with no
+control above the 1.03x regression ceiling. This remains a diagnostic partial
+portfolio rather than a suite or final-goal claim (`claim_eligible: false`);
+the report, raw rows, and frozen manifest SHA-256 values are
+`46e4e8bd15e93889329e0c19f05876334cf0871298d761f86363e8eec3eedf70`,
+`766b13e012fa236f3b7c30135fe44d2bd0880d9eb1493a08ab7fce7507817aef`, and
+`68f6e3e8beb1f2b7415003310ff9d28628ff2107f5e7c2db130256f9a9168ae7`.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an

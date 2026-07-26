@@ -11,7 +11,9 @@ use std::{collections::BTreeSet, rc::Rc};
 
 use super::*;
 use input_prefix::{NestedInputPrefix, compact_inner_inputs};
-use program::{NestedInstruction, run_operation};
+use program::{
+    IndexCache, IndexResolver, NestedInstruction, NoIndexCache, assign_index_caches, run_operation,
+};
 
 mod input_prefix;
 mod program;
@@ -37,6 +39,7 @@ pub(in super::super) struct NestedDensePlan {
     receiver_slots: Vec<usize>,
     prelude: ScalarProgram,
     inner_operations: Vec<NestedInstruction>,
+    has_cached_indices: bool,
     inner_input_prefix: Option<NestedInputPrefix>,
     inner_writes: Vec<LocalWrite>,
     inner_counter_write: Register,
@@ -281,6 +284,8 @@ impl NestedDensePlan {
             .into_iter()
             .map(NestedInstruction::lower)
             .collect::<Option<Vec<_>>>()?;
+        let mut inner_operations = inner_operations;
+        let has_cached_indices = assign_index_caches(&mut inner_operations);
         let max_operations = prelude
             .operations
             .len()
@@ -300,6 +305,7 @@ impl NestedDensePlan {
             receiver_slots,
             prelude,
             inner_operations,
+            has_cached_indices,
             inner_input_prefix,
             inner_writes,
             inner_counter_write,
@@ -503,6 +509,38 @@ impl NestedDensePlan {
         input_prefix: Option<NestedInputPrefix>,
         dynamic_start: usize,
     ) -> bool {
+        if self.has_cached_indices {
+            let mut indices = IndexCache::new();
+            self.run_inner_iteration_with_indices(
+                access,
+                bank,
+                registers,
+                input_prefix,
+                dynamic_start,
+                &mut indices,
+            )
+        } else {
+            let mut indices = NoIndexCache;
+            self.run_inner_iteration_with_indices(
+                access,
+                bank,
+                registers,
+                input_prefix,
+                dynamic_start,
+                &mut indices,
+            )
+        }
+    }
+
+    fn run_inner_iteration_with_indices<I: IndexResolver>(
+        &self,
+        access: &mut MultiAccess<'_, '_>,
+        bank: &mut LocalBank,
+        registers: &mut [f64],
+        input_prefix: Option<NestedInputPrefix>,
+        dynamic_start: usize,
+        indices: &mut I,
+    ) -> bool {
         let old_counter = match bank.number(self.inner_counter) {
             Some(counter) => counter,
             None => return false,
@@ -531,7 +569,7 @@ impl NestedDensePlan {
             .enumerate()
         {
             let register = dynamic_start + offset;
-            let Some(value) = run_operation(operation, access, bank, registers) else {
+            let Some(value) = run_operation(operation, access, bank, registers, indices) else {
                 return false;
             };
             registers[register] = value;
