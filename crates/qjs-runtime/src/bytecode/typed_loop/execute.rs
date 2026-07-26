@@ -308,12 +308,6 @@ fn seed_registers(
     }
     let mut registers = vec![Typed::Undefined; program.register_count];
     for &(register, slot) in &program.local_slots {
-        // A receiver slot holds the array itself; its register is only ever the
-        // popped left operand of an element read, never a numeric operand, so
-        // the unboxed register file does not have to represent it.
-        if program.receiver_slots.contains(&slot) {
-            continue;
-        }
         let value = match vm.local_slot_value(slot as usize) {
             Some(value) => Typed::from_value(&value)?,
             None => Typed::Undefined,

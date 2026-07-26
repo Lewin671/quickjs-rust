@@ -597,6 +597,18 @@ mod tests {
             ),
             Ok(Value::Number(12.0))
         );
+        // An element that is an object, read through a frame-slot array: the
+        // receiver has to survive into the operand stack if the read leaves the
+        // fast path, so it cannot live in the unboxed register file.
+        assert_eq!(
+            eval(
+                "function run(n) { var rows = [{ x: 5 }, { x: 6 }], s = 0;\
+                   for (var i = 0; i < n; i++) { s += rows[i % 2].x; }\
+                   return s; }\
+                 run(9);"
+            ),
+            Ok(Value::Number(49.0))
+        );
         // Writing a field the region also reads keeps the object's own value.
         assert_eq!(
             eval(

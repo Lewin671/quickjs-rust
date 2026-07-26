@@ -711,9 +711,19 @@ impl<'a> Builder<'a> {
             Op::GetProp => {
                 let (index, _) = self.pop()?;
                 let (receiver_register, receiver_class, receiver) = self.stack.pop()?;
-                if receiver_class == Class::Boxed {
-                    // The receiver came from a property read or a global, so the
-                    // array is only known at run time.
+                if receiver_class == Class::Scalar {
+                    // An array is not something the scalar file can hold, so a
+                    // receiver has to come from a boxed register: that is also
+                    // what lets a deoptimization rebuild the operand stack.
+                    let Origin::Local(slot) = receiver else {
+                        return None;
+                    };
+                    self.discovered_boxed.push(slot);
+                    return None;
+                }
+                let Origin::Local(receiver_slot) = receiver else {
+                    // The receiver is a property read or a global, so the array
+                    // it names is only known at run time.
                     let dst = self.slot_boxed()?;
                     self.emit(TypedOp::ElementRead {
                         dst,
@@ -722,10 +732,10 @@ impl<'a> Builder<'a> {
                     });
                     self.push_boxed(dst, Origin::Computed);
                     return Some(());
-                }
-                let Origin::Local(receiver_slot) = receiver else {
-                    return None;
                 };
+                // A frame slot the region never writes is resolved to its array
+                // once per entry, which costs less than revalidating the slot on
+                // every element access.
                 let receiver = self.receiver_index(receiver_slot)?;
                 let dst = self.slot_scalar()?;
                 self.emit(TypedOp::DenseRead {
