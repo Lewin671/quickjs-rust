@@ -1725,3 +1725,30 @@ fn math_intrinsics_inline_into_counted_loops() {
         Ok(Value::String("222".to_owned().into()))
     );
 }
+
+/// The two-argument `Math` intrinsics inline into a counted loop too, and
+/// `max`/`min` disagree with Rust's own on NaN and on signed zero.
+#[test]
+fn two_argument_math_intrinsics_inline_into_counted_loops() {
+    assert_eq!(
+        eval(
+            "var s = 0;\
+             for (var i = 0; i < 40; i++) { s += Math.max(i, 20) + Math.min(i, 20) + Math.pow(i % 5, 2) + Math.atan2(i, 3); }\
+             s.toFixed(6);"
+        ),
+        Ok(Value::String("1871.282547".to_owned().into()))
+    );
+    assert_eq!(
+        eval("(1 / Math.max(-0, 0)) + ':' + (1 / Math.min(0, -0));"),
+        Ok(Value::String("Infinity:-Infinity".to_owned().into()))
+    );
+    // One NaN operand makes the whole call NaN, in a loop as well.
+    assert_eq!(
+        eval("var t = 0; for (var j = 0; j < 10; j++) { t += Math.max(j, NaN); } String(t);"),
+        Ok(Value::String("NaN".to_owned().into()))
+    );
+    assert_eq!(
+        eval("var w = ''; for (var k = 0; k < 3; k++) { w += String(Math.max('5', 2)); } w;"),
+        Ok(Value::String("555".to_owned().into()))
+    );
+}

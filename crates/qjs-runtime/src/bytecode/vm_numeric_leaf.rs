@@ -107,6 +107,8 @@ pub(super) enum NumericLoopCall {
     /// A `Math` intrinsic whose whole effect is a floating-point computation of
     /// its first argument.
     MathUnary(NativeFunction),
+    /// The same for one of two arguments.
+    MathBinary(NativeFunction),
     /// The callee returns the same number every time.
     Constant(f64),
     ArgumentAddConstants {
@@ -496,6 +498,36 @@ fn math_unary(native: NativeFunction, argument: f64) -> Option<f64> {
     Some(value)
 }
 
+/// A `Math` function of two arguments whose entire effect is a floating-point
+/// computation. `max`/`min` follow the spec's NaN and signed-zero rules rather
+/// than Rust's, which disagree on both.
+fn math_binary(native: NativeFunction, left: f64, right: f64) -> Option<f64> {
+    let value = match native {
+        NativeFunction::MathPow => crate::operations::number_exponentiate(left, right),
+        NativeFunction::MathAtan2 => left.atan2(right),
+        NativeFunction::MathMax => {
+            if left.is_nan() || right.is_nan() {
+                f64::NAN
+            } else if right > left || (right == 0.0 && left == 0.0 && right.is_sign_positive()) {
+                right
+            } else {
+                left
+            }
+        }
+        NativeFunction::MathMin => {
+            if left.is_nan() || right.is_nan() {
+                f64::NAN
+            } else if right < left || (right == 0.0 && left == 0.0 && right.is_sign_negative()) {
+                right
+            } else {
+                left
+            }
+        }
+        _ => return None,
+    };
+    Some(value)
+}
+
 impl NumericLoopCall {
     pub(super) fn prepare(
         function: &Function,
@@ -504,6 +536,9 @@ impl NumericLoopCall {
         forbidden_cells: &[Upvalue],
     ) -> Option<Self> {
         if let Some(native) = function.native {
+            if argument_count >= 2 && math_binary(native, 0.0, 0.0).is_some() {
+                return Some(Self::MathBinary(native));
+            }
             if argument_count >= 1 && math_unary(native, 0.0).is_some() {
                 return Some(Self::MathUnary(native));
             }
@@ -635,6 +670,7 @@ impl NumericLoopCall {
     pub(super) fn is_read_only(&self) -> bool {
         match self {
             Self::MathUnary(_)
+            | Self::MathBinary(_)
             | Self::Constant(_)
             | Self::ArgumentAddConstants { .. }
             | Self::ArgumentConstChain { .. }
@@ -660,6 +696,8 @@ impl NumericLoopCall {
             Self::MathUnary(native) => {
                 math_unary(*native, first_argument).expect("validated numeric intrinsic")
             }
+            Self::MathBinary(native) => math_binary(*native, first_argument, second_argument)
+                .expect("validated numeric intrinsic"),
             Self::Constant(value) => *value,
             Self::ArgumentAddConstants {
                 argument_index,
