@@ -328,3 +328,30 @@ fn rejects_set_methods_with_incompatible_receivers() {
     assert!(eval("(function () { return Set.prototype.has.call({}); })();").is_err());
     assert!(eval("(function () { return Set.prototype.size; })();").is_err());
 }
+
+#[test]
+fn indexed_set_storage_preserves_order_and_holes() {
+    assert_eq!(
+        eval(
+            "var s = new Set(); s.add('a'); s.add('b'); s.add('a'); s.delete('a'); s.add('a');\
+             Array.from(s).join(',') + '|' + s.size;"
+        ),
+        Ok(Value::String("b,a|2".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var s = new Set([-0, NaN, 0]);\
+             [s.has(0), s.has(-0), s.has(NaN), s.size, Array.from(s)[0]].join(':');"
+        ),
+        Ok(Value::String("true:true:true:2:0".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var s = new Set(); var total = 0;\
+             for (var i = 0; i < 200; i++) { s.add(i); if (i % 2 === 0) s.delete(i); }\
+             s.forEach(function (v) { total += v; });\
+             total + ':' + s.size + ':' + s.has(199) + ':' + s.has(198);"
+        ),
+        Ok(Value::String("10000:100:true:false".to_owned().into()))
+    );
+}

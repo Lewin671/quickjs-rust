@@ -52,6 +52,11 @@ impl ProxyRef {
         Rc::ptr_eq(&self.inner, &other.inner)
     }
 
+    /// Identity of the shared storage, for hashing this reference as a key.
+    pub(crate) fn address(&self) -> usize {
+        Rc::as_ptr(&self.inner) as usize
+    }
+
     pub(crate) fn target(&self) -> Value {
         self.target_result().unwrap_or(Value::Undefined)
     }

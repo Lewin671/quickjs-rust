@@ -1063,6 +1063,11 @@ impl ObjectRef {
         Rc::ptr_eq(&self.0, &other.0)
     }
 
+    /// Identity of the shared storage, for hashing this reference as a key.
+    pub(crate) fn address(&self) -> usize {
+        Rc::as_ptr(&self.0) as usize
+    }
+
     pub(crate) fn downgrade(&self) -> ObjectWeakRef {
         ObjectWeakRef(Rc::downgrade(&self.0))
     }

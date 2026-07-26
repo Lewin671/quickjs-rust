@@ -4,6 +4,7 @@ use std::rc::Rc;
 use num_bigint::BigInt;
 
 mod array;
+mod collection_key;
 mod js_string;
 mod map;
 pub(crate) mod name_hash;
@@ -13,6 +14,7 @@ mod set;
 
 pub use array::ArrayRef;
 pub(crate) use array::{MAX_DENSE_STORAGE_LENGTH, array_index_property_key};
+pub(crate) use collection_key::CollectionKey;
 pub use js_string::JsString;
 pub use map::MapRef;
 pub use object::ObjectRef;

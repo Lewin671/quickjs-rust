@@ -288,3 +288,47 @@ fn rejects_map_methods_with_incompatible_receivers() {
     assert!(eval("Map.prototype.get.call({}, 'x');").is_err());
     assert!(eval("Map.prototype.size;").is_err());
 }
+
+#[test]
+fn indexed_map_storage_preserves_order_identity_and_holes() {
+    // Entries iterate in insertion order, a re-set key keeps its original
+    // position, and a deleted key can be re-added at the end.
+    assert_eq!(
+        eval(
+            "var m = new Map(); m.set('a', 1); m.set('b', 2); m.set('c', 3); m.set('b', 20);\
+             m.delete('a'); m.set('a', 10);\
+             var out = []; m.forEach(function (v, k) { out.push(k + '=' + v); });\
+             out.join(',') + '|' + m.size;"
+        ),
+        Ok(Value::String("b=20,c=3,a=10|3".to_owned().into()))
+    );
+    // SameValueZero: the two zeroes are one key, NaN matches itself, and
+    // distinct objects with equal contents stay distinct.
+    assert_eq!(
+        eval(
+            "var m = new Map(); m.set(-0, 'zero'); m.set(NaN, 'nan');\
+             var a = {}, b = {}; m.set(a, 'a'); m.set(b, 'b');\
+             [m.get(0), m.get(-0), m.get(NaN), m.get(a), m.get(b), m.size,\
+              Array.from(m.keys())[0]].join(':');"
+        ),
+        Ok(Value::String("zero:zero:nan:a:b:4:0".to_owned().into()))
+    );
+    // Strings that share code units share a key even when their sources differ.
+    assert_eq!(
+        eval(
+            "var m = new Map(); m.set('\\u{1F600}', 1);\
+             m.get(String.fromCharCode(0xD83D) + String.fromCharCode(0xDE00)) + ':' + m.size;"
+        ),
+        Ok(Value::String("1:1".to_owned().into()))
+    );
+    // Repeated insert/delete cycles stay correct after the storage compacts.
+    assert_eq!(
+        eval(
+            "var m = new Map(); var total = 0;\
+             for (var i = 0; i < 200; i++) { m.set('k' + i, i); if (i % 2 === 0) m.delete('k' + i); }\
+             m.forEach(function (v) { total += v; });\
+             total + ':' + m.size + ':' + m.has('k199') + ':' + m.has('k198');"
+        ),
+        Ok(Value::String("10000:100:true:false".to_owned().into()))
+    );
+}
