@@ -12,7 +12,7 @@ use std::rc::Rc;
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
 use super::super::vm::Vm;
-use super::{DeoptSite, MAX_NATIVE_ITERATIONS, Typed, TypedLoopProgram, TypedOp};
+use super::{Class, DeoptSite, MAX_NATIVE_ITERATIONS, Typed, TypedLoopProgram, TypedOp};
 use crate::Value;
 
 /// Runs the program covering the backedge at `ip`, if one exists and this
@@ -117,14 +117,7 @@ fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
         };
         pc += 1;
         match *op {
-            TypedOp::Const { dst, value } => registers[dst as usize] = value,
             TypedOp::Move { dst, src } => registers[dst as usize] = registers[src as usize],
-            TypedOp::ConstBoxed { dst, constant } => {
-                let Some(value) = program.boxed_constants.get(constant as usize) else {
-                    deopt_here!(op);
-                };
-                boxed[dst as usize] = value.clone();
-            }
             TypedOp::ToNumeric { dst, src } => {
                 registers[dst as usize] = registers[src as usize].to_numeric();
             }
@@ -148,7 +141,9 @@ fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
                 registers[dst as usize] = value;
             }
             TypedOp::Update { dst, op, src } => {
-                let Some(number) = registers[src as usize].number() else {
+                // The unfused shape is `ToNumeric; Update`, so the coercion
+                // belongs here and this operation cannot fail.
+                let Some(number) = registers[src as usize].to_numeric().number() else {
                     deopt_here!(op);
                 };
                 registers[dst as usize] = Typed::Number(match op {
@@ -273,7 +268,7 @@ fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
                 write_back(vm, program, &registers, &boxed);
                 // The exit target is reached with the same operand stack the
                 // branch instruction started from, condition included.
-                materialize_stack(vm, &registers, &boxed, program.sites[pc - 1]);
+                materialize_stack(vm, program, &registers, &boxed, program.sites[pc - 1]);
                 vm.ip = exit_ip as usize;
                 return Outcome::Ran;
             }
@@ -300,13 +295,15 @@ fn seed_registers(
         if program
             .written_locals
             .iter()
-            .filter_map(|register| program.slot_for_register(*register))
-            .any(|written| written == slot)
+            .any(|(_, written)| *written == slot)
         {
             return None;
         }
     }
     let mut registers = vec![Typed::Undefined; program.register_count];
+    for &(register, value) in &program.constant_registers {
+        registers[register as usize] = value;
+    }
     for &(register, slot) in &program.local_slots {
         let value = match vm.local_slot_value(slot as usize) {
             Some(value) => Typed::from_value(&value)?,
@@ -314,9 +311,8 @@ fn seed_registers(
         };
         registers[register as usize] = value;
     }
-    for &register in &program.written_locals {
-        let slot = program.slot_for_register(register)? as usize;
-        if !vm.slot_accepts_typed_loop_write(slot) {
+    for &(_, slot) in &program.written_locals {
+        if !vm.slot_accepts_typed_loop_write(slot as usize) {
             return None;
         }
     }
@@ -335,6 +331,9 @@ fn seed_registers(
         registers[*register as usize] = Typed::from_value(&value)?;
     }
     let mut boxed = vec![Value::Undefined; program.boxed_count];
+    for (register, value) in &program.boxed_constant_registers {
+        boxed[*register as usize] = value.clone();
+    }
     for &(register, slot) in &program.boxed_locals {
         // A boxed local must already hold an object: the program only ever uses
         // one as a property receiver or an element source.
@@ -378,10 +377,7 @@ fn value_is_ordinary_object(value: &Value) -> bool {
 }
 
 fn write_back(vm: &mut Vm<'_>, program: &TypedLoopProgram, registers: &[Typed], boxed: &[Value]) {
-    for &register in &program.written_locals {
-        let Some(slot) = program.slot_for_register(register) else {
-            continue;
-        };
+    for &(register, slot) in &program.written_locals {
         vm.write_typed_loop_slot(slot as usize, registers[register as usize].to_value());
     }
     for &register in &program.written_boxed_locals {
@@ -404,19 +400,25 @@ fn deopt(
     site: DeoptSite,
 ) -> Outcome {
     write_back(vm, program, registers, boxed);
-    materialize_stack(vm, registers, boxed, site);
+    materialize_stack(vm, program, registers, boxed, site);
     vm.ip = site.ip as usize;
     Outcome::Deoptimized
 }
 
 /// Pushes the operand stack `site` describes, so the interpreter sees exactly
 /// what the bytecode instruction at `site.ip` expects.
-fn materialize_stack(vm: &mut Vm<'_>, registers: &[Typed], boxed: &[Value], site: DeoptSite) {
-    for depth in 0..usize::from(site.depth) {
-        let value = if site.boxed & (1_u64 << depth) != 0 {
-            boxed[depth].clone()
-        } else {
-            registers[depth].to_value()
+fn materialize_stack(
+    vm: &mut Vm<'_>,
+    program: &TypedLoopProgram,
+    registers: &[Typed],
+    boxed: &[Value],
+    site: DeoptSite,
+) {
+    let start = site.start as usize;
+    for &(class, register) in &program.site_entries[start..start + usize::from(site.len)] {
+        let value = match class {
+            Class::Scalar => registers[register as usize].to_value(),
+            Class::Boxed => boxed[register as usize].clone(),
         };
         vm.stack.push(value);
     }

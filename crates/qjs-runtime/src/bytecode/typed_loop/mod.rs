@@ -113,16 +113,6 @@ impl Typed {
 
 #[derive(Clone, Copy, Debug)]
 enum TypedOp {
-    Const {
-        dst: u16,
-        value: Typed,
-    },
-    /// Loads a constant that no unboxed register can hold — a string, say — into
-    /// a boxed register.
-    ConstBoxed {
-        dst: u16,
-        constant: u16,
-    },
     Move {
         dst: u16,
         src: u16,
@@ -237,8 +227,18 @@ enum TypedOp {
 #[derive(Clone, Copy, Debug)]
 struct DeoptSite {
     ip: u32,
-    depth: u8,
-    boxed: u64,
+    /// Range of this site's entries in the program's `site_entries`.
+    start: u32,
+    len: u8,
+}
+
+/// Which register file a value lives in. Scalars are unboxed numbers, booleans,
+/// and `undefined`; boxed registers hold any `Value`, which is what a property
+/// read produces and what an object receiver has to be.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Class {
+    Scalar,
+    Boxed,
 }
 
 /// A compiled loop region.
@@ -249,11 +249,17 @@ pub(super) struct TypedLoopProgram {
     ops: Vec<TypedOp>,
     /// Resume information for each operation, parallel to `ops`.
     sites: Vec<DeoptSite>,
+    /// Operand-stack entries the sites name, bottom to top, as the register
+    /// holding each one and the file it lives in.
+    site_entries: Vec<(Class, u16)>,
     register_count: usize,
     /// Register holding each referenced frame slot, as (register, slot).
     local_slots: Vec<(u16, u32)>,
-    /// Registers that must be written back to their slots when the loop ends.
-    written_locals: Vec<u16>,
+    /// Slots that must be written back when the loop ends, each with the
+    /// register holding its value. Several slots may share one register: a
+    /// completion temporary that only ever receives one expression's value needs
+    /// no register of its own.
+    written_locals: Vec<(u16, u32)>,
     /// Slots that must hold a dense-readable array on entry.
     receiver_slots: Vec<u32>,
     /// Global bindings the region reads, in register order. The region provably
@@ -271,8 +277,11 @@ pub(super) struct TypedLoopProgram {
     boxed_global_reads: Vec<(u16, String)>,
     /// Property names the program reads or writes, addressed by index.
     names: Vec<Rc<str>>,
-    /// Constants that only a boxed register can hold, addressed by index.
-    boxed_constants: Vec<Value>,
+    /// Registers seeded once with a constant, as (register, value): a constant
+    /// never changes, so it costs nothing per iteration.
+    constant_registers: Vec<(u16, Typed)>,
+    /// Boxed registers seeded once with a constant no scalar register can hold.
+    boxed_constant_registers: Vec<(u16, Value)>,
     /// Number of property-access cache entries the run needs.
     cache_count: usize,
 }
@@ -284,13 +293,6 @@ impl TypedLoopProgram {
 
     pub(super) fn backedge(&self) -> usize {
         self.backedge
-    }
-
-    fn slot_for_register(&self, register: u16) -> Option<u32> {
-        self.local_slots
-            .iter()
-            .find(|(candidate, _)| *candidate == register)
-            .map(|(_, slot)| *slot)
     }
 
     fn slot_for_boxed_register(&self, register: u16) -> Option<u32> {
@@ -527,6 +529,41 @@ mod tests {
                  run();"
             ),
             Ok(Value::String("7x1x:5".to_owned().into()))
+        );
+    }
+
+    /// The shapes the bytecode compiler fuses into single instructions — the
+    /// counted loop's comparison and its increment, an assignment that also
+    /// feeds the completion temporaries — are what ordinary loops are made of.
+    #[test]
+    fn typed_loops_accept_fused_loop_shapes() {
+        assert_eq!(
+            eval(
+                "function run(n) { var s = 0; for (var i = 0; i < n; i++) { s += 2; } return s; }\
+                 run(40);"
+            ),
+            Ok(Value::Number(80.0))
+        );
+        // `continue` jumps backwards into the region and the body leaves the
+        // completion bookkeeping behind on the operand stack.
+        assert_eq!(
+            eval(
+                "function run(n) { var s = 0, i = 0;\
+                   while (i < n) { i++; if (i % 3 === 0) { continue; } s += i; }\
+                   return s; }\
+                 run(30);"
+            ),
+            Ok(Value::Number(300.0))
+        );
+        // A counted loop that runs backwards, so the fused increment is absent
+        // and the update is the ordinary shape.
+        assert_eq!(
+            eval(
+                "function run(n) { var s = 1; for (var i = n; i > 0; i--) { s = s * 1.5 - 0.5; }\
+                   return s.toFixed(4); }\
+                 run(20);"
+            ),
+            Ok(Value::String("1.0000".to_owned().into()))
         );
     }
 

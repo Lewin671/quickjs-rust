@@ -7,13 +7,14 @@
 //! nodes, and a backward jump inside the region (a nested loop) needs nothing
 //! beyond checking that the state it delivers matches the state recorded there.
 
-use qjs_ast::{BinaryOp, UnaryOp};
+use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
 use std::rc::Rc;
 
 use super::super::ir::{Bytecode, Op};
 use super::{
-    DeoptSite, MAX_REGION_OPS, MAX_REGISTERS, MAX_STACK_DEPTH, Typed, TypedLoopProgram, TypedOp,
+    Class, DeoptSite, MAX_REGION_OPS, MAX_REGISTERS, MAX_STACK_DEPTH, Typed, TypedLoopProgram,
+    TypedOp,
 };
 use crate::Value;
 
@@ -23,8 +24,16 @@ pub(crate) fn compile_all(bytecode: &Bytecode) -> Vec<TypedLoopProgram> {
         .code
         .iter()
         .enumerate()
-        .filter_map(|(backedge, op)| match op {
-            Op::Jump(target) if *target < backedge => Some((*target, backedge)),
+        .filter_map(|(ip, op)| match op {
+            Op::Jump(target) if *target < ip => Some((*target, ip)),
+            // A fused increment carries the backedge of the loop it closes, and
+            // the interpreter identifies that loop by the instruction the skip
+            // reaches — the same pair every tier is offered.
+            Op::IncrementLocal {
+                slot: _,
+                skip,
+                jump: Some(target),
+            } if *target < ip => Some((*target, ip + skip)),
             _ => None,
         })
         .filter_map(|(header, backedge)| compile(bytecode, header, backedge))
@@ -59,6 +68,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
     let Builder {
         ops,
         sites,
+        site_entries,
         next_register,
         local_slots,
         written_locals,
@@ -69,6 +79,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         written_boxed_locals,
         boxed_global_reads,
         names,
+        constants,
         boxed_constants,
         cache_count,
         ..
@@ -92,7 +103,6 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
                     | TypedOp::SetNamed { .. }
                     | TypedOp::ElementRead { .. }
                     | TypedOp::MoveBoxed { .. }
-                    | TypedOp::ConstBoxed { .. }
                     | TypedOp::Box { .. }
                     | TypedOp::Unbox { .. }
             )
@@ -101,12 +111,16 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
     if boxed_ops * 3 > ops.len() {
         return None;
     }
-    debug_assert!(matches!(code.get(backedge), Some(Op::Jump(_))));
+    debug_assert!(matches!(
+        code.get(backedge.min(code.len() - 1)),
+        Some(Op::Jump(_) | Op::IncrementLocal { .. } | Op::Pop | Op::LoadConst(_))
+    ));
     Some(TypedLoopProgram {
         header,
         backedge,
         ops,
         sites,
+        site_entries,
         register_count: next_register,
         local_slots,
         written_locals,
@@ -117,7 +131,8 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         written_boxed_locals,
         boxed_global_reads,
         names,
-        boxed_constants,
+        constant_registers: constants,
+        boxed_constant_registers: boxed_constants,
         cache_count,
     })
 }
@@ -130,27 +145,19 @@ enum Origin {
     Local(u32),
 }
 
-/// Which register file a stack entry lives in. Scalars are unboxed numbers,
-/// booleans, and `undefined`; boxed registers hold any `Value`, which is what a
-/// property read produces and what an object receiver has to be.
-#[derive(Clone, Copy, PartialEq)]
-enum Class {
-    Scalar,
-    Boxed,
-}
-
 struct Builder<'a> {
     bytecode: &'a Bytecode,
     header: usize,
     backedge: usize,
     ops: Vec<TypedOp>,
     sites: Vec<DeoptSite>,
+    site_entries: Vec<(Class, u16)>,
     /// Resume information the next emitted operation inherits.
     site: DeoptSite,
     next_register: usize,
     /// Register holding each referenced frame slot, keyed by slot.
     local_slots: Vec<(u16, u32)>,
-    written_locals: Vec<u16>,
+    written_locals: Vec<(u16, u32)>,
     receiver_slots: Vec<u32>,
     global_reads: Vec<(u16, String)>,
     next_boxed: usize,
@@ -158,7 +165,6 @@ struct Builder<'a> {
     written_boxed_locals: Vec<u16>,
     boxed_global_reads: Vec<(u16, String)>,
     names: Vec<Rc<str>>,
-    boxed_constants: Vec<Value>,
     cache_count: usize,
     /// Slots this pass treats as boxed, and slots the pass discovered must be.
     boxed_slots: Vec<u32>,
@@ -169,6 +175,14 @@ struct Builder<'a> {
     /// paths that meet must agree on depth, class, and origin — registers follow
     /// from depth — so a join that disagrees declines instead of miscompiling.
     states: Vec<Option<Vec<(u16, Class, Origin)>>>,
+    /// Registers seeded once with a constant, as (register, value).
+    constants: Vec<(u16, Typed)>,
+    /// Boxed registers seeded once with a constant.
+    boxed_constants: Vec<(u16, Value)>,
+    /// Whether each instruction in the region is the target of a jump.
+    is_target: Vec<bool>,
+    /// Instructions the last compiled operation subsumed, which the walk skips.
+    pending_skip: usize,
     /// Whether the walk is past an unconditional jump, so the next instruction
     /// is reachable only through a recorded join state.
     unreachable: bool,
@@ -186,10 +200,11 @@ impl<'a> Builder<'a> {
             backedge,
             ops: Vec::new(),
             sites: Vec::new(),
+            site_entries: Vec::new(),
             site: DeoptSite {
                 ip: header as u32,
-                depth: 0,
-                boxed: 0,
+                start: 0,
+                len: 0,
             },
             next_register: MAX_STACK_DEPTH,
             local_slots: Vec::new(),
@@ -201,11 +216,14 @@ impl<'a> Builder<'a> {
             written_boxed_locals: Vec::new(),
             boxed_global_reads: Vec::new(),
             names: Vec::new(),
-            boxed_constants: Vec::new(),
             cache_count: 0,
+            constants: Vec::new(),
+            boxed_constants: Vec::new(),
+            is_target: is_target(bytecode, header, backedge),
             boxed_slots,
             discovered_boxed: Vec::new(),
             stack: Vec::new(),
+            pending_skip: 0,
             unreachable: false,
             states: vec![None; span],
             program_index: vec![None; span],
@@ -236,10 +254,85 @@ impl<'a> Builder<'a> {
         Some(register)
     }
 
-    fn note_write(&mut self, register: u16) {
-        if !self.written_locals.contains(&register) {
-            self.written_locals.push(register);
+    fn note_write(&mut self, register: u16, slot: usize) -> Option<()> {
+        let slot = u32::try_from(slot).ok()?;
+        if !self.written_locals.contains(&(register, slot)) {
+            self.written_locals.push((register, slot));
         }
+        Some(())
+    }
+
+    /// Redirects the operation that just computed `register` so it writes `dst`
+    /// instead, which removes the copy a store would otherwise need. Only valid
+    /// when nothing else still refers to `register` and the caller emits no
+    /// further operation for this instruction: the operand-stack entry naming
+    /// `register` disappears with the copy.
+    fn fold_into_destination(&mut self, register: u16, dst: u16) -> bool {
+        if usize::from(register) >= MAX_STACK_DEPTH
+            || self
+                .stack
+                .iter()
+                .any(|(candidate, class, _)| *candidate == register && *class == Class::Scalar)
+        {
+            return false;
+        }
+        let Some(last) = self.ops.last_mut() else {
+            return false;
+        };
+        let produced = match last {
+            TypedOp::Binary { dst, .. }
+            | TypedOp::Unary { dst, .. }
+            | TypedOp::Update { dst, .. }
+            | TypedOp::ToNumeric { dst, .. }
+            | TypedOp::DenseRead { dst, .. }
+            | TypedOp::CallNumericNative { dst, .. }
+            | TypedOp::Move { dst, .. } => dst,
+            _ => return false,
+        };
+        if *produced != register {
+            return false;
+        }
+        *produced = dst;
+        true
+    }
+
+    /// How many instructions in the region assign `slot`.
+    fn writes_in_region(&self, slot: usize) -> usize {
+        self.bytecode.code[self.header..=self.backedge.min(self.bytecode.code.len() - 1)]
+            .iter()
+            .filter(|op| match op {
+                Op::StoreLocal(candidate)
+                | Op::AssignLocal(candidate)
+                | Op::ClearLocal(candidate)
+                | Op::IncrementLocal {
+                    slot: candidate, ..
+                }
+                | Op::CopyLocal { to: candidate, .. } => *candidate == slot,
+                Op::BinaryAssignLocals { target, stores, .. } => {
+                    *target == slot || stores.contains(&slot)
+                }
+                _ => false,
+            })
+            .count()
+    }
+
+    /// Whether any instruction in the region reads `slot`.
+    fn reads_in_region(&self, slot: usize) -> bool {
+        self.bytecode.code[self.header..=self.backedge.min(self.bytecode.code.len() - 1)]
+            .iter()
+            .any(|op| match op {
+                Op::LoadLocal(candidate)
+                | Op::LoadLocalOrUndefined(candidate)
+                | Op::IncrementLocal {
+                    slot: candidate, ..
+                }
+                | Op::CopyLocal {
+                    from: candidate, ..
+                } => *candidate == slot,
+                Op::CompareLocalsJumpFalse { left, right, .. } => *left == slot || *right == slot,
+                Op::GetPropNamed { cache, .. } => cache.local_slot() == Some(slot),
+                _ => false,
+            })
     }
 
     /// Register the next pushed value must be computed into: its depth's index
@@ -254,14 +347,89 @@ impl<'a> Builder<'a> {
         self.slot_scalar()
     }
 
+    /// Pushes an operand. A computed value is pushed in its depth's register;
+    /// a value that already lives somewhere stable — a frame slot's register, a
+    /// constant's — is pushed by reference, and copied into its depth's register
+    /// only when something is about to overwrite it or a join needs it there.
     fn push(&mut self, register: u16, origin: Origin) {
-        debug_assert_eq!(usize::from(register), self.stack.len());
         self.stack.push((register, Class::Scalar, origin));
     }
 
     fn push_boxed(&mut self, register: u16, origin: Origin) {
-        debug_assert_eq!(usize::from(register), self.stack.len());
         self.stack.push((register, Class::Boxed, origin));
+    }
+
+    /// Copies every operand that names `register` into its own depth's register,
+    /// so a write to `register` cannot change an operand's value.
+    ///
+    /// Working from the top down is what makes this safe: an operand names
+    /// either its own depth, a lower depth (only `Dup` produces that), or a
+    /// register outside the stack range, so writing a depth's register can never
+    /// disturb an operand that has not been copied yet.
+    fn spill(&mut self, register: u16, class: Class) -> Option<()> {
+        for depth in (0..self.stack.len()).rev() {
+            let (current, current_class, origin) = self.stack[depth];
+            if current != register || current_class != class {
+                continue;
+            }
+            let dst = u16::try_from(depth).ok()?;
+            if dst == register {
+                continue;
+            }
+            self.emit(match class {
+                Class::Scalar => TypedOp::Move { dst, src: register },
+                Class::Boxed => TypedOp::MoveBoxed { dst, src: register },
+            });
+            self.stack[depth] = (dst, class, origin);
+        }
+        Some(())
+    }
+
+    /// Copies every operand into its own depth's register, which is where both
+    /// paths of a join agree to find it.
+    fn normalize(&mut self) -> Option<()> {
+        for depth in (0..self.stack.len()).rev() {
+            let (register, class, origin) = self.stack[depth];
+            let dst = u16::try_from(depth).ok()?;
+            if register == dst {
+                continue;
+            }
+            self.emit(match class {
+                Class::Scalar => TypedOp::Move { dst, src: register },
+                Class::Boxed => TypedOp::MoveBoxed { dst, src: register },
+            });
+            self.stack[depth] = (dst, class, origin);
+        }
+        Some(())
+    }
+
+    /// Register holding `value` for the whole run, allocated once and seeded at
+    /// entry, so a constant costs nothing per iteration.
+    fn constant_register(&mut self, value: Typed) -> Option<u16> {
+        if let Some((register, _)) = self
+            .constants
+            .iter()
+            .find(|(_, candidate)| *candidate == value)
+        {
+            return Some(*register);
+        }
+        let register = self.fresh()?;
+        self.constants.push((register, value));
+        Some(register)
+    }
+
+    /// Same for a constant only a boxed register can hold.
+    fn boxed_constant_register(&mut self, value: &Value) -> Option<u16> {
+        if let Some((register, _)) = self
+            .boxed_constants
+            .iter()
+            .find(|(_, candidate)| candidate == value)
+        {
+            return Some(*register);
+        }
+        let register = self.fresh_boxed()?;
+        self.boxed_constants.push((register, value.clone()));
+        Some(register)
     }
 
     /// Pops one operand as a scalar, narrowing a boxed register on the way.
@@ -363,16 +531,15 @@ impl<'a> Builder<'a> {
     /// Records that the operations emitted from now on belong to the bytecode
     /// instruction at `ip`, which starts from the current abstract stack.
     fn open_site(&mut self, ip: usize) -> Option<()> {
-        let mut boxed = 0_u64;
-        for (depth, (_, class, _)) in self.stack.iter().enumerate() {
-            if *class == Class::Boxed {
-                boxed |= 1_u64 << depth;
-            }
+        let start = u32::try_from(self.site_entries.len()).ok()?;
+        let len = u8::try_from(self.stack.len()).ok()?;
+        for &(register, class, _) in &self.stack {
+            self.site_entries.push((class, register));
         }
         self.site = DeoptSite {
             ip: u32::try_from(ip).ok()?,
-            depth: u8::try_from(self.stack.len()).ok()?,
-            boxed,
+            start,
+            len,
         };
         Some(())
     }
@@ -390,6 +557,9 @@ impl<'a> Builder<'a> {
                 let state = self.states[offset].clone()?;
                 self.stack = state;
                 self.unreachable = false;
+            }
+            if self.is_target[offset] {
+                self.normalize()?;
             }
             // A join must agree with every path that reaches it on depth and on
             // register class — the register itself follows from the depth. Only
@@ -410,7 +580,7 @@ impl<'a> Builder<'a> {
             }
             let op = code.get(ip)?;
             self.compile_op(op, ip)?;
-            ip += 1;
+            ip += 1 + std::mem::take(&mut self.pending_skip);
         }
         // Patch the forward jumps now that every program index is known.
         for (program_slot, target_ip) in std::mem::take(&mut self.pending_jumps) {
@@ -599,41 +769,31 @@ impl<'a> Builder<'a> {
                 let constant = self.bytecode.constants.get(*index)?;
                 match Typed::from_value(constant) {
                     Some(value) => {
-                        let dst = self.slot_scalar()?;
-                        self.emit(TypedOp::Const { dst, value });
-                        self.push(dst, Origin::Computed);
+                        let register = self.constant_register(value)?;
+                        self.push(register, Origin::Computed);
                     }
                     None => {
                         let constant = constant.clone();
-                        let index = u16::try_from(self.boxed_constants.len()).ok()?;
-                        self.boxed_constants.push(constant);
-                        let dst = self.slot_boxed()?;
-                        self.emit(TypedOp::ConstBoxed {
-                            dst,
-                            constant: index,
-                        });
-                        self.push_boxed(dst, Origin::Computed);
+                        let register = self.boxed_constant_register(&constant)?;
+                        self.push_boxed(register, Origin::Computed);
                     }
                 }
             }
             Op::LoadLocal(slot) => {
                 let origin = Origin::Local(u32::try_from(*slot).ok()?);
                 if self.slot_is_boxed(*slot) {
-                    let src = self.boxed_local_register(*slot)?;
-                    let dst = self.slot_boxed()?;
-                    self.emit(TypedOp::MoveBoxed { dst, src });
-                    self.push_boxed(dst, origin);
+                    let register = self.boxed_local_register(*slot)?;
+                    self.push_boxed(register, origin);
                 } else {
-                    let src = self.local_register(*slot)?;
-                    let dst = self.slot_scalar()?;
-                    self.emit(TypedOp::Move { dst, src });
-                    self.push(dst, origin);
+                    let register = self.local_register(*slot)?;
+                    self.push(register, origin);
                 }
             }
             Op::StoreLocal(slot) | Op::AssignLocal(slot) => {
                 if self.slot_is_boxed(*slot) {
                     let (src, _) = self.pop_boxed()?;
                     let dst = self.boxed_local_register(*slot)?;
+                    self.spill(dst, Class::Boxed)?;
                     self.emit(TypedOp::MoveBoxed { dst, src });
                     if !self.written_boxed_locals.contains(&dst) {
                         self.written_boxed_locals.push(dst);
@@ -648,24 +808,16 @@ impl<'a> Builder<'a> {
                     }
                     let (src, _) = self.pop()?;
                     let dst = self.local_register(*slot)?;
-                    self.emit(TypedOp::Move { dst, src });
-                    self.note_write(dst);
+                    self.spill(dst, Class::Scalar)?;
+                    if !self.fold_into_destination(src, dst) {
+                        self.emit(TypedOp::Move { dst, src });
+                    }
+                    self.note_write(dst, *slot)?;
                 }
             }
             Op::Dup => {
-                let (src, class, origin) = *self.stack.last()?;
-                match class {
-                    Class::Scalar => {
-                        let dst = self.slot_scalar()?;
-                        self.emit(TypedOp::Move { dst, src });
-                        self.push(dst, origin);
-                    }
-                    Class::Boxed => {
-                        let dst = self.slot_boxed()?;
-                        self.emit(TypedOp::MoveBoxed { dst, src });
-                        self.push_boxed(dst, origin);
-                    }
-                }
+                let top = *self.stack.last()?;
+                self.stack.push(top);
             }
             Op::Pop => {
                 self.pop()?;
@@ -833,18 +985,180 @@ impl<'a> Builder<'a> {
                     if *target < self.header {
                         return None;
                     }
+                    self.normalize()?;
                     self.record_target(*target, ip)?;
                     self.pending_jumps.push((self.ops.len(), *target));
                     self.emit(TypedOp::JumpIfFalsy { cond, target: 0 });
                 }
             }
+            Op::BinaryAssignLocals {
+                op,
+                target,
+                stores,
+                skip,
+            } if admitted_binary(*op) => {
+                let (right, _) = self.pop()?;
+                let (left, _) = self.pop()?;
+                if [*target, stores[0], stores[1]]
+                    .into_iter()
+                    .any(|slot| self.slot_is_boxed(slot))
+                {
+                    return None;
+                }
+                // The result goes straight into the target's register: the
+                // operation reads both operands before assigning, so an operand
+                // that is the target itself is fine.
+                let value = self.local_register(*target)?;
+                self.spill(value, Class::Scalar)?;
+                self.emit(TypedOp::Binary {
+                    dst: value,
+                    op: *op,
+                    left,
+                    right,
+                });
+                self.note_write(value, *target)?;
+                // The fused form assigns the same value to two completion
+                // temporaries. One that this instruction alone writes, and that
+                // nothing in the region reads, needs no register of its own — the
+                // write-back can take the target's.
+                for slot in stores {
+                    let aliasable = self.bytecode.local_is_compiler_temporary(*slot)
+                        && !self.reads_in_region(*slot)
+                        && self.writes_in_region(*slot) == 1
+                        && self.writes_in_region(*target) == 1;
+                    if aliasable {
+                        self.note_write(value, *slot)?;
+                        continue;
+                    }
+                    let dst = self.local_register(*slot)?;
+                    self.spill(dst, Class::Scalar)?;
+                    self.emit(TypedOp::Move { dst, src: value });
+                    self.note_write(dst, *slot)?;
+                }
+                self.pending_skip = *skip;
+            }
+            Op::IncrementLocal { slot, skip, jump } => {
+                if self.slot_is_boxed(*slot) {
+                    return None;
+                }
+                let register = self.local_register(*slot)?;
+                self.spill(register, Class::Scalar)?;
+                // `Update` coerces its operand the way the unfused
+                // `ToNumeric; Update` pair does, so one operation is enough.
+                self.emit(TypedOp::Update {
+                    dst: register,
+                    op: UpdateOp::Increment,
+                    src: register,
+                });
+                self.note_write(register, *slot)?;
+                match jump {
+                    // The increment that closes this region: the executor loops
+                    // on its own, and the walk ends with the skipped span.
+                    Some(target) if *target == self.header && ip + *skip == self.backedge => {
+                        self.close_backedge()?;
+                    }
+                    Some(_) => return None,
+                    None => {}
+                }
+                self.pending_skip = *skip;
+            }
+            Op::CopyLocal { from, to, skip } => {
+                match (self.slot_is_boxed(*from), self.slot_is_boxed(*to)) {
+                    (false, false) => {
+                        let src = self.local_register(*from)?;
+                        // A completion temporary this instruction alone writes,
+                        // and nothing in the region reads, can share the source's
+                        // register: the write-back gives both slots that value.
+                        if self.bytecode.local_is_compiler_temporary(*to)
+                            && !self.reads_in_region(*to)
+                            && self.writes_in_region(*to) == 1
+                        {
+                            self.note_write(src, *to)?;
+                        } else {
+                            let dst = self.local_register(*to)?;
+                            self.spill(dst, Class::Scalar)?;
+                            self.emit(TypedOp::Move { dst, src });
+                            self.note_write(dst, *to)?;
+                        }
+                    }
+                    (true, true) => {
+                        let src = self.boxed_local_register(*from)?;
+                        let dst = self.boxed_local_register(*to)?;
+                        self.spill(dst, Class::Boxed)?;
+                        self.emit(TypedOp::MoveBoxed { dst, src });
+                        if !self.written_boxed_locals.contains(&dst) {
+                            self.written_boxed_locals.push(dst);
+                        }
+                    }
+                    _ => return None,
+                }
+                self.pending_skip = *skip;
+            }
+            Op::CompareLocalsJumpFalse {
+                left,
+                right,
+                op,
+                target,
+                skip,
+                discard,
+            } if admitted_binary(*op) => {
+                if self.slot_is_boxed(*left) || self.slot_is_boxed(*right) {
+                    return None;
+                }
+                let left = self.local_register(*left)?;
+                let right = self.local_register(*right)?;
+                let cond = if *discard {
+                    let cond = self.fresh()?;
+                    self.emit(TypedOp::Binary {
+                        dst: cond,
+                        op: *op,
+                        left,
+                        right,
+                    });
+                    cond
+                } else {
+                    // The unfused shape leaves the condition on the stack for the
+                    // `Pop` at either successor, so the abstract stack grows and
+                    // the exit has to rebuild that entry.
+                    let cond = self.slot_scalar()?;
+                    self.emit(TypedOp::Binary {
+                        dst: cond,
+                        op: *op,
+                        left,
+                        right,
+                    });
+                    self.push(cond, Origin::Computed);
+                    self.open_site(ip)?;
+                    cond
+                };
+                // A falsy comparison jumps; the fused form skips the successor's
+                // `Pop` when it also elided the push.
+                let exit = if *discard { *target + 1 } else { *target };
+                if exit > self.backedge {
+                    self.emit(TypedOp::Exit {
+                        cond,
+                        exit_ip: u32::try_from(exit).ok()?,
+                    });
+                } else {
+                    if exit < self.header {
+                        return None;
+                    }
+                    self.normalize()?;
+                    self.record_target(exit, ip)?;
+                    self.pending_jumps.push((self.ops.len(), exit));
+                    self.emit(TypedOp::JumpIfFalsy { cond, target: 0 });
+                }
+                self.pending_skip = *skip + usize::from(*discard);
+            }
             Op::Jump(target) if *target == self.header && ip == self.backedge => {
                 // The backedge itself: the executor loops on its own.
+                self.close_backedge()?;
             }
             Op::Jump(target) => {
                 if *target < self.header || *target > self.backedge {
                     return None;
                 }
+                self.normalize()?;
                 self.record_target(*target, ip)?;
                 self.pending_jumps.push((self.ops.len(), *target));
                 self.emit(TypedOp::Jump { target: 0 });
@@ -856,6 +1170,19 @@ impl<'a> Builder<'a> {
             _ => return None,
         }
         Some(())
+    }
+
+    /// Checks that looping is equivalent to jumping to the header.
+    ///
+    /// The header's state has to be a prefix of what the backedge delivers.
+    /// Entries beyond it are values the loop body pushes and never pops — the
+    /// completion-value bookkeeping leaks one per iteration in some shapes — and
+    /// dropping them is unobservable: nothing reads an operand the body left
+    /// behind, and the frame discards them when it returns.
+    fn close_backedge(&mut self) -> Option<()> {
+        self.normalize()?;
+        let header = self.states.first()?.clone()?;
+        (header.len() <= self.stack.len() && header == self.stack[..header.len()]).then_some(())
     }
 
     /// Records the abstract stack a jump delivers to `target`.
@@ -909,6 +1236,33 @@ fn merge_states(
             ))
         })
         .collect()
+}
+
+/// Which instructions of a region are the target of a jump inside it: those are
+/// the joins, and an operand has to be in its depth's register at each one.
+fn is_target(bytecode: &Bytecode, header: usize, backedge: usize) -> Vec<bool> {
+    let mut targets = vec![false; backedge - header + 1];
+    let mut mark = |target: usize| {
+        if let Some(offset) = target.checked_sub(header)
+            && offset < targets.len()
+        {
+            targets[offset] = true;
+        }
+    };
+    for op in &bytecode.code[header..=backedge.min(bytecode.code.len() - 1)] {
+        match op {
+            Op::Jump(target) | Op::JumpIfFalse(target) | Op::JumpIfTrue(target) => mark(*target),
+            Op::CompareLocalsJumpFalse { target, .. } => {
+                mark(*target);
+                mark(*target + 1);
+            }
+            Op::IncrementLocal {
+                jump: Some(target), ..
+            } => mark(*target),
+            _ => {}
+        }
+    }
+    targets
 }
 
 fn admitted_binary(op: BinaryOp) -> bool {
