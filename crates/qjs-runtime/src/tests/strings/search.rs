@@ -558,3 +558,30 @@ fn replace_all_scans_forward_without_repeating_regions() {
         Ok(Value::String("1000:acac:-1".to_owned().into()))
     );
 }
+
+#[test]
+fn prefix_and_suffix_tests_read_the_receiver_in_place() {
+    assert_eq!(
+        eval(
+            "['abc'.startsWith('ab'), 'abc'.startsWith('b', 1), 'abc'.startsWith('b'),\
+              'abc'.endsWith('bc'), 'abc'.endsWith('b', 2), 'abc'.endsWith('b'),\
+              'abc'.includes('bc'), 'abc'.includes('c', 2), 'abc'.includes('a', 99),\
+              'abc'.startsWith(''), 'abc'.endsWith(''), ''.startsWith(''),\
+              'abc'.startsWith('abcd'), 'abc'.endsWith('zabc')].join(':')"
+        ),
+        Ok(Value::String(
+            "true:true:false:true:true:false:true:true:false:true:true:true:false:false"
+                .to_owned()
+                .into()
+        ))
+    );
+    // Non-ASCII receivers keep working, and a regexp argument still throws.
+    assert_eq!(
+        eval(
+            "var threw = false; try { 'abc'.startsWith(/a/); } catch (error) { threw = error instanceof TypeError; }\
+             [threw, '\\u00e9x'.startsWith('\\u00e9'), '\\u00e9x'.endsWith('x'),\
+              '\\u00e9x'.includes('x'), '\\u{1F600}b'.endsWith('b')].join(':');"
+        ),
+        Ok(Value::String("true:true:true:true:true".to_owned().into()))
+    );
+}

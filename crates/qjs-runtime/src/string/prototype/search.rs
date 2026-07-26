@@ -19,22 +19,52 @@ use symbol_method::{
 
 use super::MAX_STRING_LENGTH;
 
+/// The receiver as a shared string value, without copying one that already is a
+/// string.
+fn search_receiver(value: Value, env: &mut CallEnv) -> Result<crate::JsString, RuntimeError> {
+    match value {
+        Value::String(value) => Ok(value),
+        value => this_string_value(value, env).map(crate::JsString::from),
+    }
+}
+
+/// The receiver's length in the units these methods index by. ASCII text — the
+/// common case — answers from the memoized flag instead of a scan.
+fn search_length(value: &crate::JsString) -> usize {
+    if value.is_ascii() {
+        value.len()
+    } else {
+        value.chars().count()
+    }
+}
+
+/// Byte offset of character `index`, clamped to the end of the buffer. Used
+/// instead of rebuilding the remainder of the receiver as a fresh string.
+fn byte_offset_for_char_index(text: &str, index: usize) -> usize {
+    if text.is_ascii() {
+        return index.min(text.len());
+    }
+    text.char_indices()
+        .nth(index)
+        .map_or(text.len(), |(offset, _)| offset)
+}
+
 pub(crate) fn native_string_prototype_ends_with(
     this_value: Value,
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let value = this_string_value(this_value, env)?;
+    let value = search_receiver(this_value, env)?;
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     reject_regexp_search_value(search_value.clone(), "String.prototype.endsWith", env)?;
     let search = to_js_string_with_env(search_value, env)?;
     let end = string_end_position(
-        value.chars().count(),
+        search_length(&value),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let prefix = value.chars().take(end).collect::<String>();
-    Ok(Value::Boolean(prefix.ends_with(&search)))
+    let boundary = byte_offset_for_char_index(&value, end);
+    Ok(Value::Boolean(value[..boundary].ends_with(&search)))
 }
 
 pub(crate) fn native_string_prototype_includes(
@@ -42,22 +72,17 @@ pub(crate) fn native_string_prototype_includes(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let value = this_string_value(this_value, env)?;
+    let value = search_receiver(this_value, env)?;
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     reject_regexp_search_value(search_value.clone(), "String.prototype.includes", env)?;
     let search = to_js_string_with_env(search_value, env)?;
     let start = string_search_start(
-        value.chars().count(),
+        search_length(&value),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    Ok(Value::Boolean(
-        value
-            .chars()
-            .skip(start)
-            .collect::<String>()
-            .contains(&search),
-    ))
+    let boundary = byte_offset_for_char_index(&value, start);
+    Ok(Value::Boolean(value[boundary..].contains(&search)))
 }
 
 pub(crate) fn native_string_prototype_index_of(
@@ -335,22 +360,17 @@ pub(crate) fn native_string_prototype_starts_with(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let value = this_string_value(this_value, env)?;
+    let value = search_receiver(this_value, env)?;
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     reject_regexp_search_value(search_value.clone(), "String.prototype.startsWith", env)?;
     let search = to_js_string_with_env(search_value, env)?;
     let start = string_search_start(
-        value.chars().count(),
+        search_length(&value),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    Ok(Value::Boolean(
-        value
-            .chars()
-            .skip(start)
-            .collect::<String>()
-            .starts_with(&search),
-    ))
+    let boundary = byte_offset_for_char_index(&value, start);
+    Ok(Value::Boolean(value[boundary..].starts_with(&search)))
 }
 
 enum Replacement {
