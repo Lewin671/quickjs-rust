@@ -493,6 +493,22 @@ fn math_unary(native: NativeFunction, argument: f64) -> Option<f64> {
         NativeFunction::MathTan => argument.tan(),
         NativeFunction::MathExp => argument.exp(),
         NativeFunction::MathLog => argument.ln(),
+        // The remaining pure computations, each mapped to the same `f64` method
+        // the native implementation calls, so the results are identical.
+        NativeFunction::MathAcos => argument.acos(),
+        NativeFunction::MathAcosh => argument.acosh(),
+        NativeFunction::MathAsin => argument.asin(),
+        NativeFunction::MathAsinh => argument.asinh(),
+        NativeFunction::MathAtan => argument.atan(),
+        NativeFunction::MathAtanh => argument.atanh(),
+        NativeFunction::MathCbrt => argument.cbrt(),
+        NativeFunction::MathCosh => argument.cosh(),
+        NativeFunction::MathExpm1 => argument.exp_m1(),
+        NativeFunction::MathLog1p => argument.ln_1p(),
+        NativeFunction::MathLog10 => argument.log10(),
+        NativeFunction::MathLog2 => argument.log2(),
+        NativeFunction::MathSinh => argument.sinh(),
+        NativeFunction::MathTanh => argument.tanh(),
         _ => return None,
     };
     Some(value)
