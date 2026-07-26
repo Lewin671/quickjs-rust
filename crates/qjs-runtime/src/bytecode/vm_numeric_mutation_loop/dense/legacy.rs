@@ -29,6 +29,7 @@ use super::{
 };
 
 mod binary_bundle;
+mod packed_bitset;
 mod reduction;
 mod typed_array;
 
@@ -590,6 +591,7 @@ pub(super) struct LegacyDynamicDensePlan {
     store_count: usize,
     sunk_store: Option<SunkDenseStore>,
     hole_tail_append: Option<HoleTailAppendPlan>,
+    packed_bitset: Option<packed_bitset::PackedBitsetMutationPlan>,
     reduction: Option<reduction::LegacyReductionPlan>,
     header: usize,
 }
@@ -646,7 +648,7 @@ impl LegacyDynamicDensePlan {
                 unreachable!("own-data limits are rejected before conversion")
             }
         };
-        let receiver_sources = receiver_sources
+        let receiver_sources: Vec<_> = receiver_sources
             .into_iter()
             .map(|source| match source {
                 ExtendedArraySource::Local(slot) => ArraySource::Local(slot),
@@ -673,6 +675,15 @@ impl LegacyDynamicDensePlan {
             sunk_store,
         );
         let input_prefix = compact_number_inputs(&mut operations, &mut writes, &mut sunk_store);
+        let packed_bitset = packed_bitset::PackedBitsetMutationPlan::compile(
+            counter_local,
+            control,
+            receiver_sources.len(),
+            &operations,
+            &writes,
+            store_count,
+            sunk_store,
+        );
         let binary_bundles = input_prefix
             .and_then(|prefix| prefix.validated_dynamic_start(operations.len()))
             .map_or_else(Vec::new, |dynamic_start| {
@@ -691,6 +702,7 @@ impl LegacyDynamicDensePlan {
             store_count,
             sunk_store,
             hole_tail_append,
+            packed_bitset,
             reduction,
             header,
         }
@@ -706,6 +718,11 @@ impl LegacyDynamicDensePlan {
         self.reduction
             .as_ref()
             .is_some_and(reduction::LegacyReductionPlan::is_two_lane_strided_counter)
+    }
+
+    #[cfg(test)]
+    pub(super) fn has_packed_bitset_mutation(&self) -> bool {
+        self.packed_bitset.is_some()
     }
 
     #[cfg(test)]
@@ -1111,13 +1128,21 @@ impl LegacyDynamicDensePlan {
                 return DenseNumericMutationLoopRun::Declined;
             };
             let array = array.clone();
-            let mut ran = array.with_dense_writable_elements(|elements| {
-                let mut access = SingleAccess {
-                    elements,
-                    pending: None,
-                };
-                self.run_program(&mut access, &mut locals, registers, limit)
+            let mut ran = self.packed_bitset.as_ref().and_then(|plan| {
+                let limit = limit.expect("packed bitset plans use less-than control");
+                array
+                    .with_dense_writable_elements(|elements| plan.run(elements, &mut locals, limit))
+                    .flatten()
             });
+            if ran.is_none() {
+                ran = array.with_dense_writable_elements(|elements| {
+                    let mut access = SingleAccess {
+                        elements,
+                        pending: None,
+                    };
+                    self.run_program(&mut access, &mut locals, registers, limit)
+                });
+            }
             if ran.is_none() {
                 ran = self.try_run_hole_tail_append(
                     vm,

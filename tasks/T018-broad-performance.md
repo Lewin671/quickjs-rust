@@ -7669,6 +7669,47 @@ the report, raw rows, and frozen manifest SHA-256 values are
 `163d543c93f75c92f3f9ced14afe5e75d47fab9a198d9a903547c5bbacbdea1c`, and
 `68f6e3e8beb1f2b7415003310ff9d28628ff2107f5e7c2db130256f9a9168ae7`.
 
+### 2026-07-26 packed-bitset mutation executor
+
+Fresh self-sampling showed that, after the outer packed-bitset predicate scan,
+the remaining nsieve hot path was the inner dense-word read/modify/write loop.
+The legacy local-Array executor now recognizes its normalized data flow rather
+than a source workload: `words[counter >> shift] <bitwise-op>= [~]bit <<
+(counter & mask)`, with `&`, `|`, or `^`, constants or stable numeric locals,
+and a positive counted step. The resulting executor preserves the existing
+ordinary dense-array lease and ToInt32/ToUint32 bitwise semantics while avoiding
+the generic per-instruction register dispatch for every word update.
+
+The plan is deliberately fail-closed. It requires authoritative numeric locals,
+one writable dense Number receiver, a finite nonnegative integral counter, and
+a positive integral step. If its first iteration cannot establish a safe dense
+index or Number word, the unchanged generic dense program runs instead. After
+any completed native update, the executor publishes the original local writes
+in their source order and returns to the loop header before the first unsafe
+iteration, preserving staged progress and observable coercion. Focused tests
+cover dynamic shift/mask/base inputs for clear, set, and toggle mutations; they
+also place a `valueOf` object in the first later word and prove exactly one
+ordinary replay after all prior native updates. The full `qjs-runtime` suite
+passed 1,865 tests.
+
+The final same-host, interleaved seven-block external diagnostic compared
+release candidate SHA-256
+`c58102a973ceb5bb8433d361651bd87b5dffecf86902b6d278bec0de153f0c53`
+against preceding-base SHA-256
+`ea8be2c069f82d1ee78001d5b22c21c4f8da00645d56da94a0bde0069171ee50`
+and QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+All capability probes completed. Candidate/base medians were 0.99872x for
+Gaussian blur, 0.99544x for audio FFT, 0.99852x for JSON financial parsing,
+and **0.63518x for `bitops-nsieve-bits`**. Nsieve reached **0.45274x
+candidate/QuickJS-NG** (about 2.21x faster), crossing its per-case 2x target
+through a reusable packed-word mutation mechanism. This remains a diagnostic
+partial portfolio rather than a suite or final-goal claim (`claim_eligible:
+false`); report, raw rows, and frozen manifest SHA-256 values are
+`99c96f1e69061c042defcaa61a6e2dad228a3b4c85172946852807103a840a2c`,
+`f99b8fced605743c69b264a89e9974a7dea2b99276c01244e716b94941cd4de0`, and
+`68f6e3e8beb1f2b7415003310ff9d28628ff2107f5e7c2db130256f9a9168ae7`.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
