@@ -955,8 +955,12 @@ fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode) -> bool {
     // Ordinary constructors use the same slot-backed parameter and receiver
     // model as ordinary calls. Constructor-only state such as `new.target`
     // remains in the small compatibility frame installed by function_env.
-    !function.lexical_this
-        && !function.lexical_arguments
+    // An arrow inherits `this`, `arguments`, and `new.target` from the function
+    // that created it, none of which a fresh frame provides. One that reads none
+    // of them is indistinguishable from an ordinary function here, and arrow
+    // callbacks that only use their parameters are the common case.
+    (!function.lexical_this || (!bytecode.uses_lexical_this() && !bytecode.reads_new_target()))
+        && (!function.lexical_arguments || !bytecode.reads_arguments())
         && !function.is_generator
         && !function.is_async
         && !function.is_class_constructor

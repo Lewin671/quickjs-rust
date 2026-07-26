@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+mod call_context;
 mod compiler;
 mod compiler_assign;
 mod compiler_binding;

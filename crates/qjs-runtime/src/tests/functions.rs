@@ -1613,3 +1613,39 @@ fn named_function_expression_name_binding_is_immutable() {
         Ok(Value::String("true:true:true".to_owned().into()))
     );
 }
+
+/// An arrow inherits `this`, `arguments`, and `new.target` from the function
+/// that created it. One that reads none of them shares the ordinary call's
+/// slot-seeded frame, so each of these has to keep answering what it did.
+#[test]
+fn arrow_functions_inherit_their_call_context() {
+    assert_eq!(
+        eval("var box = { v: 7, m: function () { var f = () => this.v; return f(); } }; box.m();"),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval("function outer() { var f = () => arguments[0]; return f(); } outer(11);"),
+        Ok(Value::Number(11.0))
+    );
+    assert_eq!(
+        eval("function T() { var f = () => new.target; this.k = f(); } new T().k === T;"),
+        Ok(Value::Boolean(true))
+    );
+    // Reads none of the three, but does capture an outer binding.
+    assert_eq!(
+        eval(
+            "function counter() { var n = 0; var bump = (d) => n + d; return bump(5) + bump(6); } counter();"
+        ),
+        Ok(Value::Number(11.0))
+    );
+    assert_eq!(
+        eval("var double = (a) => a * 2; [1, 2, 3].map(double).join(',');"),
+        Ok(Value::String("2,4,6".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function nested() { var f = () => { var g = () => 3; return g() + 1; }; return f(); } nested();"
+        ),
+        Ok(Value::Number(4.0))
+    );
+}
