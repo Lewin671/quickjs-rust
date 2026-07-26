@@ -282,7 +282,29 @@ struct CompiledNamedPlan {
 /// duplicates its value into the block and loop result slots; inside a
 /// function body only the block slot is written. Returns the cursor just past
 /// the suffix.
-fn match_completion_suffix(
+/// Matches the write-back of an accumulator statement together with whatever
+/// completion bookkeeping follows it. A statement whose value nobody observes
+/// is compiled without the duplication, so the write appears either as
+/// `Dup; AssignLocal(slot); <completion suffix>` or as a bare `AssignLocal`.
+/// Returns the assigned slot and the cursor just past the write.
+pub(super) fn match_accumulator_commit(
+    code: &[Op],
+    cursor: usize,
+    block_result_slot: usize,
+    loop_result_slot: usize,
+) -> Option<(usize, usize)> {
+    match (code.get(cursor)?, code.get(cursor + 1)) {
+        (Op::Dup, Some(Op::AssignLocal(slot))) => {
+            let end =
+                match_completion_suffix(code, cursor + 2, block_result_slot, loop_result_slot)?;
+            Some((*slot, end))
+        }
+        (Op::AssignLocal(slot), _) => Some((*slot, cursor + 1)),
+        _ => None,
+    }
+}
+
+pub(super) fn match_completion_suffix(
     code: &[Op],
     cursor: usize,
     block_result_slot: usize,
@@ -392,20 +414,17 @@ impl NamedNumericMutationLoopPlan {
             Op::LoadLocal(accumulator_slot),
             Op::GetPropNamed { key, cache },
             Op::Binary(BinaryOp::Add),
-            Op::Dup,
-            Op::AssignLocal(assigned_accumulator_slot),
         ) = (
             code.get(cursor)?,
             code.get(cursor + 1)?,
             code.get(cursor + 2)?,
-            code.get(cursor + 3)?,
-            code.get(cursor + 4)?,
         )
         else {
             return None;
         };
-        let accumulator_end =
-            match_completion_suffix(code, cursor + 5, *block_result_slot, *loop_result_slot)?;
+        let (assigned_accumulator_slot, accumulator_end) =
+            match_accumulator_commit(code, cursor + 3, *block_result_slot, *loop_result_slot)?;
+        let assigned_accumulator_slot = &assigned_accumulator_slot;
         let receiver_slot = receiver_slot?;
         if accumulator_end != tail
             || cache.local_slot() != Some(receiver_slot)

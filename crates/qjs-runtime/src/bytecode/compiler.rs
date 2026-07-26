@@ -1135,13 +1135,25 @@ impl Compiler {
         if !self.tracks_completion_values
             && let Stmt::Expr(qjs_ast::Expr::Assignment {
                 target: target @ qjs_ast::AssignmentTarget::Identifier { .. },
-                op: qjs_ast::AssignmentOp::Assign,
+                op,
                 value,
                 ..
             }) = stmt
         {
-            self.compile_assign_discarded(target, value)?;
-            return Ok(false);
+            if *op == qjs_ast::AssignmentOp::Assign {
+                self.compile_assign_discarded(target, value)?;
+                return Ok(false);
+            }
+            // A compound assignment in statement position is the shape of
+            // `sum += term` and `text += "literal"`. Producing its value costs
+            // a duplication plus the store that discards it, and — worse — the
+            // completion temporary holds the result until the block ends, so a
+            // uniquely held string can never be appended to in place and
+            // repeated `+=` becomes quadratic.
+            if Self::compound_assign_can_discard(target, *op) {
+                self.compile_compound_assign_discarded(target, *op, value)?;
+                return Ok(false);
+            }
         }
         self.compile_stmt(stmt)?;
         Ok(true)

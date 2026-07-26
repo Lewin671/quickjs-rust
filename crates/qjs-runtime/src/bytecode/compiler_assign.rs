@@ -218,6 +218,39 @@ impl Compiler {
         op: AssignmentOp,
         value: &Expr,
     ) -> Result<(), RuntimeError> {
+        self.compile_compound_assign_with_value(target, op, value, true)
+    }
+
+    /// Whether `target <op>= value` can be compiled without producing the
+    /// assigned value. The short-circuiting compounds leave the untaken
+    /// branch's value on the stack, so only the arithmetic ones qualify.
+    pub(super) fn compound_assign_can_discard(target: &AssignmentTarget, op: AssignmentOp) -> bool {
+        matches!(target, AssignmentTarget::Identifier { .. })
+            && !matches!(
+                op,
+                AssignmentOp::Assign
+                    | AssignmentOp::LogicalAndAssign
+                    | AssignmentOp::LogicalOrAssign
+                    | AssignmentOp::NullishAssign
+            )
+    }
+
+    pub(super) fn compile_compound_assign_discarded(
+        &mut self,
+        target: &AssignmentTarget,
+        op: AssignmentOp,
+        value: &Expr,
+    ) -> Result<(), RuntimeError> {
+        self.compile_compound_assign_with_value(target, op, value, false)
+    }
+
+    fn compile_compound_assign_with_value(
+        &mut self,
+        target: &AssignmentTarget,
+        op: AssignmentOp,
+        value: &Expr,
+        produce_value: bool,
+    ) -> Result<(), RuntimeError> {
         let AssignmentTarget::Identifier {
             name,
             parenthesized,
@@ -283,12 +316,14 @@ impl Compiler {
                         self.emit(Op::AppendStringLiteralLocal {
                             slot,
                             value: value.clone(),
+                            discard: !produce_value,
                         });
                     } else {
                         self.emit(Op::AppendStringLiteralGlobal {
                             name: name.clone(),
                             value: value.clone(),
                             is_strict: self.strict,
+                            discard: !produce_value,
                         });
                     }
                     return Ok(());
@@ -296,7 +331,9 @@ impl Compiler {
                 self.emit_load_identifier(name, load_slot, resolved_with_object_slot);
                 self.compile_expr(value)?;
                 self.emit(Op::Binary(assignment_binary_op(op)?));
-                self.emit(Op::Dup);
+                if produce_value {
+                    self.emit(Op::Dup);
+                }
                 self.emit_store_identifier(name, store_slot, resolved_with_object_slot);
             }
         }

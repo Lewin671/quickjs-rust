@@ -167,18 +167,26 @@ impl Vm<'_> {
     }
 
     pub(super) fn run_string_append_op(&mut self, op: Op) -> Result<(), RuntimeError> {
-        let result = match op {
-            Op::AppendStringLiteralLocal { slot, value } => {
-                self.append_string_literal_local(slot, &value)
-            }
+        let (result, discard) = match op {
+            Op::AppendStringLiteralLocal {
+                slot,
+                value,
+                discard,
+            } => (self.append_string_literal_local(slot, &value), discard),
             Op::AppendStringLiteralGlobal {
                 name,
                 value,
                 is_strict,
-            } => self.append_string_literal_global(&name, &value, is_strict),
+                discard,
+            } => (
+                self.append_string_literal_global(&name, &value, is_strict),
+                discard,
+            ),
             _ => unreachable!("string append dispatcher received a non-append opcode"),
         };
-        if let Some(value) = self.handle_runtime_result(result)? {
+        if let Some(value) = self.handle_runtime_result(result)?
+            && !discard
+        {
             self.stack.push(value);
         }
         Ok(())

@@ -256,6 +256,61 @@ fn accumulates_string_concatenation_in_place() {
 }
 
 #[test]
+fn discarded_compound_assignment_keeps_its_observable_effects() {
+    // A compound assignment in statement position is compiled without its
+    // value. The store, the coercion order, and every alias must still behave
+    // exactly as they do where the value is used.
+    assert_eq!(
+        eval(
+            "function run() { var s = ''; for (var i = 0; i < 4; i++) { s += 'ab'; } return s; } run();"
+        ),
+        Ok(Value::String("abababab".to_owned().into()))
+    );
+    assert_eq!(
+        eval("function run() { var s = 'a'; var old = s; s += 'b'; return old + ':' + s; } run();"),
+        Ok(Value::String("a:ab".to_owned().into()))
+    );
+    // The value is still produced where something reads it.
+    assert_eq!(
+        eval("function run() { var s = 1; var r = (s += 2); return r + ':' + s; } run();"),
+        Ok(Value::String("3:3".to_owned().into()))
+    );
+    // Arithmetic compounds, coercion side effects, and error paths are
+    // unchanged by dropping the value.
+    assert_eq!(
+        eval("function run() { var n = 10; n -= 3; n *= 2; n %= 9; n **= 2; return n; } run();"),
+        Ok(Value::Number(25.0))
+    );
+    assert_eq!(
+        eval(
+            "function run() { var calls = 0; var s = 'a'; s += { toString: function () { calls++; return 'b'; } }; return s + ':' + calls; } run();"
+        ),
+        Ok(Value::String("ab:1".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function run() { const s = 'a'; try { s += 'b'; } catch (error) { return 'caught:' + s; } return 'none'; } run();"
+        ),
+        Ok(Value::String("caught:a".to_owned().into()))
+    );
+    // A closure over the target observes the assignment, and a captured alias
+    // taken before it keeps the old string.
+    assert_eq!(
+        eval(
+            "function run() { var s = 'a'; var read = function () { return s; }; var old = read(); s += 'b'; return old + ':' + read(); } run();"
+        ),
+        Ok(Value::String("a:ab".to_owned().into()))
+    );
+    // The short-circuiting compounds keep their existing lowering.
+    assert_eq!(
+        eval(
+            "function run() { var a = 0; a ||= 5; var b = 1; b &&= 7; var c = null; c ??= 9; return a + ':' + b + ':' + c; } run();"
+        ),
+        Ok(Value::String("5:7:9".to_owned().into()))
+    );
+}
+
+#[test]
 fn evaluates_template_literal_substitutions() {
     assert_eq!(
         eval("let name = 'quickjs'; `hello ${name}`;"),

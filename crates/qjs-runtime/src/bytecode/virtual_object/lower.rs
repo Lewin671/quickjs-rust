@@ -725,25 +725,39 @@ fn fuse_binary_assignments(
     analysis: &super::VirtualObjectAnalysis,
     code: &mut [Op],
 ) {
-    for ip in 0..code.len().saturating_sub(3) {
-        let (Op::Binary(op), Op::Dup, Op::AssignLocal(target)) =
-            (&code[ip], &code[ip + 1], &code[ip + 2])
-        else {
+    for ip in 0..code.len().saturating_sub(1) {
+        let Op::Binary(op) = &code[ip] else {
             continue;
         };
         // A compound assignment is followed by the statement-completion stores
         // its context needs: both the block and loop result slots where a
-        // completion value is observable, and only the block slot inside a
-        // function body. Repeating the single slot keeps one fused opcode
-        // shape for both, since storing the same value twice to one slot is
-        // indistinguishable from storing it once.
-        let (stores, skip) = match (code.get(ip + 3), code.get(ip + 4), code.get(ip + 5)) {
-            (Some(Op::Dup), Some(Op::StoreLocal(first)), Some(Op::StoreLocal(second))) => {
-                ([*first, *second], 5)
+        // completion value is observable, and only the block slot where just
+        // the block's value is. Repeating the single slot keeps one fused
+        // opcode shape for both, since storing the same value twice to one slot
+        // is indistinguishable from storing it once. A statement whose value
+        // nobody observes drops the duplication entirely and assigns straight
+        // to the target, which is the same shape with the target repeated.
+        let (target, stores, skip) = match (
+            code.get(ip + 1),
+            code.get(ip + 2),
+            code.get(ip + 3),
+            code.get(ip + 4),
+            code.get(ip + 5),
+        ) {
+            (
+                Some(Op::Dup),
+                Some(Op::AssignLocal(target)),
+                Some(Op::Dup),
+                Some(Op::StoreLocal(first)),
+                Some(Op::StoreLocal(second)),
+            ) => (*target, [*first, *second], 5),
+            (Some(Op::Dup), Some(Op::AssignLocal(target)), Some(Op::StoreLocal(only)), _, _) => {
+                (*target, [*only, *only], 3)
             }
-            (Some(Op::StoreLocal(only)), _, _) => ([*only, *only], 3),
+            (Some(Op::AssignLocal(target)), _, _, _, _) => (*target, [*target, *target], 1),
             _ => continue,
         };
+        let (op, target) = (op, &target);
         if analysis
             .slot_authority
             .is_assignment_authoritative(bytecode, *target)

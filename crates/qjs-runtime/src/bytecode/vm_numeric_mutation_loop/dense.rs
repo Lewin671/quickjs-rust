@@ -1095,20 +1095,18 @@ fn compile_fixed(
         Op::LoadLocal(accumulator_slot),
         Op::GetPropIndex(encoded_checksum),
         Op::Binary(BinaryOp::Add),
-        Op::Dup,
-        Op::AssignLocal(assigned_accumulator_slot),
     ) = (
         code.get(cursor)?,
         code.get(cursor + 1)?,
         code.get(cursor + 2)?,
-        code.get(cursor + 3)?,
-        code.get(cursor + 4)?,
     )
     else {
         return None;
     };
-    let accumulator_end =
-        super::match_completion_suffix(code, cursor + 5, *block_result_slot, *loop_result_slot)?;
+    let (assigned_accumulator_slot, accumulator_commit_end) =
+        super::match_accumulator_commit(code, cursor + 3, *block_result_slot, *loop_result_slot)?;
+    let assigned_accumulator_slot = &assigned_accumulator_slot;
+    let accumulator_end = accumulator_commit_end;
     let (checksum_index, checksum_receiver) = decode_index_receiver(*encoded_checksum);
     let receiver_slot = receiver_slot?;
     let required_distinct_slots = [

@@ -214,11 +214,16 @@ pub(super) enum Op {
     AppendStringLiteralLocal {
         slot: usize,
         value: String,
+        /// Set where the appended value is unobservable, so the opcode leaves
+        /// nothing on the operand stack. Keeping the result out of a completion
+        /// temporary is what lets the next append reuse the buffer in place.
+        discard: bool,
     },
     AppendStringLiteralGlobal {
         name: String,
         value: String,
         is_strict: bool,
+        discard: bool,
     },
     StoreLocal(usize),
     AssignLocal(usize),

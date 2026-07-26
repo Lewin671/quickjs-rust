@@ -115,6 +115,47 @@ impl ControlLoopPlan {
     /// and loop result slots where completion values are observable, and only
     /// the block slot inside a function body. Returns the cursor past the
     /// stores and the block slot written.
+    /// Matches an arm's constant accumulator update. Where the arm's value is
+    /// unobservable the statement is compiled without the duplication and
+    /// without a completion store, so the following `LoadLocal` names the
+    /// arm's result slot instead.
+    fn match_arm_accumulator_update(
+        code: &[Op],
+        cursor: usize,
+    ) -> Option<(usize, usize, usize, usize)> {
+        let (
+            Op::LoadLocal(accumulator_slot),
+            Op::LoadConst(delta_index),
+            Op::Binary(BinaryOp::Add),
+        ) = (
+            code.get(cursor)?,
+            code.get(cursor + 1)?,
+            code.get(cursor + 2)?,
+        )
+        else {
+            return None;
+        };
+        let (assigned_slot, end, stored_result_slot) =
+            match (code.get(cursor + 3)?, code.get(cursor + 4)) {
+                (Op::Dup, Some(Op::AssignLocal(slot))) => {
+                    let (end, block) = Self::match_completion_stores(code, cursor + 5, None)?;
+                    (*slot, end, Some(block))
+                }
+                (Op::AssignLocal(slot), _) => (*slot, cursor + 4, None),
+                _ => return None,
+            };
+        if assigned_slot != *accumulator_slot {
+            return None;
+        }
+        let Op::LoadLocal(loaded_result_slot) = code.get(end)? else {
+            return None;
+        };
+        if stored_result_slot.is_some_and(|slot| slot != *loaded_result_slot) {
+            return None;
+        }
+        Some((*accumulator_slot, *delta_index, end, *loaded_result_slot))
+    }
+
     fn match_completion_stores(
         code: &[Op],
         cursor: usize,
@@ -218,33 +259,14 @@ impl ControlLoopPlan {
         // and reloads the branch result as the arm's value.
         let mut then_cursor = Self::skip_optional_seed(code, cursor + 7);
         then_cursor = Self::skip_optional_seed(code, then_cursor);
-        let (
-            Op::LoadLocal(accumulator_slot),
-            Op::LoadConst(then_delta_index),
-            Op::Binary(BinaryOp::Add),
-            Op::Dup,
-            Op::AssignLocal(then_accumulator_slot),
-        ) = (
-            code.get(then_cursor)?,
-            code.get(then_cursor + 1)?,
-            code.get(then_cursor + 2)?,
-            code.get(then_cursor + 3)?,
-            code.get(then_cursor + 4)?,
-        )
-        else {
+        let (accumulator_slot, then_delta_index, then_cursor, _then_result_slot) =
+            Self::match_arm_accumulator_update(code, then_cursor)?;
+        let accumulator_slot = &accumulator_slot;
+        let then_delta_index = &then_delta_index;
+        let Op::Jump(join) = code.get(then_cursor + 1)? else {
             return None;
         };
-        let (then_cursor, then_result_slot) =
-            Self::match_completion_stores(code, then_cursor + 5, None)?;
-        let (Op::LoadLocal(loaded_then_result_slot), Op::Jump(join)) =
-            (code.get(then_cursor)?, code.get(then_cursor + 1)?)
-        else {
-            return None;
-        };
-        if then_accumulator_slot != accumulator_slot
-            || loaded_then_result_slot != &then_result_slot
-            || else_start != &(then_cursor + 2)
-        {
+        if else_start != &(then_cursor + 2) {
             return None;
         }
 
@@ -254,32 +276,10 @@ impl ControlLoopPlan {
         }
         else_cursor = Self::skip_optional_seed(code, else_cursor + 1);
         else_cursor = Self::skip_optional_seed(code, else_cursor);
-        let (
-            Op::LoadLocal(else_accumulator_slot),
-            Op::LoadConst(else_delta_index),
-            Op::Binary(BinaryOp::Add),
-            Op::Dup,
-            Op::AssignLocal(assigned_else_accumulator_slot),
-        ) = (
-            code.get(else_cursor)?,
-            code.get(else_cursor + 1)?,
-            code.get(else_cursor + 2)?,
-            code.get(else_cursor + 3)?,
-            code.get(else_cursor + 4)?,
-        )
-        else {
-            return None;
-        };
-        let (else_cursor, else_result_slot) =
-            Self::match_completion_stores(code, else_cursor + 5, None)?;
-        let Op::LoadLocal(loaded_else_result_slot) = code.get(else_cursor)? else {
-            return None;
-        };
-        if else_accumulator_slot != accumulator_slot
-            || assigned_else_accumulator_slot != accumulator_slot
-            || loaded_else_result_slot != &else_result_slot
-            || join != &(else_cursor + 1)
-        {
+        let (else_accumulator_slot, else_delta_index, else_cursor, _else_result_slot) =
+            Self::match_arm_accumulator_update(code, else_cursor)?;
+        let else_delta_index = &else_delta_index;
+        if &else_accumulator_slot != accumulator_slot || join != &(else_cursor + 1) {
             return None;
         }
 

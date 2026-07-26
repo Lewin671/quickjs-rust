@@ -311,7 +311,11 @@ impl<'a> Analyzer<'a> {
                 state.stack.push(AbstractValue::unknown());
             }
             Op::TypeofGlobal(_) => state.stack.push(AbstractValue::known_non_function()),
-            Op::AppendStringLiteralLocal { slot, value } => {
+            Op::AppendStringLiteralLocal {
+                slot,
+                value,
+                discard,
+            } => {
                 let stored = state
                     .locals
                     .get(slot)
@@ -329,12 +333,16 @@ impl<'a> Analyzer<'a> {
                 } else {
                     AbstractValue::unknown()
                 };
-                state.stack.push(result);
+                if !discard {
+                    state.stack.push(result);
+                }
             }
-            Op::AppendStringLiteralGlobal { .. } => {
+            Op::AppendStringLiteralGlobal { discard, .. } => {
                 // A completed `x += "literal"` always produces a string even
                 // though a global binding's prefix is not tracked here.
-                state.stack.push(AbstractValue::some_string());
+                if !discard {
+                    state.stack.push(AbstractValue::some_string());
+                }
             }
             Op::StoreLocal(slot) => {
                 let value = Self::pop(state, ip)?;
