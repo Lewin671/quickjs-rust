@@ -100,8 +100,8 @@ eligibility is unchanged and still requires both conditions:
 
 Most cases retain a 500 ms window and 1% startup ceiling. Cases whose exact
 checksum bounds cap the safe iteration count use explicit 250-350 ms windows
-and 2-4% ceilings; their formal windows still amortize startup by at least
-25x. `branch_arithmetic` retains a 500 ms minimum but permits a 2% startup
+and 2-4.5% ceilings; even the widest ceiling still amortizes startup by more
+than 22x. `branch_arithmetic` retains a 500 ms minimum but permits a 2% startup
 fraction so an occasional process-start outlier does not invalidate an
 otherwise 1.4-second measurement at its iteration cap. These are per-case
 evidence-capacity settings, not relaxed result, linearity, checksum, or

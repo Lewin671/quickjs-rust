@@ -7916,6 +7916,29 @@ contained pre-existing user state and no clean build receipts were supplied, so
 the strict report correctly marked provenance unverified rather than emitting
 a report-grade conclusion.
 
+### 2026-07-26 plain-call measurement-capacity repair
+
+A complete local broad diagnostic exposed a single capacity miss: the
+candidate's three `plain_function_call` formal windows reached the frozen
+130,000,000-iteration cap in 290.0-293.7 ms, while its 12.48 ms median startup
+sample exceeded the former 4% ceiling. Candidate, base, and QuickJS-NG were
+otherwise complete, so this is a per-case evidence limit rather than a runtime
+failure.
+
+The case ceiling is raised to 134,000,000, whose triangular checksum is
+8,978,000,067,000,000 and remains below JavaScript's maximum safe integer
+(9,007,199,254,740,991). Its 250 ms formal window and workload/checksum model
+are unchanged; only its startup ceiling becomes 4.5%, which still requires
+more than 22x startup amortization. A three-role, three-block capacity run
+with candidate and base rebuilt from the identical runtime SHA-256
+`e72fe8cd70141c85ece3f12ac0abd365561a9e5a7081569f26c01645b7eca49b`
+recorded all 9/9 formal windows as eligible at the new cap and all 24/24 N/2N
+diagnostics as valid. Its raw JSONL SHA-256 is
+`aca7433df9f901a82adff8fead79c9523f9572b639b0ac8d15370d045d89f677`.
+The selected, receipt-free local run is intentionally rejected by strict
+reporting as incomplete/unverified, so this is a measurement-capacity repair,
+not a runtime-performance claim.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an

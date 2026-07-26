@@ -63,6 +63,8 @@ class ManifestTests(unittest.TestCase):
             self.assertEqual(cases[case_id].expected_checksum(1024), 524800)
         for case_id in ("string_slice", "object_allocation", "array_allocation"):
             self.assertEqual(cases[case_id].max_iterations, 400_000_000)
+        self.assertEqual(cases["plain_function_call"].max_iterations, 134_000_000)
+        self.assertEqual(cases["plain_function_call"].startup_max_fraction, Fraction(9, 200))
         self.assertTrue(
             all(
                 abs(case.expected_checksum(case.max_iterations)) <= (2**53 - 1)
