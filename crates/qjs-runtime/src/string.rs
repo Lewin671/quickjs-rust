@@ -145,6 +145,30 @@ pub(crate) fn js_string_cmp(left: &JsString, right: &JsString) -> std::cmp::Orde
     string_code_units(left).cmp(&string_code_units(right))
 }
 
+/// Builds the runtime's canonical text for a code-unit sequence: a valid
+/// surrogate pair becomes the scalar value it encodes, while an unpaired
+/// surrogate keeps the sentinel encoding. `string_from_code_units` keeps every
+/// unit separate, which leaves a pair looking like two private-use scalars to
+/// anything that inspects the text.
+pub(crate) fn string_from_code_units_canonical(code_units: &[u16]) -> String {
+    let mut result = String::with_capacity(code_units.len());
+    let mut index = 0;
+    while index < code_units.len() {
+        let unit = code_units[index];
+        let next = code_units.get(index + 1).copied();
+        if let (0xD800..=0xDBFF, Some(0xDC00..=0xDFFF)) = (unit, next) {
+            let low = next.expect("matched a low surrogate");
+            let scalar = 0x1_0000 + ((u32::from(unit) - 0xD800) << 10) + (u32::from(low) - 0xDC00);
+            push_code_point(&mut result, scalar);
+            index += 2;
+            continue;
+        }
+        push_code_unit(&mut result, unit);
+        index += 1;
+    }
+    result
+}
+
 pub(crate) fn string_from_code_units(code_units: &[u16]) -> String {
     let mut result = String::with_capacity(code_units.len());
     for code_unit in code_units {

@@ -1439,3 +1439,37 @@ fn memoized_matcher_view_keeps_mode_specific_indices() {
         Ok(Value::String("xy:x:y:x:0".to_owned().into()))
     );
 }
+
+#[test]
+fn regexp_split_counts_code_units_and_recombines_pairs() {
+    // `Symbol.split` walks `lastIndex`, which counts UTF-16 code units, so its
+    // segment boundaries must too — mixing in scalar-value indices dropped a
+    // code unit from a segment starting inside a supplementary character. The
+    // segments themselves recombine a surrogate pair into its scalar value.
+    assert_eq!(
+        eval(
+            "['\\u{1F600}a\\u{1F600}b'.split(/a/u).join('|'),\
+              '\\u{1F600}a\\u{1F600}b'.split(/a/).join('|'),\
+              'a\\u{1F600}b'.split(/\\u{1F600}/u).join('|'),\
+              String(/../.exec('\\u{1F600}')[0]),\
+              'a1b2c'.split(/(\\d)/).join('|'),\
+              'a,b,,c'.split(/,/).join('|'),\
+              'abc'.split(/x/).join('|'),\
+              'a,b,c'.split(/,/, 2).join('|')].join(';')"
+        ),
+        Ok(Value::String(
+            "\u{1F600}|\u{1F600}b;\u{1F600}|\u{1F600}b;a|b;\u{1F600};a|1|b|2|c;a|b||c;abc;a|b"
+                .to_owned()
+                .into()
+        ))
+    );
+    // An unpaired surrogate keeps its own identity when the split lands between
+    // the halves of a pair.
+    assert_eq!(
+        eval(
+            "var parts = '\\u{1F600}'.split(/(?:)/);\
+             [parts.length, parts[0].charCodeAt(0).toString(16), parts[1].charCodeAt(0).toString(16)].join(':');"
+        ),
+        Ok(Value::String("2:d83d:de00".to_owned().into()))
+    );
+}

@@ -32,10 +32,13 @@ pub(crate) fn native_regexp_prototype_split(
         });
     }
 
-    let input = to_js_string_with_env(
-        argument_values.first().cloned().unwrap_or(Value::Undefined),
-        env,
-    )?;
+    // Keep the argument's own string value where it already is one: every
+    // `exec` this loop performs reuses the character view memoized on it, so a
+    // fresh copy per call would rebuild that view once per match.
+    let input = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
+        Value::String(value) => value,
+        value => crate::JsString::from(to_js_string_with_env(value, env)?),
+    };
     let (splitter, unicode_matching) = split_regexp_clone(this_value, env)?;
     let limit = split_limit(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
@@ -46,8 +49,13 @@ pub(crate) fn native_regexp_prototype_split(
         return Ok(Value::Array(ArrayRef::new(parts)));
     }
 
-    let input_chars: Vec<_> = input.chars().collect();
-    let input_len = input_chars.len();
+    // Every index here is a UTF-16 code unit, which is what `lastIndex` carries
+    // and what the specification's algorithm counts. The code-unit view has one
+    // element per unit, so `advance_string_index` can step surrogate pairs on it
+    // in Unicode mode. Mixing this with scalar-value indices dropped a whole
+    // code unit from a segment that started inside a supplementary character.
+    let input_units = super::matcher_code_unit_view(&input);
+    let input_len = input_units.len();
     if input_len == 0 {
         set_last_index(splitter.clone(), Value::Number(0.0), env)?;
         let result = regexp_exec(splitter, &input, env)?;
@@ -65,19 +73,19 @@ pub(crate) fn native_regexp_prototype_split(
         set_last_index(splitter.clone(), Value::Number(search_index as f64), env)?;
         let result = regexp_exec(splitter.clone(), &input, env)?;
         if matches!(result, Value::Null) {
-            search_index = advance_string_index(&input_chars, search_index, unicode_matching);
+            search_index = advance_string_index(&input_units, search_index, unicode_matching);
             continue;
         }
 
         let match_result = ensure_exec_result_object(result)?;
         let match_end = regexp_last_index(splitter.clone(), env)?.min(input_len);
         if match_end == segment_start {
-            search_index = advance_string_index(&input_chars, search_index, unicode_matching);
+            search_index = advance_string_index(&input_units, search_index, unicode_matching);
             continue;
         }
 
         parts.push(Value::String(
-            input_slice(&input, segment_start, search_index).into(),
+            super::input_slice(&input, segment_start, search_index, false).into(),
         ));
         if parts.len() == limit {
             return Ok(Value::Array(ArrayRef::new(parts)));
@@ -93,7 +101,7 @@ pub(crate) fn native_regexp_prototype_split(
     }
 
     parts.push(Value::String(
-        input_slice(&input, segment_start, input_len).into(),
+        super::input_slice(&input, segment_start, input_len, false).into(),
     ));
     Ok(Value::Array(ArrayRef::new(parts)))
 }
@@ -116,12 +124,16 @@ fn split_regexp_clone(value: Value, env: &mut CallEnv) -> Result<(Value, bool), 
     Ok((splitter, unicode_matching))
 }
 
-fn regexp_exec(splitter: Value, input: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn regexp_exec(
+    splitter: Value,
+    input: &crate::JsString,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     let exec = property_value(splitter.clone(), "exec", env)?;
     call_function(
         exec,
         splitter,
-        vec![Value::String(input.to_owned().into())],
+        vec![Value::String(input.clone())],
         env,
         false,
     )
@@ -185,10 +197,6 @@ fn set_last_index(receiver: Value, value: Value, env: &mut CallEnv) -> Result<()
             message: "TypeError: RegExp.prototype[Symbol.split] cannot set lastIndex".to_owned(),
         })
     }
-}
-
-fn input_slice(input: &str, start: usize, end: usize) -> String {
-    input.chars().skip(start).take(end - start).collect()
 }
 
 fn is_object_value(value: &Value) -> bool {

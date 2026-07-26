@@ -1009,7 +1009,18 @@ fn regexp_groups_object_with(
 /// The matcher indexes scalar values in Unicode mode and code units otherwise,
 /// which is exactly the memoized view the match ran against — so slicing that
 /// view avoids rebuilding the whole index for each captured substring.
-fn input_slice(input: &JsString, start: usize, end: usize, unicode: bool) -> String {
+/// The memoized one-element-per-code-unit view of a string, for algorithms
+/// specified in terms of UTF-16 indices.
+pub(super) fn matcher_code_unit_view(input: &JsString) -> std::rc::Rc<[char]> {
+    input.matcher_view_with(false, |text| {
+        string_code_units(text)
+            .into_iter()
+            .map(crate::string::char_from_code_unit)
+            .collect()
+    })
+}
+
+pub(super) fn input_slice(input: &JsString, start: usize, end: usize, unicode: bool) -> String {
     let view = input.matcher_view_with(unicode, |text| {
         if unicode {
             text.chars().collect()
@@ -1020,9 +1031,23 @@ fn input_slice(input: &JsString, start: usize, end: usize, unicode: bool) -> Str
                 .collect()
         }
     });
-    view.get(start..end)
-        .map(|range| range.iter().collect())
-        .unwrap_or_default()
+    let Some(range) = view.get(start..end) else {
+        return String::new();
+    };
+    if unicode {
+        return range.iter().collect();
+    }
+    // The view holds one element per code unit, so a surrogate pair inside the
+    // range is recombined into the scalar value it encodes; collecting the
+    // elements directly would leave the pair as two sentinel scalars, which
+    // reads back correctly but prints as private-use characters.
+    let units: Vec<u16> = range
+        .iter()
+        .map(|character| {
+            crate::string::surrogate_escape_code_unit(*character).unwrap_or(*character as u16)
+        })
+        .collect();
+    crate::string::string_from_code_units_canonical(&units)
 }
 
 fn code_unit_index_for_char_index(input: &str, char_index: usize) -> usize {
