@@ -1437,3 +1437,51 @@ fn non_octal_decimal_escapes_cook_in_sloppy_mode() {
     assert!(eval(r"'use strict'; '\8';").is_err());
     assert!(eval(r"'use strict'; '\9';").is_err());
 }
+
+#[test]
+fn reference_and_string_comparisons_keep_their_spec_results() {
+    // Object comparison is reference identity for both `===` and `==`, and an
+    // object is never equal to a primitive under `===`.
+    assert_eq!(
+        eval(
+            "var o = { a: 1 }, p = { a: 1 }, alias = o, fn = function () {}, arr = [1];\
+             [o === alias, o === p, o == alias, o == p, arr === arr, fn === fn,\
+              o === 1, o === 'x', o === null, arr === o].join(':');"
+        ),
+        Ok(Value::String(
+            "true:false:true:false:true:true:false:false:false:false"
+                .to_owned()
+                .into()
+        ))
+    );
+    // A boxed primitive is an object: identity, not the wrapped value.
+    assert_eq!(
+        eval("var n = new Number(1); [n === 1, n == 1, n === new Number(1)].join(':');"),
+        Ok(Value::String("false:true:false".to_owned().into()))
+    );
+    // Symbols live in object storage but keep their own language type, so
+    // `symbol == object` still coerces the object side.
+    assert_eq!(
+        eval(
+            "var s = Symbol('t'); var box = {}; box[Symbol.toPrimitive] = function () { return s; };\
+             [s === s, s == box, s === box, Symbol('a') === Symbol('a')].join(':');"
+        ),
+        Ok(Value::String("true:true:false:false".to_owned().into()))
+    );
+    // String comparison is by UTF-16 code unit. A supplementary scalar and the
+    // matching lone-surrogate pair have different UTF-8 buffers but the same
+    // code units, so they must still compare equal and order together.
+    assert_eq!(
+        eval(
+            "var pair = '\\u{1F600}';\
+             var halves = String.fromCharCode(0xD83D) + String.fromCharCode(0xDE00);\
+             [pair === halves, pair == halves, pair < halves, pair > halves,\
+              'abc' === 'abc', 'abc' === 'abd', 'abc' < 'abd', 'b' > 'a', '\\u00e9' > 'z'].join(':');"
+        ),
+        Ok(Value::String(
+            "true:true:false:false:true:false:true:true:true"
+                .to_owned()
+                .into()
+        ))
+    );
+}

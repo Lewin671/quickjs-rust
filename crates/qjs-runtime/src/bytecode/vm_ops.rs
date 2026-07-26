@@ -37,6 +37,19 @@ impl Vm<'_> {
         if let Some(value) = fast_primitive_string_binary(&left, op, &right) {
             return Ok(value);
         }
+        // Loose equality between two object-like values is the same reference
+        // identity test as strict equality; no coercion can run.
+        if matches!(op, BinaryOp::Eq | BinaryOp::Ne)
+            && is_object_like(&left)
+            && is_object_like(&right)
+        {
+            let equal = fast_reference_eq(&left, &right);
+            return Ok(Value::Boolean(if op == BinaryOp::Eq {
+                equal
+            } else {
+                !equal
+            }));
+        }
         if matches!(op, BinaryOp::StrictEq | BinaryOp::StrictNe)
             && let Some(equal) = fast_strict_eq(&left, &right)
         {
@@ -209,14 +222,13 @@ fn fast_primitive_string_binary(left: &Value, op: BinaryOp, right: &Value) -> Op
     if let (Value::String(left), Value::String(right)) = (left, right) {
         let value = match op {
             BinaryOp::Eq | BinaryOp::StrictEq => {
-                Value::Boolean(crate::string::string_utf16_eq(left, right))
+                Value::Boolean(crate::string::js_string_eq(left, right))
             }
             BinaryOp::Ne | BinaryOp::StrictNe => {
-                Value::Boolean(!crate::string::string_utf16_eq(left, right))
+                Value::Boolean(!crate::string::js_string_eq(left, right))
             }
             BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
-                let ordering = crate::string::string_code_units(left)
-                    .cmp(&crate::string::string_code_units(right));
+                let ordering = crate::string::js_string_cmp(left, right);
                 Value::Boolean(match op {
                     BinaryOp::Lt => ordering.is_lt(),
                     BinaryOp::Le => ordering.is_le(),
@@ -264,12 +276,16 @@ fn primitive_js_string(value: &Value) -> Option<String> {
 fn fast_strict_eq(left: &Value, right: &Value) -> Option<bool> {
     match (left, right) {
         (Value::String(left), Value::String(right)) => {
-            Some(crate::string::string_utf16_eq(left, right))
+            Some(crate::string::js_string_eq(left, right))
         }
         (Value::Boolean(left), Value::Boolean(right)) => Some(left == right),
         (Value::Null, Value::Null) | (Value::Undefined, Value::Undefined) => Some(true),
         (Value::BigInt(left), Value::BigInt(right)) => Some(left == right),
         (Value::Number(_), Value::Number(_)) => None,
+        // Strict equality on the object-like variants is reference identity,
+        // and an object is never strictly equal to a primitive. Answering both
+        // here keeps `a === b` off the realm-building slow path, which used to
+        // cost an order of magnitude more than the comparison itself.
         (Value::Array(_), _)
         | (Value::Function(_), _)
         | (Value::Map(_), _)
@@ -281,7 +297,35 @@ fn fast_strict_eq(left: &Value, right: &Value) -> Option<bool> {
         | (_, Value::Map(_))
         | (_, Value::Set(_))
         | (_, Value::Object(_))
-        | (_, Value::Proxy(_)) => None,
+        | (_, Value::Proxy(_)) => Some(fast_reference_eq(left, right)),
         _ => Some(false),
+    }
+}
+
+/// Whether `value` is an ordinary object-like value, i.e. one whose loose
+/// equality against another such value is reference identity. A symbol
+/// primitive is stored as an object but has its own language type, so
+/// `symbol == object` still coerces the object side and is excluded here.
+fn is_object_like(value: &Value) -> bool {
+    match value {
+        Value::Object(object) => !crate::symbol::is_symbol_primitive(object),
+        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) => true,
+        Value::Proxy(_) => false,
+        _ => false,
+    }
+}
+
+/// Reference identity for two object-like values. Values of different variants
+/// are distinct objects, and an object-like value is never identical to a
+/// primitive.
+fn fast_reference_eq(left: &Value, right: &Value) -> bool {
+    match (left, right) {
+        (Value::Object(left), Value::Object(right)) => left.ptr_eq(right),
+        (Value::Array(left), Value::Array(right)) => left.ptr_eq(right),
+        (Value::Function(left), Value::Function(right)) => left == right,
+        (Value::Map(left), Value::Map(right)) => left.ptr_eq(right),
+        (Value::Set(left), Value::Set(right)) => left.ptr_eq(right),
+        (Value::Proxy(left), Value::Proxy(right)) => left.ptr_eq(right),
+        _ => false,
     }
 }

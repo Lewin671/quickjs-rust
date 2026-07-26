@@ -119,6 +119,32 @@ pub(crate) fn string_utf16_eq(left: &str, right: &str) -> bool {
     string_code_units(left) == string_code_units(right)
 }
 
+/// Compares two shared string values by code unit.
+///
+/// Identical buffers and identical byte sequences are always equal, and an
+/// ASCII buffer's code units are its bytes, so the general comparison — which
+/// materializes both UTF-16 views — is only needed for two distinct non-ASCII
+/// buffers. Those are rare; string equality is otherwise a shared-pointer test
+/// or one `memcmp`.
+pub(crate) fn js_string_eq(left: &JsString, right: &JsString) -> bool {
+    if JsString::ptr_eq(left, right) || left.as_str() == right.as_str() {
+        return true;
+    }
+    if left.is_ascii() || right.is_ascii() {
+        return false;
+    }
+    string_utf16_eq(left, right)
+}
+
+/// Orders two shared string values by code unit, avoiding the materialized
+/// UTF-16 views where both buffers are ASCII.
+pub(crate) fn js_string_cmp(left: &JsString, right: &JsString) -> std::cmp::Ordering {
+    if left.is_ascii() && right.is_ascii() {
+        return left.as_bytes().cmp(right.as_bytes());
+    }
+    string_code_units(left).cmp(&string_code_units(right))
+}
+
 pub(crate) fn string_from_code_units(code_units: &[u16]) -> String {
     let mut result = String::with_capacity(code_units.len());
     for code_unit in code_units {
