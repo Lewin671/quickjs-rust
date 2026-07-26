@@ -1405,3 +1405,39 @@ fn discarded_assignment_statements_keep_assignment_semantics() {
         Ok(Value::String("TypeError".to_owned().into()))
     );
 }
+
+#[test]
+fn for_in_shadowing_survives_the_hashed_seen_set() {
+    // Enumeration reports each name once, in the order the layers are walked,
+    // with a shadowed prototype name suppressed even when its own descriptor
+    // is non-enumerable.
+    assert_eq!(
+        eval(
+            "var base = { a: 1, b: 2, c: 3 };\
+             var derived = Object.create(base);\
+             derived.b = 20; derived.d = 4;\
+             Object.defineProperty(derived, 'c', { value: 30, enumerable: false });\
+             var out = []; for (var key in derived) out.push(key + '=' + derived[key]);\
+             out.join(',');"
+        ),
+        Ok(Value::String("b=20,d=4,a=1".to_owned().into()))
+    );
+    // Many properties keep insertion order, and deleting during enumeration
+    // still visits only names that remain reachable.
+    assert_eq!(
+        eval(
+            "var o = {}; for (var i = 0; i < 40; i++) o['k' + i] = i;\
+             var seen = 0, first = '', last = '';\
+             for (var key in o) { if (!first) first = key; last = key; seen++; }\
+             [seen, first, last].join(':');"
+        ),
+        Ok(Value::String("40:k0:k39".to_owned().into()))
+    );
+    // Index keys still come before string keys, and array holes are skipped.
+    assert_eq!(
+        eval(
+            "var a = [1, , 3]; a.x = 4; var out = []; for (var k in a) out.push(k); out.join(',');"
+        ),
+        Ok(Value::String("0,2,x".to_owned().into()))
+    );
+}

@@ -1360,7 +1360,10 @@ pub(super) fn enumerable_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Val
     // exotic Proxy in the chain is consulted through its ownKeys /
     // getOwnPropertyDescriptor / getPrototypeOf traps.
     let mut keys: Vec<String> = Vec::new();
-    let mut seen: Vec<String> = Vec::new();
+    // Shadowing is decided per key, so the already-seen set is consulted once
+    // per property of every layer. A linear scan made enumerating an object
+    // quadratic in its property count.
+    let mut seen: crate::value::name_hash::NameSet<String> = <_>::default();
     let mut current = value;
     loop {
         let prototype = match &current {
@@ -1373,7 +1376,7 @@ pub(super) fn enumerable_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Val
             | Value::Map(_)
             | Value::Set(_) => {
                 for key in own_string_keys(&current) {
-                    if !seen.iter().any(|existing| existing == &key) {
+                    if !seen.contains(&key) {
                         let property_key = PropertyKey::String(key.clone());
                         if let Some(property) = crate::object::own_property_descriptor_key(
                             current.clone(),
@@ -1383,7 +1386,7 @@ pub(super) fn enumerable_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Val
                             if property.enumerable {
                                 keys.push(key.clone());
                             }
-                            seen.push(key);
+                            seen.insert(key);
                         }
                     }
                 }
@@ -1440,7 +1443,7 @@ fn own_string_keys(value: &Value) -> Vec<String> {
 fn proxy_enumerable_layer(
     proxy: crate::proxy::ProxyRef,
     keys: &mut Vec<String>,
-    seen: &mut Vec<String>,
+    seen: &mut crate::value::name_hash::NameSet<String>,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     for key in crate::proxy::proxy_own_keys(proxy.clone(), env)? {
@@ -1455,11 +1458,11 @@ fn proxy_enumerable_layer(
             |target, env| crate::object::own_property_descriptor_key(target, &property_key, env),
         )?;
         if let Some(property) = descriptor {
-            if !seen.iter().any(|existing| existing == &name) {
+            if !seen.contains(&name) {
                 if property.enumerable {
                     keys.push(name.clone());
                 }
-                seen.push(name);
+                seen.insert(name);
             }
         }
     }
