@@ -55,7 +55,7 @@ fn evaluates_symbol_prototype_builtins() {
     assert_eq!(eval("Symbol(undefined).description;"), Ok(Value::Undefined));
     assert_eq!(
         eval("Symbol('').description;"),
-        Ok(Value::String(::std::rc::Rc::new(String::new())))
+        Ok(Value::String(crate::JsString::default()))
     );
     assert_eq!(
         eval("let symbol = Symbol('id'); symbol.valueOf() === symbol;"),

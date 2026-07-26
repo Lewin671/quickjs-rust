@@ -134,7 +134,7 @@ fn evaluates_string_sequence_builtins() {
         eval(
             "function f() {} f.valueOf = function() { return 'gnulluna'; }; Function.prototype.substring = String.prototype.substring; f.substring(null, Function());"
         ),
-        Ok(Value::String(::std::rc::Rc::new(String::new())))
+        Ok(Value::String(crate::JsString::default()))
     );
     assert_eq!(
         eval("'abcdef'.substr(1, 3);"),
@@ -150,7 +150,7 @@ fn evaluates_string_sequence_builtins() {
     );
     assert_eq!(
         eval("'abcdef'.substr(2, -1);"),
-        Ok(Value::String(::std::rc::Rc::new(String::new())))
+        Ok(Value::String(crate::JsString::default()))
     );
     assert_eq!(
         eval("'abcdef'.substr(2, 2.8);"),
@@ -158,7 +158,7 @@ fn evaluates_string_sequence_builtins() {
     );
     assert_eq!(
         eval("'abcdef'.substr(Infinity, 1);"),
-        Ok(Value::String(::std::rc::Rc::new(String::new())))
+        Ok(Value::String(crate::JsString::default()))
     );
     assert_eq!(
         eval("'a😀bc'.slice(1, 3) + ':' + 'a😀bc'.substr(1, 2) + ':' + 'a😀bc'.substring(3, 1);"),

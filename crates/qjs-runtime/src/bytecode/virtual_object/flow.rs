@@ -3,6 +3,7 @@ use std::{
     rc::Rc,
 };
 
+use crate::JsString;
 use crate::Value;
 
 use super::super::ir::{ArrayElementKind, Bytecode, Op, decode_index_receiver};
@@ -13,7 +14,7 @@ use super::{
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum StringKnowledge {
-    Exact(Rc<String>),
+    Exact(JsString),
     SomeString,
 }
 
@@ -44,7 +45,7 @@ impl AbstractValue {
         }
     }
 
-    fn known_string(value: Rc<String>) -> Self {
+    fn known_string(value: JsString) -> Self {
         Self {
             candidates: BTreeSet::new(),
             may_be_other: true,
@@ -106,7 +107,7 @@ impl AbstractValue {
         let mut value = String::with_capacity(prefix.len() + suffix.len());
         value.push_str(prefix);
         value.push_str(suffix);
-        Self::known_string(Rc::new(value))
+        Self::known_string(JsString::from(value))
     }
 
     fn join(&self, other: &Self) -> Self {

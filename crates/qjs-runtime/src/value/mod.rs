@@ -4,6 +4,7 @@ use std::rc::Rc;
 use num_bigint::BigInt;
 
 mod array;
+mod js_string;
 mod map;
 pub(crate) mod name_hash;
 mod object;
@@ -12,6 +13,7 @@ mod set;
 
 pub use array::ArrayRef;
 pub(crate) use array::{MAX_DENSE_STORAGE_LENGTH, array_index_property_key};
+pub use js_string::JsString;
 pub use map::MapRef;
 pub use object::ObjectRef;
 pub(crate) use object::Prototype;
@@ -33,7 +35,7 @@ pub enum Value {
     /// BigInt value. JavaScript BigInts are immutable, so sharing keeps the
     /// common `Value` representation pointer-sized without observable aliasing.
     BigInt(Rc<BigInt>),
-    /// String value. Held behind `Rc<String>` so cloning a string `Value`
+    /// String value. Held behind [`JsString`] so cloning a string `Value`
     /// (which happens on every property read, parameter pass, and environment
     /// lookup) is a refcount bump rather than a full heap copy. JavaScript
     /// strings are immutable, so sharing is safe; the in-place `+=` append fast
@@ -41,7 +43,7 @@ pub enum Value {
     /// The buffer must already use the runtime's canonical WTF-16 sentinel
     /// representation; host UTF-8 text should enter through
     /// [`Value::string_from_utf8`].
-    String(Rc<String>),
+    String(JsString),
     /// Boolean value.
     Boolean(bool),
     /// Null value.
@@ -107,7 +109,7 @@ impl Value {
     /// Constructs a JavaScript String from host UTF-8 scalar text while
     /// preserving real scalars that overlap the runtime's surrogate sentinels.
     pub fn string_from_utf8(value: &str) -> Self {
-        Self::String(Rc::new(string::string_from_utf8_scalars(value)))
+        Self::String(JsString::from(string::string_from_utf8_scalars(value)))
     }
 
     /// Returns a host UTF-8 view of a JavaScript String. Valid surrogate pairs

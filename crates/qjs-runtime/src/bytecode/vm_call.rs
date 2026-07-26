@@ -643,7 +643,7 @@ fn fast_primitive_string_char_code_at(this_value: &Value, arguments: &[Value]) -
     let code_unit = if position < 0.0 || !position.is_finite() {
         None
     } else {
-        crate::string::string_code_unit_at(value, position as usize)
+        crate::string::js_string_code_unit_at(value, position as usize)
     };
     Some(Value::Number(code_unit.map_or(f64::NAN, f64::from)))
 }

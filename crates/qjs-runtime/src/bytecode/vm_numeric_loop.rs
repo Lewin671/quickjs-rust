@@ -114,7 +114,7 @@ enum PreparedNumericLoopTerm {
         arguments: NumericLoopArguments,
     },
     StringSliceLength {
-        value: std::rc::Rc<String>,
+        value: crate::JsString,
         arguments: NumericLoopArguments,
     },
 }

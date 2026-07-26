@@ -25,12 +25,12 @@ pub(crate) fn eval_unary(
         // returns a BigInt) uses the BigInt operation rather than ToNumber,
         // which would throw.
         UnaryOp::Minus => match to_numeric_with_env(argument, env)? {
-            Value::BigInt(value) => Ok(Value::bigint(-Rc::unwrap_or_clone(value))),
+            Value::BigInt(value) => Ok(Value::bigint(-std::rc::Rc::unwrap_or_clone(value))),
             Value::Number(value) => Ok(Value::Number(-value)),
             _ => unreachable!("ToNumeric yields a Number or BigInt"),
         },
         UnaryOp::BitwiseNot => match to_numeric_with_env(argument, env)? {
-            Value::BigInt(value) => Ok(Value::bigint(!Rc::unwrap_or_clone(value))),
+            Value::BigInt(value) => Ok(Value::bigint(!std::rc::Rc::unwrap_or_clone(value))),
             Value::Number(value) => Ok(Value::Number(f64::from(!to_int32_number(value)))),
             _ => unreachable!("ToNumeric yields a Number or BigInt"),
         },

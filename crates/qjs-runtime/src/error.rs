@@ -28,7 +28,7 @@ pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_proto
         .define_non_enumerable("name".to_owned(), Value::String("Error".to_owned().into()));
     error_prototype.define_non_enumerable(
         "message".to_owned(),
-        Value::String(::std::rc::Rc::new(String::new())),
+        Value::String(crate::JsString::default()),
     );
     error_prototype.define_non_enumerable(
         "toString".to_owned(),
@@ -221,11 +221,7 @@ pub(crate) fn create_suppressed_error(
     native_suppressed_error(
         &function,
         Value::Undefined,
-        &[
-            error,
-            suppressed,
-            Value::String(::std::rc::Rc::new(String::new())),
-        ],
+        &[error, suppressed, Value::String(crate::JsString::default())],
         false,
         env,
     )
@@ -450,7 +446,7 @@ fn install_native_error(
     prototype.define_non_enumerable("name".to_owned(), Value::String(name.to_owned().into()));
     prototype.define_non_enumerable(
         "message".to_owned(),
-        Value::String(::std::rc::Rc::new(String::new())),
+        Value::String(crate::JsString::default()),
     );
     function.properties.borrow_mut().insert(
         "prototype".to_owned(),

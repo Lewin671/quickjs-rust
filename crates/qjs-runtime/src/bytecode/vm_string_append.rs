@@ -8,7 +8,7 @@ impl Vm<'_> {
     /// Drops only engine-internal mirrors before a compound string assignment.
     /// The following `Dup` + store bytecodes restore the binding immediately;
     /// any real JavaScript alias keeps the Rc shared and therefore immutable.
-    pub(super) fn prepare_compound_string_reuse(&mut self, expected: &std::rc::Rc<String>) -> bool {
+    pub(super) fn prepare_compound_string_reuse(&mut self, expected: &crate::JsString) -> bool {
         if !matches!(self.bytecode.code.get(self.ip), Some(Op::Dup)) {
             return false;
         }
@@ -25,11 +25,7 @@ impl Vm<'_> {
         }
     }
 
-    fn detach_matching_local_string(
-        &mut self,
-        slot: usize,
-        expected: &std::rc::Rc<String>,
-    ) -> bool {
+    fn detach_matching_local_string(&mut self, slot: usize, expected: &crate::JsString) -> bool {
         if self.direct_eval_with_stack && self.bytecode.local_is_from_env(slot) {
             return false;
         }
@@ -47,7 +43,7 @@ impl Vm<'_> {
         }
         if self.slot_is_authoritative(slot)
             && let Some(Some(local)) = self.locals.get_mut(slot)
-            && matches!(local, Value::String(current) if std::rc::Rc::ptr_eq(current, expected))
+            && matches!(local, Value::String(current) if crate::JsString::ptr_eq(current, expected))
         {
             *local = Value::Undefined;
             return true;
@@ -60,11 +56,7 @@ impl Vm<'_> {
     /// JavaScript alias keeps an Rc alive and therefore still forces a copy,
     /// preserving string immutability. The completed assignment immediately
     /// restores the slot/cell/realm mirrors through the normal store path.
-    fn detach_matching_shared_string(
-        &mut self,
-        slot: usize,
-        expected: &std::rc::Rc<String>,
-    ) -> bool {
+    fn detach_matching_shared_string(&mut self, slot: usize, expected: &crate::JsString) -> bool {
         if self.direct_eval_with_stack {
             return false;
         }
@@ -77,7 +69,7 @@ impl Vm<'_> {
             return false;
         };
         let matches = cell.with_value(|value| {
-            matches!(value, Value::String(current) if std::rc::Rc::ptr_eq(current, expected))
+            matches!(value, Value::String(current) if crate::JsString::ptr_eq(current, expected))
         });
         if !matches {
             return false;
@@ -100,7 +92,7 @@ impl Vm<'_> {
 
         cell.set(Value::Undefined);
         if let Some(Some(local)) = self.locals.get_mut(slot)
-            && matches!(local, Value::String(current) if std::rc::Rc::ptr_eq(current, expected))
+            && matches!(local, Value::String(current) if crate::JsString::ptr_eq(current, expected))
         {
             *local = Value::Undefined;
         }
@@ -114,7 +106,7 @@ impl Vm<'_> {
                 && global_this
                     .own_property(&name)
                     .is_some_and(|property| {
-                        matches!(property.value, Value::String(current) if std::rc::Rc::ptr_eq(&current, expected))
+                        matches!(property.value, Value::String(current) if crate::JsString::ptr_eq(&current, expected))
                     })
             {
                 global_this.set(name, Value::Undefined);
@@ -123,7 +115,7 @@ impl Vm<'_> {
         true
     }
 
-    fn detach_matching_realm_string(&mut self, name: &str, expected: &std::rc::Rc<String>) -> bool {
+    fn detach_matching_realm_string(&mut self, name: &str, expected: &crate::JsString) -> bool {
         if self.env.has_module_import(name)
             || self.env.is_immutable_lexical_binding(name)
             || self.env.is_immutable_function_name(name)
@@ -136,7 +128,7 @@ impl Vm<'_> {
             return false;
         }
         let realm_matches = self.realm.get_value(name).is_some_and(|value| {
-            matches!(value, Value::String(current) if std::rc::Rc::ptr_eq(&current, expected))
+            matches!(value, Value::String(current) if crate::JsString::ptr_eq(&current, expected))
         });
         if !realm_matches {
             return false;
@@ -152,7 +144,7 @@ impl Vm<'_> {
         let cell = self.env.realm_binding_cell(name);
         if let Some(cell) = &cell
             && !cell.with_value(|value| {
-                matches!(value, Value::String(current) if std::rc::Rc::ptr_eq(current, expected))
+                matches!(value, Value::String(current) if crate::JsString::ptr_eq(current, expected))
             })
         {
             return false;
@@ -166,7 +158,7 @@ impl Vm<'_> {
             && global_this
                 .own_property(name)
                 .is_some_and(|property| {
-                    matches!(property.value, Value::String(current) if std::rc::Rc::ptr_eq(&current, expected))
+                    matches!(property.value, Value::String(current) if crate::JsString::ptr_eq(&current, expected))
                 })
         {
             global_this.set(name.to_owned(), Value::Undefined);
@@ -243,7 +235,7 @@ impl Vm<'_> {
             self.store_local(slot, result.clone())?;
             return Ok(result);
         };
-        std::rc::Rc::make_mut(string).push_str(suffix);
+        string.make_mut().push_str(suffix);
         let result = Value::String(string.clone());
         if let Some(upvalue) = self.local_upvalues.get(slot).and_then(Option::as_ref) {
             upvalue.set(result.clone());
@@ -301,7 +293,7 @@ impl Vm<'_> {
                     let Value::String(string) = value else {
                         return None;
                     };
-                    std::rc::Rc::make_mut(string).push_str(suffix);
+                    string.make_mut().push_str(suffix);
                     Some(value.clone())
                 })
             });
@@ -352,7 +344,7 @@ pub(super) fn primitive_append_suffix(value: Value) -> Result<String, Value> {
     Ok(match value {
         Value::Number(number) => crate::number::number_to_js_string(number),
         Value::BigInt(value) => value.to_string(),
-        Value::String(value) => std::rc::Rc::unwrap_or_clone(value),
+        Value::String(value) => value.into_string(),
         Value::Boolean(true) => "true".to_owned(),
         Value::Boolean(false) => "false".to_owned(),
         Value::Null => "null".to_owned(),

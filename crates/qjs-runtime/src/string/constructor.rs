@@ -103,7 +103,7 @@ pub(crate) fn native_string_raw(
     let raw = require_object_coercible(property_value(template, "raw", env)?, "String.raw raw")?;
     let raw_length = to_length_with_env(property_value(raw.clone(), "length", env)?, env)?;
     if raw_length == 0 {
-        return Ok(Value::String(::std::rc::Rc::new(String::new())));
+        return Ok(Value::String(crate::JsString::default()));
     }
 
     let mut result = String::new();

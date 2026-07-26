@@ -477,10 +477,10 @@ impl<'a> JsonParser<'a> {
         }
     }
 
-    fn string_value_rc(&mut self) -> Result<Rc<String>, RuntimeError> {
+    fn string_value_rc(&mut self) -> Result<crate::JsString, RuntimeError> {
         match self.scan_string()? {
             JsonStringScan::Direct { start, end } => {
-                let value = Rc::new(self.source[start..end].to_owned());
+                let value = crate::JsString::from(self.source[start..end].to_owned());
                 self.cursor = end + 1;
                 Ok(value)
             }
@@ -490,7 +490,7 @@ impl<'a> JsonParser<'a> {
                 potential_host_sentinel,
             } => self
                 .decode_string(content_start, resume, potential_host_sentinel)
-                .map(Rc::new),
+                .map(crate::JsString::from),
         }
     }
 
@@ -862,7 +862,7 @@ mod tests {
         };
         assert_eq!(
             value.get("文😀"),
-            Some(Value::String(Rc::new("plain value".to_owned())))
+            Some(Value::String(crate::JsString::from("plain value")))
         );
     }
 

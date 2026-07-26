@@ -1,5 +1,4 @@
-use std::rc::Rc;
-
+use crate::JsString;
 use crate::{
     ArrayRef, PropertyKey, RuntimeError, Value, call_function, has_property_key, property_value,
     property_value_key, regexp, symbol, to_js_string_with_env, to_number_with_env,
@@ -42,7 +41,7 @@ pub(crate) fn native_string_prototype_repeat(
         });
     }
     if count.is_nan() || count == 0.0 {
-        return Ok(Value::String(::std::rc::Rc::new(String::new())));
+        return Ok(Value::String(crate::JsString::default()));
     }
 
     let count = count.trunc() as usize;
@@ -82,7 +81,7 @@ pub(crate) fn native_string_prototype_slice(
         env,
     )?;
     if end <= start {
-        return Ok(Value::String(::std::rc::Rc::new(String::new())));
+        return Ok(Value::String(crate::JsString::default()));
     }
     Ok(Value::String(string_slice_code_units(
         &value, start, end, length,
@@ -96,11 +95,7 @@ pub(crate) fn native_string_prototype_slice(
 /// method is unchanged. Computing the selected code-unit range directly keeps
 /// that general admission contract while avoiding a temporary substring that
 /// would otherwise be allocated, copied, measured, and immediately dropped.
-pub(crate) fn numeric_string_slice_code_unit_len(
-    value: &Rc<String>,
-    start: f64,
-    end: f64,
-) -> usize {
+pub(crate) fn numeric_string_slice_code_unit_len(value: &JsString, start: f64, end: f64) -> usize {
     let length = string_code_unit_len(value);
     let start = numeric_string_slice_index(length, start);
     let end = numeric_string_slice_index(length, end);
@@ -368,7 +363,7 @@ pub(crate) fn native_string_prototype_substring(
 }
 
 enum StringSequenceValue {
-    Shared(Rc<String>),
+    Shared(JsString),
     Owned(String),
 }
 
@@ -396,9 +391,9 @@ fn string_slice_code_units(
     start: usize,
     end: usize,
     length: usize,
-) -> Rc<String> {
+) -> JsString {
     if start >= end {
-        return Rc::new(String::new());
+        return JsString::default();
     }
     if start == 0
         && end == length
@@ -408,7 +403,7 @@ fn string_slice_code_units(
     }
     let value = value.as_str();
     if value.is_ascii() {
-        Rc::new(value[start..end].to_owned())
+        JsString::from(value[start..end].to_owned())
     } else {
         let mut result = String::with_capacity(value.len().min((end - start).saturating_mul(4)));
         let mut index = 0usize;
@@ -442,7 +437,7 @@ fn string_slice_code_units(
             }
             index = character_end;
         }
-        Rc::new(result)
+        JsString::from(result)
     }
 }
 
@@ -499,16 +494,17 @@ fn string_substr_count(
 #[cfg(test)]
 mod tests {
     use super::numeric_string_slice_code_unit_len;
+    use crate::JsString;
 
     #[test]
     fn numeric_slice_length_uses_utf16_code_units_without_materializing() {
-        let ascii = std::rc::Rc::new("abcdef".to_owned());
+        let ascii = JsString::from("abcdef");
         assert_eq!(numeric_string_slice_code_unit_len(&ascii, 1.0, 4.0), 3);
         assert_eq!(numeric_string_slice_code_unit_len(&ascii, 1.9, 4.9), 3);
         assert_eq!(numeric_string_slice_code_unit_len(&ascii, -4.0, -1.0), 3);
         assert_eq!(numeric_string_slice_code_unit_len(&ascii, 4.0, 1.0), 0);
 
-        let supplementary = std::rc::Rc::new("😀x".to_owned());
+        let supplementary = JsString::from("😀x");
         assert_eq!(
             numeric_string_slice_code_unit_len(&supplementary, 0.0, 1.0),
             1
@@ -522,7 +518,7 @@ mod tests {
             1
         );
 
-        let escaped_surrogates = std::rc::Rc::new(crate::string::string_from_code_units(&[
+        let escaped_surrogates = JsString::from(crate::string::string_from_code_units(&[
             0xD800, 0x61, 0xDC00,
         ]));
         assert_eq!(
@@ -537,7 +533,7 @@ mod tests {
 
     #[test]
     fn numeric_slice_length_normalizes_non_finite_and_out_of_range_indices() {
-        let value = std::rc::Rc::new("abcdef".to_owned());
+        let value = JsString::from("abcdef");
         assert_eq!(
             numeric_string_slice_code_unit_len(&value, f64::NAN, f64::INFINITY),
             6

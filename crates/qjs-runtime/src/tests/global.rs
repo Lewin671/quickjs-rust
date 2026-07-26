@@ -950,7 +950,7 @@ fn evaluates_annex_b_escape_builtins() {
     assert_eq!(eval("unescape.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("escape('');"),
-        Ok(Value::String(::std::rc::Rc::new(String::new())))
+        Ok(Value::String(crate::JsString::default()))
     );
     assert_eq!(
         eval("escape('AZaz09@*_+-./');"),

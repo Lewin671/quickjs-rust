@@ -819,7 +819,7 @@ fn initialize_promise(object: &ObjectRef) {
 fn settle_promise(object: &ObjectRef, state: &str, result: Value, env: &mut CallEnv) {
     if !matches!(
         object.own_property(PROMISE_STATE).map(|property| property.value),
-        Some(Value::String(current)) if current == PROMISE_PENDING.to_owned().into()
+        Some(Value::String(current)) if current.as_str() == PROMISE_PENDING
     ) {
         return;
     }

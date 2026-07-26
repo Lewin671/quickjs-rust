@@ -39,7 +39,7 @@ fn evaluates_string_code_unit_builtins() {
     );
     assert_eq!(
         eval("'abc'.charAt(9);"),
-        Ok(Value::String(::std::rc::Rc::new(String::new())))
+        Ok(Value::String(crate::JsString::default()))
     );
     assert_eq!(
         eval("String.prototype.charCodeAt.length;"),

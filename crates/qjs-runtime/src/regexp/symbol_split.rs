@@ -52,7 +52,7 @@ pub(crate) fn native_regexp_prototype_split(
         set_last_index(splitter.clone(), Value::Number(0.0), env)?;
         let result = regexp_exec(splitter, &input, env)?;
         if matches!(result, Value::Null) {
-            parts.push(Value::String(::std::rc::Rc::new(String::new())));
+            parts.push(Value::String(crate::JsString::default()));
         } else {
             ensure_exec_result_object(result)?;
         }

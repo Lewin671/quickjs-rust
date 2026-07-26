@@ -1,3 +1,5 @@
+use crate::JsString;
+
 mod constructor;
 mod indexing;
 mod install;
@@ -55,11 +57,24 @@ pub(crate) fn string_code_units(value: &str) -> Vec<u16> {
     code_units
 }
 
-pub(crate) fn string_code_unit_at(value: &str, index: usize) -> Option<u16> {
+/// Reads one code unit from a shared string value.
+///
+/// Deciding whether the buffer is ASCII is linear in its length, so a loop that
+/// walks a string one code unit at a time is quadratic when the decision is
+/// repeated. [`JsString`] memoizes it, which keeps an ASCII read O(1).
+pub(crate) fn js_string_code_unit_at(value: &JsString, index: usize) -> Option<u16> {
     if value.is_ascii() {
         return value.as_bytes().get(index).copied().map(u16::from);
     }
+    wide_string_code_unit_at(value, index)
+}
 
+/// Returns the UTF-16 length of a shared string value, memoized on the value.
+pub(crate) fn js_string_code_unit_len(value: &JsString) -> usize {
+    value.utf16_len_with(wide_string_code_unit_len)
+}
+
+fn wide_string_code_unit_at(value: &str, index: usize) -> Option<u16> {
     let mut current_index = 0;
     for character in value.chars() {
         if let Some(code_unit) = surrogate_escape_code_unit(character) {
@@ -84,6 +99,10 @@ pub(crate) fn string_code_unit_len(value: &str) -> usize {
     if value.is_ascii() {
         return value.len();
     }
+    wide_string_code_unit_len(value)
+}
+
+fn wide_string_code_unit_len(value: &str) -> usize {
     value
         .chars()
         .map(|character| {
@@ -197,10 +216,11 @@ pub(crate) fn push_code_point(result: &mut String, code_point: u32) {
 #[cfg(test)]
 mod tests {
     use super::{
-        char_from_code_unit, push_code_point, string_code_unit_at, string_code_unit_len,
+        char_from_code_unit, js_string_code_unit_at, push_code_point, string_code_unit_len,
         string_code_units, string_from_code_units, string_from_utf8_scalars, string_to_utf8_lossy,
         surrogate_escape_code_unit,
     };
+    use crate::JsString;
 
     #[test]
     fn code_unit_character_conversion_preserves_ascii_and_lone_surrogates() {
@@ -231,9 +251,15 @@ mod tests {
         ] {
             assert_eq!(string_code_units(value), expected);
             for (index, code_unit) in expected.iter().enumerate() {
-                assert_eq!(string_code_unit_at(value, index), Some(*code_unit));
+                assert_eq!(
+                    js_string_code_unit_at(&JsString::from(value), index),
+                    Some(*code_unit)
+                );
             }
-            assert_eq!(string_code_unit_at(value, expected.len()), None);
+            assert_eq!(
+                js_string_code_unit_at(&JsString::from(value), expected.len()),
+                None
+            );
         }
     }
 

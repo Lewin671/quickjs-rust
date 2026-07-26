@@ -92,12 +92,10 @@ pub(crate) fn native_date_prototype_to_primitive(
     }
 
     let hint = match hint {
-        Value::String(hint)
-            if hint == "string".to_owned().into() || hint == "default".to_owned().into() =>
-        {
+        Value::String(hint) if hint.as_str() == "string" || hint.as_str() == "default" => {
             PreferredType::String
         }
-        Value::String(hint) if hint == "number".to_owned().into() => PreferredType::Number,
+        Value::String(hint) if hint.as_str() == "number" => PreferredType::Number,
         _ => {
             return Err(RuntimeError {
                 thrown: None,

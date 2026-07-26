@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use num_bigint::BigInt;
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
@@ -24,7 +22,7 @@ impl Vm<'_> {
                     match super::vm_string_append::primitive_append_suffix(right) {
                         Ok(suffix) => {
                             self.prepare_compound_string_reuse(&left);
-                            let mut result = Rc::unwrap_or_clone(left);
+                            let mut result = left.into_string();
                             result.push_str(&suffix);
                             return Ok(Value::String(result.into()));
                         }
@@ -120,7 +118,7 @@ impl Vm<'_> {
                 });
             }
             Value::BigInt(value) => {
-                let value = Rc::unwrap_or_clone(value);
+                let value = std::rc::Rc::unwrap_or_clone(value);
                 let one = BigInt::from(1);
                 return Ok(match op {
                     UpdateOp::Increment => Value::bigint(value + one),
@@ -133,7 +131,7 @@ impl Vm<'_> {
         let primitive = to_primitive_with_hint(value, PreferredType::Number, &mut env)?;
         let result = match primitive {
             Value::BigInt(value) => {
-                let value = Rc::unwrap_or_clone(value);
+                let value = std::rc::Rc::unwrap_or_clone(value);
                 let one = BigInt::from(1);
                 match op {
                     UpdateOp::Increment => Value::bigint(value + one),

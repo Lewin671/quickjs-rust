@@ -1349,7 +1349,7 @@ impl ObjectRef {
         let Value::String(string) = &mut property.value else {
             return None;
         };
-        std::rc::Rc::make_mut(string).push_str(suffix);
+        string.make_mut().push_str(suffix);
         self.bump_value_revision();
         Some(Value::String(string.clone()))
     }

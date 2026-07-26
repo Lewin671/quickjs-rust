@@ -9,7 +9,7 @@ fn evaluates_string_constructor_and_statics() {
     assert_eq!(eval("String.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("String();"),
-        Ok(Value::String(::std::rc::Rc::new(String::new())))
+        Ok(Value::String(crate::JsString::default()))
     );
     assert_eq!(
         eval("String(123);"),
@@ -66,7 +66,7 @@ fn evaluates_string_constructor_and_statics() {
     );
     assert_eq!(
         eval("String.fromCodePoint();"),
-        Ok(Value::String(::std::rc::Rc::new(String::new())))
+        Ok(Value::String(crate::JsString::default()))
     );
     assert_eq!(eval("String.fromCodePoint.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
@@ -98,7 +98,7 @@ fn evaluates_string_constructor_and_statics() {
     );
     assert_eq!(
         eval("String.raw({ raw: { length: 0 } });"),
-        Ok(Value::String(::std::rc::Rc::new(String::new())))
+        Ok(Value::String(crate::JsString::default()))
     );
     assert!(eval("String.raw(null);").is_err());
     assert!(eval("String.raw({ raw: null });").is_err());

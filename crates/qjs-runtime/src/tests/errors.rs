@@ -22,7 +22,7 @@ fn evaluates_error_builtins() {
     );
     assert_eq!(
         eval("Error.prototype.message;"),
-        Ok(Value::String(::std::rc::Rc::new(String::new())))
+        Ok(Value::String(crate::JsString::default()))
     );
     assert_eq!(
         eval("Error.prototype.toString.length;"),
@@ -151,7 +151,7 @@ fn evaluates_native_error_builtins() {
         );
         assert_eq!(
             eval(&format!("{name}.prototype.message;")),
-            Ok(Value::String(::std::rc::Rc::new(String::new())))
+            Ok(Value::String(crate::JsString::default()))
         );
         assert_eq!(
             eval(&format!("{name}.prototype.constructor === {name};")),

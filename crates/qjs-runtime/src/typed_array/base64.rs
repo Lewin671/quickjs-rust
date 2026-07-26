@@ -231,13 +231,13 @@ fn base64_decode_options(
             let last_chunk_handling = property_value(value, "lastChunkHandling", env)?;
             match last_chunk_handling {
                 Value::Undefined => {}
-                Value::String(name) if name == "loose".to_owned().into() => {
+                Value::String(name) if name.as_str() == "loose" => {
                     options.last_chunk_handling = LastChunkHandling::Loose;
                 }
-                Value::String(name) if name == "strict".to_owned().into() => {
+                Value::String(name) if name.as_str() == "strict" => {
                     options.last_chunk_handling = LastChunkHandling::Strict;
                 }
-                Value::String(name) if name == "stop-before-partial".to_owned().into() => {
+                Value::String(name) if name.as_str() == "stop-before-partial" => {
                     options.last_chunk_handling = LastChunkHandling::StopBeforePartial;
                 }
                 _ => {
@@ -259,10 +259,8 @@ fn base64_decode_options(
 fn base64_alphabet_option(value: Value) -> Result<Base64Alphabet, RuntimeError> {
     match value {
         Value::Undefined => Ok(Base64Alphabet::Base64),
-        Value::String(name) if name == "base64".to_owned().into() => Ok(Base64Alphabet::Base64),
-        Value::String(name) if name == "base64url".to_owned().into() => {
-            Ok(Base64Alphabet::Base64Url)
-        }
+        Value::String(name) if name.as_str() == "base64" => Ok(Base64Alphabet::Base64),
+        Value::String(name) if name.as_str() == "base64url" => Ok(Base64Alphabet::Base64Url),
         _ => Err(RuntimeError {
             thrown: None,
             message: "TypeError: invalid base64 alphabet".to_owned(),

@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::{CallEnv, RuntimeError, Value, string::string_from_code_unit};
 
 pub(crate) fn native_assert_native_function(
@@ -118,7 +116,7 @@ pub(crate) fn native_assert_string_substr_number_loop(
                 .chain(std::iter::once(Value::Undefined))
             {
                 let actual = crate::string::native_string_prototype_substr(
-                    Value::String(Rc::new(source.to_owned())),
+                    Value::String(crate::JsString::from(source)),
                     &[Value::Number(start), length.clone()],
                     env,
                 )?;
@@ -270,7 +268,7 @@ impl SliceInput {
     fn value(self) -> Value {
         match self.raw {
             SliceInputRaw::Number(value) => Value::Number(value),
-            SliceInputRaw::String(value) => Value::String(Rc::new(value.to_owned())),
+            SliceInputRaw::String(value) => Value::String(crate::JsString::from(value)),
             SliceInputRaw::Null => Value::Null,
             SliceInputRaw::Boolean(value) => Value::Boolean(value),
         }

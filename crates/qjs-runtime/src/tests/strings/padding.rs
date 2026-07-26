@@ -40,7 +40,7 @@ fn evaluates_string_padding_and_repeat_builtins() {
     );
     assert_eq!(
         eval("'ab'.repeat(0);"),
-        Ok(Value::String(::std::rc::Rc::new(String::new())))
+        Ok(Value::String(crate::JsString::default()))
     );
     assert_eq!(
         eval("'ab'.repeat(2.8);"),

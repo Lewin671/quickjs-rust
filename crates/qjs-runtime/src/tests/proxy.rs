@@ -579,7 +579,7 @@ fn revoked_function_proxy_stays_callable_for_typeof() {
 fn revocation_function_is_anonymous() {
     assert_eq!(
         eval("Proxy.revocable({}, {}).revoke.name;"),
-        Ok(Value::String(::std::rc::Rc::new(String::new())))
+        Ok(Value::String(crate::JsString::default()))
     );
     assert_eq!(
         eval(

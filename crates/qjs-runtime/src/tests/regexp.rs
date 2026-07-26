@@ -1033,7 +1033,7 @@ fn evaluates_regexp_symbol_split() {
     );
     assert_eq!(
         eval("/./[Symbol.split]('').join('|');"),
-        Ok(Value::String(::std::rc::Rc::new(String::new())))
+        Ok(Value::String(crate::JsString::default()))
     );
     assert_eq!(
         eval("let result = /\\uDF06/u[Symbol.split]('\\uD834\\uDF06'); result.length;"),

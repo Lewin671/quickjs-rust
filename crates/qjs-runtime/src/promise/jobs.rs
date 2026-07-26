@@ -188,9 +188,7 @@ fn run_dynamic_import_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), Runt
     };
 
     let outcome = match env.module_host() {
-        Some(host) => host
-            .borrow_mut()
-            .import(&specifier, module_type.as_deref().map(String::as_str)),
+        Some(host) => host.borrow_mut().import(&specifier, module_type.as_deref()),
         None => {
             let reason = error_reason(
                 "TypeError: dynamic import is not supported in this context",

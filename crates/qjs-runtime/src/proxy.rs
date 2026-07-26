@@ -696,7 +696,7 @@ pub(crate) fn proxy_own_keys(
     for element in elements {
         match element {
             Value::String(name) => {
-                if seen_strings.contains(&name) {
+                if seen_strings.contains(&name.to_string()) {
                     return Err(invariant_error("ownKeys trap returned duplicate keys"));
                 }
                 seen_strings.push(name.clone().to_string());

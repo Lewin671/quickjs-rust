@@ -576,10 +576,7 @@ fn keep_jobs_defers_reactions_until_run_jobs() {
         "var order = []; globalThis.order = order; Promise.resolve().then(function() { order.push('deferred'); }); order.join(',');",
     )
     .unwrap();
-    assert_eq!(
-        outcome.value,
-        Value::String(::std::rc::Rc::new(String::new()))
-    );
+    assert_eq!(outcome.value, Value::String(crate::JsString::default()));
     outcome.run_jobs().unwrap();
 }
 
