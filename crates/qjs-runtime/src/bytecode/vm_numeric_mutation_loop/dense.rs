@@ -76,6 +76,9 @@ thread_local! {
     static COMPACT_DYNAMIC_DECLINES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static COMPACT_DYNAMIC_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static COMPACT_DYNAMIC_SUPPRESSIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static COMPACT_CONSTANT_PREFIX_LOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static COMPACT_LOCAL_PREFIX_LOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static COMPACT_LOGICAL_OPERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static REDUCTION_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static REDUCTION_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static EXACT_INDEX_REDUCTION_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -120,6 +123,9 @@ pub(super) fn reset_test_iterations() {
     COMPACT_DYNAMIC_DECLINES.set(0);
     COMPACT_DYNAMIC_HITS.set(0);
     COMPACT_DYNAMIC_SUPPRESSIONS.set(0);
+    COMPACT_CONSTANT_PREFIX_LOADS.set(0);
+    COMPACT_LOCAL_PREFIX_LOADS.set(0);
+    COMPACT_LOGICAL_OPERATIONS.set(0);
     REDUCTION_PATH_HITS.set(0);
     REDUCTION_ITERATIONS.set(0);
     EXACT_INDEX_REDUCTION_PATH_HITS.set(0);
@@ -220,6 +226,21 @@ pub(super) fn test_compact_dynamic_hits() -> usize {
 #[cfg(test)]
 pub(super) fn test_compact_dynamic_suppressions() -> usize {
     COMPACT_DYNAMIC_SUPPRESSIONS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_compact_constant_prefix_loads() -> usize {
+    COMPACT_CONSTANT_PREFIX_LOADS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_compact_local_prefix_loads() -> usize {
+    COMPACT_LOCAL_PREFIX_LOADS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_compact_logical_operations() -> usize {
+    COMPACT_LOGICAL_OPERATIONS.get()
 }
 
 #[cfg(test)]
@@ -380,6 +401,30 @@ fn record_compact_dynamic_hit() {
 #[cfg(test)]
 fn record_compact_dynamic_suppression() {
     COMPACT_DYNAMIC_SUPPRESSIONS.set(COMPACT_DYNAMIC_SUPPRESSIONS.get() + 1);
+}
+
+#[inline]
+fn record_compact_constant_prefix_loads(count: usize) {
+    #[cfg(test)]
+    COMPACT_CONSTANT_PREFIX_LOADS.set(COMPACT_CONSTANT_PREFIX_LOADS.get() + count);
+    #[cfg(not(test))]
+    let _ = count;
+}
+
+#[inline]
+fn record_compact_local_prefix_loads(count: usize) {
+    #[cfg(test)]
+    COMPACT_LOCAL_PREFIX_LOADS.set(COMPACT_LOCAL_PREFIX_LOADS.get() + count);
+    #[cfg(not(test))]
+    let _ = count;
+}
+
+#[inline]
+fn record_compact_logical_operations(count: usize) {
+    #[cfg(test)]
+    COMPACT_LOGICAL_OPERATIONS.set(COMPACT_LOGICAL_OPERATIONS.get() + count);
+    #[cfg(not(test))]
+    let _ = count;
 }
 
 fn record_reduction_path_hit() {

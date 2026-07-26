@@ -836,6 +836,42 @@ fn compact_array_executor_preserves_the_reordered_input_prefix() {
 }
 
 #[test]
+fn compact_array_executor_hoists_constants_and_refreshes_loop_inputs() {
+    let function = "function recur(input, output, bound, factor) { var carried = factor; for (var index = 0; index < bound; index++) { output[index] = input[index] * factor + carried + 1; carried = output[index]; factor = factor + 1; } return factor + '|' + carried + '|' + output.join(':'); }";
+    let (constant_count, local_count, dynamic_count) = typed_dense_input_layout(function);
+    assert!(constant_count > 0);
+    assert!(local_count > 0);
+    assert!(dynamic_count > 0);
+
+    dense::reset_test_iterations();
+    assert_eq!(
+        eval(&format!(
+            "{function} \
+             recur([1,2,3,4], [0,0,0,0], 4, 2) + ';' + \
+             recur([-1,0,Infinity,NaN], [0,0,0,0], 4, -0);"
+        )),
+        Ok(Value::String(
+            "6|46|5:12:25:46;4|NaN|1:2:Infinity:NaN".to_owned().into()
+        ))
+    );
+    let iterations = dense::test_iterations();
+    assert!(iterations > 2);
+    assert_eq!(dense::test_compact_dynamic_hits(), 2);
+    assert_eq!(
+        dense::test_compact_constant_prefix_loads(),
+        constant_count * 2
+    );
+    assert_eq!(
+        dense::test_compact_local_prefix_loads(),
+        local_count * iterations
+    );
+    assert_eq!(
+        dense::test_compact_logical_operations(),
+        dynamic_count * iterations
+    );
+}
+
+#[test]
 fn typed_dense_respects_view_offsets_lengths_and_surrounding_bytes() {
     let function = "function copy(input, output, bound) { for (var index = 0; index < bound; index++) { output[index] = input[index]; output[index] = output[index]; } }";
     dense::reset_test_iterations();

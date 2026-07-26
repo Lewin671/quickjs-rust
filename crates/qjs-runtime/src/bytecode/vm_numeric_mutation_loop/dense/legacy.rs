@@ -20,11 +20,12 @@ use super::{
     HoleTailAppendAccess, HoleTailAppendPlan, INLINE_DENSE_OPS, LocalWrite, MAX_DENSE_LOCALS,
     MAX_DENSE_OPS, MAX_SAFE_INTEGER, MultiAccess, NumberInstruction as ExtendedInstruction,
     ReadAccess, SingleAccess, SunkDenseStore, apply_binary, apply_unary, array_index_from_number,
-    descending_counter_is_valid, local_number, record_countdown_iteration,
-    record_countdown_path_hit, record_hole_tail_append_attempt, record_hole_tail_append_path_hit,
-    record_iteration, record_read_only_bailout, record_read_only_path_hit, record_single_path_hit,
-    record_sunk_store_hit, record_writable_lease_suppression, record_writable_path_hit,
-    set_local_number,
+    descending_counter_is_valid, local_number, record_compact_constant_prefix_loads,
+    record_compact_local_prefix_loads, record_compact_logical_operations,
+    record_countdown_iteration, record_countdown_path_hit, record_hole_tail_append_attempt,
+    record_hole_tail_append_path_hit, record_iteration, record_read_only_bailout,
+    record_read_only_path_hit, record_single_path_hit, record_sunk_store_hit,
+    record_writable_lease_suppression, record_writable_path_hit, set_local_number,
 };
 
 mod binary_bundle;
@@ -748,6 +749,22 @@ impl LegacyDynamicDensePlan {
         registers: &mut [f64],
         limit: Option<f64>,
     ) -> DynamicProgramRun {
+        let input_prefix = self.input_prefix.and_then(|prefix| {
+            prefix
+                .validated_dynamic_start(self.operations.len())
+                .map(|dynamic_start| (prefix, dynamic_start))
+        });
+        let dynamic_start = input_prefix.map_or(0, |(_, start)| start);
+        if let Some((prefix, _)) = input_prefix {
+            for (register, operation) in self.operations[..prefix.constant_count].iter().enumerate()
+            {
+                let NumberInstruction::Constant(value) = *operation else {
+                    unreachable!("validated compact prefix starts with constants")
+                };
+                registers[register] = value;
+            }
+            record_compact_constant_prefix_loads(prefix.constant_count);
+        }
         let mut made_progress = false;
         loop {
             let counter = locals[self.counter_local];
@@ -786,7 +803,21 @@ impl LegacyDynamicDensePlan {
                 }
             };
             access.reset_iteration();
-            for (register, operation) in self.operations.iter().enumerate() {
+            if let Some((prefix, _)) = input_prefix {
+                for (offset, operation) in self.operations[prefix.constant_count..dynamic_start]
+                    .iter()
+                    .enumerate()
+                {
+                    let NumberInstruction::LoadLocal(local) = *operation else {
+                        unreachable!("validated compact prefix follows constants with local loads")
+                    };
+                    registers[prefix.constant_count + offset] = locals[local];
+                }
+                record_compact_local_prefix_loads(dynamic_start - prefix.constant_count);
+            }
+            record_compact_logical_operations(self.operations.len() - dynamic_start);
+            for (offset, operation) in self.operations[dynamic_start..].iter().enumerate() {
+                let register = dynamic_start + offset;
                 let value = match *operation {
                     NumberInstruction::Constant(value) => value,
                     NumberInstruction::LoadLocal(local) => locals[local],

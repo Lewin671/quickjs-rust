@@ -7535,6 +7535,32 @@ steady-state bailouts. The direction screen is preregistered to require
 `audio-fft` candidate/base at most 0.80x while keeping all six controls at most
 1.03x; failure rejects the unit before a formal run.
 
+### 2026-07-26 ordinary-Array input-prefix execution
+
+The legacy local-Array dense executor already canonicalized its immutable
+numeric inputs into a `NumberInputPrefix`, but only the fixed TypedArray
+executor consumed that metadata. The ordinary-Array path now initializes the
+deduplicated exact-bit constant prefix once per leased region, refreshes the
+entry-local prefix before every source iteration, and dispatches only the
+remaining dynamic instructions. This is a representation-level execution
+change: names, array identities, loop bounds, values, and source size remain
+data; staged stores, forwarding, completed-iteration publication, and replay
+on the first failed iteration are unchanged.
+
+The focused regression executes two ordinary-Array invocations with carried
+locals, signed zero, infinity, and NaN. It proves constants are initialized
+once per region, loop-carried locals are reloaded for every committed
+iteration, and the dynamic executor only visits the suffix. The complete
+`qjs-runtime` suite passed 1,859 tests.
+
+A local three-block external preview is diagnostic only, not a suite claim.
+All capability probes completed, with candidate/base ratios of 0.993 for
+Gaussian blur, 0.999 for audio FFT, 0.986 for JSON financial parsing, and
+**0.882 for `bitops-nsieve-bits`**. The latter was faster in all three
+interleaved blocks, reducing an ordinary dense bitset workload without a
+benchmark-specific path. The remaining FFT gap is unaffected, so its next
+slice stays on the nested dense register executor rather than input setup.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
