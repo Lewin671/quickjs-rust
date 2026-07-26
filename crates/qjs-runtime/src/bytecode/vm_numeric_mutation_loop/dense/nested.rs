@@ -12,7 +12,8 @@ use std::{collections::BTreeSet, rc::Rc};
 use super::*;
 use input_prefix::{NestedInputPrefix, compact_inner_inputs};
 use program::{
-    IndexCache, IndexResolver, NestedInstruction, NoIndexCache, assign_index_caches, run_operation,
+    IndexCache, IndexResolver, NestedInstruction, NoIndexCache, assign_index_caches,
+    fuse_terminal_add_sub_stores, run_operation,
 };
 
 mod input_prefix;
@@ -285,6 +286,11 @@ impl NestedDensePlan {
             .map(NestedInstruction::lower)
             .collect::<Option<Vec<_>>>()?;
         let mut inner_operations = inner_operations;
+        fuse_terminal_add_sub_stores(
+            &mut inner_operations,
+            &mut inner_writes,
+            &mut inner_counter_write,
+        );
         let has_cached_indices = assign_index_caches(&mut inner_operations);
         let max_operations = prelude
             .operations

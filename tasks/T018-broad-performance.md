@@ -7789,6 +7789,44 @@ the report, raw rows, and frozen manifest SHA-256 values are
 `766b13e012fa236f3b7c30135fe44d2bd0880d9eb1493a08ab7fce7507817aef`, and
 `68f6e3e8beb1f2b7415003310ff9d28628ff2107f5e7c2db130256f9a9168ae7`.
 
+### 2026-07-26 fuse terminal nested add/sub stores
+
+The nested dense executor already runs a verified pure-Number stream, but a
+terminal `Add` or `Sub` followed immediately by a dense store still consumed
+two interpreter operations and wrote a temporary register. The nested-program
+compiler now folds that adjacent pair into `StoreAdd` or `StoreSub` and remaps
+both former SSA outputs to the fused store: assignment expressions return the
+same Number that the arithmetic computed. It deliberately leaves the pair
+unfused if the binary result supplies the store index, because that shape must
+materialize the Number before index resolution. Arithmetic still runs before
+the existing index conversion and transactional staged store, so an invalid
+index or failed store continues through the existing fallback/replay path.
+This reduces generic interpreter dispatch for every eligible nested dense
+program; it does not recognize a source workload, input, or output.
+
+Focused program tests prove add/sub fusion, register and local-write remapping,
+and retention of the index-dependent form. The complete `qjs-runtime` suite
+passed 1,871 tests and the QuickJS-NG comparison smoke suite passed before the
+staged full gate.
+
+The final same-host, interleaved seven-block external diagnostic compared
+release candidate SHA-256
+`93ce91470a438a025faf03692ec18abed872d2a564ca62aee41cb1a82e440d75`
+against preceding-base SHA-256
+`3d89913e8921344e4f86fadd6aa131206ad35489ed1329ed6ce85cd29c2ba446`
+and QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+All capability probes completed. Candidate/base medians were 1.00161x for
+Gaussian blur, **0.96405x for Kraken `audio-fft`**, 1.00242x for JSON
+financial parsing, and 1.00016x for `bitops-nsieve-bits`. FFT reached
+**0.58305x candidate/QuickJS-NG**, a stable 3.6% local improvement with no
+control above the 1.03x regression ceiling. This remains a diagnostic partial
+portfolio rather than a suite or final-goal claim (`claim_eligible: false`);
+the report, raw rows, and frozen manifest SHA-256 values are
+`cc15f91e242b8f9945ecf6a443aa36af5d5d425892b06ba6207d650db29ae15a`,
+`1c90b9db0ea1ae5e57b901546cb32500b03ab37fed981cdbab27683d415513fd`, and
+`68f6e3e8beb1f2b7415003310ff9d28628ff2107f5e7c2db130256f9a9168ae7`.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
