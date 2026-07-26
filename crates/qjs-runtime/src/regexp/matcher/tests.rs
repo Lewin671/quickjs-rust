@@ -13,7 +13,7 @@ fn regexp_match_range(
 ) -> Option<RegexpMatch> {
     regexp_match_range_inner(
         source,
-        input,
+        &crate::JsString::from(input),
         start_index,
         ignore_case,
         unicode,
@@ -61,10 +61,12 @@ fn streamed_simple_repetition_preserves_first_full_match_priority() {
 
 #[test]
 fn prepared_input_slices_reuse_unicode_and_code_unit_views() {
-    let unicode = PreparedRegexp::new(".", false, true, false, false).prepare_input("A😀B");
+    let unicode = PreparedRegexp::new(".", false, true, false, false)
+        .prepare_input(&crate::JsString::from("A😀B"));
     assert_eq!(unicode.slice(1, 2), "😀");
 
-    let code_units = PreparedRegexp::new(".", false, false, false, false).prepare_input("A😀B");
+    let code_units = PreparedRegexp::new(".", false, false, false, false)
+        .prepare_input(&crate::JsString::from("A😀B"));
     assert_eq!(string_code_units(&code_units.slice(1, 2)), vec![0xD83D]);
     assert_eq!(string_code_units(&code_units.slice(2, 3)), vec![0xDE00]);
     assert_eq!(
@@ -495,31 +497,88 @@ fn long_greedy_repetition_does_not_overflow_the_stack() {
 fn multiline_anchors_match_around_line_terminators() {
     // Without the multiline flag, `$` only matches at end of input.
     let input = "pairs\nmakes\tdouble";
-    assert!(regexp_match_range_inner("s$", input, 0, false, false, false, false).is_none());
+    assert!(
+        regexp_match_range_inner(
+            "s$",
+            &crate::JsString::from(input),
+            0,
+            false,
+            false,
+            false,
+            false
+        )
+        .is_none()
+    );
     // With multiline, `$` matches before a `\n` (the `s` in "pairs").
-    let matched = regexp_match_range_inner("s$", input, 0, false, false, false, true).unwrap();
+    let matched = regexp_match_range_inner(
+        "s$",
+        &crate::JsString::from(input),
+        0,
+        false,
+        false,
+        false,
+        true,
+    )
+    .unwrap();
     assert_eq!((matched.start, matched.end), (4, 5));
 
     // `^` matches after a line terminator in multiline mode.
-    let matched =
-        regexp_match_range_inner("^makes", "pairs\nmakes", 0, false, false, false, true).unwrap();
+    let matched = regexp_match_range_inner(
+        "^makes",
+        &crate::JsString::from("pairs\nmakes"),
+        0,
+        false,
+        false,
+        false,
+        true,
+    )
+    .unwrap();
     assert_eq!((matched.start, matched.end), (6, 11));
     assert!(
-        regexp_match_range_inner("^makes", "pairs\nmakes", 0, false, false, false, false).is_none()
+        regexp_match_range_inner(
+            "^makes",
+            &crate::JsString::from("pairs\nmakes"),
+            0,
+            false,
+            false,
+            false,
+            false
+        )
+        .is_none()
     );
 
     // All ECMAScript line terminators are recognized.
     for terminator in ['\n', '\r', '\u{2028}', '\u{2029}'] {
         let input = format!("a{terminator}b");
         assert!(
-            regexp_match_range_inner("^b", &input, 0, false, false, false, true).is_some(),
+            regexp_match_range_inner(
+                "^b",
+                &crate::JsString::from(&input),
+                0,
+                false,
+                false,
+                false,
+                true
+            )
+            .is_some(),
             "`^b` should match after U+{:04X}",
             terminator as u32
         );
     }
 
     // Sticky multiline still honors line boundaries.
-    assert!(regexp_match_at("^b", "a\nb", 2, false, false, false, true).is_some());
+    assert!(
+        regexp_match_at(
+            "^b",
+            &crate::JsString::from("a\nb"),
+            2,
+            false,
+            false,
+            false,
+            true
+        )
+        .is_some()
+    );
 }
 
 #[test]

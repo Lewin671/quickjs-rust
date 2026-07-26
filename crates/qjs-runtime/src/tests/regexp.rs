@@ -1399,3 +1399,43 @@ fn unicode_sets_rgi_emoji_repetition_fast_path() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn memoized_matcher_view_keeps_mode_specific_indices() {
+    // The character view a match indexes is memoized on the subject string.
+    // Unicode and non-Unicode modes index it differently, and a mutated
+    // binding must not reuse a stale view.
+    assert_eq!(
+        eval(
+            "var text = 'a\\u{1F600}b\\u{1F600}c';\
+             var wide = text.match(/./gu).length;\
+             var units = text.match(/./g).length;\
+             var first = /\\u{1F600}/u.exec(text)[0];\
+             var idx = text.search(/b/);\
+             [wide, units, first === '\\u{1F600}', idx].join(':');"
+        ),
+        Ok(Value::String("5:7:true:3".to_owned().into()))
+    );
+    // Repeated `/g` scans over one subject return the same matches each time.
+    assert_eq!(
+        eval(
+            "var text = 'ab'.repeat(50); var re = /b/g; var counts = [];\
+             for (var round = 0; round < 3; round++) { re.lastIndex = 0; var n = 0, m; while ((m = re.exec(text))) n++; counts.push(n); }\
+             counts.join(',');"
+        ),
+        Ok(Value::String("50,50,50".to_owned().into()))
+    );
+    // An appended string is a different value, so the new subject matches its
+    // own contents.
+    assert_eq!(
+        eval("var s = 'aa'; s.match(/a/g).length; s += 'aaa'; s.match(/a/g).length;"),
+        Ok(Value::Number(5.0))
+    );
+    // Captures and named groups slice the same view.
+    assert_eq!(
+        eval(
+            "var m = /(?<first>\\w)(\\w)/.exec('xy'); [m[0], m[1], m[2], m.groups.first, m.index].join(':');"
+        ),
+        Ok(Value::String("xy:x:y:x:0".to_owned().into()))
+    );
+}

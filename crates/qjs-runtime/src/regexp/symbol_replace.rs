@@ -34,10 +34,12 @@ pub(crate) fn native_regexp_prototype_replace(
         });
     }
 
-    let input = to_js_string_with_env(
-        argument_values.first().cloned().unwrap_or(Value::Undefined),
-        env,
-    )?;
+    // Keep the argument's own string value where it already is one, so the
+    // matcher's memoized character view survives the whole replace.
+    let input = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
+        Value::String(value) => value,
+        value => crate::JsString::from(to_js_string_with_env(value, env)?),
+    };
     let replace_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     let replacement = if matches!(replace_value, Value::Function(_)) {
         Replacement::Function(Box::new(replace_value))
@@ -53,7 +55,7 @@ pub(crate) fn native_regexp_prototype_replace(
     }
 
     let matches = collect_matches(this_value, &input, global, unicode, env)?;
-    replace_matches(input, matches, replacement, env)
+    replace_matches(input.to_string(), matches, replacement, env)
 }
 
 enum Replacement {
@@ -71,7 +73,7 @@ struct MatchRecord {
 
 fn collect_matches(
     regexp: Value,
-    input: &str,
+    input: &crate::JsString,
     global: bool,
     unicode: bool,
     env: &mut CallEnv,
@@ -111,7 +113,7 @@ fn collect_matches(
 /// and RegExp-like objects must keep the fully observable spec protocol above.
 fn prepared_native_global_matches(
     regexp: &Value,
-    input: &str,
+    input: &crate::JsString,
     global: bool,
     unicode: bool,
     env: &mut CallEnv,
@@ -229,7 +231,7 @@ fn original_native_regexp(regexp: &Value, env: &CallEnv) -> Option<(ObjectRef, S
 
 fn dot_plus_global_fast_path(
     regexp: &Value,
-    input: &str,
+    input: &crate::JsString,
     global: bool,
     unicode: bool,
     env: &mut CallEnv,
@@ -266,8 +268,8 @@ fn dot_plus_global_fast_path(
     Ok(Some(vec![MatchRecord {
         start: 0,
         end: string_code_units(&input).len(),
-        matched: input.clone(),
-        captures: vec![Value::String(input.into())],
+        matched: input.to_string(),
+        captures: vec![Value::String(input.clone())],
         groups: Value::Undefined,
     }]))
 }

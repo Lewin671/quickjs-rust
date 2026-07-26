@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
+use crate::JsString;
 use crate::reflect::ordinary_set;
-use crate::string::{string_code_units, string_from_code_units};
+use crate::string::string_code_units;
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, PropertyKey,
     RuntimeError, Value, ensure_constructor, error, function_prototype, is_truthy, property_value,
@@ -314,10 +315,13 @@ pub(crate) fn native_regexp_prototype_exec(
             thrown: None,
             message: "RegExp.prototype.exec requires a RegExp receiver".to_owned(),
         })?;
-    let input = to_js_string_with_env(
-        argument_values.first().cloned().unwrap_or(Value::Undefined),
-        env,
-    )?;
+    // Keep the argument's own string value where it already is one: the
+    // matcher memoizes its character view, so a `/g` scan reuses it instead of
+    // rebuilding it per match.
+    let input = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
+        Value::String(value) => value,
+        value => crate::JsString::from(to_js_string_with_env(value, env)?),
+    };
     let global = regexp_flags_contains(&object, 'g');
     let sticky = regexp_flags_contains(&object, 'y');
     let ignore_case = regexp_flags_contains(&object, 'i');
@@ -417,10 +421,13 @@ pub(crate) fn native_regexp_prototype_test(
             thrown: None,
             message: "RegExp.prototype.exec requires a RegExp receiver".to_owned(),
         })?;
-    let input = to_js_string_with_env(
-        argument_values.first().cloned().unwrap_or(Value::Undefined),
-        env,
-    )?;
+    // Keep the argument's own string value where it already is one: the
+    // matcher memoizes its character view, so a `/g` scan reuses it instead of
+    // rebuilding it per match.
+    let input = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
+        Value::String(value) => value,
+        value => crate::JsString::from(to_js_string_with_env(value, env)?),
+    };
     let global = regexp_flags_contains(&object, 'g');
     let sticky = regexp_flags_contains(&object, 'y');
     let ignore_case = regexp_flags_contains(&object, 'i');
@@ -853,7 +860,7 @@ fn regexp_set_last_index_object(
 }
 
 fn regexp_match_array(
-    input: &str,
+    input: &JsString,
     match_result: matcher::RegexpMatch,
     unicode: bool,
     group_names: &[Option<String>],
@@ -876,7 +883,7 @@ fn regexp_match_array(
         match_result.start
     };
     result.set_property("index".to_owned(), Value::Number(index as f64));
-    result.set_property("input".to_owned(), Value::String(input.to_owned().into()));
+    result.set_property("input".to_owned(), Value::String(input.clone()));
     result.set_property(
         "groups".to_owned(),
         regexp_groups_object(input, &captures, unicode, group_names),
@@ -957,7 +964,7 @@ fn index_pair_value(input: &str, range: Option<(usize, usize)>, unicode: bool) -
 /// has no named groups, otherwise a null-prototype object mapping each name to
 /// its captured substring (or `undefined` when the group did not participate).
 fn regexp_groups_object(
-    input: &str,
+    input: &JsString,
     captures: &[Option<(usize, usize)>],
     unicode: bool,
     group_names: &[Option<String>],
@@ -997,12 +1004,25 @@ fn regexp_groups_object_with(
     Value::Object(groups)
 }
 
-fn input_slice(input: &str, start: usize, end: usize, unicode: bool) -> String {
-    if unicode {
-        input.chars().skip(start).take(end - start).collect()
-    } else {
-        string_from_code_units(&string_code_units(input)[start..end])
-    }
+/// Materializes the matcher-indexed range `start..end` of `input`.
+///
+/// The matcher indexes scalar values in Unicode mode and code units otherwise,
+/// which is exactly the memoized view the match ran against — so slicing that
+/// view avoids rebuilding the whole index for each captured substring.
+fn input_slice(input: &JsString, start: usize, end: usize, unicode: bool) -> String {
+    let view = input.matcher_view_with(unicode, |text| {
+        if unicode {
+            text.chars().collect()
+        } else {
+            string_code_units(text)
+                .into_iter()
+                .map(crate::string::char_from_code_unit)
+                .collect()
+        }
+    });
+    view.get(start..end)
+        .map(|range| range.iter().collect())
+        .unwrap_or_default()
 }
 
 fn code_unit_index_for_char_index(input: &str, char_index: usize) -> usize {

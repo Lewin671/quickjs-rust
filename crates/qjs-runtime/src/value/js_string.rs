@@ -11,7 +11,7 @@
 //! answers next to it. The cache is filled on first use and invalidated whenever
 //! the uniquely held buffer is mutated in place.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
@@ -28,6 +28,10 @@ struct StringData {
     text: String,
     ascii: Cell<u8>,
     utf16_len: Cell<usize>,
+    /// The matcher-indexed character view and the Unicode mode it was built
+    /// for. A RegExp scan re-executes against the same subject once per match,
+    /// and rebuilding this view every time made scanning quadratic.
+    matcher_view: RefCell<Option<(bool, Rc<[char]>)>>,
 }
 
 impl StringData {
@@ -36,12 +40,14 @@ impl StringData {
             text,
             ascii: Cell::new(ASCII_UNKNOWN),
             utf16_len: Cell::new(UTF16_LEN_UNKNOWN),
+            matcher_view: RefCell::new(None),
         }
     }
 
     fn invalidate(&mut self) {
         self.ascii.set(ASCII_UNKNOWN);
         self.utf16_len.set(UTF16_LEN_UNKNOWN);
+        *self.matcher_view.borrow_mut() = None;
     }
 }
 
@@ -51,6 +57,7 @@ impl Clone for StringData {
             text: self.text.clone(),
             ascii: Cell::new(self.ascii.get()),
             utf16_len: Cell::new(self.utf16_len.get()),
+            matcher_view: RefCell::new(self.matcher_view.borrow().clone()),
         }
     }
 }
@@ -109,6 +116,26 @@ impl JsString {
         let length = measure(&self.0.text);
         self.0.utf16_len.set(length);
         length
+    }
+
+    /// Returns the memoized character view a RegExp matcher indexes, building
+    /// it with `build` on the first request for this Unicode mode.
+    pub(crate) fn matcher_view_with(
+        &self,
+        unicode: bool,
+        build: impl FnOnce(&str) -> Vec<char>,
+    ) -> Rc<[char]> {
+        // In ASCII text a code unit, a scalar value, and a byte all coincide,
+        // so one view serves both modes.
+        let ascii = self.is_ascii();
+        if let Some((cached_unicode, view)) = self.0.matcher_view.borrow().as_ref()
+            && (ascii || *cached_unicode == unicode)
+        {
+            return Rc::clone(view);
+        }
+        let view: Rc<[char]> = build(&self.0.text).into();
+        *self.0.matcher_view.borrow_mut() = Some((unicode, Rc::clone(&view)));
+        view
     }
 
     /// Borrows the buffer mutably, cloning it when it is shared. Any memoized

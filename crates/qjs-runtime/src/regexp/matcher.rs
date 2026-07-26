@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::JsString;
 use crate::string::{
     advance_string_index, char_from_code_unit, string_code_units, surrogate_escape_code_unit,
 };
@@ -74,7 +75,7 @@ pub(super) struct PreparedRegexp {
 }
 
 pub(super) struct PreparedInput {
-    text: Vec<char>,
+    text: std::rc::Rc<[char]>,
 }
 
 impl PreparedInput {
@@ -124,15 +125,21 @@ impl PreparedRegexp {
         }
     }
 
-    pub(super) fn prepare_input(&self, input: &str) -> PreparedInput {
-        let text = if self.options.unicode {
-            input.chars().collect()
-        } else {
-            string_code_units(input)
-                .into_iter()
-                .map(char_from_code_unit)
-                .collect()
-        };
+    /// Builds the matcher-indexed view of `input`, reusing the one memoized on
+    /// the string value. A `/g` scan calls this once per match against the same
+    /// subject, so rebuilding it made scanning quadratic in the subject length.
+    pub(super) fn prepare_input(&self, input: &JsString) -> PreparedInput {
+        let unicode = self.options.unicode;
+        let text = input.matcher_view_with(unicode, |text| {
+            if unicode {
+                text.chars().collect()
+            } else {
+                string_code_units(text)
+                    .into_iter()
+                    .map(char_from_code_unit)
+                    .collect()
+            }
+        });
         PreparedInput { text }
     }
 
@@ -220,7 +227,7 @@ struct AtomStep {
 
 pub(super) fn regexp_match_range(
     source: &str,
-    input: &str,
+    input: &JsString,
     start_index: usize,
     ignore_case: bool,
     unicode: bool,
@@ -241,7 +248,7 @@ pub(super) fn regexp_match_range(
 
 pub(super) fn regexp_match_at(
     source: &str,
-    input: &str,
+    input: &JsString,
     start_index: usize,
     ignore_case: bool,
     unicode: bool,
@@ -263,7 +270,7 @@ pub(super) fn regexp_match_at(
 #[allow(clippy::too_many_arguments)]
 fn regexp_match(
     source: &str,
-    input: &str,
+    input: &JsString,
     start_index: usize,
     ignore_case: bool,
     unicode: bool,
