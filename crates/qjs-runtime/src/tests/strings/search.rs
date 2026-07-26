@@ -585,3 +585,15 @@ fn prefix_and_suffix_tests_read_the_receiver_in_place() {
         Ok(Value::String("true:true:true:true:true".to_owned().into()))
     );
 }
+
+#[test]
+fn index_of_searches_from_a_byte_offset() {
+    assert_eq!(
+        eval(
+            "['abcabc'.indexOf('b'), 'abcabc'.indexOf('b', 2), 'abc'.indexOf('z'),\
+              'abc'.indexOf(''), 'abc'.indexOf('', 99), 'aa'.indexOf('a', -5),\
+              'abc'.indexOf('abc'), 'abc'.indexOf('bc', 1)].join(':')"
+        ),
+        Ok(Value::String("1:4:-1:0:3:0:0:1".to_owned().into()))
+    );
+}

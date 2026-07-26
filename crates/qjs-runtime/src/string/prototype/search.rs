@@ -90,21 +90,21 @@ pub(crate) fn native_string_prototype_index_of(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let value = this_string_value(this_value, env)?;
+    let value = search_receiver(this_value, env)?;
     let search = to_js_string_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
     let start = string_search_start(
-        value.chars().count(),
+        search_length(&value),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let haystack = value.chars().skip(start).collect::<String>();
-    let Some(byte_index) = haystack.find(&search) else {
+    let boundary = byte_offset_for_char_index(&value, start);
+    let Some(byte_index) = value[boundary..].find(&search) else {
         return Ok(Value::Number(-1.0));
     };
-    let char_offset = haystack[..byte_index].chars().count();
+    let char_offset = value[boundary..boundary + byte_index].chars().count();
     Ok(Value::Number((start + char_offset) as f64))
 }
 
