@@ -292,37 +292,22 @@ pub(crate) fn native_map_prototype_for_each(
         });
     }
     let this_arg = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    let mut index = 0;
-    loop {
-        let entries = map.entries();
-        let Some((key, value)) = entries.get(index).cloned() else {
-            break;
-        };
-        let tail_keys = entries
-            .iter()
-            .skip(index + 1)
-            .map(|(tail_key, _)| tail_key.clone())
-            .collect::<Vec<_>>();
+    // Walk storage positions: an entry added by the callback lands at the end
+    // and is visited, one deleted by it becomes a hole and is skipped, and a
+    // position never moves while any entry is live. Re-deriving the cursor from
+    // a copy of the entries after each callback made `forEach` quadratic.
+    let mut position = 0;
+    while position < map.storage_len() {
+        let entry = map.entry_at(position);
+        position += 1;
+        let Some((key, value)) = entry else { continue };
         crate::call_function(
             callback.clone(),
             this_arg.clone(),
-            vec![value, key.clone(), this_value.clone()],
+            vec![value, key, this_value.clone()],
             env,
             false,
         )?;
-        let entries = map.entries();
-        if let Some(next_index) = tail_keys.iter().find_map(|tail_key| {
-            entries
-                .iter()
-                .position(|(entry_key, _)| entry_key.same_value_zero(tail_key))
-        }) {
-            index = next_index;
-        } else if entries
-            .get(index)
-            .is_some_and(|(entry_key, _)| entry_key.same_value_zero(&key))
-        {
-            index += 1;
-        }
     }
     Ok(Value::Undefined)
 }
@@ -381,18 +366,30 @@ pub(crate) fn native_map_iterator_next(this_value: Value) -> Result<Value, Runti
             });
         }
     };
-    let entries = map.entries();
-    let index = iterator_index(&iterator)?;
-    if index >= entries.len() {
-        iterator.define_non_enumerable(MAP_ITERATOR_DONE.to_owned(), Value::Boolean(true));
-        return Ok(iterator_result(Value::Undefined, true));
-    }
+    // The cursor is a storage position, so advancing costs one read instead of
+    // a copy of every entry, and a hole left by a deletion is skipped.
+    let mut position = iterator_index(&iterator)?;
+    let entry = loop {
+        if position >= map.storage_len() {
+            iterator.define_non_enumerable(MAP_ITERATOR_DONE.to_owned(), Value::Boolean(true));
+            iterator.define_non_enumerable(
+                MAP_ITERATOR_NEXT_INDEX.to_owned(),
+                Value::Number(position as f64),
+            );
+            return Ok(iterator_result(Value::Undefined, true));
+        }
+        let entry = map.entry_at(position);
+        position += 1;
+        if let Some(entry) = entry {
+            break entry;
+        }
+    };
     iterator.define_non_enumerable(
         MAP_ITERATOR_NEXT_INDEX.to_owned(),
-        Value::Number((index + 1) as f64),
+        Value::Number(position as f64),
     );
 
-    let (key, value) = entries[index].clone();
+    let (key, value) = entry;
     let item = match iterator_kind(&iterator)?.as_str() {
         MAP_ITERATOR_KIND_KEY => key,
         MAP_ITERATOR_KIND_VALUE => value,

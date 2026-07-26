@@ -332,3 +332,48 @@ fn indexed_map_storage_preserves_order_identity_and_holes() {
         Ok(Value::String("10000:100:true:false".to_owned().into()))
     );
 }
+
+#[test]
+fn map_and_set_iteration_observes_live_mutation() {
+    // Iteration walks storage positions: an entry added during the walk is
+    // visited, one deleted during it is skipped, and a re-added key is visited
+    // again at its new position. Verified against the reference engine.
+    assert_eq!(
+        eval(
+            "var out = [];\
+             var m = new Map([['a',1],['b',2],['c',3]]);\
+             m.forEach(function (v, k) { out.push(k); if (k === 'a') { m.delete('b'); m.set('d', 4); } });\
+             out.push('|');\
+             var m3 = new Map([['a',1],['b',2],['c',3]]);\
+             for (var e of m3) { out.push(e[0]); if (e[0] === 'a') m3.delete('b'); }\
+             out.push('|');\
+             var m4 = new Map([['a',1]]); var it = m4.entries(); m4.set('b', 2);\
+             var r; while (!(r = it.next()).done) out.push(r.value[0]);\
+             out.push('|');\
+             var s = new Set([1,2,3]);\
+             s.forEach(function (v) { out.push(v); if (v === 1) { s.delete(2); s.add(4); } });\
+             out.push('|');\
+             var m5 = new Map([['a',1],['b',2]]);\
+             m5.forEach(function (v, k) { out.push(k); m5.clear(); });\
+             out.push('|');\
+             var once = 0; var m6 = new Map([['a',1],['b',2]]);\
+             m6.forEach(function (v, k) { out.push(k); if (once++ === 0) { m6.delete('a'); m6.set('a', 9); } });\
+             out.join(',');"
+        ),
+        Ok(Value::String(
+            "a,c,d,|,a,c,|,a,b,|,1,3,4,|,a,|,a,b,a".to_owned().into()
+        ))
+    );
+    // Emptying a collection releases its storage, and later entries start over
+    // at the first position.
+    assert_eq!(
+        eval(
+            "var m = new Map(); for (var i = 0; i < 50; i++) m.set(i, i);\
+             for (var i = 0; i < 50; i++) m.delete(i);\
+             m.set('x', 1); m.set('y', 2);\
+             var out = []; m.forEach(function (v, k) { out.push(k); });\
+             out.join(',') + ':' + m.size;"
+        ),
+        Ok(Value::String("x,y:2".to_owned().into()))
+    );
+}

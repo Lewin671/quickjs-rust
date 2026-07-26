@@ -100,21 +100,29 @@ impl MapRef {
         self.0.entries.borrow().iter().flatten().cloned().collect()
     }
 
-    /// Rebuilds the storage once holes outnumber live entries, so repeated
-    /// insert/delete cycles cannot grow the vector without bound.
+    /// Number of storage positions, including holes left by deletion.
+    ///
+    /// Iteration walks positions rather than a filtered copy, because the
+    /// specification requires it to observe entries added during the walk and
+    /// to skip ones deleted during it. A position therefore has to stay stable
+    /// for the lifetime of every entry, so the storage is only rebuilt once the
+    /// map is empty — a hole is reused by nothing until then.
+    pub(crate) fn storage_len(&self) -> usize {
+        self.0.entries.borrow().len()
+    }
+
+    /// Reads the entry at one storage position, or `None` for a hole.
+    pub(crate) fn entry_at(&self, position: usize) -> Option<(Value, Value)> {
+        self.0.entries.borrow().get(position)?.clone()
+    }
+
+    /// Releases the storage once nothing is left to keep a position stable for.
     fn compact_if_sparse(&self) {
-        let live = self.0.live.get();
-        let mut entries = self.0.entries.borrow_mut();
-        if entries.len() <= 8 || entries.len() <= live * 2 {
+        if self.0.live.get() != 0 {
             return;
         }
-        entries.retain(Option::is_some);
-        let mut index = self.0.index.borrow_mut();
-        index.clear();
-        for (position, entry) in entries.iter().enumerate() {
-            let Some((key, _)) = entry else { continue };
-            index.insert(CollectionKey::new(key), position);
-        }
+        self.0.entries.borrow_mut().clear();
+        self.0.index.borrow_mut().clear();
     }
 }
 

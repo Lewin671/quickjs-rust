@@ -361,33 +361,21 @@ pub(crate) fn native_set_prototype_for_each(
         });
     }
     let this_arg = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    let mut index = 0;
-    loop {
-        let values = set.values();
-        let Some(value) = values.get(index).cloned() else {
-            break;
-        };
-        let tail_values = values.iter().skip(index + 1).cloned().collect::<Vec<_>>();
+    // Walk storage positions, as `Map.prototype.forEach` does: a value added by
+    // the callback is visited, one deleted by it is skipped, and positions stay
+    // stable while any value is live.
+    let mut position = 0;
+    while position < set.storage_len() {
+        let entry = set.value_at(position);
+        position += 1;
+        let Some(value) = entry else { continue };
         crate::call_function(
             callback.clone(),
             this_arg.clone(),
-            vec![value.clone(), value.clone(), this_value.clone()],
+            vec![value.clone(), value, this_value.clone()],
             env,
             false,
         )?;
-        let values = set.values();
-        if let Some(next_index) = tail_values.iter().find_map(|tail_value| {
-            values
-                .iter()
-                .position(|entry| entry.same_value_zero(tail_value))
-        }) {
-            index = next_index;
-        } else if values
-            .get(index)
-            .is_some_and(|entry| entry.same_value_zero(&value))
-        {
-            index += 1;
-        }
     }
     Ok(Value::Undefined)
 }
@@ -428,18 +416,28 @@ pub(crate) fn native_set_iterator_next(this_value: Value) -> Result<Value, Runti
             });
         }
     };
-    let values = set.values();
-    let index = iterator_index(&iterator)?;
-    if index >= values.len() {
-        iterator.define_non_enumerable(SET_ITERATOR_DONE.to_owned(), Value::Boolean(true));
-        return Ok(iterator_result(Value::Undefined, true));
-    }
+    // The cursor is a storage position, as in the Map iterator.
+    let mut position = iterator_index(&iterator)?;
+    let value = loop {
+        if position >= set.storage_len() {
+            iterator.define_non_enumerable(SET_ITERATOR_DONE.to_owned(), Value::Boolean(true));
+            iterator.define_non_enumerable(
+                SET_ITERATOR_NEXT_INDEX.to_owned(),
+                Value::Number(position as f64),
+            );
+            return Ok(iterator_result(Value::Undefined, true));
+        }
+        let entry = set.value_at(position);
+        position += 1;
+        if let Some(value) = entry {
+            break value;
+        }
+    };
     iterator.define_non_enumerable(
         SET_ITERATOR_NEXT_INDEX.to_owned(),
-        Value::Number((index + 1) as f64),
+        Value::Number(position as f64),
     );
 
-    let value = values[index].clone();
     let item = match iterator_kind(&iterator)?.as_str() {
         SET_ITERATOR_KIND_VALUE => value,
         SET_ITERATOR_KIND_KEY_VALUE => Value::Array(ArrayRef::new(vec![value.clone(), value])),
@@ -478,30 +476,16 @@ fn for_each_live_set_value<F>(set: &SetRef, mut visit: F) -> Result<bool, Runtim
 where
     F: FnMut(Value) -> Result<bool, RuntimeError>,
 {
-    let mut index = 0;
-    loop {
-        let values = set.values();
-        let Some(value) = values.get(index).cloned() else {
-            return Ok(true);
-        };
-        let tail_values = values.iter().skip(index + 1).cloned().collect::<Vec<_>>();
-        if !visit(value.clone())? {
+    let mut position = 0;
+    while position < set.storage_len() {
+        let entry = set.value_at(position);
+        position += 1;
+        let Some(value) = entry else { continue };
+        if !visit(value)? {
             return Ok(false);
         }
-        let values = set.values();
-        if let Some(next_index) = tail_values.iter().find_map(|tail_value| {
-            values
-                .iter()
-                .position(|entry| entry.same_value_zero(tail_value))
-        }) {
-            index = next_index;
-        } else if values
-            .get(index)
-            .is_some_and(|entry| entry.same_value_zero(&value))
-        {
-            index += 1;
-        }
     }
+    Ok(true)
 }
 
 fn set_iterator(this_value: Value, env: &CallEnv, kind: &str) -> Result<Value, RuntimeError> {
