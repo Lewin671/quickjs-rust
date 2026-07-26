@@ -83,6 +83,12 @@ enum NamedPropertyCacheEntry {
         layout_revision: u64,
         slot: usize,
     },
+    /// An own data property resolved to a storage slot and the interned name
+    /// held there. Unlike `OwnSlot` this entry names no object, so one entry
+    /// serves every object built the same way — the shape a loop over a list of
+    /// constructor-built objects has, which the identity-keyed entries miss on
+    /// every element.
+    SharedSlot { key: Rc<str>, slot: usize },
 }
 
 #[derive(Clone, Debug)]
@@ -141,6 +147,9 @@ impl NamedPropertyCache {
                 }
                 return object.own_data_slot_value(*slot);
             }
+            NamedPropertyCacheEntry::SharedSlot { key, slot } => {
+                return object.shared_data_slot_value(key, *slot);
+            }
         };
         Some(match value {
             CachedValue::Undefined => Value::Undefined,
@@ -163,8 +172,28 @@ impl NamedPropertyCache {
                 NamedPropertyCacheEntry::Exact { object: cached, .. } if cached.ptr_eq(object)
             )
         });
+        // A site that has already seen a different object is reading a list or
+        // a rotating receiver, so an identity-keyed entry would miss on every
+        // element. Record the storage slot and its interned name instead.
+        let saw_other_object = self
+            .0
+            .borrow()
+            .entries
+            .iter()
+            .flatten()
+            .any(|entry| match entry {
+                NamedPropertyCacheEntry::Exact { object: cached, .. }
+                | NamedPropertyCacheEntry::OwnSlot { object: cached, .. } => !cached.ptr_eq(object),
+                NamedPropertyCacheEntry::LiteralShape { .. }
+                | NamedPropertyCacheEntry::SharedSlot { .. } => false,
+            });
         let entry = if let Some((shape, slot)) = object.literal_data_slot(key) {
             NamedPropertyCacheEntry::LiteralShape { shape, slot }
+        } else if let Some((key, slot)) = saw_other_object
+            .then(|| object.shared_data_slot(key))
+            .flatten()
+        {
+            NamedPropertyCacheEntry::SharedSlot { key, slot }
         } else if let Some(slot) = value_entry_went_stale
             .then(|| object.own_data_slot(key))
             .flatten()

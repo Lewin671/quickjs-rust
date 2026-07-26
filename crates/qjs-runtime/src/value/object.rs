@@ -12,6 +12,7 @@ use super::{Property, Value};
 
 mod array_buffer_methods;
 mod ordered_data_builder;
+mod slot_reads;
 mod typed_array_methods;
 
 pub(crate) use ordered_data_builder::OrderedDataPropertyBuilder;
@@ -1407,87 +1408,6 @@ impl ObjectRef {
             property.value = value.clone();
         }
         Some(property)
-    }
-
-    pub(crate) fn own_data_property_read(&self, key: &str) -> OwnDataPropertyRead {
-        if self.0.module_namespace_exotic.get() {
-            return OwnDataPropertyRead::NeedsSlowPath;
-        }
-        self.0.properties.borrow().own_data_read(key)
-    }
-
-    /// Resolves `key` to a stable own-property slot in this object's compact
-    /// storage. Callers pair the slot with [`Self::layout_revision`]: the pair
-    /// stays valid across ordinary value assignment, so a monomorphic read
-    /// cache keeps hitting while a field is written every iteration.
-    pub(crate) fn own_data_slot(&self, key: &str) -> Option<usize> {
-        if self.0.module_namespace_exotic.get() {
-            return None;
-        }
-        match &*self.0.properties.borrow() {
-            PropertyStorage::Small { entries } => {
-                entries.iter().position(|(candidate, property)| {
-                    candidate.as_ref() == key && !property.is_accessor()
-                })
-            }
-            PropertyStorage::Dynamic(_)
-            | PropertyStorage::Shaped { .. }
-            | PropertyStorage::ShapedPair { .. } => None,
-        }
-    }
-
-    /// Reads a slot previously resolved by [`Self::own_data_slot`]. The storage
-    /// kind is re-checked so a layout the revision counter cannot describe
-    /// simply misses the cache instead of reading the wrong property.
-    pub(crate) fn own_data_slot_value(&self, slot: usize) -> Option<Value> {
-        match &*self.0.properties.borrow() {
-            PropertyStorage::Small { entries } => {
-                let (_, property) = entries.get(slot)?;
-                (!property.is_accessor()).then(|| property.value.clone())
-            }
-            PropertyStorage::Dynamic(_)
-            | PropertyStorage::Shaped { .. }
-            | PropertyStorage::ShapedPair { .. } => None,
-        }
-    }
-
-    /// Returns the shared literal shape and storage slot for an unmodified
-    /// data-only object literal. Named-property caches use this to share one
-    /// cache entry across distinct objects created by the same bytecode site.
-    pub(crate) fn literal_data_slot(&self, key: &str) -> Option<(Rc<ObjectLiteralShape>, usize)> {
-        if self.0.module_namespace_exotic.get() || self.property_revision() != 0 {
-            return None;
-        }
-        let properties = self.0.properties.borrow();
-        let shape = match &*properties {
-            PropertyStorage::Shaped { shape, .. } | PropertyStorage::ShapedPair { shape, .. } => {
-                shape
-            }
-            PropertyStorage::Small { .. } | PropertyStorage::Dynamic(_) => return None,
-        };
-        let slot = *shape.lookup.get(key)?;
-        Some((shape.clone(), slot))
-    }
-
-    /// Reads a previously resolved literal slot after checking that this
-    /// object still has the same unmodified shared shape.
-    pub(crate) fn literal_data_slot_value(
-        &self,
-        expected_shape: &Rc<ObjectLiteralShape>,
-        slot: usize,
-    ) -> Option<Value> {
-        if self.0.module_namespace_exotic.get() || self.property_revision() != 0 {
-            return None;
-        }
-        match &*self.0.properties.borrow() {
-            PropertyStorage::Shaped { shape, properties } if Rc::ptr_eq(shape, expected_shape) => {
-                properties.get(slot).map(|property| property.value.clone())
-            }
-            PropertyStorage::ShapedPair { shape, values } if Rc::ptr_eq(shape, expected_shape) => {
-                values.get(slot).cloned()
-            }
-            _ => None,
-        }
     }
 
     /// Reads a writable ordinary own numeric data property for scalar

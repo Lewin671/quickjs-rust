@@ -261,3 +261,41 @@ fn cached_property_reads_track_writes_deletes_and_descriptor_changes() {
         Ok(Value::Number(6.0))
     );
 }
+
+#[test]
+fn shared_slot_property_cache_revalidates_every_receiver() {
+    // One read site sees many objects built the same way. The cache records a
+    // storage slot and the interned name held there, so it must still reject a
+    // receiver whose layout differs, whose property became an accessor, or that
+    // simply lacks the property.
+    assert_eq!(
+        eval(
+            "function Point(x) { this.a = 0; this.b = 1; this.c = x; }\
+             var list = []; for (var i = 0; i < 8; i++) list.push(new Point(i));\
+             var read = function (o) { return o.c; };\
+             var total = 0; for (var i = 0; i < list.length; i++) total += read(list[i]);\
+             delete list[3].b;\
+             Object.defineProperty(list[4], 'c', { get: function () { return 100; } });\
+             var reshaped = { c: 50 };\
+             var after = 0;\
+             for (var i = 0; i < list.length; i++) after += read(list[i]);\
+             [total, after, read(reshaped), read({}) === undefined].join(':');"
+        ),
+        Ok(Value::String("28:124:50:true".to_owned().into()))
+    );
+    // A receiver that inherits the name must not read a same-named own slot of
+    // an unrelated object, and a later own definition must win.
+    assert_eq!(
+        eval(
+            "function Base() { this.k = 1; }\
+             function Derived() {}\
+             Derived.prototype = { k: 9 };\
+             var read = function (o) { return o.k; };\
+             var out = [];\
+             for (var i = 0; i < 4; i++) { out.push(read(new Base())); out.push(read(new Derived())); }\
+             var d = new Derived(); d.k = 7; out.push(read(d));\
+             out.join(':');"
+        ),
+        Ok(Value::String("1:9:1:9:1:9:1:9:7".to_owned().into()))
+    );
+}
