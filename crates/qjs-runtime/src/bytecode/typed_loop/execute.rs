@@ -428,7 +428,6 @@ fn materialize_stack(
 /// computation, after proving the callee is that intrinsic. Anything else — a
 /// user function, a bound function, a different native — declines.
 fn call_numeric_native(callee: &Value, first: Typed, second: Typed, arity: u8) -> Option<Typed> {
-    use crate::function::NativeFunction as Native;
     let Value::Function(function) = callee else {
         return None;
     };
@@ -436,18 +435,11 @@ fn call_numeric_native(callee: &Value, first: Typed, second: Typed, arity: u8) -
         return None;
     }
     let native = function.native?;
-    let first = first.number();
-    let second = second.number();
-    let value = match (native, arity) {
-        (Native::MathSqrt, 1) => first?.sqrt(),
-        (Native::MathAbs, 1) => first?.abs(),
-        (Native::MathFloor, 1) => first?.floor(),
-        (Native::MathCeil, 1) => first?.ceil(),
-        (Native::MathTrunc, 1) => first?.trunc(),
-        (Native::MathSin, 1) => first?.sin(),
-        (Native::MathCos, 1) => first?.cos(),
-        (Native::MathExp, 1) => first?.exp(),
-        (Native::MathPow, 2) => crate::operations::number_exponentiate(first?, second?),
+    // The same admitted set the counted-loop tier uses, so a region that hoists
+    // its own receiver reaches every intrinsic that one does.
+    let value = match arity {
+        1 => super::super::vm_numeric_leaf::math_unary(native, first.number()?)?,
+        2 => super::super::vm_numeric_leaf::math_binary(native, first.number()?, second.number()?)?,
         _ => return None,
     };
     Some(Typed::Number(value))

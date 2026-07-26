@@ -480,7 +480,7 @@ impl NumericLeafShortcut {
 /// A `Math` function of one argument whose entire effect is a floating-point
 /// computation. Anything that can observe an object, allocate, or depend on
 /// state stays out.
-fn math_unary(native: NativeFunction, argument: f64) -> Option<f64> {
+pub(super) fn math_unary(native: NativeFunction, argument: f64) -> Option<f64> {
     let value = match native {
         NativeFunction::MathAbs => argument.abs(),
         NativeFunction::MathSqrt => argument.sqrt(),
@@ -529,7 +529,7 @@ fn math_unary(native: NativeFunction, argument: f64) -> Option<f64> {
 /// A `Math` function of two arguments whose entire effect is a floating-point
 /// computation. `max`/`min` follow the spec's NaN and signed-zero rules rather
 /// than Rust's, which disagree on both.
-fn math_binary(native: NativeFunction, left: f64, right: f64) -> Option<f64> {
+pub(super) fn math_binary(native: NativeFunction, left: f64, right: f64) -> Option<f64> {
     let value = match native {
         NativeFunction::MathPow => crate::operations::number_exponentiate(left, right),
         NativeFunction::MathAtan2 => left.atan2(right),

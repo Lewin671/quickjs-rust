@@ -1773,3 +1773,21 @@ fn sign_and_fround_inline_without_losing_their_edges() {
         Ok(Value::Number(5.050000190734863))
     );
 }
+
+/// The general loop tier reaches the same intrinsics the counted-loop tier
+/// does, which is what lets a computed argument or a second call in the same
+/// body keep running natively.
+#[test]
+fn math_intrinsics_run_natively_with_computed_arguments() {
+    assert_eq!(
+        eval("var s = 0; for (var i = 0; i < 60; i++) { s += Math.sign(i - 30); } s;"),
+        Ok(Value::Number(-1.0))
+    );
+    assert_eq!(
+        eval(
+            "var s = 0; for (var i = 1; i < 30; i++) { s += Math.atan(i) + Math.log2(i + 1); }\
+             s.toFixed(6);"
+        ),
+        Ok(Value::String("149.575891".to_owned().into()))
+    );
+}
