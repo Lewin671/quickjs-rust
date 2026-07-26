@@ -120,8 +120,14 @@ enum TypedOp {
     /// values.
     DenseRead {
         dst: u16,
-        receiver_slot: u32,
+        receiver: u16,
         index: u16,
+    },
+    /// Overwrites one in-bounds element of a dense array held in a frame slot.
+    DenseWrite {
+        receiver: u16,
+        index: u16,
+        value: u16,
     },
     JumpIfFalsy {
         cond: u16,
@@ -316,6 +322,10 @@ impl<'a> Builder<'a> {
                 None => self.depths[offset] = Some(self.stack.len()),
             }
             self.program_index[offset] = u32::try_from(self.ops.len()).ok();
+            if let Some(next) = self.compile_element_assignment(ip)? {
+                ip = next;
+                continue;
+            }
             let op = code.get(ip)?;
             self.compile_op(op, ip)?;
             ip += 1;
@@ -332,6 +342,139 @@ impl<'a> Builder<'a> {
             }
         }
         Some(())
+    }
+
+    /// Matches the four-instruction prologue the compiler emits for
+    /// `receiver[key] = value`, compiles the value expression in between, and
+    /// matches the `SetProp` tail. Returns the instruction after the tail.
+    ///
+    /// The idiom has to be recognized as a unit because its receiver and key
+    /// travel through compiler temporaries, and a property key is not something
+    /// an unboxed scalar register can hold. The temporaries are bypassed
+    /// entirely, which is only sound while nothing outside the region reads
+    /// them — checked here.
+    fn compile_element_assignment(&mut self, ip: usize) -> Option<Option<usize>> {
+        let code = &self.bytecode.code;
+        let (
+            Some(Op::LoadLocal(receiver)),
+            Some(Op::StoreLocal(receiver_temp)),
+            Some(Op::LoadLocal(index)),
+            Some(Op::StoreLocal(index_temp)),
+        ) = (
+            code.get(ip),
+            code.get(ip + 1),
+            code.get(ip + 2),
+            code.get(ip + 3),
+        )
+        else {
+            return Some(None);
+        };
+        let (receiver, receiver_temp, index, index_temp) =
+            (*receiver, *receiver_temp, *index, *index_temp);
+        if receiver == receiver_temp || index_temp == receiver_temp {
+            return Some(None);
+        }
+        // Find the tail: `StoreLocal(v); LoadLocal(rt); LoadLocal(it);
+        // LoadLocal(v); SetProp`.
+        let mut cursor = ip + 4;
+        let tail = loop {
+            if cursor + 4 > self.backedge {
+                return Some(None);
+            }
+            if let (
+                Some(Op::StoreLocal(value_temp)),
+                Some(Op::LoadLocal(first)),
+                Some(Op::LoadLocal(second)),
+                Some(Op::LoadLocal(third)),
+                Some(Op::SetProp { .. }),
+            ) = (
+                code.get(cursor),
+                code.get(cursor + 1),
+                code.get(cursor + 2),
+                code.get(cursor + 3),
+                code.get(cursor + 4),
+            ) && *first == receiver_temp
+                && *second == index_temp
+                && *third == *value_temp
+            {
+                break (cursor, *value_temp);
+            }
+            cursor += 1;
+        };
+        let (value_store, value_temp) = tail;
+        for temp in [receiver_temp, index_temp, value_temp] {
+            if !self.bytecode.local_is_compiler_temporary(temp)
+                || self.slot_is_read_outside_region(temp)
+            {
+                return Some(None);
+            }
+        }
+        // Compile the index and the value expression with the temporaries
+        // elided: the index register is produced here, and the value expression
+        // is whatever the region computes between the prologue and the tail.
+        let index_register = self.local_register(index)?;
+        let index_copy = self.fresh()?;
+        self.emit(TypedOp::Move {
+            dst: index_copy,
+            src: index_register,
+        });
+        let mut inner = ip + 4;
+        while inner < value_store {
+            if let Some(next) = self.compile_element_assignment(inner)? {
+                inner = next;
+                continue;
+            }
+            let op = self.bytecode.code.get(inner)?;
+            // A branch inside the value expression would need its own join
+            // bookkeeping relative to the elided temporaries.
+            if matches!(op, Op::Jump(_) | Op::JumpIfFalse(_)) {
+                return None;
+            }
+            self.compile_op(op, inner)?;
+            inner += 1;
+        }
+        let (value, _) = self.pop()?;
+        let receiver_slot = u32::try_from(receiver).ok()?;
+        let receiver = self.receiver_index(receiver_slot)?;
+        self.emit(TypedOp::DenseWrite {
+            receiver,
+            index: index_copy,
+            value,
+        });
+        // `SetProp` leaves the assigned value on the operand stack.
+        self.push(value, Origin::Computed);
+        Some(Some(value_store + 5))
+    }
+
+    /// Index of `slot` in the program's receiver list, adding it if new.
+    fn receiver_index(&mut self, slot: u32) -> Option<u16> {
+        if let Some(index) = self
+            .receiver_slots
+            .iter()
+            .position(|candidate| *candidate == slot)
+        {
+            return u16::try_from(index).ok();
+        }
+        self.receiver_slots.push(slot);
+        u16::try_from(self.receiver_slots.len() - 1).ok()
+    }
+
+    /// Whether any instruction outside the loop region reads or writes `slot`.
+    fn slot_is_read_outside_region(&self, slot: usize) -> bool {
+        self.bytecode.code.iter().enumerate().any(|(ip, op)| {
+            if ip >= self.header && ip <= self.backedge {
+                return false;
+            }
+            matches!(
+                op,
+                Op::LoadLocal(candidate)
+                    | Op::LoadLocalOrUndefined(candidate)
+                    | Op::StoreLocal(candidate)
+                    | Op::AssignLocal(candidate)
+                    | Op::ClearLocal(candidate)
+                    if *candidate == slot
+            )
+        })
     }
 
     fn compile_op(&mut self, op: &Op, ip: usize) -> Option<()> {
@@ -405,13 +548,11 @@ impl<'a> Builder<'a> {
                 let Origin::Local(receiver_slot) = receiver else {
                     return None;
                 };
-                if !self.receiver_slots.contains(&receiver_slot) {
-                    self.receiver_slots.push(receiver_slot);
-                }
+                let receiver = self.receiver_index(receiver_slot)?;
                 let dst = self.fresh()?;
                 self.emit(TypedOp::DenseRead {
                     dst,
-                    receiver_slot,
+                    receiver,
                     index,
                 });
                 self.push(dst, Origin::Computed);
@@ -547,15 +688,34 @@ pub(super) fn try_run_typed_loop(vm: &mut Vm<'_>, header: usize, backedge: usize
     // copying the slice handle keeps the borrow checker happy without cloning
     // the op list.
     let program = &programs[index];
-    if !run(vm, program) {
-        return decline(vm);
+    match run(vm, program) {
+        Outcome::Ran => true,
+        // A region that deoptimizes once will almost certainly do so again — its
+        // guards describe the data, not the moment — so the frame stops using
+        // the program rather than paying the entry cost every iteration.
+        Outcome::Deoptimized => {
+            if let Some(bit) = declined_bit {
+                vm.declined_typed_loop_programs |= bit;
+            }
+            true
+        }
+        Outcome::Declined => decline(vm),
     }
-    true
 }
 
-fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> bool {
-    let Some(mut registers) = seed_registers(vm, program) else {
-        return false;
+/// What one attempt to run a program did.
+enum Outcome {
+    /// The loop finished natively and the frame is positioned after it.
+    Ran,
+    /// A guard failed; the frame is positioned at the loop header.
+    Deoptimized,
+    /// The frame never entered the program.
+    Declined,
+}
+
+fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
+    let Some((mut registers, receivers)) = seed_registers(vm, program) else {
+        return Outcome::Declined;
     };
     let mut iterations = 0_u64;
     let mut index = 0_usize;
@@ -567,7 +727,7 @@ fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> bool {
             if iterations >= MAX_NATIVE_ITERATIONS {
                 write_back(vm, program, &registers);
                 vm.ip = program.header;
-                return true;
+                return Outcome::Deoptimized;
             }
             continue;
         };
@@ -608,14 +768,29 @@ fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> bool {
             }
             TypedOp::DenseRead {
                 dst,
-                receiver_slot,
+                receiver,
                 index: index_register,
             } => {
-                let Some(value) = dense_read(vm, receiver_slot, registers[index_register as usize])
-                else {
+                let Some(value) = dense_read(
+                    &receivers[receiver as usize],
+                    registers[index_register as usize],
+                ) else {
                     return deopt(vm, program, &registers);
                 };
                 registers[dst as usize] = value;
+            }
+            TypedOp::DenseWrite {
+                receiver,
+                index,
+                value,
+            } => {
+                if !dense_write(
+                    &receivers[receiver as usize],
+                    registers[index as usize],
+                    registers[value as usize],
+                ) {
+                    return deopt(vm, program, &registers);
+                }
             }
             TypedOp::JumpIfFalsy { cond, target } => {
                 if !registers[cond as usize].is_truthy() {
@@ -630,7 +805,7 @@ fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> bool {
                 write_back(vm, program, &registers);
                 vm.stack.push(registers[cond as usize].to_value());
                 vm.ip = exit_ip as usize;
-                return true;
+                return Outcome::Ran;
             }
         }
     }
@@ -638,13 +813,20 @@ fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> bool {
 
 /// Loads the frame slots the program uses, declining when any slot holds a type
 /// the register file cannot represent or a receiver is not a dense array.
-fn seed_registers(vm: &Vm<'_>, program: &TypedLoopProgram) -> Option<Vec<Typed>> {
+fn seed_registers(
+    vm: &Vm<'_>,
+    program: &TypedLoopProgram,
+) -> Option<(Vec<Typed>, Vec<crate::ArrayRef>)> {
+    // Resolve every receiver once. Re-reading the slot per element access cost
+    // more than the interpreter's own path did.
+    let mut receivers = Vec::with_capacity(program.receiver_slots.len());
     for &slot in &program.receiver_slots {
         // The receiver must be a dense array for the whole loop, so a region
         // that also writes that slot declines.
-        if !matches!(vm.local_slot_value(slot as usize), Some(Value::Array(_))) {
+        let Some(Value::Array(array)) = vm.local_slot_value(slot as usize) else {
             return None;
-        }
+        };
+        receivers.push(array);
         if program
             .written_locals
             .iter()
@@ -674,7 +856,7 @@ fn seed_registers(vm: &Vm<'_>, program: &TypedLoopProgram) -> Option<Vec<Typed>>
             return None;
         }
     }
-    Some(registers)
+    Some((registers, receivers))
 }
 
 fn write_back(vm: &mut Vm<'_>, program: &TypedLoopProgram, registers: &[Typed]) {
@@ -687,21 +869,43 @@ fn write_back(vm: &mut Vm<'_>, program: &TypedLoopProgram, registers: &[Typed]) 
 }
 
 /// Restores the frame and resumes interpretation at the loop header.
-fn deopt(vm: &mut Vm<'_>, program: &TypedLoopProgram, registers: &[Typed]) -> bool {
+fn deopt(vm: &mut Vm<'_>, program: &TypedLoopProgram, registers: &[Typed]) -> Outcome {
     write_back(vm, program, registers);
     vm.ip = program.header;
-    true
+    Outcome::Deoptimized
 }
 
-fn dense_read(vm: &Vm<'_>, receiver_slot: u32, index: Typed) -> Option<Typed> {
+fn dense_read(array: &crate::ArrayRef, index: Typed) -> Option<Typed> {
     let number = index.number()?;
     if number < 0.0 || number.fract() != 0.0 || number > u32::MAX as f64 {
         return None;
     }
-    let Some(Value::Array(array)) = vm.local_slot_value(receiver_slot as usize) else {
-        return None;
-    };
     Typed::from_value(&array.direct_dense_index_value(number as usize)?)
+}
+
+/// Overwrites an in-bounds element of a dense array, declining anything that a
+/// plain element store would not cover: a non-integer index, growth past the
+/// current length, a hole, an own indexed descriptor, or a frozen array.
+fn dense_write(array: &crate::ArrayRef, index: Typed, value: Typed) -> bool {
+    let Some(number) = index.number() else {
+        return false;
+    };
+    if number < 0.0 || number.fract() != 0.0 || number > u32::MAX as f64 {
+        return false;
+    }
+    let index = number as usize;
+    // `with_dense_writable_elements` already rejects a frozen array, holes, and
+    // own indexed descriptors, so an in-bounds write there is the whole
+    // observable effect. Growth stays on the observable path.
+    array
+        .with_dense_writable_elements(|elements| match elements.get_mut(index) {
+            Some(element) => {
+                *element = value.to_value();
+                true
+            }
+            None => false,
+        })
+        .unwrap_or(false)
 }
 
 fn typed_binary(left: Typed, op: BinaryOp, right: Typed) -> Option<Typed> {
@@ -822,6 +1026,46 @@ mod tests {
                 "function run() { var s = 7; for (var i = 0; i < 0; i++) { s = s + 1; } return s + ':' + i; } run();"
             ),
             Ok(Value::String("7:0".to_owned().into()))
+        );
+    }
+
+    #[test]
+    fn typed_loops_write_dense_elements() {
+        // A branchy read-modify-write over a dense array: the shape the
+        // specialized tiers decline, and the reason the element-assignment
+        // idiom is recognized as a unit.
+        assert_eq!(
+            eval(
+                "function run() { var a = [0, 1, 2, 3, 4];                   for (var r = 0; r < 3; r++) {                     for (var i = 0; i < 5; i++) {                       if (a[i] > 1) { a[i] = a[i] - 1; } else { a[i] = a[i] + 1; }                     }                   }                   return a.join(','); }                 run();"
+            ),
+            Ok(Value::String("1,2,1,2,1".to_owned().into()))
+        );
+        // The assignment's value is the expression's value.
+        assert_eq!(
+            eval(
+                "function run() { var a = [1, 2, 3], last = 0;                   for (var i = 0; i < 3; i++) { last = (a[i] = a[i] * 2); }                   return a.join(',') + ':' + last; }                 run();"
+            ),
+            Ok(Value::String("2,4,6:6".to_owned().into()))
+        );
+        // Growth, a frozen array, a hole, and an own indexed descriptor all stay
+        // on the observable path.
+        assert_eq!(
+            eval(
+                "function run() { var a = [1]; for (var i = 0; i < 4; i++) { a[i] = i; } return a.join(','); } run();"
+            ),
+            Ok(Value::String("0,1,2,3".to_owned().into()))
+        );
+        assert_eq!(
+            eval(
+                "function run() { var a = Object.freeze([1, 2]);                   for (var i = 0; i < 2; i++) { a[i] = 9; }                   return a.join(','); }                 run();"
+            ),
+            Ok(Value::String("1,2".to_owned().into()))
+        );
+        assert_eq!(
+            eval(
+                "function run() { var a = [1, 2];                   Object.defineProperty(a, '1', { value: 5, writable: false, configurable: true, enumerable: true });                   for (var i = 0; i < 2; i++) { a[i] = i + 10; }                   return a.join(','); }                 run();"
+            ),
+            Ok(Value::String("10,5".to_owned().into()))
         );
     }
 
