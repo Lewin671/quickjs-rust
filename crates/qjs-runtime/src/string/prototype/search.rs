@@ -405,13 +405,17 @@ fn string_match_positions(input: &str, search: &str) -> Vec<StringMatch> {
 
     let search_len = search.chars().count();
     let mut matches = Vec::new();
-    let mut next_search = 0usize;
-    while next_search <= input_len {
-        let suffix = input_char_slice(input, next_search, input_len);
-        let Some(byte_index) = suffix.find(search) else {
+    // Scan forward over byte offsets, converting to the character positions the
+    // match records use by counting only the region each step skips. Rebuilding
+    // the remaining input as a fresh string per match made a replace-all
+    // quadratic in the subject length.
+    let mut byte_offset = 0usize;
+    let mut char_offset = 0usize;
+    while byte_offset <= input.len() {
+        let Some(relative) = input[byte_offset..].find(search) else {
             break;
         };
-        let start = next_search + suffix[..byte_index].chars().count();
+        let start = char_offset + input[byte_offset..byte_offset + relative].chars().count();
         let end = start + search_len;
         matches.push(StringMatch {
             start,
@@ -419,7 +423,8 @@ fn string_match_positions(input: &str, search: &str) -> Vec<StringMatch> {
             matched: search.to_owned(),
             captures: Vec::new(),
         });
-        next_search = end;
+        byte_offset += relative + search.len();
+        char_offset = end;
     }
     matches
 }
@@ -531,11 +536,15 @@ fn replace_matches(
     {
         preflight_literal_replacement_length(input_len, &matches, replacement)?;
     }
+    // Matches arrive in increasing character order, so one forward cursor over
+    // the input copies each kept region exactly once. Slicing from the start of
+    // the input for every match made assembling the result quadratic.
+    let mut cursor = InputCursor::default();
     let mut copied_until = 0usize;
     for string_match in matches {
         let prefix_len = string_match.start.saturating_sub(copied_until);
         result_len = checked_string_length(result_len, prefix_len)?;
-        result.push_str(&input_char_slice(&input, copied_until, string_match.start));
+        result.push_str(cursor.advance_to(&input, string_match.start));
         let replacement_string = match &replacement {
             Replacement::Function(function) => {
                 functional_replacement((**function).clone(), &string_match, input.clone(), env)?
@@ -563,11 +572,36 @@ fn replace_matches(
             result_len = checked_string_length(result_len, replacement_string.chars().count())?;
         }
         result.push_str(&replacement_string);
+        // Step the cursor over the matched text so the next kept region starts
+        // after it rather than repeating it.
+        cursor.advance_to(&input, string_match.end);
         copied_until = string_match.end;
     }
     checked_string_length(result_len, input_len.saturating_sub(copied_until))?;
-    result.push_str(&input_char_slice(&input, copied_until, input_len));
+    result.push_str(cursor.advance_to(&input, input_len));
     Ok(Value::String(result.into()))
+}
+
+/// A forward cursor over an input string, tracking both its character position
+/// and its byte offset so successive slices cost only what they span.
+#[derive(Default)]
+struct InputCursor {
+    characters: usize,
+    bytes: usize,
+}
+
+impl InputCursor {
+    fn advance_to<'a>(&mut self, input: &'a str, target: usize) -> &'a str {
+        let start = self.bytes;
+        for character in input[self.bytes..].chars() {
+            if self.characters >= target {
+                break;
+            }
+            self.bytes += character.len_utf8();
+            self.characters += 1;
+        }
+        &input[start..self.bytes]
+    }
 }
 
 fn checked_string_length(current: usize, added: usize) -> Result<usize, RuntimeError> {
@@ -626,10 +660,6 @@ fn regexp_match_index(match_value: &Value, env: &mut CallEnv) -> Result<usize, R
         Value::Number(number) if number.is_finite() && number > 0.0 => Ok(number.trunc() as usize),
         _ => Ok(0),
     }
-}
-
-fn input_char_slice(input: &str, start: usize, end: usize) -> String {
-    input.chars().skip(start).take(end - start).collect()
 }
 
 fn regexp_value(pattern: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {

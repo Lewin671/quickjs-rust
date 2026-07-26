@@ -527,3 +527,34 @@ fn rejects_string_match_all_null_or_undefined_this() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn replace_all_scans_forward_without_repeating_regions() {
+    // Matching and assembling both walk the subject once. The results must
+    // still match the reference engine exactly, including surrogate pairs,
+    // empty searches, function replacements, and `$` substitutions.
+    assert_eq!(
+        eval(
+            "['aXbXc'.replaceAll('X','-'),\
+              '\\u{1F600}a\\u{1F600}'.replaceAll('a','b'),\
+              'aaa'.replaceAll('','-'),\
+              'abc'.replace('b','[$&]'),\
+              'a\\u{1F600}b'.replaceAll('\\u{1F600}','X'),\
+              'xaxbx'.replaceAll('x', function (m, i) { return '[' + i + ']'; }),\
+              'abcabc'.replaceAll('bc', '$`|$\\'')].join(';')"
+        ),
+        Ok(Value::String(
+            "a-b-c;\u{1F600}b\u{1F600};-a-a-a-;a[b]c;aXb;[0]a[2]b[4];aa|abcaabca|"
+                .to_owned()
+                .into()
+        ))
+    );
+    // Many matches over a long subject stay linear and correct.
+    assert_eq!(
+        eval(
+            "var t = 'ab'.repeat(500); var r = t.replaceAll('b', 'c');\
+             [r.length, r.slice(0, 4), r.indexOf('b')].join(':');"
+        ),
+        Ok(Value::String("1000:acac:-1".to_owned().into()))
+    );
+}
