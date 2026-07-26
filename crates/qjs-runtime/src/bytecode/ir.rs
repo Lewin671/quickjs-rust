@@ -973,6 +973,9 @@ pub struct Bytecode {
     pub(super) code: Vec<Op>,
     pub(super) numeric_leaf_plan: OnceCell<Option<super::vm_numeric_leaf::NumericLeafPlan>>,
     pub(super) numeric_loop_plans: OnceCell<Vec<super::vm_numeric_loop::NumericLoopPlan>>,
+    /// Shape-independent register programs for this body's numeric loop
+    /// regions, compiled on first entry to any loop.
+    pub(super) typed_loop_programs: OnceCell<Vec<super::typed_loop::TypedLoopProgram>>,
     pub(super) control_loop_plans: OnceCell<Vec<super::vm_control_loop::ControlLoopPlan>>,
     pub(super) numeric_mutation_loop_plans:
         OnceCell<Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>>,
@@ -1093,6 +1096,7 @@ impl Bytecode {
             code,
             numeric_leaf_plan: OnceCell::new(),
             numeric_loop_plans: OnceCell::new(),
+            typed_loop_programs: OnceCell::new(),
             control_loop_plans: OnceCell::new(),
             numeric_mutation_loop_plans: OnceCell::new(),
             virtual_object_program: OnceCell::new(),

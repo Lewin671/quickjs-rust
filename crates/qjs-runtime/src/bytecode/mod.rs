@@ -16,6 +16,7 @@ mod compiler_try;
 mod compiler_values;
 mod ir;
 mod ir_names;
+mod typed_loop;
 mod upvalue_resolver;
 mod util;
 mod virtual_object;

@@ -134,6 +134,7 @@ pub(super) struct FrameState<'a> {
     /// a call no longer clones a plan vector into its frame.
     pub(super) control_loop_plans: &'a [super::vm_control_loop::ControlLoopPlan],
     pub(super) numeric_loop_plans: &'a [super::vm_numeric_loop::NumericLoopPlan],
+    pub(super) typed_loop_programs: &'a [super::typed_loop::TypedLoopProgram],
     /// Two saturating decline counters per numeric loop plan, for the first
     /// 64 plans. A plan that matched an instruction range but could not run
     /// rebuilds its whole preparation state -- write targets, forbidden cells,
@@ -143,6 +144,9 @@ pub(super) struct FrameState<'a> {
     /// three times; the retries cover a plan that only becomes admissible once
     /// the loop's values settle.
     pub(super) declined_numeric_loop_plans: u128,
+    /// One bit per typed loop program this frame has already declined, so a
+    /// region the frame cannot run natively is not re-examined per iteration.
+    pub(super) declined_typed_loop_programs: u128,
     pub(super) shared_numeric_mutation_loop_plans:
         &'a [super::vm_numeric_mutation_loop::NumericMutationLoopPlan],
     /// Frame-local override of the shared numeric mutation loop plans,
@@ -390,9 +394,13 @@ impl<'a> Vm<'a> {
                     .control_loop_plans
                     .get_or_init(|| super::vm_control_loop::ControlLoopPlan::compile_all(bytecode)),
                 declined_numeric_loop_plans: 0,
+                declined_typed_loop_programs: 0,
                 numeric_loop_plans: bytecode
                     .numeric_loop_plans
                     .get_or_init(|| super::vm_numeric_loop::NumericLoopPlan::compile_all(bytecode)),
+                typed_loop_programs: bytecode
+                    .typed_loop_programs
+                    .get_or_init(|| super::typed_loop::compile_all(bytecode)),
                 shared_numeric_mutation_loop_plans: bytecode
                     .numeric_mutation_loop_plans
                     .get_or_init(|| {
@@ -1844,7 +1852,8 @@ impl<'a> Vm<'a> {
             || (!super::vm_numeric_mutation_loop::try_run_numeric_mutation_loop(
                 self, target, backedge,
             ) && !super::vm_numeric_loop::try_run_numeric_loop(self, target, backedge)
-                && !super::vm_control_loop::try_run_control_loop(self, target, backedge))
+                && !super::vm_control_loop::try_run_control_loop(self, target, backedge)
+                && !super::typed_loop::try_run_typed_loop(self, target, backedge))
         {
             self.ip = target;
         }

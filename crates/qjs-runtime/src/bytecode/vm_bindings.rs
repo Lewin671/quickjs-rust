@@ -1003,6 +1003,28 @@ impl Vm<'_> {
         }
     }
 
+    /// Whether a typed loop program may write `slot` directly: the slot must be
+    /// an ordinary mutable frame local with no shared cell and no realm
+    /// binding behind it, so a plain store is the whole observable effect.
+    pub(super) fn slot_accepts_typed_loop_write(&self, slot: usize) -> bool {
+        // Exactly the condition `store_local` uses for a plain slot write: an
+        // authoritative slot has no environment binding and no shared cell
+        // behind it, so the write is the whole observable effect.
+        self.slot_is_authoritative(slot)
+            && self
+                .bytecode
+                .locals
+                .get(slot)
+                .is_some_and(|local| local.mutable && !local.sloppy_global_fallback)
+    }
+
+    /// Writes a slot a typed loop program owns for the duration of the loop.
+    pub(super) fn write_typed_loop_slot(&mut self, slot: usize, value: Value) {
+        if let Some(local) = self.locals.get_mut(slot) {
+            *local = Some(value);
+        }
+    }
+
     pub(super) fn local_slot_value(&self, slot: usize) -> Option<Value> {
         self.upvalue_slot_value(slot)
             .or_else(|| self.locals.get(slot).and_then(Option::as_ref).cloned())
