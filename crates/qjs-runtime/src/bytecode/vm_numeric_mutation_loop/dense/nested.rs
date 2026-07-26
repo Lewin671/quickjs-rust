@@ -11,8 +11,10 @@ use std::{collections::BTreeSet, rc::Rc};
 
 use super::*;
 use input_prefix::{NestedInputPrefix, compact_inner_inputs};
+use program::{NestedInstruction, run_operation};
 
 mod input_prefix;
+mod program;
 
 #[derive(Clone, Debug)]
 struct ScalarProgram {
@@ -34,7 +36,7 @@ pub(in super::super) struct NestedDensePlan {
     local_slots: Vec<usize>,
     receiver_slots: Vec<usize>,
     prelude: ScalarProgram,
-    inner_operations: Vec<NumberInstruction>,
+    inner_operations: Vec<NestedInstruction>,
     inner_input_prefix: Option<NestedInputPrefix>,
     inner_writes: Vec<LocalWrite>,
     inner_counter_write: Register,
@@ -275,6 +277,10 @@ impl NestedDensePlan {
             &mut inner_counter_write,
         )
         .filter(|prefix| prefix.dynamic_start() != 0);
+        let inner_operations = inner_operations
+            .into_iter()
+            .map(NestedInstruction::lower)
+            .collect::<Option<Vec<_>>>()?;
         let max_operations = prelude
             .operations
             .len()
@@ -508,7 +514,7 @@ impl NestedDensePlan {
                 .iter()
                 .enumerate()
             {
-                let NumberInstruction::LoadLocal(local) = *operation else {
+                let NestedInstruction::LoadLocal(local) = *operation else {
                     unreachable!("validated nested input prefix ends with carried local loads")
                 };
                 let Some(value) = bank.number(local) else {
@@ -519,9 +525,13 @@ impl NestedDensePlan {
             record_nested_dense_carried_local_prefix_loads(prefix.carried_local_count);
         }
         record_nested_dense_logical_operations(self.inner_operations.len() - dynamic_start);
-        for (offset, operation) in self.inner_operations[dynamic_start..].iter().enumerate() {
+        for (offset, operation) in self.inner_operations[dynamic_start..]
+            .iter()
+            .copied()
+            .enumerate()
+        {
             let register = dynamic_start + offset;
-            let Some(value) = run_operation(operation, register, access, bank, registers) else {
+            let Some(value) = run_operation(operation, access, bank, registers) else {
                 return false;
             };
             registers[register] = value;
@@ -552,7 +562,7 @@ impl NestedDensePlan {
             .iter()
             .enumerate()
         {
-            let NumberInstruction::Constant(value) = *operation else {
+            let NestedInstruction::Constant(value) = *operation else {
                 unreachable!("validated nested input prefix starts with constants")
             };
             registers[register] = value;
@@ -563,7 +573,7 @@ impl NestedDensePlan {
             .iter()
             .enumerate()
         {
-            let NumberInstruction::LoadLocal(local) = *operation else {
+            let NestedInstruction::LoadLocal(local) = *operation else {
                 unreachable!("validated nested input prefix follows constants with invariant loads")
             };
             let Some(value) = bank.number(local) else {
@@ -956,43 +966,4 @@ fn run_scalar(program: &ScalarProgram, bank: &mut LocalBank, registers: &mut [f6
         bank.write_number(write.local, registers[write.value]);
     }
     true
-}
-
-fn run_operation<A: DenseAccess>(
-    operation: &NumberInstruction,
-    _register: usize,
-    access: &mut A,
-    bank: &LocalBank,
-    registers: &[f64],
-) -> Option<f64> {
-    Some(match *operation {
-        NumberInstruction::Constant(value) => value,
-        NumberInstruction::LoadLocal(local) => bank.number(local)?,
-        NumberInstruction::DenseLoad { receiver, index } => {
-            let index = array_index_from_number(registers[index])?;
-            access.load_number(receiver, index)?
-        }
-        NumberInstruction::DenseStore {
-            receiver,
-            index,
-            value,
-        } => {
-            let index = array_index_from_number(registers[index])?;
-            let value = registers[value];
-            access
-                .stage_store(receiver, index, value)
-                .then_some(value)?
-        }
-        NumberInstruction::Binary {
-            operation,
-            left,
-            right,
-        } => apply_binary(operation, registers[left], registers[right])?,
-        NumberInstruction::Unary { operation, value } => apply_unary(operation, registers[value])?,
-        NumberInstruction::Update { operation, value } => match operation {
-            UpdateOp::Increment => registers[value] + 1.0,
-            UpdateOp::Decrement => registers[value] - 1.0,
-        },
-        NumberInstruction::LoadInvariant(_) | NumberInstruction::MathRound { .. } => return None,
-    })
 }

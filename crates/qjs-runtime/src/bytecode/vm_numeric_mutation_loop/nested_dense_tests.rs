@@ -52,6 +52,38 @@ function slow(real, imag, size, half) {
 }
 "#;
 
+const OPERATOR_REGION: &str = r#"
+function operators(left, right, size, outerLimit, stride) {
+  var i;
+  for (var outer = 0; outer < outerLimit; outer++) {
+    i = outer;
+    while (i < size) {
+      left[i] = +(-((left[i] * 3) / 2));
+      right[i] = (((~(right[i] % 5)) ^ (i << 1) ^ (i >> 1) ^ (i >>> 1)) & 255) | 8;
+      i += stride;
+    }
+  }
+  return left.join(':') + '|' + right.join(':');
+}
+"#;
+
+const SLOW_OPERATOR_REGION: &str = r#"
+function noopOperator() {}
+function slowOperators(left, right, size, outerLimit, stride) {
+  var i;
+  for (var outer = 0; outer < outerLimit; outer++) {
+    i = outer;
+    while (i < size) {
+      noopOperator();
+      left[i] = +(-((left[i] * 3) / 2));
+      right[i] = (((~(right[i] % 5)) ^ (i << 1) ^ (i >> 1) ^ (i >>> 1)) & 255) | 8;
+      i += stride;
+    }
+  }
+  return left.join(':') + '|' + right.join(':');
+}
+"#;
+
 const FORWARDING_REGION: &str = r#"
 function region(left, right, size, outerLimit, stride, start) {
   var i;
@@ -142,6 +174,27 @@ fn plan_kind_routes_nested_dense_and_preserves_semantics() {
 
     let source = format!(
         "{FAST_REGION}{SLOW_REGION} var a=[1,2,3,4,5,6,7,8], b=[8,7,6,5,4,3,2,1], c=a.slice(), d=b.slice(); fast(a,b,8,2) === slow(c,d,8,2);"
+    );
+    assert_eq!(eval(&source), Ok(Value::Boolean(true)));
+}
+
+#[test]
+fn nested_dense_predecoded_numeric_operations_preserve_semantics() {
+    let bytecode = nested_function(OPERATOR_REGION, "operators");
+    let plans = NumericMutationLoopPlan::compile_all(&bytecode);
+    assert!(
+        matches!(
+            plans.as_slice(),
+            [NumericMutationLoopPlan {
+                kind: NumericMutationLoopKind::Special(plan),
+                ..
+            }] if matches!(plan.as_ref(), SpecialPlan::NestedDense { .. })
+        ),
+        "{plans:#?}"
+    );
+
+    let source = format!(
+        "{OPERATOR_REGION}{SLOW_OPERATOR_REGION} var left=[1,2,3,4,5,6,7,8], right=[8,7,6,5,4,3,2,1], slowLeft=left.slice(), slowRight=right.slice(); operators(left,right,8,3,2) === slowOperators(slowLeft,slowRight,8,3,2);"
     );
     assert_eq!(eval(&source), Ok(Value::Boolean(true)));
 }

@@ -7710,6 +7710,45 @@ false`); report, raw rows, and frozen manifest SHA-256 values are
 `f99b8fced605743c69b264a89e9974a7dea2b99276c01244e716b94941cd4de0`, and
 `68f6e3e8beb1f2b7415003310ff9d28628ff2107f5e7c2db130256f9a9168ae7`.
 
+### 2026-07-26 predecoded nested dense numeric instructions
+
+Nested dense regions already prove a pure-Number operation stream before they
+take their distinct ordinary-Array lease, but their inner executor still
+dispatched each `NumberInstruction::Binary` and `NumberInstruction::Unary`
+through a second runtime `BinaryOp`/`UnaryOp` match. The new
+`dense/nested/program.rs` lowers that verified stream once at plan creation
+into a single-level `NestedInstruction` sequence. It supports the same
+arithmetic, bitwise, update, and dense load/store operations as the previous
+executor; an unsupported instruction simply declines the nested plan and
+retains the existing dense fallback. This is thus a general interpreter
+dispatch reduction for every eligible nested dense program, not a source or
+workload recognition rule.
+
+The nested integration test compares the lowered executor with a deliberately
+unplanned equivalent while covering multiply, divide, remainder, all three
+shifts, all three bitwise binary operations, unary plus/minus/not, two dense
+receivers, and loop updates. Existing nested tests continue to cover staged
+store forwarding, transactional replay, aliases, holes, accessors, and
+captured-state rejection. The complete `qjs-runtime` suite passed 1,866 tests.
+
+The final same-host, interleaved seven-block external diagnostic compared
+release candidate SHA-256
+`9d51211efad575c2b7f86f10194842a57eb4376053e319a2ba2bea2f027de801`
+against preceding-base SHA-256
+`c58102a973ceb5bb8433d361651bd87b5dffecf86902b6d278bec0de153f0c53`
+and QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+All capability probes completed. Candidate/base medians were 0.99436x for
+Gaussian blur, **0.94779x for Kraken `audio-fft`**, 0.99638x for JSON
+financial parsing, and 0.62057x for `bitops-nsieve-bits`. FFT reached
+**0.61635x candidate/QuickJS-NG**, a stable 5.5% local improvement with no
+control beyond the 1.03x regression ceiling. This remains a diagnostic partial
+portfolio rather than a suite or final-goal claim (`claim_eligible: false`);
+the report, raw rows, and frozen manifest SHA-256 values are
+`37cf347408adba196cd8c82732a929bb2a1c0d7bee7323540f80faffeae50f79`,
+`e5d463c63b8c34834dd4035af767c0fb7f8fa68b4d11d3261c27b7669e2b13b4`, and
+`68f6e3e8beb1f2b7415003310ff9d28628ff2107f5e7c2db130256f9a9168ae7`.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
