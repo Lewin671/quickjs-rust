@@ -429,6 +429,13 @@ impl Vm<'_> {
         local_upvalues: &[Option<Upvalue>],
         env: &CallEnv,
     ) -> u128 {
+        // A frame with no cells and an environment that supplies no name answers
+        // the whole mask from the bytecode. Asking the environment about every
+        // local's name, as the general path must, is what made building a frame
+        // scale with its local count.
+        if local_upvalues.is_empty() && env.supplies_no_named_binding() {
+            return bytecode.authoritative_mask_clean();
+        }
         bytecode
             .locals
             .iter()

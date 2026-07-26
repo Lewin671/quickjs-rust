@@ -1401,6 +1401,18 @@ impl CallEnv {
             && self.immutable_function_name.is_none()
     }
 
+    /// Whether this environment can supply a value for *any* name, which is
+    /// what makes a frame's slots authoritative independently of the name being
+    /// asked about. A frame with no bindings answers the whole slot mask at
+    /// once, rather than one environment query per local.
+    pub(crate) fn supplies_no_named_binding(&self) -> bool {
+        self.frame_bindings.is_empty()
+            && self.deopt_bindings.is_none()
+            && self.module_imports.is_empty()
+            && self.module_live_bindings.is_none()
+            && self.immutable_function_name.is_none()
+    }
+
     pub(crate) fn frame_binding_cell(&self, name: &str) -> Option<Upvalue> {
         self.frame_bindings.cell(name)
     }

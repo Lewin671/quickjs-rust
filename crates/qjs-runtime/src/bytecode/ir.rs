@@ -1005,6 +1005,13 @@ pub struct Bytecode {
     cached_contains_with: bool,
     cached_contains_super_operation: bool,
     cached_uses_lexical_this: bool,
+    /// Slots a fresh frame seeds with `undefined`, so building one costs a fill
+    /// plus these writes instead of a branch per local.
+    cached_hoisted_slots: Vec<u32>,
+    /// The authoritative-slot mask for a frame whose environment supplies no
+    /// name-keyed binding. Deciding this per local used to ask the environment
+    /// about every name on every call.
+    cached_authoritative_mask_clean: u128,
 }
 
 impl Bytecode {
@@ -1102,6 +1109,8 @@ impl Bytecode {
             cached_contains_with: false,
             cached_contains_super_operation: false,
             cached_uses_lexical_this: false,
+            cached_hoisted_slots: Vec::new(),
+            cached_authoritative_mask_clean: 0,
         };
         // Order matters: closure/arguments metadata reads the simpler caches
         // (written-binding names, creates-closures) computed just above. Nested
@@ -1113,6 +1122,14 @@ impl Bytecode {
         bytecode.cached_closure_written_binding_names =
             bytecode.compute_closure_written_binding_names();
         bytecode.cached_writes_binding_set = bytecode.compute_writes_binding_set();
+        bytecode.cached_hoisted_slots = bytecode
+            .locals
+            .iter()
+            .enumerate()
+            .filter(|(_, local)| local.hoisted)
+            .filter_map(|(slot, _)| u32::try_from(slot).ok())
+            .collect();
+        bytecode.cached_authoritative_mask_clean = bytecode.compute_authoritative_mask_clean();
         bytecode.cached_creates_closures = bytecode.compute_creates_closures();
         bytecode.cached_creates_capturing_closures = bytecode.compute_creates_capturing_closures();
         bytecode.cached_needs_arguments_object = bytecode.compute_needs_arguments_object();
@@ -1352,6 +1369,29 @@ impl Bytecode {
 
     /// Whether the body can create a nested closure, class, generator, or async
     /// function. Used when deciding whether an `arguments` object is observable.
+    /// Slots seeded with `undefined` when a frame starts.
+    pub(super) fn hoisted_slots(&self) -> &[u32] {
+        &self.cached_hoisted_slots
+    }
+
+    /// The authoritative-slot mask for a frame with no name-keyed bindings.
+    pub(super) fn authoritative_mask_clean(&self) -> u128 {
+        self.cached_authoritative_mask_clean
+    }
+
+    fn compute_authoritative_mask_clean(&self) -> u128 {
+        let mut clean = 0_u128;
+        for (slot, local) in self.locals.iter().enumerate().take(u128::BITS as usize) {
+            if local.sloppy_global_fallback {
+                continue;
+            }
+            if local.compiler_temporary || !self.global_scope {
+                clean |= 1_u128 << slot;
+            }
+        }
+        clean
+    }
+
     pub(crate) fn creates_closures(&self) -> bool {
         self.cached_creates_closures
     }
