@@ -67,7 +67,7 @@ pub(crate) fn native_string_prototype_slice(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = string_sequence_value(this_value, env)?;
-    let length = string_code_unit_len(value.as_str());
+    let length = value.code_unit_len();
     let start = string_slice_index(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -96,7 +96,7 @@ pub(crate) fn native_string_prototype_slice(
 /// that general admission contract while avoiding a temporary substring that
 /// would otherwise be allocated, copied, measured, and immediately dropped.
 pub(crate) fn numeric_string_slice_code_unit_len(value: &JsString, start: f64, end: f64) -> usize {
-    let length = string_code_unit_len(value);
+    let length = crate::string::js_string_code_unit_len(value);
     let start = numeric_string_slice_index(length, start);
     let end = numeric_string_slice_index(length, end);
     end.saturating_sub(start)
@@ -313,7 +313,7 @@ pub(crate) fn native_string_prototype_substr(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = string_sequence_value(this_value, env)?;
-    let length = string_code_unit_len(value.as_str());
+    let length = value.code_unit_len();
     let start = string_substr_start(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -339,7 +339,7 @@ pub(crate) fn native_string_prototype_substring(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = string_sequence_value(this_value, env)?;
-    let length = string_code_unit_len(value.as_str());
+    let length = value.code_unit_len();
     let start = string_substring_index(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -374,6 +374,23 @@ impl StringSequenceValue {
             Self::Owned(value) => value.as_str(),
         }
     }
+
+    /// UTF-16 length, memoized where the receiver is a shared string value.
+    /// Recomputing it made every `slice`/`substring` linear in the receiver.
+    fn code_unit_len(&self) -> usize {
+        match self {
+            Self::Shared(value) => crate::string::js_string_code_unit_len(value),
+            Self::Owned(value) => string_code_unit_len(value),
+        }
+    }
+
+    /// Whether the buffer is ASCII, memoized where the receiver is shared.
+    fn is_ascii(&self) -> bool {
+        match self {
+            Self::Shared(value) => value.is_ascii(),
+            Self::Owned(value) => value.is_ascii(),
+        }
+    }
 }
 
 fn string_sequence_value(
@@ -401,8 +418,9 @@ fn string_slice_code_units(
     {
         return value.clone();
     }
+    let ascii = value.is_ascii();
     let value = value.as_str();
-    if value.is_ascii() {
+    if ascii {
         JsString::from(value[start..end].to_owned())
     } else {
         let mut result = String::with_capacity(value.len().min((end - start).saturating_mul(4)));

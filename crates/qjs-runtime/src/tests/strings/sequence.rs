@@ -323,3 +323,28 @@ fn repeat_beyond_max_length_throws_range_error() {
     assert!(eval("'a'.repeat(1073741824);").is_err());
     assert!(eval("'ab'.repeat(1073741824);").is_err());
 }
+
+#[test]
+fn slice_and_substring_keep_code_unit_boundaries() {
+    // The memoized length and ASCII state must not change which code units a
+    // range selects, including across a surrogate pair and a lone surrogate.
+    assert_eq!(
+        eval(
+            "var wide = 'a\\u{1F600}b';\
+             [wide.length, wide.slice(1, 3), wide.slice(1, 2) === '\\uD83D',\
+              wide.substring(3), wide.slice(-1), wide.slice(2, 1)].join('|');"
+        ),
+        Ok(Value::String("4|\u{1F600}|true|b|b|".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var s = 'abcdef'; [s.slice(1, 4), s.substring(4, 1), s.slice(-2), s.slice(9)].join('|');"
+        ),
+        Ok(Value::String("bcd|bcd|ef|".to_owned().into()))
+    );
+    // A mutated binding is a new value, so its length is measured afresh.
+    assert_eq!(
+        eval("var s = 'ab'; var first = s.slice(0, 2); s += 'cd'; first + ':' + s.slice(0, 4);"),
+        Ok(Value::String("ab:abcd".to_owned().into()))
+    );
+}
