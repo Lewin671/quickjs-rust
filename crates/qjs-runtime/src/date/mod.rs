@@ -3,6 +3,7 @@ mod constructor;
 mod format;
 mod install;
 mod iso;
+mod legacy;
 mod mutation;
 mod value;
 

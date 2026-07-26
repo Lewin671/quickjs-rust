@@ -5,6 +5,7 @@ use crate::{
     date::{
         DATE_VALUE_PROPERTY, MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE, MS_PER_SECOND,
         iso::{days_from_civil, parse_formatted_string, parse_iso_string},
+        legacy::parse_legacy_string,
     },
 };
 
@@ -19,6 +20,7 @@ pub(crate) fn is_date_object(object: &ObjectRef) -> bool {
 pub(super) fn parse_date_string(source: &str) -> f64 {
     parse_iso_string(source)
         .or_else(|| parse_formatted_string(source))
+        .or_else(|| parse_legacy_string(source))
         .map(time_clip)
         .unwrap_or(f64::NAN)
 }
