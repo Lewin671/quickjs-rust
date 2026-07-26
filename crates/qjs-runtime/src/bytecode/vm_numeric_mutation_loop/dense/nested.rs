@@ -10,6 +10,9 @@
 use std::{collections::BTreeSet, rc::Rc};
 
 use super::*;
+use input_prefix::{NestedInputPrefix, compact_inner_inputs};
+
+mod input_prefix;
 
 #[derive(Clone, Debug)]
 struct ScalarProgram {
@@ -32,6 +35,7 @@ pub(in super::super) struct NestedDensePlan {
     receiver_slots: Vec<usize>,
     prelude: ScalarProgram,
     inner_operations: Vec<NumberInstruction>,
+    inner_input_prefix: Option<NestedInputPrefix>,
     inner_writes: Vec<LocalWrite>,
     inner_counter_write: Register,
     inner_store_count: usize,
@@ -206,7 +210,7 @@ impl NestedDensePlan {
 
         let inner_counter_slot = *inner.local_slots.get(inner.counter_local)?;
         let inner_limit_slot = *inner.local_slots.get(inner_limit)?;
-        let inner_counter_write = inner
+        let mut inner_counter_write = inner
             .writes
             .iter()
             .find(|write| write.local == inner.counter_local)?
@@ -265,6 +269,12 @@ impl NestedDensePlan {
         let mut inner_writes = inner.writes.clone();
         remap_operations(&mut inner_operations, &inner.local_slots, &local_slots)?;
         remap_writes(&mut inner_writes, &inner.local_slots, &local_slots)?;
+        let inner_input_prefix = compact_inner_inputs(
+            &mut inner_operations,
+            &mut inner_writes,
+            &mut inner_counter_write,
+        )
+        .filter(|prefix| prefix.dynamic_start() != 0);
         let max_operations = prelude
             .operations
             .len()
@@ -284,6 +294,7 @@ impl NestedDensePlan {
             receiver_slots,
             prelude,
             inner_operations,
+            inner_input_prefix,
             inner_writes,
             inner_counter_write,
             inner_store_count: inner.store_count,
@@ -395,6 +406,9 @@ impl NestedDensePlan {
         mut bank: LocalBank,
         registers: &mut [f64],
     ) -> RegionOutcome {
+        let inner_input_prefix = self.inner_input_prefix;
+        let dynamic_start = inner_input_prefix.map_or(0, NestedInputPrefix::dynamic_start);
+        debug_assert!(dynamic_start <= self.inner_operations.len());
         // Entry is the first inner backedge: one interpreted iteration has
         // already committed in this outer iteration.
         let mut resumed_inner = true;
@@ -416,6 +430,7 @@ impl NestedDensePlan {
             }
 
             let mut native_inner_commits = 0usize;
+            let mut outer_inputs_initialized = false;
             loop {
                 let Some(continues) = less_than(&bank, self.inner_counter, self.inner_limit) else {
                     return if resumed_inner || native_inner_commits != 0 {
@@ -433,7 +448,23 @@ impl NestedDensePlan {
                     }
                     break;
                 }
-                if !self.run_inner_iteration(access, &mut bank, registers) {
+                if !outer_inputs_initialized
+                    && !self.initialize_outer_inputs(registers, &bank, inner_input_prefix)
+                {
+                    return if resumed_inner || native_inner_commits != 0 {
+                        RegionOutcome::ReplayInner(bank)
+                    } else {
+                        RegionOutcome::ReplayOuter(outer_start)
+                    };
+                }
+                outer_inputs_initialized = true;
+                if !self.run_inner_iteration(
+                    access,
+                    &mut bank,
+                    registers,
+                    inner_input_prefix,
+                    dynamic_start,
+                ) {
                     return if resumed_inner || native_inner_commits != 0 {
                         RegionOutcome::ReplayInner(bank)
                     } else {
@@ -463,13 +494,33 @@ impl NestedDensePlan {
         access: &mut MultiAccess<'_, '_>,
         bank: &mut LocalBank,
         registers: &mut [f64],
+        input_prefix: Option<NestedInputPrefix>,
+        dynamic_start: usize,
     ) -> bool {
         let old_counter = match bank.number(self.inner_counter) {
             Some(counter) => counter,
             None => return false,
         };
         access.reset_iteration();
-        for (register, operation) in self.inner_operations.iter().enumerate() {
+        if let Some(prefix) = input_prefix {
+            for (offset, operation) in self.inner_operations
+                [prefix.carried_local_start()..dynamic_start]
+                .iter()
+                .enumerate()
+            {
+                let NumberInstruction::LoadLocal(local) = *operation else {
+                    unreachable!("validated nested input prefix ends with carried local loads")
+                };
+                let Some(value) = bank.number(local) else {
+                    return false;
+                };
+                registers[prefix.carried_local_start() + offset] = value;
+            }
+            record_nested_dense_carried_local_prefix_loads(prefix.carried_local_count);
+        }
+        record_nested_dense_logical_operations(self.inner_operations.len() - dynamic_start);
+        for (offset, operation) in self.inner_operations[dynamic_start..].iter().enumerate() {
+            let register = dynamic_start + offset;
             let Some(value) = run_operation(operation, register, access, bank, registers) else {
                 return false;
             };
@@ -486,6 +537,53 @@ impl NestedDensePlan {
             bank.write_number(write.local, registers[write.value]);
         }
         true
+    }
+
+    fn initialize_outer_inputs(
+        &self,
+        registers: &mut [f64],
+        bank: &LocalBank,
+        input_prefix: Option<NestedInputPrefix>,
+    ) -> bool {
+        let Some(prefix) = input_prefix else {
+            return true;
+        };
+        for (register, operation) in self.inner_operations[..prefix.constant_count]
+            .iter()
+            .enumerate()
+        {
+            let NumberInstruction::Constant(value) = *operation else {
+                unreachable!("validated nested input prefix starts with constants")
+            };
+            registers[register] = value;
+        }
+        record_nested_dense_constant_prefix_loads(prefix.constant_count);
+        for (offset, operation) in self.inner_operations
+            [prefix.invariant_local_start()..prefix.carried_local_start()]
+            .iter()
+            .enumerate()
+        {
+            let NumberInstruction::LoadLocal(local) = *operation else {
+                unreachable!("validated nested input prefix follows constants with invariant loads")
+            };
+            let Some(value) = bank.number(local) else {
+                return false;
+            };
+            registers[prefix.invariant_local_start() + offset] = value;
+        }
+        record_nested_dense_invariant_local_prefix_loads(prefix.invariant_local_count);
+        true
+    }
+
+    #[cfg(test)]
+    pub(in super::super) fn input_layout(&self) -> Option<(usize, usize, usize, usize)> {
+        let prefix = self.inner_input_prefix?;
+        Some((
+            prefix.constant_count,
+            prefix.invariant_local_count,
+            prefix.carried_local_count,
+            self.inner_operations.len() - prefix.dynamic_start(),
+        ))
     }
 
     fn publish_bank(&self, vm: &mut Vm<'_>, bank: LocalBank) {

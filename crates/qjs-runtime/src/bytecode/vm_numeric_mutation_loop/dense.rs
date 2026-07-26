@@ -103,6 +103,10 @@ thread_local! {
     static NESTED_DENSE_SEEDED_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static NESTED_DENSE_BAILOUTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static NESTED_DENSE_DISCOVERY_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static NESTED_CONSTANT_PREFIX_LOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static NESTED_INVARIANT_LOCAL_PREFIX_LOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static NESTED_CARRIED_LOCAL_PREFIX_LOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static NESTED_LOGICAL_OPERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static DYNAMIC_DENSE_COMPILATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -150,6 +154,10 @@ pub(super) fn reset_test_iterations() {
     NESTED_DENSE_SEEDED_ITERATIONS.set(0);
     NESTED_DENSE_BAILOUTS.set(0);
     NESTED_DENSE_DISCOVERY_WORK.set(0);
+    NESTED_CONSTANT_PREFIX_LOADS.set(0);
+    NESTED_INVARIANT_LOCAL_PREFIX_LOADS.set(0);
+    NESTED_CARRIED_LOCAL_PREFIX_LOADS.set(0);
+    NESTED_LOGICAL_OPERATIONS.set(0);
     DYNAMIC_DENSE_COMPILATIONS.set(0);
 }
 
@@ -364,6 +372,26 @@ pub(super) fn test_nested_dense_discovery_work() -> usize {
 }
 
 #[cfg(test)]
+pub(super) fn test_nested_constant_prefix_loads() -> usize {
+    NESTED_CONSTANT_PREFIX_LOADS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_nested_invariant_local_prefix_loads() -> usize {
+    NESTED_INVARIANT_LOCAL_PREFIX_LOADS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_nested_carried_local_prefix_loads() -> usize {
+    NESTED_CARRIED_LOCAL_PREFIX_LOADS.get()
+}
+
+#[cfg(test)]
+pub(super) fn test_nested_logical_operations() -> usize {
+    NESTED_LOGICAL_OPERATIONS.get()
+}
+
+#[cfg(test)]
 pub(super) fn test_dynamic_dense_compilations() -> usize {
     DYNAMIC_DENSE_COMPILATIONS.get()
 }
@@ -567,6 +595,38 @@ fn record_nested_dense_seeded_iteration() {
 fn record_nested_dense_bailout() {
     #[cfg(test)]
     NESTED_DENSE_BAILOUTS.set(NESTED_DENSE_BAILOUTS.get() + 1);
+}
+
+#[inline]
+fn record_nested_dense_constant_prefix_loads(count: usize) {
+    #[cfg(test)]
+    NESTED_CONSTANT_PREFIX_LOADS.set(NESTED_CONSTANT_PREFIX_LOADS.get() + count);
+    #[cfg(not(test))]
+    let _ = count;
+}
+
+#[inline]
+fn record_nested_dense_invariant_local_prefix_loads(count: usize) {
+    #[cfg(test)]
+    NESTED_INVARIANT_LOCAL_PREFIX_LOADS.set(NESTED_INVARIANT_LOCAL_PREFIX_LOADS.get() + count);
+    #[cfg(not(test))]
+    let _ = count;
+}
+
+#[inline]
+fn record_nested_dense_carried_local_prefix_loads(count: usize) {
+    #[cfg(test)]
+    NESTED_CARRIED_LOCAL_PREFIX_LOADS.set(NESTED_CARRIED_LOCAL_PREFIX_LOADS.get() + count);
+    #[cfg(not(test))]
+    let _ = count;
+}
+
+#[inline]
+fn record_nested_dense_logical_operations(count: usize) {
+    #[cfg(test)]
+    NESTED_LOGICAL_OPERATIONS.set(NESTED_LOGICAL_OPERATIONS.get() + count);
+    #[cfg(not(test))]
+    let _ = count;
 }
 
 #[inline]

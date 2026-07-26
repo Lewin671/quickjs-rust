@@ -7561,6 +7561,43 @@ interleaved blocks, reducing an ordinary dense bitset workload without a
 benchmark-specific path. The remaining FFT gap is unaffected, so its next
 slice stays on the nested dense register executor rather than input setup.
 
+### 2026-07-26 nested dense invariant input prefixes
+
+The nested dense executor previously ran every raw inner-loop constant and
+`LoadLocal` through the generic instruction dispatcher on every native inner
+iteration. It now canonicalizes those pure inputs into three register-prefix
+groups: exact-bit constants, locals not written by the inner program, and
+inner-loop-carried locals. Constants and outer-invariant locals initialize
+after the scalar prelude only when an inner iteration will actually run;
+carried locals refresh before each inner iteration; only the remaining dynamic
+suffix is dispatched. The partition follows the existing SSA entry-snapshot
+contract and the compiled local-write list, rather than recognizing a source
+or benchmark shape. Staged stores, same-iteration forwarding, commit order,
+and replay on the first failed iteration remain unchanged.
+
+`dense/nested/input_prefix.rs` keeps that compile-time representation work
+separate from the one-lease executor. Its unit test preserves distinct `+0`,
+`-0`, and NaN payload bits, partitions invariant versus carried locals, and
+checks every write and counter register remap. The nested-region integration
+test additionally proves that the prefix is initialized at outer scope,
+carried inputs refresh per committed inner iteration, and the dynamic executor
+visits only the suffix. The complete `qjs-runtime` suite passed 1,860 tests.
+
+The final same-host, interleaved seven-block external preview compared the
+release candidate SHA-256
+`f939a21874b68a92873c55dd02921e372aeb26af49aa7aa74efef828f72bdcfb`
+against the preceding-base SHA-256
+`7f5fed08972e3266966ff9c4f646dc84dda4af7b496ee9bbeb49505f1bf1be88`.
+All capability probes completed. Candidate/base medians were 1.00460x for
+Gaussian blur, **0.89153x for Kraken `audio-fft`**, 0.98439x for JSON
+financial parsing, and 0.94376x for `bitops-nsieve-bits`. Thus the direct
+FFT hotspot improved by about 10.8% while every unrelated control stayed
+inside the 1.03x regression ceiling. This is a diagnostic partial portfolio,
+not a suite or final-goal claim (`claim_eligible: false`); the manifest and
+report SHA-256 values are
+`68f6e3e8beb1f2b7415003310ff9d28628ff2107f5e7c2db130256f9a9168ae7`
+and `35cb2339ccb0aecd32279a0e2a984d55a84e6e17a947a81aff787811484ed2be`.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an

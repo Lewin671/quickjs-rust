@@ -178,6 +178,22 @@ fn plan_kind_routes_predicate_scan_and_preserves_semantics() {
 
 #[test]
 fn nested_dense_region_runs_one_seed_and_the_remaining_transactional_iterations() {
+    let bytecode = nested_function(FAST_REGION, "fast");
+    let plans = NumericMutationLoopPlan::compile_all(&bytecode);
+    let NumericMutationLoopKind::Special(special) = &plans[0].kind else {
+        panic!("expected nested dense plan: {plans:#?}");
+    };
+    let SpecialPlan::NestedDense { plan, .. } = special.as_ref() else {
+        panic!("expected nested dense plan: {plans:#?}");
+    };
+    let (constant_count, invariant_local_count, carried_local_count, dynamic_count) = plan
+        .input_layout()
+        .expect("the nested program should have canonicalized inputs");
+    assert!(constant_count > 0);
+    assert!(invariant_local_count > 0);
+    assert!(carried_local_count > 0);
+    assert!(dynamic_count > 0);
+
     dense::reset_test_iterations();
     let source = format!(
         "{FAST_REGION}{SLOW_REGION} var a = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16], b = [16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1], c = a.slice(), d = b.slice(); fast(a,b,16,4) === slow(c,d,16,4);"
@@ -188,6 +204,22 @@ fn nested_dense_region_runs_one_seed_and_the_remaining_transactional_iterations(
     assert_eq!(dense::test_nested_dense_outer_completions(), 4);
     assert_eq!(dense::test_nested_dense_inner_commits(), 7);
     assert_eq!(dense::test_nested_dense_bailouts(), 0);
+    assert_eq!(
+        dense::test_nested_constant_prefix_loads(),
+        constant_count * dense::test_nested_dense_outer_completions()
+    );
+    assert_eq!(
+        dense::test_nested_invariant_local_prefix_loads(),
+        invariant_local_count * dense::test_nested_dense_outer_completions()
+    );
+    assert_eq!(
+        dense::test_nested_carried_local_prefix_loads(),
+        carried_local_count * dense::test_nested_dense_inner_commits()
+    );
+    assert_eq!(
+        dense::test_nested_logical_operations(),
+        dynamic_count * dense::test_nested_dense_inner_commits()
+    );
 }
 
 #[test]
