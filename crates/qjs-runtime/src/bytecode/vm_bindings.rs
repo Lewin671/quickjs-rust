@@ -685,10 +685,6 @@ impl Vm<'_> {
     /// callers can inspect attribute flags such as `writable`.
     /// The realm binding's current value for `name`, which is the authority a
     /// global read resolves to.
-    pub(super) fn realm_binding_value(&self, name: &str) -> Option<Value> {
-        self.realm.get_value(name)
-    }
-
     pub(super) fn global_this_own_property(&self, name: &str) -> Option<Property> {
         let global_this = self.cached_global_this()?;
         global_this.own_property(name)
