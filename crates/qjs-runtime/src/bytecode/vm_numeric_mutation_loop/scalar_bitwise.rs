@@ -518,6 +518,16 @@ pub(super) struct ScalarBitwiseLoopPlan {
 }
 
 impl ScalarBitwiseLoopPlan {
+    /// The local slot the loop bound is read from, where the bound is a hoisted
+    /// loop-invariant instead of an inline constant.
+    #[cfg(test)]
+    fn limit_slot(&self) -> Option<usize> {
+        match self.limit {
+            NumericSource::Local(slot) => Some(slot),
+            NumericSource::Constant(_) => None,
+        }
+    }
+
     pub(super) fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<Self> {
         let code = &bytecode.code;
         let (
@@ -953,6 +963,11 @@ mod tests {
                 );
             }
             vm.locals[slot] = Some(value);
+        }
+        // The loop bound is materialized into a compiler temporary before the
+        // loop, which this synthetic mid-loop VM never executes.
+        if let Some(slot) = plan.limit_slot() {
+            vm.locals[slot] = Some(Value::Number(4.0));
         }
         let result_before = vm.locals[plan.result_slot].clone();
         let ip_before = vm.ip;

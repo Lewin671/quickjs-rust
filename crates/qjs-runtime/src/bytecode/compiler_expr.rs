@@ -280,6 +280,35 @@ impl Compiler {
         )
     }
 
+    /// Returns the numeric bound of a counted-loop test whose right operand is
+    /// a plain numeric literal, e.g. `index < 1000`. The literal is invariant,
+    /// so evaluating it once before the loop is observably identical.
+    fn hoistable_numeric_loop_bound(&self, test: &Expr) -> Option<f64> {
+        let Expr::Binary {
+            left, op, right, ..
+        } = test
+        else {
+            return None;
+        };
+        // Only the ascending `<` form is normalized: it is the header shape
+        // every specialized loop tier matches, and the descending forms are
+        // recognized elsewhere with the literal in place.
+        if !matches!(op, BinaryOp::Lt) {
+            return None;
+        }
+        let Expr::Identifier { name, .. } = left.as_ref() else {
+            return None;
+        };
+        let slot = self.resolve_identifier_load_slot(name);
+        if slot.is_none() || self.identifier_needs_with_resolution(slot) || self.inside_with() {
+            return None;
+        }
+        let Expr::Literal(Literal::Number { raw, .. }) = right.as_ref() else {
+            return None;
+        };
+        parse_number_literal(raw).ok()
+    }
+
     fn compile_for_loop_after_init_with_result(
         &mut self,
         init: Option<&ForInit>,
@@ -312,9 +341,32 @@ impl Compiler {
             // this first iteration environment.
             self.emit(Op::FreshIterationScope(iteration_slots.clone()));
         }
+        // A counted loop whose bound is a numeric literal reads that literal
+        // out of the constant pool on every iteration. Materializing it into a
+        // compiler temporary before the loop makes the bound a plain local
+        // read, which is both one fewer pool access and the shape the
+        // specialized loop tiers recognize -- they only accept a local bound,
+        // so `i < 1000` used to be excluded from native execution while the
+        // otherwise identical `i < limit` was not.
+        let hoisted_limit_slot = test
+            .and_then(|test| self.hoistable_numeric_loop_bound(test))
+            .map(|bound| {
+                let slot = self.temp_local("loop_limit");
+                let constant = self.const_slot(Value::Number(bound));
+                self.emit(Op::LoadConst(constant));
+                self.emit(Op::StoreLocal(slot));
+                slot
+            });
         let loop_start = self.code.len();
         let exit_jump = if let Some(test) = test {
-            self.compile_expr(test)?;
+            match (hoisted_limit_slot, test) {
+                (Some(limit_slot), Expr::Binary { left, op, .. }) => {
+                    self.compile_expr(left)?;
+                    self.emit(Op::LoadLocal(limit_slot));
+                    self.emit(Op::Binary(*op));
+                }
+                _ => self.compile_expr(test)?,
+            }
             let jump = self.emit(Op::JumpIfFalse(usize::MAX));
             self.emit(Op::Pop);
             Some(jump)

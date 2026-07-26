@@ -330,3 +330,51 @@ fn loops_stay_correct_when_a_plan_is_retired_after_repeated_declines() {
         Ok(Value::String("45:45:4950".to_owned().into()))
     );
 }
+
+#[test]
+fn counted_loops_with_literal_bounds_match_local_bound_results() {
+    // The literal bound is materialized into a compiler temporary before the
+    // loop. The results must be identical to the same loop written with an
+    // explicit local bound, including when the body mutates the counter, when
+    // the loop body never runs, and when the bound is fractional or negative.
+    assert_eq!(
+        eval(
+            "function run() { var s = 0; for (var i = 0; i < 5; i++) { s += i; } return s + ':' + i; } run();"
+        ),
+        Ok(Value::String("10:5".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function run() { var s = 0; for (var i = 0; i < 0; i++) { s += 1; } return s + ':' + i; } run();"
+        ),
+        Ok(Value::String("0:0".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function run() { var s = 0; for (var i = 0; i < 2.5; i++) { s += 1; } return s; } run();"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval(
+            "function run() { var s = 0; for (var i = 0; i < -1; i++) { s += 1; } return s; } run();"
+        ),
+        Ok(Value::Number(0.0))
+    );
+    // A body that reassigns the counter still terminates against the same
+    // bound, and `break`/`continue` are unaffected.
+    assert_eq!(
+        eval(
+            "function run() { var s = 0; for (var i = 0; i < 10; i++) { if (i === 3) { i = 8; continue; } if (i === 9) break; s += i; } return s + ':' + i; } run();"
+        ),
+        Ok(Value::String("3:9".to_owned().into()))
+    );
+    // The bound is read once, so a body that shadows or deletes nothing can
+    // observe no difference; a `with` scope keeps the unnormalized path.
+    assert_eq!(
+        eval(
+            "var limit = { i: 0 }; var total = 0; with (limit) { for (i = 0; i < 4; i++) { total += i; } } total + ':' + limit.i;"
+        ),
+        Ok(Value::String("6:4".to_owned().into()))
+    );
+}
