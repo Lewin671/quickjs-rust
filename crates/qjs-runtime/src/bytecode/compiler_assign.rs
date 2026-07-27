@@ -142,6 +142,7 @@ impl Compiler {
                 self.compile_expr(value)?;
                 self.emit(Op::SetPropNamed {
                     key: name.as_str().into(),
+                    cache: None,
                     is_strict: self.strict,
                 });
                 Ok(())
@@ -531,9 +532,10 @@ impl Compiler {
         let value_slot = self.temp_local("assign_value");
         self.compile_expr(object)?;
         self.emit(Op::StoreLocal(object_slot));
+        let cache = NamedPropertyCache::for_local(object_slot);
         self.emit(Op::GetPropNamed {
             key: name.into(),
-            cache: NamedPropertyCache::for_local(object_slot),
+            cache: cache.clone(),
         });
         match op {
             AssignmentOp::LogicalAndAssign
@@ -548,7 +550,7 @@ impl Compiler {
                 self.emit(Op::Pop);
                 self.compile_expr(value)?;
                 self.emit(Op::StoreLocal(value_slot));
-                self.emit_named_member_store(object_slot, name, value_slot);
+                self.emit_named_member_store(object_slot, name, value_slot, Some(cache.clone()));
                 let end = self.code.len();
                 self.patch_jump(jump, end);
             }
@@ -556,7 +558,7 @@ impl Compiler {
                 self.compile_expr(value)?;
                 self.emit(Op::Binary(assignment_binary_op(op)?));
                 self.emit(Op::StoreLocal(value_slot));
-                self.emit_named_member_store(object_slot, name, value_slot);
+                self.emit_named_member_store(object_slot, name, value_slot, Some(cache.clone()));
             }
         }
         Ok(())
@@ -704,26 +706,34 @@ impl Compiler {
         let new_slot = self.temp_local("update_new");
         self.compile_expr(object)?;
         self.emit(Op::StoreLocal(object_slot));
+        let cache = NamedPropertyCache::for_local(object_slot);
         self.emit(Op::GetPropNamed {
             key: name.into(),
-            cache: NamedPropertyCache::for_local(object_slot),
+            cache: cache.clone(),
         });
         self.emit(Op::ToNumeric);
         self.emit(Op::StoreLocal(old_slot));
         self.emit(Op::LoadLocal(old_slot));
         self.emit(Op::Update(op));
         self.emit(Op::StoreLocal(new_slot));
-        self.emit_named_member_store(object_slot, name, new_slot);
+        self.emit_named_member_store(object_slot, name, new_slot, Some(cache));
         self.emit(Op::Pop);
         self.emit(Op::LoadLocal(if prefix { new_slot } else { old_slot }));
         Ok(())
     }
 
-    fn emit_named_member_store(&mut self, object_slot: usize, name: &str, value_slot: usize) {
+    fn emit_named_member_store(
+        &mut self,
+        object_slot: usize,
+        name: &str,
+        value_slot: usize,
+        cache: Option<NamedPropertyCache>,
+    ) {
         self.emit(Op::LoadLocal(object_slot));
         self.emit(Op::LoadLocal(value_slot));
         self.emit(Op::SetPropNamed {
             key: name.into(),
+            cache,
             is_strict: self.strict,
         });
     }
@@ -1028,6 +1038,14 @@ mod tests {
                 .code
                 .iter()
                 .filter(|op| matches!(op, Op::GetPropNamed { .. }))
+                .count(),
+            4
+        );
+        assert_eq!(
+            bytecode
+                .code
+                .iter()
+                .filter(|op| matches!(op, Op::SetPropNamed { cache: Some(_), .. }))
                 .count(),
             4
         );

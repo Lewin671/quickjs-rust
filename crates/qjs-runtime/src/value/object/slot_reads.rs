@@ -9,7 +9,9 @@
 
 use std::rc::Rc;
 
-use super::{ObjectLiteralShape, ObjectRef, OwnDataPropertyRead, PropertyStorage};
+use super::{
+    ObjectLiteralShape, ObjectRef, OwnDataPropertyRead, OwnDataPropertyWrite, PropertyStorage,
+};
 use crate::Value;
 
 impl ObjectRef {
@@ -98,6 +100,61 @@ impl ObjectRef {
             | PropertyStorage::Shaped { .. }
             | PropertyStorage::ShapedPair { .. } => None,
         }
+    }
+
+    /// Writes a slot resolved by [`Self::own_data_slot`]. The caller already
+    /// validated object identity and layout; this still checks writability so
+    /// a descriptor replacement cannot skip observable `[[Set]]` behavior.
+    pub(crate) fn own_data_slot_write(
+        &self,
+        slot: usize,
+        value: &Value,
+    ) -> Option<OwnDataPropertyWrite> {
+        if self.0.module_namespace_exotic.get() {
+            return None;
+        }
+        let result = match &mut *self.0.properties.borrow_mut() {
+            PropertyStorage::Small { entries } => {
+                let (_, property) = entries.get_mut(slot)?;
+                super::write_existing_property(Some(property), value)
+            }
+            PropertyStorage::Dynamic(_)
+            | PropertyStorage::Shaped { .. }
+            | PropertyStorage::ShapedPair { .. } => return None,
+        };
+        if matches!(result, OwnDataPropertyWrite::Written) {
+            self.bump_value_revision();
+        }
+        Some(result)
+    }
+
+    /// Writes a shared small-object slot only when the recorded interned key
+    /// is still present at that exact position.
+    pub(crate) fn shared_data_slot_write(
+        &self,
+        key: &Rc<str>,
+        slot: usize,
+        value: &Value,
+    ) -> Option<OwnDataPropertyWrite> {
+        if self.0.module_namespace_exotic.get() {
+            return None;
+        }
+        let result = match &mut *self.0.properties.borrow_mut() {
+            PropertyStorage::Small { entries } => {
+                let (name, property) = entries.get_mut(slot)?;
+                if !Rc::ptr_eq(name, key) {
+                    return None;
+                }
+                super::write_existing_property(Some(property), value)
+            }
+            PropertyStorage::Dynamic(_)
+            | PropertyStorage::Shaped { .. }
+            | PropertyStorage::ShapedPair { .. } => return None,
+        };
+        if matches!(result, OwnDataPropertyWrite::Written) {
+            self.bump_value_revision();
+        }
+        Some(result)
     }
 
     /// Returns the shared literal shape and storage slot for an unmodified

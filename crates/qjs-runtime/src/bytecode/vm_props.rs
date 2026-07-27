@@ -41,6 +41,67 @@ impl RealmGlobalLoopWrite {
 }
 
 impl Vm<'_> {
+    /// Stores a statically named property, reusing the paired read cache only
+    /// after it has proved an ordinary own data-property slot.
+    pub(super) fn set_named_prop(
+        &mut self,
+        key: &Rc<str>,
+        cache: Option<&NamedPropertyCache>,
+        is_strict: bool,
+    ) -> Result<(), RuntimeError> {
+        let value = self.pop()?;
+        let object = self.pop()?;
+        if !self.is_global_object(&object)
+            && let Value::Object(object_ref) = &object
+            && !crate::symbol::is_symbol_primitive(object_ref)
+        {
+            let cached = cache.and_then(|cache| cache.write(object_ref, key, &value));
+            let cached_hit = cached.is_some();
+            let write =
+                cached.unwrap_or_else(|| object_ref.write_existing_own_data_property(key, &value));
+            match write {
+                OwnDataPropertyWrite::Written => {
+                    if !cached_hit {
+                        if let Some(cache) = cache {
+                            cache.record_write(object_ref, key);
+                        }
+                    }
+                    self.stack.push(value);
+                    return Ok(());
+                }
+                OwnDataPropertyWrite::ReadOnly => {
+                    if is_strict {
+                        return Err(RuntimeError {
+                            thrown: None,
+                            message: "TypeError: cannot set property".to_owned(),
+                        });
+                    }
+                    self.stack.push(value);
+                    return Ok(());
+                }
+                OwnDataPropertyWrite::NeedsSlowPath => {
+                    if self.try_create_ordinary_own_data_property(
+                        object_ref,
+                        Rc::clone(key),
+                        &value,
+                    ) {
+                        if let Some(cache) = cache {
+                            cache.record_write(object_ref, key);
+                        }
+                        self.stack.push(value);
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        self.set_property_value(
+            object,
+            PropertyKey::String(key.to_string()),
+            value,
+            is_strict,
+        )
+    }
+
     fn realm_global_loop_context_is_fixed(&self) -> bool {
         self.transactional_realm_globals
             && self.bytecode.is_global_scope()

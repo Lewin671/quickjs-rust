@@ -916,8 +916,12 @@ impl<'a> Vm<'a> {
                     let result = self.set_index_prop(*index, *is_strict);
                     self.handle_runtime_result(result)?;
                 }
-                Op::SetPropNamed { key, is_strict } => {
-                    let result = self.set_named_prop(key, *is_strict);
+                Op::SetPropNamed {
+                    key,
+                    cache,
+                    is_strict,
+                } => {
+                    let result = self.set_named_prop(key, cache.as_ref(), *is_strict);
                     self.handle_runtime_result(result)?;
                 }
                 Op::GetPrivate(name) => {
@@ -1598,49 +1602,7 @@ impl<'a> Vm<'a> {
         Ok(())
     }
 
-    fn set_named_prop(&mut self, key: &Rc<str>, is_strict: bool) -> Result<(), RuntimeError> {
-        let value = self.pop()?;
-        let object = self.pop()?;
-        if !self.is_global_object(&object)
-            && let Value::Object(object_ref) = &object
-            && !crate::symbol::is_symbol_primitive(object_ref)
-        {
-            match object_ref.write_existing_own_data_property(key, &value) {
-                OwnDataPropertyWrite::Written => {
-                    self.stack.push(value);
-                    return Ok(());
-                }
-                OwnDataPropertyWrite::ReadOnly => {
-                    if is_strict {
-                        return Err(RuntimeError {
-                            thrown: None,
-                            message: "TypeError: cannot set property".to_owned(),
-                        });
-                    }
-                    self.stack.push(value);
-                    return Ok(());
-                }
-                OwnDataPropertyWrite::NeedsSlowPath => {
-                    if self.try_create_ordinary_own_data_property(
-                        object_ref,
-                        Rc::clone(key),
-                        &value,
-                    ) {
-                        self.stack.push(value);
-                        return Ok(());
-                    }
-                }
-            }
-        }
-        self.set_property_value(
-            object,
-            PropertyKey::String(key.to_string()),
-            value,
-            is_strict,
-        )
-    }
-
-    fn set_property_value(
+    pub(super) fn set_property_value(
         &mut self,
         object: Value,
         key: PropertyKey,

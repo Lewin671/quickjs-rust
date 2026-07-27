@@ -17,6 +17,7 @@ mod compiler_try;
 mod compiler_values;
 mod ir;
 mod ir_names;
+mod named_property_cache;
 mod typed_loop;
 mod upvalue_resolver;
 mod util;

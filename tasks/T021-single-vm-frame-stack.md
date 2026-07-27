@@ -835,3 +835,46 @@ was 0.09283x. Raw SHA-256:
 `2c52a42e1f4cd7631a2ea8666bc74cbb71fcb5762a28df70a9153b238d701cd2`.
 These are local receipt-free diagnostics, not a claim that T018's external
 2x objective is closed: even the improved date row remains 4.83x QuickJS-NG.
+
+### 2026-07-26 paired named compound-store cache
+
+The compiler now gives a named compound assignment or update expression one
+shared `NamedPropertyCache` for its `GetPropNamed` and paired `SetPropNamed`.
+Plain named assignment intentionally carries no store cache. On a validated
+ordinary own-data-property hit, an exact read entry promotes to an
+object/layout-checked slot; polymorphic constructor-built receivers can use a
+slot only after the exact interned property name is rechecked. Each write still
+checks the live descriptor's writability. Accessors, read-only properties,
+prototype writes, Proxies, globals, symbols, and exotic storage all miss and
+retain the existing `[[Set]]` route.
+
+Focused coverage changes an already cached receiver into an accessor and
+proves the getter/setter remain observable. The compiler test proves only the
+four compound/update stores in its fixture receive a paired cache. The full
+1,886-test runtime suite, 5,159-case Test262 subset, and all QuickJS-NG
+comparison fixtures passed.
+
+The candidate release SHA-256
+`90462460b159a52cdf9fa9395233d62fc76f6cd2b41aacd22c413fd60ba4dd2a`
+was measured against exact base
+`80e02eb574965bf0a586b5a609fdc1fffbd822ad997a7d392697285fdf12c8a5`
+and pinned QuickJS-NG
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+The complete three-block local broad diagnostic recorded all **225/225**
+eligible formal rows, **600/600** `ok` linearity rows, and 75/75 aggregated
+linearity checks within the 0.85--1.15 bound. Candidate/base was **0.999406x**
+(95% bootstrap CI 0.998813--1.001298), so the broad portfolio is neutral;
+candidate/QuickJS-NG was 0.092572x. Raw JSONL SHA-256:
+`219e0356f5a2b4b77d68fdd694069c7c2e74a19d7c5e9515433f6bfd22d5568e`.
+This receipt-free local run is diagnostic only, not a formal comparison claim.
+
+A full three-block pinned external preview made 44/45 candidate/base rows
+comparable. Its diagnostic geometric candidate/base ratios were 1.003x across
+JetStream's five rows, 0.998x across 13 comparable Kraken rows, and 0.993x
+across all 26 SunSpider rows. Most importantly, the independent SunSpider
+`access-nbody` workload, whose loop repeatedly performs named compound field
+writes, measured **0.945x** of base (73.023 ms versus 77.281 ms), matching the
+repeated local result. No suite score or 2x claim follows from the preview;
+the external report/raw SHA-256 values are
+`3dc1e36c76eaf203de1b47e943291f25666e867eb46e579e0481b454649f464e` and
+`2fc152942572ddd9a56c7b7f1e5f311b035623479e5ae8f4eb0717c280a62877`.

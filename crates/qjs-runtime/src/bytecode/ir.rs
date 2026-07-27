@@ -6,10 +6,11 @@ use std::{
 
 use qjs_ast::{BinaryOp, FunctionParams, ObjectPropertyKind, UnaryOp, UpdateOp};
 
-use crate::{
-    ObjectRef, Value,
-    value::{ObjectLiteralShape, ObjectWeakRef},
-};
+#[cfg(test)]
+use crate::ObjectRef;
+use crate::{Value, value::ObjectLiteralShape};
+
+pub(super) use super::named_property_cache::NamedPropertyCache;
 
 /// Packs a statically indexed property read together with an optional local
 /// receiver slot. The packed form is available only when the host word has a
@@ -40,197 +41,6 @@ pub(super) fn decode_index_receiver(encoded: usize) -> (usize, Option<usize>) {
         (encoded & u32::MAX as usize, encoded_slot.checked_sub(1))
     } else {
         (encoded, None)
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub(super) struct NamedPropertyCache(Rc<RefCell<NamedPropertyCacheState>>);
-
-/// Number of distinct receiver shapes/objects one call site remembers at
-/// once. A call site whose receiver alternates between exactly this many
-/// shapes (for example `a.f()`/`b.f()` behind a ternary) stays entirely on
-/// the cache-hit path instead of rebuilding a single-entry cache on every
-/// call; sites with more distinct shapes degrade gracefully to the slow
-/// path exactly as a single-entry cache would.
-const POLYMORPHIC_CACHE_SLOTS: usize = 2;
-
-#[derive(Clone, Debug, Default)]
-struct NamedPropertyCacheState {
-    entries: [Option<NamedPropertyCacheEntry>; POLYMORPHIC_CACHE_SLOTS],
-    next_slot: usize,
-    local_slot: Option<usize>,
-}
-
-#[derive(Clone, Debug)]
-enum NamedPropertyCacheEntry {
-    Exact {
-        object: ObjectWeakRef,
-        revision: u64,
-        value: CachedValue,
-    },
-    LiteralShape {
-        shape: Rc<ObjectLiteralShape>,
-        slot: usize,
-    },
-    /// An own data property resolved to a storage slot. Unlike `Exact`, this
-    /// entry survives ordinary value assignment to the object, because a slot
-    /// index is only invalidated by a layout change (insert, delete, or
-    /// descriptor replacement). Read-modify-write field code -- the common
-    /// shape of numeric object algorithms -- keeps hitting the cache instead
-    /// of re-resolving the property name on every iteration.
-    OwnSlot {
-        object: ObjectWeakRef,
-        layout_revision: u64,
-        slot: usize,
-    },
-    /// An own data property resolved to a storage slot and the interned name
-    /// held there. Unlike `OwnSlot` this entry names no object, so one entry
-    /// serves every object built the same way — the shape a loop over a list of
-    /// constructor-built objects has, which the identity-keyed entries miss on
-    /// every element.
-    SharedSlot { key: Rc<str>, slot: usize },
-}
-
-#[derive(Clone, Debug)]
-enum CachedValue {
-    Undefined,
-    Null,
-    Boolean(bool),
-    Number(f64),
-    Object(ObjectWeakRef),
-}
-
-impl NamedPropertyCache {
-    pub(super) fn for_local(slot: usize) -> Self {
-        Self(Rc::new(RefCell::new(NamedPropertyCacheState {
-            entries: Default::default(),
-            next_slot: 0,
-            local_slot: Some(slot),
-        })))
-    }
-
-    pub(super) fn local_slot(&self) -> Option<usize> {
-        self.0.borrow().local_slot
-    }
-
-    pub(super) fn get(&self, object: &ObjectRef) -> Option<Value> {
-        let state = self.0.borrow();
-        state
-            .entries
-            .iter()
-            .flatten()
-            .find_map(|entry| Self::read_entry(entry, object))
-    }
-
-    fn read_entry(entry: &NamedPropertyCacheEntry, object: &ObjectRef) -> Option<Value> {
-        let value = match entry {
-            NamedPropertyCacheEntry::Exact {
-                object: cached_object,
-                revision,
-                value,
-            } => {
-                if !cached_object.ptr_eq(object) || *revision != object.property_revision() {
-                    return None;
-                }
-                value
-            }
-            NamedPropertyCacheEntry::LiteralShape { shape, slot } => {
-                return object.literal_data_slot_value(shape, *slot);
-            }
-            NamedPropertyCacheEntry::OwnSlot {
-                object: cached_object,
-                layout_revision,
-                slot,
-            } => {
-                if !cached_object.ptr_eq(object) || *layout_revision != object.layout_revision() {
-                    return None;
-                }
-                return object.own_data_slot_value(*slot);
-            }
-            NamedPropertyCacheEntry::SharedSlot { key, slot } => {
-                return object.shared_data_slot_value(key, *slot);
-            }
-        };
-        Some(match value {
-            CachedValue::Undefined => Value::Undefined,
-            CachedValue::Null => Value::Null,
-            CachedValue::Boolean(value) => Value::Boolean(*value),
-            CachedValue::Number(value) => Value::Number(*value),
-            CachedValue::Object(value) => Value::Object(value.upgrade()?),
-        })
-    }
-
-    pub(super) fn update(&self, object: &ObjectRef, key: &str, value: &Value) {
-        // A cached value is the cheapest hit -- it answers without touching the
-        // object's property table at all -- but any assignment to the object
-        // invalidates it. Start there, and promote a site to the slot-keyed
-        // entry only once a stale value entry for the same object proves the
-        // site reads a field that is also being written.
-        let value_entry_went_stale = self.0.borrow().entries.iter().flatten().any(|entry| {
-            matches!(
-                entry,
-                NamedPropertyCacheEntry::Exact { object: cached, .. } if cached.ptr_eq(object)
-            )
-        });
-        // A site that has already seen a different object is reading a list or
-        // a rotating receiver, so an identity-keyed entry would miss on every
-        // element. Record the storage slot and its interned name instead.
-        let saw_other_object = self
-            .0
-            .borrow()
-            .entries
-            .iter()
-            .flatten()
-            .any(|entry| match entry {
-                NamedPropertyCacheEntry::Exact { object: cached, .. }
-                | NamedPropertyCacheEntry::OwnSlot { object: cached, .. } => !cached.ptr_eq(object),
-                NamedPropertyCacheEntry::LiteralShape { .. }
-                | NamedPropertyCacheEntry::SharedSlot { .. } => false,
-            });
-        let entry = if let Some((shape, slot)) = object.literal_data_slot(key) {
-            NamedPropertyCacheEntry::LiteralShape { shape, slot }
-        } else if let Some((key, slot)) = saw_other_object
-            .then(|| object.shared_data_slot(key))
-            .flatten()
-        {
-            NamedPropertyCacheEntry::SharedSlot { key, slot }
-        } else if let Some(slot) = value_entry_went_stale
-            .then(|| object.own_data_slot(key))
-            .flatten()
-        {
-            NamedPropertyCacheEntry::OwnSlot {
-                object: object.downgrade(),
-                layout_revision: object.layout_revision(),
-                slot,
-            }
-        } else {
-            let value = match value {
-                Value::Undefined => CachedValue::Undefined,
-                Value::Null => CachedValue::Null,
-                Value::Boolean(value) => CachedValue::Boolean(*value),
-                Value::Number(value) => CachedValue::Number(*value),
-                Value::Object(value) => CachedValue::Object(value.downgrade()),
-                _ => {
-                    self.clear();
-                    return;
-                }
-            };
-            NamedPropertyCacheEntry::Exact {
-                object: object.downgrade(),
-                revision: object.property_revision(),
-                value,
-            }
-        };
-        let mut state = self.0.borrow_mut();
-        let slot = state.next_slot;
-        state.entries[slot] = Some(entry);
-        state.next_slot = (slot + 1) % POLYMORPHIC_CACHE_SLOTS;
-    }
-
-    pub(super) fn clear(&self) {
-        let mut state = self.0.borrow_mut();
-        state.entries = Default::default();
-        state.next_slot = 0;
     }
 }
 
@@ -420,6 +230,7 @@ pub(super) enum Op {
     /// computed assignment. Leaves the assigned value on the stack.
     SetPropNamed {
         key: Rc<str>,
+        cache: Option<NamedPropertyCache>,
         is_strict: bool,
     },
     /// Reads a private member `obj.#name`: pops the object, resolves `#name`

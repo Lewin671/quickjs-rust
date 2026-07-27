@@ -55,6 +55,24 @@ fn repeated_named_own_data_writes_preserve_the_final_state() {
 }
 
 #[test]
+fn cached_named_compound_writes_revalidate_accessor_receivers() {
+    assert_eq!(
+        eval(
+            "function Box(value) { this.value = value; } \
+             function bump(box) { return ++box.value; } \
+             var first = new Box(0); var second = new Box(10); \
+             var out = [bump(first), bump(second), bump(first)]; \
+             var intercepted = 20; \
+             Object.defineProperty(second, 'value', { configurable: true, \
+               get: function() { return intercepted; }, \
+               set: function(value) { intercepted = value; } }); \
+             out.push(bump(second)); out.join(':') + ':' + intercepted;"
+        ),
+        Ok(Value::String("1:11:2:21:21".to_owned().into()))
+    );
+}
+
+#[test]
 fn named_member_assignment_keeps_the_reference_selected_before_the_rhs() {
     assert_eq!(
         eval(
