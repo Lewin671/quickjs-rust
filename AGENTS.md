@@ -20,14 +20,15 @@ each change verifiable with focused tests — but no longer cap the design at
 structural, the right change is to lift the structure, not to add another
 heuristic around it.
 
-The keystone of both goals is the **environment / binding model**. The current
-per-frame `HashMap<String, Value>` snapshot plus capture-writeback heuristics is
-the shared root of the remaining conformance failures (closure/`eval`/method
-capture staleness — M2, per-iteration, generator) *and* the call-path cost
-(per-call HashMap allocation + deep clone). Migrating to a slot-indexed locals +
-shared upvalue-cell model is the highest-ROI work and should be sequenced first;
-most remaining env-model gaps are expected to fall out of it rather than be
-patched individually.
+The **environment / binding model** remains a protected architectural boundary:
+T016 has already replaced the old snapshot/capture-writeback model with
+slot-indexed locals plus shared upvalue cells. Do not reintroduce a per-call
+name-keyed snapshot or infer the current highest-ROI work from a historical
+task description. For every new performance unit, derive priority from the
+latest exact candidate/base/QuickJS-NG evidence, attach a current profile of
+the proposed shared cost, and follow T022's queue/plan/decision workflow.
+Static architecture notes describe constraints and completed migrations; the
+evidence-bound opportunity queue decides what to optimize next.
 
 ## Standard Commands
 

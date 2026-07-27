@@ -49,14 +49,13 @@ Campaign working rules:
   273) stay in the normal gap queue; promote one to a campaign file when its
   slices stop fitting in single reviewable units.
 
-## Keystone
+## Landed keystone
 
-- `T016-environment-model-rewrite.md` — replace the snapshot + `captured_env` +
-  `CaptureWriteback` trio with slot-indexed locals + indexed shared upvalue
-  cells (`docs/design/env-model-rewrite.md`). This is the keystone for both
-  goals: it removes capture staleness at the root and the per-call locals-map
-  clone. **Subsumes T011 and T014** — do not extend the heuristic model;
-  land cells instead. Serialize on one branch.
+- `T016-environment-model-rewrite.md` — **landed.** It replaced the snapshot +
+  `captured_env` + `CaptureWriteback` trio with slot-indexed locals + indexed
+  shared upvalue cells (`docs/design/env-model-rewrite.md`). It subsumes T011
+  and T014; preserve this representation rather than reviving heuristic
+  snapshots.
 
 ## Engine Correctness
 
@@ -90,6 +89,11 @@ Campaign working rules:
   compact that same execution core into register/superinstructions. This is
   the next T018 unit; do not create a second independent VM or expand the
   direct-leaf eligibility predicate in the frame-stack commit.
+- `T022-performance-priority-controller.md` — evidence-bound selection and
+  stop mechanism for T018. It derives the next profiling queue from current
+  artifacts, freezes a unit's targets before timing, and records explicit
+  retain/reject/inconclusive decisions. Static task text is never a substitute
+  for this current evidence.
 - `T017-performance-benchmark-system.md` — versioned candidate/base/QuickJS-NG
   black-box benchmark platform. M0-M4 landed, including independent throughput,
   resource lanes, and diagnostic public-boundary Criterion lifecycle benches;

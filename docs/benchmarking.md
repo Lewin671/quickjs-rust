@@ -129,6 +129,75 @@ The legacy `scripts/microbench.sh` uses an internal millisecond `Date.now()`
 loop. It remains a useful quick probe, but its quantization and fixed engine
 order make it unsuitable for a gate or public performance claim.
 
+## Performance Priority And Decision Gate
+
+Performance evidence answers two different questions: whether a measurement is
+valid, and whether the selected work is the best current use of effort. The
+existing protocol answers the first. T022 supplies the second without turning
+the informational GitHub preview into a fixed-hardware CI claim.
+
+Static architecture/task text is never the source of the current highest-ROI
+item. It can describe a completed migration or a still-valid constraint, but a
+new optimization begins with the exact parent revision's `summary.json`,
+`report.json`, and `external-report.json` artifact bundle:
+
+```sh
+./scripts/performance-decision.sh queue \
+  --summary /path/to/summary.json \
+  --broad-report /path/to/report.json \
+  --external-report /path/to/external-report.json \
+  --output target/performance-opportunity.json
+```
+
+The output contains two ranked lists rather than a fabricated grand score:
+
+- `external` ranks complete candidate/base/QuickJS-NG rows still above the
+  campaign target (`0.50x` by default); and
+- `broad` ranks broad cases still above that target.
+
+Those lists identify workloads to profile, not implementation tactics. A
+highest-ratio external case must first be tied to a shared runtime cost in a
+current profile. The desired P0 item is a mechanism evidenced in more than one
+independent workload; a one-case leaf path is lower priority unless a written
+override explains why it unblocks the P0 work.
+
+Each optimization that claims campaign progress then adds a plan under
+`tasks/performance-units/`. The plan freezes its base revision, queue SHA-256,
+target/control cases, profile receipts, semantic risks, target improvement,
+control regression ceiling, and maximum two attempts. Validate it before code:
+
+```sh
+./scripts/performance-decision.sh validate-unit \
+  --unit tasks/performance-units/<unit>.json \
+  --queue target/performance-opportunity.json
+```
+
+After measurement, classify the plan using the exact candidate/base preview
+bundle. The fast mode checks only the predeclared targets and controls; the
+promotion mode additionally requires all 25 broad cases, complete external
+comparisons, and the exact zero-gap Test262 burndown for the candidate commit.
+
+```sh
+./scripts/performance-decision.sh decide \
+  --mode promotion \
+  --unit tasks/performance-units/<unit>.json \
+  --queue target/performance-opportunity.json \
+  --summary /path/to/summary.json \
+  --broad-report /path/to/report.json \
+  --external-report /path/to/external-report.json \
+  --test262-burndown /path/to/burndown.json \
+  --require-retained \
+  --output target/performance-decision.json
+```
+
+`retained` means the frozen gates passed; `rejected` is valid negative evidence
+that closes that mechanism after its attempt budget; `inconclusive` means the
+artifact is incomplete/noisy and cannot be counted as progress. Hosted preview
+artifacts update the queue and audit a result; same-host evidence remains the
+decision-making receipt. Once fixed-hardware or approved same-host promotion
+infrastructure exists, make this decision check required in the repository
+ruleset rather than relying on convention alone.
+
 ## Running
 
 Builds are deliberately outside measurement:

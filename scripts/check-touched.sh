@@ -85,6 +85,8 @@ touches_cli=0
 touches_test262_config=0
 touches_test262_aggregate=0
 touches_benchmark=0
+touches_performance_unit=0
+performance_units=()
 test262_filters=()
 
 add_filter() {
@@ -148,8 +150,12 @@ while IFS= read -r path; do
     crates/qjs-lexer/*) touches_lexer=1 ;;
     crates/qjs-ast/*) touches_ast=1 ;;
     crates/qjs-cli/*) touches_cli=1 ;;
-    benchmarks/*|.cargo/config.toml|tools/__init__.py|tools/benchmark/*|scripts/benchmark*.sh|scripts/resource-benchmark*.sh|scripts/lifecycle-bench.sh|scripts/external-corpus-audit.sh|scripts/performance-policy-audit.sh|scripts/performance-preview.sh|.github/workflows/performance-smoke.yml)
+    benchmarks/*|.cargo/config.toml|tools/__init__.py|tools/benchmark/*|scripts/benchmark*.sh|scripts/resource-benchmark*.sh|scripts/lifecycle-bench.sh|scripts/external-corpus-audit.sh|scripts/performance-policy-audit.sh|scripts/performance-preview.sh|scripts/performance-decision.sh|.github/workflows/performance-smoke.yml)
       touches_benchmark=1
+      ;;
+    tasks/performance-units/*.json)
+      touches_performance_unit=1
+      [ -f "$ROOT_DIR/$path" ] && performance_units+=("$path")
       ;;
     scripts/test262-aggregate.py|scripts/tests/test_test262_aggregate.py)
       touches_test262_aggregate=1
@@ -210,7 +216,15 @@ if [ "$touches_benchmark" -eq 1 ]; then
     "$ROOT_DIR/scripts/lifecycle-bench.sh" \
     "$ROOT_DIR/scripts/external-corpus-audit.sh" \
     "$ROOT_DIR/scripts/performance-policy-audit.sh" \
-    "$ROOT_DIR/scripts/performance-preview.sh"
+    "$ROOT_DIR/scripts/performance-preview.sh" \
+    "$ROOT_DIR/scripts/performance-decision.sh"
+fi
+
+if [ "$touches_performance_unit" -eq 1 ]; then
+  for performance_unit in ${performance_units[@]+"${performance_units[@]}"}; do
+    run_cmd "$ROOT_DIR/scripts/performance-decision.sh" check-unit \
+      --unit "$ROOT_DIR/$performance_unit"
+  done
 fi
 
 if [ "$touches_test262_aggregate" -eq 1 ]; then

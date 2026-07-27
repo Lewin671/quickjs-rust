@@ -60,6 +60,13 @@ qjs_check_typed_array_tests() {
     | sed -n 's/: test$//p')
 }
 
+qjs_check_performance_units() {
+  local unit
+  while IFS= read -r unit; do
+    "$ROOT_DIR/scripts/performance-decision.sh" check-unit --unit "$unit"
+  done < <(rg --files "$ROOT_DIR/tasks/performance-units" -g '*.json' | sort)
+}
+
 qjs_check_stage "format" "$CARGO_BIN" fmt --all -- --check
 qjs_check_stage "clippy" "$CARGO_BIN" clippy --workspace --all-targets -- -D warnings
 # The opt-in `agents` feature (Test262 $262.agent multi-agent harness) compiles
@@ -90,6 +97,7 @@ fi
 qjs_check_stage "benchmark tool tests" \
   env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR" \
   python3 -m unittest discover -s "$ROOT_DIR/tools/benchmark/tests" -v
+qjs_check_stage "performance unit plans" qjs_check_performance_units
 qjs_check_stage "Test262 aggregate tests" \
   env PYTHONDONTWRITEBYTECODE=1 \
   python3 -m unittest discover -s "$ROOT_DIR/scripts/tests" -v
@@ -104,6 +112,7 @@ qjs_check_stage "benchmark shell syntax" \
     "$ROOT_DIR/scripts/external-corpus-audit.sh" \
     "$ROOT_DIR/scripts/performance-policy-audit.sh" \
     "$ROOT_DIR/scripts/performance-preview.sh" \
+    "$ROOT_DIR/scripts/performance-decision.sh" \
     "$ROOT_DIR/scripts/pre-push" "$ROOT_DIR/scripts/test-git-hooks.sh" \
     "$ROOT_DIR/scripts/check.sh" "$ROOT_DIR/scripts/check-touched.sh"
 qjs_check_stage "file-size guard" "$ROOT_DIR/scripts/check-file-size.sh"
