@@ -692,3 +692,24 @@ of base; the same run measured `hash-map` at 1.00302x and `ai-astar` at
 0.99748x. Its report and raw SHA-256 values are
 `98af5e1ddd0e3fb0fa334b6b062de12994d6b531341406589f7460fe8c79135d`
 and `53f1f930b12d075b9d0ad82a382ac7f57460352eabac9877e4621482a69aca2f`.
+
+### 2026-07-26 rejected realm execution-view construction
+
+`Vm::realm_env()` normally builds an empty ordinary function frame for every
+native call, coercion hook, and property operation. A candidate replaced that
+with the already-minimal direct-leaf frame shape while preserving the caller's
+module-import routing. It removed inherited catch/eval conflict maps,
+private-name state, and the direct-eval with-stack from this realm-only view;
+a focused environment-contract test and compilation both passed.
+
+The mechanism was nevertheless rejected and reverted. A three-block,
+six-case diagnostic using candidate SHA-256
+`0adb7cd1eb998ada432da1f4a79b04973d20d7f656cbcaf92a260b3ddb11b6db`
+against exact base `80e02eb574965bf0a586b5a609fdc1fffbd822ad997a7d392697285fdf12c8a5`
+gave no material benefit: `math_abs` 1.00016x, `array_index_of` 1.00066x,
+`string_slice` 1.00025x, `property_read` 1.00127x,
+`dynamic_method_call` 1.00092x, and `function_call_two_args` 0.99818x of
+base. All 54 formal and 144 linearity records were `ok`; raw JSONL SHA-256 is
+`9efe510bda7ada2cde573b562c325cbf469da5a36903cdcfa0542e1ee1c66cb5`.
+The savings in empty-metadata reference-count traffic do not repay the new
+construction route, so this is not a general-performance improvement.
