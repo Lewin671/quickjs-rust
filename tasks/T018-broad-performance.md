@@ -7939,6 +7939,63 @@ The selected, receipt-free local run is intentionally rejected by strict
 reporting as incomplete/unverified, so this is a measurement-capacity repair,
 not a runtime-performance claim.
 
+### 2026-07-26 fuse nested dense reads, arithmetic, and transactional staging
+
+Eligible nested dense programs now remove three sources of generic executor
+overhead without changing their admission rule. A dense load with exactly one
+consumer may fold into the immediately following add/sub store, and two
+single-use products feeding an add/sub may fold into one instruction. The
+former still reads the source before converting the target index and staging
+the write; the latter explicitly computes and rounds both products before the
+add/sub, rather than using an FMA. A second consumer or an index dependency
+keeps the original SSA instructions. Small nested transactions (at most four
+writes) additionally use a fixed stack pending-store buffer; larger plans
+retain the existing `Vec` path. Failed native iterations still discard staged
+writes and replay bytecode through the established fallback.
+
+Focused program tests cover both transformations, SSA/local-write remapping,
+index-cache assignment for the two-index fused op, rejected second consumers,
+and the non-FMA intermediate rounding case. The nested executor test confirms
+the ordinary FFT-shaped plan uses four read/store folds and two product-pair
+folds while retaining its existing forwarding, alias, hole, accessor, and
+replay coverage. The complete `qjs-runtime` suite passed **1,878/1,878**
+tests, the curated Test262 subset passed **5,159/5,159**, and the
+QuickJS-NG comparison smoke suite passed.
+
+The complete local three-role broad-v2 diagnostic used candidate release
+SHA-256 `9b7ffa744e0503ceb2ed6927eda7b7278d18767e86c24b9d52135e4bc86d4af9`,
+preceding-base SHA-256
+`e72fe8cd70141c85ece3f12ac0abd365561a9e5a7081569f26c01645b7eca49b`, and
+pinned QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+All 225 formal rows were eligible, all 75 N/2N role/case checks passed, and
+all three blocks were valid. Candidate/base geometric mean was **0.99898x**;
+the largest case movement was 1.01380x for `closure_allocation_call`. The raw
+JSONL SHA-256 is
+`9501a537ec831e0ac8d9d25f5e3d9568092d85f8a4d78896ec4fbb2a89d36419`.
+It remains receipt-free local diagnostic evidence, not a report-grade claim.
+
+The independent complete seven-block external preview retained 44 comparable
+candidate/base cases (both Rust binaries still time out on
+`imaging-gaussian-blur`, while QuickJS-NG completes). Its suite geometric
+candidate/base ratios were 1.009x for JetStream, **0.994x for Kraken**, and
+1.003x for SunSpider. Kraken `audio-fft` improved to **0.91273x** of the
+preceding base and **0.52562x** of QuickJS-NG (candidate 836.771 ms, base
+916.774 ms, QuickJS-NG 1,591.956 ms). The external raw, report, and frozen
+manifest SHA-256 values are
+`525bd07a2feb36ddb1ad14695352361c354bd4a07def369a3aaa57a92ef5ff3a`,
+`81830e2b86c9dff8edd6dee9475cf68a3fdda06ede732917039291efa0e9fd8b`, and
+`a8ddeded582573bc676bf3f7bbbaf2625f6dfa7742f07bcdd6aaa26366f4e6c4`.
+
+One short 4 ms SunSpider process row, `bitops-bitwise-and`, reported a
+1.03195x independent-median candidate/base ratio in that run. It was retained
+instead of being filtered: four additional batches of 100 strictly
+candidate/base-interleaved executions of the exact hash-matched generated
+bundle measured median ratios from 1.00555x to 1.01187x and paired geometric
+means from 0.99633x to 1.01233x. That follow-up rules out a material general
+regression; the full external preview remains informational, and the campaign
+is not complete while the broader external gaps remain.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an

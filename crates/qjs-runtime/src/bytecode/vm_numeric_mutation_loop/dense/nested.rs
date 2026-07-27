@@ -13,7 +13,7 @@ use super::*;
 use input_prefix::{NestedInputPrefix, compact_inner_inputs};
 use program::{
     IndexCache, IndexResolver, NestedInstruction, NoIndexCache, assign_index_caches,
-    fuse_terminal_add_sub_stores, run_operation,
+    fuse_dense_load_stores, fuse_mul_add_sub, fuse_terminal_add_sub_stores, run_operation,
 };
 
 mod input_prefix;
@@ -291,6 +291,16 @@ impl NestedDensePlan {
             &mut inner_writes,
             &mut inner_counter_write,
         );
+        fuse_dense_load_stores(
+            &mut inner_operations,
+            &mut inner_writes,
+            &mut inner_counter_write,
+        );
+        fuse_mul_add_sub(
+            &mut inner_operations,
+            &mut inner_writes,
+            &mut inner_counter_write,
+        );
         let has_cached_indices = assign_index_caches(&mut inner_operations);
         let max_operations = prelude
             .operations
@@ -376,7 +386,6 @@ impl NestedDensePlan {
         else {
             return NestedDensePlanRun::Suppress;
         };
-
         let mut inline_registers = [0.0; INLINE_DENSE_OPS];
         let mut large_registers =
             (self.max_operations > INLINE_DENSE_OPS).then(|| vec![0.0; self.max_operations]);
@@ -387,11 +396,16 @@ impl NestedDensePlan {
         let outcome = ArrayRef::with_distinct_dense_writable_elements(&arrays, |elements| {
             record_nested_dense_entry();
             record_nested_dense_seeded_iteration();
-            let mut access = MultiAccess {
-                elements,
-                pending: Vec::with_capacity(self.inner_store_count),
-            };
-            self.run_region(&mut access, bank, registers)
+            if self.inner_store_count <= INLINE_NESTED_PENDING_STORES {
+                let mut access = InlineMultiAccess::new(elements);
+                self.run_region(&mut access, bank, registers)
+            } else {
+                let mut access = MultiAccess {
+                    elements,
+                    pending: Vec::with_capacity(self.inner_store_count),
+                };
+                self.run_region(&mut access, bank, registers)
+            }
         });
         let Some(outcome) = outcome else {
             return NestedDensePlanRun::Suppress;
@@ -418,22 +432,22 @@ impl NestedDensePlan {
         }
     }
 
-    fn run_region(
+    fn run_region<A: DenseAccess>(
         &self,
-        access: &mut MultiAccess<'_, '_>,
+        access: &mut A,
         bank: LocalBank,
         registers: &mut [f64],
     ) -> RegionOutcome {
         if self.has_cached_indices {
-            self.run_region_with_indices::<IndexCache>(access, bank, registers)
+            self.run_region_with_indices::<A, IndexCache>(access, bank, registers)
         } else {
-            self.run_region_with_indices::<NoIndexCache>(access, bank, registers)
+            self.run_region_with_indices::<A, NoIndexCache>(access, bank, registers)
         }
     }
 
-    fn run_region_with_indices<I: IndexResolver>(
+    fn run_region_with_indices<A: DenseAccess, I: IndexResolver>(
         &self,
-        access: &mut MultiAccess<'_, '_>,
+        access: &mut A,
         mut bank: LocalBank,
         registers: &mut [f64],
     ) -> RegionOutcome {
@@ -490,7 +504,7 @@ impl NestedDensePlan {
                 }
                 outer_inputs_initialized = true;
                 let mut indices = I::fresh();
-                if !self.run_inner_iteration_with_indices(
+                if !self.run_inner_iteration_with_indices::<A, I>(
                     access,
                     &mut bank,
                     registers,
@@ -522,9 +536,9 @@ impl NestedDensePlan {
         }
     }
 
-    fn run_inner_iteration_with_indices<I: IndexResolver>(
+    fn run_inner_iteration_with_indices<A: DenseAccess, I: IndexResolver>(
         &self,
-        access: &mut MultiAccess<'_, '_>,
+        access: &mut A,
         bank: &mut LocalBank,
         registers: &mut [f64],
         input_prefix: Option<NestedInputPrefix>,
@@ -622,6 +636,33 @@ impl NestedDensePlan {
             prefix.carried_local_count,
             self.inner_operations.len() - prefix.dynamic_start(),
         ))
+    }
+
+    #[cfg(test)]
+    pub(in super::super) fn fused_dense_load_store_count(&self) -> usize {
+        self.inner_operations
+            .iter()
+            .filter(|operation| {
+                matches!(
+                    operation,
+                    NestedInstruction::StoreAddFromLoad { .. }
+                        | NestedInstruction::StoreSubFromLoad { .. }
+                )
+            })
+            .count()
+    }
+
+    #[cfg(test)]
+    pub(in super::super) fn fused_mul_add_sub_count(&self) -> usize {
+        self.inner_operations
+            .iter()
+            .filter(|operation| {
+                matches!(
+                    operation,
+                    NestedInstruction::MulAdd { .. } | NestedInstruction::MulSub { .. }
+                )
+            })
+            .count()
     }
 
     fn publish_bank(&self, vm: &mut Vm<'_>, bank: LocalBank) {

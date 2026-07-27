@@ -857,6 +857,12 @@ struct PendingDenseStore {
     value: f64,
 }
 
+// Nested plans commonly stage a small, statically known number of writes per
+// source iteration. Keep that hot transactional buffer on the stack instead
+// of allocating a Vec for every one-lease run. Plans with more writes retain
+// the general Vec-backed path below.
+pub(super) const INLINE_NESTED_PENDING_STORES: usize = 4;
+
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 struct SunkDenseStore {
@@ -927,6 +933,26 @@ impl DenseAccess for SingleAccess<'_> {
 struct MultiAccess<'a, 'elements> {
     elements: &'a mut [RefMut<'elements, Vec<Value>>],
     pending: Vec<PendingDenseStore>,
+}
+
+pub(super) struct InlineMultiAccess<'a, 'elements> {
+    elements: &'a mut [RefMut<'elements, Vec<Value>>],
+    pending: [PendingDenseStore; INLINE_NESTED_PENDING_STORES],
+    pending_len: usize,
+}
+
+impl<'a, 'elements> InlineMultiAccess<'a, 'elements> {
+    pub(super) fn new(elements: &'a mut [RefMut<'elements, Vec<Value>>]) -> Self {
+        Self {
+            elements,
+            pending: [PendingDenseStore {
+                receiver: 0,
+                index: 0,
+                value: 0.0,
+            }; INLINE_NESTED_PENDING_STORES],
+            pending_len: 0,
+        }
+    }
 }
 
 struct ReadAccess<'a, 'elements> {
@@ -1001,6 +1027,59 @@ impl DenseAccess for MultiAccess<'_, '_> {
 
     fn commit_stores(&mut self) {
         for store in &self.pending {
+            self.elements[store.receiver][store.index] = Value::Number(store.value);
+        }
+    }
+}
+
+impl DenseAccess for InlineMultiAccess<'_, '_> {
+    #[inline]
+    fn reset_iteration(&mut self) {
+        self.pending_len = 0;
+    }
+
+    #[inline]
+    fn load_number(&self, receiver: usize, index: usize) -> Option<f64> {
+        if let Some(store) = self.pending[..self.pending_len]
+            .iter()
+            .rev()
+            .find(|store| store.receiver == receiver && store.index == index)
+        {
+            return Some(store.value);
+        }
+        match self.elements.get(receiver)?.get(index)? {
+            Value::Number(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    fn stage_store(&mut self, receiver: usize, index: usize, value: f64) -> bool {
+        if self.pending_len == INLINE_NESTED_PENDING_STORES
+            || self
+                .elements
+                .get(receiver)
+                .is_none_or(|elements| index >= elements.len())
+        {
+            return false;
+        }
+        self.pending[self.pending_len] = PendingDenseStore {
+            receiver,
+            index,
+            value,
+        };
+        self.pending_len += 1;
+        true
+    }
+
+    #[inline]
+    fn staged_store_count(&self) -> usize {
+        self.pending_len
+    }
+
+    #[inline]
+    fn commit_stores(&mut self) {
+        for store in &self.pending[..self.pending_len] {
             self.elements[store.receiver][store.index] = Value::Number(store.value);
         }
     }

@@ -163,6 +163,11 @@ fn plan_kind_routes_nested_dense_and_preserves_semantics() {
         SpecialPlan::NestedDense { fallback, .. }
             if fallback.is_suppressing_legacy_dynamic()
     ));
+    let SpecialPlan::NestedDense { plan, .. } = plan.as_ref() else {
+        unreachable!("nested-plan match already checked");
+    };
+    assert_eq!(plan.fused_dense_load_store_count(), 4);
+    assert_eq!(plan.fused_mul_add_sub_count(), 2);
     let outer_header = bytecode
         .code
         .iter()
