@@ -1511,6 +1511,49 @@ pub(super) fn fast_number_binary(left: &Value, op: BinaryOp, right: &Value) -> O
     Some(value)
 }
 
+/// Evaluates a binary operation whose operands are already known to be
+/// ECMAScript Numbers. Kept separate from [`fast_number_binary`] so fused
+/// bytecodes can bypass temporary boxed right operands.
+#[inline(always)]
+pub(super) fn fast_number_binary_numbers(left: f64, op: BinaryOp, right: f64) -> Option<Value> {
+    let value = match op {
+        BinaryOp::Add => Value::Number(left + right),
+        BinaryOp::Sub => Value::Number(left - right),
+        BinaryOp::Mul => Value::Number(left * right),
+        BinaryOp::Div => Value::Number(left / right),
+        BinaryOp::Rem => Value::Number(crate::operations::number_remainder(left, right)),
+        BinaryOp::Pow => Value::Number(crate::operations::number_exponentiate(left, right)),
+        BinaryOp::Shl => Value::Number(f64::from(
+            to_int32_number(left) << (to_uint32_number(right) & 0x1f),
+        )),
+        BinaryOp::Shr => Value::Number(f64::from(
+            to_int32_number(left) >> (to_uint32_number(right) & 0x1f),
+        )),
+        BinaryOp::UShr => Value::Number(f64::from(
+            to_uint32_number(left) >> (to_uint32_number(right) & 0x1f),
+        )),
+        BinaryOp::BitwiseAnd => {
+            Value::Number(f64::from(to_int32_number(left) & to_int32_number(right)))
+        }
+        BinaryOp::BitwiseXor => {
+            Value::Number(f64::from(to_int32_number(left) ^ to_int32_number(right)))
+        }
+        BinaryOp::BitwiseOr => {
+            Value::Number(f64::from(to_int32_number(left) | to_int32_number(right)))
+        }
+        BinaryOp::Eq => Value::Boolean(left == right),
+        BinaryOp::Ne => Value::Boolean(left != right),
+        BinaryOp::Lt => Value::Boolean(left < right),
+        BinaryOp::Le => Value::Boolean(left <= right),
+        BinaryOp::Gt => Value::Boolean(left > right),
+        BinaryOp::Ge => Value::Boolean(left >= right),
+        BinaryOp::StrictEq => Value::Boolean(left == right),
+        BinaryOp::StrictNe => Value::Boolean(left != right),
+        _ => return None,
+    };
+    Some(value)
+}
+
 pub(super) fn fast_number_unary(op: UnaryOp, argument: &Value) -> Option<Value> {
     let Value::Number(number) = argument else {
         return None;

@@ -15,6 +15,7 @@ use crate::value::ObjectLiteralShape;
 use super::ir::{Bytecode, Op};
 
 mod cfg;
+pub(super) mod constant_binary;
 mod flow;
 mod lower;
 #[cfg(test)]

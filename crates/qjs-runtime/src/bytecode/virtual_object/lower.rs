@@ -11,7 +11,7 @@ use std::{
     rc::Rc,
 };
 
-use super::{VirtualCandidate, VirtualKind, VirtualUse, analyze};
+use super::{VirtualCandidate, VirtualKind, VirtualUse, analyze, constant_binary};
 use crate::Value;
 use crate::bytecode::{
     ir::{Bytecode, Op, decode_index_receiver},
@@ -391,6 +391,7 @@ fn fuse_superinstructions(
         fuse_virtual_binaries(analysis, code);
         forward_read_only_virtual_constants(bytecode, code);
         fuse_binary_assignments(bytecode, analysis, code);
+        constant_binary::mark_inits_for_constant_binary_assignments(code);
         fuse_local_increments(bytecode, analysis, code);
         fuse_local_copies(analysis, code);
         fold_redundant_completion_copies(code);

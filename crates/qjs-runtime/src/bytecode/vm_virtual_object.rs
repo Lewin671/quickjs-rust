@@ -3,8 +3,33 @@
 //! These helpers execute one instruction selected by the ordinary VM dispatch;
 //! they deliberately do not form a second bytecode or loop executor.
 
-use super::{ir::Op, vm::Vm, vm_props::fast_number_binary};
+use super::{
+    ir::Op,
+    virtual_object::constant_binary::VIRTUAL_CONSTANT_BINARY_INIT_SLOT,
+    vm::Vm,
+    vm_props::{fast_number_binary, fast_number_binary_numbers},
+};
 use crate::{RuntimeError, Value, is_truthy};
+
+#[cfg(test)]
+thread_local! {
+    static TEST_CONSTANT_BINARY_INIT_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+fn record_constant_binary_init_for_test() {
+    TEST_CONSTANT_BINARY_INIT_HITS.set(TEST_CONSTANT_BINARY_INIT_HITS.get().saturating_add(1));
+}
+
+#[cfg(test)]
+fn reset_constant_binary_init_hits() {
+    TEST_CONSTANT_BINARY_INIT_HITS.set(0);
+}
+
+#[cfg(test)]
+fn constant_binary_init_hits() -> usize {
+    TEST_CONSTANT_BINARY_INIT_HITS.get()
+}
 
 impl<'a> Vm<'a> {
     /// Re-selects lowered code after generator setup/resume changes the frame's
@@ -54,6 +79,17 @@ impl<'a> Vm<'a> {
                         message: "virtual object alias slot out of bounds".to_owned(),
                     })?;
                     *target = Some(Value::Undefined);
+                    if *count == 0
+                        && *slot == VIRTUAL_CONSTANT_BINARY_INIT_SLOT
+                        && self.try_run_constant_binary_assign_after_virtual_init(*skip)?
+                    {
+                        #[cfg(test)]
+                        {
+                            record_constant_binary_init_for_test();
+                            super::virtual_object::record_virtual_init_for_test(*count);
+                        }
+                        return Ok(());
+                    }
                 } else {
                     self.stack.push(Value::Undefined);
                 }
@@ -335,6 +371,103 @@ impl<'a> Vm<'a> {
         Ok(())
     }
 
+    /// Folds a dead scalar-replaced literal initializer into the immediately
+    /// following binary assignment when its field or element read has already
+    /// been forwarded to a primitive constant. The source stream is unchanged:
+    /// this only recognizes adjacent lowered operations and preserves the
+    /// `BinaryAssignLocals` generic fallback for non-numeric values.
+    fn try_run_constant_binary_assign_after_virtual_init(
+        &mut self,
+        initializer_skip: usize,
+    ) -> Result<bool, RuntimeError> {
+        let Some(first) = self.ip.checked_add(initializer_skip) else {
+            return Ok(false);
+        };
+        let Some(Op::LoadLocal(left)) = self.execution_code.get(first) else {
+            return Ok(false);
+        };
+        let Some(right_ip) = first.checked_add(1) else {
+            return Ok(false);
+        };
+        let (right, right_number, binary_ip) = match self.execution_code.get(right_ip) {
+            Some(Op::LoadConst(index)) => {
+                let Some(right) = self.bytecode.constants.get(*index) else {
+                    return Ok(false);
+                };
+                let Some(binary_ip) = right_ip.checked_add(1) else {
+                    return Ok(false);
+                };
+                (
+                    right.clone(),
+                    match right {
+                        Value::Number(value) => Some(*value),
+                        _ => None,
+                    },
+                    binary_ip,
+                )
+            }
+            Some(Op::LoadVirtualNumber { value, skip }) => {
+                let Some(binary_ip) = right_ip
+                    .checked_add(1)
+                    .and_then(|after_load| after_load.checked_add(*skip))
+                else {
+                    return Ok(false);
+                };
+                (Value::Number(*value), Some(*value), binary_ip)
+            }
+            _ => return Ok(false),
+        };
+        let Some(Op::BinaryAssignLocals {
+            op,
+            target,
+            stores,
+            skip,
+        }) = self.execution_code.get(binary_ip)
+        else {
+            return Ok(false);
+        };
+        let (op, target, stores, binary_skip) = (*op, *target, *stores, *skip);
+        if [target, stores[0], stores[1]]
+            .into_iter()
+            .any(|slot| slot >= self.locals.len())
+        {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "fused assignment slot out of bounds".to_owned(),
+            });
+        }
+        let next_ip = binary_ip
+            .checked_add(binary_skip)
+            .and_then(|ip| ip.checked_add(1))
+            .ok_or_else(|| RuntimeError {
+                thrown: None,
+                message: "virtual constant binary instruction pointer overflow".to_owned(),
+            })?;
+        if self.slot_is_authoritative(*left)
+            && let Some(Some(Value::Number(left))) = self.locals.get(*left)
+            && let Some(right) = right_number
+            && let Some(Value::Number(value)) = fast_number_binary_numbers(*left, op, right)
+        {
+            self.locals[target] = Some(Value::Number(value));
+            self.locals[stores[0]] = Some(Value::Number(value));
+            self.locals[stores[1]] = Some(Value::Number(value));
+            self.ip = next_ip;
+            return Ok(true);
+        }
+        let value = self.load_local(*left)?;
+        self.stack.push(value);
+        self.stack.push(right);
+        let result = self.eval_binary(op);
+        let Some(value) = self.handle_runtime_result(result)? else {
+            return Ok(true);
+        };
+        self.locals[target] = Some(value.clone());
+        self.locals[stores[0]] = Some(value.clone());
+        self.locals[stores[1]] = Some(value);
+        self.ip = next_ip;
+        Ok(true)
+    }
+
     fn call_virtual_function(
         &mut self,
         allocation_ip: usize,
@@ -426,5 +559,66 @@ impl<'a> Vm<'a> {
                 self.ip += skip;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{constant_binary_init_hits, reset_constant_binary_init_hits};
+    use crate::{Value, eval};
+
+    #[test]
+    fn folds_forwarded_literal_constants_into_binary_assignments() {
+        reset_constant_binary_init_hits();
+        assert_eq!(
+            eval(
+                "function run(n) { var sum = 0; for (var i = 0; i < n; i++) { var values = [1, 2, 3]; sum += values[2]; } return sum; } run(5);"
+            ),
+            Ok(Value::Number(15.0))
+        );
+        assert_eq!(constant_binary_init_hits(), 5);
+    }
+
+    #[test]
+    fn folds_precomputed_virtual_numbers_into_binary_assignments() {
+        reset_constant_binary_init_hits();
+        assert_eq!(
+            eval(
+                "function run(n) { var total = 0; for (var index = 0; index < n; index++) { var point = { x: 1, y: 2 }; total += point.x + point.y; } return total; } run(5);"
+            ),
+            Ok(Value::Number(15.0))
+        );
+        assert_eq!(constant_binary_init_hits(), 5);
+    }
+
+    #[test]
+    fn folded_constant_binary_assignments_retain_generic_addition() {
+        reset_constant_binary_init_hits();
+        assert_eq!(
+            eval(
+                "function run(n) { var sum = ''; for (var i = 0; i < n; i++) { var values = [1, 2, 3]; sum += values[2]; } return sum; } run(2);"
+            ),
+            Ok(Value::String("33".to_owned().into()))
+        );
+        assert_eq!(constant_binary_init_hits(), 2);
+    }
+
+    #[test]
+    fn folded_constant_binary_assignments_preserve_numeric_and_bigint_edges() {
+        reset_constant_binary_init_hits();
+        assert_eq!(
+            eval(
+                "function run() { var total = -0; for (var index = 0; index < 1; index++) { var values = [1, 2, 1]; total *= values[2]; } return Object.is(total, -0); } run();"
+            ),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(constant_binary_init_hits(), 1);
+
+        reset_constant_binary_init_hits();
+        let error = eval(
+            "function run(total) { for (var index = 0; index < 1; index++) { var values = [1, 2, 3]; total += values[2]; } return total; } run(0n);",
+        )
+        .expect_err("mixed bigint and number addition should throw");
+        assert!(error.message.contains("BigInt"), "{}", error.message);
     }
 }

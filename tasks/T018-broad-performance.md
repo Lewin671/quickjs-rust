@@ -8132,6 +8132,47 @@ original lowering unit; moving only its test coverage restores the exact
 `3f0fe…` release artifact while keeping `lower.rs` below the source-size
 limit.
 
+### 2026-07-26 fuse immutable virtual literal binary assignments
+
+Lowering now marks a zero-input scalar-replaced virtual literal when its next
+executable lowered sequence is `LoadLocal`, either `LoadConst` or
+`LoadVirtualNumber`, and `BinaryAssignLocals`. The marker uses the otherwise
+inert `InitVirtualObject::slot`; it has no workload, checksum, or fixed
+iteration-count condition. The VM uses direct Number arithmetic only while
+both runtime operands are Numbers. It otherwise retains the generic binary
+path, including string coercion and mixed-BigInt-and-Number errors. Focused
+coverage exercises array and object literals, the string fallback, `-0`, and
+the BigInt error edge.
+
+The release candidate SHA-256
+`5a8ade05243e0e6450b8691018d9cc541503b628742012fb5fe6401e5101d94e`
+was compared with exact base SHA-256
+`3f0fe13d5a1823dbaf24cd59a3b8a4d7089fec172cb46721af581b40051fa19a`
+and pinned QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+The five-block broad-v2 raw JSONL (SHA-256
+`35f90413e007143d53e15e10fbc3a40e0ba9b1af25751f9754b890dfed6abc82`)
+has **375/375** eligible formal rows and **600/600** successful linearity
+rows. Every candidate/QuickJS-NG ratio is at most 0.5; the slowest is
+`closure_allocation_call` at 0.438735 (2.279x), and the portfolio geometric
+ratio is 0.093244 (10.725x). `array_allocation` is 0.409416 and
+`object_allocation` is 0.360593 of QuickJS-NG. This remains receipt-free local
+diagnostic evidence rather than a report-grade claim.
+
+The isolated external preview report (SHA-256
+`e994a16ce874a23d4533856f31f10d402d97409cd822ad4eae448968ae7996be`)
+kept the candidate/base geometric ratios effectively neutral: 1.002043 for
+JetStream, 1.003621 for Kraken, and 1.000610 for SunSpider. Its
+candidate/QuickJS-NG geometric timing ratios remain 2.700707, 1.241614, and
+2.459773 respectively; PBKDF2 is 0.999936 of the base after isolating the
+Number-only helper from the ordinary generic binary path. Therefore this unit
+does not close B3/B5 or establish the full external 2x campaign target.
+
+Post-isolation `cargo fmt --check`, the focused virtual-object tests, release
+build, `./scripts/compare-qjs.sh`, and `./scripts/check.sh` passed; the full
+gate includes **1,883** workspace tests and **5,159/5,159** curated Test262
+cases.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
