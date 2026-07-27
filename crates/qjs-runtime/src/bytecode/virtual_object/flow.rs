@@ -673,7 +673,7 @@ impl<'a> Analyzer<'a> {
             | Op::SetComputedFunctionName(_)
             | Op::DefineObjectProperty(_)
             | Op::CopyObjectSpread
-            | Op::EnumerateKeys
+            | Op::EnumerateKeys { .. }
             | Op::ForInKeyIsEnumerable
             | Op::GetIterator
             | Op::GetAsyncIterator

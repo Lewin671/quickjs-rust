@@ -885,7 +885,7 @@ impl<'a> Vm<'a> {
                 Op::SetComputedFunctionName(kind) => self.set_computed_function_name(*kind)?,
                 Op::DefineObjectProperty(meta) => self.define_object_property(*meta)?,
                 Op::CopyObjectSpread => self.copy_object_spread()?,
-                Op::EnumerateKeys => self.enumerate_keys()?,
+                Op::EnumerateKeys { cache } => self.enumerate_keys(cache)?,
                 Op::ForInKeyIsEnumerable => self.for_in_key_is_enumerable()?,
                 Op::GetPropNamed { key, cache } => {
                     let result = self.get_named_prop(key, cache);

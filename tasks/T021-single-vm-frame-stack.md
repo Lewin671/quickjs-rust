@@ -1130,3 +1130,56 @@ by adding another streaming probe. Its one material local movement is below
 the campaign gate and its paired target regresses. A future RegExp unit must
 identify a different current-profiled cost, such as construction, matching, or
 result materialization, shared by its chosen targets.
+
+### 2026-07-27 retained ordinary `for-in` key-list cache: local fast gate only
+
+The next unopened external opportunity was SunSpider `string-fasta`. A fresh
+profile of the exact base attributes 242 of 1,457 samples (about 16.6%) to
+`EnumerateKeys`, `own_property_names`, descriptor queries, and their temporary
+key-list allocation. The receipt is
+`/tmp/qjs-profile-string-fasta-current-20260727.sample` (SHA-256
+`5e8ff803689022a0d9b802aef92e564bda5d64efae321998f4b39bda654e6e89`).
+Current profiles of the other ranked `for-in` sources did not share that cost,
+so this is deliberately a one-target, one-attempt unit rather than a claim of
+cross-workload campaign progress. Its frozen plan is
+`tasks/performance-units/for-in-ordinary-key-cache.json`.
+
+The implementation retains a hidden `ArrayRef` per `EnumerateKeys` bytecode
+site only after a canonical enumeration of an all-`ObjectRef` chain. A reuse
+requires every live link to retain its exact identity, prototype link, and
+own-layout revision; arrays, functions, Proxies, typed arrays, module
+namespaces, symbol primitives, and unsupported chains use the canonical path.
+The existing live per-key descriptor check remains inside the loop, so a
+deletion while an already-started loop is running is still observable. Focused
+coverage mutates own and inherited enumerable layouts, replaces a prototype,
+and deletes a later key from inside the loop.
+
+Against exact-base release binary SHA-256
+`22ac7687531e8b7044ddefa6844d6af70a4f4cea2ea347f01932a8e44166143c`, the
+candidate binary SHA-256
+`4066181c59f5c3bc5d68f15b3cee4f3446dca0e90c3b40db27e96932e3680205` passed
+the single declared fast gate. Seven alternating exact-source process samples
+had medians of 119,263,500 ns candidate and 286,959,125 ns base, or
+**0.415611x candidate/base**. The independent `string-tagcloud`, `regexp-dna`,
+and `string-base64` controls were 1.000758x, 1.002190x, and 0.995233x;
+single-case broad diagnostic controls were 1.000753x (`local_read`) and
+1.000574x (`object_allocation`). The latter raw diagnostic is not a complete
+broad report and is not promotion evidence. A candidate profile at
+`/tmp/qjs-profile-string-fasta-for-in-cache-20260727.sample` (SHA-256
+`24fbbfe3fcf82fc95d4e4dff25632189286c12a0a6b6672019e4c3dfd8e0f916`) no
+longer shows the prior `enumerable_keys`/`own_property_names` hot chain.
+
+The focused runtime `for_in_` suite passed 10/10 tests, the targeted Test262
+slice passed 3/3, `check.sh` passed including 5,160/5,160 curated Test262
+cases, and `compare-qjs.sh` passed. A one-block three-engine external smoke
+completed for all 45 fixed cases: 44 were fully comparable and
+`imaging-gaussian-blur` timed out for both qjs-rust roles while QuickJS-NG
+completed. Its SunSpider `string-fasta` row was 0.418045x candidate/base.
+The report explicitly marks `claim_eligible: false` because it has one block
+and incomplete Kraken comparability; report/raw SHA-256 values are
+`dbaea6091d5766dd0be13d612d29a00c9f4ad010aa5f19d2daa5f73480d4d3b2` and
+`6f82929b2246dd8373f09ed00d19d563ec86fed09f321e778fe9ebdaf45f7f68`.
+
+Retain this as a local, general engine candidate, not a T021 or 2x-campaign
+promotion. Promotion still requires the plan's complete broad and external
+evidence plus a zero-gap exact Test262 scan from an exact committed candidate.
