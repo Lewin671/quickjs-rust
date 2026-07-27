@@ -7,8 +7,8 @@ use crate::{
     FIELD_INITIALIZER_EVAL_BINDING, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef,
     RuntimeError, Value,
     bytecode::{
-        DirectCallSlots, eval_direct_call_bytecode, eval_function_bytecode, try_eval_numeric_leaf,
-        try_eval_this_property_leaf,
+        DirectCallSlots, eval_direct_call_bytecode, eval_function_bytecode,
+        try_eval_numeric_control_leaf, try_eval_numeric_leaf, try_eval_this_property_leaf,
     },
     function_prototype,
     native::call_native_function,
@@ -259,6 +259,9 @@ pub(crate) fn call_direct_leaf_function(
         argument_values,
         &function.upvalues,
     ) {
+        return Ok(value);
+    }
+    if let Some(value) = try_eval_numeric_control_leaf(function, bytecode, argument_values, env) {
         return Ok(value);
     }
     if let Some(value) = try_eval_this_property_leaf(bytecode, &this_value, argument_values) {

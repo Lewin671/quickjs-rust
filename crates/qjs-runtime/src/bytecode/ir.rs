@@ -794,6 +794,12 @@ pub struct Bytecode {
     strict: bool,
     pub(super) code: Vec<Op>,
     pub(super) numeric_leaf_plan: OnceCell<Option<super::vm_numeric_leaf::NumericLeafPlan>>,
+    /// Eagerly classified bounded numeric leaves that contain branches or
+    /// call other proven numeric leaves. Keeping this separate from the
+    /// straight-line `numeric_leaf_plan` preserves that path's compact hot
+    /// representation and avoids a lazy probe for ordinary direct calls.
+    pub(super) numeric_control_leaf_plan:
+        Option<super::vm_numeric_control_leaf::NumericControlLeafPlan>,
     /// A tiny direct-call plan for a body whose only observable work is
     /// reading one own data property from its object receiver. It is separate
     /// from the numeric leaf plan because its result may be any JavaScript
@@ -961,6 +967,7 @@ impl Bytecode {
             strict,
             code,
             numeric_leaf_plan: OnceCell::new(),
+            numeric_control_leaf_plan: None,
             this_property_leaf_plan,
             numeric_loop_plans: OnceCell::new(),
             typed_loop_programs: OnceCell::new(),
@@ -1029,6 +1036,8 @@ impl Bytecode {
             )
         });
         bytecode.cached_uses_lexical_this = bytecode.compute_uses_lexical_this();
+        bytecode.numeric_control_leaf_plan =
+            super::vm_numeric_control_leaf::NumericControlLeafPlan::compile(&bytecode);
         bytecode
     }
 
