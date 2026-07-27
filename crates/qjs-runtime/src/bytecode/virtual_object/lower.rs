@@ -13,7 +13,10 @@ use std::{
 
 use super::{VirtualCandidate, VirtualKind, VirtualUse, analyze};
 use crate::Value;
-use crate::bytecode::ir::{Bytecode, Op, decode_index_receiver};
+use crate::bytecode::{
+    ir::{Bytecode, Op, decode_index_receiver},
+    vm_props::fast_number_binary,
+};
 
 #[derive(Clone, Debug)]
 pub(in crate::bytecode) struct VirtualObjectProgram {
@@ -408,6 +411,7 @@ fn superinstruction_count(code: &[Op]) -> usize {
                     | Op::StoreVirtualValue { .. }
                     | Op::LoadVirtualLength { .. }
                     | Op::LoadVirtualBinary { .. }
+                    | Op::LoadVirtualNumber { .. }
                     | Op::BinaryAssignLocals { .. }
                     | Op::IncrementLocal { .. }
                     | Op::CopyLocal { .. }
@@ -564,7 +568,12 @@ fn fuse_virtual_binaries(analysis: &super::VirtualObjectAnalysis, code: &mut [Op
 /// dispatch stream. When every later scalar read can use `LoadConst` directly,
 /// the alias-only initializer no longer needs to clone constants into the
 /// frame's virtual-value bank. Mutable candidates, explicit-stack receiver
-/// reads, and binary superinstructions retain the established storage path.
+/// reads, and non-numeric binary superinstructions retain the established
+/// storage path. A binary whose two inputs are immutable numeric constants
+/// becomes one direct numeric result opcode: it retains the source operation's
+/// instruction span and skips the original three-op sequence, but avoids
+/// reloading the virtual slots and re-dispatching the numeric operation each
+/// iteration.
 fn forward_read_only_virtual_constants(bytecode: &Bytecode, code: &mut [Op]) {
     #[derive(Clone, Copy)]
     struct Candidate {
@@ -647,6 +656,7 @@ fn forward_read_only_virtual_constants(bytecode: &Bytecode, code: &mut [Op]) {
     }
 
     let mut loads = Vec::new();
+    let mut numeric_binaries = Vec::new();
     for (ip, op) in code.iter().enumerate() {
         #[cfg(test)]
         record_virtual_forward_scan_for_test();
@@ -682,13 +692,48 @@ fn forward_read_only_virtual_constants(bytecode: &Bytecode, code: &mut [Op]) {
                     candidates[owner].eligible = false;
                 }
             }
-            Op::LoadVirtualBinary { left, right, .. } => {
-                if let Some(owner) = owner_for_slot(&candidates, &ranges, *left) {
-                    candidates[owner].eligible = false;
-                }
-                if let Some(owner) = owner_for_slot(&candidates, &ranges, *right) {
-                    candidates[owner].eligible = false;
-                }
+            Op::LoadVirtualBinary {
+                left,
+                right,
+                op,
+                skip,
+            } => {
+                let left_owner = owner_for_slot(&candidates, &ranges, *left);
+                let right_owner = owner_for_slot(&candidates, &ranges, *right);
+                let (Some(left_owner), Some(right_owner)) = (left_owner, right_owner) else {
+                    if let Some(owner) = left_owner.or(right_owner) {
+                        candidates[owner].eligible = false;
+                    }
+                    continue;
+                };
+                let constant_index = |owner: usize, slot: usize| {
+                    let candidate = candidates.get(owner)?;
+                    let offset = slot.checked_sub(candidate.slot)?;
+                    let Op::InitVirtualConstants { constants, .. } =
+                        code.get(candidate.initializer_ip)?
+                    else {
+                        return None;
+                    };
+                    constants.get(offset).copied()
+                };
+                let Some((left_index, right_index)) =
+                    constant_index(left_owner, *left).zip(constant_index(right_owner, *right))
+                else {
+                    candidates[left_owner].eligible = false;
+                    candidates[right_owner].eligible = false;
+                    continue;
+                };
+                let Some(Value::Number(value)) = bytecode
+                    .constants
+                    .get(left_index)
+                    .zip(bytecode.constants.get(right_index))
+                    .and_then(|(left, right)| fast_number_binary(left, *op, right))
+                else {
+                    candidates[left_owner].eligible = false;
+                    candidates[right_owner].eligible = false;
+                    continue;
+                };
+                numeric_binaries.push((ip, left_owner, right_owner, value, *skip));
             }
             _ => {}
         }
@@ -697,6 +742,11 @@ fn forward_read_only_virtual_constants(bytecode: &Bytecode, code: &mut [Op]) {
     for (ip, owner, constant) in loads {
         if candidates[owner].eligible {
             code[ip] = Op::LoadConst(constant);
+        }
+    }
+    for (ip, left_owner, right_owner, value, skip) in numeric_binaries {
+        if candidates[left_owner].eligible && candidates[right_owner].eligible {
+            code[ip] = Op::LoadVirtualNumber { value, skip };
         }
     }
     for candidate in candidates
@@ -986,6 +1036,10 @@ fn reset_virtual_function_test_hits() {
 fn virtual_function_test_hits() -> usize {
     TEST_VIRTUAL_FUNCTION_INIT_HITS.get()
 }
+
+#[cfg(test)]
+#[path = "lower_constant_forward_tests.rs"]
+mod constant_forward_tests;
 
 #[cfg(test)]
 mod tests {
@@ -1338,12 +1392,11 @@ mod tests {
         assert_eq!(code.len(), bytecode.code.len());
         assert!(
             code.iter()
-                .any(|op| matches!(op, Op::InitVirtualConstants { .. }))
+                .any(|op| matches!(op, Op::InitVirtualObject { count: 0, .. }))
         );
-        assert!(
-            code.iter()
-                .any(|op| matches!(op, Op::LoadVirtualBinary { .. }))
-        );
+        assert!(code.iter().any(
+            |op| matches!(op, Op::LoadVirtualNumber { value, skip } if *value == 3.0 && *skip == 2)
+        ));
         assert!(
             code.iter()
                 .any(|op| matches!(op, Op::BinaryAssignLocals { .. }))
@@ -1390,66 +1443,6 @@ mod tests {
         assert_eq!(test_hits(), 5);
         assert_eq!(test_slot_writes(), 0);
         assert_eq!(test_load_hits(), 0);
-    }
-
-    #[test]
-    fn lowering_preserves_nan_infinity_and_negative_zero_constant_bits() {
-        let nan = f64::from_bits(0x7ff8_0000_0000_1234);
-        let negative_zero = -0.0_f64;
-        let infinity = f64::INFINITY;
-        let bytecode = Bytecode::new(
-            vec![
-                Value::Number(nan),
-                Value::Number(negative_zero),
-                Value::Number(infinity),
-            ],
-            Vec::new(),
-            Vec::new(),
-        );
-        let mut code = vec![
-            Op::InitVirtualConstants {
-                slot: 4,
-                constants: vec![0, 1, 2],
-                local: None,
-                skip: 0,
-            },
-            Op::LoadVirtualValue {
-                slot: 4,
-                discard: 0,
-            },
-            Op::LoadVirtualValue {
-                slot: 5,
-                discard: 0,
-            },
-            Op::LoadVirtualValue {
-                slot: 6,
-                discard: 0,
-            },
-        ];
-        forward_read_only_virtual_constants(&bytecode, &mut code);
-        assert!(matches!(
-            code[0],
-            Op::InitVirtualObject {
-                slot: 4,
-                count: 0,
-                ..
-            }
-        ));
-        assert!(matches!(code[1], Op::LoadConst(0)));
-        assert!(matches!(code[2], Op::LoadConst(1)));
-        assert!(matches!(code[3], Op::LoadConst(2)));
-        let Value::Number(forwarded_nan) = bytecode.constants[0] else {
-            panic!("expected Number constant");
-        };
-        let Value::Number(forwarded_zero) = bytecode.constants[1] else {
-            panic!("expected Number constant");
-        };
-        let Value::Number(forwarded_infinity) = bytecode.constants[2] else {
-            panic!("expected Number constant");
-        };
-        assert_eq!(forwarded_nan.to_bits(), nan.to_bits());
-        assert_eq!(forwarded_zero.to_bits(), negative_zero.to_bits());
-        assert_eq!(forwarded_infinity.to_bits(), infinity.to_bits());
     }
 
     #[test]
@@ -1634,7 +1627,7 @@ mod tests {
     }
 
     #[test]
-    fn heap_backed_constants_and_virtual_binaries_keep_their_existing_paths() {
+    fn heap_backed_constants_keep_their_existing_paths_while_numeric_binaries_fold() {
         let string = nested_function(
             "function run(n) { var value = ''; for (var i = 0; i < n; i++) { var values = ['x']; value = values[0]; } return value; }",
         );
@@ -1673,13 +1666,11 @@ mod tests {
         assert!(
             binary_code
                 .iter()
-                .any(|op| matches!(op, Op::InitVirtualConstants { .. }))
+                .any(|op| matches!(op, Op::InitVirtualObject { count: 0, .. }))
         );
-        assert!(
-            binary_code
-                .iter()
-                .any(|op| matches!(op, Op::LoadVirtualBinary { .. }))
-        );
+        assert!(binary_code.iter().any(
+            |op| matches!(op, Op::LoadVirtualNumber { value, skip } if *value == 3.0 && *skip == 2)
+        ));
     }
 
     #[test]

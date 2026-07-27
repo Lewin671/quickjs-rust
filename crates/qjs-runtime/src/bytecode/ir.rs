@@ -731,6 +731,14 @@ pub(super) enum Op {
         allocation_ip: usize,
         argc: usize,
     },
+    /// Pushes a numeric result precomputed from two immutable numeric fields
+    /// of a scalar-replaced literal, then skips the original binary sequence.
+    /// This is emitted only by virtual-literal lowering; source compilation
+    /// never folds arbitrary JavaScript expressions into this opcode.
+    LoadVirtualNumber {
+        value: f64,
+        skip: usize,
+    },
 }
 
 /// Cold, immutable payload used when evaluating a class definition.

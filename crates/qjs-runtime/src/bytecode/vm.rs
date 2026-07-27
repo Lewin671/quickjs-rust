@@ -843,6 +843,10 @@ impl<'a> Vm<'a> {
                 Op::NewObjectDataLiteral { shape } => {
                     self.new_object_data_literal(shape.clone())?
                 }
+                Op::LoadVirtualNumber { value, skip } => {
+                    self.stack.push(Value::Number(*value));
+                    self.ip += *skip;
+                }
                 op @ (Op::InitVirtualObject { .. }
                 | Op::InitVirtualConstants { .. }
                 | Op::LoadVirtualValue { .. }

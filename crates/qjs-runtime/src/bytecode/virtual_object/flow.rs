@@ -697,7 +697,8 @@ impl<'a> Analyzer<'a> {
             | Op::CopyLocal { .. }
             | Op::CompareLocalsJumpFalse { .. }
             | Op::InitVirtualFunction { .. }
-            | Op::CallVirtualFunction { .. } => {
+            | Op::CallVirtualFunction { .. }
+            | Op::LoadVirtualNumber { .. } => {
                 return Err(AnalysisFailure::Unsupported(ip));
             }
         }

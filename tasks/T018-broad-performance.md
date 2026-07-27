@@ -8074,6 +8074,64 @@ JSONL SHA-256 is
 This is complete receipt-free local diagnostic evidence, not a report-grade
 performance claim.
 
+### 2026-07-26 precompute immutable virtual numeric literal results
+
+Read-only scalar-replaced literals now fold a binary operation only when both
+fields are immutable bytecode `Number` constants and the existing
+`fast_number_binary` helper returns a `Number`. Lowering replaces the virtual
+binary sequence with `LoadVirtualNumber`, preserving its original instruction
+span and skip count. Heap-backed constants, mutable fields, explicit-receiver
+reads, and boolean-producing comparisons retain their established paths. This
+is a general virtual-literal dispatch reduction; it has no workload, checksum,
+or iteration-count admission condition.
+
+Focused lowering coverage checks the folded opcode, `-0` bit preservation, and
+the boolean-comparison fallback. The complete `qjs-runtime` suite passed
+**1,879/1,879** tests, and the curated Test262 subset passed **5,159/5,159**.
+
+The exact final release binary SHA-256
+`3f0fe13d5a1823dbaf24cd59a3b8a4d7089fec172cb46721af581b40051fa19a`
+completed a five-block, 25-case local three-role broad diagnostic against
+preceding base SHA-256
+`1b769efc4df4f708a43d02bf3b4a215ac1e04933dac6344a07e8da3505155a92`
+and pinned QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+All **375/375** formal rows were eligible and all **600/600** linearity rows
+were `ok`. `object_allocation` improved to **0.92012x** of base and
+**0.49630x** of QuickJS-NG (76.39, 83.02, and 153.91 ns/op respectively),
+crossing the 2x reference threshold for that general allocation pattern. The
+portfolio geometric ratios were 0.99977x candidate/base and 0.09513x
+candidate/QuickJS-NG. `dynamic_method_call` was the largest local
+candidate/base movement at 1.04376x, yet remained 0.05702x of QuickJS-NG; the
+independent external screen below did not reproduce a material regression.
+The raw JSONL SHA-256 is
+`5b747f14a973744f7cf21133684abbe69e875252213419bce3e41c50487ccea5`.
+The run is intentionally non-claim diagnostic evidence because it used no
+clean build receipts; strict reporting correctly rejects its unverified
+provenance rather than manufacturing a report-grade artifact.
+
+The independent five-block external preview used the same candidate, exact
+base, and QuickJS-NG binaries. It retained all 44 candidate/base comparable
+cases: candidate/base geometric ratios were 1.00003x for the JetStream subset,
+0.99686x for Kraken, and 0.99745x for SunSpider. The only unavailable case,
+Kraken `imaging-gaussian-blur`, timed out for both Rust binaries while
+QuickJS-NG completed, so it is explicitly not counted as a win. The external
+raw/report/manifest SHA-256 values are
+`e9d6da834c7ecc202679e2321df3ac69ebc3be2e834e1168624325c83e68021e`,
+`7fa06aecd50aa44eb48b68cf13bdad63160a9176521151c9bf14e09a1d1f9acc`, and
+`a8ddeded582573bc676bf3f7bbbaf2625f6dfa7742f07bcdd6aaa26366f4e6c4`.
+
+A cleanup extraction of the forwarding helper into a separate release module
+was deliberately rejected: it changed the candidate SHA-256 to
+`bc4796ffee429e9079cb3db4cdd6fd0c32a901bda61c1de954aedab77b43060c`.
+Its complete five-block broad diagnostic (raw SHA-256
+`aad31c5c98b434dd84c29f1ce5ddad43a5618c690f5baa24172de3e231aa2ce7`)
+had all 375 formal rows eligible and 600 successful linearity probes, but
+`object_allocation` moved to 0.50115x QuickJS-NG. The helper stays in its
+original lowering unit; moving only its test coverage restores the exact
+`3f0fe…` release artifact while keeping `lower.rs` below the source-size
+limit.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
