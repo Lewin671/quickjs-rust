@@ -983,6 +983,90 @@ fn direct_leaf_this_property_read_revalidates_descriptors_and_falls_back() {
 }
 
 #[test]
+fn direct_leaf_numeric_property_expression_revalidates_and_falls_back() {
+    assert_eq!(
+        eval(
+            "var left = { x: 1, y: 2, z: 3, dot: function(other) { \
+                 return this.x * other.x + this.y * other.y + this.z * other.z; \
+             } }; \
+             var right = { x: 4, y: 5, z: 6 }; \
+             var first = left.dot(right); left.x = 2; var second = left.dot(right); \
+             var getterCalls = 0; \
+             Object.defineProperty(left, 'x', { \
+                 get: function() { getterCalls++; return 3; }, configurable: true \
+             }); \
+             first + ':' + second + ':' + left.dot(right) + ':' + getterCalls;"
+        ),
+        Ok(Value::String("32:36:40:1".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var getterCalls = 0; var prototype = {}; \
+             Object.defineProperty(prototype, 'x', { \
+                 get: function() { getterCalls++; return 1; } \
+             }); \
+             var left = Object.create(prototype); left.y = 2; left.z = 3; \
+             left.dot = function(other) { \
+                 return this.x * other.x + this.y * other.y + this.z * other.z; \
+             }; \
+             var right = { x: 4, y: 5, z: 6 }; left.dot(right) + ':' + getterCalls;"
+        ),
+        Ok(Value::String("32:1".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var reads = 0; \
+             var left = { x: 1, y: 2, z: 3, dot: function(other) { \
+                 return this.x * other.x + this.y * other.y + this.z * other.z; \
+             } }; \
+             var target = { x: 4, y: 5, z: 6 }; \
+             var right = new Proxy(target, { get: function(target, key, receiver) { \
+                 if (key === 'x' || key === 'y' || key === 'z') reads++; \
+                 return Reflect.get(target, key, receiver); \
+             } }); \
+             left.dot(right) + ':' + reads;"
+        ),
+        Ok(Value::String("32:3".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var left = { x: '1', sum: function(other) { return this.x + other.x; } }; \
+             left.sum({ x: 2 });"
+        ),
+        Ok(Value::String("12".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var left = { x: 1n, sum: function(other) { return this.x + other.x; } }; \
+             String(left.sum({ x: 2n }));"
+        ),
+        Ok(Value::String("3".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "Object.defineProperty(Number.prototype, 'x', { value: 1, configurable: true }); \
+             function sum(other) { return this.x + other.x; } \
+             var result = sum.call(5, { x: 2 }); delete Number.prototype.x; result;"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval(
+            "var left = { x: -0, multiply: function(other) { return this.x * other.x; } }; \
+             1 / left.multiply({ x: 1 });"
+        ),
+        Ok(Value::Number(f64::NEG_INFINITY))
+    );
+    assert_eq!(
+        eval(
+            "var left = { x: 2, multiply: function(other, other) { return this.x * other.x; } }; \
+             left.multiply({ x: 3 }, { x: 4 });"
+        ),
+        Ok(Value::Number(8.0))
+    );
+}
+
+#[test]
 fn numeric_leaf_falls_back_for_coercion_without_duplicate_effects() {
     assert_eq!(
         eval(

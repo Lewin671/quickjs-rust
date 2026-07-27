@@ -853,9 +853,15 @@ impl Bytecode {
         code: Vec<Op>,
         parameter_slots: Vec<usize>,
     ) -> Self {
-        let mut bytecode = Self::new(constants, locals, code);
-        bytecode.parameter_slots = parameter_slots;
-        bytecode
+        Self::with_scope_global_lexical_names_and_strict_with_parameter_slots(
+            constants,
+            locals,
+            code,
+            false,
+            Vec::new(),
+            false,
+            Some(parameter_slots),
+        )
     }
 
     pub(super) fn with_scope(
@@ -892,11 +898,33 @@ impl Bytecode {
         global_lexical_names: Vec<String>,
         strict: bool,
     ) -> Self {
-        let parameter_slots = locals
-            .iter()
-            .enumerate()
-            .filter_map(|(slot, local)| local.parameter.then_some(slot))
-            .collect();
+        Self::with_scope_global_lexical_names_and_strict_with_parameter_slots(
+            constants,
+            locals,
+            code,
+            global_scope,
+            global_lexical_names,
+            strict,
+            None,
+        )
+    }
+
+    fn with_scope_global_lexical_names_and_strict_with_parameter_slots(
+        constants: Vec<Value>,
+        locals: Vec<Local>,
+        code: Vec<Op>,
+        global_scope: bool,
+        global_lexical_names: Vec<String>,
+        strict: bool,
+        parameter_slots: Option<Vec<usize>>,
+    ) -> Self {
+        let parameter_slots = parameter_slots.unwrap_or_else(|| {
+            locals
+                .iter()
+                .enumerate()
+                .filter_map(|(slot, local)| local.parameter.then_some(slot))
+                .collect()
+        });
         let received_upvalue_slots = locals
             .iter()
             .enumerate()
@@ -909,8 +937,12 @@ impl Bytecode {
         // immutable instruction stream is being built. In particular, do not
         // make ordinary sloppy calls pay a `OnceCell` lookup merely because
         // their implicit `this` happens to be the global object.
-        let this_property_leaf_plan =
-            super::vm_numeric_leaf::ThisPropertyLeafPlan::compile(&code, global_scope);
+        let this_property_leaf_plan = super::vm_numeric_leaf::ThisPropertyLeafPlan::compile(
+            &constants,
+            &code,
+            global_scope,
+            &parameter_slots,
+        );
         let mut bytecode = Self {
             constants,
             local_slots: collect_local_slots(&locals),

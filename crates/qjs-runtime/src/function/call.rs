@@ -261,7 +261,7 @@ pub(crate) fn call_direct_leaf_function(
     ) {
         return Ok(value);
     }
-    if let Some(value) = try_eval_this_property_leaf(bytecode, &this_value) {
+    if let Some(value) = try_eval_this_property_leaf(bytecode, &this_value, argument_values) {
         return Ok(value);
     }
     let FunctionCallEnv {

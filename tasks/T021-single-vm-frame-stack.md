@@ -903,9 +903,10 @@ five-block `captured_write` screen was **1.000357x** of base (raw SHA-256
 Focused coverage proves ordinary values refresh, an accessor installed after a
 cache hit still runs once, inherited accessors and Proxies preserve their
 observable `[[Get]]` path, and primitive `this` retains ordinary boxing. The
-plan unit test also rejects a non-leaf `return this.value + 1`. The complete
-1,888-test runtime suite, 5,159-case Test262 subset, and all QuickJS-NG
-comparison fixtures passed.
+initial plan unit test distinguished the plain read from `return this.value +
+1`; the later numeric-property plan below admits that arithmetic form only
+under additional live Number guards. The complete 1,888-test runtime suite,
+5,159-case Test262 subset, and all QuickJS-NG comparison fixtures passed.
 
 The fixed candidate release SHA-256
 `77e3ae4663ee65145aa0909fbed2ae5cbf522fc53f4e6bf8b83e64d4289bdfa8` was
@@ -936,3 +937,67 @@ targeted `hash-map` case remains 5.316x QuickJS-NG. The receipt-free external
 report/raw SHA-256 values are
 `ee4fd1f560421ce242f8575de57f6d3955ae99a3bc9432a3bafbb3fd49dc7fe3` and
 `1fb35ff5689f8adc3b63323cb536ece5b3ce6315e8bbad5dbc9b0ffb24c04e7e`.
+
+### 2026-07-26 direct numeric own-data property leaf expressions
+
+Real vector and geometry methods often do more than return one field, for
+example `this.x * other.x + this.y * other.y + this.z * other.z`. The existing
+numeric leaf plan deliberately rejects `GetPropNamed`, so every such direct
+method still built a child VM even when all operands were ordinary numeric data
+fields. This slice extends the already eager bytecode-owned property-leaf
+classification, not direct-call eligibility or the VM's semantics.
+
+The new numeric variant accepts only a straight-line prefix beginning at
+`FunctionPrologueEnd`: `this` field reads, static field reads from simple
+parameter local slots, number literals, numeric-result binary operations, and
+one return. It reuses each original `NamedPropertyCache`. At execution, every
+receiver/argument must be an object with a live ordinary own **Number** data
+property. Accessors, inherited values, Proxies/exotics, primitives, BigInts,
+strings, missing fields, unsupported operations, stores, calls, and control
+flow all decline before user-observable work and use the unchanged direct-leaf
+VM. This makes a partial guarded read safe: the only reads before fallback are
+ordinary own data reads, which cannot invoke user code.
+
+Focused tests cover plan formation for the six-field dot product and direct
+execution, refreshed data fields, an accessor installed after cache warming,
+an inherited accessor, a Proxy argument trap, string and BigInt addition
+fallback, primitive `this` boxing, negative-zero multiplication, and a
+duplicate formal parameter. The latter exposed that eager plan construction
+had observed the deduplicated local-slot list before `new_function` restored
+the authoritative parameter-position list; construction now supplies that
+list first, so `function (other, other)` resolves `other` to the final
+argument as required. The focused runtime test and the complete 1,891-test
+runtime suite passed.
+
+The candidate release SHA-256
+`f10358f13f4782520c2b6fee21e4097418f89c404597220d3892d3c73fc91251` was
+compared with exact parent-base SHA-256
+`77e3ae4663ee65145aa0909fbed2ae5cbf522fc53f4e6bf8b83e64d4289bdfa8` and
+pinned QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+For a 10-million-call vector dot-product diagnostic, candidate user time was
+2.47--2.49 seconds versus base 4.87--4.88 seconds, a repeatable **1.96x**
+local improvement. QuickJS-NG took 0.75 seconds, so this remains about 3.3x
+slower than the reference and is not a campaign-completion claim.
+
+The complete three-block broad-v2 diagnostic recorded **225/225** eligible
+formal samples, **600/600** `ok` linearity samples, and all **300/300** paired
+linearity ratios within the 0.85--1.15 bound. Candidate/base geometric mean
+was **1.002488x** (worst `math_abs` 1.020903x; call family 1.003022x);
+candidate/QuickJS-NG was 0.092866x. The raw JSONL SHA-256 is
+`eb84c950d0cfc6ef197966b07c5d9e6402f88637fbde53555cd46365aea777a4`.
+This dirty, receipt-free run is diagnostic only; strict reporting correctly
+refuses a formal claim because its provenance is unverified.
+
+The matching full external preview retained all 5/5 JetStream rows and 26/26
+SunSpider rows, plus 13/14 Kraken rows; `imaging-gaussian-blur` timed out for
+both qjs-rust roles while QuickJS-NG completed, so it remains explicitly
+noncomparable. Candidate/base diagnostic geometric ratios were 0.996636x for
+JetStream, 1.000964x for comparable Kraken, and 1.005532x for SunSpider. The
+field-heavy CDJS and `raytrace-public-class-fields` rows improved independently
+to 0.995382x and 0.962834x of base; the surrounding suites remain neutral, as
+expected for a narrow general fast path. Candidate/QuickJS-NG remains 2.669004x
+for JetStream and 2.446380x for SunSpider, so this slice advances a shared
+property/call cost without closing the 2x target. External report/raw SHA-256
+values are `86a1c91e7a2c96035a3a51f1f6ca6b73f37265dd0f8e60f00ddb349ae75bd8bc`
+and `766c868c171187d67ce2ae92cbf9eda28d1323e7e7307a6c39ad0329d8dac48a`.
