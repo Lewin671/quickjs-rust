@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "direct-leaf-self-frame-stack",
+  "base_sha": "da94a01786925053b4474268094874fad03801f4",
+  "queue": {
+    "candidate_sha": "da94a01786925053b4474268094874fad03801f4",
+    "sha256": "9a6b599ac317a0f2df93afe6ad9559a9c67b7a8e71b43cb9e5b0d2c216f07138"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/controlflow-recursive"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "For an exact same-Function direct-leaf recursive call, push an independently initialized FrameState into the active Vm rather than recursively constructing a nested Vm.",
+    "generality": "The route is selected by shared Function identity and existing direct-leaf eligibility only; it does not inspect source paths, workload names, bytecode contents beyond existing eligibility, or iteration counts. Different functions retain the established direct-call route.",
+    "semantic_risks": [
+      "result delivery while preserving caller operands and instruction position",
+      "throw identity plus catch and finally ordering across stacked frames",
+      "direct this and parameter-slot isolation for every recursive invocation",
+      "fallback for a dynamic direct-leaf callee that is not the active Function"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-27 /tmp/qjs-profile-controlflow-refresh.sample; 50x wrapper of the hash-verified SunSpider source",
+      "sha256": "1807dd1c5291b25b036ffd8e89598fdf48aad32778172d484754d74a1065440c",
+      "base_sha": "da94a01786925053b4474268094874fad03801f4",
+      "opportunity_ids": [
+        "external/sunspider-1.0/controlflow-recursive"
+      ],
+      "shared_cost": "Every same-function direct-leaf recursive call constructs a nested Vm and recursively enters Vm::run_completion.",
+      "inclusive_fraction": 0.5
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/controlflow-recursive"
+    ],
+    "control_ids": [
+      "broad/plain_function_call",
+      "broad/top_level_function_call",
+      "broad/dynamic_method_call",
+      "broad/closure_allocation_call"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

@@ -1027,3 +1027,33 @@ The route avoids Rust-stack growth but leaves the expensive direct-call
 environment/frame construction in place and adds a tail probe to every
 direct-leaf call. Do not retry it by caching or reshaping that probe; a future
 attempt must remove a different shared cost and start from a fresh profile.
+
+### 2026-07-27 rejected same-function direct-leaf frame stack
+
+A second, distinct mechanism targeted all exact same-`Function` direct-leaf
+recursion rather than only tail calls. It retained independently initialized
+parameter, receiver, operand, and try state in a `Vec<FrameState>` owned by
+one VM, then delivered return values and errors through the original caller
+boundaries. Different functions retained the existing nested-VM route. The
+fresh profile was `/tmp/qjs-profile-controlflow-refresh.sample` (SHA-256
+`1807dd1c5291b25b036ffd8e89598fdf48aad32778172d484754d74a1065440c`), whose
+dominant chain repeatedly entered `Vm::run_completion` through the direct-leaf
+call path.
+
+The candidate passed a focused 10,000-level non-tail recursion test plus
+caller-operand, 1/2/3 parameter, receiver, thrown-value identity, nested
+catch/finally ordering, and different-function fallback checks. It was still
+rejected after its sole predeclared fast screen: on the same 50-times,
+hash-verified upstream wrapper (SHA-256
+`09e7ab8190fcba58055963f3a6f84f126e99add8ae5332424723a48aab8962d9`), three
+complete alternating pairs measured base real times of 3.34, 3.32, and 3.32
+seconds against candidate times of 3.67, 3.67, and 3.67 seconds. The medians
+are **1.105x candidate/base**, a 10.5% regression rather than the required
+`<= 0.90x` target. Candidate and exact-base release SHA-256 values were
+`0f4dd32fa4623e1643909c419b2c1ae35c00bf2260491e7b96f391e12db3e2ed` and
+`22ac7687531e8b7044ddefa6844d6af70a4f4cea2ea347f01932a8e44166143c`.
+
+Do not refine this stack scheduler or reuse its return/error transfer shape:
+it removes nested Rust calls but adds enough frame movement and dispatch that
+the measured hot path regresses. Any successor must target a different shared
+cost and begin with new profile evidence.
