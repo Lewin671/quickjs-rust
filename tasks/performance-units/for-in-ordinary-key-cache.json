@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "for-in-ordinary-key-cache",
+  "base_sha": "da94a01786925053b4474268094874fad03801f4",
+  "queue": {
+    "candidate_sha": "da94a01786925053b4474268094874fad03801f4",
+    "sha256": "9a6b599ac317a0f2df93afe6ad9559a9c67b7a8e71b43cb9e5b0d2c216f07138"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-fasta"
+    ],
+    "rank_ceiling": 5,
+    "override_reason": "Ranks 1 through 4 are closed by the 2026-07-27 direct-leaf frame-stack, direct-eval, and constructor fast-gate evidence. Rank 5 has a fresh profile showing EnumerateKeys, own_property_names, descriptor queries, and temporary key allocation as 242 of 1457 samples. The only other ranked external sources with for-in syntax, string-tagcloud and regexp-dna, do not show this cost in current profiles, so this is explicitly a one-target, one-attempt gate rather than a claim of cross-workload campaign progress."
+  },
+  "mechanism": {
+    "summary": "Reuse a hidden per-bytecode-site for-in key array only when the target and every link in its prototype chain remain the same ordinary ObjectRef with the same enumerable-key layout.",
+    "generality": "Eligibility is derived solely from live value kinds, object identities, prototype links, and layout revisions. It does not inspect source paths, benchmark names, checksums, or iteration counts. Proxies, arrays, functions, typed arrays, module namespaces, and every changed or unsupported chain retain the canonical enumeration path.",
+    "semantic_risks": [
+      "preserving ECMAScript for-in key order and prototype shadowing across ordinary object chains",
+      "invalidating before an add, delete, descriptor or enumerable-flag change can expose a stale key list",
+      "detecting target or inherited prototype replacement before reusing a cached list",
+      "keeping the existing per-key live enumerable check so mutations during an active loop remain observable",
+      "falling back before any Proxy or exotic-object observable operation is skipped"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-27 /tmp/qjs-profile-string-fasta-current-20260727.sample; 10x wrapper of the hash-verified SunSpider string-fasta source",
+      "sha256": "5e8ff803689022a0d9b802aef92e564bda5d64efae321998f4b39bda654e6e89",
+      "base_sha": "da94a01786925053b4474268094874fad03801f4",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-fasta"
+      ],
+      "shared_cost": "Repeated ordinary for-in enumeration rebuilds the full key vector, shadowing set, own descriptor queries, and temporary ArrayRef for stable table objects.",
+      "inclusive_fraction": 0.166
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-fasta"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/regexp-dna",
+      "external/sunspider-1.0/string-base64",
+      "broad/object_allocation",
+      "broad/local_read"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

@@ -685,6 +685,42 @@ fn evaluates_for_in_statements() {
 }
 
 #[test]
+fn for_in_ordinary_site_revalidates_cached_layouts_and_prototypes() {
+    assert_eq!(
+        eval(
+            "function keys(object) { var out = ''; for (var key in object) out += key; return out; } \
+             var base = { a: 1 }; var object = Object.create(base); object.b = 2; \
+             var first = keys(object); object.c = 3; var afterAdd = keys(object); \
+             Object.defineProperty(base, 'a', { value: 1, enumerable: false }); \
+             var afterDescriptor = keys(object); Object.setPrototypeOf(object, { z: 1 }); \
+             var afterPrototype = keys(object); var stable = keys(object); \
+             [first, afterAdd, afterDescriptor, afterPrototype, stable].join('|');"
+        ),
+        Ok(Value::String("ba|bca|bc|bcz|bcz".to_owned().into()))
+    );
+}
+
+#[test]
+fn for_in_cached_keys_keep_the_existing_live_per_key_check() {
+    assert_eq!(
+        eval(
+            "function scan(object, remove) { \
+                 var out = ''; \
+                 for (var key in object) { \
+                     if (remove && key === 'a') delete object.b; \
+                     out += key; \
+                 } \
+                 return out; \
+             } \
+             var object = { a: 1, b: 2 }; \
+             var warm = scan(object, false); var during = scan(object, true); \
+             var after = scan(object, false); [warm, during, after].join(':');"
+        ),
+        Ok(Value::String("ab:a:a".to_owned().into()))
+    );
+}
+
+#[test]
 fn for_in_rechecks_proxy_descriptor_beneath_live_array_prototype() {
     assert_eq!(
         eval(

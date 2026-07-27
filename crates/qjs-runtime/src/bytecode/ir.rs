@@ -10,6 +10,7 @@ use qjs_ast::{BinaryOp, FunctionParams, ObjectPropertyKind, UnaryOp, UpdateOp};
 use crate::ObjectRef;
 use crate::{Value, value::ObjectLiteralShape};
 
+pub(super) use super::enumerate_keys_cache::EnumerateKeysCache;
 pub(super) use super::named_property_cache::NamedPropertyCache;
 
 /// Packs a statically indexed property read together with an optional local
@@ -174,7 +175,9 @@ pub(super) enum Op {
     SetComputedFunctionName(ComputedNameKind),
     DefineObjectProperty(ObjectPropertyMeta),
     CopyObjectSpread,
-    EnumerateKeys,
+    EnumerateKeys {
+        cache: EnumerateKeysCache,
+    },
     ForInKeyIsEnumerable,
     /// Reads a statically named string property without materializing the key
     /// as an operand-stack value or allocating an owned string at runtime.

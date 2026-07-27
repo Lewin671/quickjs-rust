@@ -178,7 +178,9 @@ impl Compiler {
         self.compile_expr(right)?;
         self.emit(Op::StoreLocal(target_slot));
         self.emit(Op::LoadLocal(target_slot));
-        self.emit(Op::EnumerateKeys);
+        self.emit(Op::EnumerateKeys {
+            cache: Default::default(),
+        });
         self.emit(Op::StoreLocal(keys_slot));
         self.emit_number(0.0);
         self.emit(Op::StoreLocal(index_slot));

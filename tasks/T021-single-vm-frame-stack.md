@@ -1001,3 +1001,185 @@ for JetStream and 2.446380x for SunSpider, so this slice advances a shared
 property/call cost without closing the 2x target. External report/raw SHA-256
 values are `86a1c91e7a2c96035a3a51f1f6ca6b73f37265dd0f8e60f00ddb349ae75bd8bc`
 and `766c868c171187d67ce2ae92cbf9eda28d1323e7e7307a6c39ad0329d8dac48a`.
+
+### 2026-07-27 rejected direct-leaf tail-frame reuse
+
+A fresh profile of the queue's first-ranked SunSpider
+`controlflow-recursive` opportunity still showed direct-leaf `Vm` entry in
+the recursive chain. A narrowly guarded candidate reused the active frame only
+when the callee had the same bytecode, the next instruction was exactly
+`Return`, and no try/finally, disposable scope, or pending abrupt completion
+remained. Existing numeric/property leaf plans retained priority; all other
+calls fell back unchanged. Focused tests covered 10,000 recursive calls,
+receiver/parameter transfer, and active-finally fallback.
+
+The mechanism was rejected and reverted after its first fast screen. On a
+50-times wrapper of the hash-verified upstream source (wrapper SHA-256
+`09e7ab8190fcba58055963f3a6f84f126e99add8ae5332424723a48aab8962d9`), three
+alternating local runs measured candidate real times of 3.45, 3.44, and 3.45
+seconds against 3.41, 3.43, and 3.41 seconds for the exact-base binary. The
+median is **1.012x candidate/base**, failing the predeclared `<= 0.90x` target
+gate. The dirty candidate binary SHA-256 was
+`48b5743d012fb57398a7994d7b6fc04020e02379f8a509a4d1562e805e9cde58`; this
+is a local diagnostic, not a portfolio claim.
+
+The route avoids Rust-stack growth but leaves the expensive direct-call
+environment/frame construction in place and adds a tail probe to every
+direct-leaf call. Do not retry it by caching or reshaping that probe; a future
+attempt must remove a different shared cost and start from a fresh profile.
+
+### 2026-07-27 rejected same-function direct-leaf frame stack
+
+A second, distinct mechanism targeted all exact same-`Function` direct-leaf
+recursion rather than only tail calls. It retained independently initialized
+parameter, receiver, operand, and try state in a `Vec<FrameState>` owned by
+one VM, then delivered return values and errors through the original caller
+boundaries. Different functions retained the existing nested-VM route. The
+fresh profile was `/tmp/qjs-profile-controlflow-refresh.sample` (SHA-256
+`1807dd1c5291b25b036ffd8e89598fdf48aad32778172d484754d74a1065440c`), whose
+dominant chain repeatedly entered `Vm::run_completion` through the direct-leaf
+call path.
+
+The candidate passed a focused 10,000-level non-tail recursion test plus
+caller-operand, 1/2/3 parameter, receiver, thrown-value identity, nested
+catch/finally ordering, and different-function fallback checks. It was still
+rejected after its sole predeclared fast screen: on the same 50-times,
+hash-verified upstream wrapper (SHA-256
+`09e7ab8190fcba58055963f3a6f84f126e99add8ae5332424723a48aab8962d9`), three
+complete alternating pairs measured base real times of 3.34, 3.32, and 3.32
+seconds against candidate times of 3.67, 3.67, and 3.67 seconds. The medians
+are **1.105x candidate/base**, a 10.5% regression rather than the required
+`<= 0.90x` target. Candidate and exact-base release SHA-256 values were
+`0f4dd32fa4623e1643909c419b2c1ae35c00bf2260491e7b96f391e12db3e2ed` and
+`22ac7687531e8b7044ddefa6844d6af70a4f4cea2ea347f01932a8e44166143c`.
+
+Do not refine this stack scheduler or reuse its return/error transfer shape:
+it removes nested Rust calls but adds enough frame movement and dispatch that
+the measured hot path regresses. Any successor must target a different shared
+cost and begin with new profile evidence.
+
+### 2026-07-27 rejected constructor receiver-write leaf
+
+The rank-3 `raytrace-public-class-fields` and rank-4 `hash-map` profiles both
+showed constructors whose bodies repeatedly perform statically named
+`this.field = parameter-or-primitive` writes through a general function frame
+and VM. A prevalidated plan accepted only complete straight-line base or
+ordinary constructor bodies with that exact shape. Before its first write it
+preflighted the entire receiver/prototype chain, declining accessors, Proxies,
+non-writable descriptors, non-extensible receivers, derived constructors,
+explicit returns, `super`, eval, and closures. That preserves field
+initialization order and avoids partially observable fallback.
+
+The candidate passed focused classifier and no-partial-write tests, constructor
+field-order/setter/`Reflect.construct` fallback tests, `cargo check -p
+qjs-runtime`, and 37/37 curated Test262 class cases using the candidate release
+binary. Its SHA-256 was
+`6fd8b53069cc22326ded4d47fae918c6559c74b22b625146405fd8a72e04ce0c`; the
+exact base binary was
+`22ac7687531e8b7044ddefa6844d6af70a4f4cea2ea347f01932a8e44166143c`.
+
+The predeclared dual-target fast gate nevertheless failed. The three-block
+hash-verified external screen (report SHA-256
+`29038eb94918e61419f0b650da17b9e6395558e626dab1263f07db384e96620f`, raw
+SHA-256 `cefd5716b9d4735420d005c2d6fca1ad03f39e191c8d28bc1c1f8d5965b8d626`)
+measured `raytrace-public-class-fields` at **0.852996x** candidate/base but
+`hash-map` at only **0.986041x**, missing the frozen `<= 0.90x` target. The
+independent Kraken `ai-astar` and SunSpider `controlflow-recursive` sentinels
+were 1.005862x and 0.959686x respectively. The implementation and its tests
+were reverted immediately; only the plan and this negative evidence remain.
+
+Do not refine this constructor-only write plan by widening literal forms or
+relaxing its Set preflight. It is a useful raytrace-specific signal but not the
+shared two-workload improvement its declared gate required. A successor must
+identify a different cost that is current-profiled in both targets.
+
+### 2026-07-27 rejected streaming simple-RegExp quantifier boundaries
+
+Fresh profiles of rank-6 `string-tagcloud` and rank-14
+`string-validate-input` shared the RegExp matcher path through
+`match_pattern_first`, `repeat_atom`, and `simple_atom_boundaries`. The
+candidate avoided allocating the temporary boundary vector only for
+non-Unicode, single-code-unit, capture-free quantified atoms. It scanned the
+contiguous run once and replayed greedy or lazy continuation candidates by
+index; Unicode, surrogate-pair, multi-code-unit, and captured atom shapes
+retained the existing boundary-vector path. This was source-independent
+matcher work with no workload-name, input-length, checksum, or source-path
+condition.
+
+The focused `regexp::matcher` suite passed 42/42 tests, including greedy and
+lazy backtracking, captures, lookaround, Unicode surrogate behavior, and long
+repetition coverage. Both exact external sources also completed successfully.
+The candidate release SHA-256 was
+`93b73dbce06d26ebc6150095b77df5a719d03108ddba951ab6327b2ba72f7366`; after
+revert the release binary exactly matched the base SHA-256
+`22ac7687531e8b7044ddefa6844d6af70a4f4cea2ea347f01932a8e44166143c`.
+
+Its single predeclared fast screen used one warm-up plus seven alternating
+candidate/base process samples per exact upstream workload. `string-tagcloud`
+improved only to **0.954032x** candidate/base (202,932,166 ns median versus
+212,710,042 ns), and `string-validate-input` regressed to **1.020318x**
+(75,609,125 ns versus 74,103,500 ns). Both miss the frozen `<= 0.90x` target
+gate, so the matcher change was reverted immediately. The profile receipts are
+`/tmp/qjs-profile-tagcloud-current-20260727.sample` (SHA-256
+`1accdced86069af4e9c8cbf1b1f8ddf2e9b802a853d62713c44c17cc071dbfb6`) and
+`/tmp/qjs-profile-string-validate-input-current-20260727.sample` (SHA-256
+`94b1bbaa20b544d2c64635bc33ef418e93ee98c300f9f5198cd23e1188e053f0`).
+
+Do not retry this boundary-vector removal by broadening its atom classifier or
+by adding another streaming probe. Its one material local movement is below
+the campaign gate and its paired target regresses. A future RegExp unit must
+identify a different current-profiled cost, such as construction, matching, or
+result materialization, shared by its chosen targets.
+
+### 2026-07-27 retained ordinary `for-in` key-list cache: local fast gate only
+
+The next unopened external opportunity was SunSpider `string-fasta`. A fresh
+profile of the exact base attributes 242 of 1,457 samples (about 16.6%) to
+`EnumerateKeys`, `own_property_names`, descriptor queries, and their temporary
+key-list allocation. The receipt is
+`/tmp/qjs-profile-string-fasta-current-20260727.sample` (SHA-256
+`5e8ff803689022a0d9b802aef92e564bda5d64efae321998f4b39bda654e6e89`).
+Current profiles of the other ranked `for-in` sources did not share that cost,
+so this is deliberately a one-target, one-attempt unit rather than a claim of
+cross-workload campaign progress. Its frozen plan is
+`tasks/performance-units/for-in-ordinary-key-cache.json`.
+
+The implementation retains a hidden `ArrayRef` per `EnumerateKeys` bytecode
+site only after a canonical enumeration of an all-`ObjectRef` chain. A reuse
+requires every live link to retain its exact identity, prototype link, and
+own-layout revision; arrays, functions, Proxies, typed arrays, module
+namespaces, symbol primitives, and unsupported chains use the canonical path.
+The existing live per-key descriptor check remains inside the loop, so a
+deletion while an already-started loop is running is still observable. Focused
+coverage mutates own and inherited enumerable layouts, replaces a prototype,
+and deletes a later key from inside the loop.
+
+Against exact-base release binary SHA-256
+`22ac7687531e8b7044ddefa6844d6af70a4f4cea2ea347f01932a8e44166143c`, the
+candidate binary SHA-256
+`4066181c59f5c3bc5d68f15b3cee4f3446dca0e90c3b40db27e96932e3680205` passed
+the single declared fast gate. Seven alternating exact-source process samples
+had medians of 119,263,500 ns candidate and 286,959,125 ns base, or
+**0.415611x candidate/base**. The independent `string-tagcloud`, `regexp-dna`,
+and `string-base64` controls were 1.000758x, 1.002190x, and 0.995233x;
+single-case broad diagnostic controls were 1.000753x (`local_read`) and
+1.000574x (`object_allocation`). The latter raw diagnostic is not a complete
+broad report and is not promotion evidence. A candidate profile at
+`/tmp/qjs-profile-string-fasta-for-in-cache-20260727.sample` (SHA-256
+`24fbbfe3fcf82fc95d4e4dff25632189286c12a0a6b6672019e4c3dfd8e0f916`) no
+longer shows the prior `enumerable_keys`/`own_property_names` hot chain.
+
+The focused runtime `for_in_` suite passed 10/10 tests, the targeted Test262
+slice passed 3/3, `check.sh` passed including 5,160/5,160 curated Test262
+cases, and `compare-qjs.sh` passed. A one-block three-engine external smoke
+completed for all 45 fixed cases: 44 were fully comparable and
+`imaging-gaussian-blur` timed out for both qjs-rust roles while QuickJS-NG
+completed. Its SunSpider `string-fasta` row was 0.418045x candidate/base.
+The report explicitly marks `claim_eligible: false` because it has one block
+and incomplete Kraken comparability; report/raw SHA-256 values are
+`dbaea6091d5766dd0be13d612d29a00c9f4ad010aa5f19d2daa5f73480d4d3b2` and
+`6f82929b2246dd8373f09ed00d19d563ec86fed09f321e778fe9ebdaf45f7f68`.
+
+Retain this as a local, general engine candidate, not a T021 or 2x-campaign
+promotion. Promotion still requires the plan's complete broad and external
+evidence plus a zero-gap exact Test262 scan from an exact committed candidate.

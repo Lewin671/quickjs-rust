@@ -6,8 +6,8 @@ use crate::{
     to_primitive_with_hint,
 };
 
-use super::vm::Vm;
 use super::vm_props::{enumerable_keys, fast_number_binary, fast_number_unary};
+use super::{enumerate_keys_cache::EnumerateKeysCache, vm::Vm};
 
 impl Vm<'_> {
     pub(super) fn eval_binary(&mut self, op: BinaryOp) -> Result<Value, RuntimeError> {
@@ -163,10 +163,18 @@ impl Vm<'_> {
         Ok(result)
     }
 
-    pub(super) fn enumerate_keys(&mut self) -> Result<(), RuntimeError> {
+    pub(super) fn enumerate_keys(
+        &mut self,
+        cache: &EnumerateKeysCache,
+    ) -> Result<(), RuntimeError> {
         let value = self.pop()?;
-        let keys = enumerable_keys(value, &mut self.env)?;
-        self.stack.push(Value::Array(ArrayRef::new(keys)));
+        if let Some(keys) = cache.get(&value) {
+            self.stack.push(Value::Array(keys));
+            return Ok(());
+        }
+        let keys = ArrayRef::new(enumerable_keys(value.clone(), &mut self.env)?);
+        cache.record(&value, keys.clone());
+        self.stack.push(Value::Array(keys));
         Ok(())
     }
 
