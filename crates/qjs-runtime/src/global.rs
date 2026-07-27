@@ -1,12 +1,12 @@
 use qjs_parser::{EvalParseContext, parse_direct_eval_wtf16_script, parse_eval_script};
-use std::collections::HashSet;
+use std::{collections::HashSet, rc::Rc};
 
 use crate::CallEnv;
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, RuntimeError,
     Value,
     bytecode::{
-        compile_direct_eval_script, eval_bytecode_with_env,
+        compile_direct_eval_script, direct_eval_bytecode_is_cacheable, eval_bytecode_with_env,
         eval_bytecode_with_env_ephemeral_global_lexicals, set_object_property,
     },
     function_delete_own_property, function_own_property_descriptor,
@@ -801,15 +801,7 @@ pub(super) fn native_global_eval(
     if eval_source_is_only_comments_and_whitespace(&source) {
         return Ok(Value::Undefined);
     }
-    let script = if direct_eval {
-        parse_direct_eval_wtf16_script(&source, direct_eval_parse_context(env))
-    } else {
-        parse_eval_script(&source)
-    }
-    .map_err(|error| RuntimeError {
-        thrown: None,
-        message: format!("SyntaxError: {}", error.message),
-    })?;
+    let direct_parse_context = direct_eval.then(|| direct_eval_parse_context(env));
     let mut eval_env = if direct_eval {
         env.clone()
     } else {
@@ -833,7 +825,36 @@ pub(super) fn native_global_eval(
             env.get(crate::DIRECT_EVAL_STRICT_BINDING),
             Some(Value::Boolean(true))
         );
-    let mut bytecode = compile_direct_eval_script(&script, caller_strict)?;
+    let (mut bytecode, cacheable_direct_eval) = match direct_parse_context
+        .as_ref()
+        .and_then(|context| env.cached_direct_eval_bytecode(&source, context))
+    {
+        Some(bytecode) => (bytecode, true),
+        None => {
+            let script = match &direct_parse_context {
+                Some(context) => parse_direct_eval_wtf16_script(&source, context.clone()),
+                None => parse_eval_script(&source),
+            }
+            .map_err(|error| RuntimeError {
+                thrown: None,
+                message: format!("SyntaxError: {}", error.message),
+            })?;
+            let bytecode = Rc::new(compile_direct_eval_script(&script, caller_strict)?);
+            let cacheable_direct_eval =
+                direct_parse_context.is_some() && direct_eval_bytecode_is_cacheable(&bytecode);
+            if let Some(context) = &direct_parse_context
+                && cacheable_direct_eval
+            {
+                env.cache_direct_eval_bytecode(source.clone(), context.clone(), bytecode.clone());
+            }
+            (bytecode, cacheable_direct_eval)
+        }
+    };
+    // A declaration-free direct eval needs no complete caller-name snapshot.
+    // Its potential writes are handled below with one exact lookup per written
+    // name. Nested eval and `with` retain the conservative dynamic path.
+    let simple_direct_eval =
+        cacheable_direct_eval && !bytecode.contains_direct_eval() && !bytecode.contains_with();
     let eval_strict = bytecode.is_strict();
     if direct_function_eval
         && matches!(
@@ -872,7 +893,7 @@ pub(super) fn native_global_eval(
     } else {
         validate_eval_global_lexical_bindings(&bytecode, &eval_env, false, false)?;
     }
-    let caller_locals = eval_env.visible_local_names();
+    let caller_locals = (!simple_direct_eval).then(|| eval_env.visible_local_names());
     let hoisted_names = bytecode
         .hoisted_local_names()
         .map(str::to_owned)
@@ -885,23 +906,33 @@ pub(super) fn native_global_eval(
         .eval_lexical_local_names()
         .map(str::to_owned)
         .collect::<HashSet<_>>();
-    if !direct_function_eval && !eval_strict {
+    if !direct_function_eval
+        && !eval_strict
+        && let Some(caller_locals) = caller_locals.as_ref()
+    {
         validate_sloppy_global_eval_declarations(
             &bytecode,
             &eval_env,
-            &caller_locals,
+            caller_locals,
             &hoisted_function_names,
             false,
         )?;
     }
-    if direct_function_eval && !eval_strict {
+    if direct_function_eval && !eval_strict && !hoisted_names.is_empty() {
         validate_sloppy_function_eval_declarations(&bytecode, &eval_env)?;
     }
-    if direct_function_eval && !eval_strict {
-        bytecode.mark_eval_deletable_locals(
+    if direct_function_eval && !eval_strict && !hoisted_names.is_empty() {
+        // Cacheable blueprints have no hoisted declarations, so this only
+        // mutates a fresh, uncached compilation. `make_mut` keeps that
+        // invariant defensive if cache eligibility changes later.
+        Rc::make_mut(&mut bytecode).mark_eval_deletable_locals(
             hoisted_names
                 .iter()
-                .filter(|name| !caller_locals.contains(*name))
+                .filter(|name| {
+                    !caller_locals
+                        .as_ref()
+                        .is_some_and(|names| names.contains(*name))
+                })
                 .cloned(),
         );
     }
@@ -911,9 +942,14 @@ pub(super) fn native_global_eval(
         &mut eval_env,
         direct_function_eval,
         direct_parameter_eval,
-        &caller_locals,
+        caller_locals.as_ref(),
         eval_strict,
     );
+    let caller_has_local = |name: &str| {
+        caller_locals
+            .as_ref()
+            .map_or_else(|| env.has_local_binding(name), |names| names.contains(name))
+    };
     let result = eval_bytecode_with_env_ephemeral_global_lexicals(&bytecode, eval_env.clone());
     let writeback_names = hoisted_names
         .iter()
@@ -935,7 +971,7 @@ pub(super) fn native_global_eval(
                 if hoisted_names.contains(name) {
                     continue;
                 }
-                if caller_locals.contains(name) {
+                if caller_has_local(name) {
                     // Strict direct eval runs declarations in its own eval
                     // variable environment, but ordinary assignments to
                     // caller-scope bindings still write through to the caller.
@@ -954,7 +990,7 @@ pub(super) fn native_global_eval(
                     Value::Boolean(true),
                 );
                 update_direct_eval_parameter_captured_functions(&mut eval_env, name, value.clone());
-            } else if caller_locals.contains(name) {
+            } else if caller_has_local(name) {
                 // A caller frame binding (an outer `let`/`var` the eval'd code
                 // assigned): write it back through the frame so the caller's
                 // slot sees the update.
@@ -1458,7 +1494,7 @@ fn initialize_direct_eval_bindings(
     env: &mut CallEnv,
     direct_function_eval: bool,
     direct_parameter_eval: bool,
-    caller_locals: &HashSet<String>,
+    caller_locals: Option<&HashSet<String>>,
     eval_strict: bool,
 ) {
     if !env.has_local_binding("this")
@@ -1467,7 +1503,10 @@ fn initialize_direct_eval_bindings(
         env.insert("this".to_owned(), value);
     }
     for name in bytecode.hoisted_local_names() {
-        if !eval_strict && caller_locals.contains(name) && !direct_parameter_eval {
+        if !eval_strict
+            && caller_locals.is_some_and(|caller_locals| caller_locals.contains(name))
+            && !direct_parameter_eval
+        {
             continue;
         }
         if eval_strict {

@@ -787,3 +787,51 @@ SHA-256 values are
 The broad neutral result and closure-allocation regression show that shortening
 this transient vector is not a general runtime improvement; do not retry it
 without a design that removes work across captured and closure-creation calls.
+
+### 2026-07-26 bounded direct-eval compilation blueprints
+
+The updated `date-format-tofte` profile showed a different repeatable cost:
+the formatter dynamically evaluates small expression-only strings such as
+`Y()` on every format character. Each direct eval previously parsed and
+compiled that same string again, then rebuilt the caller's complete visible
+name set even when the eval had no declarations to instantiate.
+
+`RealmState` now owns a FIFO-bounded cache (32 entries, sources at most 4 KiB)
+keyed by the direct-eval source and the full `EvalParseContext`. An entry holds
+immutable bytecode behind `Rc`; every invocation still creates a distinct VM
+frame and runtime values. The cache rejects hoisted and lexical declarations,
+nested function/class construction, and tagged-template objects, which are the
+bytecode features with per-evaluation declaration or identity state. A second
+fast path skips the caller-wide visible-name snapshot only for those reusable
+blueprints that also contain neither nested direct eval nor `with`; a write is
+instead checked against the original caller environment by its exact name.
+All other evals retain the prior declaration, dynamic-scope, and writeback
+path.
+
+Focused runtime coverage verifies cache reuse across changed caller values,
+fresh object identity for separate eval invocations, declaration-bearing
+source bypass, and repeated local writeback. The complete 1,885-test runtime
+suite, the 5,159-case Test262 subset, and all QuickJS-NG comparison fixtures
+passed after the final fast path.
+
+The fixed candidate release SHA-256
+`89992e1bffd4089d908a88b63a17352849548f0c1cef23189407552fcf09d7f6`
+was screened against exact base
+`80e02eb574965bf0a586b5a609fdc1fffbd822ad997a7d392697285fdf12c8a5` and
+pinned QuickJS-NG
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+The five-block external screen measured `date-format-tofte` at **0.83328x**
+of base (220.62 ms versus 264.76 ms), while `cdjs` was 0.99550x,
+`hash-map` 0.98753x, `audio-oscillator` 0.99764x, and
+`controlflow-recursive` 1.00077x. Its report/raw SHA-256 values are
+`13bc0cf375b3dcf90fcfae4e49c4498de079bb8d2bf3d0c54fa4b3974a60598e` and
+`9cc90c2286e0251fa4a46a4ce9e840fac4bd7fd1683e74b580fa62b05b0c68cc`.
+
+The complete three-block local broad-v2 diagnostic produced all 225 formal
+records and 600 linearity records with `ok` status and `run_end=complete`.
+Candidate/base geometric mean was 1.00068x; the largest movement was
+`closure_allocation_call` at 1.01155x. Candidate/QuickJS-NG geometric mean
+was 0.09283x. Raw SHA-256:
+`2c52a42e1f4cd7631a2ea8666bc74cbb71fcb5762a28df70a9153b238d701cd2`.
+These are local receipt-free diagnostics, not a claim that T018's external
+2x objective is closed: even the improved date row remains 4.83x QuickJS-NG.

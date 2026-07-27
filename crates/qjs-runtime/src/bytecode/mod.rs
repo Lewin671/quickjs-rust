@@ -91,6 +91,22 @@ pub(crate) fn compile_direct_eval_script(
     compiler::compile_direct_eval_script(script, strict)
 }
 
+/// Whether a direct-eval compilation can safely serve as a reusable blueprint.
+///
+/// Declaration-bearing sources mutate eval-instantiation metadata per caller;
+/// nested function/class bodies and template literals carry per-evaluation
+/// identity state. Keep those paths freshly compiled until they have their own
+/// deep-clone representation.
+pub(crate) fn direct_eval_bytecode_is_cacheable(bytecode: &Bytecode) -> bool {
+    bytecode.hoisted_local_names().next().is_none()
+        && bytecode.eval_lexical_local_names().next().is_none()
+        && !bytecode.creates_closures()
+        && !bytecode
+            .code
+            .iter()
+            .any(|op| matches!(op, ir::Op::NewTemplateObject { .. }))
+}
+
 /// A bytecode-compilation failure tagged with the stage a conformance harness
 /// should attribute it to.
 #[derive(Clone, Debug, PartialEq)]

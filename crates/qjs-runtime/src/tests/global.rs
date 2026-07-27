@@ -1,4 +1,6 @@
-use crate::{Value, eval};
+use std::collections::HashMap;
+
+use crate::{CallEnv, DIRECT_EVAL_BINDING, Value, eval};
 
 #[test]
 fn evaluates_boolean_builtins() {
@@ -127,6 +129,67 @@ fn native_calls_use_callback_cells_without_losing_direct_eval_scope() {
         ),
         Ok(Value::Number(7.0))
     );
+}
+
+#[test]
+fn repeated_declaration_free_direct_eval_uses_fresh_cached_blueprints() {
+    let mut env = CallEnv::from_map(HashMap::new());
+    env.insert(DIRECT_EVAL_BINDING.to_owned(), Value::Boolean(true));
+    env.insert("value".to_owned(), Value::Number(1.0));
+
+    assert_eq!(
+        crate::global::native_global_eval(
+            &[Value::String("value + 1".to_owned().into())],
+            &mut env,
+        ),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(env.direct_eval_cache_len(), 1);
+
+    env.insert("value".to_owned(), Value::Number(41.0));
+    assert_eq!(
+        crate::global::native_global_eval(
+            &[Value::String("value + 1".to_owned().into())],
+            &mut env,
+        ),
+        Ok(Value::Number(42.0))
+    );
+    assert_eq!(env.direct_eval_cache_len(), 1);
+
+    let first_object =
+        crate::global::native_global_eval(&[Value::String("({})".to_owned().into())], &mut env)
+            .expect("first direct eval object literal should succeed");
+    let second_object =
+        crate::global::native_global_eval(&[Value::String("({})".to_owned().into())], &mut env)
+            .expect("second direct eval object literal should succeed");
+    match (&first_object, &second_object) {
+        (Value::Object(first), Value::Object(second)) => assert!(!first.ptr_eq(second)),
+        _ => panic!("direct eval object literals should produce objects"),
+    }
+    assert_eq!(env.direct_eval_cache_len(), 2);
+
+    assert_eq!(
+        eval(
+            "function cachedWriteback() { \
+               let local = 1; \
+               eval('local += 1'); \
+               return eval('local += 1'); \
+             } \
+             cachedWriteback();"
+        ),
+        Ok(Value::Number(3.0))
+    );
+
+    assert_eq!(
+        crate::global::native_global_eval(
+            &[Value::String(
+                "var uncached = 1; uncached".to_owned().into()
+            )],
+            &mut env,
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(env.direct_eval_cache_len(), 2);
 }
 
 #[test]

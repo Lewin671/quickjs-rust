@@ -27,7 +27,13 @@ use std::{
     rc::Rc,
 };
 
-use crate::{Function, ObjectRef, Value, function::Upvalue, private::PrivateEnvironment};
+use qjs_parser::EvalParseContext;
+
+use super::eval_cache::DirectEvalCache;
+
+use crate::{
+    Bytecode, Function, JsString, ObjectRef, Value, function::Upvalue, private::PrivateEnvironment,
+};
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 pub(super) const REALM_OBJECT_PROTOTYPE_INTRINSIC: &str = "\0realm:Object.prototype";
@@ -54,6 +60,10 @@ pub(crate) struct RealmState {
     empty_name_set: Rc<HashSet<String>>,
     global_this: Option<Value>,
     dynamic_function_realm_global: RefCell<Option<ObjectRef>>,
+    /// Parsed/compiled blueprints for small, declaration-free direct eval
+    /// sources. Entries share only immutable bytecode; each invocation still
+    /// receives an independent VM frame and runtime values.
+    direct_eval_cache: RefCell<DirectEvalCache>,
 }
 
 impl RealmState {
@@ -81,6 +91,7 @@ impl RealmState {
             empty_name_set: Rc::new(HashSet::new()),
             global_this,
             dynamic_function_realm_global: RefCell::new(dynamic_function_realm_global),
+            direct_eval_cache: RefCell::new(DirectEvalCache::default()),
         };
         if let Some(prototype) = object_prototype {
             let _ = realm.object_prototype.set(prototype);
@@ -147,6 +158,30 @@ impl RealmState {
     /// functions without hashing its private binding name for every closure.
     pub(crate) fn dynamic_function_realm_global(&self) -> Option<ObjectRef> {
         self.dynamic_function_realm_global.borrow().clone()
+    }
+
+    pub(crate) fn cached_direct_eval_bytecode(
+        &self,
+        source: &JsString,
+        context: &EvalParseContext,
+    ) -> Option<Rc<Bytecode>> {
+        self.direct_eval_cache.borrow().lookup(source, context)
+    }
+
+    pub(crate) fn cache_direct_eval_bytecode(
+        &self,
+        source: JsString,
+        context: EvalParseContext,
+        bytecode: Rc<Bytecode>,
+    ) {
+        self.direct_eval_cache
+            .borrow_mut()
+            .insert(source, context, bytecode);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn direct_eval_cache_len(&self) -> usize {
+        self.direct_eval_cache.borrow().len()
     }
 
     fn sync_dynamic_function_realm_binding(&self, name: &str, value: Option<&Value>) {
@@ -1176,6 +1211,29 @@ impl CallEnv {
             };
         }
         self.realm.dynamic_function_realm_global()
+    }
+
+    pub(crate) fn cached_direct_eval_bytecode(
+        &self,
+        source: &JsString,
+        context: &EvalParseContext,
+    ) -> Option<Rc<Bytecode>> {
+        self.realm.cached_direct_eval_bytecode(source, context)
+    }
+
+    pub(crate) fn cache_direct_eval_bytecode(
+        &self,
+        source: JsString,
+        context: EvalParseContext,
+        bytecode: Rc<Bytecode>,
+    ) {
+        self.realm
+            .cache_direct_eval_bytecode(source, context, bytecode);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn direct_eval_cache_len(&self) -> usize {
+        self.realm.direct_eval_cache_len()
     }
 
     pub(crate) fn object_prototype_intrinsic_override(&self) -> Option<ObjectRef> {

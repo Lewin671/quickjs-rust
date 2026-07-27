@@ -1,6 +1,7 @@
 mod arguments;
 mod call;
 mod env;
+mod eval_cache;
 mod install;
 mod local_names;
 mod native_kind;
