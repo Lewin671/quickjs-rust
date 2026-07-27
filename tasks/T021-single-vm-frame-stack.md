@@ -1057,3 +1057,38 @@ Do not refine this stack scheduler or reuse its return/error transfer shape:
 it removes nested Rust calls but adds enough frame movement and dispatch that
 the measured hot path regresses. Any successor must target a different shared
 cost and begin with new profile evidence.
+
+### 2026-07-27 rejected constructor receiver-write leaf
+
+The rank-3 `raytrace-public-class-fields` and rank-4 `hash-map` profiles both
+showed constructors whose bodies repeatedly perform statically named
+`this.field = parameter-or-primitive` writes through a general function frame
+and VM. A prevalidated plan accepted only complete straight-line base or
+ordinary constructor bodies with that exact shape. Before its first write it
+preflighted the entire receiver/prototype chain, declining accessors, Proxies,
+non-writable descriptors, non-extensible receivers, derived constructors,
+explicit returns, `super`, eval, and closures. That preserves field
+initialization order and avoids partially observable fallback.
+
+The candidate passed focused classifier and no-partial-write tests, constructor
+field-order/setter/`Reflect.construct` fallback tests, `cargo check -p
+qjs-runtime`, and 37/37 curated Test262 class cases using the candidate release
+binary. Its SHA-256 was
+`6fd8b53069cc22326ded4d47fae918c6559c74b22b625146405fd8a72e04ce0c`; the
+exact base binary was
+`22ac7687531e8b7044ddefa6844d6af70a4f4cea2ea347f01932a8e44166143c`.
+
+The predeclared dual-target fast gate nevertheless failed. The three-block
+hash-verified external screen (report SHA-256
+`29038eb94918e61419f0b650da17b9e6395558e626dab1263f07db384e96620f`, raw
+SHA-256 `cefd5716b9d4735420d005c2d6fca1ad03f39e191c8d28bc1c1f8d5965b8d626`)
+measured `raytrace-public-class-fields` at **0.852996x** candidate/base but
+`hash-map` at only **0.986041x**, missing the frozen `<= 0.90x` target. The
+independent Kraken `ai-astar` and SunSpider `controlflow-recursive` sentinels
+were 1.005862x and 0.959686x respectively. The implementation and its tests
+were reverted immediately; only the plan and this negative evidence remain.
+
+Do not refine this constructor-only write plan by widening literal forms or
+relaxing its Set preflight. It is a useful raytrace-specific signal but not the
+shared two-workload improvement its declared gate required. A successor must
+identify a different cost that is current-profiled in both targets.

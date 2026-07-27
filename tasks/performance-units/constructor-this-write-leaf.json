@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "constructor-this-write-leaf",
+  "base_sha": "da94a01786925053b4474268094874fad03801f4",
+  "queue": {
+    "candidate_sha": "da94a01786925053b4474268094874fad03801f4",
+    "sha256": "9a6b599ac317a0f2df93afe6ad9559a9c67b7a8e71b43cb9e5b0d2c216f07138"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "rank_ceiling": 4,
+    "override_reason": "The rank-1 recursive direct-leaf frame-stack and rank-2 repeated-eval mechanisms are closed by 2026-07-27 fast-gate evidence. Ranks 3 and 4 share a distinct, currently profiled constructor-body cost: simple statically named receiver writes still enter the general function environment and VM. One general constructor write plan tests both independent JetStream workloads without selecting by workload source."
+  },
+  "mechanism": {
+    "summary": "Execute a prevalidated base or ordinary constructor body made only of ordered `this.<static name> = parameter-or-primitive` writes without constructing a function VM.",
+    "generality": "Eligibility is derived only from immutable bytecode, constructor mode, and live ordinary-object property semantics. It does not inspect benchmark paths, source names, checksums, or iteration counts. Derived constructors and every body outside the complete straight-line shape retain the existing call path.",
+    "semantic_risks": [
+      "preserving ordered public-field initialization before the constructor body",
+      "falling back before any write when a receiver or prototype can observe Set through an accessor, Proxy, non-writable descriptor, or non-extensible object",
+      "preserving Reflect.construct receiver/prototype behavior and base-versus-derived constructor rules",
+      "keeping parameter omission, primitive constants, and implicit undefined return behavior identical"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-27 /tmp/qjs-profile-raytrace.sample; hash-verified JetStream raytrace-public-class-fields bundle",
+      "sha256": "9b3bb292be955ce57b33e77cc7ae72cfdde1f72c2fad7043c58d6e3d37076b3a",
+      "base_sha": "da94a01786925053b4474268094874fad03801f4",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/raytrace-public-class-fields"
+      ],
+      "shared_cost": "Base-class construction repeatedly traverses construct_function, class field initialization, general function environment setup, and VM execution for bodies dominated by statically named receiver writes.",
+      "inclusive_fraction": 0.1
+    },
+    {
+      "source": "macOS sample 2026-07-27 /tmp/qjs-profile-hash-map-refresh.sample; hash-verified JetStream hash-map bundle",
+      "sha256": "6fafc7f5506655aec65cdba663a6312fe2ad13b4509809be8b97343f5a3719ff",
+      "base_sha": "da94a01786925053b4474268094874fad03801f4",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Ordinary function constructors with static receiver initialization remain on the direct-call VM route, paying full function environment, frame, operand-stack, and generic named-store execution for every construction.",
+      "inclusive_fraction": 0.1
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "control_ids": [
+      "broad/plain_function_call",
+      "broad/top_level_function_call",
+      "broad/dynamic_method_call",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
