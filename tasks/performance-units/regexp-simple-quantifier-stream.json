@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "regexp-simple-quantifier-stream",
+  "base_sha": "da94a01786925053b4474268094874fad03801f4",
+  "queue": {
+    "candidate_sha": "da94a01786925053b4474268094874fad03801f4",
+    "sha256": "9a6b599ac317a0f2df93afe6ad9559a9c67b7a8e71b43cb9e5b0d2c216f07138"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/string-validate-input"
+    ],
+    "rank_ceiling": 14,
+    "override_reason": "Ranks 1 through 4 are closed by the 2026-07-27 frame-stack, direct-eval, and constructor fast-gate evidence; ranks 5, 7 through 13 have fresh profiles identifying distinct direct-call, typed-loop, parser, numeric, or array/property costs. Rank 6 and rank 14 both spend material time in the same RegExp matcher path, specifically match_pattern_first scanning quantified simple atoms through an allocated boundary vector. This unit reduces that shared matcher cost without source-path, workload-name, checksum, or iteration-count admission."
+  },
+  "mechanism": {
+    "summary": "Stream eligible non-Unicode single-code-unit quantified RegExp atom candidates directly into match_pattern_first, preserving greedy or lazy backtracking order without allocating a boundary vector for every quantified atom.",
+    "generality": "Eligibility is derived solely from immutable parsed RegExp pattern state and matcher options. It applies to every non-Unicode simple atom repetition with no atom capture, regardless of script source, benchmark identity, input length, or result. Unicode and multi-code-unit atoms, captured atoms, and all unsupported patterns retain the existing boundary-vector matcher.",
+    "semantic_risks": [
+      "preserving ECMAScript greedy and lazy candidate priority when a continuation backtracks",
+      "preserving captures owned by surrounding groups while excluding only atoms with direct capture effects",
+      "falling back for Unicode, surrogate-pair, zero-width, and multi-code-unit atom semantics",
+      "preserving RegExp test, exec, replace, and stateful lastIndex behavior through the unchanged result protocol"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-27 /tmp/qjs-profile-tagcloud-current-20260727.sample; hash-verified SunSpider string-tagcloud source",
+      "sha256": "1accdced86069af4e9c8cbf1b1f8ddf2e9b802a853d62713c44c17cc071dbfb6",
+      "base_sha": "da94a01786925053b4474268094874fad03801f4",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-tagcloud"
+      ],
+      "shared_cost": "RegExp replacement repeatedly enters PreparedRegexp::match_input, match_pattern_first, repeat_atom, and simple_atom_boundaries for quantified simple atoms.",
+      "inclusive_fraction": 0.2
+    },
+    {
+      "source": "macOS sample 2026-07-27 /tmp/qjs-profile-string-validate-input-current-20260727.sample; 50x wrapper of the hash-verified SunSpider source",
+      "sha256": "94b1bbaa20b544d2c64635bc33ef418e93ee98c300f9f5198cd23e1188e053f0",
+      "base_sha": "da94a01786925053b4474268094874fad03801f4",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-validate-input"
+      ],
+      "shared_cost": "Repeated RegExp.prototype.test calls spend material samples in match_pattern_first, simple_atom_boundaries, repeat_atom, and character-class matching for ordinary non-Unicode quantified atoms.",
+      "inclusive_fraction": 0.2
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/string-validate-input"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/string-fasta",
+      "external/sunspider-1.0/string-base64",
+      "external/kraken-1.1/stanford-crypto-sha256-iterative",
+      "broad/local_read"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

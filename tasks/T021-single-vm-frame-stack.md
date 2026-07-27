@@ -1092,3 +1092,41 @@ Do not refine this constructor-only write plan by widening literal forms or
 relaxing its Set preflight. It is a useful raytrace-specific signal but not the
 shared two-workload improvement its declared gate required. A successor must
 identify a different cost that is current-profiled in both targets.
+
+### 2026-07-27 rejected streaming simple-RegExp quantifier boundaries
+
+Fresh profiles of rank-6 `string-tagcloud` and rank-14
+`string-validate-input` shared the RegExp matcher path through
+`match_pattern_first`, `repeat_atom`, and `simple_atom_boundaries`. The
+candidate avoided allocating the temporary boundary vector only for
+non-Unicode, single-code-unit, capture-free quantified atoms. It scanned the
+contiguous run once and replayed greedy or lazy continuation candidates by
+index; Unicode, surrogate-pair, multi-code-unit, and captured atom shapes
+retained the existing boundary-vector path. This was source-independent
+matcher work with no workload-name, input-length, checksum, or source-path
+condition.
+
+The focused `regexp::matcher` suite passed 42/42 tests, including greedy and
+lazy backtracking, captures, lookaround, Unicode surrogate behavior, and long
+repetition coverage. Both exact external sources also completed successfully.
+The candidate release SHA-256 was
+`93b73dbce06d26ebc6150095b77df5a719d03108ddba951ab6327b2ba72f7366`; after
+revert the release binary exactly matched the base SHA-256
+`22ac7687531e8b7044ddefa6844d6af70a4f4cea2ea347f01932a8e44166143c`.
+
+Its single predeclared fast screen used one warm-up plus seven alternating
+candidate/base process samples per exact upstream workload. `string-tagcloud`
+improved only to **0.954032x** candidate/base (202,932,166 ns median versus
+212,710,042 ns), and `string-validate-input` regressed to **1.020318x**
+(75,609,125 ns versus 74,103,500 ns). Both miss the frozen `<= 0.90x` target
+gate, so the matcher change was reverted immediately. The profile receipts are
+`/tmp/qjs-profile-tagcloud-current-20260727.sample` (SHA-256
+`1accdced86069af4e9c8cbf1b1f8ddf2e9b802a853d62713c44c17cc071dbfb6`) and
+`/tmp/qjs-profile-string-validate-input-current-20260727.sample` (SHA-256
+`94b1bbaa20b544d2c64635bc33ef418e93ee98c300f9f5198cd23e1188e053f0`).
+
+Do not retry this boundary-vector removal by broadening its atom classifier or
+by adding another streaming probe. Its one material local movement is below
+the campaign gate and its paired target regresses. A future RegExp unit must
+identify a different current-profiled cost, such as construction, matching, or
+result materialization, shared by its chosen targets.
