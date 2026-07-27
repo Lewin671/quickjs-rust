@@ -646,3 +646,49 @@ numbers predated the previous commit, which had already taken that gain.
 Rebuild the base binary from `HEAD` for every A/B. Comparing against numbers
 from an earlier build attributes the previous commit's gain to the current
 experiment.
+
+### 2026-07-26 direct-call result-only exit
+
+The slot-seeded direct-call path has already proved that it cannot write
+compatibility bindings back to its caller. It nevertheless returned a full
+`FunctionBytecodeResult`, moving the completed frame's surviving fields only
+for each direct caller to immediately take its `value`. A dedicated
+`eval_direct_call_bytecode` entry now keeps the completed VM local, drops its
+frame in place, and returns only `Result<Value, RuntimeError>`. General calls
+retain the existing result object because they still need its environment and
+slot state. This neither widens direct-call eligibility nor changes opcode
+execution.
+
+Focused coverage includes the existing zero-through-three-argument and
+receiver direct-call cases plus a new thrown-object identity test, proving the
+result-only exit still reaches the caller's catch with the original value.
+
+The complete five-block local broad diagnostic compared final candidate release
+SHA-256 `80e02eb574965bf0a586b5a609fdc1fffbd822ad997a7d392697285fdf12c8a5`
+against exact base SHA-256
+`5a8ade05243e0e6450b8691018d9cc541503b628742012fb5fe6401e5101d94e`
+and pinned QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+All **375/375** formal rows were eligible and all **600/600** linearity rows
+were `ok`. Candidate/base was **0.99577x** geometrically; the largest movement
+was `local_read` at 1.00732x. `dynamic_method_call` improved to **0.95785x**
+of base and `function_call_two_args` to **0.90678x**, while the complete
+portfolio reached 0.09303x of QuickJS-NG. The raw JSONL SHA-256 is
+`bf7b0f0ac02873b4219d8f8d08748ee879d062e7d5916959a57f1c8604c0dedc`.
+
+A separate three-block external screen retained one independent case from each
+suite: JetStream `hash-map` measured 0.99968x of base, Kraken `ai-astar`
+0.98993x, and SunSpider `controlflow-recursive` 0.99949x. Its report and raw
+SHA-256 values are
+`e0271f8850411efb50cf77829201a71a5a6e0d5e4160f7f079075f31fdacf0c6`
+and `1a5ac748635523772f82be3ccee839d6f838b62e29b1d1a3e23d2c88a6bf7b44`.
+These focused external rows are non-claim diagnostics; they establish no
+material regression but do not close T018's full external acceptance gate or
+its 2x-versus-QuickJS-NG objective.
+
+A second independent three-block screen substituted SunSpider
+`date-format-tofte`, the native-call-heavy holdout, and measured it at 0.99063x
+of base; the same run measured `hash-map` at 1.00302x and `ai-astar` at
+0.99748x. Its report and raw SHA-256 values are
+`98af5e1ddd0e3fb0fa334b6b062de12994d6b531341406589f7460fe8c79135d`
+and `53f1f930b12d075b9d0ad82a382ac7f57460352eabac9877e4621482a69aca2f`.

@@ -125,6 +125,22 @@ pub(super) fn eval_function_bytecode<'a>(
     }
 }
 
+/// Runs a guarded direct call and drops its completed frame in place.
+pub(super) fn eval_direct_call_bytecode(
+    bytecode: &Bytecode,
+    env: CallEnv,
+    direct_call_slots: DirectCallSlots<'_>,
+) -> Result<Value, RuntimeError> {
+    let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
+        bytecode,
+        env,
+        Vec::new(),
+        Vec::new(),
+        Some(direct_call_slots),
+    );
+    vm.run()
+}
+
 pub(super) struct FrameState<'a> {
     pub(super) bytecode: &'a Bytecode,
     pub(super) execution_code: &'a [Op],

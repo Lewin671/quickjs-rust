@@ -913,6 +913,21 @@ fn direct_leaf_vm_call_preserves_two_and_three_argument_order() {
 }
 
 #[test]
+fn direct_leaf_return_only_path_preserves_thrown_value_identity() {
+    assert_eq!(
+        eval(
+            "var sentinel = {}; \
+             function leaf() { throw sentinel; } \
+             function caller() { \
+               try { leaf(); } catch (error) { return error === sentinel; } \
+             } \
+             caller();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn direct_leaf_resolved_call_preserves_receiver_and_multi_argument_order() {
     assert_eq!(
         eval(

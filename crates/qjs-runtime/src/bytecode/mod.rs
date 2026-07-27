@@ -161,20 +161,16 @@ pub(crate) struct DirectCallSlots<'a> {
     pub(crate) realm_upvalue_slots: u128,
 }
 
-pub(crate) fn eval_function_bytecode_with_direct_call_slots<'a>(
-    bytecode: &'a Bytecode,
+/// Runs a slot-seeded ordinary call whose caller needs only its completion
+/// value. Direct-call eligibility excludes the compatibility bindings that a
+/// general call must copy back to its caller, so materializing a completed
+/// `FunctionBytecodeResult` would only move and then drop the finished frame.
+pub(crate) fn eval_direct_call_bytecode(
+    bytecode: &Bytecode,
     env: crate::CallEnv,
-    persist_global_lexicals: bool,
     direct_call_slots: DirectCallSlots<'_>,
-) -> FunctionBytecodeResult<'a> {
-    vm::eval_function_bytecode(
-        bytecode,
-        env,
-        Vec::new(),
-        Vec::new(),
-        persist_global_lexicals,
-        Some(direct_call_slots),
-    )
+) -> Result<Value, RuntimeError> {
+    vm::eval_direct_call_bytecode(bytecode, env, direct_call_slots)
 }
 
 /// Compiles and evaluates source text through the bytecode VM.
