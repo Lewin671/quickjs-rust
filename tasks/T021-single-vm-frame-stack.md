@@ -743,3 +743,47 @@ linearity records were `ok`; the segmented raw JSONL SHA-256 values were
 `e86955b84d0813bdd10de8a16dce68f3856a132354dcf700b38bc9f7f922cee3`.
 Avoiding an empty cold lookup does not pay for an extra per-function cache
 probe, so this does not advance the general-performance campaign.
+
+### 2026-07-26 rejected truncated direct captured-upvalue storage
+
+Direct leaf calls with received lexical upvalues rebuilt a
+`Vec<Option<Upvalue>>` through every local slot, including an all-`None` tail
+after the last capture. A candidate separated sloppy-global routes from the
+already indexed received-upvalue slots and, when no module import or sloppy
+fallback was present, constructed only the prefix through the final received
+slot. Reads past that prefix already use bounds-checked `get` and mean no cell;
+direct-leaf eligibility excludes direct eval, `with`, and capturing closures,
+which are the routes that could later install a cell in the omitted tail.
+
+The focused storage-shape and direct-leaf semantic tests passed. On an isolated
+captured-property-call shape with six later ordinary locals, it removed roughly
+3% of retired instructions (about 26.87B versus 27.70B across interleaved
+3M-call runs), so it received a complete broad check rather than being
+discarded on the microbenchmark alone.
+
+The candidate was rejected and reverted after that check. Candidate release
+SHA-256 `f97d3c3c2afee9c3ca1e6d04caa05838f1a5272b116386386937386dc8039c7a`
+was compared with exact base SHA-256
+`80e02eb574965bf0a586b5a609fdc1fffbd822ad997a7d392697285fdf12c8a5` and
+pinned QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+The complete five-block raw diagnostic has SHA-256
+`8579e0197eb0d629af06eb2dd9de3a02f3ad734e703a30b386c2c7cb29e1b153`:
+all **375/375** formal records were eligible and `ok`, all **600/600**
+linearity records were `ok`, and `run_end=complete`. Its provenance is local
+and unverified because these dirty-worktree binaries have no clean build
+receipts, so `benchmark-report.sh` correctly refused to turn it into a formal
+report; the raw result remains a non-claim diagnostic. Median-per-case
+geometric candidate/base was **1.000014x**, with
+`closure_allocation_call` regressing to **1.01483x**. Candidate/QuickJS-NG was
+0.09277x, unchanged in campaign terms.
+
+An independent three-block external screen gave the tempting but insufficient
+local signal: JetStream `hash-map` 0.98558x of base, Kraken `ai-astar`
+1.01203x, and SunSpider `controlflow-recursive` 0.98009x. Its report/raw
+SHA-256 values are
+`f2660dac6e0790ecdb417a530ca9d7102d28cec3bf44d8eec6962b03b59d11d2` and
+`319b035dd6d95c6dcd01b1dd850db0501722a13447fe7d93f34b23726d01fa61`.
+The broad neutral result and closure-allocation regression show that shortening
+this transient vector is not a general runtime improvement; do not retry it
+without a design that removes work across captured and closure-creation calls.
