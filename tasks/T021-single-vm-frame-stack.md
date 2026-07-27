@@ -878,3 +878,61 @@ repeated local result. No suite score or 2x claim follows from the preview;
 the external report/raw SHA-256 values are
 `3dc1e36c76eaf203de1b47e943291f25666e867eb46e579e0481b454649f464e` and
 `2fc152942572ddd9a56c7b7f1e5f311b035623479e5ae8f4eb0717c280a62877`.
+
+### 2026-07-26 direct `this` own-data leaf methods
+
+The remaining method-call gap includes a genuinely general leaf shape that the
+numeric plans intentionally decline: `function () { return this.value; }`.
+Such a body previously constructed a child VM even when its receiver already
+had an ordinary own data property. Bytecode construction now recognizes only
+the exact `FunctionPrologueEnd`, `LoadGlobal("this")`, `GetPropNamed`,
+`Return` prefix and retains a clone of that instruction's existing
+`NamedPropertyCache`. A direct-leaf invocation skips the VM only for an object
+receiver whose live own property is ordinary data; cache hits still validate
+the receiver/layout revisions. Accessors, inherited properties, Proxies,
+exotics, and primitive receivers all decline to the unchanged VM path.
+
+The plan is classified while immutable bytecode is built, rather than lazily
+at a call site. This matters for ordinary sloppy calls: their implicit global
+`this` is an object even when their body is not a property reader. An initial
+lazy-probe experiment made `captured_write` 1.02347x of base in a complete
+three-block screen; after construction-time classification, an independent
+five-block `captured_write` screen was **1.000357x** of base (raw SHA-256
+`6d3ea0701f91ce05e58e99a4986e4d560d71e69a5d310049411c0d6d0d9cdf38`).
+
+Focused coverage proves ordinary values refresh, an accessor installed after a
+cache hit still runs once, inherited accessors and Proxies preserve their
+observable `[[Get]]` path, and primitive `this` retains ordinary boxing. The
+plan unit test also rejects a non-leaf `return this.value + 1`. The complete
+1,888-test runtime suite, 5,159-case Test262 subset, and all QuickJS-NG
+comparison fixtures passed.
+
+The fixed candidate release SHA-256
+`77e3ae4663ee65145aa0909fbed2ae5cbf522fc53f4e6bf8b83e64d4289bdfa8` was
+compared with exact parent base
+`90462460b159a52cdf9fa9395233d62fc76f6cd2b41aacd22c413fd60ba4dd2a` and
+pinned QuickJS-NG
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+As a shape diagnostic only, three 10-million-call runs of the direct method
+fell from 3.62--3.63 seconds of user time to 2.26--2.27 seconds, about
+**1.60x**. The complete three-block broad-v2 diagnostic recorded all
+**225/225** formal samples eligible and `ok`, all **600/600** linearity rows
+`ok`, and all 300 paired linearity checks within the 0.85--1.15 bound.
+Candidate/base was **0.999752x** geometrically (call family 1.001461x; worst
+case `array_dynamic_read` 1.007617x), and candidate/QuickJS-NG was 0.092767x.
+Raw SHA-256: `0dd7ea935903a88e2784aeac4e2899437d41a1e0a4ed9dbfcf0f8282f09b2774`.
+The no-receipt local raw file remains diagnostic only; strict reporting
+correctly refuses a formal claim for provenance rather than a missing physical
+measurement.
+
+The matching full three-block external preview had 5/5 comparable JetStream
+rows at 0.998x candidate/base, 13/14 comparable Kraken rows at 1.001x, and
+26/26 SunSpider rows at 1.001x. `imaging-gaussian-blur` timed out on both base
+and candidate while QuickJS-NG completed, so it is explicitly not compared.
+The largest comparable candidate/base ratio was 1.022713x; `hash-map` was
+0.993442x, `controlflow-recursive` 0.992378x, and `access-nbody` 0.989131x.
+This is a safe general improvement, not closure of the 2x campaign: the
+targeted `hash-map` case remains 5.316x QuickJS-NG. The receipt-free external
+report/raw SHA-256 values are
+`ee4fd1f560421ce242f8575de57f6d3955ae99a3bc9432a3bafbb3fd49dc7fe3` and
+`1fb35ff5689f8adc3b63323cb536ece5b3ce6315e8bbad5dbc9b0ffb24c04e7e`.

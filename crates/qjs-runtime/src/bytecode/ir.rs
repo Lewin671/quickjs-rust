@@ -791,6 +791,12 @@ pub struct Bytecode {
     strict: bool,
     pub(super) code: Vec<Op>,
     pub(super) numeric_leaf_plan: OnceCell<Option<super::vm_numeric_leaf::NumericLeafPlan>>,
+    /// A tiny direct-call plan for a body whose only observable work is
+    /// reading one own data property from its object receiver. It is separate
+    /// from the numeric leaf plan because its result may be any JavaScript
+    /// value, while accessors, prototypes, proxies, and primitive receivers
+    /// retain the ordinary VM path.
+    pub(super) this_property_leaf_plan: Option<super::vm_numeric_leaf::ThisPropertyLeafPlan>,
     pub(super) numeric_loop_plans: OnceCell<Vec<super::vm_numeric_loop::NumericLoopPlan>>,
     /// Shape-independent register programs for this body's numeric loop
     /// regions, compiled on first entry to any loop.
@@ -899,6 +905,12 @@ impl Bytecode {
         let has_direct_local_upvalue_routes = locals
             .iter()
             .any(|local| local.is_received_upvalue() || local.sloppy_global_fallback);
+        // This is a fixed bytecode shape, so classify it once while the
+        // immutable instruction stream is being built. In particular, do not
+        // make ordinary sloppy calls pay a `OnceCell` lookup merely because
+        // their implicit `this` happens to be the global object.
+        let this_property_leaf_plan =
+            super::vm_numeric_leaf::ThisPropertyLeafPlan::compile(&code, global_scope);
         let mut bytecode = Self {
             constants,
             local_slots: collect_local_slots(&locals),
@@ -914,6 +926,7 @@ impl Bytecode {
             strict,
             code,
             numeric_leaf_plan: OnceCell::new(),
+            this_property_leaf_plan,
             numeric_loop_plans: OnceCell::new(),
             typed_loop_programs: OnceCell::new(),
             control_loop_plans: OnceCell::new(),

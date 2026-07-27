@@ -946,6 +946,43 @@ fn direct_leaf_resolved_call_preserves_receiver_and_multi_argument_order() {
 }
 
 #[test]
+fn direct_leaf_this_property_read_revalidates_descriptors_and_falls_back() {
+    assert_eq!(
+        eval(
+            "var receiver = { value: 7, read: function() { return this.value; } }; \
+             var first = receiver.read(); receiver.value = 9; var second = receiver.read(); \
+             var getterCalls = 0; \
+             Object.defineProperty(receiver, 'value', { get: function() { getterCalls++; return 11; } }); \
+             first + ':' + second + ':' + receiver.read() + ':' + getterCalls;"
+        ),
+        Ok(Value::String("7:9:11:1".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var getterCalls = 0; var prototype = {}; \
+             Object.defineProperty(prototype, 'value', { get: function() { getterCalls++; return 12; } }); \
+             var receiver = Object.create(prototype); \
+             receiver.read = function() { return this.value; }; \
+             receiver.read() + ':' + getterCalls;"
+        ),
+        Ok(Value::String("12:1".to_owned().into()))
+    );
+    assert_eq!(
+        eval("var readLength = function() { return this.length; }; readLength.call('abc');"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval(
+            "var reads = 0; var target = { value: 17, read: function() { return this.value; } }; \
+             var receiver = new Proxy(target, { get: function(target, key, receiver) { \
+                 if (key === 'value') reads++; return Reflect.get(target, key, receiver); \
+             } }); receiver.read() + ':' + reads;"
+        ),
+        Ok(Value::String("17:1".to_owned().into()))
+    );
+}
+
+#[test]
 fn numeric_leaf_falls_back_for_coercion_without_duplicate_effects() {
     assert_eq!(
         eval(
