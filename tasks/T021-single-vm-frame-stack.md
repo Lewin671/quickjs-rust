@@ -1001,3 +1001,29 @@ for JetStream and 2.446380x for SunSpider, so this slice advances a shared
 property/call cost without closing the 2x target. External report/raw SHA-256
 values are `86a1c91e7a2c96035a3a51f1f6ca6b73f37265dd0f8e60f00ddb349ae75bd8bc`
 and `766c868c171187d67ce2ae92cbf9eda28d1323e7e7307a6c39ad0329d8dac48a`.
+
+### 2026-07-27 rejected direct-leaf tail-frame reuse
+
+A fresh profile of the queue's first-ranked SunSpider
+`controlflow-recursive` opportunity still showed direct-leaf `Vm` entry in
+the recursive chain. A narrowly guarded candidate reused the active frame only
+when the callee had the same bytecode, the next instruction was exactly
+`Return`, and no try/finally, disposable scope, or pending abrupt completion
+remained. Existing numeric/property leaf plans retained priority; all other
+calls fell back unchanged. Focused tests covered 10,000 recursive calls,
+receiver/parameter transfer, and active-finally fallback.
+
+The mechanism was rejected and reverted after its first fast screen. On a
+50-times wrapper of the hash-verified upstream source (wrapper SHA-256
+`09e7ab8190fcba58055963f3a6f84f126e99add8ae5332424723a48aab8962d9`), three
+alternating local runs measured candidate real times of 3.45, 3.44, and 3.45
+seconds against 3.41, 3.43, and 3.41 seconds for the exact-base binary. The
+median is **1.012x candidate/base**, failing the predeclared `<= 0.90x` target
+gate. The dirty candidate binary SHA-256 was
+`48b5743d012fb57398a7994d7b6fc04020e02379f8a509a4d1562e805e9cde58`; this
+is a local diagnostic, not a portfolio claim.
+
+The route avoids Rust-stack growth but leaves the expensive direct-call
+environment/frame construction in place and adds a tail probe to every
+direct-leaf call. Do not retry it by caching or reshaping that probe; a future
+attempt must remove a different shared cost and start from a fresh profile.

@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "direct-leaf-tail-reuse",
+  "base_sha": "da94a01786925053b4474268094874fad03801f4",
+  "queue": {
+    "candidate_sha": "da94a01786925053b4474268094874fad03801f4",
+    "sha256": "9a6b599ac317a0f2df93afe6ad9559a9c67b7a8e71b43cb9e5b0d2c216f07138"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/controlflow-recursive"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Reuse the active direct-leaf frame for a statically adjacent self-bytecode tail call when no caller cleanup state remains.",
+    "generality": "The route is selected only by runtime bytecode identity, an existing direct-leaf callee, and an exact return-tail position; it does not inspect source paths, workload names, or iteration counts.",
+    "semantic_risks": [
+      "tail-position detection and caller operand preservation",
+      "throw identity and finally ordering",
+      "direct this and parameter slot isolation",
+      "fallback for eval with generators async constructors proxies and bound functions"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-27 /tmp/qjs-profile-controlflow.sample; 50x wrapper of the hash-verified SunSpider source",
+      "sha256": "1ff1753b054e655596915ba3c3abe51be0cf00c042ba801c47062324e089e7d1",
+      "base_sha": "da94a01786925053b4474268094874fad03801f4",
+      "opportunity_ids": [
+        "external/sunspider-1.0/controlflow-recursive"
+      ],
+      "shared_cost": "Nested direct-leaf calls repeatedly construct a Vm and recurse through Vm::run_completion.",
+      "inclusive_fraction": 0.3
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/controlflow-recursive"
+    ],
+    "control_ids": [
+      "broad/plain_function_call",
+      "broad/top_level_function_call",
+      "broad/dynamic_method_call",
+      "broad/closure_allocation_call"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
