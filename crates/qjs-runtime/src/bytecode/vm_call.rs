@@ -296,10 +296,50 @@ impl Vm<'_> {
             let arguments = argument.as_slice();
             return self.call_direct_leaf_callee(callee, this_value, arguments);
         }
+        let fixed_multi_argument_direct_leaf = argc <= 3
+            && self
+                .stack
+                .len()
+                .checked_sub(argc + 1)
+                .and_then(|index| self.stack.get(index))
+                .is_some_and(is_direct_leaf_function);
+        if fixed_multi_argument_direct_leaf {
+            return self.call_resolved_fixed_multi_argument_direct_leaf(argc);
+        }
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
         let this_value = self.pop()?;
         self.call_callee(callee, this_value, arguments)
+    }
+
+    // Method calls keep their receiver below the callee, so they need their
+    // own fixed-argument pop sequence. Keep it out of the dispatch body for
+    // the same reason as ordinary multi-argument direct calls: zero- and
+    // one-argument calls are hotter, and the extra code otherwise perturbs
+    // their generated path.
+    #[inline(never)]
+    fn call_resolved_fixed_multi_argument_direct_leaf(
+        &mut self,
+        argc: usize,
+    ) -> Result<(), RuntimeError> {
+        match argc {
+            2 => {
+                let second = self.pop()?;
+                let first = self.pop()?;
+                let callee = self.pop()?;
+                let this_value = self.pop()?;
+                self.call_direct_leaf_callee(callee, this_value, &[first, second])
+            }
+            3 => {
+                let third = self.pop()?;
+                let second = self.pop()?;
+                let first = self.pop()?;
+                let callee = self.pop()?;
+                let this_value = self.pop()?;
+                self.call_direct_leaf_callee(callee, this_value, &[first, second, third])
+            }
+            _ => unreachable!("fixed multi-argument resolved calls contain two or three values"),
+        }
     }
 
     pub(super) fn call_resolved_spread(&mut self) -> Result<(), RuntimeError> {

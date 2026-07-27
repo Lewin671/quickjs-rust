@@ -7996,6 +7996,61 @@ means from 0.99633x to 1.01233x. That follow-up rules out a material general
 regression; the full external preview remains informational, and the campaign
 is not complete while the broader external gaps remain.
 
+### 2026-07-26 avoid `Vec` staging for resolved two- and three-argument leaf calls
+
+The ordinary `Call` opcode already popped eligible direct-leaf calls with two
+or three arguments into fixed stack arrays, but `CallResolved` (the receiver
+form used by methods) always constructed a `Vec<Value>`. The direct-leaf
+predicate, callee, receiver, parameter order, and callee implementation are
+unchanged. `CallResolved` now takes the same fixed-array route only after the
+existing semantic guard has accepted the callee; all other resolved calls keep
+their vector path. The helper is out of line so the common zero/one-argument
+dispatch body does not absorb the extra code.
+
+Focused runtime coverage invokes receiver methods with both two and three
+arguments, including recursive three-argument method calls. It verifies the
+receiver, argument order, and recursive result while the existing direct-leaf
+tests continue to cover ordinary calls.
+
+The complete three-block local external preview compared candidate SHA-256
+`aeed913d7f531168be55b6013e7b49b0ea46dca4e3acc77a7df1723b0761bad5`
+against exact base SHA-256
+`9b7ffa744e0503ceb2ed6927eda7b7278d18767e86c24b9d52135e4bc86d4af9`
+and pinned QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+All five JetStream cases, thirteen mutually comparable Kraken cases, and all
+twenty-six SunSpider cases retained capability. Candidate/base geometric means
+were 0.991x (JetStream), 0.998x (Kraken), and 1.003x (SunSpider). The targeted
+JetStream `hash-map` case improved to **0.97470x** base (and 5.37004x
+QuickJS-NG); `cdjs` was 0.98884x and raytrace was neutral at 0.99566x.
+Kraken `ai-astar` was neutral at 1.00199x. `imaging-gaussian-blur` remains
+uncomparable because both Rust roles time out while QuickJS-NG completes.
+
+The one short full-preview outlier, SunSpider `string-unpack-code` at 1.02782x
+(137 ms candidate versus 133 ms base), was checked rather than dismissed: 50
+strictly candidate/base-interleaved executions of the exact bundle gave a
+1.00141x independent-median ratio and 1.00193x paired geometric mean. Eight
+high-resolution interleaved `hash-map` pairs independently retained a
+0.97689x independent-median ratio and 0.98001x paired geometric mean. These
+follow-ups identify the short-process row as timing noise while reproducing
+the targeted general method-call benefit.
+
+The external raw/report/frozen-manifest SHA-256 values are
+`a59ad18ff82ad90a4a35b36e575bb0dd3d1a0d4b34aa41fa1eec9759a737d26d`,
+`95793b2b1ceb5b57c6bdd96eac49841dc98ff816236ec9409ca6907cac6a2cce`, and
+`a8ddeded582573bc676bf3f7bbbaf2625f6dfa7742f07bcdd6aaa26366f4e6c4`.
+
+The complete local broad-v2 diagnostic recorded all 225 formal three-role
+measurements and passed all 75 role/case N/2N linearity checks. Its
+candidate/base geometric mean was 1.00012x; the call family was 1.00024x,
+`method_call` 1.00287x, and no case exceeded 1.00388x (property write). The
+candidate/QuickJS-NG geometric mean was 0.09532x. Its raw SHA-256 is
+`d226d52f0caefb6bd8d9ed332007c6ee137b2f0d95215b9c0e2c45b24b4b1693`.
+The workspace was intentionally dirty and no signed execution receipts were
+supplied, so `benchmark-report.sh` correctly rejects the raw file as
+provenance-unverified; this is a complete local diagnostic, not a
+report-grade performance claim.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an

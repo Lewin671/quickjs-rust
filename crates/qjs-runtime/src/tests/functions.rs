@@ -913,6 +913,24 @@ fn direct_leaf_vm_call_preserves_two_and_three_argument_order() {
 }
 
 #[test]
+fn direct_leaf_resolved_call_preserves_receiver_and_multi_argument_order() {
+    assert_eq!(
+        eval(
+            "var receiver = { \
+               bias: 100, \
+               pair: function(first, second) { return this.bias + first * 10 + second; }, \
+               triple: function(first, second, third) { \
+                 if (third === 0) return this.bias + first * 10 + second; \
+                 return this.triple(second, first + 1, third - 1); \
+               } \
+             }; \
+             receiver.pair(4, 7) + ':' + receiver.triple(1, 2, 2);"
+        ),
+        Ok(Value::String("147:123".to_owned().into()))
+    );
+}
+
+#[test]
 fn numeric_leaf_falls_back_for_coercion_without_duplicate_effects() {
     assert_eq!(
         eval(
