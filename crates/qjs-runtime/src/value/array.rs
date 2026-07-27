@@ -98,7 +98,16 @@ impl ArrayData {
 
 impl ArrayRef {
     pub(crate) fn new(elements: Vec<Value>) -> Self {
-        Self::new_sparse(elements, Vec::new())
+        let length = elements.len();
+        Self(Rc::new(ArrayData {
+            elements: RefCell::new(elements),
+            length: Cell::new(length),
+            length_writable: Cell::new(true),
+            extensible: Cell::new(true),
+            sealed: Cell::new(false),
+            frozen: Cell::new(false),
+            cold: OnceCell::new(),
+        }))
     }
 
     pub(crate) fn new_with_length(length: usize) -> Self {
@@ -114,6 +123,9 @@ impl ArrayRef {
     }
 
     pub(crate) fn new_sparse(elements: Vec<Value>, holes: Vec<usize>) -> Self {
+        if holes.is_empty() {
+            return Self::new(elements);
+        }
         let length = elements.len();
         let holes: BTreeSet<_> = holes.into_iter().collect();
         let all_holes = holes.len() == length && (0..length).all(|index| holes.contains(&index));
@@ -1172,6 +1184,13 @@ mod tests {
         assert!(
             array.0.cold.get().is_none(),
             "dense reads must not allocate cold array state"
+        );
+
+        let no_hole_literal = ArrayRef::new_sparse(vec![Value::Number(4.0)], Vec::new());
+        assert_eq!(no_hole_literal.get(0), Some(Value::Number(4.0)));
+        assert!(
+            no_hole_literal.0.cold.get().is_none(),
+            "an array literal with no holes stays on the dense constructor path"
         );
 
         assert!(array.delete_index(1));

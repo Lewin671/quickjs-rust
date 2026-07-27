@@ -8051,6 +8051,29 @@ supplied, so `benchmark-report.sh` correctly rejects the raw file as
 provenance-unverified; this is a complete local diagnostic, not a
 report-grade performance claim.
 
+### 2026-07-26 avoid sparse setup for dense array literals
+
+`ArrayRef::new` now constructs its already-dense storage directly, and
+`ArrayRef::new_sparse` delegates to that path when its hole list is empty.
+Dense literals therefore avoid constructing and probing an empty `BTreeSet`;
+actual sparse arrays retain the prior hole collection and cold-state setup.
+The focused array-layout test exercises the no-hole `new_sparse` path and
+confirms that its cold state remains unallocated.
+
+A complete five-block local broad-v2 diagnostic compared candidate release
+SHA-256 `1b769efc4df4f708a43d02bf3b4a215ac1e04933dac6344a07e8da3505155a92`
+with exact base SHA-256
+`aeed913d7f531168be55b6013e7b49b0ea46dca4e3acc77a7df1723b0761bad5` and
+pinned QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+All 375 formal rows were eligible. `array_allocation` improved to **0.99093x**
+of the exact base and **0.55069x** of QuickJS-NG; the 25-case candidate/base
+geometric mean was 1.00012x, with no material portfolio regression. The raw
+JSONL SHA-256 is
+`16cf84cf1796bba6aa7d28938c4dfe81fe3d961ef3fd8cb3b2ff6a5f016463f4`.
+This is complete receipt-free local diagnostic evidence, not a report-grade
+performance claim.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
