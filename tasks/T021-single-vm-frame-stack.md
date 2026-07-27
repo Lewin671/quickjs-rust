@@ -713,3 +713,33 @@ base. All 54 formal and 144 linearity records were `ok`; raw JSONL SHA-256 is
 `9efe510bda7ada2cde573b562c325cbf469da5a36903cdcfa0542e1ee1c66cb5`.
 The savings in empty-metadata reference-count traffic do not repay the new
 construction route, so this is not a general-performance improvement.
+
+### 2026-07-26 rejected function private-environment demand cache
+
+Every ordinary user-function call currently asks its function and then its
+home object for a private environment, even when the body cannot access a
+private name. A candidate classified bytecode once per function and skipped
+that cold auxiliary-state lookup unless the body has a private operation,
+direct `eval`, or a nested function/class that could capture lexical private
+state. General frames still explicitly cleared inherited private state. The
+classifier unit test and all 42 private-name runtime tests passed.
+
+The mechanism was nevertheless neutral and was reverted. Candidate release
+SHA-256 `22608bde72aa6938b3ef9b1fe17dd5b3b2efe90b2162f0e2b1d470861b50e6b8`
+was compared against an exact rebuild of pushed `2a4c9670`, SHA-256
+`80e02eb574965bf0a586b5a609fdc1fffbd822ad997a7d392697285fdf12c8a5`, and
+pinned QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+Six independent three-block diagnostics measured candidate/base at
+`function_call_two_args` 0.99845x, `dynamic_method_call` 1.00022x,
+`property_read` 1.00121x, `array_index_of` 0.99999x, `string_slice` 0.99909x,
+and `math_abs` 1.00169x: a 1.00011x geometric mean. All 54 formal and 144
+linearity records were `ok`; the segmented raw JSONL SHA-256 values were
+`0765f604cfc860e9533e18dbd15c807c244c28b400291473efd2138a4a4378cc`,
+`a1ba643ed56aad65c270bdb9e10ef1d65d3e8ad275cf273007d153bd773d3f3d`,
+`c2f53eeb1ab06be4f9343248612bb2978cf8d06dbf16299466cc79341bdf54be`,
+`3b18e4f651fba6b5ed780b01eb5174f89926b95c1887adec80370f13f408358c`,
+`7d113dffb3d59b0a50a466026386aa9d263da78fe142ea230f9044d17a4cad71`, and
+`e86955b84d0813bdd10de8a16dce68f3856a132354dcf700b38bc9f7f922cee3`.
+Avoiding an empty cold lookup does not pay for an extra per-function cache
+probe, so this does not advance the general-performance campaign.
