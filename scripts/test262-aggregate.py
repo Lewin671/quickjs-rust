@@ -272,6 +272,20 @@ def burndown_entry(totals, commit, recorded):
     }
 
 
+def complete_parity_error(totals):
+    actionable_gap = totals["qjsng_pass_rust_fail"] + totals["qjsng_pass_rust_timeout"]
+    rust_not_run = totals["qjsng_pass_rust_not_run"]
+    if actionable_gap == 0 and rust_not_run == 0:
+        return None
+    return (
+        "Test262 parity gate failed: "
+        f"actionable_gap={actionable_gap} "
+        f"(fail={totals['qjsng_pass_rust_fail']}, "
+        f"timeout={totals['qjsng_pass_rust_timeout']}), "
+        f"quickjs_ng_pass_rust_not_run={rust_not_run}"
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ng-cases", required=True, help="glob for QuickJS-NG cases-*.jsonl files")
@@ -280,6 +294,13 @@ def main():
     parser.add_argument("--summary-out", help="append the markdown summary to this file")
     parser.add_argument("--burndown-out", help="write the schema-1 burndown JSON line to this file")
     parser.add_argument("--comparison-cases-out", help="write merged per-case comparison JSONL")
+    parser.add_argument(
+        "--require-complete-parity",
+        action="store_true",
+        help=(
+            "exit nonzero when QuickJS-NG passes but quickjs-rust fails, times out, or is not run"
+        ),
+    )
     parser.add_argument(
         "--recorded",
         default=datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d"),
@@ -306,6 +327,12 @@ def main():
             handle.write(entry + "\n")
     print(entry)
 
+    if args.require_complete_parity:
+        if error := complete_parity_error(totals):
+            print(f"error: {error}", file=sys.stderr)
+            return 1
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

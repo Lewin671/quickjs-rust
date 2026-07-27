@@ -83,6 +83,7 @@ touches_lexer=0
 touches_ast=0
 touches_cli=0
 touches_test262_config=0
+touches_test262_aggregate=0
 touches_benchmark=0
 test262_filters=()
 
@@ -150,6 +151,9 @@ while IFS= read -r path; do
     benchmarks/*|.cargo/config.toml|tools/__init__.py|tools/benchmark/*|scripts/benchmark*.sh|scripts/resource-benchmark*.sh|scripts/lifecycle-bench.sh|scripts/external-corpus-audit.sh|scripts/performance-policy-audit.sh|scripts/performance-preview.sh|.github/workflows/performance-smoke.yml)
       touches_benchmark=1
       ;;
+    scripts/test262-aggregate.py|scripts/tests/test_test262_aggregate.py)
+      touches_test262_aggregate=1
+      ;;
   esac
 
   add_common_filters_for_path "$path"
@@ -207,6 +211,11 @@ if [ "$touches_benchmark" -eq 1 ]; then
     "$ROOT_DIR/scripts/external-corpus-audit.sh" \
     "$ROOT_DIR/scripts/performance-policy-audit.sh" \
     "$ROOT_DIR/scripts/performance-preview.sh"
+fi
+
+if [ "$touches_test262_aggregate" -eq 1 ]; then
+  run_cmd env PYTHONDONTWRITEBYTECODE=1 \
+    python3 -m unittest discover -s "$ROOT_DIR/scripts/tests" -v
 fi
 
 if [ "$touches_test262_config" -eq 1 ]; then

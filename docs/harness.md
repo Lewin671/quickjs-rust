@@ -423,8 +423,11 @@ The
 commit, but a newer push to the same branch cancels a superseded in-flight
 run, so rapid push sequences settle on the latest commit's scan. It
 runs the sharded quickjs-rust scan and QuickJS-NG baseline in parallel,
-uploads shard summaries, and aggregates the result into the workflow summary
-without delaying the main CI workflow. CI uploads the checked commit's
+uploads shard summaries, and aggregates the result into the workflow summary.
+The aggregate is a conformance gate: it fails when QuickJS-NG passes a case
+that quickjs-rust fails, times out, or cannot run. The burndown and merged
+comparison artifacts still upload on that failure so the exact cases remain
+diagnosable. CI uploads the checked commit's
 optimized `qjs-cli` binary, and coverage jobs reuse that release artifact
 instead of rebuilding the runner binary on every shard group; local
 release-profile scans use the same runner profile for diagnosing timeout

@@ -235,12 +235,14 @@ fn set_primitive_property(
 }
 
 fn primitive_constructor_prototype(env: &CallEnv, constructor_name: &str) -> Option<ObjectRef> {
-    if constructor_name == "Symbol"
-        && let Some(prototype) = marked_global_constructor_prototype(env, "Symbol")
-    {
-        return Some(prototype);
-    }
-    crate::constructor_named_prototype(env, constructor_name)
+    // A primitive's wrapper prototype belongs to the active execution realm,
+    // not to a same-named lexical binding in the current frame. In particular,
+    // Test262's cross-realm eval host installs the realm intrinsics on its
+    // marked global object while the bytecode frame still retains the caller's
+    // ordinary realm bindings. This applies to every boxed primitive, not only
+    // Symbol.
+    marked_global_constructor_prototype(env, constructor_name)
+        .or_else(|| crate::constructor_named_prototype(env, constructor_name))
 }
 
 fn marked_global_constructor_prototype(env: &CallEnv, constructor_name: &str) -> Option<ObjectRef> {

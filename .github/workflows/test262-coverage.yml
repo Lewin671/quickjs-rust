@@ -290,7 +290,7 @@ jobs:
           path: rust-coverage
           merge-multiple: true
 
-      - name: Write coverage summary and burndown entry
+      - name: Write coverage summary, burndown entry, and enforce parity gate
         env:
           COVERAGE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
@@ -300,9 +300,11 @@ jobs:
             --commit "$COVERAGE_SHA" \
             --summary-out "$GITHUB_STEP_SUMMARY" \
             --burndown-out burndown.json \
-            --comparison-cases-out comparison-cases.jsonl
+            --comparison-cases-out comparison-cases.jsonl \
+            --require-complete-parity
 
       - name: Upload burndown entry
+        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: test262-burndown
@@ -310,6 +312,7 @@ jobs:
           retention-days: 90
 
       - name: Upload comparison cases
+        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: test262-comparison-cases

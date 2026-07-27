@@ -43,7 +43,8 @@ each script is for.
   JSONL sets into the CI coverage summary, the schema-1 burndown entry, and an
   optional merged per-case comparison JSONL for follow-up gap selection. Used by
   the Test262 Coverage workflow; also runs locally on artifacts downloaded with
-  `gh run download`.
+  `gh run download`. Pass `--require-complete-parity` to fail when QuickJS-NG
+  passes a case that quickjs-rust fails, times out, or does not run.
 - `test262-burndown.sh`: Appends a complete-scan entry to
   `docs/conformance/burndown.jsonl`; rejects partial or filtered scans.
 - `test262-baseline-metadata.awk`: Internal metadata parser shared by the
