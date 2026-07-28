@@ -8173,6 +8173,51 @@ build, `./scripts/compare-qjs.sh`, and `./scripts/check.sh` passed; the full
 gate includes **1,883** workspace tests and **5,159/5,159** curated Test262
 cases.
 
+### 2026-07-27 reuse buffers for discarded dynamic string appends
+
+The dynamic string-append reuse guard previously required `Dup` followed by a
+binding store after `Binary(Add)`. Discarded `result += rhs` lowers to the
+equally ordinary direct shape `Binary(Add); AssignLocal`, so it unnecessarily
+missed the existing internal-mirror release and copied the accumulated string.
+The guard now accepts an optional `Dup` before the following store. It retains
+the exact-pointer internal-owner checks, real JavaScript aliases still force
+copy-on-write, and all non-eligible stores use the old generic path. Focused
+coverage verifies the direct compiler shape and preserves both an external
+alias and a captured read. This is bytecode-shape generalization only: it has
+no workload name, source path, iteration count, checksum, or result-based
+condition.
+
+The declared unit
+`tasks/performance-units/discarded-dynamic-string-reuse.json` (plan SHA-256
+`f35adfa90ea1933ccce05203a9b65e4a0cbd1af21593ff8cea961616b4156d03`)
+compared commit `968cd463588b49bb7ecec5ef02bdebf62e6c053d` with exact base
+`7fffa88d9c70dd33ef51c786f8d0930447792d16`. The independent external preview
+improved the selected `string-base64` case to **0.870381x** candidate/base.
+The predeclared external controls remained within the 1.03x guard:
+`string-unpack-code` 1.012225x, `string-validate-input` 0.878188x, and
+`date-format-tofte` 1.003400x. Focused broad diagnostics were also neutral:
+`local_read` 1.000470x and `string_slice` 0.953507x candidate/base.
+
+This unit is deliberately **not promoted as a portfolio or campaign win**.
+The physical three-block broad run produced all 25 cases and three roles, but
+`captured_read` and `captured_write` were `timer_limited` in every block; the
+strict report therefore rejects the entire comparison input and supplies no
+broad aggregate. The independent external report retained 44/45
+candidate/base-comparable cases: Kraken `imaging-gaussian-blur` remains
+unavailable for both Rust binaries while QuickJS-NG completes. Consequently
+the fast gate is evidence that the mechanism works, but promotion is
+**inconclusive** until the T021 measurement-capacity failure and that external
+comparability gap are resolved. The single planned mechanism attempt is
+consumed; do not retune it against this benchmark.
+
+The exact `--all` Test262 scan processed 53,572 records (42,672 configured):
+qjs-rust passed 42,611, failed 0, and timed out 0. The remaining 61
+QuickJS-NG-pass cases are the existing `agent` harness not-run boundary, so
+the actionable gap is zero; this is not presented as full agent-harness
+coverage. `cargo fmt`, focused string-append tests, `check-touched`,
+`./scripts/check.sh`, and `./scripts/compare-qjs.sh` all passed before the
+commit.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
