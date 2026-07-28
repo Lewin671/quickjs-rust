@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "compact-hot-dispatch",
+  "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+  "queue": {
+    "candidate_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+    "sha256": "165bb337cf1a13854151a451ada0b0a035109bddd3833db704871d9bbb1bdf07"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/controlflow-recursive"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Compile a separate compact execution stream for semantically ordinary bytecode and enter it from the existing VM, while retaining the current Op interpreter as the exact fallback.",
+    "generality": "Eligibility derives solely from bytecode op forms, frame and binding state, and runtime guards. It does not inspect benchmark names, source paths, function names, loop counts, or workload values. Unsupported bytecode and every guard failure retain the existing interpreter from the exact next instruction.",
+    "semantic_risks": [
+      "the instruction pointer must be synchronized at every call, abrupt completion, jump, generator suspension, and fallback boundary",
+      "calls must retain argument order, receiver binding, errors and finally handling, direct eval, with, spread and iterator behavior, and completion propagation",
+      "unsupported bytecode must re-enter the original interpreter at the exact next operation without skipping or replaying effects",
+      "lowered virtual-object and loop-plan execution views must preserve original bytecode-offset mapping and existing deoptimization guards"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-profile-controlflow-6cac.dFd5X5/controlflow.sample; exact 6cac3f50 generic-preview binary SHA-256 d7ecaed330745fb257f9286bdb661f0dd489426578daaf026a33f1019c624987; 100x hash-verified pinned SunSpider controlflow-recursive wrapper SHA-256 52ecb05f622d41dd35db1d476f1f5c46d16e252efa72946516b5396c33f56261",
+      "sha256": "e0ed1ba6091a2b3a2edf7d9e8ea06cbd7fc210c827eb62f7cb5c0f7641f9fbc9",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/sunspider-1.0/controlflow-recursive"
+      ],
+      "shared_cost": "Of 816 main-thread samples, 713 are rooted in Vm::run_completion and recursive direct-leaf calls repeatedly re-enter the same generic dispatcher; Vm and FrameState construction and teardown remain inside that chain. The selected unit must reduce generic dispatch without retrying the rejected frame-stack routing.",
+      "inclusive_fraction": 0.87
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/controlflow-recursive"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "broad/plain_function_call",
+      "broad/dynamic_method_call",
+      "broad/top_level_function_call"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

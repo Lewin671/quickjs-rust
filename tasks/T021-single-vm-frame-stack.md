@@ -1210,3 +1210,39 @@ and incomplete Kraken comparability; report/raw SHA-256 values are
 Retain this as a local, general engine candidate, not a T021 or 2x-campaign
 promotion. Promotion still requires the plan's complete broad and external
 evidence plus a zero-gap exact Test262 scan from an exact committed candidate.
+
+### 2026-07-28 rejected compact direct-call dispatcher
+
+The refreshed exact-`6cac3f50` profile of rank-1 SunSpider
+`controlflow-recursive` still rooted 713 of 816 main-thread samples in
+`Vm::run_completion`. The frozen plan
+`tasks/performance-units/compact-hot-dispatch.json` (SHA-256
+`c0cf73dd23c22279e04f6fd5ca8fd13e5c5e6836f0a48cf80472e99cb093ba13`)
+therefore compiled an all-or-nothing smaller instruction stream for direct-call
+function bytecode containing only constants, local loads/stores, binary
+operations, calls, returns, and forward branches. It had no source name,
+workload name, iteration count, or type admission. Backedges, virtual-object
+views, dynamic scope, `try`, disposal, generators, and unsupported bytecode
+retained the original dispatcher.
+
+The focused plan/admission/coercion tests passed, as did the 5,160-case curated
+Test262 subset and all QuickJS-NG comparison fixtures. The candidate release
+binary SHA-256 was
+`005e7a408a082d1477f983ddb822b7b39736b8ff53e9b932f81b0eac5a9da2e7`; the
+exact-base binary SHA-256 was
+`d7ecaed330745fb257f9286bdb661f0dd489426578daaf026a33f1019c624987`.
+On two alternating runs of the 100-times hash-verified pinned-source wrapper
+(wrapper SHA-256
+`52ecb05f622d41dd35db1d476f1f5c46d16e252efa72946516b5396c33f56261`), base
+CPU times were 6.79 s and 6.80 s while candidate times were 6.51 s and 6.50 s.
+Their medians are 6.795 s and 6.505 s, or **0.9573x candidate/base**. That is
+about a 4.3% improvement, well short of the frozen `<= 0.90x` target gate, so
+the dirty-worktree timing is negative diagnostic evidence rather than a
+promotion claim.
+
+The implementation and its focused tests were reverted immediately. Do not
+retry this exact compact-stream design by widening its opcode set or changing
+its admission guards: reducing only the outer `Op` match does not remove enough
+of the direct-call, local-load, binary, and value-management cost. A successor
+must start from a fresh cross-workload profile of one of those remaining shared
+costs.
