@@ -8254,6 +8254,31 @@ Those local runs intentionally omit clean build receipts, so strict reporting
 marks them non-claim evidence; the next clean current-SHA preview must use the
 repaired capacity before selecting or promoting another runtime unit.
 
+### 2026-07-28 plain-call startup-capacity revalidation
+
+The clean `e9841e32` versus exact-parent `cc4d977e` preview exposed a new
+capacity boundary before it could report the previously retained discarded
+string-reuse unit. Candidate `plain_function_call` samples reached the exact
+safe-integer ceiling of 134,000,000 iterations in 298.425--314.741 ms, while
+its median startup sample was 18.504 ms. Its startup shares were therefore
+5.88--6.20%, above the previous 4.5% contract; all three broad blocks were
+correctly rejected as `timer_limited`. The incomplete raw and report SHA-256
+values are `bc6568799022efb2f59efe1c0d072219c4659bf21345020ba78e09c9eb8136ce`
+and `5a20e61ed671bd90e8caf881f0e46b75f408b71e8f9387113a135b27ccf73482`.
+
+The iteration cap cannot increase: its triangular checksum is already
+8,978,000,067,000,000, below but close to `Number.MAX_SAFE_INTEGER`. The
+repair therefore changes only this case's startup fraction from 4.5% to 7%.
+It retains the exact workload, operation count, checksum, 250 ms minimum
+window, warmup, timeout, calibration safety factor, linearity checks, and all
+runtime code. The new bound still requires more than 14x startup amortization.
+A candidate/base/QuickJS-NG three-block screen retained all 9/9 formal samples
+and all 24 N/2N diagnostics; its receipt-free raw SHA-256 is
+`45b0f8d2347a74981b6b2dbd6153c8ec2798f3e78bf5af36253d0a5dc11324a5`.
+This is measurement-capacity evidence only, not a runtime performance claim.
+The next clean full preview must use this contract before it can decide the
+discarded-string unit.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
