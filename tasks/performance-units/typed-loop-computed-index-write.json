@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "typed-loop-computed-index-write",
+  "base_sha": "1e534b1fa1dc9d7b8bc82367e0a3a68ad683f5ed",
+  "queue": {
+    "candidate_sha": "1e534b1fa1dc9d7b8bc82367e0a3a68ad683f5ed",
+    "sha256": "d5cd32fa57138dc11fd7a846f4071af547b7e499552804fc4b32486dbdebaeae"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/kraken-1.1/stanford-crypto-sha256-iterative"
+    ],
+    "rank_ceiling": 7,
+    "override_reason": "Ranks 1 through 6 are closed by current rejected direct-leaf frame, constructor, heap-value-cache, direct-eval, and RegExp evidence. The current rank-7 SHA-256 profile and exact bytecode inspection identify a distinct structural blocker: its 64-round numeric loop is otherwise admitted by the existing shape-independent typed-loop executor, but a dense local Array write whose key is an arithmetic expression cannot be lowered. The proposed admission is defined only by bytecode shape, compiler-temporary ownership, and existing runtime array guards; it has no workload, source-path, checksum, or iteration-count condition."
+  },
+  "mechanism": {
+    "summary": "Extend the existing typed-loop element-assignment lowering so an existing dense local Array may use a prevalidated scalar index expression, rather than requiring the key to be one raw local-slot load, before its value expression and existing DenseWrite operation.",
+    "generality": "The extension applies to every compiler-emitted receiver/key/value temporary sequence whose receiver is a local Array, whose index and value subexpressions are already admitted by the typed-loop scalar program, and whose temporary slots are compiler-owned and unread outside the region. The same live dense-array, in-bounds, writable-element, numeric-index, alias, and deoptimization guards remain authoritative. Branching subexpressions, observable property receivers, non-integer or non-Number keys, holes, growth, indexed descriptors, frozen arrays, stale temporary ownership, direct eval, and any unsupported bytecode retain the existing interpreter path.",
+    "semantic_risks": [
+      "the receiver must be captured before the index and value exactly once, and the generated register program must preserve JavaScript evaluation order",
+      "an index expression that leaves the scalar domain must deopt at the exact instruction with the operand stack and completed writes restored",
+      "only compiler-generated temporaries that have no observable reads outside the region may be elided; user-visible assignments and completion values must retain their existing writeback semantics",
+      "dense writes must retain existing bounds, holes, descriptors, frozen-array, alias, and replay behavior rather than assuming the Array stays ordinary"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-27 /private/tmp/qjs-profile-sha256-current-1e534.sample; 20x hash-verified Kraken stanford-crypto-sha256-iterative direct-script bundle executed by the exact 1e534 candidate binary, followed by exact bytecode inspection of its 64-round compression loop",
+      "sha256": "8078c6b7bc00a303b5b62373abe9f7bf30a4d28e2971201c1f8652f24590f746",
+      "base_sha": "1e534b1fa1dc9d7b8bc82367e0a3a68ad683f5ed",
+      "opportunity_ids": [
+        "external/kraken-1.1/stanford-crypto-sha256-iterative"
+      ],
+      "shared_cost": "The 2,934-sample profile is dominated by Vm::run_completion with repeated eval_binary and fast_number_binary chains. The exact 207-op compression-loop bytecode has admitted scalar control flow and dense reads, but compilation stops at the generic SetProp form generated for a local dense-array write with key `counter & 15`; this forces every one of the 64 rounds through ordinary operand-stack and Value dispatch.",
+      "inclusive_fraction": 0.5
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/kraken-1.1/stanford-crypto-sha256-iterative"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/stanford-crypto-pbkdf2",
+      "external/sunspider-1.0/crypto-sha1",
+      "external/sunspider-1.0/math-partial-sums",
+      "external/kraken-1.1/audio-fft",
+      "broad/array_write",
+      "broad/dynamic_method_call",
+      "broad/plain_function_call"
+    ],
+    "target_max_candidate_over_base": 0.8,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
