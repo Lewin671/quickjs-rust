@@ -1258,3 +1258,40 @@ The runtime change and its focused test were reverted immediately. Do not
 retune this non-Exact own-slot fallback by expanding its value types or cache
 capacity: it is not a shared improvement across the declared targets. A
 successor must target a different current-profiled cost.
+
+### 2026-07-28 rejected static dense-array numeric leaf reads
+
+A fresh current-candidate profile of SunSpider `3d-raytrace` used the
+unchanged upstream source (SHA-256
+`87a1cb968113dcaf427dc2634e95f6ee6460f38e132c26cdf640639521620591`) and
+showed repeated direct-leaf VM entry alongside dense element reads, numeric
+binary operations, and `Value` lifetime work. The sample receipt is
+`/private/tmp/qjs-profile-3d-raytrace-6cac-v2.sample` (SHA-256
+`20a39e7669457da1004833d99cc98fe8394195f2cf593e35a8dd909b9c0238ff`).
+
+One narrow prototype extended the existing preclassified numeric own-property
+leaf plan only for a compiler-fused parameter `GetPropIndex` with a static
+index. It accepted a direct function such as a vector dot product only when
+each receiver was a real dense Array and every accessed own element was a
+Number. Holes, indexed descriptors, non-Number values, non-Array receivers,
+and every unfused or dynamic index returned to the original VM before any
+observable access. Focused tests covered current element values plus getter
+and coercion fallbacks; the exact upstream result remained identical.
+
+The prototype failed its first end-to-end fast gate and was removed. Seven
+alternating process pairs used the unchanged source followed by twenty extra
+`raytraceScene()` calls in the same Realm solely to make timing measurable.
+Candidate release SHA-256 was
+`de97ff6418e00677e5357682a9ad4ca0bf537c8ebb9e9ac6c38424ea71411e73`; the
+exact `6cac` base release SHA-256 was
+`b861e96bf99af4c8fd5e50c044afcb05d9bf9b7eb79616ba8a095388e5c8bbd7`.
+Candidate times were 1.65, 1.64, 1.63, 1.63, 1.63, 1.63, and 1.63 seconds;
+base times were 1.60, 1.60, 1.61, 1.61, 1.60, 1.61, and 1.61 seconds. The
+medians are **1.63s candidate / 1.61s base = 1.012422x**, a regression rather
+than the predeclared at-most-0.90x retention gate. This is diagnostic evidence
+only, not an external-suite performance claim.
+
+Do not retry this static dense-array direct-leaf read shape by adding more
+fixed vector indices or arithmetic forms. A successor must remove a different
+profiled shared cost and demonstrate an end-to-end win before broadening its
+semantic surface.
