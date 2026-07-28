@@ -17,10 +17,6 @@ use super::{
 const MAX_FAST_LOCALS: usize = 32;
 const MAX_FAST_STACK: usize = 16;
 
-mod arithmetic_program;
-
-use arithmetic_program::NumericLeafArithmeticProgram;
-
 #[derive(Clone, Copy, Debug)]
 enum FastValue {
     Uninitialized,
@@ -140,9 +136,6 @@ enum NumericLeafShortcut {
         right_argument_index: usize,
         op: BinaryOp,
     },
-    /// A straight-line Number-only leaf body compiled into a raw scalar stack
-    /// program. Any non-Number argument declines before running an operation.
-    ArithmeticProgram(NumericLeafArithmeticProgram),
     UpvalueArgumentBinary {
         upvalue_index: usize,
         argument_index: usize,
@@ -660,7 +653,7 @@ impl NumericLeafShortcut {
                 right: *right,
             });
         }
-        NumericLeafArithmeticProgram::compile(ops, bytecode).map(Self::ArithmeticProgram)
+        None
     }
 
     fn eval(&self, arguments: &[Value], upvalues: &[Upvalue]) -> Option<Value> {
@@ -715,7 +708,6 @@ impl NumericLeafShortcut {
                 argument_number(*right_argument_index)?,
             )?
             .into_value(),
-            Self::ArithmeticProgram(program) => program.eval(arguments).map(Value::Number),
             Self::UpvalueArgumentBinary {
                 upvalue_index,
                 argument_index,
@@ -952,10 +944,6 @@ impl NumericLoopCall {
                     right: *right,
                 })
             }
-            // This path supports general direct calls but is intentionally not
-            // a counted-loop scalar plan: its multi-step stack shape needs a
-            // per-invocation evaluator rather than one reusable scalar state.
-            NumericLeafShortcut::ArithmeticProgram(_) => None,
             _ => None,
         }
     }
@@ -1512,17 +1500,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::{bytecode::compiler, eval};
-
-    fn numeric_plan_for_first_function(source: &str) -> Option<NumericLeafPlan> {
-        let script = qjs_parser::parse_script(source).expect("source should parse");
-        let script_bytecode = compiler::compile_script(&script).expect("source should compile");
-        let function_bytecode = script_bytecode.code.iter().find_map(|op| match op {
-            Op::NewFunction { bytecode, .. } => Some(bytecode),
-            _ => None,
-        })?;
-        NumericLeafPlan::compile(function_bytecode)
-    }
+    use crate::bytecode::compiler;
 
     #[test]
     fn plan_propagates_constant_locals_into_immediate_binary_ops() {
@@ -1590,116 +1568,6 @@ mod tests {
                 op: BinaryOp::Add,
             })
         ));
-    }
-
-    #[test]
-    fn arithmetic_program_compiles_multi_argument_formula() {
-        let plan = numeric_plan_for_first_function(
-            "function A(i, j) { return 1 / ((i + j) * (i + j + 1) / 2 + i + 1); }",
-        )
-        .expect("formula should be admitted");
-        let Some(NumericLeafShortcut::ArithmeticProgram(program)) = plan.shortcut.as_ref() else {
-            panic!("formula should use an arithmetic program: {plan:#?}");
-        };
-
-        assert_eq!(
-            program.eval(&[Value::Number(2.0), Value::Number(3.0)]),
-            Some(1.0 / 18.0)
-        );
-        assert_eq!(
-            program.eval(&[Value::Boolean(true), Value::Number(3.0)]),
-            None,
-            "non-Number input must decline before arithmetic"
-        );
-    }
-
-    #[test]
-    fn arithmetic_program_preserves_number_edge_cases() {
-        let plan = numeric_plan_for_first_function(
-            "function quotient(left, right) { return (left * 1) / (right + 0); }",
-        )
-        .expect("formula should be admitted");
-        let Some(NumericLeafShortcut::ArithmeticProgram(program)) = plan.shortcut.as_ref() else {
-            panic!("formula should use an arithmetic program: {plan:#?}");
-        };
-
-        let negative_zero = program
-            .eval(&[Value::Number(-0.0), Value::Number(1.0)])
-            .expect("Number arguments should evaluate");
-        assert_eq!(negative_zero, 0.0);
-        assert!(negative_zero.is_sign_negative());
-        assert!(
-            program
-                .eval(&[Value::Number(f64::NAN), Value::Number(1.0)])
-                .expect("Number arguments should evaluate")
-                .is_nan()
-        );
-        assert!(
-            program
-                .eval(&[Value::Number(f64::INFINITY), Value::Number(1.0)])
-                .expect("Number arguments should evaluate")
-                .is_infinite()
-        );
-
-        let remainder = numeric_plan_for_first_function(
-            "function remainder(left, right) { return (left * 1) % right; }",
-        )
-        .expect("remainder should be admitted");
-        let Some(NumericLeafShortcut::ArithmeticProgram(program)) = remainder.shortcut.as_ref()
-        else {
-            panic!("remainder should use an arithmetic program: {remainder:#?}");
-        };
-        let negative_zero = program
-            .eval(&[Value::Number(-0.0), Value::Number(1.0)])
-            .expect("Number arguments should evaluate");
-        assert_eq!(negative_zero, 0.0);
-        assert!(negative_zero.is_sign_negative());
-        assert!(
-            program
-                .eval(&[Value::Number(f64::INFINITY), Value::Number(1.0)])
-                .expect("Number arguments should evaluate")
-                .is_nan()
-        );
-    }
-
-    #[test]
-    fn arithmetic_program_declines_mutation_control_flow_and_coercion() {
-        let mutation = numeric_plan_for_first_function(
-            "function mutate(left, right) { left += right; return left * right; }",
-        )
-        .expect("ordinary numeric leaf should still be admitted");
-        assert!(
-            !matches!(
-                mutation.shortcut,
-                Some(NumericLeafShortcut::ArithmeticProgram(_))
-            ),
-            "local writes must not enter the raw arithmetic program"
-        );
-        assert!(
-            numeric_plan_for_first_function(
-                "function branch(left, right) { if (left) return right; return left + right; }",
-            )
-            .is_none(),
-            "control flow must not enter the numeric leaf plan"
-        );
-
-        let sum = numeric_plan_for_first_function(
-            "function sum(left, right) { return (left + right) * 2; }",
-        )
-        .expect("formula should be admitted");
-        assert!(matches!(
-            sum.shortcut,
-            Some(NumericLeafShortcut::ArithmeticProgram(_))
-        ));
-        assert_eq!(
-            eval(
-                "var calls = 0; \
-                 function sum(left, right) { return (left + right) * 2; } \
-                 var source = { valueOf: function() { calls++; return 2; } }; \
-                 sum(source, 3) + ':' + calls;"
-            ),
-            Ok(Value::String("10:1".to_owned().into()))
-        );
     }
 
     #[test]
