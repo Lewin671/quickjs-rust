@@ -1246,3 +1246,45 @@ its admission guards: reducing only the outer `Op` match does not remove enough
 of the direct-call, local-load, binary, and value-management cost. A successor
 must start from a fresh cross-workload profile of one of those remaining shared
 costs.
+
+### 2026-07-28 rejected scalar self-recursive numeric call cluster
+
+The next rank-1 attempt began from the same exact-`6cac3f50` controlflow
+profile, but inspected the compiled `ack`, `fib`, and `tak` bodies before
+implementation. Each body contains only primitive numeric constants and
+parameters, arithmetic/comparisons, branches, returns, and fixed-arity calls
+through its captured self binding. The frozen plan
+`tasks/performance-units/numeric-recursive-call-cluster.json` (SHA-256
+`ed076b7227201cde161b7f8ccf6f26ca42f28567fb0febeb1a15f4121fb46d59`)
+therefore used a bytecode-complete scalar frame stack only after verifying the
+live self-upvalue identity and Number arguments. Every other opcode, capture,
+argument, or depth kept the ordinary direct-leaf VM before user-observable
+work. Focused coverage included all three source shapes, signed zero, live
+self-binding replacement, string coercion fallback, and rejected mutation or
+non-self calls.
+
+The mechanism did remove the intended target cost. Against exact base binary
+SHA-256 `d7ecaed330745fb257f9286bdb661f0dd489426578daaf026a33f1019c624987`,
+the final candidate binary SHA-256
+`61fb8763a5aa01feda5b19179d86ca1a13b836b72fd4c779d842f065a836499b` had
+two alternating 100-times pinned-source runs with base CPU times 6.91 s and
+6.94 s and candidate times 1.55 s and 1.55 s: **0.2238x
+candidate/base**. The hash-verified wrapper SHA-256 is
+`52ecb05f622d41dd35db1d476f1f5c46d16e252efa72946516b5396c33f56261`.
+
+It nevertheless fails its frozen control gate. Two final alternating A*
+samples gave base CPU times 9.94 s and 9.60 s versus candidate 10.24 s and
+10.05 s, whose medians are 9.77 s and 10.145 s, or **1.0384x
+candidate/base**, above the plan's `<= 1.03x` ceiling. Single exact controls
+were neutral-to-positive for `hash-map` (1.62/1.68 s = 0.9643x) and
+`raytrace-public-class-fields` (2.45/2.53 s = 0.9684x), but they cannot offset
+the failed A* gate. The candidate A* profile receipt is
+`/tmp/qjs-profile-ai-astar-numeric-recursive.ankPLX/ai-astar.sample` (SHA-256
+`4320f2a222c297861420b274f58ead01e1d9d60fe86b0c5bcc36c9ca7b4ea792`) and
+remains rooted in the generic VM/direct-leaf chain.
+
+The scalar implementation and its tests were reverted immediately; no runtime
+code is retained. Do not retry this unit by moving its admission checks,
+raising the depth limit, or broadening its opcode subset. The one-attempt plan
+closed when a non-target direct-call workload regressed, so the next unit must
+remove a different current-profiled shared cost.
