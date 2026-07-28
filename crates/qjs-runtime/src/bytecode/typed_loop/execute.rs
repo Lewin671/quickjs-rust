@@ -11,8 +11,10 @@ use std::rc::Rc;
 
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
-use super::super::{vm::Vm, vm_bindings::TypedLoopSloppyGlobalWrite};
-use super::{Class, DeoptSite, MAX_NATIVE_ITERATIONS, Typed, TypedLoopProgram, TypedOp};
+use super::super::vm::Vm;
+use super::{
+    Class, DeoptSite, MAX_NATIVE_ITERATIONS, Typed, TypedLoopProgram, TypedLoopScratch, TypedOp,
+};
 use crate::Value;
 
 /// Runs the program covering the backedge at `ip`, if one exists and this
@@ -90,27 +92,28 @@ enum Outcome {
     Declined,
 }
 
-type SeededRegisters = (
-    Vec<Typed>,
-    Vec<crate::ArrayRef>,
-    Vec<Value>,
-    Vec<TypedLoopSloppyGlobalWrite>,
-);
-
 fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
-    let Some((mut registers, receivers, mut boxed, sloppy_global_writes)) =
-        seed_registers(vm, program)
-    else {
-        return Outcome::Declined;
-    };
+    let mut scratch = program.take_scratch();
+    let outcome = seed_registers(vm, program, &mut scratch)
+        .map(|()| execute(vm, program, &mut scratch))
+        .unwrap_or(Outcome::Declined);
+    program.recycle_scratch(scratch);
+    outcome
+}
+
+fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopScratch) -> Outcome {
+    let registers = &mut scratch.registers;
+    let receivers = &scratch.receivers;
+    let boxed = &mut scratch.boxed;
+    let sloppy_global_writes = &scratch.sloppy_global_writes;
+    let caches = &mut scratch.caches;
     // One inline cache per property access site, warmed on the first iteration.
-    let mut caches: Vec<Option<(Rc<str>, usize)>> = vec![None; program.cache_count];
     let mut iterations = 0_u64;
     let mut pc = 0_usize;
     macro_rules! deopt_here {
         ($op:expr) => {{
             let site = program.sites[pc - 1];
-            return deopt(vm, program, &registers, &boxed, site);
+            return deopt(vm, program, registers, boxed, site);
         }};
     }
     loop {
@@ -120,7 +123,7 @@ fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
             iterations += 1;
             if iterations >= MAX_NATIVE_ITERATIONS {
                 let site = program.sites[0];
-                return deopt(vm, program, &registers, &boxed, site);
+                return deopt(vm, program, registers, boxed, site);
             }
             continue;
         };
@@ -274,7 +277,7 @@ fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
                     iterations += 1;
                     if iterations >= MAX_NATIVE_ITERATIONS {
                         let site = program.sites[target as usize];
-                        return deopt(vm, program, &registers, &boxed, site);
+                        return deopt(vm, program, registers, boxed, site);
                     }
                 }
                 pc = target as usize;
@@ -283,10 +286,10 @@ fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
                 if registers[cond as usize].is_truthy() {
                     continue;
                 }
-                write_back(vm, program, &registers, &boxed);
+                write_back(vm, program, registers, boxed);
                 // The exit target is reached with the same operand stack the
                 // branch instruction started from, condition included.
-                materialize_stack(vm, program, &registers, &boxed, program.sites[pc - 1]);
+                materialize_stack(vm, program, registers, boxed, program.sites[pc - 1]);
                 vm.ip = exit_ip as usize;
                 return Outcome::Ran;
             }
@@ -296,10 +299,21 @@ fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
 
 /// Loads the frame slots the program uses, declining when any slot holds a type
 /// the register file cannot represent or a receiver is not a dense array.
-fn seed_registers(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Option<SeededRegisters> {
+fn seed_registers(
+    vm: &mut Vm<'_>,
+    program: &TypedLoopProgram,
+    scratch: &mut TypedLoopScratch,
+) -> Option<()> {
+    scratch.clear();
+    let TypedLoopScratch {
+        registers,
+        receivers,
+        boxed,
+        sloppy_global_writes,
+        caches,
+    } = scratch;
     // Resolve every receiver once. Re-reading the slot per element access cost
     // more than the interpreter's own path did.
-    let mut receivers = Vec::with_capacity(program.receiver_slots.len());
     for &slot in &program.receiver_slots {
         // The receiver must be a dense array for the whole loop, so a region
         // that also writes that slot declines.
@@ -315,7 +329,7 @@ fn seed_registers(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Option<SeededR
             return None;
         }
     }
-    let mut registers = vec![Typed::Undefined; program.register_count];
+    registers.resize(program.register_count, Typed::Undefined);
     for &(register, value) in &program.constant_registers {
         registers[register as usize] = value;
     }
@@ -345,7 +359,7 @@ fn seed_registers(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Option<SeededR
         let value = vm.load_global(name).ok()?;
         registers[*register as usize] = Typed::from_value(&value)?;
     }
-    let mut boxed = vec![Value::Undefined; program.boxed_count];
+    boxed.resize(program.boxed_count, Value::Undefined);
     for (register, value) in &program.boxed_constant_registers {
         boxed[*register as usize] = value.clone();
     }
@@ -377,18 +391,17 @@ fn seed_registers(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Option<SeededR
         }
         boxed[*register as usize] = value;
     }
-    let sloppy_global_writes = program
-        .sloppy_global_writes
-        .iter()
-        .map(|(slot, name)| vm.prepare_typed_loop_sloppy_global_write(*slot as usize, name))
-        .collect::<Option<Vec<_>>>()?;
+    for (slot, name) in &program.sloppy_global_writes {
+        sloppy_global_writes.push(vm.prepare_typed_loop_sloppy_global_write(*slot as usize, name)?);
+    }
     // A later generic native call may refresh a fallback slot from the realm
     // after user code runs. Register every sink once on entry so that slow-path
     // continuation observes the same live binding identity as ordinary stores.
     for (_, name) in &program.sloppy_global_writes {
         vm.record_sloppy_global_name(name);
     }
-    Some((registers, receivers, boxed, sloppy_global_writes))
+    caches.resize(program.cache_count, None);
+    Some(())
 }
 
 /// Whether a value is an ordinary object or array the program may hold in a

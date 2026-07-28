@@ -33,7 +33,11 @@
 
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
-use std::rc::Rc;
+use std::{
+    cell::{OnceCell, RefCell},
+    fmt,
+    rc::Rc,
+};
 
 use crate::Value;
 
@@ -246,6 +250,44 @@ enum Class {
     Boxed,
 }
 
+/// Per-entry storage for one native loop run. The executor owns this while a
+/// program is active, then clears and returns it to that program's tiny pool.
+/// Keeping it program-local means no temporary state crosses bytecode bodies.
+#[derive(Default)]
+struct TypedLoopScratch {
+    registers: Vec<Typed>,
+    receivers: Vec<crate::ArrayRef>,
+    boxed: Vec<Value>,
+    sloppy_global_writes: Vec<super::vm_bindings::TypedLoopSloppyGlobalWrite>,
+    caches: Vec<Option<(Rc<str>, usize)>>,
+}
+
+impl TypedLoopScratch {
+    fn clear(&mut self) {
+        self.registers.clear();
+        self.receivers.clear();
+        self.boxed.clear();
+        self.sloppy_global_writes.clear();
+        self.caches.clear();
+    }
+}
+
+impl fmt::Debug for TypedLoopScratch {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TypedLoopScratch")
+            .field("register_count", &self.registers.len())
+            .field("receiver_count", &self.receivers.len())
+            .field("boxed_count", &self.boxed.len())
+            .field(
+                "sloppy_global_write_count",
+                &self.sloppy_global_writes.len(),
+            )
+            .field("cache_count", &self.caches.len())
+            .finish()
+    }
+}
+
 /// A compiled loop region.
 #[derive(Clone, Debug)]
 pub(super) struct TypedLoopProgram {
@@ -293,9 +335,16 @@ pub(super) struct TypedLoopProgram {
     boxed_constant_registers: Vec<(u16, Value)>,
     /// Number of property-access cache entries the run needs.
     cache_count: usize,
+    /// Created only after the first native entry, so a program that compiles
+    /// but never runs in this tier pays no pool allocation. One cleared bundle
+    /// then serves the common sequential-entry case without retaining scratch
+    /// storage for every recursive invocation.
+    scratch_pool: OnceCell<Rc<RefCell<Vec<TypedLoopScratch>>>>,
 }
 
 impl TypedLoopProgram {
+    const MAX_POOLED_SCRATCH_BUNDLES: usize = 1;
+
     pub(super) fn header(&self) -> usize {
         self.header
     }
@@ -309,6 +358,25 @@ impl TypedLoopProgram {
             .iter()
             .find(|(candidate, _)| *candidate == register)
             .map(|(_, slot)| *slot)
+    }
+
+    fn take_scratch(&self) -> TypedLoopScratch {
+        self.scratch_pool
+            .get_or_init(|| Rc::new(RefCell::new(Vec::new())))
+            .borrow_mut()
+            .pop()
+            .unwrap_or_default()
+    }
+
+    fn recycle_scratch(&self, mut scratch: TypedLoopScratch) {
+        scratch.clear();
+        let mut pooled = self
+            .scratch_pool
+            .get_or_init(|| Rc::new(RefCell::new(Vec::new())))
+            .borrow_mut();
+        if pooled.len() < Self::MAX_POOLED_SCRATCH_BUNDLES {
+            pooled.push(scratch);
+        }
     }
 }
 
@@ -329,6 +397,55 @@ mod tests {
                 _ => None,
             })
             .expect("function bytecode should be nested in the script")
+    }
+
+    #[test]
+    fn typed_loop_scratch_pool_reuses_only_cleared_storage() {
+        let bytecode = nested_function(
+            "function run(n) { var total = 0; for (var i = 0; i < n; i++) { total += i; } return total; }",
+        );
+        let programs = super::compile_all(&bytecode);
+        let program = programs.first().expect("loop should be admitted");
+        assert!(program.scratch_pool.get().is_none());
+
+        let mut first = program.take_scratch();
+        first.registers.push(super::Typed::Number(1.0));
+        first.boxed.push(Value::Number(2.0));
+        first.caches.push(Some((std::rc::Rc::from("value"), 3)));
+        let register_capacity = first.registers.capacity();
+        let boxed_capacity = first.boxed.capacity();
+        let cache_capacity = first.caches.capacity();
+        program.recycle_scratch(first);
+
+        let reused = program.take_scratch();
+        assert!(reused.registers.is_empty());
+        assert!(reused.receivers.is_empty());
+        assert!(reused.boxed.is_empty());
+        assert!(reused.sloppy_global_writes.is_empty());
+        assert!(reused.caches.is_empty());
+        assert!(reused.registers.capacity() >= register_capacity);
+        assert!(reused.boxed.capacity() >= boxed_capacity);
+        assert!(reused.caches.capacity() >= cache_capacity);
+        program.recycle_scratch(reused);
+
+        // A nested call receives fresh storage when the one sequential-entry
+        // slot is occupied, and its later return cannot grow the pool.
+        let mut active = program.take_scratch();
+        active.registers.push(super::Typed::Number(4.0));
+        let nested = program.take_scratch();
+        assert!(nested.registers.is_empty());
+        program.recycle_scratch(nested);
+        assert_eq!(active.registers, vec![super::Typed::Number(4.0)]);
+        program.recycle_scratch(active);
+        assert_eq!(
+            program
+                .scratch_pool
+                .get()
+                .expect("taking scratch should initialize the pool")
+                .borrow()
+                .len(),
+            1
+        );
     }
 
     /// Every case here is a loop the typed tier accepts. The expected values are

@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "typed-loop-scratch-reuse",
+  "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+  "queue": {
+    "candidate_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+    "sha256": "165bb337cf1a13854151a451ada0b0a035109bddd3833db704871d9bbb1bdf07"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/bitops-bits-in-byte"
+    ],
+    "rank_ceiling": 14,
+    "override_reason": "Ranks 1 through 13 are closed by current direct-leaf frame, constructor, object-cache, direct-eval, RegExp, typed-loop admission, and primitive String-cache evidence. The fresh rank-14 profile identifies a different shared cost in a region the existing typed-loop executor already admits: each entry allocates and drops its scalar registers, boxed registers, receiver vector, inline-cache vector, and any sloppy-global sink vector. The proposed reuse is keyed only by an immutable compiled typed-loop program and is bounded for recursive entries; it has no workload, source-path, checksum, or iteration-count condition. This one-target override requires the strict target, independent controls, complete external and broad coverage, and exact Test262 gates below before retention."
+  },
+  "mechanism": {
+    "summary": "Lazily create and then reuse a bounded, cleared scratch bundle per compiled typed-loop program for its scalar registers, boxed values, dense-array receivers, named-property inline caches, and guarded sloppy-global sink records, instead of allocating those vectors on every native-loop entry.",
+    "generality": "The reuse applies to every already-admitted TypedLoopProgram, but its pool is created only after a region actually enters the native tier. A bundle is taken after the existing region selection and guard checks, reset to that program's immutable register/cache counts, and returned after normal exit, deoptimization, or admission decline. Nested entries take another bounded bundle or fall back to a fresh one; no scratch state crosses program instances or changes compilation, operation selection, values, caches, writeback, deoptimization, or exception behavior. Every unsupported region retains the unchanged interpreter path.",
+    "semantic_risks": [
+      "all reused scalar, boxed, receiver, inline-cache, and sloppy-global records must be reset before an entry so no prior invocation can affect values, guards, property lookup, or writes",
+      "every normal exit, deoptimization, early decline, and error-adjacent return must return owned temporary storage without retaining live JS values or borrowing it across VM execution",
+      "recursive or nested invocation of the same compiled program must never alias active scratch storage; exhausted bounded pools must preserve behavior by allocating a separate bundle",
+      "cache entries and guarded global sink identities must remain invocation-local in effect, including after mutation, direct eval, or a deoptimization boundary"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-current-bitops-bits-in-byte-profile.sample; 200x SunSpider bitops-bits-in-byte direct-script bundle executed by the exact 6cac3f50 runtime, used only to lengthen sampling and followed by executor inspection",
+      "sha256": "d4842959f7540d4fa1223d8d2b52da1094c3a12da5b8fd4da0a6f0962b8cdb4b",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/sunspider-1.0/bitops-bits-in-byte"
+      ],
+      "shared_cost": "The 3,707-sample profile places 897 inclusive samples in the existing typed-loop executor while the hot bitsinbyte function is invoked 89,600 times. Inspection shows every admitted entry initializes fresh Vec<Typed>, Vec<Value>, receiver, inline-cache, and optional sloppy-global vectors before executing the same program. This is distinct from prior loop-admission and VM-frame-reuse experiments: the tier already runs, but its per-entry temporary storage remains allocator-bound.",
+      "inclusive_fraction": 0.24
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/bitops-bits-in-byte"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/math-spectral-norm",
+      "external/sunspider-1.0/bitops-nsieve-bits",
+      "external/sunspider-1.0/crypto-sha1",
+      "broad/array_write",
+      "broad/dynamic_method_call",
+      "broad/plain_function_call",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

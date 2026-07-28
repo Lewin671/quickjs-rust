@@ -9,7 +9,7 @@
 
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
-use std::rc::Rc;
+use std::{cell::OnceCell, rc::Rc};
 
 use super::super::ir::{Bytecode, Op};
 use super::{
@@ -136,6 +136,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         constant_registers: constants,
         boxed_constant_registers: boxed_constants,
         cache_count,
+        scratch_pool: OnceCell::new(),
     })
 }
 

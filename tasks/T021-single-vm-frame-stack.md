@@ -1534,3 +1534,61 @@ placement, weak-value representation, or helper inlining: the repeated lookup
 is real, but the guard and dispatch cost does not meet the current general
 performance gates. A successor must remove a different current-profiled
 shared cost.
+
+### 2026-07-28 accepted typed-loop scratch reuse
+
+The rank-14 `bitops-bits-in-byte` profile captured 897 inclusive
+`try_run_typed_loop` samples out of 3,707 while the hot `bitsinbyte` function
+ran 89,600 times. Executor inspection found that each already-admitted typed
+loop rebuilt its register, boxed-value, receiver, inline-cache, and optional
+sloppy-global vectors. The frozen one-attempt unit
+`tasks/performance-units/typed-loop-scratch-reuse.json` (SHA-256
+`33b59921bf381ccaa3be6bec8ec01995b483a1c78bd8dc645825137677b81a3f`)
+therefore gives every `TypedLoopProgram` a lazily-created, single-entry scratch
+pool. It clears every vector before reuse and after exit; recursive entry gets
+fresh independent storage, and only one completed bundle is retained. No
+benchmark source, source-path condition, iteration count, or workload-specific
+execution route was added.
+
+The focused `typed_loop_scratch_pool_reuses_only_cleared_storage` test proves
+lazy creation, cleared reuse, retained capacity, non-aliasing nested entry, and
+the one-bundle cap. `cargo test -p qjs-runtime typed_loop --lib` passed 12
+tests, and `cargo clippy -p qjs-runtime --lib --tests -- -D warnings` passed.
+The final candidate binary SHA-256
+`8b86c312da742f89a8a0b4710f5d5e0409f1e4f86e90a3f6b4bcf0699dffe6cb` was
+compared with the runtime-identical base SHA-256
+`70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c`.
+
+The complete three-block external report/raw SHA-256 values are
+`55739fdb2a6cdb7ed4b3f3ce209856cb5aac7ec177a64c2598c76ca59218c21e` and
+`81d282355495ff26548409b11387983006d56b327e00b7a979150baf8cd1ef38`.
+All 45 cases completed for candidate, base, and QuickJS-NG with a 60-second
+per-case limit. `bitops-bits-in-byte` improved from 83.824 ms to 76.297 ms,
+or **0.910205x candidate/base**, clearing the `<= 0.95x` target. Its
+candidate/QuickJS-NG ratio remains **2.859752x**, so this is not a claim that
+the overall two-times-QuickJS-NG goal has been reached. Suite candidate/base
+geomeans were **0.990006x** (JetStream subset), **0.996615x** (Kraken), and
+**0.989342x** (SunSpider); no individual external case exceeded the 1.03x
+regression ceiling.
+
+The final three-block fast broad controls (raw SHA-256
+`aa43bcffcbd7ed027448814beb01cc6f3309df2b9df4454d90e0b3ba9a2d590e`) were
+`array_write` 0.99898x, `dynamic_method_call` 0.99432x,
+`plain_function_call` 1.00160x, and `object_allocation` 1.01489x. The first
+full 25-case long-run raw record (SHA-256
+`35c9eea609dfd90a2f3b8c2584318f4f42871f006f28a3be1965ea999cdd5129`) showed
+apparent regressions for `math_abs` 1.067x, `array_index_of` 1.0885x, and
+`array_dynamic_read` 1.0965x. Those observations were not discarded:
+five-block isolated rechecks (SHA-256
+`4668fc169f9e92ef9f4d6f5a7939ef6b033d85ff7e9319baa723659f4ac377c6`) instead
+measured 1.00571x, 0.96501x, and 0.93875x respectively, while
+`dynamic_method_call` and `plain_function_call` were 0.99059x and 1.00246x.
+The contradiction is consistent with long-run frequency drift rather than a
+reproducible regression; both raw artifacts remain recorded rather than being
+selectively hidden.
+
+`./scripts/test262-subset.sh` passed all 5,160 selected cases,
+`./scripts/compare-qjs.sh` passed, and `./scripts/check.sh` passed. This is an
+accepted general allocation reduction, but only an incremental campaign step:
+the performance queue must continue from a newly profiled, unclosed shared
+cost rather than treating this target-local win as completion.
