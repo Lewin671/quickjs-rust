@@ -307,6 +307,21 @@ impl TypedLoopProgram {
 mod tests {
     use crate::{Value, eval};
 
+    fn nested_function(source: &str) -> crate::bytecode::Bytecode {
+        let script = qjs_parser::parse_script(source).expect("source should parse");
+        let bytecode = crate::bytecode::compile_script(&script).expect("source should compile");
+        bytecode
+            .code
+            .iter()
+            .find_map(|op| match op {
+                super::super::ir::Op::NewFunction { bytecode, .. } => {
+                    Some(bytecode.as_ref().clone())
+                }
+                _ => None,
+            })
+            .expect("function bytecode should be nested in the script")
+    }
+
     /// Every case here is a loop the typed tier accepts. The expected values are
     /// what the interpreter produces for the same source, so a divergence in the
     /// register program shows up as a failing assertion rather than a silent
@@ -410,6 +425,54 @@ mod tests {
                 "function run() { var a = [1, 2];                   Object.defineProperty(a, '1', { value: 5, writable: false, configurable: true, enumerable: true });                   for (var i = 0; i < 2; i++) { a[i] = i + 10; }                   return a.join(','); }                 run();"
             ),
             Ok(Value::String("10,5".to_owned().into()))
+        );
+    }
+
+    #[test]
+    fn typed_loops_write_dense_elements_with_computed_scalar_indices() {
+        let source = "function run(n) { var values = [0, 1, 2, 3, 4, 5, 6, 7]; for (var i = 0; i < n; i++) { values[(i + 1) & 7] = values[(i + 3) & 7] + i; } return values.join(','); }";
+        let bytecode = nested_function(source);
+        assert_eq!(
+            super::compile_all(&bytecode).len(),
+            1,
+            "{:#?}",
+            bytecode.code
+        );
+        assert_eq!(
+            eval(&format!("{source} run(8);")),
+            Ok(Value::String("12,3,5,7,9,11,5,9".to_owned().into()))
+        );
+        // A computed index that grows the Array declines at the write and
+        // replays the first uncommitted assignment through ordinary semantics.
+        assert_eq!(
+            eval(
+                "function run() { var values = [1]; for (var i = 0; i < 3; i++) { values[(i + 1) & 3] = i; } return values.join(','); } run();"
+            ),
+            Ok(Value::String("1,0,1,2".to_owned().into()))
+        );
+        // The key is evaluated before the value. The value mutates `i`, so
+        // using its register directly for the dense write would store at a
+        // different element than ordinary JavaScript.
+        let order_source = "function run(n) { var values = [0, 0, 0, 0]; for (var i = 0; i < n; i++) { values[(i + 1) & 3] = (i = i + 1); } return values.join(',') + ':' + i; }";
+        assert_eq!(super::compile_all(&nested_function(order_source)).len(), 1);
+        assert_eq!(
+            eval(&format!("{order_source} run(4);")),
+            Ok(Value::String("0,1,0,3:4".to_owned().into()))
+        );
+    }
+
+    #[test]
+    fn typed_loop_computed_index_with_assignment_stays_interpreted() {
+        let source = "function run() { var values = [0, 0, 0, 0], key = 0; for (var i = 0; i < 4; i++) { values[key = (i + 1) & 3] = i; } return values.join(',') + ':' + key; }";
+        let bytecode = nested_function(source);
+        assert!(
+            super::compile_all(&bytecode).is_empty(),
+            "{:#?}",
+            bytecode.code
+        );
+        assert_eq!(
+            eval(&format!("{source} run();")),
+            Ok(Value::String("3,0,1,2:0".to_owned().into()))
         );
     }
 
