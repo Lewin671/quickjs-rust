@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "immediate-object-slot-read-cache",
+  "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+  "queue": {
+    "candidate_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+    "sha256": "165bb337cf1a13854151a451ada0b0a035109bddd3833db704871d9bbb1bdf07"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar"
+    ],
+    "rank_ceiling": 3,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "When a named-property read first resolves an object-valued ordinary data property in compact small-object storage, install the existing object-identity and layout-version checked OwnSlot entry immediately instead of first retaining a weak cached value and waiting for that exact entry to go stale.",
+    "generality": "The representation is selected only by the live receiver's ordinary compact storage, the resolved own data-property slot, and the runtime value category. It does not inspect benchmark names, source paths, function identities, input values, iteration counts, or results. Dynamic storage, shaped literals, accessors, exotic receivers, primitives, structural changes, and unsupported values retain the existing cache or generic property path.",
+    "semantic_risks": [
+      "preserving the exact own-data-property, accessor, Proxy, exotic-object, and inherited-property fallbacks before any cache entry is installed",
+      "validating both receiver identity and layout revision before every slot read so deletion, redefinition, property insertion, and storage promotion cannot expose a stale slot",
+      "preserving ordinary assignment visibility because value-only writes leave the slot live and the slot read returns the current value rather than a cached reference",
+      "retaining weak receiver ownership so bytecode cache entries cannot keep user objects alive"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-readcache-ray.x9bVqm/raytrace.sample; current main executable SHA-256 70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c; wrapper SHA-256 824daa5582289787f6e25a200892a1d6bdfa682afe9ce76a30e520dc7e03528c. The repeated class-instance property path reaches NamedPropertyCache::update and repeatedly drops/replaces exact entries, while the same source creates and passes object-valued fields such as position, material, and shape.",
+      "sha256": "019ad67f65e0856b2183c8d8548584e2625962c30d090227a9499cc6c0a6a811",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/raytrace-public-class-fields"
+      ],
+      "shared_cost": "NamedPropertyCache::update, its cache-entry replacement, and ordinary own-data lookup remain visible under the hot direct-call chain; an immediate OwnSlot entry removes the object-value weak-cache construction and avoids later exact-entry invalidation for compact receivers.",
+      "inclusive_fraction": 0.03
+    },
+    {
+      "source": "macOS samples 2026-07-28 /tmp/qjs-profile-frame-cold-ai-astar.Vpq9Te/ai-astar.sample and refreshed /tmp/qjs-readcache-ai.9VryMB/ai-astar.sample; runtime-identical current main executable SHA-256 70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c; wrapper SHA-256 a3653c77773ce2b424301835021957b26119240810f43d5434d98fd88d7a416c. The longer receipt records 61 direct samples in the object-value Exact cache construction branch; the refreshed receipt independently retains update work in GraphNode object-field reads.",
+      "sha256": "6a7d8bb799cabaa38353d9bd58024c6459cb76cfd45e242d8c3fa7d1a7e42be6",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/kraken-1.1/ai-astar"
+      ],
+      "shared_cost": "GraphNode fields are compact ordinary own data properties; immediate OwnSlot caching lets their object-valued reads retain the live slot across ordinary value writes instead of rebuilding an Exact weak-value entry.",
+      "inclusive_fraction": 0.03
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map",
+      "external/sunspider-1.0/date-format-tofte",
+      "external/sunspider-1.0/string-tagcloud",
+      "broad/dynamic_method_call",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

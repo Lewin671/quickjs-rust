@@ -1330,3 +1330,41 @@ splitting out a smaller subset of the same state: the intended shared direct
 call path did not produce a material cross-workload win, and class-field
 raytrace regressed. A successor must profile and remove a different shared
 cost.
+
+### 2026-07-28 rejected immediate object-value slot read cache
+
+Fresh profiles of rank-2 `raytrace-public-class-fields` and rank-3 `ai-astar`
+showed ordinary named-property cache update work under their hot direct-call
+chains. The frozen one-attempt plan
+`tasks/performance-units/immediate-object-slot-read-cache.json` (SHA-256
+`53a7862abafafa94439326495402b634cc9d71c28b5017d3e3c2e30e475c1a9d`)
+therefore made the existing `OwnSlot` representation available on the first
+object-valued read of a compact ordinary receiver. It retained the current
+receiver-identity and layout-revision checks; accessors, exotics, shaped and
+dynamic storage, structural changes, and non-object values retained the
+unchanged cache path. Focused tests proved that an ordinary value write reads
+the live replacement from the slot and that the weak receiver entry does not
+keep an object alive.
+
+The candidate passed the focused named-property cache suite. Its release
+binary SHA-256 was
+`d8370a54beaacd85ed8bfc63085ff8891e9b8a9db82225693f8c943701cebdbf`; the
+runtime-identical base was
+`70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c`.
+The raytrace wrapper was hash-verified at
+`824daa5582289787f6e25a200892a1d6bdfa682afe9ce76a30e520dc7e03528c`.
+Three alternating exact-source pairs measured candidate/base ratios of
+**0.995951x**, **1.000000x**, and **1.000000x** (candidate/base real seconds
+2.46/2.47, 2.44/2.44, and 2.43/2.43), for a median of **1.000000x** rather
+than the frozen `<= 0.97x` target. A supplementary fixed-source A* diagnostic
+also moved in the wrong direction: 10.23 s candidate versus 10.05 s base, or
+**1.017910x**. The A* wrapper SHA-256 was
+`a3653c77773ce2b424301835021957b26119240810f43d5434d98fd88d7a416c`.
+
+The runtime implementation and its focused tests were reverted immediately;
+the raytrace target failed before broad controls, complete external coverage,
+or Test262 promotion work was warranted. Do not retry this exact first-read
+promotion by changing only its value-category guard or `Exact`/`OwnSlot`
+selection order: the avoided weak-value cache work is below the current
+cross-workload materiality threshold. A successor must profile a distinct
+shared object or call cost.
