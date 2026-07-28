@@ -8463,6 +8463,57 @@ mechanism is retained as a semantically verified fast-gate improvement, but
 is not credited as a complete portfolio promotion or as evidence that every
 benchmark is below the 2x QuickJS-NG objective.
 
+### 2026-07-27 rejected raw numeric-leaf arithmetic program
+
+The one-attempt plan
+`tasks/performance-units/numeric-leaf-arithmetic-program.json` (SHA-256
+`aad3b99e856bbefe3523f73b4b8393c1fe6e3b0c260bfd57d961f6f627e4fdcc`)
+targeted rank-28 SunSpider `math-spectral-norm`. Commit
+`16e55461ce91bc6736d9049b14bd8c218123a282` compiled a direct leaf only
+when its immutable bytecode contained Number parameters/literals and
+straight-line arithmetic. At runtime every participating argument had to
+remain a Number; local writes, captures, properties, calls, control flow,
+coercion, and every unproven stack shape retained the ordinary VM.
+
+The receipt-bound standard broad run used candidate binary SHA-256
+`7cbd0727b580be1734245992e701b8fb4b3277d612c57105afbf626e8c0952bc`,
+base SHA-256
+`d7ecaed330745fb257f9286bdb661f0dd489426578daaf026a33f1019c624987`,
+and pinned QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+All 2,250 of 2,250 three-engine measurement records across 30 blocks were
+valid; every linearity check passed and the report was healthy. Its raw and
+report SHA-256 values are
+`b377d39348604baff5be46c4fbcb172212d151dd938377bc517d391ded2c8c4d`
+and
+`9861ba757c4971916e3fe280708852f2a5c17933b185630861ce26547de18c05`.
+The frozen broad controls stayed neutral: `plain_function_call` 1.001235x,
+`function_call_two_args` 1.000678x, `many_locals_call` 1.000046x, and
+`branch_arithmetic` 0.999982x candidate/base.
+
+The complete three-block external raw/report SHA-256 values are
+`4cfd68694f75c2da46b9ca292f3608b02a870557eb27645af744de83c2bf5c0a`
+and
+`9f1566926aadf90ce2979fa0580bf3e6502cb3fe029d9dc253b154f11ee01c6c`.
+The target met its local objective at **0.859342x candidate/base** and
+**1.857168x candidate/QuickJS-NG**. But the independent `audio-fft`
+control regressed to **1.040972x candidate/base**, above the immutable
+1.03x ceiling. The fast decision is therefore **rejected**, not retained;
+its JSON SHA-256 is
+`2edbba6d92b49820cca61cf7e2eeb298d79fc3305739272af348d47819f30c07`.
+The external report also remains incomplete for the pre-existing
+`imaging-gaussian-blur` capacity gap (both Rust roles timeout while
+QuickJS-NG completes), but that is not needed to reject this unit.
+
+No exact Test262 promotion scan was run: the fast gate already exhausted this
+unit's only declared attempt. The raw program and its tests were removed by
+`b6e7ad5f34332b749a7c643b091f5ebbcbdb6636`; the restored runtime passed
+all 1,898 `qjs-runtime` tests, `compare-qjs.sh`, and staged
+`check-touched.sh --explain` including 65 selected Test262 cases. Do not
+retry this arithmetic-program mechanism by changing its grammar, guards,
+stack representation, or input shape. A successor must begin from a fresh
+profile of a distinct shared cost.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
