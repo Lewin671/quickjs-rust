@@ -1131,6 +1131,39 @@ the campaign gate and its paired target regresses. A future RegExp unit must
 identify a different current-profiled cost, such as construction, matching, or
 result materialization, shared by its chosen targets.
 
+### 2026-07-27 rejected bounded numeric control/call-graph leaf
+
+A fresh `imaging-darkroom` profile showed a bounded pure-numeric call graph
+(`ProcessImageData -> FastGain -> FastBias -> FastLog2`) whose repeated
+branches and direct calls still entered the ordinary VM. The candidate compiled
+only a small statically proven numeric control-flow/call graph, with strict
+limits on locals, operands, call depth, and operations. Any dynamic binding,
+redefined intrinsic, accessor, Proxy, unsupported opcode, or uncertain
+receiver falls back to the ordinary VM. Focused coverage exercised signed zero,
+captured numeric calls, `Math` rebinding fallback, and observability of an
+unbound discarded global. The full local gate passed, including 5,160 curated
+Test262 cases and the comparison fixtures.
+
+The one-attempt fast screen used strict receipt-verified three-engine evidence
+from clean candidate commit `64eb8cd46d1a29a1ea21146a8f5e65baabfb8b4b`
+against base `7fffa88d9c70dd33ef51c786f8d0930447792d16`. The broad report
+SHA-256 is
+`57f7a48f1071366a1efda997292cbd0de4b9256f17ea9e3cb8edf3789e03e087`; the
+complete external report SHA-256 is
+`a3fd8c1eba6d9569ee4832f2225737da9fb7ecfcd9e925b28001054162d254cf`.
+`imaging-darkroom` met its target at **0.814908x** candidate/base, while
+`audio-oscillator` was 1.001979x, `math-spectral-norm` was 0.991263x, and
+broad `local_read` was 1.001456x. However, the independently sourced
+JetStream `hash-map` control regressed to **1.074431x**, exceeding its frozen
+1.03x ceiling. T022 therefore recorded the unit as rejected; the candidate
+was reverted by `ee8dbdc7` without rewriting published history.
+
+Do not retry this eager numeric-control planner by widening its bytecode
+classifier, changing its thresholds, or adding another speculative probe. The
+unrelated `hash-map` regression shows that plan construction/dispatch is not a
+net shared win at this layer. A successor must start with a new profile of a
+different shared cost.
+
 ### 2026-07-27 retained ordinary `for-in` key-list cache: local fast gate only
 
 The next unopened external opportunity was SunSpider `string-fasta`. A fresh
