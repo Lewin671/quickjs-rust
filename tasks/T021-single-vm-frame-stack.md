@@ -1295,3 +1295,58 @@ Do not retry this static dense-array direct-leaf read shape by adding more
 fixed vector indices or arithmetic forms. A successor must remove a different
 profiled shared cost and demonstrate an end-to-end win before broadening its
 semantic surface.
+
+### 2026-07-28 rejected prepared native global RegExp match
+
+The refreshed evidence queue ranks SunSpider `regexp-dna` ninth at 3.771672x
+QuickJS-NG. A fresh diagnostic profile of eighteen calls of the exact
+408,689-byte upstream source (wrapped only to make sampling long enough)
+showed 3,938 of 4,247 user-space samples through
+`native_regexp_prototype_match` / `global_match` / `regexp_exec` /
+`native_regexp_prototype_exec`. The receipt is
+`/private/tmp/qjs-profile-regexp-dna-6cac-v1.sample` (SHA-256
+`ec0f1d3bcd01aabc623c07573f286357614ad7476b7b575369665549b6fb2662`).
+Although `simple_atom_boundaries` is visible there, its removal is already
+closed by paired negative evidence; this unit instead tested the distinct
+native `/g` protocol cost recorded in
+`tasks/performance-units/regexp-dna-native-global-match.json`.
+
+The one prototype retained the required observable `flags` read and initial
+`lastIndex` write, then admitted only an unchanged realm-native RegExp with no
+own `exec`, the current realm `RegExp.prototype`, and its original native
+`exec`. It reused one `PreparedRegexp` and one prepared input through the
+global scan and materialized only the full-match strings that global
+`@@match` returns. Non-global patterns, custom exec methods, altered
+prototypes, RegExp-like receivers, and mismatched global/Unicode bits retained
+the ordinary protocol. A first diagnostic profile exposed a non-performance
+guard bug: literal flag source order such as `ig` differs from canonical
+`.flags` order `gi`. The repaired guard compared the semantic global and
+Unicode bits; the second profile directly enters `PreparedRegexp::match_input`
+from `native_regexp_prototype_match` with no global-match/exec loop in the
+hot chain. Its receipt is
+`/private/tmp/qjs-profile-regexp-dna-native-global-match-v2.sample` (SHA-256
+`e5d7f5bfb9fc5a82463cfb793ec1a49c37c2a857ce633a5ebf6fdd7e9c73f3cb`).
+
+The exact upstream output hash was identical for candidate and base:
+`770c2d18aa4ec3159f46da461ef452972949942ff4f6a9771044485faa146398`.
+Focused `regexp_symbol_match` tests passed, including captured global output,
+canonicalized flag ordering, empty Unicode matching, and own/prototype `exec`
+fallbacks. Candidate release SHA-256 was
+`66bc7ebeb67c7be1e93bbed8ddaa3579c898161d02ca8189d4dfd821fd75ed39`; exact
+`6cac` base release SHA-256 was
+`b861e96bf99af4c8fd5e50c044afcb05d9bf9b7eb79616ba8a095388e5c8bbd7`.
+
+Despite confirmed admission, the predeclared fast gate failed. Seven
+alternating exact-source process pairs had candidate times 405,833,960,
+404,337,883, 404,986,143, 404,706,955, 406,368,017, 405,165,911, and
+405,169,010 ns, versus base times 422,340,870, 421,157,122, 422,080,994,
+422,096,968, 422,369,003, 422,354,937, and 422,410,965 ns. The medians are
+**405,165,911 / 422,340,870 = 0.959334x candidate/base**, far short of the
+frozen `<= 0.75x` retention gate. The prototype and its focused tests were
+reverted immediately; no Test262 or broad-suite promotion work is warranted.
+
+Do not retry prepared native global `@@match` by reshaping its guard, reusing
+the input/matcher again, or omitting its intermediate exec-result array. The
+confirmed gain is only about four percent. A successor must attack a different
+current-profiled matcher cost and must remain distinct from the already
+rejected simple-quantifier boundary-vector route.

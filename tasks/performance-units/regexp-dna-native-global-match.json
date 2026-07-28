@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "regexp-dna-native-global-match",
+  "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+  "queue": {
+    "candidate_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+    "sha256": "165bb337cf1a13854151a451ada0b0a035109bddd3833db704871d9bbb1bdf07"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/regexp-dna"
+    ],
+    "rank_ceiling": 9,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "For an unchanged realm-native RegExp with the original native exec method, reuse one PreparedRegexp and PreparedInput throughout RegExp.prototype[Symbol.match]'s global scan, and materialize only the full-match strings required by the global-match result.",
+    "generality": "The path is defined by RegExp object identity and current observable shape, never by source text, workload name, input length, checksum, or match count. It runs only after the specified flags read and initial lastIndex write have occurred, only when the observable global and Unicode bits agree with the object's internal flags (the accessor canonically reorders flag text), the object has no own exec, its direct prototype is the current realm RegExp.prototype, and that prototype still owns the native RegExp.prototype.exec function. It supports arbitrary valid native patterns and flags, including sticky, Unicode, empty matches, captures, and hasIndices; custom exec methods, altered prototypes, mismatched observable global/Unicode flags, RegExp-like objects, and all non-global patterns retain the generic spec protocol.",
+    "semantic_risks": [
+      "the flags Get and initial lastIndex Set must retain their prescribed observable order before admission",
+      "the native path must preserve every per-exec lastIndex update, reset on final failure, and empty-match AdvanceStringIndex behavior",
+      "global @@match must return only full-match strings while preserving native match selection for captures, sticky, Unicode, ignore-case, dot-all, multiline, and hasIndices patterns",
+      "any overridden exec, prototype, or flags state must decline admission before matcher execution and use the existing observable exec loop"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /private/tmp/qjs-profile-regexp-dna-6cac-v1.sample; 18 diagnostic calls of the exact 408,689-byte upstream SunSpider regexp-dna source wrapped only to extend the sampling interval, executed by the exact 6cac candidate release binary",
+      "sha256": "ec0f1d3bcd01aabc623c07573f286357614ad7476b7b575369665549b6fb2662",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/sunspider-1.0/regexp-dna"
+      ],
+      "shared_cost": "3,938 of 4,247 observed user-space samples run through native_regexp_prototype_match/global_match/regexp_exec/native_regexp_prototype_exec. The repeated route re-enters regexp_match/PreparedRegexp::match_input for each global hit; the profile also shows allocation and matcher work in match_pattern_first, simple_atom_boundaries, atom_end, and atom_capture_indices. The simple_atom_boundaries component is explicitly closed by prior paired negative evidence, while this unit removes the distinct repeated native exec/protocol, pattern preparation, and temporary exec-result materialization cost without changing matcher rules.",
+      "inclusive_fraction": 0.92
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/regexp-dna"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/string-validate-input",
+      "external/sunspider-1.0/string-fasta",
+      "external/sunspider-1.0/string-base64",
+      "broad/array_write",
+      "broad/dynamic_method_call",
+      "broad/plain_function_call"
+    ],
+    "target_max_candidate_over_base": 0.75,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
