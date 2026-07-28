@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "primitive-string-prototype-read-cache",
+  "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+  "queue": {
+    "candidate_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+    "sha256": "165bb337cf1a13854151a451ada0b0a035109bddd3833db704871d9bbb1bdf07"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-base64"
+    ],
+    "rank_ceiling": 12,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Cache a named own-data value from the live String intrinsic prototype at a bytecode property-read site, guarded by the current String constructor identity and revision plus the prototype identity and property revision.",
+    "generality": "The cache applies to any primitive-string named read whose current String constructor and prototype expose an ordinary own data property. It does not inspect benchmark names, source paths, method names, input values, iteration counts, or results. Reassigned constructors, replaced prototypes, property redefinition or deletion, accessors, inherited properties, indexed strings, Proxies, other primitive kinds, and dynamic-function realm overrides retain the current lookup path.",
+    "semantic_risks": [
+      "validating the current String constructor identity and its property revision before every primitive cache hit so a global constructor reassignment or prototype replacement cannot expose a stale value",
+      "validating the String prototype identity and property revision before every hit so ordinary writes, deletion, definition, and accessor replacement retain their existing observable behavior",
+      "retaining weak ownership for cached functions and prototype objects so bytecode-owned caches cannot create reference cycles or keep user-visible values alive",
+      "declining caching for inherited properties, accessors, indexed strings, dynamic-function realm overrides, and every unsupported receiver so the existing generic property protocol remains authoritative"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-current-string-base64-profile.sample; SHA-256 current runtime-identical main executable 70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c; 48 independent upstream source executions were concatenated only to extend the sampling interval. Of 1,479 main-thread samples, the direct-leaf call chain contains 182 samples in Vm::try_direct_get_string, repeatedly resolving primitive String.prototype methods used by charCodeAt calls; the flat profile also retains primitive_prototype_env, Function::own_property, constructor_named_prototype, ObjectRef::property, and PropertyStorage::get work.",
+      "sha256": "65d28f5128bafd351f99de32be32835c2165f7b647b1cf5d757f04b47a99c1b2",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-base64"
+      ],
+      "shared_cost": "A named read from a primitive string cannot use the ordinary object cache, so every repeated prototype method lookup reconstructs the primitive prototype environment, resolves the String constructor and its prototype property, and walks String.prototype even when the same ordinary method remains unchanged. A revision-guarded weak cache can reuse that live value while preserving the normal route after any structural change.",
+      "inclusive_fraction": 0.123
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-base64"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/access-nbody",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/jetstream3-js-subset/hash-map",
+      "external/sunspider-1.0/controlflow-recursive",
+      "broad/dynamic_method_call",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

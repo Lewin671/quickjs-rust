@@ -1497,3 +1497,40 @@ cache-entry ordering or compaction mechanism by changing the placement,
 retaining one identity entry, or varying cache cardinality: the avoided probe
 is below the materiality gate and the independent control regressed. A
 successor must profile a different shared property, numeric, or call cost.
+
+### 2026-07-28 rejected primitive String prototype read cache
+
+The rank-12 `string-base64` profile showed repeated primitive method lookup:
+182 of 1,479 main-thread samples were in `Vm::try_direct_get_string`, with the
+same direct-leaf chain also retaining `primitive_prototype_env`, String
+constructor/prototype resolution, and property-table reads. The frozen
+one-attempt plan
+`tasks/performance-units/primitive-string-prototype-read-cache.json` (SHA-256
+`afc7845c05e422e064ebc06cf3ce5dbd9b226011bc036d90aaabe7d067931e53`)
+therefore cached only ordinary own data properties from the current
+`String.prototype`, with weak values plus constructor/prototype mutation
+guards. Focused checks covered accessors, global `String` replacement,
+prototype replacement, and string-own `length` precedence.
+
+The profile's 48-source concatenation was used only to lengthen the sample
+interval and is not timing evidence. Exact-source process timing did not
+reproduce the initial apparent speedup: ten independent `string-base64`
+processes took 0.74 s for the candidate versus 0.77 s for the exact base, or
+**0.961039x candidate/base**, missing the frozen `<= 0.95x` target gate. More
+importantly, the three-block broad control run rejected the mechanism even
+after moving the cache off the generic bytecode-cache layout: candidate binary
+SHA-256 `eef360a3497b86492fc4f796fa23e44d9e60dad7ae49984b436bad60d4ce1402`
+versus runtime-identical base
+`70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c`
+measured `dynamic_method_call` **1.000809x** and `object_allocation`
+**1.083295x** candidate/base. The latter exceeds the unit's `<= 1.03x`
+control ceiling; raw diagnostic SHA-256 is
+`3abd92f66232db8b1906c0e27dd0e563a95232c7606aac7293360448e2f46241`.
+
+The runtime implementation and its focused tests were fully reverted before
+complete external coverage or Test262 promotion work. Do not retry this
+per-site or constructor-side primitive-prototype cache by changing cache
+placement, weak-value representation, or helper inlining: the repeated lookup
+is real, but the guard and dispatch cost does not meet the current general
+performance gates. A successor must remove a different current-profiled
+shared cost.
