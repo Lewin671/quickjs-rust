@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "dense-index-numeric-leaf",
+  "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+  "queue": {
+    "candidate_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+    "sha256": "165bb337cf1a13854151a451ada0b0a035109bddd3833db704871d9bbb1bdf07"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/3d-raytrace"
+    ],
+    "rank_ceiling": 7,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Preclassify straight-line direct-leaf numeric functions that read fixed present elements from array parameters, then evaluate their Number arithmetic without creating a child VM when every indexed read is an ordinary dense Number element.",
+    "generality": "Eligibility derives only from immutable bytecode, fixed non-negative indices, parameter-slot layout, and live ordinary array element state. It does not inspect benchmark names, source paths, function identities, input values, iteration counts, or results. Holes, own indexed descriptors, out-of-range reads, non-arrays, non-Number values, dynamic indices, `this` reads, getters, proxies, typed arrays, stores, calls, branches, coercions, and unsupported bytecode retain the unchanged direct-leaf VM before observable work.",
+    "semantic_risks": [
+      "preserving ordinary indexed-property semantics by accepting only a present dense own element and falling back for holes, own indexed descriptors, or every receiver that needs generic lookup",
+      "preserving Number arithmetic, NaN, signed zero, Infinity, and each binary operation exactly while declining non-Number inputs before coercion could be observed",
+      "preserving duplicate-formal parameter resolution by deriving every indexed source from the authoritative parameter-position list",
+      "never partially executing a body containing writes, calls, control flow, dynamic properties, accessors, proxies, typed arrays, or other observable operations"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-current-3d-raytrace-profile.sample; runtime-identical current main executable SHA-256 70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c. Of 1,105 main-thread samples, the direct-leaf chain repeatedly enters Vm::run_completion through call_direct_leaf_function. The pinned source contains general vector helpers such as sqrLengthVector(self) returning self[0] * self[0] + self[1] * self[1] + self[2] * self[2], so each numeric indexed read currently crosses the child VM and canonical property path.",
+      "sha256": "5e18053f743296ba821bba030b66e76429987999ce9d4019749501d29af933a0",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/sunspider-1.0/3d-raytrace"
+      ],
+      "shared_cost": "A complete numeric array-read leaf currently creates the ordinary direct-call environment and evaluates LoadLocal/GetPropIndex/Binary bytecode through the generic VM on every invocation. An eager all-or-nothing plan can reuse the existing fixed-index IR and ArrayRef target-element guard to avoid that repeated call and dispatch work without changing property semantics.",
+      "inclusive_fraction": 1.0
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/3d-raytrace"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/sunspider-1.0/date-format-tofte",
+      "external/sunspider-1.0/access-nbody",
+      "broad/plain_function_call",
+      "broad/dynamic_method_call",
+      "broad/array_read",
+      "broad/array_dynamic_read"
+    ],
+    "target_max_candidate_over_base": 0.93,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

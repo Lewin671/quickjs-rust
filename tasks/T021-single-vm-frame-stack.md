@@ -1415,3 +1415,47 @@ promotion were therefore not run. Do not retry this exact shared-key plus
 single-borrow layout by changing field guards or accepting the allocation
 regression. A successor must first isolate the general allocation regression
 and remove it structurally.
+
+### 2026-07-28 rejected dense-index numeric leaf
+
+The frozen one-attempt plan
+`tasks/performance-units/dense-index-numeric-leaf.json` (SHA-256
+`11365e3011774f32f031fc3b664c35b148847783bb81df2e76d6d2d87e8c06e4`)
+targeted rank-7 SunSpider `3d-raytrace` after the higher-ranked direct-call,
+field-cache, and allocation candidates had either been rejected or profiled as
+different costs. A fresh exact-current profile
+`/tmp/qjs-current-3d-raytrace-profile.sample` (SHA-256
+`5e18053f743296ba821bba030b66e76429987999ce9d4019749501d29af933a0`)
+showed 1,105 main-thread samples rooted in `Vm::run_completion` through
+`call_direct_leaf_function`. The pinned source repeatedly calls ordinary
+array-parameter vector helpers such as `sqrLengthVector(self)`, whose fixed
+numeric element reads currently execute through the child VM.
+
+The candidate preclassified only complete straight-line numeric leaves with
+fixed parameter-array indices and live present dense Number elements. Holes,
+indexed descriptors, proxies, TypedArrays, non-Number elements, dynamic
+indices, `this`, calls, stores, and control flow retained the original VM
+before observable work. Focused plan and execution tests covered ordinary
+arrays, duplicate formals, holes with inherited getters, own indexed getters,
+proxies, string fallback, and signed zero; they passed before timing.
+
+The release candidate SHA-256
+`5117a1205e978d28252908d215ba9189d8ec39fc73208ab234d91c0393744c28`
+was measured against the runtime-identical base SHA-256
+`70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c`.
+The three-block, hash-verified, three-suite diagnostic manifest SHA-256 was
+`1f536f44bf73c8ac9ecc09fea46c19c44d6627beaa26b12365ad9a03d0a2ee4f`;
+the report/raw SHA-256 values were
+`0c2b85ea0e4019e57f1c206097526e0ffe34df52dc6fad80cb0bf494fe89d04e` and
+`15dcd3634e8e26502961a31796e8570f752d8547eedd41402823bdd6a290bbd2`.
+`3d-raytrace` moved only from 86.955 ms to 85.779 ms, or **0.986477x**
+candidate/base, missing the frozen `<= 0.93x` target. The independent A*
+control regressed from 9.700 s to 10.625 s, or **1.095380x**, exceeding the
+`<= 1.03x` control ceiling; class-field raytrace was neutral at 0.999009x.
+
+The runtime implementation and its focused tests were completely reverted;
+no complete portfolio or Test262 promotion run was warranted. Do not retry
+this direct dense-index leaf route by widening indexed forms, accepting more
+array/value classes, moving its probe to the `this` plan, or changing only
+its guards. A successor must begin from a distinct current-profiled shared
+array or call cost.
