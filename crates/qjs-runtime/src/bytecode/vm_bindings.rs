@@ -19,6 +19,17 @@ use super::{
     vm_set::set_property_key,
 };
 
+/// A sloppy fallback binding that a typed loop proved is an existing writable
+/// ordinary realm global. The executor publishes every write immediately, so
+/// it retains the interpreter's observable per-iteration ordering.
+#[derive(Clone, Debug)]
+pub(super) struct TypedLoopSloppyGlobalWrite {
+    slot: usize,
+    name: String,
+    cell: Upvalue,
+    global_this: crate::ObjectRef,
+}
+
 impl Vm<'_> {
     /// Realm `globalThis` object handle. `CallEnv::global_this` already
     /// resolves this from a plain `Option<Value>` field set once at realm
@@ -1018,6 +1029,106 @@ impl Vm<'_> {
                 .locals
                 .get(slot)
                 .is_some_and(|local| local.mutable && !local.sloppy_global_fallback)
+    }
+
+    /// Prepares one sloppy fallback slot for a typed-loop store. This is
+    /// deliberately stricter than the ordinary store: the typed program can
+    /// only enter after the fallback already names the same writable own data
+    /// property, realm cell, and local value. Missing globals and every dynamic
+    /// binding path stay on the generic bytecode operation that creates or
+    /// resolves them.
+    pub(super) fn prepare_typed_loop_sloppy_global_write(
+        &self,
+        slot: usize,
+        name: &str,
+    ) -> Option<TypedLoopSloppyGlobalWrite> {
+        if self.direct_eval_with_stack
+            || !self.with_stack.is_empty()
+            || self.bytecode.contains_direct_eval()
+            || self.bytecode.contains_with()
+            || self.env.deopt_bindings().is_some()
+            || self.env.has_module_imports()
+            || self.env.dynamic_function_realm_global().is_some()
+            || self.env.has_local_binding(name)
+            || self.env.has_module_import(name)
+            || self.env.is_global_lexical_binding(name)
+            || self.env.is_immutable_lexical_binding(name)
+            || self.env.is_immutable_function_name(name)
+        {
+            return None;
+        }
+        let local = self.bytecode.locals.get(slot)?;
+        if local.name != name
+            || !local.mutable
+            || !local.sloppy_global_fallback
+            || local.compiler_temporary
+            || self.bytecode.local_slot(name) != Some(slot)
+        {
+            return None;
+        }
+        // The generic store's fast branch only applies once the frame holds a
+        // value and the global property already exists. Keeping that same
+        // boundary means the first creation and every unusual reconfiguration
+        // retain the ordinary interpreter path.
+        let value = self.locals.get(slot)?.as_ref()?;
+        if !matches!(
+            value,
+            Value::Number(_) | Value::Boolean(_) | Value::Undefined
+        ) {
+            return None;
+        }
+        let global_this = self.cached_global_this()?;
+        let property = global_this.own_property(name)?;
+        if property.is_accessor() || !property.writable || !property.value.same_value(value) {
+            return None;
+        }
+        let cell = self.env.realm_binding_cell(name)?;
+        if !self.env.is_realm_binding_cell(name, &cell)
+            || !cell.get().same_value(value)
+            || !self.env.get_realm(name)?.same_value(value)
+        {
+            return None;
+        }
+        if let Some(local_cell) = self.local_upvalues.get(slot)?.as_ref()
+            && !local_cell.ptr_eq(&cell)
+        {
+            return None;
+        }
+        Some(TypedLoopSloppyGlobalWrite {
+            slot,
+            name: name.to_owned(),
+            cell,
+            global_this,
+        })
+    }
+
+    /// Publishes one already-guarded typed-loop sloppy-global value. No user
+    /// code can run in an admitted region, so the entry proof stays valid until
+    /// the loop yields; if the data-property write nevertheless declines, the
+    /// caller deoptimizes before the bytecode store and replays it normally.
+    pub(super) fn write_typed_loop_sloppy_global(
+        &mut self,
+        target: &TypedLoopSloppyGlobalWrite,
+        value: Value,
+    ) -> bool {
+        if !matches!(
+            target
+                .global_this
+                .write_existing_own_data_property(&target.name, &value),
+            OwnDataPropertyWrite::Written
+        ) {
+            return false;
+        }
+        debug_assert!(self.env.is_realm_binding_cell(&target.name, &target.cell));
+        let replaced =
+            self.env
+                .replace_existing_realm_with_cell(&target.name, value.clone(), &target.cell);
+        debug_assert!(
+            replaced,
+            "prepared sloppy-global cell must remain canonical"
+        );
+        self.locals[target.slot] = Some(value);
+        true
     }
 
     /// Writes a slot a typed loop program owns for the duration of the loop.

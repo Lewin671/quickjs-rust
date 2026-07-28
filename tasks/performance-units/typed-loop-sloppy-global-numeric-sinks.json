@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "typed-loop-sloppy-global-numeric-sinks",
+  "base_sha": "c8c246487878fce65578d3af2ea90ae45f1a6df6",
+  "queue": {
+    "candidate_sha": "c8c246487878fce65578d3af2ea90ae45f1a6df6",
+    "sha256": "155ce859680212740f4dc70e9c84b510701b89cbb4c11d337c9926590cd42534"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/math-partial-sums"
+    ],
+    "rank_ceiling": 8,
+    "override_reason": "Ranks 1 through 6 are closed by current rejected direct-leaf frame, constructor, heap-value-cache, direct-eval, and RegExp evidence. The rank-7 CDJS profile found only a sub-10-percent independently removable Vm and frame construction cost, while both structural frame-reuse routes already have negative evidence. The current rank-8 profile identifies a distinct blocked shared mechanism: an otherwise scalar typed-loop-compatible numeric region is rejected because sloppy fallback locals write existing numeric global data properties. The extension is defined only by bytecode shape, binding identity, ordinary data-property state, and existing typed-loop guards; it has no workload, source-path, checksum, or iteration-count condition. This is a one-target override because it is the highest remaining viable queue item after the higher-ranked mechanisms were closed; retention still requires the strict target, control, complete external, complete broad, and exact Test262 gates below."
+  },
+  "mechanism": {
+    "summary": "Extend the existing typed-loop executor to admit a scalar numeric region with StoreLocalOrGlobalSloppy fallback locals only when each fallback already resolves to the same writable ordinary numeric own-data global property, then perform each guarded global write in program order rather than batching it at loop exit.",
+    "generality": "The extension applies to every existing typed-loop-compatible scalar region whose sloppy fallback slots have stable non-shadowing binding identities and whose corresponding global own properties already exist as writable ordinary data properties. A same-name LoadGlobal is admitted only when it resolves to that exact fallback slot and is represented by the slot's scalar register, so each iteration observes its prior write; unrelated global reads remain hoisted only when they do not overlap a global write. The entry guard rejects direct eval, with-like dynamic binding paths, absent globals, accessors, proxies, non-writable properties, changed realm-cell identities, non-numeric values, unsupported observable property writes, or any unsupported bytecode. No source text, workload name, iteration count, or benchmark-specific shape is accepted; all rejected cases retain the ordinary interpreter path.",
+    "semantic_risks": [
+      "a sloppy fallback must continue to resolve to its local binding when one is later introduced, and to the global property only when the original bytecode semantics select that fallback",
+      "global data-property reads and writes must preserve their existing identity checks, coercion behavior, exception timing, and program order; writes may not be deferred or coalesced across iterations",
+      "a changed Math object, accessor, proxy, descriptor, direct eval, dynamic binding, alias, or scalar-domain escape must decline admission or deopt at an exact bytecode boundary without losing completed writes",
+      "the native loop must synchronize the local fallback slot and the realm global property after every admitted write so later bytecode observes exactly the same value"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-27 /private/tmp/qjs-profile-math-partial-sums-c8c24648-v2.sample; 150x hash-verified SunSpider math-partial-sums direct-script bundle executed by the exact c8c24648 candidate binary, followed by typed-loop compiler and bytecode inspection",
+      "sha256": "f256c0b77fe238d36d851aea4271cc2901bbd582bb8cb3f6fd07716aaceb21f8",
+      "base_sha": "c8c246487878fce65578d3af2ea90ae45f1a6df6",
+      "opportunity_ids": [
+        "external/sunspider-1.0/math-partial-sums"
+      ],
+      "shared_cost": "The 3,692-sample profile is dominated by Vm::run_completion, load_global, eval_binary, Value clone and drop, local-slot access, dynamic binding lookup, and generic call dispatch; Math libc work itself is small. Exact inspection shows the loop already fits the scalar typed-loop operation classes, including guarded numeric Math calls, but compilation refuses its Math global read because the same region contains StoreLocalOrGlobalSloppy writes for chained-initializer fallback globals. The current executor has no safe per-iteration fallback-global sink, so the whole region stays in generic bytecode dispatch.",
+      "inclusive_fraction": 0.5
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/math-partial-sums"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/stanford-crypto-pbkdf2",
+      "external/sunspider-1.0/crypto-sha1",
+      "external/kraken-1.1/audio-fft",
+      "external/sunspider-1.0/math-spectral-norm",
+      "broad/array_write",
+      "broad/dynamic_method_call",
+      "broad/plain_function_call"
+    ],
+    "target_max_candidate_over_base": 0.52,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

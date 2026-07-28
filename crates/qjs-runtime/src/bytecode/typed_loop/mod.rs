@@ -151,6 +151,11 @@ enum TypedOp {
         index: u16,
         value: u16,
     },
+    /// Publishes one scalar value to a prevalidated sloppy fallback global.
+    StoreSloppyGlobal {
+        target: u16,
+        value: u16,
+    },
     JumpIfFalsy {
         cond: u16,
         target: u32,
@@ -262,10 +267,14 @@ pub(super) struct TypedLoopProgram {
     written_locals: Vec<(u16, u32)>,
     /// Slots that must hold a dense-readable array on entry.
     receiver_slots: Vec<u32>,
-    /// Global bindings the region reads, in register order. The region provably
-    /// writes no global, so reading each one once on entry is equivalent to
-    /// reading it per iteration.
+    /// Global bindings the region reads, in register order. The region does
+    /// not write any of these names and cannot run observable code, so reading
+    /// each one once on entry is equivalent to reading it per iteration.
     global_reads: Vec<(u16, String)>,
+    /// Existing sloppy fallback globals written by the region. Their matching
+    /// reads use the frame-slot register rather than a hoisted global read, and
+    /// each write is synchronized immediately by the executor.
+    sloppy_global_writes: Vec<(u32, String)>,
     /// Number of boxed registers, which hold objects and any value a property
     /// read produces.
     boxed_count: usize,
@@ -508,6 +517,47 @@ mod tests {
                 "var calls = 0;                 Object.defineProperty(globalThis, 'probe', { get: function () { calls++; return 2; }, configurable: true });                 function run() { var s = 0; for (var i = 0; i < 5; i++) { if (i > 1) { s += probe; } else { s -= probe; } } return s; }                 var result = run(); result + ':' + calls;"
             ),
             Ok(Value::String("2:5".to_owned().into()))
+        );
+    }
+
+    #[test]
+    fn typed_loops_sync_existing_sloppy_numeric_globals() {
+        let source = "var typedLoopSloppyProbe = 0; function run(n) { var total = typedLoopSloppyProbe = 0; for (var i = 0; i < n; i++) { typedLoopSloppyProbe = typedLoopSloppyProbe + Math.pow(i, 0); total = total + typedLoopSloppyProbe; } return total + ':' + typedLoopSloppyProbe; }";
+        let bytecode = nested_function(source);
+        assert_eq!(super::compile_all(&bytecode).len(), 1, "{bytecode:#?}");
+        assert_eq!(
+            eval(&format!("{source} run(5);")),
+            Ok(Value::String("15:5".to_owned().into()))
+        );
+
+        // A native-call guard can fail after a completed sloppy-global write.
+        // Resume at the exact call site so the generic callee and subsequent
+        // string additions run once, without repeating the completed store.
+        let deopt_source = "function run(n) { var total = typedLoopDeoptProbe = 0, box = { f: function () { return 'x'; } }; for (var i = 0; i < n; i++) { typedLoopDeoptProbe = typedLoopDeoptProbe + 1; total = total + box.f(i); total = total + typedLoopDeoptProbe; } return total + ':' + typedLoopDeoptProbe; }";
+        assert_eq!(
+            super::compile_all(&nested_function(deopt_source)).len(),
+            1,
+            "{deopt_source}"
+        );
+        assert_eq!(
+            eval(&format!("{deopt_source} run(2);")),
+            Ok(Value::String("0x1x2:2".to_owned().into()))
+        );
+
+        // A read-only descriptor must retain sloppy assignment's silent
+        // failure rather than entering the prevalidated sink path.
+        assert_eq!(
+            eval(
+                "Object.defineProperty(globalThis, 'typedLoopReadOnlyProbe', { value: 2, writable: false, configurable: true });\
+                 function run(n) { var total = typedLoopReadOnlyProbe = 0;\
+                   for (var i = 0; i < n; i++) {\
+                     total = total + typedLoopReadOnlyProbe;\
+                     typedLoopReadOnlyProbe = typedLoopReadOnlyProbe + 1;\
+                   }\
+                   return total + ':' + typedLoopReadOnlyProbe; }\
+                 run(3);"
+            ),
+            Ok(Value::String("6:2".to_owned().into()))
         );
     }
 

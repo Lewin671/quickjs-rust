@@ -11,7 +11,7 @@ use std::rc::Rc;
 
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
-use super::super::vm::Vm;
+use super::super::{vm::Vm, vm_bindings::TypedLoopSloppyGlobalWrite};
 use super::{Class, DeoptSite, MAX_NATIVE_ITERATIONS, Typed, TypedLoopProgram, TypedOp};
 use crate::Value;
 
@@ -90,8 +90,17 @@ enum Outcome {
     Declined,
 }
 
+type SeededRegisters = (
+    Vec<Typed>,
+    Vec<crate::ArrayRef>,
+    Vec<Value>,
+    Vec<TypedLoopSloppyGlobalWrite>,
+);
+
 fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
-    let Some((mut registers, receivers, mut boxed)) = seed_registers(vm, program) else {
+    let Some((mut registers, receivers, mut boxed, sloppy_global_writes)) =
+        seed_registers(vm, program)
+    else {
         return Outcome::Declined;
     };
     // One inline cache per property access site, warmed on the first iteration.
@@ -174,6 +183,15 @@ fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
                     registers[index as usize],
                     registers[value as usize],
                 ) {
+                    deopt_here!(op);
+                }
+            }
+            TypedOp::StoreSloppyGlobal { target, value } => {
+                let Some(target) = sloppy_global_writes.get(target as usize) else {
+                    deopt_here!(op);
+                };
+                if !vm.write_typed_loop_sloppy_global(target, registers[value as usize].to_value())
+                {
                     deopt_here!(op);
                 }
             }
@@ -278,10 +296,7 @@ fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
 
 /// Loads the frame slots the program uses, declining when any slot holds a type
 /// the register file cannot represent or a receiver is not a dense array.
-fn seed_registers(
-    vm: &mut Vm<'_>,
-    program: &TypedLoopProgram,
-) -> Option<(Vec<Typed>, Vec<crate::ArrayRef>, Vec<Value>)> {
+fn seed_registers(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Option<SeededRegisters> {
     // Resolve every receiver once. Re-reading the slot per element access cost
     // more than the interpreter's own path did.
     let mut receivers = Vec::with_capacity(program.receiver_slots.len());
@@ -362,7 +377,18 @@ fn seed_registers(
         }
         boxed[*register as usize] = value;
     }
-    Some((registers, receivers, boxed))
+    let sloppy_global_writes = program
+        .sloppy_global_writes
+        .iter()
+        .map(|(slot, name)| vm.prepare_typed_loop_sloppy_global_write(*slot as usize, name))
+        .collect::<Option<Vec<_>>>()?;
+    // A later generic native call may refresh a fallback slot from the realm
+    // after user code runs. Register every sink once on entry so that slow-path
+    // continuation observes the same live binding identity as ordinary stores.
+    for (_, name) in &program.sloppy_global_writes {
+        vm.record_sloppy_global_name(name);
+    }
+    Some((registers, receivers, boxed, sloppy_global_writes))
 }
 
 /// Whether a value is an ordinary object or array the program may hold in a
