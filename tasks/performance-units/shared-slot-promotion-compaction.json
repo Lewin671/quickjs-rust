@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "shared-slot-promotion-compaction",
+  "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+  "queue": {
+    "candidate_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+    "sha256": "165bb337cf1a13854151a451ada0b0a035109bddd3833db704871d9bbb1bdf07"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/access-nbody"
+    ],
+    "rank_ceiling": 11,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "When a named-property read cache promotes two ordinary compact receivers to one validated SharedSlot, replace obsolete identity-specific entries with that shared entry so later hits do not first probe a known-mismatching weak-object entry.",
+    "generality": "The compaction depends only on an existing per-site cache observing a second ordinary compact receiver whose interned key occupies the same validated slot. It does not inspect workload names, source paths, function identities, input values, iteration counts, or results. Primitive, Proxy, typed-array, module-namespace, accessor, dynamic, shaped, differently keyed, and layout-mismatching receivers retain the existing cache miss or generic property route.",
+    "semantic_risks": [
+      "retaining the interned-key and exact-slot validation on every SharedSlot read so a structurally changed receiver cannot expose the wrong property",
+      "preserving the ordinary own-data, accessor, Proxy, exotic-object, inherited-property, and primitive fallbacks after any shared-slot miss",
+      "preserving live value visibility because SharedSlot reads the current property value rather than retaining an old cached value",
+      "preserving paired compound-store behavior and writable-descriptor checks when a read cache is shared with its following write"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-current-access-nbody-profile.sample; exact runtime-identical main executable SHA-256 70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c. Of 1,466 main-thread samples, NamedPropertyCache::get accounts for 98 and its callers repeatedly read and update seven same-layout Body fields inside the NBodySystem nested loop. Cache inspection shows the second distinct compact receiver installs a SharedSlot in the rotating second entry while the first Exact entry remains ahead of it, so stable shared hits still perform an unnecessary identity/revision probe first.",
+      "sha256": "a8a3440af283d79ea9eb0d64efd75941f46e1a2f9e5685929467caf353a6e34a",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/sunspider-1.0/access-nbody"
+      ],
+      "shared_cost": "A stable shared compact-object field read iterates the two-entry cache and first fails an obsolete weak-object identity plus property-revision check before it reaches the already validated SharedSlot. Compacting at promotion removes that repeated failed probe while retaining the existing slot/key guard and generic fallback.",
+      "inclusive_fraction": 0.0668
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/access-nbody"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/jetstream3-js-subset/hash-map",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/sunspider-1.0/controlflow-recursive",
+      "broad/dynamic_method_call",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

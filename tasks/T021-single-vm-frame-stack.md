@@ -1459,3 +1459,41 @@ this direct dense-index leaf route by widening indexed forms, accepting more
 array/value classes, moving its probe to the `this` plan, or changing only
 its guards. A successor must begin from a distinct current-profiled shared
 array or call cost.
+
+### 2026-07-28 rejected shared-slot promotion compaction
+
+The rank-11 `access-nbody` profile found 98 `NamedPropertyCache::get` frames
+among 1,466 main-thread samples. Its `Body` objects use the same seven compact
+fields repeatedly, and cache inspection showed that the second receiver
+promotes a site to `SharedSlot` while leaving an older `Exact` entry ahead of
+it. The frozen one-attempt plan
+`tasks/performance-units/shared-slot-promotion-compaction.json` (SHA-256
+`d966e0295c4aa8afd17850a641071cb8ac74cf29462d88eddc055466190cb97c`)
+therefore compacted that promotion to one front-positioned shared key/slot
+entry. The candidate retained the existing per-hit interned-key, slot,
+accessor, descriptor, and generic-fallback checks; focused cache tests also
+proved that a nonmatching ordinary receiver can still occupy the second cache
+entry and that paired writes return the current shared-slot value.
+
+The release candidate SHA-256
+`65d0b7049d6eec4609e14560b19e3ae167339d6e7443f847db57ef32d4d8374c`
+was measured against runtime-identical base
+`70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c`.
+The fixed six-case, three-suite manifest SHA-256 was
+`a7bdd19bcb3101197adf94ea9ad70868d3aae6632abf8122a1d8649542c2acce`;
+the raw/report SHA-256 values were
+`24d808f3b3def646352f4962fbad68cf08fd7a4f5ac27f44572ca3490006ae8a` and
+`2a301b1a2219beab2966e12f65751b1ee6867ef847cd3d839040f2fb774483c1`.
+The target improved only from 73.538 ms to 72.690 ms, or **0.988474x**
+candidate/base, missing the frozen `<= 0.95x` gate. The independent A*
+control regressed from 9.795 s to 10.798 s, or **1.102369x**, exceeding the
+`<= 1.03x` ceiling; hash-map, class-field raytrace, 3d-raytrace, and
+controlflow-recursive measured 1.012362x, 0.974786x, 0.991758x, and 0.998676x
+respectively.
+
+The runtime implementation and focused tests were completely reverted before
+any broad, complete-external, or Test262 promotion run. Do not retry this
+cache-entry ordering or compaction mechanism by changing the placement,
+retaining one identity entry, or varying cache cardinality: the avoided probe
+is below the materiality gate and the independent control regressed. A
+successor must profile a different shared property, numeric, or call cost.
