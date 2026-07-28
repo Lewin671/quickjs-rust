@@ -1592,3 +1592,50 @@ selectively hidden.
 accepted general allocation reduction, but only an incremental campaign step:
 the performance queue must continue from a newly profiled, unclosed shared
 cost rather than treating this target-local win as completion.
+
+### 2026-07-28 accepted cached direct-eval selected bindings
+
+The rank-five `sunspider-1.0/date-format-tofte` profile attributed 802 of
+1,209 samples to `native_global_eval` and its caller-environment construction
+path. On an exact hit in the existing direct-eval compilation cache, the old
+path still materialized every visible caller binding before evaluation. The
+frozen unit `tasks/performance-units/direct-eval-selected-bindings.json`
+(SHA-256 `e420347b498df54eaaaeec240129e8be38fc301b8776422cb71412f4b89bc9c8`)
+instead builds that cached call environment from static global references,
+`this`, and the cache entry's selected outer names. Declarations, nested direct
+eval, `with`, cache misses, and all other dynamic cases retain the complete
+caller-environment path. The selected cells preserve their prior lexical order
+and deoptimized shared-cell identity; no source-path condition, benchmark
+condition, or target-only execution route was added.
+
+The focused
+`cached_direct_eval_keeps_only_referenced_outer_bindings` test covers selected
+reads and writes, `this`, `arguments`, cache hits, and a binding first created
+by declaration-bearing eval. It passed along with all 1,900 runtime tests and
+the 65 directly relevant Test262 cases selected by the touched-file gate.
+`./scripts/compare-qjs.sh` passed. The exact candidate binary SHA-256
+`a048b921e4402a7368e42e15649d3d200088b8347049af02962807c4cf0a3d0b`
+was compared with the exact base binary SHA-256
+`776de42b79bb7200f372584b705a234d222405c10440e968bf961bc0d49a68ed`.
+
+The three-block formal broad report SHA-256
+`e7b0c67a131ab9aacef8a529a4819f93d9c4d2dc0253c57b62bfcae51baa1fe3`
+completed all 25 cases and measured 0.9998x candidate/base overall. Its
+pre-registered controls were `dynamic_method_call` 1.00098x,
+`plain_function_call` 1.00102x, and `object_allocation` 0.99363x, all under
+the 1.03x regression ceiling. A matching three-block 60-second complete
+external run (report/raw SHA-256
+`aade22a0399424592e04ed637f9afd8bb3262ae8959a7c119ba3bf30eef5bf43` and
+`d67a1997049041183fd525f56e077a577047d6da45c49c3181426121661ec5f6`)
+completed all 45 cases for candidate, base, and QuickJS-NG. The target fell
+from 218.261 ms to 140.269 ms, or **0.642666x candidate/base**, clearing the
+frozen `<= 0.90x` target; the external controls were `controlflow` 0.99590x,
+`raytrace` 1.00742x, `A*` 1.00427x, `hash` 1.00467x, and `tagcloud` 0.98782x.
+
+The complete-external fast decision retained the unit. The corresponding
+promotion decision remains inconclusive solely because no exact project-wide,
+zero-gap Test262 burndown exists; this is not a claim of global conformance or
+of reaching the overall two-times-QuickJS-NG goal. It is an accepted general
+cached-evaluation reduction under the existing runtime, curated Test262, and
+QuickJS-NG comparison gates; the next unit must again start from a current
+profiled, unclosed shared cost.
