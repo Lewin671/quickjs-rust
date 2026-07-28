@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "direct-eval-selected-bindings",
+  "base_sha": "4d14ee5ab384e9eff0103d38d76a8d342d2f2f4b",
+  "queue": {
+    "candidate_sha": "4d14ee5ab384e9eff0103d38d76a8d342d2f2f4b",
+    "sha256": "dafc354680c64d5c9be2a0c49f7788b57226992850954b8fede2cf069ba8135b"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/date-format-tofte"
+    ],
+    "rank_ceiling": 5,
+    "override_reason": "Fresh profiles of ranks 1 through 4 still root in direct-leaf VM entry and call setup, whose compact dispatch, recursive scalar frame, frame-cold-state, array-index leaf, and property-cache variants are closed by current evidence. The rank-5 profile identifies a distinct dynamic-scope cost: a declaration-free direct-eval cache hit repeatedly materializes every caller binding even though the immutable cached bytecode has a finite set of referenced and written names. The proposed route is keyed only by an existing direct-eval cache hit and immutable bytecode metadata, with no workload, source-path, checksum, iteration-count, or result condition. It retains the strict target, unrelated external controls, complete external/broad evidence, and exact Test262 gate below."
+  },
+  "mechanism": {
+    "summary": "For an already-cached, declaration-free direct-eval blueprint without nested direct eval or with, build the caller compatibility environment from only the blueprint's statically referenced or written outer binding names instead of materializing every active caller slot and dynamic cell.",
+    "generality": "The VM may take the route only after an exact existing Realm direct-eval cache lookup using the same parse context as ordinary eval. The cached bytecode must remain declaration-free and contain neither nested direct eval nor with. It exports the selected live bindings with the same shadow order, cell identity, realm metadata, this/new-target/private context, and writeback path as the ordinary frame snapshot. Cache misses, comments and RegExp fast paths, declarations, nested dynamic scope, unsupported context, and every ordinary/indirect eval retain the unchanged full route before observable work.",
+    "semantic_risks": [
+      "the selected-name set must include every statically loaded, typeof-tested, stored, and sloppy-assigned outer binding, so reads and writeback cannot fall through to a same-named realm binding",
+      "active local shadowing, uninitialized lexical bindings, received upvalue cells, dynamic bindings introduced by an earlier eval, this, arguments, new.target, private-name context, and strictness must retain exactly the existing identity and lookup order",
+      "a cache lookup must use the exact direct-eval parse context, including strict, method, derived-constructor, field-initializer, and visible-private-name state, so parse legality and bytecode selection cannot drift",
+      "any cache miss or source capable of declarations, nested eval, with, closures, or per-evaluation identity must construct the existing complete dynamic environment rather than applying a partial snapshot"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-profile-date-tofte-4d14.yCMHBd/date-format-tofte.sample; exact 4d14ee5a release runtime; the official SunSpider source (SHA-256 cbefaffbecb6769a85f5877765b21f967a1cff5ab2625d4a9066c050fcdc7b5e) was concatenated 40 times solely to lengthen sampling, never used for timing or a benchmark decision.",
+      "sha256": "091f1cd213babb4cca9b6f187dcf94b246242486127767db04bcc8ebaded5043",
+      "base_sha": "4d14ee5ab384e9eff0103d38d76a8d342d2f2f4b",
+      "opportunity_ids": [
+        "external/sunspider-1.0/date-format-tofte"
+      ],
+      "shared_cost": "802 of 1,209 samples pass through native_global_eval after the existing direct-eval compilation cache has removed parsing. That chain still enters eval_function_bytecode and repeatedly shows frame_call_env-derived visible_local_entries, insert, insert_frame_cell, and fork_deopt_bindings work while the cached expressions such as Y() reference only a small outer-name subset. This is distinct from the accepted blueprint cache and from closed generic native-call or frame-layout mechanisms: it changes the dynamic binding export cardinality only for a proven reusable eval blueprint.",
+      "inclusive_fraction": 0.66
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/date-format-tofte"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/sunspider-1.0/string-tagcloud",
+      "broad/dynamic_method_call",
+      "broad/plain_function_call",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

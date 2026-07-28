@@ -193,6 +193,40 @@ fn repeated_declaration_free_direct_eval_uses_fresh_cached_blueprints() {
 }
 
 #[test]
+fn cached_direct_eval_keeps_only_referenced_outer_bindings() {
+    assert_eq!(
+        eval(
+            "var globalSelectedBinding = 100; \
+             function selectedBindings(seed) { \
+               var untouched = 23; \
+               var selected = seed; \
+               eval('selected += 1'); \
+               var twice = eval('selected += 1'); \
+               var firstThis = eval('this.offset + arguments[0]'); \
+               var secondThis = eval('this.offset + arguments[0]'); \
+               return twice + ':' + firstThis + ':' + secondThis + ':' + untouched + ':' + globalSelectedBinding; \
+             } \
+             selectedBindings.call({ offset: 4 }, 5);"
+        ),
+        Ok(Value::String("7:9:9:23:100".to_owned().into()))
+    );
+
+    // The declaration-bearing first eval must remain on the conservative
+    // route, but its function-scope var is still a selected dynamic binding
+    // when the repeated declaration-free source reaches the cache-hit route.
+    assert_eq!(
+        eval(
+            "function readsPriorEvalBinding() { \
+               eval('var introducedByPriorEval = 11'); \
+               return eval('introducedByPriorEval') + eval('introducedByPriorEval'); \
+             } \
+             readsPriorEvalBinding();"
+        ),
+        Ok(Value::Number(22.0))
+    );
+}
+
+#[test]
 fn global_nan_is_non_writable() {
     // Sloppy mode: assignment silently fails, NaN remains a number.
     assert_eq!(

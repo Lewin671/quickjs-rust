@@ -1283,7 +1283,7 @@ fn is_line_terminator(ch: char) -> bool {
     matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}')
 }
 
-fn direct_eval_parse_context(env: &CallEnv) -> EvalParseContext {
+pub(crate) fn direct_eval_parse_context(env: &CallEnv) -> EvalParseContext {
     EvalParseContext {
         strict: matches!(
             env.get(crate::DIRECT_EVAL_STRICT_BINDING),
