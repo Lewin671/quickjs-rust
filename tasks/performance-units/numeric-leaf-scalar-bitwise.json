@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "numeric-leaf-scalar-bitwise",
+  "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+  "queue": {
+    "candidate_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+    "sha256": "165bb337cf1a13854151a451ada0b0a035109bddd3833db704871d9bbb1bdf07"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/bitops-3bit-bits-in-byte"
+    ],
+    "rank_ceiling": 17,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Evaluate already-admitted numeric-leaf bitwise and shift operations directly on f64 scalar operands, rather than materializing temporary Value operands only to recover the same Number or Boolean result.",
+    "generality": "The route changes only the existing numeric-leaf executor after its bytecode and all operands have already passed the current primitive-number admission checks. It applies to every admitted leaf using ECMAScript Number bitwise, shift, exponentiation, arithmetic, or comparison operators; it has no source-path, function-name, workload, input-size, iteration-count, call-graph, or compiler-admission condition. Any non-Number operand, unsupported opcode, BigInt path, dynamic call, property access, coercion, or existing leaf-plan rejection continues through the unchanged generic VM.",
+    "semantic_risks": [
+      "the direct scalar forms must exactly preserve ToInt32 and ToUint32 behavior for NaN, infinities, signed zero, fractional values, and large finite doubles",
+      "left, signed-right, and unsigned-right shifts must retain the ECMAScript five-bit count mask and signed versus unsigned result conversion",
+      "the fast result domain must preserve Boolean comparison results and Number exponentiation, remainder, and signed-zero behavior without leaking a non-Number shortcut",
+      "the implementation must not add a new bytecode classifier, eager plan construction, or dispatch probe to calls that are not already executing an admitted numeric leaf"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /private/tmp/qjs-profile-bitops-3bit-641-v1.sample; profile-only 400x repetition of the verified SunSpider bitops-3bit-bits-in-byte hot path (wrapper SHA-256 fe2ec653fc0560c4ae9b02b0b07ac2c23258fdb2585e9b7737c5ccf524fcf2c9) executed by the runtime-equivalent post-revert release binary",
+      "sha256": "38fcb6bfa72a2bdee41f1dd4adb8550fd59593a8a034271a9104ef7d7c25c2dc",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/sunspider-1.0/bitops-3bit-bits-in-byte"
+      ],
+      "shared_cost": "The 7,411-sample profile reaches the existing direct-leaf numeric executor on every fast3bitlookup call: try_eval_numeric_leaf has 2,147 top samples, fast_number_binary 1,070, and direct_number_binary 794. The leaf already has primitive f64 operands, but each bitwise operation still enters fast_number_binary through temporary Value::Number wrappers and drops them again.",
+      "inclusive_fraction": 0.53
+    },
+    {
+      "source": "macOS samples 2026-07-27 /private/tmp/qjs-profile-crypto-md5-641-v3.sample and /private/tmp/qjs-profile-crypto-sha1-641-v1.sample; repeated verified SunSpider hash computations executed by the runtime-equivalent post-revert release binary",
+      "sha256": "8ed28c99189b5e369f8557c033fa3b2493ea69548c7603a578bf3a75cc3cf102",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/sunspider-1.0/crypto-md5",
+        "external/sunspider-1.0/crypto-sha1"
+      ],
+      "shared_cost": "Both independent profiles show existing numeric-leaf helpers such as safe_add and rotate operations spending material time in direct_number_binary and fast_number_binary beneath try_eval_numeric_leaf. Their outer numeric call graph remains deliberately out of scope; this unit only removes the shared scalar operation cost already present within the admitted helpers.",
+      "inclusive_fraction": 0.2
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/bitops-3bit-bits-in-byte"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/bitops-bits-in-byte",
+      "external/sunspider-1.0/crypto-md5",
+      "external/sunspider-1.0/crypto-sha1",
+      "external/sunspider-1.0/math-spectral-norm",
+      "broad/plain_function_call",
+      "broad/branch_arithmetic",
+      "broad/dynamic_method_call"
+    ],
+    "target_max_candidate_over_base": 0.8,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

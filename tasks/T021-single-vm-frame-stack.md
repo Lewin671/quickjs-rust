@@ -1397,3 +1397,52 @@ widening its bytecode grammar, relaxing guards, or adding more shift variants:
 the shared control-plan admission/dispatch cost is not a net win under its
 declared independent control. A successor must begin from a new profile of a
 different shared cost.
+
+### 2026-07-28 rejected scalar numeric-leaf bitwise / constant-right lowering
+
+Queue rank 17, SunSpider `bitops-3bit-bits-in-byte`, entered the existing
+numeric-leaf executor on every `fast3bitlookup` call. The current 400-times
+profile receipt is
+`/private/tmp/qjs-profile-bitops-3bit-641-v1.sample` (SHA-256
+`38fcb6bfa72a2bdee41f1dd4adb8550fd59593a8a034271a9104ef7d7c25c2dc`): of
+7,411 samples, `try_eval_numeric_leaf` had 2,147, `fast_number_binary` 1,070,
+and `direct_number_binary` 794. The frozen one-attempt plan is
+`tasks/performance-units/numeric-leaf-scalar-bitwise.json` (SHA-256
+`c5581bbd41151b55fbe62ffc22f880c6beed4e9cf261e71c1cbe12989c51c9f7`). It
+tested a general lowering only after the existing primitive-number leaf
+admission: direct scalar evaluation of bitwise/shift operations and immutable
+right-literal `ToInt32`/`ToUint32` preparation. It introduced no source,
+function-name, workload, input-size, call-graph, or new-admission condition.
+
+The candidate profile
+`/private/tmp/qjs-profile-bitops-3bit-const-right-v1.sample` (SHA-256
+`adf8d362f815797e265fa311499ac1f28dcbb3246d711bd1d845d7ad5fc2ec55`) did
+remove the inner leaf `fast_number_binary` cost: `try_eval_numeric_leaf` was
+1,802 samples, `direct_number_binary` 612, and
+`direct_bitwise_const_right` 242. One preliminary 400-times target wrapper
+diagnostic measured 12.48 seconds for candidate versus 16.61 seconds for base
+(about **0.751x**); repeated `crypto-md5` and `crypto-sha1` diagnostics were
+about **0.865x** and **0.868x**. These timings were diagnostic only, not a
+promotion or fast-retention claim.
+
+The earliest independent broad control already falsified the unit. The
+three-block, candidate/base-only raw screen is
+`target/benchmarks/fast-numeric-leaf-scalar-bitwise-controls.jsonl` (SHA-256
+`de83fc8d8e3c2d74a45f20923799ce36b50c7ee6a213599952b23ab522f1683a`). It is
+explicitly dirty, provenance-unverified, partial (3 of 25 broad cases), and
+`claim_eligible: false`; its normalized median ratios are therefore negative
+screen evidence only. `plain_function_call` regressed to
+**1.140703x candidate/base**, beyond the frozen 1.03x control ceiling, while
+`branch_arithmetic` was 1.000139x and `dynamic_method_call` 0.999877x. The
+candidate binary SHA-256 was
+`25f3e198168e3cfce90671d47f553d40b0239cb72a88330713677914d6a8d47f`; the
+exact-base binary SHA-256 was
+`70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c`.
+
+The unit is **rejected and reverted** before a complete external/broad run or
+Test262 scan: a failed frozen control cannot be rescued by filling in the
+remaining cases. Do not retune this same direct-leaf scalar lowering through
+helper inlining, enum reshaping, or code-layout changes; that would be a
+second attempt after a decisive shared-call regression. A successor must start
+from a new profile of a distinct shared cost and keep ordinary
+`plain_function_call` off its perturbation path.
