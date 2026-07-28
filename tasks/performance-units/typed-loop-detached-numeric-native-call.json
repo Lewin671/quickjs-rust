@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "typed-loop-detached-numeric-native-call",
+  "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+  "queue": {
+    "candidate_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+    "sha256": "165bb337cf1a13854151a451ada0b0a035109bddd3833db704871d9bbb1bdf07"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/3d-morph"
+    ],
+    "rank_ceiling": 18,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Extend the existing typed-loop CallNumericNative lowering from receiver-preserving CallResolved bytecode to ordinary Call bytecode with one or two scalar arguments, so a detached pure Math intrinsic held in an existing local can execute in the typed register loop instead of re-entering the generic VM call path.",
+    "generality": "The route is selected solely by existing loop bytecode, scalar register state, and the run-time identity of an unbound NativeFunction pure Math intrinsic. It applies to ordinary detached or locally stored numeric intrinsics in any admitted typed loop; it has no source-path, function-name, workload, input-size, iteration-count, checksum, call-graph, or benchmark-specific condition. A user function, bound function, non-Math native, non-numeric operand, unsupported arity, or any failed dense-array/typed-loop guard declines to the unchanged interpreter at the existing deoptimization site.",
+    "semantic_risks": [
+      "plain Call has an undefined receiver while CallResolved preserves a receiver, so the new lowering must not share receiver-consuming behavior or admit an intrinsic whose result can observe this",
+      "the compiler must preserve the ordinary Call operand-stack order and its exact resume site when the native identity or a scalar operand guard fails",
+      "a local callee can hold a user function, bound function, proxy, or a changed value; every such case must decline before executing any native iteration",
+      "unsupported or missing arity, NaN, infinity, signed-zero, and two-argument Math semantics must continue to use the existing typed-loop math helpers or decline rather than duplicate arithmetic"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /private/tmp/qjs-profile-3d-morph-05f-v3.sample; exact pinned SunSpider 3d-morph source (SHA-256 9a782188384af592c308338225f014cc7df246614f47f312cf71f29ed06e9f2d) plus a profile-only 3,000-call morph repetition whose generated source SHA-256 is 73346039c0a608ba4ccd0d7842ff99d48e1da2189cebed0cd7d17befb36478c7, executed by the exact 6cac-equivalent release binary",
+      "sha256": "05a481511cc8fe27bcde904fa2e1f76d5141a5823394cd1228f3fbcbd177773c",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/sunspider-1.0/3d-morph"
+      ],
+      "shared_cost": "All 7,419 execution samples enter the direct leaf for morph, but its inner detached sin(...) call remains on the generic VM path: Vm::run_completion contributes 1,442 samples at the call site, call_callee_with_marker 647, try_fast_global_native_call 190, and construction or destruction of the temporary CallEnv 324. The typed-loop compiler already lowers equivalent receiver-preserving CallResolved Math calls, but it has no Op::Call arm, leaving this otherwise scalar dense-array loop uninterpreted.",
+      "inclusive_fraction": 0.19
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/3d-morph"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/access-nbody",
+      "external/sunspider-1.0/math-spectral-norm",
+      "external/sunspider-1.0/crypto-sha1",
+      "external/sunspider-1.0/bitops-3bit-bits-in-byte",
+      "broad/plain_function_call",
+      "broad/branch_arithmetic",
+      "broad/dynamic_method_call"
+    ],
+    "target_max_candidate_over_base": 0.68,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

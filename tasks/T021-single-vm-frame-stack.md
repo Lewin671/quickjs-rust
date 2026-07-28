@@ -1446,3 +1446,50 @@ helper inlining, enum reshaping, or code-layout changes; that would be a
 second attempt after a decisive shared-call regression. A successor must start
 from a new profile of a distinct shared cost and keep ordinary
 `plain_function_call` off its perturbation path.
+
+### 2026-07-28 rejected detached numeric-native ordinary-call typed-loop lowering
+
+Queue rank 18, SunSpider `3d-morph` (2.901753x QuickJS-NG in the receipt-bound
+queue), has a local `sin = Math.sin` whose inner `sin(...)` call compiles as an
+ordinary `Op::Call`, rather than the receiver-preserving `Op::CallResolved`
+form the generic typed-loop tier already lowers. The current base profile is
+`/private/tmp/qjs-profile-3d-morph-05f-v3.sample` (SHA-256
+`05a481511cc8fe27bcde904fa2e1f76d5141a5823394cd1228f3fbcbd177773c`), taken
+from the pinned source SHA-256
+`9a782188384af592c308338225f014cc7df246614f47f312cf71f29ed06e9f2d`. It
+showed the generic native-call chain beneath `morph`, including
+`call_callee_with_marker`, `try_fast_global_native_call`, and temporary
+`CallEnv` work.
+
+The frozen one-attempt plan is
+`tasks/performance-units/typed-loop-detached-numeric-native-call.json`
+(SHA-256 `14ae2cd11321bb8fd4b24d7212c5c04b23216e88fcc44c66fb75d877f7639b0f`).
+The prototype lowered one- and two-argument ordinary calls into the existing
+`CallNumericNative` typed operation. It retained the existing run-time guard:
+only an unbound pure numeric native with scalar operands executes there; user,
+bound, non-Math, and non-scalar calls deopt at the original call site. Focused
+typed-loop tests, including the existing receiver-preserving Math coverage,
+passed, and the exact upstream source still completed normally.
+
+A three-second candidate diagnostic sample at
+`/private/tmp/qjs-profile-3d-morph-detached-call-candidate.sample` (SHA-256
+`5d393f9a4fc869cbae9ad300bbdd68ca906d7c209d24a09606bcb10c66ad116e`) recorded
+the new tier attempting execution, but was intentionally stopped after the
+sample and is not a completion or timing receipt. The decisive preliminary
+black-box screen used the exact upstream source followed by 500 extra
+`morph` calls in the same Realm (wrapper SHA-256
+`9e23925045055773ed9e3facc9fad9d1005c7a85dff9048f30927102d8669ec5`). Five
+candidate process times were 2.33, 2.34, 2.32, 2.33, and 2.33 seconds; five
+base times were 2.32, 2.30, 2.30, 2.31, and 2.30 seconds. Thus the medians are
+**2.33s candidate / 2.30s base = 1.013043x**, nowhere near the frozen
+`<= 0.68x` target gate. Candidate and exact-base release binary SHA-256 values
+were `f671d6fe12a52c3320ec6208194331a4637b250798885b71a547fdca2fe62fd1` and
+`70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c`.
+
+This was an ordered, diagnostic screen rather than a complete external or
+broad report, but the target miss is far larger than its timing precision. The
+prototype and its focused test were reverted immediately; no controls, full
+report, or Test262 promotion scan are warranted. Do not retry this same
+ordinary-`Call` lowering by widening its admission, changing receiver handling,
+or reshaping the helper: its declared target has no end-to-end win. A successor
+must begin from a new profile of a different shared cost.
