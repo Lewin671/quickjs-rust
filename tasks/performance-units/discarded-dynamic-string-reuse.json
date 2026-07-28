@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "discarded-dynamic-string-reuse",
+  "base_sha": "7fffa88d9c70dd33ef51c786f8d0930447792d16",
+  "queue": {
+    "candidate_sha": "7fffa88d9c70dd33ef51c786f8d0930447792d16",
+    "sha256": "6a80393b587e25983ed283765c93d39b961f026ba82fc886a48da16f77716cef"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-base64"
+    ],
+    "rank_ceiling": 8,
+    "override_reason": "Ranks 1 through 7 are closed by current direct-leaf frame, constructor-leaf, direct-eval/capture, RegExp-quantifier, or capture-heavy crypto evidence. The fresh rank-8 string-base64 profile identifies a distinct remaining string-buffer ownership cost: discarded dynamic compound assignment emits a direct identifier store, while the existing reuse guard recognizes only Dup plus store. The mechanism is selected solely by bytecode successor shape and live binding state, never by source or workload identity."
+  },
+  "mechanism": {
+    "summary": "Extend the existing dynamic primitive-string buffer reuse guard to recognize an immediate identifier store after a discarded compound assignment, in addition to its existing Dup-plus-store bytecode sequence.",
+    "generality": "Eligibility depends only on the next bytecode operation being an existing local or global identifier store and on the current pointer-identity, mutability, module, realm, and descriptor checks. It applies to every eligible dynamic string compound assignment, without inspecting benchmark names, source paths, checksums, or iteration counts.",
+    "semantic_risks": [
+      "clearing an engine-internal binding mirror only when the immediately following bytecode operation restores that binding with the computed result",
+      "preserving JavaScript-visible aliases by retaining copy-on-write whenever any external string reference remains shared",
+      "evaluating the right operand and all observable coercions exactly once before the original store semantics run",
+      "retaining the existing fallback for direct eval, with, module imports, immutable bindings, accessors, and non-writable global properties"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-27 /tmp/qjs-profile-string-base64-current-cc4d.sample; 70x function wrapper of the hash-verified SunSpider source, wrapper SHA-256 7c5c7afb712570c98344e9516c65fa2f0e398c64785ff9d004da5b1c0e0a0b1d",
+      "sha256": "3ab2633f2f5ee9c383c68c89a14dbb5d639b906bbc2ed734233de41bc54bd186",
+      "base_sha": "7fffa88d9c70dd33ef51c786f8d0930447792d16",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-base64"
+      ],
+      "shared_cost": "Discarded dynamic += forms enter Vm::eval_binary but cannot release the internal binding mirror because the guard recognizes only Dup plus store. Of 3,662 samples, separate hot branches show 456 in replacement String growth and 351 in left JsString extraction and cloning.",
+      "inclusive_fraction": 0.2
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-base64"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/string-unpack-code",
+      "external/sunspider-1.0/string-validate-input",
+      "external/sunspider-1.0/date-format-tofte",
+      "broad/string_slice",
+      "broad/local_read"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
