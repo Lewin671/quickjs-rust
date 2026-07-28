@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "present-own-primitive-predicate-scan",
+  "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+  "queue": {
+    "candidate_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+    "sha256": "165bb337cf1a13854151a451ada0b0a035109bddd3833db704871d9bbb1bdf07"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/access-nsieve"
+    ],
+    "rank_ceiling": 23,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Extend the existing false-prefix predicate scanner with a read-only present-own dense-array lease: it may retain unrelated holes outside the dynamic scan range while each accessed index is proven present own, and it reads primitive Number or Boolean values without entering the ordinary VM.",
+    "generality": "Admission remains derived solely from existing bytecode CFG/pure-read translation and run-time local/array state. The lease requires dense backing to cover logical length and no own special properties; each dynamic index is checked against the borrowed hole set before its value is read. A hole in the scanned range, accessor or descriptor, proxy, borrow conflict, non-primitive value, unsupported predicate, changed local, or any failed guard deoptimizes at the existing current-iteration boundary. No source path, function name, workload, input size, iteration count, checksum, or benchmark identity participates in admission.",
+    "semantic_risks": [
+      "present own elements must continue to shadow prototype properties while a scanned hole must re-enter generic lookup so an inherited getter remains observable",
+      "own indexed descriptors and array storage borrow conflicts must decline before any scan iteration is committed",
+      "after a partial false prefix, the counter and false-branch completion state must be committed before the current hole, accessor, or non-primitive iteration is replayed by the VM",
+      "Boolean truthiness must be exact, and Boolean values must not be admitted into numeric-coercing predicate operations"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /private/tmp/qjs-profile-access-nsieve-7c-v1.sample; exact pinned SunSpider access-nsieve source (SHA-256 ef62b42b6f926d61d9741a8e57b2758a9aea28ad2d1ee1e7d4747957d00fdc20) plus a profile-only repeated wrapper whose generated source SHA-256 is f81b05ee3bcbbc3be745cf86d92e2affb1a24261dc5cd2f01075494445b86efa, executed by the exact 6cac-equivalent release binary",
+      "sha256": "f61648fc98248715a8104ec3715e2a57238b6bcc8abb948ecff816387b2ab884",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/sunspider-1.0/access-nsieve"
+      ],
+      "shared_cost": "The outer sieve predicate has the existing pure false-prefix shape, but Array(m + 1) deliberately retains only indices 0 and 1 as holes after it writes Boolean flags from index 2 onward. The full-array dense lease rejects before touching the Boolean load, leaving virtual-object dispatch (626 exclusive samples, 17.0%) and generic loop/property work active across composite false entries. A present-own per-index proof removes that unrelated-hole blocker without changing the predicate bytecode or array write path.",
+      "inclusive_fraction": 0.17
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/access-nsieve"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/access-nbody",
+      "external/sunspider-1.0/bitops-nsieve-bits",
+      "external/sunspider-1.0/crypto-sha1",
+      "external/sunspider-1.0/math-spectral-norm",
+      "broad/plain_function_call",
+      "broad/branch_arithmetic",
+      "broad/dynamic_method_call"
+    ],
+    "target_max_candidate_over_base": 0.78,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

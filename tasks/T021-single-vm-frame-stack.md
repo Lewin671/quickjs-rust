@@ -1493,3 +1493,86 @@ report, or Test262 promotion scan are warranted. Do not retry this same
 ordinary-`Call` lowering by widening its admission, changing receiver handling,
 or reshaping the helper: its declared target has no end-to-end win. A successor
 must begin from a new profile of a different shared cost.
+
+### 2026-07-28 rejected full-dense Boolean predicate scan
+
+Queue rank 23, SunSpider `access-nsieve` (2.554890x QuickJS-NG in the
+receipt-bound queue), initializes `Array(m + 1)` with Boolean `true` and marks
+composites Boolean `false`. Its outer `if (isPrime[i])` has the existing
+false-prefix scan bytecode shape, but the scanner's dense load previously
+accepted only `Number`. The current diagnostic profile is
+`/private/tmp/qjs-profile-access-nsieve-7c-v1.sample` (SHA-256
+`f61648fc98248715a8104ec3715e2a57238b6bcc8abb948ecff816387b2ab884`) from the
+exact upstream source SHA-256
+`ef62b42b6f926d61d9741a8e57b2758a9aea28ad2d1ee1e7d4747957d00fdc20`. It
+showed 626 exclusive samples in `run_virtual_object_op` as well as the
+ordinary loop/property path.
+
+The frozen one-attempt plan is
+`tasks/performance-units/boolean-dense-predicate-scan.json` (SHA-256
+`5987a26faa6ed9292daa65de622194059bdc7d401c362e8956f8e43ee79f996a`). Its
+prototype admitted Boolean elements only under the pre-existing pure-read,
+authoritative-local, and fully-dense own-data guards; every other Value,
+hole, descriptor, proxy, or borrow conflict stayed on the VM path. Focused
+predicate-scan coverage passed 18/18 tests, including Boolean false prefixes,
+true-body handoff, non-Boolean deoptimization, holes, and indexed accessors.
+
+The actual array is never fully dense: indices zero and one remain holes after
+the initialization loop. Consequently the existing full-array lease rejects
+before the Boolean load is reached, so the unit did not remove the profiled
+cost. Five alternating candidate/base process pairs used the exact upstream
+source inside a profile-only same-Realm 20-call wrapper (wrapper SHA-256
+`9b6f8545c35e24348e433725b0ce8daf88dc7cbee5669e1e6e2eb4faa151d001`). Candidate
+user times were 1.52, 1.52, 1.52, 1.52, and 1.52 seconds; base times were
+1.53, 1.52, 1.53, 1.53, and 1.53 seconds. The medians are **1.52s / 1.53s =
+0.993464x candidate/base**, far short of the frozen `<= 0.78x` gate. The dirty
+candidate and exact-base binary SHA-256 values were
+`04e826e7cd9b75e4a19a7840071ce72a2c8f716adb3b1d38bc84c4919975adee` and
+`70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c`.
+
+The Boolean change and its focused tests were reverted immediately; no
+controls, full report, or Test262 promotion scan are warranted. Do not retry
+Boolean support under the same full-dense lease or try to tune this miss by
+changing its type checks. A successor may separately profile and justify a
+range-aware present-own read lease that can prove every index it actually
+reads; that is a different semantic mechanism with new prototype, descriptor,
+and hole obligations.
+
+### 2026-07-28 rejected present-own primitive predicate scan
+
+The distinct successor plan
+`tasks/performance-units/present-own-primitive-predicate-scan.json` (SHA-256
+`9f8ae265f1a2aa47255790394edb5c5468b05ffc74417d464d804db8efdf3c1d`) retained
+the existing false-prefix CFG and completion proof, but replaced the
+full-array dense lease with a read-only lease that exposed dense backing plus
+the hole set. Each scanned index had to be present own; unrelated holes and
+prototype overrides were harmless because a present own element shadows the
+prototype. Any hole reached by the scan, own special property, borrow conflict,
+non-primitive value, or unsupported numeric coercion deoptimized at the
+current iteration. The Boolean extension was therefore coupled only to the
+same per-index primitive-read proof, not to a new opcode or workload matcher.
+
+Focused candidate coverage passed 18/18 predicate-scan tests and 12/12 array
+tests. It included the exact `Array(n)`-with-unrelated-leading-holes shape,
+Boolean false-prefix/true-body behavior, and a scanned hole whose inherited
+getter must run. The exact upstream `access-nsieve` source still completed
+normally. These are semantic checks only; they do not override the frozen
+performance threshold.
+
+The first and only timing attempt reused the exact source in the same
+20-call profile wrapper (SHA-256
+`9b6f8545c35e24348e433725b0ce8daf88dc7cbee5669e1e6e2eb4faa151d001`). Five
+alternating candidate times were 1.52, 1.52, 1.52, 1.52, and 1.52 CPU seconds;
+the corresponding base times were 1.52, 1.52, 1.52, 1.53, and 1.52 seconds.
+Both medians are **1.52s**, or **1.000000x candidate/base**, not the frozen
+`<= 0.78x` target. Candidate release SHA-256 was
+`d2029a0d76954001df36c28fadc997de2a1c5ab5037c117b750dc935beafc6bb`; the
+exact-base release SHA-256 was
+`70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c`.
+
+The runtime change and focused tests were reverted immediately; no controls,
+full report, or Test262 promotion scan are warranted after this decisive target
+miss. Do not retry this same present-own primitive scan by widening the lease,
+changing plan selection, or adding more primitive forms. A successor must
+profile a different shared cost rather than turning the rejected target into a
+series of admission tweaks.

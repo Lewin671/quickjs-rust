@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "boolean-dense-predicate-scan",
+  "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+  "queue": {
+    "candidate_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+    "sha256": "165bb337cf1a13854151a451ada0b0a035109bddd3833db704871d9bbb1bdf07"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/access-nsieve"
+    ],
+    "rank_ceiling": 23,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Extend the existing false-prefix dense predicate scanner so an admitted pure truthiness predicate can read a present own Boolean element as well as a Number, skipping consecutive false Boolean iterations without entering the ordinary VM.",
+    "generality": "Admission remains the existing bytecode CFG, pure-read predicate translation, authoritative-local, and fully dense own-data proof. The execution path observes only present own Number or Boolean elements; holes, descriptors, borrowed storage, proxies, strings, objects, BigInts, null, undefined, and every failed guard decline to the unchanged VM before the current iteration. No source path, function name, workload, input size, iteration count, checksum, or benchmark identity participates in admission.",
+    "semantic_risks": [
+      "Boolean truthiness must exactly distinguish false from true while preserving generic truthiness and side effects for every other Value kind",
+      "a hole, indexed accessor, proxy, or borrowed storage must retain ordinary property lookup rather than observing the dense lease",
+      "after a partial false prefix, the counter and false-branch completion state must be committed before the first true or deoptimized iteration re-enters the VM",
+      "the scanner must not treat Boolean values as Numbers in a predicate that requires numeric coercion"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /private/tmp/qjs-profile-access-nsieve-7c-v1.sample; exact pinned SunSpider access-nsieve source (SHA-256 ef62b42b6f926d61d9741a8e57b2758a9aea28ad2d1ee1e7d4747957d00fdc20) plus a profile-only repeated wrapper whose generated source SHA-256 is f81b05ee3bcbbc3be745cf86d92e2affb1a24261dc5cd2f01075494445b86efa, executed by the exact 6cac-equivalent release binary",
+      "sha256": "f61648fc98248715a8104ec3715e2a57238b6bcc8abb948ecff816387b2ab884",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/sunspider-1.0/access-nsieve"
+      ],
+      "shared_cost": "The source initializes Array(m + 1) with Boolean true and later marks composites Boolean false. The existing false-prefix plan already recognizes the pure outer predicate shape, but its DenseLoad accepts only Number and immediately suppresses on the first Boolean. The profile attributes 626 exclusive samples (17.0%) to virtual-object dispatch plus generic loop and property work on this rejected outer loop; after sieve initialization, false composite entries dominate the outer iteration stream.",
+      "inclusive_fraction": 0.17
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/access-nsieve"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/access-nbody",
+      "external/sunspider-1.0/bitops-nsieve-bits",
+      "external/sunspider-1.0/crypto-sha1",
+      "external/sunspider-1.0/math-spectral-norm",
+      "broad/plain_function_call",
+      "broad/branch_arithmetic",
+      "broad/dynamic_method_call"
+    ],
+    "target_max_candidate_over_base": 0.78,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
