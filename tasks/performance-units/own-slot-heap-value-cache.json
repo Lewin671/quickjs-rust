@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "own-slot-heap-value-cache",
+  "base_sha": "e9841e32c0617d1ca996520f88b2c524df6427b8",
+  "queue": {
+    "candidate_sha": "e9841e32c0617d1ca996520f88b2c524df6427b8",
+    "sha256": "2a0e2f657e1651a77ab639683d208d498f0d3ac66ca4dd27819a0b6e61d7f2d0"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar"
+    ],
+    "rank_ceiling": 3,
+    "override_reason": "Rank 1 controlflow-recursive is closed by the rejected direct-leaf tail and same-function frame-stack mechanisms. The fresh rank-2 and rank-3 profiles independently retain NamedPropertyCache get/update work on ordinary own data properties whose values are not eligible for Exact caching. Rank-4 hash-map exposes the same cost but is kept as a regression control because its sampled fraction is lower. This is not the previously rejected inherited-prototype cache: it only records a proven own data slot and never changes prototype lookup."
+  },
+  "mechanism": {
+    "summary": "When an ordinary own named-data read returns a value that Exact cannot retain without extending heap reachability, cache the receiver's weak identity, layout revision, and existing own-data slot, then read the current value from that slot on a hit.",
+    "generality": "Eligibility comes only from the existing ordinary own-data read and live slot/layout checks. It applies to Function, String, BigInt, Array, Map, Set, Proxy, and other non-Exact value variants at every static named-property site, without inspecting source paths, benchmark names, checksums, or iteration counts. Inherited, accessor, exotic, Proxy-receiver, typed-array, module-namespace, and primitive-receiver reads retain their existing paths.",
+    "semantic_risks": [
+      "the cached slot must be invalidated by every structural change through the receiver layout revision",
+      "a value replacement with unchanged layout must return the replacement rather than the stale cached value",
+      "the cache must retain only the receiver weak reference and no heap value, so it cannot extend object or function lifetime",
+      "accessor and inherited-property reads must still clear the cache and use the current slow path"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-27 /tmp/qjs-profile-raytrace-e984.sample; hash-verified JetStream raytrace-public-class-fields iteration body from the current e9841e32 external corpus",
+      "sha256": "9fc21a797ae0b52d351388be238bf686340db011d9d4cc53d360c652bf1ef8ef",
+      "base_sha": "e9841e32c0617d1ca996520f88b2c524df6427b8",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/raytrace-public-class-fields"
+      ],
+      "shared_cost": "26 of 707 top-stack samples are NamedPropertyCache::get and 9 are update; the call graph also shows repeated try_cached_get_string and cache-entry drops. The current mechanism clears rather than retaining a verified own slot when Exact cannot represent the returned heap value.",
+      "inclusive_fraction": 0.037
+    },
+    {
+      "source": "macOS sample 2026-07-27 /tmp/qjs-profile-ai-astar-e984.sample; hash-verified Kraken ai-astar direct-script bundle from the current e9841e32 external corpus",
+      "sha256": "cd32fe54624e394c5dd3ed9e7bdb0d4125d929d9bae28aceac514656253b8f4f",
+      "base_sha": "e9841e32c0617d1ca996520f88b2c524df6427b8",
+      "opportunity_ids": [
+        "external/kraken-1.1/ai-astar"
+      ],
+      "shared_cost": "35 of 727 top-stack samples are NamedPropertyCache::get, 27 are update, and 22 are try_cached_get_string. Their hot chains include cache clear/update after dynamic own function and heap-valued fields, while the receiver remains an ordinary own-data object.",
+      "inclusive_fraction": 0.048
+    },
+    {
+      "source": "macOS sample 2026-07-27 /tmp/qjs-profile-hash-map-e984.sample; hash-verified JetStream hash-map iteration body from the current e9841e32 external corpus",
+      "sha256": "31789088096705391d76ace722575079e2747440bcca0d0ffa88710ef95c8e81",
+      "base_sha": "e9841e32c0617d1ca996520f88b2c524df6427b8",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "11 of 725 top-stack samples are NamedPropertyCache::get and 10 are try_cached_get_string, confirming the same cache family at a lower fraction. It is an independent regression control rather than a required target.",
+      "inclusive_fraction": 0.015
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar"
+    ],
+    "control_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/date-format-tofte",
+      "broad/property_read",
+      "broad/object_allocation",
+      "broad/dynamic_method_call"
+    ],
+    "target_max_candidate_over_base": 0.98,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

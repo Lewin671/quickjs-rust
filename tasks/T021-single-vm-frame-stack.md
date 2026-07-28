@@ -1216,3 +1216,45 @@ and incomplete Kraken comparability; report/raw SHA-256 values are
 Retain this as a local, general engine candidate, not a T021 or 2x-campaign
 promotion. Promotion still requires the plan's complete broad and external
 evidence plus a zero-gap exact Test262 scan from an exact committed candidate.
+
+### 2026-07-27 rejected own-slot cache for non-Exact values
+
+The current, receipt-bound queue at `e9841e32` still has closed recursion at
+rank 1, followed by JetStream `raytrace-public-class-fields` (5.742x
+QuickJS-NG), Kraken `ai-astar` (5.568x), and JetStream `hash-map` (5.498x).
+Fresh profiles found the same named-own-property cache family in all three:
+`NamedPropertyCache::get` accounts for 26/707 top-stack samples in raytrace,
+35/727 in ai-astar, and 11/725 in hash-map. The corresponding current profile
+SHA-256 values are `9fc21a797ae0b52d351388be238bf686340db011d9d4cc53d360c652bf1ef8ef`,
+`cd32fe54624e394c5dd3ed9e7bdb0d4125d929d9bae28aceac514656253b8f4f`, and
+`31789088096705391d76ace722575079e2747440bcca0d0ffa88710ef95c8e81`.
+
+The frozen unit plan is
+`tasks/performance-units/own-slot-heap-value-cache.json` (SHA-256
+`358a64f123d0e7f958eb19425fb0b86abd73c84c96cbc2909298486426a4b8bb`). It
+tested a distinct mechanism from the previously rejected prototype cache:
+after an existing ordinary own-data read had proved a slot but the value could
+not be kept in an `Exact` entry without retaining heap state, retain only the
+weak receiver, layout revision, and slot; each hit re-reads the current value.
+The focused cache test covered value replacement, structural invalidation, and
+weak receiver lifetime.
+
+The one permitted dirty-candidate fast screen used candidate release SHA-256
+`a5c38162c2a444a6b3d95ca68bee13c06f0886efa37e43899342418e40b52bc6`, exact
+`e9841e32` base SHA-256
+`a490883b34e1f7304089d120f7046a133f53b9728929670f9de0a2dee18ae81d`, and
+pinned QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0` across
+all 45 external cases and three role-rotated blocks. Raytrace met its frozen
+target at **0.969856x** candidate/base and hash-map improved to **0.953756x**,
+but independent target ai-astar regressed to **1.014760x**, missing the
+required `<= 0.980000x` shared-target gate. Controls remained within their
+1.03 ceiling: controlflow-recursive **0.939998x** and date-format-tofte
+**1.001592x**. The external report and raw SHA-256 values are
+`9d1dd5bbcd80562e97b9a0ddffef8837ec9f2a223640f0f887cc9a3a3ca45f29` and
+`d00b555eebec88928a2b84c3b318ce134686b96e4fa628bd208d5318ec2e852f`.
+
+The runtime change and its focused test were reverted immediately. Do not
+retune this non-Exact own-slot fallback by expanding its value types or cache
+capacity: it is not a shared improvement across the declared targets. A
+successor must target a different current-profiled cost.
