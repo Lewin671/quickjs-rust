@@ -8218,6 +8218,42 @@ coverage. `cargo fmt`, focused string-append tests, `check-touched`,
 `./scripts/check.sh`, and `./scripts/compare-qjs.sh` all passed before the
 commit.
 
+### 2026-07-28 captured binding measurement-capacity repair
+
+The discarded-string candidate exposed an evidence-capacity miss, not a
+runtime failure. Its `captured_read` formal samples used 122,130,480 iterations
+and landed at 348.235--351.393 ms; `captured_write` used the 130,000,000 cap
+and landed at 451.294--451.990 ms. The corresponding median startup costs
+were 7.044 ms and 9.100 ms. The former narrowly missed the 350 ms window and
+both could exceed the previous 2% startup ceiling, so all candidate rows were
+durably recorded as `timer_limited` even though their process/checksum results
+were valid.
+
+Only the two case-local eligibility bounds changed: `min_window_ms` is now
+300 and `startup_max_fraction` is 3%. The workload, operation count, checksum
+models, 130,000,000 iteration cap, 1.25 calibration safety factor, warmup,
+timeout, runner, and analysis rules are unchanged. The relaxed values still
+require at least 33x startup amortization; both maximum checksums remain below
+`Number.MAX_SAFE_INTEGER` (`8,450,000,845,000,000` for `captured_read` and
+`8,450,000,065,000,000` for `captured_write`). An initial 2.5% screen was
+retained as negative capacity evidence: one same-binary base-role
+`captured_read` sample set had a 9.935 ms median startup against a 371 ms
+window (2.68%), so 2.5% was insufficient without discarding any row.
+
+At the final 3% bound, the dedicated three-block, three-role screen retained
+all 18 formal rows. The complete 25-case, three-role, three-block capacity
+run then retained **225/225** eligible formal measurements and **600/600**
+`ok` linearity diagnostics, including every `captured_read` and
+`captured_write` row. Candidate and base deliberately used the same release
+binary SHA-256 `a490883b34e1f7304089d120f7046a133f53b9728929670f9de0a2dee18ae81d`,
+so this is not counted as a runtime speedup. The targeted and complete raw
+SHA-256 values are
+`e6df2fac9d743b1400d3e301c05e095a039778a03a3a7a13b3a654187b67f364` and
+`69d2bd1ba89baab6482ac8a4707b9cf9f6886919580d75da0e0179e1c92c43be`.
+Those local runs intentionally omit clean build receipts, so strict reporting
+marks them non-claim evidence; the next clean current-SHA preview must use the
+repaired capacity before selecting or promoting another runtime unit.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
