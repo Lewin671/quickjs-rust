@@ -1288,3 +1288,45 @@ code is retained. Do not retry this unit by moving its admission checks,
 raising the depth limit, or broadening its opcode subset. The one-attempt plan
 closed when a non-target direct-call workload regressed, so the next unit must
 remove a different current-profiled shared cost.
+
+### 2026-07-28 rejected direct-leaf `CallEnv` cold-state refactor
+
+Four fresh current-main profiles showed the same ordinary direct-call chain in
+the top four external opportunities: `Vm::run_completion` followed by
+`call_direct_leaf_function` accounted for 87% of controlflow-recursive samples,
+99.8% of hash-map and raytrace-public-class-fields samples, and 96.7% of
+ai-astar samples. The frozen one-attempt plan
+`tasks/performance-units/direct-leaf-frame-cold-state.json` (SHA-256
+`22efae97826e42c388114d6e0f93619d993e4d1ea0d175dd6ab4c6265b00efe6`)
+therefore moved constructor, dynamic-scope, private-name, direct-eval, and
+module-live state from the inline `CallEnv` representation into an on-demand
+copy-on-write block. Ordinary direct leaves began with no cold block; every
+dynamic or exceptional operation continued through the same `CallEnv` API.
+
+The candidate passed the focused environment tests and all 1,899
+`qjs-runtime` unit tests. Its release executable SHA-256 was
+`1bb84cf3202c31a88a474b71f470832ca68f441b8a3c43623834adab5ef9aedf`; the
+runtime-identical current-main base was
+`70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c`.
+The fixed six-case external manifest SHA-256 was
+`b1e6f158e55bd94967d783d8b488d8af9757eec1164b00c339cc23a72015e36c`.
+
+Its three-block, three-role Latin-square external gate rejected the mechanism:
+the four frozen targets were **0.978910x** hash-map, **1.005638x**
+raytrace-public-class-fields, **0.975448x** ai-astar, and **0.970403x**
+controlflow-recursive candidate/base, all missing the required `<= 0.95x`
+target gate. Independent controls were within their regression ceiling
+(`date-format-tofte` **1.002767x**, `string-tagcloud` **0.975388x**), but they
+cannot compensate for a failed target gate. The raw receipt SHA-256 is
+`a09d096d79581f458f6240f43fb325c578ed1bae3fb029390b99a6fad971bfe0` and the
+report SHA-256 is
+`e3c92e9aebe933f6e38c31f2737abfb22b8bac5b958fb51f85e8f471e38629c9`.
+
+The runtime implementation and its focused tests were completely reverted;
+the partial external fast gate failed before broad controls, complete external
+coverage, or Test262 promotion work was warranted. Do not retry this exact
+cold-block representation by repacking fields, changing the box placement, or
+splitting out a smaller subset of the same state: the intended shared direct
+call path did not produce a material cross-workload win, and class-field
+raytrace regressed. A successor must profile and remove a different shared
+cost.

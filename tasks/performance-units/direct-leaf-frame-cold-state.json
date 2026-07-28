@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "direct-leaf-frame-cold-state",
+  "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+  "queue": {
+    "candidate_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+    "sha256": "165bb337cf1a13854151a451ada0b0a035109bddd3833db704871d9bbb1bdf07"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "rank_ceiling": 4,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Move CallEnv state needed only by dynamic scope, constructors, private names, and module live bindings into an on-demand copy-on-write cold block while retaining the hot realm, frame-binding, and module-routing fields inline.",
+    "generality": "The representation is selected only by whether JavaScript execution actually introduces one of the corresponding language states. It does not inspect workload names, source paths, function identities, call depth, input values, iterations, or results. Every frame, including direct eval, constructors, generators, modules, native callbacks, and ordinary direct calls, continues through the same CallEnv API and semantics.",
+    "semantic_risks": [
+      "preserving per-frame versus inherited ownership and copy-on-write isolation of catch bindings, direct-eval conflicts, deoptimization cells, and immutable function names",
+      "preserving new.target, private-environment, direct-eval with-stack, and module live-binding lookup and mutation ordering",
+      "preserving native-call and direct-eval compatibility snapshots, including visible frame bindings and writeback behavior",
+      "preserving error, throw, finally, generator, async, and module suspension paths that materialize cold state after frame entry",
+      "ensuring a cold-state allocation never changes ordinary realm lookup, slot-authority, or direct-leaf fallback behavior"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-profile-frame-cold-controlflow.qmhqTU/controlflow.sample; current main 555636a0 has runtime-identical executable SHA-256 70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c; wrapper SHA-256 52ecb05f622d41dd35db1d476f1f5c46d16e252efa72946516b5396c33f56261",
+      "sha256": "174935d585e30b873c2ab5fdbec6b458709f59e998f0cf3d41ecf5cb303a9629",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/sunspider-1.0/controlflow-recursive"
+      ],
+      "shared_cost": "410 of 470 main-thread samples are rooted in Vm::run_completion followed by call_direct_leaf_function; recursive ordinary calls repeatedly construct and tear down the same full frame state.",
+      "inclusive_fraction": 0.87
+    },
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-profile-frame-cold-raytrace.sgGVpn/raytrace.sample; current main 555636a0 executable SHA-256 70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c; wrapper SHA-256 824daa5582289787f6e25a200892a1d6bdfa682afe9ce76a30e520dc7e03528c",
+      "sha256": "adcab8b55fed9336cc0ab5b2f5e3a793197fc76b9d817ca626bc9f5bcd1ae880",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/raytrace-public-class-fields"
+      ],
+      "shared_cost": "1,547 of 1,550 main-thread samples are rooted in the same Vm::run_completion and repeated call_direct_leaf_function chain, independently of the recursive control-flow source.",
+      "inclusive_fraction": 0.99
+    },
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-profile-frame-cold-ai-astar.Vpq9Te/ai-astar.sample; current main 555636a0 executable SHA-256 70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c; wrapper SHA-256 a3653c77773ce2b424301835021957b26119240810f43d5434d98fd88d7a416c",
+      "sha256": "b579ebd049cdc3cbf6f0bbc0c6f1f51d2960245d8b081dfad41e807d3ca8d533",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/kraken-1.1/ai-astar"
+      ],
+      "shared_cost": "1,553 of 1,606 main-thread samples are rooted in Vm::run_completion and call_direct_leaf_function, showing the common frame path remains material outside recursion and class-heavy code.",
+      "inclusive_fraction": 0.96
+    },
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-profile-frame-cold-hash.7U1JVh/hash-map.sample; current main 555636a0 executable SHA-256 70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c; wrapper SHA-256 aa98bc1975d8824840df5c31a397b5dab27d514e1854ff5681ceea8ec4bf2c20",
+      "sha256": "5fc3e9fdeb4d1730d865f92d6877a146aadb09ce1fba7974815c94402fed0081",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "1,358 of 1,361 main-thread samples are rooted in Vm::run_completion and call_direct_leaf_function; the same generic frame representation dominates a collection-heavy workload.",
+      "inclusive_fraction": 0.99
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/date-format-tofte",
+      "external/sunspider-1.0/string-tagcloud",
+      "broad/plain_function_call",
+      "broad/dynamic_method_call",
+      "broad/top_level_function_call"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
