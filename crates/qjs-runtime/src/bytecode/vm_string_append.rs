@@ -6,13 +6,15 @@ use super::{ir::Op, vm::Vm};
 
 impl Vm<'_> {
     /// Drops only engine-internal mirrors before a compound string assignment.
-    /// The following `Dup` + store bytecodes restore the binding immediately;
-    /// any real JavaScript alias keeps the Rc shared and therefore immutable.
+    /// The following store bytecode restores the binding immediately, with an
+    /// optional preceding `Dup` when the assignment value remains observable.
+    /// Any real JavaScript alias keeps the Rc shared and therefore immutable.
     pub(super) fn prepare_compound_string_reuse(&mut self, expected: &crate::JsString) -> bool {
-        if !matches!(self.bytecode.code.get(self.ip), Some(Op::Dup)) {
-            return false;
-        }
-        match self.bytecode.code.get(self.ip + 1).cloned() {
+        let store = match self.bytecode.code.get(self.ip).cloned() {
+            Some(Op::Dup) => self.bytecode.code.get(self.ip + 1).cloned(),
+            op => op,
+        };
+        match store {
             Some(Op::AssignLocal(slot)) => self.detach_matching_local_string(slot, expected),
             Some(Op::StoreGlobalStrict(name)) | Some(Op::StoreGlobalSloppy { name, .. }) => {
                 self.detach_matching_realm_string(&name, expected)
@@ -363,6 +365,8 @@ pub(super) fn primitive_append_suffix(value: Value) -> Result<String, Value> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::bytecode::compiler;
     use crate::{Value, eval};
 
     #[test]
@@ -372,6 +376,54 @@ mod tests {
                 "var trace = ''; function outer() { return function() { trace += '1'; }; } outer()(); trace;"
             ),
             Ok(Value::String("1".to_owned().into()))
+        );
+    }
+
+    #[test]
+    fn discarded_dynamic_string_append_keeps_direct_store_shape() {
+        let script = qjs_parser::parse_script(
+            "function join(parts) { let result = ''; for (let index = 0; index < parts.length; index++) { result += parts[index]; } return result; }",
+        )
+        .expect("script should parse");
+        let bytecode = compiler::compile_script(&script).expect("script should compile");
+        let join = bytecode
+            .code
+            .iter()
+            .find_map(|op| match op {
+                Op::NewFunction {
+                    name: Some(name),
+                    bytecode,
+                    ..
+                } if name == "join" => Some(bytecode),
+                _ => None,
+            })
+            .expect("join bytecode should be present");
+
+        assert!(
+            join.code
+                .windows(2)
+                .any(|ops| matches!(ops, [Op::Binary(BinaryOp::Add), Op::AssignLocal(_)])),
+            "discarded compound assignment should store directly: {:#?}",
+            join.code
+        );
+    }
+
+    #[test]
+    fn discarded_dynamic_string_append_preserves_alias_and_capture() {
+        assert_eq!(
+            eval(
+                "function collect(parts) {\
+                    let result = '';\
+                    const initial = result;\
+                    function read() { return result; }\
+                    for (let index = 0; index < parts.length; index++) {\
+                        result += parts[index];\
+                    }\
+                    return initial + ':' + read() + ':' + result;\
+                }\
+                collect(['a', 'bc', 'd']);",
+            ),
+            Ok(Value::String(":abcd:abcd".into()))
         );
     }
 }
