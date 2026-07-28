@@ -37,7 +37,6 @@ mod vm_iter;
 mod vm_jobs;
 mod vm_literals;
 mod vm_module;
-mod vm_numeric_control_leaf;
 mod vm_numeric_leaf;
 mod vm_numeric_loop;
 mod vm_numeric_mutation_loop;
@@ -62,7 +61,6 @@ pub(crate) use vm_generator::{
     resume_generator, start_suspended_at_body,
 };
 pub(crate) use vm_iter::sync_iterator_for_value;
-pub(crate) use vm_numeric_control_leaf::try_eval_numeric_control_leaf;
 pub(crate) use vm_numeric_leaf::{try_eval_numeric_leaf, try_eval_this_property_leaf};
 pub(crate) use vm_private::apply_instance_private_element;
 pub(crate) use vm_result::FunctionBytecodeResult;
