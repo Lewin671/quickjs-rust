@@ -1,19 +1,11 @@
 use qjs_ast::{BinaryOp, UpdateOp};
 
-use crate::{Value, to_int32_number, to_uint32_number};
+use crate::{Value, to_int32_number};
 
 use super::{
     ir::{Bytecode, Op},
     vm::Vm,
 };
-
-#[cfg(test)]
-use std::cell::Cell;
-
-#[cfg(test)]
-thread_local! {
-    static BITWISE_CONDITIONAL_SHIFT_HITS: Cell<usize> = const { Cell::new(0) };
-}
 
 #[derive(Clone, Copy, Debug)]
 enum ControlLoopKind {
@@ -29,13 +21,6 @@ enum ControlLoopKind {
         then_delta: f64,
         else_delta: f64,
     },
-    BitwiseConditionalShift {
-        input_slot: usize,
-        accumulator_slot: usize,
-        block_result_slot: usize,
-        loop_result_slot: usize,
-        shift: u32,
-    },
 }
 
 /// Prevalidated counted loop whose body is pure local control flow.
@@ -45,43 +30,16 @@ pub(super) struct ControlLoopPlan {
     backedge: usize,
     exit: usize,
     counter_slot: usize,
-    limit: ControlLoopLimit,
+    limit_slot: usize,
     kind: ControlLoopKind,
 }
 
 struct ControlLoopHeader {
     counter_slot: usize,
-    limit: ControlLoopLimit,
+    limit_slot: usize,
     exit: usize,
     body_start: usize,
     seeded_block_result_slot: Option<usize>,
-}
-
-#[derive(Clone, Copy, Debug)]
-enum ControlLoopLimit {
-    Local(usize),
-    Constant(f64),
-}
-
-impl ControlLoopLimit {
-    fn compile(bytecode: &Bytecode, op: &Op) -> Option<Self> {
-        match op {
-            Op::LoadLocal(slot) => Some(Self::Local(*slot)),
-            Op::LoadConst(index) => Some(Self::Constant(number_constant(bytecode, *index)?)),
-            _ => None,
-        }
-    }
-
-    fn value(self, vm: &Vm<'_>) -> Option<f64> {
-        match self {
-            Self::Local(slot) => local_number_read(vm, slot),
-            Self::Constant(value) => Some(value),
-        }
-    }
-
-    fn references(self, slot: usize) -> bool {
-        matches!(self, Self::Local(candidate) if candidate == slot)
-    }
 }
 
 impl ControlLoopPlan {
@@ -106,14 +64,13 @@ impl ControlLoopPlan {
     fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<Self> {
         Self::compile_empty(bytecode, header, backedge)
             .or_else(|| Self::compile_bitwise_branch(bytecode, header, backedge))
-            .or_else(|| Self::compile_bitwise_conditional_shift(bytecode, header, backedge))
     }
 
     fn compile_header(bytecode: &Bytecode, header: usize) -> Option<ControlLoopHeader> {
         let code = &bytecode.code;
         let (
             Op::LoadLocal(counter_slot),
-            limit_op,
+            Op::LoadLocal(limit_slot),
             Op::Binary(BinaryOp::Lt),
             Op::JumpIfFalse(exit),
             Op::Pop,
@@ -127,7 +84,6 @@ impl ControlLoopPlan {
         else {
             return None;
         };
-        let limit = ControlLoopLimit::compile(bytecode, limit_op)?;
         // The block-result seed prologue is emitted only where a statement
         // completion value is observable; a function body starts its loop body
         // directly and names the same slot at its first completion store.
@@ -138,7 +94,7 @@ impl ControlLoopPlan {
             };
         matches!(code.get(*exit), Some(Op::Pop)).then_some(ControlLoopHeader {
             counter_slot: *counter_slot,
-            limit,
+            limit_slot: *limit_slot,
             exit: *exit,
             body_start,
             seeded_block_result_slot,
@@ -220,17 +176,11 @@ impl ControlLoopPlan {
     fn compile_empty(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<Self> {
         let ControlLoopHeader {
             counter_slot,
-            limit,
+            limit_slot,
             exit,
             body_start,
             seeded_block_result_slot,
         } = Self::compile_header(bytecode, header)?;
-        // Keep the pre-existing empty-loop tier's local-limit admission
-        // unchanged. Constant limits are part of the new shifting-recursion
-        // shape below, not an incidental widening of this older plan.
-        if !matches!(limit, ControlLoopLimit::Local(_)) {
-            return None;
-        }
         let block_result_slot = seeded_block_result_slot?;
         let code = &bytecode.code;
         let (
@@ -265,7 +215,7 @@ impl ControlLoopPlan {
             backedge,
             exit,
             counter_slot,
-            limit,
+            limit_slot,
             kind: ControlLoopKind::Empty { block_result_slot },
         })
     }
@@ -273,16 +223,11 @@ impl ControlLoopPlan {
     fn compile_bitwise_branch(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<Self> {
         let ControlLoopHeader {
             counter_slot,
-            limit,
+            limit_slot,
             exit,
             body_start,
             seeded_block_result_slot,
         } = Self::compile_header(bytecode, header)?;
-        // See `compile_empty`: this matcher intentionally keeps its original
-        // local-limit contract while the new recurrence plan admits constants.
-        if !matches!(limit, ControlLoopLimit::Local(_)) {
-            return None;
-        }
         let code = &bytecode.code;
         let cursor = body_start;
         let (
@@ -381,7 +326,7 @@ impl ControlLoopPlan {
             backedge,
             exit,
             counter_slot,
-            limit,
+            limit_slot,
             kind: ControlLoopKind::BitwiseBranch {
                 accumulator_slot: *accumulator_slot,
                 block_result_slot,
@@ -394,145 +339,6 @@ impl ControlLoopPlan {
         })
     }
 
-    /// Matches a pure local bit test paired with a left-shifting recurrence:
-    ///
-    /// ```text
-    /// while (counter < limit) {
-    ///     if (input & counter) accumulator++;
-    ///     counter <<= constant;
-    /// }
-    /// ```
-    ///
-    /// This is a semantic bytecode shape, not a source-level population-count
-    /// special case. The run-time guard below proves the shifting recurrence
-    /// exits before batching the local writes.
-    fn compile_bitwise_conditional_shift(
-        bytecode: &Bytecode,
-        header: usize,
-        backedge: usize,
-    ) -> Option<Self> {
-        let ControlLoopHeader {
-            counter_slot,
-            limit,
-            exit,
-            body_start,
-            seeded_block_result_slot,
-        } = Self::compile_header(bytecode, header)?;
-        if seeded_block_result_slot.is_some() {
-            return None;
-        }
-        let code = &bytecode.code;
-        let cursor = body_start;
-        let (
-            Op::LoadLocal(input_slot),
-            Op::LoadLocal(condition_counter_slot),
-            Op::Binary(BinaryOp::BitwiseAnd),
-            Op::JumpIfFalse(false_start),
-            Op::Pop,
-            Op::LoadLocal(accumulator_slot),
-            Op::ToNumeric,
-            Op::Dup,
-            Op::Update(UpdateOp::Increment),
-            Op::AssignLocal(assigned_accumulator_slot),
-            Op::Jump(join),
-        ) = (
-            code.get(cursor)?,
-            code.get(cursor + 1)?,
-            code.get(cursor + 2)?,
-            code.get(cursor + 3)?,
-            code.get(cursor + 4)?,
-            code.get(cursor + 5)?,
-            code.get(cursor + 6)?,
-            code.get(cursor + 7)?,
-            code.get(cursor + 8)?,
-            code.get(cursor + 9)?,
-            code.get(cursor + 10)?,
-        )
-        else {
-            return None;
-        };
-        if condition_counter_slot != &counter_slot || assigned_accumulator_slot != accumulator_slot
-        {
-            return None;
-        }
-        let (Op::Pop, Op::LoadConst(undefined_index), Op::StoreLocal(block_result_slot)) = (
-            code.get(*false_start)?,
-            code.get(false_start + 1)?,
-            code.get(false_start + 2)?,
-        ) else {
-            return None;
-        };
-        if join != &(*false_start + 2)
-            || !matches!(
-                bytecode.constants.get(*undefined_index),
-                Some(Value::Undefined)
-            )
-        {
-            return None;
-        }
-        let tail = *join + 1;
-        let (
-            Op::LoadLocal(tail_counter_slot),
-            Op::LoadConst(shift_index),
-            Op::Binary(BinaryOp::Shl),
-            Op::AssignLocal(assigned_counter_slot),
-            Op::LoadLocal(tail_block_result_slot),
-            Op::StoreLocal(loop_result_slot),
-            Op::Jump(tail_header),
-        ) = (
-            code.get(tail)?,
-            code.get(tail + 1)?,
-            code.get(tail + 2)?,
-            code.get(tail + 3)?,
-            code.get(tail + 4)?,
-            code.get(tail + 5)?,
-            code.get(tail + 6)?,
-        )
-        else {
-            return None;
-        };
-        if tail_counter_slot != &counter_slot
-            || assigned_counter_slot != &counter_slot
-            || tail_block_result_slot != block_result_slot
-            || tail_header != &header
-            || tail + 6 != backedge
-            || !bytecode.local_is_compiler_temporary(*block_result_slot)
-            || !bytecode.local_is_compiler_temporary(*loop_result_slot)
-        {
-            return None;
-        }
-        let shift = to_uint32_number(number_constant(bytecode, *shift_index)?) & 0x1f;
-        if shift == 0
-            || [*input_slot, counter_slot, *accumulator_slot]
-                .into_iter()
-                .any(|slot| limit.references(slot))
-            || *input_slot == counter_slot
-            || *input_slot == *accumulator_slot
-            || counter_slot == *accumulator_slot
-            || [*block_result_slot, *loop_result_slot]
-                .into_iter()
-                .any(|slot| [*input_slot, counter_slot, *accumulator_slot].contains(&slot))
-            || block_result_slot == loop_result_slot
-        {
-            return None;
-        }
-
-        Some(Self {
-            header,
-            backedge,
-            exit,
-            counter_slot,
-            limit,
-            kind: ControlLoopKind::BitwiseConditionalShift {
-                input_slot: *input_slot,
-                accumulator_slot: *accumulator_slot,
-                block_result_slot: *block_result_slot,
-                loop_result_slot: *loop_result_slot,
-                shift,
-            },
-        })
-    }
-
     fn try_run(self, vm: &mut Vm<'_>) -> bool {
         if vm.direct_eval_with_stack || !vm.slot_is_authoritative(self.counter_slot) {
             return false;
@@ -540,7 +346,7 @@ impl ControlLoopPlan {
         let Some(mut counter) = local_number(vm, self.counter_slot) else {
             return false;
         };
-        let Some(limit) = self.limit.value(vm) else {
+        let Some(limit) = local_number_read(vm, self.limit_slot) else {
             return false;
         };
         match self.kind {
@@ -585,73 +391,6 @@ impl ControlLoopPlan {
                 set_local_number(vm, block_result_slot, accumulator);
                 set_local_number(vm, loop_result_slot, accumulator);
             }
-            ControlLoopKind::BitwiseConditionalShift {
-                input_slot,
-                accumulator_slot,
-                block_result_slot,
-                loop_result_slot,
-                shift,
-            } => {
-                if vm.bytecode.contains_direct_eval()
-                    || vm.bytecode.contains_with()
-                    || [
-                        input_slot,
-                        accumulator_slot,
-                        block_result_slot,
-                        loop_result_slot,
-                    ]
-                    .into_iter()
-                    .any(|slot| !vm.slot_is_authoritative(slot))
-                {
-                    return false;
-                }
-                let Some(input) = local_number_read(vm, input_slot) else {
-                    return false;
-                };
-                let Some(mut accumulator) = local_number(vm, accumulator_slot) else {
-                    return false;
-                };
-                #[cfg(test)]
-                BITWISE_CONDITIONAL_SHIFT_HITS.with(|hits| hits.set(hits.get() + 1));
-                // At a backedge the source loop has already completed at least
-                // one iteration. If its next header check fails, preserving the
-                // existing completion slots and skipping the exit `Pop` is the
-                // exact ordinary continuation.
-                if counter < limit {
-                    if !counter.is_finite()
-                        || counter.fract() != 0.0
-                        || counter <= 0.0
-                        || !limit.is_finite()
-                        || limit <= 0.0
-                    {
-                        return false;
-                    }
-                    let input_word = to_int32_number(input);
-                    let mut last_completion = Value::Undefined;
-                    // A positive signed 32-bit value shifted left by a
-                    // nonzero count either reaches the positive limit or
-                    // becomes non-positive within 32 transitions. Refusing
-                    // the latter leaves every potentially non-terminating
-                    // recurrence to ordinary execution without publication.
-                    for _ in 0..32 {
-                        if counter >= limit {
-                            break;
-                        }
-                        if (input_word & to_int32_number(counter)) != 0 {
-                            last_completion = Value::Number(accumulator);
-                            accumulator += 1.0;
-                        }
-                        counter = f64::from(to_int32_number(counter) << shift);
-                    }
-                    if counter < limit {
-                        return false;
-                    }
-                    set_local_number(vm, accumulator_slot, accumulator);
-                    set_local_value(vm, block_result_slot, last_completion.clone());
-                    set_local_value(vm, loop_result_slot, last_completion);
-                }
-                set_local_number(vm, self.counter_slot, counter);
-            }
         }
         vm.ip = self.exit + 1;
         true
@@ -691,14 +430,10 @@ fn set_local_number(vm: &mut Vm<'_>, slot: usize, value: f64) {
     vm.locals[slot] = Some(Value::Number(value));
 }
 
-fn set_local_value(vm: &mut Vm<'_>, slot: usize, value: Value) {
-    vm.locals[slot] = Some(value);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Value, bytecode::compiler, eval};
+    use crate::bytecode::compiler;
 
     pub(super) fn nested_function(source: &str) -> Bytecode {
         let script = qjs_parser::parse_script(source).expect("source should parse");
@@ -735,82 +470,5 @@ mod tests {
                 ..
             }]
         ));
-
-        let conditional_shift = nested_function(
-            "function bitsinbyte(b) { var m = 1, c = 0; while (m < 0x100) { if (b & m) c++; m <<= 1; } return c; }",
-        );
-        assert!(matches!(
-            ControlLoopPlan::compile_all(&conditional_shift).as_slice(),
-            [ControlLoopPlan {
-                kind: ControlLoopKind::BitwiseConditionalShift { .. },
-                ..
-            }]
-        ));
-    }
-
-    fn reset_conditional_shift_hits() {
-        BITWISE_CONDITIONAL_SHIFT_HITS.with(|hits| hits.set(0));
-    }
-
-    fn conditional_shift_hits() -> usize {
-        BITWISE_CONDITIONAL_SHIFT_HITS.with(Cell::get)
-    }
-
-    #[test]
-    fn bitwise_conditional_shift_preserves_numeric_results_and_deopts() {
-        reset_conditional_shift_hits();
-        assert_eq!(
-            eval(
-                "function bitsinbyte(b) { var m = 1, c = 0; while (m < 0x100) { if (b & m) c++; m <<= 1; } return c + ':' + m; } bitsinbyte(173);",
-            ),
-            Ok(Value::String("5:256".to_owned().into()))
-        );
-        assert_eq!(conditional_shift_hits(), 1);
-
-        reset_conditional_shift_hits();
-        assert_eq!(
-            eval(
-                "function stride(b) { var m = 1, c = 0; while (m < 64) { if (b & m) c++; m <<= 2; } return c + ':' + m; } stride(85);",
-            ),
-            Ok(Value::String("3:64".to_owned().into()))
-        );
-        assert_eq!(conditional_shift_hits(), 1);
-
-        // JavaScript masks the shift count to five bits, and a false branch
-        // must retain the numeric accumulator exactly (including `-0`).
-        reset_conditional_shift_hits();
-        assert_eq!(
-            eval(
-                "function maskedShift(b) { var m = 1, c = 0; while (m < 16) { if (b & m) c++; m <<= 33; } return c + ':' + m; } maskedShift(11);",
-            ),
-            Ok(Value::String("3:16".to_owned().into()))
-        );
-        assert_eq!(conditional_shift_hits(), 1);
-
-        reset_conditional_shift_hits();
-        assert_eq!(
-            eval(
-                "function falseOnly(b) { var m = 1, c = -0; while (m < 255.5) { if (b & m) c++; m <<= 1; } return Object.is(c, -0) + ':' + c + ':' + m; } falseOnly(Infinity);",
-            ),
-            Ok(Value::String("true:0:256".to_owned().into()))
-        );
-        assert_eq!(conditional_shift_hits(), 1);
-
-        // A captured accumulator could be observed by an escaped closure, so
-        // the plan must retain the generic loop even though its bytecode shape
-        // is otherwise identical.
-        reset_conditional_shift_hits();
-        assert_eq!(
-            eval(
-                "function captured(b) { var m = 1, c = 0; function read() { return c; } while (m < 16) { if (b & m) c++; m <<= 1; } return read() + ':' + m; } captured(11);",
-            ),
-            Ok(Value::String("3:16".to_owned().into()))
-        );
-        assert_eq!(conditional_shift_hits(), 0);
-
-        let non_progressing = nested_function(
-            "function stuck(b) { var m = 1, c = 0; while (m < 8) { if (b & m) c++; m <<= 0; } return c; }",
-        );
-        assert!(ControlLoopPlan::compile_all(&non_progressing).is_empty());
     }
 }
