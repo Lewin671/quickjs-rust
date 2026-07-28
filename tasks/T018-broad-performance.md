@@ -8394,6 +8394,75 @@ external-capacity gap is not attributed to this compiler change and must not
 be hidden or converted into a campaign win; the unit's one declared mechanism
 attempt is therefore closed without benchmark-shaped retuning.
 
+### 2026-07-28 typed-loop stable sloppy numeric global sinks
+
+The immutable rank-eight plan
+`tasks/performance-units/typed-loop-sloppy-global-numeric-sinks.json`
+(SHA-256 `aa7d21899f8539dacd350456ec3fe3e7b6445657b5f77dbed678bb951d70172c`)
+addressed a separate shared VM cost exposed by the external
+`math-partial-sums` profile. Commit
+`6cac3f50d2c17195d52fa94eaafbcf97ab6f2447` extends the existing typed-loop
+compiler for scalar `StoreLocalOrGlobalSloppy` fallback slots only when the
+slot, realm binding, and an already-existing writable ordinary own data
+property all have the same stable numeric identity. A same-name `LoadGlobal`
+uses that scalar fallback register, while unrelated global reads can still be
+hoisted only when they do not overlap a sink. Each admitted store updates the
+ordinary property, realm cell, and fallback slot in bytecode order; a failed
+write guard deoptimizes at that exact store with already-completed writes
+preserved. Direct eval, dynamic bindings, accessors, absent globals, changed
+identity, non-writable descriptors, aliases, non-scalar values, and observable
+property writes retain the ordinary interpreter path. This is a binding and
+property-identity rule, with no benchmark name, source path, checksum, or
+iteration-count condition.
+
+Focused coverage `typed_loops_sync_existing_sloppy_numeric_globals` proves a
+successful existing-global numeric loop (`15:5`), exact resume after a
+completed store deoptimization (`0x1x2:2`), and read-only-descriptor fallback.
+The 1,898-test `qjs-runtime` crate suite, `compare-qjs.sh`, staged
+`check-touched.sh --explain` (including its 65 selected Test262 cases), and
+full `check.sh` passed before the exact scan below.
+
+The clean three-engine comparison used candidate binary SHA-256
+`d7ecaed330745fb257f9286bdb661f0dd489426578daaf026a33f1019c624987`, exact
+`c8c246487878fce65578d3af2ea90ae45f1a6df6` base binary SHA-256
+`6684ea70851243d54da44b17f101ea04dd578b9d0c07f4e16fc939a2fb246bbf`, and
+pinned QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+The broad raw/report/summary SHA-256 values are
+`62a23233f35ed0f956d5f055246d7a5c550977adb6c3ce6ae6f211afde9ce75d`,
+`332d9e236ceb2ca0f0cde8c8505fdb68392afb8f9e27548878d9440d99151fe1`, and
+`fac89b2dfc1b6abc4b593d41472d6194858f3b20670f0665b1702903397847b9`.
+All 225 broad measurement records were valid, all 75 role/case linearity
+checks passed, and the complete candidate/base geometric ratio was 1.008835x.
+The predeclared broad controls remained neutral: `array_write` 1.003509x,
+`dynamic_method_call` 0.998860x, and `plain_function_call` 1.001679x.
+
+The external raw/report SHA-256 values are
+`6bc92265c9681e57a5dadf3d957d1e3a91aa85ecdb2412298bba4f02ef9c28af` and
+`e2a32b5abc04a7bb1f58d5659d6c536a55415dd6cd77ee889792f2609f488bc3`.
+The declared target `math-partial-sums` reached **0.364896x candidate/base**
+(2.74x faster) and **1.400794x candidate/QuickJS-NG**. The external controls
+were `stanford-crypto-pbkdf2` 0.996395x, `audio-fft` 0.983441x,
+`crypto-sha1` 0.994366x, and `math-spectral-norm` 1.013140x candidate/base.
+JetStream remained 5/5 comparable and SunSpider 26/26. Kraken remained 13/14
+because both Rust roles time out on pre-existing `imaging-gaussian-blur` while
+QuickJS-NG completes; it is a coverage fact, not a removed or hidden case.
+The fast decision SHA-256
+`4df474a49a1a19a5e8f135e7006c5e9d1330d152b084b0374e1b2836cf11ebd3` is
+therefore `retained` under every predeclared target and control gate.
+
+The `QJS_CLI_PROFILE=release QJS_AGENTS=1` exact ten-shard Test262 scan
+processed all 53,572 upstream records: qjs-rust passed 42,672, with zero
+failures, timeouts, and not-run cases; the QuickJS-NG-pass/rust-nonpass
+actionable gap is zero. The commit-bound burndown entry SHA-256 is
+`b59662d769147af773cda4dd472d3aaa740d4872a0e6c8d15a4ae6682de1c83e`.
+The promotion decision SHA-256
+`905afabdf473af9a7966e1c8fe0411b63471d0f1b5eceda7c9ffb386aef86e44` remains
+`inconclusive` solely because the external report is not complete. Thus the
+mechanism is retained as a semantically verified fast-gate improvement, but
+is not credited as a complete portfolio promotion or as evidence that every
+benchmark is below the 2x QuickJS-NG objective.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
