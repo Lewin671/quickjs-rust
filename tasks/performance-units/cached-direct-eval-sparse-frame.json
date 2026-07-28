@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "cached-direct-eval-sparse-frame",
+  "base_sha": "1e534b1fa1dc9d7b8bc82367e0a3a68ad683f5ed",
+  "queue": {
+    "candidate_sha": "1e534b1fa1dc9d7b8bc82367e0a3a68ad683f5ed",
+    "sha256": "d5cd32fa57138dc11fd7a846f4071af547b7e499552804fc4b32486dbdebaeae"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/date-format-tofte"
+    ],
+    "rank_ceiling": 5,
+    "override_reason": "Ranks 1 through 4 are closed by current direct-leaf frame-stack, constructor-leaf, and own-slot cache evidence. The fresh rank-5 profile shows a distinct remaining cost after the existing direct-eval blueprint cache: every cache hit still materializes and writes back the whole caller frame, although the reusable bytecode statically identifies its referenced and written names. The proposed guard is bytecode- and environment-shape-based only; it never selects a source path, benchmark name, checksum, or iteration count."
+  },
+  "mechanism": {
+    "summary": "For a cache-hit direct eval whose reusable bytecode has no declarations, nested eval, or with scope, materialize only the caller bindings named by that bytecode plus the fixed call-context bindings instead of snapshotting every active caller slot.",
+    "generality": "Eligibility is derived from the existing direct-eval cache entry, immutable bytecode name sets, and the caller's dynamic-scope state. It applies to every matching direct eval regardless of source path or benchmark. Cache misses, declaration-bearing evals, nested eval, with, existing deoptimized bindings, and any unsupported call context retain the current complete frame snapshot and writeback path.",
+    "semantic_risks": [
+      "a sparse frame must preserve lexical shadowing, TDZ values, captured-cell identity, and exact writes for every statically referenced or written binding",
+      "this, arguments, new.target, home object, super constructor, private environment, strictness, and parameter-scope metadata must remain available whenever the eval bytecode can observe them",
+      "a caller with existing dynamic bindings or with scope must decline before any partial environment is created",
+      "the fallback must remain byte-for-byte the current full direct-eval environment path for cache misses and unsupported source shapes"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-27 /tmp/qjs-profile-date-current-1e534.sample; 40x function wrapper of the hash-verified current SunSpider date-format-tofte source, executed by the clean candidate preview binary",
+      "sha256": "d60751ece32f27cadf5ae2f24aaa86d1459f69bf9c852e12266cb29f15ab2c83",
+      "base_sha": "1e534b1fa1dc9d7b8bc82367e0a3a68ad683f5ed",
+      "opportunity_ids": [
+        "external/sunspider-1.0/date-format-tofte"
+      ],
+      "shared_cost": "The repeated cache-hit direct eval path enters native_global_eval but still reaches frame_call_env and apply_env. In 3,600 sampled main-thread stacks, apply_env has 165 top-of-stack samples, while the same paths show FrameBindings insertion, String cloning, hashing, memcmp, allocation, and free work from complete caller-frame materialization and writeback.",
+      "inclusive_fraction": 0.11
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/date-format-tofte"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/date-format-xparb",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/string-base64",
+      "broad/plain_function_call",
+      "broad/dynamic_method_call",
+      "broad/string_slice"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

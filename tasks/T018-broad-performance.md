@@ -8279,6 +8279,61 @@ This is measurement-capacity evidence only, not a runtime performance claim.
 The next clean full preview must use this contract before it can decide the
 discarded-string unit.
 
+### 2026-07-28 discarded-string unit revalidated after capacity repair
+
+The clean exact comparison of 1e534b1fa1dc9d7b8bc82367e0a3a68ad683f5ed
+(which contains the retained discarded-string reuse) against its runtime base
+cc4d977ebb6d6740704558f694792faa5a3f01c9 now completes the broad
+measurement capacity that was missing from the original unit. Its three-block
+raw and report SHA-256 values are
+4f4d986ec903bedc2a78ea1326b8258aad699c62c543eb1153cedd860f2f5289 and
+79db518c8be0bb0bb09a7b9e7845281a18a8a2e069fd4f3c0d16b4fa00e5589b;
+all 225/225 formal rows are eligible and all 600/600 linearity diagnostics
+pass.
+
+The external raw and report hashes are
+6b9c4ef98f2259c3ad4d761a9168eece727ddf33057fb624fc7e2e353a4701fa and
+3d7db8f8dd031efecab541b00b5f994da280bee54527053a089ffe70282b33a3.
+The selected string-base64 result remains 0.870381x candidate/base; the
+predeclared string-unpack-code, string-validate-input, and date-format-tofte
+controls are respectively 1.004x, 1.018x, and 1.003x. The report still has
+only 44/45 Rust candidate/base-comparable external cases because both Rust
+roles time out on Kraken imaging-gaussian-blur while QuickJS-NG completes.
+Therefore this retained mechanism remains inconclusive for promotion, not a
+portfolio win; its single immutable-unit attempt is consumed and it must not
+be retuned against the selected benchmark.
+
+### 2026-07-28 rejected sparse cached-direct-eval frame
+
+The rank-five date-format-tofte profile at 1e534b1f identified a remaining
+complete caller-frame materialization and writeback cost after the existing
+direct-eval bytecode cache. The immutable plan
+tasks/performance-units/cached-direct-eval-sparse-frame.json (SHA-256
+26a84b4546eefa618f75fea16efa5f8e2aadd576ec926ad90615078b67f94d9e)
+therefore tried a general cache-hit path that projected only statically
+referenced/written caller bindings plus fixed call context. Cache misses,
+declarations, nested eval, with, deoptimized bindings, and unsupported scope
+shapes retained the established full-frame path. Focused lexical shadowing,
+closure, this, and arguments tests passed, as did the 1,896-test runtime crate
+suite and curated Test262 subset before screening.
+
+The one-block, hash-verified external fast screen compared the uncommitted
+candidate binary SHA-256
+c49047ff39bb44e84642164b4ef3b6f5969427fc4dc8c2fb23c4f0451cc65576 with the
+exact 1e534b1f base binary
+a490883b34e1f7304089d120f7046a133f53b9728929670f9de0a2dee18ae81d. Its
+temporary manifest, raw records, and report SHA-256 values are
+f1fa6ee9be9424b58fa461f14f0909055cb0d6be7dc9112b36ec9dea725eebfb,
+e531e38f225018f7544f8f64834025ff2d5d8529dc54e163146b62fc17230b3c, and
+c3ca7277c68523129fa44baa3ccd47266eef12026c4cc28316fe507590055ed0. The
+required target was 0.999056x candidate/base, missing the immutable
+at-most-0.90x gate. Controls were non-regressing (date-format-xparb 0.985971x,
+string-base64 0.979587x, string-tagcloud 1.018734x; cross-suite hash-map
+0.962568x and ai-astar 1.018219x), but that cannot rescue a failed target
+gate. The prototype was removed before broad or promotion measurement; this
+avoids treating a weak, receipt-free local screen as progress. The plan remains
+as immutable rejection evidence, and no runtime commit was made.
+
 ## Notes
 
 Broad v2 is still a first-party micro portfolio, not a substitute for an
