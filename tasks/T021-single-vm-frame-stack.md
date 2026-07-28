@@ -1350,3 +1350,50 @@ the input/matcher again, or omitting its intermediate exec-result array. The
 confirmed gain is only about four percent. A successor must attack a different
 current-profiled matcher cost and must remain distinct from the already
 rejected simple-quantifier boundary-vector route.
+
+### 2026-07-28 rejected conditional bit-test / shift control loop
+
+The current evidence-bound queue placed SunSpider `bitops-bits-in-byte` at
+rank 14 (3.209996x QuickJS-NG). A fresh exact-bytecode inspection showed a
+pure local loop with the sequence `b & m`, conditional local increment, and
+`m <<= 1`; it was already admitted by the generic typed-loop executor but not
+by either existing scalar-bitwise or counter-and-constant control plans. The
+profile receipt is `/private/tmp/qjs-profile-bitops-bits-in-byte-6cac-v1.sample`
+(SHA-256 `7e3ec1c5120cca529609c678a3137aa222eae89c1df04ee173fb9fad3e5c541a`).
+
+The one frozen unit at candidate `e339b055a39703ba734ada6b416997d3327e1150`
+used a strict local-only matcher and a bounded `ToInt32` recurrence proof; any
+captured binding, dynamic scope, non-number, unsupported completion shape, or
+unproven exit used the existing execution path. Focused execution and
+fallback tests passed before the exact candidate was measured against base
+`6cac3f50d2c17195d52fa94eaafbcf97ab6f2447` from two clean isolated source
+trees.
+
+The receipt-bound three-block external report is
+`/private/tmp/qjs-construct-parent.y39c53/repo/target/perf-bitwise-conditional-shift-e339-vs-6cac-retry1/external-report.json`
+(SHA-256 `c8bc240f32cdcd4c988f71cc659d49a73a7d3d5b390e42d9070b9f023470eeaf`),
+with raw samples SHA-256
+`7b47b13de2fc2d2da3065783a637d4829ee26c60648cabf228e8ef58d06c44cd`.
+The target improved from 87.152 ms to 48.624 ms, or
+**0.557922x candidate/base** and **1.810x candidate/QuickJS-NG**, satisfying
+its target and explicit under-2x reference condition. But the independent
+`bitops-bitwise-and` control regressed to **1.065019x candidate/base**,
+exceeding the frozen 1.03x ceiling. The other controls did not explain that
+away: `bitops-3bit-bits-in-byte` was 0.990724x, `math-partial-sums` 0.984193x,
+`access-nbody` 1.012730x, `local_read` 0.999770x, and
+`plain_function_call` 1.002229x. The broad report SHA-256 is
+`043daa189115e1ae28fb69838dab3904f7b9e97c0fd7180d2af78441fa37b9c5`; its
+hosted-preview health is informational/non-claim, and the external report is
+also incomplete for qjs-rust `imaging-gaussian-blur`, so it cannot substitute
+for a promotion claim.
+
+The bound fast decision is **rejected** solely for the control regression;
+its JSON receipt is
+`/private/tmp/qjs-construct-parent.y39c53/repo/target/performance-decision-bitwise-e339-fast.json`
+(SHA-256 `5b381dccaddfc1429b3a070341e367d9c8e0f7a55bb29c0fd48f3cec9d10717f`).
+The runtime and frozen plan were reverted by `2a66c9cd` rather than retaining
+a benchmark-shaped local win. Do not retry this conditional-shift matcher by
+widening its bytecode grammar, relaxing guards, or adding more shift variants:
+the shared control-plan admission/dispatch cost is not a net win under its
+declared independent control. A successor must begin from a new profile of a
+different shared cost.
