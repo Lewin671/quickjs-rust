@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "two-dimensional-dense-mutation",
+  "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+  "queue": {
+    "candidate_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+    "sha256": "165bb337cf1a13854151a451ada0b0a035109bddd3833db704871d9bbb1bdf07"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/crypto-aes"
+    ],
+    "rank_ceiling": 24,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Add a guarded transactional executor for pure Number loops whose array element receiver is one dynamic dense row selected from a local outer ordinary Array, so outer[row][column] reads and writes do not re-enter the generic VM for every primitive operation.",
+    "generality": "Admission is derived only from bytecode data flow: a local ordinary outer Array, numeric row and element keys, and a pure numeric counted-loop region. At entry the outer indexed path and each selected inner row must be ordinary own dense storage with no holes, indexed descriptors, prototype-index hazard, Proxy, cycle, immutable write target, aliasing conflict, or borrow conflict. Every load and staged store validates the live row and element before it can commit; unsupported bytecode, changed locals, non-Number values, an unproved row, or any failed guard replays the uncommitted iteration through the ordinary VM. No function name, source path, workload, input size, result, checksum, or benchmark identity participates in admission.",
+    "semantic_risks": [
+      "a missing outer row or inner element must resume ordinary indexed lookup so inherited getters and accessors remain observable",
+      "row aliases and self-referential outer arrays must not make staged reads observe a different order than the bytecode",
+      "a failed row or element guard after a prior staged write must discard the entire current iteration before generic replay",
+      "outer and inner array integrity, frozen rows, descriptor changes, Proxy receivers, and RefCell borrow conflicts must decline before any native commit",
+      "the executor must preserve JavaScript Number, bitwise, negative-zero, and index-conversion behavior already implemented by the dense loop runtime"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /private/tmp/qjs-profile-crypto-aes-7c-v1.sample; exact pinned SunSpider crypto-aes source (SHA-256 7151c362dd1d10ec6bf8bd332a57bf96aa3d6bf64a87695b7b670af09e430365), executed by the exact 6cac-equivalent release binary",
+      "sha256": "03042fe9252b3a5efd7569c84d53f9eb1bd2cace4e25075668e9051d2d1e57e4",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/sunspider-1.0/crypto-aes"
+      ],
+      "shared_cost": "The profile records 162 exclusive run_virtual_object_op samples and 59 direct dense-index samples beneath repeated direct-leaf calls. Cipher, SubBytes, ShiftRows, MixColumns, AddRoundKey, and KeyExpansion repeatedly use dynamic two-dimensional ordinary Array access such as state[row][column]. The current dense translator can make a local Array receiver or an own-data receiver, but treats its first indexed result as a Number; it cannot represent that result as the next dense receiver, so this common primitive 2D shape remains in generic dispatch.",
+      "inclusive_fraction": 0.2
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/crypto-aes"
+    ],
+    "control_ids": [
+      "external/jetstream3-js-subset/stanford-crypto-aes",
+      "external/kraken-1.1/stanford-crypto-aes",
+      "external/kraken-1.1/audio-fft",
+      "external/sunspider-1.0/access-nbody",
+      "broad/array_dynamic_read",
+      "broad/array_mutation",
+      "broad/plain_function_call"
+    ],
+    "target_max_candidate_over_base": 0.84,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

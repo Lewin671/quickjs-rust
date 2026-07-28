@@ -1576,3 +1576,52 @@ miss. Do not retry this same present-own primitive scan by widening the lease,
 changing plan selection, or adding more primitive forms. A successor must
 profile a different shared cost rather than turning the rejected target into a
 series of admission tweaks.
+
+### 2026-07-28 rejected two-dimensional dense ordinary-array mutation
+
+Queue rank 24, SunSpider `crypto-aes` (2.354737x QuickJS-NG in the
+receipt-bound queue), repeatedly uses dynamic two-dimensional ordinary Array
+accesses such as `state[row][column]` in Cipher, SubBytes, ShiftRows,
+MixColumns, AddRoundKey, and KeyExpansion. The current profile is
+`/private/tmp/qjs-profile-crypto-aes-7c-v1.sample` (SHA-256
+`03042fe9252b3a5efd7569c84d53f9eb1bd2cace4e25075668e9051d2d1e57e4`) from the
+exact upstream source SHA-256
+`7151c362dd1d10ec6bf8bd332a57bf96aa3d6bf64a87695b7b670af09e430365`. It
+contains 162 exclusive `run_virtual_object_op` samples and 59 direct
+dense-index samples under repeated direct-leaf calls. The existing dense
+translator can form one dense receiver but treats an indexed result as a
+Number, so it cannot represent that result as the next dense receiver.
+
+The frozen one-attempt plan is
+`tasks/performance-units/two-dimensional-dense-mutation.json` (SHA-256
+`0e2782f83ac3a1bb298faacfeb3d7dda46bee5205dcb70adce4044849902d1e0`). The
+prototype added a bytecode-derived, transactional 2D path beside the existing
+numeric loop executor. It admitted only local ordinary outer Arrays and live,
+ordinary, own, fully dense Number rows, and declined holes, descriptors,
+prototype-index hazards, Proxies, row aliases or cycles, immutable rows,
+non-Numbers, and borrow conflicts. A failed guard discarded the current
+iteration before ordinary VM replay. It had no source, function-name, input,
+result, checksum, or benchmark-identity admission condition. Focused 2D
+coverage and the full `qjs-runtime` test suite passed before timing; all
+prototype source and test changes were then reverted after the gate result.
+
+The direct fast screen ran the exact upstream source with one warmup per
+binary, followed by 25 interleaved candidate/base pairs in alternating order;
+stdout and exit status were checked before timed runs. The candidate release
+binary SHA-256 was
+`0e521fe08a4ba1d4fb1c5d9ed1e9bdf3e12d14c5e4d548c6740d150ef71df859`; the
+exact-base binary SHA-256 was
+`70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c`.
+Candidate/base median wall times were 81.177750 ms / 83.115708 ms, with a
+median paired ratio of **0.976855x** (mean **0.977101x**, observed range
+0.964674x--0.989036x). This decisively misses the frozen target gate of
+`<= 0.84x`; a roughly 2.3% movement cannot close the 15.1% reduction still
+needed to cross the `< 2x` QuickJS-NG boundary.
+
+The unit is **rejected and reverted**. The target miss is sufficient, so the
+frozen controls, complete broad/external reports, and Test262 promotion scan
+were intentionally not run. Do not retry this same two-dimensional receiver,
+row-lease, or transactional-staging mechanism by relaxing its guards or
+reshaping its implementation: that would be a second attempt after a decisive
+end-to-end miss. A successor must begin from a new profile of a distinct
+shared cost.
