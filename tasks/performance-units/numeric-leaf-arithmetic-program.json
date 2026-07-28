@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "numeric-leaf-arithmetic-program",
+  "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+  "queue": {
+    "candidate_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+    "sha256": "165bb337cf1a13854151a451ada0b0a035109bddd3833db704871d9bbb1bdf07"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/math-spectral-norm"
+    ],
+    "rank_ceiling": 28,
+    "override_reason": "Ranks 1 through 24 are closed by current rejected or retained evidence. The fresh rank-25 access-fannkuch profile is already dominated by the existing guarded dense-loop executor and has no independently removable new cost. The fresh rank-27 SHA-256 profile is dominated by the existing typed-loop executor rather than the direct numeric-leaf evaluator. Rank 26 has no current shared-cost profile, so its ratio alone does not authorize an implementation. The rank-28 profile instead identifies a distinct, bytecode-general cost: pure Number direct leaves with multi-operation arithmetic bodies still interpret FastValue micro-ops on every call. This bounded one-target override is justified because it needs only a 6.7 percent reduction to cross the current 2x QuickJS-NG boundary, while the same admission applies to every proven pure numeric leaf and has no source, function-name, workload, input-size, or result condition."
+  },
+  "mechanism": {
+    "summary": "Compile a prevalidated raw-f64 stack program for side-effect-free direct leaf bodies made only of Number parameters, numeric literals, and numeric arithmetic, so repeated calls avoid interpreting FastValue tags and generic numeric binary dispatch for every bytecode operation.",
+    "generality": "Admission is derived only from immutable bytecode and parameter-slot identity. The program accepts a body only when every value is an explicit Number parameter or Number literal, every operation is an arithmetic operation already proven to return Number, stack depth is bounded, and the body returns exactly that Number. At call time every participating argument must still be Number. Local stores, updates, upvalues, receiver/property access, calls, control flow, Boolean-producing operations, coercion, non-Number arguments, and every unrecognized op decline before any result or write is committed. No source text, function name, call-site identity, workload, iteration count, input value, checksum, or benchmark identity participates in admission.",
+    "semantic_risks": [
+      "NaN, signed zero, infinities, division and remainder behavior must remain identical to the existing Number operation helpers",
+      "a non-Number argument or any coercion-observable expression must decline before the ordinary direct-leaf path performs user-visible work",
+      "the static verifier must reject every body with local mutation, captured state, property access, calls, control flow, Boolean results, or an ambiguous stack shape",
+      "the shortcut must not bypass existing direct-leaf eligibility or alter this binding, arity, or fallback semantics"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /private/tmp/qjs-profile-math-spectral-norm-645-v1.sample; exact pinned SunSpider math-spectral-norm source (SHA-256 d57283fcb398ed3fd512991068768c5a20b8af3aa8c69ed0d6dc5416f6d0023f) followed by 160 profile-only spectralnorm(48) calls in the same Realm (wrapper SHA-256 ad272b0ed22464288a2bb7cf2c7ada91c64a82fa3efda0b352639e282310cc62), executed by the exact 6cac-equivalent release binary",
+      "sha256": "1adf298896bdd698959e01953f2dbca555ea67c15173fb4c1f3f55abd24a591b",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/sunspider-1.0/math-spectral-norm"
+      ],
+      "shared_cost": "The 1,459-sample profile spends the repeated A(i, j) inner call chain in call_fixed_multi_argument_direct_leaf and call_direct_leaf_function. Its collapsed top frames include 299 try_eval_numeric_leaf samples and 85 direct_number_binary samples; A is a two-parameter, multi-operation pure Number expression, so it misses the existing constant-chain and single-binary shortcuts and instead interprets FastValue operations per call.",
+      "inclusive_fraction": 0.25
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/math-spectral-norm"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/math-cordic",
+      "external/sunspider-1.0/crypto-aes",
+      "external/sunspider-1.0/access-fannkuch",
+      "external/kraken-1.1/stanford-crypto-sha256-iterative",
+      "external/kraken-1.1/audio-fft",
+      "broad/plain_function_call",
+      "broad/function_call_two_args",
+      "broad/many_locals_call",
+      "broad/branch_arithmetic"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
