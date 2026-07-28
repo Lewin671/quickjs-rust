@@ -1131,6 +1131,33 @@ the campaign gate and its paired target regresses. A future RegExp unit must
 identify a different current-profiled cost, such as construction, matching, or
 result materialization, shared by its chosen targets.
 
+### 2026-07-28 rejected static property-store cache diagnostic
+
+A current-main A* profile showed named-property cache work beside the shared
+dispatch and direct-leaf call chains. The diagnostic therefore gave every
+ordinary `obj.name = value` site a cache and allowed a small-object slot cache
+to validate separately allocated but textually equal property keys. The latter
+preserved its full slot, accessor, and writability checks; focused coverage
+proved cross-object read/write reuse, and all 1,900 `qjs-runtime` unit tests
+passed.
+
+The first alternating exact-source screen rejected it immediately. The
+candidate built from main `6fa6ecde464489b5e2de5947da6f492ad40abd99` had
+SHA-256 `020bd036fa7d6e2831dff19129f1a30dbf349ceb36cabd23093e40923d391bd9`;
+the exact-main base binary had SHA-256
+`70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c`.
+The hash-verified A* adapter source had SHA-256
+`a3653c77773ce2b424301835021957b26119240810f43d5434d98fd88d7a416c`.
+Its first candidate/base pair was 11.76 s versus 10.83 s, or **1.086x
+candidate/base**. This was an early diagnostic rather than a performance-unit
+claim, so no broad or promotion run was started and the implementation was
+reverted before a second pair.
+
+Do not retry this by merely changing cache cardinality, key comparison, or
+which static stores allocate a cache. The extra cache state and per-store
+probe outweigh the avoided lookup in the selected top-ranked workload. A
+successor must begin with a fresh profile and remove a different shared cost.
+
 ### 2026-07-27 retained ordinary `for-in` key-list cache: local fast gate only
 
 The next unopened external opportunity was SunSpider `string-fasta`. A fresh
