@@ -74,6 +74,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         written_locals,
         receiver_slots,
         global_reads,
+        sloppy_global_writes,
         next_boxed,
         boxed_locals,
         written_boxed_locals,
@@ -126,6 +127,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         written_locals,
         receiver_slots,
         global_reads,
+        sloppy_global_writes,
         boxed_count: next_boxed,
         boxed_locals,
         written_boxed_locals,
@@ -160,6 +162,7 @@ struct Builder<'a> {
     written_locals: Vec<(u16, u32)>,
     receiver_slots: Vec<u32>,
     global_reads: Vec<(u16, String)>,
+    sloppy_global_writes: Vec<(u32, String)>,
     next_boxed: usize,
     boxed_locals: Vec<(u16, u32)>,
     written_boxed_locals: Vec<u16>,
@@ -211,6 +214,7 @@ impl<'a> Builder<'a> {
             written_locals: Vec::new(),
             receiver_slots: Vec::new(),
             global_reads: Vec::new(),
+            sloppy_global_writes: Vec::new(),
             next_boxed: MAX_STACK_DEPTH,
             boxed_locals: Vec::new(),
             written_boxed_locals: Vec::new(),
@@ -304,6 +308,9 @@ impl<'a> Builder<'a> {
                 Op::StoreLocal(candidate)
                 | Op::AssignLocal(candidate)
                 | Op::ClearLocal(candidate)
+                | Op::StoreLocalOrGlobalSloppy {
+                    slot: candidate, ..
+                }
                 | Op::IncrementLocal {
                     slot: candidate, ..
                 }
@@ -742,21 +749,66 @@ impl<'a> Builder<'a> {
         Some(register)
     }
 
-    /// Whether the region contains any instruction that could write a global,
-    /// which would make a hoisted read observably stale.
-    fn region_writes_a_global(&self) -> bool {
+    /// Whether the region contains an instruction that could write `name`,
+    /// which would make a hoisted read of that same binding observably stale.
+    fn region_writes_global_named(&self, name: &str) -> bool {
         self.bytecode.code[self.header..=self.backedge]
             .iter()
-            .any(|op| {
-                matches!(
-                    op,
-                    Op::StoreGlobalStrict(_)
-                        | Op::StoreGlobalSloppy { .. }
-                        | Op::StoreLocalOrGlobalSloppy { .. }
-                        | Op::DefineGlobalVar(_)
-                        | Op::AppendStringLiteralGlobal { .. }
-                )
+            .any(|op| match op {
+                Op::StoreGlobalStrict(candidate) | Op::DefineGlobalVar(candidate) => {
+                    candidate == name
+                }
+                Op::StoreGlobalSloppy {
+                    name: candidate, ..
+                }
+                | Op::StoreLocalOrGlobalSloppy {
+                    name: candidate, ..
+                }
+                | Op::AppendStringLiteralGlobal {
+                    name: candidate, ..
+                } => candidate == name,
+                _ => false,
             })
+    }
+
+    /// A named-property write could target `globalThis` and mutate a hoisted
+    /// global binding. A region with a sloppy fallback sink therefore keeps
+    /// those writes out of this tier; dense array writes remain separately
+    /// guarded and cannot alter a global object's binding descriptors.
+    fn region_writes_a_sloppy_global(&self) -> bool {
+        self.bytecode.code[self.header..=self.backedge]
+            .iter()
+            .any(|op| matches!(op, Op::StoreLocalOrGlobalSloppy { .. }))
+    }
+
+    /// Returns the frame slot for an unresolved sloppy binding only when this
+    /// bytecode owns the compiler-emitted fallback slot for the same name.
+    fn sloppy_global_fallback_slot(&self, name: &str) -> Option<usize> {
+        let slot = self.bytecode.local_slot(name)?;
+        let local = self.bytecode.locals.get(slot)?;
+        (local.name == name && local.sloppy_global_fallback && !local.compiler_temporary)
+            .then_some(slot)
+    }
+
+    /// Index of the prepared sink for a sloppy fallback write, adding it once
+    /// per slot/name pair. The runtime validates the dynamic binding and
+    /// property identities before entering the program.
+    fn sloppy_global_write_index(&mut self, slot: usize, name: &str) -> Option<u16> {
+        if self.sloppy_global_fallback_slot(name) != Some(slot) {
+            return None;
+        }
+        let slot = u32::try_from(slot).ok()?;
+        if let Some(index) =
+            self.sloppy_global_writes
+                .iter()
+                .position(|(candidate_slot, candidate_name)| {
+                    *candidate_slot == slot && candidate_name == name
+                })
+        {
+            return u16::try_from(index).ok();
+        }
+        self.sloppy_global_writes.push((slot, name.to_owned()));
+        u16::try_from(self.sloppy_global_writes.len() - 1).ok()
     }
 
     /// Index of `slot` in the program's receiver list, adding it if new.
@@ -842,6 +894,24 @@ impl<'a> Builder<'a> {
                     self.note_write(dst, *slot)?;
                 }
             }
+            Op::StoreLocalOrGlobalSloppy { slot, name } => {
+                if self.slot_is_boxed(*slot)
+                    || self.sloppy_global_fallback_slot(name) != Some(*slot)
+                {
+                    return None;
+                }
+                let target = self.sloppy_global_write_index(*slot, name)?;
+                let (src, _) = self.pop()?;
+                let dst = self.local_register(*slot)?;
+                self.spill(dst, Class::Scalar)?;
+                // The store can still decline at run time. Keep `src` intact
+                // until after it publishes so its bytecode site's operand
+                // stack can be rebuilt and the generic store replayed exactly.
+                self.emit(TypedOp::StoreSloppyGlobal { target, value: src });
+                if src != dst {
+                    self.emit(TypedOp::Move { dst, src });
+                }
+            }
             Op::Dup => {
                 let top = *self.stack.last()?;
                 self.stack.push(top);
@@ -925,11 +995,18 @@ impl<'a> Builder<'a> {
                 self.push(dst, Origin::Computed);
             }
             Op::LoadGlobal(name) => {
-                // A global read is hoisted to loop entry, which is only
-                // equivalent while the region writes no global at all. The value
-                // lands in a boxed register: an object receiver needs one, and a
-                // numeric global is narrowed at its first use.
-                if self.region_writes_a_global() {
+                // A matching sloppy fallback read is the register that its
+                // per-iteration sink updates. Every other global read may be
+                // hoisted only when the region does not write that binding.
+                if let Some(slot) = self.sloppy_global_fallback_slot(name) {
+                    if self.slot_is_boxed(slot) {
+                        return None;
+                    }
+                    let register = self.local_register(slot)?;
+                    self.push(register, Origin::Local(u32::try_from(slot).ok()?));
+                    return Some(());
+                }
+                if self.region_writes_global_named(name) {
                     return None;
                 }
                 let register = self.global_register(name)?;
@@ -954,6 +1031,9 @@ impl<'a> Builder<'a> {
                 self.push_boxed(dst, Origin::Computed);
             }
             Op::SetPropNamed { key, .. } => {
+                if self.region_writes_a_sloppy_global() {
+                    return None;
+                }
                 let (value, _) = self.pop_boxed()?;
                 let (object, _) = self.pop_boxed()?;
                 let _ = &object;
