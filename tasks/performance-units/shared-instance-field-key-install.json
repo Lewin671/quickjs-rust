@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "shared-instance-field-key-install",
+  "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+  "queue": {
+    "candidate_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+    "sha256": "165bb337cf1a13854151a451ada0b0a035109bddd3833db704871d9bbb1bdf07"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "rank_ceiling": 2,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Store each resolved public instance-field string key once as a shared runtime key, then install a new default data property through one ordinary-object borrow when the receiver remains extensible, non-exotic, and has no own property at that key.",
+    "generality": "The fast path is selected only by the class field's already-resolved string key and the receiver's live ordinary-object state. It does not inspect workload names, source paths, function identities, input values, iteration counts, or expected results. Symbols, proxies, non-object receivers, TypedArrays, module namespaces, non-extensible objects, existing own properties, and every unsupported condition retain the complete generic path.",
+    "semantic_risks": [
+      "preserving field initializer order and the absence of each field until its own initializer has completed",
+      "falling back before any mutation when an earlier initializer, a superclass return value, or a host object has made the receiver non-extensible, exotic, or already owns the field key",
+      "preserving CreateDataPropertyOrThrow descriptor attributes and TypeError behavior on every declined receiver",
+      "mirroring a successful definition on a realm global through the existing realm-global synchronization hook"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-readcache-ray.x9bVqm/raytrace.sample; current main executable SHA-256 70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c; wrapper SHA-256 824daa5582289787f6e25a200892a1d6bdfa682afe9ce76a30e520dc7e03528c. Of 1,550 main-thread samples, the class-field path retains 117 initialize_instance_fields frames, 78 define_property_on_value_key frames, 60 ObjectRef::define_property frames, and 20 PropertyStorage::insert frames. The independent source declares many public fields on repeatedly constructed Color, Vector, Ray, Material, Shape, and derived instances.",
+      "sha256": "019ad67f65e0856b2183c8d8548584e2625962c30d090227a9499cc6c0a6a811",
+      "base_sha": "6cac3f50d2c17195d52fa94eaafbcf97ab6f2447",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/raytrace-public-class-fields"
+      ],
+      "shared_cost": "Every ordinary instance field clones its stored String key, builds a default descriptor, enters generic property-definition dispatch, probes the receiver more than once, and copies the key into ordinary storage. Sharing the resolved key and combining the ordinary absent-property check with insertion removes those repeated allocation and dispatch costs while leaving all semantic exceptions on the generic path.",
+      "inclusive_fraction": 0.05
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/date-format-tofte",
+      "external/sunspider-1.0/string-tagcloud",
+      "broad/object_allocation",
+      "broad/dynamic_method_call"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

@@ -1368,3 +1368,50 @@ promotion by changing only its value-category guard or `Exact`/`OwnSlot`
 selection order: the avoided weak-value cache work is below the current
 cross-workload materiality threshold. A successor must profile a distinct
 shared object or call cost.
+
+### 2026-07-28 rejected shared instance-field key installation
+
+The next rank-two raytrace unit froze
+`tasks/performance-units/shared-instance-field-key-install.json` (SHA-256
+`87355449a8b18384d62e7edbfeb438500df546d60fb52d22fa90a3fcce475e08`)
+against the exact `6cac3f50` queue. Its fresh raytrace receipt showed 117
+`initialize_instance_fields`, 78 `define_property_on_value_key`, and 60
+`ObjectRef::define_property` frames among 1,550 main-thread samples. The
+candidate shared each resolved public-instance string key with the target
+object and combined the ordinary absent-property check with insertion. It
+retained the generic path for symbols, Proxies, non-object receivers,
+TypedArrays, module namespaces, non-extensible receivers, and existing own
+properties; focused tests covered both an earlier initializer defining a later
+field and a receiver made non-extensible before its next field.
+
+The class-heavy target did improve materially. Candidate binary SHA-256
+`ecb78e1fb4abf24903433293916db12a881f5e080ed3a66e5cc00ddbb788050e`
+versus base SHA-256
+`70208d9c129430c98e186956b01f0384eb6525aaa8f30e8fe02a9551a7f9b45c`
+produced the same output SHA-256
+`f5bc4f369844bf414bcaa550808d7e5406037ad4da77bde3ae30fcaa7701bdfc`
+on all six pinned raytrace wrapper runs (wrapper SHA-256
+`824daa5582289787f6e25a200892a1d6bdfa682afe9ce76a30e520dc7e03528c`).
+The three alternating candidate/base pairs were 1.91/2.42 s, 1.90/2.42 s,
+and 1.97/2.45 s: a median **0.789256x candidate/base**, well past the frozen
+`<= 0.97x` target. A*, hash-map, and controlflow diagnostics stayed within the
+non-target ceiling: A* was 9.65/9.74 s, 9.65/10.18 s, and 9.44/10.16 s;
+hash-map was 1.62/1.59 s, 1.62/1.59 s, and 1.62/1.60 s; and controlflow was
+6.29/6.31 s. Their wrapper SHA-256 values are
+`a3653c77773ce2b424301835021957b26119240810f43d5434d98fd88d7a416c`,
+`aa98bc1975d8824840df5c31a397b5dab27d514e1854ff5681ceea8ec4bf2c20`, and
+`52ecb05f622d41dd35db1d476f1f5c46d16e252efa72946516b5396c33f56261`.
+
+It nevertheless fails the frozen object-allocation control. The focused
+two-role runner independently normalized candidate/base to about **1.097x**
+(median 719,083,333 ns / 12,612,198 operations versus 719,461,667 ns /
+13,840,373 operations). Fixed-work manual confirmation used the same
+13,840,373 iterations and identical output SHA-256
+`e4f3cf3bb850e4e733486d922740880c221c11505fa0710b8de260482c04b98b`:
+candidate/base was 0.77/0.71 s, 0.78/0.71 s, and 0.77/0.71 s, or a median
+**1.084507x**, above the unit's `<= 1.03x` control ceiling. The runtime code
+and focused tests were reverted; complete external coverage and Test262
+promotion were therefore not run. Do not retry this exact shared-key plus
+single-borrow layout by changing field guards or accepting the allocation
+regression. A successor must first isolate the general allocation regression
+and remove it structurally.
