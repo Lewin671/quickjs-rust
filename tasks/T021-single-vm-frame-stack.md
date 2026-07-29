@@ -1860,3 +1860,37 @@ This is informational same-host evidence, not a claim that the every-case
 full `./scripts/check.sh` and `./scripts/compare-qjs.sh` gates completed
 for this retained commit. The next performance unit must be selected from the
 refreshed external queue rather than extrapolated from this local improvement.
+
+### 2026-07-28 rejected prepared RegExp atom metadata
+
+The exact `af4a65a1` queue put `string-tagcloud` fourth and `regexp-dna`
+seventh. Fresh profiles of both workloads showed repeated immutable matcher
+work: DNA's collapsed stacks included `atom_end`, `atom_capture_indices`,
+`simple_atom_matcher`, and `quantifier`, while tagcloud independently showed
+the same chain under prepared native global replacement. The frozen one-attempt
+plan `tasks/performance-units/prepared-regexp-atom-metadata.json` (plan SHA-256
+`085aeb3b27acf4cd0be8294ba46ccbdaffe67e6a5cff1d30b3075430be49ae33`)
+therefore cached only top-level simple class and escape atom metadata in a
+prepared matcher. It retained the existing repetition-boundary vector and all
+group, assertion, backreference, and generic fallback paths; this was distinct
+from the earlier rejected boundary-streaming removal.
+
+Focused matcher tests passed before timing. The final release candidate
+(`635246fc70239e4dea7832f8945a96ae5186f6050706f68ebf228cb170024dc1`)
+was compared with the exact `af4a65a1` base
+(`d1cfd7429e2400704202b93f1b0bc514cd12cdcc30d6d096e54e84239c9b8a41`)
+in a complete one-block external screen. `regexp-dna` improved to
+**0.942225x candidate/base**, but the independent `string-tagcloud` target
+reached only **0.974216x**, missing the frozen `<= 0.95x` dual-target gate.
+Declared external controls stayed within the `<= 1.03x` ceiling: validate
+input 1.011899x, base64 0.999849x, controlflow 0.991042x, A* 0.982583x,
+and hash-map 1.009209x. The external raw/report SHA-256 values are
+`b0617088bc72e84b8746284375291156dbc23fc5a6a2fb956045490fffb8f120` and
+`c34486650bb95731fe889a56f503aabb37624a617f8c026f1a01239bba0ad2b0`.
+
+The implementation and focused test were reverted immediately; broad
+controls, Test262 promotion, and a commit were not warranted after the target
+failure. Do not retry this same atom-metadata layout by changing cache breadth,
+its storage representation, or the literal guard: it produces a real DNA gain
+but not a material cross-workload RegExp win. A successor must remove a
+different currently profiled shared regexp or string cost.
