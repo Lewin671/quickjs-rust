@@ -1,6 +1,7 @@
 use super::super::vm_props::fast_number_binary_numbers;
 use super::*;
 use crate::bytecode::compiler;
+use crate::eval;
 
 #[test]
 fn number_only_program_admits_local_temporary_bitwise_leaf() {
@@ -22,28 +23,16 @@ fn number_only_program_admits_local_temporary_bitwise_leaf() {
         })
         .expect("function bytecode should be nested in the script");
     let plan = NumericLeafPlan::compile(function_bytecode).expect("leaf should be admitted");
-    assert!(
-        matches!(
-            plan.shortcut,
-            Some(NumericLeafShortcut::NumberOnlyProgram(_))
-        ),
-        "unexpected shortcut: {:#?}; ops: {:#?}",
-        plan.shortcut,
-        plan.ops
-    );
+    let NumericLeafPlan::NumberOnly(program) = plan else {
+        panic!("unexpected plan: {plan:#?}");
+    };
     assert_eq!(
-        plan.shortcut
-            .as_ref()
-            .and_then(|shortcut| shortcut
-                .eval(&[Value::Number(2_147_483_647.0), Value::Number(1.0)], &[],)),
+        program.eval(&[Value::Number(2_147_483_647.0), Value::Number(1.0)]),
         Some(Value::Number(-2_147_483_648.0))
     );
     assert!(
-        plan.shortcut
-            .as_ref()
-            .and_then(
-                |shortcut| shortcut.eval(&[Value::Number(1.0), Value::String("2".into())], &[],)
-            )
+        program
+            .eval(&[Value::Number(1.0), Value::String("2".into())])
             .is_none()
     );
 }
@@ -84,4 +73,19 @@ fn number_only_binary_matches_the_number_fast_path_at_edges() {
             );
         }
     }
+}
+
+#[test]
+fn number_only_program_declines_to_full_vm_for_coercive_arguments() {
+    assert_eq!(
+        eval(
+            "function safeAdd(x, y) { \
+                var low = (x & 65535) + (y & 65535); \
+                var high = (x >> 16) + (y >> 16) + (low >> 16); \
+                return (high << 16) | (low & 65535); \
+            } \
+            safeAdd('2', 1);",
+        ),
+        Ok(Value::Number(3.0))
+    );
 }

@@ -70,13 +70,12 @@ enum NumberOnlyOp {
     Return,
 }
 
-/// A scalar direct-leaf program kept separate from the common shortcut enum.
+/// A scalar direct-leaf program stored only in its own plan variant.
 ///
-/// Most direct leaf calls are not numeric. Keeping this interpreter behind an
-/// optional plan avoids growing their shared dispatch path merely because a
-/// different function was eligible for the scalar tier.
+/// Most direct leaf calls are not numeric. Separating this payload avoids
+/// attaching its vectors to ordinary plans or extending shortcut dispatch.
 #[derive(Clone, Debug)]
-struct NumberOnlyProgram {
+pub(super) struct NumberOnlyProgram {
     ops: Vec<NumberOnlyOp>,
     parameter_slots: Vec<usize>,
 }
@@ -88,7 +87,13 @@ struct NumberOnlyProgram {
 /// removes repeated `var local = <number>` setup and turns a dynamic value
 /// followed by a constant binary operand into one immediate micro-op.
 #[derive(Clone, Debug)]
-pub(super) struct NumericLeafPlan {
+pub(super) enum NumericLeafPlan {
+    General(GeneralNumericLeafPlan),
+    NumberOnly(NumberOnlyProgram),
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct GeneralNumericLeafPlan {
     ops: Vec<FastOp>,
     shortcut: Option<NumericLeafShortcut>,
     hoisted_slots: u32,
@@ -171,7 +176,6 @@ enum NumericLeafShortcut {
         op: BinaryOp,
         right: f64,
     },
-    NumberOnlyProgram(Box<NumberOnlyProgram>),
 }
 
 /// A numeric leaf call reduced to scalar state for a counted-loop trace.
@@ -379,12 +383,17 @@ impl NumericLeafPlan {
                         writes_received_upvalues = false;
                     }
                     let shortcut = NumericLeafShortcut::compile(&ops, bytecode);
-                    return Some(Self {
+                    if shortcut.is_none()
+                        && let Some(program) = NumberOnlyProgram::compile(&ops, bytecode)
+                    {
+                        return Some(Self::NumberOnly(program));
+                    }
+                    return Some(Self::General(GeneralNumericLeafPlan {
                         ops,
                         shortcut,
                         hoisted_slots,
                         writes_received_upvalues,
-                    });
+                    }));
                 }
                 _ => return None,
             }
@@ -679,8 +688,7 @@ impl NumericLeafShortcut {
                 right: *right,
             });
         }
-        NumberOnlyProgram::compile(ops, bytecode)
-            .map(|program| Self::NumberOnlyProgram(Box::new(program)))
+        None
     }
 
     fn eval(&self, arguments: &[Value], upvalues: &[Upvalue]) -> Option<Value> {
@@ -755,7 +763,6 @@ impl NumericLeafShortcut {
                 upvalues.get(*upvalue_index)?.set(value.clone());
                 Some(value)
             }
-            Self::NumberOnlyProgram(program) => program.eval(arguments),
         }
     }
 }
@@ -1001,12 +1008,14 @@ impl NumericLoopCall {
         {
             return None;
         }
-        let shortcut = bytecode
+        let plan = bytecode
             .numeric_leaf_plan
             .get_or_init(|| NumericLeafPlan::compile(bytecode))
-            .as_ref()?
-            .shortcut
             .as_ref()?;
+        let NumericLeafPlan::General(plan) = plan else {
+            return None;
+        };
+        let shortcut = plan.shortcut.as_ref()?;
         let captured_number = |index: usize| -> Option<f64> {
             function
                 .upvalues
@@ -1253,6 +1262,17 @@ pub(crate) fn try_eval_numeric_leaf(
         .numeric_leaf_plan
         .get_or_init(|| NumericLeafPlan::compile(bytecode))
         .as_ref()?;
+    let NumericLeafPlan::General(plan) = plan else {
+        let NumericLeafPlan::NumberOnly(program) = plan else {
+            unreachable!("numeric leaf plan variants are exhaustive");
+        };
+        if bytecode.parameter_slots().len() == params.positional.len()
+            && bytecode.received_upvalue_slots().len() == upvalues.len()
+        {
+            return program.eval(arguments);
+        }
+        return None;
+    };
     if plan.writes_received_upvalues {
         return try_eval_numeric_leaf_bytecode(bytecode, params, arguments, upvalues);
     }
@@ -1678,6 +1698,13 @@ mod tests {
     use super::*;
     use crate::bytecode::compiler;
 
+    fn expect_general_plan(plan: NumericLeafPlan) -> GeneralNumericLeafPlan {
+        match plan {
+            NumericLeafPlan::General(plan) => plan,
+            NumericLeafPlan::NumberOnly(_) => panic!("expected a general numeric leaf plan"),
+        }
+    }
+
     #[test]
     fn plan_propagates_constant_locals_into_immediate_binary_ops() {
         let script = qjs_parser::parse_script(
@@ -1693,7 +1720,9 @@ mod tests {
                 _ => None,
             })
             .expect("function bytecode should be nested in the script");
-        let plan = NumericLeafPlan::compile(function_bytecode).expect("leaf should be admitted");
+        let plan = expect_general_plan(
+            NumericLeafPlan::compile(function_bytecode).expect("leaf should be admitted"),
+        );
 
         assert_eq!(
             plan.ops
@@ -1734,7 +1763,9 @@ mod tests {
                 _ => None,
             })
             .expect("function bytecode should be nested in the script");
-        let plan = NumericLeafPlan::compile(function_bytecode).expect("leaf should be admitted");
+        let plan = expect_general_plan(
+            NumericLeafPlan::compile(function_bytecode).expect("leaf should be admitted"),
+        );
 
         assert!(matches!(
             plan.shortcut,
@@ -1769,7 +1800,9 @@ mod tests {
                 _ => None,
             })
             .expect("inner function should be compiled");
-        let plan = NumericLeafPlan::compile(inner).expect("counter should be admitted");
+        let plan = expect_general_plan(
+            NumericLeafPlan::compile(inner).expect("counter should be admitted"),
+        );
         assert!(matches!(
             plan.ops.as_slice(),
             [FastOp::UpdateUpvalueConstReturn {
@@ -1812,7 +1845,9 @@ mod tests {
                 _ => None,
             })
             .expect("inner function should be compiled");
-        let plan = NumericLeafPlan::compile(inner).expect("reader should be admitted");
+        let plan = expect_general_plan(
+            NumericLeafPlan::compile(inner).expect("reader should be admitted"),
+        );
         assert!(matches!(
             plan.shortcut,
             Some(NumericLeafShortcut::ArgumentUpvalueBinary {
