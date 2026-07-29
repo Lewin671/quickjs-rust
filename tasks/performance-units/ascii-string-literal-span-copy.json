@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "ascii-string-literal-span-copy",
+  "base_sha": "0c31864b700655b54c6efc8383a52053f06d62a4",
+  "queue": {
+    "candidate_sha": "0c31864b700655b54c6efc8383a52053f06d62a4",
+    "sha256": "8558f3e2708a20d1f7859f5b1f1ab028318c02359954e2ced4a120f01d312840"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-tagcloud"
+    ],
+    "rank_ceiling": 5,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Copy each contiguous unescaped ASCII string-literal span into the cooked token value in one operation, stopping before a quote, backslash, CR, LF, or non-ASCII byte so the existing character, escape, line-terminator, and WTF-16 paths retain ownership of every special case.",
+    "generality": "Eligibility depends only on source bytes at the current lexer cursor. Every ordinary quoted string can take the same fast path for any qualifying ASCII span, independent of source file, benchmark, realm, value, or call count. Quotes, escapes, line terminators, and non-ASCII scalars use the unchanged scanner logic, so the optimization does not create a target-specific parser or runtime route.",
+    "semantic_risks": [
+      "the byte span must begin and end at UTF-8 character boundaries before slicing the source",
+      "the fast span must stop before every quote, escape, and ECMAScript line terminator so existing cooking and diagnostics remain authoritative",
+      "non-ASCII source must retain the existing scalar and surrogate-sentinel handling, including runtime WTF-16 input",
+      "token spans and the cursor must advance by exactly the same source bytes as the per-character path"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-f09-tagcloud-repl-profile.JrQ1w0/string-tagcloud-20x-repl.sample; SHA-256 upstream source 9634886bcb846c76141f97b681b33a11df444901e0b4c899d8f72a3b6544f9d5; the official SunSpider source was repeated 20 times through qjs -i only to lengthen sampling, never for timing; the profiled runtime is source-identical to queue candidate 0c31864b",
+      "sha256": "7df03b869be2a38573e0a4ba93dae898332e239f80e6e303b9a01cfe23daf375",
+      "base_sha": "0c31864b700655b54c6efc8383a52053f06d62a4",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-tagcloud"
+      ],
+      "shared_cost": "The large unescaped ASCII JSON literal is decoded one scalar at a time: 1,194 of 2,173 top-of-stack samples land in Lexer::string, with another 462 in Lexer::advance and 374 in push_js_scalar. The similarly sized string-unpack-code profile did not reproduce this cost, so this is intentionally a single-target gate rather than a cross-workload claim.",
+      "inclusive_fraction": 0.5494707777266452
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-tagcloud"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/string-unpack-code",
+      "external/sunspider-1.0/regexp-dna",
+      "external/sunspider-1.0/string-base64",
+      "broad/string_slice",
+      "broad/plain_function_call",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.85,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

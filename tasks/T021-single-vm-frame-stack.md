@@ -1708,3 +1708,38 @@ delaying only another subset of plan lookups: the construction probes are a
 real shared cost but not material enough for the stated general gate. A future
 unit must remove a different current-profiled cost inside direct-call setup or
 the execution core.
+
+### 2026-07-28 rejected ASCII string literal span copy
+
+The current queue's rank-five SunSpider string-tagcloud case had a diagnostic
+profile with 1,194 of 2,173 top-of-stack samples in Lexer::string, plus 462 in
+Lexer::advance and 374 in push_js_scalar. The frozen one-attempt unit
+tasks/performance-units/ascii-string-literal-span-copy.json (plan SHA-256
+96b0898780677e82a803c3150210f8ff60265d544565f6341871c7f7f7868b7c)
+therefore copied only contiguous ASCII string spans, stopping before quotes,
+backslashes, CR, LF, and non-ASCII source so existing escape, diagnostic, and
+runtime WTF-16 paths retained all special cases. The similarly sized
+string-unpack-code profile did not show this cost, so the plan deliberately
+claimed one target rather than a general benchmark-family win.
+
+The focused lexer suite passed all 65 tests, including an ASCII span around an
+escape and Unicode scalar and a runtime-WTF-16 sentinel boundary. Candidate
+and base also produced matching exit status and output on the hash-verified
+upstream string-tagcloud, string-unpack-code, regexp-dna, and string-base64
+sources. The release candidate binary SHA-256
+5175f622ac02e361f56c8c641fdfcc2f3a487bee1840c19090dfb46b0db0d82f was
+then alternated seven times with the exact-current runtime base SHA-256
+2b36815789e28f95d445728ba858913413452c6bcdc3744b4c5568b7a1751bcb on the
+unwrapped, official string-tagcloud source. Base times were 0.204893,
+0.203606, 0.204366, 0.207729, 0.209302, 0.204618, and 0.207952 seconds;
+candidate times were 0.211515, 0.205109, 0.206226, 0.206185, 0.205841,
+0.203567, and 0.205915 seconds. The medians are 0.204893 and 0.205915
+seconds, or **1.004988x candidate/base**, not the frozen <=0.85x target.
+
+The profile's repeated qjs -i input was used only to locate lexical work and
+did not establish material end-to-end benefit on the exact workload. The
+implementation and focused tests were reverted before staging; no broad,
+complete-external, Test262, or promotion run was warranted. Do not retry this
+same contiguous-ASCII-copy route through a different byte scan, inlining, or
+preallocation tweak. A successor must begin with a distinct current-profiled
+cost whose exact-source timing supports a material general opportunity.
