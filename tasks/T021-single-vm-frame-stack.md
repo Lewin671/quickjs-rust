@@ -1639,3 +1639,40 @@ of reaching the overall two-times-QuickJS-NG goal. It is an accepted general
 cached-evaluation reduction under the existing runtime, curated Test262, and
 QuickJS-NG comparison gates; the next unit must again start from a current
 profiled, unclosed shared cost.
+
+### 2026-07-28 rejected numeric-property `Math` unary leaf
+
+The refreshed exact-current queue put JetStream class-field raytrace and
+Kraken A* at ranks two and three by candidate/QuickJS-NG ratio. Their current
+profiles shared a distinct unclosed cost: 1,947 raytrace samples and 7,362 A*
+samples passed through `call_direct_leaf_function`; raytrace repeatedly calls
+`Vector.magnitude()` with `Math.sqrt`, while A* repeatedly calls its Manhattan
+heuristic with `Math.abs`. The frozen one-attempt unit
+`numeric-property-math-unary-leaf` (plan SHA-256
+`6ef7bc28e6bc8cb6363abd68d51a455b784811e36cfbab147d71bac37b200d71`)
+therefore extended the existing numeric own-data property leaf to admit
+straight-line numeric local temporaries and receiver-preserving unary `Math`
+calls. It still declined dynamic realms, replaced/accessor `Math` methods,
+accessors/proxies/non-number fields, captured locals, and all other calls.
+
+The implementation's focused plan and observable-fallback tests passed, as
+did all 1,902 runtime tests. It then failed the predeclared fast gate before
+staging: the release candidate binary SHA-256
+`d9f40b7dafa5724f8137ad55d8903d6fa2e392abad2adbac70d09b0fc554df6c`
+was alternated with the runtime-identical `2159444f` base binary SHA-256
+`de0b888d2ac6d7352959471a9defcdc16cafbc1aa72949a20b931e2a418b24df` on
+the hash-verified upstream bundles. Class-field raytrace was only 2.37 s
+candidate versus 2.44 s base, or **0.971311x candidate/base**, missing its
+`<= 0.95x` target. More importantly, A* regressed from 9.45 s base to 10.79 s
+candidate, or **1.141799x candidate/base**. The following raytrace pair was
+again only 2.37 s versus 2.42 s, or 0.979339x. The first complete alternating
+round was already decisive, so the remaining timing process was stopped; no
+complete-external, broad, Test262, or promotion run was warranted.
+
+The implementation, tests, and uncommitted plan were fully reverted before
+any staging or push. Do not retry this direct-property `Math` route by
+changing its local-register representation, cache position, or fallback
+guards: per-call intrinsic revalidation and plan dispatch outweigh the child
+VM avoided on A*, while raytrace misses materiality. A successor must start
+from a different shared, current-profiled cost rather than widening this
+admission path.
