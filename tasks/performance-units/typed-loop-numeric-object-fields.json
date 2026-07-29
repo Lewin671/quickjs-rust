@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "typed-loop-numeric-object-fields",
+  "base_sha": "930eaeb8af3afe7f3c6897a9968abe9f31e0f47a",
+  "queue": {
+    "candidate_sha": "930eaeb8af3afe7f3c6897a9968abe9f31e0f47a",
+    "sha256": "ea31b3863ecf4c8fbb82f9cf32f90b0bc8c2ab90bd82766d3bc08eb34d3ad386"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/sunspider-1.0/access-nbody"
+    ],
+    "rank_ceiling": 7,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Extend the existing shape-independent typed-loop executor so a numeric-consuming named read can stay in a scalar register and a named write of a scalar Number can avoid boxing, while a dense local array element can be retained as a boxed ordinary receiver only when a later property operation requires it.",
+    "generality": "Selection derives solely from existing typed-loop bytecode dataflow: an unshared GetPropNamed result must be consumed as a scalar, an array length is read only from a real Array, a named read must observe an ordinary own Number data property, and a named write must reach a writable own Number data property from a live Number. It applies to every admitted loop with that dataflow and never inspects workload names, source paths, function identities, inputs, iteration counts, or outputs. Inherited properties, accessors, Proxies, primitives, non-Number values, read-only or missing write targets, array holes, non-dense arrays, dynamic scope, direct eval, and unsupported dataflow retain the ordinary interpreter at the original bytecode instruction.",
+    "semantic_risks": [
+      "a scalar property read must deopt before observable lookup when the receiver is not an Array length or an ordinary own Number data property, preserving inherited, accessor, Proxy, and primitive behavior",
+      "a scalar property write must retain property descriptor checks, assignment completion value, NaN, signed zero, Infinity, and exact bytecode-order visibility before any fallback",
+      "rewriting a local dense-array element from scalar to boxed receiver form must preserve element-read order, holes, proxy exclusion, and the original operand stack at every deoptimization point",
+      "shared property-slot caches must continue to validate the live receiver layout and current value so deletion, redefinition, or a non-Number replacement cannot expose stale data",
+      "the existing typed-loop compiler must keep generic boxed reads and writes whenever one property result has multiple consumers or cannot be proven to remain in the scalar domain"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-29 target/performance-next-930eaeb8/profiles/ai-astar.sample; exact candidate 930eaeb8af3afe7f3c6897a9968abe9f31e0f47a. The 2,391-sample top-stack receipt includes 291 NamedPropertyCache::get samples, and diagnostic bytecode inspection shows the hot openList[i].f scan is otherwise accepted by the typed-loop compiler when boxed-operation admission is temporarily removed.",
+      "sha256": "34a02ca22157a2f1346cf4b5cd0364b11225c0d4d469e71452621d36ec925b64",
+      "base_sha": "930eaeb8af3afe7f3c6897a9968abe9f31e0f47a",
+      "opportunity_ids": [
+        "external/kraken-1.1/ai-astar"
+      ],
+      "shared_cost": "The frontier-minimum loop repeatedly takes a dense object element, reads its ordinary numeric f field, unboxes it, and executes generic property/cache dispatch. The existing typed-loop scalar/control program already represents its remaining work, but declines because those object operations exceed the boxed-operation ratio.",
+      "inclusive_fraction": 0.1217
+    },
+    {
+      "source": "macOS sample 2026-07-29 target/performance-next-930eaeb8/profiles/access-nbody.sample; exact candidate 930eaeb8af3afe7f3c6897a9968abe9f31e0f47a. The 1,448-sample top-stack receipt includes 202 NamedPropertyCache::get samples, and diagnostic bytecode inspection shows the force, energy, and position-update loops are otherwise accepted by the typed-loop compiler when boxed-operation admission is temporarily removed.",
+      "sha256": "00f82890b2ec4eba29765595fbae3363f19828acf8b712ce7783c3ad2dfdb5e3",
+      "base_sha": "930eaeb8af3afe7f3c6897a9968abe9f31e0f47a",
+      "opportunity_ids": [
+        "external/sunspider-1.0/access-nbody"
+      ],
+      "shared_cost": "The hot body-pair loops repeatedly obtain dense body elements, read and update ordinary numeric x/y/z/vx/vy/vz/mass fields, box or unbox every field value, and then fall back to generic bytecode dispatch. The same scalar typed-loop operations and guarded Math intrinsic already cover the arithmetic once those field values remain scalar.",
+      "inclusive_fraction": 0.1395
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/sunspider-1.0/access-nbody"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/3d-raytrace",
+      "broad/property_read",
+      "broad/property_write",
+      "broad/array_dynamic_read",
+      "broad/object_allocation",
+      "broad/plain_function_call"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

@@ -2010,3 +2010,55 @@ replace, captures, lookarounds, and nullable-loop fallback produced the same
 This is retained fast-gate evidence only: the complete broad/external
 promotion bundle and exact zero-gap burndown remain required before making a
 portfolio-level claim.
+
+### 2026-07-29 rejected typed-loop numeric-object-field scalarization
+
+The exact `930eaeb8` opportunity queue ranked Kraken `ai-astar` second and
+SunSpider `access-nbody` seventh. Their fresh current-binary profiles shared
+named property work but not an already-retained implementation route: A* had
+291 samples in `NamedPropertyCache::get` out of 2,391, while N-body had 202
+out of 1,448. The frozen one-attempt unit
+`tasks/performance-units/typed-loop-numeric-object-fields.json` (plan
+SHA-256 `35ba5c7c4dfbbc8963289fd178f5d9a5cf614da52fcdee40a04e54d68a2a2451`)
+therefore extended the existing typed-loop dataflow rather than a workload
+special case: an unshared numeric named read stayed scalar, a scalar named
+write avoided boxing, and a dense local Array element became a guarded boxed
+ordinary receiver only when a later property operation needed one.
+
+Focused typed-loop coverage passed 14 tests, including numeric field reads and
+writes, Array `length`, dense object receivers, accessor fallback, and
+read-only-write fallback. `cargo fmt --check`, clippy with warnings denied,
+and the full runtime library passed (1,914 tests). The exact candidate release
+binary SHA-256 was
+`8e1079b7b288113d3d5a68ea4f2a8e78de4c1d39edce899e4347fccc026c78b3`; it
+completed the unmodified upstream A* and N-body sources with their
+`__QJS_EXTERNAL_OK__` markers, and its complete curated Test262 subset passed
+all **5,160** cases when selected explicitly through `QJS_CLI_BIN`.
+
+The frozen fast gate required both targets to be at most `0.90x`
+candidate/base. Three-block alternating external measurement against the
+runtime-identical base binary SHA-256
+`95e83d949426a239d9af53b9da84fb8d9bff73a12be5712369f85de0d6e03450` gave
+N-body **0.583367x**, but A* **1.154586x**: a 15.5% regression. This fails
+the unit even though every predeclared external control was within the 1.03x
+ceiling: CDJS 0.954982x, hash-map 0.978916x, public-field raytrace 0.965685x,
+3d-raytrace 0.971948x, and controlflow-recursive 0.932408x. The external
+report SHA-256 is
+`740400b383cbc2db32e95ed07f0dbd47a9181ce2b992b1412ec932c37c602620`.
+
+The five declared broad controls were also sampled before the rejection was
+recorded: property read 1.000869x, property write 0.999434x, dynamic array
+read 1.001667x, object allocation 0.998540x, and plain function call
+0.998475x. Their raw JSONL SHA-256 is
+`2de160cd7ae7f9c8fafb65129afa16b7e64d2010dc21b5a2568246ae6c52cc1d`.
+The report tool correctly refuses to represent that five-case sample as a
+complete 25-case portfolio, and the target failure means the full promotion
+bundle was intentionally not run.
+
+The runtime implementation and its dedicated tests were reverted immediately;
+only the frozen plan and this negative-evidence record remain. Do not retry
+this scalarization by changing its cache ordering, boxed-operation threshold,
+or property guard: one independent target gets a large win, but the other
+queue-ranked target regresses materially. A future typed-loop proposal needs a
+new shared-cost profile and a different mechanism that improves both object
+field workloads before it is attempted.
