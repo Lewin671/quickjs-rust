@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 use crate::JsString;
@@ -7,7 +6,6 @@ use crate::string::{
 };
 
 mod backreferences;
-mod capture_free;
 mod classes;
 mod escapes;
 mod fast_scan;
@@ -18,7 +16,6 @@ mod normalization;
 mod tests;
 
 use backreferences::{match_unicode_backreference_forward, match_unicode_backreference_reverse};
-use capture_free::CaptureFreeProgram;
 use classes::class_match;
 use escapes::{
     ParsedEscape, ParsedPropertyEscape, PropertyCache, chars_equal, control_letter_escape,
@@ -74,7 +71,6 @@ pub(super) struct PreparedRegexp {
     group_indices: HashMap<usize, usize>,
     properties: PropertyCache,
     alternatives: Vec<(usize, usize)>,
-    capture_free: Option<RefCell<CaptureFreeProgram>>,
     options: MatchOptions,
 }
 
@@ -120,17 +116,11 @@ impl PreparedRegexp {
         let group_indices = capture_group_indices(&pattern);
         let properties = PropertyCache::build(&pattern);
         let alternatives = group_alternatives(&pattern, 0, pattern.len());
-        let capture_free = group_indices
-            .is_empty()
-            .then(|| CaptureFreeProgram::compile(&pattern, &properties, options))
-            .flatten()
-            .map(RefCell::new);
         Self {
             pattern,
             group_indices,
             properties,
             alternatives,
-            capture_free,
             options,
         }
     }
@@ -186,23 +176,6 @@ impl PreparedRegexp {
         let text = &prepared_input.text;
         if start_index > text.len() {
             return None;
-        }
-        if let Some(capture_free) = &self.capture_free {
-            let mut capture_free = capture_free.borrow_mut();
-            return capture_free
-                .match_input(
-                    &self.pattern,
-                    text,
-                    start_index,
-                    exact_start,
-                    &self.properties,
-                    self.options,
-                )
-                .map(|(start, end)| RegexpMatch {
-                    start,
-                    end,
-                    captures: Vec::new(),
-                });
         }
         let final_start = if exact_start { start_index } else { text.len() };
         (start_index..=final_start)
@@ -626,7 +599,6 @@ fn match_pattern_first(
                 && let Some(matcher) = simple_atom_matcher(pattern, pc, properties, options)
             {
                 let boundaries = simple_atom_boundaries(
-                    pattern,
                     text,
                     &matcher,
                     quantifier,
@@ -1643,9 +1615,7 @@ fn repeat_atom(
     if atom_captures.is_empty()
         && let Some(matcher) = simple_atom_matcher(pattern, atom_pc, properties, options)
     {
-        return repeat_simple_atom(
-            pattern, text, &matcher, quantifier, state, properties, options,
-        );
+        return repeat_simple_atom(text, &matcher, quantifier, state, properties, options);
     }
 
     let mut current = vec![state];

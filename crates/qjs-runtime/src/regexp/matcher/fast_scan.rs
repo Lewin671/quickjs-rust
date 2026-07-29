@@ -23,16 +23,13 @@ use crate::string::advance_string_index;
 /// A single-code-point atom whose repetition can be scanned linearly. Each
 /// variant tests the code point at one text position and reports the index just
 /// past a successful match (so unicode surrogate pairs advance by two units).
-#[derive(Clone, Copy)]
-pub(super) enum SimpleAtom {
+pub(super) enum SimpleAtom<'a> {
     /// `.` — any code point except (unless dot-all) a line terminator.
     AnyChar,
     /// A bare literal character (`a`, `1`, ...).
     Literal(char),
-    /// A character class `[...]`, stored as immutable pattern offsets so a
-    /// prepared matcher can reuse the decoded atom without borrowing a
-    /// temporary pattern slice.
-    Class { start: usize, end: usize },
+    /// A character class `[...]` (the slice excludes the brackets).
+    Class { class: &'a [char], base: usize },
     /// A `\` escape that consumes exactly one input code point: `\d`, `\w`,
     /// `\s` (and negations) or a control escape.
     Escape(char),
@@ -46,19 +43,19 @@ pub(super) enum SimpleAtom {
 /// `None` for atoms that need the generic machinery (groups, backreferences,
 /// anchors). The classification mirrors [`match_atom`](super::match_atom)
 /// exactly so the fast path produces identical matches.
-pub(super) fn simple_atom_matcher(
-    pattern: &[char],
+pub(super) fn simple_atom_matcher<'a>(
+    pattern: &'a [char],
     atom_pc: usize,
     properties: &PropertyCache,
     options: MatchOptions,
-) -> Option<SimpleAtom> {
+) -> Option<SimpleAtom<'a>> {
     match pattern[atom_pc] {
         '.' => Some(SimpleAtom::AnyChar),
         '[' => {
             let class_end = class_end(pattern, atom_pc)?;
             Some(SimpleAtom::Class {
-                start: atom_pc + 1,
-                end: class_end,
+                class: &pattern[atom_pc + 1..class_end],
+                base: atom_pc + 1,
             })
         }
         '\\' => {
@@ -118,11 +115,10 @@ pub(super) fn simple_atom_matcher(
     }
 }
 
-impl SimpleAtom {
+impl SimpleAtom<'_> {
     /// Test the code point at `index`, returning the index just past a match.
-    pub(super) fn step(
+    fn step(
         &self,
-        pattern: &[char],
         text: &[char],
         index: usize,
         properties: &PropertyCache,
@@ -141,10 +137,9 @@ impl SimpleAtom {
                 chars_equal(value, *literal, options.ignore_case, options.unicode)
                     .then_some(next_index)
             }
-            SimpleAtom::Class { start, end } => {
+            SimpleAtom::Class { class, base } => {
                 let (value, next_index) = regexp_code_point_at(text, index, options.unicode)?;
-                class_match(&pattern[*start..*end], *start, value, properties, options)
-                    .then_some(next_index)
+                class_match(class, *base, value, properties, options).then_some(next_index)
             }
             SimpleAtom::UnicodeEscape(value) => {
                 if options.unicode {
@@ -210,23 +205,16 @@ impl SimpleAtom {
 /// (greedy: longest first; lazy: shortest first) by mutating one base state's
 /// index rather than cloning per character.
 pub(super) fn repeat_simple_atom(
-    pattern: &[char],
     text: &[char],
-    matcher: &SimpleAtom,
+    matcher: &SimpleAtom<'_>,
     quantifier: Quantifier,
     state: MatchState,
     properties: &PropertyCache,
     options: MatchOptions,
 ) -> Vec<MatchState> {
-    let Some(boundaries) = simple_atom_boundaries(
-        pattern,
-        text,
-        matcher,
-        quantifier,
-        state.index,
-        properties,
-        options,
-    ) else {
+    let Some(boundaries) =
+        simple_atom_boundaries(text, matcher, quantifier, state.index, properties, options)
+    else {
         return Vec::new();
     };
     let lowest = quantifier.min;
@@ -251,9 +239,8 @@ pub(super) fn repeat_simple_atom(
 /// boundaries greedily or lazily without materializing a `MatchState` for
 /// every position before it knows whether the rest of the pattern matches.
 pub(super) fn simple_atom_boundaries(
-    pattern: &[char],
     text: &[char],
-    matcher: &SimpleAtom,
+    matcher: &SimpleAtom<'_>,
     quantifier: Quantifier,
     start: usize,
     properties: &PropertyCache,
@@ -263,7 +250,7 @@ pub(super) fn simple_atom_boundaries(
     let mut index = start;
     let max = quantifier.max.unwrap_or(usize::MAX);
     while boundaries.len() - 1 < max {
-        let Some(next) = matcher.step(pattern, text, index, properties, options) else {
+        let Some(next) = matcher.step(text, index, properties, options) else {
             break;
         };
         if next == index {

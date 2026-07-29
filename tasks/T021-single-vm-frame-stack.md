@@ -1970,8 +1970,7 @@ sequence: eliminating child construction on this tail-only slice is still too
 narrow. A successor must begin from a fresh shared-cost profile and remove a
 different cost that also covers non-tail direct calls or another queue-ranked
 workload.
-
-### 2026-07-29 retained capture-free ordered RegExp program fast screen
+### 2026-07-29 rejected capture-free ordered RegExp program after full screen
 
 The current queue ranked `string-tagcloud` fourth and `regexp-dna` seventh.
 Fresh profiles tied both to one different shared cost: Tagcloud placed 1,655
@@ -2007,9 +2006,30 @@ alternation priority, lazy repeats, Unicode, multiline anchors, global exec,
 replace, captures, lookarounds, and nullable-loop fallback produced the same
 1,836-byte output from candidate and base (SHA-256
 `f028d864b2ca55911384d44003490d08bc2f20db1e0a2d75630685aa5c48b642`).
-This is retained fast-gate evidence only: the complete broad/external
-promotion bundle and exact zero-gap burndown remain required before making a
-portfolio-level claim.
+
+The retained fast screen was not sufficient for promotion. A complete
+three-block broad portfolio produced 75 valid linearity checks; its
+candidate/base geometric mean was 0.982189x, but its allocation family was
+1.065956x. The complete three-block external manifest then preserved the
+large intended wins -- `string-tagcloud` **0.846015x** and `regexp-dna`
+**0.266699x** candidate/base -- but failed two frozen independent controls:
+`string-base64` was **1.051479x** and `controlflow-recursive` was
+**1.034165x**, both above the 1.03x ceiling. The other declared controls
+were hash-map 0.992385x, A* 0.987877x, and string-validate-input 0.962097x.
+
+The deterministic decision, bound to the exact source queue
+`9a7ab99bc827c9b4d42a00baaf1d042f25324e30c91f0993fdf71078c63d3758`,
+therefore returned `rejected`. Its preview-summary, broad-report, and
+external-report SHA-256 values are
+`6086b156294f1487df2525b562427fe4bff28b9c7336659081aaa7608402b83f`,
+`1d3369f26f0e42dbd090233377ac6e3219d961a78d0c7b4b4a5314adb34ff6f9`,
+and `a00ae1b4374e9a143f037eeb694352819369bdf447b9a72cc92208d35d1c36a8`.
+The runtime implementation and its dedicated tests are reverted; the frozen
+plan remains as negative evidence. Do not retry the same compiled-program
+layout by broadening syntax admission, changing choice-stack storage, or
+tuning the fallback boundary: the target wins do not offset its independently
+measured control regressions. A successor needs a new profile of a different
+shared RegExp or allocation cost.
 
 ### 2026-07-29 rejected typed-loop numeric-object-field scalarization
 
