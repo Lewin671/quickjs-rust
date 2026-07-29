@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "regexp-first-continuation-repetition",
+  "base_sha": "7d0f6bdbb2e5065155f2562bd7c790617b02abfb",
+  "queue": {
+    "candidate_sha": "7d0f6bdbb2e5065155f2562bd7c790617b02abfb",
+    "sha256": "7b8076306c0e96c6fdf4566e7d12fac173908d9c00d90c49cf85bb790e80d926"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/string-validate-input"
+    ],
+    "rank_ceiling": 11,
+    "override_reason": "Fresh ranks 1 through 4 remain closed by documented direct-call/frame, numeric ownership, constructor-receiver, and typed-field rejection evidence. The rank-5 tagcloud and independently profiled rank-11 string-validate-input receipts expose one different current matcher cost: generic quantified atoms materialize every candidate MatchState before match_pattern_first can test its continuation. This unit changes that generic first-result handoff only; it is not a retry of the rejected capture-free compiled RegExp program or simple-atom boundary streaming mechanisms."
+  },
+  "mechanism": {
+    "summary": "When top-level first-match execution reaches a non-simple quantified RegExp atom, preserve the existing repetition DFS priority but invoke the remaining pattern continuation at each accept state and stop at the first success instead of first collecting every repetition MatchState in a Vec.",
+    "generality": "Admission is solely the existing matcher context: match_pattern_first is executing a quantified atom that did not take its capture-free SimpleAtom route. It has no workload, source path, input length, iteration count, checksum, pattern-text, or expected-result condition. The all-state matcher, reverse matcher, SimpleAtom path, atom parsing, property caches, and every continuation that fails remain semantically unchanged; the new traversal only changes when a candidate is handed to the same continuation.",
+    "semantic_risks": [
+      "preserving ECMAScript leftmost-first priority through alternatives and greedy or lazy quantified groups",
+      "preserving capture writes and clearing of captures for zero repetitions before each attempted continuation",
+      "preserving the zero-width-loop filter and duplicate-state suppression used by the existing explicit repetition DFS",
+      "preserving nested groups, backreferences, lookarounds, Unicode advancement, and all matcher options because match_atom and the continuation remain the existing implementations",
+      "preserving RegExp exec, test, match, replace, and lastIndex result protocol through the unchanged RegexpMatch boundary"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-29 target/performance-next-7d0f6bdb-r1/profiles/string-tagcloud.sample; hash-verified official SunSpider string-tagcloud source (SHA-256 9634886bcb846c76141f97b681b33a11df444901e0b4c899d8f72a3b6544f9d5) loaded once as a prelude and its existing render phase repeated by the diagnostic suffix SHA-256 6a2f90c8f34f916862481b28ab453346a0b03a7e128f764da2c64efa94f1a26b. The current runtime source is identical to 7d0f6bdb outside documentation-only changes.",
+      "sha256": "8e1f62ecd5356a8b0a907f24153fbc8ee94fec959cfb92526b85032050bbe10a",
+      "base_sha": "7d0f6bdbb2e5065155f2562bd7c790617b02abfb",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-tagcloud"
+      ],
+      "shared_cost": "Of 3,576 main-thread samples, 1,014 are under PreparedRegexp::match_input; the dominant generic branch includes match_pattern_first (279), repeat_atom (240), and Vec::from_iter (221), showing eager repetition-state collection before the first continuation can succeed.",
+      "inclusive_fraction": 0.2836
+    },
+    {
+      "source": "macOS sample 2026-07-29 target/performance-next-7d0f6bdb-r1/profiles/string-validate-repeat.sample; hash-verified official SunSpider string-validate-input source (SHA-256 518ed0c67fde0c0d65af6238b91f5e498d8ba5d188c428f4a76dd498704737d5) loaded once as a prelude, then its own doTest workload repeated by the sampling-only suffix SHA-256 ce713925d44c96caca34cd1d3f290f97c6091fe8b1301b2fdacdebbdc90d0478. The wrapper is diagnostic only and is not a timing input.",
+      "sha256": "3b9b45145ae56f05fbedf10c5506866cc4b9ae9c8c01583e5b481284829e261c",
+      "base_sha": "7d0f6bdbb2e5065155f2562bd7c790617b02abfb",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-validate-input"
+      ],
+      "shared_cost": "Of 2,556 main-thread samples, 792 are under match_pattern_first; its email-validation quantified group enters repeat_atom (176), Vec::from_iter (157), and RawVecInner::finish_grow (126). The same eager generic-repetition materialization is independently present without tagcloud's JSON pattern mix.",
+      "inclusive_fraction": 0.3099
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/string-validate-input"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/regexp-dna",
+      "external/sunspider-1.0/string-base64",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

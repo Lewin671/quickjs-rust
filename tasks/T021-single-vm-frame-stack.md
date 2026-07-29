@@ -2293,3 +2293,47 @@ comparison, and no exact all-suite Test262 burndown is attached. This is a
 retained local performance unit, not a fixed-hardware or full-conformance
 promotion claim. Subsequent work must start from a new queue and fresh shared
 cost profile rather than retuning this exact-one route.
+
+### 2026-07-29 rejected first-continuation generic-RegExp repetition
+
+The exact `7d0f6bdb` opportunity queue ranked SunSpider `string-tagcloud`
+fifth and `string-validate-input` eleventh. Fresh source-matched samples tied
+them to a distinct generic matcher cost: Tagcloud put 1,014 of 3,576
+main-thread samples under `PreparedRegexp::match_input`, including
+`match_pattern_first` (279), `repeat_atom` (240), and `Vec::from_iter` (221).
+The independent validate-input profile put 792 of 2,556 samples under
+`match_pattern_first`, including `repeat_atom` (176), `Vec::from_iter` (157),
+and `RawVecInner::finish_grow` (126). The frozen one-attempt unit
+`tasks/performance-units/regexp-first-continuation-repetition.json` (plan
+SHA-256 `a9917e1509d5a71df335c8e4b46b7ced3dcfff301e7d72983875443c9ee838b0`)
+therefore kept the existing generic repetition DFS but offered each accept
+state directly to `match_pattern_first`'s continuation, stopping after its
+first success rather than collecting all accepted states first. It did not
+alter pattern parsing, the all-state/reverse matchers, simple-atom handling,
+or any source-specific condition.
+
+The candidate passed the new greedy/lazy/capture-clear focused matcher test,
+the complete 44-test matcher suite, and `qjs-runtime` clippy with warnings
+denied. Its isolated release binary SHA-256 was
+`133e8cbd52b60def2bce85d5bc4a0f919e76fbfb20eb43aadb3649cd1ad2b87f`; the
+runtime-identical `7d0f6bdb` baseline was
+`1e02e6bf0b9dfec25b6a9acea1de5335ac42a6748119bc354a9e3981baeac204`.
+
+The frozen seven-block alternating direct-process fast screen used unmodified
+official sources and byte-equal candidate/base stdout and stderr. Its raw
+receipt SHA-256 is
+`15f7456ebd3dd3c5f529a4af623b11dcc9f76179622dbfce418acf4028f276f5`.
+The paired median candidate/base ratios were only **0.992507x** for Tagcloud
+(196.275 ms versus 197.328 ms) and **0.992173x** for validate-input
+(74.187 ms versus 74.776 ms), both far above the frozen `<= 0.90x` target
+gate. The first Tagcloud candidate process was a 5.13x cold-start outlier,
+but excluding neither it nor any other declared block changes the decisive
+insufficiency of the median result.
+
+The runtime implementation and dedicated test were reverted immediately;
+the full external manifest, broad portfolio, and Test262 promotion bundle
+were intentionally not run after the fast-gate failure. Do not retry this
+mechanism by changing callback placement, visitor shape, minimum-repeat
+handling, or the collection boundary: the direct early-exit form itself has
+shown less than one percent on both independently profiled targets. A future
+RegExp unit must begin with a fresh profile of a different cost.
