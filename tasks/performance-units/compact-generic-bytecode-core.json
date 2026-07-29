@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "compact-generic-bytecode-core",
+  "base_sha": "50a20d60a312977aaecea5ecd2564b915f2892e9",
+  "queue": {
+    "candidate_sha": "50a20d60a312977aaecea5ecd2564b915f2892e9",
+    "sha256": "d6eae4a64796a5670016136fb198944f9b63a92e3ec7c930ddf644ad717866db"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "rank_ceiling": 3,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Lower a complete, ordinary synchronous bytecode program into a compact immutable execution representation and run it on the existing Vm, frame, operand stack, call, completion, and property helpers so hot common operations avoid the large generic Op dispatch loop without creating a second semantic VM.",
+    "generality": "Eligibility depends only on the immutable bytecode instruction set and function execution mode. Every complete ordinary synchronous program composed entirely of implemented compact operations takes the same execution core regardless of source path, benchmark, function name, inputs, iteration count, or result. Any unsupported operation, generator, async function, direct eval, with, module-sensitive route, or exceptional feature declines before observable work to the existing Vm loop.",
+    "semantic_risks": [
+      "preserving byte-for-byte instruction-pointer and jump targets while compact instructions share the existing Vm operand stack and local-slot authority",
+      "preserving JavaScript call argument order, receiver handling, direct-leaf routing, thrown-value identity, try/finally completion routing, and observable accessor or Proxy fallbacks through the existing helpers",
+      "keeping virtual-object lowering, numeric/control/typed loop plans, direct eval, with, generators, async functions, modules, class construction, and every unsupported operation on the existing execution route before observable work",
+      "ensuring compact-program caching is immutable and cannot retain per-invocation Values, property-cache state, dynamic bindings, or realm-specific mutable state"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-29 /tmp/qjs-current-profile.llQgYl/controlflow.sample; current main release binary SHA-256 95e83d949426a239d9af53b9da84fb8d9bff73a12be5712369f85de0d6e03450; repeated upstream controlflow-recursive source used only to sustain sampling",
+      "sha256": "89dcda4cd6353611bd2391015384e8c760b6d0a1eea22ceaefa3cb16fbabf94c",
+      "base_sha": "50a20d60a312977aaecea5ecd2564b915f2892e9",
+      "opportunity_ids": [
+        "external/sunspider-1.0/controlflow-recursive"
+      ],
+      "shared_cost": "898 of 3,256 top-of-stack samples are Vm::run_completion, with the recursive direct-call chain below it. The generic opcode dispatch loop is therefore a material cost independent of frame construction.",
+      "inclusive_fraction": 0.276
+    },
+    {
+      "source": "macOS sample 2026-07-29 /tmp/qjs-current-profile.llQgYl/ai-astar.sample; current main release binary SHA-256 95e83d949426a239d9af53b9da84fb8d9bff73a12be5712369f85de0d6e03450; concatenated hash-verified upstream A* sources used only to sustain sampling",
+      "sha256": "fe4bb1667f112d04424e91b7b26792c381388467379f4cd3dbd444a4cf244dc6",
+      "base_sha": "50a20d60a312977aaecea5ecd2564b915f2892e9",
+      "opportunity_ids": [
+        "external/kraken-1.1/ai-astar"
+      ],
+      "shared_cost": "1,807 of 3,980 top-of-stack samples are Vm::run_completion, ahead of property-cache, object-slot, Value lifetime, and numeric-operation costs. A compact execution core can cover the same ordinary property, branch, call, and arithmetic operations without a workload-specific path.",
+      "inclusive_fraction": 0.454
+    },
+    {
+      "source": "macOS sample 2026-07-29 /tmp/qjs-current-profile.llQgYl/hash-map.sample; current main release binary SHA-256 95e83d949426a239d9af53b9da84fb8d9bff73a12be5712369f85de0d6e03450; repeated hash-verified JetStream hash-map source used only to sustain sampling",
+      "sha256": "00e467c665eb299e2579e2a374e4f2fd8632403f4da874f349e4d105bb521dcf",
+      "base_sha": "50a20d60a312977aaecea5ecd2564b915f2892e9",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "1,206 of 3,969 top-of-stack samples are Vm::run_completion, in addition to direct-call frame construction and ordinary object-slot reads. The same full-program compact dispatch target is independent of recursion and collection implementation details.",
+      "inclusive_fraction": 0.304
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "control_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/string-tagcloud",
+      "broad/plain_function_call",
+      "broad/dynamic_method_call",
+      "broad/property_read",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

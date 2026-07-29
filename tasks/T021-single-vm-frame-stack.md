@@ -2062,3 +2062,58 @@ or property guard: one independent target gets a large win, but the other
 queue-ranked target regresses materially. A future typed-loop proposal needs a
 new shared-cost profile and a different mechanism that improves both object
 field workloads before it is attempted.
+
+### 2026-07-29 rejected compact generic bytecode core
+
+The fresh exact-`930eaeb8` queue ranked JetStream `controlflow-recursive`,
+Kraken `ai-astar`, and SunSpider `hash-map` first through third, with
+candidate/QuickJS-NG ratios of 6.607650x, 5.566090x, and 5.455860x. Their
+current profiles put the execution dispatcher, virtual-object selection, and
+operand-stack handling on every measured path. The frozen one-attempt unit
+`tasks/performance-units/compact-generic-bytecode-core.json` (plan SHA-256
+`e678b7f5f0eb13a12d1f28425d3f9ae9b3614d49c0d544e45fbb6a8096eae4d3`)
+therefore lowered the complete ordinary synchronous bytecode subset into a
+generic dense `CompactProgram`, retaining the existing VM helpers and falling
+back before execution for generators, dynamic scope, modules, and unsupported
+opcodes. It also cached an equivalent compact stream per virtual-object
+variant; it contained no workload names or benchmark-specific branches.
+
+Focused compact-core coverage passed four tests, including control flow,
+property and accessor effects, and captured `with` scope fallback. The virtual
+number lowering regression test and the direct `with`-scope fallback test
+passed. `cargo fmt --all --check` passed; the full runtime library passed
+1,915 tests during the implementation; and the final exact implementation
+passed all **5,160** curated Test262 subset cases.
+
+The clean three-block external run used candidate release binary SHA-256
+`79556b2c9074ceb8b5ec188a3f941f5afc58bd75dbe68e1ac36922c6d11da` against
+the runtime-identical base SHA-256
+`95e83d949426a239d9af53b9da84fb8d9bff73a12be5712369f85de0d6e03450`.
+Every frozen `<= 0.90x` target gate failed: controlflow-recursive was
+**0.994665x** (77.482 ms / 77.898 ms), A* **0.997122x**
+(9,643.316 ms / 9,671.152 ms), and hash-map **1.124792x**
+(1,951.761 ms / 1,735.220 ms). Hash-map regressed 12.5%. The independent
+external controls were within the 1.03x ceiling (public-field raytrace
+0.997750x, CDJS 1.002822x, and string-tagcloud 0.995898x), but that does not
+rescue a mechanism which makes none of its shared queue targets materially
+faster. The complete external report SHA-256 is
+`5c7afcc5db8a16ff68d0ee8ab5203b82a453261c1084cc64935daf2165fb3711`; its
+raw measurements SHA-256 is
+`b525d16ee55b926a87a331d9dad93fb782e528e41d1cf868942284bae2eee7ce`.
+
+The declared broad controls gave the decisive generality failure: median
+candidate/base was plain function call 1.000308x, property read 0.939213x,
+object allocation 0.938541x, but dynamic method call **1.621115x**
+(507.586 ms / 313.109 ms). This is far above the frozen 1.03x ceiling. The
+partial four-case sample is intentionally not a portfolio result; the report
+tool correctly rejected it as incomplete. Its raw JSONL SHA-256 is
+`cf9b638cd4feb731575ba769e68992466b9fd5c4bc3de17f20d4cea97e1e56f9`.
+
+The runtime implementation was reverted immediately; only the frozen plan and
+this negative-evidence record remain. Do not retry this compact core by
+changing opcode layout, compact-cache placement, virtual variant caching,
+instruction width, or eligibility ordering: all three independent targets
+missed and a broad dynamic-call control regressed catastrophically. A future
+proposal must start with a fresh profile of a different shared cost, likely
+property/value representation or allocation/GC work outside the generic
+dispatcher.
