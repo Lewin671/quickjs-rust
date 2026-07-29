@@ -11,7 +11,6 @@ use crate::{
 use super::{
     ir::{Bytecode, Op},
     named_property_cache::NamedPropertyCache,
-    vm_props::fast_number_binary,
 };
 
 const MAX_FAST_LOCALS: usize = 32;
@@ -54,6 +53,21 @@ enum FastOp {
     },
     Return,
     ReturnConst(FastValue),
+}
+
+/// A subset of FastOp that is proven to carry only ECMAScript Numbers.
+///
+/// Keeping this distinct from the general direct-leaf program lets the common
+/// scalar case avoid repeated FastValue tag checks and temporary Value
+/// construction while retaining the original path for every other value.
+#[derive(Clone, Debug)]
+enum NumberOnlyOp {
+    LoadConst(f64),
+    LoadLocal(usize),
+    StoreLocal(usize),
+    Binary(BinaryOp),
+    BinaryConstRight(BinaryOp, f64),
+    Return,
 }
 
 /// Compact, prevalidated form of the straight-line numeric bytecode subset.
@@ -145,6 +159,10 @@ enum NumericLeafShortcut {
         upvalue_index: usize,
         op: BinaryOp,
         right: f64,
+    },
+    NumberOnlyProgram {
+        ops: Vec<NumberOnlyOp>,
+        parameter_slots: Vec<usize>,
     },
 }
 
@@ -653,7 +671,11 @@ impl NumericLeafShortcut {
                 right: *right,
             });
         }
-        None
+        let (ops, parameter_slots) = compile_number_only_program(ops, bytecode)?;
+        Some(Self::NumberOnlyProgram {
+            ops,
+            parameter_slots,
+        })
     }
 
     fn eval(&self, arguments: &[Value], upvalues: &[Upvalue]) -> Option<Value> {
@@ -728,8 +750,131 @@ impl NumericLeafShortcut {
                 upvalues.get(*upvalue_index)?.set(value.clone());
                 Some(value)
             }
+            Self::NumberOnlyProgram {
+                ops,
+                parameter_slots,
+            } => {
+                let mut locals = [0.0; MAX_FAST_LOCALS];
+                for (index, &slot) in parameter_slots.iter().enumerate() {
+                    let Value::Number(value) = arguments.get(index)? else {
+                        return None;
+                    };
+                    *locals.get_mut(slot)? = *value;
+                }
+                let mut stack = [0.0; MAX_FAST_STACK];
+                let mut stack_len = 0;
+                for op in ops {
+                    match op {
+                        NumberOnlyOp::LoadConst(value) => {
+                            push_number(&mut stack, &mut stack_len, *value)?;
+                        }
+                        NumberOnlyOp::LoadLocal(slot) => {
+                            push_number(&mut stack, &mut stack_len, *locals.get(*slot)?)?;
+                        }
+                        NumberOnlyOp::StoreLocal(slot) => {
+                            *locals.get_mut(*slot)? = pop_number(&stack, &mut stack_len)?;
+                        }
+                        NumberOnlyOp::Binary(op) => {
+                            let right = pop_number(&stack, &mut stack_len)?;
+                            let left = pop_number(&stack, &mut stack_len)?;
+                            push_number(
+                                &mut stack,
+                                &mut stack_len,
+                                number_binary(left, *op, right)?,
+                            )?;
+                        }
+                        NumberOnlyOp::BinaryConstRight(op, right) => {
+                            let left = pop_number(&stack, &mut stack_len)?;
+                            push_number(
+                                &mut stack,
+                                &mut stack_len,
+                                number_binary(left, *op, *right)?,
+                            )?;
+                        }
+                        NumberOnlyOp::Return => {
+                            return Some(Value::Number(pop_number(&stack, &mut stack_len)?));
+                        }
+                    }
+                }
+                None
+            }
         }
     }
+}
+
+fn compile_number_only_program(
+    ops: &[FastOp],
+    bytecode: &Bytecode,
+) -> Option<(Vec<NumberOnlyOp>, Vec<usize>)> {
+    #[derive(Clone, Copy, PartialEq)]
+    enum StackValue {
+        Number,
+        Dead,
+    }
+
+    if !bytecode.received_upvalue_slots().is_empty() {
+        return None;
+    }
+    let mut initialized_slots = 0_u32;
+    for &slot in bytecode.parameter_slots() {
+        initialized_slots |= 1_u32.checked_shl(slot as u32)?;
+    }
+    let mut stack = Vec::with_capacity(MAX_FAST_STACK);
+    let mut program = Vec::with_capacity(ops.len());
+    for (index, op) in ops.iter().enumerate() {
+        match op {
+            FastOp::LoadConst(FastValue::Number(value)) => {
+                stack.push(StackValue::Number);
+                program.push(NumberOnlyOp::LoadConst(*value));
+            }
+            // Function-body statement completions leave an unobservable
+            // undefined beneath the next statement's expression. Track it
+            // statically but do not materialize it in the scalar executor.
+            FastOp::LoadConst(FastValue::Undefined) => stack.push(StackValue::Dead),
+            FastOp::LoadLocal(slot)
+                if initialized_slots & (1_u32.checked_shl(*slot as u32)?) != 0 =>
+            {
+                stack.push(StackValue::Number);
+                program.push(NumberOnlyOp::LoadLocal(*slot));
+            }
+            FastOp::StoreLocal {
+                slot,
+                upvalue_index: None,
+            } if stack.pop() == Some(StackValue::Number) => {
+                initialized_slots |= 1_u32.checked_shl(*slot as u32)?;
+                program.push(NumberOnlyOp::StoreLocal(*slot));
+            }
+            FastOp::Binary(op)
+                if matches!(
+                    (stack.pop(), stack.pop()),
+                    (Some(StackValue::Number), Some(StackValue::Number))
+                ) && number_binary(0.0, *op, 0.0).is_some() =>
+            {
+                stack.push(StackValue::Number);
+                program.push(NumberOnlyOp::Binary(*op));
+            }
+            FastOp::BinaryConstRight(op, right)
+                if stack.pop() == Some(StackValue::Number)
+                    && number_binary(0.0, *op, *right).is_some() =>
+            {
+                stack.push(StackValue::Number);
+                program.push(NumberOnlyOp::BinaryConstRight(*op, *right));
+            }
+            FastOp::Return
+                if stack.pop() == Some(StackValue::Number)
+                    && stack.iter().all(|value| *value == StackValue::Dead)
+                    && index + 1 == ops.len() =>
+            {
+                program.push(NumberOnlyOp::Return);
+                return Some((program, bytecode.parameter_slots().to_vec()));
+            }
+            _ => return None,
+        }
+        if stack.len() > MAX_FAST_STACK {
+            return None;
+        }
+    }
+    None
 }
 
 /// A `Math` function of one argument whose entire effect is a floating-point
@@ -1457,43 +1602,58 @@ fn pop_number(stack: &[f64; MAX_FAST_STACK], stack_len: &mut usize) -> Option<f6
 }
 
 fn direct_number_binary(left: f64, op: BinaryOp, right: f64) -> Option<FastValue> {
+    if let Some(value) = number_binary(left, op, right) {
+        return Some(FastValue::Number(value));
+    }
     let value = match op {
-        BinaryOp::Add => FastValue::Number(left + right),
-        BinaryOp::Sub => FastValue::Number(left - right),
-        BinaryOp::Mul => FastValue::Number(left * right),
-        BinaryOp::Div => FastValue::Number(left / right),
-        BinaryOp::Rem => FastValue::Number(crate::operations::number_remainder(left, right)),
         BinaryOp::Eq | BinaryOp::StrictEq => FastValue::Boolean(left == right),
         BinaryOp::Ne | BinaryOp::StrictNe => FastValue::Boolean(left != right),
         BinaryOp::Lt => FastValue::Boolean(left < right),
         BinaryOp::Le => FastValue::Boolean(left <= right),
         BinaryOp::Gt => FastValue::Boolean(left > right),
         BinaryOp::Ge => FastValue::Boolean(left >= right),
-        _ => {
-            let value = fast_number_binary(&Value::Number(left), op, &Value::Number(right))?;
-            FastValue::from_value(&value)?
-        }
+        _ => return None,
     };
     Some(value)
 }
 
-// Keep the scalar-result arithmetic local to call-shaped plans. Inlining the
-// wider `direct_number_binary` helper bloats unrelated fast loops, while this
-// adapter only needs the five operations that always produce a Number.
+// Keep scalar-result arithmetic local to numeric-leaf plans. Unlike the
+// general direct executor, every caller here has already checked that both
+// operands are Numbers, so no temporary Value representation is required.
 #[inline(always)]
 fn number_binary(left: f64, op: BinaryOp, right: f64) -> Option<f64> {
-    match op {
-        BinaryOp::Add => Some(left + right),
-        BinaryOp::Sub => Some(left - right),
-        BinaryOp::Mul => Some(left * right),
-        BinaryOp::Div => Some(left / right),
-        BinaryOp::Rem => Some(crate::operations::number_remainder(left, right)),
-        _ => match direct_number_binary(left, op, right)? {
-            FastValue::Number(value) => Some(value),
-            _ => None,
-        },
-    }
+    Some(match op {
+        BinaryOp::Add => left + right,
+        BinaryOp::Sub => left - right,
+        BinaryOp::Mul => left * right,
+        BinaryOp::Div => left / right,
+        BinaryOp::Rem => crate::operations::number_remainder(left, right),
+        BinaryOp::Pow => crate::operations::number_exponentiate(left, right),
+        BinaryOp::Shl => {
+            f64::from(crate::to_int32_number(left) << (crate::to_uint32_number(right) & 0x1f))
+        }
+        BinaryOp::Shr => {
+            f64::from(crate::to_int32_number(left) >> (crate::to_uint32_number(right) & 0x1f))
+        }
+        BinaryOp::UShr => {
+            f64::from(crate::to_uint32_number(left) >> (crate::to_uint32_number(right) & 0x1f))
+        }
+        BinaryOp::BitwiseAnd => {
+            f64::from(crate::to_int32_number(left) & crate::to_int32_number(right))
+        }
+        BinaryOp::BitwiseXor => {
+            f64::from(crate::to_int32_number(left) ^ crate::to_int32_number(right))
+        }
+        BinaryOp::BitwiseOr => {
+            f64::from(crate::to_int32_number(left) | crate::to_int32_number(right))
+        }
+        _ => return None,
+    })
 }
+
+#[cfg(test)]
+#[path = "vm_numeric_leaf_number_tests.rs"]
+mod number_only_tests;
 
 #[cfg(test)]
 mod tests {

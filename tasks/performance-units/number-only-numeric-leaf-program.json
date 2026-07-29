@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "number-only-numeric-leaf-program",
+  "base_sha": "0c31864b700655b54c6efc8383a52053f06d62a4",
+  "queue": {
+    "candidate_sha": "0c31864b700655b54c6efc8383a52053f06d62a4",
+    "sha256": "8558f3e2708a20d1f7859f5b1f1ab028318c02359954e2ced4a120f01d312840"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/crypto-md5",
+      "external/sunspider-1.0/crypto-sha1"
+    ],
+    "rank_ceiling": 19,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Precompile a side-effect-free straight-line direct leaf whose inputs, local temporaries, operands, and return value are all Numbers into a scalar f64 local-and-stack program, avoiding FastValue tagging and generic Value binary dispatch on every call.",
+    "generality": "Eligibility derives only from immutable bytecode, parameter slots, local dataflow, and live Number arguments. It never inspects benchmark names, source paths, function identities, input values beyond the Number type, iteration counts, or results. The same program applies to any ordinary direct leaf with local numeric temporaries, including arithmetic and bitwise helper functions.",
+    "semantic_risks": [
+      "preserving ECMAScript Number arithmetic, NaN, signed zero, Infinity, ToInt32, ToUint32, shift-count, remainder, and exponentiation behavior for every admitted binary operation",
+      "declining before observable work when an argument is missing or non-Number, when a received upvalue exists, or when the bytecode contains coercion, comparison, boolean, update, duplicate, discard, control flow, calls, property access, stores to an upvalue, or any unsupported operation",
+      "preserving local declaration and duplicate-formal semantics by seeding only the bytecode's authoritative parameter-position slots and requiring every other local read to have an earlier numeric store",
+      "retaining the existing direct-leaf and full-VM paths unchanged for every non-admitted call"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-b6-crypto-md5-20x-profile.lt8uuY/crypto-md5-20x.sample; runtime-identical current-main executable SHA-256 2b36815789e28f95d445728ba858913413452c6bcdc3744b4c5568b7a1751bcb. The pinned source was concatenated only to lengthen sampling, never timed. Of 477 main-thread samples, 71 were inclusive in try_eval_numeric_leaf below direct leaf calls, with the nested safe_add helper repeatedly executing local temporary stores and Number bitwise arithmetic.",
+      "sha256": "8764b468a52762a0ff88f2d79351b333758a107d94421141fe9dccb28b8eb556",
+      "base_sha": "0c31864b700655b54c6efc8383a52053f06d62a4",
+      "opportunity_ids": [
+        "external/sunspider-1.0/crypto-md5"
+      ],
+      "shared_cost": "The current direct-leaf numeric evaluator allocates fixed FastValue local and operand-stack state, branches on tags for every load/store/binary operation, and routes Number bitwise operations through a Value-returning helper even when the immutable leaf bytecode and all live inputs are already proven numeric.",
+      "inclusive_fraction": 0.1488
+    },
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-b6-crypto-sha1-20x-profile.muoCXx/crypto-sha1-20x.sample; runtime-identical current-main executable SHA-256 2b36815789e28f95d445728ba858913413452c6bcdc3744b4c5568b7a1751bcb. The pinned source was concatenated only to lengthen sampling, never timed. Of 387 main-thread samples, 52 were inclusive in try_eval_numeric_leaf below direct leaf calls, again through the same safe_add local-temporary numeric shape.",
+      "sha256": "f5cdefea29ca1d4e45d1755253accb004dd1e70a2f0e6ba9d9be29c7ef7a6c83",
+      "base_sha": "0c31864b700655b54c6efc8383a52053f06d62a4",
+      "opportunity_ids": [
+        "external/sunspider-1.0/crypto-sha1"
+      ],
+      "shared_cost": "A second independent workload confirms that the remaining cost is the generic numeric leaf interpreter rather than an MD5-specific helper: both the scalar state representation and the Number-only binary route are shared across ordinary straight-line local-temporary leaves.",
+      "inclusive_fraction": 0.1344
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/crypto-md5",
+      "external/sunspider-1.0/crypto-sha1"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/sunspider-1.0/access-nbody",
+      "external/jetstream3-js-subset/stanford-crypto-aes",
+      "broad/plain_function_call",
+      "broad/function_call_two_args",
+      "broad/dynamic_method_call",
+      "broad/math_abs"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

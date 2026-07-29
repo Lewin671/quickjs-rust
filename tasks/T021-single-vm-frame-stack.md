@@ -1743,3 +1743,67 @@ complete-external, Test262, or promotion run was warranted. Do not retry this
 same contiguous-ASCII-copy route through a different byte scan, inlining, or
 preallocation tweak. A successor must begin with a distinct current-profiled
 cost whose exact-source timing supports a material general opportunity.
+
+### 2026-07-28 accepted Number-only numeric direct-leaf program
+
+The refreshed queue put SunSpider \`crypto-md5\` and \`crypto-sha1\` at ranks
+14 and 19. Independent profiles of both exact-current workloads attributed
+71/477 and 52/387 main-thread samples respectively to
+\`try_eval_numeric_leaf\`, below direct calls to the same \`safe_add\` shape:
+straight-line Number arguments, local temporary stores, and bitwise
+arithmetic. The frozen one-attempt unit
+\`tasks/performance-units/number-only-numeric-leaf-program.json\` (SHA-256
+\`41ae87b208008cc96c2f5220439b5260b2713495f54d9cd8841ffc91eb20627a\`)
+therefore precompiles only that general bytecode subset into scalar \`f64\`
+locals and an operand stack. It never observes benchmark identities, source
+paths, input values beyond the Number type, or iteration counts.
+
+The compiler declines before observable work when any parameter is missing or
+not a Number, an upvalue is received, or the body contains coercion,
+comparison, boolean/update/stack manipulation, control flow, calls, property
+access, or an unsupported local operation. The general direct-leaf executor
+remains the fallback. The scalar binary helper matches the established Number
+fast path for arithmetic, remainder, exponentiation, shifts, and bitwise
+operations; focused coverage compares NaN, signed-zero, infinity, conversion,
+and shift edge cases bit-for-bit and verifies both local-temporary admission
+and non-Number fallback.
+
+The release candidate SHA-256
+\`38b7e4b85b195b0f00e142d1020b968556dc3c947f84a3b47603ec608d79a6f6\`
+was compared with runtime-identical current-main base
+\`2b36815789e28f95d445728ba858913413452c6bcdc3744b4c5568b7a1751bcb\`.
+The complete three-block external report/raw SHA-256 values are
+\`794519642a48ef43b2173957fa6f17b59bb69f4ca7e74063fb7068e671c00e48\` and
+\`eb0d6576349f83097417d37c9d8a452f70d83700b7aec84323ce7d28c17cb6fb\`.
+All 45 scheduled sources were exercised for candidate, base, and QuickJS-NG;
+44 candidate/base rows were comparable. The two frozen targets improved from
+38.713 ms to 33.138 ms (**0.855988x candidate/base**) for MD5 and from
+36.050 ms to 31.690 ms (**0.879036x**) for SHA-1. Their remaining
+candidate/QuickJS-NG ratios are **2.540928x** and **2.388396x**, so this is
+not a claim that the final every-case \`<= 0.50x\` objective has been met.
+The 44-row external candidate/base geometric mean is **0.981460x**; the
+largest regression is \`string-unpack-code\` at **1.028481x**, below the
+unit's 1.03x ceiling. Predeclared external controls range from 0.904092x
+(A*) through 0.997786x (class-field raytrace), with hash-map at 0.993325x,
+AES at 0.992278x, controlflow-recursive at 0.995826x, and the two SunSpider
+controls at 0.988733x and 0.984448x.
+
+The complete 25-case, three-block broad raw record has SHA-256
+\`423235031b99462f9a8da47db5e688629a95c6ab415457dbf2c2638652be96d6\`.
+Its candidate/base geometric mean is **0.996728x**, its largest individual
+regression is \`closure_allocation_call\` at **1.020195x**, and the frozen
+controls are \`dynamic_method_call\` 0.948492x,
+\`function_call_two_args\` 0.998202x, \`plain_function_call\` 1.000794x,
+and \`math_abs\` 1.002326x. This local broad raw record is explicitly
+provenance-unverified because the candidate was built before its source commit;
+it is conservative pre-merge regression evidence, not a claim-grade report.
+
+\`cargo test -p qjs-runtime --lib bytecode::vm_numeric_leaf --no-fail-fast\`
+passed all 9 focused tests, \`./scripts/test262-subset.sh\` passed all 5,160
+selected cases, and \`./scripts/compare-qjs.sh\` passed. The complete
+\`./scripts/check.sh\` gate also passed before the commit was pushed.
+Promotion remains deliberately inconclusive until an exact candidate-commit
+zero-gap Test262 burndown and a fully comparable external report are available.
+This is an accepted general direct-leaf reduction under the current local
+runtime, curated Test262, and QuickJS-NG comparison gates; the next unit must
+again begin from a current shared-cost profile.
