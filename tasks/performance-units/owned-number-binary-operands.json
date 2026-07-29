@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "owned-number-binary-operands",
+  "base_sha": "50a20d60a312977aaecea5ecd2564b915f2892e9",
+  "queue": {
+    "candidate_sha": "50a20d60a312977aaecea5ecd2564b915f2892e9",
+    "sha256": "d6eae4a64796a5670016136fb198944f9b63a92e3ec7c930ddf644ad717866db"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "rank_ceiling": 3,
+    "override_reason": "Rank-one controlflow-recursive remains dominated by already rejected direct-leaf frame and compact-dispatch mechanisms. The rank-two and rank-three profiles independently expose the still-unaddressed owned-Value lifetime cost inside ordinary Number binary bytecode; this unit changes that operation's value representation only after the existing generic interpreter has popped both operands."
+  },
+  "mechanism": {
+    "summary": "When an ordinary binary bytecode operation has already popped two Number Values, destructure them into f64 operands and call the existing Number-only binary helper directly, instead of borrowing the boxed Values through the generic helper and then running their enum Drop paths. Unsupported Number operators reconstruct the same Values before the unchanged slow path.",
+    "generality": "Selection depends only on the two live JavaScript operand tags and the existing BinaryOp semantics. It has no source, benchmark, function, receiver, argument, iteration, or result condition. Every non-Number pair, coercive operation, object comparison, string concatenation, BigInt operation, Proxy path, and unsupported Number operator retains the existing code path before any observable work.",
+    "semantic_risks": [
+      "preserving ECMAScript Number arithmetic, NaN, signed zero, Infinity, remainder, exponentiation, integer conversion, shift count, and comparison behavior through the existing f64 helper",
+      "reconstructing both Number Values exactly when the existing helper declines an operator so the unchanged coercive or relational slow path observes identical inputs",
+      "retaining operand pop order and all stack-underflow behavior before the Number fast decision",
+      "leaving non-Number Value lifetime, string append reuse, object identity comparison, accessor, Proxy, BigInt, and exception paths unchanged"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-29 /private/tmp/qjs-next-profile.OexVSP/ai-astar.sample; current df0e80d5 runtime-identical release binary SHA-256 7c1c93f6f18dc037a4ab0603c57199f31c3ebacb2f55bdae6cd879bdf1c202a8; hash-verified Kraken A* bundle",
+      "sha256": "28487a521c8a714470a7b0f2d528bba33d0b283c7168a10f38882d96d33c6ab5",
+      "base_sha": "50a20d60a312977aaecea5ecd2564b915f2892e9",
+      "opportunity_ids": [
+        "external/kraken-1.1/ai-astar"
+      ],
+      "shared_cost": "Of 3,636 main-thread samples, eval_binary has 436 top frames and Value::drop has 221. The hot binary path currently borrows two already-popped Number Values through fast_number_binary, then drops both boxed operands after a successful primitive result; property and direct-call work remain separate costs.",
+      "inclusive_fraction": 0.1807
+    },
+    {
+      "source": "macOS sample 2026-07-29 /private/tmp/qjs-shared-cost-profile.IiQFN2/hash-map.sample; current df0e80d5 runtime-identical release binary SHA-256 7c1c93f6f18dc037a4ab0603c57199f31c3ebacb2f55bdae6cd879bdf1c202a8; hash-verified JetStream hash-map bundle",
+      "sha256": "311299cad408300b2cb0658da4db9c9e42d05f2db549b3f247b95ff8f8804c06",
+      "base_sha": "50a20d60a312977aaecea5ecd2564b915f2892e9",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Of 1,102 main-thread samples, eval_binary has 66 top frames while Value::clone and Value::drop each have 45. Its numeric hash/index and counter operations use the same ordinary boxed binary path under independent direct-call and allocation activity.",
+      "inclusive_fraction": 0.1416
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "control_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/string-tagcloud",
+      "broad/property_read",
+      "broad/plain_function_call",
+      "broad/dynamic_method_call"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

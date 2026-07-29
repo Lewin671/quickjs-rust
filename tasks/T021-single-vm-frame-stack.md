@@ -2159,3 +2159,47 @@ run after rejection. Do not retry this mechanism by tuning transition depth,
 shape-cache ordering, or spare slot capacity: it has not shown the required
 cross-workload benefit. A successor should start from a fresh profile of a
 different shared allocation or Value-lifecycle cost.
+
+### 2026-07-29 rejected owned Number binary operands
+
+Fresh exact-source profiles of A* and hash-map exposed ordinary Number binary
+bytecode beside `Value::drop`: A* had 436 `eval_binary` and 221 `Value::drop`
+top frames out of 3,636 samples, while hash-map had 66 `eval_binary` plus 45
+each of `Value::clone` and `Value::drop` out of 1,102. The frozen one-attempt
+unit `tasks/performance-units/owned-number-binary-operands.json` (plan
+SHA-256 `57f3342cd35a019c7871612e51afdae17675081be4f62bb885e515796e234376`)
+therefore moved two already-popped Number operands out of their `Value` enums
+before calling the existing Number helper, reconstructing both values for an
+unsupported operator before the unchanged generic path. Selection depended
+only on live operand tags and the current `BinaryOp`; all coercive, object,
+string, BigInt, Proxy, and unsupported-operator paths retained their existing
+route.
+
+The prototype passed its focused bytecode test, including a two-Number `in`
+exception fallback, and the complete runtime library passed all **1,912**
+tests. `cargo fmt --check` passed. The release candidate SHA-256
+`6c9837794e60def86d5a1f5df1d585aa6966bf7d877cefe949093cdb5e6d7254` was
+measured against the runtime-identical exact-`50a20d60` base SHA-256
+`7c1c93f6f18dc037a4ab0603c57199f31c3ebacb2f55bdae6cd879bdf1c202a8`.
+
+The frozen fast gate used a three-block, seeded role-rotation manifest with
+the two target cases and three independent controls; its exact source-file
+hash subset manifest SHA-256 is
+`222e0f5ab5da114f2eeb57d4babd37caca1e9d5d64e244bc6e7cef999d1d7020`.
+Both required `<= 0.95x` targets missed: A* was **0.974437x**
+(9,822.494 ms / 10,080.174 ms) and hash-map was **0.988694x**
+(1,622.495 ms / 1,641.048 ms). The controls stayed below the 1.03x ceiling
+but did not change the decision: public-field raytrace was 0.997401x,
+controlflow-recursive 0.985907x, and string-tagcloud 1.006982x. The raw
+measurements SHA-256 is
+`a286f3a78e35b8e7ce0167196a6eed1203f08b2534f1981d38edfdca94ff1d35`; the
+report SHA-256 is
+`16635c0afe0342e08d97b106c257d240843e6402c7710b7442e896a57dd16c02`.
+
+The runtime implementation and its dedicated fallback test were reverted
+immediately. The complete external manifest, broad portfolio, and Test262
+promotion bundle were intentionally not run after this fast-gate rejection.
+Do not retry by rearranging the borrowed match, inlining the existing helper,
+or changing fallback reconstruction: the shared improvement is materially
+below the declared target in both independent workloads. A successor must
+profile a different shared allocation or value-lifecycle cost first.
