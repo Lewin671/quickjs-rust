@@ -1,12 +1,12 @@
 {
   "schema_version": 2,
-  "id": "quickjs-benchmark-analysis-v4",
+  "id": "quickjs-benchmark-analysis-v5",
   "compatible_measurement": {
     "schema_version": 4,
-    "protocol_id": "quickjs-measurement-protocol-v7"
+    "protocol_id": "quickjs-measurement-protocol-v8"
   },
   "protocol": {
-    "id": "quickjs-analysis-protocol-v4",
+    "id": "quickjs-analysis-protocol-v5",
     "files": [
       "scripts/benchmark-report.sh",
       "tools/__init__.py",
@@ -25,7 +25,7 @@
       "tools/benchmark/schema.py",
       "tools/benchmark/statistics.py"
     ],
-    "aggregate_sha256": "e68c72df7b975b8ada2dd3b1cdda8640866e5704ff5bbef31024281eb4697f6a"
+    "aggregate_sha256": "10e456d9862bdd7242a36fa06b3f9ab2c563ea48957d3cb44fde232a14bd7bb4"
   },
   "bootstrap": {
     "samples": 20000,

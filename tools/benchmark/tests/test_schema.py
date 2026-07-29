@@ -24,7 +24,7 @@ class ManifestTests(unittest.TestCase):
         manifest = load_manifest(ROOT / "benchmarks/manifest.json")
         self.assertEqual(manifest.schema_version, 4)
         self.assertEqual(manifest.series_id, "broad-black-box-v2")
-        self.assertEqual(manifest.protocol_id, "quickjs-measurement-protocol-v7")
+        self.assertEqual(manifest.protocol_id, "quickjs-measurement-protocol-v8")
         self.assertEqual(manifest.lane_id, "throughput/wall_ns_per_operation")
         self.assertEqual(
             [case.id for case in manifest.cases],

@@ -353,10 +353,30 @@ class BenchmarkRun:
             )
             if status != "ok":
                 return False
-            if result.duration_ns >= target_ns or iterations >= case.max_iterations:
+            if result.duration_ns < target_ns and iterations < case.max_iterations:
+                iterations = next_calibration_iterations(
+                    iterations, target_ns, result.duration_ns, case.max_iterations
+                )
+                continue
+            if iterations >= case.max_iterations:
+                break
+
+            # The first sample that clears the target can be an outlier.  A
+            # same-iteration confirmation keeps calibration a setup-only
+            # phase while preventing a faster steady-state process from
+            # leaving every formal block below the manifest's minimum window.
+            # Do not reinterpret either diagnostic as a measurement: a short
+            # confirmation scales the iteration count and must itself clear
+            # the same safety-adjusted target before measurement can begin.
+            confirmed, status, _quality = self._sample(
+                engine, case, iterations, "calibration", None, None, "diagnostic"
+            )
+            if status != "ok":
+                return False
+            if confirmed.duration_ns >= target_ns:
                 break
             iterations = next_calibration_iterations(
-                iterations, target_ns, result.duration_ns, case.max_iterations
+                iterations, target_ns, confirmed.duration_ns, case.max_iterations
             )
         for _ in range(case.warmup_runs):
             _result, status, _quality = self._sample(

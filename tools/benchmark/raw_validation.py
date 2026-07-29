@@ -142,17 +142,27 @@ def _replay_setup(
         row, reason = take("calibration", expected_iterations)
         if reason is not None:
             return failed(row, reason, None)
-        reached = (
-            row["duration_ns"] >= target_ns
-            or expected_iterations >= case.max_iterations
-        )
-        if reached:
+        if row["duration_ns"] < target_ns and expected_iterations < case.max_iterations:
+            expected_iterations = next_calibration_iterations(
+                expected_iterations,
+                target_ns,
+                row["duration_ns"],
+                case.max_iterations,
+            )
+            continue
+        if expected_iterations >= case.max_iterations:
+            formal_iterations = expected_iterations
+            break
+        confirmation, reason = take("calibration", expected_iterations)
+        if reason is not None:
+            return failed(confirmation, reason, None)
+        if confirmation["duration_ns"] >= target_ns:
             formal_iterations = expected_iterations
             break
         expected_iterations = next_calibration_iterations(
             expected_iterations,
             target_ns,
-            row["duration_ns"],
+            confirmation["duration_ns"],
             case.max_iterations,
         )
 

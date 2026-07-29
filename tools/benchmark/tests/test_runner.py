@@ -345,7 +345,7 @@ class RunnerTests(unittest.TestCase):
         rows = [json.loads(line) for line in output.getvalue().splitlines()]
         self.assertEqual(
             [row["phase"] for row in rows],
-            ["startup", "startup", "startup", "calibration", "warmup"]
+            ["startup", "startup", "startup", "calibration", "calibration", "warmup"]
             + ["linearity"] * 8,
         )
         diagnostics = rows[-8:]
@@ -396,8 +396,42 @@ class RunnerTests(unittest.TestCase):
             calibration = [row["iterations"] for row in rows if row["phase"] == "calibration"]
             return run.iterations[(engine.role, case.id)], calibration
 
-        self.assertEqual(calibrate(Fraction(1)), (100, [100]))
-        self.assertEqual(calibrate(Fraction(5, 4)), (114, [100, 114]))
+        self.assertEqual(calibrate(Fraction(1)), (100, [100, 100]))
+        self.assertEqual(calibrate(Fraction(5, 4)), (114, [100, 114, 114]))
+
+    def test_calibration_rechecks_a_fast_steady_state_before_measurement(self) -> None:
+        engine = self._engine("raise SystemExit(1)\n")
+        manifest = load_manifest(ROOT / "benchmarks/manifest.json")
+        case = replace(
+            manifest.cases[0], initial_iterations=10, max_iterations=1_000,
+            min_window_ms=1, startup_max_fraction=Fraction(1, 10),
+            calibration_safety_factor=Fraction(1), warmup_runs=0,
+        )
+        output = io.StringIO()
+        run = BenchmarkRun(manifest, [engine], [case], 1, 1, JsonlWriter(output), ROOT)
+        self.addCleanup(run.close)
+        calls = 0
+
+        def varying_speed(argv: list[str], _timeout: float) -> ProcessResult:
+            nonlocal calls
+            calls += 1
+            iterations = int(argv[-1])
+            if iterations == 0:
+                duration = 100_000
+            elif calls == 4:
+                duration = 2_000_000
+            elif calls == 5:
+                duration = 500_000
+            else:
+                duration = 2_000_000
+            return self._valid_result(case, iterations, duration_ns=duration)
+
+        with mock.patch("tools.benchmark.runner.run_process", side_effect=varying_speed):
+            self.assertTrue(run._calibrate(engine, case))
+        rows = [json.loads(line) for line in output.getvalue().splitlines()]
+        calibration = [row["iterations"] for row in rows if row["phase"] == "calibration"]
+        self.assertEqual(calibration, [10, 10, 20, 20])
+        self.assertEqual(run.iterations[(engine.role, case.id)], 20)
 
     def test_calibration_headroom_does_not_relax_measurement_eligibility(self) -> None:
         engine = self._engine("raise SystemExit(1)\n")
@@ -438,7 +472,7 @@ class RunnerTests(unittest.TestCase):
         def fail_second_point(argv: list[str], _timeout: float) -> ProcessResult:
             nonlocal calls
             calls += 1
-            if calls == 8:
+            if calls == 9:
                 return self._process_result(exit_code=9)
             iterations = int(argv[-1])
             duration = 1_000_000 if iterations == 0 else 20_000_000

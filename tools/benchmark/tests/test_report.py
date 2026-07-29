@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import unittest
 from dataclasses import replace
+from fractions import Fraction
 from pathlib import Path
 from unittest import mock
 
@@ -16,6 +17,7 @@ from tools.benchmark.analysis_schema import load_analysis_manifest
 from tools.benchmark.process import ProcessResult
 from tools.benchmark.receipts import BuildReceipt, canonical_receipt_sha256
 from tools.benchmark.report import ReportError, build_report
+from tools.benchmark.raw_validation import _replay_setup
 from tools.benchmark.runner import BenchmarkRun, JsonlWriter
 from tools.benchmark.schema import load_manifest
 
@@ -582,8 +584,8 @@ class ReportTests(unittest.TestCase):
             if row.get("phase") == "calibration" and row["role"] == role
             and row["case_id"] == case_id
         ]
-        self.assertGreaterEqual(len(calibration), 2)
-        old_last, adjusted_last = calibration[-2:]
+        self.assertGreaterEqual(len(calibration), 3)
+        initial, adjusted_last, confirmation = calibration[-3:]
         case = next(case for case in self.manifest.cases if case.id == case_id)
         startup = [
             row["duration_ns"] for row in rows
@@ -596,12 +598,55 @@ class ReportTests(unittest.TestCase):
         )
         adjusted_target = case.calibration_target_ns(int(statistics.median(startup)))
         self.assertLess(old_target, adjusted_target)
-        self.assertLess(old_last["duration_ns"], adjusted_target)
+        self.assertLess(initial["duration_ns"], adjusted_target)
         self.assertGreaterEqual(adjusted_last["duration_ns"], adjusted_target)
-        rows.remove(adjusted_last)
+        self.assertGreaterEqual(confirmation["duration_ns"], adjusted_target)
+        rows.remove(confirmation)
         self._write_rows(rows)
         with self.assertRaisesRegex(ReportError, "expected calibration, got warmup"):
             self._build_report()
+
+    def test_raw_replay_recalibrates_after_a_short_confirmation(self) -> None:
+        case = replace(
+            self.manifest.cases[0], initial_iterations=10, max_iterations=1_000,
+            min_window_ms=1, startup_max_fraction=Fraction(1, 10),
+            calibration_safety_factor=Fraction(1), warmup_runs=0,
+        )
+
+        def record(
+            phase: str, iterations: int, duration_ns: int, point: str | None = None
+        ) -> tuple[dict, None]:
+            return ({
+                "phase": phase,
+                "iterations": iterations,
+                "duration_ns": duration_ns,
+                "diagnostic_point": point,
+            }, None)
+
+        samples = [
+            record("startup", 0, 100_000),
+            record("startup", 0, 100_000),
+            record("startup", 0, 100_000),
+            record("calibration", 10, 2_000_000),
+            record("calibration", 10, 500_000),
+            record("calibration", 20, 2_000_000),
+            record("calibration", 20, 2_000_000),
+        ]
+        samples.extend(
+            record(
+                "linearity", 20 if scale == "n" else 40, 2_000_000,
+                f"{scale}:{repetition}",
+            )
+            for scale, repetition in (
+                ("n", 0), ("2n", 0), ("2n", 1), ("n", 1),
+                ("n", 2), ("2n", 2), ("2n", 3), ("n", 3),
+            )
+        )
+        complete, iterations, startup, failure = _replay_setup(samples, case, "candidate")
+        self.assertTrue(complete)
+        self.assertEqual(iterations, 20)
+        self.assertEqual(startup, (100_000, 100_000, 100_000))
+        self.assertIsNone(failure)
 
     def test_each_reachable_diagnostic_failure_phase_is_accepted(self) -> None:
         role = "candidate"

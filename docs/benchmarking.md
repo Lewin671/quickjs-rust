@@ -85,11 +85,14 @@ intermediate binary float. Round-up-to-integer nanoseconds makes runner and
 raw-evidence replay deterministic.
 
 When a calibration sample is short of the target, the next iteration count is
-`ceil(iterations * target_ns / duration_ns)`. Progress is always at least one
-iteration, a single step is capped at 16x, and the manifest's `max_iterations`
-is the final cap. Runner execution and raw validation call the same integer-only
-progression helper, so proportional scaling cannot drift between production
-and replay.
+`ceil(iterations * target_ns / duration_ns)`. A first sample that reaches the
+target is immediately confirmed at the same iteration count before any warmup
+or formal block starts. If that confirmation is short, it becomes the next
+calibration input instead of being silently treated as a valid measurement.
+Progress is always at least one iteration, a single step is capped at 16x, and
+the manifest's `max_iterations` is the final cap. Runner execution and raw
+validation replay the same integer-only progression and confirmation sequence,
+so calibration cannot drift between production and evidence replay.
 
 The safety factor changes only when calibration stops. Formal measurement
 eligibility is unchanged and still requires both conditions:
