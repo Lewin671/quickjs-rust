@@ -2,6 +2,8 @@ use super::regexp_match_range as regexp_match_range_inner;
 use super::{PreparedRegexp, RegexpMatch, regexp_match_at};
 use crate::string::{string_code_units, string_from_code_unit, string_from_utf8_scalars};
 
+type MatchResult = (usize, usize, Vec<Option<(usize, usize)>>);
+
 /// Test wrapper keeping the historical six-argument signature (multiline off).
 fn regexp_match_range(
     source: &str,
@@ -73,6 +75,165 @@ fn prepared_input_slices_reuse_unicode_and_code_unit_views() {
         string_code_units(&code_units.slice(1, 3)),
         vec![0xD83D, 0xDE00]
     );
+}
+
+#[test]
+fn capture_free_program_preserves_ordered_matching_and_declines_observable_groups() {
+    let compiled = PreparedRegexp::new(r"^(?:ab|a[cd]){1,2}?$", false, false, false, false);
+    assert!(compiled.capture_free.is_some());
+    let matched = regexp_match_range(r"^(?:ab|a[cd]){1,2}?$", "abac", 0, false, false, false)
+        .expect("capture-free non-capturing group must use the prepared program");
+    assert_eq!((matched.start, matched.end), (0, 4));
+    assert!(matched.captures.is_empty());
+
+    let boundary = PreparedRegexp::new(r"\b(?:foo|bar)\b", false, false, false, false);
+    assert!(boundary.capture_free.is_some());
+    let matched = regexp_match_range(r"\b(?:foo|bar)\b", "xx bar!", 0, false, false, false)
+        .expect("word-boundary alternatives must retain leftmost search");
+    assert_eq!((matched.start, matched.end), (3, 6));
+
+    let lazy = regexp_match_range(r"(?:a|aa)+?b", "aab", 0, false, false, false)
+        .expect("lazy repeated alternatives must backtrack into the continuation");
+    assert_eq!((lazy.start, lazy.end), (0, 3));
+
+    assert!(
+        PreparedRegexp::new("(a)", false, false, false, false)
+            .capture_free
+            .is_none()
+    );
+    assert!(
+        PreparedRegexp::new("(?=a)a", false, false, false, false)
+            .capture_free
+            .is_none()
+    );
+    assert!(
+        PreparedRegexp::new("(?:a?)*", false, false, false, false)
+            .capture_free
+            .is_none()
+    );
+}
+
+fn prepared_match_result(
+    regexp: &PreparedRegexp,
+    input: &str,
+    start_index: usize,
+    exact_start: bool,
+) -> Option<MatchResult> {
+    let input_value = crate::JsString::from(input);
+    let prepared_input = regexp.prepare_input(&input_value);
+    let matched = if exact_start {
+        regexp.match_at(input, &prepared_input, start_index)
+    } else {
+        regexp.match_range(input, &prepared_input, start_index)
+    };
+    matched.map(|matched| (matched.start, matched.end, matched.captures))
+}
+
+#[test]
+fn capture_free_program_matches_generic_fallback_across_supported_syntax() {
+    let cases = [
+        (r"(?:a|aa)+?b", "aab", 0, false, false, false, false, false),
+        (r"(?:a|)b", "zabc", 0, false, false, false, false, false),
+        (r"(?:|ab)c", "zabc", 0, false, false, false, false, false),
+        (
+            r"(?:a{0,2}|bc){0,3}?d",
+            "bcaad",
+            0,
+            false,
+            false,
+            false,
+            false,
+            false,
+        ),
+        (r"(?:a.|b.)+", "a\nb!", 0, false, false, true, false, false),
+        (
+            r"\\b(?:foo|bar)\\b",
+            "xx bar!",
+            0,
+            false,
+            false,
+            false,
+            false,
+            false,
+        ),
+        (
+            r"\\B(?:foo|bar)\\b",
+            "xxfoobar!",
+            0,
+            false,
+            false,
+            false,
+            false,
+            false,
+        ),
+        (
+            r"^(?:a|b)+$",
+            "x\na\ny",
+            0,
+            false,
+            false,
+            false,
+            true,
+            false,
+        ),
+        (
+            r"(?:[a-z]|\\d){2,4}?z",
+            "a2bz",
+            0,
+            false,
+            false,
+            false,
+            false,
+            false,
+        ),
+        (
+            r"(?:\\p{L}|[0-9])+",
+            "9é2",
+            0,
+            false,
+            true,
+            false,
+            false,
+            false,
+        ),
+        (
+            r"(?:\\u{1F600}|x)+",
+            "x😀",
+            0,
+            false,
+            true,
+            false,
+            false,
+            false,
+        ),
+        (r"(?:k|\\u212A)+", "KK", 0, true, true, false, false, false),
+        (
+            r"(?:ab|a[cd]){1,2}?$",
+            "xxabac",
+            2,
+            false,
+            false,
+            false,
+            false,
+            true,
+        ),
+    ];
+
+    for (source, input, start_index, ignore_case, unicode, dot_all, multiline, exact_start) in cases
+    {
+        let compiled = PreparedRegexp::new(source, ignore_case, unicode, dot_all, multiline);
+        assert!(
+            compiled.capture_free.is_some(),
+            "expected supported pattern to compile: {source}"
+        );
+        let mut fallback = PreparedRegexp::new(source, ignore_case, unicode, dot_all, multiline);
+        fallback.capture_free = None;
+        assert_eq!(
+            prepared_match_result(&compiled, input, start_index, exact_start),
+            prepared_match_result(&fallback, input, start_index, exact_start),
+            "compiled program diverged from the general matcher for /{source}/"
+        );
+    }
 }
 
 #[test]

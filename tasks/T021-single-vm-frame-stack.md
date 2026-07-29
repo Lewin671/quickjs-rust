@@ -1970,3 +1970,43 @@ sequence: eliminating child construction on this tail-only slice is still too
 narrow. A successor must begin from a fresh shared-cost profile and remove a
 different cost that also covers non-tail direct calls or another queue-ranked
 workload.
+
+### 2026-07-29 retained capture-free ordered RegExp program fast screen
+
+The current queue ranked `string-tagcloud` fourth and `regexp-dna` seventh.
+Fresh profiles tied both to one different shared cost: Tagcloud placed 1,655
+of 4,319 main-thread samples under `PreparedRegexp::match_input`, while DNA
+placed 3,785 of 4,000 there. The frozen one-attempt unit
+`tasks/performance-units/capture-free-regexp-program.json` (plan SHA-256
+`f2de0fa42cc2be45f7bb484978ace127a8596468b412b220dd850c79f0efc527`)
+therefore compiles the capture-free subset once into an ordered explicit
+backtracking program. It predecodes literals, classes, escapes, anchors,
+word boundaries, non-capturing groups, alternatives, and greedy or lazy
+quantifiers, then reuses its choice stack across candidate starts. Captures,
+named groups, backreferences, lookarounds, unsupported syntax, and nullable
+unbounded loops decline before observable matching to the existing matcher.
+
+The exact upstream sources passed on both binaries with matching `Null` and
+`Undefined` output. Seven alternating direct-process samples per target
+compared candidate binary SHA-256
+`7c1c93f6f18dc037a4ab0603c57199f31c3ebacb2f55bdae6cd879bdf1c202a8`
+against the runtime-identical base SHA-256
+`d7600fa3516b718782a48e24b64f3337a79e39a62f5cc3c632d99eed5d8e54c3`.
+The median `string-tagcloud` time was 181,433,416 ns versus 211,674,708 ns
+(**0.857133x** candidate/base), and `regexp-dna` was 114,044,583 ns versus
+440,470,917 ns (**0.258915x**). Both clear the frozen `<= 0.90x` fast gate.
+The declared controls stayed below the `1.03x` ceiling: `string-validate-input`
+0.986646x, `string-base64` 0.987798x, `controlflow-recursive` 0.998348x,
+`ai-astar` 1.012124x, and `hash-map` 1.002831x.
+
+Focused matcher coverage passed 44 tests (including direct comparison against
+the unchanged generic fallback across the supported syntax), the full runtime library passed
+1,911 tests, clippy passed with warnings denied, and the curated Test262
+subset passed all 5,160 cases. A deterministic differential script covering
+alternation priority, lazy repeats, Unicode, multiline anchors, global exec,
+replace, captures, lookarounds, and nullable-loop fallback produced the same
+1,836-byte output from candidate and base (SHA-256
+`f028d864b2ca55911384d44003490d08bc2f20db1e0a2d75630685aa5c48b642`).
+This is retained fast-gate evidence only: the complete broad/external
+promotion bundle and exact zero-gap burndown remain required before making a
+portfolio-level claim.

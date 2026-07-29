@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "capture-free-regexp-program",
+  "base_sha": "af4a65a16c2af06318ce3d9cf358ebd061408d2d",
+  "queue": {
+    "candidate_sha": "af4a65a16c2af06318ce3d9cf358ebd061408d2d",
+    "sha256": "9a7ab99bc827c9b4d42a00baaf1d042f25324e30c91f0993fdf71078c63d3758"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/regexp-dna"
+    ],
+    "rank_ceiling": 7,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Compile capture-free ordinary RegExp patterns once into an ordered backtracking program whose execution uses predecoded atoms and a reusable explicit choice stack instead of repeatedly rediscovering groups, quantifiers, atoms, and temporary match-state vectors.",
+    "generality": "Admission depends only on immutable RegExp syntax and flags: no capturing groups, backreferences, lookarounds, or unsupported nullable loops; supported literals, classes, escapes, anchors, word boundaries, non-capturing groups, alternation, and greedy or lazy quantifiers use the program. It contains no workload name, source path, input length, checksum, iteration count, or expected-result condition. Every unsupported pattern falls back before observable matching to the unchanged general matcher.",
+    "semantic_risks": [
+      "preserving ECMAScript leftmost-first, alternation, greedy, and lazy backtracking priority",
+      "preserving Unicode code-point and WTF-16 code-unit advancement through the existing atom and class semantics",
+      "preserving anchors and word-boundary behavior with multiline and ignore-case flags",
+      "rejecting all captures, named groups, backreferences, lookarounds, and nullable unbounded loops before the optimized executor is selected",
+      "preserving RegExp test, exec, match, replace, and lastIndex result protocol through the unchanged RegexpMatch boundary"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-29 /tmp/qjs-tagcloud-repeat-current.sample; 25x wrapper of the hash-verified SunSpider string-tagcloud source. The current runtime source is identical to af4a65a1 outside documentation-only commits. Of 4,319 main-thread samples, 1,655 are under PreparedRegexp::match_input, with native RegExp replace, match_pattern_first, and simple_atom_boundaries below it.",
+      "sha256": "9873741a06a538f661af0f317034183566857ef75c9b90ecc91a92b796af93ef",
+      "base_sha": "af4a65a16c2af06318ce3d9cf358ebd061408d2d",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-tagcloud"
+      ],
+      "shared_cost": "Capture-free JSON-validation and replacement patterns repeatedly enter the generic matcher, which reparses atoms and quantifiers and materializes simple-atom boundary vectors for every candidate start.",
+      "inclusive_fraction": 0.383
+    },
+    {
+      "source": "macOS sample 2026-07-29 /tmp/qjs-regexp-dna-repeat-current.sample; 15x wrapper of the hash-verified SunSpider regexp-dna source. The current runtime source is identical to af4a65a1 outside documentation-only commits. Of 4,000 main-thread samples, 3,785 are under PreparedRegexp::match_input, with match_pattern_first and simple_atom_boundaries dominating its descendants.",
+      "sha256": "7d10e14f13cb549c08fee72011be7db65d1cd5f0ccc305a3162eb2dc36595d53",
+      "base_sha": "af4a65a16c2af06318ce3d9cf358ebd061408d2d",
+      "opportunity_ids": [
+        "external/sunspider-1.0/regexp-dna"
+      ],
+      "shared_cost": "Capture-free fixed-width alternatives repeatedly traverse generic recursive matching and allocate simple-atom repetition boundaries while scanning a large subject; predecoded program instructions can remove the shared dynamic pattern walk.",
+      "inclusive_fraction": 0.946
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/regexp-dna"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/string-validate-input",
+      "external/sunspider-1.0/string-base64",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
