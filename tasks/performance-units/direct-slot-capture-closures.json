@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "direct-slot-capture-closures",
+  "base_sha": "7d0f6bdbb2e5065155f2562bd7c790617b02abfb",
+  "queue": {
+    "candidate_sha": "7d0f6bdbb2e5065155f2562bd7c790617b02abfb",
+    "sha256": "7b8076306c0e96c6fdf4566e7d12fac173908d9c00d90c49cf85bb790e80d926"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/cdjs"
+    ],
+    "rank_ceiling": 6,
+    "override_reason": "Fresh ranks 1 through 5 remain closed by the documented scheduler/direct-leaf, hash-map, typed object-field, numeric ownership, constructor-receiver, and RegExp rejection evidence. The rank-6 CDJS receipt instead exposes 1,151 of 1,169 main-thread samples in the generic call_callee_with_marker -> call_function -> eval_function_bytecode chain. Its drawMotionOnVoxelMap body creates ordinary nested closures over slot-backed locals, so the existing direct-slot P0 mechanism stops precisely at a structural eligibility boundary rather than a previously rejected leaf specialization. The independent rank-17 JetStream AES profile is deliberately a control, not fabricated shared-target evidence: it already spends its hot execution on direct leaves. This unit removes only the ordinary captured-closure boundary while retaining every dynamic, class, lexical-this, arguments, eval, with, and super exclusion."
+  },
+  "mechanism": {
+    "summary": "Permit a slot-backed direct call to create ordinary non-lexical-this function closures, promoting its local-upvalue vector lazily on the first actual capture so sibling and escaping closures retain the same cells as the generic frame.",
+    "generality": "Admission is compiled-opcode classification only: every Op::NewFunction with lexical_this false is compatible, while Op::NewClass and any lexical-this function literal remain incompatible. It has no workload, source-path, checksum, function-name, iteration-count, input-size, result, or benchmark condition. Existing direct-call exclusions for arguments, direct eval, with, super, generators, async functions, named-function bindings, dynamic bindings, and non-seedable parameters remain unchanged.",
+    "semantic_risks": [
+      "preserving one shared cell for all sibling closures and the declaring frame after a local is promoted",
+      "preserving escaped closure lifetime after the slot-backed parent frame returns",
+      "preserving per-iteration lexical environments when a loop binding is captured",
+      "preserving received upvalues, TDZ markers, and writes made before or after capture",
+      "retaining generic-frame behavior for class creation, lexical-this closures, arguments, direct eval, with, and super"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-29 target/performance-next-80a07762-r1/profiles/cdjs.sample of the hash-verified generated JetStream CDJS profile bundle SHA-256 8fdde63549dd457d375730cca98efc1be687c3fa32b84e5d63a9903b768fed47 (from reduce_collision_set.js SHA-256 d6b96cd39e6cbfdc2589d8468d336e579d46ba2e4ee0d9fbdb1980360c38c433 and red_black_tree.js SHA-256 f784d71d2a743f8417d85e44e85d68599aaa88885d9ff092ead37818bc910e69) on the runtime executable SHA-256 1e02e6bf0b9dfec25b6a9acea1de5335ac42a6748119bc354a9e3981baeac204. Runtime source is identical to 7d0f6bdb outside documentation-only changes.",
+      "sha256": "b33b3d6525de545adb2cf3f6e750bce1e3f79e300b831f1525ac76a89c308697",
+      "base_sha": "7d0f6bdbb2e5065155f2562bd7c790617b02abfb",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/cdjs"
+      ],
+      "shared_cost": "1,151 of 1,169 main-thread samples sit below call_callee_with_marker -> call_function -> eval_function_bytecode, recursively. CDJS reduce_collision_set.js creates nested ordinary functions putIntoMap, isInVoxel, and recurse inside drawMotionOnVoxelMap; they capture slot-backed motion, seen, and surrounding values, which is the current direct-call eligibility blocker.",
+      "inclusive_fraction": 0.9846
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/cdjs"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar",
+      "external/sunspider-1.0/access-nbody",
+      "external/jetstream3-js-subset/stanford-crypto-aes",
+      "external/sunspider-1.0/regexp-dna"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

@@ -2337,3 +2337,46 @@ mechanism by changing callback placement, visitor shape, minimum-repeat
 handling, or the collection boundary: the direct early-exit form itself has
 shown less than one percent on both independently profiled targets. A future
 RegExp unit must begin with a fresh profile of a different cost.
+
+### 2026-07-29 rejected direct-slot ordinary captured closures
+
+The exact `7d0f6bdb` queue ranked JetStream CDJS sixth. Its fresh profile put
+1,151 of 1,169 main-thread samples under the recursive generic
+`call_callee_with_marker -> call_function -> eval_function_bytecode` chain.
+`reduce_collision_set.js` creates ordinary nested functions
+`putIntoMap`, `isInVoxel`, and `recurse` within `drawMotionOnVoxelMap`; those
+functions capture the parent frame's slot-backed values. The frozen
+one-attempt unit `tasks/performance-units/direct-slot-capture-closures.json`
+(plan SHA-256
+`5c91faf10b8d942cbe3d2d70ba3f415fad76eecbb93fb0e9c8cdb848fc8cb7`)
+therefore allowed non-lexical-`this` function literals through the direct-slot
+eligibility check and lazily grew the local-upvalue table on first capture.
+Classes, lexical-`this`, arguments, direct eval, `with`, `super`, named
+function bindings, outer generator/async calls, and dynamic bindings kept
+their prior compatibility route.
+
+The candidate did activate the intended route: its CDJS sample (SHA-256
+`295d009d5bba58619190859abca1fd88756b0b9affe5d7b592c2bea46e8c6765`)
+shows the formerly generic hot call chain as direct-leaf calls. Focused shared
+capture, escaping closure, and per-iteration lexical tests passed; the full
+`qjs-runtime` suite passed all **1,911** tests and the curated Test262 subset
+passed all **5,160** cases. The isolated release candidate SHA-256 was
+`b61ad0effe127af28ad23069af89ecf1f2606cd4fe5611deb02679a72c1c3c34`,
+against the runtime-identical exact-`7d0f6bdb` base SHA-256
+`1e02e6bf0b9dfec25b6a9acea1de5335ac42a6748119bc354a9e3981baeac204`.
+
+The source-matched generated CDJS bundle SHA-256
+`8fdde63549dd457d375730cca98efc1be687c3fa32b84e5d63a9903b768fed47`
+was then run in seven direct-process base/candidate pairs. Reported base/candidate
+wall-clock pairs in seconds were `(2.04, 2.31)`, `(2.08, 1.56)`,
+`(1.57, 1.53)`, `(1.55, 1.53)`, `(1.55, 1.53)`, `(1.56, 1.51)`, and
+`(1.55, 1.53)`. Their paired median candidate/base ratio is approximately
+**0.987x**, far above the frozen `<= 0.95x` target gate; even the steady
+pairs show only one to three percent. The full external and broad promotion
+portfolio was not run because this fast gate already failed.
+
+The runtime implementation was reverted immediately. Do not retry by changing
+lazy-table growth, broadening closure categories, or rearranging the direct
+call boundary: this general direct-route conversion removed the profiled chain
+but did not produce the required end-to-end CDJS improvement. A successor must
+start from a fresh profile of a different shared cost.
