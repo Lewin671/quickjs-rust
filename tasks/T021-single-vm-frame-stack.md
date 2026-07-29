@@ -2117,3 +2117,45 @@ missed and a broad dynamic-call control regressed catastrophically. A future
 proposal must start with a fresh profile of a different shared cost, likely
 property/value representation or allocation/GC work outside the generic
 dispatcher.
+
+### 2026-07-29 rejected constructor transition-shape object storage
+
+The exact `50a20d60` queue ranked Kraken `ai-astar`, JetStream `hash-map`,
+and public-field raytrace second through fourth. Fresh profiles connected all
+three to repeated ordinary receiver fields: A* constructs five `GraphNode`
+fields and later adds four more, hash-map constructs fixed-field entries at
+volume, and raytrace repeats public-field and constructor writes. The frozen
+one-attempt unit
+`tasks/performance-units/transition-shape-object-storage.json` (plan SHA-256
+`87b3de88e4aa15c3d079e8bca9e6997a0440f44cc6132f12aafbdd6cc52bc3a4`)
+therefore learned a per-constructor field sequence, reused shared compact
+slots, and added bounded shape transitions for matching later own fields.
+All divergence, deletion, descriptor, accessor, exotic, Proxy, and
+non-matching-write paths retained their existing storage route; no workload
+names or benchmark-specific conditions were used.
+
+The prototype passed its focused shape, mismatch, cache-read/write, accessor
+fallback, and end-to-end constructor tests; the complete runtime library also
+passed all 1,917 tests. The clean release candidate binary SHA-256
+`088a02cdafcf808912b75ede0474b3a791ebdfe27ef71e0bed8bd4a4793b4ee2` was
+measured against a binary rebuilt from exact `50a20d60`, SHA-256
+`7c1c93f6f18dc037a4ab0603c57199f31c3ebacb2f55bdae6cd879bdf1c202a8`.
+
+The three-block full external-manifest run produced a strong A* result,
+**0.849010x** (8,306.457 ms / 9,783.698 ms), but missed the frozen
+`<= 0.95x` gate on both independent co-targets: hash-map was **0.963739x**
+(1,592.674 ms / 1,652.599 ms) and public-field raytrace was **0.961343x**
+(1,715.395 ms / 1,784.373 ms). Every declared external control stayed below
+the `1.03x` regression ceiling: CDJS 0.981849x, controlflow-recursive
+0.998482x, and string-tagcloud 0.975669x. The report SHA-256 is
+`798c580cc15fc50c06231d0320b2f36fba3985fdf7a39602f1eb0128202ca659`; raw
+measurements SHA-256 is
+`38ba746a4d18f7338bbb6d7d3ceb78df8b1a557b67aa9efc4aee6c4784e6ead7`.
+
+This fails the frozen one-attempt target gate despite a real A* win. The
+runtime implementation and its dedicated tests were reverted immediately;
+the full broad portfolio and Test262 promotion bundle were intentionally not
+run after rejection. Do not retry this mechanism by tuning transition depth,
+shape-cache ordering, or spare slot capacity: it has not shown the required
+cross-workload benefit. A successor should start from a fresh profile of a
+different shared allocation or Value-lifecycle cost.

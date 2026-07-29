@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "transition-shape-object-storage",
+  "base_sha": "50a20d60a312977aaecea5ecd2564b915f2892e9",
+  "queue": {
+    "candidate_sha": "50a20d60a312977aaecea5ecd2564b915f2892e9",
+    "sha256": "d6eae4a64796a5670016136fb198944f9b63a92e3ec7c930ddf644ad717866db"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "rank_ceiling": 4,
+    "override_reason": "Rank-one controlflow-recursive is dominated by the already rejected direct-leaf/frame and complete compact-dispatch mechanisms. The current rank-two A* and rank-three hash-map sources both repeatedly construct ordinary same-field receivers, while rank-four raytrace independently profiles the same class-field/object-storage route. This is a distinct representation change, not another direct-leaf or cache-entry variation."
+  },
+  "mechanism": {
+    "summary": "Let repeated ordinary user-constructor receivers share immutable property shapes, then transition those shapes on matching ordinary named additions so values stay in compact ordered slots instead of every instance growing an independent small vector or dynamic name map. Extend the existing shape-slot cache route to re-read live data descriptors after ordinary value writes.",
+    "generality": "A receiver is selected only because it was allocated for a user bytecode constructor and its actual own string-property additions establish the same ordered shape as a prior successful construction of that bytecode. A transition depends only on the live parent shape and added key. It does not inspect benchmark names, source paths, function names, inputs, iteration counts, or results. Objects with a different insertion order, deletion, unsupported storage mutation, exotics, proxies, symbols, or a missing shape retain the existing compact or dynamic storage behavior.",
+    "semantic_risks": [
+      "preserving OrdinarySet and DefineProperty descriptor, setter, Proxy, extensibility, and prototype-chain behavior before a shape slot is populated",
+      "preserving absence and enumeration order for partially initialized constructors, duplicate writes, deletions, array-index keys, and descriptor replacement",
+      "invalidating identity or shape slot caches on every structural change while allowing ordinary value writes to expose the current value and current writable/accessor state",
+      "ensuring a constructor that throws, returns another object, uses Reflect.construct, or diverges in field order cannot expose a partially learned layout as an observable property"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-29 /tmp/qjs-next-profile.qHxZMs/ai-astar.sample; current f824f108 release binary SHA-256 7c1c93f6f18dc037a4ab0603c57199f31c3ebacb2f55bdae6cd879bdf1c202a8; hash-verified A* bundle declares GraphNode with five constructor fields and later adds f/g/h/parent to every grid node",
+      "sha256": "d11bf7451580973942fbbd4a68d0fa2f4d2f68201c8b72477e43a01060d703e1",
+      "base_sha": "50a20d60a312977aaecea5ecd2564b915f2892e9",
+      "opportunity_ids": [
+        "external/kraken-1.1/ai-astar"
+      ],
+      "shared_cost": "Of 3,964 main-thread samples, NamedPropertyCache::get and update account for 255 and 179 top frames. GraphNode instances follow the same five-field constructor sequence and the same four-field initialization sequence, but after the ninth field current storage becomes per-object dynamic and cannot retain a shared shape slot.",
+      "inclusive_fraction": 0.1095
+    },
+    {
+      "source": "macOS sample 2026-07-29 /tmp/qjs-next-profile.LZddCM/hash-map.sample; current f824f108 release binary SHA-256 7c1c93f6f18dc037a4ab0603c57199f31c3ebacb2f55bdae6cd879bdf1c202a8; hash-verified JetStream hash-map source constructs 90,000 Entry values plus HashMap and iterator receivers with fixed named-field sequences",
+      "sha256": "dc74c9c6571a62ccd7547b132f2c8d2a4b5a642f274e42caffeb8145af3af32c",
+      "base_sha": "50a20d60a312977aaecea5ecd2564b915f2892e9",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "The 794-sample current profile retains Value lifetime work (45 Value::drop top frames) and ordinary object/property reads under the repeated direct-call chain. The source's high-volume Entry construction makes the duplicated property-key and descriptor storage a shared allocation cost distinct from the exhausted direct-frame mechanisms.",
+      "inclusive_fraction": 0.0567
+    },
+    {
+      "source": "macOS sample 2026-07-29 /tmp/qjs-function-cache-profile.ZPpHvL/raytrace.sample; current f824f108 release binary SHA-256 7c1c93f6f18dc037a4ab0603c57199f31c3ebacb2f55bdae6cd879bdf1c202a8; hash-verified JetStream raytrace bundle contains repeated public-field and constructor writes for Color, Vector, Ray, Material, Shape, and derived instances",
+      "sha256": "5034a50695b11c793ead8c1515210312401784aedfd6cdade7fd8332711f8bef",
+      "base_sha": "50a20d60a312977aaecea5ecd2564b915f2892e9",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/raytrace-public-class-fields"
+      ],
+      "shared_cost": "The 711-sample execution retains initialize_instance_fields, set_shared_key, PropertyStorage::insert/get_mut, own-data reads, and construction under the hot direct-call chain. Sharing the eventual receiver shape would remove repeated per-instance key storage while preserving the current field initialization path.",
+      "inclusive_fraction": 0.05
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/string-tagcloud",
+      "broad/object_allocation",
+      "broad/property_read",
+      "broad/dynamic_method_call",
+      "broad/plain_function_call"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
