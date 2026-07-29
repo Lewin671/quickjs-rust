@@ -2245,3 +2245,51 @@ layouts, or first-observation conversion variants: their conversion cost
 erased the proposed lookup benefit. A future property-storage unit must use a
 different mechanism that avoids per-object representation conversion at cache
 observation.
+
+### 2026-07-29 retained exact-one simple-RegExp atom continuation
+
+The exact `32856150` queue ranked SunSpider `regexp-dna` seventh, but a
+fresh source-matched profile found a distinct shared matcher cost: 3,160 of
+3,614 main-thread samples entered `PreparedRegexp::match_input`, including
+407 `RawVec::grow_one` samples below `simple_atom_boundaries`. The frozen
+one-attempt unit `tasks/performance-units/exact-simple-regexp-atom.json`
+(plan SHA-256 `d1bd54e6dc3b4afc81d6f4df8304798059f57dd9bc2fff00ef9befb3723c402b`)
+therefore advances an already-classified, capture-free `SimpleAtom` directly
+when its parsed quantifier is exactly `{1}`. This avoids materializing the
+two-entry repetition-boundary vector. It depends only on existing matcher
+classification and quantifier semantics; captures, groups, backreferences,
+lookarounds, quantified atoms, and every unclassified atom retain the old
+path.
+
+The focused matcher suite passed 43 tests, including capture preservation and
+Unicode surrogate-pair advancement; the full runtime suite passed 1,911
+tests, and the curated Test262 subset passed all 5,160 cases. `check.sh`, the
+staged touched gate, and the pre-push full gate all passed. The candidate is
+commit `7d0f6bdbb2e5065155f2562bd7c790617b02abfb` (binary SHA-256
+`0894bd6195019d8392af854399d3a16c86b65079e1487939740cbefe91a9f3f1`),
+measured against its exact parent `3285615027c056f00d04d3cd51e75e7708dc1b8b`
+(binary SHA-256
+`188a2da162bac5be55bc20d15a57259bab6f071138085d5e83db86a0faa22d1e`).
+
+The first complete preview used older `fe8d287e` as a diagnostic base and is
+not used for this decision. The exact-parent three-block preview has summary,
+broad-report, and external-report SHA-256 values
+`42400073fcc2ca8bcb6f5591d1ac6807196c5e38b3aa4869a75f9723b8783287`,
+`107722273fe22710f6ea9727ae4b3a57074bce41986901a9feed226823d58ca0`, and
+`c7592adf4cda455bb1313f7f49a8fdd1980bef19ff9236e10123adb8db942f65`.
+It retained the target at **0.474420x** candidate/base (206.218 ms versus
+434.674 ms) and kept all declared controls below 1.03x: string-tagcloud
+0.933701x, string-validate-input 0.999955x, controlflow-recursive 1.002294x,
+A* 1.000419x, and hash-map 1.001336x. The full broad portfolio contained all
+25 cases and had a 0.974785x candidate/base geometric mean; it is context,
+not a substitute for the frozen target/control gate.
+
+The hash-bound fast decision is **retained** (SHA-256
+`46e33921493819f730660812532c9a08451fca15b3d6df3d6a314a3e35c7c105`).
+The stricter promotion decision is intentionally **inconclusive** (SHA-256
+`c42ab2dca35f405824860e6efda918feae2fbb962a1fdb241567f82e8bc55ffc`):
+Kraken `imaging-gaussian-blur` lacks complete candidate/base and QuickJS-NG
+comparison, and no exact all-suite Test262 burndown is attached. This is a
+retained local performance unit, not a fixed-hardware or full-conformance
+promotion claim. Subsequent work must start from a new queue and fresh shared
+cost profile rather than retuning this exact-one route.
