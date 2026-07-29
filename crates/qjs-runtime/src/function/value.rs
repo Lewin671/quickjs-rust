@@ -26,10 +26,50 @@ const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 pub(crate) struct InstanceFieldInitializer {
     /// The property key the field installs (computed keys are resolved at class
     /// definition time).
-    pub(crate) key: PropertyKey,
+    key: InstanceFieldKey,
     /// The initializer thunk: a function evaluated with `this` = the instance.
     /// `None` for a field with no initializer (which installs `undefined`).
     pub(crate) initializer: Option<Function>,
+}
+
+/// A class field key after class-definition-time resolution.
+///
+/// Public string keys are immutable for the class's lifetime, so retaining
+/// them as a shared string avoids deep-copying the same source key for every
+/// constructed instance. Symbols retain their existing identity handle and
+/// use the generic installation path.
+#[derive(Clone)]
+enum InstanceFieldKey {
+    String(Rc<str>),
+    Symbol(ObjectRef),
+}
+
+impl InstanceFieldInitializer {
+    pub(crate) fn new(key: PropertyKey, initializer: Option<Function>) -> Self {
+        let key = match key {
+            PropertyKey::String(key) => InstanceFieldKey::String(key.into()),
+            PropertyKey::Symbol(symbol) => InstanceFieldKey::Symbol(symbol),
+        };
+        Self { key, initializer }
+    }
+
+    /// Returns the shareable public string key when the field can take the
+    /// ordinary-object installation route.
+    pub(crate) fn shared_string_key(&self) -> Option<&Rc<str>> {
+        match &self.key {
+            InstanceFieldKey::String(key) => Some(key),
+            InstanceFieldKey::Symbol(_) => None,
+        }
+    }
+
+    /// Rebuilds the generic key only when the field cannot use the ordinary
+    /// fast path. This preserves the full symbol and exotic-receiver route.
+    pub(crate) fn property_key(&self) -> PropertyKey {
+        match &self.key {
+            InstanceFieldKey::String(key) => PropertyKey::String(key.to_string()),
+            InstanceFieldKey::Symbol(symbol) => PropertyKey::Symbol(symbol.clone()),
+        }
+    }
 }
 
 /// A class element applied to each instance at construction time.

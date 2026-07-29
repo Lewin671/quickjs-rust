@@ -216,10 +216,9 @@ impl Vm<'_> {
                             &constructor_function,
                             name,
                         );
-                        constructor_function.push_instance_public_field(InstanceFieldInitializer {
-                            key,
-                            initializer,
-                        });
+                        constructor_function.push_instance_public_field(
+                            InstanceFieldInitializer::new(key, initializer),
+                        );
                     }
                 }
                 ClassElementDef::Private(private) => {

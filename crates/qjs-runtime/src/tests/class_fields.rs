@@ -204,6 +204,66 @@ fn instance_fields_are_writable_and_configurable() {
 }
 
 #[test]
+fn public_string_fields_keep_default_descriptors_and_definition_order() {
+    assert_eq!(
+        eval(
+            "class C { first = 1; second = this.first + 1; } \
+             let c = new C(); \
+             let first = Object.getOwnPropertyDescriptor(c, 'first'); \
+             let second = Object.getOwnPropertyDescriptor(c, 'second'); \
+             [Object.keys(c).join(','), first.writable, first.enumerable, first.configurable, second.value].join(':');"
+        ),
+        Ok(Value::String(
+            "first,second:true:true:true:2".to_owned().into()
+        ))
+    );
+}
+
+#[test]
+fn public_field_falls_back_when_an_earlier_initializer_owns_a_later_key() {
+    assert_eq!(
+        eval(
+            "let caught = false; \
+             class C { \
+               first = (Object.defineProperty(this, 'later', { value: 1, writable: true, enumerable: false, configurable: false }), 0); \
+               later = 2; \
+             } \
+             try { new C(); } catch (error) { caught = error instanceof TypeError; } \
+             caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn public_field_falls_back_for_nonextensible_derived_receiver() {
+    assert_eq!(
+        eval(
+            "function Base() { return Object.preventExtensions({}); } \
+             class C extends Base { field = 1; } \
+             let caught = false; \
+             try { new C(); } catch (error) { caught = error instanceof TypeError; } \
+             caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn public_field_on_a_global_receiver_keeps_lexical_and_property_names_distinct() {
+    assert_eq!(
+        eval(
+            "let mirrored = 0; \
+             function Base() { return globalThis; } \
+             class C extends Base { mirrored = 7; } \
+             new C(); \
+             [mirrored, globalThis.mirrored].join(':');"
+        ),
+        Ok(Value::String("0:7".to_owned().into()))
+    );
+}
+
+#[test]
 fn derived_public_fields_define_through_proxy_receiver() {
     assert_eq!(
         eval(

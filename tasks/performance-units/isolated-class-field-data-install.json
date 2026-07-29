@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "isolated-class-field-data-install",
+  "base_sha": "f0b3ea878a7dc34bf8aa3ab0822d854ce316396f",
+  "queue": {
+    "candidate_sha": "f0b3ea878a7dc34bf8aa3ab0822d854ce316396f",
+    "sha256": "7ba906d1e5a2afb9662732dae52d092844fd96e56a99f8713a365f373286f29a"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "rank_ceiling": 2,
+    "override_reason": "The rank-2 public-field path is a bounded structural staging slice. Rank 1, 3, and 4 share a larger direct-call/object execution deficit, but their currently profiled frame and cache variants are closed by measured negative evidence. The prior shared-field unit materially improved raytrace but regressed broad object allocation because it added a new single-borrow property-storage route. This successor first isolates that regression structurally: it changes class-field metadata and uses the existing ObjectRef set_shared_key operation only after pre-mutation ordinary-object checks. It does not change ObjectRef construction, PropertyStorage, ordinary literal creation, or generic property definition. The mechanism applies to every resolved public string instance field with the same live receiver state and contains no workload, source, iteration, or result condition."
+  },
+  "mechanism": {
+    "summary": "Store each resolved public instance-field string key as Rc<str>, then install it through the existing ordinary ObjectRef shared-key write after explicit absent, extensible, and non-exotic checks. Keep the complete CreateDataPropertyOrThrow path for every unsupported receiver or key.",
+    "generality": "Selection depends only on a class field's already-resolved public string key and the receiver's live ObjectRef state. It applies equally to all ordinary base and derived class instances, not to a workload, source path, function identity, input, iteration count, or expected result. Symbols, proxies, non-object receivers, typed arrays, module namespaces, array-prototype exotica, symbol wrappers, non-extensible objects, existing own properties, and all other cases retain the generic path before mutation.",
+    "semantic_risks": [
+      "preserving field initializer order and keeping each later field absent until its own initializer completes",
+      "falling back before mutation when an earlier initializer or superclass return value makes the receiver non-extensible, exotic, or already owns the field key",
+      "preserving CreateDataPropertyOrThrow descriptor attributes and TypeError behavior on every declined receiver",
+      "mirroring a successful definition on a realm global through the existing realm-global synchronization hook"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-profile-current-raytrace.sample; HEAD afd2b2a06df372326fe3d15c0aaf8ba88f9a50e2 is runtime-identical to queue candidate f0b3ea878a7dc34bf8aa3ab0822d854ce316396f; executable SHA-256 1c98c649387ba0bbf831334b60d87d414794fc1a8a02dd537c68137b95757a7f. Of 710 sampled stacks, class-field construction remains visible under the hot direct-call chain, including repeated initialize_instance_fields and generic field-definition frames in the public class-field raytrace workload.",
+      "sha256": "006d6227e391243767c43ae2c5e75765aedb0d63792cf88ef02a382f654b8b76",
+      "base_sha": "f0b3ea878a7dc34bf8aa3ab0822d854ce316396f",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/raytrace-public-class-fields"
+      ],
+      "shared_cost": "Every ordinary public instance field currently deep-clones its stored String key, creates a default descriptor, enters generic property-definition dispatch, probes the receiver repeatedly, and copies the key into ordinary storage. This slice shares the class-resolved key and avoids descriptor/generic-dispatch work without changing ObjectRef construction or property-storage implementation.",
+      "inclusive_fraction": 0.05
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/date-format-tofte",
+      "broad/object_allocation",
+      "broad/dynamic_method_call",
+      "broad/property_read"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

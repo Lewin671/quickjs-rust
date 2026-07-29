@@ -382,7 +382,26 @@ pub(crate) fn initialize_instance_fields(
                     Some(thunk) => call_field_initializer(thunk, this_value.clone(), env)?,
                     None => Value::Undefined,
                 };
-                crate::bytecode::install_field_value(this_value, field.key.clone(), value, env)?;
+                if let Some(key) = field.shared_string_key()
+                    && let Value::Object(object) = this_value
+                    && is_ordinary_public_field_receiver(object)
+                    && object.is_extensible()
+                    && !object.has_own_property(key)
+                {
+                    // The checks above run before mutation and JavaScript has
+                    // no interleaving point between them and this write. The
+                    // existing shared-key helper creates exactly the default
+                    // enumerable, writable, configurable data property.
+                    object.set_shared_key(key.clone(), value);
+                    env.sync_realm_global_object_property(object, key);
+                } else {
+                    crate::bytecode::install_field_value(
+                        this_value,
+                        field.property_key(),
+                        value,
+                        env,
+                    )?;
+                }
             }
             InstanceElementInitializer::PrivateElement(private) => {
                 crate::bytecode::apply_instance_private_element(
@@ -392,6 +411,16 @@ pub(crate) fn initialize_instance_fields(
         }
     }
     Ok(())
+}
+
+/// Whether a string-keyed class field can reuse the existing ordinary-object
+/// shared-key write. The generic DefineProperty route remains authoritative for
+/// every receiver with custom string-key behavior.
+fn is_ordinary_public_field_receiver(object: &ObjectRef) -> bool {
+    !crate::typed_array::is_typed_array_object(object)
+        && !object.is_module_namespace_exotic()
+        && !object.is_array_prototype_exotic()
+        && !object.is_symbol_object()
 }
 
 /// Evaluates a class field initializer with the receiver supplied by class
