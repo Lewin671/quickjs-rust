@@ -1676,3 +1676,35 @@ guards: per-call intrinsic revalidation and plan dispatch outweigh the child
 VM avoided on A*, while raytrace misses materiality. A successor must start
 from a different shared, current-profiled cost rather than widening this
 admission path.
+
+### 2026-07-28 rejected direct-leaf lazy loop-plan state
+
+Fresh exact-current profiles of rank-one `controlflow-recursive` and rank-four
+`hash-map` both showed `Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots`
+as a shared top-of-stack cost: 171 of 2,173 and 141 of 2,173 samples,
+respectively. The frozen one-attempt unit
+`tasks/performance-units/direct-leaf-lazy-loop-plan-state.json` (SHA-256
+`d868a524a3c2fa1d13245c4b71fcb7a025b1634abffb4ddf620aaf8a7af41cf8`)
+therefore classified bytecode with no backward unconditional jump and supplied
+empty numeric, control, typed, and numeric-mutation loop-plan slices to its
+VM frame and virtual-object lowering. Every body with a backward `Op::Jump`
+retained the exact old plan route. Focused coverage proved that a no-backedge
+body did not materialize any loop-plan `OnceCell`, and eight direct-leaf
+receiver, argument, exception, and fallback tests passed.
+
+The first target's two alternating exact-source timings rejected the unit
+before it reached the second target. The candidate release binary SHA-256
+`54b05426c8111b729562a7937eb06ed4698a42472d06f4e7b850baf3ee5ee313` was
+compared with the exact current-main base SHA-256
+`2b36815789e28f95d445728ba858913413452c6bcdc3744b4c5568b7a1751bcb` on a
+100-times wrapper of the official `controlflow-recursive` source. Base times
+were 6.407385 s and 6.413233 s; candidate times were 6.454553 s and
+6.462816 s. Their medians are 6.410309 s and 6.458685 s, or
+**1.007547x candidate/base**, rather than the frozen `<= 0.95x` target.
+
+The implementation and focused test were reverted immediately. Do not retry
+this by changing the cached backedge test, covering more plan kinds, or
+delaying only another subset of plan lookups: the construction probes are a
+real shared cost but not material enough for the stated general gate. A future
+unit must remove a different current-profiled cost inside direct-call setup or
+the execution core.

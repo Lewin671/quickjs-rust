@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "direct-leaf-lazy-loop-plan-state",
+  "base_sha": "8a49ac9b8fbba0427d7f6dc9e42f471250cb51c0",
+  "queue": {
+    "candidate_sha": "0c31864b700655b54c6efc8383a52053f06d62a4",
+    "sha256": "8558f3e2708a20d1f7859f5b1f1ab028318c02359954e2ced4a120f01d312840"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "rank_ceiling": 4,
+    "override_reason": "The exact current runtime differs from the queue candidate only in task documentation. Fresh profiles of rank 1 controlflow-recursive and rank 4 hash-map both put direct-leaf VM construction in the shared hot chain: 171 of 2,173 and 141 of 2,173 top-of-stack samples respectively. Previous CallEnv cold-state, frame-layout, frame-stack, and property-cache units are closed by negative evidence. This unit instead removes plan-state construction work that cannot be reached by a bytecode body with no backward unconditional jump; it is keyed solely by immutable bytecode shape, has no workload/source/result condition, and retains strict target plus independent control gates."
+  },
+  "mechanism": {
+    "summary": "Record whether immutable bytecode contains a backward unconditional jump. For a body without one, initialize all loop-tier plan slice fields as empty and let virtual-object lowering use empty loop-plan inputs instead of probing or compiling numeric, control, typed, and numeric-mutation loop metadata on every VM frame construction.",
+    "generality": "The condition is a compiler-independent property of every Bytecode instruction stream. Every function or script without a backward Op::Jump takes the same path, regardless of benchmark, source name, receiver, argument values, or call count. A body with any backward unconditional jump keeps the exact existing plan initialization and execution path. The optimization neither accepts additional direct leaves nor changes bytecode execution, call setup, values, exceptions, loop dispatch, cache identity, or fallback behavior.",
+    "semantic_risks": [
+      "the bytecode-shape test must conservatively recognize every unconditional backward jump that can invoke jump_with_loop_plans",
+      "a no-backedge body must still receive empty plan slices with the same lifetime and no mutable state shared across invocations",
+      "virtual-object lowering must receive the same effective no-loop inputs and retain all scalar-replacement and superinstruction behavior unrelated to loop plans",
+      "all loop-bearing bytecodes must retain the byte-for-byte existing plan initialization path"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-8a-controlflow-profile.6CCWY3/controlflow-recursive-100x.sample; exact current 8a49ac9 runtime; the official SunSpider source was repeated 100 times only to lengthen sampling, never for timing",
+      "sha256": "75d0a647b34b13698bd7089b8cd02a25dc531eb2caab2606040c998eda8747fa",
+      "base_sha": "8a49ac9b8fbba0427d7f6dc9e42f471250cb51c0",
+      "opportunity_ids": [
+        "external/sunspider-1.0/controlflow-recursive"
+      ],
+      "shared_cost": "The 2,173-sample recursive direct-leaf chain records 171 top-of-stack samples in Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots. ack, fib, and tak have recursive branches but no loop backedge, so frame setup repeatedly prepares loop-tier state their bytecode cannot execute.",
+      "inclusive_fraction": 0.079
+    },
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-8a-hash-map-profile.GvuCVL/hash-map-6x.sample; exact current 8a49ac9 runtime; the official JetStream subset source was repeated 6 times only to lengthen sampling, never for timing",
+      "sha256": "293542b35f00a83b3e76ea741edac82fa9b0f97120bcb84b4585b9fd770592ad",
+      "base_sha": "8a49ac9b8fbba0427d7f6dc9e42f471250cb51c0",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "The 2,173-sample ordinary direct-leaf chain records 141 top-of-stack samples in the same VM constructor. The workload contains many short helper calls; no-backedge helpers currently pay the same loop-plan metadata setup as loop-bearing bodies.",
+      "inclusive_fraction": 0.065
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "control_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar",
+      "external/sunspider-1.0/string-tagcloud",
+      "broad/plain_function_call",
+      "broad/dynamic_method_call",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
