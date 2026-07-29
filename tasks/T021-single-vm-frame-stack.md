@@ -1894,3 +1894,36 @@ failure. Do not retry this same atom-metadata layout by changing cache breadth,
 its storage representation, or the literal guard: it produces a real DNA gain
 but not a material cross-workload RegExp win. A successor must remove a
 different currently profiled shared regexp or string cost.
+
+### 2026-07-28 rejected pure numeric call graph leaf
+
+The refreshed exact `af4a65a1` queue ranked `kraken-1.1/imaging-darkroom`
+eighth. A current sample attributed 3,496 of 3,662 main-thread stacks to the
+repeated direct-leaf path through `FastGain`, `FastBias`, `FastLog2`, and pure
+`Math` calls. The frozen one-attempt plan
+`tasks/performance-units/pure-numeric-call-graph-leaf.json` (plan SHA-256
+`6ded39882d940c75a7e5bf330413e16f1f52caa8324954d9e947026a401e55bc`)
+therefore admitted only acyclic, prevalidated Number-only helper graphs with
+forward branches, live lexical captures, and own-data pure `Math` intrinsics.
+It rejected every coercive, dynamic-realm, accessor, loop, cycle, write, and
+unsupported path before scalar execution. The cold graph payload was boxed so
+ordinary `NumericLeafPlan` layout did not grow.
+
+Focused tests covered both branch results against the ordinary VM, replacement
+of `Math` intrinsics, and coercive-argument fallback; the complete local
+Test262 subset passed all **5,160** cases. The final release candidate binary
+SHA-256 `58b3a2b07511a3a0ed88e9653b1f32cc37b7a4ccbff6ad5983196829c37dd775`
+was then compared with the exact `af4a65a1` base binary SHA-256
+`d1cfd7429e2400704202b93f1b0bc514cd12cdcc30d6d096e54e84239c9b8a41` in a
+complete one-block external screen. The target regressed to
+**1.131718x candidate/base**, missing the frozen `<= 0.85x` gate; `ai-astar`
+also reached 1.060260x, and `imaging-gaussian-blur` remained an explicit
+capability timeout. The external raw/report SHA-256 values are
+`b35fc0e8baa2fcb3e47d9044c04035ecf0ddfd2adad75b19357e93defe73d671` and
+`b569987b97903b43c4d8193ea033af9c410867f8902b7f34ac693ace46ff0dd3`.
+
+The implementation was reverted without a runtime commit. Do not retry this
+per-invocation recursive graph preparation by changing its staging or storage
+inside this unit: the evidence shows that avoiding child VMs does not pay for
+the guards and preparation at this call depth. A future call-graph proposal
+needs a distinct current profile and a new frozen plan.
