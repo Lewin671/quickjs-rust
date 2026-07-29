@@ -23,21 +23,27 @@ fn number_only_program_admits_local_temporary_bitwise_leaf() {
         .expect("function bytecode should be nested in the script");
     let plan = NumericLeafPlan::compile(function_bytecode).expect("leaf should be admitted");
     assert!(
-        plan.number_only_program.is_some(),
+        matches!(
+            plan.shortcut,
+            Some(NumericLeafShortcut::NumberOnlyProgram(_))
+        ),
         "unexpected shortcut: {:#?}; ops: {:#?}",
         plan.shortcut,
         plan.ops
     );
     assert_eq!(
-        plan.number_only_program
+        plan.shortcut
             .as_ref()
-            .and_then(|program| program.eval(&[Value::Number(2_147_483_647.0), Value::Number(1.0)])),
+            .and_then(|shortcut| shortcut
+                .eval(&[Value::Number(2_147_483_647.0), Value::Number(1.0)], &[],)),
         Some(Value::Number(-2_147_483_648.0))
     );
     assert!(
-        plan.number_only_program
+        plan.shortcut
             .as_ref()
-            .and_then(|program| program.eval(&[Value::Number(1.0), Value::String("2".into())]))
+            .and_then(
+                |shortcut| shortcut.eval(&[Value::Number(1.0), Value::String("2".into())], &[],)
+            )
             .is_none()
     );
 }

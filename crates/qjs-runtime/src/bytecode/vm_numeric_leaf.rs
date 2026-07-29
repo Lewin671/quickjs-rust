@@ -91,7 +91,6 @@ struct NumberOnlyProgram {
 pub(super) struct NumericLeafPlan {
     ops: Vec<FastOp>,
     shortcut: Option<NumericLeafShortcut>,
-    number_only_program: Option<NumberOnlyProgram>,
     hoisted_slots: u32,
     writes_received_upvalues: bool,
 }
@@ -172,6 +171,7 @@ enum NumericLeafShortcut {
         op: BinaryOp,
         right: f64,
     },
+    NumberOnlyProgram(Box<NumberOnlyProgram>),
 }
 
 /// A numeric leaf call reduced to scalar state for a counted-loop trace.
@@ -379,15 +379,9 @@ impl NumericLeafPlan {
                         writes_received_upvalues = false;
                     }
                     let shortcut = NumericLeafShortcut::compile(&ops, bytecode);
-                    let number_only_program = if shortcut.is_none() {
-                        NumberOnlyProgram::compile(&ops, bytecode)
-                    } else {
-                        None
-                    };
                     return Some(Self {
                         ops,
                         shortcut,
-                        number_only_program,
                         hoisted_slots,
                         writes_received_upvalues,
                     });
@@ -685,7 +679,8 @@ impl NumericLeafShortcut {
                 right: *right,
             });
         }
-        None
+        NumberOnlyProgram::compile(ops, bytecode)
+            .map(|program| Self::NumberOnlyProgram(Box::new(program)))
     }
 
     fn eval(&self, arguments: &[Value], upvalues: &[Upvalue]) -> Option<Value> {
@@ -760,6 +755,7 @@ impl NumericLeafShortcut {
                 upvalues.get(*upvalue_index)?.set(value.clone());
                 Some(value)
             }
+            Self::NumberOnlyProgram(program) => program.eval(arguments),
         }
     }
 }
@@ -1268,13 +1264,6 @@ pub(crate) fn try_eval_numeric_leaf(
             .shortcut
             .as_ref()
             .and_then(|shortcut| shortcut.eval(arguments, upvalues))
-        {
-            return Some(value);
-        }
-        if let Some(value) = plan
-            .number_only_program
-            .as_ref()
-            .and_then(|program| program.eval(arguments))
         {
             return Some(value);
         }
