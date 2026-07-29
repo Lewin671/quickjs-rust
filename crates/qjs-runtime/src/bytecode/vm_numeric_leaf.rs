@@ -70,6 +70,17 @@ enum NumberOnlyOp {
     Return,
 }
 
+/// A scalar direct-leaf program kept separate from the common shortcut enum.
+///
+/// Most direct leaf calls are not numeric. Keeping this interpreter behind an
+/// optional plan avoids growing their shared dispatch path merely because a
+/// different function was eligible for the scalar tier.
+#[derive(Clone, Debug)]
+struct NumberOnlyProgram {
+    ops: Vec<NumberOnlyOp>,
+    parameter_slots: Vec<usize>,
+}
+
 /// Compact, prevalidated form of the straight-line numeric bytecode subset.
 ///
 /// Besides avoiding the general `Op` representation in every call, building
@@ -80,6 +91,7 @@ enum NumberOnlyOp {
 pub(super) struct NumericLeafPlan {
     ops: Vec<FastOp>,
     shortcut: Option<NumericLeafShortcut>,
+    number_only_program: Option<NumberOnlyProgram>,
     hoisted_slots: u32,
     writes_received_upvalues: bool,
 }
@@ -159,10 +171,6 @@ enum NumericLeafShortcut {
         upvalue_index: usize,
         op: BinaryOp,
         right: f64,
-    },
-    NumberOnlyProgram {
-        ops: Vec<NumberOnlyOp>,
-        parameter_slots: Vec<usize>,
     },
 }
 
@@ -371,9 +379,15 @@ impl NumericLeafPlan {
                         writes_received_upvalues = false;
                     }
                     let shortcut = NumericLeafShortcut::compile(&ops, bytecode);
+                    let number_only_program = if shortcut.is_none() {
+                        NumberOnlyProgram::compile(&ops, bytecode)
+                    } else {
+                        None
+                    };
                     return Some(Self {
                         ops,
                         shortcut,
+                        number_only_program,
                         hoisted_slots,
                         writes_received_upvalues,
                     });
@@ -671,11 +685,7 @@ impl NumericLeafShortcut {
                 right: *right,
             });
         }
-        let (ops, parameter_slots) = compile_number_only_program(ops, bytecode)?;
-        Some(Self::NumberOnlyProgram {
-            ops,
-            parameter_slots,
-        })
+        None
     }
 
     fn eval(&self, arguments: &[Value], upvalues: &[Upvalue]) -> Option<Value> {
@@ -750,55 +760,63 @@ impl NumericLeafShortcut {
                 upvalues.get(*upvalue_index)?.set(value.clone());
                 Some(value)
             }
-            Self::NumberOnlyProgram {
-                ops,
-                parameter_slots,
-            } => {
-                let mut locals = [0.0; MAX_FAST_LOCALS];
-                for (index, &slot) in parameter_slots.iter().enumerate() {
-                    let Value::Number(value) = arguments.get(index)? else {
-                        return None;
-                    };
-                    *locals.get_mut(slot)? = *value;
+        }
+    }
+}
+
+impl NumberOnlyProgram {
+    fn compile(ops: &[FastOp], bytecode: &Bytecode) -> Option<Self> {
+        let (ops, parameter_slots) = compile_number_only_program(ops, bytecode)?;
+        Some(Self {
+            ops,
+            parameter_slots,
+        })
+    }
+
+    // This interpreter is only useful after a plan has admitted it. Keeping it
+    // out of the common direct-leaf dispatch preserves instruction-cache
+    // locality for object and control-flow leaves that cannot use it.
+    #[inline(never)]
+    fn eval(&self, arguments: &[Value]) -> Option<Value> {
+        let mut locals = [0.0; MAX_FAST_LOCALS];
+        for (index, &slot) in self.parameter_slots.iter().enumerate() {
+            let Value::Number(value) = arguments.get(index)? else {
+                return None;
+            };
+            *locals.get_mut(slot)? = *value;
+        }
+        let mut stack = [0.0; MAX_FAST_STACK];
+        let mut stack_len = 0;
+        for op in &self.ops {
+            match op {
+                NumberOnlyOp::LoadConst(value) => {
+                    push_number(&mut stack, &mut stack_len, *value)?;
                 }
-                let mut stack = [0.0; MAX_FAST_STACK];
-                let mut stack_len = 0;
-                for op in ops {
-                    match op {
-                        NumberOnlyOp::LoadConst(value) => {
-                            push_number(&mut stack, &mut stack_len, *value)?;
-                        }
-                        NumberOnlyOp::LoadLocal(slot) => {
-                            push_number(&mut stack, &mut stack_len, *locals.get(*slot)?)?;
-                        }
-                        NumberOnlyOp::StoreLocal(slot) => {
-                            *locals.get_mut(*slot)? = pop_number(&stack, &mut stack_len)?;
-                        }
-                        NumberOnlyOp::Binary(op) => {
-                            let right = pop_number(&stack, &mut stack_len)?;
-                            let left = pop_number(&stack, &mut stack_len)?;
-                            push_number(
-                                &mut stack,
-                                &mut stack_len,
-                                number_binary(left, *op, right)?,
-                            )?;
-                        }
-                        NumberOnlyOp::BinaryConstRight(op, right) => {
-                            let left = pop_number(&stack, &mut stack_len)?;
-                            push_number(
-                                &mut stack,
-                                &mut stack_len,
-                                number_binary(left, *op, *right)?,
-                            )?;
-                        }
-                        NumberOnlyOp::Return => {
-                            return Some(Value::Number(pop_number(&stack, &mut stack_len)?));
-                        }
-                    }
+                NumberOnlyOp::LoadLocal(slot) => {
+                    push_number(&mut stack, &mut stack_len, *locals.get(*slot)?)?;
                 }
-                None
+                NumberOnlyOp::StoreLocal(slot) => {
+                    *locals.get_mut(*slot)? = pop_number(&stack, &mut stack_len)?;
+                }
+                NumberOnlyOp::Binary(op) => {
+                    let right = pop_number(&stack, &mut stack_len)?;
+                    let left = pop_number(&stack, &mut stack_len)?;
+                    push_number(&mut stack, &mut stack_len, number_binary(left, *op, right)?)?;
+                }
+                NumberOnlyOp::BinaryConstRight(op, right) => {
+                    let left = pop_number(&stack, &mut stack_len)?;
+                    push_number(
+                        &mut stack,
+                        &mut stack_len,
+                        number_binary(left, *op, *right)?,
+                    )?;
+                }
+                NumberOnlyOp::Return => {
+                    return Some(Value::Number(pop_number(&stack, &mut stack_len)?));
+                }
             }
         }
+        None
     }
 }
 
@@ -1245,12 +1263,21 @@ pub(crate) fn try_eval_numeric_leaf(
 
     if bytecode.parameter_slots().len() == params.positional.len()
         && bytecode.received_upvalue_slots().len() == upvalues.len()
-        && let Some(value) = plan
+    {
+        if let Some(value) = plan
             .shortcut
             .as_ref()
             .and_then(|shortcut| shortcut.eval(arguments, upvalues))
-    {
-        return Some(value);
+        {
+            return Some(value);
+        }
+        if let Some(value) = plan
+            .number_only_program
+            .as_ref()
+            .and_then(|program| program.eval(arguments))
+        {
+            return Some(value);
+        }
     }
 
     let mut locals = [FastValue::Uninitialized; MAX_FAST_LOCALS];
