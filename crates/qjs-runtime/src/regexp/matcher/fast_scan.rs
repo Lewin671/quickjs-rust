@@ -117,7 +117,7 @@ pub(super) fn simple_atom_matcher<'a>(
 
 impl SimpleAtom<'_> {
     /// Test the code point at `index`, returning the index just past a match.
-    fn step(
+    pub(super) fn step(
         &self,
         text: &[char],
         index: usize,
@@ -212,6 +212,15 @@ pub(super) fn repeat_simple_atom(
     properties: &PropertyCache,
     options: MatchOptions,
 ) -> Vec<MatchState> {
+    if quantifier.is_exactly_one() {
+        let Some(next_index) = matcher.step(text, state.index, properties, options) else {
+            return Vec::new();
+        };
+        let mut accepted = state;
+        accepted.index = next_index;
+        return vec![accepted];
+    }
+
     let Some(boundaries) =
         simple_atom_boundaries(text, matcher, quantifier, state.index, properties, options)
     else {

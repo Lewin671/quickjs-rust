@@ -43,6 +43,25 @@ fn greedy_simple_atom_backtracks_against_trailing_atom() {
 }
 
 #[test]
+fn exact_simple_atoms_preserve_captures_and_unicode_advancement() {
+    // The literal, class, and decimal escape all have an implicit `{1}`
+    // quantifier. Their direct route must retain the surrounding capture.
+    let matched = regexp_match_range(r"^(a)[b]\d$", "ab7", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 3));
+    assert_eq!(matched.captures, vec![Some((0, 1))]);
+
+    // In Unicode mode a direct `.` route must advance past the entire
+    // surrogate pair, rather than accepting its high code-unit half.
+    let input = format!(
+        "{}{}",
+        string_from_code_unit(0xD83D),
+        string_from_code_unit(0xDE00)
+    );
+    let matched = regexp_match_range(r"^.$", &input, 0, false, true, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 2));
+}
+
+#[test]
 fn lazy_simple_atom_takes_shortest_run() {
     let matched = regexp_match_range(r"a.*?c", "axxcxxc", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 4));

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "exact-simple-regexp-atom",
+  "base_sha": "3285615027c056f00d04d3cd51e75e7708dc1b8b",
+  "queue": {
+    "candidate_sha": "3285615027c056f00d04d3cd51e75e7708dc1b8b",
+    "sha256": "61812f93d3aa7730b34d24f8977ce59e48d8cc9a6ac57cd1ae9322e51cd4a029"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/regexp-dna"
+    ],
+    "rank_ceiling": 7,
+    "override_reason": "Ranks 1 through 3 remain closed by the current direct-call/frame and shared-layout rejection evidence, while ranks 4 through 6 do not expose one newly profiled common mechanism. The rank-7 regexp-dna receipt is current at 32856150 and places 3,160 of 3,614 main-thread samples under PreparedRegexp::match_input; its exact-one simple atoms repeatedly allocate and grow a temporary boundary Vec. This unit changes that generic per-atom cost, not the reverted capture-free compiled-program or quantified-boundary mechanisms."
+  },
+  "mechanism": {
+    "summary": "For an already-classified capture-free simple RegExp atom whose quantifier is exactly one, advance one input code point and enter its continuation directly instead of materializing a two-element Vec<usize> repetition-boundary list.",
+    "generality": "Admission depends only on existing matcher semantics: SimpleAtom classification must succeed, the atom must contain no captures, and its parsed quantifier must be exactly {1}. It has no workload, source-path, input-size, checksum, result, or iteration condition. Quantified atoms, captures, groups, backreferences, lookarounds, and every atom the existing classifier rejects keep the unchanged matcher path.",
+    "semantic_risks": [
+      "preserving leftmost-first match and continuation order for an exact-one atom",
+      "preserving Unicode code-point versus WTF-16 code-unit advancement through the existing SimpleAtom::step implementation",
+      "preserving ignore-case, dot-all, character-class, escape, and property-escape matching through the existing classifier and step logic",
+      "preserving capture, backreference, lookaround, greedy, lazy, and quantified behavior by leaving every non-exact-one or non-simple path unchanged",
+      "preserving RegExp exec, match, replace, and lastIndex results through the unchanged RegexpMatch boundary"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-29 target/performance-next-32856150-r2/profiles/regexp-dna.sample; exact 32856150 source rebuilt after cargo clean -p qjs-cli, release qjs SHA-256 22cc20a00531332335607e7a9ba8784ae2bc9b0686408b227cc44c0b5f9dda74; 32 concatenated, hash-verified official SunSpider regexp-dna scripts executed with their original global semantics only to sustain sampling",
+      "sha256": "569536560383521d07d6ec9638bb761688eed8ee98ecd5d20e3b51563b07c431",
+      "base_sha": "3285615027c056f00d04d3cd51e75e7708dc1b8b",
+      "opportunity_ids": [
+        "external/sunspider-1.0/regexp-dna"
+      ],
+      "shared_cost": "Of 3,614 main-thread samples, 3,160 enter PreparedRegexp::match_input. The capture-free fixed-width alternatives repeatedly call match_pattern_first, which currently routes even exact-one SimpleAtom matches through simple_atom_boundaries. Its two-entry Vec grows on each such probe: the profile attributes 407 samples to RawVec::grow_one beneath simple_atom_boundaries, plus 388 to finish_grow. The same existing exact-one simple-atom route is used by the generic matcher independently of pattern text or workload.",
+      "inclusive_fraction": 0.874377
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/regexp-dna"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/string-validate-input",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "target_max_candidate_over_base": 0.85,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

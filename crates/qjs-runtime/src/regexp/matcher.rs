@@ -598,6 +598,21 @@ fn match_pattern_first(
             if atom_captures.is_empty()
                 && let Some(matcher) = simple_atom_matcher(pattern, pc, properties, options)
             {
+                if quantifier.is_exactly_one() {
+                    let next_index = matcher.step(text, state.index, properties, options)?;
+                    let mut candidate = state;
+                    candidate.index = next_index;
+                    return match_pattern_first(
+                        pattern,
+                        text,
+                        quantifier.next_pc,
+                        end_pc,
+                        candidate,
+                        group_indices,
+                        properties,
+                        options,
+                    );
+                }
                 let boundaries = simple_atom_boundaries(
                     text,
                     &matcher,
@@ -1541,6 +1556,10 @@ fn quantifier(pattern: &[char], pc: usize) -> Quantifier {
 }
 
 impl Quantifier {
+    fn is_exactly_one(self) -> bool {
+        self.min == 1 && self.max == Some(1)
+    }
+
     fn with_lazy_suffix(mut self, pattern: &[char]) -> Self {
         if pattern.get(self.next_pc) == Some(&'?') {
             self.greedy = false;
