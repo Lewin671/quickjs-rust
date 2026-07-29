@@ -448,6 +448,36 @@ mod tests {
         );
     }
 
+    #[test]
+    fn typed_loop_compacts_register_files_to_used_stack_depth() {
+        let scalar_bytecode = nested_function(
+            "function run(n) { var total = 0; for (var i = 0; i < n; i++) { total += i; } return total; }",
+        );
+        let scalar_program = super::compile_all(&scalar_bytecode)
+            .into_iter()
+            .next()
+            .expect("scalar loop should be admitted");
+        assert!(scalar_program.register_count < super::MAX_STACK_DEPTH);
+        assert_eq!(scalar_program.boxed_count, 0);
+
+        let dense_bytecode = nested_function(
+            "function run(n) { var values = [1, 2, 4]; var total = 0; for (var i = 0; i < n; i++) { total += values[i % 3]; } return total; }",
+        );
+        let dense_program = super::compile_all(&dense_bytecode)
+            .into_iter()
+            .next()
+            .expect("dense loop should be admitted");
+        assert!(dense_program.register_count < super::MAX_STACK_DEPTH);
+        assert!(dense_program.boxed_count > 0);
+        assert!(dense_program.boxed_count < super::MAX_STACK_DEPTH);
+        assert_eq!(
+            eval(
+                "function run(n) { var values = [1, 2, 4]; var total = 0; for (var i = 0; i < n; i++) { total += values[i % 3]; } return total; } run(6);"
+            ),
+            Ok(Value::Number(14.0))
+        );
+    }
+
     /// Every case here is a loop the typed tier accepts. The expected values are
     /// what the interpreter produces for the same source, so a divergence in the
     /// register program shows up as a failing assertion rather than a silent

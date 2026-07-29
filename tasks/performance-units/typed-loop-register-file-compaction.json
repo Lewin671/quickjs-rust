@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "typed-loop-register-file-compaction",
+  "base_sha": "7d0f6bdbb2e5065155f2562bd7c790617b02abfb",
+  "queue": {
+    "candidate_sha": "7d0f6bdbb2e5065155f2562bd7c790617b02abfb",
+    "sha256": "7b8076306c0e96c6fdf4566e7d12fac173908d9c00d90c49cf85bb790e80d926"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/bitops-bits-in-byte",
+      "external/sunspider-1.0/math-cordic"
+    ],
+    "rank_ceiling": 14,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "After lowering an admitted typed-loop region, compact its scalar and boxed register namespaces around the maximum stack depth it actually uses, remapping persistent local, global, and constant registers so native entries no longer reset the unconditional 48-slot stack reservation.",
+    "generality": "The transformation applies to every already-admitted TypedLoopProgram solely from its compiled operations and register-class metadata. It does not inspect JavaScript source names, paths, input sizes, iteration counts, result values, checksums, or benchmark identities. Scalar and boxed register files remain distinct; each pre-existing logical register is remapped consistently in operations, deoptimization sites, local/global/constant seed metadata, and writeback metadata. Unsupported regions and all entry guards retain their existing paths.",
+    "semantic_risks": [
+      "every scalar and boxed operand field in every typed operation must be remapped in its correct register namespace without collision between stack and persistent registers",
+      "deoptimization-site stack reconstruction must read the remapped register that corresponds to the original abstract operand stack entry",
+      "local, global, constant, receiver, writeback, and boxed-local metadata must seed and publish the same logical values after compaction",
+      "regions with no boxed operands must retain an empty boxed file, while regions with stack-only, persistent-only, and mixed boxed operands retain exactly the values their operations can address",
+      "recompiling a bytecode body must produce deterministic compact layouts and must not change native-tier admission or fallback behavior"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-29 target/performance-next-e366f89a-r1/profiles/bitops-bits-in-byte.sample of a 100x direct-script SunSpider bitops-bits-in-byte bundle from bitops-bits-in-byte.js SHA-256 4f1a917cd52ebc07ec30dbe9d3e369e03c09825f9d2898fc3403ebd34a9bd853, executed by runtime binary SHA-256 1e02e6bf0b9dfec25b6a9acea1de5335ac42a6748119bc354a9e3981baeac204. Runtime source is identical to 7d0f6bdb outside documentation-only commits.",
+      "sha256": "a758db2358ce9614e045ca4745fa909edf6472b59ffbcda1f2b226dc404a9640",
+      "base_sha": "7d0f6bdbb2e5065155f2562bd7c790617b02abfb",
+      "opportunity_ids": [
+        "external/sunspider-1.0/bitops-bits-in-byte"
+      ],
+      "shared_cost": "The 3,685-sample profile places 1,864 samples in typed-loop admission/execution. Inside run, 295 samples land in Vec<Value>::resize/extend_with and 139 in TypedLoopScratch::clear. The bitsinbyte loop has only scalar arithmetic, yet the current program initializes boxed_count from MAX_STACK_DEPTH before adding any persistent boxed register, so every native entry fills and every recycle clears phantom boxed Undefined slots.",
+      "inclusive_fraction": 0.506
+    },
+    {
+      "source": "macOS sample 2026-07-29 target/performance-next-e366f89a-r1/profiles/math-cordic.sample of a 1,000x direct-script SunSpider math-cordic bundle from math-cordic.js SHA-256 ad8710fb0e502fb0d214179751102861eff3b3d5c4603344e3129afa693305a6, executed by runtime binary SHA-256 1e02e6bf0b9dfec25b6a9acea1de5335ac42a6748119bc354a9e3981baeac204. Runtime source is identical to 7d0f6bdb outside documentation-only commits.",
+      "sha256": "b49be41b360414d53a13d5997134ffbb8555e3fb499b12a663f9429508c074f9",
+      "base_sha": "7d0f6bdbb2e5065155f2562bd7c790617b02abfb",
+      "opportunity_ids": [
+        "external/sunspider-1.0/math-cordic"
+      ],
+      "shared_cost": "The 3,701-sample profile places 1,820 samples in typed-loop admission/execution. Its entry path has 148 Vec<Value>::resize/extend_with samples and 108 TypedLoopScratch::clear samples. CORDIC needs only a small number of real boxed values for its array/global path, but the same MAX_STACK_DEPTH reservation raises the boxed file before those values are added. This independently confirms the cost is fixed register-file padding rather than a bitsinbyte-specific loop shape.",
+      "inclusive_fraction": 0.492
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/bitops-bits-in-byte",
+      "external/sunspider-1.0/math-cordic"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/bitops-3bit-bits-in-byte",
+      "external/sunspider-1.0/bitops-nsieve-bits",
+      "external/sunspider-1.0/access-nsieve",
+      "external/sunspider-1.0/math-spectral-norm",
+      "external/sunspider-1.0/crypto-sha1",
+      "broad/array_write",
+      "broad/plain_function_call",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
