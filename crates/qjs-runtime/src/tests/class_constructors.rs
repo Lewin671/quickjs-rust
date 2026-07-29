@@ -9,6 +9,32 @@ fn default_constructor_creates_instance() {
 }
 
 #[test]
+fn base_constructor_slot_frame_preserves_construct_context() {
+    assert_eq!(
+        eval(
+            "let trace = []; \
+             let NewTarget = function() {}; \
+             let C = class { \
+               #value; \
+               field = trace.push('field'); \
+               constructor(value = 1) { \
+                 trace.push('constructor'); \
+                 this.#value = value; \
+                 this.target = new.target; \
+               } \
+               read() { return this.#value; } \
+             }; \
+             let instance = Reflect.construct(C, [7], NewTarget); \
+             let called; try { C(); } catch (error) { called = error.name; } \
+             [trace.join(','), C.prototype.read.call(instance), instance.target === NewTarget, Object.getPrototypeOf(instance) === NewTarget.prototype, called].join(':');"
+        ),
+        Ok(Value::String(
+            "field,constructor:7:true:true:TypeError".to_owned().into()
+        ))
+    );
+}
+
+#[test]
 fn default_derived_constructor_arguments_do_not_shadow_outer_bindings() {
     assert_eq!(
         eval(

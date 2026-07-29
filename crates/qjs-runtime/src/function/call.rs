@@ -772,7 +772,8 @@ fn function_env<'a>(
     env: &CallEnv,
     is_construct: bool,
 ) -> FunctionCallEnv<'a> {
-    let use_direct_call_slots = can_seed_direct_leaf_call(function, bytecode);
+    let use_direct_call_slots = can_seed_direct_leaf_call(function, bytecode)
+        || (is_construct && can_seed_base_class_constructor_slots(function, bytecode));
     let lexical_this = received_upvalue_value(function, bytecode, "this");
     let lexical_field_initializer =
         received_upvalue_value(function, bytecode, FIELD_INITIALIZER_EVAL_BINDING);
@@ -980,6 +981,20 @@ fn direct_seedable_parameter_list(params: &FunctionParams) -> bool {
 }
 
 fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode) -> bool {
+    // This predicate feeds the ordinary direct-call dispatcher, which must
+    // retain the TypeError for `ClassConstructor()`. Base class constructors
+    // can separately reuse these slots only after `function_env` has proved
+    // this is a construction call.
+    !function.is_class_constructor && can_seed_slot_backed_call(function, bytecode)
+}
+
+fn can_seed_base_class_constructor_slots(function: &Function, bytecode: &Bytecode) -> bool {
+    function.is_class_constructor
+        && !function.is_derived_constructor
+        && can_seed_slot_backed_call(function, bytecode)
+}
+
+fn can_seed_slot_backed_call(function: &Function, bytecode: &Bytecode) -> bool {
     // Ordinary constructors use the same slot-backed parameter and receiver
     // model as ordinary calls. Constructor-only state such as `new.target`
     // remains in the small compatibility frame installed by function_env.
@@ -991,7 +1006,6 @@ fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode) -> bool {
         && (!function.lexical_arguments || !bytecode.reads_arguments())
         && !function.is_generator
         && !function.is_async
-        && !function.is_class_constructor
         && !function.has_name_binding
         && !function.immutable_name_binding
         && (function.immutable_env_binding.is_none() || function.is_field_initializer)
@@ -1180,5 +1194,46 @@ fn function_private_environment(function: &Function) -> Option<PrivateEnvironmen
         Some(Value::Object(object)) => object.private_environment(),
         Some(Value::Function(function)) => function.private_environment(),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{can_seed_base_class_constructor_slots, can_seed_direct_leaf_call};
+    use crate::{Value, eval};
+
+    #[test]
+    fn base_class_constructor_slot_eligibility_is_construct_only() {
+        let Value::Function(function) = eval(
+            "(class { #value; constructor(value = 1) { this.#value = value; this.target = new.target; } })",
+        )
+        .expect("class expression should evaluate")
+        else {
+            panic!("expected class constructor function");
+        };
+        let bytecode = function
+            .bytecode
+            .as_ref()
+            .expect("class constructor should have bytecode");
+
+        assert!(can_seed_base_class_constructor_slots(&function, bytecode));
+        assert!(!can_seed_direct_leaf_call(&function, bytecode));
+    }
+
+    #[test]
+    fn derived_class_constructor_stays_out_of_slot_seeded_construction() {
+        let Value::Function(function) = eval(
+            "(class extends class {} { constructor(value) { super(); this.value = value; } })",
+        )
+        .expect("derived class expression should evaluate") else {
+            panic!("expected derived class constructor function");
+        };
+        let bytecode = function
+            .bytecode
+            .as_ref()
+            .expect("derived class constructor should have bytecode");
+
+        assert!(!can_seed_base_class_constructor_slots(&function, bytecode));
+        assert!(!can_seed_direct_leaf_call(&function, bytecode));
     }
 }

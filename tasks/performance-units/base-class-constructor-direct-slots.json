@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "base-class-constructor-direct-slots",
+  "base_sha": "d3f9c17926e5c0b60a676da4c44f2add3544309b",
+  "queue": {
+    "candidate_sha": "d3f9c17926e5c0b60a676da4c44f2add3544309b",
+    "sha256": "6e56a55b30f33331be06a86bdc2f5702c4125a18d917e7fed7b6cff778081ed8"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "rank_ceiling": 4,
+    "override_reason": "The exact d3f9 queue ranks controlflow-recursive, ai-astar, and hash-map above public-field raytrace. Their current shared direct-call paths have already exhausted the measured frame-stack, compact-dispatch, numeric-recursive, and cold-CallEnv variants recorded in T021. Rank-4 raytrace exposes a different remaining cost: eligible base class constructors still materialize generic parameter and receiver bindings although the existing slot-backed VM can execute their full bytecode. This unit changes only eligibility for that general VM path, not a constructor-body specialization; it explicitly preserves the ordinary-call class-constructor TypeError route and does not revisit the rejected receiver-write leaf plan."
+  },
+  "mechanism": {
+    "summary": "Allow an eligible base class constructor to seed the existing slot-backed call frame only for construction, while retaining the existing direct-leaf predicate that excludes every class constructor from ordinary call dispatch.",
+    "generality": "Selection depends only on the function's existing class/derived metadata, whether the invocation is a construction, and the existing bytecode safety gates for parameters, arguments, eval, with, super, and capturing closures. It applies to every matching base class constructor regardless of source file, workload, input, iteration count, function identity, or result. Derived constructors, super operations, direct eval, with, closures, arguments objects, destructuring/rest parameters, name bindings, and every ordinary call retain the generic path.",
+    "semantic_risks": [
+      "keeping all class constructors out of ordinary direct-call dispatch so C() still throws TypeError",
+      "preserving base class field initialization before constructor-body execution",
+      "propagating new.target and Reflect.construct receiver/prototype behavior through the existing compatibility frame",
+      "installing the class private environment before bytecode executes",
+      "retaining the generic function frame for derived constructors and every excluded dynamic feature"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-28 /tmp/qjs-profile-d3f9-raytrace.sample; exact d3f9c17926e5c0b60a676da4c44f2add3544309b executable SHA-256 9e062cf87c6683d1d7821bec10bf29434ae6aeb7430810e0102a4ad7ff0c7d1d. Source plus six runIteration iterations lengthened sampling only and is not timing evidence. Of 3,521 sampled stacks, field initialization is now small while generic constructor work remains visible through function_env, FrameBindings get/insert, CallEnv construction/drop, construct_function, and generic eval_function_bytecode.",
+      "sha256": "c7a80dc74c4239330c5fc2db88c76dfa351f94fab9aa7ab5bc87a6c3be41f149",
+      "base_sha": "d3f9c17926e5c0b60a676da4c44f2add3544309b",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/raytrace-public-class-fields"
+      ],
+      "shared_cost": "Every otherwise eligible base class constructor still creates a generic function frame, materializes this and positional parameters in FrameBindings, and returns through the generic bytecode-result wrapper. The existing slot-backed VM already represents those parameters and receiver directly, while its small CallEnv continues to hold new.target, home-object, and private-environment compatibility state.",
+      "inclusive_fraction": 0.1
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/date-format-tofte",
+      "broad/object_allocation",
+      "broad/dynamic_method_call",
+      "broad/property_read"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
