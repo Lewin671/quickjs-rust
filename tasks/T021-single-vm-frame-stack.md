@@ -1927,3 +1927,46 @@ per-invocation recursive graph preparation by changing its staging or storage
 inside this unit: the evidence shows that avoiding child VMs does not pay for
 the guards and preparation at this call depth. A future call-graph proposal
 needs a distinct current profile and a new frozen plan.
+
+### 2026-07-29 rejected exact direct-leaf tail-frame reset
+
+The refreshed queue still ranked SunSpider `controlflow-recursive` first. Its
+current profile placed 585 sampled stacks in `call_direct_leaf_function` and
+570 in `Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots`, so
+the frozen one-attempt unit
+`tasks/performance-units/direct-leaf-tail-frame-reset.json` targeted a
+different cost from the prior tail probe: for an exact same-`Function` direct
+leaf call in syntactic tail position, it re-seeded the active VM frame instead
+of constructing the child `CallEnv`, `Vm`, and `FrameState` at all.
+
+The candidate was deliberately narrow. It retained the ordinary path unless
+the following opcode was `Return`, the callee identity exactly matched the
+active direct leaf, no receiver normalization, dynamic realm, virtual value,
+active try/finally/disposal scope, pending completion, or dynamic scope was
+present, and the only discarded statement-completion operands were
+`undefined`. On a hit it rebuilt parameter and hoisted slots, direct local
+upvalues, binding masks, virtual-object selection, loop state, and literal
+prototype caches exactly as a fresh direct frame would. Focused coverage
+confirmed 2,048 nested self-tail calls and manual release checks returned
+`100000` for deep recursion, `0:xxxx` through `try/finally`, `3` through a
+receiver-sensitive method, and `37` after rebinding the recursive function.
+The complete `./scripts/test262-subset.sh` passed all **5,160** curated cases.
+
+The target fast screen nevertheless missed its predeclared `<= 0.90x`
+candidate/base gate. The hash-verified 100-times upstream controlflow wrapper
+(`52ecb05f622d41dd35db1d476f1f5c46d16e252efa72946516b5396c33f56261`)
+ran in alternating pairs: base/candidate `6.54/6.23`, candidate/base
+`6.14/6.53`, and base/candidate `6.53/6.15` seconds. Median candidate/base is
+**0.941807x** (6.15s / 6.53s): a real 5.8% gain, but below the required 10%
+threshold. The candidate and exact runtime-identical base binary SHA-256
+values were `52acf6ff52d785d55352883c532ac10b80f9ccbd0b03821b5e425c00541ecc51`
+and `d7600fa3516b718782a48e24b64f3337a79e39a62f5cc3c632d99eed5d8e54c3`.
+
+The runtime implementation was reverted immediately; A*, hash-map, broad,
+and complete external controls were intentionally not run after the target
+fast gate failed. Do not retry direct-leaf tail-frame reset by broadening its
+operand guard, changing its retained function handle, or reshaping its reset
+sequence: eliminating child construction on this tail-only slice is still too
+narrow. A successor must begin from a fresh shared-cost profile and remove a
+different cost that also covers non-tail direct calls or another queue-ranked
+workload.

@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "direct-leaf-tail-frame-reset",
+  "base_sha": "af4a65a16c2af06318ce3d9cf358ebd061408d2d",
+  "queue": {
+    "candidate_sha": "af4a65a16c2af06318ce3d9cf358ebd061408d2d",
+    "sha256": "9a7ab99bc827c9b4d42a00baaf1d042f25324e30c91f0993fdf71078c63d3758"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/controlflow-recursive"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "For an exact same-function direct-leaf call in syntactic tail position, reset the active frame in place with the new direct-call slots instead of constructing a child CallEnv, Vm, and FrameState.",
+    "generality": "Selection depends only on the existing direct-leaf contract, exact Function identity, immutable bytecode tail position, empty active abrupt-completion state, and whether the bytecode can reuse its slot-backed receiver contract. It contains no benchmark name, source path, input, iteration-count, checksum, or expected-result condition. Every non-tail, different-function, dynamic-scope, closure, this-sensitive, try/finally-active, or otherwise unsupported call continues through the unchanged direct-leaf path before observable callee work.",
+    "semantic_risks": [
+      "preserving exact Function identity so two distinct functions that share bytecode never share a frame",
+      "resetting parameter, hoisted-local, operand, virtual-value, loop-decline, and pending-completion state exactly as a fresh direct-leaf frame would",
+      "retaining receiver evaluation and ordinary call argument order before the frame-reuse decision",
+      "declining whenever a catch, finally, disposal scope, generator state, or pending abrupt completion could observe a distinct child frame",
+      "retaining direct-leaf fallback for any body that needs a freshly normalized this binding or other per-call compatibility state"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-29 /tmp/qjs-current-profile-clean.u7Te8d/controlflow.sample; freshly built current-main runtime (source-identical to af4a65a1). The official controlflow-recursive source ran directly; sampling was diagnostic only. The profile records 585 top stacks in call_direct_leaf_function and 570 in Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots beneath the recursive execution chain. A separate output-only count of the official workload observed 55,177 ack, 114,625 fib, and 75,687 tak invocations; ack and tak contain syntactic self-tail edges while fib remains a non-tail control.",
+      "sha256": "23e65cbef941786a24c46c24f43f3ddf4fce3bb33dd296bcb7cf60f6ad6812b7",
+      "base_sha": "af4a65a16c2af06318ce3d9cf358ebd061408d2d",
+      "opportunity_ids": [
+        "external/sunspider-1.0/controlflow-recursive"
+      ],
+      "shared_cost": "The current recursive tail edge still creates a complete direct-leaf child and only then reaches the generic VM executor. Reusing the current slot-backed frame at that edge removes the child environment and frame construction rather than merely changing the prior tail-call probe or scheduler transfer.",
+      "inclusive_fraction": 0.583
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/controlflow-recursive"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/sunspider-1.0/string-tagcloud",
+      "broad/plain_function_call",
+      "broad/function_call_two_args",
+      "broad/dynamic_method_call"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
