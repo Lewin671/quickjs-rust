@@ -2223,3 +2223,25 @@ Do not retry by rearranging the borrowed match, inlining the existing helper,
 or changing fallback reconstruction: the shared improvement is materially
 below the declared target in both independent workloads. A successor must
 profile a different shared allocation or value-lifecycle cost first.
+
+### 2026-07-29 rejected cache-learned dynamic property layout
+
+The exact `fe8d287e` queue ranked Kraken A* second and its fresh profile
+showed `NamedPropertyCache::get` and `NamedPropertyCache::update` in 469 and
+398 of 8,613 samples. A one-attempt storage proposal therefore learned the
+first matching dynamic ordinary-property table and converted later matching
+tables to the existing shaped representation. It selected only by live
+ordinary-property keys and descriptors; it did not inspect constructors,
+source text, bytecode identity, or benchmark names. All mismatches,
+deletions, descriptor changes, accessors, exotic objects, and Proxy paths
+kept their existing route.
+
+Focused property-storage and cache tests passed, but direct release A* pairs
+missed the frozen `<= 0.95x` target gate: the candidate took 9.86 s and
+9.92 s against 9.93 s and 9.76 s for the exact base (0.993x and 1.016x).
+The implementation and its plan were fully withdrawn before broad or
+conformance promotion. Do not retry dynamic-table promotion, cache-learned
+layouts, or first-observation conversion variants: their conversion cost
+erased the proposed lookup benefit. A future property-storage unit must use a
+different mechanism that avoids per-object representation conversion at cache
+observation.

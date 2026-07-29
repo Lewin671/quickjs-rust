@@ -26,9 +26,10 @@ impl OrderedDataPropertyBuilder {
     }
 
     /// Applies one CreateDataProperty-style update. The generic storage insert
-    /// path overwrites duplicates in place and promotes only when a ninth
-    /// unique key arrives. Array-index classification happens only after the
-    /// insert reports a new key, keeping duplicate updates allocation-free.
+    /// path overwrites duplicates in place and promotes only when a unique key
+    /// exceeds the compact-storage limit. Array-index classification happens
+    /// only after the insert reports a new key, keeping duplicate updates
+    /// allocation-free.
     pub(crate) fn insert(&mut self, key: Rc<str>, value: Value) {
         let classify_key = Rc::clone(&key);
         let inserted = self
@@ -101,9 +102,11 @@ mod tests {
     #[test]
     fn duplicate_heavy_dynamic_builder_retains_only_unique_properties() {
         let mut builder = OrderedDataPropertyBuilder::new();
-        for value in 0..300 {
+        let unique_count = PropertyStorage::SMALL_LIMIT + 2;
+        let value_count = unique_count * 30;
+        for value in 0..value_count {
             builder.insert(
-                Rc::from(format!("field{}", value % 10)),
+                Rc::from(format!("field{}", value % unique_count)),
                 Value::Number(value as f64),
             );
         }
@@ -111,8 +114,8 @@ mod tests {
         assert!(matches!(
             &builder.properties,
             PropertyStorage::Dynamic(dynamic)
-                if dynamic.properties.len() == 10
-                    && dynamic.order.len() == 10
+                if dynamic.properties.len() == unique_count
+                    && dynamic.order.len() == unique_count
                     && dynamic.properties.capacity() <= PropertyStorage::SMALL_LIMIT * 4
                     && dynamic.order.capacity() <= PropertyStorage::SMALL_LIMIT * 4
         ));
@@ -121,14 +124,14 @@ mod tests {
         let object = builder.finish(None);
         assert_eq!(
             object.own_property_names(),
-            (0..10)
+            (0..unique_count)
                 .map(|index| format!("field{index}"))
                 .collect::<Vec<_>>()
         );
-        for index in 0..10 {
+        for index in 0..unique_count {
             assert_eq!(
                 object.get(&format!("field{index}")),
-                Some(Value::Number((290 + index) as f64))
+                Some(Value::Number((value_count - unique_count + index) as f64))
             );
         }
     }

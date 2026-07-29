@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "small-property-storage-threshold-12",
+  "base_sha": "fe8d287ef237a34c262ee9d61c04193b00f5f2ec",
+  "queue": {
+    "candidate_sha": "fe8d287ef237a34c262ee9d61c04193b00f5f2ec",
+    "sha256": "78314ce087b4b55dca4be6fdeb1387500778ce2e33d87ccb0e90e74fa2663ef5"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/kraken-1.1/ai-astar"
+    ],
+    "rank_ceiling": 2,
+    "override_reason": "Rank-one controlflow-recursive remains dominated by the closed direct-leaf/frame and generic-dispatch mechanisms. The rank-two A* profile independently exposes a current storage threshold: every GraphNode gains a ninth ordinary data field, which moves it from the retained small vector to a per-instance dynamic name map and makes the existing shared small-slot cache unavailable. This is a storage-policy change, not a constructor shape or cache-layout retry."
+  },
+  "mechanism": {
+    "summary": "Keep ordinary objects with at most twelve string properties in the existing compact linear storage, so repeated 9-to-12-field receivers can retain the established shared data-slot cache instead of immediately allocating a dynamic name map.",
+    "generality": "Selection depends only on the live count of ordinary own string properties. It does not inspect constructors, function names, bytecode identity, source paths, benchmark names, arguments, iteration counts, or results. Objects that grow past twelve fields retain the current dynamic map behavior, and every property lookup, descriptor operation, deletion, extensibility, and enumeration path continues to use the same storage API.",
+    "semantic_risks": [
+      "preserving ECMAScript own-property insertion order and array-index ordering across the later small-to-dynamic promotion",
+      "preserving descriptor, accessor, writable, configurable, delete, and non-extensible behavior while the object remains in the larger small-storage range",
+      "ensuring shared named-property slots retain their interned-key and data-descriptor checks after ordinary value writes"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "target/performance-next-fe8d287e-r1/profiles/ai-astar.sample; exact fe8d287e release binary SHA-256 06035ed821a5bfe8a2fc7be21c8384d083d785cf558995a283e8414aa09fbb31; hash-verified Kraken A* bundle creates five GraphNode fields and astar.init adds f/g/h/parent, making every node a nine-field ordinary receiver",
+      "sha256": "d8a936c36e2992ecc7c6f85a3e4f0f018ba6cd7f51d583148165a9eb0baadbad",
+      "base_sha": "fe8d287ef237a34c262ee9d61c04193b00f5f2ec",
+      "opportunity_ids": [
+        "external/kraken-1.1/ai-astar"
+      ],
+      "shared_cost": "Of 8,613 current samples, NamedPropertyCache::get and update account for 469 and 398 top frames. The ninth GraphNode field crosses PropertyStorage::SMALL_LIMIT=8, so later homogeneous receivers cannot use the existing shared small-object slot route and instead repeat dynamic name-map lookup.",
+      "inclusive_fraction": 0.1007
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/kraken-1.1/ai-astar"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/jetstream3-js-subset/cdjs",
+      "broad/property_read",
+      "broad/property_write",
+      "broad/object_allocation",
+      "broad/dynamic_method_call",
+      "broad/plain_function_call"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

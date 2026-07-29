@@ -545,7 +545,10 @@ enum PropertyStorage {
 }
 
 impl PropertyStorage {
-    const SMALL_LIMIT: usize = 8;
+    // Keep the common 9-to-12 field receiver compact. Repeated named access
+    // can then use the existing shared small-object slot cache instead of
+    // immediately allocating a dynamic name table at the ninth field.
+    const SMALL_LIMIT: usize = 12;
 
     fn dynamic(
         properties: crate::value::name_hash::NameMap<Rc<str>, Property>,
@@ -1783,26 +1786,31 @@ mod tests {
     }
 
     #[test]
-    fn ordinary_small_object_promotes_only_after_eight_properties() {
+    fn ordinary_small_object_promotes_only_after_the_compact_limit() {
         let object = ObjectRef::new(HashMap::new());
 
-        for index in 0..8 {
+        for index in 0..PropertyStorage::SMALL_LIMIT {
             object.set(format!("field{index}"), Value::Number(index as f64));
         }
         assert!(matches!(
             &*object.0.properties.borrow(),
-            PropertyStorage::Small { entries } if entries.len() == 8
+            PropertyStorage::Small { entries } if entries.len() == PropertyStorage::SMALL_LIMIT
         ));
 
-        object.set("field8".to_owned(), Value::Number(8.0));
+        let dynamic_index = PropertyStorage::SMALL_LIMIT;
+        object.set(
+            format!("field{dynamic_index}"),
+            Value::Number(dynamic_index as f64),
+        );
         assert!(matches!(
             &*object.0.properties.borrow(),
             PropertyStorage::Dynamic(dynamic)
-                if dynamic.properties.len() == 9 && dynamic.order.len() == 9
+                if dynamic.properties.len() == PropertyStorage::SMALL_LIMIT + 1
+                    && dynamic.order.len() == PropertyStorage::SMALL_LIMIT + 1
         ));
         assert_eq!(
             object.own_property_names(),
-            (0..9)
+            (0..=PropertyStorage::SMALL_LIMIT)
                 .map(|index| format!("field{index}"))
                 .collect::<Vec<_>>()
         );
