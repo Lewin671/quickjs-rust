@@ -1807,3 +1807,56 @@ zero-gap Test262 burndown and a fully comparable external report are available.
 This is an accepted general direct-leaf reduction under the current local
 runtime, curated Test262, and QuickJS-NG comparison gates; the next unit must
 again begin from a current shared-cost profile.
+
+### 2026-07-28 Number-only leaf plan layout correction and exact revalidation
+
+The preceding acceptance was invalidated by a fresh exact-current external
+refresh: the original `8bf379e2` layout regressed Kraken `ai-astar` to
+`1.114135x` candidate/base. Two structural corrections were then rejected
+before promotion. Commit `20d00510` moved the scalar program into an
+optional member of every `NumericLeafPlan`; this recovered A* but grew the
+shared plan and regressed `array_allocation` to `1.091967x` (95% CI
+`1.073655..1.094184`). Commit `dc020566` boxed the program in the
+shortcut enum instead; it restored allocation to `1.002494x` but extended
+the common shortcut dispatch and regressed `math_abs` to `1.041533x`
+(95% CI `1.038962..1.042656`). Neither intermediary is a retained
+performance result.
+
+The retained layout is commit `f0b3ea878a7dc34bf8aa3ab0822d854ce316396f`.
+It represents scalar leaves as the dedicated `NumericLeafPlan::NumberOnly`
+variant, while ordinary leaves remain in the `General` payload and retain
+the pre-existing `NumericLeafShortcut` variants. Thus no ordinary plan
+carries optional scalar vectors and no ordinary shortcut executes a scalar
+variant arm. The scalar executor is still a general bytecode-subset mechanism;
+it accepts only Number arguments and falls back to the full VM before
+observable work for coercive values.
+
+The exact hosted recipe compared candidate binary SHA-256
+`a8d6cf8aa94bef1f459627f41c0ee6d1a96aa68a884476f6a3f4e7f0c486f25f`
+at `f0b3ea87` against base `0c31864b` (binary SHA-256
+`a048b921e4402a7368e42e15649d3d200088b8347049af02962807c4cf0a3d0b`).
+The three-block broad run has 225/225 valid records and a candidate/base
+geometric mean of **0.996442x**; no case exceeds 1.03x. The two prior
+holdouts are `math_abs` **0.997592x** (CI `0.983775..1.013537`) and
+`array_allocation` **0.997826x** (CI `0.991410..1.004104`). Its raw
+and report SHA-256 values are
+`ec3eb61e9c7c34240bcdb1265f9057d98c3839868d438a85d07a47d3103270ea` and
+`c4e0431a30a8c77c1fe5976c6c8f23bcb2f365bec15995b2b12ee38c70a3f8de`.
+
+The matching external run reports 44 comparable candidate/base cases with a
+**0.980431x** geometric mean and no regression above 1.03x; `ai-astar` is
+**0.999048x**, `crypto-md5` **0.851911x**, and `crypto-sha1`
+**0.835176x**. `kraken-1.1/imaging-gaussian-blur` is explicitly excluded:
+both candidate and base hit the same 15-second capability timeout, while
+QuickJS-NG completed, so it is not silently treated as a win or a comparison.
+The external raw and report SHA-256 values are
+`43c9ce92702cb5dbfe6153cc3e8539bdf190a12585cddbadc8570b2164ad9947` and
+`ab3c0b8e69cb594d7c89e37a299b9830caf21598fadd0f8610d5a52a5f2fceca`.
+This is informational same-host evidence, not a claim that the every-case
+`<= 0.50x` QuickJS-NG objective is complete.
+
+`cargo test -p qjs-runtime --lib` passed 1,903 tests, the staged
+`check-touched` gate passed with its 65 affected Test262 cases, and the
+full `./scripts/check.sh` and `./scripts/compare-qjs.sh` gates completed
+for this retained commit. The next performance unit must be selected from the
+refreshed external queue rather than extrapolated from this local improvement.
