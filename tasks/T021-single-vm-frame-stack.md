@@ -2425,3 +2425,45 @@ full-conformance promotion claim: Kraken `imaging-gaussian-blur` still lacks a
 complete candidate/base comparison, and no exact all-suite Test262 burndown is
 attached. Future work must use a fresh queue and profile a different shared
 cost rather than tune this compaction mechanism.
+
+### 2026-07-30 rejected native-callback direct-leaf bridge
+
+The current `32a00b0e` queue ranked SunSpider `string-tagcloud` fourth. Its
+fresh runtime-identical `bb53c9d6` profile put 263 of 2,196 main-thread
+samples in the generic `call_function` bridge beneath native Array sorting,
+before 158 samples entered `eval_direct_call_bytecode`. The one-attempt plan
+`tasks/performance-units/native-callback-direct-leaf-bridge.json` (SHA-256
+`94acdc5284d5398dbd848ffd56673dabb5016529069e36c24644a100841639b2`)
+therefore routed only a non-constructor callee that already satisfied the
+existing direct-leaf predicate from `call_function` to
+`call_direct_leaf_function`. It did not inspect a builtin, source, function
+identity, values, or benchmark inputs; every ineligible, constructor, class,
+async, generator, eval, closure-capturing, or dynamic call retained the
+ordinary route.
+
+The prototype's focused callback tests preserved `this`, received upvalues,
+and `arguments` fallback semantics. The full runtime suite passed all
+**1,916** tests and the curated Test262 subset passed all **5,160** cases.
+The isolated candidate release SHA-256 was
+`f6b8be512c7cd9031588ac6a1d9aa54e70c0eaa6fbea78c1ca295a82b6b0d158`,
+against the runtime-identical pre-prototype binary SHA-256
+`568549b735c590a0787d93a84f67d2f3c65312f917e863714a1bb28e6f757ad4`.
+
+The hash-verified upstream fast screen used three seeded role-rotated blocks
+over Tagcloud plus HashMap and A* controls. Its temporary three-case manifest,
+raw receipt, and report SHA-256 values are
+`ae0fbce8aeae58ba57029504a23cb8ac1801b266dffebc69c4ba4c8294987c3c`,
+`ecb93792f3842d2308baf60a34eef721c1e5062161132a6537a576770f0a5820`, and
+`513bb644bf00aaeecd3dceddb6d96da2e98000e7491261466694cdc7b1ffef47`.
+The frozen Tagcloud `<= 0.95x` gate failed outright at **1.010180x**
+candidate/base. The two unrelated controls were similarly neutral: HashMap
+was 1.002718x and A* was 0.997648x. This incomplete fast screen is not a
+promotion result, but the target regression decisively closes the sole
+attempt; the complete external and broad portfolios were not run.
+
+The runtime change and its tests were reverted immediately. Do not retry by
+inlining the bridge, reshuffling the leaf probes, or broadening eligibility:
+the existing generic path already seeds direct slots, and removing its
+compatibility wrapper did not yield a material end-to-end gain. A successor
+must profile a different shared cost rather than another native-callback call
+boundary variant.

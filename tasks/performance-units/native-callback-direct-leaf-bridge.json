@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "native-callback-direct-leaf-bridge",
+  "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+  "queue": {
+    "candidate_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+    "sha256": "818e5ecb2d50ea6dc34f77e8e32d334ffda2733ae082153cb13b5a3b8c7f2d2d"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-tagcloud"
+    ],
+    "rank_ceiling": 4,
+    "override_reason": "Fresh current profiles show ranks 1 through 3 rooted in the VM's already-direct leaf route, while the same path has recent negative evidence for broad frame and dispatch variants. The rank-4 Tagcloud profile instead reaches an eligible JavaScript comparator from native Array sorting through the generic call_function path: 263 of 2,196 main-thread samples are in that bridge. CDjs confirms that this is not a universal Array cost (its native array activity is negligible), so this is a one-attempt, narrow-scope probe of a general native-to-JavaScript callback boundary. The route is selected only by the existing immutable leaf eligibility predicate and is not keyed to Array, sorting, source text, function identity, input, iteration count, or benchmark result."
+  },
+  "mechanism": {
+    "summary": "When an ordinary non-constructor JavaScript call reaches the generic call_function entry from a native or host callback and the callee already satisfies the direct-leaf predicate, invoke the existing direct-leaf entry rather than recreating an equivalent compatibility frame through function_env.",
+    "generality": "Selection uses only is_construct and the existing is_direct_leaf_function predicate. It applies to every eligible ordinary bytecode function reaching call_function, regardless of the native builtin, source path, function name or identity, values, call depth, iteration count, or benchmark. Proxies, bound functions, class constructors, native functions, generators, async functions, lexical-context functions, arguments users, direct eval, with, super, closure-capturing functions, and every ineligible bytecode function retain the existing generic route before observable work.",
+    "semantic_risks": [
+      "preserving ordinary receiver coercion, strictness, and cross-realm this binding for callbacks that read this",
+      "preserving the callback function's creation realm, module host, private environment, and received-upvalue identity",
+      "not bypassing constructor setup, class field initialization, generator or async suspension, immutable-name restoration, or dynamic scope materialization",
+      "retaining all generic behavior for a function whose direct-leaf eligibility is absent or becomes false",
+      "preserving thrown completion propagation through native callbacks such as Array.prototype.sort"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-bb53c9d6-r1/profiles/string-tagcloud.sample; SHA-256 verified below; freshly built bb53c9d6 runtime and CLI source are runtime-identical to queue candidate 32a00b0e outside the evidence-only benchmark-key correction. The 2,196-sample main-thread profile has 395 samples in native_array_prototype_sort, 361 in sorted_array_values, and 263 in generic function::call::call_function before 158 reach eval_direct_call_bytecode.",
+      "sha256": "34bc5198155d832e40f0b1df091b1d375e3cd8c8893a0042acc0725941abc521",
+      "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-tagcloud"
+      ],
+      "shared_cost": "An eligible comparator called by a native builtin currently enters call_function, repeats generic function_env setup, then reaches the same direct-slot bytecode evaluator that call_direct_leaf_function already uses. The bridge therefore pays compatibility-frame work without exposing compatibility bindings to the guarded callback.",
+      "inclusive_fraction": 0.12
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-tagcloud"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/cdjs",
+      "broad/plain_function_call",
+      "broad/dynamic_method_call",
+      "broad/closure_allocation_call"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
