@@ -2932,3 +2932,66 @@ move-stable-pointer, contiguous-operand-buffer transfer shape by changing pool
 bounds, inline argument width, stack-base placement, or child-frame storage.
 The measurement closes this shared frame route for the current representation;
 the next unit must use a refreshed queue and a different profiled mechanism.
+
+### 2026-07-30 rejected fused dense-object Number read
+
+The exact `620bb67b` opportunity queue (SHA-256
+`0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1`)
+ranked Kraken A* third at 4.8729x QuickJS-NG after the two higher-ranked
+direct-call and frame routes were closed. A fresh exact-current A* sample
+(SHA-256
+`a32d90e6139faa8f15f5cff1ee19c9f63143e45a2da18f9dd2750b012d5f35e5`)
+placed 2,139 of 4,388 main-thread samples in generic VM dispatch, 548 in
+`Value` clone/drop, 228 in the named-property cache, 235 in its fast helpers,
+and 72 in the dense-index read. The hot `openList[i].f` comparison performs two
+independent dense-element plus Number-field chains per iteration. A separate
+N-body control profile (SHA-256
+`1f33298aaf4ab1c3a89ffafd44ac77e2a0e81643b7deb7e12ff3a4e27fa656e5`)
+confirmed that this array/object/Number family is shared rather than unique to
+A*.
+
+The frozen one-attempt plan
+`tasks/performance-units/typed-loop-dense-object-number-read.json` (SHA-256
+`ebd9824d34272e59a21ec99db31a3740e1c7757b90eb722ec72d140982df3eef`)
+tested a narrower mechanism than the earlier rejected broad numeric-object
+field scalarization. It recognized only a typed-loop straight-line
+`LoadLocal(array)`, `LoadLocal(index)`, computed element read, then named field
+read. One guarded operation borrowed the present dense element, required an
+ordinary object with a current own Number data slot, and wrote the `f64`
+directly to the scalar register file. Neither intermediate `Value` was cloned
+or boxed. Holes, descriptors, accessors, inherited or non-Number fields,
+changed layouts, unsupported indices, and unsupported control flow all
+deoptimized at the original computed read before observable work.
+
+The prototype compiled cleanly. Its focused tests proved that the exact A*
+shape emitted the fused operation and returned the expected result, while an
+accessor replacement deoptimized and invoked its getter exactly once. All 14
+typed-loop tests passed. These semantic checks established a valid candidate;
+they did not relax the performance threshold.
+
+The exact-base five-block alternating screen compared standard-recipe
+candidate SHA-256
+`797ea840011914e2467b796a6d452ff071793a5e7adb9e1fdd9d819f02442d96`
+with exact `620bb67b` base binary SHA-256
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`.
+Every warmup and measured process exited successfully with identical stdout
+and stderr hashes. The A* source SHA-256 was
+`a3653c77773ce2b424301835021957b26119240810f43d5434d98fd88d7a416c`;
+the raw receipt SHA-256 is
+`5922343e9dd03f11804758aa81be838268225627018539bd7ba344043d4852c1`.
+The five measured candidate times had an 8,366.721 ms median, versus an
+8,210.598 ms base median, and the paired candidate/base median was
+**1.024107x**. The result missed the required `<= 0.90x` reduction and moved in
+the wrong direction by 2.4%.
+
+The unit is therefore **rejected** after its single allowed attempt. All
+runtime and focused-test changes were reverted, and the restored runtime source
+matches `HEAD`. Controls, full Test262, broad, and external promotion runs were
+not started because the sole target failed the first gate. Do not retry this
+exact typed-loop fusion by moving the guard, changing cache warmup, retaining
+one of the two boxed intermediates, or adjusting typed-loop admission. Together
+with the earlier boxed numeric-object-field rejection, this closes typed-loop
+scalarization of the `denseArray[index].numberField` chain for the current
+object and `Value` representations. A future attempt requires a different
+profiled representation-level mechanism, not another variant of this fused
+operation.

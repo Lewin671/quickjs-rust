@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "typed-loop-dense-object-number-read",
+  "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+  "queue": {
+    "candidate_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+    "sha256": "0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/kraken-1.1/ai-astar"
+    ],
+    "rank_ceiling": 3,
+    "override_reason": "Ranks one and two are closed for this cycle by the current direct-leaf frame, compact-dispatch, scalar-recursion, contiguous-frame-stack, object-arena, property-layout, and Value-lifetime rejection evidence. Rank-three A* still spends nearly half of its exact current profile in the generic interpreter and repeatedly executes the distinct array[index].numberField chain. The previous typed-loop object-field unit materialized array elements and field results in boxed Value registers and regressed A* by 15.5%; this unit instead fuses the producer and numeric consumer so neither intermediate Value exists. It does not retune that unit's boxed-operation threshold, property-cache ordering, or guard placement."
+  },
+  "mechanism": {
+    "summary": "When an admitted typed-loop region contains a computed read from a read-only dense local Array immediately followed by a named property read, lower both bytecode operations to one guarded scalar operation. It borrows the present array element, requires an ordinary Object with a live own Number data slot, and writes the Number directly to the scalar register file without cloning the element or field Value; every miss deoptimizes at the original computed read before observable work.",
+    "generality": "Admission depends only on typed-loop bytecode dataflow and live runtime tags: a read-only frame slot must hold an Array, the index must be a present dense integer element, the element must be an ordinary Object, and the named property must be a current own Number data property addressable through compact shared-slot storage. It never inspects source paths, benchmark names, function or property spellings, input sizes, iteration counts, checksums, or results. Holes, special indexed descriptors, accessor or inherited fields, Proxies, primitives, non-Number fields, mutated layouts, dynamic scope, direct eval, and unsupported control flow deopt before the original GetProp can observe anything.",
+    "semantic_risks": [
+      "preserving computed property-key coercion and prototype lookup by declining before observable work whenever the index is not a present dense integer element",
+      "holding only a scoped borrow of the array element while reading the ordinary object field, without leaking a reference across array or object mutation",
+      "revalidating the interned field key and compact slot on every object so deletion, redefinition, layout change, accessors, and non-Number replacement cannot expose stale data",
+      "anchoring deoptimization at the original computed GetProp with the exact pre-operation scalar and boxed stack state",
+      "leaving the rejected generic boxed object-field scalarization, boxed-operation profitability threshold, and all non-fused typed-loop operations unchanged"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-b97e2983/ai-astar/current.sample; runtime-exact 620bb67b release binary SHA-256 c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b; hash-verified A* bundle SHA-256 a3653c77773ce2b424301835021957b26119240810f43d5434d98fd88d7a416c",
+      "sha256": "a32d90e6139faa8f15f5cff1ee19c9f63143e45a2da18f9dd2750b012d5f35e5",
+      "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+      "opportunity_ids": [
+        "external/kraken-1.1/ai-astar"
+      ],
+      "shared_cost": "Of 4,388 main-thread samples, Vm::run_completion has 2,139 top frames, eval_binary 576, Value clone/drop 548, NamedPropertyCache::get 228, named-property fast helpers 235, and direct_dense_index_value 72. The hot openList[i].f comparison executes two independent dense-element-plus-number-field chains per iteration; the fused operation removes their intermediate Value clone/drop and multiple typed/main dispatches while preserving the same shared slot checks.",
+      "inclusive_fraction": 0.1219
+    },
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-b97e2983/access-nbody/current.sample; runtime-exact 620bb67b release binary SHA-256 c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b; official source SHA-256 84f08150e27c075e4a6b1b900b743cc2845abd3a47175cd444f6a1178493487c and sampling wrapper SHA-256 1f65354dce2dcf44b2f38f2394ead3c1f167872e5270ae5e5684c8d97da94250",
+      "sha256": "1f33298aaf4ab1c3a89ffafd44ac77e2a0e81643b7deb7e12ff3a4e27fa656e5",
+      "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+      "opportunity_ids": [
+        "external/sunspider-1.0/access-nbody"
+      ],
+      "shared_cost": "The independent object-array workload records 2,260 of 4,448 samples in generic dispatch, 587 in Value clone/drop, 293 in named-slot cache reads, 228 in ordinary binary evaluation, and 82 in named-slot writes. It is a strict non-regression control for the same array/object/Number family: this unit must not recreate the rejected broad boxed-field scalarization that made N-body fast while A* regressed.",
+      "inclusive_fraction": 0.2675
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/kraken-1.1/ai-astar"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/access-nbody",
+      "external/jetstream3-js-subset/hash-map",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/audio-fft",
+      "broad/property_read",
+      "broad/array_dynamic_read",
+      "broad/plain_function_call",
+      "broad/dynamic_method_call"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
