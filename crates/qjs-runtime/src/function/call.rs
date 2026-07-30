@@ -7,8 +7,8 @@ use crate::{
     FIELD_INITIALIZER_EVAL_BINDING, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef,
     RuntimeError, Value,
     bytecode::{
-        DirectCallSlots, eval_direct_call_bytecode, eval_function_bytecode, try_eval_numeric_leaf,
-        try_eval_this_property_leaf,
+        DirectCallSlots, DirectCallUpvalues, eval_direct_call_bytecode, eval_function_bytecode,
+        try_eval_numeric_leaf, try_eval_this_property_leaf,
     },
     function_prototype,
     native::call_native_function,
@@ -300,7 +300,7 @@ pub(crate) fn call_direct_function_literal(
         this_value: None,
         parameter_slots: bytecode.parameter_slots(),
         arguments: argument_values,
-        upvalues: &[],
+        upvalues: DirectCallUpvalues::Slice(&[]),
         realm_upvalue_slots: 0,
     };
     eval_direct_call_bytecode(bytecode, call_env, direct_call_slots)
@@ -757,7 +757,7 @@ fn direct_leaf_function_env<'a>(
             this_value: direct_this_value,
             parameter_slots: bytecode.parameter_slots(),
             arguments: argument_values,
-            upvalues: &function.upvalues,
+            upvalues: DirectCallUpvalues::Function(function),
             realm_upvalue_slots: function.realm_upvalue_slots,
         }),
     }
@@ -939,7 +939,7 @@ fn function_env<'a>(
         this_value: direct_this_value,
         parameter_slots: bytecode.parameter_slots(),
         arguments: argument_values,
-        upvalues: &function.upvalues,
+        upvalues: DirectCallUpvalues::Function(function),
         realm_upvalue_slots: function.realm_upvalue_slots,
     });
     FunctionCallEnv {

@@ -167,7 +167,7 @@ impl NumericLoopSelector {
         let mut slots = scalar_slots.to_vec();
         slots.extend(selector_slots);
         for (index, &slot) in slots.iter().enumerate() {
-            let Some(Some(cell)) = vm.local_upvalues.get(slot) else {
+            let Some(cell) = vm.local_upvalue_cell(slot) else {
                 continue;
             };
             for &previous_slot in &slots[..index] {
@@ -175,9 +175,7 @@ impl NumericLoopSelector {
                     continue;
                 }
                 if vm
-                    .local_upvalues
-                    .get(previous_slot)
-                    .and_then(Option::as_ref)
+                    .local_upvalue_cell(previous_slot)
                     .is_some_and(|previous| previous.ptr_eq(cell))
                 {
                     return None;

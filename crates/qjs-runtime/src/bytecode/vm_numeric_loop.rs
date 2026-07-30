@@ -572,7 +572,7 @@ impl NumericLoopPlan {
                 return false;
             };
             for slot in scalar_slots.iter().copied().chain(selector.slots()) {
-                let Some(Some(cell)) = vm.local_upvalues.get(slot) else {
+                let Some(cell) = vm.local_upvalue_cell(slot) else {
                     continue;
                 };
                 if !forbidden_cells
@@ -1141,7 +1141,7 @@ impl NumericLoopTerm {
             call: NumericLoopCall::prepare(
                 &function,
                 arguments.len(),
-                &vm.local_upvalues,
+                |cell| vm.has_local_upvalue_cell(cell),
                 forbidden_cells,
             )?,
             arguments: *arguments,

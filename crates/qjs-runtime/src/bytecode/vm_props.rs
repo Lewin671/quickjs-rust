@@ -158,7 +158,7 @@ impl Vm<'_> {
         {
             return None;
         }
-        let cell = self.local_upvalues.get(slot)?.as_ref()?.clone();
+        let cell = self.local_upvalue_cell(slot)?.clone();
         if !self.env.is_realm_binding_cell(&local.name, &cell) {
             return None;
         }
@@ -268,7 +268,7 @@ impl Vm<'_> {
                 // (`initial_realm_binding_slots`), so it's already at hand
                 // here and `replace_existing_realm` would otherwise redo the
                 // same name-table hash lookup to re-derive it.
-                let synced = match self.local_upvalues.get(slot).and_then(Option::as_ref) {
+                let synced = match self.local_upvalue_cell(slot) {
                     Some(cell) => {
                         self.env
                             .replace_existing_realm_with_cell(name, value.clone(), cell)

@@ -981,7 +981,7 @@ impl NumericLoopCall {
     pub(super) fn prepare(
         function: &Function,
         argument_count: usize,
-        caller_cells: &[Option<Upvalue>],
+        caller_has_upvalue: impl Fn(&Upvalue) -> bool,
         forbidden_cells: &[Upvalue],
     ) -> Option<Self> {
         if let Some(native) = function.native {
@@ -1096,11 +1096,7 @@ impl NumericLoopCall {
                 right,
             } if argument_count == 0 => {
                 let upvalue = function.upvalues.get(*upvalue_index)?.clone();
-                if caller_cells
-                    .iter()
-                    .flatten()
-                    .any(|caller| caller.ptr_eq(&upvalue))
-                {
+                if caller_has_upvalue(&upvalue) {
                     return None;
                 }
                 let value = captured_number(*upvalue_index)?;

@@ -29,6 +29,7 @@ mod vm_call;
 mod vm_capture;
 mod vm_class;
 mod vm_control_loop;
+mod vm_direct_upvalues;
 mod vm_dispose;
 mod vm_errors;
 mod vm_generator;
@@ -171,11 +172,40 @@ pub(crate) fn eval_function_bytecode(
     )
 }
 
+/// The immutable source of received-upvalue cells for a slot-seeded call.
+///
+/// User functions retain their upvalue vector for their whole lifetime. A
+/// direct frame that statically only reads those cells can keep one `Function`
+/// handle instead of allocating a local-sized option vector and cloning every
+/// cell handle. Function literals without an allocated `Function` retain the
+/// ordinary slice representation.
+#[derive(Clone, Copy)]
+pub(crate) enum DirectCallUpvalues<'a> {
+    Function(&'a crate::Function),
+    Slice(&'a [crate::function::Upvalue]),
+}
+
+impl<'a> DirectCallUpvalues<'a> {
+    pub(crate) fn as_slice(self) -> &'a [crate::function::Upvalue] {
+        match self {
+            Self::Function(function) => &function.upvalues,
+            Self::Slice(upvalues) => upvalues,
+        }
+    }
+
+    pub(crate) fn function(self) -> Option<&'a crate::Function> {
+        match self {
+            Self::Function(function) => Some(function),
+            Self::Slice(_) => None,
+        }
+    }
+}
+
 pub(crate) struct DirectCallSlots<'a> {
     pub(crate) this_value: Option<Value>,
     pub(crate) parameter_slots: &'a [usize],
     pub(crate) arguments: &'a [Value],
-    pub(crate) upvalues: &'a [crate::function::Upvalue],
+    pub(crate) upvalues: DirectCallUpvalues<'a>,
     pub(crate) realm_upvalue_slots: u128,
 }
 

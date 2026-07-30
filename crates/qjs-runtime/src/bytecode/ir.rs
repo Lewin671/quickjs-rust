@@ -779,6 +779,11 @@ pub struct Bytecode {
     /// an outer capture or sloppy global fallback. Module imports are tracked
     /// by `CallEnv` and checked separately at call time.
     has_direct_local_upvalue_routes: bool,
+    /// Received-upvalue slots that can share the callee's immutable upvalue
+    /// vector for a direct leaf frame. Every admitted slot is below 128 and
+    /// its body only reads the cell; writes, clearing, dynamic scope, module
+    /// imports, and sloppy-global routes retain owned per-frame storage.
+    direct_readonly_received_upvalue_slots: u128,
     global_names: Vec<String>,
     global_lexical_names: Vec<String>,
     sloppy_global_assignment_names: Vec<String>,
@@ -952,6 +957,7 @@ impl Bytecode {
             parameter_slots,
             received_upvalue_slots,
             has_direct_local_upvalue_routes,
+            direct_readonly_received_upvalue_slots: 0,
             locals,
             global_names: collect_global_names(&code),
             global_lexical_names,
@@ -1029,6 +1035,8 @@ impl Bytecode {
             )
         });
         bytecode.cached_uses_lexical_this = bytecode.compute_uses_lexical_this();
+        bytecode.direct_readonly_received_upvalue_slots =
+            bytecode.compute_direct_readonly_received_upvalue_slots();
         bytecode
     }
 
@@ -1184,6 +1192,27 @@ impl Bytecode {
         self.has_direct_local_upvalue_routes
     }
 
+    /// Returns the received-upvalue mask for a direct frame that may borrow
+    /// its callee's immutable upvalue vector. The caller still checks dynamic
+    /// state such as module imports and the source function's exact layout.
+    pub(super) fn direct_readonly_received_upvalue_slots(&self) -> Option<u128> {
+        (self.direct_readonly_received_upvalue_slots != 0)
+            .then_some(self.direct_readonly_received_upvalue_slots)
+    }
+
+    /// Looks up the source-function upvalue position for a statically admitted
+    /// direct shared slot. The mask makes this a few integer operations instead
+    /// of scanning a local-sized vector on every captured read.
+    pub(super) fn direct_readonly_received_upvalue_index(&self, slot: usize) -> Option<usize> {
+        if slot >= u128::BITS as usize {
+            return None;
+        }
+        let slot_bit = 1_u128 << slot;
+        (self.direct_readonly_received_upvalue_slots & slot_bit != 0).then(|| {
+            (self.direct_readonly_received_upvalue_slots & (slot_bit - 1)).count_ones() as usize
+        })
+    }
+
     pub(crate) fn local_name_at(&self, slot: usize) -> Option<&str> {
         self.locals.get(slot).map(|local| local.name.as_str())
     }
@@ -1298,6 +1327,35 @@ impl Bytecode {
             Op::NewClass { .. } => true,
             _ => false,
         })
+    }
+
+    fn compute_direct_readonly_received_upvalue_slots(&self) -> u128 {
+        // This proof deliberately sits below direct-call eligibility. It only
+        // establishes that received cells are never written or re-captured by
+        // this immutable body; call setup still rejects dynamic scope and
+        // module routing before it borrows the function-owned vector.
+        if self.cached_creates_capturing_closures
+            || self.cached_contains_direct_eval
+            || self.cached_contains_with
+            || self.received_upvalue_slots.is_empty()
+            || self.locals.iter().any(|local| local.sloppy_global_fallback)
+        {
+            return 0;
+        }
+        let mut slots = 0_u128;
+        for &slot in &self.received_upvalue_slots {
+            if slot >= u128::BITS as usize {
+                return 0;
+            }
+            slots |= 1_u128 << slot;
+        }
+        let writes_or_rebinds_received = self.code.iter().any(|op| {
+            self.received_upvalue_slots.iter().any(|&slot| {
+                op_touches_local_slot(op, slot)
+                    && !matches!(op, Op::LoadLocal(index) | Op::LoadLocalOrUndefined(index) if *index == slot)
+            })
+        });
+        if writes_or_rebinds_received { 0 } else { slots }
     }
 
     /// Whether this body contains a top-level `await` (`Op::Await`). Nested
@@ -1495,6 +1553,7 @@ fn op_touches_local_slot(op: &Op, slot: usize) -> bool {
     match op {
         Op::LoadLocal(index)
         | Op::LoadLocalOrUndefined(index)
+        | Op::AppendStringLiteralLocal { slot: index, .. }
         | Op::StoreLocal(index)
         | Op::AssignLocal(index)
         | Op::ClearLocal(index) => *index == slot,
@@ -1776,6 +1835,49 @@ mod tests {
         let bytecode = Bytecode::new_function(Vec::new(), Vec::new(), Vec::new(), vec![3, 3, 7]);
 
         assert_eq!(bytecode.parameter_slots(), &[3, 3, 7]);
+    }
+
+    #[test]
+    fn direct_readonly_received_upvalue_mask_requires_read_only_slots() {
+        let captured = Local {
+            name: "captured".to_owned(),
+            compiler_temporary: false,
+            hoisted: false,
+            hoisted_function: false,
+            parameter: false,
+            catch_binding: false,
+            mutable: true,
+            from_env: true,
+            sloppy_global_fallback: false,
+        };
+        let read_only = Bytecode::new(Vec::new(), vec![captured.clone()], vec![Op::LoadLocal(0)]);
+        assert_eq!(read_only.direct_readonly_received_upvalue_slots(), Some(1));
+        assert_eq!(read_only.direct_readonly_received_upvalue_index(0), Some(0));
+
+        let writes = Bytecode::new(Vec::new(), vec![captured], vec![Op::StoreLocal(0)]);
+        assert_eq!(writes.direct_readonly_received_upvalue_slots(), None);
+        assert_eq!(writes.direct_readonly_received_upvalue_index(0), None);
+
+        let append = Bytecode::new(
+            Vec::new(),
+            vec![Local {
+                name: "captured".to_owned(),
+                compiler_temporary: false,
+                hoisted: false,
+                hoisted_function: false,
+                parameter: false,
+                catch_binding: false,
+                mutable: true,
+                from_env: true,
+                sloppy_global_fallback: false,
+            }],
+            vec![Op::AppendStringLiteralLocal {
+                slot: 0,
+                value: "x".to_owned(),
+                discard: true,
+            }],
+        );
+        assert_eq!(append.direct_readonly_received_upvalue_slots(), None);
     }
 
     #[test]

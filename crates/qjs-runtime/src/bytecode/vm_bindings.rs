@@ -484,9 +484,13 @@ impl Vm<'_> {
 
     pub(super) fn refresh_authoritative_slots(&mut self) {
         self.authoritative_slots =
-            Self::initial_authoritative_slots(self.bytecode, &self.local_upvalues, &self.env);
+            Self::initial_authoritative_slots(self.bytecode, &self.local_upvalues, &self.env)
+                & !self.direct_readonly_upvalue_slots;
+        let direct_realm_binding_slots =
+            self.realm_binding_slots & self.direct_readonly_upvalue_slots;
         self.realm_binding_slots =
-            Self::initial_realm_binding_slots(self.bytecode, &self.local_upvalues, &self.env);
+            Self::initial_realm_binding_slots(self.bytecode, &self.local_upvalues, &self.env)
+                | direct_realm_binding_slots;
         self.refresh_virtual_object_execution();
     }
 
@@ -970,7 +974,7 @@ impl Vm<'_> {
     #[inline(never)]
     fn load_local_slow(&mut self, slot: usize) -> Result<Value, RuntimeError> {
         if self.slot_is_realm_binding(slot)
-            && let Some(cell) = self.local_upvalues.get(slot).and_then(Option::as_ref)
+            && let Some(cell) = self.local_upvalue_cell(slot)
         {
             let value = cell.get();
             if !value.is_uninitialized_lexical_marker() {
@@ -1089,7 +1093,7 @@ impl Vm<'_> {
         {
             return None;
         }
-        if let Some(local_cell) = self.local_upvalues.get(slot)?.as_ref()
+        if let Some(local_cell) = self.local_upvalue_cell(slot)
             && !local_cell.ptr_eq(&cell)
         {
             return None;
@@ -1144,10 +1148,7 @@ impl Vm<'_> {
     }
 
     pub(super) fn upvalue_slot_value(&self, slot: usize) -> Option<Value> {
-        self.local_upvalues
-            .get(slot)
-            .and_then(Option::as_ref)
-            .map(Upvalue::get)
+        self.local_upvalue_cell(slot).map(Upvalue::get)
     }
 
     #[inline(always)]
@@ -1238,9 +1239,7 @@ impl Vm<'_> {
             });
         }
         let upvalue_initialized = self
-            .local_upvalues
-            .get(slot)
-            .and_then(Option::as_ref)
+            .local_upvalue_cell(slot)
             .map(|upvalue| upvalue.get())
             .is_some_and(|value| {
                 !matches!(
@@ -1265,13 +1264,12 @@ impl Vm<'_> {
             });
         }
         *local = Some(value.clone());
-        let uses_shared_cell =
-            if let Some(upvalue) = self.local_upvalues.get(slot).and_then(Option::as_ref) {
-                upvalue.set(value.clone());
-                true
-            } else {
-                false
-            };
+        let uses_shared_cell = if let Some(upvalue) = self.local_upvalue_cell(slot) {
+            upvalue.set(value.clone());
+            true
+        } else {
+            false
+        };
         if !uses_shared_cell {
             // Binding classes not migrated to cells still use the coexistence
             // snapshot/writeback path. A cell-backed lexical must not also write
@@ -1322,14 +1320,10 @@ impl Vm<'_> {
                 && self.bytecode.local_is_body_hoist_only(slot)
                 && !self.bytecode.local_is_compiler_temporary(slot)
         } else {
-            let shared_realm_cell = self
-                .local_upvalues
-                .get(slot)
-                .and_then(Option::as_ref)
-                .is_some_and(|cell| {
-                    self.env
-                        .is_realm_binding_cell(&self.bytecode.locals[slot].name, cell)
-                });
+            let shared_realm_cell = self.local_upvalue_cell(slot).is_some_and(|cell| {
+                self.env
+                    .is_realm_binding_cell(&self.bytecode.locals[slot].name, cell)
+            });
             (from_env && (!uses_shared_cell || shared_realm_cell))
                 || (self.bytecode.global_scope
                     && self.bytecode.local_is_body_hoist_only(slot)

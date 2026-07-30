@@ -82,7 +82,7 @@ impl Vm<'_> {
     }
 
     pub(super) fn ensure_upvalue_for_parent_slot(&mut self, slot: usize) -> Upvalue {
-        if let Some(upvalue) = self.local_upvalues.get(slot).and_then(Option::as_ref) {
+        if let Some(upvalue) = self.local_upvalue_cell(slot) {
             return upvalue.clone();
         }
         if self

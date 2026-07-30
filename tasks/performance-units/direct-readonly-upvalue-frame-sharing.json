@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "direct-readonly-upvalue-frame-sharing",
+  "base_sha": "e66d03032a97362d2ac858003e7dee09e1f686ae",
+  "queue": {
+    "candidate_sha": "e66d03032a97362d2ac858003e7dee09e1f686ae",
+    "sha256": "1636b83c83b23491a64e9979ea815dada85c7bdcaaae126cfe6d88869103c321"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "rank_ceiling": 4,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "For a direct slot-seeded call whose received upvalues are statically read-only, retain one shared reference to the callee function and resolve the indexed cells from it instead of allocating a per-frame local-upvalue vector and cloning every cell handle.",
+    "generality": "Admission is determined solely from immutable bytecode and call-environment state: the function must already be eligible for the direct slot-seeded call path, have received upvalues, contain no write or clear of a received-upvalue slot, create no capturing closure, have no module-import or sloppy-global-fallback route, and have matching function upvalues. It does not inspect benchmark names, source paths, input sizes, values, iteration counts, function names, or workload-specific identities. All other calls keep the existing owned per-frame cell vector.",
+    "semantic_risks": [
+      "preserving live shared-cell identity and observing every later binding update instead of caching a Value or pinning a former global binding",
+      "preserving realm binding deletion and accessor fallback when a realm-backed received cell holds the uninitialized lexical marker",
+      "keeping writes, clears, direct eval, with, module imports, sloppy global fallbacks, and capturing closures on the existing owned cell-vector path",
+      "preventing authoritative-slot classification from treating a borrowed received-upvalue slot as an uninitialized frame local",
+      "retaining normal frame construction and direct-call result behavior for direct function literals, constructors, and functions whose upvalue layout does not exactly match the compiled slots"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-29 target/performance-next-7d0f6bdb-r1/profiles/controlflow-recursive.sample; SHA-256 verified below. The 3,030-sample profile shows 2,694 samples through direct leaf calls, 393 at direct VM construction, and 55 at the received-upvalue local-load slow path. A same-source bytecode audit found ack, fib, and tak each have one received, read-only self cell. Runtime and CLI sources are identical to e66d0303 outside evidence-only commits.",
+      "sha256": "df337d7e679843ec205f25937b8d68db60131fc3332b762b40aaaeabefe9da9a",
+      "base_sha": "e66d03032a97362d2ac858003e7dee09e1f686ae",
+      "opportunity_ids": [
+        "external/sunspider-1.0/controlflow-recursive"
+      ],
+      "shared_cost": "Each recursive direct frame rebuilds local_upvalues for the read-only self cell, allocating the local-sized option vector and cloning the cell handle before LoadLocal reads that same live realm cell.",
+      "inclusive_fraction": 0.13
+    },
+    {
+      "source": "macOS sample 2026-07-29 target/performance-next-7d0f6bdb-r1/profiles/hash-map.sample; SHA-256 verified below. The 1,299-sample profile shows 1,298 samples through direct leaf calls and 75 at direct VM construction. A same-source bytecode audit found the hot HashMap helpers and iterator methods receive read-only outer helper cells, including functions with 14 to 18 locals. Runtime and CLI sources are identical to e66d0303 outside evidence-only commits.",
+      "sha256": "7db146008eb7344510c701b7b1cd218e4505ff9a1cb33fc118273fc8955cd296",
+      "base_sha": "e66d03032a97362d2ac858003e7dee09e1f686ae",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Read-only captured constructors and helpers currently force a local-sized option vector and one Rc clone per captured cell on every direct helper invocation even though the frame never writes or re-captures those bindings.",
+      "inclusive_fraction": 0.058
+    },
+    {
+      "source": "macOS sample 2026-07-27 target/benchmarks/raytrace-public-class-fields.sample.txt; SHA-256 verified below. The 701-sample profile shows 699 samples through direct leaf calls and 28 at direct VM construction. A same-source bytecode audit found renderScene receives 11 read-only constructor/helper cells. The sampled runtime source is identical to e66d0303 in runtime and CLI paths.",
+      "sha256": "1820117372cc90c744cb2b3f9f7b71a83f5641613c0d2d8aa72584e47f18719a",
+      "base_sha": "e66d03032a97362d2ac858003e7dee09e1f686ae",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/raytrace-public-class-fields"
+      ],
+      "shared_cost": "The direct renderScene frame owns no mutation of its 11 received cells, yet it rebuilds a local-upvalue vector and clones all of them per call before resolving the same live values.",
+      "inclusive_fraction": 0.04
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/access-nbody",
+      "broad/plain_function_call",
+      "broad/dynamic_method_call",
+      "broad/closure_allocation"
+    ],
+    "target_max_candidate_over_base": 0.98,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
