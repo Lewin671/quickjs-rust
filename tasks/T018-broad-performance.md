@@ -8597,3 +8597,23 @@ The runtime and test implementation was reverted immediately. Do not retry
 this data-buffer sharing or ASCII-enumeration mechanism by retuning it: the
 single permitted attempt has closed it. A future string/object performance
 unit must begin with a new profile of a different shared cost.
+
+### 2026-07-29 rejected CLI global-allocator screen before measurement
+
+The exact `e66d0303` external queue still exposes allocator/free frames in
+controlflow-recursive, hash-map, A*, and public-class-field raytrace. A frozen
+process-wide allocator plan was therefore prepared as a low-cost alternative
+to a Value/ownership architecture rewrite. It was deliberately general: the
+candidate would have selected one allocator at CLI startup, before any
+JavaScript state, without observing source, workload, iteration, key, value,
+or result.
+
+Dependency review closed the screen before a benchmark result could be used.
+`mimalloc` resolves through `libmimalloc-sys`, which compiles and links a C
+allocator. That violates the repository's explicit pure-Rust/no-FFI boundary,
+so the CLI annotation, dependency, lockfile entries, and an in-progress
+four-case preview were all reverted or terminated. No partial measurement is
+evidence, and this is not a performance regression or an accepted dependency.
+Do not retry a C-backed global allocator under T018; an allocator or ownership
+unit must remain Rust-native and meet the ordinary cross-suite and Test262
+gates.
