@@ -2590,3 +2590,65 @@ candidate/base sample SHA-256 values are
 and `82d3a3922ff0ad3b06b1f763573274e5437d2a12b30d4d98b3cecdc7395f15a8`.
 A distinct successor must preserve that hot inlining boundary and keep graph
 evaluation out of line before it may retest entry preparation.
+
+### 2026-07-30 rejected isolated entry-prepared numeric helper graph
+
+The successor unit
+`tasks/performance-units/typed-loop-isolated-prepared-numeric-helper-graph.json`
+(plan SHA-256
+`739c05040dfa2ad6aa4716e46a84142830fdccc08e49b247fdd4c2b55d88efcc`)
+preserved the existing private `typed_binary` implementation byte-for-byte,
+placed graph arithmetic in a separate out-of-line module, allocated graph
+metadata only for programs containing graph calls, and prepared that metadata
+only at typed-loop entry. Its diagnostic 3d-morph sample SHA-256
+`c67e54e749c111a741416f35884ca08706fffacd49e7061eddde83f823f021f6`
+contained 2,776 top-of-stack samples in `typed_loop::execute::run`, no
+`typed_binary` symbol, and no graph evaluator frames, confirming that the
+previous inlining failure had been removed structurally.
+
+Focused graph semantics covered nested helpers, exact ordinary-callback
+results, replaced helper and `Math.log` fallback with preserved side effects,
+and Number edge cases including shifts, bitwise operations, NaN, and signed
+zero. All 16 typed-loop tests passed. The staged touched gate also passed
+formatting, workspace Clippy, the source-size guard, all 1,917 runtime tests,
+the performance-unit schema checks, and 65 selected Test262 cases. The
+candidate was commit `b32a6e14cce05539cd325416e2251194b70303a5`, with release
+binary SHA-256
+`4c68f5d8c8531acfca221ffaa9b0dcd13bf1d45eebf55c8946c2f066c15327f2`,
+against exact `14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1` base binary
+SHA-256
+`919c9cad198c2dcf3a50317e13997743756a084a51394097f3542b9b832fa5cb`.
+
+The five-block nine-case screen showed that isolation fixed the original
+external control failure: imaging-darkroom reached **0.209405x**
+candidate/base, while 3d-morph was 1.014971x and the other seven external
+controls ranged from 0.983589x to 1.022598x. The external report SHA-256 is
+`be85ba015c8e5a086b30494fcc8d938742bd7ad36b71bc3d032755eadc272efc`.
+Its candidate/base evidence remains valid, but its QuickJS-NG ratios are not
+used because the first screen inherited an older locally built reference
+binary whose compiler did not match the frozen recipe.
+
+A subsequent source- and binary-receipted three-block run used the pinned
+Homebrew Clang 21 QuickJS-NG recipe and completed all 25 broad cases with all
+75 linearity diagnostics passing. Its raw and report SHA-256 values are
+`458ae5d2362c136b043f18f65110382e1fcbdb455be686c0b94c260263c7eaa8`
+and
+`0a0eaabc30ff271b06172df93d2b82912eec0d5a75331931695daec2093f7e1f`.
+Five declared broad controls remained neutral: `array_dynamic_read`
+0.998088x, `array_write` 1.002701x, `plain_function_call` 1.000393x,
+`function_call_two_args` 1.000625x, and `math_abs` 1.002547x. However,
+`dynamic_method_call` regressed to **1.049178x** candidate/base, with a
+bootstrap interval of 1.048820x to 1.054175x, decisively above the frozen
+1.03x ceiling.
+
+The hash-bound fast decision is therefore **rejected** with reason
+`control regression gate failed for ['broad/dynamic_method_call']`; its
+artifact SHA-256 is
+`0613316c3a2468f0bc54f4c0cfa667935d87c5ee6c4b731685f59e6374fbfd20`. The unit allowed one attempt, so
+the runtime implementation and focused tests were reverted and the complete
+external/Test262 promotion bundle was intentionally skipped. Do not retry
+this helper-graph integration by changing graph limits, admission shapes,
+module visibility, or dispatch layout: two independent implementations have
+now produced large target gains but unacceptable regressions in typed-loop or
+generic-call controls. A future imaging unit requires a different execution
+mechanism and fresh profile evidence.

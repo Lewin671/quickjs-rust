@@ -41,7 +41,6 @@ use std::{
 
 use crate::Value;
 
-mod call_graph;
 mod compile;
 mod execute;
 
@@ -215,15 +214,6 @@ enum TypedOp {
         second: u16,
         arity: u8,
     },
-    /// Calls an ordinary Number-only helper graph whose complete dynamic state
-    /// was validated and snapshotted once at loop entry.
-    CallNumericFunction {
-        dst: u16,
-        callee: u16,
-        first: u16,
-        second: u16,
-        arity: u8,
-    },
     /// Leaves the loop: the condition value goes back on the operand stack,
     /// because the instruction at the loop's exit pops it.
     Exit {
@@ -337,9 +327,6 @@ pub(super) struct TypedLoopProgram {
     /// object at native-loop entry; the call operation rechecks the exact
     /// intrinsic before it can execute.
     numeric_native_callee_registers: Vec<u16>,
-    /// Boxed registers whose live ordinary functions are prepared into scalar
-    /// helper graphs once at loop entry, in call-operation index order.
-    numeric_function_callee_registers: Option<Box<[u16]>>,
     /// Boxed registers written back to their slots when the loop ends.
     written_boxed_locals: Vec<u16>,
     /// Global bindings read into boxed registers.
@@ -376,12 +363,6 @@ impl TypedLoopProgram {
             .iter()
             .find(|(candidate, _)| *candidate == register)
             .map(|(_, slot)| *slot)
-    }
-
-    fn numeric_function_callee_registers(&self) -> &[u16] {
-        self.numeric_function_callee_registers
-            .as_deref()
-            .unwrap_or_default()
     }
 
     fn take_scratch(&self) -> TypedLoopScratch {
@@ -421,23 +402,6 @@ mod tests {
                 _ => None,
             })
             .expect("function bytecode should be nested in the script")
-    }
-
-    fn named_function(source: &str, expected: &str) -> crate::bytecode::Bytecode {
-        let script = qjs_parser::parse_script(source).expect("source should parse");
-        let bytecode = crate::bytecode::compile_script(&script).expect("source should compile");
-        bytecode
-            .code
-            .iter()
-            .find_map(|op| match op {
-                super::super::ir::Op::NewFunction {
-                    name: Some(name),
-                    bytecode,
-                    ..
-                } if name == expected => Some(bytecode.as_ref().clone()),
-                _ => None,
-            })
-            .unwrap_or_else(|| panic!("function `{expected}` should be nested in the script"))
     }
 
     #[test]
@@ -991,78 +955,5 @@ mod tests {
             ),
             Ok(Value::Number(105.0))
         );
-    }
-
-    #[test]
-    fn typed_loops_prepare_pure_numeric_helper_graphs_once_per_entry() {
-        let source = "function FastLog2(x) { return Math.log(x) / Math.LN2; }\
-                      var LOG2_HALF = FastLog2(0.5);\
-                      function FastBias(b, x) { return Math.pow(x, FastLog2(b) / LOG2_HALF); }\
-                      function FastGain(g, x) { return x < 0.5\
-                        ? FastBias(1.0 - g, 2.0 * x) * 0.5\
-                        : 1.0 - FastBias(1.0 - g, 2.0 - 2.0 * x) * 0.5; }\
-                      function Clamp(x) { return x < 0.0 ? 0.0 : (x > 1.0 ? 1.0 : x); }\
-                      function run(n) { var values = [-0.25, 0.25, 0.75, 1.25], total = 0;\
-                        for (var i = 0; i < n; i++) {\
-                          var y = FastGain(0.25, Clamp(values[i & 3]));\
-                          values[i & 3] = y; total += y;\
-                        }\
-                        return total; }\
-                      function slow(n, gain, clamp) { var values = [-0.25, 0.25, 0.75, 1.25], total = 0;\
-                        for (var i = 0; i < n; i++) {\
-                          var y = gain(0.25, clamp(values[i & 3]));\
-                          values[i & 3] = y; total += y;\
-                        }\
-                        return total; }";
-        let bytecode = named_function(source, "run");
-        let programs = super::compile_all(&bytecode);
-        assert_eq!(programs.len(), 1, "{bytecode:#?}");
-        assert_eq!(programs[0].numeric_function_callee_registers().len(), 2);
-
-        super::call_graph::reset_eval_hits();
-        assert_eq!(
-            eval(&format!("{source} run(8) - slow(8, FastGain, Clamp);")),
-            Ok(Value::Number(0.0))
-        );
-        // The interpreter executes the first trip to discover the backedge;
-        // the native region owns the remaining seven, with two graph calls per
-        // iteration.
-        assert_eq!(super::call_graph::eval_hits(), 14);
-    }
-
-    #[test]
-    fn typed_loop_helper_graph_guards_decline_before_running_the_loop() {
-        let source = "function Clamp(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }\
-                      function Gain(g, x) { return Math.pow(x, g); }\
-                      function run(n) { var total = 0;\
-                        for (var i = 0; i < n; i++) { total += Gain(0.25, Clamp(i / 4)); }\
-                        return total; }";
-        assert_eq!(super::compile_all(&named_function(source, "run")).len(), 1);
-
-        super::call_graph::reset_eval_hits();
-        assert_eq!(
-            eval(&format!(
-                "{source}\
-                 var calls = 0;\
-                 Gain = function (g, x) {{ calls++; return x + g; }};\
-                 run(4) + ':' + calls;"
-            )),
-            Ok(Value::String("2.5:4".to_owned().into()))
-        );
-        assert_eq!(super::call_graph::eval_hits(), 0);
-
-        super::call_graph::reset_eval_hits();
-        assert_eq!(
-            eval(
-                "function FastLog2(x) { return Math.log(x) / Math.LN2; }\
-                 function run(n) { var total = 0;\
-                   for (var i = 0; i < n; i++) { total += FastLog2(i + 1); }\
-                   return total; }\
-                 var calls = 0; Math.log = function (x) { calls++; return x + 1; };\
-                 run(3); calls;"
-            ),
-            Ok(Value::Number(3.0))
-        );
-        assert_eq!(super::call_graph::eval_hits(), 0);
     }
 }
