@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "realm-object-arena",
+  "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+  "queue": {
+    "candidate_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+    "sha256": "818e5ecb2d50ea6dc34f77e8e32d334ffda2733ae082153cb13b5a3b8c7f2d2d"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "rank_ceiling": 2,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Replace Rc<ObjectData>'s per-object allocator boundary with pointer-sized intrusive strong/weak object cells held in stable Realm-local blocks, and route ordinary constructor receiver allocation through those blocks.",
+    "generality": "Admission depends only on ordinary object allocation in a Realm. It does not inspect JavaScript source, benchmark names, paths, constructor/function names, property names, inputs, iteration counts, or results. Object identity, prototype behavior, descriptors, weak caches, cross-realm construction, and the existing unpooled fallback all use the same handle contract.",
+    "semantic_risks": [
+      "preserving exactly-once ObjectData destruction and strong-count clone/drop behavior",
+      "preserving ObjectWeakRef upgrade, clone, and final-drop behavior without resurrecting destroyed object data",
+      "keeping arena blocks alive while an escaping Value or weak cache handle remains after its Realm owner drops",
+      "preserving stable identity across prototypes, cycles, property caches, descriptor mutation, and cross-realm construction",
+      "localizing every raw-pointer validity and slot-reuse proof to the arena implementation"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS current-main profile /tmp/qjs-current-external.Vyd00J/hash-map.sample (SHA below) plus MallocStackLogging receipt /tmp/qjs-current-external.Vyd00J/hash-map.malloc-count (SHA-256 eee73db39feb1ca373f275f4b6f6e43b93af457b770854e940fc37c4def5bdc1). The release binary SHA-256 is 568549b735c590a0787d93a84f67d2f3c65312f917e863714a1bb28e6f757ad4 and is runtime-identical to queue candidate 32a00b0e outside evidence-only commits. The live trace recorded 23,760 ObjectRef::with_prototype_slot allocations totaling 3,801,600 bytes under ordinary Entry construction.",
+      "sha256": "a275eec13951b4f9e86d8cede379eb0f6a46a24bca97d5994075d993a371ae4c",
+      "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "The rank-two 5.351608x QuickJS-NG gap repeatedly creates live ordinary receiver headers through Rc. A Realm-local block allocator removes that system-allocation class even when the objects remain live together, unlike a post-drop reuse cache.",
+      "inclusive_fraction": 0.08
+    },
+    {
+      "source": "macOS current-main profile /tmp/qjs-current-external.Vyd00J/ai-astar.sample (SHA below) plus MallocStackLogging receipt /tmp/qjs-current-external.Vyd00J/ai-astar-runtime.malloc-count (SHA-256 5f31094a79f13360cb30d5490ceff0181712b5ad2a30bee26cfade76287e8d3a). The independent A* run recorded 10,000 ObjectRef::with_prototype_slot allocations totaling 1,600,000 bytes before its heavier property-storage work.",
+      "sha256": "0fd5e57fe0e7b3bea21027f94af13593fc78e2a0763d218768a803c7fd5cbf49",
+      "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+      "opportunity_ids": [
+        "external/kraken-1.1/ai-astar"
+      ],
+      "shared_cost": "A* independently constructs the same Rc-backed ordinary-object header, confirming this is not an Entry-specific mechanism. Its heavier property storage is a conservative non-regression control for S1.",
+      "inclusive_fraction": 0.03
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/jetstream3-js-subset/cdjs",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "broad/object_allocation",
+      "broad/array_allocation",
+      "broad/property_read",
+      "broad/property_write",
+      "broad/dynamic_method_call",
+      "broad/plain_function_call"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

@@ -94,6 +94,11 @@ Campaign working rules:
   artifacts, freezes a unit's targets before timing, and records explicit
   retain/reject/inconclusive decisions. Static task text is never a substitute
   for this current evidence.
+- `T023-realm-object-arena.md` — **S1 rejected.** The Realm-local intrusive
+  object-cell arena regressed the frozen HashMap and A* fast gate despite
+  removing per-object allocation, so do not retry this ownership/counting
+  mechanism or broaden its admission. A future tracing/GC design needs a new
+  profile and independently frozen plan.
 - `T017-performance-benchmark-system.md` — versioned candidate/base/QuickJS-NG
   black-box benchmark platform. M0-M4 landed, including independent throughput,
   resource lanes, and diagnostic public-boundary Criterion lifecycle benches;
