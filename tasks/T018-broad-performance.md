@@ -8561,3 +8561,39 @@ retuning the transfer path: preserving the bytecode grammar consumed by the
 numeric mutation plans is itself the material constraint. A future write-path
 unit must start from a fresh profile of a different shared cost and preserve
 that planner boundary.
+
+### 2026-07-29 rejected String wrapper shared data buffer
+
+The exact `e66d0303` queue's rank-17 SunSpider `date-format-xparb` profile
+showed `native_string` in 63 of 729 samples and `define_string_data` in 22.
+The frozen one-attempt plan
+`tasks/performance-units/string-wrapper-shared-data-buffer.json` (SHA-256
+`e58a1465bd9f67b47e47a765544596bd30d27af7aae6ee7ee5a752e8f91815bc`)
+therefore made the general ordinary boxed-String installer retain the existing
+immutable `JsString` handle rather than copy its UTF-8 buffer, and enumerated
+ASCII indices directly from shared bytes. It applied equally to `new String`,
+`Object(string)`, and internal primitive-string boxing; no source, benchmark,
+iteration, key, or receiver condition was added. Focused UTF-16/COW wrapper
+tests, the String runtime tests, `compare-qjs.sh`, and the touched-check gate
+all passed before the performance screen.
+
+The clean three-engine candidate `5ae09d23` versus exact `e66d0303` base did
+not meet the frozen target: `date-format-xparb` was **0.991250406x**
+candidate/base, short of the required `<= 0.98x`. The controls were all within
+their `<= 1.03x` cap: `date-format-tofte` 1.012579697x,
+`string-tagcloud` 1.024176969x, `string-base64` 1.020213566x, `hash-map`
+1.001740171x, `object_allocation` 0.992809244x, and `string_slice`
+1.001126266x. The formal fast decision is therefore **rejected**, not
+promotable; its SHA-256 is
+`51accca0cd2eaf2bfca8e9e771b59ef7902855bf79c1f2194ccb963bd0f9489b` at
+`target/performance-5ae09d23-vs-e66d0303/string-wrapper-shared-data-buffer/fast-decision.json`.
+The corresponding three-engine preview summary, broad report, and external
+report SHA-256 values are respectively
+`d0e9f27dedf783c99beb9279dcfb3a4f14a44346bb54808c3d03bae94e16d735`,
+`2f71c8d69ab345a0b6c1c34275ca6b238f4653c49c397d0ec5ab7d2eaf7160d4`, and
+`02f9862782acc7e3a05e608ef7267222dde724916c0c1812208f89adcd1f237f`.
+
+The runtime and test implementation was reverted immediately. Do not retry
+this data-buffer sharing or ASCII-enumeration mechanism by retuning it: the
+single permitted attempt has closed it. A future string/object performance
+unit must begin with a new profile of a different shared cost.

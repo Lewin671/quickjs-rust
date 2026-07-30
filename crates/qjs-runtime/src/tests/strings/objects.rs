@@ -63,25 +63,3 @@ fn string_prototype_is_empty_string_object() {
         ))
     );
 }
-
-#[test]
-fn boxed_strings_preserve_utf16_properties_and_copy_on_write_values() {
-    assert_eq!(
-        eval(
-            "let source = 'a'; let wrapped = new String(source); source += 'b'; let boxed = Object(source); let index = Object.getOwnPropertyDescriptor(wrapped, '0'); [wrapped.valueOf(), source, boxed.valueOf(), Object.keys(wrapped).join(','), index.writable, index.enumerable, index.configurable].join('|');"
-        ),
-        Ok(Value::String(
-            "a|ab|ab|0|false|true|false".to_owned().into()
-        ))
-    );
-    assert_eq!(
-        eval(
-            "let value = String.fromCharCode(0xd834, 0xdf06); let wrapped = new String(value); let boxed = Object(value); let first = Object.getOwnPropertyDescriptor(wrapped, '0'); [wrapped.length, wrapped.charCodeAt(0), wrapped.charCodeAt(1), Object.keys(wrapped).join(','), first.writable, first.enumerable, first.configurable, boxed.length, boxed.charCodeAt(0), boxed.charCodeAt(1)].join('|');"
-        ),
-        Ok(Value::String(
-            "2|55348|57094|0,1|false|true|false|2|55348|57094"
-                .to_owned()
-                .into()
-        ))
-    );
-}

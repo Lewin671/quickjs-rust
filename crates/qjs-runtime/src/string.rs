@@ -8,9 +8,8 @@ mod property;
 mod prototype;
 
 pub(super) use constructor::{
-    define_string_data, is_string_object, native_string, native_string_from_char_code,
-    native_string_from_code_point, native_string_raw, string_from_code_point_numbers,
-    string_object_value,
+    is_string_object, native_string, native_string_from_char_code, native_string_from_code_point,
+    native_string_raw, string_from_code_point_numbers, string_object_value,
 };
 pub(crate) use install::{install_string, install_string_well_known_symbols};
 pub(crate) use iterator::{native_string_iterator_next, native_string_prototype_iterator};

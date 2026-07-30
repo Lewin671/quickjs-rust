@@ -77,8 +77,7 @@ const STRING_PROTOTYPE_METHODS: &[(&str, usize, NativeFunction)] = &[
 pub(crate) fn install_string(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let string_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
-    let empty_string = crate::JsString::default();
-    super::constructor::define_string_data(&string_prototype, &empty_string);
+    super::constructor::define_string_data(&string_prototype, "");
     let string_function = Function::new_native(Some("String"), 1, NativeFunction::String, true);
     string_prototype.define_non_enumerable(
         "constructor".to_owned(),
