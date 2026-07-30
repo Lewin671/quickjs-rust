@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "typed-loop-isolated-prepared-numeric-helper-graph",
+  "base_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+  "queue": {
+    "candidate_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+    "sha256": "7b759f146a7472dd7d3333049821ea31622bdd9d57ff43f7740ff2e243a4bd41"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/kraken-1.1/imaging-darkroom"
+    ],
+    "rank_ceiling": 4,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Retest entry-prepared pure Number helper graphs while preserving the existing private typed-loop arithmetic inlining boundary, keeping graph arithmetic and evaluation in a separate out-of-line module, and allocating graph preparation state only for programs that contain graph-call operations. The expected imaging-darkroom reduction is 65-75%, based on the rejected candidate's 75.1% measured reduction; the unit is rejected unless imaging reaches at most 0.35x its exact base and every declared control remains at most 1.03x. Scope and implementation cost are bounded to one new private typed-loop graph module, typed-loop compile/execute metadata and dispatch, and two focused test families, with no public API, dependency, parser, AST, environment-model, or generic VM changes. Validation is one focused typed-loop test pass followed by a five-block seeded nine-case external screen that includes 3d-morph; only a passing fast screen advances to complete broad, external, comparison, and Test262 promotion gates.",
+    "generality": "Admission remains structural: an otherwise compatible typed loop may call an unmodified global or read-only captured ordinary function with one or two scalar arguments only when its complete immutable bytecode graph contains bounded acyclic Number constants, parameters, read-only Number or function captures, supported arithmetic and comparisons, forward branches, and receiver-independent pure Math intrinsics. Every function, cell, realm, Math object, own data property, arity, and Number guard is completed once before native loop work. The ordinary typed-loop executor keeps its existing private typed_binary implementation unchanged; graph evaluation uses a distinct graph_binary routine and an explicitly out-of-line entry, and prepared graphs live in an entry-local optional allocation rather than TypedLoopScratch. The mechanism never inspects benchmark names, source paths, function names, input sizes, iteration counts, checksums, or expected results. Unsupported bytecode, cycles, loops, coercion, writes, accessors, proxies, dynamic scope, replaced bindings or intrinsics, non-Number inputs, or any failed guard declines before the loop performs fast-path work.",
+    "semantic_risks": [
+      "preserving ECMAScript Number arithmetic, comparisons, truthiness, NaN, signed zero, Infinity, remainder, exponentiation, and supported Math intrinsic behavior in the graph-only arithmetic implementation",
+      "resolving and snapshotting live global functions, closure cells, realm Math bindings, and own data properties before loop execution without hoisting observable getters, proxies, coercions, or writes",
+      "keeping deoptimization exact at the original outer call when preparation fails, with the precise callee and argument stack and no helper or loop side effect already executed",
+      "rejecting recursion, backward branches, excessive graph depth or size, receiver, arguments, new.target, direct eval, with, module-sensitive state, mutable captures, throws, and unsupported call shapes",
+      "mapping every prepared callee index through boxed-register compaction without adding graph state to ordinary scratch bundles or changing the private typed_binary linkage and inlining decision"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-14d9f2f6/samples/imaging-darkroom.sample from a diagnostic-only repeated pinned Kraken imaging-darkroom bundle SHA-256 bfc464b658a5b69810769631928842241a46d8d9bfbfb62da53804843eadfaba, executed by exact-base release qjs SHA-256 919c9cad198c2dcf3a50317e13997743756a084a51394097f3542b9b832fa5cb. The sample roots 3,768 of 4,011 main-thread stacks in generic Vm::run_completion below ProcessImageData, with repeated FastGain, FastBias, FastLog2, Clamp, and pure Math child frames; the typed-loop tier is absent because ordinary helper calls are not admitted.",
+      "sha256": "435d7307a584869f83d13204282e3b5610487827029954920ffa9e97e389b457",
+      "base_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+      "opportunity_ids": [
+        "external/kraken-1.1/imaging-darkroom"
+      ],
+      "shared_cost": "The hot pixel loop's arithmetic, branches, dense reads, and dense writes already fit the generic typed-loop IR, but two global pure Number helper calls exclude the entire region. The rejected entry-prepared implementation established causality by reducing imaging from 5,421.789 ms to 1,348.788 ms while its focused counter observed the expected scalar graph calls.",
+      "inclusive_fraction": 0.9394
+    },
+    {
+      "source": "paired macOS samples 2026-07-30 target/performance-profile-14d9f2f6/rejected-helper-graph/3d-morph-candidate.sample and 3d-morph-base.sample of the same diagnostic-only expanded upstream source. The rejected candidate sample SHA-256 is 58261c4780bc37e77219911a6a7d4d05e2a1ab35b24f05b6da11319836f0abbb and the exact-base sample SHA-256 is 82d3a3922ff0ad3b06b1f763573274e5437d2a12b30d4d98b3cecdc7395f15a8. The candidate placed 870 of 4,033 top-of-stack samples in an out-of-line typed_loop::execute::typed_binary, while the base kept the same arithmetic inside execute::run and exposed no out-of-line symbol; 3d-morph never executed a graph call.",
+      "sha256": "58261c4780bc37e77219911a6a7d4d05e2a1ab35b24f05b6da11319836f0abbb",
+      "base_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+      "opportunity_ids": [
+        "external/kraken-1.1/imaging-darkroom"
+      ],
+      "shared_cost": "The prior 1.234879x 3d-morph regression was not graph work: widening typed_binary from private to pub(super) changed LLVM's inlining decision and imposed an ordinary Rust call on every existing typed numeric operation. The successor can therefore preserve the measured target mechanism while removing the independent control cost by leaving typed_binary byte-for-byte private and using graph-only arithmetic in an out-of-line module.",
+      "inclusive_fraction": 0.2157
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/kraken-1.1/imaging-darkroom"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/audio-fft",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/3d-morph",
+      "external/sunspider-1.0/access-nbody",
+      "broad/array_dynamic_read",
+      "broad/array_write",
+      "broad/plain_function_call",
+      "broad/function_call_two_args",
+      "broad/dynamic_method_call",
+      "broad/math_abs"
+    ],
+    "target_max_candidate_over_base": 0.35,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

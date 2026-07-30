@@ -78,6 +78,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         next_boxed,
         mut boxed_locals,
         mut numeric_native_callee_registers,
+        mut numeric_function_callee_registers,
         mut written_boxed_locals,
         mut boxed_global_reads,
         names,
@@ -134,6 +135,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         BoxedRegisterMetadata {
             locals: &mut boxed_locals,
             numeric_native_callee_registers: &mut numeric_native_callee_registers,
+            numeric_function_callee_registers: &mut numeric_function_callee_registers,
             written_locals: &mut written_boxed_locals,
             global_reads: &mut boxed_global_reads,
             constants: &mut boxed_constants,
@@ -159,6 +161,8 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         boxed_count,
         boxed_locals,
         numeric_native_callee_registers,
+        numeric_function_callee_registers: (!numeric_function_callee_registers.is_empty())
+            .then(|| numeric_function_callee_registers.into_boxed_slice()),
         written_boxed_locals,
         boxed_global_reads,
         names,
@@ -191,6 +195,7 @@ fn compact_scalar_registers(
 struct BoxedRegisterMetadata<'a> {
     locals: &'a mut [(u16, u32)],
     numeric_native_callee_registers: &'a mut [u16],
+    numeric_function_callee_registers: &'a mut [u16],
     written_locals: &'a mut [u16],
     global_reads: &'a mut [(u16, String)],
     constants: &'a mut [(u16, Value)],
@@ -205,6 +210,7 @@ fn compact_boxed_registers(
     let BoxedRegisterMetadata {
         locals,
         numeric_native_callee_registers,
+        numeric_function_callee_registers,
         written_locals,
         global_reads,
         constants,
@@ -214,6 +220,9 @@ fn compact_boxed_registers(
     remap_site_entries(site_entries, Class::Boxed, stack_register_count);
     remap_register_pairs(locals, stack_register_count);
     for register in numeric_native_callee_registers {
+        remap_register(register, stack_register_count);
+    }
+    for register in numeric_function_callee_registers {
         remap_register(register, stack_register_count);
     }
     for register in written_locals {
@@ -288,6 +297,9 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
             TypedOp::ElementRead { index, .. } => visit(index),
             TypedOp::CallNumericNative {
                 dst, first, second, ..
+            }
+            | TypedOp::CallNumericFunction {
+                dst, first, second, ..
             } => {
                 visit(dst);
                 visit(first);
@@ -326,6 +338,7 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
             | TypedOp::DenseRead { .. }
             | TypedOp::DenseWrite { .. }
             | TypedOp::StoreSloppyGlobal { .. }
+            | TypedOp::CallNumericFunction { .. }
             | TypedOp::JumpIfFalsy { .. }
             | TypedOp::Jump { .. }
             | TypedOp::Exit { .. } => {}
@@ -370,6 +383,8 @@ fn compact_register_count(next_register: usize, stack_register_count: usize) -> 
 enum Origin {
     Computed,
     Local(u32),
+    /// Persistent boxed register seeded from a global binding.
+    Global(u16),
 }
 
 fn writes_slot(op: &Op, slot: usize) -> bool {
@@ -408,6 +423,7 @@ struct Builder<'a> {
     next_boxed: usize,
     boxed_locals: Vec<(u16, u32)>,
     numeric_native_callee_registers: Vec<u16>,
+    numeric_function_callee_registers: Vec<u16>,
     written_boxed_locals: Vec<u16>,
     boxed_global_reads: Vec<(u16, String)>,
     names: Vec<Rc<str>>,
@@ -461,6 +477,7 @@ impl<'a> Builder<'a> {
             next_boxed: MAX_STACK_DEPTH,
             boxed_locals: Vec::new(),
             numeric_native_callee_registers: Vec::new(),
+            numeric_function_callee_registers: Vec::new(),
             written_boxed_locals: Vec::new(),
             boxed_global_reads: Vec::new(),
             names: Vec::new(),
@@ -534,6 +551,7 @@ impl<'a> Builder<'a> {
             | TypedOp::ToNumeric { dst, .. }
             | TypedOp::DenseRead { dst, .. }
             | TypedOp::CallNumericNative { dst, .. }
+            | TypedOp::CallNumericFunction { dst, .. }
             | TypedOp::Move { dst, .. } => dst,
             _ => return false,
         };
@@ -762,6 +780,35 @@ impl<'a> Builder<'a> {
             self.numeric_native_callee_registers.push(register);
         }
         true
+    }
+
+    /// Returns the entry-prepared helper index for an unbound ordinary
+    /// function whose identity comes from a read-only captured or global
+    /// binding. Parameters and ordinary mutable locals remain on the generic
+    /// call path, so callback loops do not install a plan merely to decline.
+    fn numeric_function_callee(&mut self, callee: u16, origin: Origin) -> Option<u16> {
+        let register = match origin {
+            Origin::Local(slot) => {
+                let slot = usize::try_from(slot).ok()?;
+                if !self.bytecode.received_upvalue_slots().contains(&slot)
+                    || self.writes_in_region(slot) != 0
+                {
+                    return None;
+                }
+                callee
+            }
+            Origin::Global(register) => register,
+            Origin::Computed => return None,
+        };
+        if let Some(index) = self
+            .numeric_function_callee_registers
+            .iter()
+            .position(|candidate| *candidate == register)
+        {
+            return u16::try_from(index).ok();
+        }
+        self.numeric_function_callee_registers.push(register);
+        u16::try_from(self.numeric_function_callee_registers.len() - 1).ok()
     }
 
     /// Boxed register for a receiver the bytecode names as a frame slot rather
@@ -1279,7 +1326,7 @@ impl<'a> Builder<'a> {
                 let register = self.global_register(name)?;
                 let dst = self.slot_boxed()?;
                 self.emit(TypedOp::MoveBoxed { dst, src: register });
-                self.push_boxed(dst, Origin::Computed);
+                self.push_boxed(dst, Origin::Global(register));
             }
             Op::GetPropNamed { key, cache } => {
                 let (object, _) = match cache.local_slot() {
@@ -1342,17 +1389,26 @@ impl<'a> Builder<'a> {
                     args[index] = register;
                 }
                 let (callee, origin) = self.pop_boxed()?;
-                if !self.mark_numeric_native_callee(callee, origin) {
-                    return None;
-                }
                 let dst = self.slot_scalar()?;
-                self.emit(TypedOp::CallNumericNative {
-                    dst,
-                    callee,
-                    first: args[0],
-                    second: args[1],
-                    arity: u8::try_from(*argc).ok()?,
-                });
+                let arity = u8::try_from(*argc).ok()?;
+                if self.mark_numeric_native_callee(callee, origin) {
+                    self.emit(TypedOp::CallNumericNative {
+                        dst,
+                        callee,
+                        first: args[0],
+                        second: args[1],
+                        arity,
+                    });
+                } else {
+                    let callee = self.numeric_function_callee(callee, origin)?;
+                    self.emit(TypedOp::CallNumericFunction {
+                        dst,
+                        callee,
+                        first: args[0],
+                        second: args[1],
+                        arity,
+                    });
+                }
                 self.push(dst, Origin::Computed);
             }
             Op::JumpIfFalse(target) => {

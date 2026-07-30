@@ -95,13 +95,44 @@ enum Outcome {
 fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
     let mut scratch = program.take_scratch();
     let outcome = seed_registers(vm, program, &mut scratch)
-        .map(|()| execute(vm, program, &mut scratch))
+        .and_then(|()| {
+            let numeric_functions = prepare_numeric_functions(program, &scratch.boxed)?;
+            Some(execute(
+                vm,
+                program,
+                &mut scratch,
+                numeric_functions.as_deref().unwrap_or_default(),
+            ))
+        })
         .unwrap_or(Outcome::Declined);
     program.recycle_scratch(scratch);
     outcome
 }
 
-fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopScratch) -> Outcome {
+fn prepare_numeric_functions(
+    program: &TypedLoopProgram,
+    boxed: &[Value],
+) -> Option<Option<Vec<super::call_graph::PreparedCallGraph>>> {
+    let registers = program.numeric_function_callee_registers.as_deref();
+    let Some(registers) = registers else {
+        return Some(None);
+    };
+    let mut functions = Vec::with_capacity(registers.len());
+    for &register in registers {
+        let Value::Function(function) = boxed.get(register as usize)? else {
+            return None;
+        };
+        functions.push(super::call_graph::PreparedCallGraph::prepare(function)?);
+    }
+    Some(Some(functions))
+}
+
+fn execute(
+    vm: &mut Vm<'_>,
+    program: &TypedLoopProgram,
+    scratch: &mut TypedLoopScratch,
+    numeric_functions: &[super::call_graph::PreparedCallGraph],
+) -> Outcome {
     let registers = &mut scratch.registers;
     let receivers = &scratch.receivers;
     let boxed = &mut scratch.boxed;
@@ -265,6 +296,20 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                 };
                 registers[dst as usize] = value;
             }
+            TypedOp::CallNumericFunction {
+                dst,
+                callee,
+                first,
+                second,
+                arity,
+            } => {
+                let Some(value) = numeric_functions.get(callee as usize).and_then(|function| {
+                    function.eval(registers[first as usize], registers[second as usize], arity)
+                }) else {
+                    deopt_here!(op);
+                };
+                registers[dst as usize] = value;
+            }
             TypedOp::JumpIfFalsy { cond, target } => {
                 if !registers[cond as usize].is_truthy() {
                     pc = target as usize;
@@ -370,9 +415,12 @@ fn seed_registers(
         // invoking it, and any other function deoptimizes at that original call.
         let value = vm.local_slot_value(slot as usize)?;
         let is_numeric_native_callee = program.numeric_native_callee_registers.contains(&register);
-        let accepts_numeric_native_callee =
-            is_numeric_native_callee && matches!(value, Value::Function(_));
-        if !(value_is_ordinary_object(&value) || accepts_numeric_native_callee) {
+        let is_numeric_function_callee = program
+            .numeric_function_callee_registers()
+            .contains(&register);
+        let accepts_function_callee = (is_numeric_native_callee || is_numeric_function_callee)
+            && matches!(value, Value::Function(_));
+        if !(value_is_ordinary_object(&value) || accepts_function_callee) {
             return None;
         }
         boxed[register as usize] = value;
@@ -391,7 +439,11 @@ fn seed_registers(
             return None;
         }
         let value = vm.load_global(name).ok()?;
-        if !value_is_ordinary_object(&value) {
+        let accepts_function_callee = program
+            .numeric_function_callee_registers()
+            .contains(register)
+            && matches!(value, Value::Function(_));
+        if !(value_is_ordinary_object(&value) || accepts_function_callee) {
             return None;
         }
         boxed[*register as usize] = value;
