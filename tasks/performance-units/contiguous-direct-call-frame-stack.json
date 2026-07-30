@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "contiguous-direct-call-frame-stack",
+  "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+  "queue": {
+    "candidate_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+    "sha256": "0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "rank_ceiling": 2,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Route only already-eligible ordinary direct-leaf bytecode calls through the existing opcode executor on an explicit frame scheduler whose operand values live in one VM-owned contiguous stack; suspended frames retain relative stack bases and a move-cheap hot header rather than an independent operand Vec and recursively constructed Vm.",
+    "generality": "Admission remains the existing is_direct_leaf_function predicate, after the existing numeric and this-property leaf probes. The mechanism depends only on function metadata and bytecode semantics. It never inspects source text, paths, benchmark identity, function names, iteration counts, argument values, checksums, or expected results. Native, Proxy, bound, constructor, generator, async, direct-eval, with-aware, closure-producing, and guard-false calls remain on the existing recursive fallback.",
+    "semantic_risks": [
+      "keeping every operand and TryFrame stack depth relative to the active frame while parent operands remain below the child base",
+      "preserving zero through three argument order, receiver binding, direct readonly upvalue cells, realm/module/agent context, and function rebinding fallbacks",
+      "running child finally and disposal handling before restoring a parent and offering one thrown value through every restored catch/finally boundary without changing identity",
+      "clearing completed child values and frame-owned references before bounded storage reuse so no object or cell lifetime leaks across calls",
+      "avoiding a dispatch-loop indirection or branch regression for root frames, native/numeric fast hits, and non-eligible calls"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-620bb67b/controlflow-recursive/current.sample; standard-recipe candidate binary SHA-256 c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b; diagnostic wrapper target/performance-profile-14d9f2f6/bundles/sunspider-1.0--controlflow-recursive.js SHA-256 4513e8821a8e06c4055b2059ec10cb730a90d4efd5d89e133d19344d82baaa7d extends only the official source SHA-256 7689048105ae415ad60df2a882384063df640371d806d7a7d91446f2881b7d83",
+      "sha256": "289f099ccf6dda2a8ef273584296de5e54e4476d7527e67d9f82d4c93e2ebc03",
+      "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+      "opportunity_ids": [
+        "external/sunspider-1.0/controlflow-recursive"
+      ],
+      "shared_cost": "Of 2,254 runtime main-thread samples, exclusive top-of-stack costs include 385 in call_direct_leaf_function, 220 in Vm frame construction, 110 dropping FrameState, 68 dropping CallEnv, 34 installing the marked call realm, and 27 recycling the per-frame operand stack. These 844 samples, or 37.4 percent, are frame/call setup and teardown before counting allocator traffic, while another 1,228 samples remain in the ordinary opcode and boxed-Value path that the same continuous stack preserves rather than duplicating.",
+      "inclusive_fraction": 0.374
+    },
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-620bb67b/hash-map/current.sample; standard-recipe candidate binary SHA-256 c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b; diagnostic wrapper target/performance-profile-14d9f2f6/bundles/jetstream3-js-subset--hash-map.js SHA-256 c67d6168472c68ec2a902fbd8d0b1c9d49b725233d06ac7db25263e18e7625fe uses only hash-verified JetStream sources",
+      "sha256": "9621e95e6b582b797b713374b4e2df15b8abd56fcfa59feff06a0c5c929f2877",
+      "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Of 3,627 main-thread samples, 308 are in call_direct_leaf_function, 184 in Vm frame construction, 79 dropping FrameState, 49 dropping CallEnv, and 14 recycling operand storage: 634 samples, or 17.5 percent, in the same frame boundary. A further 326 exclusive samples are Value clone/drop work, giving a continuous value stack a second independent lever before the workload's object-slot and string-key costs.",
+      "inclusive_fraction": 0.175
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/string-tagcloud",
+      "broad/plain_function_call",
+      "broad/function_call_two_args",
+      "broad/dynamic_method_call",
+      "broad/top_level_function_call",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

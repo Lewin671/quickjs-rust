@@ -2873,3 +2873,62 @@ touched gate passed all 1,915 runtime tests and 65 selected Test262 cases;
 curated Test262 subset, and `./scripts/compare-qjs.sh` passed. The accepted
 general reduction therefore advances the campaign, whose next unit must start
 from a refreshed exact-current queue and fresh shared-cost profile.
+
+### 2026-07-30 rejected contiguous direct-call frame stack
+
+The exact `620bb67b` opportunity queue (SHA-256
+`0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1`)
+ranked SunSpider `controlflow-recursive` first at 5.8835x QuickJS-NG and
+JetStream HashMap second at 5.3652x. Fresh source-matched samples had SHA-256
+values `289f099ccf6dda2a8ef273584296de5e54e4476d7527e67d9f82d4c93e2ebc03`
+and `9621e95e6b582b797b713374b4e2df15b8abd56fcfa59feff06a0c5c929f2877`.
+The recursive profile attributed 844 of 2,254 useful samples (37.4%) to
+direct-leaf call setup, VM/frame construction and teardown, CallEnv teardown,
+marked-realm setup, and operand-stack recycling. HashMap attributed 634 of
+3,627 samples (17.5%) to the same boundary, with another 326 samples in
+`Value` clone/drop work.
+
+The frozen one-attempt plan
+`tasks/performance-units/contiguous-direct-call-frame-stack.json` (SHA-256
+`4092dcf45b66d684747df470a14db0440065f603beedc9b3bfb7f2c3d1d612f8`)
+therefore tested a mechanism distinct from the earlier independent-Vec and
+same-function schedulers. It split each frame into a move-cheap dispatch header
+and boxed cold state, kept bytecode/immutable plan views move-stable, and moved
+one contiguous operand `Vec<Value>` between parent and child handles while
+retaining relative bases. Admission remained the existing ordinary
+`is_direct_leaf_function` predicate after the existing numeric and
+this-property probes; no source, function, workload, path, checksum, iteration,
+or expected-result condition was added.
+
+The structural prototype compiled cleanly. Its layout-only stage passed all
+1,915 runtime tests. The complete scheduler stage passed five focused tests,
+including 10,000 recursive frames, zero-through-three arguments and receiver
+binding, parent operands, thrown-value identity through nested `finally`,
+cleared storage reuse, and eval/with/closure/generator fallbacks; all 1,920
+runtime tests then passed. These correctness results do not override the
+predeclared performance gate.
+
+The final exact-base five-block alternating screen compared standard-recipe
+candidate SHA-256
+`6a7b5b99d1240921d0f6840741cff6460b037eab0e1cec564a0f6be5b810fd1e`
+with exact `620bb67b` base binary SHA-256
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`.
+Every paired process had identical exit status, stdout hash, and stderr hash.
+The raw receipt SHA-256 is
+`8eb2833660a2c058441b309e4a973ffb81e5d5623dfdd98057438086e17d4b7b`.
+Both targets regressed decisively instead of reaching the required `<= 0.90x`:
+
+| Target | Candidate median | Base median | Candidate / base |
+| --- | ---: | ---: | ---: |
+| `controlflow-recursive` | 78.392 ms | 66.363 ms | **1.180476x** |
+| JetStream HashMap | 1,868.258 ms | 1,616.959 ms | **1.150426x** |
+
+The unit is **rejected** after its single allowed attempt. The runtime,
+function-call, and focused-test changes were reverted; the restored worktree
+compiled cleanly. Because both independent targets moved in the wrong
+direction by 15-18%, controls, full Test262, broad, and external promotion runs
+were not started. Do not retry this hot-header plus boxed-cold-state,
+move-stable-pointer, contiguous-operand-buffer transfer shape by changing pool
+bounds, inline argument width, stack-base placement, or child-frame storage.
+The measurement closes this shared frame route for the current representation;
+the next unit must use a refreshed queue and a different profiled mechanism.
