@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "direct-construction-realm-context",
+  "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+  "queue": {
+    "candidate_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+    "sha256": "818e5ecb2d50ea6dc34f77e8e32d334ffda2733ae082153cb13b5a3b8c7f2d2d"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar"
+    ],
+    "rank_ceiling": 3,
+    "override_reason": "Rank-one controlflow-recursive remains closed by the current direct-leaf frame, tail-reset, same-function frame-stack, scalar-recursion, compact-dispatch, and lazy-frame-state rejection evidence. This pre-implementation unit was rejected by source audit: Vm::call_env for a user bytecode callee attaches a host to self.env.new_function_frame(), while Vm::realm_env attaches a host to self.env.empty_frame(), and CallEnv::empty_frame is exactly a new_function_frame alias. The HashMap and A* receipts establish construction frequency, not a distinct parent-context cost. No candidate source, binary, or fast-gate run is warranted; retain this artifact so the false boundary is not retried as a constructor-body, property-layout, or call-frame mechanism."
+  },
+  "mechanism": {
+    "summary": "Rejected during source audit before implementation: substituting realm_env for the user-bytecode call_env in ordinary direct-leaf construction cannot remove a parent context because both paths build the same host-attached new_function_frame. No runtime route is added; construct_function, caller refresh, constructor validation, new.target installation and restoration, prototype resolution, receiver allocation, slot-backed body execution, result selection, and every observable property operation remain unchanged.",
+    "generality": "No construction changes admission or execution. The originally proposed existing direct-leaf predicate is deliberately not emitted because its realm-only replacement is representation-identical to the generic user-bytecode CallEnv. Native, bound, Proxy, class, generator, async, direct-eval, with, closure-capturing, arguments-object, non-seedable-parameter, and every other construction remain on their existing paths.",
+    "semantic_risks": [
+      "the apparent CallEnv substitution is an exact construction alias, so a branch would add dispatch cost without removing allocation or observable work",
+      "ordinary and Reflect.construct new.target identity, receiver prototype lookup, property behavior, exceptions, and caller sloppy-global refresh must remain untouched because no candidate runtime code is justified",
+      "future construction work must profile a distinct cost beneath construct_function rather than treating ObjectRef allocation counts as evidence for a parent CallEnv difference"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS current-main profile /tmp/qjs-current-external.Vyd00J/hash-map.sample (SHA below) plus MallocStackLogging receipt /tmp/qjs-current-external.Vyd00J/hash-map.malloc-count (SHA-256 eee73db39feb1ca373f275f4b6f6e43b93af457b770854e940fc37c4def5bdc1). The latter records 23,760 ObjectRef::with_prototype_slot allocations (3,801,600 bytes) under Vm::construct_callee -> construct_function while the fixed Entry constructor route runs its existing direct-slot body.",
+      "sha256": "a275eec13951b4f9e86d8cede379eb0f6a46a24bca97d5994075d993a371ae4c",
+      "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Disproven before prototype: HashMap's ObjectRef allocation count establishes that construction is frequent, but source audit shows the proposed call_env and realm_env parent contexts both allocate the same new_function_frame. It is not evidence of an independent compatibility-shell cost.",
+      "inclusive_fraction": 0.05
+    },
+    {
+      "source": "macOS current-main profile /tmp/qjs-current-external.Vyd00J/ai-astar.sample (SHA below) plus MallocStackLogging receipt /tmp/qjs-current-external.Vyd00J/ai-astar-runtime.malloc-count (SHA-256 5f31094a79f13360cb30d5490ceff0181712b5ad2a30bee26cfade76287e8d3a). The independent GraphNode route records 10,000 ObjectRef::with_prototype_slot allocations (1,600,000 bytes) through the same Vm::construct_callee -> construct_function boundary before its different nine-field body and later search work.",
+      "sha256": "0fd5e57fe0e7b3bea21027f94af13593fc78e2a0763d218768a803c7fd5cbf49",
+      "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+      "opportunity_ids": [
+        "external/kraken-1.1/ai-astar"
+      ],
+      "shared_cost": "Disproven before prototype: A* independently repeats construction, but it reaches the same user-bytecode CallEnv construction alias as HashMap. The object allocation trace cannot justify a realm-context replacement that has identical frame creation.",
+      "inclusive_fraction": 0.05
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "broad/object_allocation",
+      "broad/plain_function_call",
+      "broad/dynamic_method_call"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

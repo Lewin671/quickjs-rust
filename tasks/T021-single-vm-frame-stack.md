@@ -2467,3 +2467,30 @@ the existing generic path already seeds direct slots, and removing its
 compatibility wrapper did not yield a material end-to-end gain. A successor
 must profile a different shared cost rather than another native-callback call
 boundary variant.
+
+### 2026-07-30 rejected direct-construction realm-context alias
+
+The current `32a00b0e` queue ranks JetStream `hash-map` second and Kraken
+`ai-astar` third. Their fresh MallocStackLogging receipts record 23,760 and
+10,000 ordinary receiver allocations respectively through
+`Vm::construct_callee -> construct_function`, so the frozen unit
+`tasks/performance-units/direct-construction-realm-context.json` (SHA-256
+`fb4f53b6db7d23361bcd66be5ad2514c93c5c12f35771bcd9bd2fca20e92e9b1`)
+initially proposed replacing the caller compatibility environment for an
+already direct-leaf ordinary constructor with a realm-only environment.
+
+The proposal was rejected during source audit before any runtime code or
+candidate binary existed. `Vm::call_env` takes the user-bytecode path through
+`self.attach_host(self.env.new_function_frame())`; `Vm::realm_env` takes
+`self.attach_host(self.env.empty_frame())`; and `CallEnv::empty_frame()` is
+exactly a `new_function_frame()` alias. The proposed substitution therefore
+removes neither an allocation nor metadata work. Adding a direct-leaf branch
+would only add a predicate and a duplicate result path around identical frame
+construction.
+
+The two profiles still establish that object construction is frequent, but do
+not show a distinct parent-`CallEnv` cost. No source patch, focused test,
+candidate binary, or fast-gate run was appropriate. Do not retry this as a
+realm-context, caller-shell, or `empty_frame` versus `new_function_frame`
+variant; a future construction unit must profile a different cost beneath
+`construct_function` or receiver/property allocation itself.
