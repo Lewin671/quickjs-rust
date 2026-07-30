@@ -2773,7 +2773,7 @@ matcher ownership: it removed the intended structural work but delivered less
 than the campaign's ten-percent minimum. A future literal or RegExp unit needs
 fresh evidence for a different shared cost.
 
-### 2026-07-30 frame-independent native construction candidate
+### 2026-07-30 accepted frame-independent native construction
 
 The exact `14d9f2f6` opportunity queue ranks SunSpider `date-format-tofte`
 ninth at 5.790250x QuickJS-NG. Ranks one through seven are closed by current
@@ -2824,7 +2824,52 @@ also passed its `<= 1.03x` ceiling. Ratios were 0.986840x for
 `date-format-xparb`, 1.003848x for `controlflow-recursive`, 0.991339x for
 `string-tagcloud`, 1.006946x for HashMap, 0.998412x for CDJS, 1.001362x for
 `access-nbody`, 1.001382x for `dynamic_method_call`, 1.000707x for
-`plain_function_call`, and 0.998588x for `object_allocation`. This retains the
-candidate through the fast gate only. Campaign promotion still requires a
-clean exact candidate commit, the complete 25-case broad report, complete
-external comparison, and exact zero-gap Test262 burndown.
+`plain_function_call`, and 0.998588x for `object_allocation`.
+
+The retained implementation is commit
+`620bb67b9c7c36714177b7006a7ccaddd88653f5`. Its standard-recipe candidate,
+exact-base, and pinned QuickJS-NG release binary SHA-256 values are
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`,
+`540fc89a37c71dd1f0ac4a0916a6f8e0ccbc418c27498f960fedcfb2510df3bf`,
+and
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+The clean three-block broad summary, report, and raw SHA-256 values are
+`76cdfb6fe4fd8833839e16025e4c6b97d762289f685d2c80c25c112f9014fba2`,
+`a320011570f8178b8be208abc6bea97d0ccbf20ba98e619714a810fb8c009e7e`,
+and
+`bf7234c6e3eb65ada0eabd818aa10e9d1cdc8528e3669f8a8875d6cde1db38aa`.
+All 25 cases and all 75 linearity diagnostics completed. Candidate/base
+geometric mean was 1.000334x, the largest individual broad ratio was
+`top_level_function_call` at 1.010124x, and the declared broad controls were
+`dynamic_method_call` 0.998416x, `plain_function_call` 1.001574x, and
+`object_allocation` 0.994472x.
+
+The default 30-second external preview completed 44 comparable cases and
+exposed one honest coverage gap: Kraken `imaging-gaussian-blur` timed out for
+candidate and base. The source- and binary-identical 60-second rerun closed
+that gap and completed all 45 cases for candidate, base, and QuickJS-NG. Its
+manifest, report, and raw SHA-256 values are
+`a8ddeded582573bc676bf3f7bbbaf2625f6dfa7742f07bcdd6aaa26366f4e6c4`,
+`ed0f904c65ab557b68a85d2ff3a5ba0f0f71616a53faf990b541f972a6cbf773`,
+and
+`d468a142a618b98bb89c8dea80232cfae29442761fc8f625810903d74c7cd574`.
+The target measured **0.899021x** candidate/base and 2.738381x
+candidate/QuickJS-NG, so it clears this unit's ten-percent base gate but not
+the campaign's overall two-times-QuickJS-NG goal. All declared external
+controls remained below 1.03x: xparb 0.992505x, recursive 0.997750x,
+tagcloud 0.996059x, HashMap 0.990611x, CDJS 0.996163x, and nbody 0.988177x.
+The complete portfolio also records, rather than hides, a non-control
+`bitops-bitwise-and` ratio of 1.034481x; it is a very short case and was not a
+frozen acceptance criterion for this constructor-specific unit.
+
+The hash-bound fast decision is **retained** (SHA-256
+`509fa5cbe97728eef0f93b834e4bf039a0649215c8748abc805fd6f8c1d6a065`).
+The strict promotion decision is **inconclusive** (SHA-256
+`ecca153b01d18199e6654887ba925c0ade44a4cd19307ca512552345502b22b4`)
+solely because no exact project-wide zero-gap Test262 burndown is attached;
+this is not a global conformance or campaign-completion claim. The staged
+touched gate passed all 1,915 runtime tests and 65 selected Test262 cases;
+`./scripts/check.sh` passed all workspace checks and the complete 5,160-case
+curated Test262 subset, and `./scripts/compare-qjs.sh` passed. The accepted
+general reduction therefore advances the campaign, whose next unit must start
+from a refreshed exact-current queue and fresh shared-cost profile.
