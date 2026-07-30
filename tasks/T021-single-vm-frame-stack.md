@@ -2380,3 +2380,48 @@ lazy-table growth, broadening closure categories, or rearranging the direct
 call boundary: this general direct-route conversion removed the profiled chain
 but did not produce the required end-to-end CDJS improvement. A successor must
 start from a fresh profile of a different shared cost.
+
+### 2026-07-29 retained typed-loop register-file compaction
+
+The exact `7d0f6bdb` queue ranked SunSpider `bitops-bits-in-byte` and
+`math-cordic` as independently profiled typed-loop opportunities. Both profiles
+showed time under the typed-loop register-file lifecycle, notably boxed
+`Value`-vector initialization and clearing. The frozen one-attempt unit
+`tasks/performance-units/typed-loop-register-file-compaction.json` (plan
+SHA-256 `ed7e97efc6a212e8330cdd067cf1228c85d5f40adf9d7bdaec0eaeae5490ba23`)
+therefore remaps each lowered typed-loop program's persistent scalar and boxed
+registers immediately after the actually used stack-register range. It visits
+every typed operation and site-entry register pair; local/global/constant
+metadata and written boxed locals receive the same remap. This is a program
+representation compaction based only on the lowered program's register use,
+not on source text, workload identity, or loop values.
+
+The candidate is commit `46ceb4f6dcb65083cecd63b5227a81c6b417a916`, measured
+against the exact `7d0f6bdbb2e5065155f2562bd7c790617b02abfb` base. Its new
+typed-loop test verifies that a pure scalar loop has no boxed register file,
+that a dense-array loop retains only its real boxed depth, and that execution
+semantics are unchanged. Before the formal run, formatting, Clippy with
+warnings denied, the 1,912-test runtime library, and the 5,160-case curated
+Test262 subset passed.
+
+The source- and binary-receipted three-block preview retained both frozen
+targets: `bitops-bits-in-byte` was **0.839532x** candidate/base and
+`math-cordic` was **0.927189x**. All five external controls stayed below the
+`1.03x` ceiling: `bitops-3bit-bits-in-byte` 0.985684x,
+`bitops-nsieve-bits` 1.001397x, `access-nsieve` 0.991247x,
+`math-spectral-norm` 0.998721x, and `crypto-sha1` 1.001257x. The broad
+controls likewise held: `array_write` 0.998338x,
+`plain_function_call` 1.001180x, and `object_allocation` 1.006151x.
+The fast decision is **retained**; its SHA-256 is
+`48002d278801ae282bff429e3f8b751ab7d8023b7da14a8ea52f7dbb16b1d696`.
+Its bound summary, broad-report, external-report, and external-raw SHA-256
+values are `35c1b54a5f874800ce73904423f8e800f25de588ea43c26b7c6d1775726c0ffd`,
+`4afee6efea5e166b4bf74b2f4f59b8def07392d8ee35b67be005b9eb1f922ea2`,
+`6c0bb7792546d7f6afbc81ee3c2cb2c36487990354e86acf886b835da5071cdf`, and
+`7f1f8bf179cdba2b63d91721b10c3a0e3ac335b61a62056d3fb67184183d6c1a`.
+
+This is a retained local performance unit, not a fixed-hardware or
+full-conformance promotion claim: Kraken `imaging-gaussian-blur` still lacks a
+complete candidate/base comparison, and no exact all-suite Test262 burndown is
+attached. Future work must use a fresh queue and profile a different shared
+cost rather than tune this compaction mechanism.
