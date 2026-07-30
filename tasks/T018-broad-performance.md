@@ -8522,3 +8522,42 @@ focused `named_property_cache_remembers_two_alternating_receivers` unit test.
 Mechanism is general (any polymorphic call site benefits, not just this
 benchmark shape); does not close the case's gap to QuickJS-NG, which remains
 open for further work.
+
+### 2026-07-29 rejected discarded member assignment-result transfer
+
+The exact `46ceb4f6` queue's rank-two JetStream `hash-map` and rank-seven
+Kraken `imaging-darkroom` profiles both contained `Value` clone/drop work
+around discarded member writes. The frozen one-attempt plan
+`tasks/performance-units/discarded-member-assignment-value-transfer.json`
+(SHA-256 `414df139641e716c27bf2aaed32cac5be67e33ff9e9f210d76138cae60ff1ac2`)
+therefore made only plain non-private, non-super member statements in
+completion-discarding blocks emit an existing `SetProp*; Pop` pair. The VM
+then skipped that pair's assignment-result materialization after a successful
+write and moved the RHS into writable ordinary object or dense-array storage
+where ownership was already accepted. Focused value-result, computed-key,
+setter, Proxy, strict-error, and owned-property tests passed.
+
+The bytecode shape was nevertheless incompatible with the established numeric
+mutation-loop grammar: the focused
+`recognizes_named_numeric_recurrence` test changed from one admitted plan to
+zero. A three-block, same-host, receipt-free four-case direction screen then
+made the regression decisive. Candidate binary SHA-256
+`5a316dcb0a5bc56093071dc8bed52a08f0f871663c4f5960992e27c20a9775eb` versus
+the exact `46ceb4f6` base binary
+`d8866f518f67fb50778dfb9e717ff0b375d5098d7a3007f469ae190d95c5dfb0` measured
+candidate/base medians of **19.589468x** for `property_write`, **19.218934x**
+for `array_write`, and **1.074055x** for `object_allocation`; only unrelated
+`dynamic_method_call` was 0.924853x. The raw screen SHA-256 is
+`251b5151553faf76ea92d96b3a581b8bd0cefbb8273000403050d3f692eced35` at
+`target/performance-next-46ceb4f6-r1/discarded-member-assignment-value-transfer/fast-broad-raw.jsonl`.
+It is deliberately diagnostic rather than a formal decision because its
+selected four-case receipt-free input cannot satisfy the full-portfolio report
+contract.
+
+The runtime and test implementation was reverted immediately; the external
+suite and promotion checks were not run after this hard control failure. Do
+not retry this mechanism by adding `Pop` pairs, changing their placement, or
+retuning the transfer path: preserving the bytecode grammar consumed by the
+numeric mutation plans is itself the material constraint. A future write-path
+unit must start from a fresh profile of a different shared cost and preserve
+that planner boundary.

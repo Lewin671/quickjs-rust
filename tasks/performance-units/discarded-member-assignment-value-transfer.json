@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "discarded-member-assignment-value-transfer",
+  "base_sha": "46ceb4f6dcb65083cecd63b5227a81c6b417a916",
+  "queue": {
+    "candidate_sha": "46ceb4f6dcb65083cecd63b5227a81c6b417a916",
+    "sha256": "c761b4d1a3203e4da508cb001bb0c26985da6af8bd54f283f36d72558228cf91"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/imaging-darkroom"
+    ],
+    "rank_ceiling": 7,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "In the compiler's existing function-body completion-discard mode, lower a plain non-private, non-super member assignment statement to the existing SetProp, SetPropNamed, or SetPropIndex followed by Pop protocol. At runtime recognize that exact pair: after a successful write, skip result materialization and the paired Pop; where the selected store API already accepts ownership, move the RHS into it rather than cloning solely for the discarded result.",
+    "generality": "Eligibility comes only from the compiler's existing completion-value mode, ordinary assignment syntax, and a non-private, non-super member target. It applies uniformly without inspecting source paths, function identities, receiver kinds, keys, values, iteration counts, or results. Any assignment whose result is consumed by another expression, every tracked script completion, private member, super property, compound assignment, accessor, Proxy, primitive, global, exotic, and slow property route retains its current assignment semantics; the optimization changes only the post-success transfer protocol when the paired Pop proves the result unobservable. This is not a generic dispatch compaction: it is a narrowly semantic collapse of the assignment-result producer and its paired consumer.",
+    "semantic_risks": [
+      "preserving receiver, computed-key, and RHS evaluation order and evaluating each exactly once before the write",
+      "preserving assignment expression results whenever a surrounding expression or tracked statement-list completion can observe them, and leaving private, super, and non-statement member forms on the existing compiler path",
+      "preserving strict-mode errors, setter and Proxy calls, primitive receiver behavior, global-object synchronization, and abrupt-completion timing while suppressing only an unobservable post-write stack value",
+      "moving a Value only through an existing ownership-taking store after the current descriptor and receiver checks have selected that same data-write path; every other store retains its existing input and fallback behavior",
+      "skipping the following Pop only after a write completes successfully, so an abrupt completion leaves the instruction pointer and exception behavior on the unchanged path"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-29 target/performance-next-46ceb4f6-r1/profiles/hash-map-current.sample; hash-verified generated JetStream hash-map profile bundle target/performance-next-46ceb4f6-r1/profiles/hash-map.profile.js SHA-256 aa98bc1975d8824840df5c31a397b5dab27d514e1854ff5681ceea8ec4bf2c20; exact candidate executable SHA-256 d8866f518f67fb50778dfb9e717ff0b375d5098d7a3007f469ae190d95c5dfb0.",
+      "sha256": "12714806edfea40762e798317671d80f8a6249acdcfa273075a7b471998cc1bc",
+      "base_sha": "46ceb4f6dcb65083cecd63b5227a81c6b417a916",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "The current exact profile has 50 top-of-stack Value drops and 22 Value clones in a 220-sample flat profile while the source repeatedly performs discarded Entry, HashMap, and dense-array member writes. The compiler already suppresses result materialization for identifier assignments in this completion mode, but ordinary member assignments still leave the stored RHS on the stack until frame exit; this unit gives only qualifying statements the ordinary SetProp-plus-Pop transfer pair so the VM can collapse it safely.",
+      "inclusive_fraction": 0.2
+    },
+    {
+      "source": "macOS sample 2026-07-29 target/performance-next-46ceb4f6-r1/profiles/imaging-darkroom-current.sample; diagnostic-only bundle combines the hash-verified Kraken imaging-darkroom-data fixture with four executions of its public top-level loop, source SHA-256 0d2e680e2083c1a5b2eb36fdd98140380b7ccc613f0c701aa80a9a84ad94d873; exact candidate executable SHA-256 d8866f518f67fb50778dfb9e717ff0b375d5098d7a3007f469ae190d95c5dfb0.",
+      "sha256": "db13d1475c0d880a7cb6d4da9428f73f6a6bc05a9da538a343aa866b54bb8c88",
+      "base_sha": "46ceb4f6dcb65083cecd63b5227a81c6b417a916",
+      "opportunity_ids": [
+        "external/kraken-1.1/imaging-darkroom"
+      ],
+      "shared_cost": "The independent current profile has 154 top-of-stack Value drops and 63 Value clones in 982 flat samples. Its pixel loop executes three discarded computed member writes per pixel and reaches the existing ArrayRef::set fast path, so it exercises the same dead assignment-result transfer independently of hash-map's object fields.",
+      "inclusive_fraction": 0.2
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/imaging-darkroom"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/sunspider-1.0/string-tagcloud",
+      "broad/property_write",
+      "broad/array_write",
+      "broad/object_allocation",
+      "broad/dynamic_method_call"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
