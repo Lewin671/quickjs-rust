@@ -78,7 +78,16 @@ promptly so hosted CI records the formal three-role evidence.
   found no credible property or control regression. Hosted full/external
   evidence subsequently passed the generalization gate; exact results are
   recorded below and in T018.
-- [ ] **S5 (open, gate on a fresh measurement first) — evaluate whether
+- [x] **S5 — rejected: box the two-value `ShapedPair` payload.** Moving the
+  exact-two-property literal payload behind a `Box` reduced
+  `PropertyStorage` from 40 to 32 bytes and `ObjectData` from 112 to 104
+  bytes, but imposed a second allocation on each such literal. The frozen
+  HashMap target fast gate regressed (1.013x candidate/base), so the runtime
+  implementation was reverted immediately; see the dated negative evidence
+  below. Do not retry this layout by moving the box boundary, changing literal
+  admission, or tuning pair promotion: the header-size win did not outweigh
+  the extra allocation on an independent high-volume target.
+- [ ] **S6 (open, gate on a fresh measurement first) — evaluate whether
   `Rc`'s strong/weak refcount block is avoidable for object kinds never
   targeted by `Weak`.**
 
@@ -215,6 +224,38 @@ The artifact digest is
 `3ed6be7438b8037003012c34a1fc4d4eb8299283fbe4f1c973dd792458eeda8e`.
 The hosted run remains informational `inconclusive`/`non_claim` evidence on
 variable hardware rather than a fixed-host public claim.
+
+### 2026-07-30 rejected S5 boxed `ShapedPair` payload
+
+The exact current opportunity queue
+`target/performance-32a00b0e-vs-e66d0303/opportunity.json` ranked JetStream
+`hash-map` and Kraken `ai-astar` second and third. Fresh profiles plus
+MallocStackLogging showed both construct high volumes of ordinary `ObjectData`
+receivers: HashMap made 90,000 `Entry` receivers per run and A* made 10,000
+`GraphNode` receivers. Although these receivers use `Small` storage, the
+inline `[Value; 2]` in `PropertyStorage::ShapedPair` made every `ObjectData`
+carry the largest enum payload. The frozen one-attempt plan is
+`tasks/performance-units/box-shaped-pair-storage.json` (SHA-256
+`3103a81cb4c42dae795aa0e14db0911a99150b23e6196d181680c3bc65dd54c7`). It
+was a general layout experiment: no constructor, property name, source,
+iteration count, or benchmark was selected specially.
+
+The candidate boxed only the two-value literal payload. Focused object tests,
+the full runtime library (**1,914** tests), and the complete curated Test262
+subset (**5,160** cases) passed. The exact base release binary SHA-256 was
+`568549b735c590a0787d93a84f67d2f3c65312f917e863714a1bb28e6f757ad4`; the
+candidate was
+`7c88a7acafaa0241761e52e37638dfe44d8a908dc6364ee1d24ed62a38ce307f`.
+
+Four warmed, alternating runs of the unmodified JetStream HashMap profile
+gave base times of 1.61, 1.58, 1.59, and 1.59 seconds and candidate times of
+1.66, 1.60, 1.61, and 1.61 seconds. Their medians are 1.59 and 1.61 seconds:
+**1.013x candidate/base**, not the frozen `<= 0.95x` target gate. The prior
+first pair (2.53 and 2.04 seconds) was treated as warm-up and excluded. Since
+one independent target failed decisively, A*, broad, and full external
+promotion runs were intentionally not used to search for a favorable result.
+The runtime implementation and its size assertions were reverted immediately;
+only the frozen plan and this negative evidence remain.
 
 ### A much larger lever found outside this campaign's scope: global `var` sync
 

@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "box-shaped-pair-storage",
+  "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+  "queue": {
+    "candidate_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+    "sha256": "818e5ecb2d50ea6dc34f77e8e32d334ffda2733ae082153cb13b5a3b8c7f2d2d"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar"
+    ],
+    "rank_ceiling": 3,
+    "override_reason": "Rank-one controlflow-recursive remains closed by the direct-leaf frame, tail-reset, same-function frame-stack, and scalar-recursion negative evidence. Fresh current profiles and allocation traces for ranks two and three instead share ordinary ObjectData allocation: hash-map creates 90,000 Entry receivers per run, and A* creates 10,000 GraphNode receivers. The current PropertyStorage enum carries the inline two-value ShapedPair payload in every ObjectData allocation even when these receivers use Small storage. This is an object-header layout experiment, not a retry of constructor transition shapes, default descriptor materialization, property-cache probes, or the retained small-object threshold."
+  },
+  "mechanism": {
+    "summary": "Move the two-value ShapedPair payload behind a Box so the PropertyStorage discriminant carried by ordinary Small and Dynamic objects is smaller; two-property literals retain the same shape, values, reads, writes, descriptor promotion, and enumeration behavior through the boxed payload.",
+    "generality": "The layout applies to every PropertyStorage value regardless of source path, constructor identity, field name, input, iteration count, or benchmark. Ordinary Small and Dynamic objects receive the smaller ObjectData header, while any exact two-value static data literal pays only the internal indirection needed to retain its existing pair specialization. All property lookup, descriptor, accessor, delete, prototype, cache, enumeration, and promotion code continues through the same storage APIs.",
+    "semantic_risks": [
+      "preserving two-property literal duplicate-key handling, insertion order, and current-value visibility through every ShapedPair read and write",
+      "preserving descriptor replacement, accessor installation, deletion, extensibility, and integrity operations by promoting a boxed pair through the existing dynamic-storage route",
+      "preserving named-property cache shape identity and slot validation when the pair payload is indirectly stored",
+      "avoiding a misleading allocation win if the additional pair allocation regresses ordinary two-property literal creation"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-bb53c9d6-r1/profiles/hash-map.sample; SHA-256 verified below. The release runtime was rebuilt from current main after the evidence-only commits (SHA-256 568549b735c590a0787d93a84f67d2f3c65312f917e863714a1bb28e6f757ad4); MallocStackLogging independently recorded 90,000 construct_function to ObjectRef::with_prototype_slot allocations (14.4 MB) and 90,000 PropertyStorage::insert to RawVec::grow_one allocations (20.16 MB) while the official hash-map source created Entry receivers.",
+      "sha256": "a38570e20aba2d07acb9e45aa2f6cb85f7b19752c5e9af9e3efda07a21073f38",
+      "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Each ordinary receiver allocates ObjectData even though its active PropertyStorage is Small; the inline ShapedPair variant sets that enum's maximum payload size for all such headers. Lowering the header allocation class is a shared allocation cost separate from per-constructor shape learning or property-write caching.",
+      "inclusive_fraction": 0.08
+    },
+    {
+      "source": "macOS sample 2026-07-30 target/performance-bb53c9d6-r1/profiles/ai-astar.sample; SHA-256 verified below. The same current release and a separate MallocStackLogging diagnostic recorded GraphNode construction through ObjectRef::with_prototype_slot and repeated PropertyStorage::insert growth; the official A* source creates 10,000 five-field GraphNode ordinary receivers before search execution.",
+      "sha256": "4ea07fcf8854bc4f7453a9f7c4eaf7b21ea9ec78720b0b0d383b5ca7e7b874d0",
+      "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+      "opportunity_ids": [
+        "external/kraken-1.1/ai-astar"
+      ],
+      "shared_cost": "A* independently exercises the same ordinary ObjectData header before its GraphNode fields use Small storage. The candidate changes only the inactive maximum enum payload that each of those objects carries, not the previously rejected field sequence or small-storage threshold mechanisms.",
+      "inclusive_fraction": 0.05
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/jetstream3-js-subset/cdjs",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "broad/object_allocation",
+      "broad/property_read",
+      "broad/property_write",
+      "broad/plain_function_call"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
