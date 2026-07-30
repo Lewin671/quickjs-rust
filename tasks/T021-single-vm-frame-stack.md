@@ -2772,3 +2772,59 @@ mechanism by changing flag packing, cold-slot layout, opcode placement, or
 matcher ownership: it removed the intended structural work but delivered less
 than the campaign's ten-percent minimum. A future literal or RegExp unit needs
 fresh evidence for a different shared cost.
+
+### 2026-07-30 frame-independent native construction candidate
+
+The exact `14d9f2f6` opportunity queue ranks SunSpider `date-format-tofte`
+ninth at 5.790250x QuickJS-NG. Ranks one through seven are closed by current
+profiles and their consumed mechanisms. A fresh rank-eight
+`date-format-xparb` sample found only about twelve samples of removable native
+constructor environment work among 1,575 useful samples; its remaining String
+wrapper and concatenation costs require substantially broader representation
+work. The fresh Tofte sample (SHA-256
+`c0526ef6ac17aad2cc333cdabad8c3a287e47b3ef931e500927d3d12366a43ac`)
+instead found 19 samples in native Date caller-environment materialization and
+208 disjoint samples in post-constructor `apply_call_env`, or 227 of 2,178
+useful main-thread samples (10.4%).
+
+The frozen one-attempt plan
+`tasks/performance-units/frame-independent-native-construction.json`
+(SHA-256
+`13e68e4dd055d1ebe5afd43439814dc840c8a807256d89d5828e1154df14b139`)
+therefore mirrors the existing native-call rule at bytecode `Construct`:
+an unbound native Function receives the shared realm environment instead of a
+snapshot and later writeback of the caller frame. User-bytecode, bound, Proxy,
+class, derived, and forwarding construction retain the generic path. This is
+distinct from the rejected user-constructor context alias, where both choices
+allocated the same empty child frame. Coercion hooks and callbacks still run
+through their own function closures, while `apply_call_env` still refreshes
+sloppy realm-backed caller slots.
+
+Focused semantics cover Number coercion through a callback that mutates a
+captured local, Date construction beneath direct eval, thrown-value identity,
+and a synchronous Promise executor retaining its captured cell. The new test,
+all 59 global tests, eight Date-selected tests, two String-constructor tests,
+the existing native callback test, workspace Clippy, and 669 targeted Test262
+Date/String/Number/Promise/call/new cases pass.
+
+The candidate and exact-base release binary SHA-256 values are
+`1598e5352a92c37413ac9e9040a8cc769cf678391db7130fa1dc868f219744f9`
+and
+`919c9cad198c2dcf3a50317e13997743756a084a51394097f3542b9b832fa5cb`.
+The seven-block alternating target receipt (SHA-256
+`e0f6e1e3c58869a23671f5b36f9583351ed99c6058e91c0775145dfaf6f62747`)
+requires identical exit status, stdout, and stderr for every candidate/base
+execution. `date-format-tofte` reached **0.892977x** candidate/base (126.498
+ms candidate median versus 141.561 ms base), passing the frozen `<= 0.90x`
+target gate.
+
+The independently recorded nine-control receipt (SHA-256
+`dbae252cd255296d34791dc1d65bae0cbb87e098ffb2b19f9cc46c0fbf4b8740`)
+also passed its `<= 1.03x` ceiling. Ratios were 0.986840x for
+`date-format-xparb`, 1.003848x for `controlflow-recursive`, 0.991339x for
+`string-tagcloud`, 1.006946x for HashMap, 0.998412x for CDJS, 1.001362x for
+`access-nbody`, 1.001382x for `dynamic_method_call`, 1.000707x for
+`plain_function_call`, and 0.998588x for `object_allocation`. This retains the
+candidate through the fast gate only. Campaign promotion still requires a
+clean exact candidate commit, the complete 25-case broad report, complete
+external comparison, and exact zero-gap Test262 burndown.

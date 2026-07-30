@@ -1800,3 +1800,51 @@ fn native_callees_see_the_realm_not_the_caller_frame() {
         Ok(Value::String("1,2,3".to_owned().into()))
     );
 }
+
+#[test]
+fn native_constructors_see_the_realm_and_callbacks_keep_captured_cells() {
+    assert_eq!(
+        eval(
+            "function f() {
+               let local = 3;
+               return eval(\"new Number({ valueOf: function () { local += 4; return local; } }).valueOf() + ':' + local\");
+             }
+             f();"
+        ),
+        Ok(Value::String("7:7".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function f() {
+               let local = 5;
+               return eval(\"new Date('January 1 2001 00:00:00 +0000').getUTCFullYear() + local\");
+             }
+             f();"
+        ),
+        Ok(Value::Number(2006.0))
+    );
+    assert_eq!(
+        eval(
+            "let sentinel = {};
+             let caught;
+             try {
+               new Number({ valueOf: function () { throw sentinel; } });
+             } catch (error) {
+               caught = error;
+             }
+             caught === sentinel;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function f() {
+               let local = 1;
+               new Promise(function (resolve) { local = 9; resolve(local); });
+               return local;
+             }
+             f();"
+        ),
+        Ok(Value::Number(9.0))
+    );
+}

@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "frame-independent-native-construction",
+  "base_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+  "queue": {
+    "candidate_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+    "sha256": "7b759f146a7472dd7d3333049821ea31622bdd9d57ff43f7740ff2e243a4bd41"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/date-format-tofte"
+    ],
+    "rank_ceiling": 9,
+    "override_reason": "Ranks 1 through 7 are closed by their current profiles and consumed frame, object, RegExp, string, or helper-graph mechanisms. A fresh rank-8 date-format-xparb profile has 1,575 useful main-thread samples: its native-constructor caller-environment setup and writeback total only about twelve samples, while the remaining boxed-String body and generic string concatenation require substantially higher-cost representation or escape-analysis work and the prior shared StringData attempt is closed. The fresh rank-9 date-format-tofte profile instead exposes a distinct low-cost boundary: a native Date constructor invoked beneath cached direct eval snapshots and writes back a dynamic caller environment even though native constructors, like the already-generalized native call path, do not inherit caller lexical bindings. This is not the rejected direct-construction realm-context alias, which concerned user-bytecode constructors whose call_env and realm_env both allocate the same empty child frame; here the current native path demonstrably takes frame_call_env and apply_env around the constructor body."
+  },
+  "mechanism": {
+    "summary": "When a bytecode Construct operation has resolved an unbound native Function target, invoke construct_function with a realm-only CallEnv instead of snapshotting and later writing back the active caller frame, mirroring the existing frame-independent native-call rule.",
+    "generality": "Admission depends only on the resolved constructor representation: a directly resolved Function with a native implementation and no bound target uses the current realm-only environment. Native constructors still receive the same target, newTarget, arguments, shared realm, module host, agent context, prototype lookup, and callback behavior. Proxy, bound, user-bytecode, class, derived, Reflect.construct forwarding, and non-constructable targets retain the current call_env path. No source text, benchmark identity, function name, argument value, iteration count, checksum, or result is inspected.",
+    "semantic_risks": [
+      "preserving newTarget installation and restoration plus prototype lookup, including replaced native-constructor prototypes and cross-realm prototype markers",
+      "preserving argument coercion and native-constructor callbacks whose user functions capture caller or eval-created cells",
+      "preserving shared realm writes and refreshing sloppy-global-backed caller slots after construction",
+      "keeping Proxy, bound-function, user-bytecode, derived-class, and Reflect.construct forwarding on paths that may execute arbitrary constructor code",
+      "preserving abrupt completion and thrown-value identity while avoiding caller frame writeback only for the frame-independent native target"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-f620dd73/date-format-tofte/current.sample; the diagnostic wrapper target/performance-next-46ceb4f6-r1/profiles/date-format-tofte-current.profile.js (SHA-256 e16199f1e0c97fe27b996180b3cfbb5a6f2fb6bd38328a497cd28ded8927b56c) extends only the hash-verified official SunSpider source. The f620dd73 release executable is byte-identical to the queued 14d9f2f6 executable (SHA-256 919c9cad198c2dcf3a50317e13997743756a084a51394097f3542b9b832fa5cb).",
+      "sha256": "c0526ef6ac17aad2cc333cdabad8c3a287e47b3ef931e500927d3d12366a43ac",
+      "base_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+      "opportunity_ids": [
+        "external/sunspider-1.0/date-format-tofte"
+      ],
+      "shared_cost": "Of 2,178 useful main-thread samples, the native Date construction reached from cached eval has 19 samples in construct_callee caller-environment materialization and 208 disjoint samples in apply_call_env after the constructor body. These 227 samples, or 10.4 percent, are the snapshot and writeback work removed by selecting the existing realm-only environment before an unbound native constructor. The 49-sample construct_function body, prototype selection, Date parsing, receiver allocation, and all user code remain unchanged.",
+      "inclusive_fraction": 0.104
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/date-format-tofte"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/date-format-xparb",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/access-nbody",
+      "broad/dynamic_method_call",
+      "broad/plain_function_call",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

@@ -1666,7 +1666,23 @@ impl<'a> Vm<'a> {
             }
             return Ok(());
         }
-        let mut env = self.call_env(&callee);
+        // A native constructor, like a native call, does not inherit the
+        // caller's lexical environment. Any coercion hooks or callbacks it
+        // invokes carry their own closure cells, while realm writes are shared
+        // directly. Avoid materializing and writing back a dynamic caller
+        // frame solely because construction happened beneath direct eval or a
+        // closure-creating function.
+        let frame_independent_native = matches!(
+            &callee,
+            Value::Function(function) if function.native.is_some() && function.bound.is_none()
+        );
+        let mut env = if frame_independent_native {
+            VmCallEnv {
+                env: self.realm_env(),
+            }
+        } else {
+            self.call_env(&callee)
+        };
         let result = construct_function(callee.clone(), callee, arguments, &mut env.env);
         self.apply_call_env(env);
         if let Some(result) = self.handle_call_result(result)? {
