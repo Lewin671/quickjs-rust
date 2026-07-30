@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "ordinary-bytecode-value-only-exit",
+  "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+  "queue": {
+    "candidate_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+    "sha256": "818e5ecb2d50ea6dc34f77e8e32d334ffda2733ae082153cb13b5a3b8c7f2d2d"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/date-format-tofte"
+    ],
+    "rank_ceiling": 12,
+    "override_reason": "Ranks 1, 3, 4, and 5 are closed by current direct-leaf, static-object, native-callback, and raytrace profiling evidence; rank 2 remains a separate PropertyStorage allocation-family investigation rather than a call-exit mechanism. Fresh profiles of rank 6 CDjs and rank 12 date-format-tofte independently expose the same ordinary non-direct bytecode completion boundary. A value-only exit is a general, lower-risk prerequisite to any larger generic-frame scheduler and will be retained only if both targets clear the frozen gate."
+  },
+  "mechanism": {
+    "summary": "For a synchronous ordinary bytecode function call whose caller needs only its completion value, keep the completed VM local and return Result<Value, RuntimeError> instead of materializing FunctionBytecodeResult and moving its CallEnv, locals, local-upvalue vector, and sloppy-global metadata through the caller before immediately dropping them.",
+    "generality": "Admission is determined only by the call's semantic role: ordinary synchronous bytecode calls use the value-only exit unless they are derived constructor calls whose caller must inspect the completed frame to implement implicit this return. Generator, async, async-generator, direct-slot, direct-eval, module, and derived-constructor flows retain their existing entry and result behavior. It does not inspect source paths, workload names, function names, argument values, iteration counts, checksums, or benchmark identities.",
+    "semantic_risks": [
+      "retaining the full FunctionBytecodeResult path for derived construction so super-bound this, implicit object return, and missing-super errors remain observable",
+      "preserving immutable function-name caller restoration after both successful and abrupt ordinary calls",
+      "preserving the existing full-frame result APIs for direct eval and other evaluators whose callers inspect environment or slot state",
+      "dropping the completed ordinary frame in the same order on return and throw so captured-cell identity, using disposal, sloppy-global state, and thrown-value identity do not change",
+      "not widening direct-leaf eligibility or altering generator, async, class-constructor, proxy, bound-function, or native-call dispatch"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 /tmp/qjs-cdjs-current.oc8lQ8/cdjs.sample; current exact base 32a00b0e has release executable SHA-256 568549b735c590a0787d93a84f67d2f3c65312f917e863714a1bb28e6f757ad4. The runner-equivalent pinned JetStream CDjs bundle completed normally.",
+      "sha256": "97f6e94c2e81e8b31c74e95348e0bcbe5b63fd71ef579ec8176cbdefacf5788c",
+      "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/cdjs"
+      ],
+      "shared_cost": "685 of 697 sampled stacks pass through the general call_function -> eval_function_bytecode path rather than the direct-leaf or native callback paths. CDjs heavily exercises closure-capturing collision and tree helpers, so every such ordinary completion currently materializes then immediately drops a full FunctionBytecodeResult.",
+      "inclusive_fraction": 0.98
+    },
+    {
+      "source": "macOS sample 2026-07-30 /tmp/qjs-date-format-tofte-current.MyXUg5/date-format-tofte.sample; hash-verified diagnostic source target/performance-next-46ceb4f6-r1/profiles/date-format-tofte-current.profile.js SHA-256 e16199f1e0c97fe27b996180b3cfbb5a6f2fb6bd38328a497cd28ded8927b56c; current exact base 32a00b0e release executable SHA-256 568549b735c590a0787d93a84f67d2f3c65312f917e863714a1bb28e6f757ad4.",
+      "sha256": "a9f5cc8661f1a0ea65fd7c7fa10f6cd84a6ceb735df25ce9c9840ac14ebdf2ce",
+      "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+      "opportunity_ids": [
+        "external/sunspider-1.0/date-format-tofte"
+      ],
+      "shared_cost": "2,086 of 2,204 sampled stacks pass through call_function -> eval_function_bytecode. The workload independently reaches ordinary functions generated around dynamic formatting logic; direct-eval evaluators retain their full-state path, while their ordinary synchronous callees still pay the same avoidable value-only completion transfer.",
+      "inclusive_fraction": 0.95
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/date-format-tofte"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/sunspider-1.0/string-tagcloud",
+      "broad/dynamic_method_call",
+      "broad/function_call_two_args",
+      "broad/derived_class_constructor",
+      "broad/direct_eval"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

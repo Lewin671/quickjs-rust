@@ -2494,3 +2494,40 @@ candidate binary, or fast-gate run was appropriate. Do not retry this as a
 realm-context, caller-shell, or `empty_frame` versus `new_function_frame`
 variant; a future construction unit must profile a different cost beneath
 `construct_function` or receiver/property allocation itself.
+
+### 2026-07-30 rejected ordinary bytecode value-only exit
+
+The current `32a00b0e` profiles for SunSpider `cdjs` and
+`date-format-tofte` both attributed the dominant non-direct function stacks to
+`call_function -> eval_function_bytecode`. The frozen one-attempt unit
+`tasks/performance-units/ordinary-bytecode-value-only-exit.json` (SHA-256
+`c50af5c78cd2629c12e4f088688e7f3697ae6296396945d68143528fbcf8acad`)
+therefore tested whether a synchronous, non-derived ordinary function could
+return its completion `Value` directly, leaving the richer
+`FunctionBytecodeResult` solely for derived construction. It did not select by
+function identity, source, workload, value, or call depth.
+
+Focused return/throw-identity and derived-constructor tests passed, along with
+the affected runtime test groups, `cargo check -p qjs-runtime`, and Clippy
+with warnings denied. The isolated candidate binary SHA-256 was
+`a7761053866158a52fad0353f276c9ec53d862ca059b40e4e151cbefb192b535`, against
+the runtime-identical base SHA-256
+`568549b735c590a0787d93a84f67d2f3c65312f917e863714a1bb28e6f757ad4`.
+
+The hash-verified three-block external fast screen's manifest, raw receipt,
+and report SHA-256 values were
+`12698a36cb9648fd3440d834621f3c466a070ef1fca34be0713580b190e60946`,
+`c90d4cfbf8a0997806c49ef8f6430a19f0bd244e8ce0257d8f838d8b754a0f27`, and
+`b8b0790de1ae322b2b000b27fc1a4ffb4c87f427a8ccb3893467005097e23175`.
+The frozen `cdjs <= 0.95x` target gate failed at **0.997776x**
+candidate/base. Controls were neutral: HashMap 0.994082x, raytrace 0.991145x,
+A* 1.001217x, nbody 0.989133x, controlflow-recursive 0.994493x, and Tagcloud
+1.006328x. Since the first target failed and the unit permits one attempt,
+the second target was not run and the complete external, broad, and Test262
+promotion work was intentionally skipped.
+
+The runtime patch and focused tests were reverted immediately. Do not retry
+this by splitting, borrowing, or inlining `FunctionBytecodeResult`: avoiding
+that final aggregate move is not a material end-to-end lever. A successor
+must remove a separately profiled shared generic-call cost, such as a proven
+safe call-frame or scheduler cost, under a fresh plan and profile.
