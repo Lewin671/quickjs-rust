@@ -1,12 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    Function, ObjectRef, Property, PropertyKey, RuntimeError, Value,
-    bigint::BIGINT_DATA_PROPERTY,
-    boolean::BOOLEAN_DATA_PROPERTY,
-    function_prototype,
-    number::NUMBER_DATA_PROPERTY,
-    string::{self, STRING_DATA_PROPERTY},
+    Function, JsString, ObjectRef, PropertyKey, RuntimeError, Value, bigint::BIGINT_DATA_PROPERTY,
+    boolean::BOOLEAN_DATA_PROPERTY, function_prototype, number::NUMBER_DATA_PROPERTY, string,
     symbol,
 };
 
@@ -122,32 +118,9 @@ fn boxed_number(value: f64, env: &CallEnv) -> Value {
     Value::Object(object)
 }
 
-fn boxed_string(value: &str, env: &CallEnv) -> Value {
+fn boxed_string(value: &JsString, env: &CallEnv) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), constructor_prototype("String", env));
-    object.define_non_enumerable(
-        STRING_DATA_PROPERTY.to_owned(),
-        Value::String(value.to_owned().into()),
-    );
-    object.define_property(
-        "length".to_owned(),
-        Property::data(
-            Value::Number(string::string_code_unit_len(value) as f64),
-            false,
-            false,
-            false,
-        ),
-    );
-    for (index, code_unit) in string::string_code_units(value).into_iter().enumerate() {
-        object.define_property(
-            index.to_string(),
-            Property::data(
-                Value::String(string::string_from_code_unit(code_unit).into()),
-                true,
-                false,
-                false,
-            ),
-        );
-    }
+    string::define_string_data(&object, value);
     Value::Object(object)
 }
 

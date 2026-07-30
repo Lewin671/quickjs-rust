@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "string-wrapper-shared-data-buffer",
+  "base_sha": "e66d03032a97362d2ac858003e7dee09e1f686ae",
+  "queue": {
+    "candidate_sha": "e66d03032a97362d2ac858003e7dee09e1f686ae",
+    "sha256": "1636b83c83b23491a64e9979ea815dada85c7bdcaaae126cfe6d88869103c321"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/date-format-xparb"
+    ],
+    "rank_ceiling": 17,
+    "override_reason": "Fresh rank-17 evidence identifies a shared immutable String-wrapper data representation cost. Ranks 1 through 16 are covered by the closed direct-frame, call, typed-loop, object-shape, RegExp, direct-eval, class-field, property-cache, or dynamic-string-append mechanisms; the immediately preceding discarded member-assignment transfer is also explicitly rejected. This unit instead removes an owned UTF-8 buffer copy made while installing the ordinary String exotic object's internal data and its ASCII index properties. It has no source-path, benchmark, iteration-count, checksum, or receiver-identity condition, and uses strict target, cross-suite controls, full external and broad coverage, and Test262 gates before retention."
+  },
+  "mechanism": {
+    "summary": "Represent the internal StringData of ordinary boxed String objects by cloning the existing immutable JsString handle instead of cloning its UTF-8 buffer, and install ASCII indexed properties directly from the shared bytes rather than first materializing a temporary UTF-16 vector.",
+    "generality": "The shared installer applies to every ordinary new String(value), Object(string), and internal primitive-string boxing route after the existing ToString, receiver/prototype, and constructor checks. It stores only a clone of the immutable, copy-on-write JsString handle, so later dynamic mutation of another primitive string value detaches through the existing JsString::make_mut behavior. Non-ASCII input keeps the current linear string_code_units path; only ASCII enumeration avoids an intermediate vector. The change does not inspect benchmark names, source text, iteration counts, values, keys, or object identity, and it leaves String(Symbol), Proxy, primitive conversion, descriptors, and all non-string boxing routes on their established semantic paths."
+    ,"semantic_risks": [
+      "preserving String versus new String conversion behavior, including the existing new String(Symbol) TypeError and constructor-selected prototype behavior",
+      "preserving each boxed string's UTF-16 length, indexed code units, index-key order, and length/index property descriptor attributes, including surrogate-pair and lone-surrogate cases",
+      "ensuring the shared immutable StringData handle cannot let a later copy-on-write append or other mutation alter an already created wrapper object's value",
+      "preserving ordinary Object(string) and internal primitive boxing behavior while removing only duplicated data storage and the ASCII-only temporary code-unit vector"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-29 /tmp/qjs_2026-07-29_191308_6e43.sample.txt; exact e66d03032a97362d2ac858003e7dee09e1f686ae release runtime; the official SunSpider date-format-xparb source SHA-256 is 8c5dae670a78939e88e46baaf14b75250001c7d73116613e54ad86c4f0c03eba and was used only to sustain profiling, never as a timing decision.",
+      "sha256": "f356c5d32e4aaf6ee1a86bfbcbf2012346b149f5d71eb9592b95da496878200c",
+      "base_sha": "e66d03032a97362d2ac858003e7dee09e1f686ae",
+      "opportunity_ids": [
+        "external/sunspider-1.0/date-format-xparb"
+      ],
+      "shared_cost": "The 729-sample profile sends 63 samples through native_string and 22 through define_string_data. This external workload repeatedly invokes new String on numeric date fields: after ToString creates a JsString, the current installer copies its UTF-8 buffer into the internal StringData property and materializes a temporary ASCII UTF-16 vector before creating the required indexed properties. Sharing the immutable buffer and iterating ASCII bytes removes those per-wrapper copies and temporary allocation without changing the required ordinary properties.",
+      "inclusive_fraction": 0.086
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/date-format-xparb"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/date-format-tofte",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/string-base64",
+      "external/jetstream3-js-subset/hash-map",
+      "broad/object_allocation",
+      "broad/string_slice"
+    ],
+    "target_max_candidate_over_base": 0.98,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

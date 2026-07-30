@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 
 use crate::{
-    Function, ObjectRef, Property, RuntimeError, Value, function_prototype, property_value, symbol,
-    to_js_string_with_env, to_length_with_env, to_number_with_env, to_uint16_with_env,
+    Function, JsString, ObjectRef, Property, RuntimeError, Value, function_prototype,
+    property_value, symbol, to_js_string_with_env, to_length_with_env, to_number_with_env,
+    to_uint16_with_env,
 };
 
 use super::{
-    STRING_DATA_PROPERTY, push_code_point, string_code_unit_len, string_code_units,
-    string_from_code_unit, string_from_code_units,
+    STRING_DATA_PROPERTY, js_string_code_unit_len, push_code_point, string_code_units,
+    string_from_code_unit,
 };
 use crate::CallEnv;
 
@@ -22,13 +23,13 @@ pub(crate) fn native_string(
         // `String(symbol)` (non-construct) returns the descriptive string;
         // `new String(symbol)` falls through to ToString, which throws.
         Some(Value::Object(object)) if !is_construct && symbol::is_symbol_primitive(&object) => {
-            symbol::symbol_descriptive_string(&object)
+            symbol::symbol_descriptive_string(&object).into()
         }
-        Some(value) => to_js_string_with_env(value, env)?,
-        None => String::new(),
+        Some(value) => to_js_string_with_env(value, env)?.into(),
+        None => JsString::default(),
     };
     if !is_construct {
-        return Ok(Value::String(value.into()));
+        return Ok(Value::String(value));
     }
 
     let object = match this_value {
@@ -150,31 +151,41 @@ fn require_object_coercible(value: Value, context: &str) -> Result<Value, Runtim
     }
 }
 
-pub(super) fn define_string_data(object: &ObjectRef, value: &str) {
+pub(crate) fn define_string_data(object: &ObjectRef, value: &JsString) {
     object.define_non_enumerable(
         STRING_DATA_PROPERTY.to_owned(),
-        Value::String(value.to_owned().into()),
+        Value::String(value.clone()),
     );
     object.define_property(
         "length".to_owned(),
         Property::data(
-            Value::Number(string_code_unit_len(value) as f64),
+            Value::Number(js_string_code_unit_len(value) as f64),
             false,
             false,
             false,
         ),
     );
-    for (index, code_unit) in string_code_units(value).into_iter().enumerate() {
-        object.define_property(
-            index.to_string(),
-            Property::data(
-                Value::String(string_from_code_units(&[code_unit]).into()),
-                true,
-                false,
-                false,
-            ),
-        );
+    if value.is_ascii() {
+        for (index, byte) in value.as_bytes().iter().copied().enumerate() {
+            define_string_index(object, index, u16::from(byte));
+        }
+    } else {
+        for (index, code_unit) in string_code_units(value).into_iter().enumerate() {
+            define_string_index(object, index, code_unit);
+        }
     }
+}
+
+fn define_string_index(object: &ObjectRef, index: usize, code_unit: u16) {
+    object.define_property(
+        index.to_string(),
+        Property::data(
+            Value::String(string_from_code_unit(code_unit).into()),
+            true,
+            false,
+            false,
+        ),
+    );
 }
 
 pub(crate) fn string_object_value(object: &ObjectRef) -> Option<String> {
