@@ -73,7 +73,7 @@
       "external/sunspider-1.0/access-nbody",
       "broad/plain_function_call",
       "broad/dynamic_method_call",
-      "broad/closure_allocation"
+      "broad/closure_allocation_call"
     ],
     "target_max_candidate_over_base": 0.98,
     "control_max_candidate_over_base": 1.03,
