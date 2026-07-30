@@ -2531,3 +2531,62 @@ this by splitting, borrowing, or inlining `FunctionBytecodeResult`: avoiding
 that final aggregate move is not a material end-to-end lever. A successor
 must remove a separately profiled shared generic-call cost, such as a proven
 safe call-frame or scheduler cost, under a fresh plan and profile.
+
+### 2026-07-30 rejected entry-prepared numeric helper graph
+
+The exact `14d9f2f6` queue ranked Kraken `imaging-darkroom` fourth. A fresh
+sample placed 3,768 of 4,011 main-thread stacks in generic
+`Vm::run_completion` below `ProcessImageData`, including repeated direct-leaf
+frames through `FastGain`, `FastBias`, `FastLog2`, `Clamp`, and pure `Math`
+intrinsics. The frozen one-attempt plan
+`tasks/performance-units/typed-loop-entry-prepared-numeric-helper-graph.json`
+(SHA-256
+`be987cbde9321722df000e4922e8a8ea33393366275add86d87572c4ba6754ca`)
+therefore tested a mechanism distinct from the rejected per-invocation graph:
+the outer typed loop prepared and guarded the complete bounded acyclic helper
+graph once at entry, then evaluated only scalar graph instructions during the
+pixel iterations.
+
+Focused coverage proved 14 native graph calls across the seven iterations
+after backedge discovery, exact results against an ordinary callback loop,
+and zero graph calls with ordinary side effects when either a helper binding or
+`Math.log` was replaced. All 15 typed-loop tests passed. The candidate release
+SHA-256 was
+`e50d7fa7e16cb4ec5169c49626fe7d8549fd385719bf49e13451d214e9bad5f4`,
+against exact-base binary SHA-256
+`919c9cad198c2dcf3a50317e13997743756a084a51394097f3542b9b832fa5cb`.
+
+The complete five-block, seeded role-rotated fast screen used nine
+hash-verified upstream cases. Imaging improved from 5,421.789 ms to 1,348.788
+ms, or **0.248772x candidate/base**, and reached **0.850201x QuickJS-NG**.
+Eight declared controls were otherwise neutral: HashMap 0.992363x, raytrace
+0.992486x, A* 1.011120x, audio FFT 1.017029x, nbody 1.002863x,
+controlflow-recursive 1.013209x, and Tagcloud 1.007847x. However, the protected
+`3d-morph` control regressed from 25.107 ms to 31.004 ms, or
+**1.234879x candidate/base**, decisively exceeding the frozen `<= 1.03x`
+control ceiling. The manifest, raw receipt, and report SHA-256 values are
+`c36e49ab449cfc5292f6a0d5fadc4117614f2918bda434833eb3622f5f446f5e`,
+`b6d6b75689740d94436628f725acda25b4f5582500c10a50beacf097a8ef0278`,
+and `9c6297c1f67a5b63de2b837ff24fbf4748810389da654d37057b567b3b18ee2d`.
+
+The eager typed-loop integration and focused tests were reverted immediately;
+the decisive control failure made broad and Test262 promotion work
+unwarranted. Do not retry by changing graph limits, admitted operators, or
+benchmark-facing call shapes. A successor may revisit entry preparation only
+after a fresh profile explains the independent `3d-morph` regression and with
+a design that isolates all helper-graph state and dispatch from typed loops
+that do not use it.
+
+The post-revert binary comparison supplied that missing profile. In paired
+five-second samples of the same diagnostic-only expanded 3d-morph source, the
+candidate put 870 top-of-stack samples in an out-of-line
+`typed_loop::execute::typed_binary` call, while the exact base kept the same
+work inside `typed_loop::execute::run` and had no corresponding out-of-line
+symbol. Merely widening `typed_binary` from private to `pub(super)` for graph
+reuse changed the optimizer's inlining decision and imposed a call on every
+existing typed numeric operation; 3d-morph never entered a helper graph. The
+candidate/base sample SHA-256 values are
+`58261c4780bc37e77219911a6a7d4d05e2a1ab35b24f05b6da11319836f0abbb`
+and `82d3a3922ff0ad3b06b1f763573274e5437d2a12b30d4d98b3cecdc7395f15a8`.
+A distinct successor must preserve that hot inlining boundary and keep graph
+evaluation out of line before it may retest entry preparation.

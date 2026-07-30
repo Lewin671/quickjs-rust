@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "typed-loop-entry-prepared-numeric-helper-graph",
+  "base_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+  "queue": {
+    "candidate_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+    "sha256": "7b759f146a7472dd7d3333049821ea31622bdd9d57ff43f7740ff2e243a4bd41"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/kraken-1.1/imaging-darkroom"
+    ],
+    "rank_ceiling": 4,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Admit global ordinary Number-only helper calls in an otherwise compatible TypedLoopProgram, prepare their bounded acyclic helper graphs and all live closure/realm/Math guards once at typed-loop entry, and execute each hot call through scalar graph state instead of generic bytecode frames. The expected target reduction is 35-60%; the unit is rejected unless imaging-darkroom reaches at most 0.70x its exact base while controls remain at most 1.03x.",
+    "generality": "Admission is structural: a loop call must use an unmodified global binding, one or two scalar arguments, and a live ordinary function whose immutable bytecode graph contains only Number constants and parameters, read-only captured Number or function cells, supported arithmetic/comparisons, forward branches, and receiver-independent pure Math intrinsics. Every graph, cell, function, realm, Math object, property, arity, and Number guard is completed before native loop execution. The mechanism never inspects benchmark names, source paths, function names, input sizes, iteration counts, checksums, or expected results. Unsupported bytecode, cycles, loops, coercion, writes, accessors, proxies, dynamic scope, replaced intrinsics, non-Number inputs, or any failed guard declines before the loop performs fast-path work and retains the existing interpreter path.",
+    "semantic_risks": [
+      "preserving ECMAScript Number arithmetic, comparisons, truthiness, NaN, signed zero, Infinity, remainder, exponentiation, and supported Math intrinsic behavior across nested calls and both sides of forward branches",
+      "resolving and snapshotting live global functions, closure cells, realm Math bindings, and own data properties before loop execution without hoisting any observable getter, proxy, coercion, or write",
+      "keeping deoptimization exact at the original outer call when entry preparation fails, with the precise callee and argument stack and with no helper or loop side effect already executed",
+      "rejecting recursion, backward branches, excessive graph depth or size, receiver/arguments/new.target/direct-eval/with/module-sensitive state, mutable captures, throws, and unsupported call shapes",
+      "mapping every prepared callee index through typed-loop boxed-register compaction and scratch reuse without sharing mutable invocation state across recursive outer frames"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-14d9f2f6/samples/imaging-darkroom.sample from a diagnostic-only repeated pinned Kraken imaging-darkroom bundle SHA-256 bfc464b658a5b69810769631928842241a46d8d9bfbfb62da53804843eadfaba, executed by exact-base release qjs SHA-256 919c9cad198c2dcf3a50317e13997743756a084a51394097f3542b9b832fa5cb. The diagnostic repetition was never used as a timing fixture. The sample roots 3,768 of 4,011 main-thread stacks in generic Vm::run_completion below ProcessImageData, with repeated child direct-leaf frames through FastGain, FastBias, FastLog2, Clamp, and pure Math calls; the current typed-loop tier is absent because generic JS helper calls are not admitted.",
+      "sha256": "435d7307a584869f83d13204282e3b5610487827029954920ffa9e97e389b457",
+      "base_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+      "opportunity_ids": [
+        "external/kraken-1.1/imaging-darkroom"
+      ],
+      "shared_cost": "The hot pixel loop's arithmetic, branches, dense reads, and dense writes already fit the generic typed-loop IR, but two global pure Number helper calls exclude the entire region. Preparing the helper graph once per loop entry can remove outer-loop dispatch and boxing plus all nested direct-leaf frame construction. This is distinct from the rejected pure-numeric-call-graph leaf, which rebuilt and guarded the recursive graph at every helper invocation and regressed the target to 1.131718x base.",
+      "inclusive_fraction": 0.9394
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/kraken-1.1/imaging-darkroom"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/audio-fft",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/3d-morph",
+      "external/sunspider-1.0/access-nbody",
+      "broad/array_dynamic_read",
+      "broad/array_write",
+      "broad/plain_function_call",
+      "broad/function_call_two_args",
+      "broad/dynamic_method_call",
+      "broad/math_abs"
+    ],
+    "target_max_candidate_over_base": 0.7,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
