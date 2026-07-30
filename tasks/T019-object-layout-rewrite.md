@@ -87,9 +87,16 @@ promptly so hosted CI records the formal three-role evidence.
   below. Do not retry this layout by moving the box boundary, changing literal
   admission, or tuning pair promotion: the header-size win did not outweigh
   the extra allocation on an independent high-volume target.
-- [ ] **S6 (open, gate on a fresh measurement first) — evaluate whether
-  `Rc`'s strong/weak refcount block is avoidable for object kinds never
-  targeted by `Weak`.**
+- [x] **S6 — rejected: lazy weak `ObjectRef` control sidecar.** Ordinary
+  objects used one inline strong-count word and allocated a weak-control
+  sidecar only when a bytecode or enumeration cache requested `ObjectWeakRef`.
+  The representation preserved focused ownership and cache tests, but its
+  target HashMap fast gate regressed to 1.023x candidate/base (and A* to
+  1.077x). The common clone/drop state handling cost more than the saved
+  `Rc` header allocation. The implementation was reverted immediately; do
+  not retry pointer-tagged lazy-weak sidecars or a different scalar-count
+  encoding around the current `Rc` ownership model. A deliberate arena/GC
+  subsystem remains a separate architectural decision.
 
 ## Scope
 
@@ -256,6 +263,49 @@ one independent target failed decisively, A*, broad, and full external
 promotion runs were intentionally not used to search for a favorable result.
 The runtime implementation and its size assertions were reverted immediately;
 only the frozen plan and this negative evidence remain.
+
+### 2026-07-30 rejected S6 lazy weak `ObjectRef` refcount
+
+Fresh current-main profiling and MallocStackLogging attributed a material
+shared allocation cost to the `Rc<ObjectData>` header: HashMap recorded
+23,760 `ObjectRef::with_prototype_slot` allocations (3,801,600 bytes), while
+A* independently recorded 10,000 (1,600,000 bytes). Production
+`ObjectWeakRef` use was limited to the bytecode named-property and enumeration
+caches, so the frozen one-attempt plan
+`tasks/performance-units/lazy-weak-object-refcount.json` (SHA-256
+`6b9fd4c29f450e619f1f71f0ab6f0e13926a8a726e1d94cd00ed350779d57ee6`)
+tested a general ownership representation rather than a workload-specific
+path: an ordinary `ObjectRef` kept one inline strong count, and the first
+weak observer promoted it to a separate sidecar. No constructor, property,
+source, input, iteration count, or benchmark result affected admission.
+
+The candidate added four reference-state tests covering strong-only size,
+weak upgrade before and after final strong drop, restoration to compact state
+after final weak drop, and cloned weak lifetime. Those tests, 12 focused
+object tests, the full runtime library (**1,918** tests), the complete
+curated Test262 subset (**5,160** cases), formatting, and
+`cargo clippy -p qjs-runtime --all-targets -- -D warnings` passed. The exact
+base release binary SHA-256 was
+`568549b735c590a0787d93a84f67d2f3c65312f917e863714a1bb28e6f757ad4`; the
+candidate was
+`962cbec52390471f1396f197bf94aaeff4914c89b03b00b98a23916dd5ea110d`.
+
+The three-role external fast-gate report is preserved locally under
+`target/performance-lazy-weak-object-refcount-fast-gate/`: raw/report
+SHA-256 values are
+`454ebb66d7ceb64b1bd6a2404054a1e63eec95761e88a6594a3ea2e9a04c6be5` and
+`b98bc81e03beff2903e3e2d085bfb650548238a98cd3502c6ed367ed3a437c51`.
+The reduced three-suite manifest retained the frozen HashMap target plus A*
+and recursive controls (its SHA-256 is
+`54a51004deb23940f495ef789396f1286939c2802473b36f2afa8f1689e0d9ce`), with
+the original three-block seeded role rotation and outer-process wall-time
+metric. Median candidate/base ratios were **1.023x** for HashMap (1,646.237
+ms vs 1,609.867 ms), **1.077x** for A* (8,967.832 ms vs 8,329.103 ms), and
+0.995x for recursive control flow. HashMap missed the frozen `<= 0.95x`
+target and A* also exceeded its `<= 1.03x` control limit. No broad or full
+external promotion run was used to hunt for a favorable result; the runtime
+implementation was reverted immediately and only the frozen plan plus this
+negative evidence remain.
 
 ### A much larger lever found outside this campaign's scope: global `var` sync
 

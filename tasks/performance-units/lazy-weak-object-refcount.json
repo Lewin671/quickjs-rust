@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "lazy-weak-object-refcount",
+  "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+  "queue": {
+    "candidate_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+    "sha256": "818e5ecb2d50ea6dc34f77e8e32d334ffda2733ae082153cb13b5a3b8c7f2d2d"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "rank_ceiling": 2,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Represent ordinary ObjectRef ownership with one inline strong-count word while no weak observer exists, and lazily allocate a separate weak-control record only when a cache or enumeration site requests ObjectWeakRef.",
+    "generality": "The representation applies to every ordinary ObjectRef based only on whether that object has a weak observer. It never examines source text, function identity, property names, benchmark paths, inputs, iteration counts, or results. All object operations retain their existing ownership API; object caches and enumeration caches retain non-owning weak semantics, while objects without weak observers avoid Rc's permanently allocated weak-count word.",
+    "semantic_risks": [
+      "preserving strong clone and final-drop behavior, including overflow handling and exactly-once ObjectData destruction",
+      "preserving ObjectWeakRef identity, upgrade, clone, and final weak-drop behavior after the last strong reference disappears",
+      "ensuring bytecode property and enumeration caches remain non-owning and cannot resurrect or retain an unreachable object",
+      "preserving stable object address identity while strong or weak handles exist, including prototype and cyclic-reference behavior",
+      "keeping every unsafe pointer conversion localized, aligned, and valid only for the allocation lifetime described by the reference state machine"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS current-main profile /tmp/qjs-current-external.Vyd00J/hash-map.sample (SHA below) plus MallocStackLogging receipt /tmp/qjs-current-external.Vyd00J/hash-map.malloc-count (SHA-256 eee73db39feb1ca373f275f4b6f6e43b93af457b770854e940fc37c4def5bdc1). The rebuilt current-main release SHA-256 is 568549b735c590a0787d93a84f67d2f3c65312f917e863714a1bb28e6f757ad4 and is runtime-identical to queue candidate 32a00b0e outside evidence-only commits. The live allocation trace recorded 23,760 ObjectRef::with_prototype_slot allocations totaling 3,801,600 bytes and 23,759 PropertyStorage::insert allocations totaling 5,322,016 bytes under the repeated Entry constructor route.",
+      "sha256": "a275eec13951b4f9e86d8cede379eb0f6a46a24bca97d5994075d993a371ae4c",
+      "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "The rank-two 5.351608x QuickJS-NG gap repeatedly allocates ordinary ObjectData through Rc even though production ObjectWeakRef use is restricted to two bounded bytecode cache families. A lazy weak sidecar can lower the common object allocation class without changing the property-storage mechanisms that were already rejected.",
+      "inclusive_fraction": 0.08
+    },
+    {
+      "source": "macOS current-main profile /tmp/qjs-current-external.Vyd00J/ai-astar.sample (SHA below) plus MallocStackLogging receipt /tmp/qjs-current-external.Vyd00J/ai-astar-runtime.malloc-count (SHA-256 5f31094a79f13360cb30d5490ceff0181712b5ad2a30bee26cfade76287e8d3a). The independent A* run recorded 10,000 ObjectRef::with_prototype_slot allocations totaling 1,600,000 bytes before its heavier per-node property-storage allocations.",
+      "sha256": "0fd5e57fe0e7b3bea21027f94af13593fc78e2a0763d218768a803c7fd5cbf49",
+      "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+      "opportunity_ids": [
+        "external/kraken-1.1/ai-astar"
+      ],
+      "shared_cost": "A* independently creates the same Rc-backed ordinary object headers, confirming that the reference-header mechanism is broader than Entry construction. Its larger property vectors make it a conservative regression sentinel rather than a promised co-target.",
+      "inclusive_fraction": 0.03
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/ai-astar",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/jetstream3-js-subset/cdjs",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "broad/object_allocation",
+      "broad/array_allocation",
+      "broad/property_read",
+      "broad/property_write",
+      "broad/dynamic_method_call",
+      "broad/plain_function_call"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
