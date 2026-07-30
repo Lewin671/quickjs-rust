@@ -77,6 +77,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         sloppy_global_writes,
         next_boxed,
         mut boxed_locals,
+        mut numeric_native_callee_registers,
         mut written_boxed_locals,
         mut boxed_global_reads,
         names,
@@ -130,10 +131,13 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
     let boxed_count = compact_boxed_registers(
         &mut ops,
         &mut site_entries,
-        &mut boxed_locals,
-        &mut written_boxed_locals,
-        &mut boxed_global_reads,
-        &mut boxed_constants,
+        BoxedRegisterMetadata {
+            locals: &mut boxed_locals,
+            numeric_native_callee_registers: &mut numeric_native_callee_registers,
+            written_locals: &mut written_boxed_locals,
+            global_reads: &mut boxed_global_reads,
+            constants: &mut boxed_constants,
+        },
         next_boxed,
     )?;
     debug_assert!(matches!(
@@ -154,6 +158,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         sloppy_global_writes,
         boxed_count,
         boxed_locals,
+        numeric_native_callee_registers,
         written_boxed_locals,
         boxed_global_reads,
         names,
@@ -183,24 +188,39 @@ fn compact_scalar_registers(
     compact_register_count(next_register, stack_register_count)
 }
 
+struct BoxedRegisterMetadata<'a> {
+    locals: &'a mut [(u16, u32)],
+    numeric_native_callee_registers: &'a mut [u16],
+    written_locals: &'a mut [u16],
+    global_reads: &'a mut [(u16, String)],
+    constants: &'a mut [(u16, Value)],
+}
+
 fn compact_boxed_registers(
     ops: &mut [TypedOp],
     site_entries: &mut [(Class, u16)],
-    boxed_locals: &mut [(u16, u32)],
-    written_boxed_locals: &mut [u16],
-    boxed_global_reads: &mut [(u16, String)],
-    boxed_constants: &mut [(u16, Value)],
+    metadata: BoxedRegisterMetadata<'_>,
     next_boxed: usize,
 ) -> Option<usize> {
+    let BoxedRegisterMetadata {
+        locals,
+        numeric_native_callee_registers,
+        written_locals,
+        global_reads,
+        constants,
+    } = metadata;
     let stack_register_count = stack_register_count(ops, site_entries, Class::Boxed);
     remap_ops(ops, Class::Boxed, stack_register_count);
     remap_site_entries(site_entries, Class::Boxed, stack_register_count);
-    remap_register_pairs(boxed_locals, stack_register_count);
-    for register in written_boxed_locals {
+    remap_register_pairs(locals, stack_register_count);
+    for register in numeric_native_callee_registers {
         remap_register(register, stack_register_count);
     }
-    remap_register_pairs(boxed_global_reads, stack_register_count);
-    remap_register_pairs(boxed_constants, stack_register_count);
+    for register in written_locals {
+        remap_register(register, stack_register_count);
+    }
+    remap_register_pairs(global_reads, stack_register_count);
+    remap_register_pairs(constants, stack_register_count);
     compact_register_count(next_boxed, stack_register_count)
 }
 
@@ -352,6 +372,23 @@ enum Origin {
     Local(u32),
 }
 
+fn writes_slot(op: &Op, slot: usize) -> bool {
+    match op {
+        Op::StoreLocal(candidate)
+        | Op::AssignLocal(candidate)
+        | Op::ClearLocal(candidate)
+        | Op::StoreLocalOrGlobalSloppy {
+            slot: candidate, ..
+        }
+        | Op::IncrementLocal {
+            slot: candidate, ..
+        }
+        | Op::CopyLocal { to: candidate, .. } => *candidate == slot,
+        Op::BinaryAssignLocals { target, stores, .. } => *target == slot || stores.contains(&slot),
+        _ => false,
+    }
+}
+
 struct Builder<'a> {
     bytecode: &'a Bytecode,
     header: usize,
@@ -370,6 +407,7 @@ struct Builder<'a> {
     sloppy_global_writes: Vec<(u32, String)>,
     next_boxed: usize,
     boxed_locals: Vec<(u16, u32)>,
+    numeric_native_callee_registers: Vec<u16>,
     written_boxed_locals: Vec<u16>,
     boxed_global_reads: Vec<(u16, String)>,
     names: Vec<Rc<str>>,
@@ -422,6 +460,7 @@ impl<'a> Builder<'a> {
             sloppy_global_writes: Vec::new(),
             next_boxed: MAX_STACK_DEPTH,
             boxed_locals: Vec::new(),
+            numeric_native_callee_registers: Vec::new(),
             written_boxed_locals: Vec::new(),
             boxed_global_reads: Vec::new(),
             names: Vec::new(),
@@ -509,22 +548,7 @@ impl<'a> Builder<'a> {
     fn writes_in_region(&self, slot: usize) -> usize {
         self.bytecode.code[self.header..=self.backedge.min(self.bytecode.code.len() - 1)]
             .iter()
-            .filter(|op| match op {
-                Op::StoreLocal(candidate)
-                | Op::AssignLocal(candidate)
-                | Op::ClearLocal(candidate)
-                | Op::StoreLocalOrGlobalSloppy {
-                    slot: candidate, ..
-                }
-                | Op::IncrementLocal {
-                    slot: candidate, ..
-                }
-                | Op::CopyLocal { to: candidate, .. } => *candidate == slot,
-                Op::BinaryAssignLocals { target, stores, .. } => {
-                    *target == slot || stores.contains(&slot)
-                }
-                _ => false,
-            })
+            .filter(|op| writes_slot(op, slot))
             .count()
     }
 
@@ -700,6 +724,44 @@ impl<'a> Builder<'a> {
         let register = self.fresh_boxed()?;
         self.boxed_locals.push((register, slot));
         Some(register)
+    }
+
+    /// Records a local as a numeric-native callee only when its last write
+    /// before the loop is the direct bytecode shape for `Math.<property>`.
+    ///
+    /// A generic local call cannot be compiled just to deopt at its first
+    /// invocation: installing such a plan makes its otherwise-interpreted loop
+    /// pay typed-loop dispatch at every backedge. The live function identity is
+    /// still checked at execution, so a replaced property or local remains
+    /// observationally identical to the ordinary call path.
+    fn mark_numeric_native_callee(&mut self, register: u16, origin: Origin) -> bool {
+        let Origin::Local(slot) = origin else {
+            return false;
+        };
+        let Ok(slot) = usize::try_from(slot) else {
+            return false;
+        };
+        let prefix = &self.bytecode.code[..self.header];
+        let Some(store) = prefix.iter().rposition(|op| writes_slot(op, slot)) else {
+            return false;
+        };
+        let Some(math_load) = store.checked_sub(2) else {
+            return false;
+        };
+        if !matches!(
+            (prefix.get(math_load), prefix.get(math_load + 1), prefix.get(store)),
+            (
+                Some(Op::LoadGlobal(name)),
+                Some(Op::GetPropNamed { .. }),
+                Some(Op::StoreLocal(candidate)),
+            ) if name == "Math" && *candidate == slot
+        ) {
+            return false;
+        }
+        if !self.numeric_native_callee_registers.contains(&register) {
+            self.numeric_native_callee_registers.push(register);
+        }
+        true
     }
 
     /// Boxed register for a receiver the bytecode names as a frame slot rather
@@ -1263,6 +1325,26 @@ impl<'a> Builder<'a> {
                 // The receiver is dropped: only receiver-independent intrinsics
                 // are admitted, and the run-time check proves that.
                 let _ = self.stack.pop()?;
+                let dst = self.slot_scalar()?;
+                self.emit(TypedOp::CallNumericNative {
+                    dst,
+                    callee,
+                    first: args[0],
+                    second: args[1],
+                    arity: u8::try_from(*argc).ok()?,
+                });
+                self.push(dst, Origin::Computed);
+            }
+            Op::Call(argc) if (1..=2).contains(argc) => {
+                let mut args = [0_u16; 2];
+                for index in (0..*argc).rev() {
+                    let (register, _) = self.pop()?;
+                    args[index] = register;
+                }
+                let (callee, origin) = self.pop_boxed()?;
+                if !self.mark_numeric_native_callee(callee, origin) {
+                    return None;
+                }
                 let dst = self.slot_scalar()?;
                 self.emit(TypedOp::CallNumericNative {
                     dst,

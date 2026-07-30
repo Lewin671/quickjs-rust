@@ -322,6 +322,11 @@ pub(super) struct TypedLoopProgram {
     boxed_count: usize,
     /// Boxed register holding each referenced frame slot, as (register, slot).
     boxed_locals: Vec<(u16, u32)>,
+    /// Boxed local registers which occur as the callee of an unbound numeric
+    /// native call. These alone may hold a Function rather than an ordinary
+    /// object at native-loop entry; the call operation rechecks the exact
+    /// intrinsic before it can execute.
+    numeric_native_callee_registers: Vec<u16>,
     /// Boxed registers written back to their slots when the loop ends.
     written_boxed_locals: Vec<u16>,
     /// Global bindings read into boxed registers.
@@ -882,6 +887,40 @@ mod tests {
                  run(10);"
             ),
             Ok(Value::Number(50.0))
+        );
+        // A detached numeric intrinsic is an ordinary `Call`, not a
+        // receiver-preserving `CallResolved`. It must nevertheless use the
+        // same guarded native operation once the frame-local callee is known.
+        let unbound_source = "function run(n) { var floor = Math.floor, s = 0; for (var i = 0; i < n; i++) { s = s + floor(i / 2); } return s; }";
+        assert_eq!(
+            super::compile_all(&nested_function(unbound_source)).len(),
+            1,
+            "{unbound_source}"
+        );
+        assert_eq!(
+            eval(&format!("{unbound_source} run(8);")),
+            Ok(Value::Number(12.0))
+        );
+        // A generic Function local must stay out of typed-loop compilation:
+        // installing a plan only to deopt would add per-backedge dispatch to
+        // an otherwise ordinary callback loop. The counter proves its normal
+        // interpreter calls remain exact.
+        let fallback_source = "var typedLoopCallCount = 0; function run(n, callbackValue) { var numeric = callbackValue, total = 0; for (var i = 0; i < n; i++) { total = total + numeric(i); } return total + ':' + typedLoopCallCount; } function callback(value) { typedLoopCallCount++; return value; }";
+        assert_eq!(
+            super::compile_all(&nested_function(fallback_source)).len(),
+            0,
+            "{fallback_source}"
+        );
+        // The direct Math initializer is not enough when a later preheader
+        // write replaces it: the last write is the provenance authority.
+        let overwritten_alias_source = "function run(n, callbackValue) { var numeric = Math.floor; numeric = callbackValue; var total = 0; for (var i = 0; i < n; i++) { total = total + numeric(i); } return total; }";
+        assert!(
+            super::compile_all(&nested_function(overwritten_alias_source)).is_empty(),
+            "{overwritten_alias_source}"
+        );
+        assert_eq!(
+            eval(&format!("{fallback_source} run(4, callback);")),
+            Ok(Value::String("6:4".to_owned().into()))
         );
         // A string constant inside the region is held boxed and still compares
         // the way the interpreter does.

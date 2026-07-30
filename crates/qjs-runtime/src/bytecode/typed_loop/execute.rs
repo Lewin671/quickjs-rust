@@ -364,10 +364,15 @@ fn seed_registers(
         boxed[*register as usize] = value.clone();
     }
     for &(register, slot) in &program.boxed_locals {
-        // A boxed local must already hold an object: the program only ever uses
-        // one as a property receiver or an element source.
+        // A boxed local normally holds an ordinary object. A register used as
+        // an unbound numeric-native callee may instead hold a Function; the
+        // CallNumericNative operation checks the exact unbound intrinsic before
+        // invoking it, and any other function deoptimizes at that original call.
         let value = vm.local_slot_value(slot as usize)?;
-        if !value_is_ordinary_object(&value) {
+        let is_numeric_native_callee = program.numeric_native_callee_registers.contains(&register);
+        let accepts_numeric_native_callee =
+            is_numeric_native_callee && matches!(value, Value::Function(_));
+        if !(value_is_ordinary_object(&value) || accepts_numeric_native_callee) {
             return None;
         }
         boxed[register as usize] = value;

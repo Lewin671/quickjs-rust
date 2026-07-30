@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "typed-loop-unbound-numeric-native-call",
+  "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+  "queue": {
+    "candidate_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+    "sha256": "818e5ecb2d50ea6dc34f77e8e32d334ffda2733ae082153cb13b5a3b8c7f2d2d"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/3d-morph"
+    ],
+    "rank_ceiling": 14,
+    "override_reason": "Ranks 1 through 13 are presently covered by closed direct-frame, object-storage, RegExp, native-call, direct-eval, or typed-loop mechanisms, or by a separately profiled object-heap investigation. A fresh rank-14 3d-morph profile exposes a different executable-tier boundary: the existing typed loop accepts receiver-preserving CallResolved numeric intrinsics but rejects the bytecode Call form emitted for an unbound local that holds a numeric Math intrinsic. The source's hot inner loop therefore remains in generic VM dispatch despite having an otherwise admissible scalar dense-write shape. This unit extends the existing generic loop IR by bytecode shape and live callee identity only; it does not select a source file, function name, input, iteration count, or result. The strict target and independent typed-loop, dense-array, native-call, and broad controls below remain required for retention."
+  },
+  "mechanism": {
+    "summary": "Extend TypedLoopProgram lowering to admit an unbound Op::Call with one or two scalar arguments when its callee is a frame-local value whose most recent pre-loop write is the direct bytecode form for Math.<property>, then use the existing CallNumericNative operation only after the live local is proven to be an unbound pure numeric intrinsic.",
+    "generality": "The extension applies to every existing typed-loop-compatible region whose ordinary Call bytecode has one or two scalar arguments and whose callee local has the generic preheader bytecode provenance LoadGlobal(\"Math\"); GetPropNamed; StoreLocal. This is a structural bytecode condition rather than a benchmark/source-function choice. At entry the specific local is checked as a function; at the call instruction the existing numeric-intrinsic classifier verifies an unbound supported native and numeric arguments. Any other local Call remains outside TypedLoopProgram compilation and therefore retains its existing interpreter or other-tier dispatch exactly. A replaced intrinsic, coercive argument, unsupported arity, dynamic scope, non-dense receiver, or any other unsupported operation deoptimizes at the original Call with its original operand stack, then executes the unchanged interpreter path. No benchmark, source path, function name, input value, iteration count, checksum, or expected result participates in admission.",
+    "semantic_risks": [
+      "the unbound Call stack shape must consume only callee and arguments, unlike CallResolved which also consumes a receiver, and a deoptimization must rebuild that exact pre-call stack",
+      "the preheader provenance scan must admit only a local whose last write is the direct LoadGlobal(\"Math\"); GetPropNamed; StoreLocal shape, so a generic local call never installs a hot deoptimization plan",
+      "a frame-local Function must be admitted only in registers proved by that provenance and used as numeric-native callees; other boxed-local object and property guards must retain their existing restrictions",
+      "a bound, replaced, or unsupported native callee must deopt before invocation so its this value, argument order, throw timing, and side effects remain identical to generic Call",
+      "scalar arguments must retain the existing Number-only guards and Math operation semantics, including NaN, signed zero, infinities, and all intrinsic-specific edge cases",
+      "program metadata and register compaction must remap every local-callee register consistently, with no mutable callee or cache state shared across invocations"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-next-46ceb4f6-r1/profiles/3d-morph-current.sample of diagnostic-only repeated execution of the pinned SunSpider 3d-morph shape. The diagnostic source SHA-256 is 502b3b09f3c2af4054f568343c9a53aa39560def41686af4e7eabf02c4b95972, the sample SHA-256 is 9db741c46725773ee221d946f52fcbce201579d045eaa647173bd6c93f529294, and the current exact-base release executable SHA-256 is 568549b735c590a0787d93a84f67d2f3c65312f917e863714a1bb28e6f757ad4. The profile is diagnostic only and is not a timing fixture.",
+      "sha256": "9db741c46725773ee221d946f52fcbce201579d045eaa647173bd6c93f529294",
+      "base_sha": "32a00b0e7d4fe1af8b599c58597cb729127cece6",
+      "opportunity_ids": [
+        "external/sunspider-1.0/3d-morph"
+      ],
+      "shared_cost": "The current profile roots 2,206 of 2,213 sampled execution stacks in the direct call of morph. Its scalar inner loop repeatedly enters generic Vm::run_completion arithmetic and the ordinary call_callee_with_marker -> try_fast_global_native_call route for the cached local sin function; only three samples enter try_run_typed_loop. Exact current lowering shows TypedLoopProgram has a CallNumericNative operation but compile.rs admits only Op::CallResolved, while the identifier call sin(...) emits Op::Call. Thus the shared cost is a generic loop-IR call-form gap, not the previously accepted native Math dispatcher or a function-specific special case.",
+      "inclusive_fraction": 0.997
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/3d-morph"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/access-nbody",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/sunspider-1.0/math-cordic",
+      "external/kraken-1.1/imaging-darkroom",
+      "external/kraken-1.1/audio-fft",
+      "broad/array_write",
+      "broad/plain_function_call",
+      "broad/dynamic_method_call"
+    ],
+    "target_max_candidate_over_base": 0.85,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
