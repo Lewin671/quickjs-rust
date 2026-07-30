@@ -2652,3 +2652,61 @@ module visibility, or dispatch layout: two independent implementations have
 now produced large target gains but unacceptable regressions in typed-loop or
 generic-call controls. A future imaging unit requires a different execution
 mechanism and fresh profile evidence.
+
+### 2026-07-30 rejected copy-on-write RegExp capture snapshots
+
+The exact `14d9f2f6` opportunity queue ranked SunSpider `string-tagcloud`
+third at 7.252203x QuickJS-NG. The current `c36139cd` release executable is
+byte-identical to that runtime baseline (SHA-256
+`919c9cad198c2dcf3a50317e13997743756a084a51394097f3542b9b832fa5cb`).
+Its source-matched Tagcloud sample (SHA-256
+`74a2ed1d910b8e37450b83a916f3e1286dd767fca9c3b0c718af506788e259df`)
+put 949 of 3,411 main-thread samples under `PreparedRegexp::match_input`.
+Allocator entry points dominated the complete profile, and the matcher cloned
+the owned capture `Vec` at each speculative `MatchState` branch. A fresh
+validate-input sample (SHA-256
+`a24056f5e48c2a1d835d40d0faf86407fee9b999344f0713ef833dc607687a61`)
+independently put 252 of 2,621 samples in the same matcher, while a current
+regexp-dna sample (SHA-256
+`f1da4270d0192ebb73613b040a2749fd60e9a0dd741037e8692ccc50e72072ef`)
+showed that match-result string materialization was below a useful whole-case
+ceiling. The latter observation closed a proposed lazy replacement-result
+unit before implementation.
+
+The frozen one-attempt plan
+`tasks/performance-units/regexp-cow-capture-snapshots.json` (SHA-256
+`5c9a275b42b502d5ecee0334a2b0a2053f1eeb1beecc54ca7579d052695f07d9`)
+replaced transient owned capture vectors with immutable `Rc<[CaptureRange]>`
+snapshots. `PreparedRegexp` shared one all-`None` seed, capture-free patterns
+retained an allocation-free representation, branch clones incremented a
+reference count, and the first capture write detached through
+`Rc::make_mut`. The successful result alone materialized the original ordered
+`Vec`. Focused tests proved allocation-free zero-capture state and copy-on-write
+branch isolation; all 45 matcher tests passed. The complete 5,160-case Test262
+subset also passed on candidate source.
+
+The candidate and exact-base release binary SHA-256 values were
+`b92ddf3b54f580117398dd03973ebce552ee064b8633f519163a83c17c26bb6b`
+and
+`919c9cad198c2dcf3a50317e13997743756a084a51394097f3542b9b832fa5cb`.
+The seven-block alternating direct-process screen required byte-equal stdout,
+stderr, and successful exit status for every candidate/base pair. Its harness
+and raw receipt SHA-256 values are
+`017a5becd3430e9223fd6d27ed7e0762447226f4924010463d3eed2b83b69153`
+and
+`d0b7cd269d948bc208d3c7ad59dd3e2b1dda3a8f93fef602fc06cf1199e1010c`.
+The frozen Tagcloud target improved only to **0.954929x** candidate/base
+(183.355 ms candidate median versus 191.201 ms base), missing the required
+`<= 0.90x` gate. The independent validate-input case improved to 0.968227x.
+All other controls stayed below 1.03x: regexp-dna 0.983802x, string-base64
+1.003028x, controlflow-recursive 1.011073x, A* 0.986325x, HashMap 0.991561x,
+and raytrace public class fields 0.989244x.
+
+The representation is correct and general, but a 4.5% target gain is below
+the predeclared campaign threshold. The implementation and its focused tests
+were therefore reverted immediately; the rebuilt release executable again
+matches the exact base byte-for-byte. Do not retry this mechanism by changing
+`Rc`/`Arc`, adding an inline-capture threshold, or moving individual clone
+sites. A future RegExp unit needs a fresh profile and a broader state-vector
+or capture-delta mechanism that removes materially more of the matcher than
+capture payload cloning alone.

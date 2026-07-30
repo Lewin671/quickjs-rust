@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "regexp-cow-capture-snapshots",
+  "base_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+  "queue": {
+    "candidate_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+    "sha256": "7b759f146a7472dd7d3333049821ea31622bdd9d57ff43f7740ff2e243a4bd41"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-tagcloud"
+    ],
+    "rank_ceiling": 3,
+    "override_reason": "The rank-1 recursive case is closed for this cycle by current exact frame-lifecycle profiles plus rejected contiguous-frame, boxed-frame, same-function-stack, local-pool, and compact-core experiments; the retained operand-stack pool already captures the non-regressing portion of that direction. The rank-2 hash-map profile attributes only about three percent of samples to the allocator even though each small object owns 384 bytes across ObjectRef and PropertyStorage, so property coallocation is a memory project rather than the highest current CPU return. Rank-3 string-tagcloud spends 949 of 3,411 current exact samples in PreparedRegexp::match_input, with repeated MatchState branching and allocation-heavy state-vector traversal. Copy-on-write capture snapshots remove a different shared allocation source without retrying rejected continuation, boundary-streaming, atom-metadata, or capture-free-program mechanisms."
+  },
+  "mechanism": {
+    "summary": "Represent transient RegExp MatchState captures as an immutable reference-counted slice shared by branches and copied only when a capture slot is actually written, while keeping zero-capture states allocation-free and materializing the existing owned Vec only at the successful RegexpMatch boundary.",
+    "generality": "The representation applies to every matcher path solely from the pattern's capture count. PreparedRegexp owns one all-None seed; candidate starts, alternatives, lookarounds, repetitions, reverse matching, and duplicate-state keys share snapshots through ordinary MatchState cloning. A capture start, end, or clear uses copy-on-write isolation before mutation. There is no workload name, source path, pattern text, input size, iteration count, checksum, or expected-result condition, and no parser or observable RegExp protocol changes.",
+    "semantic_risks": [
+      "preserving branch-local capture writes across alternatives, greedy and lazy repetition, lookaround, reverse matching, and backtracking",
+      "preserving capture clearing when a quantified group does not participate and preserving backreference reads from the correct snapshot",
+      "preserving content-based equality and hashing in duplicate-state suppression rather than comparing snapshot identity",
+      "keeping capture-free patterns allocation-free despite introducing the shared representation",
+      "converting the winning snapshot to the same ordered Vec of optional ranges at the RegexpMatch API boundary"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-14d9f2f6/samples/string-tagcloud.sample; hash-verified official SunSpider string-tagcloud source (SHA-256 9634886bcb846c76141f97b681b33a11df444901e0b4c899d8f72a3b6544f9d5) loaded once and repeated only by the diagnostic wrapper. The c36139cd release executable is byte-identical to the profiled 14d9f2f6 executable (SHA-256 919c9cad198c2dcf3a50317e13997743756a084a51394097f3542b9b832fa5cb).",
+      "sha256": "74a2ed1d910b8e37450b83a916f3e1286dd767fca9c3b0c718af506788e259df",
+      "base_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-tagcloud"
+      ],
+      "shared_cost": "Of 3,411 main-thread samples, 949 are under PreparedRegexp::match_input. Its capture-bearing JSON-validation alternative repeatedly clones MatchState through match_pattern_first, repeat_atom, match_atom, lookaround-compatible branches, and duplicate-state keys; allocator and free entry points dominate the complete top-of-stack profile. The current owned Vec capture payload makes each branch snapshot an eager deep clone even when that branch never writes a capture.",
+      "inclusive_fraction": 0.2782
+    },
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-c36139cd/string-validate-input/string-validate-input.sample; the diagnostic bundle appends a 50-iteration sampling loop to the hash-verified official SunSpider source (SHA-256 518ed0c67fde0c0d65af6238b91f5e498d8ba5d188c428f4a76dd498704737d5), and runs the exact baseline executable SHA-256 919c9cad198c2dcf3a50317e13997743756a084a51394097f3542b9b832fa5cb.",
+      "sha256": "a24056f5e48c2a1d835d40d0faf86407fee9b999344f0713ef833dc607687a61",
+      "base_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-validate-input"
+      ],
+      "shared_cost": "The independent input-validation workload places 252 of 2,621 samples in PreparedRegexp::match_input, including nested capture-bearing match_pattern_first and repeat_atom paths. This confirms the representation is shared, while the 9.61 percent whole-workload ceiling is too small to declare validate-input a ten-percent target, so it remains a regression control.",
+      "inclusive_fraction": 0.0961
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-tagcloud"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/string-validate-input",
+      "external/sunspider-1.0/regexp-dna",
+      "external/sunspider-1.0/string-base64",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
