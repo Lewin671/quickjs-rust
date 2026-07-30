@@ -8617,3 +8617,47 @@ evidence, and this is not a performance regression or an accepted dependency.
 Do not retry a C-backed global allocator under T018; an allocator or ownership
 unit must remain Rust-native and meet the ordinary cross-suite and Test262
 gates.
+
+### 2026-07-29 rejected default data-property storage
+
+The exact `e66d0303` queue's rank-two through rank-four external profiles
+shared repeated ordinary default-data-property allocation and mutation. The
+frozen one-attempt plan
+`tasks/performance-units/default-data-property-storage.json` (SHA-256
+`ebbf379771cd7ab5584b3d539ed4eef729fdc1b12cbba31b8518e160d91c6329`)
+therefore stored only a `Value` for every writable, enumerable, configurable
+ordinary data property in compact small objects and shared literal shapes,
+materializing a full `Property` only before descriptor observation or mutation.
+The rule was representation-wide: it did not inspect a constructor, field
+name, benchmark, source path, input, or iteration count. Accessors,
+non-default descriptors, exotics, symbols, and structural mutations retained
+the established descriptor-bearing routes.
+
+Focused storage semantics (16 tests), the full 1,914-test `qjs-runtime` suite,
+and `compare-qjs.sh` passed before the direction screen. A fresh three-block
+external screen used candidate binary SHA-256
+`9b1268b693419ce68bd8aec5d8ac9989ca26427ad63d14627edcb033ddd14d4c`, exact
+`e66d0303` base binary SHA-256
+`d8866f518f67fb50778dfb9e717ff0b375d5098d7a3007f469ae190d95c5dfb0`, and
+pinned QuickJS-NG SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+The seven-case manifest, raw JSONL, and report SHA-256 values are
+`12698a36cb9648fd3440d834621f3c466a070ef1fca34be0713580b190e60946`,
+`f528e6f1a74efd7551fa965c7c8e0405f7f9829f950a3bcbba7cafca986b8626`, and
+`74ff46eae7e5d63c2a73f1c611ad39e029e752fbb464fcf8adc3756f0564a862`.
+
+Two targets met the `<= 0.98x` candidate/base gate: JetStream `hash-map` was
+**0.969753446x** and public-class-field raytrace was **0.970184650x**. Kraken
+`ai-astar`, however, was **1.022300250x** candidate/base, a 2.23% regression
+rather than the required 2% improvement. All sampled controls were within
+their `<= 1.03x` cap (`cdjs` 0.954694522x, `controlflow-recursive`
+0.916169710x, `access-nbody` 1.000685448x, and `string-tagcloud`
+1.000319878x), but they cannot rescue a failed target. The fast gate is
+therefore rejected; a full broad run, exact Test262 scan, and promotion run
+would only spend time after the predeclared one-attempt criterion failed.
+
+The runtime and candidate-only tests were reverted immediately. Do not retry
+the same default-descriptor materialization or retune its small/shaped storage
+thresholds: the general representation did not improve all independently
+profiled targets. A future property or allocation unit must start from a new
+cross-workload profile of a different shared cost.

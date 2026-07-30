@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "default-data-property-storage",
+  "base_sha": "e66d03032a97362d2ac858003e7dee09e1f686ae",
+  "queue": {
+    "candidate_sha": "e66d03032a97362d2ac858003e7dee09e1f686ae",
+    "sha256": "1636b83c83b23491a64e9979ea815dada85c7bdcaaae126cfe6d88869103c321"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "rank_ceiling": 4,
+    "override_reason": "Rank-one controlflow-recursive is closed by the direct-leaf/frame and compact-dispatch rejection evidence. Ranks two through four have current receipts for the same compact ordinary-property allocation and mutation path. This changes the default descriptor representation itself; it neither learns constructor shapes nor retunes the rejected transition-shape, cache, or frame mechanisms."
+  },
+  "mechanism": {
+    "summary": "Store an ordinary property whose descriptor is exactly writable, enumerable, configurable data as a key plus Value until an operation needs non-default descriptor state. Use the same value-only representation for every shared static object-literal shape, and materialize Property descriptors only for definition, accessor, integrity, or other descriptor mutations.",
+    "generality": "Eligibility follows only the live descriptor state of an ordinary object property. Every default data property in compact small storage or a compiler-shared literal shape uses the representation, independent of benchmark name, source path, constructor identity, field name, input, iteration count, or result. Accessors, non-default descriptors, symbols, exotics, structural mutations requiring generic storage, and values beyond the compact limit retain the current descriptor-bearing paths.",
+    "semantic_risks": [
+      "preserving ordinary assignment, delete, redefinition, extensibility, and descriptor-query behavior while materializing a default descriptor before any operation that can observe or alter its attributes",
+      "preserving insertion order, duplicate literal key first-position and last-value semantics, and numeric-index-before-string enumeration across value-only to descriptor-bearing promotion",
+      "preserving named-property cache validity and live value visibility across value writes, descriptor mutation, small-storage promotion, and shaped-literal promotion",
+      "preserving sealed and frozen behavior by materializing descriptors before changing configurable or writable state",
+      "preserving accessor, Proxy, module-namespace, typed-array, array-exotic, and inherited-property fallbacks before any default-data representation is selected"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-29 /tmp/qjs_2026-07-29_hash_map_current.sample.txt; SHA-256 verified below. Its 5,758 main-thread samples retain PropertyStorage::get and allocation/value-lifetime work on the repeated hash-map object route. The sampled runtime source is identical to queue candidate e66d0303 in runtime and CLI paths: 46ceb4f6..e66d0303 changes only task evidence.",
+      "sha256": "1f23fa484ca94297c0d177faecdd2e06b2febfb35ada017a5bf87bd8844d94f3",
+      "base_sha": "e66d03032a97362d2ac858003e7dee09e1f686ae",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Repeated ordinary Entry and map helper receivers retain compact Property descriptors even when every installed field is the default writable, enumerable, configurable data descriptor. The same direct property route repeatedly reads those values and drops their surrounding descriptor storage.",
+      "inclusive_fraction": 0.0017
+    },
+    {
+      "source": "macOS sample 2026-07-29 target/performance-next-46ceb4f6-r1/profiles/ai-astar.sample; SHA-256 verified below. Its 2,181 main-thread samples include PropertyStorage insertion, lookup, Vec growth, and allocator frames under repeated GraphNode construction. 46ceb4f6..e66d0303 changes only task evidence, so the runtime source is identical to the queue candidate.",
+      "sha256": "185e1023fd8636fd63b644a6b08ce999d37a34d0959747054dbac6b718a14ffd",
+      "base_sha": "e66d03032a97362d2ac858003e7dee09e1f686ae",
+      "opportunity_ids": [
+        "external/kraken-1.1/ai-astar"
+      ],
+      "shared_cost": "Every GraphNode begins with default own data fields and later receives default f, g, h, and parent fields. The current compact vector stores a complete 32-byte Property for each field although the hot path only needs the current Value and the descriptor is not observed or changed.",
+      "inclusive_fraction": 0.0018
+    },
+    {
+      "source": "macOS sample 2026-07-29 /tmp/qjs_2026-07-29_raytrace_public_class_fields_current.sample.txt; SHA-256 verified below. Of 5,620 main-thread samples, 43 have PropertyStorage::get_mut, 24 have ObjectRef::set_shared_key, 19 have PropertyStorage::insert, and the same chains include RawVec growth. The sampled runtime source is identical to queue candidate e66d0303 in runtime and CLI paths.",
+      "sha256": "2d461480dbb347e7131109115494d1b2ae9211f68b00de7f727bad3c36357ef5",
+      "base_sha": "e66d03032a97362d2ac858003e7dee09e1f686ae",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/raytrace-public-class-fields"
+      ],
+      "shared_cost": "Repeated public-field construction installs default ordinary data properties through set_shared_key and PropertyStorage insertion. Keeping only Values until a descriptor mutation removes the descriptor payload and avoids get_mut promotion for the normal field-install path.",
+      "inclusive_fraction": 0.0077
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/access-nbody",
+      "broad/object_allocation",
+      "broad/property_read",
+      "broad/property_write",
+      "broad/dynamic_method_call",
+      "broad/plain_function_call"
+    ],
+    "target_max_candidate_over_base": 0.98,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
