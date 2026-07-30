@@ -2710,3 +2710,65 @@ matches the exact base byte-for-byte. Do not retry this mechanism by changing
 sites. A future RegExp unit needs a fresh profile and a broader state-vector
 or capture-delta mechanism that removes materially more of the matcher than
 capture payload cloning alone.
+
+### 2026-07-30 rejected shared RegExp literal blueprints
+
+The exact `14d9f2f6` opportunity queue ranked SunSpider
+`string-validate-input` seventh at 6.088607x QuickJS-NG after the six higher
+entries were closed by current profiles or their one-attempt mechanisms. A
+fresh source-matched sample (SHA-256
+`5afb51f0c1b6719d5c34cf020471b9708996ebe04bb9bc81ef97cae1f80d3458`)
+contained 2,206 main-thread samples. Disjoint branches attributed about 141
+samples to repeated RegExp literal construction, 39 to immutable
+`PreparedRegexp` creation, and 58 to source/flag recovery and setup between
+the native `test` entry and matcher execution: a combined 10.8% measured
+ceiling.
+
+The frozen one-attempt plan
+`tasks/performance-units/regexp-literal-shared-blueprint.json` (SHA-256
+`6b99ec21f08243f19ea48c641e9acf0b0585a9215f48be58c1f7f7e0c33ac0b9`)
+introduced a dedicated RegExp-literal opcode. Bytecode owned one validated,
+immutable source/flags/prepared-matcher blueprint; every evaluation still
+allocated a fresh object and independent `lastIndex` through the active realm
+intrinsic. RegExp source, flags, and matcher state moved from guessed
+NUL-prefixed ordinary properties into the existing out-of-line object cold
+state. Dynamic construction and `RegExp.prototype.compile` remained runtime
+validated and did not eagerly prepare an unused matcher.
+
+Focused tests proved that the opcode was used only for syntactic literals,
+that a handwritten `new RegExp` retained the generic constructor path, that
+literal identity and realm prototype were fresh and correct after rebinding
+the global `RegExp`, and that guessed legacy property names could not mutate
+the RegExp brand or matching state. All 100 RegExp-selected tests, all 1,917
+runtime tests, workspace Clippy, and the complete 5,160-case Test262 subset
+passed. The exact official `string-validate-input` source also produced the
+same successful output on candidate and base.
+
+The candidate and exact-base release binary SHA-256 values were
+`79426706f9fb558510031edd84076e747f1d03c062178794f3d3628c98c52b48`
+and
+`919c9cad198c2dcf3a50317e13997743756a084a51394097f3542b9b832fa5cb`.
+The seven-block alternating direct-process screen required identical exit
+status, stdout hash, and stderr hash for every paired run. Its harness and raw
+receipt SHA-256 values are
+`6aa6b2884e33f794a2d6a2f67bcae96a22ee53f77550926b36a68de829dcca88`
+and
+`10f8bf5795204ffc9e4f8301ed08645a7e939063bd5ead94a4872934a436caee`.
+The target reached **0.910267x** candidate/base (66.231 ms candidate median
+versus 72.654 ms base), an 8.97% improvement but short of the frozen
+`<= 0.90x` gate. All controls remained below 1.03x: string-tagcloud
+0.999010x, regexp-dna 0.996223x, string-base64 0.997230x,
+controlflow-recursive 1.008732x, HashMap 1.010793x, raytrace public class
+fields 0.996013x, object allocation 0.999859x, dynamic method call 0.999037x,
+and string slice 1.000481x.
+
+The hash-bound fast decision is therefore **rejected** with reason `target
+improvement gate failed for ['external/sunspider-1.0/string-validate-input']`;
+its artifact SHA-256 is
+`61e3d8bf85f0ae6eb6b79c6dc1ad0bee87b0faf3c7ab2295d54afe3b75f2b5f2`.
+The unit allowed one attempt, so the runtime implementation and focused tests
+were reverted immediately. Do not retry this combined blueprint/internal-slot
+mechanism by changing flag packing, cold-slot layout, opcode placement, or
+matcher ownership: it removed the intended structural work but delivered less
+than the campaign's ten-percent minimum. A future literal or RegExp unit needs
+fresh evidence for a different shared cost.

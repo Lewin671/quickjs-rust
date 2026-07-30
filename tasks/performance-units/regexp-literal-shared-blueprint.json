@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "regexp-literal-shared-blueprint",
+  "base_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+  "queue": {
+    "candidate_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+    "sha256": "7b759f146a7472dd7d3333049821ea31622bdd9d57ff43f7740ff2e243a4bd41"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-validate-input"
+    ],
+    "rank_ceiling": 7,
+    "override_reason": "Current exact evidence closes the higher queue entries for this cycle: rank-1 recursive has rejected frame-stack, frame-pool, dispatcher, and layout mechanisms; rank-2 hash-map attributes only about three percent of current CPU samples to allocation; rank-3 string-tagcloud rejected capture snapshots at a 4.5 percent gain after earlier continuation, boundary, atom-metadata, and capture-free-program experiments; rank-4 imaging rejected its helper-graph mechanism because shared controls regressed; rank-5 string-base64 already consumed its one dynamic-buffer-reuse attempt and now requires a high-cost rope representation; rank-6 raytrace retains ordinary class-field initialization and current samples expose no distinct bounded cost above ten percent. Rank-7 string-validate-input instead repeats the same immutable RegExp literal construction and pattern preparation inside its hot validation loop, providing a new shared structural cost rather than a retune of any rejected matcher algorithm."
+  },
+  "mechanism": {
+    "summary": "Compile each syntactic RegExp literal into a bytecode-owned immutable blueprint containing its validated source, flags, and prepared matcher, then instantiate a fresh RegExp object from that blueprint through the current realm intrinsic while storing RegExp state in true cold internal slots instead of NUL-prefixed ordinary properties.",
+    "generality": "Every syntactic RegExp literal uses the same opcode and immutable blueprint regardless of pattern text, input, loop shape, benchmark identity, or result. Each evaluation still allocates a fresh object and lastIndex property, but shares only pattern-side state that the ECMAScript RegExp literal semantics make immutable. Dynamic RegExp construction and RegExp.prototype.compile retain runtime validation and build their own state; custom and proxy RegExp-like objects retain observable property access paths.",
+    "semantic_risks": [
+      "preserving fresh object identity and an independent writable non-enumerable non-configurable lastIndex for every literal evaluation",
+      "using the active realm intrinsic RegExp prototype even when the global RegExp binding is shadowed or rebound",
+      "preserving global and sticky lastIndex reads, writes, failures, and UTF-16 index conversion",
+      "preserving RegExp.prototype.compile replacement of source, flags, matcher state, and lastIndex",
+      "preserving RegExp constructor newTarget and prototype behavior for dynamic construction while only syntactic literals use the dedicated opcode",
+      "preserving observable source, flags, accessor, Symbol.match, proxy, and custom RegExp-like object semantics while removing guessed NUL-prefixed ordinary storage"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-9186c0a7/string-validate-input/string-validate-current.sample; the diagnostic wrapper target/performance-next-46ceb4f6-r1/profiles/string-validate-current.profile.js (SHA-256 1afe3fa8de3fc05a27b9dcbf3f454170b4fddddd655c89e2f578e2ced3c91ef5) loads the hash-verified official SunSpider source (SHA-256 518ed0c67fde0c0d65af6238b91f5e498d8ba5d188c428f4a76dd498704737d5) and repeats only its public doTest entry. The 9186c0a7 release executable is byte-identical to the queued 14d9f2f6 executable (SHA-256 919c9cad198c2dcf3a50317e13997743756a084a51394097f3542b9b832fa5cb).",
+      "sha256": "5afb51f0c1b6719d5c34cf020471b9708996ebe04bb9bc81ef97cae1f80d3458",
+      "base_sha": "14d9f2f6ef4a90c1b1b62f38f6fdf9937c8307e1",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-validate-input"
+      ],
+      "shared_cost": "Of 2,206 main-thread samples, about 141 are in repeated RegExp literal construction, about 39 are in immutable PreparedRegexp creation below test, and about 58 more lie between the native test entry and matcher execution in repeated source/flag recovery and setup. These disjoint branches total about 238 samples, or 10.8 percent. A dedicated literal opcode removes the constructor branch, a bytecode-owned prepared matcher removes pattern preparation, and cold internal slots remove the two pseudo-property lookups and owned String copies on each test.",
+      "inclusive_fraction": 0.108
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-validate-input"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/regexp-dna",
+      "external/sunspider-1.0/string-base64",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "broad/object_allocation",
+      "broad/dynamic_method_call",
+      "broad/string_slice"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
