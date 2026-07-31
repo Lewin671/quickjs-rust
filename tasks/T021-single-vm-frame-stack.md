@@ -4727,6 +4727,63 @@ The focused test, all 1,922 runtime tests, all 211 benchmark-tool tests, every
 performance-plan validator, all 5,160 curated Test262 cases,
 `./scripts/check.sh`, and every `./scripts/compare-qjs.sh` fixture passed.
 This retains the single allowed fast attempt without changing a threshold.
-The plan's complete broad, complete external, and exact-commit Test262
-promotion evidence must still be bound after commit; this local decision is
-not a campaign-completion claim.
+
+The implementation and its initial evidence were committed as
+`c823043e2ae348a20587dee25c956b81e59210c1` and pushed on `main`. Exact-commit
+standard-pair candidate, base, and QuickJS-NG executable SHA-256 values are
+`82335e8280120666716e86e09755decc560e93923811894a188ca6d1a1c760bb`,
+`04d1ea96981f83afe8a34ae83b9d98da17a1d1d641f9bcd9a950d74a4645c6d1`,
+and
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+Their receipt SHA-256 values are
+`ff8a089db3be6eb1b79097652d29d28feeba55d96fe53390c3e8189842311967`,
+`8ac8f5f9126cbaaba66b86cf3f94d615696ce42bdf489fea745feea862543c5c`,
+and
+`b96f63f100f0ddfb6e7dedfdbcb195f579144cf01af814706d3d7a1b24b90b0f`.
+An initial exact orchestration built both Rust roles beneath explicit target
+triple directories and was excluded before use because all three broad blocks
+made the base `plain_function_call` timer-limited at its lower iteration cap.
+A focused standard-pair capacity run instead made all three roles eligible;
+no health threshold or manifest capacity was changed.
+
+The complete exact-commit 25-case broad matrix then finished all 225 formal
+samples. Candidate/base geometric mean was 1.001359x. The four frozen broad
+controls were 1.010383x for plain function calls, 1.011336x for dynamic method
+calls, 1.000945x for string slicing, and 1.010726x for property reads. Every
+broad candidate/QuickJS-NG row remained below 0.5x; the worst was closure
+allocation/call at 0.429972x. The non-control `many_locals_call` row measured
+1.036329x base and remains an explicit observation for a separately
+profiled unit. Broad manifest, raw, report, and summary SHA-256 values are
+`5c3c586de23444190437652cf99a57da46730a4473d22e281c9e388f8c4215c0`,
+`5a767d832b4e9028eff6fc76f24e858e949e80e51401f8efc6d948e5cd3dbb5e`,
+`b3edd735fd314207599ce5cc1a592bcb18b27d0f049b7d2482b8f470d3cb9fa6`,
+and
+`338f2c11b78a76f6655994485b555faccd613705b955ef8a935a2feb0b140dec`.
+
+The exact-commit 60-second external run completed all 45 cases for all three
+roles. `string-unpack-code` reproduced at **0.650552x candidate/base** and
+1.188030x QuickJS-NG. JetStream, Kraken, and SunSpider candidate/base geometric
+means were 1.003407x, 1.000353x, and 0.981842x. All frozen external controls
+were at or below 1.011052x. The non-control SunSpider `access-nbody` row was the
+largest observed base ratio at 1.091118x; it remains explicit debt requiring a
+new profile rather than post-hoc retuning of this unit. External manifest,
+raw, report, and rendered-summary SHA-256 values are
+`a8ddeded582573bc676bf3f7bbbaf2625f6dfa7742f07bcdd6aaa26366f4e6c4`,
+`e29506807792b738124b2ceedf10fbad392ed337c0f9abf677bd096785492e7d`,
+`12ac4419b2734695722f10f4e4569e6aeb0f70be388f295ac5284862a8c5d5f6`,
+and
+`396fec7e2d64b206d97c9157c2db8838b6dfa732e0bd469e6f54a5e3157056e8`.
+
+Exact-commit Test262 Coverage run `30635826875` passed and produced burndown
+SHA-256
+`de37243f26917fbd9d8e1a29e4f7adfafc191feef41abb15f66c0a325098ec8f`.
+It covers all 53,572 pinned cases: 10,900 are outside the QuickJS-NG
+configuration, while qjs-rust passes all 42,672 configured cases with zero
+failures, timeouts, not-run cases, or actionable gaps. Exact-commit CI run
+`30635509140` also passed. The hash-bound promotion decision retains the unit
+without an exception and has SHA-256
+`9bad5dbcb55a06665a530b1624b34d89bdbe84358a69d06b30d2d1ed61140a0d`.
+This closes the functional-replace input unit as a semantics-preserving
+optimization, not the campaign: most external rows remain above 0.5x
+QuickJS-NG, so refresh the queue from `c823043e` and continue from its highest
+unclosed exact-current shared cost.
