@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "chunked-compound-string-accumulator",
+  "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+  "queue": {
+    "candidate_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+    "sha256": "0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-base64"
+    ],
+    "rank_ceiling": 10,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "After the existing compound-string binding guard has proved that the immediately following bytecode restores the same mutable binding and has removed only engine-internal mirrors, accumulate the uniquely owned left string in bounded 4 KiB chunks instead of repeatedly growing one flat String. Coalesce small suffixes into the current tail, share completed immutable chunks when the exact same string is concatenated with itself, and flatten once on the first operation that requires a contiguous str. Every non-eligible, aliased, coercive, or ordinary string operation retains the current flat path. The expected string-base64 reduction is 10-15%, supported by the exact profile's 11.3% combined growth/copy subtrees; the unit is rejected unless the target reaches at most 0.90x exact base and every control remains at most 1.03x. Scope is the private JsString backing representation, the already-guarded primitive append branch, and focused semantic tests, with no public API, parser, AST, dependency, binding-model, or generic property-path change.",
+    "generality": "Selection depends only on the existing bytecode-successor and live binding checks in prepare_compound_string_reuse plus unique runtime string ownership. A qualifying primitive Add result may retain a private chunked accumulator whose completed chunks are immutable and whose tail is uniquely mutable; any read, comparison, hash, property access, call, RegExp use, conversion, or other contiguous-string consumer observes one lazily flattened canonical byte sequence. Exact-buffer self-concatenation may duplicate immutable chunk handles only after the right operand and all engine mirrors have been released and no JavaScript-visible alias can be mutated. External aliases, captures, direct eval, with, module imports, immutable bindings, accessors, non-writable globals, object coercion, unsupported operands, and guard failure use the unchanged flat concatenation. Admission never inspects benchmark names, source paths, function or binding names, input size, contents, iteration count, checksum, or result.",
+    "semantic_risks": [
+      "preserving the canonical UTF-8 encoding of the runtime's WTF-16 sentinel scalars across chunk boundaries and flattening before every API that exposes a contiguous str",
+      "preserving primitive String immutability and copy-on-write snapshots when a JavaScript-visible alias, captured binding, property, argument, return value, or external Rc owner remains live",
+      "duplicating exact-buffer self-concatenation in source order without mutating the right operand, losing repeated bytes, or changing observable coercion and assignment order",
+      "invalidating and rebuilding ASCII, UTF-16 length, and RegExp matcher-view metadata exactly when a unique accumulator changes or becomes flat",
+      "bounding chunk payloads and metadata growth while avoiding a deep recursive rope, retaining deterministic equality, ordering, hashing, indexing, conversion, and Debug behavior",
+      "leaving the retained discarded-dynamic-string-reuse eligibility and all ordinary flat append, literal append, object-property append, and failed-guard paths unchanged"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-3f3ef30c/string-base64/current.sample; exact runtime-620bb67b standard release executable SHA-256 c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b; 40-run diagnostic wrapper SHA-256 58685e645bfd519793ea3be46954be8d5b3a16147199e6bdc7ff0f3670713293 derived from official SunSpider source SHA-256 48e6106fc6df6cb725b2c56934aff1591c97527862d27accfc11e419467639fc; the process produced Undefined and empty stderr",
+      "sha256": "2a1afc57aa3a7d34b678ff70afaa42becd70670784c8793fab0cc7a1d4fd3850",
+      "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-base64"
+      ],
+      "shared_cost": "Of 2,168 main-thread samples, one primitive-Add subtree spends 128 samples growing the flat String, including 127 in RawVec reserve and 85 in memmove. A separate exact-buffer/self-concatenation subtree spends 117 samples converting the shared right JsString into an owned String, including 105 in JsString::into_string and 92 in memmove. Together these representation costs are 245 samples (11.30%), with 177 samples directly copying bytes, after the already-retained binding-mirror release has admitted the append. The remaining primitive-prototype lookup, generic call/frame, object-property, and Value families are either independently below ten percent or closed by current negative evidence.",
+      "inclusive_fraction": 0.113
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-base64"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/string-unpack-code",
+      "external/sunspider-1.0/string-validate-input",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/date-format-tofte",
+      "external/sunspider-1.0/date-format-xparb",
+      "external/sunspider-1.0/access-nbody",
+      "external/jetstream3-js-subset/hash-map",
+      "broad/string_slice",
+      "broad/object_allocation",
+      "broad/plain_function_call"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

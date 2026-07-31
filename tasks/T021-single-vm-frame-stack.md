@@ -3365,3 +3365,60 @@ scalarization or fusion, boxed-operation admission, property guards, or
 compound-store pairing without a future exact profile that exposes a new
 independently bounded representation cost above ten percent. The queue should
 advance to rank-ten SunSpider `string-base64`.
+
+### 2026-07-30 rejected chunked compound-string accumulator
+
+The exact `620bb67b` opportunity queue (SHA-256
+`0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1`)
+ranked SunSpider `string-base64` tenth at 3.4700x QuickJS-NG. The exact base
+profile used the standard release binary SHA-256
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`,
+the unmodified upstream source SHA-256
+`48e6106fc6df6cb725b2c56934aff1591c97527862d27accfc11e419467639fc`,
+and a 40-run diagnostic wrapper SHA-256
+`58685e645bfd519793ea3be46954be8d5b3a16147199e6bdc7ff0f3670713293`.
+Its 2,168-sample main-thread receipt (SHA-256
+`2a1afc57aa3a7d34b678ff70afaa42becd70670784c8793fab0cc7a1d4fd3850`)
+placed 128 samples under flat `String` growth, including 127 in `RawVec`
+reserve and 85 in `memmove`, plus 117 samples under shared-right/self-append
+conversion, including 105 in `JsString::into_string` and 92 in `memmove`.
+These distinct representation costs totaled 245 samples, or 11.30%, after
+the retained compound-string binding guard had already admitted buffer reuse.
+
+The frozen one-attempt plan
+`tasks/performance-units/chunked-compound-string-accumulator.json` (SHA-256
+`eb51277672684b1b0e9e91d10e250e3d8594c1176395672a9274cf5ebf426f6d`)
+tested a private, bounded string representation. Only a uniquely owned result
+accepted by the existing successor-and-binding guard could accumulate in
+4 KiB chunks; completed chunks were immutable, exact self-concatenation could
+duplicate their handles, and every contiguous-string consumer lazily
+flattened the value. Aliased, coercive, failed-guard, ordinary append, and
+all parser, AST, property, and binding routes retained the flat path. Focused
+tests passed for large Unicode append and UTF-16 metadata, alias immutability,
+exact self-append ordering, later visible aliases, and returning a previously
+unflattened result. The focused runtime tests and `cargo clippy -p qjs-runtime
+--all-targets -- -D warnings` also passed before measurement.
+
+The standard-recipe candidate binary SHA-256 was
+`b6a39c03a6d8798c1cdcc058d3a720152e6cb24db27f0af1c935fa4c557d3d5d`;
+the exact base binary remained
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`.
+Every warmup and measured process exited successfully with byte-identical
+stdout and stderr hashes. The seven-block alternating target receipt SHA-256
+is `cc25ed7fd65da23a90569fee2ed1c22f11e517fe4fe70cc79e1deabf41a5f0a4`.
+Its paired candidate/base ratios were 0.620728x, 0.948602x, 0.971491x,
+1.330664x, 1.005836x, 0.948158x, and 0.988536x. The **0.971491x** median
+missed the predeclared `<= 0.90x` target by 7.1 percentage points; the
+separate candidate/base medians were 82.486 ms and 84.705 ms, confirming that
+the mechanism removed only a small part of total process time despite noisy
+individual pairs.
+
+The unit is therefore **rejected** after its single allowed attempt. The
+mandatory target failed before control or promotion measurement, so no broad,
+external-portfolio, or Test262 performance claim was made. All runtime and
+focused-test changes were reverted, leaving only the immutable plan and this
+negative result. Do not retry this 4 KiB flat-tail/chunk-handle shape by
+retuning chunk size, flatten threshold, or self-append eligibility. A future
+string representation needs fresh exact evidence for a different bounded
+cost and must preserve the existing compound-string reuse mechanism. The
+queue should advance to rank-eleven SunSpider `3d-raytrace`.
