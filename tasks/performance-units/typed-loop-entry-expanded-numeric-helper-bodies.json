@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "typed-loop-entry-expanded-numeric-helper-bodies",
+  "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+  "queue": {
+    "candidate_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+    "sha256": "0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/kraken-1.1/imaging-darkroom"
+    ],
+    "rank_ceiling": 8,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "At typed-loop entry, validate a bounded acyclic pure-Number helper graph and expand its body into the existing TypedOp instruction set with fresh registers, then execute a temporary cloned TypedLoopProgram through the unchanged seed and execute machinery. Programs without helper metadata retain the current run, seed_registers, and execute path; helper programs add one cold entry branch but no new executor opcode, generic call branch, or per-iteration graph evaluator. The expected imaging-darkroom reduction is 65-75%, supported by the two rejected entry-prepared graph candidates' 75.1% and 79.1% target reductions; this distinct execution mechanism is rejected unless the target reaches at most 0.35x exact base and all controls remain at most 1.03x. Scope is one private helper-analysis/expansion module, compile-time helper-site metadata, a cold entry path, and focused semantic tests. Implementation cost is medium-high, with no public API, parser, AST, dependency, generic VM, or binding-model change.",
+    "generality": "Admission is structural and workload-independent: an otherwise compatible typed loop may call an unmodified global or read-only captured ordinary function with one or two scalar arguments only when its complete immutable bytecode graph contains bounded acyclic Number constants, parameters, stable Number or function captures, supported arithmetic and comparisons, forward branches, and receiver-independent pure Math intrinsics. Before any loop operation, the entry path resolves every live callee, shared upvalue cell value, creation realm, Math binding, and own data property; any failed guard declines. It then translates the prepared graph into only existing Move, Binary, JumpIfFalsy, Jump, and CallNumericNative operations, preserving the original call operands until the expansion returns so deoptimization can replay the generic call exactly. Ordinary typed loops never construct or inspect expanded state and continue through the unchanged executor. A helper-bearing loop with named-property stores is declined so no admitted outer-loop side effect can invalidate a snapshotted Math property. Unsupported bytecode, recursion, backward branches, excess graph or register size, mutable or aliased writes, accessors, proxies, coercion, dynamic scope, replaced bindings, non-Number values, constructors, spread, receiver-sensitive calls, or guard failure stays on the generic path. Admission never inspects benchmark, source path, function or property spelling beyond the standard Math binding and the live property read, input size, iteration count, checksum, or result.",
+    "semantic_risks": [
+      "preserving ECMAScript Number arithmetic, comparison, truthiness, NaN, signed zero, Infinity, remainder, exponentiation, shifts, bitwise conversion, and supported Math intrinsic behavior by lowering only to the existing typed-loop operations",
+      "resolving live function identity, shared upvalue cells, creation-realm Math binding, and own data properties before any dense write, local write, or other loop side effect, while declining accessors, proxies, dynamic realms, mutable captures, and outer named-property writes",
+      "renaming every scalar and boxed register without collision, remapping forward branches and multiple returns, recursively expanding nested calls within fixed depth, node, operation, and register limits, and preserving the base call arguments until completion",
+      "attaching the original call DeoptSite to expanded operations so any guardable numeric native failure reconstructs the exact callee-and-argument operand stack and resumes at the original Call without repeating prior outer-loop effects",
+      "keeping the non-helper path's run, seed_registers, execute, private typed_binary, TypedOp layout, and scratch bundle unchanged so the prior 3d-morph and dynamic_method_call regressions cannot reappear through helper dispatch or graph evaluation",
+      "preserving the T016 slot-indexed local and shared-upvalue-cell model without snapshots that can outlive one guarded loop entry or hide a writable cell"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-fee40a08/imaging-darkroom/current.sample; exact runtime-620bb67b release executable SHA-256 c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b; official generated Kraken imaging-darkroom bundle SHA-256 bfc464b658a5b69810769631928842241a46d8d9bfbfb62da53804843eadfaba; the complete official bundle produced its expected marker during profiling",
+      "sha256": "179f6fc7a9270a62e556602d1bead193b43064b4a1d93f9c1ffe9d5ee7da6066",
+      "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+      "opportunity_ids": [
+        "external/kraken-1.1/imaging-darkroom"
+      ],
+      "shared_cost": "Of 4,406 main-thread samples, 4,214 (95.64%) lie below the direct ProcessImageData call and repeatedly traverse FastGain, FastBias, FastLog2, Clamp, and pure Math child calls. Vm::run_completion alone contributes 1,985 exclusive samples (45.05%); call_direct_leaf_function contributes 274, fast_number_binary 201, Vm construction 163, FrameState destruction 69, and CallEnv construction/destruction 88. The outer pixel loop's arithmetic, branches, dense reads, and dense writes fit the existing typed-loop IR, but its two ordinary helper calls exclude the whole region. The two prior entry-prepared candidates established causality by reducing this exact benchmark to 0.248772x and 0.209405x; both were rejected solely for independent control regressions caused by executor integration, which this entry expansion removes structurally.",
+      "inclusive_fraction": 0.9564
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/kraken-1.1/imaging-darkroom"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/3d-morph",
+      "external/kraken-1.1/imaging-gaussian-blur",
+      "external/kraken-1.1/audio-fft",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/access-nbody",
+      "broad/dynamic_method_call",
+      "broad/math_abs",
+      "broad/plain_function_call",
+      "broad/function_call_two_args",
+      "broad/array_dynamic_read",
+      "broad/array_write",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.35,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

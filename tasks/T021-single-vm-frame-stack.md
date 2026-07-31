@@ -3231,3 +3231,86 @@ result transfer, or a bundle-specific combination of its scattered costs.
 A future CDJS attempt requires a fresh representation-level mechanism with an
 independently profiled share above ten percent. The queue should advance to
 rank-eight Kraken `imaging-darkroom`.
+
+### 2026-07-30 rejected typed-loop entry-expanded numeric helper bodies
+
+The exact `620bb67b` opportunity queue (SHA-256
+`0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1`)
+ranked Kraken `imaging-darkroom` eighth at 3.6449x QuickJS-NG. A fresh full
+run of the official generated bundle (SHA-256
+`bfc464b658a5b69810769631928842241a46d8d9bfbfb62da53804843eadfaba`)
+produced its expected marker. Its 4,406-sample main-thread profile (SHA-256
+`179f6fc7a9270a62e556602d1bead193b43064b4a1d93f9c1ffe9d5ee7da6066`)
+placed 4,214 samples, or 95.64%, below `ProcessImageData` in the repeated
+`FastGain`, `FastBias`, `FastLog2`, `Clamp`, and pure-Math helper graph.
+`Vm::run_completion` contributed 1,985 exclusive samples, direct-leaf calls
+274, numeric binary work 201, VM construction 163, frame destruction 69, and
+call-environment construction/destruction 88. The outer arithmetic, branches,
+dense reads, and writes already fit the typed-loop IR; ordinary helper calls
+were the bounded exclusion.
+
+The frozen one-attempt plan
+`tasks/performance-units/typed-loop-entry-expanded-numeric-helper-bodies.json`
+(SHA-256
+`27b71e62ef678fe6e677886c1735d224267f8a94b25f18f3a9f055cacdb5332c`)
+tested a structural mechanism rather than another call-graph evaluator. At
+typed-loop entry it validated a bounded acyclic pure-Number helper graph,
+including exact function identity, live T016 upvalue cells, creation-realm
+`Math`, and own data properties, then renamed its registers and translated it
+to the existing `Move`, `Binary`, `JumpIfFalsy`, `Jump`, and
+`CallNumericNative` operations. Unsupported graphs, dynamic realms, accessors,
+replacement, coercion, recursion, backward branches, writes through shared
+cells, named-property stores, and excess size declined before loop effects.
+There was no new opcode, graph executor, parser or AST change, dependency,
+source-name heuristic, or benchmark-specific admission rule.
+
+Seventeen focused typed-loop tests passed, including nested helpers, cached
+entry reuse, function and `Math` replacement, numeric-capture invalidation,
+NaN/signed-zero and bitwise behavior, exact generic results, and T016
+shared-cell decline; 1,902 unrelated runtime tests were filtered in that
+focused run. An early uncached form made darkroom 0.162269x exact base and
+0.593989x QuickJS-NG, but a nine-block audit reproduced
+`math-spectral-norm` at 1.056984x because short inner loops rebuilt the same
+graph on every function entry. A program-local cache that revalidated the
+complete live graph before reuse removed that issue: the follow-up nine-block
+medians were spectral-norm 0.999436x and HashMap 1.004681x.
+
+The final standard-recipe candidate binary SHA-256 was
+`7d3337ee26a08fd9f809c7a10e590725d6a33bfee3f008b4065bf31f09457d78`;
+the exact base binary remained
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`.
+Every warmup and measured process exited successfully with identical stdout
+and stderr hashes. The complete frozen five-block receipt SHA-256 is
+`a7555f38585186bf03e4cc4d20a09ec18289a800cafc84cf104229b3a44866ad`.
+Darkroom reached **0.163388x**, an 83.7% reduction and well beyond the required
+`<= 0.35x` target. Thirteen controls passed the `<= 1.03x` ceiling:
+3d-morph 1.015369x, gaussian blur 1.002667x, audio FFT 0.982324x, A*
+1.008417x, HashMap 1.003677x, public-field raytrace 1.003539x, recursive
+0.991882x, nbody 0.991757x, dynamic method call 1.000205x, plain function
+call 1.005971x, two-argument call 0.996617x, dynamic array read 0.992882x,
+and array write 1.001155x.
+
+Three mandatory controls failed: `string-tagcloud` was **1.107604x**,
+`math_abs` **1.033666x**, and `object_allocation` **1.081317x**. The
+`math_abs` failure was independently stable across nine seeded alternating
+blocks at about 1.04x. Three corrective layouts preserved the ordinary
+`run`/seed/execute call graph, restored its inlining, and restored all old
+program-field offsets, but did not remove that regression. Equal-duration
+profiles of an intermediate candidate and exact base (SHA-256
+`53bfe3b95b4550bae961acb16def320e4780c11bd834bd26f1311d8938df74cc`
+and `478d47ab42fddaf8d3c9447b2190b77251701ea314cf6edabd1b5e012e10ce01`)
+placed every sample in the pre-existing `vm_numeric_loop` and `math_unary`
+path, not the new typed-loop helper path. Together with the unchanged source
+for those modules, this is diagnostic evidence of reproducible 16-CGU codegen
+perturbation, not grounds to waive a measured control failure.
+
+The standard fail-closed decision receipt (SHA-256
+`2331837849c2e3204890f96d2a3097fca61826f1cbf17cbb5af413777816b6d3`)
+therefore classifies the unit as **rejected**. All runtime and focused-test
+changes were reverted, and `crates/qjs-runtime` again matches `HEAD` exactly.
+Full Test262 and complete promotion portfolios were not started after the
+mandatory fast gate failed. Do not retry this entry-expanded helper module by
+retuning cache, inlining, field order, function order, or code padding; a
+future helper-body mechanism needs a different representation with stable
+ordinary-code generation and fresh profile evidence. The queue should advance
+to rank-nine SunSpider `access-nbody`.
