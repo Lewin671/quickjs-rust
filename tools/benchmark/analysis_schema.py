@@ -91,7 +91,7 @@ class AnalysisManifest:
     schema_version: int
     id: str
     compatible_measurement_schema: int
-    compatible_measurement_protocol: str
+    compatible_measurement_protocols: tuple[str, ...]
     protocol_id: str
     protocol_file_ids: tuple[str, ...]
     protocol_files: tuple[Path, ...]
@@ -106,11 +106,30 @@ class AnalysisManifest:
     def assert_compatible(self, measurement: Manifest) -> None:
         if (
             measurement.schema_version != self.compatible_measurement_schema
-            or measurement.protocol_id != self.compatible_measurement_protocol
+            or measurement.protocol_id not in self.compatible_measurement_protocols
         ):
             raise AnalysisManifestError(
                 "analysis manifest is incompatible with measurement schema/protocol"
             )
+
+
+def _compatible_protocols(compatible: dict[str, Any]) -> tuple[str, ...]:
+    """Reads the measurement protocols this analysis policy may read.
+
+    One analysis policy legitimately serves more than one measurement series:
+    the broad portfolio and the generic-path sentinels differ in workload --
+    and therefore in measurement protocol -- while sharing every analysis rule
+    that turns raw records into ratios. Listing the protocols keeps that
+    explicit and still fails closed on an unlisted one.
+    """
+    where = "analysis.compatible_measurement.protocol_ids"
+    values = compatible["protocol_ids"]
+    if not isinstance(values, list) or not values:
+        raise AnalysisManifestError(f"{where}: expected a non-empty array")
+    protocols = tuple(_string(value, where) for value in values)
+    if len(set(protocols)) != len(protocols) or list(protocols) != sorted(protocols):
+        raise AnalysisManifestError(f"{where}: protocols must be unique and sorted")
+    return protocols
 
 
 def load_analysis_manifest(path: Path, measurement: Manifest) -> AnalysisManifest:
@@ -137,7 +156,7 @@ def load_analysis_manifest(path: Path, measurement: Manifest) -> AnalysisManifes
     compatible = data["compatible_measurement"]
     if not isinstance(compatible, dict):
         raise AnalysisManifestError("analysis.compatible_measurement: expected object")
-    _keys(compatible, {"schema_version", "protocol_id"}, "analysis.compatible_measurement")
+    _keys(compatible, {"schema_version", "protocol_ids"}, "analysis.compatible_measurement")
     compatible_schema = _integer(
         compatible["schema_version"], "analysis.compatible_measurement.schema_version", 1
     )
@@ -236,9 +255,7 @@ def load_analysis_manifest(path: Path, measurement: Manifest) -> AnalysisManifes
         schema_version=2,
         id=_string(data["id"], "analysis.id"),
         compatible_measurement_schema=compatible_schema,
-        compatible_measurement_protocol=_string(
-            compatible["protocol_id"], "analysis.compatible_measurement.protocol_id"
-        ),
+        compatible_measurement_protocols=_compatible_protocols(compatible),
         protocol_id=_string(protocol["id"], "analysis.protocol.id"),
         protocol_file_ids=tuple(file_ids),
         protocol_files=tuple(file_path for _identifier, file_path in resolved),

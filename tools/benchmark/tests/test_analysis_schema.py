@@ -5,6 +5,7 @@ import json
 import shutil
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from tools.benchmark.analysis_schema import AnalysisManifestError, load_analysis_manifest
@@ -87,7 +88,7 @@ class AnalysisManifestTests(unittest.TestCase):
         with self.assertRaisesRegex(AnalysisManifestError, "expected integer"):
             load_analysis_manifest(path, self.measurement)
         data["bootstrap"]["samples"] = 20_000
-        data["compatible_measurement"]["protocol_id"] = "wrong"
+        data["compatible_measurement"]["protocol_ids"] = ["wrong"]
         path.write_text(json.dumps(data), encoding="utf-8")
         with self.assertRaisesRegex(AnalysisManifestError, "incompatible"):
             load_analysis_manifest(path, self.measurement)
@@ -102,3 +103,49 @@ class AnalysisManifestTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CompatibleProtocolListTests(unittest.TestCase):
+    """One analysis policy, more than one measurement series.
+
+    The broad portfolio and the generic-path sentinels differ in workload and
+    therefore in measurement protocol, while sharing every rule that turns raw
+    records into ratios. Listing the protocols is what lets the sentinels reach
+    the same analysis without a second, drifting copy of that policy.
+    """
+
+    def test_repository_policy_serves_both_measurement_series(self) -> None:
+        data = json.loads((ROOT / "benchmarks/analysis.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            data["compatible_measurement"]["protocol_ids"],
+            ["quickjs-generic-sentinel-protocol-v1", "quickjs-measurement-protocol-v8"],
+        )
+        for manifest_path in (
+            "benchmarks/manifest.json",
+            "benchmarks/generic-sentinels-manifest.json",
+        ):
+            measurement = load_manifest(ROOT / manifest_path)
+            analysis = load_analysis_manifest(ROOT / "benchmarks/analysis.json", measurement)
+            analysis.assert_compatible(measurement)
+
+    def test_unlisted_protocol_still_fails_closed(self) -> None:
+        measurement = load_manifest(ROOT / "benchmarks/manifest.json")
+        analysis = load_analysis_manifest(ROOT / "benchmarks/analysis.json", measurement)
+        stranger = replace(measurement, protocol_id="quickjs-unlisted-protocol-v1")
+        with self.assertRaisesRegex(AnalysisManifestError, "incompatible"):
+            analysis.assert_compatible(stranger)
+
+    def test_protocol_list_must_be_non_empty_unique_and_sorted(self) -> None:
+        measurement = load_manifest(ROOT / "benchmarks/manifest.json")
+        helper = AnalysisManifestTests()
+        temporary, path, data = helper._copy_manifest()
+        self.addCleanup(temporary.cleanup)
+        for value, message in (
+            ([], "non-empty array"),
+            (["b", "a"], "unique and sorted"),
+            (["a", "a"], "unique and sorted"),
+        ):
+            data["compatible_measurement"]["protocol_ids"] = value
+            path.write_text(json.dumps(data), encoding="utf-8")
+            with self.assertRaisesRegex(AnalysisManifestError, message):
+                load_analysis_manifest(path, measurement)

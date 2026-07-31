@@ -3,7 +3,10 @@
   "id": "quickjs-benchmark-analysis-v5",
   "compatible_measurement": {
     "schema_version": 4,
-    "protocol_id": "quickjs-measurement-protocol-v8"
+    "protocol_ids": [
+      "quickjs-generic-sentinel-protocol-v1",
+      "quickjs-measurement-protocol-v8"
+    ]
   },
   "protocol": {
     "id": "quickjs-analysis-protocol-v5",
@@ -25,7 +28,7 @@
       "tools/benchmark/schema.py",
       "tools/benchmark/statistics.py"
     ],
-    "aggregate_sha256": "10e456d9862bdd7242a36fa06b3f9ab2c563ea48957d3cb44fde232a14bd7bb4"
+    "aggregate_sha256": "9353f38eb13a16550bd2d08055000fc1c5e68c453d0e760f5a2c4262f49cd080"
   },
   "bootstrap": {
     "samples": 20000,

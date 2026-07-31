@@ -11,7 +11,7 @@
     "throughput_analysis": {
       "manifest_path": "benchmarks/analysis.json",
       "protocol_id": "quickjs-analysis-protocol-v5",
-      "protocol_sha256": "10e456d9862bdd7242a36fa06b3f9ab2c563ea48957d3cb44fde232a14bd7bb4"
+      "protocol_sha256": "9353f38eb13a16550bd2d08055000fc1c5e68c453d0e760f5a2c4262f49cd080"
     },
     "resource_measurement": {
       "manifest_path": "benchmarks/resources.json",
@@ -117,7 +117,7 @@
         ],
         "required_protocol_sha256": {
           "throughput_measurement": "ce158c449331f311b2b027367d37df01b6a33a6ddd592937a5146b6d9b715e06",
-          "throughput_analysis": "10e456d9862bdd7242a36fa06b3f9ab2c563ea48957d3cb44fde232a14bd7bb4",
+          "throughput_analysis": "9353f38eb13a16550bd2d08055000fc1c5e68c453d0e760f5a2c4262f49cd080",
           "resource_measurement": "e1c096a39e78e1087410ef7209f23292628c7e29cbd4598956a9dfc25dd9a5ce",
           "resource_analysis": "4d28b20cd3090bdc74a4350774c1d12807458a957ebfe85ae03d286f4b59e14a"
         }
@@ -138,7 +138,7 @@
         ],
         "required_protocol_sha256": {
           "throughput_measurement": "ce158c449331f311b2b027367d37df01b6a33a6ddd592937a5146b6d9b715e06",
-          "throughput_analysis": "10e456d9862bdd7242a36fa06b3f9ab2c563ea48957d3cb44fde232a14bd7bb4",
+          "throughput_analysis": "9353f38eb13a16550bd2d08055000fc1c5e68c453d0e760f5a2c4262f49cd080",
           "resource_measurement": "e1c096a39e78e1087410ef7209f23292628c7e29cbd4598956a9dfc25dd9a5ce",
           "resource_analysis": "4d28b20cd3090bdc74a4350774c1d12807458a957ebfe85ae03d286f4b59e14a"
         }
@@ -160,7 +160,7 @@
         ],
         "required_protocol_sha256": {
           "throughput_measurement": "ce158c449331f311b2b027367d37df01b6a33a6ddd592937a5146b6d9b715e06",
-          "throughput_analysis": "10e456d9862bdd7242a36fa06b3f9ab2c563ea48957d3cb44fde232a14bd7bb4",
+          "throughput_analysis": "9353f38eb13a16550bd2d08055000fc1c5e68c453d0e760f5a2c4262f49cd080",
           "resource_measurement": "e1c096a39e78e1087410ef7209f23292628c7e29cbd4598956a9dfc25dd9a5ce",
           "resource_analysis": "4d28b20cd3090bdc74a4350774c1d12807458a957ebfe85ae03d286f4b59e14a"
         }

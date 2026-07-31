@@ -20,7 +20,7 @@ def _analysis_contract(analysis: AnalysisManifest) -> dict[str, Any]:
         "protocol_files": list(analysis.protocol_file_ids),
         "compatible_measurement": {
             "schema_version": analysis.compatible_measurement_schema,
-            "protocol_id": analysis.compatible_measurement_protocol,
+            "protocol_ids": list(analysis.compatible_measurement_protocols),
         },
         "bootstrap": {
             "samples": analysis.bootstrap_samples,
