@@ -4248,3 +4248,98 @@ the campaign threshold, but 38 external cases remain above 0.5x. The new
 rank-one opportunity is SunSpider `controlflow-recursive` at 6.0132x. This
 closes the realm String prototype unit, not the campaign; continue from that
 fresh queue and a new exact-current profile.
+
+### 2026-07-30 retained branchy nested dense typed loops
+
+The exact `4023b3dd` opportunity queue ranked Kraken
+`imaging-gaussian-blur` eleventh at 3.1320x QuickJS-NG after the guarded unary
+Math opcode. A fresh source-faithful sample contained 3,696 main-thread
+samples: bytecode dispatch accounted for 1,383 (37.4%), `Value` clone/drop for
+694 (18.8%), generic binary operations for 402 (10.9%), and the remaining Math
+path for only 23 (0.6%). The profile SHA-256 is
+`892f7c436301021ce1d8d81d8447ed472dadf183169cae5d2c130453eea30052`.
+Bytecode inspection identified the shared missing mechanism: four nested
+numeric loops with truthy short-circuit bounds and a two-level dense read,
+`kernel[Math.abs(j)][Math.abs(i)]`, were not admitted by the typed-loop tier.
+
+The frozen one-attempt plan
+`tasks/performance-units/typed-loop-branchy-nested-dense-read.json` (SHA-256
+`f5eb4a9b20e219006803d10791c00698c451444922493d42e81ed767f9f1dc81`)
+extends the existing typed-loop compiler rather than adding a benchmark leaf.
+The compiler now admits truthy conditional branches through its existing
+numeric-not operation, skips unreachable instructions until a known reachable
+target, and learns which intermediate dense reads must remain boxed for a
+subsequent indexed read. The existing guarded element-read operation and
+deoptimization stack preserve live array semantics; getters, non-array
+intermediates, and unsupported shapes replay the generic VM path. Parser, AST,
+environment, public API, dependency, and generic bytecode-executor boundaries
+did not change.
+
+Focused tests cover truthy short-circuit values including negative zero and
+NaN, nested ordinary-array reads, getter observation and non-array fallback,
+and a reduced four-channel Gaussian kernel. All 1,922 runtime tests, the
+5,160-case curated Test262 subset, the staged touched gate,
+`./scripts/check.sh`, `./scripts/compare-qjs.sh`, the pre-push gate, and
+exact-commit CI run `30622615132` passed. The retained runtime commit is
+`60e28ecf84aa8a9328377f7f6343465da59849c4`; candidate, exact-base, and
+QuickJS-NG executable SHA-256 values are
+`04d1ea96981f83afe8a34ae83b9d98da17a1d1d641f9bcd9a950d74a4645c6d1`,
+`498e5bd03ce89f2f8100f77f2e9026da3f24903b2d617897688b235b37af6d81`,
+and
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+Their build-receipt SHA-256 values are
+`8ac8f5f9126cbaaba66b86cf3f94d615696ce42bdf489fea745feea862543c5c`,
+`0264066a3f864429d14853f893c98ef3b21e83d89a9cc6a6fde20d49c116fe06`,
+and
+`b96f63f100f0ddfb6e7dedfdbcb195f579144cf01af814706d3d7a1b24b90b0f`.
+
+The five-pair exact-binary fast target measured Gaussian blur at
+**0.301961x candidate/base**, below the frozen `<= 0.65x` gate, with one
+byte-identical successful output set. All seventeen declared controls stayed
+below 1.03x; the worst was CDJS at 1.006378x. The target and control receipt
+SHA-256 values are
+`7b1a9492fc638ed158f2d49e3d543577008af1a05253a95d8f29871cae45566a`
+and
+`b8af17b3108f2c96965d2ed59b04651d97a504325edbe133e27a52db14ec597a`.
+
+The exact 25-case broad matrix completed all three role-rotation blocks and
+all 225 formal samples. Candidate/base geometric mean was 1.000793x; the worst
+broad row was `array_dynamic_read` at 1.019958x. Every broad case remained
+below 0.5x QuickJS-NG, with the worst `closure_allocation_call` at 0.429781x.
+Manifest, raw, report, and summary SHA-256 values are
+`5c3c586de23444190437652cf99a57da46730a4473d22e281c9e388f8c4215c0`,
+`642cab2fc95ea55960dc544768886c170f73eab40bf50e0340b459c92fab94d7`,
+`3f2880e9713b5ebc32a3266cc5e1792c1759ae115146d7265af29ac7beb681a6`,
+and
+`dc39e0b484db74fb2a750767030bcc80fd62749425b23fc23d969a08354da370`.
+
+The exact 45-case external portfolio completed all three 60-second blocks for
+all roles. Kraken Gaussian reproduced at **0.302290x candidate/base** and
+0.943971x QuickJS-NG. JetStream, Kraken, and SunSpider candidate/base geometric
+means were 0.997783x, 0.918029x, and 0.995593x. The worst external
+candidate/base row was the non-control Kraken `audio-dft` at 1.016804x, below
+the frozen 1.03x ceiling. External manifest, raw, report, and rendered-summary
+SHA-256 values are
+`a8ddeded582573bc676bf3f7bbbaf2625f6dfa7742f07bcdd6aaa26366f4e6c4`,
+`c0a01b17466206ebaa8a8d123bc7694bc43e02f6ea5243cdbee08505365f0f0d`,
+`eb9a9d56c68e3c39d9490e41bb8e5955c85b42f4885364747b3b5ee1b2aea16e`,
+and
+`3d61da152703724f045ec94a94ad3b798bd9cf784bb4a63c4a354e0ff93eecb6`.
+
+Exact-commit Test262 Coverage run `30622894172` passed and produced burndown
+SHA-256
+`d5e8ceed4b1b3004b21c2d61e90e284700bec7a5dae8e5091a461a309bb0d43b`.
+It covers all 53,572 pinned cases: 10,900 are outside the QuickJS-NG
+configuration, while qjs-rust passes all 42,672 configured cases with zero
+failures, zero timeouts, zero not-run cases, and zero actionable gaps. The
+promotion decision retains the unit with no exception and has SHA-256
+`b3b0f9d5ab7c20f412205811a14ca4c05613eb645e916a41816e2a6af93c91db`.
+
+The refreshed exact `60e28ecf` queue has SHA-256
+`608f966a5ca40eb0f40cfba31d9ce515370e042ca4bc3f324e72599c896495d1`.
+Gaussian moves from rank eleven to rank thirty-five at 0.943971x QuickJS-NG;
+no broad case is above the campaign threshold, but 38 external cases remain
+above 0.5x. The new rank-one opportunity is SunSpider
+`controlflow-recursive` at 5.8391x. This closes the branchy nested dense-loop
+unit, not the campaign; continue from the new queue's highest unclosed
+current-profile mechanism.
