@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "dense-primitive-predicate-scan",
+  "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+  "queue": {
+    "candidate_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+    "sha256": "608f966a5ca40eb0f40cfba31d9ce515370e042ca4bc3f324e72599c896495d1"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/access-nsieve"
+    ],
+    "rank_ceiling": 22,
+    "override_reason": "Ranks 1 through 19 are closed for this cycle by exact-current retained or rejected frame, object, string, RegExp, constructor, typed-loop, and Number-only evidence. Fresh rank-20 crypto-aes profiling places 1,406 of 3,236 samples in generic dispatch, but its dense/nested-array work reproduces the already-consumed read-only and rejected branchy-transform mechanisms without a new bounded compiler boundary. Fresh rank-21 access-fannkuch profiling places 1,669 of 3,277 samples in generic dispatch while 433 more are already inside the retained compact dynamic dense executors; its remaining outer permutation control does not expose a distinct low-cost region. Rank-22 access-nsieve instead has a narrow existing-plan gap: its counted outer loop has the exact pure false-prefix shape handled by DenseNumericPredicateScanPlan, but the plan accepts only Number elements and its whole-array lease rejects the two unrelated prefix holes left by Array(m + 1). Extending that existing scan to present own primitive elements is lower cost and lower semantic risk than another general-dispatch or dense-plan rewrite."
+  },
+  "mechanism": {
+    "summary": "Extend the existing counted dense predicate scanner so a direct present-own Boolean element can supply ToBoolean, and so unrelated sparse indices do not suppress the scan. The scanner batches consecutive false iterations, hands every true predicate back to the unchanged VM body, and deoptimizes at the first absent, described, or unsupported element before that iteration becomes observable.",
+    "generality": "Eligibility continues to depend only on immutable bytecode shape: a counted loop, one direct dense local-array read in its leading pure predicate, an unobservable false edge, authoritative Number counter and bound slots, and the existing local receiver proof. Runtime reads use the array's present-own dense-element guard at each sparse fallback index; Number and Boolean elements are accepted, while holes, indexed descriptors, proxies, unsupported primitive arithmetic, borrow conflicts, non-authoritative slots, direct eval, or changed array shape resume the ordinary VM before observable work. No source path, function or benchmark name, input size, iteration count, checksum, expected result, or target-specific constant participates.",
+    "semantic_risks": [
+      "preserving ECMAScript ToBoolean for Boolean and Number elements, including false, true, NaN, positive and negative zero",
+      "never skipping an iteration whose indexed read would observe a hole, inherited getter, own descriptor, Proxy, or abrupt property-key conversion",
+      "publishing only completed false-prefix counter updates and replaying the first unsupported iteration at the original loop header",
+      "releasing every dense-element borrow before handing a true predicate to an arbitrary observable body",
+      "leaving existing packed-bitset and strict dense Number scans byte-for-byte on their current preferred lease path",
+      "suppressing the plan before work when receiver, counter, limit, or completion slots are captured or otherwise non-authoritative"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-31 target/performance-profile-e2159229/access-nsieve/current.sample; exact runtime-60e28ecf standard-recipe release executable SHA-256 04d1ea96981f83afe8a34ae83b9d98da17a1d1d641f9bcd9a950d74a4645c6d1; source-faithful generated SunSpider bundle plus repeated public sieve entry SHA-256 5428f7e48905cd0a633952ce0dc6e21fc68a5494ad28b590596f12281ca4c618; process completed with the expected sentinel and empty stderr",
+      "sha256": "45b18697adef32413f9c91d0a62c1206b3f28d75cb533996ecfc4e894b5bc304",
+      "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+      "opportunity_ids": [
+        "external/sunspider-1.0/access-nsieve"
+      ],
+      "shared_cost": "Of 3,259 main-thread samples, 1,840 (56.5%) land exclusively in generic Vm::run_completion, 259 in Value drop, 134 in Value clone, and 226 in virtual-object operations. The source executes 140,003 outer isPrime[i] predicates per public sieve call, most false after the inner marking loops. Static inspection shows the existing false-prefix scanner accepts the counted control and direct local-array predicate bytecode but declines live state because isPrime stores Booleans and retains unrelated holes at indices zero and one. The planned primitive sparse fallback addresses only that outer predicate subset; inner false stores and every true prime body remain controls on the attainable gain.",
+      "inclusive_fraction": 0.3
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/access-nsieve"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/bitops-nsieve-bits",
+      "external/sunspider-1.0/access-fannkuch",
+      "external/sunspider-1.0/crypto-aes",
+      "external/sunspider-1.0/3d-cube",
+      "external/kraken-1.1/audio-beat-detection",
+      "broad/array_dynamic_read",
+      "broad/array_write",
+      "broad/branch_arithmetic",
+      "broad/plain_function_call",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.8,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

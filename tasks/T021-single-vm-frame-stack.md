@@ -4529,3 +4529,61 @@ changes were reverted. Do not retune this unit through scalar stack-op fusion,
 completion-value elision, a registerized Number-only instruction layout, enum
 packing, or a relaxed target threshold; any successor must start from a
 distinct new exact-current shared-cost profile.
+
+### 2026-07-31 rejected dense primitive predicate scan
+
+The next exact-current queue slice was profiled before implementation with the
+same standard-recipe runtime-`60e28ecf` executable SHA-256
+`04d1ea96981f83afe8a34ae83b9d98da17a1d1d641f9bcd9a950d74a4645c6d1`.
+Rank-twenty SunSpider `crypto-aes` placed 1,406 of 3,236 main-thread samples
+in generic VM dispatch, but reproduced the already-consumed dense-read and
+rejected branchy-transform boundaries. Rank-twenty-one `access-fannkuch`
+placed 1,669 of 3,277 samples in generic dispatch while another 433 samples
+were already inside the retained compact dynamic dense executors. Their sample
+SHA-256 values are
+`bfa210e9b495365d2fd5e3289ee57e4ff0bf7d540133b91f2e920216fb81dece`
+and
+`8f31f9b51da5f477411a1867ae5b52ec88c70913747426405bb3d953bffce511`.
+
+Rank-twenty-two `access-nsieve` exposed a narrower apparent gap. Its sample
+placed 1,840 of 3,259 stacks in generic dispatch, 259 in `Value` drop, 134 in
+`Value` clone, and 226 in virtual-object operations. The counted outer
+`isPrime[i]` predicate has the pure false-prefix shape of the retained dense
+numeric predicate scanner, but the live array contains Booleans plus two
+unrelated prefix holes. The source-faithful wrapper and sample SHA-256 values
+are
+`5428f7e48905cd0a633952ce0dc6e21fc68a5494ad28b590596f12281ca4c618`
+and
+`45b18697adef32413f9c91d0a62c1206b3f28d75cb533996ecfc4e894b5bc304`.
+
+The frozen one-attempt plan
+`tasks/performance-units/dense-primitive-predicate-scan.json` (SHA-256
+`20bc3b399b8d37581423e7c80ea96adfac4701c87b0cb03d887d53b9d015d0cc`)
+therefore extended only the existing scanner. Its strict dense Number lease
+remained preferred; a failed whole-array lease retried each index through the
+present-own dense-element guard, accepted Number or Boolean predicate values,
+and deoptimized before the first hole, descriptor, inherited getter, or
+unsupported value. The ordinary VM still ran every true body and all inner
+Boolean stores. Eighteen focused predicate-scan tests passed, including sparse
+Boolean prefixes and inherited-getter replay.
+
+The 31-block alternating exact-binary target gate rejected the unit. Candidate
+executable SHA-256
+`7586c05f3e6bfc854fbafe6ac90f2aace83d7e1e27ec4698f43f463a794a0247`
+was compared with the exact base above on the unmodified pinned source SHA-256
+`ef62b42b6f926d61d9741a8e57b2758a9aea28ad2d1ee1e7d4747957d00fdc20`.
+Every process completed with byte-identical stdout and empty stderr, but the
+paired median was **0.999001x candidate/base**, far above the frozen `<= 0.80x`
+ceiling. The target runner and result SHA-256 values are
+`2ee3dcc8500bca987b51389becf4841dd1a1e82999da51c76b65f504920059c2`
+and
+`6123cbc6cc32f7664fe8fb36cd2b95d1a07c06263f853dbd3412a21ef13123a9`.
+
+The failed target gate stopped the attempt before controls, complete broad or
+external portfolios, or Test262 promotion work. Runtime and focused-test
+changes were reverted. Do not retry Boolean admission, sparse per-index
+fallback, a wider primitive truthiness set, or a relaxed target threshold
+under this unit: the exact target shows that false-prefix scanning is not a
+material share of `access-nsieve` end-to-end time. A successor must identify a
+distinct shared cost, most likely in the retained inner Boolean store path,
+from new exact-current evidence.
