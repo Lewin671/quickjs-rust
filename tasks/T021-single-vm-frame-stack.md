@@ -2995,3 +2995,77 @@ scalarization of the `denseArray[index].numberField` chain for the current
 object and `Value` representations. A future attempt requires a different
 profiled representation-level mechanism, not another variant of this fused
 operation.
+
+### 2026-07-30 rejected boxed-String virtual index properties
+
+The exact `620bb67b` opportunity queue (SHA-256
+`0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1`)
+ranked SunSpider `string-tagcloud` fourth at 4.1325x QuickJS-NG after the first
+three frame, recursion, object-layout, and typed-loop routes were closed. A
+fresh exact-current tagcloud sample (SHA-256
+`079339f4d5b4d85ff7338b1f7375787645790dde03accfaadffd8366d5a9417a`)
+contained 7,206 main-thread samples. Primitive-receiver boxing accounted for
+989 samples, including 770 under `boxed_string` while it created the internal
+StringData and length plus one ordinary `Property` per UTF-16 code unit. The
+descendants included property-table insertion and promotion, per-code-unit
+String construction, allocation, and destruction. An independent current
+`date-format-tofte` sample (SHA-256
+`8bf689bf4ac341177de2b55a1648da3d489811a4f14854670878cdc82d91bed9`)
+confirmed the same `new String` route but placed only 23 of 11,310 samples in
+`define_string_data`, making it an explicit short-wrapper overhead control.
+
+The frozen one-attempt plan
+`tasks/performance-units/boxed-string-virtual-index-properties.json` (SHA-256
+`ca9837710a1f458e56c0bf7e284f1f7962d82c5c982ed251fe923d106f74c6d3`)
+tested a mechanism distinct from the rejected StringData-buffer sharing unit.
+It retained the existing owned StringData copy and ordinary fixed `length`,
+but stopped creating indexed ordinary properties eagerly. Central object get,
+has, descriptor, define, set, delete, and own-key paths instead synthesized the
+fixed enumerable/non-writable/non-configurable UTF-16 index descriptors on
+demand. The representation applied to `new String`, `Object(string)`, String
+subclasses, and non-strict primitive receiver boxing without inspecting source,
+benchmark, function, input, contents, length, iteration count, checksum, or
+result.
+
+Four focused test groups covered compatible and incompatible definitions,
+strict and Reflect assignment, deletion, UTF-16 surrogate code units, ordinary
+numeric and named key ordering, Object values/entries/assign/spread, freeze and
+seal state, inherited and receiver writes, Proxy invariants, subclasses, and
+sloppy primitive receiver boxing. All six boxed-String tests, all 30 String
+tests, and all 34 Object builtin tests passed. These semantic results
+established a valid candidate but did not override the frozen broad control
+ceiling.
+
+The five-block alternating screen compared standard-recipe candidate SHA-256
+`250591e329714df7590c93234d84b1c3bf1679a46c1bd1016f18c04daed5a8b3`
+with exact `620bb67b` base binary SHA-256
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`.
+Every warmup and measured process exited successfully with identical stdout
+and stderr hashes. The target receipt SHA-256 is
+`81d4fdf8975a3a610a78f2ae8ad4011ecbdd979d5d153fe36d85baebb00fdd58`;
+tagcloud reached **0.775197x** candidate/base, a 22.5% improvement and well
+past the required `<= 0.92x` target.
+
+The independently measured control receipt SHA-256 is
+`953c60fd12e1f85eb71497b7cc8bf3e817c7258b0b38c8fd2c00518be3da222e`.
+Ten controls stayed below the frozen `<= 1.03x` ceiling: `date-format-tofte`
+0.994412x, `date-format-xparb` 0.936216x, `string-base64` 0.980507x,
+`string-validate-input` 1.003042x, HashMap 1.000888x, A* 1.002198x,
+`property_read` 1.000391x, `property_write` 1.000596x, `string_slice`
+0.954262x, and `dynamic_method_call` 0.968973x. The required
+`object_allocation` control, however, was **1.077567x**. Four of its five
+paired blocks were tightly grouped between 1.075727x and 1.077783x; the
+candidate itself stayed between 5,534 and 5,541 ms in all five blocks. This is
+a stable 7.8% broad regression, not timing noise, and exceeds the control cap
+decisively.
+
+The unit is therefore **rejected** after its single allowed attempt despite the
+large target win. All runtime and focused-test changes were reverted, and the
+restored runtime source matches `HEAD`. Full Test262 and complete portfolio
+promotion runs were not started after the mandatory broad control failed. Do
+not retry centralized virtual boxed-String indices by rearranging the ordinary
+`ObjectRef` helper checks, changing key guards, or selectively materializing a
+length threshold. That on-demand representation has useful negative evidence
+but violates the broad allocation boundary; a future String-boxing unit needs
+a newly profiled representation or escape mechanism that does not perturb the
+ordinary object core.

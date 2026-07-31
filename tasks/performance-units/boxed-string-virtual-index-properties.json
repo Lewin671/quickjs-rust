@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "boxed-string-virtual-index-properties",
+  "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+  "queue": {
+    "candidate_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+    "sha256": "0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-tagcloud"
+    ],
+    "rank_ceiling": 4,
+    "override_reason": "Ranks one through three are closed for this cycle by the current direct-leaf frame, compact-dispatch, contiguous-frame, recursive-number, object-layout, property-storage, typed-loop, and fused dense-object-read negative evidence. The fresh rank-four tagcloud profile identifies a different structural cost: ordinary sloppy functions box primitive String receivers by eagerly installing one full ordinary Property per UTF-16 code unit. The earlier rejected String-wrapper unit retained every indexed Property and removed only a shared-buffer copy plus a temporary ASCII vector; this unit instead removes the O(length) property materialization itself and implements the existing String exotic semantics virtually."
+  },
+  "mechanism": {
+    "summary": "Create boxed String objects with only their existing internal StringData and ordinary length property, then synthesize the non-writable, enumerable, non-configurable UTF-16 index properties at centralized object get, has, descriptor, define, delete, set, and own-key boundaries instead of allocating an ordinary Property for every code unit.",
+    "generality": "The representation applies to every ordinary boxed String created by new String(value), Object(string), String subclass construction, and non-strict primitive-receiver boxing. A key is virtual only when it is a canonical in-range UTF-16 index of an object carrying the existing StringData internal marker; all named properties, symbols, accessors, prototype traversal, Proxy traps, indices beyond the string length, and non-String objects stay on their existing routes. Compatible defineProperty calls against a virtual fixed descriptor succeed without materializing it, incompatible definitions and deletes fail, and ordinary added properties retain ECMAScript own-key ordering. The implementation does not inspect source paths, benchmark names, function or property spellings, input values, string contents, lengths, iteration counts, checksums, or results. It is distinct from the rejected shared-data-buffer and ASCII-enumeration mechanism because it eliminates the indexed descriptor objects and their property-table transitions rather than retuning how those objects are populated.",
+    "semantic_risks": [
+      "preserving UTF-16 code-unit values and index bounds for ASCII, surrogate pairs, and lone surrogates",
+      "preserving fixed indexed descriptors through Object and Reflect getOwnPropertyDescriptor, defineProperty, assignment, delete, seal, freeze, and preventExtensions",
+      "merging virtual indices with ordinary numeric, string, and symbol own keys in ECMAScript order without duplicates",
+      "preserving Object.keys, values, entries, assign, spread, rest, for-in, and JSON traversal of boxed String indices",
+      "keeping named-property direct reads and caches fast while preventing numeric misses from walking the prototype past a virtual own index",
+      "preserving receiver-aware prototype setters and Proxy invariants when a boxed String is the target, receiver, or prototype",
+      "leaving the existing immutable StringData value stable across copy-on-write primitive string mutation"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-4cb2452c/string-tagcloud/current.sample; runtime-exact 620bb67b release binary SHA-256 c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b; official source SHA-256 9634886bcb846c76141f97b681b33a11df444901e0b4c899d8f72a3b6544f9d5 and sampling wrapper SHA-256 b4c0fbe32063e06e1743bde7bfe2440ecacfa779346c133b0bae24a752556f24",
+      "sha256": "079339f4d5b4d85ff7338b1f7375787645790dde03accfaadffd8366d5a9417a",
+      "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-tagcloud"
+      ],
+      "shared_cost": "Of 7,206 main-thread samples, 989 enter primitive receiver boxing and 770 remain under boxed_string while it creates StringData, length, and one ordinary indexed Property per UTF-16 code unit. Descendants include ObjectRef::define_property, PropertyStorage insertion and promotion, string_from_code_unit, HashMap mutation, allocation, and destruction. The proposed representation removes the indexed-property construction and later destruction while retaining the wrapper object and its observable String exotic behavior.",
+      "inclusive_fraction": 0.1069
+    },
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-4cb2452c/date-format-tofte/current.sample; runtime-exact 620bb67b release binary SHA-256 c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b; official source SHA-256 cbefaffbecb6769a85f5877765b21f967a1cff5ab2625d4a9066c050fcdc7b5e; 120 source-equivalent outer repetitions only sustained sampling and the final output was validated",
+      "sha256": "8bf689bf4ac341177de2b55a1648da3d489811a4f14854670878cdc82d91bed9",
+      "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+      "opportunity_ids": [
+        "external/sunspider-1.0/date-format-tofte"
+      ],
+      "shared_cost": "The independent constructor-heavy workload executes the same general new String path but only 23 of 11,310 samples remain in define_string_data because its strings contain one or two code units. It is therefore a strict reach and overhead control: the representation should remain neutral or modestly improve short explicit wrappers rather than shifting tagcloud cost into every ordinary object access.",
+      "inclusive_fraction": 0.002
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-tagcloud"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/date-format-tofte",
+      "external/sunspider-1.0/date-format-xparb",
+      "external/sunspider-1.0/string-base64",
+      "external/sunspider-1.0/string-validate-input",
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar",
+      "broad/object_allocation",
+      "broad/property_read",
+      "broad/property_write",
+      "broad/string_slice",
+      "broad/dynamic_method_call"
+    ],
+    "target_max_candidate_over_base": 0.92,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
