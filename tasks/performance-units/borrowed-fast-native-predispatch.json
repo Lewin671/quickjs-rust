@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "borrowed-fast-native-predispatch",
+  "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+  "queue": {
+    "candidate_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+    "sha256": "0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/kraken-1.1/imaging-gaussian-blur"
+    ],
+    "rank_ceiling": 6,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Predispatch fixed-small-arity native calls from borrowed operand-stack slices before allocating an argument Vec, and provide the existing fast-native dispatcher a lazy realm-environment factory so environment-independent successes such as Math.abs also avoid constructing an empty CallEnv. The expected Gaussian-blur reduction is 12-18%; the unit is rejected unless the target reaches at most 0.90x its exact base while controls remain at most 1.03x. Scope is one private VM call module plus focused semantics tests, with low-to-medium implementation cost and no public API, parser, AST, dependency, or binding-model change.",
+    "generality": "The predispatch is selected only by the existing Function native identity, the ordinary Call or CallResolved bytecode stack shape, and a bounded fixed argument count. It borrows the callee, receiver, and arguments without mutating the operand stack, invokes only the existing semantic fast-native classifier, and falls through unchanged when that classifier declines. Environment-independent primitive natives allocate no CallEnv; an environment-dependent accepted native obtains the same realm-plus-host CallEnv lazily. Spread calls, constructors, direct user functions, bound functions, proxies, replaced intrinsics, accessors, unsupported natives, unsupported arities, and coercive or otherwise declined operations retain the existing call path. The mechanism never inspects source paths, benchmark names, function or property spellings, input values, array sizes, iteration counts, checksums, or results.",
+    "semantic_risks": [
+      "preserving the distinct Call and CallResolved operand layouts, receiver value, argument order, and exact stack truncation on normal return and abrupt completion",
+      "performing no stack mutation before the fast-native classifier accepts so every unsupported or coercive case falls through to the unchanged generic path",
+      "preserving the dynamic-code-executed marker for eval and related dynamic natives even when the borrowed predispatch handles the call",
+      "constructing the identical attached realm environment exactly once for accepted environment-dependent fast natives while constructing none for environment-independent natives",
+      "preserving thrown-value identity, catch propagation, reference-count drop timing, caller locals, and optional returned values when a fast native succeeds or throws",
+      "leaving spread, constructor, direct-eval, proxy, bound-function, replaced-native, user-function, and larger-arity dispatch behavior unchanged"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-ed8461fc/imaging-gaussian-blur/current.sample; exact runtime-620bb67b release executable SHA-256 c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b; official generated Kraken imaging-gaussian-blur bundle SHA-256 54a60944b49ce59f85524db09ea4eba6f2137036e19487a45844d728b843bd38; the full official bundle completed with its expected marker during the profile run",
+      "sha256": "ee644edb30089322d645f00fbee263ca37624df30565294f96f5b8791c46f3cb",
+      "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+      "opportunity_ids": [
+        "external/kraken-1.1/imaging-gaussian-blur"
+      ],
+      "shared_cost": "Of 7,384 main-thread samples, the mutually exclusive hot leaves include 583 in call_callee_with_marker, 252 constructing empty CallEnv frames, 140 dropping CallEnv frames, and 47 in pop_arguments, totaling 1,022 samples or 13.84% before allocator descendants. Source inspection ties these costs to the inner convolution's repeated ordinary Math.abs calls: call and call-resolved allocate an argument Vec, call_callee_with_marker eagerly creates realm_env, and only then does try_fast_global_native_call identify the environment-independent unary Math primitive. The proposed borrowed predispatch removes those generic-call allocations without changing the existing native semantic implementation.",
+      "inclusive_fraction": 0.1384
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/kraken-1.1/imaging-gaussian-blur"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/imaging-darkroom",
+      "external/sunspider-1.0/3d-morph",
+      "external/kraken-1.1/audio-fft",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/sunspider-1.0/date-format-tofte",
+      "external/sunspider-1.0/string-tagcloud",
+      "broad/math_abs",
+      "broad/plain_function_call",
+      "broad/function_call_two_args",
+      "broad/dynamic_method_call",
+      "broad/property_read",
+      "broad/array_dynamic_read",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

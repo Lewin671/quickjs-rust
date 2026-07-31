@@ -3106,3 +3106,79 @@ public-field key sharing, field descriptor installation, constructor shapes,
 or base-constructor slot seeding without a future exact profile that exposes a
 new independently bounded cost above ten percent. The queue should advance to
 rank-six `imaging-gaussian-blur`.
+
+### 2026-07-30 rejected borrowed fast-native predispatch
+
+The exact `620bb67b` opportunity queue (SHA-256
+`0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1`)
+ranked Kraken `imaging-gaussian-blur` sixth at 3.9988x QuickJS-NG. A fresh
+full run of the official generated bundle (SHA-256
+`54a60944b49ce59f85524db09ea4eba6f2137036e19487a45844d728b843bd38`)
+produced the expected marker and a 7,384-sample main-thread profile with
+SHA-256
+`ee644edb30089322d645f00fbee263ca37624df30565294f96f5b8791c46f3cb`.
+The mutually exclusive hot leaves included 583 samples in
+`call_callee_with_marker`, 252 constructing empty `CallEnv` frames, 140
+dropping those frames, and 47 in `pop_arguments`: 1,022 samples, or 13.84%,
+before their allocator descendants. Source and route inspection tied the cost
+to the inner convolution's repeated `Math.abs` calls. The ordinary call path
+allocated an argument `Vec`, eagerly created a realm environment, and only
+then reached the existing environment-independent unary-Math fast native.
+
+The frozen one-attempt plan
+`tasks/performance-units/borrowed-fast-native-predispatch.json` (SHA-256
+`4bf10fcd0dcc322c6095ae5a22ac2d7d5ca2349caec74327ccc676ab9eb6b026`)
+tested one general call mechanism. Fixed calls of at most three arguments
+first borrowed the callee, receiver, and argument slice from the operand stack
+and invoked the existing semantic fast-native classifier. Accepted calls
+truncated the exact operands before processing their return or abrupt
+completion; declined calls performed no mutation and fell through unchanged.
+The classifier also received a lazy realm-environment factory, so accepted
+environment-independent natives avoided both the argument allocation and the
+empty frame. Eligibility used only the native function identity and ordinary
+`Call` or `CallResolved` stack shape; spread, constructor, bound, Proxy,
+replaced, coercive, unsupported, and user-function routes were unchanged.
+
+Focused runtime tests passed for resolved and unbound primitive calls,
+realm-dependent String slicing, coercion fallback, thrown-value identity and
+catch-stack restoration, replaced Math natives, indirect eval, and caller
+locals. The existing primitive-native fallback test passed alongside the new
+coverage. These semantic checks established a valid candidate but did not
+relax the predeclared broad control ceiling.
+
+The exact-base five-block alternating screen compared standard-recipe
+candidate SHA-256
+`45df9dbb0cd0a73706fdf535e395e8f6cd7e53623428a4c6e248266a23c0e895`
+with exact `620bb67b` base binary SHA-256
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`.
+Every warmup and measured process exited successfully with byte-identical
+stdout and stderr hashes. The target receipt SHA-256 is
+`a47f194e833ec145edfe93fd796d37a4fac3a2af865ee32d47b76f715f83e6df`.
+Its five paired candidate/base ratios were 0.790214x, 0.786895x, 0.787794x,
+0.802361x, and 0.779258x. The **0.787794x** median is a 21.2% improvement and
+comfortably passed the required `<= 0.90x` target.
+
+The complete frozen control receipt SHA-256 is
+`4da0f2e0d1eb32f726bda3ec1dffe2d3177a55d74614c6d8874ebbab1707a087`.
+Thirteen controls stayed below the `<= 1.03x` ceiling: `imaging-darkroom`
+0.890908x, `3d-morph` 0.984161x, `audio-fft` 0.941089x, A* 0.996347x,
+public-field raytrace 0.966698x, `date-format-tofte` 0.989809x, tagcloud
+0.996359x, `math_abs` 0.999569x, `plain_function_call` 1.000200x,
+`function_call_two_args` 0.999536x, `dynamic_method_call` 0.923722x,
+`property_read` 1.000165x, and `array_dynamic_read` 0.990688x. The required
+`object_allocation` control, however, was **1.077990x**. All five paired
+ratios were between 1.060424x and 1.082633x, so the 7.8% regression is stable
+and decisively exceeds the cap.
+
+The fail-closed decision receipt (SHA-256
+`10598f2886afc2f0ab4866c32e0d5914453debc44abd10981eced3202d6bc30b`)
+therefore classifies the unit as **rejected** after its single allowed
+attempt. All runtime and focused-test changes were reverted, and the restored
+runtime source matches `HEAD`; full Test262 and complete portfolio promotion
+runs were not started after the mandatory broad control failed. Do not retry
+this borrowed-stack plus lazy-realm predispatch shape by moving the branch,
+changing the fixed arity, splitting native families, or retuning inlining.
+The large target and independent Kraken gains show that generic native-call
+setup remains valuable, but a future unit must remove it through a different
+profiled call representation that does not perturb the ordinary allocation
+loop. The queue should advance to rank-seven JetStream `cdjs`.
