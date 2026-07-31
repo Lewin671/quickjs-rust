@@ -3422,3 +3422,57 @@ retuning chunk size, flatten threshold, or self-append eligibility. A future
 string representation needs fresh exact evidence for a different bounded
 cost and must preserve the existing compound-string reuse mechanism. The
 queue should advance to rank-eleven SunSpider `3d-raytrace`.
+
+### 2026-07-30 skipped 3d-raytrace after current profile screen
+
+The exact `620bb67b` opportunity queue (SHA-256
+`0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1`)
+ranked SunSpider `3d-raytrace` eleventh at 3.4552x QuickJS-NG. The later
+commits remain evidence-only, so the runtime-exact standard release binary is
+still SHA-256
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`.
+A fresh five-second sample used the unmodified upstream source (SHA-256
+`87a1cb968113dcaf427dc2634e95f6ee6460f38e132c26cdf640639521620591`)
+and a diagnostic 100-extra-run wrapper (SHA-256
+`727015925e8e7f724c8df53a4e0c8cb7962a75f4da16417af9e823a4fded829d`).
+It exited successfully with `Undefined`, no stderr, and a 3,552-sample
+main-thread runtime profile whose SHA-256 is
+`26e38d92610ba468e5754a52c0348f2ed104abbcfdafe37f773ca9576616bd4a`.
+The stdout and empty-stderr SHA-256 values are
+`50fbe849aa61688a0dde78393afa32aba45d9f4a52109662bea06fa4c45715d5`
+and
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+Generic `Vm::run_completion` contributes 1,379 exclusive samples, or 38.8%.
+Instruction-level inspection of the sampled PCs distributes that work across
+ordinary direct-call staging, binary evaluation, global loads, named-property
+cache reads, dense-index reads, returns, and `Value` clone/drop boundaries;
+it does not expose one new hot opcode. `Value` clone/drop itself totals 445
+samples, or 12.5%, but its call-tree parents span those same independent
+binary, global, property, array, and frame-lifecycle routes. The next flat
+families are individually smaller: named-cache lookup is 164 samples (4.6%),
+ordinary plus fast Number binary helpers total 271 (7.6%), direct-leaf call
+wrapping is 140 (3.9%), dense-index reads are 98 (2.8%), VM construction is
+86 (2.4%), and ordinary own-data reads are 78 (2.2%). Allocator entry points
+also remain below the ten-percent materiality boundary.
+
+Those concrete mechanisms are already closed. The complete compact generic
+bytecode core failed all three of its external targets and catastrophically
+regressed the dynamic-call control. The direct-leaf frame-stack variants and
+contiguous operand stack failed their frozen gates. Moving owned Number
+binary operands achieved only 0.974437x on A* and 0.988694x on HashMap. The
+fixed dense-index numeric leaf targeted this exact workload and reached only
+0.986477x while regressing A* to 1.095380x. Immediate property-value caching,
+shared-slot promotion, lazy ownership representations, the Realm object
+arena, and typed-loop object-field scalarization have likewise failed their
+independent target or control gates.
+
+No performance-unit plan, runtime patch, candidate binary, or timing gate was
+created. Treating the aggregate `Value` lifetime samples as one mechanism
+would combine unrelated ownership boundaries, while a global tagged-value or
+tracing-GC rewrite is not a bounded consequence of this single workload
+profile. Do not retry fixed dense-index leaves, direct-call frame layouts,
+compact opcode streams, owned binary operands, or property-cache placement
+for this case without a future exact profile that isolates a new general
+representation boundary above ten percent. The queue should advance to
+rank-twelve SunSpider `string-validate-input`.
