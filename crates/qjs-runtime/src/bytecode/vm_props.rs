@@ -545,6 +545,20 @@ impl Vm<'_> {
                 if let Some(value) = string::string_property(value, key) {
                     return Some(value);
                 }
+                // Ordinary realms own a stable `%String.prototype%` slot. Walk
+                // that live object directly so primitive method reads do not
+                // rebuild a CallEnv and rediscover the mutable String binding
+                // on every iteration. Accessors, Proxies, and exotic links
+                // decline before observable work and replay the generic path.
+                if self.env.dynamic_function_realm_global().is_none()
+                    && let Some(prototype) = self.realm.string_prototype()
+                {
+                    return match ordinary_chain_data_value(&prototype, key) {
+                        Ok(DirectPropertyRead::Data(value)) => Some(value),
+                        Ok(DirectPropertyRead::Missing) => Some(Value::Undefined),
+                        Err(ProxyInChain) | Ok(DirectPropertyRead::NeedsSlowPath) => None,
+                    };
+                }
                 let env = self.primitive_prototype_env();
                 data_property_value(inherited_primitive_prototype_descriptor(
                     &env, "String", key,

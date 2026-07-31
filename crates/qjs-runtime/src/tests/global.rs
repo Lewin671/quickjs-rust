@@ -417,16 +417,22 @@ fn indirect_eval_uses_marked_realm_for_primitive_prototypes() {
              other.Number = function Number() {}; \
              other.Number.prototype = Object.create(Number.prototype); \
              other.Number.prototype.test262 = 'number prototype'; \
+             other.String = function String() {}; \
+             other.String.prototype = Object.create(String.prototype); \
+             other.String.prototype.test262 = 'string prototype'; \
              var writes = 0; \
              Object.setPrototypeOf(other.Number.prototype, new Proxy({}, { \
                set: function() { writes += 1; return true; } \
              })); \
              other.value = 1; \
              var read = other.eval('value.test262'); \
+             var stringRead = other.eval('\"value\".test262'); \
              other.eval('0..assigned = null;'); \
-             read + ':' + writes;"
+             read + ':' + stringRead + ':' + writes;"
         ),
-        Ok(Value::String("number prototype:1".to_owned().into()))
+        Ok(Value::String(
+            "number prototype:string prototype:1".to_owned().into()
+        ))
     );
 }
 

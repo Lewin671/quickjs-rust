@@ -548,6 +548,34 @@ fn primitive_named_get_uses_realm_prototypes_without_frame_shadowing() {
 }
 
 #[test]
+fn primitive_string_direct_read_uses_live_realm_intrinsic_and_falls_back() {
+    assert_eq!(
+        eval_bytecode_source(
+            "let intrinsic = String.prototype; \
+             let original = intrinsic.charAt; \
+             String = function String() {}; \
+             String.prototype = { charAt: function() { return 'wrong'; } }; \
+             let first = 'xy'.charAt(1); \
+             intrinsic.charAt = function() { return 'live'; }; \
+             let second = 'xy'.charAt(0); \
+             intrinsic.charAt = original; \
+             first + ':' + second;"
+        ),
+        Ok(Value::String("y:live".to_owned().into()))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "let hits = 0; \
+             Object.defineProperty(String.prototype, 'marker', { \
+                 get: function() { 'use strict'; hits += 1; return this === 'xy' ? 'ok' : 'bad'; } \
+             }); \
+             'xy'.marker + ':' + hits;"
+        ),
+        Ok(Value::String("ok:1".to_owned().into()))
+    );
+}
+
+#[test]
 fn named_get_cache_tracks_receiver_identity_and_property_mutations() {
     assert_eq!(
         eval_bytecode_source(

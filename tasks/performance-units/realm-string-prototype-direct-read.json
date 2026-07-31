@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "realm-string-prototype-direct-read",
+  "base_sha": "0745c0187a005de3c5cbe0d4c317fd9e5a9b3536",
+  "queue": {
+    "candidate_sha": "0745c0187a005de3c5cbe0d4c317fd9e5a9b3536",
+    "sha256": "664737b4614cbdd6d6628114250a0e13332e6e35234b5a9aefb7c7a093d16e02"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-base64"
+    ],
+    "rank_ceiling": 8,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Store the realm's stable intrinsic String.prototype identity beside the existing Object.prototype and Array.prototype realm slots, then let ordinary primitive-string named reads walk that live object chain directly. This removes repeated CallEnv frame materialization, mutable String-constructor lookup, constructor prototype lookup, and duplicate Object.prototype fallback from every plain data-property read while retaining the existing generic path for accessors, Proxies, exotic prototype slots, missing intrinsic state, and marked dynamic-function realms. The current exact profile places 518 of 3,654 main-thread samples in the repeated try_direct_get_string property-resolution route, including primitive_prototype_env, constructor_named_prototype, Function::own_property, ObjectRef::property, PropertyStorage::get, CallEnv allocation, hashing, and comparison work. Expected end-to-end reduction is 8-12%; reject unless string-base64 reaches at most 0.92x its exact base and every declared control remains at most 1.03x. Scope is one private RealmState intrinsic slot, String builtin installation, the existing direct primitive-string data-read branch, and focused tests, with no parser, AST, bytecode, VM-frame layout, public API, dependency, binding-model, native-call, string-buffer, or generic object-property change.",
+    "generality": "The fast route applies to any primitive String named read in an ordinary realm, independent of method name or call shape. The realm owns the same canonical intrinsic object already used to install String builtins; each read still observes the prototype object's current own properties and current prototype chain. Accessors, Proxy or exotic links, marked cross-realm execution, absent intrinsic initialization, indexed characters, and every non-String receiver retain the existing authoritative lookup. The mechanism never inspects benchmark names, source paths, function names, input lengths, keys, argument values, iteration counts, checksums, or expected results, and it does not cache a property value or native identity.",
+    "semantic_risks": [
+      "capturing exactly the realm's original String.prototype intrinsic during builtin installation without making mutable global String rebinding authoritative",
+      "observing live data-property writes, deletion, definition, and ordinary prototype-link changes through the stored object identity",
+      "declining accessors and Proxy, Array, or Function prototype links before observable work so getter receiver identity and traps remain on the generic path",
+      "preserving indexed string character and length precedence before any prototype lookup",
+      "retaining marked dynamic-function and synthetic cross-realm behavior by falling back whenever a dynamic realm global is active or the stable slot is absent",
+      "matching the existing realm-owned Object.prototype and Array.prototype lifetime model without introducing bytecode-owned strong references or JavaScript-visible marker bindings",
+      "keeping RealmState and unrelated object-allocation, call, property, numeric, and String-buffer paths within the declared regression ceiling"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-31 target/performance-profile-0745c018/string-base64/current.sample; exact promoted 0745c018 release executable SHA-256 c0eded40cbf77482bb8e6e106334c65e3a1fc45b5f8006d1ad31a1899cd14b56; 100-run diagnostic wrapper SHA-256 52b18a695e899a4dd1b9e43930205e74038b6c7cb14742020d77317969c223bc derived from official SunSpider source SHA-256 48e6106fc6df6cb725b2c56934aff1591c97527862d27accfc11e419467639fc; the process exited successfully with Undefined and empty stderr",
+      "sha256": "edbf7d0eed078b2ac18111d567d7341a0e22b4dd8a2fa379692b7fc283afa02a",
+      "base_sha": "0745c0187a005de3c5cbe0d4c317fd9e5a9b3536",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-base64"
+      ],
+      "shared_cost": "Of 3,654 main-thread samples, 518 (14.18%) enter the repeated primitive String prototype data-property resolution below one hot VM dispatch site. The subtree includes 250 inherited-prototype descriptor samples, 151 constructor-prototype samples, 138 Function.prototype resolution samples, 163 additional primitive environment samples, 109 ObjectRef property samples, 85 PropertyStorage samples, and repeated CallEnv allocation, dynamic-binding hashing, Value cloning, and comparison. The actual fast charCodeAt leaf is only 12 exclusive samples. A realm-owned intrinsic identity removes the structural lookup prefix for every primitive String data read while continuing to inspect the live object chain; unlike the rejected per-site primitive property cache, it caches neither a property value nor a bytecode-site guard and does not alter bytecode cache layout.",
+      "inclusive_fraction": 0.1418
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-base64"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/jetstream3-js-subset/cdjs",
+      "external/kraken-1.1/imaging-darkroom",
+      "external/sunspider-1.0/string-unpack-code",
+      "external/sunspider-1.0/string-validate-input",
+      "external/kraken-1.1/imaging-gaussian-blur",
+      "broad/string_slice",
+      "broad/property_read",
+      "broad/dynamic_method_call",
+      "broad/plain_function_call",
+      "broad/math_abs",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.92,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

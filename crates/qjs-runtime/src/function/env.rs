@@ -55,6 +55,9 @@ pub(crate) struct RealmState {
     /// by literals, classes, or abstract operations that name an intrinsic.
     object_prototype: OnceCell<ObjectRef>,
     array_prototype: OnceCell<ObjectRef>,
+    /// Stable `%String.prototype%` identity used by primitive String reads.
+    /// The mutable global `String` binding is not the intrinsic authority.
+    string_prototype: OnceCell<ObjectRef>,
     /// Canonical empty copy-on-write name set for ordinary frames. Sharing it
     /// avoids allocating catch/eval metadata that most calls never mutate.
     empty_name_set: Rc<HashSet<String>>,
@@ -88,6 +91,7 @@ impl RealmState {
             bindings: DynamicBindings::from_values(bindings),
             object_prototype: OnceCell::new(),
             array_prototype: OnceCell::new(),
+            string_prototype: OnceCell::new(),
             empty_name_set: Rc::new(HashSet::new()),
             global_this,
             dynamic_function_realm_global: RefCell::new(dynamic_function_realm_global),
@@ -116,12 +120,23 @@ impl RealmState {
         );
     }
 
+    pub(crate) fn initialize_string_prototype(&self, prototype: ObjectRef) {
+        assert!(
+            self.string_prototype.set(prototype).is_ok(),
+            "realm String.prototype intrinsic initialized twice"
+        );
+    }
+
     pub(crate) fn object_prototype(&self) -> Option<ObjectRef> {
         self.object_prototype.get().cloned()
     }
 
     pub(crate) fn array_prototype(&self) -> Option<ObjectRef> {
         self.array_prototype.get().cloned()
+    }
+
+    pub(crate) fn string_prototype(&self) -> Option<ObjectRef> {
+        self.string_prototype.get().cloned()
     }
 
     pub(crate) fn get_value(&self, name: &str) -> Option<Value> {
