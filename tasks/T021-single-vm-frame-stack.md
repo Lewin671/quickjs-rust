@@ -4883,3 +4883,23 @@ the two `declined_*` bitsets -- roughly 290 bytes that a lazily allocated
 `ObjectData` already uses for its own cold state. The lazy allocation matters:
 allocating the cold box per frame would trade this cost for a worse one, which
 is what boxing the whole frame did in the aborted stage.
+
+Access-site counts, which decide the sequencing rather than the byte counts
+alone. The cheapest first slice is the state only unwinding, generators,
+`using` declarations, and sloppy-global fallback ever touch: `pending_throw`
+(8 sites), `pending_return` (7), `pending_jump` (6), `resume_mode` (6),
+`disposable_scopes` (6), and `sloppy_global_names` (6) -- 39 sites for roughly
+112 bytes. Adding `try_stack` (11 sites, 24 bytes) is the natural second step,
+though note `try_stack.is_empty()` is consulted on every runtime error, so it
+is the coldest field with a warm read.
+
+Deliberately not in a first slice: `with_stack` (28 sites) and `virtual_values`
+(13) are large and widely touched, and the three prototype caches are eight
+bytes each and read on ordinary paths. Those need their own justification
+rather than riding along.
+
+The correctness risk is concentrated, not diffuse: the cheap slice is entirely
+unwinding and suspension state, which is where subtle bugs hide and where this
+repository has historically spent the most debugging effort. A unit taking it
+should expect its cost to be in focused tests for throw/finally/generator
+resume ordering, not in the mechanical field moves.
