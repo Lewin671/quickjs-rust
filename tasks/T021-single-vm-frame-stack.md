@@ -3530,3 +3530,66 @@ or chunk sizing would violate their one-attempt decisions. A future attempt
 requires a fresh exact profile that isolates a different general boundary
 above ten percent. The queue should advance to rank-thirteen SunSpider
 `access-binary-trees`.
+
+### 2026-07-30 skipped access-binary-trees after current profile screen
+
+The exact `620bb67b` opportunity queue (SHA-256
+`0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1`)
+ranked SunSpider `access-binary-trees` thirteenth at 3.0141x QuickJS-NG. The
+subsequent commits remain evidence-only, so the runtime-exact standard release
+binary is still SHA-256
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`.
+A fresh five-second sample used the unmodified upstream source (SHA-256
+`af16d6f52b448094138cfd8e5f6e24c8d60772654463a4a8627cd54f910f93b5`)
+and an existing diagnostic 80-copy wrapper (SHA-256
+`358b2d14d51f3b053c28c667759692f525ed0fc186b885f8a675369e137c0203`).
+It exited successfully with `Undefined`, no stderr, and 3,591 useful runtime
+samples. The profile SHA-256 is
+`26e6b954b845dbb4029ba3ec121615e371fdf17aed679c03ccae18c79c9d93a7`;
+the stdout and empty-stderr SHA-256 values are
+`50fbe849aa61688a0dde78393afa32aba45d9f4a52109662bea06fa4c45715d5`
+and
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+Mutually exclusive call-tree attribution places 1,590 samples (44.28%) under
+`TreeNode` construction and 1,980 (55.14%) under ordinary recursive or method
+direct calls. The direct-call side contains 525 samples in generic dispatch,
+280 in call wrappers, 216 in VM/frame lifecycle, 203 in `CallEnv` lifecycle,
+184 in `Value` clone/drop, 157 in allocator entry points, and 144 in object or
+property operations. This is the exact boundary already tested by the current
+queue's rank-one contiguous frame stack: that candidate covered 37.4% of its
+recursive profile and regressed both declared targets by 15-18%. The earlier
+same-function scheduler, independent frame pools, tail-frame reset,
+value-only exit, compact dispatch/core, frame cold-state, environment
+shrinking, and numeric recursive cluster independently close the remaining
+layout, scheduling, dispatch, and scalar-call shapes.
+
+The constructor side is also a collection of consumed mechanisms rather than
+one new leaf. Object and property work totals 408 samples (11.36%), but its
+largest disjoint leaves are default-property creation 74 (2.06%), small
+property lookup 68 (1.89%), ordinary receiver allocation 49 (1.36%), small
+property mutation 45 (1.25%), direct own-data reads 31 (0.86%), shared-key
+writes 29 (0.81%), existing-data writes 26 (0.72%), and ordinary descriptor
+lookup 25 (0.70%). The other constructor families are generic dispatch 229
+(6.38%), allocator entry points 209 (5.82%), `Value` lifecycle 188 (5.24%),
+environment setup 159 (4.43%), VM/frame lifecycle 131 (3.65%), and call
+wrappers 118 (3.29%). Even the dispatch leaf is spread over 126 sampled PC
+groups; no group exceeds 75 samples, or 2.09% of the runtime profile.
+
+Current code already retains slot-backed ordinary construction, fast missing
+ordinary data-property creation, and compact small-object storage. The
+straight-line constructor receiver-write leaf, constructor transition shapes,
+default data-only property representation, boxed storage layout, lazy weak
+reference counts, and Realm-local object arena each exhausted a frozen
+attempt and were rejected. In particular, the constructor leaf reached one
+target at 0.852996x but missed its independent co-target at 0.986041x, while
+the ownership and arena representations regressed their object-heavy targets.
+Combining those rejected paths under this tree workload would not make a new
+general mechanism.
+
+No performance-unit plan, runtime patch, candidate binary, or timing gate was
+created. Do not retry recursive frame layouts, constructor receiver-write
+plans, transition shapes, property payload/storage thresholds, intrusive
+object counts, or Realm block arenas for this case without a fresh profile
+that isolates a different representation boundary. The queue should advance
+to rank-fourteen SunSpider `date-format-tofte`.
