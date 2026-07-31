@@ -36,6 +36,32 @@ external ratio identifies a workload to profile, not a code change to make.
    controls. A complete promotion also requires complete broad/external
    evidence and zero Test262 parity gaps. Valid negative evidence is recorded
    as `rejected`; incomplete/noisy evidence is `inconclusive`, never progress.
+5. A plan declaring `"unit_kind": "migration"` (schema 2) is a staged
+   architectural program instead of a leaf fast path. Its intermediate stages
+   are classified by `decide --mode stage` as `advance`, `abort`, or
+   `inconclusive` against a regression budget, never as `retained` or
+   `rejected`; the migration itself reaches the ordinary payoff gate only at
+   its final stage. Full contract in `docs/benchmarking.md`.
+
+## Why staged migrations exist
+
+The one-attempt leaf rule is correct for a recognizer and fatal for an
+architecture. Every structural attempt this campaign made was closed after a
+single implementation: the contiguous direct-call frame stack (correct, 1,920
+tests passing, regressed two targets), the realm object arena (1.016x/1.088x),
+transition-shape object storage, the compact generic bytecode core, and
+default data-property storage (two of three targets improved 3%, the third
+regressed 2.2%). Each rejection recorded "do not retry this mechanism", so the
+only changes able to close a 3-6x generic-path gap were made unavailable one
+at a time.
+
+A migration's early stages move real execution onto a new representation
+before any of it is faster. Requiring each to pay for itself is requiring a
+bridge to carry traffic after the first pier. The stage gate keeps every final
+standard — complete broad and external evidence, zero Test262 gap, a real
+improvement — and changes only how the work is allowed to reach that gate. An
+`abort` closes one implementation shape; it does not close "frames", "shapes",
+or "arenas".
 
 Raw timing artifacts remain outside Git. The queue and decision bind their
 SHA-256 values so a small reviewable plan cannot be detached from its evidence.
@@ -58,6 +84,10 @@ SHA-256 values so a small reviewable plan cannot be detached from its evidence.
   coverage, or use an unexplained priority override.
 - [x] Fast and promotion decisions distinguish retained, rejected, and
   inconclusive evidence, including zero-gap Test262 validation.
+- [x] A staged architectural migration can reach that gate: its stages are
+  judged against a bounded regression budget, measured cumulatively against one
+  migration base, and an aborted stage closes an implementation rather than a
+  mechanism family.
 - [ ] Add a repository ruleset-required `Performance decision` check once
   fixed-hardware or approved same-host promotion infrastructure is available.
 
@@ -77,3 +107,10 @@ parent revision's preview artifact and profiling the top external opportunities.
 It may proceed only after its plan passes `validate-unit`. Two failed fast
 screens close that mechanism and require a new profile; they do not justify a
 third variation of the same leaf specialization.
+
+A neutrality control must execute the path it is guarding. Broad portfolio
+cases do not: at 100,000 nominal iterations `plain_function_call` performs five
+real calls and `property_read` eleven real property operations, because the
+loop is folded whole. Use `benchmarks/generic-sentinels-manifest.json` and the
+`perf-counters` build to control generic-path work, and keep broad cases for
+what they actually measure — specializer coverage.

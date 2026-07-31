@@ -20,154 +20,34 @@ only bind a reviewable decision to those artifacts by SHA-256.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
-import os
-import re
 import sys
-import tempfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from .performance_schema import (
+    _ROLES,
+    PerformanceDecisionError,
+    _array,
+    _boolean,
+    _fraction,
+    _integer,
+    _keys,
+    _object,
+    _opportunity_id,
+    _ratio,
+    _read_json,
+    _revision,
+    _sha256,
+    _string,
+    _unique_strings,
+    _unit_id,
+)
 
-class PerformanceDecisionError(ValueError):
-    """A priority queue, plan, or decision input is malformed."""
-
-
-_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
-_REVISION = re.compile(r"[0-9a-f]{40}\Z")
-_UNIT_ID = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
-_OPPORTUNITY_ID = re.compile(r"(?:external|broad)/[a-z0-9][a-z0-9._/-]*\Z")
-_ROLES = ("candidate", "base", "quickjs-ng")
 _QUEUE_TYPE = "quickjs-performance-opportunity-queue"
 _UNIT_TYPE = "quickjs-performance-unit"
 _DECISION_TYPE = "quickjs-performance-decision"
-
-
-def _reject_constant(value: str) -> None:
-    raise PerformanceDecisionError(
-        f"JSON contains non-standard numeric constant {value}"
-    )
-
-
-def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, value in pairs:
-        if key in result:
-            raise PerformanceDecisionError(f"JSON contains duplicate key {key!r}")
-        result[key] = value
-    return result
-
-
-def _read_json(path: Path, where: str) -> tuple[dict[str, Any], str]:
-    resolved = path.expanduser().resolve()
-    try:
-        raw = resolved.read_bytes()
-        value = json.loads(
-            raw, object_pairs_hook=_unique_object, parse_constant=_reject_constant
-        )
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise PerformanceDecisionError(f"cannot read {where} {resolved}: {error}") from error
-    if not isinstance(value, dict):
-        raise PerformanceDecisionError(f"{where}: expected an object")
-    return value, hashlib.sha256(raw).hexdigest()
-
-
-def _object(value: Any, where: str) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        raise PerformanceDecisionError(f"{where}: expected an object")
-    return value
-
-
-def _array(value: Any, where: str) -> list[Any]:
-    if not isinstance(value, list):
-        raise PerformanceDecisionError(f"{where}: expected an array")
-    return value
-
-
-def _keys(value: dict[str, Any], expected: set[str], where: str) -> None:
-    actual = set(value)
-    if actual != expected:
-        missing = sorted(expected - actual)
-        unknown = sorted(actual - expected)
-        details = []
-        if missing:
-            details.append(f"missing {missing}")
-        if unknown:
-            details.append(f"unknown {unknown}")
-        raise PerformanceDecisionError(f"{where}: {', '.join(details)}")
-
-
-def _string(value: Any, where: str) -> str:
-    if not isinstance(value, str) or not value or value.strip() != value:
-        raise PerformanceDecisionError(f"{where}: expected a non-empty trimmed string")
-    return value
-
-
-def _sha256(value: Any, where: str) -> str:
-    text = _string(value, where)
-    if not _SHA256.fullmatch(text) or text == "0" * 64:
-        raise PerformanceDecisionError(f"{where}: expected a non-zero lowercase SHA-256")
-    return text
-
-
-def _revision(value: Any, where: str) -> str:
-    text = _string(value, where)
-    if not _REVISION.fullmatch(text) or text == "0" * 40:
-        raise PerformanceDecisionError(f"{where}: expected a full lowercase git SHA")
-    return text
-
-
-def _ratio(value: Any, where: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise PerformanceDecisionError(f"{where}: expected a finite positive ratio")
-    result = float(value)
-    if not math.isfinite(result) or result <= 0:
-        raise PerformanceDecisionError(f"{where}: expected a finite positive ratio")
-    return result
-
-
-def _fraction(value: Any, where: str) -> float:
-    result = _ratio(value, where)
-    if result > 1:
-        raise PerformanceDecisionError(f"{where}: expected a fraction in (0, 1]")
-    return result
-
-
-def _integer(value: Any, where: str, minimum: int = 0) -> int:
-    if type(value) is not int or value < minimum:
-        raise PerformanceDecisionError(f"{where}: expected an integer >= {minimum}")
-    return value
-
-
-def _boolean(value: Any, where: str) -> bool:
-    if not isinstance(value, bool):
-        raise PerformanceDecisionError(f"{where}: expected a boolean")
-    return value
-
-
-def _opportunity_id(value: Any, where: str) -> str:
-    text = _string(value, where)
-    if not _OPPORTUNITY_ID.fullmatch(text) or "//" in text or ".." in text:
-        raise PerformanceDecisionError(f"{where}: invalid opportunity id")
-    return text
-
-
-def _unit_id(value: Any, where: str) -> str:
-    text = _string(value, where)
-    if not _UNIT_ID.fullmatch(text):
-        raise PerformanceDecisionError(f"{where}: invalid stable unit id")
-    return text
-
-
-def _unique_strings(values: Any, where: str, parser: Any = _string) -> tuple[str, ...]:
-    result = tuple(parser(value, f"{where}[]") for value in _array(values, where))
-    if not result:
-        raise PerformanceDecisionError(f"{where}: expected a non-empty array")
-    if len(result) != len(set(result)):
-        raise PerformanceDecisionError(f"{where}: values must be unique")
-    return result
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
@@ -364,18 +244,87 @@ def load_queue(path: Path) -> tuple[dict[str, Any], str]:
     return queue, digest
 
 
+def _load_migration(unit: dict[str, Any]) -> dict[str, Any]:
+    """Validates a staged architectural migration's stage budget.
+
+    A migration is judged at its end state, not after its first commit. Its
+    intermediate stages exist to move real execution onto a new representation
+    and are expected to be neutral or slightly negative; requiring each to pay
+    for itself is what makes an architectural change unlandable. The stage
+    budget therefore caps regression instead of requiring improvement, and the
+    plan's `fast_gate` stays in force as the final payoff gate.
+    """
+    migration = _object(unit["migration"], "performance unit.migration")
+    _keys(
+        migration,
+        {"stages", "current_stage", "cumulative_target_ids", "stage_max_candidate_over_base"},
+        "performance unit.migration",
+    )
+    stages = _integer(migration["stages"], "performance unit.migration.stages", 2)
+    if stages > 12:
+        raise PerformanceDecisionError(
+            "performance unit.migration.stages: a migration longer than 12 stages is not one "
+            "reviewable program"
+        )
+    current = _integer(migration["current_stage"], "performance unit.migration.current_stage", 1)
+    if current > stages:
+        raise PerformanceDecisionError(
+            "performance unit.migration.current_stage: cannot exceed the declared stage count"
+        )
+    # `_unique_strings` already rejects an empty array, which is the rule that
+    # matters here: a migration must name what it is for before its first
+    # stage lands.
+    _unique_strings(
+        migration["cumulative_target_ids"],
+        "performance unit.migration.cumulative_target_ids",
+        _opportunity_id,
+    )
+    budget = _ratio(
+        migration["stage_max_candidate_over_base"],
+        "performance unit.migration.stage_max_candidate_over_base",
+    )
+    if budget < 1:
+        raise PerformanceDecisionError(
+            "performance unit.migration.stage_max_candidate_over_base: a stage budget that "
+            "requires improvement is a leaf gate, not a migration stage"
+        )
+    if budget > 1.25:
+        raise PerformanceDecisionError(
+            "performance unit.migration.stage_max_candidate_over_base: a stage may absorb "
+            "scaffolding cost, not an unbounded regression"
+        )
+    return migration
+
+
+def unit_kind(unit: dict[str, Any]) -> str:
+    """Returns the plan's kind, defaulting schema 1 plans to `leaf`.
+
+    Schema 1 predates staged migrations, so every existing plan is a leaf fast
+    path. Defaulting rather than rewriting them keeps their frozen SHA-256
+    bindings intact.
+    """
+    return unit.get("unit_kind", "leaf")
+
+
 def load_unit(path: Path) -> tuple[dict[str, Any], str]:
     unit, digest = _read_json(path, "performance unit")
-    _keys(
-        unit,
-        {
-            "schema_version", "artifact_type", "unit_id", "base_sha", "queue",
-            "priority", "mechanism", "profile_evidence", "fast_gate", "promotion_gate",
-        },
-        "performance unit",
-    )
-    if unit["schema_version"] != 1 or unit["artifact_type"] != _UNIT_TYPE:
+    version = unit.get("schema_version")
+    if version not in {1, 2} or unit.get("artifact_type") != _UNIT_TYPE:
         raise PerformanceDecisionError("performance unit: unsupported schema")
+    expected_keys = {
+        "schema_version", "artifact_type", "unit_id", "base_sha", "queue",
+        "priority", "mechanism", "profile_evidence", "fast_gate", "promotion_gate",
+    }
+    if version == 2:
+        expected_keys.add("unit_kind")
+        if unit.get("unit_kind") == "migration":
+            expected_keys.add("migration")
+    _keys(unit, expected_keys, "performance unit")
+    kind = unit_kind(unit)
+    if kind not in {"leaf", "migration"}:
+        raise PerformanceDecisionError("performance unit.unit_kind: expected leaf or migration")
+    if kind == "migration":
+        _load_migration(unit)
     _unit_id(unit["unit_id"], "performance unit.unit_id")
     _revision(unit["base_sha"], "performance unit.base_sha")
 
@@ -554,6 +503,75 @@ def _test262_zero_gap(report: dict[str, Any], candidate_sha: str) -> bool:
     return all(_integer(container.get(key), f"Test262 burndown.{key}") == 0 for container, key in fields)
 
 
+def _stage_decision(
+    unit: dict[str, Any],
+    unit_sha: str,
+    base_sha: str,
+    candidate_sha: str,
+    metrics: dict[str, float],
+    validation: dict[str, Any],
+    queue_sha: str,
+    summary_sha: str,
+    broad_sha: str,
+    external_sha: str,
+) -> dict[str, Any]:
+    """Classifies one stage of a migration as advance, abort, or inconclusive.
+
+    `retained` and `rejected` are deliberately unavailable here. A stage that
+    does not regress past its budget has earned the right to continue, not a
+    performance claim; a stage that does closes that one implementation, not
+    the mechanism family it belongs to. Only the final stage's fast or
+    promotion decision can retain or reject the migration itself.
+    """
+    migration = unit["migration"]
+    budget = migration["stage_max_candidate_over_base"]
+    watched = tuple(migration["cumulative_target_ids"]) + tuple(unit["fast_gate"]["control_ids"])
+    reasons: list[str] = []
+    missing = sorted(set(watched) - set(metrics))
+    if missing:
+        state = "inconclusive"
+        reasons.append(f"missing candidate/base evidence for {missing}")
+    else:
+        regressed = [
+            opportunity_id for opportunity_id in watched if metrics[opportunity_id] > budget
+        ]
+        if regressed:
+            state = "abort"
+            reasons.append(
+                f"stage regression budget {budget} exceeded for {regressed}; this closes the "
+                "stage's implementation shape, not its mechanism family"
+            )
+        else:
+            state = "advance"
+    return {
+        "schema_version": 2,
+        "artifact_type": _DECISION_TYPE,
+        "unit_id": unit["unit_id"],
+        "unit_sha256": unit_sha,
+        "unit_kind": "migration",
+        "base_sha": base_sha,
+        "candidate_sha": candidate_sha,
+        "mode": "stage",
+        "stage": migration["current_stage"],
+        "stages": migration["stages"],
+        "decision": state,
+        "reasons": reasons,
+        "metrics": {
+            opportunity_id: metrics[opportunity_id]
+            for opportunity_id in watched
+            if opportunity_id in metrics
+        },
+        "evidence": {
+            "queue_sha256": queue_sha,
+            "preview_summary_sha256": summary_sha,
+            "broad_report_sha256": broad_sha,
+            "external_report_sha256": external_sha,
+            "test262_burndown_sha256": None,
+        },
+        "unit_validation": validation,
+    }
+
+
 def decide(
     unit: dict[str, Any],
     unit_sha: str,
@@ -570,9 +588,27 @@ def decide(
 ) -> dict[str, Any]:
     validation = validate_unit_against_queue(unit, unit_sha, queue, queue_sha)
     candidate_sha, base_sha = _summary_revisions(summary)
+    # A migration keeps one base SHA across every stage, so this equality is
+    # what makes each stage measurement cumulative against the migration base
+    # rather than against the scaffolding commit before it.
     if base_sha != unit["base_sha"]:
         raise PerformanceDecisionError("preview summary base SHA does not match performance unit")
+    kind = unit_kind(unit)
+    if mode == "stage" and kind != "migration":
+        raise PerformanceDecisionError("stage mode requires a migration unit")
+    if kind == "migration" and mode != "stage":
+        migration = unit["migration"]
+        if migration["current_stage"] != migration["stages"]:
+            raise PerformanceDecisionError(
+                "a migration reaches fast or promotion mode only at its final stage; "
+                "use --mode stage for an intermediate stage"
+            )
     metrics, broad_complete, external_complete = _base_metric_index(broad, external)
+    if mode == "stage":
+        return _stage_decision(
+            unit, unit_sha, base_sha, candidate_sha, metrics, validation,
+            queue_sha, summary_sha, broad_sha, external_sha,
+        )
     fast_gate = unit["fast_gate"]
     target_ids = tuple(fast_gate["target_ids"])
     control_ids = tuple(fast_gate["control_ids"])
@@ -662,7 +698,7 @@ def _parser() -> argparse.ArgumentParser:
     decision.add_argument("--broad-report", type=Path, required=True)
     decision.add_argument("--external-report", type=Path, required=True)
     decision.add_argument("--test262-burndown", type=Path)
-    decision.add_argument("--mode", choices=("fast", "promotion"), required=True)
+    decision.add_argument("--mode", choices=("stage", "fast", "promotion"), required=True)
     decision.add_argument("--require-retained", action="store_true")
     decision.add_argument("--output", type=Path, required=True)
     return parser
@@ -698,7 +734,10 @@ def main() -> int:
         )
         _atomic_write(args.output, payload)
         print(json.dumps(payload, sort_keys=True))
-        return 0 if not args.require_retained or payload["decision"] == "retained" else 1
+        if not args.require_retained:
+            return 0
+        accepted = "advance" if args.mode == "stage" else "retained"
+        return 0 if payload["decision"] == accepted else 1
     except PerformanceDecisionError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2

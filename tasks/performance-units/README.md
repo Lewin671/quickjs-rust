@@ -86,3 +86,45 @@ Use `--mode promotion --test262-burndown <burndown.json>` only for the complete
 portfolio. `rejected` is useful evidence and must be recorded in the task;
 `inconclusive` means refresh or complete the evidence rather than calling it a
 win.
+
+## Staged migrations
+
+The shape above is a `leaf` plan: one mechanism that must pay for itself
+inside its attempt budget. An architectural migration cannot meet that gate at
+its first commit, because its early stages move execution onto a new
+representation before any of it is faster. Declare those as schema 2 with
+`"unit_kind": "migration"` and a stage budget:
+
+```json
+{
+  "schema_version": 2,
+  "unit_kind": "migration",
+  "migration": {
+    "stages": 8,
+    "current_stage": 1,
+    "cumulative_target_ids": ["external/sunspider-1.0/controlflow-recursive"],
+    "stage_max_candidate_over_base": 1.10
+  }
+}
+```
+
+Keep `base_sha` fixed at the migration base for every stage; that is what makes
+each stage's evidence cumulative rather than a comparison against the
+scaffolding commit before it. Bump only `current_stage`.
+
+```sh
+./scripts/performance-decision.sh decide --mode stage \
+  --unit tasks/performance-units/<unit>.json \
+  --queue target/performance-opportunity.json \
+  --summary /path/to/summary.json \
+  --broad-report /path/to/report.json \
+  --external-report /path/to/external-report.json \
+  --require-retained \
+  --output target/performance-stage-<n>.json
+```
+
+A stage is `advance`, `abort`, or `inconclusive`. `advance` earns the right to
+continue and is never a performance claim. `abort` closes that stage's
+implementation shape and explicitly not its mechanism family — record which,
+in those words. The migration itself is judged only at `current_stage ==
+stages`, by the ordinary `--mode fast` / `--mode promotion` gate.

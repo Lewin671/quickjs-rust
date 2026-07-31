@@ -240,6 +240,63 @@ decision-making receipt. Once fixed-hardware or approved same-host promotion
 infrastructure exists, make this decision check required in the repository
 ruleset rather than relying on convention alone.
 
+### Staged migrations
+
+The gate above is correct for a leaf fast path and wrong for an architectural
+change. A leaf unit must pay for itself immediately, and the one-or-two-attempt
+budget is what stops a recognizer from being retuned until the noise agrees. An
+architectural migration cannot meet that gate at its first commit: its early
+stages move real execution onto a new representation before any of it is
+faster, so they measure neutral or slightly negative by construction. Judging
+them by the leaf gate is what closed the contiguous frame stack, the realm
+object arena, transition-shape storage, and default data-property storage —
+each after a single implementation, each recorded as "do not retry this
+mechanism".
+
+Schema 2 therefore adds `unit_kind`. Plans without it are `leaf` and behave
+exactly as before, so existing frozen plans keep their SHA-256 bindings. A
+`migration` plan additionally declares its stage budget:
+
+```json
+{
+  "schema_version": 2,
+  "unit_kind": "migration",
+  "migration": {
+    "stages": 8,
+    "current_stage": 1,
+    "cumulative_target_ids": ["external/sunspider-1.0/controlflow-recursive"],
+    "stage_max_candidate_over_base": 1.10
+  }
+}
+```
+
+`./scripts/performance-decision.sh decide --mode stage` then classifies one
+stage as:
+
+- `advance` — every cumulative target and declared control is inside
+  `stage_max_candidate_over_base`. The stage has earned the right to continue;
+  it has **not** made a performance claim.
+- `abort` — a target or control regressed past that budget. This closes that
+  stage's implementation shape, explicitly **not** the mechanism family it
+  belongs to.
+- `inconclusive` — the evidence is missing or incomplete, exactly as elsewhere.
+
+`retained` and `rejected` are unavailable in stage mode, and `--mode fast` or
+`--mode promotion` is refused until `current_stage == stages`. The migration as
+a whole is judged only at its end state, by the ordinary payoff gate.
+
+A migration keeps **one** `base_sha` across every stage. The decision tool
+already requires the preview summary's base to equal the plan's `base_sha`, so
+this single rule is what makes every stage measurement cumulative against the
+migration base rather than against the scaffolding commit before it. Comparing
+a stage to its immediate parent remains useful for diagnosis, but it is not
+what the gate reads.
+
+The stage budget is bounded on both sides: below 1.0 it would be a leaf gate
+wearing a migration's name, and above 1.25 it would license an unbounded
+regression. `stages` is capped at 12, because a program longer than that is not
+one reviewable unit of work.
+
 ## Running
 
 Builds are deliberately outside measurement:

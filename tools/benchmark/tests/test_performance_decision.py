@@ -9,6 +9,7 @@ from pathlib import Path
 
 from tools.benchmark.performance_decision import (
     PerformanceDecisionError,
+    _read_json,
     build_queue,
     decide,
     load_queue,
@@ -275,3 +276,119 @@ class PerformanceDecisionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MigrationStageTests(unittest.TestCase):
+    """Staged migrations, which are judged at their end state.
+
+    A leaf fast path must pay for itself immediately, and the one- or two-
+    attempt rule is right for it. An architectural migration cannot: its
+    scaffolding stages move execution onto a new representation before any of
+    it is faster. Judging those stages by the leaf gate is what made every
+    structural attempt in this campaign unlandable, so the stage vocabulary is
+    deliberately separate.
+    """
+
+    fixtures = PerformanceDecisionTests
+
+    def setUp(self) -> None:
+        self._directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self._directory.cleanup)
+        self.directory = Path(self._directory.name)
+        self.helper = PerformanceDecisionTests()
+        self.queue, self.queue_sha, _unit, _unit_sha = self.helper._queue_and_unit(self.directory)
+
+    def _migration_unit(self, *, stage: int = 1, stages: int = 8,
+                        budget: float = 1.10) -> dict[str, object]:
+        unit = self.helper._unit(self.queue_sha)
+        unit["schema_version"] = 2
+        unit["unit_kind"] = "migration"
+        unit["migration"] = {
+            "stages": stages,
+            "current_stage": stage,
+            "cumulative_target_ids": ["external/suite/target"],
+            "stage_max_candidate_over_base": budget,
+        }
+        return unit
+
+    def _decide(self, unit_payload: dict[str, object], *, target_base: float,
+                mode: str = "stage") -> dict[str, object]:
+        unit_path = self.helper._write(self.directory, "migration-unit.json", unit_payload)
+        unit, unit_sha = load_unit(unit_path)
+        summary_path = self.helper._write(
+            self.directory, "stage-summary.json",
+            self.helper._summary(self.helper.candidate_sha, self.helper.base_sha),
+        )
+        broad_path = self.helper._write(self.directory, "stage-broad.json", self.helper._broad())
+        external_path = self.helper._write(
+            self.directory, "stage-external.json", self.helper._external(target_base=target_base)
+        )
+        summary, summary_sha = _read_json(summary_path, "preview summary")
+        broad, broad_sha = _read_json(broad_path, "broad report")
+        external, external_sha = _read_json(external_path, "external report")
+        return decide(
+            unit, unit_sha, self.queue, self.queue_sha, summary, summary_sha, broad, broad_sha,
+            external, external_sha, mode, None,
+        )
+
+    def test_neutral_scaffolding_stage_advances_without_an_improvement(self) -> None:
+        # 1.02x is a regression by the leaf gate and would consume the unit's
+        # only attempt. As a stage it is inside the budget.
+        payload = self._decide(self._migration_unit(), target_base=1.02)
+        self.assertEqual(payload["decision"], "advance")
+        self.assertEqual(payload["mode"], "stage")
+        self.assertEqual((payload["stage"], payload["stages"]), (1, 8))
+        self.assertEqual(payload["schema_version"], 2)
+        self.assertIsNone(payload["evidence"]["test262_burndown_sha256"])
+
+    def test_stage_beyond_its_budget_aborts_without_closing_the_family(self) -> None:
+        payload = self._decide(self._migration_unit(budget=1.05), target_base=1.4)
+        self.assertEqual(payload["decision"], "abort")
+        self.assertRegex(payload["reasons"][0], "not its mechanism family")
+
+    def test_missing_evidence_is_inconclusive_not_an_abort(self) -> None:
+        unit = self._migration_unit()
+        unit["migration"]["cumulative_target_ids"] = ["external/suite/absent"]
+        payload = self._decide(unit, target_base=0.5)
+        self.assertEqual(payload["decision"], "inconclusive")
+        self.assertRegex(payload["reasons"][0], "missing candidate/base evidence")
+
+    def test_intermediate_stage_cannot_claim_a_fast_or_promotion_decision(self) -> None:
+        with self.assertRaisesRegex(PerformanceDecisionError, "final stage"):
+            self._decide(self._migration_unit(stage=3), target_base=0.5, mode="fast")
+
+    def test_final_stage_is_judged_by_the_ordinary_payoff_gate(self) -> None:
+        payload = self._decide(
+            self._migration_unit(stage=8, stages=8), target_base=0.5, mode="fast"
+        )
+        self.assertEqual(payload["decision"], "retained")
+
+    def test_stage_mode_requires_a_migration_unit(self) -> None:
+        with self.assertRaisesRegex(PerformanceDecisionError, "requires a migration unit"):
+            self._decide(self.helper._unit(self.queue_sha), target_base=0.5)
+
+    def test_migration_budget_must_absorb_cost_without_being_unbounded(self) -> None:
+        for budget, message in ((0.95, "leaf gate"), (1.5, "unbounded regression")):
+            path = self.helper._write(
+                self.directory, f"broken-{budget}.json", self._migration_unit(budget=budget)
+            )
+            with self.assertRaisesRegex(PerformanceDecisionError, message):
+                load_unit(path)
+
+    def test_a_migration_must_name_its_cumulative_targets_and_bound_its_stages(self) -> None:
+        empty = self._migration_unit()
+        empty["migration"]["cumulative_target_ids"] = []
+        path = self.helper._write(self.directory, "no-targets.json", empty)
+        with self.assertRaisesRegex(PerformanceDecisionError, "cumulative_target_ids: expected a non-empty"):
+            load_unit(path)
+
+        sprawling = self._migration_unit(stages=13)
+        path = self.helper._write(self.directory, "sprawling.json", sprawling)
+        with self.assertRaisesRegex(PerformanceDecisionError, "one reviewable program"):
+            load_unit(path)
+
+    def test_schema_one_plans_still_load_as_leaf_units(self) -> None:
+        path = self.helper._write(self.directory, "legacy.json", self.helper._unit(self.queue_sha))
+        unit, _ = load_unit(path)
+        self.assertEqual(unit["schema_version"], 1)
+        self.assertNotIn("unit_kind", unit)
