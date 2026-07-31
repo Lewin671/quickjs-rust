@@ -3747,3 +3747,52 @@ complete external report, and zero-gap Test262 artifact. This closes the unit
 as a semantics-preserving retained optimization; it is not campaign
 completion because most external cases remain above 0.5x QuickJS-NG. Refresh
 the queue from `10ba7595` and continue from its highest unclosed shared cost.
+
+### 2026-07-30 re-screened refreshed rank-one recursive cost
+
+The exact `10ba7595` opportunity queue (SHA-256
+`b5568ff2525a585d6b9cbcfbf3f2a1342239e1e2444336316169e8c26f47ac60`)
+again ranks SunSpider `controlflow-recursive` first, now at 5.8534x
+QuickJS-NG. The documentation-only `9d66a8ba` commit does not change the
+runtime, so a fresh five-second sample used the exact promoted candidate
+binary SHA-256
+`fb90b58b3164eda22f04954eb55698b04ef15cc0feba6d2c1053cae7b636a69e`,
+the pinned upstream source SHA-256
+`7689048105ae415ad60df2a882384063df640371d806d7a7d91446f2881b7d83`,
+and the existing source-faithful 100-repeat wrapper SHA-256
+`52ecb05f622d41dd35db1d476f1f5c46d16e252efa72946516b5396c33f56261`.
+The process exited successfully with `Undefined`, no stderr, and 2,391 useful
+main-thread runtime samples after excluding the initial dyld segment. The
+profile SHA-256 is
+`4e7f4a8f94b3762ac452cfb4b16a3db4e24f6bd4528cc0149adc9574c914b0f3`;
+the stdout and empty-stderr SHA-256 values are
+`50fbe849aa61688a0dde78393afa32aba45d9f4a52109662bea06fa4c45715d5`
+and
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+The current profile reproduces the already-closed recursive-call boundary.
+Generic `Vm::run_completion` dispatch contributes 763 exclusive samples
+(31.91%), `call_direct_leaf_function` contributes 381 (15.93%), and
+`Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots` contributes
+233 (9.74%). `Value`, `FrameState`, and `CallEnv` destruction contribute 124,
+88, and 47 samples respectively; binary evaluation and `Value` cloning are
+only 62 and 52. The remaining direct-call helpers, stack recycling, local
+loads, numeric probes, and allocator leaves are individually below two
+percent or split across independent mechanisms.
+
+There is no new general mechanism in those samples. The compact dispatcher
+reached only 0.9573x, the scalar recursive cluster failed its A* control after
+reaching 0.2238x on this target, the direct-leaf cold-state and lazy-loop-state
+representations missed their frozen gates, the exact tail-frame reset stopped
+at 0.9418x, and the contiguous frame-stack transfer regressed both recursive
+and HashMap targets by 15-18%. Earlier same-function scheduling, frame
+packing, environment grouping, result materialization, and operand-stack
+reuse experiments close the remaining construction and teardown shapes.
+
+No performance-unit plan, runtime patch, candidate binary, or timing gate was
+created. Retrying one of those mechanisms with a different threshold or
+layout would violate its frozen one-attempt decision, while treating generic
+dispatch plus all call lifecycle work as one cost would combine independent
+representations. Advance the current queue to rank-two JetStream HashMap and
+require its fresh profile to expose a different shared boundary before
+implementation.
