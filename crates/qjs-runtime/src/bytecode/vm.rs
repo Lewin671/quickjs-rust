@@ -27,6 +27,7 @@ use std::{
 pub(super) type Slot = Option<Value>;
 
 use super::frame_program::{FrameBytecode, FrameProgramView};
+use super::frame_stack::FrameExit;
 use super::operand_stack::OperandStack;
 use super::vm_call_env::{VmCallEnv, VmCallEnvOrigin};
 
@@ -204,6 +205,9 @@ pub(super) struct Vm<'a> {
     /// calls are routed onto this VM; the driver in `frame_stack` is what
     /// makes a non-empty stack meaningful.
     pub(super) callers: Vec<super::frame_stack::SuspendedFrame<'a>>,
+    /// A frame a handler asked to enter, waiting for the driver to install it
+    /// once the current activation's program view has been dropped.
+    pub(super) pending_frame_entry: Option<(FrameState<'a>, super::frame_stack::FrameContinuation)>,
 }
 
 impl<'a> Vm<'a> {
@@ -439,6 +443,7 @@ impl<'a> Vm<'a> {
                 dynamic_code_executed: false,
             },
             callers: Vec::new(),
+            pending_frame_entry: None,
         }
     }
 
@@ -612,7 +617,7 @@ impl<'a> Vm<'a> {
     ///
     /// This is one *activation*: a generator body re-enters it on each resume,
     /// and the frame-stack driver re-enters it once per frame.
-    pub(super) fn run_current_activation(&mut self) -> Result<Completion, RuntimeError> {
+    pub(super) fn run_current_activation(&mut self) -> Result<FrameExit, RuntimeError> {
         // One owner clone per activation, held on this stack frame. The view
         // borrows the owner rather than the VM, which is what lets the current
         // instruction stay borrowed while its handler mutates VM state -- and
@@ -1167,7 +1172,7 @@ impl<'a> Vm<'a> {
                 Op::ExitTry => self.exit_try()?,
                 Op::EndFinally => {
                     if let Some(value) = self.end_finally()? {
-                        return Ok(Completion::Return(value));
+                        return Ok(FrameExit::Completed(Completion::Return(value)));
                     }
                 }
                 Op::DiscardPendingAbrupt => {
@@ -1177,7 +1182,7 @@ impl<'a> Vm<'a> {
                 Op::Return => {
                     let value = self.stack.pop().unwrap_or(Value::Undefined);
                     if let Some(value) = self.return_value(value)? {
-                        return Ok(Completion::Return(value));
+                        return Ok(FrameExit::Completed(Completion::Return(value)));
                     }
                 }
                 Op::Throw => {
@@ -1194,16 +1199,16 @@ impl<'a> Vm<'a> {
                     self.enter_body_deopt_scope();
                     if self.stop_at_prologue {
                         self.stop_at_prologue = false;
-                        return Ok(Completion::PrologueEnd);
+                        return Ok(FrameExit::Completed(Completion::PrologueEnd));
                     }
                 }
                 Op::Yield => {
                     let value = self.pop()?;
-                    return Ok(Completion::Yield(value));
+                    return Ok(FrameExit::Completed(Completion::Yield(value)));
                 }
                 Op::Await => {
                     let value = self.pop()?;
-                    return Ok(Completion::Await(value));
+                    return Ok(FrameExit::Completed(Completion::Await(value)));
                 }
                 Op::YieldDelegate {
                     iterator_slot,
@@ -1211,17 +1216,27 @@ impl<'a> Vm<'a> {
                     async_delegate,
                 } => match self.yield_delegate(*iterator_slot, *next_slot, *async_delegate)? {
                     DelegateStep::Suspend(value) if *async_delegate => {
-                        return Ok(Completion::YieldDelegateAsync(value));
+                        return Ok(FrameExit::Completed(Completion::YieldDelegateAsync(value)));
                     }
-                    DelegateStep::Suspend(value) => return Ok(Completion::YieldDelegate(value)),
-                    DelegateStep::Await(value) => return Ok(Completion::YieldDelegateAwait(value)),
+                    DelegateStep::Suspend(value) => {
+                        return Ok(FrameExit::Completed(Completion::YieldDelegate(value)));
+                    }
+                    DelegateStep::Await(value) => {
+                        return Ok(FrameExit::Completed(Completion::YieldDelegateAwait(value)));
+                    }
                     DelegateStep::AwaitReturn(value) => {
-                        return Ok(Completion::YieldDelegateAwaitReturn(value));
+                        return Ok(FrameExit::Completed(Completion::YieldDelegateAwaitReturn(
+                            value,
+                        )));
                     }
                     DelegateStep::AwaitReturnValue(value) => {
-                        return Ok(Completion::YieldDelegateAwaitReturnValue(value));
+                        return Ok(FrameExit::Completed(
+                            Completion::YieldDelegateAwaitReturnValue(value),
+                        ));
                     }
-                    DelegateStep::Return(value) => return Ok(Completion::Return(value)),
+                    DelegateStep::Return(value) => {
+                        return Ok(FrameExit::Completed(Completion::Return(value)));
+                    }
                     DelegateStep::Continue => {}
                 },
                 Op::ImportCall { has_options } => self.import_call(*has_options)?,

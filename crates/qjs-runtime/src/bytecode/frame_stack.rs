@@ -25,6 +25,21 @@ use crate::RuntimeError;
 use super::vm::{FrameState, Vm};
 use super::vm_result::Completion;
 
+/// How one activation ended.
+///
+/// A handler cannot install a frame itself: it runs inside the dispatch loop,
+/// where a `FrameProgramView` derived from the current frame is alive, and
+/// replacing the frame under a live view would leave the loop executing code
+/// that no longer belongs to it. A handler that wants to enter a frame instead
+/// records the request and ends the activation with `EnterFrame`; returning is
+/// what drops the view, and the driver installs the frame afterwards.
+pub(super) enum FrameExit {
+    Completed(Completion),
+    /// The current frame asked to enter the frame it recorded on the VM.
+    #[allow(dead_code)]
+    EnterFrame,
+}
+
 /// What a caller does with the completion of the frame above it.
 ///
 /// Only one shape exists while nothing routes: an ordinary call expression
@@ -66,7 +81,14 @@ impl<'a> Vm<'a> {
     pub(super) fn run_completion(&mut self) -> Result<Completion, RuntimeError> {
         loop {
             match self.run_current_activation() {
-                Ok(completion) => match self.callers.pop() {
+                Ok(FrameExit::EnterFrame) => {
+                    let (frame, continuation) = self
+                        .pending_frame_entry
+                        .take()
+                        .expect("an EnterFrame exit records the frame it wants entered");
+                    self.push_frame(frame, continuation);
+                }
+                Ok(FrameExit::Completed(completion)) => match self.callers.pop() {
                     None => return Ok(completion),
                     Some(caller) => self.resume_caller(caller, completion)?,
                 },
