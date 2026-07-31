@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "cached-direct-leaf-numeric-call-graph",
+  "base_sha": "0745c0187a005de3c5cbe0d4c317fd9e5a9b3536",
+  "queue": {
+    "candidate_sha": "0745c0187a005de3c5cbe0d4c317fd9e5a9b3536",
+    "sha256": "664737b4614cbdd6d6628114250a0e13332e6e35234b5a9aefb7c7a093d16e02"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/kraken-1.1/imaging-darkroom"
+    ],
+    "rank_ceiling": 7,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Cache a bounded acyclic Number-only helper graph in the existing lazy bytecode numeric-leaf plan, keyed monomorphically by the live root Function identity. Compilation and recursive graph preparation occur once for a stable function graph; later ordinary direct-leaf calls validate the live function/capture/realm Math identities and primitive Number inputs, then execute scalar graph instructions without constructing nested CallEnv, Vm, FrameState, operand-stack, or argument-vector state. This is distinct from the rejected per-invocation graph, which rebuilt and cloned the graph on every call, and from all rejected typed-loop graph integrations: it does not touch typed-loop compilation, execution, scratch, or arithmetic linkage. The current profile places 1,305 of 3,694 main-thread samples in the repeated immediate child direct-leaf route below ProcessImageData, including deeper FastGain, FastBias, FastLog2, Clamp, and Math frames. Expected end-to-end reduction is 20-35%; reject unless imaging-darkroom reaches at most 0.80x its exact base and every declared control remains at most 1.03x. Scope is one private numeric graph module, the boxed lazy numeric-leaf plan variant, direct-leaf call plumbing, and focused tests, with no public API, dependency, parser, AST, environment-model, FunctionData layout, generic VM-dispatch, or typed-loop change.",
+    "generality": "Admission depends only on immutable bytecode structure: at most two ordinary parameters, bounded code/stack/graph depth, Number constants and read-only Number or ordinary-function captures, supported Number arithmetic and comparisons, forward-only branches, and receiver-independent pure Math intrinsics. The prepared cache owns only immutable graph metadata and raw identity addresses, never Function or Upvalue handles, so it cannot create JavaScript object cycles. Every invocation re-reads live cells and realm Math data before or during pure scalar work; any changed identity, accessor/proxy/coercion requirement, non-Number, recursion, backward branch, write, dynamic scope, default/rest parameter, receiver use, unsupported opcode, or failed bound falls back to the unchanged VM before observable graph work. The mechanism never inspects benchmark names, source paths, function names, argument magnitudes, array sizes, loop counts, checksums, or expected results, and ordinary non-graph numeric leaves keep their existing evaluator and layout.",
+    "semantic_risks": [
+      "preserving ECMAScript Number arithmetic, comparison, truthiness, NaN, signed zero, Infinity, remainder, exponentiation, shifts, and bitwise conversion semantics in the scalar graph evaluator",
+      "proving every admitted graph is forward-only, bounded, side-effect-free, receiver-independent, and returns a Number on all reachable paths",
+      "checking the exact live root and nested Function identities without retaining owning Function or Upvalue handles that could create reference cycles",
+      "re-reading mutable Number captures and realm Math bindings so replacement remains visible while accepting only own data properties and supported native identities",
+      "declining defaults, rest parameters, missing or extra arguments, coercive values, dynamic realms, accessors, proxies, recursion, writes, and unsupported calls before observable behavior",
+      "preserving the operand stack and ordinary direct-leaf fallback when any cached guard or scalar evaluation step declines",
+      "keeping the existing straight-line NumericLeafPlan variants, generic VM dispatch, typed-loop implementation, and FunctionData size unchanged for non-graph workloads"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-31 target/performance-profile-0745c018/imaging-darkroom/current.sample; exact promoted 0745c018 release executable SHA-256 c0eded40cbf77482bb8e6e106334c65e3a1fc45b5f8006d1ad31a1899cd14b56; official generated Kraken imaging-darkroom bundle SHA-256 bfc464b658a5b69810769631928842241a46d8d9bfbfb62da53804843eadfaba; the full source-matched workload completed with both expected markers and empty stderr",
+      "sha256": "64d87294cf2a00e7ee7a4bdf75b896abf1d0f3b1d65f96ea8b1cdfd4bebd6383",
+      "base_sha": "0745c0187a005de3c5cbe0d4c317fd9e5a9b3536",
+      "opportunity_ids": [
+        "external/kraken-1.1/imaging-darkroom"
+      ],
+      "shared_cost": "Of 3,694 main-thread samples, 3,500 are under the ProcessImageData direct frame and 1,305 (35.33%) enter its immediate repeated direct-leaf child route. That route contains another 907-call child layer and a 415-call layer before Math.log/Math.pow, plus repeated Vm, CallEnv, FrameState, Value-clone/drop, global-load, and property-cache work. The retained guarded unary Math opcode improved imaging only 2.4%, while prior isolated typed-loop helper graphs proved that collapsing this exact pure helper family is causal with a 79.1% target reduction; their failures came from typed-loop/code-layout controls, not graph semantics. Caching preparation in the bytecode-owned lazy plan removes the measured per-invocation preparation overhead of the earlier ordinary-call graph without changing typed loops.",
+      "inclusive_fraction": 0.3533
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/kraken-1.1/imaging-darkroom"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/string-base64",
+      "external/sunspider-1.0/3d-morph",
+      "external/sunspider-1.0/access-nbody",
+      "external/kraken-1.1/imaging-gaussian-blur",
+      "external/kraken-1.1/audio-fft",
+      "broad/array_dynamic_read",
+      "broad/property_read",
+      "broad/plain_function_call",
+      "broad/function_call_two_args",
+      "broad/dynamic_method_call",
+      "broad/math_abs",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.8,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

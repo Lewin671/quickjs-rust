@@ -4095,3 +4095,60 @@ Gaussian moves from rank six to rank twelve at 3.1130x QuickJS-NG; no broad
 case is above the campaign threshold, but 38 external cases remain above
 0.5x. This closes the opcode unit, not the campaign. Continue from the new
 queue's highest unclosed current-profile mechanism.
+
+### 2026-07-30 rejected cached direct-leaf numeric call graph
+
+The exact `0745c018` queue ranks Kraken `imaging-darkroom` seventh at 3.5275x
+QuickJS-NG. A fresh exact-current sample used promoted candidate binary
+SHA-256
+`c0eded40cbf77482bb8e6e106334c65e3a1fc45b5f8006d1ad31a1899cd14b56`
+and the source-faithful bundle SHA-256
+`bfc464b658a5b69810769631928842241a46d8d9bfbfb62da53804843eadfaba`.
+The successful profile contains 3,694 main-thread samples; 3,500 are below the
+`ProcessImageData` direct frame and 1,305 (35.33%) enter its immediate repeated
+direct-leaf child route, followed by deeper `FastGain`, `FastBias`, `FastLog2`,
+`Clamp`, and Math frames. The profile SHA-256 is
+`64d87294cf2a00e7ee7a4bdf75b896abf1d0f3b1d65f96ea8b1cdfd4bebd6383`.
+
+The frozen one-attempt plan
+`tasks/performance-units/cached-direct-leaf-numeric-call-graph.json` (SHA-256
+`55e78cad4927272d215f44bc93d4fa79d84a1ec808b1d7baff657b92fcf721bd`)
+tested a bounded acyclic Number-only helper graph cached in the existing lazy
+numeric-leaf plan. Admission was bytecode-structural and limited to pure
+Number operations, forward branches, read-only Number or ordinary-function
+captures, and guarded Math data properties. The cache held only immutable
+graph data, weak bytecode/object references, and raw identity addresses; each
+call re-read live captures and guarded the root, nested functions, realm Math
+object, property revision, and native identity before scalar evaluation. It
+did not change parser, AST, environment, `FunctionData`, generic VM dispatch,
+or typed-loop paths. Focused tests covered both branches, live Number capture,
+Math and nested-function replacement fallback, coercive argument fallback
+before effects, and exact `NumericLeafPlan` layout parity. `cargo check`,
+clippy with warnings denied, and all five focused tests passed.
+
+The standard-recipe candidate binary SHA-256 was
+`6e2fa211af85b2162f1b4f158ff1740837f5c7fa120e5ffb04a2463b3249cca9`;
+the exact base remained
+`c0eded40cbf77482bb8e6e106334c65e3a1fc45b5f8006d1ad31a1899cd14b56`.
+The blocked alternating-process fast gate preserved byte-identical successful
+output and measured the target at **0.652603x candidate/base**, well below the
+frozen `<= 0.80x` target. Seventeen of eighteen controls remained below the
+1.03x ceiling: recursive 1.007518x, HashMap 1.012698x, A* 0.999380x,
+tagcloud 1.000760x, raytrace 1.004328x, CDJS 0.996820x, base64 1.000545x,
+3d-morph 1.004261x, nbody 0.999435x, audio FFT 1.003926x, Gaussian blur
+0.989994x, dynamic array read 1.002753x, property read 1.001226x, plain call
+0.999535x, two-argument call 1.001733x, dynamic method call 0.999755x, and
+object allocation 1.002590x. The receipt SHA-256 is
+`29512e6412ac635f2ef5f529f3c556c42ac89f43fdf9268eb12d97fa6aac5b7d`.
+
+The remaining broad `math_abs` control measured 1.039981x across nine paired
+blocks. Because that exceeded the frozen 1.03x ceiling, an isolated 31-block
+alternating-process recheck was permitted only to distinguish noise, with no
+code or gate change. It confirmed **1.040674x**, again with byte-identical
+successful output; the recheck receipt SHA-256 is
+`6445b4d0adc1d9c0a10e71c668930edf60f423c732b747d2e9203d5e362e2948`.
+The target gain therefore does not compensate for the reproducible unrelated
+broad regression. The one allowed attempt is rejected before complete broad,
+external, or Test262 promotion. The runtime and focused-test implementation
+was reverted; retain only the frozen plan and this evidence. Do not tune graph
+bounds, cache shape, enum boxing, or instruction layout under this unit.
