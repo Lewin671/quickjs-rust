@@ -19,6 +19,7 @@ mod enumerate_keys_cache;
 mod ir;
 mod ir_names;
 mod named_property_cache;
+mod operand_stack;
 mod typed_loop;
 mod upvalue_resolver;
 mod util;

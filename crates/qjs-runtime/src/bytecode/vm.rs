@@ -26,50 +26,7 @@ use std::{
 };
 pub(super) type Slot = Option<Value>;
 
-pub(super) struct OperandStack<'a> {
-    bytecode: &'a Bytecode,
-    values: Vec<Value>,
-}
-
-impl<'a> OperandStack<'a> {
-    fn new(bytecode: &'a Bytecode) -> Self {
-        Self {
-            bytecode,
-            values: bytecode.take_operand_stack(),
-        }
-    }
-
-    pub(super) fn take(&mut self) -> Vec<Value> {
-        std::mem::take(&mut self.values)
-    }
-
-    pub(super) fn replace(&mut self, values: Vec<Value>) {
-        let previous = std::mem::replace(&mut self.values, values);
-        self.bytecode.recycle_operand_stack(previous);
-    }
-}
-
-impl Deref for OperandStack<'_> {
-    type Target = Vec<Value>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.values
-    }
-}
-
-impl DerefMut for OperandStack<'_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.values
-    }
-}
-
-impl Drop for OperandStack<'_> {
-    fn drop(&mut self) {
-        self.bytecode
-            .recycle_operand_stack(std::mem::take(&mut self.values));
-    }
-}
-
+use super::operand_stack::OperandStack;
 use super::vm_call_env::{VmCallEnv, VmCallEnvOrigin};
 
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
@@ -169,7 +126,7 @@ pub(super) struct FrameState<'a> {
     pub(super) numeric_mutation_loop_plans:
         Option<Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>>,
     pub(super) virtual_values: Vec<Value>,
-    pub(super) stack: OperandStack<'a>,
+    pub(super) stack: OperandStack,
     pub(super) locals: Vec<Slot>,
     pub(super) local_upvalues: Vec<Option<Upvalue>>,
     /// Direct frames that only read received cells retain the source function

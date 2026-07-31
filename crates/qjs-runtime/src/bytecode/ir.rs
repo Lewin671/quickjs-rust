@@ -12,6 +12,7 @@ use crate::{Value, value::ObjectLiteralShape};
 
 pub(super) use super::enumerate_keys_cache::EnumerateKeysCache;
 pub(super) use super::named_property_cache::NamedPropertyCache;
+use super::operand_stack::OperandStackRecycler;
 
 /// Packs a statically indexed property read together with an optional local
 /// receiver slot. The packed form is available only when the host word has a
@@ -819,15 +820,11 @@ pub struct Bytecode {
         OnceCell<Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>>,
     pub(super) virtual_object_program: OnceCell<super::virtual_object::VirtualObjectProgram>,
     pub(super) template_objects: RefCell<HashMap<usize, Value>>,
-    /// One cleared operand-stack allocation retained for the next invocation
-    /// of this compiled body. Sequential calls are the common case, so a
-    /// single slot removes their allocator traffic without retaining every
-    /// stack created by deep recursion. Cloned bytecode shares the same slot.
     /// Recycled operand stacks. A recursive or otherwise deeply nested call
     /// has every enclosing frame holding its own stack at once, so a
     /// single-slot pool only ever served the outermost frame and every nested
-    /// call allocated and freed one.
-    operand_stack_pool: Rc<RefCell<Vec<Vec<Value>>>>,
+    /// call allocated and freed one. Cloned bytecode shares the same pool.
+    operand_stack_pool: OperandStackRecycler,
     /// Per-call metadata precomputed once at construction. Each of these used to
     /// be recomputed on every call by recursively walking `code` (and nested
     /// function/class op trees) and materializing a fresh `BTreeSet`/`Vec`,
@@ -979,7 +976,7 @@ impl Bytecode {
             numeric_mutation_loop_plans: OnceCell::new(),
             virtual_object_program: OnceCell::new(),
             template_objects: RefCell::new(HashMap::new()),
-            operand_stack_pool: Rc::new(RefCell::new(Vec::new())),
+            operand_stack_pool: OperandStackRecycler::new(),
             cached_closure_referenced_global_names: Vec::new(),
             cached_written_binding_names: Vec::new(),
             cached_closure_written_binding_names: Vec::new(),
@@ -1045,29 +1042,13 @@ impl Bytecode {
         bytecode
     }
 
-    const INITIAL_OPERAND_STACK_CAPACITY: usize = 64;
-    const MAX_RECYCLED_OPERAND_STACK_CAPACITY: usize = 256;
-    /// How many operand stacks one bytecode keeps for reuse. Deep recursion
-    /// holds one per active frame, and the bound keeps a runaway depth from
-    /// retaining unbounded storage after it unwinds.
-    const MAX_POOLED_OPERAND_STACKS: usize = 32;
-
-    pub(super) fn take_operand_stack(&self) -> Vec<Value> {
-        self.operand_stack_pool
-            .borrow_mut()
-            .pop()
-            .unwrap_or_else(|| Vec::with_capacity(Self::INITIAL_OPERAND_STACK_CAPACITY))
-    }
-
-    pub(super) fn recycle_operand_stack(&self, mut stack: Vec<Value>) {
-        stack.clear();
-        if stack.capacity() > Self::MAX_RECYCLED_OPERAND_STACK_CAPACITY {
-            return;
-        }
-        let mut pooled = self.operand_stack_pool.borrow_mut();
-        if pooled.len() < Self::MAX_POOLED_OPERAND_STACKS {
-            pooled.push(stack);
-        }
+    /// A handle on this body's operand-stack recycler.
+    ///
+    /// Handing out the handle rather than the `Bytecode` is what lets a frame
+    /// return its stack to the pool without holding a borrow of the bytecode
+    /// for the frame's whole lifetime.
+    pub(super) fn operand_stack_recycler(&self) -> OperandStackRecycler {
+        self.operand_stack_pool.clone()
     }
 
     pub(crate) fn is_strict(&self) -> bool {
@@ -1806,33 +1787,46 @@ mod tests {
     #[test]
     fn operand_stack_pool_reuses_cleared_bounded_storage() {
         let bytecode = Bytecode::new(Vec::new(), Vec::new(), Vec::new());
-        let mut first = bytecode.take_operand_stack();
+        let recycler = bytecode.operand_stack_recycler();
+        let mut first = recycler.take();
         first.push(Value::Number(1.0));
         let allocation = first.as_ptr();
 
-        bytecode.recycle_operand_stack(first);
-        let reused = bytecode.take_operand_stack();
+        recycler.recycle(first);
+        let reused = recycler.take();
 
         assert!(reused.is_empty());
         assert_eq!(reused.as_ptr(), allocation);
-        bytecode.recycle_operand_stack(reused);
+        recycler.recycle(reused);
 
-        let _active = bytecode.take_operand_stack();
-        let oversized = Vec::with_capacity(Bytecode::MAX_RECYCLED_OPERAND_STACK_CAPACITY + 1);
-        bytecode.recycle_operand_stack(oversized);
-        assert!(bytecode.operand_stack_pool.borrow().is_empty());
+        let _active = recycler.take();
+        let oversized = Vec::with_capacity(OperandStackRecycler::MAX_RECYCLED_CAPACITY + 1);
+        recycler.recycle(oversized);
+        assert_eq!(recycler.pooled_len(), 0);
 
         // Nested frames each get their own recycled stack, up to the bound.
-        let nested: Vec<_> = (0..Bytecode::MAX_POOLED_OPERAND_STACKS + 2)
-            .map(|_| bytecode.take_operand_stack())
+        let nested: Vec<_> = (0..OperandStackRecycler::MAX_POOLED + 2)
+            .map(|_| recycler.take())
             .collect();
         for stack in nested {
-            bytecode.recycle_operand_stack(stack);
+            recycler.recycle(stack);
         }
-        assert_eq!(
-            bytecode.operand_stack_pool.borrow().len(),
-            Bytecode::MAX_POOLED_OPERAND_STACKS
-        );
+        assert_eq!(recycler.pooled_len(), OperandStackRecycler::MAX_POOLED);
+    }
+
+    #[test]
+    fn a_recycler_handle_outlives_the_bytecode_it_came_from() {
+        // This is the property the frame-stack migration needs: a frame can
+        // return its operand stack when it ends without having borrowed the
+        // bytecode for the frame's whole lifetime.
+        let recycler = {
+            let bytecode = Bytecode::new(Vec::new(), Vec::new(), Vec::new());
+            bytecode.operand_stack_recycler()
+        };
+        let mut stack = recycler.take();
+        stack.push(Value::Number(1.0));
+        recycler.recycle(stack);
+        assert_eq!(recycler.pooled_len(), 1);
     }
 
     #[test]
