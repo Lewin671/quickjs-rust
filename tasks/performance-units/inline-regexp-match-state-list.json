@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "inline-regexp-match-state-list",
+  "base_sha": "10ba7595c07748318e9708a9ede15c3a6778dcbd",
+  "queue": {
+    "candidate_sha": "10ba7595c07748318e9708a9ede15c3a6778dcbd",
+    "sha256": "b5568ff2525a585d6b9cbcfbf3f2a1342239e1e2444336316169e8c26f47ac60"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-tagcloud"
+    ],
+    "rank_ceiling": 4,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Represent transient RegExp matcher fan-out lists with one inline MatchState and spill to the existing heap-backed growth path only when an alternative or backtracking step produces multiple states.",
+    "generality": "The representation applies uniformly to the state and indexed-state collections returned by the general forward, reverse, group, lookaround, atom, quantifier, and simple-atom matcher paths. Selection depends only on the live number of semantic match states. It has no pattern-text, source-path, workload, input-length, iteration, checksum, or expected-result condition; zero and one-state results stay inline while arbitrary fan-out retains ordered heap growth.",
+    "semantic_risks": [
+      "preserving exact ECMAScript leftmost-first order across alternatives plus greedy and lazy backtracking when an inline list spills",
+      "preserving independent MatchState capture ownership, branch cloning, capture clearing, and duplicate-state suppression without revisiting the rejected capture snapshot representation",
+      "preserving reverse matching, lookaround, Unicode advancement, zero-width-loop filtering, and unbounded explicit work stacks while only changing transient result-list storage",
+      "preserving every existing first-result and all-result boundary so the representation cannot prune states or turn a failure into a match",
+      "avoiding larger stack frames or spill bookkeeping that outweigh the removed singleton allocations on matcher and non-RegExp controls"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-10ba7595/string-tagcloud/current.sample; exact promoted 10ba7595 candidate executable SHA-256 fb90b58b3164eda22f04954eb55698b04ef15cc0feba6d2c1053cae7b636a69e; hash-verified official SunSpider source SHA-256 9634886bcb846c76141f97b681b33a11df444901e0b4c899d8f72a3b6544f9d5 loaded once and repeated only by diagnostic wrapper SHA-256 5b4e3d1d0561062006c8bc12c700b7fc7769ca12f11a04674259184b13c41264.",
+      "sha256": "48d7b28c8b6caaa21026bf3d8b28e288e1a5ce88249cd5ecb0ee1c03e33a042f",
+      "base_sha": "10ba7595c07748318e9708a9ede15c3a6778dcbd",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-tagcloud"
+      ],
+      "shared_cost": "Of 2,925 main-thread samples, 811 are under PreparedRegexp::match_input. The hot capture-bearing route puts 212 samples in repeat_atom; 197 immediately enter Vec::from_iter and 192 continue through its iterator while nested match_pattern and match_atom calls repeatedly return empty or singleton Vec collections. The flat profile is led by allocator and free entry points. This state-list allocation is broader than capture payload cloning and distinct from the rejected first-continuation visitor because it changes neither MatchState contents nor continuation order.",
+      "inclusive_fraction": 0.2773
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-tagcloud"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/string-validate-input",
+      "external/sunspider-1.0/regexp-dna",
+      "external/sunspider-1.0/string-base64",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

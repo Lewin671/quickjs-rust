@@ -3796,3 +3796,203 @@ dispatch plus all call lifecycle work as one cost would combine independent
 representations. Advance the current queue to rank-two JetStream HashMap and
 require its fresh profile to expose a different shared boundary before
 implementation.
+
+### 2026-07-30 re-screened refreshed rank-two HashMap cost
+
+The exact `10ba7595` queue ranks JetStream `hash-map` second at 5.3476x
+QuickJS-NG. The runtime remains byte-for-byte identical through the later
+evidence-only commits, so a fresh five-second sample again used exact promoted
+candidate binary SHA-256
+`fb90b58b3164eda22f04954eb55698b04ef15cc0feba6d2c1053cae7b636a69e`.
+The pinned upstream source SHA-256 is
+`9789c4d06f12ee4e4836c669b5515a40c6caaf5e9321c08da548740225fb46fb`;
+the source-faithful diagnostic wrapper repeats the official iteration four
+times only to sustain sampling and has SHA-256
+`c67d6168472c68ec2a902fbd8d0b1c9d49b725233d06ac7db25263e18e7625fe`.
+The process exited successfully after printing `__QJS_EXTERNAL_OK__` and
+`Undefined`, with no stderr and 3,630 useful main-thread runtime samples. The
+profile SHA-256 is
+`b238cfde83f142f18c6e1ae4f31be5d6bc7feb6211ebab4cea4a184b531cf582`;
+the stdout and empty-stderr SHA-256 values are
+`89eb657835671c4963858500b421a87c683cf5e381c80ba84af40da3055372ba`
+and
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+The current profile reproduces the same already-partitioned costs as the
+earlier exact HashMap evidence. Generic `Vm::run_completion` dispatch
+contributes 1,186 exclusive samples (32.67%). Direct-leaf call setup and
+lifecycle remain distributed across `call_direct_leaf_function` (321,
+8.84%), VM construction (187, 5.15%), `FrameState` destruction (78, 2.15%),
+and `CallEnv` destruction (54, 1.49%). `Value` destruction and cloning
+contribute 206 (5.67%) and 135 (3.72%). The largest named-property leaves are
+`own_data_property_read` at 137 (3.77%), cache lookup at 52 (1.43%), and the
+cached and direct string probes at 41 (1.13%) and 32 (0.88%). No remaining
+property, allocation, binary-operation, or call helper is independently ten
+percent of the profile.
+
+Those clusters do not establish a new mechanism. The complete compact
+bytecode core, contiguous frame stack, direct-leaf cold state, lazy loop-plan
+state, direct read-only upvalue sharing, argument moves, and Number-operand
+ownership units already tested the dispatch, frame, and value-lifetime
+routes. The retained shared small-object slot cache already validates one
+interned field key across distinct receivers; transition shapes, default-data
+storage, larger compact storage, immediate object-slot installation, and
+object-header layout experiments cover the property-storage alternatives.
+Combining those individually smaller costs into a nominal HashMap fast path
+would be workload specialization rather than a profile-backed shared engine
+mechanism.
+
+No performance-unit plan, runtime patch, candidate binary, or timing gate was
+created. Advance the refreshed queue to rank-three Kraken A* and require a
+fresh exact-current profile to expose a distinct general cost before opening
+another one-attempt unit.
+
+### 2026-07-30 re-screened refreshed rank-three A* cost
+
+The exact `10ba7595` queue ranks Kraken `ai-astar` third at 4.8649x
+QuickJS-NG. A fresh five-second sample used the same exact promoted candidate
+binary SHA-256
+`fb90b58b3164eda22f04954eb55698b04ef15cc0feba6d2c1053cae7b636a69e`
+and the source-faithful generated adapter SHA-256
+`a3653c77773ce2b424301835021957b26119240810f43d5434d98fd88d7a416c`.
+The pinned Kraken source and data files have SHA-256 values
+`ab1778d3625e51a9e54a24a7692a7729ae88922162ea3bfbe6acfb5562247467`
+and
+`22366873662558d87ff8ed05e5c65085d7f3a619c9ab62dee7078daba5ae33d0`.
+The process exited successfully after printing `__QJS_EXTERNAL_OK__` and the
+matching String completion, with no stderr and 3,649 main-thread samples. The
+profile SHA-256 is
+`cb2a5529ab5edc595344145223bd244afcc5fa57971900edcc5f10985025da21`;
+the stdout and empty-stderr SHA-256 values are
+`f5bc4f369844bf414bcaa550808d7e5406037ad4da77bde3ae30fcaa7701bdfc`
+and
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+The current profile again isolates the previously tested A* mechanisms.
+Generic `Vm::run_completion` dispatch contributes 1,749 exclusive samples
+(47.93%), and `eval_binary` contributes 553 (15.15%). `Value` destruction and
+cloning contribute 275 (7.54%) and 162 (4.44%). Named-cache lookup and its
+cached/direct probes contribute 177 (4.85%), 134 (3.67%), and 55 (1.51%);
+global loads contribute 98 (2.69%), and dense-index reads contribute 59
+(1.62%). Every other binary, update, loop-tier, allocation, and property
+helper is individually near or below one percent.
+
+The only independent cluster above ten percent is the ordinary binary route,
+and its frozen owned-Number experiment already moved the two popped Number
+operands through the existing Number helper. It reached only 0.974437x on A*
+and 0.988694x on HashMap and was rejected. The complete compact bytecode core
+closed the generic-dispatch alternative. The remaining object chain is also
+not new: typed-loop numeric-object scalarization regressed A* to 1.154586x,
+the narrower dense-object Number fusion regressed it to 1.024107x, and the
+small/dynamic storage, transition-shape, shared-slot, immediate-cache, and
+store-cache experiments already cover the cache and property representations.
+The current profile supplies no evidence that another threshold or fusion of
+those paths would behave differently.
+
+No performance-unit plan, runtime patch, candidate binary, or timing gate was
+created. Advance the refreshed queue to rank-four SunSpider `string-tagcloud`
+and require a different profile-backed RegExp or String representation rather
+than retrying the closed binary, typed-loop, or named-cache mechanisms.
+
+### 2026-07-30 rejected inline RegExp match-state lists
+
+The exact `10ba7595` queue ranks SunSpider `string-tagcloud` fourth at
+4.1335x QuickJS-NG. A fresh exact-current sample used promoted candidate
+binary SHA-256
+`fb90b58b3164eda22f04954eb55698b04ef15cc0feba6d2c1053cae7b636a69e`,
+official source SHA-256
+`9634886bcb846c76141f97b681b33a11df444901e0b4c899d8f72a3b6544f9d5`,
+and diagnostic wrapper SHA-256
+`5b4e3d1d0561062006c8bc12c700b7fc7769ca12f11a04674259184b13c41264`.
+The successful process produced 2,925 main-thread samples, 811 under
+`PreparedRegexp::match_input`. The hot captured-group route put 212 samples in
+`repeat_atom`; 197 immediately entered `Vec::from_iter`, and 192 continued
+through its iterator while nested `match_pattern` and `match_atom` calls
+mostly returned empty or singleton state lists. The profile, stdout, and
+empty-stderr SHA-256 values are
+`48d7b28c8b6caaa21026bf3d8b28e288e1a5ce88249cd5ecb0ee1c03e33a042f`,
+`89eb657835671c4963858500b421a87c683cf5e381c80ba84af40da3055372ba`,
+and
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+The frozen one-attempt plan
+`tasks/performance-units/inline-regexp-match-state-list.json` (SHA-256
+`265d9dec87ce730f98da0f1cd68a08f59052c9540d18e7ed1b5dd46ff7bb3dcc`)
+gave the general matcher one inline `MatchState` in each transient state or
+indexed-state list and retained ordered heap spill for arbitrary alternation
+and backtracking fan-out. This changed neither captures nor continuation
+order, so it was distinct from the rejected capture COW and first-continuation
+mechanisms. The implementation used `smallvec` 1.15, already present in the
+workspace lockfile through tooling, rather than introducing a custom unsafe
+container. A focused structural test proved inline singleton storage plus
+ordered spill with independent capture vectors, and all 44 matcher tests
+passed.
+
+The standard-recipe candidate binary SHA-256 was
+`b5b1a4a3cf78408d49f6af8562dcb45d27c915fd4c74885b3f5ebfe70204352c`;
+the exact base binary SHA-256 remained
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`.
+A seven-block seeded role-rotation screen used a three-suite diagnostic
+manifest SHA-256
+`37dac1cb9578e3bf37f7057d8ef018a8345a4e8ef3f8d377ab9656ac376f5b86`.
+Every process completed with matching capability. Tagcloud measured
+194.795 ms candidate versus 194.955 ms base, or **0.999179x**, far above the
+frozen `<= 0.90x` target. The independent JetStream Gaussian and Kraken JSON
+parse controls were neutral at 0.998059x and 1.006104x. Raw and report
+SHA-256 values are
+`cc61b480f452b1d664b6d79fd9908b6ae08a68d9ae1e298e1c0ded69df78b67a`
+and
+`7f8145d25ec9816826a2c13f6d6739dd702ea07d218faf28ef2223d7baa4d514`.
+
+The target failed before the remaining frozen controls or any broad,
+full-external, or Test262 promotion run was warranted. The runtime, focused
+test, direct dependency, and lockfile changes were reverted; the restored
+runtime compiles cleanly. Do not retry singleton capacity, inline width,
+container choice, or spill threshold: removing the result-list heap boundary
+is not a material whole-workload mechanism here. Advance the refreshed queue
+to rank-five public-class-field raytrace.
+
+### 2026-07-30 re-screened refreshed rank-five public-class-field raytrace cost
+
+The exact `10ba7595` queue ranks JetStream
+`raytrace-public-class-fields` fifth at 4.0154x QuickJS-NG. A fresh run used
+exact promoted candidate binary SHA-256
+`fb90b58b3164eda22f04954eb55698b04ef15cc0feba6d2c1053cae7b636a69e`,
+pinned upstream source SHA-256
+`5bb6cbf1f8c771604921eee1c1d8dcc7e5de3b8005fe5489bad9b29c741c6697`,
+and source-faithful wrapper SHA-256
+`824daa5582289787f6e25a200892a1d6bdfa682afe9ce76a30e520dc7e03528c`.
+The process exited successfully after printing `__QJS_EXTERNAL_OK__` and the
+matching String completion, with no stderr and 1,324 main-thread samples. The
+profile SHA-256 is
+`ab13f9382f7d8c12a8003bd31461653ba48a82d7d63986daf51883aa80eb4ae9`;
+the stdout and empty-stderr SHA-256 values are
+`f5bc4f369844bf414bcaa550808d7e5406037ad4da77bde3ae30fcaa7701bdfc`
+and
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+The refreshed exclusive profile confirms that no class-field-specific cost is
+independently material. `initialize_instance_fields` contributes 12 samples,
+`call_field_initializer` 9, `ObjectRef::set_shared_key` 14, and
+`PropertyStorage::insert` 7: 42 samples in total, or 3.17%. The remaining
+cost is divided among generic `Vm::run_completion` dispatch (242, 18.28%), VM
+construction (53, 4.00%), direct-leaf invocation (47, 3.55%), generic
+`function_env` work (41, 3.10%), `Value` clone/drop (104, 7.85%), allocator
+entry points, frame teardown, and named-property operations. Apart from the
+already-tested generic dispatcher, none is independently ten percent of the
+profile.
+
+These are the same closed mechanism families seen in the earlier raytrace
+screen. Base-class constructor direct slots, isolated shared-key field
+installation, transition shapes, default-data storage, immediate slot reads,
+direct read-only upvalue sharing, the contiguous frame stack, compact generic
+dispatch, and ownership-layout experiments already tested the corresponding
+constructor, field, property, call, and lifetime boundaries. Combining those
+distributed leaves into a raytrace-specific constructor or field path would
+not establish a new general engine mechanism.
+
+No performance-unit plan, runtime patch, candidate binary, or timing gate was
+created. Do not retry public-field key sharing, field installation, constructor
+shape seeding, or generic frame packing without a future exact profile that
+exposes a new independently bounded shared cost above ten percent. Advance the
+refreshed queue to rank-six Kraken `imaging-gaussian-blur`.
