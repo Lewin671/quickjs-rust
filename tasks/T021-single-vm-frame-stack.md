@@ -3182,3 +3182,52 @@ The large target and independent Kraken gains show that generic native-call
 setup remains valuable, but a future unit must remove it through a different
 profiled call representation that does not perturb the ordinary allocation
 loop. The queue should advance to rank-seven JetStream `cdjs`.
+
+### 2026-07-30 skipped CDJS after current profile screen
+
+The exact `620bb67b` opportunity queue (SHA-256
+`0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1`)
+ranked JetStream CDJS seventh at 3.7303x QuickJS-NG. The later commits are
+evidence-only, so the runtime remains exact at `620bb67b`; its standard
+release binary SHA-256 is
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`.
+A fresh high-frequency run of the unmodified generated CDJS bundle (SHA-256
+`8fdde63549dd457d375730cca98efc1be687c3fa32b84e5d63a9903b768fed47`)
+exited successfully with the expected marker. Its 1,162-sample main-thread
+profile has SHA-256
+`226d6386ccbeb675b7f2cfb0e42da433666944bd1a40fd8b84c7e81e69edfe43`.
+
+The exclusive sample families reproduce already closed costs rather than a
+new bounded mechanism. Generic `Vm::run_completion` dispatch accounts for
+318 samples, or 27.4%, but both compact direct-call dispatch and the complete
+generic compact bytecode core have already failed their target and broad
+gates. The call family contains 93 samples in `call_direct_leaf_function`, 55
+in `Vm` construction, 31 dropping `FrameState`, 22 creating and 23 dropping
+`CallEnv`, and 19 in `call_callee_with_marker`. Those are not one untested
+20.9% lever: the independently removable VM-plus-frame lifecycle is 7.4%,
+the environment pair is 3.9%, the generic wrapper is 1.6%, and the direct
+wrapper is 8.0%. The full recursive frame scheduler, same-function frame
+stack, contiguous direct-call frame stack, tail-frame reset, value-only exit,
+and direct-slot captured-closure conversion have each already been measured
+and rejected. In particular, the earlier CDJS captured-closure candidate
+removed the same inclusive generic call chain but achieved only about
+0.987x, while the later value-only exit reached 0.997776x.
+
+The remaining flat costs are likewise distributed: `Value` clone/drop totals
+118 samples (10.2%) across calls, properties, and containers rather than one
+ownership boundary; the named-property cache, ordinary slot/storage reads,
+string comparison, and property helpers are each smaller slices; allocator
+entry points total under 6%. Current evidence has already rejected the owned
+operand, discarded assignment transfer, lazy weak-refcount, Realm-arena,
+immediate property-cache, transition-shape, and property-storage variants
+which targeted those families. Aggregating them under one CDJS label would
+combine unrelated mechanisms and violate the single-unit evidence rule.
+
+No optimization plan, runtime patch, candidate binary, or timing gate was
+created. This is a deliberate low-benefit and duplicate-route stop, not a
+performance claim. Do not retry CDJS through another direct-call scheduler,
+captured-closure eligibility expansion, compact opcode stream, value-only
+result transfer, or a bundle-specific combination of its scattered costs.
+A future CDJS attempt requires a fresh representation-level mechanism with an
+independently profiled share above ten percent. The queue should advance to
+rank-eight Kraken `imaging-darkroom`.
