@@ -4853,3 +4853,33 @@ A second, independent lever is now measured and available: `FrameState` at 704
 bytes is itself the cost driver. Shrinking it -- for example by boxing the cold
 state a frame rarely touches -- would reduce every frame operation, including
 the ones the current nested path already performs.
+
+### 2026-07-31 frame size is on the critical path of the existing route
+
+The aborted routing stage above attributed its regression to moving a
+704-byte `FrameState`. That raises a question the abort does not answer: is
+the frame's *size* expensive even where it is not moved -- that is, on the
+nested route the engine uses today?
+
+An inverse experiment answers it directly. Padding `FrameState` by 320 bytes
+and measuring against the unmodified `cbbb0fcc` base, paired and alternating
+over seven samples, gives `recursive_call_tree` **1.1258x** [0.9978, 1.3866]
+and `prototype_method_call` **1.0695x** [0.9691, 1.1101].
+
+The direction is consistent with the `memmove` attribution and with the
+mechanism -- a larger frame costs more to construct, initialize, and drop --
+but the ranges are wide enough that the magnitude is not established. Treat
+this as "frame size is on the critical path", not as a 7-13% estimate. A unit
+that shrinks the frame should measure its own effect rather than inherit this
+number.
+
+The composition, for whichever unit takes it: 36 fields, 704 bytes, of which
+`CallEnv` alone is 208. Cold candidates a slot-seeded leaf call never touches
+include `try_stack`, `pending_throw`/`pending_return`/`pending_jump`,
+`resume_mode`, `sloppy_global_names`, `with_stack`, `disposable_scopes`, the
+three prototype caches, `numeric_mutation_loop_plans`, `virtual_values`, and
+the two `declined_*` bitsets -- roughly 290 bytes that a lazily allocated
+`Option<Box<FrameColdState>>` would replace with eight, the same shape
+`ObjectData` already uses for its own cold state. The lazy allocation matters:
+allocating the cold box per frame would trade this cost for a worse one, which
+is what boxing the whole frame did in the aborted stage.
