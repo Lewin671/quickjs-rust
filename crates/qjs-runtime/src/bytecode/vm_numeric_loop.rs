@@ -1244,12 +1244,17 @@ impl PreparedNumericLoopTerm {
     }
 }
 
-pub(super) fn try_run_numeric_loop(vm: &mut Vm<'_>, header: usize, backedge: usize) -> bool {
-    // The plans are immutable once compiled and live in the bytecode, whose
-    // borrow outlives the frame. Reading them there keeps the frame free of a
-    // per-call plan-vector clone.
-    let Some((index, plan)) = vm
-        .numeric_loop_plans
+pub(super) fn try_run_numeric_loop(
+    vm: &mut Vm<'_>,
+    plans: super::vm_loop_dispatch::LoopPlanView<'_>,
+    header: usize,
+    backedge: usize,
+) -> bool {
+    // The plans are immutable once compiled and live in the bytecode. They are
+    // supplied by the caller rather than read off the frame so the frame need
+    // not borrow its bytecode for its whole lifetime.
+    let Some((index, plan)) = plans
+        .numeric
         .iter()
         .enumerate()
         .find(|(_, plan)| plan.header == header && plan.backedge == backedge)

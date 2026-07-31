@@ -223,3 +223,57 @@ fn recursion_and_prototype_methods_already_reach_the_slot_seeded_cohort() {
     // slot-seeding predicates. The forty method calls are all slot-seeded.
     assert_eq!(methods.generic_call_frames, 4);
 }
+
+#[test]
+fn supplying_loop_plans_externally_does_not_change_which_plan_claims_a_site() {
+    // The loop accelerators are now handed to dispatch instead of read off the
+    // frame, so the frame can stop borrowing its bytecode. That is a plumbing
+    // change only: if it altered which engine claims a backward edge, or how
+    // many edges are consulted, it would have changed execution rather than
+    // representation.
+    let cases: &[(&str, u64, u64)] = &[
+        // A counted numeric loop in a function body: one engine claims the
+        // whole region, so the frame takes a single backward edge.
+        (
+            "function run() {
+                 var total = 0;
+                 for (var i = 0; i < 200; i++) { total += i; }
+                 return total;
+             }
+             run();",
+            1,
+            0,
+        ),
+        // The same loop at global scope, where the counters are realm
+        // bindings: no engine claims it, and every edge consults all four.
+        (
+            "var total = 0;
+             for (var i = 0; i < 200; i++) { total += i; }
+             total;",
+            0,
+            200,
+        ),
+        // A loop whose body allocates: also unclaimed, one declined chain per
+        // iteration.
+        (
+            "var seen = [];
+             for (var i = 0; i < 60; i++) { seen.push({ index: i }); }
+             seen.length;",
+            0,
+            60,
+        ),
+    ];
+    for (source, expected_entries, expected_declined) in cases {
+        let (_, counters) = counted(source);
+        assert_eq!(counters.loop_plan_entries, *expected_entries, "{source}");
+        assert_eq!(
+            counters.declined_loop_plan_edges, *expected_declined,
+            "{source}"
+        );
+        assert_eq!(
+            counters.loop_backedges,
+            counters.loop_plan_entries + counters.declined_loop_plan_edges,
+            "every backward edge either enters a plan or declines every plan"
+        );
+    }
+}

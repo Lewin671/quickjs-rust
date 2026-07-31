@@ -19,11 +19,16 @@ use crate::Value;
 
 /// Runs the program covering the backedge at `ip`, if one exists and this
 /// frame admits it. Returns whether the loop was executed natively.
-pub(crate) fn try_run_typed_loop(vm: &mut Vm<'_>, header: usize, backedge: usize) -> bool {
+pub(crate) fn try_run_typed_loop(
+    vm: &mut Vm<'_>,
+    plans: crate::bytecode::vm_loop_dispatch::LoopPlanView<'_>,
+    header: usize,
+    backedge: usize,
+) -> bool {
     if vm.direct_eval_with_stack {
         return false;
     }
-    let programs = vm.typed_loop_programs;
+    let programs = plans.typed;
     if programs.is_empty() {
         return false;
     }
@@ -47,8 +52,8 @@ pub(crate) fn try_run_typed_loop(vm: &mut Vm<'_>, header: usize, backedge: usize
     // A loop another tier already recognizes stays with that tier: those plans
     // own their own deoptimization and replay protocol, and running the region
     // twice through two accelerators is not equivalent to running it once.
-    if vm
-        .numeric_loop_plans
+    if plans
+        .numeric
         .iter()
         .any(|plan| plan.contains_instruction(backedge))
         || vm

@@ -599,14 +599,17 @@ fn set_local_number(vm: &mut Vm<'_>, slot: usize, value: f64) {
 
 pub(super) fn try_run_numeric_mutation_loop(
     vm: &mut Vm<'_>,
+    plans: super::vm_loop_dispatch::LoopPlanView<'_>,
     header: usize,
     backedge: usize,
 ) -> bool {
-    let plans = vm
+    // A frame that has diverged runs its own override; every other frame runs
+    // the body's shared plans, which the caller supplies.
+    let active = vm
         .numeric_mutation_loop_plans
         .as_deref()
-        .unwrap_or(vm.shared_numeric_mutation_loop_plans);
-    let Some((index, plan)) = plans
+        .unwrap_or(plans.shared_numeric_mutation);
+    let Some((index, plan)) = active
         .iter()
         .enumerate()
         .find(|(_, plan)| plan.header == header && plan.backedge == backedge)

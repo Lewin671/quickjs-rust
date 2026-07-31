@@ -397,8 +397,14 @@ impl ControlLoopPlan {
     }
 }
 
-pub(super) fn try_run_control_loop(vm: &mut Vm<'_>, header: usize, backedge: usize) -> bool {
-    vm.control_loop_plans
+pub(super) fn try_run_control_loop(
+    vm: &mut Vm<'_>,
+    plans: super::vm_loop_dispatch::LoopPlanView<'_>,
+    header: usize,
+    backedge: usize,
+) -> bool {
+    plans
+        .control
         .iter()
         .find(|plan| plan.header == header && plan.backedge == backedge)
         .copied()
