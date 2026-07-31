@@ -481,6 +481,26 @@ impl DynamicBindings {
         self.0.borrow_mut().insert(name, upvalue);
     }
 
+    /// Overlays a live frame cell unless this shared dynamic environment
+    /// already names that exact cell.
+    ///
+    /// Closure creation can ask the same frame to expose its locals many
+    /// times. The map is shared by those closures, so replacing an entry with
+    /// the identical [`Upvalue`] only clones and drops the owned name while
+    /// leaving binding identity unchanged. A different cell must still win:
+    /// it can represent a newly active lexical shadow with the same name.
+    pub(crate) fn overlay_cell(&self, name: &str, upvalue: &Upvalue) -> bool {
+        let mut bindings = self.0.borrow_mut();
+        if bindings
+            .get(name)
+            .is_some_and(|binding| binding.ptr_eq(upvalue))
+        {
+            return false;
+        }
+        bindings.insert(name.to_owned(), upvalue.clone());
+        true
+    }
+
     pub(crate) fn set(&self, name: &str, value: Value) -> bool {
         let Some(binding) = self.cell(name) else {
             return false;
@@ -1535,7 +1555,7 @@ impl CallEnv {
 mod tests {
     use super::{
         CallEnv, DYNAMIC_FUNCTION_REALM_GLOBAL, DynamicBindings, FrameBindingValue, FrameBindings,
-        new_realm,
+        Upvalue, new_realm,
     };
     use crate::{ObjectRef, Value};
     use std::{collections::HashMap, rc::Rc};
@@ -1612,6 +1632,26 @@ mod tests {
 
         env.set_deopt_bindings(DynamicBindings::new());
         assert!(!env.slot_is_authoritative("value"));
+    }
+
+    #[test]
+    fn dynamic_cell_overlay_skips_only_the_identical_cell() {
+        let bindings = DynamicBindings::new();
+        let first = Upvalue::new(Value::Number(1.0));
+        assert!(bindings.overlay_cell("value", &first));
+        assert!(!bindings.overlay_cell("value", &first));
+
+        first.set(Value::Number(2.0));
+        assert!(matches!(bindings.get("value"), Some(Value::Number(2.0))));
+
+        let shadow = Upvalue::new(Value::Number(2.0));
+        assert!(bindings.overlay_cell("value", &shadow));
+        assert!(
+            bindings
+                .cell("value")
+                .is_some_and(|binding| binding.ptr_eq(&shadow))
+        );
+        assert!(!bindings.overlay_cell("value", &shadow));
     }
 
     #[test]

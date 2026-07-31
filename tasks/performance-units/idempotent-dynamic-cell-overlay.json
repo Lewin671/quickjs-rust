@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "idempotent-dynamic-cell-overlay",
+  "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+  "queue": {
+    "candidate_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+    "sha256": "0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/date-format-tofte"
+    ],
+    "rank_ceiling": 14,
+    "override_reason": "Exact queue ranks 1 through 13 are closed by the current documented scheduler, direct-leaf, typed-loop, RegExp, string, object/property, constructor, recursive-call, and allocation evidence. The fresh rank-14 profile exposes a different shared-cell cost: Op::NewFunction repeatedly overlays the same live local Upvalue identities into one shared dynamic-binding map. This unit removes only identity-equal replacement work and leaves every absent or changed cell on the existing insertion path. Selection depends on binding identity alone and has no workload, source-path, name, checksum, iteration-count, or expected-result condition."
+  },
+  "mechanism": {
+    "summary": "Make the shared dynamic-cell overlay idempotent: before frame_deopt_bindings clones an owned name and replaces a map entry, compare the existing same-name Upvalue by cell identity and skip the replacement when it already names the exact live cell.",
+    "generality": "Every function, class, private element, or dynamic compatibility path that already asks frame_deopt_bindings to expose live slot cells uses the same identity-preserving operation. An absent name or a different cell still clones the name and performs the current map replacement, so first capture, block shadow changes, parameter cells, eval-introduced bindings, and later closure creation retain the established shared DynamicBindings behavior. An identical cell is already the required binding, making a second replacement observably redundant. Ordinary frames without deopt bindings retain the unchanged None path.",
+    "semantic_risks": [
+      "the equality check must use Upvalue pointer identity rather than JavaScript value equality, because two shadowing bindings can currently contain equal values while requiring distinct cells",
+      "an absent entry or a same-name entry backed by a different cell must still replace the map entry so lexical shadow changes and newly captured locals remain visible to later direct eval and closures",
+      "the check and conditional replacement must occur under one short mutable DynamicBindings borrow without holding that borrow across JavaScript execution",
+      "the optimization must not fork, snapshot, filter, or otherwise change the shared dynamic map, its lookup order, or the existing first-insertion and write-through semantics"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-07b7ab33/date-format-tofte/current.sample; exact 620bb67b release runtime binary SHA-256 c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b; official SunSpider source SHA-256 cbefaffbecb6769a85f5877765b21f967a1cff5ab2625d4a9066c050fcdc7b5e; diagnostic wrapper SHA-256 e16199f1e0c97fe27b996180b3cfbb5a6f2fb6bd38328a497cd28ded8927b56c",
+      "sha256": "5b9e87f5169932278d2502146f1b362721069e73f77e0716b59a97ae65ed61a4",
+      "base_sha": "620bb67b9c7c36714177b7006a7ccaddd88653f5",
+      "opportunity_ids": [
+        "external/sunspider-1.0/date-format-tofte"
+      ],
+      "shared_cost": "The successful 3,654-sample run attributes 942 samples (25.78%) to the NewFunction opcode and 904 (24.74%) to its frame_deopt_bindings calls. Inside that opcode, HashMap insertion has 125 exclusive samples, String cloning 42, and allocator/free leaves 512; the formatter constructs 28 nested local functions per invocation while the frame's DynamicBindings map and live Upvalue identities are shared. The repeated identity-equal overlays are distinct from the retained selected direct-eval call environment, rejected sparse eval frame, and rejected capture-repair scan: this mechanism changes neither eval export cardinality nor writeback and removes only redundant shared-map replacement.",
+      "inclusive_fraction": 0.2578
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/date-format-tofte"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/date-format-xparb",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/sunspider-1.0/string-tagcloud",
+      "broad/closure_allocation_call",
+      "broad/dynamic_method_call",
+      "broad/plain_function_call",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

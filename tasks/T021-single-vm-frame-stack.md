@@ -3593,3 +3593,107 @@ plans, transition shapes, property payload/storage thresholds, intrusive
 object counts, or Realm block arenas for this case without a fresh profile
 that isolates a different representation boundary. The queue should advance
 to rank-fourteen SunSpider `date-format-tofte`.
+
+### 2026-07-30 retained idempotent dynamic-cell overlay
+
+The exact `620bb67b` opportunity queue (SHA-256
+`0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1`)
+ranked SunSpider `date-format-tofte` fourteenth at 2.7384x QuickJS-NG. A fresh
+run used the unmodified upstream source (SHA-256
+`cbefaffbecb6769a85f5877765b21f967a1cff5ab2625d4a9066c050fcdc7b5e`)
+and diagnostic wrapper SHA-256
+`e16199f1e0c97fe27b996180b3cfbb5a6f2fb6bd38328a497cd28ded8927b56c`.
+It exited successfully with `Number(3971006963208.0)`, no stderr, and 3,654
+useful main-thread samples. The profile SHA-256 is
+`5b9e87f5169932278d2502146f1b362721069e73f77e0716b59a97ae65ed61a4`;
+the stdout and empty-stderr SHA-256 values are
+`ddd86a18e60d7abff8c5c55a868396b1bdd71c489b591d3098ca572f235060ad`
+and
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+`Op::NewFunction` accounts for 942 samples (25.78%) and its
+`frame_deopt_bindings` calls for 904 (24.74%). The formatter declares 28
+nested local functions per invocation. Each closure asks the same frame to
+overlay its live locals into one shared `DynamicBindings` map, even when the
+same name already points at the exact same `Upvalue`. Inside the opcode,
+exclusive samples include 125 in hash-map insertion, 42 in `String` cloning,
+and 512 across allocation/free leaves. This is distinct from cached direct
+eval's retained selected-binding environment, the rejected sparse eval frame,
+and the rejected capture-repair scan: the cost is repeated identity-equal map
+replacement, not binding selection, snapshotting, or writeback.
+
+The frozen one-attempt plan
+`tasks/performance-units/idempotent-dynamic-cell-overlay.json` (SHA-256
+`1239e5ca61a56c65cc5d252a8f0a4c7335ec53b9fcbd074548a954903401a8e6`)
+adds one identity-preserving operation to `DynamicBindings`.
+`frame_deopt_bindings` now holds one short mutable map borrow and skips an
+overlay only when the existing same-name cell is pointer-identical to the
+incoming live cell. An absent name or a different cell still clones the name
+and replaces the entry, preserving first capture, lexical shadow changes,
+direct-eval visibility, and shared-cell write-through. There is no source,
+workload, binding-name, checksum, or result-value condition.
+
+The focused cell test covers first insertion, an identity-equal no-op,
+write-through, and replacement by an equal-valued but distinct shadow cell.
+The existing direct-eval/closure shared-cell test also passed. The staged
+touched gate passed formatting, clippy, all 1,916 runtime tests, plan
+validation, and 116 direct-eval/function/call Test262 cases.
+
+The standard-recipe candidate and exact-base binary SHA-256 values are
+`fb90b58b3164eda22f04954eb55698b04ef15cc0feba6d2c1053cae7b636a69e`
+and
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`.
+The one allowed fast attempt retained the target at **0.832420x** base and
+2.303145x QuickJS-NG. Every frozen external control stayed below 1.03x:
+HashMap 0.999663x, public-field raytrace 1.004676x, A* 1.007822x,
+recursive 1.015583x, xparb 0.999025x, and tagcloud 1.009285x. The frozen
+broad controls also passed: plain function call 1.002258x, dynamic method
+call 1.002460x, object allocation 0.999891x, and closure allocation/call
+0.997496x. The focused external manifest, raw, and report SHA-256 values are
+`2b3076bc65e7908cf50fd2e664bd228dd43b49da636bd4c19fe4c18df09fb763`,
+`627b215bb4db9920c8c5596a44e99736d05b7d3bc6577763075a7973fa21005a`,
+and
+`e907f81c0b8d02d41bf6db731639f1b55f34505c301a18b63db0fdf2948203e9`;
+the focused broad raw SHA-256 is
+`7da92adf11cb89d5fb0754c4addd228d6c33d4e8aeff489b11e4bfdf6f0d6b45`.
+
+A complete 25-case pre-commit broad diagnostic (raw SHA-256
+`10b6e19a5eafcd2fcd9fb1b5daa6982ad0cc2142284b5889eccc1bbdea4a15a4`)
+completed all 225 formal samples. Candidate/base geometric mean was
+1.009999x and every broad candidate/QuickJS-NG ratio remained below 0.5x.
+The run exposed a reproducible non-control `array_dynamic_read` code-layout
+regression: 1.180618x in the full matrix and 1.177266x in an isolated recheck
+(SHA-256
+`78a49095e835e616cc4cfa65aef46565675603fda97987eba83a07171e870a46`).
+That case still measured 0.399485x QuickJS-NG and was not a frozen control,
+so it does not override the one-attempt decision; it remains explicit debt
+for a separately profiled unit. The same recheck reduced the full-run
+`captured_write` 1.036574x observation to 1.004232x.
+
+The default 15-second external run completed 44 of 45 cases; candidate and
+base timed out only on the known Kraken `imaging-gaussian-blur` capability
+case. A manifest-bound 60-second rerun closed that gap and completed all 45
+cases for all three roles. Its manifest, raw, report, and summary SHA-256
+values are
+`2df77d269c535af13879b3392da56c13db78f165582521c2dd4721725d88d354`,
+`d1207acb8fd45ee8cf862df386da352469595a19159c95ec540920e46345e0a2`,
+`349a5141c8e4901127fa76c131bcf0e20b05de4cb7112164d6fee261c8e9adea`,
+and
+`1f950f9145980cfc692f28ce3dd25bf25f2e34031aa640186146512622b07718`.
+The target was **0.829725x** base and 2.286054x QuickJS-NG. JetStream,
+Kraken, and SunSpider candidate/base geometric means were 0.999159x,
+0.998724x, and 0.993245x. All frozen external controls again stayed below
+1.012x, and the largest individual external base ratio was the non-control
+`crypto-md5` at 1.019531x.
+
+`./scripts/check.sh` passed formatting, clippy, agent-feature tests, all
+workspace tests, 211 benchmark-tool tests, every performance-plan validator,
+and all 5,160 curated Test262 cases; `./scripts/compare-qjs.sh` passed every
+fixture. The implementation is retained by its frozen fast gate. The complete
+broad and external runs are pre-commit diagnostics rather than a formal
+promotion receipt because the candidate had no immutable commit/receipt at
+measurement time; exact-commit Test262 burndown and receipt-bound reanalysis
+remain required before calling it promoted. This unit is therefore accepted
+as a semantics-preserving local performance improvement, not as global
+conformance or campaign completion. After exact-commit evidence is attached,
+refresh the queue and continue from its highest unclosed shared cost.

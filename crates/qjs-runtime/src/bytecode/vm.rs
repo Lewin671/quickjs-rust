@@ -608,7 +608,7 @@ impl<'a> Vm<'a> {
                 continue;
             }
             if let Some(upvalue) = self.local_upvalue_cell(slot) {
-                bindings.insert_cell(local.name.clone(), upvalue.clone());
+                bindings.overlay_cell(&local.name, upvalue);
             }
         }
         Some(bindings)
