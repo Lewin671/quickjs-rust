@@ -25,6 +25,19 @@ impl Vm<'_> {
         }
     }
 
+    /// Raises `error` inside the current frame.
+    ///
+    /// The frame's `try`/`catch`/`finally` claims it when there is a live
+    /// handler; otherwise it propagates. The frame-stack driver uses this to
+    /// deliver a failed callee to its caller, so a routed call unwinds exactly
+    /// as a nested `Vm` returning `Err` does today.
+    pub(super) fn raise_in_current_frame(
+        &mut self,
+        error: RuntimeError,
+    ) -> Result<(), RuntimeError> {
+        self.handle_runtime_error(error)
+    }
+
     #[cold]
     #[inline(never)]
     fn handle_runtime_error(&mut self, error: RuntimeError) -> Result<(), RuntimeError> {

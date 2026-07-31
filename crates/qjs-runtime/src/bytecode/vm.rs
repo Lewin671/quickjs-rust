@@ -200,6 +200,10 @@ pub(super) struct FrameState<'a> {
 
 pub(super) struct Vm<'a> {
     pub(super) current: FrameState<'a>,
+    /// Frames waiting for the one above them to finish. Empty until ordinary
+    /// calls are routed onto this VM; the driver in `frame_stack` is what
+    /// makes a non-empty stack meaningful.
+    pub(super) callers: Vec<super::frame_stack::SuspendedFrame<'a>>,
 }
 
 impl<'a> Vm<'a> {
@@ -410,6 +414,7 @@ impl<'a> Vm<'a> {
                 transactional_realm_globals: false,
                 dynamic_code_executed: false,
             },
+            callers: Vec::new(),
         }
     }
 
@@ -579,9 +584,11 @@ impl<'a> Vm<'a> {
         })
     }
 
-    /// Runs the bytecode loop until it returns or yields. Generator bodies
-    /// re-enter on each resume; ordinary functions/scripts run it once.
-    pub(super) fn run_completion(&mut self) -> Result<Completion, RuntimeError> {
+    /// Runs one frame's bytecode until it returns or suspends.
+    ///
+    /// This is one *activation*: a generator body re-enters it on each resume,
+    /// and the frame-stack driver re-enters it once per frame.
+    pub(super) fn run_current_activation(&mut self) -> Result<Completion, RuntimeError> {
         // One owner clone per activation, held on this stack frame. The view
         // borrows the owner rather than the VM, which is what lets the current
         // instruction stay borrowed while its handler mutates VM state -- and
