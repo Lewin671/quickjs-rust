@@ -3069,3 +3069,40 @@ length threshold. That on-demand representation has useful negative evidence
 but violates the broad allocation boundary; a future String-boxing unit needs
 a newly profiled representation or escape mechanism that does not perturb the
 ordinary object core.
+
+### 2026-07-30 skipped public-class-field raytrace after profile screen
+
+The exact `620bb67b` opportunity queue (SHA-256
+`0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1`)
+ranked JetStream `raytrace-public-class-fields` fifth at 4.0395x QuickJS-NG.
+The commits after `620bb67b` change only task evidence, so the standard-recipe
+release binary remains exact; its SHA-256 is
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`.
+A fresh run of the hash-verified upstream bundle (SHA-256
+`824daa5582289787f6e25a200892a1d6bdfa682afe9ce76a30e520dc7e03528c`)
+produced the expected marker and a 1,324-sample main-thread profile with
+SHA-256
+`54cf33e2cc93f4865a7f7ba0a5820b7ef5c1a76a2191f80c90a2c56ab7c9917c`.
+
+The exclusive samples show that the formerly dominant class-field path is no
+longer a bounded high-ROI opportunity. `initialize_instance_fields`,
+`call_field_initializer`, `set_shared_key`, and `PropertyStorage::insert`
+together account for only 28 top-of-stack samples, or 2.1%. The remaining
+cost is distributed across generic opcode execution (253 samples), direct-call
+and frame lifecycle, allocator entry points, and `Value` clone/drop work.
+Those families are not new mechanisms: current evidence has already rejected
+the compact generic core, contiguous direct-call stack, lazy-weak and
+Realm-arena ownership representations, constructor transition shapes, default
+data-property storage, and owned-operand transfers. Current base-class direct
+slots and isolated shared-key field installation already cover the retained
+field-specific reductions.
+
+No performance-unit plan or runtime candidate was created. A field-only
+mechanism has an observed upper bound far below the campaign's materiality
+threshold, while aggregating the remaining unrelated costs would simply
+rebrand multiple exhausted architectural routes. This is a deliberate
+low-benefit stop, not a conformance or performance claim. Do not revisit
+public-field key sharing, field descriptor installation, constructor shapes,
+or base-constructor slot seeding without a future exact profile that exposes a
+new independently bounded cost above ten percent. The queue should advance to
+rank-six `imaging-gaussian-blur`.
