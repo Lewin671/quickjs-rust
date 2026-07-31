@@ -4475,3 +4475,57 @@ runtime and focused-test changes were reverted. No full broad/external
 portfolio or Test262 promotion scan was run for the rejected candidate. Do not
 retry this combined compiler/runtime unit without new exact-current evidence
 that independently explains and removes the broad allocation regression.
+
+### 2026-07-31 rejected Number-only local-assignment admission
+
+After the AES rejection, exact-current profiles attributed the next queue
+slice rather than reopening an older mechanism. Rank-sixteen
+`bitops-bits-in-byte` placed 1,496 of 4,042 top-of-stack samples in the body of
+the already-retained typed-loop executor; its entry, scratch, and register-file
+lifecycle costs were small. Rank-seventeen `crypto-md5` placed 440 of 3,129
+useful samples in the already-retained `NumberOnlyProgram::eval`, without a new
+admission boundary. Rank-eighteen `bitops-3bit-bits-in-byte` exposed a more
+bounded gap: 1,211 of 3,940 useful samples landed exclusively in the general
+`try_eval_numeric_leaf` path and another 632 in its out-of-line
+`direct_number_binary`, or 46.8% together. Its pure local `+=` body emitted
+statically numeric `Dup`, `Pop`, and `ToNumeric` shapes that the existing
+Number-only compiler rejected. The rank-eighteen and independent MD5 profile
+SHA-256 values are
+`53f6c48cf5221a911a30fe5406a33e48ca392a30e051eeb48a6d1ca7e0afc49c`
+and
+`ad7611cdfb920e5975f4eae9bb5ad9a3cd83fb9d241f5620d19fffd6bf7671d1`.
+
+The frozen one-attempt plan
+`tasks/performance-units/number-only-local-assignment-program.json` (SHA-256
+`9c2d0f28a58c5a72ec0d4c40ea4d269b613b0b0a978de4402fb26735100e0d76`)
+therefore admitted only stack manipulation and local mutation whose abstract
+values were already proven ECMAScript Numbers. It added scalar duplicate,
+discard, and update operations, treated `ToNumeric` as an identity only after
+that proof, and allowed older pure numeric statement completions to die with a
+returning frame. Received upvalues, non-Number or missing arguments, coercive
+values, calls, properties, control flow, and unsupported bytecode still
+declined before observable work. Seven focused Number-only tests passed,
+covering the source-faithful three-bit lookup, local compound assignment,
+prefix and postfix update, comma discard, Number edge operations, and coercive
+fallback.
+
+The 31-block alternating exact-binary target gate rejected the unit.
+Candidate executable SHA-256
+`fb2ecbfa63dee5772bc0744ec5b961fba7cdb9588ed854618bec4ac0e6b50d8e`
+was compared with exact-base executable SHA-256
+`04d1ea96981f83afe8a34ae83b9d98da17a1d1d641f9bcd9a950d74a4645c6d1`
+on the unmodified pinned source (SHA-256
+`908076ee39ddf74f3d6be54b7f7c78fae8ddc9a308849f1ab1e40f1676779b41`).
+Every process completed with byte-identical stdout and empty stderr, but the
+median was only **0.837388x candidate/base**, above the frozen `<= 0.80x`
+ceiling. The target runner and result SHA-256 values are
+`d0f0d2099c981bc8a8f1e243f59fa8e02c86f4ffde4d0f7adbbf7998d0834397`
+and
+`dd62db87113cd8f1f80974351a6263125862ecfdac869331525726f33360f6b0`.
+
+The failed target gate stopped the attempt before controls, complete broad or
+external portfolios, or Test262 promotion work. Runtime and focused-test
+changes were reverted. Do not retune this unit through scalar stack-op fusion,
+completion-value elision, a registerized Number-only instruction layout, enum
+packing, or a relaxed target threshold; any successor must start from a
+distinct new exact-current shared-cost profile.

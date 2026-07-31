@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "number-only-local-assignment-program",
+  "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+  "queue": {
+    "candidate_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+    "sha256": "608f966a5ca40eb0f40cfba31d9ce515370e042ca4bc3f324e72599c896495d1"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/bitops-3bit-bits-in-byte"
+    ],
+    "rank_ceiling": 18,
+    "override_reason": "Ranks 1 through 15 are closed for this cycle by the current exact direct-frame, object-storage, RegExp, string, constructor, typed-loop, and rejected branchy-AES evidence. The fresh rank-16 bitops-bits-in-byte profile now places 1,496 of 4,042 top-of-stack samples inside the already-retained typed-loop operation executor, while its entry, scratch, and register-file lifecycle costs are small and the prior compact register-file units are consumed. Rank-17 MD5 places only 440 of 3,129 samples in the already-retained Number-only program and exposes no new admission boundary. Rank-18 instead has a bounded compiler gap: 1,843 of 3,940 useful samples are in the general numeric-leaf evaluator plus direct_number_binary because pure local compound assignment emits statically numeric Dup, Pop, and ToNumeric operations that the existing Number-only compiler rejects. Extending that immutable-bytecode admission is lower-cost and has a materially larger removable fraction than another typed-loop dispatch or retained MD5-layout retry."
+  },
+  "mechanism": {
+    "summary": "Extend the existing Number-only direct-leaf compiler and scalar executor to admit stack manipulation and local mutation operations whose abstract stack values are already proven ECMAScript Numbers. Numeric Dup, Pop, ToNumeric, and Update shapes remain in the scalar program, allowing ordinary local compound assignments to avoid FastValue tags, direct_number_binary, and upvalue-commit bookkeeping on every call.",
+    "generality": "Eligibility depends only on immutable direct-leaf bytecode, the existing numeric abstract dataflow, authoritative parameter and local slots, and live Number arguments. The program may duplicate or discard only an abstract Number, treats ToNumeric as an identity only after that proof, and updates only mutable local scalar state. A received upvalue, missing or non-Number argument, coercive value, observable property or call operation, control flow, unsupported stack type, or any other unsupported bytecode declines before user-visible work to the unchanged general direct-leaf or full-VM route. The mechanism never inspects source paths, benchmark or function names, input values beyond Number type, iteration counts, checksums, or expected results.",
+    "semantic_risks": [
+      "preserving the exact duplicated assignment value and expression-statement discard order for local compound assignments while omitting only statically dead undefined completion values",
+      "keeping ToNumeric an identity only for an abstract Number so Symbol, BigInt, object coercion, and abrupt completion remain on the existing observable path",
+      "implementing prefix and postfix numeric Update stack results correctly if admitted, including NaN, infinity, signed zero, and decrement behavior",
+      "never treating a received upvalue store as a local scalar store or bypassing the existing delayed shared-cell commit protocol",
+      "retaining the dedicated NumericLeafPlan variant layout and unchanged execution path for previously admitted Number-only programs such as safe_add",
+      "falling back before observable work whenever parameter arity, live argument types, local mutability, stack depth, or bytecode shape differs from the compiled proof"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-31 target/performance-profile-60e28ecf/bitops-3bit-bits-in-byte/current.sample; exact promoted 60e28ecf release executable SHA-256 04d1ea96981f83afe8a34ae83b9d98da17a1d1d641f9bcd9a950d74a4645c6d1; source-faithful diagnostic wrapper SHA-256 fdbf6777602ad7fdb9c902fb53794921d748b160a237e63cae2b6aa62c0afe71 repeated only the official outer workload and completed successfully with empty stderr",
+      "sha256": "53f6c48cf5221a911a30fe5406a33e48ca392a30e051eeb48a6d1ca7e0afc49c",
+      "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+      "opportunity_ids": [
+        "external/sunspider-1.0/bitops-3bit-bits-in-byte"
+      ],
+      "shared_cost": "Of 3,940 useful main-thread samples, 1,211 (30.7%) land exclusively in try_eval_numeric_leaf and 632 (16.0%) in its out-of-line direct_number_binary, with another 79 in commit_upvalues. The hot fast3bitlookup body is straight-line Number arithmetic over one Number argument and mutable local c; its local += bytecode is the structural reason it uses the general FastValue evaluator instead of the retained Number-only program.",
+      "inclusive_fraction": 0.4678
+    },
+    {
+      "source": "macOS sample 2026-07-31 target/performance-profile-60e28ecf/crypto-md5/current.sample; the same exact promoted 60e28ecf release executable; source-faithful diagnostic wrapper SHA-256 75a602a3c228b61c5d436e9646790e9b9ca1028aebadd2db5b661cda7cc6106a repeated only the official public MD5 entry and returned the expected digest with empty stderr",
+      "sha256": "ad7611cdfb920e5975f4eae9bb5ad9a3cd83fb9d241f5620d19fffd6bf7671d1",
+      "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+      "opportunity_ids": [
+        "external/sunspider-1.0/crypto-md5"
+      ],
+      "shared_cost": "The independent workload places 440 of 3,129 useful samples (14.1%) in NumberOnlyProgram::eval for the already-admitted safe_add helper. This confirms that the scalar executor is a live shared mechanism and makes MD5 a mandatory no-regression control: the new admission may add only payload-neutral operation variants and must not move or enlarge the surrounding general plan layout.",
+      "inclusive_fraction": 0.1406
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/bitops-3bit-bits-in-byte"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/bitops-bits-in-byte",
+      "external/sunspider-1.0/crypto-md5",
+      "external/sunspider-1.0/crypto-sha1",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar",
+      "broad/plain_function_call",
+      "broad/function_call_two_args",
+      "broad/captured_write",
+      "broad/dynamic_method_call",
+      "broad/math_abs",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.8,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
