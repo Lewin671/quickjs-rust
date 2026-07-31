@@ -4787,3 +4787,69 @@ This closes the functional-replace input unit as a semantics-preserving
 optimization, not the campaign: most external rows remain above 0.5x
 QuickJS-NG, so refresh the queue from `c823043e` and continue from its highest
 unclosed exact-current shared cost.
+
+### 2026-07-31 aborted stage: routing through a moved frame
+
+The call-frame migration's plumbing landed as `8974a69a` (call-environment
+provenance), `cbbb0fcc` (`PreparedBytecodeCall`), `e0cbc752`/`9d4da8d6`/
+`c7daae80` (a frame owns its bytecode), `b0f93999` (a frame-stack driver),
+`0da1dffe` (a frame built from a handle it owns), and `e8641244` (a handler
+requests frame entry rather than performing it). All are green and pushed.
+
+Routing itself was then attempted and **aborted** under the T022 migration
+stage gate. It is recorded here because the negative result is precise and
+closes one implementation shape rather than the mechanism.
+
+The shape: `prepare_direct_leaf_call` split the slot-seeded cohort's
+preparation from its execution, `call_direct_leaf_callee` built the callee
+frame with `Vm::with_frame_bytecode(FrameBytecode::Shared(..))` and recorded it
+in `Vm::pending_frame_entry`, the six call opcode arms ended the activation
+with `FrameExit::EnterFrame`, and the driver installed it with `push_frame`.
+
+It was semantically correct. All 1,937 runtime tests passed, `compare-qjs.sh`
+was clean, and both feature builds linted. Two capability facts confirmed the
+routing really happened:
+
+- `nested_vm_constructions` collapsed from **12,700,005 to 0** on
+  `recursive_call_tree` while `same_vm_frame_entries` rose to 12,700,004.
+- Recursion depth went from a **process abort at 2,000** to a correct result
+  at **200,000**, which is the catchable-error behavior QuickJS-NG has and
+  this engine does not.
+
+It was also decisively slower. Paired, strictly alternating, seven samples
+against the `cbbb0fcc` migration base: `recursive_call_tree` **1.3848x**
+[1.3561, 1.4004] and `prototype_method_call` **1.2769x** [1.2565, 1.2922].
+The two cases dominated by closed-form leaf evaluation improved
+(`polymorphic_call_site` 0.9650x, `capturing_closure_call` 0.9499x), which is
+consistent: they do not build frames. Cumulative 1.1283x, outside the 1.10
+stage budget.
+
+Attribution is unambiguous. `_platform_memmove` became the second hottest
+symbol at 818 of roughly 3,700 samples, having been absent from the top twenty
+before. `FrameState` is **704 bytes**, and the routed path moves one about six
+times per call -- constructor return, `into_frame`, into the pending `Option`,
+out of it, `mem::replace` into `current`, and into the `callers` vector -- where
+a nested `Vm` constructed its frame in place and never moved it. At 12.7
+million calls that is roughly 50 GB of `memmove`.
+
+Boxing the frame to make those moves pointer-sized was measured and is
+**worse**: `recursive_call_tree` 1.6170x and `prototype_method_call` 1.4480x.
+It trades six memcpys for a heap allocation and free per call.
+
+The runtime changes were reverted; the plumbing commits above were kept
+because they are correct, independently tested, and are what any next shape
+builds on.
+
+What this closes: recording a frame in an `Option` and moving it into place,
+boxed or not. What it does not close: running ordinary calls on one VM. The
+next shape must **construct the callee frame in place in its final location and
+never move it** -- for example `Vm { frames: Vec<FrameState>, current: usize }`
+with the frame written directly into the vector, which also requires the frame
+constructor to initialize in place rather than return by value. Note that
+`Vec::push` of a returned value would itself reintroduce one move, so the
+constructor's signature is part of the mechanism, not an implementation detail.
+
+A second, independent lever is now measured and available: `FrameState` at 704
+bytes is itself the cost driver. Shrinking it -- for example by boxing the cold
+state a frame rarely touches -- would reduce every frame operation, including
+the ones the current nested path already performs.
