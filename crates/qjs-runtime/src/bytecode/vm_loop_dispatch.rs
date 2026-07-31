@@ -12,7 +12,7 @@
 //! chain one place to be measured and, later, narrowed.
 
 use super::typed_loop::TypedLoopProgram;
-use super::vm::{FrameState, Vm};
+use super::vm::Vm;
 use super::vm_control_loop::ControlLoopPlan;
 use super::vm_numeric_loop::NumericLoopPlan;
 use super::vm_numeric_mutation_loop::NumericMutationLoopPlan;
@@ -34,17 +34,6 @@ pub(super) struct LoopPlanView<'a> {
     pub(super) shared_numeric_mutation: &'a [NumericMutationLoopPlan],
 }
 
-impl<'a> LoopPlanView<'a> {
-    pub(super) fn from_frame(frame: &FrameState<'a>) -> Self {
-        Self {
-            control: frame.control_loop_plans,
-            numeric: frame.numeric_loop_plans,
-            typed: frame.typed_loop_programs,
-            shared_numeric_mutation: frame.shared_numeric_mutation_loop_plans,
-        }
-    }
-}
-
 impl Vm<'_> {
     /// Frame-local numeric mutation loop plans, materialized from the shared
     /// bytecode plans on first deoptimization. Suppressing or rewriting a plan
@@ -52,23 +41,16 @@ impl Vm<'_> {
     /// takes its own copy exactly when it first needs to diverge.
     pub(super) fn frame_numeric_mutation_loop_plans(
         &mut self,
+        shared: &[super::vm_numeric_mutation_loop::NumericMutationLoopPlan],
     ) -> &mut Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan> {
-        let shared = self.current.shared_numeric_mutation_loop_plans;
         self.current
             .numeric_mutation_loop_plans
             .get_or_insert_with(|| shared.to_vec())
     }
 
-    /// Performs one bytecode jump while preserving the shared counted-loop
+    /// Performs one bytecode jump while preserving the counted-loop
     /// accelerators attached to ordinary backward edges.
-    pub(super) fn jump_with_loop_plans(&mut self, target: usize, backedge: usize) {
-        let plans = LoopPlanView::from_frame(&self.current);
-        self.jump_with_loop_plan_view(plans, target, backedge);
-    }
-
-    /// Performs one bytecode jump against an explicitly supplied set of loop
-    /// accelerators.
-    pub(super) fn jump_with_loop_plan_view(
+    pub(super) fn jump_with_loop_plans(
         &mut self,
         plans: LoopPlanView<'_>,
         target: usize,

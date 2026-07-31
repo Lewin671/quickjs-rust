@@ -56,12 +56,12 @@ pub(crate) fn try_run_typed_loop(
         .numeric
         .iter()
         .any(|plan| plan.contains_instruction(backedge))
-        || vm
-            .shared_numeric_mutation_loop_plans
+        || plans
+            .shared_numeric_mutation
             .iter()
             .any(|plan| plan.contains_instruction(backedge))
-        || vm
-            .control_loop_plans
+        || plans
+            .control
             .iter()
             .any(|plan| plan.contains_instruction(backedge))
     {

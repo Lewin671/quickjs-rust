@@ -26,6 +26,7 @@ use std::{
 };
 pub(super) type Slot = Option<Value>;
 
+use super::frame_program::{FrameBytecode, FrameProgramView};
 use super::operand_stack::OperandStack;
 use super::vm_call_env::{VmCallEnv, VmCallEnvOrigin};
 
@@ -97,15 +98,13 @@ pub(super) fn eval_direct_call_bytecode(
 }
 
 pub(super) struct FrameState<'a> {
-    pub(super) bytecode: &'a Bytecode,
-    pub(super) execution_code: &'a [Op],
+    pub(super) bytecode: FrameBytecode<'a>,
+    /// Whether this frame may run the lowered stream that also virtualizes
+    /// function literals. It is a selection input rather than a selection:
+    /// the stream itself is derived per activation, from a bytecode owner the
+    /// frame owns rather than borrows.
+    pub(super) virtual_function_context_safe: bool,
     pub(super) ip: usize,
-    /// Borrowed views of the bytecode's compiled loop plans. The plans are
-    /// immutable once compiled and outlive every frame over that bytecode, so
-    /// a call no longer clones a plan vector into its frame.
-    pub(super) control_loop_plans: &'a [super::vm_control_loop::ControlLoopPlan],
-    pub(super) numeric_loop_plans: &'a [super::vm_numeric_loop::NumericLoopPlan],
-    pub(super) typed_loop_programs: &'a [super::typed_loop::TypedLoopProgram],
     /// Two saturating decline counters per numeric loop plan, for the first
     /// 64 plans. A plan that matched an instruction range but could not run
     /// rebuilds its whole preparation state -- write targets, forbidden cells,
@@ -118,8 +117,6 @@ pub(super) struct FrameState<'a> {
     /// One bit per typed loop program this frame has already declined, so a
     /// region the frame cannot run natively is not re-examined per iteration.
     pub(super) declined_typed_loop_programs: u128,
-    pub(super) shared_numeric_mutation_loop_plans:
-        &'a [super::vm_numeric_mutation_loop::NumericMutationLoopPlan],
     /// Frame-local override of the shared numeric mutation loop plans,
     /// materialized only when a deoptimization suppresses or rewrites one for
     /// this invocation. Ordinary frames leave this `None`.
@@ -364,47 +361,23 @@ impl<'a> Vm<'a> {
                 & !direct_readonly_upvalue_slots;
         let realm_binding_slots = direct_realm_binding_slots
             .unwrap_or_else(|| Self::initial_realm_binding_slots(bytecode, &local_upvalues, &env));
-        let virtual_object_program = bytecode
-            .virtual_object_program
-            .get_or_init(|| super::virtual_object::lower(bytecode));
         // Ordinary function creation captures these runtime-only contexts.
         // The data-only variant keeps object/array SRA available while leaving
         // function literals materialized in a frame that needs those captures.
         let virtual_function_context_safe = env.deopt_bindings().is_none()
             && env.immutable_function_name().is_none()
             && with_stack.is_empty();
-        let execution_code = virtual_object_program.code_for_frame(
-            &bytecode.code,
-            authoritative_slots,
-            virtual_function_context_safe,
-        );
         // Keep cold virtual candidates allocation-free. Their first
         // initializer grows this bank only as far as the candidate needs.
         let virtual_values = Vec::new();
         Self {
             current: FrameState {
-                bytecode,
-                execution_code,
+                bytecode: FrameBytecode::Borrowed(bytecode),
                 ip: 0,
-                control_loop_plans: bytecode
-                    .control_loop_plans
-                    .get_or_init(|| super::vm_control_loop::ControlLoopPlan::compile_all(bytecode)),
                 declined_numeric_loop_plans: 0,
                 declined_typed_loop_programs: 0,
-                numeric_loop_plans: bytecode
-                    .numeric_loop_plans
-                    .get_or_init(|| super::vm_numeric_loop::NumericLoopPlan::compile_all(bytecode)),
-                typed_loop_programs: bytecode
-                    .typed_loop_programs
-                    .get_or_init(|| super::typed_loop::compile_all(bytecode)),
-                shared_numeric_mutation_loop_plans: bytecode
-                    .numeric_mutation_loop_plans
-                    .get_or_init(|| {
-                        super::vm_numeric_mutation_loop::NumericMutationLoopPlan::compile_all(
-                            bytecode,
-                        )
-                    }),
                 numeric_mutation_loop_plans: None,
+                virtual_function_context_safe,
                 virtual_values,
                 stack: OperandStack::new(bytecode),
                 locals,
@@ -609,15 +582,30 @@ impl<'a> Vm<'a> {
     /// Runs the bytecode loop until it returns or yields. Generator bodies
     /// re-enter on each resume; ordinary functions/scripts run it once.
     pub(super) fn run_completion(&mut self) -> Result<Completion, RuntimeError> {
+        // One owner clone per activation, held on this stack frame. The view
+        // borrows the owner rather than the VM, which is what lets the current
+        // instruction stay borrowed while its handler mutates VM state -- and
+        // what lets a frame own its bytecode instead of borrowing it from a
+        // lifetime that outlives the whole VM.
+        //
+        // Deriving here is correct because the selection inputs cannot change
+        // during an activation: `refresh_virtual_object_execution` runs only
+        // during generator setup and resume, before this loop starts.
+        let owner = self.current.bytecode.clone();
+        let program = FrameProgramView::new(
+            &owner,
+            self.current.authoritative_slots,
+            self.current.virtual_function_context_safe,
+        );
+        let bytecode = program.bytecode;
         loop {
-            // Copy the shared bytecode reference out of the VM so the current
-            // instruction can stay borrowed while its handler mutates VM state.
-            let bytecode = self.bytecode;
-            let execution_code = self.execution_code;
-            let op = execution_code.get(self.ip).ok_or_else(|| RuntimeError {
-                thrown: None,
-                message: "bytecode instruction pointer out of bounds".to_owned(),
-            })?;
+            let op = program
+                .execution_code
+                .get(self.ip)
+                .ok_or_else(|| RuntimeError {
+                    thrown: None,
+                    message: "bytecode instruction pointer out of bounds".to_owned(),
+                })?;
             self.ip += 1;
             match op {
                 Op::LoadConst(index) => {
@@ -792,7 +780,7 @@ impl<'a> Vm<'a> {
                 | Op::CopyLocal { .. }
                 | Op::CompareLocalsJumpFalse { .. }
                 | Op::InitVirtualFunction { .. }
-                | Op::CallVirtualFunction { .. }) => self.run_virtual_object_op(op)?,
+                | Op::CallVirtualFunction { .. }) => self.run_virtual_object_op(&program, op)?,
                 op @ (Op::EnterDisposableScope
                 | Op::RegisterDisposable
                 | Op::RegisterAsyncDisposable
@@ -1118,7 +1106,7 @@ impl<'a> Vm<'a> {
                 }
                 Op::Jump(target) => {
                     let backedge = self.ip - 1;
-                    self.jump_with_loop_plans(*target, backedge);
+                    self.jump_with_loop_plans(program.loop_plans(), *target, backedge);
                 }
                 Op::AbruptJump(target) => {
                     self.abrupt_jump(*target)?;

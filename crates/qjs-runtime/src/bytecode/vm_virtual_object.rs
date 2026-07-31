@@ -37,22 +37,22 @@ impl<'a> Vm<'a> {
     /// streams, and the analysis never carries a virtual candidate across a
     /// suspension point.
     pub(super) fn refresh_virtual_object_execution(&mut self) {
-        let program = self
-            .bytecode
-            .virtual_object_program
-            .get_or_init(|| super::virtual_object::lower(self.bytecode));
-        let virtual_function_context_safe = self.env.deopt_bindings().is_none()
+        // Only the selection inputs are updated here. The instruction stream
+        // they imply is derived when the frame is next activated, because a
+        // live `FrameProgramView` must never have code replaced underneath it.
+        // Every caller runs during generator setup or resume, before the
+        // dispatch loop starts, so there is no live view to invalidate.
+        self.current.virtual_function_context_safe = self.env.deopt_bindings().is_none()
             && self.env.immutable_function_name().is_none()
             && self.with_stack.is_empty();
-        self.execution_code = program.code_for_frame(
-            &self.bytecode.code,
-            self.authoritative_slots,
-            virtual_function_context_safe,
-        );
         self.virtual_values.clear();
     }
 
-    pub(super) fn run_virtual_object_op(&mut self, op: &Op) -> Result<(), RuntimeError> {
+    pub(super) fn run_virtual_object_op(
+        &mut self,
+        program: &super::frame_program::FrameProgramView<'_>,
+        op: &Op,
+    ) -> Result<(), RuntimeError> {
         match op {
             Op::InitVirtualObject {
                 slot,
@@ -81,7 +81,10 @@ impl<'a> Vm<'a> {
                     *target = Some(Value::Undefined);
                     if *count == 0
                         && *slot == VIRTUAL_CONSTANT_BINARY_INIT_SLOT
-                        && self.try_run_constant_binary_assign_after_virtual_init(*skip)?
+                        && self.try_run_constant_binary_assign_after_virtual_init(
+                            program.execution_code,
+                            *skip,
+                        )?
                     {
                         #[cfg(test)]
                         {
@@ -273,7 +276,7 @@ impl<'a> Vm<'a> {
                     self.locals[*slot] = Some(Value::Number(value + 1.0));
                     if let Some(target) = jump {
                         let backedge = self.ip + *skip;
-                        self.jump_with_loop_plans(*target, backedge);
+                        self.jump_with_loop_plans(program.loop_plans(), *target, backedge);
                     } else {
                         self.ip += *skip;
                     }
@@ -301,7 +304,7 @@ impl<'a> Vm<'a> {
                 self.pop()?;
                 if let Some(target) = jump {
                     let backedge = self.ip + *skip;
-                    self.jump_with_loop_plans(*target, backedge);
+                    self.jump_with_loop_plans(program.loop_plans(), *target, backedge);
                 } else {
                     self.ip += *skip;
                 }
@@ -378,18 +381,19 @@ impl<'a> Vm<'a> {
     /// `BinaryAssignLocals` generic fallback for non-numeric values.
     fn try_run_constant_binary_assign_after_virtual_init(
         &mut self,
+        execution_code: &[Op],
         initializer_skip: usize,
     ) -> Result<bool, RuntimeError> {
         let Some(first) = self.ip.checked_add(initializer_skip) else {
             return Ok(false);
         };
-        let Some(Op::LoadLocal(left)) = self.execution_code.get(first) else {
+        let Some(Op::LoadLocal(left)) = execution_code.get(first) else {
             return Ok(false);
         };
         let Some(right_ip) = first.checked_add(1) else {
             return Ok(false);
         };
-        let (right, right_number, binary_ip) = match self.execution_code.get(right_ip) {
+        let (right, right_number, binary_ip) = match execution_code.get(right_ip) {
             Some(Op::LoadConst(index)) => {
                 let Some(right) = self.bytecode.constants.get(*index) else {
                     return Ok(false);
@@ -422,7 +426,7 @@ impl<'a> Vm<'a> {
             target,
             stores,
             skip,
-        }) = self.execution_code.get(binary_ip)
+        }) = execution_code.get(binary_ip)
         else {
             return Ok(false);
         };

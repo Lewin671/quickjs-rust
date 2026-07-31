@@ -484,12 +484,12 @@ impl Vm<'_> {
 
     pub(super) fn refresh_authoritative_slots(&mut self) {
         self.authoritative_slots =
-            Self::initial_authoritative_slots(self.bytecode, &self.local_upvalues, &self.env)
+            Self::initial_authoritative_slots(&self.bytecode, &self.local_upvalues, &self.env)
                 & !self.direct_readonly_upvalue_slots;
         let direct_realm_binding_slots =
             self.realm_binding_slots & self.direct_readonly_upvalue_slots;
         self.realm_binding_slots =
-            Self::initial_realm_binding_slots(self.bytecode, &self.local_upvalues, &self.env)
+            Self::initial_realm_binding_slots(&self.bytecode, &self.local_upvalues, &self.env)
                 | direct_realm_binding_slots;
         self.refresh_virtual_object_execution();
     }

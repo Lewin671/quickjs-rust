@@ -16,6 +16,7 @@ mod compiler_pattern;
 mod compiler_try;
 mod compiler_values;
 mod enumerate_keys_cache;
+mod frame_program;
 mod ir;
 mod ir_names;
 mod named_property_cache;

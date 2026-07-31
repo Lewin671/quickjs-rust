@@ -624,28 +624,32 @@ pub(super) fn try_run_numeric_mutation_loop(
             // Plans are already cloned into each frame. Removing a zero-
             // progress plan suppresses only this invocation and
             // adds no state to the call-path-sensitive FrameState layout.
-            vm.frame_numeric_mutation_loop_plans().remove(index);
+            vm.frame_numeric_mutation_loop_plans(plans.shared_numeric_mutation)
+                .remove(index);
             false
         }
         NumericMutationLoopRun::HandledAndSuppressPlan => {
-            vm.frame_numeric_mutation_loop_plans().remove(index);
+            vm.frame_numeric_mutation_loop_plans(plans.shared_numeric_mutation)
+                .remove(index);
             true
         }
         NumericMutationLoopRun::SwitchToDense(fallback) => {
             let run = fallback.try_run(vm);
             if !matches!(run, DenseNumericMutationLoopRun::Suppress) {
-                vm.frame_numeric_mutation_loop_plans()[index] = NumericMutationLoopPlan {
-                    header: plan.header,
-                    backedge: plan.backedge,
-                    exit: fallback.exit(),
-                    kind: NumericMutationLoopKind::Dense(fallback),
-                };
+                vm.frame_numeric_mutation_loop_plans(plans.shared_numeric_mutation)[index] =
+                    NumericMutationLoopPlan {
+                        header: plan.header,
+                        backedge: plan.backedge,
+                        exit: fallback.exit(),
+                        kind: NumericMutationLoopKind::Dense(fallback),
+                    };
             }
             match run {
                 DenseNumericMutationLoopRun::Handled => true,
                 DenseNumericMutationLoopRun::Declined => false,
                 DenseNumericMutationLoopRun::Suppress => {
-                    vm.frame_numeric_mutation_loop_plans().remove(index);
+                    vm.frame_numeric_mutation_loop_plans(plans.shared_numeric_mutation)
+                        .remove(index);
                     false
                 }
             }
