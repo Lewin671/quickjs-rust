@@ -3314,3 +3314,54 @@ retuning cache, inlining, field order, function order, or code padding; a
 future helper-body mechanism needs a different representation with stable
 ordinary-code generation and fresh profile evidence. The queue should advance
 to rank-nine SunSpider `access-nbody`.
+
+### 2026-07-30 skipped access-nbody after current profile screen
+
+The exact `620bb67b` opportunity queue (SHA-256
+`0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1`)
+ranked SunSpider `access-nbody` ninth at 3.5831x QuickJS-NG. The later commits
+remain evidence-only, so the runtime-exact standard release binary is still
+SHA-256
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`.
+A fresh five-second run used the unmodified upstream source (SHA-256
+`84f08150e27c075e4a6b1b900b743cc2845abd3a47175cd444f6a1178493487c`)
+and the existing sampling wrapper (SHA-256
+`1f65354dce2dcf44b2f38f2394ead3c1f167872e5270ae5e5684c8d97da94250`).
+It exited successfully with `Undefined`, no stderr, and a 3,702-sample
+main-thread profile whose SHA-256 is
+`df00da80d4adf4758ac778aba422fc3479f3c2ee9a3f1dbc9b1a76c7af161b8f`.
+The stdout and empty-stderr SHA-256 values are
+`50fbe849aa61688a0dde78393afa32aba45d9f4a52109662bea06fa4c45715d5`
+and
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+The exclusive distribution is stable against the earlier exact 4,448-sample
+receipt. Generic `Vm::run_completion` dispatch accounts for 1,856 samples, or
+50.1%; `Value` clone/drop totals 488, or 13.2%;
+`NamedPropertyCache::get` contributes 261, or 7.1%; ordinary
+`eval_binary` contributes 190, or 5.1%; and the paired named-cache write is
+only 73 samples, or 2.0%. The prior receipt recorded the same families at
+2,260, 587, 293, 228, and 82 samples respectively, so sampling variance does
+not expose a new boundary.
+
+Each material family is already closed by current evidence. The compact
+generic bytecode core failed its independent target and broad gates. The
+typed-loop numeric-object-field unit directly removed generic dispatch,
+boxing, and object-field work and made N-body 0.583367x, but regressed the
+independent A* object-field workload to 1.154586x; the narrower fused dense
+object Number read then made A* 1.024107x and was also rejected. Shared-slot
+cache promotion reached only 0.988474x on N-body while making A* 1.102369x.
+The remaining named writes are already covered by the retained paired
+compound-store cache, which previously made N-body 0.945x. Binary evaluation
+and every other exclusive family are individually below the ten-percent
+materiality boundary.
+
+No performance-unit plan, runtime patch, candidate binary, or timing gate was
+created. Combining generic dispatch, `Value` lifetime, property-cache reads,
+and numeric operations under one N-body label would reassemble the rejected
+numeric-object-field scalarization rather than define a distinct general
+mechanism. Do not retry cache-entry ordering, typed-loop object-field
+scalarization or fusion, boxed-operation admission, property guards, or
+compound-store pairing without a future exact profile that exposes a new
+independently bounded representation cost above ten percent. The queue should
+advance to rank-ten SunSpider `string-base64`.
