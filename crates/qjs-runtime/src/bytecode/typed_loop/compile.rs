@@ -45,25 +45,39 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
     if backedge.checked_sub(header)? > MAX_REGION_OPS {
         return None;
     }
-    // Whether a frame slot holds a number or an object is not visible in the
-    // bytecode, so compile, learn which slots must be boxed, and recompile. The
-    // set only grows, so this converges.
+    // Whether a frame slot or a computed array element holds a number or an
+    // object is not visible in the bytecode, so compile, learn which values must
+    // stay boxed, and recompile. Both sets only grow, so this converges.
     let mut boxed_slots: Vec<u32> = Vec::new();
+    let mut boxed_element_reads: Vec<u32> = Vec::new();
     let builder = loop {
-        let mut builder = Builder::new(bytecode, header, backedge, boxed_slots.clone());
+        let mut builder = Builder::new(
+            bytecode,
+            header,
+            backedge,
+            boxed_slots.clone(),
+            boxed_element_reads.clone(),
+        );
         if builder.compile().is_some() {
             break builder;
         }
-        let discovered: Vec<u32> = builder
+        let discovered_slots: Vec<u32> = builder
             .discovered_boxed
             .iter()
             .copied()
             .filter(|slot| !boxed_slots.contains(slot))
             .collect();
-        if discovered.is_empty() {
+        let discovered_reads: Vec<u32> = builder
+            .discovered_boxed_element_reads
+            .iter()
+            .copied()
+            .filter(|site| !boxed_element_reads.contains(site))
+            .collect();
+        if discovered_slots.is_empty() && discovered_reads.is_empty() {
             return None;
         }
-        boxed_slots.extend(discovered);
+        boxed_slots.extend(discovered_slots);
+        boxed_element_reads.extend(discovered_reads);
     };
     let Builder {
         mut ops,
@@ -365,11 +379,13 @@ fn compact_register_count(next_register: usize, stack_register_count: usize) -> 
 }
 
 /// Where a register's value came from, so a property read can recognize a
-/// receiver that is really a frame slot.
+/// receiver that is really a frame slot or an earlier dense element read whose
+/// result must remain boxed for a nested access.
 #[derive(Clone, Copy, PartialEq)]
 enum Origin {
     Computed,
     Local(u32),
+    ElementRead(u32),
 }
 
 fn writes_slot(op: &Op, slot: usize) -> bool {
@@ -415,6 +431,10 @@ struct Builder<'a> {
     /// Slots this pass treats as boxed, and slots the pass discovered must be.
     boxed_slots: Vec<u32>,
     discovered_boxed: Vec<u32>,
+    /// Computed element-read bytecode sites whose results must remain boxed so
+    /// a later operation can use the live element as an object receiver.
+    boxed_element_reads: Vec<u32>,
+    discovered_boxed_element_reads: Vec<u32>,
     /// Abstract operand stack of (register, class, origin).
     stack: Vec<(u16, Class, Origin)>,
     /// Abstract stack recorded for each bytecode index reached by a jump. Two
@@ -438,7 +458,13 @@ struct Builder<'a> {
 }
 
 impl<'a> Builder<'a> {
-    fn new(bytecode: &'a Bytecode, header: usize, backedge: usize, boxed_slots: Vec<u32>) -> Self {
+    fn new(
+        bytecode: &'a Bytecode,
+        header: usize,
+        backedge: usize,
+        boxed_slots: Vec<u32>,
+        boxed_element_reads: Vec<u32>,
+    ) -> Self {
         let span = backedge - header + 1;
         Self {
             bytecode,
@@ -470,6 +496,8 @@ impl<'a> Builder<'a> {
             is_target: is_target(bytecode, header, backedge),
             boxed_slots,
             discovered_boxed: Vec::new(),
+            boxed_element_reads,
+            discovered_boxed_element_reads: Vec::new(),
             stack: Vec::new(),
             pending_skip: 0,
             unreachable: false,
@@ -691,9 +719,16 @@ impl<'a> Builder<'a> {
         match class {
             Class::Boxed => Some((register, origin)),
             Class::Scalar => {
-                if let Origin::Local(slot) = origin {
-                    self.discovered_boxed.push(slot);
-                    return None;
+                match origin {
+                    Origin::Local(slot) => {
+                        self.discovered_boxed.push(slot);
+                        return None;
+                    }
+                    Origin::ElementRead(site) => {
+                        self.discovered_boxed_element_reads.push(site);
+                        return None;
+                    }
+                    Origin::Computed => {}
                 }
                 let dst = self.fresh_boxed()?;
                 self.emit(TypedOp::Box { dst, src: register });
@@ -825,12 +860,17 @@ impl<'a> Builder<'a> {
             let offset = ip - self.header;
             // Code after an unconditional jump runs only when something jumps to
             // it, so it starts from that jump's recorded stack rather than from
-            // the fall-through one. With no recorded state it is unreachable and
-            // the region declines rather than guess.
+            // the fall-through one. With no recorded state it is dead bytecode;
+            // keep scanning until a reachable target rather than inventing a
+            // stack for an instruction no path can execute.
             if self.unreachable {
-                let state = self.states[offset].clone()?;
-                self.stack = state;
-                self.unreachable = false;
+                if let Some(state) = self.states[offset].clone() {
+                    self.stack = state;
+                    self.unreachable = false;
+                } else {
+                    ip += 1;
+                    continue;
+                }
             }
             if self.is_target[offset] {
                 self.normalize()?;
@@ -1131,6 +1171,56 @@ impl<'a> Builder<'a> {
         Some(())
     }
 
+    /// Lowers either conditional branch through the typed tier's single falsy
+    /// branch operation. The original condition remains on the abstract stack;
+    /// a truthy branch uses a separate logical-not register only for the branch
+    /// decision, so every exit and deoptimization reconstructs the bytecode's
+    /// pre-branch stack rather than the inverted helper value.
+    fn compile_conditional_jump(
+        &mut self,
+        target: usize,
+        ip: usize,
+        jump_when_truthy: bool,
+    ) -> Option<()> {
+        let (cond, class, _) = *self.stack.last()?;
+        let cond = if class == Class::Scalar {
+            cond
+        } else {
+            let dst = self.fresh()?;
+            self.emit(TypedOp::Unbox { dst, src: cond });
+            dst
+        };
+        let branch_cond = if jump_when_truthy {
+            let inverted = self.fresh()?;
+            self.emit(TypedOp::Unary {
+                dst: inverted,
+                op: UnaryOp::Not,
+                src: cond,
+            });
+            inverted
+        } else {
+            cond
+        };
+        if target > self.backedge {
+            self.emit(TypedOp::Exit {
+                cond: branch_cond,
+                exit_ip: u32::try_from(target).ok()?,
+            });
+            return Some(());
+        }
+        if target < self.header {
+            return None;
+        }
+        self.normalize()?;
+        self.record_target(target, ip)?;
+        self.pending_jumps.push((self.ops.len(), target));
+        self.emit(TypedOp::JumpIfFalsy {
+            cond: branch_cond,
+            target: 0,
+        });
+        Some(())
+    }
+
     fn compile_op(&mut self, op: &Op, ip: usize) -> Option<()> {
         match op {
             Op::LoadConst(index) => {
@@ -1253,10 +1343,11 @@ impl<'a> Builder<'a> {
                     // An array is not something the scalar file can hold, so a
                     // receiver has to come from a boxed register: that is also
                     // what lets a deoptimization rebuild the operand stack.
-                    let Origin::Local(slot) = receiver else {
-                        return None;
-                    };
-                    self.discovered_boxed.push(slot);
+                    match receiver {
+                        Origin::Local(slot) => self.discovered_boxed.push(slot),
+                        Origin::ElementRead(site) => self.discovered_boxed_element_reads.push(site),
+                        Origin::Computed => return None,
+                    }
                     return None;
                 }
                 let Origin::Local(receiver_slot) = receiver else {
@@ -1271,6 +1362,20 @@ impl<'a> Builder<'a> {
                     self.push_boxed(dst, Origin::Computed);
                     return Some(());
                 };
+                let site = u32::try_from(ip).ok()?;
+                if self.boxed_element_reads.contains(&site) {
+                    // This array element feeds another property read. Preserve
+                    // the actual Value in a boxed register so a later guard can
+                    // deopt with the exact intermediate receiver still present.
+                    let dst = self.slot_boxed()?;
+                    self.emit(TypedOp::ElementRead {
+                        dst,
+                        receiver: receiver_register,
+                        index,
+                    });
+                    self.push_boxed(dst, Origin::Computed);
+                    return Some(());
+                }
                 // A frame slot the region never writes is resolved to its array
                 // once per entry, which costs less than revalidating the slot on
                 // every element access.
@@ -1281,7 +1386,7 @@ impl<'a> Builder<'a> {
                     receiver,
                     index,
                 });
-                self.push(dst, Origin::Computed);
+                self.push(dst, Origin::ElementRead(site));
             }
             Op::LoadGlobal(name) => {
                 // A matching sloppy fallback read is the register that its
@@ -1363,36 +1468,8 @@ impl<'a> Builder<'a> {
                 });
                 self.push(dst, Origin::Computed);
             }
-            Op::JumpIfFalse(target) => {
-                // The condition stays on the operand stack: an in-region branch
-                // has a `Pop` at its target, and the loop's exit pops it too.
-                // The condition is inspected without popping, so a boxed one is
-                // narrowed into a scalar copy first.
-                let (cond, class, origin) = *self.stack.last()?;
-                let cond = if class == Class::Scalar {
-                    cond
-                } else {
-                    let dst = self.fresh()?;
-                    self.emit(TypedOp::Unbox { dst, src: cond });
-                    let top = self.stack.last_mut()?;
-                    *top = (cond, Class::Boxed, origin);
-                    dst
-                };
-                if *target > self.backedge {
-                    self.emit(TypedOp::Exit {
-                        cond,
-                        exit_ip: u32::try_from(*target).ok()?,
-                    });
-                } else {
-                    if *target < self.header {
-                        return None;
-                    }
-                    self.normalize()?;
-                    self.record_target(*target, ip)?;
-                    self.pending_jumps.push((self.ops.len(), *target));
-                    self.emit(TypedOp::JumpIfFalsy { cond, target: 0 });
-                }
-            }
+            Op::JumpIfFalse(target) => self.compile_conditional_jump(*target, ip, false)?,
+            Op::JumpIfTrue(target) => self.compile_conditional_jump(*target, ip, true)?,
             Op::BinaryAssignLocals {
                 op,
                 target,

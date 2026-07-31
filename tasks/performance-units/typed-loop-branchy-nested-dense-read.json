@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "typed-loop-branchy-nested-dense-read",
+  "base_sha": "4023b3dd4d677ad349fd0e677289dead840d7dab",
+  "queue": {
+    "candidate_sha": "4023b3dd4d677ad349fd0e677289dead840d7dab",
+    "sha256": "1a68df2ccd12ed444316096150c6f4e75968bf2c1f6687fa082832a73f312f50"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/kraken-1.1/imaging-gaussian-blur"
+    ],
+    "rank_ceiling": 11,
+    "override_reason": "Fresh exact-current profiles closed ranks one through ten for this cycle: recursive control, HashMap, A*, Tagcloud, public-field raytrace, CDJS, darkroom, 3d-raytrace, N-body, and input validation reproduce already rejected frame, generic-dispatch, Value-lifetime, property, RegExp, helper-call, or allocation mechanisms without a new independently bounded cost. Rank-eleven Gaussian blur changes that evidence: after the retained guarded unary-Math opcode removed the former call hotspot, 37.4% remains in generic dispatch and the source-faithful bytecode has four nested numeric backedges but zero typed-loop programs. A reverted compiler diagnostic identifies two coupled whitelist gaps in the same innermost region: the logical-or boundary emits JumpIfTrue, and kernel[row] must remain boxed to serve as the receiver of the second dense index. This unit admits that general branchy nested-dense region rather than retrying Math, generic compact dispatch, dense scalar-leaf, numeric-helper graph, or object-field scalarization mechanisms."
+  },
+  "mechanism": {
+    "summary": "Admit numeric typed-loop regions that combine truthy short-circuit branches with nested dense-array reads. Lower JumpIfTrue through the existing typed truthiness operation and falsy branch representation. During the compiler's convergent class-learning passes, record a dense element read whose result is later required as a property receiver and recompile that site to the existing boxed ElementRead operation; the following index then stays boxed until its numeric consumer unboxes it. Each array access retains its own runtime dense-array, integer-index, present-element, and value-class guard, and any miss deoptimizes at the original bytecode site with the exact operand stack. The expected Gaussian-blur reduction is at least 35%; reject the unit unless the target reaches at most 0.65x its exact base and every declared control remains at most 1.03x. Scope is the private typed-loop compiler, IR execution tests, and no parser, AST, public API, dependency, environment-model, generic VM dispatch, or specialized numeric-mutation tier change.",
+    "generality": "Eligibility is derived only from ordinary bytecode dataflow inside an otherwise admitted typed-loop region. A truthy branch is accepted for every typed Number, Boolean, or undefined condition using the same ToBoolean rule as the existing falsy branch. A nested element chain is learned only when an earlier computed read must remain boxed for a later property read; each receiver must be a live Array and each key a present non-negative integer dense element at execution. The mechanism never inspects source paths, benchmark names, variable names, function identities, array dimensions, input values, loop counts, checksums, or results. Strings, objects requiring coercion, holes, accessors, indexed descriptors, inherited indexed properties, Proxies, non-Arrays, out-of-range keys, unsupported calls, writes through the receiver binding, direct eval, and every class or control-flow mismatch leave through the existing precise deoptimization path.",
+    "semantic_risks": [
+      "JumpIfTrue must preserve the original condition on the operand stack while branching on exact ECMAScript truthiness for every typed value, including NaN and signed zero",
+      "an out-of-region truthy exit must invert only the branch decision and still materialize the original pre-branch stack at the bytecode target",
+      "boxed-element class discovery must converge monotonically with existing boxed-local discovery and must not change an unrelated scalar dense read",
+      "the first nested property read must preserve key evaluation order and leave a real boxed array value available if a later Math guard or second index deoptimizes",
+      "holes, accessors, indexed descriptors, inherited properties, Proxies, non-integer keys, and non-Array intermediate values must deopt before suppressing observable property semantics",
+      "the final numeric consumer may unbox only Number, Boolean, or undefined values already representable by the typed register file and must replay other values at the original site",
+      "forward and backward joins must agree on boxed register class, origin, and exact deoptimization stack after truthy and falsy paths merge",
+      "typed-loop precedence over specialized loop tiers and the boxed-operation profitability guard must remain unchanged for every previously admitted or rejected region"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-4023b3dd/imaging-gaussian-blur/current.sample; runtime-exact 4023b3dd release executable SHA-256 498e5bd03ce89f2f8100f77f2e9026da3f24903b2d617897688b235b37af6d81; official generated Kraken imaging-gaussian-blur bundle SHA-256 54a60944b49ce59f85524db09ea4eba6f2137036e19487a45844d728b843bd38; the full source-faithful bundle completed with stdout SHA-256 f5bc4f369844bf414bcaa550808d7e5406037ad4da77bde3ae30fcaa7701bdfc and empty stderr; a temporary compiler-only diagnostic was reverted after confirming backedges (73,233), (41,245), (18,341), and (7,353) produce zero typed-loop programs, first at JumpIfTrue and then at the scalar kernel[row] receiver",
+      "sha256": "892f7c436301021ce1d8d81d8447ed472dadf183169cae5d2c130453eea30052",
+      "base_sha": "4023b3dd4d677ad349fd0e677289dead840d7dab",
+      "opportunity_ids": [
+        "external/kraken-1.1/imaging-gaussian-blur"
+      ],
+      "shared_cost": "Of 3,696 main-thread samples, generic Vm::run_completion dispatch contributes 1,383 samples (37.4%), Value clone/drop contributes 694 (18.8%), and ordinary plus fast Number binary evaluation contributes 402 (10.9%), while the already optimized unary-Math route is only 23 samples (0.6%). The hot inner convolution repeatedly evaluates four scalar image reads and four kernel[Math.abs(j)][Math.abs(i)] chains; admitting the whole branchy nested-dense region removes dispatch and boxing around the shared numeric work rather than specializing a Math name or one image dimension.",
+      "inclusive_fraction": 0.3742
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/kraken-1.1/imaging-gaussian-blur"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/jetstream3-js-subset/cdjs",
+      "external/kraken-1.1/imaging-darkroom",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/sunspider-1.0/access-nbody",
+      "external/sunspider-1.0/string-validate-input",
+      "external/sunspider-1.0/bitops-bits-in-byte",
+      "broad/math_abs",
+      "broad/array_dynamic_read",
+      "broad/array_write",
+      "broad/plain_function_call",
+      "broad/dynamic_method_call",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.65,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

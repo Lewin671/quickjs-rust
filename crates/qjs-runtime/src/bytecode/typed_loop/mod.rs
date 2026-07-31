@@ -41,6 +41,8 @@ use std::{
 
 use crate::Value;
 
+#[cfg(test)]
+mod branchy_nested_tests;
 mod compile;
 mod execute;
 
