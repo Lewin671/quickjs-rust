@@ -184,3 +184,42 @@ fn an_ordinary_nested_call_does_not_inherit_an_eval_marker() {
     );
     assert_eq!(value, Value::Number(1101.0));
 }
+
+#[test]
+fn recursion_and_prototype_methods_already_reach_the_slot_seeded_cohort() {
+    // This is the frame-stack migration's precondition, measured now rather
+    // than assumed later: the calls it intends to route into one VM must
+    // already be the ones taking the slot-seeded path. If they were falling
+    // through to the general name-keyed prologue instead, routing them would
+    // not be the right change.
+    let (_, recursion) = counted(
+        "function tree(depth, value) {
+             if (depth <= 0) { return value + 1; }
+             var left = tree(depth - 1, value);
+             var right = tree(depth - 1, value);
+             return left + right - (value + 1);
+         }
+         tree(5, 3);",
+    );
+    assert_eq!(recursion.ordinary_call_attempts, 63);
+    assert_eq!(recursion.direct_leaf_frames, 63);
+    assert_eq!(recursion.generic_call_frames, 0);
+    // One nested VM per call is what the migration exists to remove.
+    assert!(recursion.nested_vm_constructions >= 63);
+    assert_eq!(recursion.same_vm_frame_entries, 0);
+
+    let (_, methods) = counted(
+        "function Stepper(step) { this.step = step; }
+         Stepper.prototype.advance = function (value) { return value + this.step; };
+         var pool = [];
+         for (var i = 0; i < 4; i++) { pool.push(new Stepper(1)); }
+         var checksum = 0;
+         for (var j = 0; j < 40; j++) { checksum += pool[j & 3].advance(j); }
+         checksum;",
+    );
+    assert!(methods.direct_leaf_frames >= 40);
+    // The four `new Stepper(1)` constructions are the only general frames:
+    // `Stepper` is an ordinary function, so constructing it is outside both
+    // slot-seeding predicates. The forty method calls are all slot-seeded.
+    assert_eq!(methods.generic_call_frames, 4);
+}

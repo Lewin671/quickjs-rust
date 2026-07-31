@@ -17,6 +17,9 @@ use crate::{
     symbol,
 };
 
+use super::call_frame::{
+    CallCompletionPolicy, PreparedBytecodeCall, apply_completion_to_caller, missing_bytecode_body,
+};
 use super::{
     CROSS_REALM_TYPE_ERROR_PROTOTYPE, CallEnv, InstanceElementInitializer,
     arguments::arguments_object, function_call_this, parameter_binding_name,
@@ -193,7 +196,7 @@ pub(crate) fn call_function(
             initialize_instance_fields(function, &this_value, env)?;
         }
         crate::diagnostics::count!(generic_call_frames);
-        let function_env = function_env(
+        let prepared = prepare_bytecode_call(
             function,
             bytecode,
             &callee,
@@ -202,37 +205,80 @@ pub(crate) fn call_function(
             env,
             is_construct,
         );
-        let immutable_name_caller_value = immutable_name_caller_value(function, env);
-        let FunctionCallEnv {
-            env: call_env,
-            direct_call_slots,
-        } = function_env;
-        if let Some(direct_call_slots) = direct_call_slots {
-            let result = eval_direct_call_bytecode(bytecode, call_env, direct_call_slots);
-            restore_immutable_name_caller_value(function, env, immutable_name_caller_value);
-            return result;
-        }
-        let result = eval_function_bytecode(
-            bytecode,
-            call_env,
-            function.upvalues.clone(),
-            function.with_stack.clone(),
-            true,
-        );
-        restore_immutable_name_caller_value(function, env, immutable_name_caller_value);
-        // A derived constructor implicitly returns its (super-bound) `this`
-        // when the body does not return an object, and it is a ReferenceError
-        // to finish without having called `super(...)`.
-        if function.is_derived_constructor && is_construct {
-            return finish_derived_construct(result);
-        }
-        return result.value;
+        return run_prepared_bytecode_call(prepared, env);
     }
 
-    Err(RuntimeError {
-        thrown: None,
-        message: "user function has no bytecode body".to_owned(),
-    })
+    Err(missing_bytecode_body())
+}
+
+/// Builds everything an ordinary synchronous call needs, without running it.
+///
+/// Every callable-kind decision -- proxy, bound, native, generator, async,
+/// construction -- has been made by the time this runs. One question is left:
+/// which environment and slots this body gets.
+fn prepare_bytecode_call<'a>(
+    function: &'a Function,
+    bytecode: &'a Rc<Bytecode>,
+    callee: &Value,
+    this_value: Value,
+    argument_values: &'a [Value],
+    env: &mut CallEnv,
+    is_construct: bool,
+) -> PreparedBytecodeCall<'a> {
+    let FunctionCallEnv {
+        env: call_env,
+        direct_call_slots,
+    } = function_env(
+        function,
+        bytecode,
+        callee,
+        this_value,
+        argument_values,
+        env,
+        is_construct,
+    );
+    // Captured before the callee runs, because a named function expression
+    // shadows this binding for the duration of the call.
+    let restored_caller_binding = immutable_name_caller_value(function, env);
+    PreparedBytecodeCall {
+        bytecode: Rc::clone(bytecode),
+        env: call_env,
+        slots: direct_call_slots,
+        upvalues: function.upvalues.clone(),
+        with_stack: function.with_stack.clone(),
+        completion: CallCompletionPolicy::new(
+            restored_caller_binding,
+            function.is_derived_constructor && is_construct,
+        ),
+    }
+}
+
+/// Runs a prepared call and settles what its caller is owed.
+fn run_prepared_bytecode_call(
+    prepared: PreparedBytecodeCall<'_>,
+    caller_env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let slot_seeded = prepared.is_slot_seeded();
+    let PreparedBytecodeCall {
+        bytecode,
+        env,
+        slots,
+        upvalues,
+        with_stack,
+        mut completion,
+    } = prepared;
+    if slot_seeded {
+        let slots = slots.expect("a slot-seeded call carries its slots");
+        let result = eval_direct_call_bytecode(&bytecode, env, slots);
+        apply_completion_to_caller(&mut completion, caller_env);
+        return result;
+    }
+    let result = eval_function_bytecode(&bytecode, env, upvalues, with_stack, true);
+    apply_completion_to_caller(&mut completion, caller_env);
+    if completion.finishes_derived_construct() {
+        return finish_derived_construct(result);
+    }
+    result.value
 }
 
 /// Runs the already-guarded ordinary leaf shape directly from a VM frame.
@@ -356,23 +402,6 @@ fn immutable_name_caller_value(function: &Function, env: &CallEnv) -> Option<(St
         return None;
     }
     env.get(name).map(|value| (name.clone(), value))
-}
-
-fn restore_immutable_name_caller_value(
-    function: &Function,
-    env: &mut CallEnv,
-    saved: Option<(String, Value)>,
-) {
-    if !function.immutable_name_binding {
-        return;
-    }
-    let Some((name, value)) = saved else {
-        return;
-    };
-    env.set_local(&name, value.clone());
-    if env.realm_contains(&name) {
-        env.insert_realm(name, value);
-    }
 }
 
 /// Runs a class constructor's instance-field initializers, in definition
