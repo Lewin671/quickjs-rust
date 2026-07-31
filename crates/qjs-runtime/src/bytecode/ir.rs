@@ -345,6 +345,11 @@ pub(super) enum Op {
     /// Calls a pre-resolved callee. The stack holds `[receiver, callee,
     /// args...]`; pops the arguments, callee, and receiver, then calls.
     CallResolved(usize),
+    /// A one-argument `Math.<unary>(argument)` call site. The receiver,
+    /// property read, and argument are still evaluated normally; execution
+    /// bypasses generic call setup only when the live callee is a supported
+    /// native unary-Math function and the live argument is already a Number.
+    CallResolvedGuardedMathUnary,
     /// Like `CallResolved` but takes the arguments from an array on the stack:
     /// `[receiver, callee, args_array]`.
     CallResolvedSpread,

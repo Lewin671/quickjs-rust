@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "guarded-math-unary-call-opcode",
+  "base_sha": "10ba7595c07748318e9708a9ede15c3a6778dcbd",
+  "queue": {
+    "candidate_sha": "10ba7595c07748318e9708a9ede15c3a6778dcbd",
+    "sha256": "b5568ff2525a585d6b9cbcfbf3f2a1342239e1e2444336316169e8c26f47ac60"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/kraken-1.1/imaging-gaussian-blur"
+    ],
+    "rank_ceiling": 6,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Give direct one-argument Math.<supported unary> call sites a dedicated guarded bytecode operation. The compiler still evaluates the Math receiver, property read, and argument in their ordinary order; the operation executes the existing pure numeric intrinsic only when the live callee has the corresponding native identity and the live argument is already a Number, otherwise it falls through to unchanged CallResolved semantics without first mutating the stack. The expected Gaussian-blur reduction is 12-22%; the unit is rejected unless the target reaches at most 0.90x its exact base and every declared control remains at most 1.03x. Scope is the private bytecode IR, compiler call lowering, its IR consumers, one VM call helper, and focused semantics tests, with no public API, AST, parser, dependency, environment-model, or generic Call/CallResolved fast-path change.",
+    "generality": "Eligibility is determined only by the ordinary AST shape Math.<supported unary>(argument), absence of spread or optional chaining, and exactly one argument. The supported names are the complete environment-independent unary-Math family already implemented by the runtime fast-native classifier, not a benchmark-specific subset. Runtime acceptance depends only on the evaluated callee's existing NativeFunction identity and a primitive Number argument. The receiver and property are evaluated normally, so shadowed or replaced Math objects, getters, proxies, and replaced methods retain their effects; any non-native, bound, proxy, coercive, missing, extra-argument, computed-property, spread, optional, or otherwise unsupported call executes the unchanged resolved-call path. The mechanism never inspects source paths, benchmark names, function identities beyond the standard native tag, array sizes, input values, loop counts, checksums, or results. Generic Call and CallResolved bytecode sites do not execute the new guard.",
+    "semantic_risks": [
+      "receiver lookup, property access, and argument evaluation must occur once in the same left-to-right order before the guarded operation",
+      "the guard must inspect the receiver-callee-argument stack shape without mutation and leave it byte-for-byte intact before falling back to ordinary CallResolved",
+      "only the exact supported unary native identities and an already primitive Number argument may bypass generic coercion and realm-environment construction",
+      "shadowed or replaced Math bindings, accessor or proxy results, bound functions, and copied non-native methods must retain ordinary receiver, coercion, throw, and side-effect behavior",
+      "accepted Number calls must preserve NaN, signed zero, infinities, and every intrinsic-specific edge case through the existing numeric implementation",
+      "stack consumption, value drop order, abrupt completion handling, catch restoration, and completion values must match a successful resolved native call",
+      "all bytecode analyses and optional execution tiers must either model the new operation with the same stack effect as CallResolved(1) or conservatively decline it without changing generic execution"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-30 target/performance-profile-10ba7595/imaging-gaussian-blur/current.sample; exact promoted 10ba7595 release executable SHA-256 fb90b58b3164eda22f04954eb55698b04ef15cc0feba6d2c1053cae7b636a69e; official generated Kraken imaging-gaussian-blur bundle SHA-256 54a60944b49ce59f85524db09ea4eba6f2137036e19487a45844d728b843bd38; the full official duplicated-iteration bundle completed successfully with its two expected markers, stdout SHA-256 0581a6af0439f7a2ef5c87b620188cd3a9715e32e4c58478dff308d32f2848a8, and empty stderr",
+      "sha256": "b10415352db0d939a25d9cf431726df19f13b5376be5b8ca4976635129d1d04c",
+      "base_sha": "10ba7595c07748318e9708a9ede15c3a6778dcbd",
+      "opportunity_ids": [
+        "external/kraken-1.1/imaging-gaussian-blur"
+      ],
+      "shared_cost": "Of 7,410 main-thread samples, the mutually exclusive leaves include 599 in call_callee_with_marker, 279 constructing CallEnv frames, 150 dropping CallEnv frames, 163 in try_fast_global_native_call, and 41 in pop_arguments: 1,232 samples or 16.63%. Source and stack inspection tie this repeated route to the inner convolution's Math.abs(j) and Math.abs(i) calls. The earlier borrowed-fast-native predispatch proved the opportunity by improving the target 21.2%, but it changed the generic call entry and regressed broad object_allocation 7.8%. This plan instead assigns only syntactically eligible standard Math call sites a distinct bytecode representation, leaving every ordinary allocation-loop instruction and generic call entry unchanged.",
+      "inclusive_fraction": 0.1663
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/kraken-1.1/imaging-gaussian-blur"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/imaging-darkroom",
+      "external/sunspider-1.0/3d-morph",
+      "external/kraken-1.1/audio-fft",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/sunspider-1.0/string-tagcloud",
+      "broad/math_abs",
+      "broad/plain_function_call",
+      "broad/function_call_two_args",
+      "broad/dynamic_method_call",
+      "broad/property_read",
+      "broad/array_dynamic_read",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

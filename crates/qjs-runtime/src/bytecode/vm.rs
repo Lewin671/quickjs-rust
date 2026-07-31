@@ -1094,6 +1094,7 @@ impl<'a> Vm<'a> {
                     }
                 }
                 Op::CallResolved(argc) => self.call_resolved(*argc)?,
+                Op::CallResolvedGuardedMathUnary => self.call_resolved_guarded_math_unary()?,
                 Op::CallResolvedSpread => self.call_resolved_spread()?,
                 Op::SuperCall(argc) => {
                     let arguments = self.pop_arguments(*argc)?;

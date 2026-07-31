@@ -1160,6 +1160,7 @@ fn compile_call_arguments(
         let call_count = match bytecode.code.get(cursor)? {
             Op::Call(count) if !resolved => Some(*count),
             Op::CallResolved(count) if resolved => Some(*count),
+            Op::CallResolvedGuardedMathUnary if resolved => Some(1),
             _ => None,
         };
         if let Some(call_count) = call_count {

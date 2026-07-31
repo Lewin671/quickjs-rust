@@ -393,6 +393,7 @@ impl Compiler {
             object, property, ..
         } = callee
         {
+            let guarded_math_unary = is_guarded_math_unary_call(callee, arguments);
             self.compile_expr(object)?;
             self.emit(Op::Dup);
             self.compile_member_get(property)?;
@@ -407,7 +408,11 @@ impl Compiler {
                 };
                 self.compile_expr(argument)?;
             }
-            self.emit(Op::CallResolved(arguments.len()));
+            if guarded_math_unary {
+                self.emit(Op::CallResolvedGuardedMathUnary);
+            } else {
+                self.emit(Op::CallResolved(arguments.len()));
+            }
             return Ok(());
         }
 
@@ -723,12 +728,104 @@ fn is_anonymous_function_definition(expr: &Expr) -> bool {
     )
 }
 
+fn is_guarded_math_unary_call(callee: &Expr, arguments: &[CallArgument]) -> bool {
+    if !matches!(arguments, [CallArgument::Expr(_)]) {
+        return false;
+    }
+    let Expr::Member {
+        object, property, ..
+    } = callee
+    else {
+        return false;
+    };
+    if !matches!(object.as_ref(), Expr::Identifier { name, .. } if name == "Math") {
+        return false;
+    }
+    let MemberProperty::Named(name) = property else {
+        return false;
+    };
+    matches!(
+        name.as_str(),
+        "abs"
+            | "acos"
+            | "acosh"
+            | "asin"
+            | "asinh"
+            | "atan"
+            | "atanh"
+            | "cbrt"
+            | "ceil"
+            | "cos"
+            | "cosh"
+            | "exp"
+            | "expm1"
+            | "floor"
+            | "log"
+            | "log1p"
+            | "log10"
+            | "log2"
+            | "sin"
+            | "sinh"
+            | "sqrt"
+            | "tan"
+            | "tanh"
+            | "trunc"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::{
         compiler,
         ir::{Op, decode_index_receiver},
+        vm_call::{guarded_math_unary_hits, reset_guarded_math_unary_hits},
     };
+    use crate::{Value, eval};
+
+    #[test]
+    fn direct_unary_math_calls_use_guarded_opcode() {
+        let script = qjs_parser::parse_script(
+            "Math.abs(-1); Math.sqrt(4); Math.abs(); Math.abs(1, 2); Math['abs'](1); other.abs(1); Math.pow(2, 3); Math.abs(...[1]);",
+        )
+        .expect("source should parse");
+        let bytecode = compiler::compile_script(&script).expect("source should compile");
+
+        assert_eq!(
+            bytecode
+                .code
+                .iter()
+                .filter(|op| matches!(op, Op::CallResolvedGuardedMathUnary))
+                .count(),
+            2,
+            "{:?}",
+            bytecode.code
+        );
+    }
+
+    #[test]
+    fn guarded_unary_math_call_preserves_fallback_semantics() {
+        reset_guarded_math_unary_hits();
+        assert_eq!(eval("Math.abs(-3);"), Ok(Value::Number(3.0)));
+        assert_eq!(guarded_math_unary_hits(), 1);
+
+        reset_guarded_math_unary_hits();
+        assert_eq!(
+            eval(
+                "var order = []; var Math = { get abs() { order.push('get'); return function (value) { order.push('call'); order.push(this === Math ? 'this' : 'bad-this'); return value + 1; }; } }; function argument() { order.push('arg'); return 2; } var result = Math.abs(argument()); order.join(',') + ':' + result;"
+            ),
+            Ok(Value::String("get,arg,call,this:3".to_owned().into()))
+        );
+        assert_eq!(guarded_math_unary_hits(), 0);
+
+        reset_guarded_math_unary_hits();
+        assert_eq!(
+            eval(
+                "var hits = 0; var argument = { valueOf() { hits++; return -4; } }; Math.abs(argument) + ':' + hits;"
+            ),
+            Ok(Value::String("4:1".to_owned().into()))
+        );
+        assert_eq!(guarded_math_unary_hits(), 0);
+    }
 
     #[test]
     fn static_member_reads_use_named_property_op() {

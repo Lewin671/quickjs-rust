@@ -1109,6 +1109,28 @@ impl<'a> Builder<'a> {
         })
     }
 
+    fn compile_resolved_numeric_native(&mut self, argc: usize) -> Option<()> {
+        let mut args = [0_u16; 2];
+        for index in (0..argc).rev() {
+            let (register, _) = self.pop()?;
+            args[index] = register;
+        }
+        let (callee, _) = self.pop_boxed()?;
+        // The receiver is dropped: only receiver-independent intrinsics are
+        // admitted, and the run-time check proves that.
+        let _ = self.stack.pop()?;
+        let dst = self.slot_scalar()?;
+        self.emit(TypedOp::CallNumericNative {
+            dst,
+            callee,
+            first: args[0],
+            second: args[1],
+            arity: u8::try_from(argc).ok()?,
+        });
+        self.push(dst, Origin::Computed);
+        Some(())
+    }
+
     fn compile_op(&mut self, op: &Op, ip: usize) -> Option<()> {
         match op {
             Op::LoadConst(index) => {
@@ -1316,24 +1338,10 @@ impl<'a> Builder<'a> {
                 self.push_boxed(dst, Origin::Computed);
             }
             Op::CallResolved(argc) if *argc <= 2 => {
-                let mut args = [0_u16; 2];
-                for index in (0..*argc).rev() {
-                    let (register, _) = self.pop()?;
-                    args[index] = register;
-                }
-                let (callee, _) = self.pop_boxed()?;
-                // The receiver is dropped: only receiver-independent intrinsics
-                // are admitted, and the run-time check proves that.
-                let _ = self.stack.pop()?;
-                let dst = self.slot_scalar()?;
-                self.emit(TypedOp::CallNumericNative {
-                    dst,
-                    callee,
-                    first: args[0],
-                    second: args[1],
-                    arity: u8::try_from(*argc).ok()?,
-                });
-                self.push(dst, Origin::Computed);
+                self.compile_resolved_numeric_native(*argc)?;
+            }
+            Op::CallResolvedGuardedMathUnary => {
+                self.compile_resolved_numeric_native(1)?;
             }
             Op::Call(argc) if (1..=2).contains(argc) => {
                 let mut args = [0_u16; 2];

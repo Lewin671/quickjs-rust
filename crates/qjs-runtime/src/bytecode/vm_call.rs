@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+#[cfg(test)]
+use std::cell::Cell;
+
 use crate::{
     CallEnv, Function, NativeFunction, RuntimeError, Value, call_function,
     function::{call_direct_leaf_function, is_direct_leaf_function},
@@ -10,6 +13,21 @@ use super::util::stack_underflow;
 use super::vm::{Vm, VmCallEnv};
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
+
+#[cfg(test)]
+thread_local! {
+    static GUARDED_MATH_UNARY_HITS: Cell<usize> = const { Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(super) fn reset_guarded_math_unary_hits() {
+    GUARDED_MATH_UNARY_HITS.with(|hits| hits.set(0));
+}
+
+#[cfg(test)]
+pub(super) fn guarded_math_unary_hits() -> usize {
+    GUARDED_MATH_UNARY_HITS.with(Cell::get)
+}
 
 fn direct_eval_selects_name(eval_bytecode: &super::Bytecode, name: &str) -> bool {
     // `this` has a dedicated VM path in some bytecode shapes, so keep it even
@@ -439,6 +457,40 @@ impl Vm<'_> {
         let callee = self.pop()?;
         let this_value = self.pop()?;
         self.call_callee(callee, this_value, arguments)
+    }
+
+    /// Executes a compiler-marked unary-Math call without materializing the
+    /// generic argument vector or realm call environment. The receiver,
+    /// callee, and argument have already been evaluated through the ordinary
+    /// member-call bytecode. Declines leave that exact stack untouched before
+    /// replaying `CallResolved(1)`.
+    pub(super) fn call_resolved_guarded_math_unary(&mut self) -> Result<(), RuntimeError> {
+        let Some(receiver_index) = self.stack.len().checked_sub(3) else {
+            return Err(stack_underflow());
+        };
+        let Some(Value::Function(function)) = self.stack.get(receiver_index + 1) else {
+            return self.call_resolved(1);
+        };
+        let Some(native) = function.native_kind() else {
+            return self.call_resolved(1);
+        };
+        let Some(Value::Number(argument)) = self.stack.get(receiver_index + 2) else {
+            return self.call_resolved(1);
+        };
+        let Some(result) = super::vm_numeric_leaf::math_unary(native, *argument) else {
+            return self.call_resolved(1);
+        };
+
+        let argument = self.pop()?;
+        let callee = self.pop()?;
+        let receiver = self.pop()?;
+        drop(argument);
+        drop(callee);
+        drop(receiver);
+        self.stack.push(Value::Number(result));
+        #[cfg(test)]
+        GUARDED_MATH_UNARY_HITS.with(|hits| hits.set(hits.get() + 1));
+        Ok(())
     }
 
     // Method calls keep their receiver below the callee, so they need their

@@ -544,6 +544,10 @@ impl<'a> Analyzer<'a> {
                 self.consume_escape(ip, state, argc + 2)?;
                 state.stack.push(AbstractValue::unknown());
             }
+            Op::CallResolvedGuardedMathUnary => {
+                self.consume_escape(ip, state, 3)?;
+                state.stack.push(AbstractValue::unknown());
+            }
             Op::CallSpread | Op::NewSpread => {
                 self.consume_escape(ip, state, 2)?;
                 state.stack.push(AbstractValue::unknown());
