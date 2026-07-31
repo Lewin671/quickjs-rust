@@ -4392,3 +4392,36 @@ runtime and focused-test changes were reverted. Do not retry fixed-index
 admission alone; any later unit must independently justify and freeze a safe,
 general dense tail-append mechanism, preserve array length and indexed
 property semantics, and then remeasure both AES targets.
+
+### 2026-07-30 correction: AES stops before `DenseWrite`
+
+The causal sentence at the end of the preceding section was too strong. A
+source-equivalent preflight against the exact inverse-key-schedule bytecode
+showed that fixed-index admission does **not** make that loop reach
+`DenseWrite`. Its `e[b] = condition ? value : table-expression` assignment has
+conditional jumps between the compiler-temporary key store and the final
+`SetProp`. `compile_element_assignment` rejects any such control flow before
+lowering the assignment, so the fixed-index-only candidate still leaves this
+whole loop in the interpreter. The existing trace with SHA-256
+`d1c33d14537cd0fde116d8d19adb9ded425a88b6802a17ab891f5df481dda0bc`
+records the exact loop at bytecode 214..303, including the conditional RHS,
+four fused `GetPropIndex` reads, and the final `SetProp`.
+
+The fixed-index unit's measured **0.954071x** JetStream and **0.965981x**
+Kraken results remain valid negative evidence: that isolated compiler change
+missed its frozen `<= 0.85x` target. They do not prove that tail growth was the
+next executed guard. Runtime and test changes had already been reverted, so
+the correction changes no promoted engine behavior.
+
+The subsequently frozen
+`tasks/performance-units/typed-loop-dense-tail-append.json` plan (SHA-256
+`58f5d29b3ef2dec7a2191f6f22363f5b1e422240827e86456bcea6c1873b644f`)
+is withdrawn at preflight for relying on that incorrect causal inference. No
+candidate benchmark attempt was made and no runtime change is retained under
+that plan. A later unit may target the actual combined bytecode mechanism only
+after freezing it explicitly: normal branch-aware computed element assignment
+must carry its boxed receiver and scalar key/value through joins to an exact
+`SetProp` deoptimization site; only then can a separately guarded exact dense
+tail store publish the new element and Array length. This correction supersedes
+the preceding section's final diagnosis without changing its rejection
+decision.

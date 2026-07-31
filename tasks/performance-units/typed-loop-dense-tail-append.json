@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "typed-loop-dense-tail-append",
+  "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+  "queue": {
+    "candidate_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+    "sha256": "608f966a5ca40eb0f40cfba31d9ce515370e042ca4bc3f324e72599c896495d1"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/stanford-crypto-aes",
+      "external/kraken-1.1/stanford-crypto-aes"
+    ],
+    "rank_ceiling": 15,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Extend the existing typed-loop DenseWrite operation from present dense elements to one additional ordinary-array case: an exact tail store whose integer index equals the current logical and materialized length. Reuse the VM's realm-Array prototype identity and indexed-prototype hazard guards plus ArrayRef's extensibility, writable-length, dense-cap, and own-descriptor eligibility before publishing the value and new length. Compose that executor change with the previously tested fixed-index lowering prerequisite so general table[fixedRow][dynamicIndex] transforms can reach the tail store; the new hypothesis is the tail append, because exact A/B evidence already rejected fixed-index admission alone.",
+    "generality": "Admission and execution depend only on immutable bytecode dataflow and current ordinary Array state. The compiler lowers standard uint32 GetPropIndex and computed SetProp shapes without inspecting names or values. An append is accepted only when the numeric property key is an integer exactly equal to Array length, dense storage is fully materialized through that length, the index is below the generic dense-storage cap, the Array is extensible with writable length and no special descriptor at that index, it uses the current realm's ordinary Array.prototype, and that prototype chain contains no indexed property or exotic interceptor. Existing in-bounds dense writes are unchanged. A gap write, non-Array or typed-array receiver, hole, custom prototype, accessor, Proxy, frozen, sealed or non-extensible Array, non-writable length, indexed descriptor, borrow conflict, non-integer or out-of-range key, unsupported operation, direct eval, or failed scalar guard deoptimizes before the failing operation's observable work. The mechanism never branches on source paths, benchmark names, constructor or variable names, array sizes other than general storage bounds, key contents, input values, iteration counts, checksums, or expected results.",
+    "semantic_risks": [
+      "updating Array length exactly once with the appended own data property while preserving strict and sloppy failure behavior through pre-write deoptimization",
+      "rejecting inherited indexed setters and custom or exotic prototype chains before a direct tail store",
+      "resuming after a successful append at any later deoptimization site without replaying or duplicating the published element",
+      "distinguishing exact tail growth from gap writes, holes below length, non-integer keys, the dense-storage cap, and fixed-index reads that require generic property lookup",
+      "reconstructing fused and unfused GetPropIndex operand stacks while keeping nested receiver values boxed and ordinary numeric results scalar",
+      "leaving existing in-bounds DenseWrite behavior and precedence of numeric-mutation, numeric, control, and previously compiled typed-loop programs unchanged"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-31 target/performance-profile-60e28ecf/jetstream-stanford-crypto-aes/current.sample; exact promoted 60e28ecf release executable SHA-256 04d1ea96981f83afe8a34ae83b9d98da17a1d1d641f9bcd9a950d74a4645c6d1; generated source-faithful JetStream bundle SHA-256 7afbe130da966d379938ae8160dada27f991bba82cc0d1b85b4df86f1c2ad94f; the process completed with the expected sentinel and empty stderr",
+      "sha256": "d315217e4b49eef04538722475fd2293d8371b469acee3663f9a1997c99d2d93",
+      "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/stanford-crypto-aes"
+      ],
+      "shared_cost": "Of 3,643 main-thread samples, 1,673 (45.9%) land exclusively in generic Vm::run_completion and 2,573 enter the AES constructor chain, while only 10 reach typed-loop entry. Compiler trace SHA-256 d1c33d14537cd0fde116d8d19adb9ded425a88b6802a17ab891f5df481dda0bc isolates the inverse-key-schedule loop. The fixed-index-only candidate then compiled its nested table reads but measured 0.954071x candidate/base in result SHA-256 317a283776d58f2abcd38e6ed9e58b169521072badbde6fa68fdd155985d5a9c because DenseWrite rejects the first e[b] store at b == e.length. The exact-tail guard is therefore the independently identified activation boundary, not a post-hoc widening of the rejected unit.",
+      "inclusive_fraction": 0.459
+    },
+    {
+      "source": "macOS sample 2026-07-31 target/performance-profile-60e28ecf/kraken-stanford-crypto-aes/current.sample; the same exact promoted 60e28ecf release executable; generated source-faithful Kraken bundle SHA-256 c5a8c4ac34189f33a6539e61bda420f6e738a7ebd2028a07a72638b19d0ed16a; the process completed with the expected sentinel and empty stderr",
+      "sha256": "29d1aefd19bc900a18ec0f1edff948e679684a404df764967a4cb81e87c4e6e6",
+      "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+      "opportunity_ids": [
+        "external/kraken-1.1/stanford-crypto-aes"
+      ],
+      "shared_cost": "The independent corpus reproduces the same constructor bytecode, empty inverse-key result Array, and exact-tail store. Of 3,382 main-thread samples, 1,524 (45.1%) land exclusively in generic Vm::run_completion, 2,294 enter the constructor chain, and only 8 reach typed-loop entry. Fixed-index admission alone measured 0.965981x candidate/base in the same five-block result, so both independent targets bind the next attempt to safe exact-tail publication rather than another fixed-index-only change.",
+      "inclusive_fraction": 0.451
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/stanford-crypto-aes",
+      "external/kraken-1.1/stanford-crypto-aes"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/imaging-gaussian-blur",
+      "external/kraken-1.1/audio-fft",
+      "external/sunspider-1.0/access-fannkuch",
+      "external/sunspider-1.0/bitops-nsieve-bits",
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar",
+      "broad/array_dynamic_read",
+      "broad/array_read",
+      "broad/array_write",
+      "broad/object_allocation",
+      "broad/plain_function_call"
+    ],
+    "target_max_candidate_over_base": 0.8,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
