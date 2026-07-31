@@ -4343,3 +4343,52 @@ above 0.5x. The new rank-one opportunity is SunSpider
 `controlflow-recursive` at 5.8391x. This closes the branchy nested dense-loop
 unit, not the campaign; continue from the new queue's highest unclosed
 current-profile mechanism.
+
+### 2026-07-30 rejected typed-loop fixed-index nested dense reads
+
+The exact `60e28ecf` queue ranked JetStream and Kraken Stanford AES fourteenth
+and fifteenth. Fresh source-faithful samples reproduced the same constructor
+shape: 45.9% of 3,643 JetStream main-thread samples and 45.1% of 3,382 Kraken
+samples landed exclusively in generic `Vm::run_completion`, while only ten
+and eight samples reached typed-loop entry. Their profile SHA-256 values are
+`d315217e4b49eef04538722475fd2293d8371b469acee3663f9a1997c99d2d93`
+and
+`29d1aefd19bc900a18ec0f1edff948e679684a404df764967a4cb81e87c4e6e6`.
+A reverted compiler trace with SHA-256
+`d1c33d14537cd0fde116d8d19adb9ded425a88b6802a17ab891f5df481dda0bc`
+showed that the first key-expansion loop already compiled, while the inverse
+key-schedule loop stopped at four fused fixed-index table-row reads.
+
+The frozen one-attempt plan
+`tasks/performance-units/typed-loop-fixed-index-nested-dense-read.json`
+(SHA-256
+`71e3d35d1d306d7d73b860e2e408099d6e762855e5f59d864bfed4ff9d276416`)
+therefore admitted `GetPropIndex` through the existing guarded scalar or boxed
+dense-read operations. Five focused tests passed with 1,919 filtered tests,
+including fixed-row nested reads, indexed-accessor deoptimization, ordinary
+object fallback, and scalar fixed-index reads. Candidate and exact-base
+executable SHA-256 values are
+`21186dddc97b0ee9d2f60cb6afe085dcd29eb3ef18d2da77d87fc86690acf1ae`
+and
+`04d1ea96981f83afe8a34ae83b9d98da17a1d1d641f9bcd9a950d74a4645c6d1`.
+
+The five-block alternating exact-binary target gate rejected the unit.
+JetStream measured **0.954071x candidate/base** and Kraken measured
+**0.965981x**, both well above the frozen `<= 0.85x` ceiling. Every measured
+process exited successfully with byte-identical stdout and empty stderr. The
+runner and result SHA-256 values are
+`18d8ea8c226b4749b850d2ff9fa23a23b52336bf90ac05fa48ca1741519acb45`
+and
+`317a283776d58f2abcd38e6ed9e58b169521072badbde6fa68fdd155985d5a9c`.
+No control, broad, external-portfolio, or Test262 promotion work was run after
+the frozen target gate failed.
+
+Inspection after the failed gate found the next independent boundary. The
+inverse key schedule creates an empty result array and assigns its next
+sequential element inside the loop. The typed-loop `DenseWrite` guard accepts
+only an already-present element, so the candidate deoptimizes on the first
+`index == length` write even after fixed-index reads admit the loop. The
+runtime and focused-test changes were reverted. Do not retry fixed-index
+admission alone; any later unit must independently justify and freeze a safe,
+general dense tail-append mechanism, preserve array length and indexed
+property semantics, and then remeasure both AES targets.

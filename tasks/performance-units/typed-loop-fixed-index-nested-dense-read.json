@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "typed-loop-fixed-index-nested-dense-read",
+  "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+  "queue": {
+    "candidate_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+    "sha256": "608f966a5ca40eb0f40cfba31d9ce515370e042ca4bc3f324e72599c896495d1"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/stanford-crypto-aes",
+      "external/kraken-1.1/stanford-crypto-aes"
+    ],
+    "rank_ceiling": 15,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Teach the existing typed-loop dataflow to lower statically indexed property reads, including the fused local-receiver GetPropIndex form, through its guarded dense-array operations. A fixed-index result that feeds another property read stays boxed so general table[row][dynamicIndex] chains can execute in the native loop; a numeric result remains scalar. Every miss deoptimizes at the original bytecode instruction.",
+    "generality": "Admission depends only on immutable bytecode shape and the existing typed-loop fixed point. The encoded index is a standard uint32 property index, the fused receiver must be a live local Array, and every nested receiver and dynamic index must pass the existing present dense-element guards. The mechanism never inspects source paths, benchmark names, constructor or variable names, array sizes, key contents, input values, iteration counts, checksums, or results. A non-fused fixed-index read uses the boxed receiver already present on the operand stack. Non-Arrays, typed arrays, holes, indexed descriptors, inherited indexed properties, accessors, Proxies, out-of-range dynamic indices, unsupported writes or calls, direct eval, and any failed entry or mid-loop guard resume the unchanged interpreter at the exact GetPropIndex or later operation.",
+    "semantic_risks": [
+      "reconstructing the exact operand stack when a fused GetPropIndex has no explicit receiver operand while an ordinary GetPropIndex does",
+      "preserving uint32 fixed-index semantics, including holes, inherited indexed properties, indexed descriptors, typed arrays, and non-Array receivers by deoptimizing before observable work",
+      "keeping fixed-index results boxed only when later dataflow needs an object receiver, without boxing numeric table values that can remain scalar",
+      "preserving live array aliasing, dense writes, branches, descending counters, and mid-loop replay ordering in the existing typed-loop executor",
+      "leaving precedence and admission of numeric-mutation, numeric, control, and previously compiled typed-loop programs unchanged"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-31 target/performance-profile-60e28ecf/jetstream-stanford-crypto-aes/current.sample; exact promoted 60e28ecf release executable SHA-256 04d1ea96981f83afe8a34ae83b9d98da17a1d1d641f9bcd9a950d74a4645c6d1; generated source-faithful JetStream bundle SHA-256 7afbe130da966d379938ae8160dada27f991bba82cc0d1b85b4df86f1c2ad94f and diagnostic 12-iteration wrapper SHA-256 94daaa6797bd7ac7d8a438919d836096aa1ba6f15f4a091c8a297ce778fcbb16; the process completed with the expected sentinel and empty stderr",
+      "sha256": "d315217e4b49eef04538722475fd2293d8371b469acee3663f9a1997c99d2d93",
+      "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/stanford-crypto-aes"
+      ],
+      "shared_cost": "Of 3,643 main-thread samples, 1,673 (45.9%) land exclusively in generic Vm::run_completion while only 10 land in typed-loop entry. The AES constructor chain contains 2,573 samples. A reverted compiler-only trace (SHA-256 d1c33d14537cd0fde116d8d19adb9ded425a88b6802a17ab891f5df481dda0bc) shows that the first key-expansion loop already compiles, while the second loop at bytecode 214..303 is rejected at four fused GetPropIndex operations that produce the fixed table rows for later dynamic dense reads.",
+      "inclusive_fraction": 0.459
+    },
+    {
+      "source": "macOS sample 2026-07-31 target/performance-profile-60e28ecf/kraken-stanford-crypto-aes/current.sample; the same exact promoted 60e28ecf release executable; generated source-faithful Kraken bundle SHA-256 c5a8c4ac34189f33a6539e61bda420f6e738a7ebd2028a07a72638b19d0ed16a and diagnostic 40-iteration wrapper SHA-256 05176d71a6aada69d4e3114a5f47fd08a19533c24a6758ab1f9bc3538683e6c4; the process completed with the expected sentinel and empty stderr",
+      "sha256": "29d1aefd19bc900a18ec0f1edff948e679684a404df764967a4cb81e87c4e6e6",
+      "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+      "opportunity_ids": [
+        "external/kraken-1.1/stanford-crypto-aes"
+      ],
+      "shared_cost": "The independent AES corpus reproduces the same key-schedule bytecode and rejection boundary. Of 3,382 main-thread samples, 1,524 (45.1%) land exclusively in generic Vm::run_completion, 2,294 enter the constructor chain, and only 8 reach typed-loop entry. This confirms a shared fixed-index nested-table mechanism rather than JetStream harness or data-specific behavior.",
+      "inclusive_fraction": 0.451
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/stanford-crypto-aes",
+      "external/kraken-1.1/stanford-crypto-aes"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/imaging-gaussian-blur",
+      "external/kraken-1.1/audio-fft",
+      "external/sunspider-1.0/access-fannkuch",
+      "external/sunspider-1.0/bitops-nsieve-bits",
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar",
+      "broad/array_dynamic_read",
+      "broad/array_read",
+      "broad/array_write",
+      "broad/object_allocation",
+      "broad/plain_function_call"
+    ],
+    "target_max_candidate_over_base": 0.85,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
