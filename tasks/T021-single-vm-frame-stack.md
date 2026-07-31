@@ -4152,3 +4152,99 @@ broad regression. The one allowed attempt is rejected before complete broad,
 external, or Test262 promotion. The runtime and focused-test implementation
 was reverted; retain only the frozen plan and this evidence. Do not tune graph
 bounds, cache shape, enum boxing, or instruction layout under this unit.
+
+### 2026-07-30 retained realm String prototype direct read
+
+The exact `0745c018` opportunity queue (SHA-256
+`664737b4614cbdd6d6628114250a0e13332e6e35234b5a9aefb7c7a093d16e02`)
+ranked SunSpider `string-base64` eighth at 3.4738x QuickJS-NG. A fresh
+source-faithful exact-current sample contained 3,654 main-thread samples; 518
+(14.18%) entered primitive String prototype resolution, including environment,
+constructor, prototype, function, property, and hash work. The eventual
+`charCodeAt` native leaf contributed only 12 exclusive samples, so the unit
+targeted the shared lookup boundary rather than the builtin. The profile
+SHA-256 is
+`edbf7d0eed078b2ac18111d567d7341a0e22b4dd8a2fa379692b7fc283afa02a`.
+
+The frozen one-attempt plan
+`tasks/performance-units/realm-string-prototype-direct-read.json` (SHA-256
+`ae0f3a61eb6b2b3977bc892ec3a589474a0ee42fe1af781225c9ef04e13ae289`)
+adds the canonical live `%String.prototype%` object to the existing realm
+intrinsic state. After preserving primitive `length` and indexed-character
+precedence, ordinary named String reads use the existing ordinary-chain data
+reader directly on that live prototype. Data replacement remains observable;
+accessors, proxies or exotic chain entries, borrow conflicts, and marked
+dynamic cross-realm globals replay the existing generic path. Rebinding the
+global `String` name no longer changes primitive intrinsic lookup. The cache
+stores neither a property value nor a site guard, and no bytecode, frame,
+parser, AST, public API, dependency, or environment-model boundary changed.
+
+Focused tests cover global constructor rebinding, live prototype data
+replacement, accessor fallback with the strict primitive receiver, and marked
+dynamic cross-realm fallback. All 1,919 runtime tests and the 5,160-case
+curated Test262 subset passed. The staged touched gate, `./scripts/check.sh`,
+`./scripts/compare-qjs.sh`, the pre-push gate, and exact-commit CI run
+`30617551260` also passed. The retained runtime commit is
+`4023b3dd4d677ad349fd0e677289dead840d7dab`; candidate, exact-base, and
+QuickJS-NG executable SHA-256 values are
+`498e5bd03ce89f2f8100f77f2e9026da3f24903b2d617897688b235b37af6d81`,
+`c0eded40cbf77482bb8e6e106334c65e3a1fc45b5f8006d1ad31a1899cd14b56`,
+and
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+Their build-receipt SHA-256 values are
+`0264066a3f864429d14853f893c98ef3b21e83d89a9cc6a6fde20d49c116fe06`,
+`cc381f7003e9d5f77dab848d6e6ca0e9c0935beae71edc58161b89c633375d49`,
+and
+`b96f63f100f0ddfb6e7dedfdbcb195f579144cf01af814706d3d7a1b24b90b0f`.
+
+The 31-block exact-binary fast target measured `string-base64` at
+**0.832831x candidate/base**, below the frozen `<= 0.92x` gate. All sixteen
+declared controls remained below 1.03x; the worst was A* at 1.011280x, while
+`string-validate-input` was 0.947844x and the remaining broad/string/external
+controls were between 0.969885x and 1.008188x. Successful output was
+byte-identical. The target and control receipt SHA-256 values are
+`ef1694fbb67cd6a94cdee84e2845eb4b21a6911ffaf007f004d749987420629c`
+and
+`cffc75763c68cb1c57c4ccd66a79a2501fff3dceffcaf65de06bd35d74ca018c`.
+
+The exact 25-case broad matrix completed all three role-rotation blocks.
+Candidate/base geometric mean was 1.000229x with interval
+0.999335x-1.001389x; the worst broad case was `branch_arithmetic` at
+1.005956x. Every broad case remained below 0.5x QuickJS-NG, with the worst
+`closure_allocation_call` at 0.433197x. Manifest, raw, report, and summary
+SHA-256 values are
+`5c3c586de23444190437652cf99a57da46730a4473d22e281c9e388f8c4215c0`,
+`0f983db89e47d9156e1249c4bd6ea6c8d90d9c00f680051807ef114caba493ac`,
+`7006249fdcd24ddd2d1434e1e862705faa66175d9ace6715dc7c279cf36c1a8f`,
+and
+`48a4d2a9223de1084c0da7fe63cdccee843c690e6883cd184b912e98a4cffc59`.
+
+The exact 45-case external portfolio completed all three 60-second blocks.
+Base64 reproduced at **0.839687x candidate/base** and 2.8750x QuickJS-NG.
+JetStream, Kraken, and SunSpider candidate/base geometric means were
+0.994487x, 0.993841x, and 0.985502x. The worst external candidate/base row was
+`math-partial-sums` at 1.018490x, below the frozen 1.03x ceiling, so no
+post-hoc outlier remeasurement was needed. External manifest, raw, report, and
+rendered-summary SHA-256 values are
+`a8ddeded582573bc676bf3f7bbbaf2625f6dfa7742f07bcdd6aaa26366f4e6c4`,
+`1841998fd79ea5d57dce649e902378cb6c35f8cd099ce0eb00a9c1a165d11971`,
+`fc6dddbcbdc8a1404646e0ab5cc810515c15ce3bfa5c9354a1283c67453ab366`,
+and
+`388da8cf92d390de453894268dd7d7e364b0d7c78b8372923ee020fcf053c86e`.
+
+Exact-commit Test262 Coverage run `30617806617` passed and produced burndown
+SHA-256
+`36b7545c38345a1b81bb87d1246b69d8a2bed076cec6d584452a1df4c7dfa1b1`.
+It covers all 53,572 pinned cases: 10,900 are outside the QuickJS-NG
+configuration, while qjs-rust passes all 42,672 configured cases with zero
+failures, zero timeouts, zero not-run cases, and zero actionable gaps. The
+promotion decision retains the unit with no exception and has SHA-256
+`26f8261e7df45e6112d9aa57c1dce4a0608f298535acd4333ffb49586dd9cf97`.
+
+The refreshed exact `4023b3dd` queue has SHA-256
+`1a68df2ccd12ed444316096150c6f4e75968bf2c1f6687fa082832a73f312f50`.
+Base64 moves to rank thirteen at 2.8750x QuickJS-NG; no broad case is above
+the campaign threshold, but 38 external cases remain above 0.5x. The new
+rank-one opportunity is SunSpider `controlflow-recursive` at 6.0132x. This
+closes the realm String prototype unit, not the campaign; continue from that
+fresh queue and a new exact-current profile.
