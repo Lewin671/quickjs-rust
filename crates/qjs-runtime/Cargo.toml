@@ -21,6 +21,12 @@ categories.workspace = true
 # platform's non-fair `std::sync::Mutex`.
 agents = ["dep:parking_lot"]
 
+# Opt-in execution counters for performance diagnosis (`crates/qjs-runtime/src/
+# diagnostics.rs`). Off by default and compiled out entirely: with the feature
+# off every counting site expands to nothing and the storage does not exist. A
+# build with it on is a diagnostic build and must not be used for timing.
+perf-counters = []
+
 [dependencies]
 num-bigint = "0.4"
 num-traits = "0.2"

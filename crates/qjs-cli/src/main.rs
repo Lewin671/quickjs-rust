@@ -197,7 +197,21 @@ fn run() -> Result<(), CliError> {
         })?
     };
     println!("{}", format_value(&value, raw_output));
+    report_execution_counters();
     Ok(())
+}
+
+/// Prints the runtime's execution counters to stderr, so a diagnostic build can
+/// show which execution paths a workload took without disturbing the stdout
+/// contract the benchmark harness parses. Compiled out without the feature.
+fn report_execution_counters() {
+    let Some(counters) = qjs_runtime::counters() else {
+        return;
+    };
+    eprintln!("QJS_PERF_COUNTERS");
+    for (name, value) in counters.entries() {
+        eprintln!("  {name} {value}");
+    }
 }
 
 fn command_name() -> String {

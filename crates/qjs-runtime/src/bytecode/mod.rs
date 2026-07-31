@@ -37,6 +37,7 @@ mod vm_import;
 mod vm_iter;
 mod vm_jobs;
 mod vm_literals;
+mod vm_loop_dispatch;
 mod vm_module;
 mod vm_numeric_leaf;
 mod vm_numeric_loop;

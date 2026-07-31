@@ -106,6 +106,7 @@ pub(crate) fn call_function(
         return Err(class_constructor_call_error(function));
     }
     if let Some(native) = function.native {
+        crate::diagnostics::count!(native_calls);
         return call_native_function(
             function,
             native,
@@ -116,6 +117,7 @@ pub(crate) fn call_function(
         );
     }
     if let Some(bytecode) = &function.bytecode {
+        crate::diagnostics::count!(ordinary_call_attempts);
         if function.is_generator && function.is_async {
             let function_env = function_env(
                 function,
@@ -190,6 +192,7 @@ pub(crate) fn call_function(
         if function.is_class_constructor && !function.is_derived_constructor && is_construct {
             initialize_instance_fields(function, &this_value, env)?;
         }
+        crate::diagnostics::count!(generic_call_frames);
         let function_env = function_env(
             function,
             bytecode,
@@ -246,6 +249,7 @@ pub(crate) fn call_direct_leaf_function(
     module_host: Option<crate::module::ModuleHostRef>,
     #[cfg(feature = "agents")] agent_context: Option<crate::agent::AgentContextRef>,
 ) -> Result<Value, RuntimeError> {
+    crate::diagnostics::count!(ordinary_call_attempts);
     let Value::Function(function) = &callee else {
         unreachable!("direct leaf predicate only accepts functions");
     };
@@ -259,11 +263,14 @@ pub(crate) fn call_direct_leaf_function(
         argument_values,
         &function.upvalues,
     ) {
+        crate::diagnostics::count!(closed_form_leaf_evaluations);
         return Ok(value);
     }
     if let Some(value) = try_eval_this_property_leaf(bytecode, &this_value, argument_values) {
+        crate::diagnostics::count!(closed_form_leaf_evaluations);
         return Ok(value);
     }
+    crate::diagnostics::count!(direct_leaf_frames);
     let FunctionCallEnv {
         env: mut call_env,
         direct_call_slots,
@@ -292,9 +299,12 @@ pub(crate) fn call_direct_function_literal(
     argument_values: &[Value],
     env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
+    crate::diagnostics::count!(ordinary_call_attempts);
     if let Some(value) = try_eval_numeric_leaf(bytecode, params, argument_values, &[]) {
+        crate::diagnostics::count!(closed_form_leaf_evaluations);
         return Ok(value);
     }
+    crate::diagnostics::count!(direct_leaf_frames);
     let call_env = env.new_direct_leaf_function_frame(env.module_imports());
     let direct_call_slots = DirectCallSlots {
         this_value: None,

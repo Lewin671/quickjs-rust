@@ -261,6 +261,55 @@ cargo build --release -p qjs-cli
   --output target/benchmarks/report.json
 ```
 
+Pass `--manifest benchmarks/generic-sentinels-manifest.json` to run the
+generic-path sentinels instead of the broad portfolio. The two series are never
+pooled: they answer different questions, and their absolute ratios are not
+comparable.
+
+### Execution counters
+
+Wall time cannot tell an accelerated workload from a folded one. The
+`perf-counters` cargo feature adds execution counters that can, reporting how
+many calls, property operations, and loop-plan probes the engine really
+performed:
+
+```sh
+cargo build --release -p qjs-cli --features perf-counters \
+  --target-dir target/perf-counters
+./target/perf-counters/release/qjs benchmarks/workloads/broad-micro.js \
+  plain_function_call 100000 2>&1 >/dev/null
+```
+
+A counter-enabled build is a **diagnostic build and must never be used for
+timing** — the counters add work to the paths they observe. Nothing is
+compiled in without the feature: every counting site expands to nothing.
+
+This is what the two suites report for a nominal 100,000 iterations:
+
+| Case | Suite | Claims | Real calls | Real property ops | Declined plan edges |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `plain_function_call` | broad | 100,000 calls | 5 | 8 | 0 |
+| `method_call` | broad | 100,000 calls | 5 | 9 | 0 |
+| `dynamic_method_call` | broad | 100,000 calls | 5 | 9 | 0 |
+| `property_read` | broad | 300,000 reads | 4 | 11 | 0 |
+| `property_write` | broad | 300,000 writes | 4 | 15 | 0 |
+| `recursive_call_tree` | sentinel | 12,700,000 calls | 12,700,004 | 10 | 100,000 |
+| `prototype_method_call` | sentinel | 100,000 calls | 100,069 | 300,136 | 100,063 |
+| `heterogeneous_property_read` | sentinel | 300,000 reads | 5 | 400,074 | 100,064 |
+| `string_key_map_churn` | sentinel | 200,000 ops | 5 | 304,107 | 102,047 |
+
+The broad portfolio performs five calls where it claims a hundred thousand:
+one loop-plan entry runs the whole loop and the callee never executes. That is
+the concrete form of the folding problem, and it is why a broad case cannot
+serve as a control for generic-path work.
+
+The last column is a second finding the counters make visible. Every case a
+loop engine cannot claim pays the full four-engine probe chain on *every*
+backward edge and enters none of them — about one declined chain per
+iteration across all four sentinel loops. That measurement, not a raw probe
+count, is what a loop-dispatch-table change would have to justify itself
+against.
+
 Use `--case ID` (repeatable) or `--filter TEXT` for a focused run. `--output`
 must name a new file; otherwise the runner writes under ignored
 `target/benchmarks/`. Candidate/base default to adapter `qjs-rust-raw`

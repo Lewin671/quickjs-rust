@@ -16,6 +16,7 @@ mod bytecode;
 mod conversion;
 mod data_view;
 mod date;
+mod diagnostics;
 mod disposable_stack;
 mod error;
 mod finalization_registry;
@@ -84,6 +85,10 @@ use value::{
     array_index_property_key,
 };
 pub use value::{JsString, Value};
+
+#[cfg(feature = "perf-counters")]
+pub use diagnostics::reset_counters;
+pub use diagnostics::{Counters, counters};
 
 pub use bytecode::{
     Bytecode, CompileError, EvalOutcome, compile_script, compile_script_classified, eval_bytecode,

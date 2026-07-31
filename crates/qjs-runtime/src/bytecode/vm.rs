@@ -344,6 +344,7 @@ impl<'a> Vm<'a> {
         with_stack: Vec<Value>,
         direct_call_slots: Option<DirectCallSlots<'_>>,
     ) -> Self {
+        crate::diagnostics::count!(nested_vm_constructions);
         if (bytecode.contains_direct_eval() || bytecode.contains_with())
             && env.deopt_bindings().is_none()
         {
@@ -854,10 +855,12 @@ impl<'a> Vm<'a> {
                 Op::EnumerateKeys { cache } => self.enumerate_keys(cache)?,
                 Op::ForInKeyIsEnumerable => self.for_in_key_is_enumerable()?,
                 Op::GetPropNamed { key, cache } => {
+                    crate::diagnostics::count!(named_property_reads);
                     let result = self.get_named_prop(key, cache);
                     self.handle_runtime_result(result)?;
                 }
                 Op::GetPropIndex(index) => {
+                    crate::diagnostics::count!(computed_property_reads);
                     let result = self.get_index_prop(*index);
                     self.handle_runtime_result(result)?;
                 }
@@ -871,14 +874,17 @@ impl<'a> Vm<'a> {
                 Op::ObjectRestExcluding { excluded } => self.object_rest_excluding(excluded)?,
                 Op::RequireObjectCoercible => self.require_object_coercible()?,
                 Op::GetProp => {
+                    crate::diagnostics::count!(computed_property_reads);
                     let result = self.get_prop();
                     self.handle_runtime_result(result)?;
                 }
                 Op::SetProp { is_strict } => {
+                    crate::diagnostics::count!(computed_property_writes);
                     let result = self.set_prop(*is_strict);
                     self.handle_runtime_result(result)?;
                 }
                 Op::SetPropIndex { index, is_strict } => {
+                    crate::diagnostics::count!(computed_property_writes);
                     let result = self.set_index_prop(*index, *is_strict);
                     self.handle_runtime_result(result)?;
                 }
@@ -887,6 +893,7 @@ impl<'a> Vm<'a> {
                     cache,
                     is_strict,
                 } => {
+                    crate::diagnostics::count!(named_property_writes);
                     let result = self.set_named_prop(key, cache.as_ref(), *is_strict);
                     self.handle_runtime_result(result)?;
                 }
@@ -1795,33 +1802,6 @@ impl<'a> Vm<'a> {
 
     pub(super) fn pop(&mut self) -> Result<Value, RuntimeError> {
         self.stack.pop().ok_or_else(stack_underflow)
-    }
-
-    /// Frame-local numeric mutation loop plans, materialized from the shared
-    /// bytecode plans on first deoptimization. Suppressing or rewriting a plan
-    /// must not affect other invocations of the same function, so the frame
-    /// takes its own copy exactly when it first needs to diverge.
-    pub(super) fn frame_numeric_mutation_loop_plans(
-        &mut self,
-    ) -> &mut Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan> {
-        let shared = self.current.shared_numeric_mutation_loop_plans;
-        self.current
-            .numeric_mutation_loop_plans
-            .get_or_insert_with(|| shared.to_vec())
-    }
-
-    /// Performs one bytecode jump while preserving the shared counted-loop
-    /// accelerators attached to ordinary backward edges.
-    pub(super) fn jump_with_loop_plans(&mut self, target: usize, backedge: usize) {
-        if target >= backedge
-            || (!super::vm_numeric_mutation_loop::try_run_numeric_mutation_loop(
-                self, target, backedge,
-            ) && !super::vm_numeric_loop::try_run_numeric_loop(self, target, backedge)
-                && !super::vm_control_loop::try_run_control_loop(self, target, backedge)
-                && !super::typed_loop::try_run_typed_loop(self, target, backedge))
-        {
-            self.ip = target;
-        }
     }
 
     fn captured_immutable_function_name(
