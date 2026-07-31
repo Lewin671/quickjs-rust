@@ -70,6 +70,10 @@ declare_counters! {
     /// Callee frames entered on the caller's own VM instead of a nested `Vm`.
     /// Stays zero until the frame-stack driver routes ordinary calls.
     same_vm_frame_entries,
+    /// Generic calls whose environment could carry a direct-eval marker and
+    /// therefore paid the pre-call scrub. An ordinary workload should report
+    /// zero: every environment it hands over is built empty.
+    call_env_marker_scrubs,
     /// Statically named property reads and writes.
     named_property_reads,
     named_property_writes,

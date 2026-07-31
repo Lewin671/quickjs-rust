@@ -10,7 +10,8 @@ use crate::{
 };
 
 use super::util::stack_underflow;
-use super::vm::{Vm, VmCallEnv};
+use super::vm::Vm;
+use super::vm_call_env::{VmCallEnv, VmCallEnvOrigin};
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
@@ -315,20 +316,29 @@ impl Vm<'_> {
         let frame_independent_native = !effective_direct_eval
             && matches!(&callee, Value::Function(function) if function.native.is_some());
         let mut env = if effective_direct_eval {
-            match arguments.first() {
+            let mut env = match arguments.first() {
                 Some(Value::String(source)) => self
                     .cached_direct_eval_call_env(source, direct_eval_strict)
-                    .map(|env| VmCallEnv { env })
+                    .map(|env| VmCallEnv {
+                        env,
+                        origin: VmCallEnvOrigin::DirectEval,
+                    })
                     .unwrap_or_else(|| self.call_env(&callee)),
                 _ => self.call_env(&callee),
-            }
+            };
+            // Whatever environment a direct eval ends up with, it is about to
+            // carry the markers, so its provenance is DirectEval.
+            env.origin = VmCallEnvOrigin::DirectEval;
+            env
         } else if frame_independent_native {
             VmCallEnv {
                 env: self.realm_env(),
+                origin: VmCallEnvOrigin::RealmOnly,
             }
         } else {
             self.call_env(&callee)
         };
+        let marker_free = env.origin.is_marker_free();
         if effective_direct_eval {
             env.env
                 .insert(crate::DIRECT_EVAL_BINDING.to_owned(), Value::Boolean(true));
@@ -343,7 +353,10 @@ impl Vm<'_> {
                 );
             }
             env.env.set_direct_eval_with_stack(self.with_stack.clone());
-        } else {
+        } else if !marker_free {
+            // A freshly built frame cannot carry a marker: `CallEnv::remove`
+            // reaches only frame and deopt bindings, and both start empty.
+            crate::diagnostics::count!(call_env_marker_scrubs);
             env.env.remove(crate::DIRECT_EVAL_BINDING);
             env.env.remove(crate::DIRECT_EVAL_STRICT_BINDING);
             env.env
@@ -370,6 +383,10 @@ impl Vm<'_> {
     }
 
     fn marked_dynamic_realm_snapshot(&self) -> Option<HashMap<String, Value>> {
+        // The realm caches this marker, and the frame layer is checked first,
+        // so an unmarked frame answers without the full name-resolution chain
+        // that `get` walks. Almost every call is unmarked.
+        self.env.dynamic_function_realm_global()?;
         let Some(Value::Object(global)) = self.env.get(DYNAMIC_FUNCTION_REALM_GLOBAL) else {
             return None;
         };

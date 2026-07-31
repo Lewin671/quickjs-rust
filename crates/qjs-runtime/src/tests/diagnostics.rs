@@ -112,3 +112,75 @@ fn an_unrecognized_loop_probes_every_engine_and_enters_none() {
     assert_eq!(counters.loop_plan_entries, 0);
     assert_eq!(counters.declined_loop_plan_edges, counters.loop_backedges);
 }
+
+#[test]
+fn an_ordinary_call_hands_over_an_environment_that_cannot_carry_markers() {
+    // Nothing here can resolve a name dynamically, so every callee gets a
+    // freshly built frame and the pre-call marker scrub has nothing to find.
+    let (_, counters) = counted(
+        "function inner(value) { return value + 1; }
+         function outer(value) { return inner(value) + 1; }
+         var total = 0;
+         for (var i = 0; i < 30; i++) { total += outer(i); }
+         total;",
+    );
+    assert!(counters.ordinary_call_attempts >= 30);
+    assert_eq!(counters.call_env_marker_scrubs, 0);
+}
+
+#[test]
+fn a_callee_handed_the_callers_dynamic_view_still_scrubs() {
+    // A Proxy callee is neither a user bytecode function (which would get its
+    // own fresh frame) nor a plain native (which resolves through the realm),
+    // so a closure-creating caller hands it that caller's own dynamic name
+    // view. That environment can carry markers, so the scrub must remain.
+    let (_, counters) = counted(
+        "var proxied = new Proxy(function (value) { return value; }, {});
+         function caller(value) {
+             var captured = value;
+             var closure = function () { return captured; };
+             return proxied(value) + closure();
+         }
+         var total = 0;
+         for (var i = 0; i < 5; i++) { total += caller(i); }
+         total;",
+    );
+    assert!(
+        counters.call_env_marker_scrubs > 0,
+        "an inherited dynamic frame must keep scrubbing"
+    );
+}
+
+#[test]
+fn direct_eval_still_reaches_caller_locals_across_the_provenance_split() {
+    // The marker plumbing is what makes a direct eval resolve names in its
+    // caller's frame. Skipping the scrub for provably empty environments must
+    // not touch that.
+    let (value, _) = counted(
+        "function run(start) {
+             var local = start;
+             eval('local = local + 41;');
+             return local;
+         }
+         run(1);",
+    );
+    assert_eq!(value, Value::Number(42.0));
+}
+
+#[test]
+fn an_ordinary_nested_call_does_not_inherit_an_eval_marker() {
+    // `plain` resolves `probe` through the global scope. If it inherited the
+    // caller's direct-eval view it would see the caller's local instead, so
+    // this pins that a nested ordinary call still gets a fresh frame.
+    let (value, _) = counted(
+        "var probe = 1;
+         function plain() { return probe; }
+         function withEval() {
+             var probe = 100;
+             eval('probe = probe + 1;');
+             return plain() * 1000 + probe;
+         }
+         withEval();",
+    );
+    assert_eq!(value, Value::Number(1101.0));
+}

@@ -26,6 +26,7 @@ mod virtual_object;
 mod vm;
 mod vm_bindings;
 mod vm_call;
+mod vm_call_env;
 mod vm_capture;
 mod vm_class;
 mod vm_control_loop;

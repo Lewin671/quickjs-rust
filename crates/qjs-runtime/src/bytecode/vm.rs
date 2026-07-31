@@ -1,5 +1,4 @@
 use super::util::{stack_underflow, typeof_value};
-use super::vm_call::user_bytecode_function;
 use super::vm_iter::DelegateStep;
 use super::vm_props::{
     array_index_from_number, array_index_from_string, get_property, get_property_key,
@@ -71,9 +70,8 @@ impl Drop for OperandStack<'_> {
     }
 }
 
-pub(super) struct VmCallEnv {
-    pub(super) env: CallEnv,
-}
+use super::vm_call_env::{VmCallEnv, VmCallEnvOrigin};
+
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
     let mut vm = Vm::new(bytecode)?;
     let value = vm.run()?;
@@ -613,11 +611,6 @@ impl<'a> Vm<'a> {
             }
         }
         Some(bindings)
-    }
-
-    /// A shared-realm `CallEnv` with empty frame locals.
-    pub(super) fn realm_env(&self) -> CallEnv {
-        self.attach_host(self.env.empty_frame())
     }
 
     pub(super) fn coerce_property_key(
@@ -1687,6 +1680,7 @@ impl<'a> Vm<'a> {
         let mut env = if frame_independent_native {
             VmCallEnv {
                 env: self.realm_env(),
+                origin: VmCallEnvOrigin::RealmOnly,
             }
         } else {
             self.call_env(&callee)
@@ -1718,58 +1712,7 @@ impl<'a> Vm<'a> {
         Ok(arguments)
     }
 
-    pub(super) fn current_env(&self) -> CallEnv {
-        self.frame_call_env()
-    }
-
-    pub(super) fn call_env(&self, callee: &Value) -> VmCallEnv {
-        if user_bytecode_function(callee).is_some() {
-            let env = self.attach_host(self.env.new_function_frame());
-            return VmCallEnv { env };
-        }
-        // A native builtin has no closure over the caller's frame: it resolves
-        // names through the realm. Snapshotting every caller slot into a
-        // name-keyed compatibility frame -- and writing the whole thing back
-        // afterwards -- is therefore unobservable work for most calls, and it
-        // dominated builtin-heavy workloads.
-        //
-        // Three kinds of caller keep the snapshot. A frame that can resolve
-        // names dynamically needs it for itself: a direct `eval`, a `with`
-        // body, or one already carrying deoptimized bindings. A frame that
-        // creates a closure needs it for the callee's sake, because that
-        // closure may be handed to the builtin and may run a direct `eval`,
-        // which resolves free names through the environment the builtin was
-        // invoked with.
-        VmCallEnv {
-            env: self.callee_env(),
-        }
-    }
-
-    /// The environment to hand to code that runs on this frame's behalf but
-    /// does not close over it: a native builtin, a getter or setter, a Proxy
-    /// trap, or a `toString`/`valueOf` hook. Such code resolves names through
-    /// the realm, so the caller's slots need not be materialized as a
-    /// name-keyed frame -- unless this frame can resolve names dynamically
-    /// (direct `eval`, `with`, or deoptimized bindings), or it creates a
-    /// closure that could be handed onward and run a direct `eval`, which
-    /// resolves free names through the environment it was invoked with.
-    pub(super) fn callee_env(&self) -> CallEnv {
-        if self.bytecode.contains_direct_eval()
-            || self.bytecode.contains_with()
-            || self.bytecode.creates_closures()
-            || self.env.deopt_bindings().is_some()
-        {
-            return self.current_env();
-        }
-        self.realm_env()
-    }
-
-    pub(super) fn apply_call_env(&mut self, env: VmCallEnv) {
-        self.apply_env(env.env);
-        self.refresh_realm_backed_locals_from_realm();
-    }
-
-    fn refresh_realm_backed_locals_from_realm(&mut self) {
+    pub(super) fn refresh_realm_backed_locals_from_realm(&mut self) {
         for index in 0..self.locals.len() {
             if !self.bytecode.local_is_sloppy_global_fallback(index) {
                 continue;
