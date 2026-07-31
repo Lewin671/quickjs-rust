@@ -62,6 +62,45 @@ checksum while leaving a genuinely general optimizer free to accelerate the
 state recurrence. The protocol ID, workload hash, suite ID, and series ID all
 changed so v1 evidence cannot be mistaken for v2 evidence.
 
+### Generic-path sentinels
+
+`benchmarks/generic-sentinels-manifest.json` (series `generic-sentinels-v1`,
+workload `benchmarks/workloads/generic-sentinels.js`) is a separate six-case
+suite that exists because broad v2's anti-shortcut reasoning does not go far
+enough. Broad v2 defeated *terminal-state* shortcuts, but every one of its
+cases still names its callee statically and holds its receiver fixed, so a
+partial evaluator can fold the measured operation away in full rather than
+accelerate it. At `c823043e` the broad portfolio therefore reported a
+candidate/QuickJS-NG geometric mean of 0.158 while the external macro suites
+reported 1.643 on the same binaries: `plain_function_call` completed
+20,000,000 nominal calls in 0.04 s against QuickJS-NG's 0.90 s, and six
+different cases all reported exactly 4.3 ns/op. Those are folding artifacts,
+not throughput.
+
+Broad v2 is consequently a **specializer coverage suite**. It is still the
+right instrument for proving a recognizer did not regress, and it must not be
+used as a neutrality control set for units that change the ordinary
+interpreter, because its cases do not execute that path.
+
+The sentinels keep the same host contract — closed-form checksums, declared
+operation counts, no clock — but withhold the static facts a specializer needs,
+using ordinary dynamism rather than artificial barriers:
+
+| Case | Family | Denies the specializer |
+| --- | --- | --- |
+| `recursive_call_tree` | call | 127 real calls per iteration through a binary recursion whose `value + 1` result can only be established by induction |
+| `prototype_method_call` | call | prototype-dispatched callee reading `this.step` on a receiver whose identity rotates through a 64-element pool |
+| `polymorphic_call_site` | call | callee identity rotates through a runtime-built table |
+| `capturing_closure_call` | call | closures read a captured cell, selected from a runtime-built table |
+| `heterogeneous_property_read` | property | three storage shapes hold the three read names at different positions |
+| `string_key_map_churn` | property | computed string-key read and write against an object past every small-storage threshold |
+
+Every case is verified two ways: its checksum must match the manifest's
+closed form, and it must match QuickJS-NG's checksum for the same iteration
+count. If a future optimization genuinely accelerates ordinary calls or
+ordinary property access, these cases move — that is what makes them a
+holdout rather than a second recognizer target.
+
 The workload reports deterministic operation counts and correctness checksums
 but contains no clock. Python measures `perf_counter_ns` around a fresh shell
 process, so the metric is **amortized black-box throughput**, including startup,

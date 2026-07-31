@@ -97,6 +97,59 @@ class ManifestTests(unittest.TestCase):
             all(case.calibration_safety_factor == Fraction(5, 4) for case in manifest.cases)
         )
 
+    def test_generic_sentinel_manifest_and_hashes_validate(self) -> None:
+        manifest = load_manifest(ROOT / "benchmarks/generic-sentinels-manifest.json")
+        self.assertEqual(manifest.schema_version, 4)
+        self.assertEqual(manifest.series_id, "generic-sentinels-v1")
+        self.assertEqual(manifest.protocol_id, "quickjs-generic-sentinel-protocol-v1")
+        self.assertEqual(manifest.lane_id, "throughput/wall_ns_per_operation")
+        # The sentinels are the holdout for the ordinary interpreter, so their
+        # inventory is frozen exactly like the broad portfolio's: a later
+        # optimization must move these numbers rather than narrow the suite.
+        self.assertEqual(
+            [case.id for case in manifest.cases],
+            [
+                "recursive_call_tree", "prototype_method_call",
+                "polymorphic_call_site", "capturing_closure_call",
+                "heterogeneous_property_read", "string_key_map_churn",
+            ],
+        )
+        family_counts: dict[str, int] = {}
+        for case in manifest.cases:
+            family_counts[case.family] = family_counts.get(case.family, 0) + 1
+        self.assertEqual(family_counts, {"call": 4, "property": 2})
+        self.assertTrue(all(case.critical for case in manifest.cases))
+        cases = {case.id: case for case in manifest.cases}
+        # Each declared operation count is the real work per iteration: the
+        # recursion performs 2**(depth + 1) - 1 calls at depth 6, the
+        # heterogeneous read touches three names, and the map churn does one
+        # read and one write.
+        self.assertEqual(cases["recursive_call_tree"].operations_per_iteration, 127)
+        self.assertEqual(cases["heterogeneous_property_read"].operations_per_iteration, 3)
+        self.assertEqual(cases["string_key_map_churn"].operations_per_iteration, 2)
+        self.assertEqual(cases["string_key_map_churn"].checksum_model, "linear")
+        self.assertTrue(
+            all(
+                case.checksum_model == "triangular"
+                for case_id, case in cases.items()
+                if case_id != "string_key_map_churn"
+            )
+        )
+        self.assertTrue(
+            all(
+                abs(case.expected_checksum(case.max_iterations)) <= (2**53 - 1)
+                for case in manifest.cases
+            ),
+            "every maximum-iteration checksum must remain an exact JavaScript number",
+        )
+        self.assertIn(
+            "benchmarks/workloads/generic-sentinels.js", manifest.protocol_file_ids
+        )
+        self.assertNotIn("benchmarks/workloads/broad-micro.js", manifest.protocol_file_ids)
+        self.assertTrue(
+            all(sha256_file(case.workload) == case.workload_sha256 for case in manifest.cases)
+        )
+
     def test_calibration_target_applies_factor_and_rounds_up(self) -> None:
         case = load_manifest(ROOT / "benchmarks/manifest.json").cases[0]
         case = replace(

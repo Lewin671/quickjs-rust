@@ -1,0 +1,198 @@
+{
+  "build_recipes": [
+    {
+      "allocator": "system",
+      "build_mode": "release",
+      "engine_identity": "qjs-rust",
+      "features": [],
+      "flags": [
+        "-Cllvm-args=-align-all-functions=4"
+      ],
+      "host_features": "target-default",
+      "lto": "off",
+      "strip": "none",
+      "target": "aarch64-apple-darwin",
+      "toolchain": "rustc 1.95.0 (59807616e 2026-04-14); cargo 1.95.0 (f2d3ce0bd 2026-03-21); LLVM 22.1.2"
+    },
+    {
+      "allocator": "system",
+      "build_mode": "release",
+      "engine_identity": "quickjs-ng",
+      "features": [],
+      "flags": [
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DBUILD_QJS_LIBC=ON"
+      ],
+      "host_features": "target-default",
+      "lto": "off",
+      "strip": "none",
+      "target": "arm64-apple-darwin25.5.0",
+      "toolchain": "Homebrew clang version 21.1.8"
+    }
+  ],
+  "cases": [
+    {
+      "checksum": {
+        "factor": 1,
+        "model": "triangular"
+      },
+      "critical": true,
+      "family": "call",
+      "id": "recursive_call_tree",
+      "measurement": {
+        "calibration_safety_factor": 1.25,
+        "initial_iterations": 1024,
+        "max_iterations": 8000000,
+        "min_window_ms": 250,
+        "startup_max_fraction": 0.02,
+        "timeout_seconds": 30,
+        "warmup_runs": 1
+      },
+      "operations_per_iteration": 127,
+      "workload": "benchmarks/workloads/generic-sentinels.js",
+      "workload_sha256": "19b1060789fc96ae941c60ae35995c3b185de319acaf9ce53515bfdb824baf7a"
+    },
+    {
+      "checksum": {
+        "factor": 1,
+        "model": "triangular"
+      },
+      "critical": true,
+      "family": "call",
+      "id": "prototype_method_call",
+      "measurement": {
+        "calibration_safety_factor": 1.25,
+        "initial_iterations": 1024,
+        "max_iterations": 134000000,
+        "min_window_ms": 250,
+        "startup_max_fraction": 0.02,
+        "timeout_seconds": 30,
+        "warmup_runs": 1
+      },
+      "operations_per_iteration": 1,
+      "workload": "benchmarks/workloads/generic-sentinels.js",
+      "workload_sha256": "19b1060789fc96ae941c60ae35995c3b185de319acaf9ce53515bfdb824baf7a"
+    },
+    {
+      "checksum": {
+        "factor": 1,
+        "model": "triangular"
+      },
+      "critical": true,
+      "family": "call",
+      "id": "polymorphic_call_site",
+      "measurement": {
+        "calibration_safety_factor": 1.25,
+        "initial_iterations": 1024,
+        "max_iterations": 134000000,
+        "min_window_ms": 250,
+        "startup_max_fraction": 0.02,
+        "timeout_seconds": 30,
+        "warmup_runs": 1
+      },
+      "operations_per_iteration": 1,
+      "workload": "benchmarks/workloads/generic-sentinels.js",
+      "workload_sha256": "19b1060789fc96ae941c60ae35995c3b185de319acaf9ce53515bfdb824baf7a"
+    },
+    {
+      "checksum": {
+        "factor": 1,
+        "model": "triangular"
+      },
+      "critical": true,
+      "family": "call",
+      "id": "capturing_closure_call",
+      "measurement": {
+        "calibration_safety_factor": 1.25,
+        "initial_iterations": 1024,
+        "max_iterations": 134000000,
+        "min_window_ms": 250,
+        "startup_max_fraction": 0.02,
+        "timeout_seconds": 30,
+        "warmup_runs": 1
+      },
+      "operations_per_iteration": 1,
+      "workload": "benchmarks/workloads/generic-sentinels.js",
+      "workload_sha256": "19b1060789fc96ae941c60ae35995c3b185de319acaf9ce53515bfdb824baf7a"
+    },
+    {
+      "checksum": {
+        "factor": 1,
+        "model": "triangular"
+      },
+      "critical": true,
+      "family": "property",
+      "id": "heterogeneous_property_read",
+      "measurement": {
+        "calibration_safety_factor": 1.25,
+        "initial_iterations": 1024,
+        "max_iterations": 134000000,
+        "min_window_ms": 250,
+        "startup_max_fraction": 0.02,
+        "timeout_seconds": 30,
+        "warmup_runs": 1
+      },
+      "operations_per_iteration": 3,
+      "workload": "benchmarks/workloads/generic-sentinels.js",
+      "workload_sha256": "19b1060789fc96ae941c60ae35995c3b185de319acaf9ce53515bfdb824baf7a"
+    },
+    {
+      "checksum": {
+        "factor": 1,
+        "model": "linear"
+      },
+      "critical": true,
+      "family": "property",
+      "id": "string_key_map_churn",
+      "measurement": {
+        "calibration_safety_factor": 1.25,
+        "initial_iterations": 1024,
+        "max_iterations": 134000000,
+        "min_window_ms": 250,
+        "startup_max_fraction": 0.02,
+        "timeout_seconds": 30,
+        "warmup_runs": 1
+      },
+      "operations_per_iteration": 2,
+      "workload": "benchmarks/workloads/generic-sentinels.js",
+      "workload_sha256": "19b1060789fc96ae941c60ae35995c3b185de319acaf9ce53515bfdb824baf7a"
+    }
+  ],
+  "lane": {
+    "id": "throughput/wall_ns_per_operation"
+  },
+  "profile": {
+    "id": "macos-arm64-release-v1",
+    "platform": "macos-arm64"
+  },
+  "protocol": {
+    "aggregate_sha256": "0d40e1690fe2c5abab85db2f4a3999fd3bfaf6eecdc970570807a7dbd00cf41a",
+    "files": [
+      "benchmarks/workloads/generic-sentinels.js",
+      "scripts/benchmark.sh",
+      "tools/__init__.py",
+      "tools/benchmark/__init__.py",
+      "tools/benchmark/__main__.py",
+      "tools/benchmark/adapters.py",
+      "tools/benchmark/linearity.py",
+      "tools/benchmark/planning.py",
+      "tools/benchmark/process.py",
+      "tools/benchmark/receipts.py",
+      "tools/benchmark/records.py",
+      "tools/benchmark/runner.py",
+      "tools/benchmark/schema.py",
+      "tools/benchmark/snapshots.py"
+    ],
+    "id": "quickjs-generic-sentinel-protocol-v1"
+  },
+  "reference_engine": {
+    "identity": "quickjs-ng",
+    "revision": "f7830186043e4488f2998759d60a514faf07cbc9",
+    "source_repo": "https://github.com/quickjs-ng/quickjs.git"
+  },
+  "schema_version": 4,
+  "series": {
+    "id": "generic-sentinels-v1",
+    "suite_id": "quickjs-rust-generic-sentinels@quickjs-ng-f7830186-v1"
+  }
+}
