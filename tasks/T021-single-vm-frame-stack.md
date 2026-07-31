@@ -3996,3 +3996,102 @@ created. Do not retry public-field key sharing, field installation, constructor
 shape seeding, or generic frame packing without a future exact profile that
 exposes a new independently bounded shared cost above ten percent. Advance the
 refreshed queue to rank-six Kraken `imaging-gaussian-blur`.
+
+### 2026-07-30 retained guarded unary Math call opcode
+
+The exact `10ba7595` opportunity queue (SHA-256
+`b5568ff2525a585d6b9cbcfbf3f2a1342239e1e2444336316169e8c26f47ac60`)
+ranked Kraken `imaging-gaussian-blur` sixth at 3.9908x QuickJS-NG. A fresh
+five-second exact-current sample (SHA-256
+`b10415352db0d939a25d9cf431726df19f13b5376be5b8ca4976635129d1d04c`)
+contained 7,410 main-thread samples. The ordinary `Math.abs(number)` call
+boundary contributed a 16.63% cluster across resolved-call setup, native
+dispatch, argument movement, and result materialization. An earlier borrowed
+native predispatch proved the target causal at 0.787794x but regressed the
+independent `object_allocation` control to 1.077990x, so the new unit used a
+dedicated bytecode representation rather than changing generic call dispatch.
+
+The frozen one-attempt plan
+`tasks/performance-units/guarded-math-unary-call-opcode.json` (SHA-256
+`aa05f4db88fc4443ff06a3b7ee75c13cb099428717dd216a23601b5d5f3d21f2`)
+introduced `CallResolvedGuardedMathUnary` only for direct one-argument static
+calls to the existing supported unary `Math` family. Receiver lookup, property
+lookup, and argument evaluation retain ordinary source order. At execution the
+operation requires the live callee's exact native identity and a primitive
+Number argument; otherwise it replays unchanged `CallResolved(1)` without
+first mutating the stack. Getter, rebinding, coercive-object, computed-property,
+missing/extra/spread-argument, and unsupported-native cases therefore remain on
+their existing semantic paths. The VM, compiler, stack-flow analyzer, numeric
+loop recognizer, and typed-loop compiler share that private operation; no
+parser, AST, public API, dependency, or environment-model boundary changed.
+
+Focused tests cover IR admission and exclusion, the intrinsic hit, getter/call/
+argument/receiver order, live replacement, and coercive fallback. All 1,918
+runtime tests and the 5,160-case curated Test262 subset passed. The staged
+touched gate, `./scripts/check.sh`, `./scripts/compare-qjs.sh`, the pre-push
+gate, and exact-commit CI run `30612421572` also passed. The retained runtime
+commit is `0745c0187a005de3c5cbe0d4c317fd9e5a9b3536`; candidate, exact-base,
+and QuickJS-NG executable SHA-256 values are
+`c0eded40cbf77482bb8e6e106334c65e3a1fc45b5f8006d1ad31a1899cd14b56`,
+`fb90b58b3164eda22f04954eb55698b04ef15cc0feba6d2c1053cae7b636a69e`,
+and
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+Their build-receipt SHA-256 values are
+`cc381f7003e9d5f77dab848d6e6ca0e9c0935beae71edc58161b89c633375d49`,
+`efb969ac779cc3d06e3aa9eb20efb271f2ec23be9cf700c071d1337d8447868f`,
+and
+`b96f63f100f0ddfb6e7dedfdbcb195f579144cf01af814706d3d7a1b24b90b0f`.
+
+The five-block exact-binary target screen measured Gaussian blur at
+**0.783654x candidate/base**, below the frozen `<= 0.90x` gate. All thirteen
+declared controls remained below 1.03x: darkroom 0.973639x, 3d-morph
+1.000201x, audio FFT 0.988352x, A* 0.989706x, public-field raytrace
+0.991797x, Tagcloud 0.984018x, `math_abs` 0.999845x, plain call 1.001475x,
+two-argument call 1.000086x, dynamic method call 0.999748x, property read
+1.000999x, dynamic array read 0.855495x, and object allocation 1.002583x.
+The target and control receipt SHA-256 values are
+`1317ef440cbcb7941260a1835973582d8715939edefaee80d119bc183a4c9475`
+and
+`729d09a2a22aa0f32759ab5790ba10b289fc58985c0a3c3a3ca64c976378009d`;
+the hash-bound fast decision retains the unit at SHA-256
+`5218e480ea209caf2a625f35a6bbef7ae1539c24eefa4f2e7f505de368c86af3`.
+
+The exact 25-case broad matrix completed all three role-rotation blocks.
+Candidate/base geometric mean was 0.9910x with interval 0.9811x-0.9922x;
+the worst broad case was `math_abs` at 1.002785x, and every broad case remained
+below 0.5x QuickJS-NG. Manifest, raw, report, and summary SHA-256 values are
+`5c3c586de23444190437652cf99a57da46730a4473d22e281c9e388f8c4215c0`,
+`4859cc045b5bad0d97a02dd11e079e383ad12ad8b337a06c8f3052e92550e63e`,
+`da9b219a21737fcc30202573ee221b30163ee6542fed32e73ec545697cb2f841`,
+and
+`b65dfdd95ff990cb256179be5d1370def4f0316450dbdae7e5d2cb29b7560acb`.
+
+The exact 45-case external portfolio completed all three 60-second blocks.
+Gaussian blur reproduced at **0.779639x candidate/base** and 3.1130x
+QuickJS-NG; JetStream, Kraken, and SunSpider candidate/base geometric means
+were 0.996x, 0.973x, and 0.999x. Two very short full-run outliers were audited
+with 31 paired blocks: `bitops-bitwise-and` resolved to 0.996166x and
+`math-cordic` to 1.022725x. The outlier receipt SHA-256 is
+`7f714131176518481d554c7c29e98d8606f7ccc9ae5242298873dd5029a1addc`.
+External manifest, raw, report, and rendered-summary SHA-256 values are
+`2df77d269c535af13879b3392da56c13db78f165582521c2dd4721725d88d354`,
+`a2551254bc48a23538e90bb9068902ff6eb613a857510b2fa6167ab577239218`,
+`41d45bd5e921e4602c402c24f1afbd5eee3788676ae2cd872d6c4de25d777e00`,
+and
+`8d8705833e06173e41a80743f4427070467e041f58fb8ac5a81cada88af2299e`.
+
+Exact-commit Test262 Coverage run `30612682674` passed and produced burndown
+SHA-256
+`aa760a75346aa2ef6e85c2e9b854fbff3871137ab9adc9658d6c8ebdcd61c546`.
+It covers all 53,572 pinned cases: 10,900 are outside the QuickJS-NG
+configuration, while qjs-rust passes all 42,672 configured cases with zero
+failures, zero timeouts, and zero actionable gaps. The promotion decision
+retains the unit and has SHA-256
+`f7a3c5e77d339a43b52d8d996220e02028136dcbc8fa73033037957484e4e067`.
+
+The refreshed exact `0745c018` queue has SHA-256
+`664737b4614cbdd6d6628114250a0e13332e6e35234b5a9aefb7c7a093d16e02`.
+Gaussian moves from rank six to rank twelve at 3.1130x QuickJS-NG; no broad
+case is above the campaign threshold, but 38 external cases remain above
+0.5x. This closes the opcode unit, not the campaign. Continue from the new
+queue's highest unclosed current-profile mechanism.
