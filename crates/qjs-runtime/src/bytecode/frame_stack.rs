@@ -226,6 +226,43 @@ mod tests {
     }
 
     #[test]
+    fn a_frame_built_from_a_shared_handle_outlives_its_only_other_owner() {
+        // The property a routed call depends on: a callee's bytecode is owned
+        // by a `Function` on the caller's operand stack, which the caller may
+        // release while the callee is still running.
+        use crate::bytecode::frame_program::FrameBytecode;
+        use std::rc::Rc;
+
+        let outer = parse_script("0;").expect("outer parses");
+        let outer = compile_script(&outer).expect("outer compiles");
+        let inner = parse_script("41 + 1;").expect("inner parses");
+        let inner = Rc::new(compile_script(&inner).expect("inner compiles"));
+        let observer = Rc::downgrade(&inner);
+
+        let mut vm = Vm::new(&outer).expect("root frame");
+        let env = vm.env.clone();
+        let callee = Vm::with_frame_bytecode(
+            FrameBytecode::Shared(Rc::clone(&inner)),
+            env,
+            Vec::new(),
+            Vec::new(),
+            None,
+        )
+        .into_frame();
+        vm.push_frame(callee, FrameContinuation::PushResult);
+
+        // Every owner outside the frame is gone; the frame must still run.
+        drop(inner);
+        assert!(observer.upgrade().is_some(), "the frame must be the owner");
+        let completion = match vm.run_completion() {
+            Ok(completion) => completion,
+            Err(error) => panic!("the routed frame must complete: {}", error.message),
+        };
+        assert!(matches!(completion, Completion::Return(_)));
+        assert!(vm.callers.is_empty());
+    }
+
+    #[test]
     fn a_suspension_cannot_resume_a_caller() {
         // Generators and async functions keep their own drivers and stay on
         // the nested-`Vm` fallback. If one ever reached here, discarding the

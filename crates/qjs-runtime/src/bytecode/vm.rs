@@ -295,12 +295,35 @@ impl<'a> Vm<'a> {
 
     fn new_with_globals_upvalues_with_stack_and_direct_call_slots(
         bytecode: &'a Bytecode,
+        env: CallEnv,
+        upvalues: Vec<Upvalue>,
+        with_stack: Vec<Value>,
+        direct_call_slots: Option<DirectCallSlots<'_>>,
+    ) -> Self {
+        Self::with_frame_bytecode(
+            FrameBytecode::Borrowed(bytecode),
+            env,
+            upvalues,
+            with_stack,
+            direct_call_slots,
+        )
+    }
+
+    /// Builds a frame over a bytecode handle the frame itself owns.
+    ///
+    /// A callee's bytecode is an `Rc` held by a `Function` on its caller's
+    /// operand stack, not by anything with the VM's root lifetime, so a routed
+    /// call must be able to build a frame from the handle rather than from a
+    /// borrow.
+    pub(super) fn with_frame_bytecode(
+        handle: FrameBytecode<'a>,
         mut env: CallEnv,
         upvalues: Vec<Upvalue>,
         with_stack: Vec<Value>,
         direct_call_slots: Option<DirectCallSlots<'_>>,
     ) -> Self {
         crate::diagnostics::count!(nested_vm_constructions);
+        let bytecode: &Bytecode = &handle;
         if (bytecode.contains_direct_eval() || bytecode.contains_with())
             && env.deopt_bindings().is_none()
         {
@@ -374,16 +397,17 @@ impl<'a> Vm<'a> {
         // Keep cold virtual candidates allocation-free. Their first
         // initializer grows this bank only as far as the candidate needs.
         let virtual_values = Vec::new();
+        let stack = OperandStack::new(bytecode);
         Self {
             current: FrameState {
-                bytecode: FrameBytecode::Borrowed(bytecode),
+                bytecode: handle,
                 ip: 0,
                 declined_numeric_loop_plans: 0,
                 declined_typed_loop_programs: 0,
                 numeric_mutation_loop_plans: None,
                 virtual_function_context_safe,
                 virtual_values,
-                stack: OperandStack::new(bytecode),
+                stack,
                 locals,
                 local_upvalues,
                 direct_readonly_upvalue_owner,
