@@ -3476,3 +3476,57 @@ compact opcode streams, owned binary operands, or property-cache placement
 for this case without a future exact profile that isolates a new general
 representation boundary above ten percent. The queue should advance to
 rank-twelve SunSpider `string-validate-input`.
+
+### 2026-07-30 skipped string-validate-input after current profile screen
+
+The exact `620bb67b` opportunity queue (SHA-256
+`0b381ac46e93fd834186a2b16fe5a2c1cfbbaebf6c9c8b65c9ff3195473b37b1`)
+ranked SunSpider `string-validate-input` twelfth at 3.4370x QuickJS-NG. The
+evidence-only commits after that queue do not change the runtime, so the exact
+standard-release executable remains SHA-256
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`.
+A fresh five-second sample used the unmodified upstream source (SHA-256
+`518ed0c67fde0c0d65af6238b91f5e498d8ba5d188c428f4a76dd498704737d5`)
+and the existing diagnostic 80-extra-run wrapper (SHA-256
+`1afe3fa8de3fc05a27b9dcbf3f454170b4fddddd655c89e2f578e2ced3c91ef5`).
+It exited successfully with `Undefined`, no stderr, and 3,672 useful
+main-thread runtime samples. The profile SHA-256 is
+`837da0bb48f65fefe6f8ebdd00e303d861ff6e2113d73aafa245874ceadaf65a`;
+the stdout and empty-stderr SHA-256 values are
+`50fbe849aa61688a0dde78393afa32aba45d9f4a52109662bea06fa4c45715d5`
+and
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+Generic `Vm::run_completion` contributes 609 exclusive samples (16.59%), but
+its call tree distributes that dispatch work across ordinary RegExp calls,
+ZIP-code `charAt` calls, binary operations, globals, properties, and frame
+lifecycle rather than one new opcode. `Value` clone/drop totals 256 samples
+(6.97%): 162 belong to call/frame routes, 74 to property/binding routes, and
+the remainder to binary, string, and RegExp setup. Allocator and free entry
+points total 837 samples (22.79%), but nearest-runtime-ancestor attribution
+again splits them below the materiality boundary: RegExp matching 210
+(5.72%), call/frame work 193 (5.26%), strings 169 (4.60%), binary VM work 121
+(3.30%), properties/bindings 84 (2.29%), and RegExp construction or validation
+60 (1.63%). No individual allocation call path exceeds 20 samples.
+
+The matcher is the only inclusive subsystem near ten percent:
+`PreparedRegexp::match_input` contains 380 samples (10.35%). Its concrete
+costs are not new, however. Streaming simple-atom boundaries regressed this
+case to 1.020318x; first-continuation generic repetition reached only
+0.992173x; exact-one simple atoms were neutral at 0.999955x; copy-on-write
+capture snapshots reached 0.968227x; and the shared literal blueprint removed
+the separate construction/setup ceiling but stopped at 0.910267x, just above
+its frozen target gate. The previously rejected capture-free compiled program
+and captured-result materialization likewise close their respective matcher
+representations. The call-frame, string-append, and generic VM alternatives
+are independently closed by the borrowed-native predispatch, chunked compound
+accumulator, compact bytecode, frame-stack, and operand-ownership experiments.
+
+No performance-unit plan, runtime patch, candidate binary, or timing gate was
+created. Aggregating all allocator frames or all VM dispatch frames would join
+unrelated semantic mechanisms, while retrying the boundary vector,
+continuation visitor, capture storage, literal blueprint, borrowed call stack,
+or chunk sizing would violate their one-attempt decisions. A future attempt
+requires a fresh exact profile that isolates a different general boundary
+above ten percent. The queue should advance to rank-thirteen SunSpider
+`access-binary-trees`.
