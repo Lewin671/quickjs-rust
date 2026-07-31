@@ -4425,3 +4425,53 @@ must carry its boxed receiver and scalar key/value through joins to an exact
 tail store publish the new element and Array length. This correction supersedes
 the preceding section's final diagnosis without changing its rejection
 decision.
+
+### 2026-07-30 rejected branchy dense element transforms
+
+The frozen one-attempt plan
+`tasks/performance-units/typed-loop-branchy-dense-element-transform.json`
+(SHA-256
+`ae9554a9d6e77358c578559284d5900e32afbe34d1f0c60cbcf843faa8561f21`)
+combined the actual boundaries seen in the exact AES trace. The candidate let
+the main typed-loop abstract interpreter carry a computed assignment through
+ordinary RHS branch joins, lowered fixed-index row reads through existing
+guarded element reads, and emitted an exact boxed-receiver `ElementWrite` at
+the original `SetProp`. Existing dense elements reused `DenseWrite`; one exact
+tail append additionally required an ordinary realm Array prototype without
+indexed hazards and repeated Array storage, length, descriptor, extensibility,
+and borrow checks immediately before publication. A general compiler fix also
+kept the common scalar `Move` at branch-join targets instead of folding only
+one predecessor's producer into the destination.
+
+Focused coverage passed before measurement: all 21 typed-loop tests and all 13
+Array value tests passed. They included the exact AES-shaped branchy transform,
+boxed and scalar fixed-row reads, successful exact-tail growth, gap and
+inherited-setter fallback, and deoptimization after an already completed write
+without replay. Candidate and exact-base executable SHA-256 values are
+`58976d533d3e9380d131fe11d3dda229bbcaf9c9f428f94c3c7c45c2f4deb3cf`
+and
+`04d1ea96981f83afe8a34ae83b9d98da17a1d1d641f9bcd9a950d74a4645c6d1`.
+
+Both five-block alternating exact-binary targets passed their frozen
+`<= 0.80x` ceiling: JetStream Stanford AES measured **0.793291x
+candidate/base** and Kraken Stanford AES measured **0.774597x**. All measured
+processes completed successfully with byte-identical output. The target runner
+and result SHA-256 values are
+`7d23d055eab2c62de9914276e8561153ae1b872ec7360b043147e81e1a75c1ba`
+and
+`5f05ea03e1452e22dac6fba10c23f839875c8f8e17d71a3e056ef40544f98f59`.
+
+The frozen control gate nevertheless rejected the unit. Ten of eleven controls
+remained below 1.03x, including `array_dynamic_read` at 0.994710x,
+`array_read` at 0.999441x, `array_write` at 0.998510x, and
+`plain_function_call` at 1.000937x. `object_allocation` measured **1.082193x
+candidate/base**, exceeding the ceiling by more than five percentage points.
+The control runner and result SHA-256 values are
+`6052b8824ae290f1852bbf4787539a8279391333cf69cc208fe085a1213434af`
+and
+`50a0f4f1070596ba3e10bdf93a52a028c1cd17e62b27548b152223e5c24df4f4`.
+The one-attempt contract forbids threshold changes or a selective rerun, so the
+runtime and focused-test changes were reverted. No full broad/external
+portfolio or Test262 promotion scan was run for the rejected candidate. Do not
+retry this combined compiler/runtime unit without new exact-current evidence
+that independently explains and removes the broad allocation regression.

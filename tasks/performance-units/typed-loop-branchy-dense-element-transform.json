@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "typed-loop-branchy-dense-element-transform",
+  "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+  "queue": {
+    "candidate_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+    "sha256": "608f966a5ca40eb0f40cfba31d9ce515370e042ca4bc3f324e72599c896495d1"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/stanford-crypto-aes",
+      "external/kraken-1.1/stanford-crypto-aes"
+    ],
+    "rank_ceiling": 15,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Teach the typed-loop abstract interpreter to carry a computed element assignment through ordinary RHS control-flow joins instead of requiring the straight-line compiler-temporary shortcut. A new ElementWrite operation consumes the exact boxed receiver plus scalar key and value present at the original SetProp site, so any failed guard reconstructs that bytecode stack without replaying earlier RHS work. The operation reuses existing dense in-bounds writes and adds one exact ordinary-Array tail case. Standard fixed-index row reads are lowered through the existing guarded read operations so general table[fixedRow][dynamicIndex] transforms can reach the write.",
+    "generality": "When the existing specialized element-assignment matcher sees RHS control flow, it declines only that shortcut and lets the main immutable-bytecode walk model the receiver, key, value, compiler-temporary stores, branches, and joins normally. Generic SetProp lowering accepts a boxed receiver and scalar key/value regardless of source spelling; runtime executes only a real Array with an integer dense index. Existing elements use the present fully-dense writable guard. Tail growth additionally requires the index to equal both current logical and materialized length, stay below the generic dense-storage cap, pass ArrayRef extensibility, writable-length, hole, descriptor, and borrow checks, use the current realm's ordinary Array.prototype, and have no indexed or exotic prototype-chain interceptor. Fixed GetPropIndex follows standard uint32 decoding and the same present-element guards as computed reads. A gap write, non-Array or typed-array receiver, hole, custom prototype, accessor, Proxy, frozen, sealed or non-extensible Array, non-writable length, indexed descriptor, non-integer or out-of-range key, unsupported RHS operation, direct eval, or failed scalar/boxed guard deoptimizes at the exact original bytecode operation before its observable work. No production branch may inspect source paths, benchmark names, constructor or variable names, input values, array sizes other than generic storage limits, iteration counts, key or table contents, checksums, or expected results.",
+    "semantic_risks": [
+      "preserving receiver then key then RHS evaluation order while compiler temporaries and branch joins move values between boxed and scalar registers",
+      "reconstructing the exact three-operand SetProp stack when receiver, key, or value guards fail after branchy RHS work but before mutation",
+      "resuming after a successful element write at a later deoptimization site without replaying or duplicating that write",
+      "updating Array length exactly once with an exact tail own data property while preserving strict and sloppy failure behavior through pre-write deoptimization",
+      "rejecting inherited indexed setters, custom prototypes, sparse storage, gap writes, descriptors, integrity-level restrictions, and dense-cap overflow before direct mutation",
+      "keeping fixed-index results boxed only when later dataflow needs an object receiver while scalar fixed reads and existing straight-line DenseWrite programs remain unchanged",
+      "leaving precedence and deoptimization ownership of numeric-mutation, numeric, control, and previously compiled typed-loop programs unchanged"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-31 target/performance-profile-60e28ecf/jetstream-stanford-crypto-aes/current.sample; exact promoted 60e28ecf release executable SHA-256 04d1ea96981f83afe8a34ae83b9d98da17a1d1d641f9bcd9a950d74a4645c6d1; generated source-faithful JetStream bundle SHA-256 7afbe130da966d379938ae8160dada27f991bba82cc0d1b85b4df86f1c2ad94f and exact compiler trace SHA-256 d1c33d14537cd0fde116d8d19adb9ded425a88b6802a17ab891f5df481dda0bc; the process completed with the expected sentinel and empty stderr",
+      "sha256": "d315217e4b49eef04538722475fd2293d8371b469acee3663f9a1997c99d2d93",
+      "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/stanford-crypto-aes"
+      ],
+      "shared_cost": "Of 3,643 main-thread samples, 1,673 (45.9%) land exclusively in generic Vm::run_completion and 2,573 enter the AES constructor chain, while only 10 reach typed-loop entry. The exact trace records the uncompiled inverse-key-schedule loop at bytecode 214..303: a conditional computed read, then an e[b] assignment whose conditional RHS contains four fused fixed-row reads and dynamic dense reads before SetProp. Source-equivalent preflight proves that compile_element_assignment rejects the RHS jumps before lowering SetProp. The prior fixed-index-only exact result SHA-256 317a283776d58f2abcd38e6ed9e58b169521072badbde6fa68fdd155985d5a9c measured only 0.954071x, isolating branch-aware assignment and its exact write semantics as the remaining shared unit rather than licensing another read-only retry.",
+      "inclusive_fraction": 0.459
+    },
+    {
+      "source": "macOS sample 2026-07-31 target/performance-profile-60e28ecf/kraken-stanford-crypto-aes/current.sample; the same exact promoted 60e28ecf release executable; generated source-faithful Kraken bundle SHA-256 c5a8c4ac34189f33a6539e61bda420f6e738a7ebd2028a07a72638b19d0ed16a; the process completed with the expected sentinel and empty stderr",
+      "sha256": "29d1aefd19bc900a18ec0f1edff948e679684a404df764967a4cb81e87c4e6e6",
+      "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+      "opportunity_ids": [
+        "external/kraken-1.1/stanford-crypto-aes"
+      ],
+      "shared_cost": "The independent corpus reproduces the same constructor source and bytecode boundary. Of 3,382 main-thread samples, 1,524 (45.1%) land exclusively in generic Vm::run_completion, 2,294 enter the constructor chain, and only 8 reach typed-loop entry. Fixed-index admission alone measured 0.965981x candidate/base, confirming that the frozen attempt must cover the general branch-aware element transform through its guarded SetProp rather than attribute the remaining cost to a guard the compiler never reached.",
+      "inclusive_fraction": 0.451
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/stanford-crypto-aes",
+      "external/kraken-1.1/stanford-crypto-aes"
+    ],
+    "control_ids": [
+      "external/kraken-1.1/imaging-gaussian-blur",
+      "external/kraken-1.1/audio-fft",
+      "external/sunspider-1.0/access-fannkuch",
+      "external/sunspider-1.0/bitops-nsieve-bits",
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar",
+      "broad/array_dynamic_read",
+      "broad/array_read",
+      "broad/array_write",
+      "broad/object_allocation",
+      "broad/plain_function_call"
+    ],
+    "target_max_candidate_over_base": 0.8,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
