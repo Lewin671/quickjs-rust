@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "shared-functional-replace-input",
+  "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+  "queue": {
+    "candidate_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+    "sha256": "608f966a5ca40eb0f40cfba31d9ce515370e042ca4bc3f324e72599c896495d1"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-unpack-code"
+    ],
+    "rank_ceiling": 27,
+    "override_reason": "Ranks 1 through 26 are closed for this cycle by exact-current retained, rejected, or explicitly skipped frame, constructor, object, string, RegExp, typed-loop, dense-loop, and Number-only evidence. Fresh exact-current profiles of ranks 27 through 30 isolate one distinct low-cost mechanism at rank 27: functional RegExp replacement copies the complete immutable subject into a new Rust String before every callback even though the runtime already represents the same JavaScript string with a shared JsString allocation. The copy consumes 3,100 of 9,431 samples by itself. Rank 28 is distributed generic VM and Value ownership cost, rank 29 reproduces already-consumed RegExp matcher families, and rank 30 reproduces the retained typed-loop executor plus distributed array/property costs. Although the new cost dominates only one freshly profiled workload, its 32.9% directly removable share, exact shared representation, and semantic locality justify a one-attempt rank-27 override rather than beginning another structural matcher or execution-tier campaign."
+  },
+  "mechanism": {
+    "summary": "Keep the replace subject as the runtime's shared immutable JsString through result construction and pass a cheap clone of that shared handle as the functional replacer's input argument, instead of converting the subject to an owned Rust String and cloning the complete buffer once per match.",
+    "generality": "The mechanism applies to every String.prototype.replace or RegExp.prototype[Symbol.replace] call that reaches the ordinary builtin functional-replacement path, independent of pattern source, flags, subject length, replacement callback identity, match count, or benchmark. Result assembly continues to borrow the identical subject text and uses the existing UTF-16 slicing and string-length checks. Each callback still receives a primitive string with exactly the original subject contents; only its unobservable immutable backing allocation is shared. String-replacement paths, custom exec methods, subclass/prototype observability, capture materialization, match order, lastIndex behavior, and result allocation remain unchanged. No source text, benchmark name, input size, iteration count, checksum, or expected output participates.",
+    "semantic_risks": [
+      "passing the original complete subject to every callback in the same argument position even when earlier callbacks mutate unrelated objects or RegExp state",
+      "preserving primitive-string value semantics while sharing only the runtime's immutable backing allocation",
+      "keeping UTF-16 match positions, unmatched slices, substitution slices, maximum string length checks, and callback result coercion unchanged",
+      "not extending the optimization to observable custom exec or replacement protocols beyond the existing builtin dispatch boundary",
+      "retaining the subject for the full replace operation without creating a reference cycle or permitting in-place mutation through JsString copy-on-write"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-31 target/performance-profile-60e28ecf-ranks27-30/string-unpack-code.sample; exact runtime-60e28ecf standard-recipe release executable SHA-256 04d1ea96981f83afe8a34ae83b9d98da17a1d1d641f9bcd9a950d74a4645c6d1; official SunSpider source SHA-256 6ff9856ad51b877ef29262b942015ec04dd2ffe916b5adc85324aee2a144d382; source-faithful 100-repeat profiling bundle SHA-256 873429513da82a504afc20986e3d34d81e97cbd3b64879e7e45d3448d45601bb; process emitted the expected __QJS_PROFILE_OK__:string-unpack-code sentinel, exited successfully, and had empty stderr",
+      "sha256": "1c3e8ae0f2813c6d76203aaa4d6a866dbfc1f0c78d492a8f21e4f82b4d3194d1",
+      "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-unpack-code"
+      ],
+      "shared_cost": "Of 9,431 main-thread samples, 7,877 are inside String.prototype.replace and 3,313 reach native_regexp_prototype_replace at the call site that clones the subject for the functional replacer. Rust String::clone accounts for 3,102 inclusive samples there, including 3,100 samples in platform memmove. The direct full-buffer copy is therefore 32.87% of the whole profile before counting allocation and deallocation. JsString already documents clone as a shared reference-count bump and immutable JavaScript string values make the backing identity unobservable, so this is a redundant representation conversion rather than required matcher or callback work.",
+      "inclusive_fraction": 0.3287
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-unpack-code"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/regexp-dna",
+      "external/sunspider-1.0/string-fasta",
+      "external/jetstream3-js-subset/hash-map",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/kraken-1.1/stanford-crypto-pbkdf2",
+      "broad/plain_function_call",
+      "broad/dynamic_method_call",
+      "broad/string_slice",
+      "broad/property_read"
+    ],
+    "target_max_candidate_over_base": 0.75,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

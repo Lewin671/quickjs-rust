@@ -55,7 +55,7 @@ pub(crate) fn native_regexp_prototype_replace(
     }
 
     let matches = collect_matches(this_value, &input, global, unicode, env)?;
-    replace_matches(input.to_string(), matches, replacement, env)
+    replace_matches(input, matches, replacement, env)
 }
 
 enum Replacement {
@@ -333,7 +333,7 @@ fn match_record(
 }
 
 fn replace_matches(
-    input: String,
+    input: crate::JsString,
     matches: Vec<MatchRecord>,
     replacement: Replacement,
     env: &mut CallEnv,
@@ -360,6 +360,9 @@ fn replace_matches(
         ));
         let replacement_string = match &replacement {
             Replacement::Function(function) => {
+                // JavaScript strings are immutable, so the callback can share
+                // the original subject instead of copying its full buffer for
+                // every match.
                 functional_replacement((**function).clone(), &match_record, input.clone(), env)?
             }
             Replacement::String(replacement) => {
@@ -446,14 +449,14 @@ fn coerce_named_captures(groups: Value) -> Result<Value, RuntimeError> {
 fn functional_replacement(
     function: Value,
     match_record: &MatchRecord,
-    input: String,
+    input: crate::JsString,
     env: &mut CallEnv,
 ) -> Result<String, RuntimeError> {
     let mut arguments = Vec::with_capacity(4 + match_record.captures.len());
     arguments.push(Value::String(match_record.matched.clone().into()));
     arguments.extend(match_record.captures.iter().cloned());
     arguments.push(Value::Number(match_record.start as f64));
-    arguments.push(Value::String(input.into()));
+    arguments.push(Value::String(input));
     if !matches!(match_record.groups, Value::Undefined) {
         arguments.push(match_record.groups.clone());
     }

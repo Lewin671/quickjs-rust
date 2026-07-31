@@ -869,6 +869,16 @@ fn evaluates_regexp_symbol_replace() {
         Ok(Value::String("a1:1:4b2:3:4".to_owned().into()))
     );
     assert_eq!(
+        eval(
+            "let original = 'a1a2'; let seen = []; \
+             let result = /a/g[Symbol.replace](original, function(match, position, input) { \
+                 seen.push(input === original, input.length, input.charAt(position + 1)); \
+                 return input.charAt(position + 1); \
+             }); result + ':' + seen.join(',');"
+        ),
+        Ok(Value::String("1122:true,4,1,true,4,2".to_owned().into()))
+    );
+    assert_eq!(
         eval("let re = /(?:)/g; 'a'.replace(re, '-');"),
         Ok(Value::String("-a-".to_owned().into()))
     );

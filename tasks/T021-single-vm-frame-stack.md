@@ -4648,3 +4648,85 @@ validation and revision bookkeeping consume most of the removable work. Do
 not retry per-frame active-cell snapshots, structural-revision invalidation,
 or a relaxed target threshold under this unit. A successor must isolate a
 different shared cost rather than elaborating this cache.
+
+### 2026-07-31 retained shared functional-replace input
+
+Exact-current profiling then covered queue ranks twenty-seven through thirty
+with the standard-recipe runtime-`60e28ecf` executable SHA-256
+`04d1ea96981f83afe8a34ae83b9d98da17a1d1d641f9bcd9a950d74a4645c6d1`.
+Rank-twenty-seven SunSpider `string-unpack-code` placed 7,877 of 9,431
+main-thread samples in `String.prototype.replace`. The builtin RegExp replace
+path copied the complete immutable subject into a Rust `String` for every
+functional-replacement callback: `String::clone` accounted for 3,102
+inclusive samples and platform `memmove` for 3,100, or 32.87% of the whole
+profile before allocation and release costs. Its sample SHA-256 is
+`1c3e8ae0f2813c6d76203aaa4d6a866dbfc1f0c78d492a8f21e4f82b4d3194d1`.
+
+The adjacent profiles did not expose a lower-risk new mechanism. Rank
+twenty-eight `string-fasta` placed 3,601 of 9,726 samples in flat generic VM
+execution and 962 in distributed `Value` ownership. Rank twenty-nine
+`regexp-dna` placed 8,198 of 9,412 samples in the global RegExp match path but
+reproduced matcher mechanisms already consumed by earlier units. Rank thirty
+Kraken PBKDF2 placed 3,187 of 8,519 samples in the already-retained typed-loop
+executor. Their sample SHA-256 values are, respectively,
+`0452dbe0d1ba03002ff366e6b4b71ddb8683cfdad3289d8df5081c51904f2fb7`,
+`58afa1ce297ce588f45430c3ffcb47a16eae82d46c4f675c52a51d957dbf7c35`,
+and
+`404ca1d36a020f75fa7ae01912d4fb43460125fd2c0c792f8ff15bb8113d6997`.
+The distinct directly removable copy at rank twenty-seven therefore had the
+best risk-adjusted return.
+
+The frozen one-attempt plan
+`tasks/performance-units/shared-functional-replace-input.json` (SHA-256
+`18fe623146017de29091d816d77018b11b13fd62c93cc3bb2546c5bb2186f82a`)
+keeps the subject in its existing shared immutable `JsString` representation
+through result construction. Each ordinary builtin functional-replacement
+callback receives a cheap clone of that handle in the same argument position,
+instead of a newly allocated full-buffer copy. Match order, captures, UTF-16
+positions and slicing, callback result coercion, custom protocol boundaries,
+`lastIndex`, and result allocation are unchanged. A focused global-replace
+regression verifies that every callback observes the complete original
+primitive string, its length, and the expected per-match position and result.
+
+Candidate executable SHA-256
+`b3f992cfb182137b4d4d28fdabbaa5a863da1919f54892f2df04ecc22a399062`
+was compared with the exact base above on unmodified pinned source SHA-256
+`6ff9856ad51b877ef29262b942015ec04dd2ffe916b5adc85324aee2a144d382`.
+The 31-pair alternating direct-process target gate retained the unit at
+**0.613206x candidate/base**, below the frozen `<= 0.75x` ceiling; candidate
+and base medians were 89,050,917 ns and 147,059,542 ns. Every process exited
+successfully with byte-identical stdout and empty stderr. The target runner
+and result SHA-256 values are
+`45b8fe96ddac2c293e62024576b6f64de2d805ce98b53dd9436237f48181e024`
+and
+`884f44fca41da83838073527b16f11eff05a63c2d1adea4839658f8b20c4847a`.
+
+All frozen controls stayed below 1.03x. Seven-block broad medians were
+0.925661x for dynamic method calls, 1.002511x for plain function calls,
+1.003171x for property reads, and 0.952484x for string slicing. The broad raw
+and summary SHA-256 values are
+`dbe7e38f7b0c90b8bdf703d6eb47c01b7b787986b1919fb7094be2e6d91dd25a`
+and
+`3107e7a2358296de3568a81d78d41f1b597a3abe6ffa6be2f23453bec7702850`.
+Seven-block external medians were 0.955080x for HashMap, 1.010184x for PBKDF2,
+0.900400x for recursive control flow, 1.007704x for RegExp DNA, 0.968516x for
+FASTA, and 0.997958x for tagcloud. External manifest, raw, report, and rendered
+summary SHA-256 values are
+`be52e9069d3c4a1db4249e71b67885d026b8ac74f42d12047be2a140bf1c17b4`,
+`aa97ad5d4d08935b62eb4aae58ecf4cd027d6970a1494095f0c3d52bead253d1`,
+`ecc19305ec26376973960b673e87de4c5c2f3d6cb0705164ab20f1056d22e882`,
+and
+`2a6eba145925c334efff810fbf01f7fa22bcd28fca222a385a06a262b69eee2b`.
+
+A post-change source-faithful sample contains 4,736 main-thread samples.
+Platform `memmove` falls from 3,249 of 9,431 base samples (34.45%) to 147
+(3.10%), and the per-callback full-subject clone stack is absent. The sample
+SHA-256 is
+`665aef59df13c3f9d0f1da81a789982a08d258f080b44707914103c641eeffd7`.
+The focused test, all 1,922 runtime tests, all 211 benchmark-tool tests, every
+performance-plan validator, all 5,160 curated Test262 cases,
+`./scripts/check.sh`, and every `./scripts/compare-qjs.sh` fixture passed.
+This retains the single allowed fast attempt without changing a threshold.
+The plan's complete broad, complete external, and exact-commit Test262
+promotion evidence must still be bound after commit; this local decision is
+not a campaign-completion claim.
