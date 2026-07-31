@@ -3689,11 +3689,61 @@ Kraken, and SunSpider candidate/base geometric means were 0.999159x,
 `./scripts/check.sh` passed formatting, clippy, agent-feature tests, all
 workspace tests, 211 benchmark-tool tests, every performance-plan validator,
 and all 5,160 curated Test262 cases; `./scripts/compare-qjs.sh` passed every
-fixture. The implementation is retained by its frozen fast gate. The complete
-broad and external runs are pre-commit diagnostics rather than a formal
-promotion receipt because the candidate had no immutable commit/receipt at
-measurement time; exact-commit Test262 burndown and receipt-bound reanalysis
-remain required before calling it promoted. This unit is therefore accepted
-as a semantics-preserving local performance improvement, not as global
-conformance or campaign completion. After exact-commit evidence is attached,
-refresh the queue and continue from its highest unclosed shared cost.
+fixture. The implementation commit is
+`10ba7595c07748318e9708a9ede15c3a6778dcbd`, pushed on `main`. A subsequent
+owned-harness preview bound that clean commit to candidate binary SHA-256
+`fb90b58b3164eda22f04954eb55698b04ef15cc0feba6d2c1053cae7b636a69e`,
+exact base `620bb67b9c7c36714177b7006a7ccaddd88653f5` / binary SHA-256
+`c7b9b627e6b03e1e08c80967be6ee43e81b34401d130bd94ab754f9ef2b2f81b`,
+and QuickJS-NG `f7830186043e4488f2998759d60a514faf07cbc9` / binary SHA-256
+`cfd8386c3c29b1125a878b8fb82f9627820f2dcc16d2a691c5f8c16ad0b047a0`.
+The candidate, base, and QuickJS-NG receipt SHA-256 values are
+`efb969ac779cc3d06e3aa9eb20efb271f2ec23be9cf700c071d1337d8447868f`,
+`9282b1711ca5434d6dbb8ad0ba28488c6ce19c077160799fe8897758ffc17564`,
+and
+`b96f63f100f0ddfb6e7dedfdbcb195f579144cf01af814706d3d7a1b24b90b0f`.
+
+The exact-commit 25-case broad run completed all three blocks. Its raw,
+report, and summary SHA-256 values are
+`803324e9731f4d38ab1a458d9591cbe1ccad9b06de4d2a28bcf2ffdfaedf7394`,
+`b69723ba382787527e6afd67bce09b2034ed8000361bc54c7eb0f0d56695f58f`,
+and
+`7688b26106961774151b631df5d8ca2215eac7ede4c42d1d7f9024ceb8de8f52`.
+Candidate/base geometric mean was 1.005690x, and all candidate/QuickJS-NG
+ratios remained below 0.5x. The reproducible non-control
+`array_dynamic_read` observation remained explicit at 1.177053x base and
+0.400747x QuickJS-NG; it is outside the frozen control set and still requires
+a separately profiled unit rather than post-hoc retuning of this one-attempt
+plan.
+
+The exact-commit 60-second external rerun completed all 45 cases for all
+three roles. The separately archived timeout-override manifest is still
+SHA-256
+`2df77d269c535af13879b3392da56c13db78f165582521c2dd4721725d88d354`;
+the runner also copied the canonical 15-second registry manifest, SHA-256
+`a8ddeded582573bc676bf3f7bbbaf2625f6dfa7742f07bcdd6aaa26366f4e6c4`,
+into its output. The exact raw, report, and rendered-summary SHA-256 values are
+`6a142c59d4d0524adf2bbc6d573449f3ff141923be6dac620b557ba9b1f1b5a1`,
+`d9d1433866bd153288c13e0de20548d8e95c60f6d82f6365a0bbab6394dc04a9`,
+and
+`a7b31a175da31b112a763b1f8e2ff88bc50f4d96802e83d22c9ea14a4af6f08c`.
+The target reproduced at **0.832444x** base and 2.281x QuickJS-NG.
+JetStream, Kraken, and SunSpider candidate/base geometric means were 1.003x,
+0.999x, and 0.996x. The previously missing Kraken Gaussian case completed at
+1.003x base and 3.991x QuickJS-NG.
+
+The exact-commit Test262 Coverage artifact from run `30605695518` is SHA-256
+`f35a66049f4a55e233884209dd1da58d88402615177f46cd7e20ae30ad55f8ef`.
+It covers all 53,572 pinned cases: 10,900 are outside the QuickJS-NG
+configuration, while qjs-rust passes all 42,672 configured cases with zero
+failures, zero timeouts, and zero actionable gaps against QuickJS-NG. The
+hash-bound fast and promotion decisions both retain the unit; their SHA-256
+values are
+`945336794035ac26f54c7e6e69b899375117c1f09988da0708f3e7539a8ee1f7`
+and
+`22e50a688c067f8ecd25ff9825857b4adb71b35b5d7d705eda68a08ed8995624`.
+The promotion receipt binds the queue, immutable plan, exact broad report,
+complete external report, and zero-gap Test262 artifact. This closes the unit
+as a semantics-preserving retained optimization; it is not campaign
+completion because most external cases remain above 0.5x QuickJS-NG. Refresh
+the queue from `10ba7595` and continue from its highest unclosed shared cost.
