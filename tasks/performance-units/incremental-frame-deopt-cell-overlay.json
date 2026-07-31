@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "incremental-frame-deopt-cell-overlay",
+  "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+  "queue": {
+    "candidate_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+    "sha256": "608f966a5ca40eb0f40cfba31d9ce515370e042ca4bc3f324e72599c896495d1"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/date-format-tofte"
+    ],
+    "rank_ceiling": 23,
+    "override_reason": "Ranks 1 through 22 are closed for this cycle by exact-current retained, rejected, or skipped frame, constructor, object, string, RegExp, typed-loop, dense-loop, and Number-only evidence. Fresh exact-current profiles of ranks 24 through 26 reproduce already-retained legacy dense, typed-loop, and Number-only executors without isolating a new redundant subphase. Rank-23 date-format-tofte instead exposes the residual cost immediately after the retained idempotent cell overlay: every closure creation still rescans all active frame cells and hashes every already-correct name even though function-declaration initialization adds only the next live cell. Incrementally overlaying monotonic additions is a distinct representation boundary with an exact ordered fallback for every replacement or deactivation."
+  },
+  "mechanism": {
+    "summary": "Cache, per bytecode frame, the dynamic-binding map identity and structural revision plus the active local-cell snapshot established by the last function-creation overlay. When the same map is unchanged and all cached cells remain active with identical identity, overlay only newly active cells in lexical slot order; otherwise perform the existing full ordered overlay and rebuild the snapshot.",
+    "generality": "The incremental route applies to every ordinary NewFunction operation in a frame that already carries explicit deopt bindings. Selection depends only on the shared DynamicBindings identity and structural revision and on exact Upvalue pointer identity for currently active non-temporary, non-sloppy, non-global-hoist-only slots. New cells are applied in lexical slot order. A removed or replaced cached cell, changed map identity or revision, active shadow conflict, direct-eval structural mutation, block exit, unsupported slot count, or any uncertain state runs the unchanged full ordered overlay before closure publication. Ordinary frames and every non-function frame materialization keep their current path. No source text, benchmark or function name, input size, iteration count, checksum, or expected result participates.",
+    "semantic_risks": [
+      "preserving lexical declaration order so a newly active inner same-name cell wins while a deactivated inner cell causes the outer active cell to be restored by a full scan",
+      "invalidating the incremental snapshot whenever direct eval or another consumer structurally inserts, removes, or replaces a dynamic binding cell, while ignoring value-only writes through an unchanged cell",
+      "using exact Rc and Upvalue pointer identity rather than names, values, hashes, or probabilistic fingerprints to decide whether cached state is reusable",
+      "releasing every map borrow before function construction or any JavaScript execution and never retaining JavaScript values in the cache beyond the already-live Upvalue cells",
+      "keeping the current complete ordered overlay as the fallback for map replacement, cell replacement, deactivation, shadow ambiguity, or unsupported frame state"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-07-31 target/performance-profile-e2159229/date-format-tofte/current.sample; exact runtime-60e28ecf standard-recipe release executable SHA-256 04d1ea96981f83afe8a34ae83b9d98da17a1d1d641f9bcd9a950d74a4645c6d1; official source SHA-256 cbefaffbecb6769a85f5877765b21f967a1cff5ab2625d4a9066c050fcdc7b5e; source-faithful generated bundle plus repeated public outer body SHA-256 49f32f3a6aa0b633ab7424b197380fde1934b7afbd215044c6ce6a3995781dc5; process completed with the expected sentinel and empty stderr",
+      "sha256": "cab1103cb319e02fc32efd550f98fa6a962a1a73bfe33aa4a5898b5277f20083",
+      "base_sha": "60e28ecf84aa8a9328377f7f6343465da59849c4",
+      "opportunity_ids": [
+        "external/sunspider-1.0/date-format-tofte"
+      ],
+      "shared_cost": "Of 2,846 main-thread samples, the NewFunction path spends 363 inclusive samples (12.75%) in frame_deopt_bindings and its DynamicBindings overlay. Exclusive leaves include 164 in overlay_cell, 139 in string comparison, and 68 in frame_deopt_bindings itself. The retained identity-equal overlay already avoids replacing an unchanged cell, but each of the formatter's 28 nested declarations still hashes every previously active name before adding the next function cell. The planned snapshot removes those repeated prefix lookups while preserving the first insertion and every changed-cell fallback.",
+      "inclusive_fraction": 0.1275
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/date-format-tofte"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/date-format-xparb",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar",
+      "broad/captured_read",
+      "broad/captured_write",
+      "broad/closure_allocation_call",
+      "broad/plain_function_call",
+      "broad/dynamic_method_call",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

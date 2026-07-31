@@ -4587,3 +4587,64 @@ under this unit: the exact target shows that false-prefix scanning is not a
 material share of `access-nsieve` end-to-end time. A successor must identify a
 distinct shared cost, most likely in the retained inner Boolean store path,
 from new exact-current evidence.
+
+### 2026-07-31 rejected incremental frame deopt cell overlay
+
+Exact-current profiling then covered queue ranks twenty-three through
+twenty-six with the standard-recipe runtime-`60e28ecf` executable SHA-256
+`04d1ea96981f83afe8a34ae83b9d98da17a1d1d641f9bcd9a950d74a4645c6d1`.
+SunSpider `date-format-tofte` placed 363 of 2,846 inclusive samples (12.75%)
+under `NewFunction`'s frame-deopt overlay, including 164 exclusive samples in
+`DynamicBindings::overlay_cell`, 139 in string comparison, and 68 in the frame
+scan itself. Kraken `stanford-crypto-ccm` instead placed 275 of 2,376 samples
+in its already-retained `LegacyDynamicDensePlan`; Kraken iterative SHA-256
+placed 677 of 2,328 in its already-retained typed-loop executor; and spectral
+norm placed 456 of 2,908 in its already-retained `NumberOnlyProgram`. Their
+source-faithful profile-wrapper SHA-256 values are, respectively,
+`49f32f3a6aa0b633ab7424b197380fde1934b7afbd215044c6ce6a3995781dc5`,
+`37bea1f06bc65282ca24f6ea5a0710493a22dab20da947fdccaf8a21354f355a`,
+`282d81e7773818a48d85b0bfc0bef826b74a6aa0781ffa21fd53819f9e4badd6`,
+and
+`a4f2f2f854b2c854e91d9f35b20dc636b5a97d06ea4ccdeb5f8bd9feeb04a3d9`;
+the corresponding sample SHA-256 values are
+`cab1103cb319e02fc32efd550f98fa6a962a1a73bfe33aa4a5898b5277f20083`,
+`fbfbe9f35be0ff6b59804bd5e8706ba4f667685f9752214ee4fdf8fb51efb28a`,
+`e3058cf0a3fc555fee80ac534ef7dda463275709622eb8169d1fad78203fe25f`,
+and
+`91594cf5c6d4342979315d567274bb56de58bdb6eeb72ca50581f6b2ded317b5`.
+
+The risk-adjusted order was incremental frame overlay, numeric direct-leaf
+call fusion, CCM legacy-plan specialization, then SHA typed-loop core packing.
+The first had the only new exact boundary and the lowest semantic risk; the
+other three overlapped rejected call-graph work or retained executors and had
+materially higher implementation risk. The frozen one-attempt plan
+`tasks/performance-units/incremental-frame-deopt-cell-overlay.json` (SHA-256
+`e1146b13c01e53d5df5e40859db07c1ce8ace4358fc6cf40fab66dd359ea18b4`)
+therefore added an exact structural revision to `DynamicBindings` and cached,
+per frame, the map identity plus active `Upvalue` identities established by
+the previous `NewFunction`. Only monotonic new live cells used the incremental
+ordered overlay; map mutation, cell replacement or deactivation, and shadow
+ambiguity retained the complete ordered fallback. Focused revision and
+block-shadow activation/exit tests passed before measurement.
+
+The 31-block alternating exact-binary target gate rejected the unit. Candidate
+executable SHA-256
+`0fc38ae636713bafc55f5e9ded0c86ce2505be1b1eb432ec5f715228aef57a96`
+was compared with the exact base above on the unmodified pinned Tofte source
+SHA-256
+`cbefaffbecb6769a85f5877765b21f967a1cff5ab2625d4a9066c050fcdc7b5e`.
+Every process completed with byte-identical stdout and empty stderr, but the
+paired median was only **0.980412x candidate/base**, far above the frozen
+`<= 0.90x` ceiling. The target runner and result SHA-256 values are
+`de2b6343a3cfb281724c31be7eda52f2a51c99fb013dbb208e5e08da63d85638`
+and
+`9b07800fa402ea6054b80345bc7beea1446a8381ee55c94223be9053d2a4ba6d`.
+
+The failed target gate stopped the attempt before controls, complete broad or
+external portfolios, or Test262 promotion work. Runtime and focused-test
+changes were reverted. The exact end-to-end gain shows that prefix hashing is
+not the dominant remainder implied by the inclusive profile; snapshot
+validation and revision bookkeeping consume most of the removable work. Do
+not retry per-frame active-cell snapshots, structural-revision invalidation,
+or a relaxed target threshold under this unit. A successor must isolate a
+different shared cost rather than elaborating this cache.
