@@ -11,6 +11,7 @@ use std::{
     rc::Rc,
 };
 
+use super::peephole::{fuse_local_copies, fuse_local_increments, range_is_linear};
 use super::{VirtualCandidate, VirtualKind, VirtualUse, analyze, constant_binary};
 use crate::Value;
 use crate::bytecode::{
@@ -826,67 +827,6 @@ fn fuse_binary_assignments(
     }
 }
 
-fn fuse_local_increments(
-    bytecode: &Bytecode,
-    analysis: &super::VirtualObjectAnalysis,
-    code: &mut [Op],
-) {
-    for ip in 0..code.len().saturating_sub(5) {
-        let (
-            Op::LoadLocal(slot),
-            Op::ToNumeric,
-            Op::Dup,
-            Op::Update(qjs_ast::UpdateOp::Increment),
-            Op::AssignLocal(assigned),
-            Op::Pop,
-        ) = (
-            &code[ip],
-            &code[ip + 1],
-            &code[ip + 2],
-            &code[ip + 3],
-            &code[ip + 4],
-            &code[ip + 5],
-        )
-        else {
-            continue;
-        };
-        if slot == assigned
-            && analysis
-                .slot_authority
-                .is_assignment_authoritative(bytecode, *slot)
-            && range_is_linear(analysis, ip, ip + 5)
-        {
-            let jump = match code.get(ip + 6) {
-                Some(Op::Jump(target)) => Some(*target),
-                _ => None,
-            };
-            code[ip] = Op::IncrementLocal {
-                slot: *slot,
-                skip: 5,
-                jump,
-            };
-        }
-    }
-}
-
-fn fuse_local_copies(analysis: &super::VirtualObjectAnalysis, code: &mut [Op]) {
-    for ip in 0..code.len().saturating_sub(1) {
-        let (Op::LoadLocal(from), Op::StoreLocal(to)) = (&code[ip], &code[ip + 1]) else {
-            continue;
-        };
-        if analysis.slot_authority.is_authoritative(*from)
-            && analysis.slot_authority.is_authoritative(*to)
-            && range_is_linear(analysis, ip, ip + 1)
-        {
-            code[ip] = Op::CopyLocal {
-                from: *from,
-                to: *to,
-                skip: 1,
-            };
-        }
-    }
-}
-
 fn fold_redundant_completion_copies(code: &mut [Op]) {
     for ip in 0..code.len() {
         let Op::BinaryAssignLocals { stores, skip, .. } = code[ip] else {
@@ -932,14 +872,6 @@ fn fuse_local_comparisons(analysis: &super::VirtualObjectAnalysis, code: &mut [O
             };
         }
     }
-}
-
-fn range_is_linear(analysis: &super::VirtualObjectAnalysis, start: usize, end: usize) -> bool {
-    analysis
-        .cfg
-        .blocks
-        .iter()
-        .any(|block| block.start <= start && end < block.end)
 }
 
 fn get_stack_input_count(op: &Op) -> Option<usize> {

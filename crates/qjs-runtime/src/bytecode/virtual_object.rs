@@ -18,6 +18,7 @@ mod cfg;
 pub(super) mod constant_binary;
 mod flow;
 mod lower;
+mod peephole;
 #[cfg(test)]
 mod tests;
 
