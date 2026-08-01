@@ -16,15 +16,14 @@
 //! a backward jump inside the region — a nested loop — needs only a check that
 //! the state it delivers matches the state recorded there.
 //!
-//! Admission is conservative and checked three times. At compile time the
-//! region's opcodes must all be in the whitelist, its stack behaviour must be
-//! statically consistent, and its operations must be mostly scalar: where the
-//! work is the property protocol instead, the interpreter's own inline caches
-//! are already as good, and running such a region natively measured neutral to
-//! slower. At entry every slot the program reads must hold a representable
-//! value, every slot it writes must be an authoritative frame slot, and every
-//! receiver must be a dense array. Mid-run, each operation that cannot be
-//! completed without observable behaviour hands the loop back.
+//! Admission is conservative and checked three times, and it turns on what a
+//! region can *execute* rather than on how much of its work is boxed. At
+//! compile time the region's opcodes must all be in the whitelist and its stack
+//! behaviour must be statically consistent. At entry every slot the program
+//! reads must hold a representable value, every slot it writes must be an
+//! authoritative frame slot, and every receiver must be a dense array. Mid-run,
+//! each operation that cannot be completed without observable behaviour hands
+//! the loop back.
 //!
 //! Handing back is what makes a region with side effects safe to accelerate: the
 //! interpreter resumes at the exact bytecode instruction that stopped, with the
