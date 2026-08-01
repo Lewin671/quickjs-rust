@@ -741,3 +741,23 @@ fn inline_number_binary_preserves_non_number_and_edge_semantics() {
         Ok(Value::Number(6.0))
     );
 }
+
+#[test]
+fn inline_update_and_to_numeric_decline_for_non_numbers() {
+    // A postfix update on a string still coerces through `ToNumeric`, yields
+    // the coerced old value, and stores the incremented one.
+    assert_eq!(
+        eval_bytecode_source("var x = '5'; var y = x++; y + ':' + x;"),
+        Ok(Value::String("5:6".to_owned().into()))
+    );
+    // A BigInt must not reach the f64 increment.
+    assert_eq!(
+        eval_bytecode_source("var b = 5n; b++; b === 6n;"),
+        Ok(Value::Boolean(true))
+    );
+    // `valueOf` coercion still runs before the increment.
+    assert_eq!(
+        eval_bytecode_source("var o = { valueOf: function () { return 7; } }; var n = o; n++; n;"),
+        Ok(Value::Number(8.0))
+    );
+}

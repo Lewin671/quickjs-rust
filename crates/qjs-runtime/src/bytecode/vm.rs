@@ -381,14 +381,37 @@ impl<'a> Vm<'a> {
                     self.handle_runtime_result(result)?;
                 }
                 Op::AssignLocal(slot) => {
+                    // Mirrors `assign_local`'s own fast path, inline, so an
+                    // assignment to an initialized mutable slot never builds a
+                    // `Result` to report that it succeeded.
+                    let slot = *slot;
+                    if !self.current.direct_eval_with_stack
+                        && slot < u128::BITS as usize
+                        && self.current.authoritative_slots & (1_u128 << slot) != 0
+                        && self
+                            .current
+                            .bytecode
+                            .locals
+                            .get(slot)
+                            .is_some_and(|local| local.mutable)
+                        && self.current.locals.get(slot).is_some_and(|local| {
+                            local
+                                .as_ref()
+                                .is_some_and(|local| !local.is_uninitialized_lexical_marker())
+                        })
+                        && let Some(value) = self.current.stack.pop()
+                    {
+                        self.current.locals[slot] = Some(value);
+                        continue;
+                    }
                     let value = self.pop()?;
                     let result = if self.direct_eval_with_stack
-                        && self.bytecode.local_is_from_env(*slot)
+                        && self.bytecode.local_is_from_env(slot)
                     {
-                        let name = self.bytecode.locals[*slot].name.clone();
-                        self.store_ident_with(&name, Some(*slot), self.bytecode.is_strict(), value)
+                        let name = self.bytecode.locals[slot].name.clone();
+                        self.store_ident_with(&name, Some(slot), self.bytecode.is_strict(), value)
                     } else {
-                        self.assign_local(*slot, value)
+                        self.assign_local(slot, value)
                     };
                     self.handle_runtime_result(result)?;
                 }
@@ -483,11 +506,17 @@ impl<'a> Vm<'a> {
                     self.run_with_op(op.clone())?;
                 }
                 Op::Pop => {
-                    self.pop()?;
+                    if self.current.stack.pop().is_none() {
+                        return Err(stack_underflow());
+                    }
                 }
                 Op::Dup => {
-                    let value = self.stack.last().cloned().ok_or_else(stack_underflow)?;
-                    self.stack.push(value);
+                    let stack = &mut *self.current.stack;
+                    let Some(value) = stack.last() else {
+                        return Err(stack_underflow());
+                    };
+                    let value = super::vm_bindings::clone_local_value(value);
+                    stack.push(value);
                 }
                 Op::NewArray { elements } => self.new_array(elements)?,
                 Op::NewTemplateObject { site, cooked, raw } => {
@@ -814,6 +843,12 @@ impl<'a> Vm<'a> {
                     }
                 }
                 Op::ToNumeric => {
+                    // `eval_to_numeric` is the identity on a number, so the
+                    // general path pops and re-pushes the same value through
+                    // two memory-sized results to change nothing.
+                    if matches!(self.current.stack.last(), Some(Value::Number(_))) {
+                        continue;
+                    }
                     let result = self.eval_to_numeric();
                     if let Some(value) = self.handle_runtime_result(result)? {
                         self.stack.push(value);
@@ -826,6 +861,14 @@ impl<'a> Vm<'a> {
                     }
                 }
                 Op::Update(op) => {
+                    let stack = &mut *self.current.stack;
+                    if let Some(Value::Number(number)) = stack.last_mut() {
+                        *number = match op {
+                            qjs_ast::UpdateOp::Increment => *number + 1.0,
+                            qjs_ast::UpdateOp::Decrement => *number - 1.0,
+                        };
+                        continue;
+                    }
                     let result = self.eval_update(*op);
                     if let Some(value) = self.handle_runtime_result(result)? {
                         self.stack.push(value);
