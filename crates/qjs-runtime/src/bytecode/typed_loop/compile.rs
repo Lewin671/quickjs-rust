@@ -160,6 +160,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         Some(Op::Jump(_) | Op::IncrementLocal { .. } | Op::Pop | Op::LoadConst(_))
     ));
     Some(TypedLoopProgram {
+        shape_caches: std::cell::RefCell::new(Vec::new()),
         header,
         backedge,
         ops,

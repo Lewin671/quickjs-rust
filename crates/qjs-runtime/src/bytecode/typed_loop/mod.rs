@@ -311,6 +311,45 @@ impl fmt::Debug for TypedLoopScratch {
     }
 }
 
+/// The literal shapes one property-read site has resolved.
+///
+/// The one-way `caches` entry is not enough on a polymorphic site:
+/// `heterogeneous_property_read` rotates three distinct object-literal shapes
+/// through one read, so it missed every iteration and fell back to resolving
+/// the name -- a hash lookup and a `memcmp` per access, which the profile
+/// charged 27% of that sentinel to. Shape identity is an `Rc` pointer
+/// comparison, so scanning a few is far cheaper than resolving the name.
+/// One remembered shape and the slot the property occupies in it.
+type ShapeWay = (Rc<crate::value::ObjectLiteralShape>, usize);
+
+#[derive(Clone, Debug, Default)]
+pub(super) struct ShapeWays {
+    /// Boxed deliberately, against `clippy::box_collection`. Most sites are
+    /// answered by the one-way cache and never resolve a shape at all, so this
+    /// keeps their entry one pointer instead of three. Measured, not assumed:
+    /// unboxed costs `prototype_method_call` 3.9% against 2.6% boxed, and that
+    /// sentinel never reaches the shape path.
+    #[allow(clippy::box_collection)]
+    ways: Option<Box<Vec<ShapeWay>>>,
+}
+
+impl ShapeWays {
+    /// How many distinct shapes one site remembers. Past a handful a site is
+    /// megamorphic and the linear scan stops paying for itself.
+    const WAYS: usize = 4;
+
+    pub(super) fn entries(&self) -> &[ShapeWay] {
+        self.ways.as_deref().map_or(&[], Vec::as_slice)
+    }
+
+    pub(super) fn record(&mut self, shape: Rc<crate::value::ObjectLiteralShape>, slot: usize) {
+        let ways = self.ways.get_or_insert_with(Box::default);
+        if ways.len() < Self::WAYS {
+            ways.push((shape, slot));
+        }
+    }
+}
+
 /// A compiled loop region.
 #[derive(Clone, Debug)]
 pub(super) struct TypedLoopProgram {
@@ -368,6 +407,18 @@ pub(super) struct TypedLoopProgram {
     /// then serves the common sequential-entry case without retaining scratch
     /// storage for every recursive invocation.
     scratch_pool: OnceCell<Rc<RefCell<Vec<TypedLoopScratch>>>>,
+    /// Shape ways per property site, kept on the program rather than in the
+    /// per-activation scratch.
+    ///
+    /// Two reasons. Adding a sixth vector to the scratch cost
+    /// `prototype_method_call` 3.6%: that sentinel declines this tier on
+    /// essentially every backedge, and a declined backedge still moves the
+    /// scratch twice. And a site's shapes are a property of the site, not of
+    /// one activation, so keeping them here lets a short loop that is entered
+    /// repeatedly reuse what it learned. Shape identity and the property
+    /// revision are re-checked on every read, so a stale entry misses rather
+    /// than reading a wrong slot.
+    shape_caches: RefCell<Vec<ShapeWays>>,
 }
 
 impl TypedLoopProgram {

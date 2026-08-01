@@ -112,6 +112,8 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
     let boxed = &mut scratch.boxed;
     let sloppy_global_writes = &scratch.sloppy_global_writes;
     let caches = &mut scratch.caches;
+    // Borrowed for the whole region: the program owns these across activations.
+    let mut shape_caches = program.shape_caches.borrow_mut();
     // One inline cache per property access site, warmed on the first iteration.
     let mut iterations = 0_u64;
     let mut pc = 0_usize;
@@ -223,6 +225,7 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                     &boxed[object as usize],
                     &program.names[name as usize],
                     &mut caches[cache as usize],
+                    &mut shape_caches[cache as usize],
                 ) else {
                     deopt_here!(op);
                 };
@@ -430,6 +433,10 @@ fn seed_registers(
         vm.record_sloppy_global_name(name);
     }
     caches.resize(program.cache_count, None);
+    program
+        .shape_caches
+        .borrow_mut()
+        .resize_with(program.cache_count, super::ShapeWays::default);
     Some(())
 }
 
@@ -574,6 +581,7 @@ fn get_named(
     receiver: &Value,
     name: &Rc<str>,
     cache: &mut Option<(Rc<str>, usize)>,
+    shapes: &mut super::ShapeWays,
 ) -> Option<Value> {
     let Value::Object(object) = receiver else {
         return None;
@@ -583,10 +591,25 @@ fn get_named(
     {
         return Some(value);
     }
+    // Shape identity is an `Rc` pointer comparison, so scanning the remembered
+    // shapes is cheaper than resolving the name even when the site is
+    // polymorphic. `literal_data_slot_value` re-checks the revision, so a
+    // mutated receiver misses rather than reading a stale slot.
+    for (shape, slot) in shapes.entries() {
+        if let Some(value) = object.literal_data_slot_value(shape, *slot) {
+            return Some(value);
+        }
+    }
     if let Some((key, slot)) = object.shared_data_slot(name)
         && let Some(value) = object.shared_data_slot_value(&key, slot)
     {
         *cache = Some((key, slot));
+        return Some(value);
+    }
+    if let Some((shape, slot)) = object.literal_data_slot(name)
+        && let Some(value) = object.literal_data_slot_value(&shape, slot)
+    {
+        shapes.record(shape, slot);
         return Some(value);
     }
     // Storage the slot cache cannot address — a builtin's dynamic map, say — and

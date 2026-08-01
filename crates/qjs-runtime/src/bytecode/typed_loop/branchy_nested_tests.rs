@@ -140,3 +140,87 @@ fn branchy_nested_dense_math_region_is_admitted() {
         Ok(Value::Number(160.0))
     );
 }
+
+// The property-read site cache remembers up to four literal shapes, validated
+// by shape identity plus the property revision. These pin what that must not
+// change: a stale entry has to miss, never read a wrong slot.
+
+#[test]
+fn a_polymorphic_property_read_sees_each_shape_correctly() {
+    let source = "function run(pool, n) {
+            var total = 0;
+            for (var i = 0; i < n; i++) { total += pool[i % pool.length].step; }
+            return total;
+        }
+        run([{ step: 1, a: 0 }, { a: 0, step: 10 }, { a: 0, b: 0, step: 100 }], 30);";
+    assert_eq!(eval(source), Ok(Value::Number(1110.0)));
+}
+
+#[test]
+fn a_shape_change_between_reads_invalidates_the_cached_slot() {
+    // Adding a property moves the receiver to a new shape; the cached entry
+    // must miss rather than read the old slot index.
+    let source = "function run(o, n) {
+            var total = 0;
+            for (var i = 0; i < n; i++) { total += o.step; if (i === 4) { o.added = 1; } }
+            return total;
+        }
+        run({ step: 3 }, 10);";
+    assert_eq!(eval(source), Ok(Value::Number(30.0)));
+}
+
+#[test]
+fn an_overwritten_property_is_read_at_its_new_value() {
+    let source = "function run(o, n) {
+            var total = 0;
+            for (var i = 0; i < n; i++) { total += o.step; o.step = o.step + 1; }
+            return total;
+        }
+        run({ step: 1, other: 0 }, 5);";
+    assert_eq!(eval(source), Ok(Value::Number(15.0)));
+}
+
+#[test]
+fn a_deleted_property_reads_undefined_rather_than_a_stale_slot() {
+    let source = "function run(o, n) {
+            var seen = 0;
+            for (var i = 0; i < n; i++) {
+                if (o.step === undefined) { seen++; }
+                if (i === 2) { delete o.step; }
+            }
+            return seen;
+        }
+        run({ step: 1, other: 0 }, 6);";
+    assert_eq!(eval(source), Ok(Value::Number(3.0)));
+}
+
+#[test]
+fn a_megamorphic_property_read_stays_correct_past_the_cache_ways() {
+    // Six shapes against four ways: the extra shapes must fall through to name
+    // resolution and still read the right value.
+    let source = "var pool = [
+            { step: 1, a: 0 }, { a: 0, step: 2 }, { b: 0, step: 3 },
+            { c: 0, d: 0, step: 4 }, { e: 0, step: 5 }, { f: 0, g: 0, h: 0, step: 6 }
+        ];
+        function run(pool, n) {
+            var total = 0;
+            for (var i = 0; i < n; i++) { total += pool[i % 6].step; }
+            return total;
+        }
+        run(pool, 12);";
+    assert_eq!(eval(source), Ok(Value::Number(42.0)));
+}
+
+#[test]
+fn an_accessor_shadowing_a_cached_shape_is_not_answered_from_the_cache() {
+    let source = "function run(pool, n) {
+            var total = 0;
+            for (var i = 0; i < n; i++) { total += pool[i % pool.length].step; }
+            return total;
+        }
+        var plain = { step: 1, a: 0 };
+        var withGetter = { a: 0 };
+        Object.defineProperty(withGetter, 'step', { get: function () { return 10; } });
+        run([plain, withGetter], 10);";
+    assert_eq!(eval(source), Ok(Value::Number(55.0)));
+}

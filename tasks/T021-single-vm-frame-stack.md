@@ -5601,3 +5601,51 @@ measured 0.8986. Every other sentinel 0.9901-1.0017; six-case geomean 0.9612.
 Eight focused tests pin what the borrow must not change: non-writable
 properties in both modes, own and inherited setters, property creation, frozen
 objects, Proxy traps, getter/prototype walks, and global-object writes.
+
+### 2026-08-01 a polymorphic shape cache for typed-loop property reads
+
+`heterogeneous_property_read` already runs natively -- `typed_loop::run` is 60%
+of its profile -- but `slot_reads` was **27%** and `memcmp` 3.1%, which is a
+cache that never hits. Two reasons, both in `get_named`:
+
+1. Its cache was one way. The sentinel rotates **three** distinct
+   object-literal shapes through a single read, so a one-way cache misses every
+   iteration by construction.
+2. `shared_data_slot`, the only lookup it could record, answers **only**
+   `PropertyStorage::Small`. These receivers have four or five properties and
+   are `Shaped`, so the cache was never populated at all -- every access
+   resolved the name.
+
+`literal_data_slot` / `literal_data_slot_value` already exist and are the right
+primitives: they key on `Rc<ObjectLiteralShape>` identity and re-check the
+property revision, so validation is a pointer comparison and a stale entry
+misses rather than reading a wrong slot. `get_named` now remembers up to four
+shapes per site and scans them after the one-way cache misses.
+
+**Where the cache lives took three attempts, and the counters were not the
+guide -- a control run was.** `prototype_method_call` regressed ~3.6%, and a
+base-against-base control put this machine's noise floor at **0.5%**, so it was
+real. That sentinel declines this tier on essentially every backedge, and a
+declined backedge still moves the scratch twice:
+
+| shape cache location | `prototype_method_call` |
+| --- | ---: |
+| widened `caches` entry | 1.0372 |
+| own array in the scratch | 1.0296 |
+| own array, slow path `#[inline(never)]` | 1.0414 (and halved the win) |
+| **on the program, boxed ways** | **1.0270** |
+
+Keeping it on `TypedLoopProgram` rather than in `TypedLoopScratch` is also the
+better model: a site's shapes are a property of the site, not of one
+activation, so a short loop entered repeatedly now reuses what it learned.
+Boxing the ways vector is deliberate against `clippy::box_collection` and
+measured: unboxed is 3.9% against 2.6% boxed.
+
+Paired alternating A/B against a base rebuilt from `6db1fe43`, thirteen reps:
+`heterogeneous_property_read` **0.8784** [0.8631, 0.8940],
+`prototype_method_call` 1.0270 [1.0138, 1.0424], others 0.9925-1.0065.
+Six-case geomean **0.9837**.
+
+Six tests pin the invalidation: polymorphic reads, a shape change mid-loop, an
+overwrite, a delete, six shapes against four ways, and an accessor shadowing a
+cached shape.
