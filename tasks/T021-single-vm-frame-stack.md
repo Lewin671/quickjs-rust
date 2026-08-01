@@ -5408,3 +5408,55 @@ other sentinel between 0.978 and 1.007; six-case geomean 0.9828.
 
 Position against QuickJS-NG after this unit is recorded with the session
 summary below.
+
+### 2026-08-01 session close: where the compact tier leaves T021
+
+Seven commits, all pushed, `main` green (1,966 runtime tests, 218/218
+`compare-qjs`, Test262 slices clean at every commit):
+
+| commit | unit | candidate/base |
+| --- | --- | ---: |
+| `815d8b79` | whole-function compact register executor | -- |
+| `a69ecae6` | direct-leaf dispatch from registers | 0.9193 |
+| `67555208` | upvalue-backed local read from its cell | 0.9914 |
+| `63c775bd` | admission narrowed to initialized slots | (safety) |
+| `be43c1f5` | VM-free activation | 0.8956 |
+| `227f7d20` | locals into the register file | 0.9074 |
+
+Sentinels against QuickJS-NG, quiet machine, seven paired reps:
+
+| case | session start | now |
+| --- | ---: | ---: |
+| `recursive_call_tree` | 6.3253 | **4.4246** |
+| `prototype_method_call` | 1.3413 | 1.3479 |
+| `polymorphic_call_site` | 1.0277 | 1.0429 |
+| `capturing_closure_call` | 0.9851 | 0.9474 |
+| `heterogeneous_property_read` | 1.4796 | 1.4860 |
+| `string_key_map_churn` | 3.0097 | 3.0092 |
+| **geomean** | **1.8355** | **1.7250** |
+
+Recursion is down 30%; the geomean is down 6%. T018's `<= 0.50x` contract is
+not met and is not close.
+
+**What this session established, which is worth more than the 6%:** the unit
+ordering this task assumed since R2 was backwards. Dispatch elimination was
+measured directly -- 100% of generic dispatch removed from the recursive body,
+proven by counters -- and bought ~5%. Call construction was the cost. Acting on
+that inverted ordering is what produced the remaining 25%.
+
+**Why the sentinel still cannot win, stated as a budget.** Parity needs
+`E + C < 39.5 ns` per call. After removing the `Vm`, the frame, the locals
+vector and its recycler, `compact_fn::execute` self-time alone is still ~30% of
+samples. The remaining path is ~15% `call_direct_leaf_function` (which inlines
+`direct_leaf_function_env`) and ~18% `Value` clone/drop. Closing that needs the
+things Codex named and this session did not build: compact-to-compact
+activation switching in one loop, no per-call `CallEnv`, and fewer `Value`
+clone/drops.
+
+Codex's explicit constraint on the `CallEnv` unit, recorded because it is the
+easy thing to get wrong: **do not reuse the caller's `CallEnv`**.
+`direct_leaf_function_env` performs `this` normalization, creation-realm
+selection, dynamic-realm marking, module-host routing, and private-environment
+installation. For an admitted body most of those are no-ops -- so the opening
+is *proving* that per body and skipping the work, not sharing the caller's
+environment.
