@@ -5973,3 +5973,54 @@ the only place in this tier where `unsafe` would be justified.
 That is a bounded unit, but it is a representation change to the activation,
 not an addition to it, so it is not something to land half-done at the end of a
 session. Reverted; nothing from the attempt is in the tree.
+
+### 2026-08-01 the single-VM frame stack, built and measured: 1.2678
+
+The blocker recorded above -- an activation cannot borrow a bytecode it reaches
+through a register -- turned out to have a clean fix, and the unit this task is
+named for was built:
+
+- `CompactOp` is `Copy`, so the dispatch loop reads `program.ops[pc]` by value
+  and holds no borrow that a frame switch would invalidate.
+- `compact_function_program` caches `Rc<CompactFunctionProgram>`, so a frame can
+  own its program.
+- `ActivationBytecode` is `Borrowed(&Bytecode) | Owned(Rc<Bytecode>)`: the root
+  borrows its caller's argument, a switched-to callee owns the handle it
+  reached through the `Function` in a register.
+- One register buffer for the whole chain, each activation a window at `base`;
+  a `Call` whose callee `compact_callee` admits pushes a `Suspended` and
+  switches; `Return` pops.
+
+**The mechanism worked exactly as designed.** On the 2,000-iteration sentinel,
+`compact_standalone_activations` fell **254,001 -> 2,001**: only the outermost
+call per iteration builds an activation, and the other 252,000 are window
+switches inside one loop. `ordinary_call_attempts` and `compact_function_ops`
+are unchanged.
+
+**And it is 1.2678 -- 27% slower.** Reverted.
+
+Every register access now costs a `base +` offset, and an 18-operation body
+performs several per operation. That outweighs everything the unit removes: the
+Rust stack frame, the pool round trip, the `run` setup. It is the same trade
+that has now lost four times in this file, and this is the clearest instance
+because the mechanism gate passed perfectly while the timing gate failed badly:
+
+| unit | mechanism | timing |
+| --- | --- | ---: |
+| flag to skip the register sweep | n/a | 1.1348 |
+| sweep only owners + blank at entry | n/a | 1.0283 |
+| `mem::replace` over `Value::clone` | n/a | 1.0235 |
+| **single-VM frame stack** | **254,001 -> 2,001** | **1.2678** |
+
+**This retires T021's central premise for this tier.** "Remove the per-call
+frame construction" was the task's name and its thesis; built to completion, it
+costs more than it saves, because a windowed register file is not free the way
+a per-activation one is. The nested design wins here precisely because each
+activation's registers start at zero and the compiler can keep the base in a
+register.
+
+What remains for the recursive sentinel is therefore not the calling
+convention. It is `execute` itself at 61.8%, and that is bounded by `Value`
+being 16 bytes with `needs_drop = true` -- every register write pays for a
+representation that a tagged or NaN-boxed value would not have. That is the
+next unit, and it is a value-representation change, not a frame one.
