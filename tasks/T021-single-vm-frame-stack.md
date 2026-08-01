@@ -5851,3 +5851,37 @@ Seven tests cover what the tier must not change: the churn loop's own totals,
 create-then-overwrite, prototype-chain reads, an accessor declining rather than
 being read as a slot, a frozen receiver, a numeric index still reaching the
 array after its producer is boxed, and a join keeping both branch values.
+
+### 2026-08-01 remembering where an inherited property resolved
+
+With the churn loop admitted, `prototype_method_call` (1.38) became the largest
+non-recursive gap. Its profile is not the dispatcher either: `typed_loop::run`
+53%, then `slot_reads` 12.7%, `ordinary_data_property` 3.7% and `memcmp` 2.2%
+-- roughly 19% resolving one name.
+
+The name is `advance`, and it lives on `Stepper.prototype`. The shape cache
+added earlier only records *own* properties, so every iteration walked the
+chain: an own miss on the receiver, then a hash lookup and `memcmp` on the
+prototype.
+
+`get_named` now remembers the holder, its property revision, and the slot.
+Revisiting is a prototype pointer comparison, a revision comparison, and a slot
+read. Soundness rests on the own lookups that already run first: a property
+that later appears on the receiver shadows the remembered one rather than being
+masked by it. Only the immediate prototype is remembered -- a deeper chain
+still walks, so no multi-level invalidation problem is created.
+
+Paired alternating A/B against a base rebuilt from `e1ebc45d`, nine reps:
+`prototype_method_call` **0.8991** [0.8873, 0.9094]; every other sentinel
+0.9875-1.0241; geomean 0.9815.
+
+Six tests cover the invalidation paths: an own property shadowing the
+remembered one, mutating the prototype mid-loop, adding an own property
+mid-loop, replacing the prototype with `setPrototypeOf`, and an inherited
+accessor declining rather than being read from a slot.
+
+**A correctness defect surfaced while writing those tests**, unrelated to this
+session's work and present in every earlier build: `(true ? a : b).x` evaluated
+to the object rather than to `x`, because the named-property peephole removes a
+`LoadLocal` that a conditional's already-patched `Jump` lands on. Fixed
+separately in `e6aa57e1` with a `compare-qjs` fixture.

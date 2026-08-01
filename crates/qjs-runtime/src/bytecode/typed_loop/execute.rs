@@ -683,6 +683,26 @@ fn get_named(
         shapes.record(shape, slot);
         return Some(value);
     }
+    // The name is not an own property. A method call site reads its callee
+    // from the prototype every iteration, so remember where it resolved:
+    // revisiting is then a pointer comparison and a slot read instead of a
+    // hash lookup per level of the chain.
+    //
+    // The own lookups above are what keep this sound -- they run first on
+    // every read, so a property that later appears on the receiver shadows the
+    // remembered one rather than being masked by it.
+    if let Some(inherited) = shapes.inherited()
+        && let Some(value) = inherited.read(object)
+    {
+        return Some(value);
+    }
+    if let crate::value::Prototype::Object(prototype) = object.prototype_slot()?
+        && let Some(slot) = prototype.own_data_slot(name)
+        && let Some(value) = prototype.own_data_slot_value(slot)
+    {
+        shapes.record_inherited(prototype.clone(), prototype.property_revision(), slot);
+        return Some(value);
+    }
     // Storage the slot cache cannot address — a builtin's dynamic map, say — and
     // inherited data properties still read without observable behaviour, they
     // just resolve the name every time.

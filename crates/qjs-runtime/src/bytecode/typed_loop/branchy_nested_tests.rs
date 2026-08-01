@@ -323,3 +323,93 @@ fn a_join_widening_a_scalar_keeps_both_branch_values() {
         run({ a: 'A' }, ['a', 'missing'], 4);";
     assert_eq!(eval(source), Ok(Value::String("AXAX".into())));
 }
+
+// A property found on the receiver's immediate prototype is remembered, so a
+// method call site stops walking the chain every iteration. Three things can
+// invalidate that, and each has to be caught.
+
+#[test]
+fn an_inherited_method_is_read_from_the_prototype_every_iteration() {
+    let source = "function Stepper(step) { this.step = step; }
+        Stepper.prototype.advance = function (v) { return v + this.step; };
+        function run(pool, n) {
+            var total = 0;
+            for (var i = 0; i < n; i++) { total += pool[i % pool.length].advance(i); }
+            return total;
+        }
+        run([new Stepper(1), new Stepper(1)], 10);";
+    assert_eq!(eval(source), Ok(Value::Number(55.0)));
+}
+
+#[test]
+fn an_own_property_shadows_the_remembered_prototype_one() {
+    let source = "var proto = { tag: 'proto' };
+        function run(a, b, n) {
+            var out = '';
+            for (var i = 0; i < n; i++) { out += (i % 2 === 0 ? a : b).tag; }
+            return out;
+        }
+        var plain = Object.create(proto);
+        var shadowed = Object.create(proto);
+        shadowed.tag = 'own';
+        run(plain, shadowed, 4);";
+    assert_eq!(eval(source), Ok(Value::String("protoownprotoown".into())));
+}
+
+#[test]
+fn mutating_the_prototype_between_iterations_is_observed() {
+    let source = "var proto = { v: 1 };
+        var o = Object.create(proto);
+        function run(o, proto, n) {
+            var total = 0;
+            for (var i = 0; i < n; i++) { total += o.v; if (i === 2) { proto.v = 10; } }
+            return total;
+        }
+        run(o, proto, 6);";
+    assert_eq!(eval(source), Ok(Value::Number(33.0)));
+}
+
+#[test]
+fn adding_an_own_property_mid_loop_shadows_the_cached_prototype() {
+    let source = "var proto = { v: 1 };
+        var o = Object.create(proto);
+        function run(o, n) {
+            var total = 0;
+            for (var i = 0; i < n; i++) { total += o.v; if (i === 2) { o.v = 100; } }
+            return total;
+        }
+        run(o, 6);";
+    assert_eq!(eval(source), Ok(Value::Number(303.0)));
+}
+
+#[test]
+fn replacing_the_prototype_mid_loop_is_observed() {
+    let source = "var first = { v: 1 };
+        var second = { v: 7 };
+        var o = Object.create(first);
+        function run(o, second, n) {
+            var total = 0;
+            for (var i = 0; i < n; i++) {
+                total += o.v;
+                if (i === 2) { Object.setPrototypeOf(o, second); }
+            }
+            return total;
+        }
+        run(o, second, 6);";
+    assert_eq!(eval(source), Ok(Value::Number(24.0)));
+}
+
+#[test]
+fn an_inherited_accessor_is_not_answered_from_the_slot_cache() {
+    let source = "var calls = 0;
+        var proto = {};
+        Object.defineProperty(proto, 'v', { get: function () { calls++; return 2; } });
+        var o = Object.create(proto);
+        function run(o, n) {
+            var total = 0;
+            for (var i = 0; i < n; i++) { total += o.v; }
+            return total;
+        }
+        run(o, 5) + ':' + calls;";
+    assert_eq!(eval(source), Ok(Value::String("10:5".into())));
+}

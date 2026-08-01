@@ -339,6 +339,22 @@ impl fmt::Debug for TypedLoopScratch {
 /// One remembered shape and the slot the property occupies in it.
 type ShapeWay = (Rc<crate::value::ObjectLiteralShape>, usize);
 
+/// A property resolved on a receiver's immediate prototype.
+///
+/// A method call site reads its callee from the prototype on every iteration,
+/// and walking there costs a hash lookup and a `memcmp` per level. Remembering
+/// the holder makes the repeat visit a pointer comparison plus a slot read.
+///
+/// Validity has three parts, all cheap: the receiver must still miss the name
+/// on its own (so nothing shadows it), its prototype must still be the
+/// remembered holder, and the holder's property revision must be unchanged.
+#[derive(Clone, Debug)]
+pub(super) struct InheritedWay {
+    holder: crate::ObjectRef,
+    revision: u64,
+    slot: usize,
+}
+
 #[derive(Clone, Debug, Default)]
 pub(super) struct ShapeWays {
     /// Boxed deliberately, against `clippy::box_collection`. Most sites are
@@ -348,12 +364,46 @@ pub(super) struct ShapeWays {
     /// sentinel never reaches the shape path.
     #[allow(clippy::box_collection)]
     ways: Option<Box<Vec<ShapeWay>>>,
+    /// The prototype resolution for this site, if it has one. Boxed for the
+    /// same reason: a site answered by an own property never allocates it.
+    inherited_way: Option<Box<InheritedWay>>,
+}
+
+impl InheritedWay {
+    /// Re-reads the remembered prototype property, or `None` if anything the
+    /// resolution depended on has moved.
+    pub(super) fn read(&self, receiver: &crate::ObjectRef) -> Option<Value> {
+        let crate::value::Prototype::Object(prototype) = receiver.prototype_slot()? else {
+            return None;
+        };
+        if !prototype.ptr_eq(&self.holder) || prototype.property_revision() != self.revision {
+            return None;
+        }
+        self.holder.own_data_slot_value(self.slot)
+    }
 }
 
 impl ShapeWays {
     /// How many distinct shapes one site remembers. Past a handful a site is
     /// megamorphic and the linear scan stops paying for itself.
     const WAYS: usize = 4;
+
+    pub(super) fn inherited(&self) -> Option<&InheritedWay> {
+        self.inherited_way.as_deref()
+    }
+
+    pub(super) fn record_inherited(
+        &mut self,
+        holder: crate::ObjectRef,
+        revision: u64,
+        slot: usize,
+    ) {
+        self.inherited_way = Some(Box::new(InheritedWay {
+            holder,
+            revision,
+            slot,
+        }));
+    }
 
     pub(super) fn entries(&self) -> &[ShapeWay] {
         self.ways.as_deref().map_or(&[], Vec::as_slice)
