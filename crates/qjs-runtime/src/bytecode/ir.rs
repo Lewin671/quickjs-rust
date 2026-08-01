@@ -810,7 +810,7 @@ pub struct Bytecode {
     /// from the numeric leaf plan because its result may be any JavaScript
     /// value, while accessors, prototypes, proxies, and primitive receivers
     /// retain the ordinary VM path.
-    pub(super) this_property_leaf_plan: Option<super::vm_numeric_leaf::ThisPropertyLeafPlan>,
+    pub(super) this_property_leaf_plan: Option<super::vm_this_property_leaf::ThisPropertyLeafPlan>,
     pub(super) numeric_loop_plans: OnceCell<Vec<super::vm_numeric_loop::NumericLoopPlan>>,
     /// Shape-independent register programs for this body's numeric loop
     /// regions, compiled on first entry to any loop.
@@ -949,7 +949,7 @@ impl Bytecode {
         // immutable instruction stream is being built. In particular, do not
         // make ordinary sloppy calls pay a `OnceCell` lookup merely because
         // their implicit `this` happens to be the global object.
-        let this_property_leaf_plan = super::vm_numeric_leaf::ThisPropertyLeafPlan::compile(
+        let this_property_leaf_plan = super::vm_this_property_leaf::ThisPropertyLeafPlan::compile(
             &constants,
             &code,
             global_scope,

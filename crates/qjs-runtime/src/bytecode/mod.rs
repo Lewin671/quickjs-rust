@@ -53,6 +53,7 @@ mod vm_props;
 mod vm_result;
 mod vm_set;
 mod vm_string_append;
+mod vm_this_property_leaf;
 mod vm_try;
 mod vm_virtual_object;
 
@@ -68,10 +69,11 @@ pub(crate) use vm_generator::{
     resume_generator, start_suspended_at_body,
 };
 pub(crate) use vm_iter::sync_iterator_for_value;
-pub(crate) use vm_numeric_leaf::{try_eval_numeric_leaf, try_eval_this_property_leaf};
+pub(crate) use vm_numeric_leaf::try_eval_numeric_leaf;
 pub(crate) use vm_private::apply_instance_private_element;
 pub(crate) use vm_result::FunctionBytecodeResult;
 pub(crate) use vm_set::set_property as set_object_property;
+pub(crate) use vm_this_property_leaf::try_eval_this_property_leaf;
 
 pub(crate) fn delete_object_property(
     object: Value,
