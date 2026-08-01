@@ -154,3 +154,77 @@ fn a_named_function_expression_restores_the_caller_binding_it_shadowed() {
     );
     assert_eq!(value, Value::string_from_utf8("function:caller"));
 }
+
+/// `function (value) { return value + this.step; }` is answered by the
+/// closed-form receiver-property tier, which builds no frame at all. That tier
+/// evaluates in `f64`, so every input it cannot represent must reach the
+/// ordinary path instead -- and reach it with the same result the ordinary
+/// path would have produced on its own.
+///
+/// The receivers are built and the methods invoked directly, because that is
+/// the only shape that reaches the tier: `Function.prototype.call` dispatches
+/// through a native builtin and never consults it. Each row was checked
+/// against QuickJS-NG.
+#[test]
+fn closed_form_receiver_arithmetic_declines_every_non_numeric_input() {
+    const SETUP: &str = "function Holder(step) { this.step = step; } \
+         Holder.prototype.advance = function (value) { return value + this.step; }; \
+         Holder.prototype.sum = function (a, b) { return a + b + this.step; }; ";
+    let cases: &[(&str, &str, Value)] = &[
+        ("numbers", "new Holder(1).advance(5);", Value::Number(6.0)),
+        (
+            "string argument concatenates",
+            "new Holder(1).advance('2');",
+            Value::String("21".to_owned().into()),
+        ),
+        (
+            "string property concatenates",
+            "new Holder('x').advance(5);",
+            Value::String("5x".to_owned().into()),
+        ),
+        (
+            "object argument coerces through valueOf",
+            "new Holder(1).advance({valueOf: function () { return 9; }});",
+            Value::Number(10.0),
+        ),
+        (
+            "missing argument is undefined, not absent",
+            "String(new Holder(1).advance());",
+            Value::String("NaN".to_owned().into()),
+        ),
+        (
+            "missing property is undefined, not absent",
+            "String(new Holder(undefined).advance(5));",
+            Value::String("NaN".to_owned().into()),
+        ),
+        (
+            "negative zero survives",
+            "1 / new Holder(-0).advance(-0);",
+            Value::Number(f64::NEG_INFINITY),
+        ),
+        (
+            "two arguments and a receiver property",
+            "new Holder(1).sum(2, 3);",
+            Value::Number(6.0),
+        ),
+        (
+            "two arguments, one missing",
+            "String(new Holder(1).sum(2));",
+            Value::String("NaN".to_owned().into()),
+        ),
+        (
+            "an accessor receiver property still runs its getter",
+            "var o = {get step() { return 3; }, advance: Holder.prototype.advance}; o.advance(5);",
+            Value::Number(8.0),
+        ),
+        (
+            "an inherited receiver property still resolves",
+            "var p = {step: 2}; var c = Object.create(p); c.advance = Holder.prototype.advance; \
+             c.advance(5);",
+            Value::Number(7.0),
+        ),
+    ];
+    for (label, source, expected) in cases {
+        assert_eq!(value_of(&format!("{SETUP}{source}")), *expected, "{label}");
+    }
+}

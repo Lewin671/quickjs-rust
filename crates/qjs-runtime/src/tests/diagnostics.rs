@@ -186,12 +186,16 @@ fn an_ordinary_nested_call_does_not_inherit_an_eval_marker() {
 }
 
 #[test]
-fn recursion_and_prototype_methods_already_reach_the_slot_seeded_cohort() {
-    // This is the frame-stack migration's precondition, measured now rather
-    // than assumed later: the calls it intends to route into one VM must
-    // already be the ones taking the slot-seeded path. If they were falling
-    // through to the general name-keyed prologue instead, routing them would
-    // not be the right change.
+fn recursion_builds_slot_seeded_frames_and_receiver_arithmetic_builds_none() {
+    // This is the frame-stack migration's precondition, measured rather than
+    // assumed: the calls it intends to route into one VM must be the ones
+    // taking the slot-seeded path, not the general name-keyed prologue.
+    //
+    // The two halves have since diverged, which is the point of keeping them
+    // in one test. Recursion is still the migration's cohort. Prototype method
+    // calls of the `value + this.step` shape have left it entirely -- the
+    // closed-form receiver-property tier answers them with no frame and no
+    // nested VM -- so the migration no longer has to make them fast.
     let (_, recursion) = counted(
         "function tree(depth, value) {
              if (depth <= 0) { return value + 1; }
@@ -217,11 +221,21 @@ fn recursion_and_prototype_methods_already_reach_the_slot_seeded_cohort() {
          for (var j = 0; j < 40; j++) { checksum += pool[j & 3].advance(j); }
          checksum;",
     );
-    assert!(methods.direct_leaf_frames >= 40);
+    // These forty calls used to build forty slot-seeded frames. They now build
+    // none: `value + this.step` is answered by the closed-form
+    // receiver-property tier, which is the outcome the frame migration was
+    // meant to approximate for this shape and reaches it without a frame at
+    // all. The counters say so precisely, which is why the assertion is on the
+    // tier rather than on wall time.
+    assert_eq!(methods.closed_form_leaf_evaluations, 40);
+    assert_eq!(methods.direct_leaf_frames, 0);
     // The four `new Stepper(1)` constructions are the only general frames:
     // `Stepper` is an ordinary function, so constructing it is outside both
-    // slot-seeding predicates. The forty method calls are all slot-seeded.
+    // slot-seeding predicates.
     assert_eq!(methods.generic_call_frames, 4);
+    // Five nested VMs remain: the four constructions and the top-level script.
+    // The method calls contribute none.
+    assert_eq!(methods.nested_vm_constructions, 5);
 }
 
 #[test]

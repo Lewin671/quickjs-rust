@@ -52,6 +52,12 @@ enum ThisPropertyNumericOp {
         key: Rc<str>,
         cache: NamedPropertyCache,
     },
+    /// An argument used directly as a numeric operand, as in
+    /// `function (value) { return value + this.step; }`. The plan already
+    /// modelled arguments as receivers of property reads; without this it
+    /// could not use one as a plain number, which excluded the most common
+    /// arithmetic method body there is.
+    Argument(usize),
     Constant(f64),
     Binary(BinaryOp),
     Return,
@@ -163,6 +169,13 @@ impl ThisPropertyNumericPlan {
                         cache: cache.clone(),
                     });
                 }
+                Op::LoadLocal(slot) => {
+                    let index = parameter_slots
+                        .iter()
+                        .rposition(|candidate| candidate == slot)?;
+                    push_this_property_stack(&mut stack, ThisPropertyStackValue::Number)?;
+                    plan_ops.push(ThisPropertyNumericOp::Argument(index));
+                }
                 Op::LoadConst(index) => {
                     let Value::Number(value) = constants.get(*index)? else {
                         return None;
@@ -209,6 +222,12 @@ impl ThisPropertyNumericPlan {
                         &mut stack_len,
                         own_data_property_number(receiver, key, cache)?,
                     )?;
+                }
+                ThisPropertyNumericOp::Argument(index) => {
+                    let Some(Value::Number(value)) = arguments.get(*index) else {
+                        return None;
+                    };
+                    push_number(&mut stack, &mut stack_len, *value)?;
                 }
                 ThisPropertyNumericOp::Constant(value) => {
                     push_number(&mut stack, &mut stack_len, *value)?;
@@ -387,6 +406,43 @@ mod tests {
         assert_eq!(
             plan.eval(&Value::Object(receiver), &[Value::Object(argument)]),
             Some(Value::Number(32.0))
+        );
+    }
+
+    #[test]
+    fn this_property_numeric_plan_uses_an_argument_as_a_numeric_operand() {
+        let script = qjs_parser::parse_script(
+            "var receiver = { step: 2, advance: function (value) { return value + this.step; } };",
+        )
+        .expect("source should parse");
+        let script_bytecode = compiler::compile_script(&script).expect("source should compile");
+        let function_bytecode = script_bytecode
+            .code
+            .iter()
+            .find_map(|op| match op {
+                Op::NewFunction { bytecode, .. } => Some(bytecode),
+                _ => None,
+            })
+            .expect("function bytecode should be nested in the script");
+        let plan = function_bytecode
+            .this_property_leaf_plan
+            .as_ref()
+            .expect("an argument used as a numeric operand should be admitted");
+        assert!(matches!(plan, ThisPropertyLeafPlan::Numeric(_)));
+        let receiver =
+            crate::ObjectRef::new(HashMap::from([("step".to_owned(), Value::Number(2.0))]));
+        assert_eq!(
+            plan.eval(&Value::Object(receiver.clone()), &[Value::Number(5.0)]),
+            Some(Value::Number(7.0))
+        );
+        // A non-numeric argument has no representation in the plan's `f64`
+        // stack, so it must decline rather than coerce.
+        assert_eq!(
+            plan.eval(
+                &Value::Object(receiver),
+                &[Value::String("5".to_owned().into())]
+            ),
+            None
         );
     }
 
