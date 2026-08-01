@@ -232,6 +232,67 @@ impl Compiler {
         Ok(())
     }
 
+    /// Emits a variable declaration's binding stores, without the statement's
+    /// own completion value.
+    ///
+    /// `compile_stmt` appends that value; a statement list that cannot observe
+    /// it calls this directly, because in a function body every `var`, `let`,
+    /// and `const` statement otherwise pushed an `undefined` that nothing ever
+    /// read. In `callTree` that was three of the thirty-two instructions the
+    /// non-leaf path dispatches.
+    pub(super) fn compile_var_decl_bindings(
+        &mut self,
+        kind: VarKind,
+        declarations: &[qjs_ast::VarDeclarator],
+    ) -> Result<(), RuntimeError> {
+        for declaration in declarations {
+            for name in declaration.binding.names() {
+                let slot = self.declare_var_kind_slot(&name, kind);
+                if kind.is_lexical() {
+                    self.emit(Op::ClearLocal(slot));
+                }
+            }
+            let has_init = declaration.init.is_some();
+            if let Some(init) = &declaration.init {
+                if let Some((name, slot, object_slot)) =
+                    self.resolve_var_initializer_with_target(&declaration.binding, kind)
+                {
+                    self.compile_declaration_init(&declaration.binding, init)?;
+                    self.emit(Op::StoreResolvedIdentWith {
+                        name,
+                        slot,
+                        object_slot,
+                        is_strict: self.strict,
+                    });
+                    continue;
+                }
+                self.compile_declaration_init(&declaration.binding, init)?;
+            } else {
+                self.emit_load_undefined();
+            }
+            // A `using`/`await using` registers its initializer value with the
+            // enclosing disposal scope before the binding store consumes it
+            // (register ops inspect the stack top).
+            if self.disposable_scope_depth > 0 {
+                match kind {
+                    VarKind::Using => {
+                        self.emit(Op::RegisterDisposable);
+                    }
+                    VarKind::AwaitUsing => {
+                        self.emit(Op::RegisterAsyncDisposable);
+                    }
+                    _ => {}
+                }
+            }
+            if has_init {
+                self.compile_binding_initializer(&declaration.binding, kind)?;
+            } else {
+                self.compile_binding_uninitialized(&declaration.binding, kind)?;
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn compile_binding_default(
         &mut self,
         default: Option<&qjs_ast::Expr>,

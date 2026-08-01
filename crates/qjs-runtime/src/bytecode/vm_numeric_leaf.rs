@@ -1552,17 +1552,28 @@ fn push_abstract(stack: &mut Vec<AbstractValue>, value: AbstractValue) -> Option
 }
 
 fn compact_terminal_upvalue_update(ops: &mut Vec<FastOp>) -> bool {
-    let [
+    // The `Dup` is present only where the compound assignment had to produce
+    // its own value. A statement list that cannot observe that value compiles
+    // the assignment to the store alone, so the same counter reaches this tier
+    // in two shapes and both must fuse -- otherwise a codegen improvement
+    // silently costs this tier its fastest form. Match both without building
+    // an intermediate sequence: this runs on every candidate body, most of
+    // which are not counters at all.
+    let (load, binary, store, load_back, ret) = match ops.as_slice() {
+        [load, binary, FastOp::Dup, store, load_back, ret] => (load, binary, store, load_back, ret),
+        [load, binary, store, load_back, ret] => (load, binary, store, load_back, ret),
+        _ => return false,
+    };
+    let (
         FastOp::LoadLocal(load_slot),
         FastOp::BinaryConstRight(op, right),
-        FastOp::Dup,
         FastOp::StoreLocal {
             slot: store_slot,
             upvalue_index: Some(upvalue_index),
         },
         FastOp::LoadLocal(return_slot),
         FastOp::Return,
-    ] = ops.as_slice()
+    ) = (load, binary, store, load_back, ret)
     else {
         return false;
     };

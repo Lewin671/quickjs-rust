@@ -340,7 +340,13 @@ impl Compiler {
                 compiler.compile_statements_with_disposal(body)?;
             } else {
                 for stmt in body {
-                    compiler.compile_stmt(stmt)?;
+                    // A function body's statement completion values are never
+                    // observable, so each statement that can drop its own is
+                    // compiled without producing one. The rest still push, and
+                    // are still left where they land: the frame's operand stack
+                    // is discarded when the body returns, and adding a `Pop`
+                    // per statement would cost more instructions than it saves.
+                    compiler.compile_statement_list_entry(stmt)?;
                 }
             }
             Ok(())
@@ -949,51 +955,7 @@ impl Compiler {
             Stmt::VarDecl {
                 kind, declarations, ..
             } => {
-                for declaration in declarations {
-                    for name in declaration.binding.names() {
-                        let slot = self.declare_var_kind_slot(&name, *kind);
-                        if kind.is_lexical() {
-                            self.emit(Op::ClearLocal(slot));
-                        }
-                    }
-                    let has_init = declaration.init.is_some();
-                    if let Some(init) = &declaration.init {
-                        if let Some((name, slot, object_slot)) =
-                            self.resolve_var_initializer_with_target(&declaration.binding, *kind)
-                        {
-                            self.compile_declaration_init(&declaration.binding, init)?;
-                            self.emit(Op::StoreResolvedIdentWith {
-                                name,
-                                slot,
-                                object_slot,
-                                is_strict: self.strict,
-                            });
-                            continue;
-                        }
-                        self.compile_declaration_init(&declaration.binding, init)?;
-                    } else {
-                        self.emit_load_undefined();
-                    }
-                    // A `using`/`await using` registers its initializer value
-                    // with the enclosing disposal scope before the binding
-                    // store consumes it (register ops inspect the stack top).
-                    if self.disposable_scope_depth > 0 {
-                        match kind {
-                            VarKind::Using => {
-                                self.emit(Op::RegisterDisposable);
-                            }
-                            VarKind::AwaitUsing => {
-                                self.emit(Op::RegisterAsyncDisposable);
-                            }
-                            _ => {}
-                        }
-                    }
-                    if has_init {
-                        self.compile_binding_initializer(&declaration.binding, *kind)?;
-                    } else {
-                        self.compile_binding_uninitialized(&declaration.binding, *kind)?;
-                    }
-                }
+                self.compile_var_decl_bindings(*kind, declarations)?;
                 self.emit_load_undefined();
                 Ok(())
             }
@@ -1160,6 +1122,18 @@ impl Compiler {
                 self.compile_compound_assign_discarded(target, *op, value)?;
                 return Ok(false);
             }
+        }
+        // A variable declaration in statement position is the other ubiquitous
+        // statement form. Its completion value is always `undefined`, so where
+        // nothing can observe it the declaration compiles to its binding stores
+        // alone.
+        if !self.tracks_completion_values
+            && let Stmt::VarDecl {
+                kind, declarations, ..
+            } = stmt
+        {
+            self.compile_var_decl_bindings(*kind, declarations)?;
+            return Ok(false);
         }
         self.compile_stmt(stmt)?;
         Ok(true)
