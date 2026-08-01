@@ -143,7 +143,12 @@ impl CompactFunctionProgram {
     }
 
     fn recycle_registers(&self, mut registers: Vec<crate::Value>) {
-        registers.clear();
+        // Reset in place rather than clearing. A cleared buffer has to be
+        // grown again by the next activation, which showed up as
+        // `Vec::extend_with` in the profile; keeping the length means the next
+        // `take_registers` can use it as-is. The values still have to be
+        // dropped here either way.
+        registers.fill(crate::Value::Undefined);
         let mut pooled = self
             .scratch_pool
             .get_or_init(|| Rc::new(RefCell::new(Vec::new())))

@@ -168,7 +168,11 @@ fn run(
     };
     let program = entry.program;
     let mut registers = program.take_registers();
-    registers.clear();
+    // A recycled buffer already has the right length and is already all
+    // `undefined`; only a fresh one needs growing.
+    if registers.len() != program.register_count {
+        registers.clear();
+    }
     // Locals live in the low registers. Everything starts `undefined`, which
     // is already the correct seed for a hoisted `var`; parameters overwrite
     // theirs below, and a received upvalue is read from its cell rather than

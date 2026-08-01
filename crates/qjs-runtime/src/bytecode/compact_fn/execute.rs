@@ -67,7 +67,15 @@ pub(super) fn execute(
                 registers[src as usize] = Value::Undefined;
             }
             CompactOp::JumpIfFalsy { cond, target } => {
-                if !crate::is_truthy(&registers[cond as usize]) {
+                // The general `is_truthy` consults the `[[IsHTMLDDA]]` slot,
+                // which showed up in the profile for a loop condition that is
+                // always a number. Numbers answer here; everything else keeps
+                // the shared implementation.
+                let falsy = match &registers[cond as usize] {
+                    Value::Number(number) => *number == 0.0 || number.is_nan(),
+                    other => !crate::is_truthy(other),
+                };
+                if falsy {
                     pc = target as usize;
                 }
             }
