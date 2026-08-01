@@ -5702,3 +5702,54 @@ That also rules out the analogous change in the generic interpreter's
 `StoreLocal`, which was the next candidate for the inline drop test:
 `run_current_activation` is 24,600 instructions with a saturated register
 allocator, so adding a test there is the same trade at worse odds.
+
+### 2026-08-01 the typed-loop churn blocker, found by tracing instead of guessing
+
+Six earlier hypotheses about why `string_key_map_churn`'s loop is never
+admitted each failed with byte-identical counters. The note left for this
+session said to stop inferring and trace every `?` in the walk loop. Doing that
+answered it in one run -- and the answer is not where any of the six looked.
+
+Instrumenting each exit of `Builder::compile`'s walk gives, per fixpoint pass:
+
+```
+pass 1   ip=21  compile_op GetProp            (normal: records a discovery)
+pass 2   ip=23  compile_element_assignment
+pass 3   ip=23  compile_element_assignment
+```
+
+The walk never reaches op 29. It exits inside `compile_element_assignment` at
+ip 23 -- and that call is not a failure to lower an instruction, it is
+`table[key] = (table[key] || 0) + 1` matching the *array element assignment*
+idiom by shape and then discovering it is not one. Probing inside it:
+
+```
+pass 2   inner=29  compile_op GetProp          (computed string key)
+pass 3   inner=30  control_flow JumpIfTrue(33)  (the `||`)
+```
+
+So there are **two** blockers in series, which is why the earlier prototype
+that added `GetComputedString`/`SetComputedString` still saw no admission: the
+`||` would have stopped it anyway.
+
+The structural defect underneath is the interesting part.
+`compile_element_assignment` lowers to exactly one thing, `TypedOp::DenseWrite`,
+so a dictionary receiver was never expressible there. But it discovers that
+*after* emitting the key expression, and at that point "cannot lower this" has
+to be `None` -- which aborts the **whole region** -- rather than `Some(None)`,
+which would hand the instruction back to the ordinary per-instruction path.
+A pattern that does not apply was taking down everything around it.
+
+`8880c0c3`'s successor moves the branch-free requirement to a pre-scan, before
+anything is emitted, so that case now declines cheaply and leaves the region
+alive. Sentinels are unchanged (0.9915-1.0078, geomean 0.9982): churn still
+declines, because the remaining blocker is the computed string key itself.
+
+**What this leaves for the churn unit**, now that its shape is known rather
+than guessed: `TypedOp::GetComputedString`/`SetComputedString` over boxed
+registers, with the runtime helpers that already exist and take `&str`. The
+region will then compile as ordinary instructions rather than through the
+element-assignment idiom, so no join bookkeeping for elided temporaries is
+needed. Note the receiver's array-ness is not decidable at compile time --
+`receiver_index` only allocates an index, and `seed_registers` is what
+validates -- so the ordinary path is the correct home for this shape.

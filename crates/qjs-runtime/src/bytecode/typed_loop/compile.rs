@@ -1011,6 +1011,24 @@ impl<'a> Builder<'a> {
         // temporaries elided. Copy the computed key before the value
         // expression: JavaScript evaluates it first, so a later local write in
         // the value expression must not change the eventual dense-array index.
+        // The value expression must be branch-free: a join inside it would
+        // need its own bookkeeping relative to the elided temporaries. That is
+        // decided here, by inspection, rather than part-way through lowering.
+        //
+        // The distinction matters more than it looks. Saying "cannot lower
+        // this" after emitting operations has to fail with `None`, which takes
+        // the *whole region* down; saying it beforehand can return
+        // `Some(None)` and let the ordinary per-instruction path try. A
+        // `table[key] = (table[key] || 0) + 1` is exactly that case: this
+        // idiom only lowers to a dense array write, so a dictionary receiver
+        // was never going to be expressible here, and its `||` was aborting
+        // the region before the ordinary path ever saw it.
+        for probe in index_store + 1..value_store {
+            if expression_has_control_flow(code.get(probe)?) {
+                return Some(None);
+            }
+        }
+        let receiver_slot = u32::try_from(receiver).ok()?;
         let index_register = self.compile_pure_scalar_expression(ip + 2, index_store)?;
         let index_copy = self.fresh()?;
         self.emit(TypedOp::Move {
@@ -1036,7 +1054,6 @@ impl<'a> Builder<'a> {
             return None;
         }
         let (value, _) = self.pop()?;
-        let receiver_slot = u32::try_from(receiver).ok()?;
         let receiver = self.receiver_index(receiver_slot)?;
         self.emit(TypedOp::DenseWrite {
             receiver,
