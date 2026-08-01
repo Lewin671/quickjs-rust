@@ -5511,3 +5511,61 @@ counter `compact_standalone_activations`.
 Paired alternating A/B against a base rebuilt from `50be13ec`, nine reps twice:
 `recursive_call_tree` **0.7007** and **0.7036** [0.6997, 0.7106]. Every other
 sentinel between 0.9937 and 1.0052; six-case geomean **0.9443**.
+
+### 2026-08-01 the TDZ regression the local gate could not see
+
+`be43c1f5` (VM-free activation) took `actionable_gap` from 0 to **12** in the
+Test262 Coverage workflow, and three commits landed on top before the failure
+was noticed. The 12 are one family: `closure-get-before-initialization` for
+`let`, `const`, `using` and `await-using`.
+
+Cause: rewriting the tier to run without a `Vm` removed the general-path
+fallback, and the uninitialized-lexical check on `LoadUpvalueLocal` went with
+it. A closure called before the `let` it captures is reached returned
+`undefined` instead of raising `ReferenceError`.
+
+The admission narrowing in `63c775bd` looked like it covered this and does not.
+It proves every local a body *reads* is a parameter, a hoisted `var`, or a
+received upvalue -- but whether a received cell is *initialized* is a fact about
+the caller's execution, not a property of the callee's body. No static
+admission can rule it out. Fixed in `001b216b` by checking at the read.
+
+**Why the local gate missed it, which matters more than the bug.** The pre-push
+gate runs `tests/test262/allowlist.txt` -- 5,160 cases at the time. The CI
+workflow runs the full configured inventory, 42,672. None of the 12 were in the
+allowlist, so every local run was green. Nine are in it now; the three
+`await-using` cases are excluded because the subset runner rejects their `async`
+flag.
+
+The general lesson for this tier: an admission predicate can only constrain the
+*body*. Anything about the caller's state -- cell initialization, receiver
+identity, environment shape -- has to be checked where it is read or at entry,
+never assumed from what the body looks like.
+
+### 2026-08-01 rejected: virtual stack / copy propagation in the compact compiler
+
+`LoadLocal` lowering to a `Move` is redundant when the value is already in a
+register -- the local's own. Recording "abstract depth d is local s" and letting
+the consumer read `s` directly removes about a third of the emitted operations
+for the recursive sentinel, materializing only where the layout must be real:
+branches, merge points, and a call's contiguous argument window.
+
+Implemented and **rejected**: it produced wrong results twice, and the second
+diagnosis was still incomplete.
+
+1. Aliasing. A stack level that *names* a local rather than holding a copy
+   observes a later `StoreLocal` to that local, when the language says it
+   captured the old value. Fixed by materializing aliases before the write.
+2. Merge edges. `cond ? a : b` whose arms share a `Return`: the branch edge
+   materializes before jumping, but the fall-through edge does not, so `Return`
+   read an empty canonical register. `pick('y')` returned `undefined`.
+   Materializing on the fall-through edge into a branch target did **not** fix
+   it, which is where this was abandoned -- the remaining defect is not
+   understood, and a data-flow transform whose failure mode is silently wrong
+   values is not worth carrying on an incomplete model.
+
+Whoever picks this up: the payoff is real (roughly a third of dispatched
+operations) but it needs a proper liveness/aliasing analysis over the compact
+IR, not the incremental holder-array approach tried here. Reproduce with
+`var s = Symbol('s'); function pick(k){ return k === s ? 'S' : k; } pick('y')`,
+which must be `'y'`.
