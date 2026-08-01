@@ -54,6 +54,28 @@ impl<'a> CompactActivation<'a> {
         owner.upvalues.get(index)
     }
 
+    /// Answers a received cell that is still in its temporal dead zone.
+    ///
+    /// Whether a cell is initialized is a runtime fact about the *caller's*
+    /// execution, not a property of this body, so no amount of admission
+    /// narrowing can rule it out -- a closure can be called before the `let`
+    /// it captures is reached. A compiler temporary reads as `undefined`,
+    /// matching `Vm::uninitialized_local_value`.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn uninitialized_upvalue(&self, slot: usize) -> Result<Value, RuntimeError> {
+        if self.bytecode.local_is_compiler_temporary(slot) {
+            return Ok(Value::Undefined);
+        }
+        Err(RuntimeError {
+            thrown: None,
+            message: format!(
+                "ReferenceError: undefined identifier `{}`",
+                self.bytecode.locals[slot].name
+            ),
+        })
+    }
+
     /// Evaluates one non-numeric binary operation.
     ///
     /// Binary coercion never runs in the caller's lexical environment -- user

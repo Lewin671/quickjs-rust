@@ -46,7 +46,12 @@ pub(super) fn execute(
                 let Some(cell) = activation.upvalue_cell(slot as usize) else {
                     return Err(uninitialized_local());
                 };
-                registers[dst as usize] = cell.get();
+                let value = cell.get();
+                registers[dst as usize] = if value.is_uninitialized_lexical_marker() {
+                    activation.uninitialized_upvalue(slot as usize)?
+                } else {
+                    value
+                };
             }
             CompactOp::Binary {
                 dst,

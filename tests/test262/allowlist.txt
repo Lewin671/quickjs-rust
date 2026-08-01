@@ -5163,3 +5163,12 @@ test/language/statements/with/get-mutable-binding-binding-deleted-in-get-unscopa
 test/language/statements/with/set-mutable-binding-binding-deleted-with-typed-array-in-proto-chain.js
 test/language/statements/with/set-mutable-binding-idref-compound-assign-with-proxy-env.js
 test/language/statements/with/set-mutable-binding-idref-with-proxy-env.js
+test/language/statements/let/block-local-closure-get-before-initialization.js
+test/language/statements/let/function-local-closure-get-before-initialization.js
+test/language/statements/let/global-closure-get-before-initialization.js
+test/language/statements/const/block-local-closure-get-before-initialization.js
+test/language/statements/const/function-local-closure-get-before-initialization.js
+test/language/statements/const/global-closure-get-before-initialization.js
+test/language/statements/using/block-local-closure-get-before-initialization.js
+test/language/statements/using/function-local-closure-get-before-initialization.js
+test/language/statements/using/global-closure-get-before-initialization.js

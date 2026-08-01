@@ -270,3 +270,42 @@ fn errors_from_a_shared_environment_callee_keep_their_thrown_value() {
         try { driver(null); 'no throw'; } catch (e) { e instanceof TypeError; }";
     assert_eq!(eval(source), Ok(Value::Boolean(true)));
 }
+
+#[test]
+fn a_captured_binding_read_before_initialization_still_throws() {
+    // Whether a received cell is initialized is a fact about the *caller's*
+    // execution, so no admission narrowing can rule it out: this closure is
+    // called before the `let` it captures is reached. Regression test for the
+    // 12 Test262 `closure-get-before-initialization` cases the VM-free
+    // rewrite broke by dropping the marker check.
+    let source = "(function () {
+            function f() { return x + 1; }
+            var threw = false;
+            try { f(); } catch (e) { threw = e instanceof ReferenceError; }
+            let x;
+            return threw;
+        }());";
+    assert_eq!(eval(source), Ok(Value::Boolean(true)));
+}
+
+#[test]
+fn a_captured_binding_read_after_initialization_still_reads() {
+    let source = "(function () {
+            function f() { return x + 1; }
+            let x = 41;
+            return f();
+        }());";
+    assert_eq!(eval(source), Ok(Value::Number(42.0)));
+}
+
+#[test]
+fn a_captured_const_read_before_initialization_still_throws() {
+    let source = "(function () {
+            function f() { return c; }
+            var threw = false;
+            try { f(); } catch (e) { threw = e instanceof ReferenceError; }
+            const c = 1;
+            return threw;
+        }());";
+    assert_eq!(eval(source), Ok(Value::Boolean(true)));
+}
