@@ -5649,3 +5649,29 @@ Six-case geomean **0.9837**.
 Six tests pin the invalidation: polymorphic reads, a shape change mid-loop, an
 overwrite, a delete, six shapes against four ways, and an accessor shadowing a
 cached shape.
+
+### 2026-08-01 the biggest remaining cost in the compact tier was `drop_in_place`
+
+With the environment and the frame gone, the recursive sentinel's profile was
+`compact_fn::execute` ~50%, **`drop_in_place<Value>` 22%**, `Value::clone` 10%.
+
+That 22% is for registers that, in this body, only ever hold numbers. `Value`
+is 16 bytes with `needs_drop = true`, so `registers[dst] = value` drops the old
+value -- and `drop_in_place::<Value>` stays an out-of-line call. Every register
+write in an 18-operation activation paid one, as did the per-recycle reset.
+
+Register stores now go through an `#[inline(always)]` helper that tests the
+discriminant first and `mem::forget`s a value that owns nothing. The list is
+**positive**: `Number`, `Boolean`, `Null`, `Undefined` are forgotten, and
+everything else -- including any variant added later -- takes the ordinary
+drop. A mistake in that direction costs a branch, never a leak. The recycler's
+reset uses the same test instead of `Vec::fill`.
+
+Paired alternating A/B against a base rebuilt from `27702b16`, eleven reps:
+`recursive_call_tree` **0.7550** [0.5485, 0.7746]. Every other sentinel between
+0.9979 and 1.0078; six-case geomean **0.9555**.
+
+Three tests cover what the shortcut must not break: non-primitive values
+flowing through an admitted body, a register alternating heap and primitive
+values across 200 activations, and string accumulation across a recycled
+buffer.

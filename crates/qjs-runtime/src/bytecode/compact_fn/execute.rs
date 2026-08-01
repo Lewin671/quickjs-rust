@@ -12,6 +12,26 @@ use super::activation::{CompactActivation, call_from_activation};
 use super::{CompactFunctionProgram, CompactOp};
 use crate::{RuntimeError, Value};
 
+/// Overwrites a register, deciding inline whether the old value owns anything.
+///
+/// `drop_in_place::<Value>` stays an out-of-line call and was 22% of the
+/// recursive sentinel's profile -- for registers that only ever hold numbers.
+/// Testing the discriminant here lets the common case skip the call entirely.
+///
+/// The four variants listed own nothing; everything else, including any
+/// variant added later, takes the ordinary drop. A mistake in that list
+/// therefore costs a branch, never a leak.
+#[inline(always)]
+fn store(slot: &mut Value, value: Value) {
+    let previous = std::mem::replace(slot, value);
+    if matches!(
+        previous,
+        Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined
+    ) {
+        std::mem::forget(previous);
+    }
+}
+
 #[inline(never)]
 pub(super) fn execute(
     activation: &mut CompactActivation<'_>,
@@ -36,22 +56,27 @@ pub(super) fn execute(
                 // `Value::clone` stays an out-of-line call; the local-value
                 // clone inlines its primitive cases, which is what a constant
                 // pool of numbers actually needs.
-                registers[dst as usize] = crate::bytecode::vm_bindings::clone_local_value(value);
+                store(
+                    &mut registers[dst as usize],
+                    crate::bytecode::vm_bindings::clone_local_value(value),
+                );
             }
             CompactOp::Move { dst, src } => {
-                registers[dst as usize] =
+                let value =
                     crate::bytecode::vm_bindings::clone_local_value(&registers[src as usize]);
+                store(&mut registers[dst as usize], value);
             }
             CompactOp::LoadUpvalueLocal { dst, slot } => {
                 let Some(cell) = activation.upvalue_cell(slot as usize) else {
                     return Err(uninitialized_local());
                 };
                 let value = cell.get();
-                registers[dst as usize] = if value.is_uninitialized_lexical_marker() {
+                let value = if value.is_uninitialized_lexical_marker() {
                     activation.uninitialized_upvalue(slot as usize)?
                 } else {
                     value
                 };
+                store(&mut registers[dst as usize], value);
             }
             CompactOp::Binary {
                 dst,
@@ -64,15 +89,16 @@ pub(super) fn execute(
                     && let Some(value) =
                         crate::bytecode::vm_props::fast_number_binary_numbers(*left, op, *right)
                 {
-                    registers[dst as usize] = value;
+                    store(&mut registers[dst as usize], value);
                     continue;
                 }
                 let left = std::mem::replace(&mut registers[left as usize], Value::Undefined);
                 let right = std::mem::replace(&mut registers[right as usize], Value::Undefined);
-                registers[dst as usize] = activation.eval_binary(left, op, right)?;
+                let value = activation.eval_binary(left, op, right)?;
+                store(&mut registers[dst as usize], value);
             }
             CompactOp::Drop { src } => {
-                registers[src as usize] = Value::Undefined;
+                store(&mut registers[src as usize], Value::Undefined);
             }
             CompactOp::JumpIfFalsy { cond, target } => {
                 // The general `is_truthy` consults the `[[IsHTMLDDA]]` slot,
@@ -96,7 +122,7 @@ pub(super) fn execute(
                     callee,
                     &registers[base + 1..base + 1 + argc as usize],
                 )?;
-                registers[dst as usize] = value;
+                store(&mut registers[dst as usize], value);
             }
             CompactOp::Return { src } => {
                 return Ok(std::mem::replace(

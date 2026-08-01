@@ -309,3 +309,43 @@ fn a_captured_const_read_before_initialization_still_throws() {
         }());";
     assert_eq!(eval(source), Ok(Value::Boolean(true)));
 }
+
+// Register stores skip `drop_in_place` when the value they overwrite is one of
+// the four variants that own nothing. These pin that non-primitive values --
+// which must take the ordinary drop -- still flow through a compact body
+// correctly, and that a register reused across activations does not hand an
+// old value to a later one.
+
+#[test]
+fn non_primitive_values_flow_through_a_compact_body() {
+    let source = "function pick(a, b) { return a === null ? b : a; }
+        var o = { tag: 'obj' };
+        [pick('s', 1), pick(null, 'fallback'), pick(o, 1).tag, typeof pick(null, o)].join(',');";
+    assert_eq!(
+        eval(source),
+        Ok(Value::String("s,fallback,obj,object".into()))
+    );
+}
+
+#[test]
+fn a_recycled_register_does_not_leak_a_previous_activations_value() {
+    // Same body, alternating primitive and heap values through the same
+    // registers. A store that forgot a droppable value would leak; one that
+    // dropped a live value would corrupt the result.
+    let source = "function pick(a, b) { return a === null ? b : a; }
+        var out = [];
+        for (var i = 0; i < 200; i++) {
+            out.push(pick(i % 2 === 0 ? null : { n: i }, 'x' + i));
+        }
+        out[0] + ',' + out[1].n + ',' + out[198] + ',' + out[199].n;";
+    assert_eq!(eval(source), Ok(Value::String("x0,1,x198,199".into())));
+}
+
+#[test]
+fn strings_concatenated_in_a_compact_body_survive_recycling() {
+    let source = "function join(a, b) { return a + b; }
+        var acc = '';
+        for (var i = 0; i < 50; i++) { acc = join(acc, 'ab'); }
+        acc.length + ':' + acc.slice(0, 4);";
+    assert_eq!(eval(source), Ok(Value::String("100:abab".into())));
+}

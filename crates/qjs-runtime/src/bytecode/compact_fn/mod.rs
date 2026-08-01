@@ -146,9 +146,23 @@ impl CompactFunctionProgram {
         // Reset in place rather than clearing. A cleared buffer has to be
         // grown again by the next activation, which showed up as
         // `Vec::extend_with` in the profile; keeping the length means the next
-        // `take_registers` can use it as-is. The values still have to be
-        // dropped here either way.
-        registers.fill(crate::Value::Undefined);
+        // `take_registers` can use it as-is.
+        //
+        // `fill` would call `drop_in_place` per element. Most registers hold a
+        // number by the time a body returns, so the same inline discriminant
+        // test the executor uses for its stores pays here too.
+        for slot in &mut registers {
+            let previous = std::mem::replace(slot, crate::Value::Undefined);
+            if matches!(
+                previous,
+                crate::Value::Number(_)
+                    | crate::Value::Boolean(_)
+                    | crate::Value::Null
+                    | crate::Value::Undefined
+            ) {
+                std::mem::forget(previous);
+            }
+        }
         let mut pooled = self
             .scratch_pool
             .get_or_init(|| Rc::new(RefCell::new(Vec::new())))
