@@ -55,21 +55,18 @@ enum CompactOp {
         dst: u16,
         index: u32,
     },
-    /// Reads a local whose sole binding authority is indexed storage. The
-    /// authoritative-slot precondition is checked once at entry, not per read.
-    LoadLocal {
+    /// Copies between registers. Locals occupy the low registers, so a local
+    /// read or write is this operation rather than a trip through indexed
+    /// frame storage.
+    Move {
         dst: u16,
-        slot: u16,
+        src: u16,
     },
     /// Reads a local backed by a received upvalue cell, which a slot-seeded
     /// direct frame resolves through the function it retains.
     LoadUpvalueLocal {
         dst: u16,
         slot: u16,
-    },
-    StoreLocal {
-        slot: u16,
-        src: u16,
     },
     /// Releases a register that `Op::Pop` discarded.
     ///

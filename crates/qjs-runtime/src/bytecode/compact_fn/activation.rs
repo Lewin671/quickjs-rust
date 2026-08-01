@@ -22,7 +22,6 @@ use qjs_ast::BinaryOp;
 use super::execute;
 use crate::bytecode::DirectCallSlots;
 use crate::bytecode::ir::Bytecode;
-use crate::bytecode::vm::{Slot, Vm};
 use crate::function::{CallEnv, Function, Upvalue};
 use crate::{RuntimeError, Value};
 
@@ -34,7 +33,6 @@ pub(super) struct CompactActivation<'a> {
     /// not the caller's: it carries `this` normalization, creation-realm
     /// selection, module-host routing, and the private environment.
     pub(super) env: CallEnv,
-    pub(super) locals: Vec<Slot>,
     /// The function whose upvalue vector backs this body's received cells.
     /// Reads resolve through it by bytecode slot, keeping cell identity live.
     upvalue_owner: Option<Function>,
@@ -118,24 +116,31 @@ pub(in crate::bytecode) fn try_run_standalone(
     let call_env = env.take()?;
     let call_slots = slots.take()?;
     crate::diagnostics::count!(compact_standalone_activations);
-    let mut locals = Vm::initial_direct_call_slots(bytecode);
-    // An admitted body never reads `this` -- `LoadThis` is not in the opcode
-    // set -- so the seeded receiver is discarded rather than retained.
-    let _ = Vm::seed_direct_call_slots(bytecode, &mut locals, call_slots);
     let mut activation = CompactActivation {
         bytecode,
         env: call_env,
-        locals,
         upvalue_owner,
         upvalue_slots,
     };
 
     let mut registers = program.take_registers();
     registers.clear();
+    // Locals live in the low registers. Everything starts `undefined`, which
+    // is already the correct seed for a hoisted `var`; parameters overwrite
+    // theirs below, and a received upvalue is read from its cell rather than
+    // from a register. `this` is not in the opcode set, so its slot is left
+    // alone. That is the whole frame-setup cost for an admitted body.
     registers.resize(program.register_count, Value::Undefined);
+    for (index, &slot) in call_slots.parameter_slots.iter().enumerate() {
+        let Some(target) = registers.get_mut(slot) else {
+            continue;
+        };
+        if let Some(argument) = call_slots.arguments.get(index) {
+            *target = argument.clone();
+        }
+    }
     let result = execute::execute(&mut activation, program, &mut registers);
     program.recycle_registers(registers);
-    bytecode.recycle_local_slots(std::mem::take(&mut activation.locals));
     Some(result)
 }
 

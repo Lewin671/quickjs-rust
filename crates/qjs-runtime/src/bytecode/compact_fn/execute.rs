@@ -35,25 +35,15 @@ pub(super) fn execute(
                 };
                 registers[dst as usize] = value.clone();
             }
-            CompactOp::LoadLocal { dst, slot } => {
-                // Admission proved this slot is a parameter, a hoisted `var`,
-                // or a received upvalue, so a fresh activation has filled it.
-                let Some(Some(value)) = activation.locals.get(slot as usize) else {
-                    return Err(uninitialized_local());
-                };
-                registers[dst as usize] = crate::bytecode::vm_bindings::clone_local_value(value);
+            CompactOp::Move { dst, src } => {
+                registers[dst as usize] =
+                    crate::bytecode::vm_bindings::clone_local_value(&registers[src as usize]);
             }
             CompactOp::LoadUpvalueLocal { dst, slot } => {
                 let Some(cell) = activation.upvalue_cell(slot as usize) else {
                     return Err(uninitialized_local());
                 };
                 registers[dst as usize] = cell.get();
-            }
-            CompactOp::StoreLocal { slot, src } => {
-                let Some(target) = activation.locals.get_mut(slot as usize) else {
-                    return Err(local_out_of_bounds());
-                };
-                *target = Some(registers[src as usize].clone());
             }
             CompactOp::Binary {
                 dst,
@@ -107,14 +97,6 @@ fn constant_out_of_bounds() -> RuntimeError {
     RuntimeError {
         thrown: None,
         message: "compact function constant index out of bounds".to_owned(),
-    }
-}
-
-#[cold]
-fn local_out_of_bounds() -> RuntimeError {
-    RuntimeError {
-        thrown: None,
-        message: "compact function local slot out of bounds".to_owned(),
     }
 }
 

@@ -117,17 +117,19 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<CompactFunctionProgram> {
     }
 
     let entry_depth = propagate_depths(code)?;
-    // The register file replaces the operand stack only: locals keep living in
-    // the frame's indexed storage. Seeding them into registers would be faster
-    // still, but it would have to reproduce this body's uninitialized-lexical
-    // and upvalue-cell semantics at entry, which is a separate unit.
-    let register_count = entry_depth
+    // One flat register file: locals occupy `0..local_count` and the former
+    // operand stack follows. Admission already proved every local this body
+    // reads is filled on entry, so a local needs no `Option`, no indexed frame
+    // storage, and no per-call allocation -- seeding is a parameter copy into
+    // the low registers.
+    let stack_registers = entry_depth
         .iter()
         .flatten()
         .copied()
         .max()
         .unwrap_or(0)
         .saturating_add(2) as usize;
+    let register_count = local_count.checked_add(stack_registers)?;
     if register_count > MAX_REGISTERS {
         return None;
     }
@@ -138,7 +140,7 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<CompactFunctionProgram> {
     let mut compact_index = vec![0_u32; code.len() + 1];
     let mut required_authoritative_slots = 0_u128;
 
-    let register = |depth: u16| -> u16 { depth };
+    let register = |depth: u16| -> u16 { (local_count as u16).saturating_add(depth) };
 
     for (ip, op) in code.iter().enumerate() {
         compact_index[ip] = u32::try_from(ops.len()).ok()?;
@@ -169,9 +171,9 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<CompactFunctionProgram> {
                     });
                 } else {
                     required_authoritative_slots |= slot_bit;
-                    ops.push(CompactOp::LoadLocal {
+                    ops.push(CompactOp::Move {
                         dst: register(depth),
-                        slot: slot_index,
+                        src: slot_index,
                     });
                 }
             }
@@ -180,8 +182,8 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<CompactFunctionProgram> {
                 // mutable, non-upvalue local.
                 let slot_bit = 1_u128 << *slot;
                 required_authoritative_slots |= slot_bit;
-                ops.push(CompactOp::StoreLocal {
-                    slot: u16::try_from(*slot).ok()?,
+                ops.push(CompactOp::Move {
+                    dst: u16::try_from(*slot).ok()?,
                     src: register(depth.checked_sub(1)?),
                 });
             }

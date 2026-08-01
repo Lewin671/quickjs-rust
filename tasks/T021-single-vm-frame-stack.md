@@ -5380,3 +5380,31 @@ Remaining, and unchanged by this unit: `compact_fn::execute` self-time is still
 QuickJS-NG's ~35 ns. The next unit is the one Codex named: locals and operands
 in one register file, compact-to-compact switching in one loop, no per-call
 `CallEnv`.
+
+### 2026-08-01 locals into the register file: the frame is now one flat buffer
+
+Follow-on to the VM-free activation. Locals moved out of indexed frame storage
+and into the low registers of the same file that already held the former
+operand stack: register `n` is local `n`, and stack depth `d` is register
+`local_count + d`. `LoadLocal`/`StoreLocal` therefore lower to `Move`, and the
+whole per-call frame setup becomes one `resize` of a pooled buffer plus a
+parameter copy.
+
+This is only safe because of the admission narrowing landed in `63c775bd`:
+every local a body reads is a parameter, a hoisted `var`, or a received
+upvalue. Parameters are copied in, hoisted `var`s want `undefined` -- which is
+what the resize already writes -- and an upvalue is read from its cell rather
+than from a register. So there is nothing left for `Option<Value>` to
+represent, and `Vm::initial_direct_call_slots`, `seed_direct_call_slots`, and
+the `LocalSlotRecycler` round trip all drop out of the path.
+
+Counters unchanged from the previous unit: `nested_vm_constructions` 4,
+`compact_standalone_activations` 254,001, `compact_function_ops` 4,680,009,
+`executed_ops` 34,245.
+
+Paired alternating A/B against a base rebuilt from `be43c1f5`, nine and seven
+reps: `recursive_call_tree` **0.9092** and **0.9074** [0.9025, 0.9110]. Every
+other sentinel between 0.978 and 1.007; six-case geomean 0.9828.
+
+Position against QuickJS-NG after this unit is recorded with the session
+summary below.
