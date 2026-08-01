@@ -4903,3 +4903,103 @@ unwinding and suspension state, which is where subtle bugs hide and where this
 repository has historically spent the most debugging effort. A unit taking it
 should expect its cost to be in focused tests for throw/finally/generator
 resume ordering, not in the mechanical field moves.
+
+### 2026-08-01 root cause: the generic dispatcher's register pressure
+
+`Vm::run_current_activation` is one function of 24,792 machine instructions
+with a stack frame of about 4.3 KB, all ten callee-saved GPRs and all eight
+callee-saved FP registers saved, 335 distinct `[sp,#imm]` slots, and 3,644
+spill/reload instructions (14.7% of the function). Forty-eight opcode arms
+branch back to the same address, and that address is a stack reload. The
+preamble every one of them pays is:
+
+```asm
+ldr  x10, [sp, #0x370]      ; reload `self` FROM THE STACK
+ldr  x20, [x10, #0x288]     ; self.ip from memory
+ldr  x14, [sp, #0x360]      ; execution_code.len from the stack
+ldr  x13, [sp, #0x368]      ; execution_code.ptr from the stack
+cmp x20, x14 / b.hs         ; bounds check
+madd x26, x20, #0x60, x13   ; ip * 96 + base
+add  x8, x20, #1
+str  x8, [x10, #0x288]      ; ip back to memory
+ldr  x8, [x26]              ; discriminant
+ldrh w10, [x11, x8, lsl #1] ; jump table
+br   x9
+```
+
+Eight memory operations and a roughly five-deep dependent load chain run before
+any opcode does any work -- about 15-20 cycles, or ~5 ns, which is most of the
+measured 9.5-15.6 ns per dispatched instruction against QuickJS-NG's 2.0-2.4.
+`self`, `execution_code.ptr`, and `execution_code.len` are loop-invariant and
+still reloaded every dispatch: the allocator has no registers left for them.
+
+This is one mechanism for four results that previously looked unrelated: the
+per-instruction gap at parity instruction counts, the 2026-07-24 `unreachable!()`
+arm costing about 17%, a 2026-08-01 single added fast-path arm costing 6.8%, and
+a per-backedge probe skip costing 7.9% with provably identical dynamic counters.
+Any source change that raises pressure taxes all ninety-odd opcodes at once.
+
+Machine layout is **not** the cause, and that line of inquiry is closed.
+Identical source, only alignment changed, nine alternating repetitions each:
+`-align-all-functions=5` 1.0025, `=6` 1.0114, control (base against itself)
+1.0036. Pure address shift is at the noise floor, so I-cache set aliasing and
+BTB aliasing are ruled out. Basic-block alignment does cost -- `-align-all-blocks=4`
+1.0539 and `=5` 1.2495 -- but it inserts NOPs and inflates the code, so it
+measures code size, not placement.
+
+By contrast `typed_loop::execute` (inlined into `run`) is 2,972 instructions
+with a 688-byte frame, 42 spill slots, `pc` live in `x8`, and two memory
+operations before its dispatch. The constraint that new execution machinery
+belongs in a separate small executor is therefore confirmed by code generation,
+not only by timing.
+
+### 2026-08-01 retained typed-loop admission without the boxed-operation ratio
+
+A fresh per-sentinel counter profile at 200,000 iterations showed five of the
+six generic-path sentinels declining the typed tier on essentially every
+backedge (`prototype_method_call` 1 entry against 200,063 declines,
+`heterogeneous_property_read` 0 against 200,064), and three of them --
+`prototype_method_call`, `polymorphic_call_site`, `capturing_closure_call` --
+already answering all 200,000 calls with closed-form leaf evaluations and
+building no frames. Their remaining cost is the generic dispatcher running
+21-23 instructions per iteration *around* an already-free call.
+
+Bisection identified the cause as this file's own admission rule rather than a
+missing operation: `checksum += pool[i & 63].step` was admitted, while
+`var row = pool[i & 63]; checksum += row.step` and two element reads in one
+iteration were both rejected, because more than a third of their operations
+were boxed. The rule compared this tier against an interpreter assumed to be a
+peer; the disassembly above shows the fallback it chose is not one.
+
+Removing the rule, measured with a runtime switch inside one binary and then
+confirmed between separate binaries, nine alternating repetitions:
+`heterogeneous_property_read` **0.5016** [0.4718, 0.5102], the other five
+between 0.997 and 1.017, six-sentinel geomean **0.8946**. That case's executed
+instruction count falls from 5,202,553 to 2,579 and its declines from 200,064
+to 64, moving it from about 2.98x to about 1.49x QuickJS-NG.
+
+The 40-case cached SunSpider/Kraken corpus, seven alternating repetitions, is
+geomean **0.9981** with worst cases 1.0164, 1.0166, and 1.0174 -- all inside
+the 1.03 control ceiling. The mandatory canaries are clean: Kraken `ai-astar`
+**0.9999** [0.9902, 1.0018] and SunSpider `access-nbody` **0.9925**, plus the
+three cases the rule was introduced to protect (`math-cordic` 0.9947,
+`3d-cube` 0.9676, `audio-fft` 1.0031).
+
+This does **not** reopen the 2026-07-29 rejected numeric-object-field
+scalarization, whose record above stands unchanged. That unit changed property
+*representation* -- scalar numeric field reads, unboxed field writes, and dense
+local receivers promoted to guarded boxed ones -- and regressed `ai-astar` by
+15.5% while winning `access-nbody` by 41.7%. Its warning against retrying by
+"changing its cache ordering, boxed-operation threshold, or property guard"
+was about that representation. The present change alters no representation, no
+handler, and no guard: the identical compiled program is now permitted to run,
+and its canary is flat rather than 1.155x.
+
+One honest cost: `prototype_method_call` regresses **1.0174** [1.0116, 1.0238].
+Its loop still declines, but a program now exists for it, so every backedge
+pays `try_run_typed_loop`'s linear scan over `plans.typed` before the frame's
+decline bit short-circuits, where the empty-program check used to return
+immediately. This is the same per-backedge probe cost that three separate
+memoization attempts failed to remove on 2026-08-01, so it was accepted rather
+than retried. It should convert into a win once a boxed-register call operation
+admits that loop instead of declining it.

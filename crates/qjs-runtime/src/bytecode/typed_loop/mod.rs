@@ -958,4 +958,122 @@ mod tests {
             Ok(Value::Number(105.0))
         );
     }
+
+    /// A region is admitted on what it can execute, not on how much of its work
+    /// is boxed. Each source here crossed the old "more than a third of the
+    /// operations are boxed" rejection and so declined on every backedge, which
+    /// left its arithmetic, induction variable, and branches on the generic
+    /// dispatcher too.
+    #[test]
+    fn property_heavy_regions_are_admitted() {
+        // An object held in a local across the property reads. One element read
+        // plus one move plus one named read is already past the old ratio.
+        let via_local = nested_function(
+            "function run(n, pool) { var total = 0;\
+               for (var i = 0; i < n; i++) { var row = pool[i & 63]; total += row.step; }\
+               return total; }",
+        );
+        assert!(
+            !super::compile_all(&via_local).is_empty(),
+            "a region that holds an element in a local should be admitted"
+        );
+
+        // Two element reads in one iteration, without any local.
+        let two_reads = nested_function(
+            "function run(n, pool) { var total = 0;\
+               for (var i = 0; i < n; i++) { total += pool[i & 63].step + pool[i & 63].carry; }\
+               return total; }",
+        );
+        assert!(
+            !super::compile_all(&two_reads).is_empty(),
+            "a region with two element reads should be admitted"
+        );
+
+        // The generic-path sentinel's shape: an element read into a local, then
+        // three named reads off it.
+        let three_fields = nested_function(
+            "function run(n, pool) { var total = 0;\
+               for (var i = 0; i < n; i++) {\
+                 var row = pool[i & 63];\
+                 total += i + row.step + row.carry + row.rest;\
+               }\
+               return total; }",
+        );
+        assert!(
+            !super::compile_all(&three_fields).is_empty(),
+            "a region reading three fields per iteration should be admitted"
+        );
+    }
+
+    /// Admission is a performance decision, so each newly admitted shape has to
+    /// answer exactly what the interpreter answers -- including when the
+    /// assumptions its operations guard stop holding partway through the loop.
+    #[test]
+    fn admitted_property_heavy_regions_match_interpreted_results() {
+        // Receivers deliberately built with three different storage layouts, so
+        // no single cached slot covers the site.
+        assert_eq!(
+            eval(
+                "function run(n) { var pool = [];\
+                   for (var k = 0; k < 3; k++) {\
+                     if (k === 0) pool.push({ step: 1, carry: 2, rest: 3, left: k });\
+                     else if (k === 1) pool.push({ left: k, carry: 2, step: 1, rest: 3 });\
+                     else pool.push({ left: k, rest: 3, extra: k, carry: 2, step: 1 });\
+                   }\
+                   var total = 0;\
+                   for (var i = 0; i < n; i++) {\
+                     var row = pool[i % 3];\
+                     total += i + row.step + row.carry + row.rest;\
+                   }\
+                   return total; }\
+                 run(30);"
+            ),
+            Ok(Value::Number(615.0))
+        );
+        // A getter installed before the loop: the named read has to leave the
+        // register program and resume at the exact instruction it stopped on.
+        assert_eq!(
+            eval(
+                "function run(n) { var row = { carry: 10 };\
+                   Object.defineProperty(row, 'step', { get: function () { return 2; } });\
+                   var pool = [row], total = 0;\
+                   for (var i = 0; i < n; i++) { var r = pool[0]; total += r.step + r.carry; }\
+                   return total; }\
+                 run(7);"
+            ),
+            Ok(Value::Number(84.0))
+        );
+        // The receiver's shape changes partway through, so the operation's
+        // remembered storage slot stops being valid mid-loop.
+        assert_eq!(
+            eval(
+                "function run(n) { var pool = [{ step: 1, carry: 2 }, { step: 3, carry: 4 }];\
+                   var total = 0;\
+                   for (var i = 0; i < n; i++) {\
+                     var row = pool[i % 2];\
+                     total += row.step + row.carry;\
+                     if (i === 3) { pool[0] = { carry: 20, step: 10 }; }\
+                   }\
+                   return total; }\
+                 run(8);"
+            ),
+            Ok(Value::Number(94.0))
+        );
+        // An element that is not an object at all: the read has to deoptimize
+        // rather than answer from the boxed register file.
+        assert_eq!(
+            eval(
+                "function run(n) { var pool = [{ step: 1, carry: 2 }, { step: 3, carry: 4 }];\
+                   var total = 0;\
+                   for (var i = 0; i < n; i++) {\
+                     if (i === 4) { pool[0] = 'text'; }\
+                     var row = pool[i % 2];\
+                     total += row.step === undefined ? 100 : row.step + row.carry;\
+                   }\
+                   return total; }\
+                 run(8);"
+            ),
+            Ok(Value::Number(234.0))
+        );
+    }
 }

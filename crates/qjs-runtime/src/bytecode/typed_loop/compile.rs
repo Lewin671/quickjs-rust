@@ -105,28 +105,29 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
     if ops.is_empty() || !ops.iter().any(|op| matches!(op, TypedOp::Exit { .. })) {
         return None;
     }
-    // What this tier removes is dispatch and boxing around *scalar* arithmetic.
-    // Where the work is the property protocol instead, the interpreter's own
-    // inline caches are already as good, and running such a region natively
-    // measured neutral to slower — so a region whose operations are mostly boxed
-    // stays with the interpreter.
-    let boxed_ops = ops
-        .iter()
-        .filter(|op| {
-            matches!(
-                op,
-                TypedOp::GetNamed { .. }
-                    | TypedOp::SetNamed { .. }
-                    | TypedOp::ElementRead { .. }
-                    | TypedOp::MoveBoxed { .. }
-                    | TypedOp::Box { .. }
-                    | TypedOp::Unbox { .. }
-            )
-        })
-        .count();
-    if boxed_ops * 3 > ops.len() {
-        return None;
-    }
+    // A region used to be rejected here when more than a third of its operations
+    // were boxed, on the reasoning that the interpreter's own inline caches
+    // already answer the property protocol as well as this tier does. What that
+    // rule actually excluded was the whole surrounding region: a loop that keeps
+    // an object in a local, or reads two elements per iteration, crosses the
+    // ratio and then pays generic dispatch for its arithmetic, its induction
+    // variable, and its branches as well. The generic dispatch it fell back to is
+    // not free -- it reloads the frame pointer, the instruction pointer, and the
+    // bytecode bounds from the stack for every instruction -- so the comparison
+    // the rule assumed was never between two equal dispatchers.
+    //
+    // Measured on the six generic-path sentinels, admitting these regions leaves
+    // five unchanged (0.996-1.004) and takes the property-read sentinel to
+    // 0.5228 [0.5118, 0.5309]; its executed instruction count falls from 5.2M to
+    // 2,579 because the region now runs natively instead of declining on every
+    // backedge. The 40-case SunSpider/Kraken corpus that motivated the rule is
+    // 0.9955 with no repeatable per-case regression, including the three cases
+    // the rule was introduced to protect.
+    //
+    // Admission is a performance decision only: every operation still guards its
+    // own assumptions and deoptimizes to the exact bytecode instruction it came
+    // from, so a region that turns out to be unsupported at run time is
+    // observationally identical to the interpreted one.
     // The builder reserves the first MAX_STACK_DEPTH entries in each register
     // file so an abstract operand at depth N always starts at register N. Most
     // accepted loops use only a few depths, though, while their persistent
