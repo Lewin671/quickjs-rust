@@ -1078,6 +1078,17 @@ impl<'a> Vm<'a> {
             self.stack.push(value);
             return Ok(());
         }
+        // Fast path: a string-keyed read that the direct getter answers needs
+        // no owned `PropertyKey`. Building one copies the string, so a
+        // dictionary loop paid one allocation per access even when the lookup
+        // itself is a borrow. `ToPropertyKey` on a string is already
+        // side-effect free, so trying the borrow first is observably identical.
+        if let Value::String(name) = &key_value
+            && let Some(value) = self.try_direct_get_string(&object, name.as_str())
+        {
+            self.stack.push(value);
+            return Ok(());
+        }
         let key = self.coerce_property_key(key_value)?;
         let value = if let Some(value) = self.try_direct_get(&object, &key) {
             value
@@ -1254,6 +1265,24 @@ impl<'a> Vm<'a> {
         {
             let object = object.clone();
             self.set_typed_array_index(&object, index, &value, is_strict)?;
+            self.pop()?;
+            self.stack.push(value);
+            return Ok(());
+        }
+        // Fast path: overwriting an existing own data property under a string
+        // key, for the same reason as the read above -- the owned key is only
+        // needed to *create* a property, and a dictionary loop overwrites.
+        // This mirrors `set_property_value`'s own guard exactly, including
+        // excluding the global object, whose writes go through bindings.
+        if let Value::String(name) = &key_value
+            && let Some(receiver @ Value::Object(_)) = self.stack.last()
+            && !self.is_global_object(receiver)
+            && let Value::Object(target) = receiver.clone()
+            && matches!(
+                target.write_existing_own_data_property(name.as_str(), &value),
+                OwnDataPropertyWrite::Written
+            )
+        {
             self.pop()?;
             self.stack.push(value);
             return Ok(());

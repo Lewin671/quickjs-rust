@@ -317,3 +317,99 @@ fn shared_slot_property_cache_revalidates_every_receiver() {
         Ok(Value::String("1:9:1:9:1:9:1:9:7".to_owned().into()))
     );
 }
+
+// The computed string-key read and write both try a borrowed lookup before
+// building an owned `PropertyKey`, because building one copies the string and
+// a dictionary loop pays that per access. These pin the semantics that borrow
+// must not change: it is only allowed to answer the cases the owned path would
+// have answered identically.
+
+#[test]
+fn a_computed_string_write_still_honours_a_non_writable_property() {
+    assert_eq!(
+        eval(
+            "var o = {}; Object.defineProperty(o, 'x', { value: 1, writable: false }); \
+             var k = 'x'; o[k] = 2; o.x;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "'use strict'; var o = {}; \
+             Object.defineProperty(o, 'x', { value: 1, writable: false }); \
+             var k = 'x'; try { o[k] = 2; 'no throw'; } catch (e) { e instanceof TypeError; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn a_computed_string_write_still_runs_an_own_setter() {
+    assert_eq!(
+        eval(
+            "var log = []; var o = { set x(v) { log.push(v); } }; \
+             var k = 'x'; o[k] = 7; o[k] = 8; log.join(',');"
+        ),
+        Ok(Value::String("7,8".into()))
+    );
+}
+
+#[test]
+fn a_computed_string_write_still_runs_an_inherited_setter() {
+    assert_eq!(
+        eval(
+            "var seen = 0; var proto = { set x(v) { seen = v; } }; \
+             var o = Object.create(proto); var k = 'x'; o[k] = 41; seen + (o.hasOwnProperty('x') ? 0 : 1);"
+        ),
+        Ok(Value::Number(42.0))
+    );
+}
+
+#[test]
+fn a_computed_string_write_still_creates_a_missing_property() {
+    assert_eq!(
+        eval("var o = {}; var k = 'fresh'; o[k] = 5; o.fresh + Object.keys(o).length;"),
+        Ok(Value::Number(6.0))
+    );
+}
+
+#[test]
+fn a_computed_string_write_is_still_refused_by_a_frozen_object() {
+    assert_eq!(
+        eval("var o = Object.freeze({ x: 1 }); var k = 'x'; o[k] = 2; o.x;"),
+        Ok(Value::Number(1.0))
+    );
+}
+
+#[test]
+fn a_computed_string_write_still_reaches_a_proxy_trap() {
+    assert_eq!(
+        eval(
+            "var log = []; \
+             var p = new Proxy({}, { set(t, k, v) { log.push(k + '=' + v); t[k] = v; return true; } }); \
+             var k = 'x'; p[k] = 3; log.join(',') + '|' + p.x;"
+        ),
+        Ok(Value::String("x=3|3".into()))
+    );
+}
+
+#[test]
+fn a_computed_string_read_still_runs_getters_and_walks_the_prototype() {
+    assert_eq!(
+        eval(
+            "var calls = 0; var proto = { get g() { calls++; return 10; }, inherited: 5 }; \
+             var o = Object.create(proto); o.own = 1; \
+             var a = 'g', b = 'inherited', c = 'own', d = 'missing'; \
+             [o[a], o[b], o[c], o[d], calls].join(',');"
+        ),
+        Ok(Value::String("10,5,1,,1".into()))
+    );
+}
+
+#[test]
+fn a_computed_string_write_to_the_global_object_still_updates_the_binding() {
+    assert_eq!(
+        eval("var g = (0, eval)('this'); var k = 'sentinelGlobal'; g[k] = 9; sentinelGlobal;"),
+        Ok(Value::Number(9.0))
+    );
+}

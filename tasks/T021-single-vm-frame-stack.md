@@ -5569,3 +5569,35 @@ operations) but it needs a proper liveness/aliasing analysis over the compact
 IR, not the incremental holder-array approach tried here. Reproduce with
 `var s = Symbol('s'); function pick(k){ return k === s ? 'S' : k; } pick('y')`,
 which must be `'y'`.
+
+### 2026-08-01 computed string keys: borrow before allocating
+
+With recursion down to ~3.0x, `string_key_map_churn` became the largest single
+gap. Its profile is not the dispatcher: allocation and free are **10.7%** of
+samples (`_xzm_free` 3.5%, `xzone_malloc` 2.3%, `malloc_zone_malloc` 2.3%,
+`_free` 1.4%, `finish_grow` 1.2%).
+
+The cause is one line. `PropertyKey::String` owns a `String`, and
+`try_to_property_key_without_coercion` builds it with `value.to_string()`, so
+`table[key]` copies the key on **every** access -- while the lookup that
+consumes it, `try_direct_get_string`, already takes `&str`. A 600k-iteration
+dictionary loop therefore performed 1.2M allocations to answer 1.2M borrows.
+
+Both sides now try the borrow first and build the owned key only on a miss:
+
+- read: `try_direct_get_string(&object, name.as_str())` before
+  `coerce_property_key`;
+- write: `write_existing_own_data_property(name.as_str(), &value)` before it,
+  under exactly `set_property_value`'s own guards. `symbol_primitive_set_fails`
+  needs no restating -- it returns `false` for every string key by inspection.
+
+`ToPropertyKey` on a string is side-effect free, so trying the borrow first is
+observably identical rather than merely usually right.
+
+Paired alternating A/B against a base rebuilt from `cf77711d`, nine reps:
+`string_key_map_churn` **0.8061** [0.8021, 0.8119]; read-only intermediate
+measured 0.8986. Every other sentinel 0.9901-1.0017; six-case geomean 0.9612.
+
+Eight focused tests pin what the borrow must not change: non-writable
+properties in both modes, own and inherited setters, property creation, frozen
+objects, Proxy traps, getter/prototype walks, and global-object writes.
