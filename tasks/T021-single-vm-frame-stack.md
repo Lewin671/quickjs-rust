@@ -6024,3 +6024,43 @@ convention. It is `execute` itself at 61.8%, and that is bounded by `Value`
 being 16 bytes with `needs_drop = true` -- every register write pays for a
 representation that a tagged or NaN-boxed value would not have. That is the
 next unit, and it is a value-representation change, not a frame one.
+
+### 2026-08-01 measuring the tier's per-operation cost, and two findings
+
+A microbenchmark was built to answer what the compact tier costs per operation
+against QuickJS-NG, since that is what remains after the frame half closed.
+
+**First attempt measured the wrong thing.** A pure-numeric leaf called in a loop
+reported 3.99x, but the counters said `closed_form_leaf_evaluations 200000` and
+`compact_function_ops 0` -- the callee was answered by the closed-form
+evaluator and the 3.99x was the *outer* loop on the generic interpreter.
+Always check which tier ran before believing a ratio.
+
+**Second attempt exposed an admission gap.** A body of eighty `t = t + b;
+t = t - c;` statements was not admitted either: `t = ...` after `var t = a`
+compiles to `AssignLocal`, and the opcode whitelist has only `StoreLocal`.
+Adding it admitted the body -- `executed_ops` 712,032 -> 48,032 -- and gave the
+measurement: **6.1x against NG**, roughly 8.2 ns per compact operation against
+NG's ~1.3.
+
+Where that goes is visible in the lowering. `t = t + b` becomes four
+operations -- `Move(r0,t); Move(r1,b); Binary(r0,r0,r1); Move(t,r0)` -- of which
+three are `Move`, each a `clone_local_value` plus a discriminant-tested store.
+NG's equivalent is two local reads, an add, and a local write on eight-byte
+values. **So the tier's per-operation gap is the `Move` traffic and the `Value`
+representation underneath it, not dispatch.**
+
+**`AssignLocal` was reverted: it is not `StoreLocal`.** Three tests failed --
+module default-import rebinding, an async iterator close, and an indexed store
+walking a native error constructor's parent. Assigning an *existing* binding
+can have to reach a module live binding or a realm cell, which writing a
+register bypasses; initializing one cannot. The original whitelist was right to
+name only `StoreLocal`, and admitting assignment needs those paths proven
+absent, not assumed.
+
+That leaves the virtual stack -- which collapses `Move(r0,t); Move(r1,b);
+Binary(r0,r0,r1)` to `Binary(r0,t,b)` -- worth far more than the 9% estimated
+earlier from `callTree` alone: on straight-line numeric code it removes about
+half the operations. It remains rejected on correctness (aliasing and merge
+edges, recorded above), but its value is now measured rather than guessed, and
+that changes the case for building it properly with a real liveness analysis.
