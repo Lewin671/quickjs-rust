@@ -224,3 +224,102 @@ fn an_accessor_shadowing_a_cached_shape_is_not_answered_from_the_cache() {
         run([plain, withGetter], 10);";
     assert_eq!(eval(source), Ok(Value::Number(55.0)));
 }
+
+// Computed string-key access inside a loop region. Three separate changes make
+// this admissible -- a computed read/write that discriminates instead of
+// assuming array semantics, a join that widens a scalar to meet a boxed value,
+// and a seed that lets a boxed register hold any value -- and each has its own
+// way of going wrong.
+
+#[test]
+fn a_dictionary_churn_loop_computes_the_same_totals() {
+    let source = "function churn(keys, n) {
+            var table = {};
+            for (var i = 0; i < n; i++) {
+                var key = keys[i % keys.length];
+                table[key] = (table[key] || 0) + 1;
+            }
+            var total = 0;
+            for (var name in table) { total += table[name]; }
+            return total + ':' + table.a + ',' + table.b + ',' + table.c;
+        }
+        churn(['a', 'b', 'c'], 30);";
+    assert_eq!(eval(source), Ok(Value::String("30:10,10,10".into())));
+}
+
+#[test]
+fn a_computed_write_creates_then_overwrites() {
+    // The first write to each key creates the property and every later one
+    // overwrites it. Refusing creation would deoptimize on iteration one and
+    // never re-enter, losing the loop to its own first write.
+    let source = "function run(n) {
+            var t = {};
+            for (var i = 0; i < n; i++) { t['k' + (i % 2)] = i; }
+            return t.k0 + ',' + t.k1 + ',' + Object.keys(t).length;
+        }
+        run(10);";
+    assert_eq!(eval(source), Ok(Value::String("8,9,2".into())));
+}
+
+#[test]
+fn a_computed_access_still_walks_the_prototype_chain() {
+    let source = "function run(o, keys, n) {
+            var total = 0;
+            for (var i = 0; i < n; i++) { total += o[keys[i % keys.length]]; }
+            return total;
+        }
+        var proto = { inherited: 5 };
+        var o = Object.create(proto);
+        o.own = 1;
+        run(o, ['own', 'inherited'], 10);";
+    assert_eq!(eval(source), Ok(Value::Number(30.0)));
+}
+
+#[test]
+fn a_computed_access_declines_an_accessor_rather_than_reading_a_slot() {
+    let source = "function run(o, keys, n) {
+            var total = 0;
+            for (var i = 0; i < n; i++) { total += o[keys[i % keys.length]]; }
+            return total;
+        }
+        var calls = 0;
+        var o = { plain: 1 };
+        Object.defineProperty(o, 'lazy', { get: function () { calls++; return 10; } });
+        run(o, ['plain', 'lazy'], 10) + ':' + calls;";
+    assert_eq!(eval(source), Ok(Value::String("55:5".into())));
+}
+
+#[test]
+fn a_computed_write_is_refused_by_a_frozen_receiver() {
+    let source = "function run(o, n) {
+            for (var i = 0; i < n; i++) { o['x'] = i; }
+            return o.x;
+        }
+        run(Object.freeze({ x: -1 }), 10);";
+    assert_eq!(eval(source), Ok(Value::Number(-1.0)));
+}
+
+#[test]
+fn a_numeric_index_still_reads_an_array_after_its_producer_is_boxed() {
+    // Demanding a boxed key forces the producing element read boxed too, so an
+    // ordinary `a[b[i]]` now flows through the computed access. It must still
+    // read the array rather than deoptimizing.
+    let source = "function run(values, indices, n) {
+            var total = 0;
+            for (var i = 0; i < n; i++) { total += values[indices[i % indices.length]]; }
+            return total;
+        }
+        run([10, 20, 30], [0, 1, 2], 9);";
+    assert_eq!(eval(source), Ok(Value::Number(180.0)));
+}
+
+#[test]
+fn a_join_widening_a_scalar_keeps_both_branch_values() {
+    let source = "function run(o, keys, n) {
+            var out = '';
+            for (var i = 0; i < n; i++) { out += (o[keys[i % keys.length]] || 'X'); }
+            return out;
+        }
+        run({ a: 'A' }, ['a', 'missing'], 4);";
+    assert_eq!(eval(source), Ok(Value::String("AXAX".into())));
+}

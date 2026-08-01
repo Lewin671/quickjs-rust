@@ -5800,3 +5800,54 @@ instrumenting each `?` in `Builder::compile`'s walk and running
 **Process note, now three sessions old.** Every inference about this blocker
 has been wrong and every trace has been right. Instrument the exits; do not
 reason about where a trace happens to print.
+
+### 2026-08-01 the churn loop is admitted: computed string keys land
+
+Seven prior attempts failed to admit `string_key_map_churn`'s loop. Tracing
+each `?` -- rather than inferring -- found the chain, and each link turned out
+to be a real missing capability rather than a bug:
+
+| what was missing | where it stopped |
+| --- | --- |
+| region survives an inapplicable element assignment | `ip=23` (landed `58f2dcf0`) |
+| a computed read that does not assert array semantics | `ip=29` |
+| a `SetProp` arm -- `compile_op` had none at all | `ip=39` |
+| boxed compiler temporaries for receiver/key/value | `ip=24/26/22/40/42` |
+| a join that widens a scalar to meet a boxed value | `ip=33` `merge_states` |
+| a seed that lets a boxed register hold a string | `seed_registers` |
+| creating a property, not only overwriting one | first iteration |
+
+The last two are the ones that had gone unexamined for three sessions.
+
+**`value_is_ordinary_object` in the seed** rejected the region at entry even
+after it compiled, because the key register holds a *string* -- which is the
+entire point of a computed access. That check was redundant: every operation
+consuming a boxed register already checks what it holds and deoptimizes
+(`get_named` needs an object, `element_read` an array, `Unbox` and
+`call_numeric_native` bail, and the new computed access discriminates). Audited
+all of them before widening it.
+
+**Property creation.** `write_existing_own_data_property` only overwrites, so
+the first iteration -- which creates the key -- deoptimized, and a deoptimized
+program is never retried for that frame. The loop was lost to its own first
+write. `Vm::try_create_ordinary_own_data_property` handles the rest and
+re-checks extensibility, exotics and the prototype chain itself.
+
+**One narrowing, driven by the corpus rather than the sentinel.** The first
+version also demanded a boxed key from every read whose key came from an
+element read. That admitted churn, and it also forced an ordinary `a[b[i]]`
+through the computed access: 40-case corpus geomean 1.0102 with `regexp-dna` at
+**1.191**. Removing that discovery leaves churn admitted -- unchanged counters
+-- because the *write* drives the chain and the read follows a pass later.
+Corpus is then **1.0009**, worst case 1.0353.
+
+Sentinels against a base rebuilt from `377f614a`, nine reps:
+`string_key_map_churn` **0.4195** [0.4148, 0.4236]; every other sentinel
+1.0019-1.0192; geomean 0.8715. Checksums byte-identical at 1k, 100k and 2M
+iterations. `declined_loop_plan_edges` 4046 -> 2047 and `executed_ops`
+125,502 -> 51,515 for the 2,000-iteration counter run.
+
+Seven tests cover what the tier must not change: the churn loop's own totals,
+create-then-overwrite, prototype-chain reads, an accessor declining rather than
+being read as a slot, a frozen receiver, a numeric index still reaching the
+array after its producer is boxed, and a join keeping both branch values.

@@ -12,6 +12,9 @@ use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 use std::{cell::OnceCell, rc::Rc};
 
 use super::super::ir::{Bytecode, Op};
+use super::register_packing::{
+    BoxedRegisterMetadata, compact_boxed_registers, compact_scalar_registers,
+};
 use super::{
     Class, DeoptSite, MAX_REGION_OPS, MAX_REGISTERS, MAX_STACK_DEPTH, Typed, TypedLoopProgram,
     TypedOp,
@@ -102,6 +105,14 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
     } = builder;
     // A region that never leaves through its header test cannot be entered
     // safely, and one with no operations is not worth a program.
+    let post_probe = std::env::var_os("QJS_WALK_TRACE").is_some() && code.len() == 107;
+    if post_probe {
+        eprintln!(
+            "POST reached: region {header}..{backedge} ops={} has_exit={}",
+            ops.len(),
+            ops.iter().any(|op| matches!(op, TypedOp::Exit { .. }))
+        );
+    }
     if ops.is_empty() || !ops.iter().any(|op| matches!(op, TypedOp::Exit { .. })) {
         return None;
     }
@@ -174,7 +185,6 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         sloppy_global_writes,
         boxed_count,
         boxed_locals,
-        numeric_native_callee_registers,
         written_boxed_locals,
         boxed_global_reads,
         names,
@@ -183,227 +193,6 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         cache_count,
         scratch_pool: OnceCell::new(),
     })
-}
-
-fn compact_scalar_registers(
-    ops: &mut [TypedOp],
-    site_entries: &mut [(Class, u16)],
-    local_slots: &mut [(u16, u32)],
-    written_locals: &mut [(u16, u32)],
-    global_reads: &mut [(u16, String)],
-    constants: &mut [(u16, Typed)],
-    next_register: usize,
-) -> Option<usize> {
-    let stack_register_count = stack_register_count(ops, site_entries, Class::Scalar);
-    remap_ops(ops, Class::Scalar, stack_register_count);
-    remap_site_entries(site_entries, Class::Scalar, stack_register_count);
-    remap_register_pairs(local_slots, stack_register_count);
-    remap_register_pairs(written_locals, stack_register_count);
-    remap_register_pairs(global_reads, stack_register_count);
-    remap_register_pairs(constants, stack_register_count);
-    compact_register_count(next_register, stack_register_count)
-}
-
-struct BoxedRegisterMetadata<'a> {
-    locals: &'a mut [(u16, u32)],
-    numeric_native_callee_registers: &'a mut [u16],
-    written_locals: &'a mut [u16],
-    global_reads: &'a mut [(u16, String)],
-    constants: &'a mut [(u16, Value)],
-}
-
-fn compact_boxed_registers(
-    ops: &mut [TypedOp],
-    site_entries: &mut [(Class, u16)],
-    metadata: BoxedRegisterMetadata<'_>,
-    next_boxed: usize,
-) -> Option<usize> {
-    let BoxedRegisterMetadata {
-        locals,
-        numeric_native_callee_registers,
-        written_locals,
-        global_reads,
-        constants,
-    } = metadata;
-    let stack_register_count = stack_register_count(ops, site_entries, Class::Boxed);
-    remap_ops(ops, Class::Boxed, stack_register_count);
-    remap_site_entries(site_entries, Class::Boxed, stack_register_count);
-    remap_register_pairs(locals, stack_register_count);
-    for register in numeric_native_callee_registers {
-        remap_register(register, stack_register_count);
-    }
-    for register in written_locals {
-        remap_register(register, stack_register_count);
-    }
-    remap_register_pairs(global_reads, stack_register_count);
-    remap_register_pairs(constants, stack_register_count);
-    compact_register_count(next_boxed, stack_register_count)
-}
-
-fn stack_register_count(ops: &[TypedOp], site_entries: &[(Class, u16)], class: Class) -> usize {
-    let mut count = site_entries
-        .iter()
-        .filter_map(|(candidate, register)| (*candidate == class).then_some(*register))
-        .fold(0, note_stack_register);
-    for op in ops {
-        let mut copy = *op;
-        visit_registers(&mut copy, class, |register| {
-            count = note_stack_register(count, *register);
-        });
-    }
-    count
-}
-
-fn remap_ops(ops: &mut [TypedOp], class: Class, stack_register_count: usize) {
-    for op in ops {
-        visit_registers(op, class, |register| {
-            remap_register(register, stack_register_count)
-        });
-    }
-}
-
-fn note_stack_register(count: usize, register: u16) -> usize {
-    let register = usize::from(register);
-    if register < MAX_STACK_DEPTH {
-        count.max(register + 1)
-    } else {
-        count
-    }
-}
-
-fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u16)) {
-    match class {
-        Class::Scalar => match op {
-            TypedOp::Move { dst, src } | TypedOp::ToNumeric { dst, src } => {
-                visit(dst);
-                visit(src);
-            }
-            TypedOp::Binary {
-                dst, left, right, ..
-            } => {
-                visit(dst);
-                visit(left);
-                visit(right);
-            }
-            TypedOp::Unary { dst, src, .. } | TypedOp::Update { dst, src, .. } => {
-                visit(dst);
-                visit(src);
-            }
-            TypedOp::DenseRead { dst, index, .. } => {
-                visit(dst);
-                visit(index);
-            }
-            TypedOp::DenseWrite { index, value, .. } => {
-                visit(index);
-                visit(value);
-            }
-            TypedOp::StoreSloppyGlobal { value, .. } => visit(value),
-            TypedOp::JumpIfFalsy { cond, .. } | TypedOp::Exit { cond, .. } => visit(cond),
-            TypedOp::Unbox { dst, .. } => visit(dst),
-            TypedOp::Box { src, .. } => visit(src),
-            TypedOp::ElementRead { index, .. } => visit(index),
-            TypedOp::CallNumericNative {
-                dst, first, second, ..
-            } => {
-                visit(dst);
-                visit(first);
-                visit(second);
-            }
-            // Only the arguments are scalar; the receiver, callee, and result
-            // are boxed because a user callee takes and returns any value.
-            TypedOp::CallClosedFormLeaf { first, second, .. } => {
-                visit(first);
-                visit(second);
-            }
-            TypedOp::Jump { .. }
-            | TypedOp::MoveBoxed { .. }
-            | TypedOp::GetNamed { .. }
-            | TypedOp::SetNamed { .. } => {}
-        },
-        Class::Boxed => match op {
-            TypedOp::MoveBoxed { dst, src } => {
-                visit(dst);
-                visit(src);
-            }
-            TypedOp::Unbox { src, .. } => visit(src),
-            TypedOp::Box { dst, .. } => visit(dst),
-            TypedOp::GetNamed { dst, object, .. } => {
-                visit(dst);
-                visit(object);
-            }
-            TypedOp::SetNamed { object, value, .. } => {
-                visit(object);
-                visit(value);
-            }
-            TypedOp::ElementRead { dst, receiver, .. } => {
-                visit(dst);
-                visit(receiver);
-            }
-            TypedOp::CallNumericNative { callee, .. } => visit(callee),
-            TypedOp::CallClosedFormLeaf {
-                dst,
-                receiver,
-                callee,
-                ..
-            } => {
-                visit(dst);
-                visit(receiver);
-                visit(callee);
-            }
-            TypedOp::Move { .. }
-            | TypedOp::ToNumeric { .. }
-            | TypedOp::Binary { .. }
-            | TypedOp::Unary { .. }
-            | TypedOp::Update { .. }
-            | TypedOp::DenseRead { .. }
-            | TypedOp::DenseWrite { .. }
-            | TypedOp::StoreSloppyGlobal { .. }
-            | TypedOp::JumpIfFalsy { .. }
-            | TypedOp::Jump { .. }
-            | TypedOp::Exit { .. } => {}
-        },
-    }
-}
-
-fn remap_site_entries(
-    site_entries: &mut [(Class, u16)],
-    class: Class,
-    stack_register_count: usize,
-) {
-    for (candidate, register) in site_entries {
-        if *candidate == class {
-            remap_register(register, stack_register_count);
-        }
-    }
-}
-
-fn remap_register_pairs<T>(pairs: &mut [(u16, T)], stack_register_count: usize) {
-    for (register, _) in pairs {
-        remap_register(register, stack_register_count);
-    }
-}
-
-fn remap_register(register: &mut u16, stack_register_count: usize) {
-    let register_index = usize::from(*register);
-    if register_index >= MAX_STACK_DEPTH {
-        let compacted = stack_register_count + register_index - MAX_STACK_DEPTH;
-        debug_assert!(compacted < MAX_REGISTERS);
-        *register = compacted as u16;
-    }
-}
-
-fn compact_register_count(next_register: usize, stack_register_count: usize) -> Option<usize> {
-    stack_register_count.checked_add(next_register.checked_sub(MAX_STACK_DEPTH)?)
-}
-
-/// Where a register's value came from, so a property read can recognize a
-/// receiver that is really a frame slot or an earlier dense element read whose
-/// result must remain boxed for a nested access.
-#[derive(Clone, Copy, PartialEq)]
-enum Origin {
-    Computed,
-    Local(u32),
-    ElementRead(u32),
 }
 
 fn writes_slot(op: &Op, slot: usize) -> bool {
@@ -421,6 +210,14 @@ fn writes_slot(op: &Op, slot: usize) -> bool {
         Op::BinaryAssignLocals { target, stores, .. } => *target == slot || stores.contains(&slot),
         _ => false,
     }
+}
+
+/// result must remain boxed for a nested access.
+#[derive(Clone, Copy, PartialEq)]
+enum Origin {
+    Computed,
+    Local(u32),
+    ElementRead(u32),
 }
 
 struct Builder<'a> {
@@ -902,34 +699,95 @@ impl<'a> Builder<'a> {
                     continue;
                 }
             }
-            if self.is_target[offset] {
-                self.normalize()?;
+            let probe = std::env::var_os("QJS_WALK_TRACE").is_some() && code.len() == 107;
+            if self.is_target[offset] && self.normalize().is_none() {
+                if probe {
+                    eprintln!("WALK ip={ip} EXIT normalize");
+                }
+                return None;
             }
             // A join must agree with every path that reaches it on depth and on
             // register class — the register itself follows from the depth. Only
             // provenance may differ, and there the join keeps the weaker one.
+            // A join whose paths disagree only on *representation* can still
+            // agree. `(o[k] || 0)` reaches its merge with an object on the
+            // branch edge and a number on the fall-through one; widening the
+            // scalar side here, where its value is still in hand, is what lets
+            // the two meet. `normalize` above has already put every operand in
+            // its depth's register, so the widened value lands in the boxed
+            // register of the same depth.
+            //
+            // Only this direction is repairable: if the *recorded* side were
+            // scalar, its code has already been emitted and cannot be revised.
+            if let Some(recorded) = self.states[offset].clone()
+                && recorded.len() == self.stack.len()
+            {
+                let widen: Vec<usize> = recorded
+                    .iter()
+                    .zip(&self.stack)
+                    .enumerate()
+                    .filter(|(_, (was, now))| was.1 == Class::Boxed && now.1 == Class::Scalar)
+                    .map(|(depth, _)| depth)
+                    .collect();
+                for depth in widen {
+                    let dst = u16::try_from(depth).ok()?;
+                    let src = self.stack[depth].0;
+                    self.emit(TypedOp::Box { dst, src });
+                    self.stack[depth] = (dst, Class::Boxed, Origin::Computed);
+                }
+            }
             match self.states[offset].clone() {
                 Some(state) => {
-                    let merged = merge_states(&state, &self.stack)?;
+                    let Some(merged) = merge_states(&state, &self.stack) else {
+                        if probe {
+                            eprintln!("WALK ip={ip} EXIT merge_states");
+                        }
+                        return None;
+                    };
                     self.stack = merged.clone();
                     self.states[offset] = Some(merged);
                 }
                 None => self.states[offset] = Some(self.stack.clone()),
             }
             self.program_index[offset] = u32::try_from(self.ops.len()).ok();
-            self.open_site(ip)?;
-            if let Some(next) = self.compile_element_assignment(ip)? {
-                ip = next;
-                continue;
+            if self.open_site(ip).is_none() {
+                if probe {
+                    eprintln!("WALK ip={ip} EXIT open_site");
+                }
+                return None;
+            }
+            match self.compile_element_assignment(ip) {
+                None => {
+                    if probe {
+                        eprintln!("WALK ip={ip} EXIT element_assignment");
+                    }
+                    return None;
+                }
+                Some(Some(next)) => {
+                    ip = next;
+                    continue;
+                }
+                Some(None) => {}
             }
             let op = code.get(ip)?;
-            self.compile_op(op, ip)?;
+            if self.compile_op(op, ip).is_none() {
+                if probe {
+                    eprintln!("WALK ip={ip} EXIT compile_op {op:?}");
+                }
+                return None;
+            }
             ip += 1 + std::mem::take(&mut self.pending_skip);
         }
         // Patch the forward jumps now that every program index is known.
+        let probe = std::env::var_os("QJS_WALK_TRACE").is_some() && code.len() == 107;
         for (program_slot, target_ip) in std::mem::take(&mut self.pending_jumps) {
             let offset = target_ip.checked_sub(self.header)?;
-            let target = (*self.program_index.get(offset)?)?;
+            let Some(Some(target)) = self.program_index.get(offset).copied() else {
+                if probe {
+                    eprintln!("WALK EXIT jump_patch target_ip={target_ip}");
+                }
+                return None;
+            };
             match &mut self.ops[program_slot] {
                 TypedOp::JumpIfFalsy { target: slot, .. } | TypedOp::Jump { target: slot } => {
                     *slot = target;
@@ -1322,6 +1180,13 @@ impl<'a> Builder<'a> {
                 }
             }
             Op::StoreLocal(slot) | Op::AssignLocal(slot) => {
+                if std::env::var_os("QJS_WALK_TRACE").is_some() && self.bytecode.code.len() == 107 {
+                    eprintln!(
+                        "STORE slot={slot} is_boxed={} top_class={:?}",
+                        self.slot_is_boxed(*slot),
+                        self.stack.last().map(|(_, c, _)| *c)
+                    );
+                }
                 if self.slot_is_boxed(*slot) {
                     let (src, _) = self.pop_boxed()?;
                     let dst = self.boxed_local_register(*slot)?;
@@ -1411,6 +1276,36 @@ impl<'a> Builder<'a> {
                 self.push(dst, Origin::Computed);
             }
             Op::GetProp => {
+                // A boxed key is a computed access, not an array index.
+                if matches!(self.stack.last(), Some((_, Class::Boxed, _))) {
+                    let (key, _, _) = self.stack.pop()?;
+                    let (receiver_register, receiver_class, receiver) = self.stack.pop()?;
+                    if receiver_class == Class::Scalar {
+                        match receiver {
+                            Origin::Local(slot) => self.discovered_boxed.push(slot),
+                            Origin::ElementRead(site) => {
+                                self.discovered_boxed_element_reads.push(site);
+                            }
+                            Origin::Computed => return None,
+                        }
+                        return None;
+                    }
+                    let dst = self.slot_boxed()?;
+                    self.emit(TypedOp::ComputedRead {
+                        dst,
+                        receiver: receiver_register,
+                        key,
+                    });
+                    self.push_boxed(dst, Origin::Computed);
+                    return Some(());
+                }
+                // Deliberately no discovery here. Demanding a boxed key from
+                // every read whose key came from an element read would force
+                // an ordinary `a[b[i]]` through the computed access as well,
+                // which measured a 19% regression on `regexp-dna` and 1% over
+                // the 40-case corpus. A dictionary loop reaches the boxed key
+                // through its *write* instead -- `SetProp`'s `pop_boxed`
+                // discovers it -- and the read then follows on the next pass.
                 let (index, _) = self.pop()?;
                 let (receiver_register, receiver_class, receiver) = self.stack.pop()?;
                 if receiver_class == Class::Scalar {
@@ -1504,6 +1399,20 @@ impl<'a> Builder<'a> {
                     cache,
                 });
                 self.push_boxed(dst, Origin::Computed);
+            }
+            Op::SetProp { .. } => {
+                // All three operands must be boxed; `pop_boxed` records a
+                // discovery and declines when one is still scalar.
+                let (value, _) = self.pop_boxed()?;
+                let (key, _) = self.pop_boxed()?;
+                let (receiver, _) = self.pop_boxed()?;
+                self.emit(TypedOp::ComputedWrite {
+                    receiver,
+                    key,
+                    value,
+                });
+                // `SetProp` leaves the assigned value on the operand stack.
+                self.push_boxed(value, Origin::Computed);
             }
             Op::SetPropNamed { key, .. } => {
                 if self.region_writes_a_sloppy_global() {

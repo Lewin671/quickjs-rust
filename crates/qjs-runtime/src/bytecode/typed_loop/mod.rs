@@ -44,6 +44,7 @@ use crate::Value;
 mod branchy_nested_tests;
 mod compile;
 mod execute;
+mod register_packing;
 
 pub(super) use compile::compile_all;
 pub(super) use execute::try_run_typed_loop;
@@ -204,6 +205,22 @@ enum TypedOp {
         dst: u16,
         receiver: u16,
         index: u16,
+    },
+    /// Reads `receiver[key]` where the key is a boxed value rather than an
+    /// array index. `ElementRead` conflates "this read's result must be boxed"
+    /// with "this read has array semantics"; a dictionary access needs the
+    /// first without the second.
+    ComputedRead {
+        dst: u16,
+        receiver: u16,
+        key: u16,
+    },
+    /// Writes `receiver[key] = value` under a boxed key, overwriting an
+    /// existing own data property only.
+    ComputedWrite {
+        receiver: u16,
+        key: u16,
+        value: u16,
     },
     /// Calls a pure numeric intrinsic — a `Math` function whose whole effect is
     /// a floating-point computation — after checking at run time that the callee
@@ -388,7 +405,6 @@ pub(super) struct TypedLoopProgram {
     /// native call. These alone may hold a Function rather than an ordinary
     /// object at native-loop entry; the call operation rechecks the exact
     /// intrinsic before it can execute.
-    numeric_native_callee_registers: Vec<u16>,
     /// Boxed registers written back to their slots when the loop ends.
     written_boxed_locals: Vec<u16>,
     /// Global bindings read into boxed registers.

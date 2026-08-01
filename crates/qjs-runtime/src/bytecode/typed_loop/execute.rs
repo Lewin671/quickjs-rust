@@ -256,6 +256,43 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                 };
                 boxed[dst as usize] = value;
             }
+            TypedOp::ComputedRead { dst, receiver, key } => {
+                let Some(value) = computed_read(&boxed[receiver as usize], &boxed[key as usize])
+                else {
+                    deopt_here!(op);
+                };
+                boxed[dst as usize] = value;
+            }
+            TypedOp::ComputedWrite {
+                receiver,
+                key,
+                value,
+            } => {
+                let written = match (&boxed[receiver as usize], &boxed[key as usize]) {
+                    (Value::Object(object), Value::String(name)) => {
+                        let value = &boxed[value as usize];
+                        match object.write_existing_own_data_property(name.as_str(), value) {
+                            crate::value::OwnDataPropertyWrite::Written => true,
+                            // The property does not exist yet. A dictionary
+                            // loop creates each key exactly once, so refusing
+                            // here would deoptimize on the first iteration and
+                            // never re-enter -- the whole loop would be lost to
+                            // its own first write. The creation path re-checks
+                            // extensibility, exotics, and the prototype chain
+                            // itself, so anything it will not do still declines.
+                            _ => vm.try_create_ordinary_own_data_property(
+                                object,
+                                Rc::from(name.as_str()),
+                                value,
+                            ),
+                        }
+                    }
+                    _ => false,
+                };
+                if !written {
+                    deopt_here!(op);
+                }
+            }
             TypedOp::CallNumericNative {
                 dst,
                 callee,
@@ -345,7 +382,12 @@ fn seed_registers(
         // The receiver must be a dense array for the whole loop, so a region
         // that also writes that slot declines.
         let Some(Value::Array(array)) = vm.local_slot_value(slot as usize) else {
-            return None;
+            {
+                if std::env::var_os("QJS_WALK_TRACE").is_some() {
+                    eprintln!("SEED reject #1");
+                }
+                return None;
+            }
         };
         receivers.push(array);
         if program
@@ -353,7 +395,12 @@ fn seed_registers(
             .iter()
             .any(|(_, written)| *written == slot)
         {
-            return None;
+            {
+                if std::env::var_os("QJS_WALK_TRACE").is_some() {
+                    eprintln!("SEED reject #2");
+                }
+                return None;
+            }
         }
     }
     registers.resize(program.register_count, Typed::Undefined);
@@ -369,7 +416,12 @@ fn seed_registers(
     }
     for &(_, slot) in &program.written_locals {
         if !vm.slot_accepts_typed_loop_write(slot as usize) {
-            return None;
+            {
+                if std::env::var_os("QJS_WALK_TRACE").is_some() {
+                    eprintln!("SEED reject #3");
+                }
+                return None;
+            }
         }
     }
     for (register, name) in &program.global_reads {
@@ -379,7 +431,12 @@ fn seed_registers(
             .global_this_own_property(name)
             .is_some_and(|property| property.is_accessor())
         {
-            return None;
+            {
+                if std::env::var_os("QJS_WALK_TRACE").is_some() {
+                    eprintln!("SEED reject #4");
+                }
+                return None;
+            }
         }
         // Resolving through the interpreter's own path keeps `this`, global
         // lexicals, and shadowing exactly as the loop would have seen them.
@@ -391,23 +448,27 @@ fn seed_registers(
         boxed[*register as usize] = value.clone();
     }
     for &(register, slot) in &program.boxed_locals {
-        // A boxed local normally holds an ordinary object. A register used as
-        // an unbound numeric-native callee may instead hold a Function; the
-        // CallNumericNative operation checks the exact unbound intrinsic before
-        // invoking it, and any other function deoptimizes at that original call.
-        let value = vm.local_slot_value(slot as usize)?;
-        let is_numeric_native_callee = program.numeric_native_callee_registers.contains(&register);
-        let accepts_numeric_native_callee =
-            is_numeric_native_callee && matches!(value, Value::Function(_));
-        if !(value_is_ordinary_object(&value) || accepts_numeric_native_callee) {
-            return None;
-        }
-        boxed[register as usize] = value;
+        // A boxed register holds any JavaScript value, and every operation
+        // that consumes one checks what it actually is before acting:
+        // `get_named` and `set_named` require an object, `element_read` an
+        // array, `computed_read`/`computed_write` discriminate, `Unbox` and
+        // `call_numeric_native` deoptimize on anything unexpected. Seeding
+        // therefore does not need to pre-judge the value.
+        //
+        // It used to require an ordinary object here, which excluded a string
+        // -- and a string key is the whole point of a computed access, so a
+        // dictionary loop could compile and then always decline at entry.
+        boxed[register as usize] = vm.local_slot_value(slot as usize)?;
     }
     for &register in &program.written_boxed_locals {
         let slot = program.slot_for_boxed_register(register)? as usize;
         if !vm.slot_accepts_typed_loop_write(slot) {
-            return None;
+            {
+                if std::env::var_os("QJS_WALK_TRACE").is_some() {
+                    eprintln!("SEED reject #6");
+                }
+                return None;
+            }
         }
     }
     for (register, name) in &program.boxed_global_reads {
@@ -415,11 +476,21 @@ fn seed_registers(
             .global_this_own_property(name)
             .is_some_and(|property| property.is_accessor())
         {
-            return None;
+            {
+                if std::env::var_os("QJS_WALK_TRACE").is_some() {
+                    eprintln!("SEED reject #7");
+                }
+                return None;
+            }
         }
         let value = vm.load_global(name).ok()?;
         if !value_is_ordinary_object(&value) {
-            return None;
+            {
+                if std::env::var_os("QJS_WALK_TRACE").is_some() {
+                    eprintln!("SEED reject #8");
+                }
+                return None;
+            }
         }
         boxed[*register as usize] = value;
     }
@@ -654,6 +725,26 @@ fn set_named(receiver: &Value, name: &Rc<str>, value: &Value) -> bool {
         object.write_existing_own_data_property(name, value),
         crate::value::OwnDataPropertyWrite::Written
     )
+}
+
+/// Reads `receiver[key]` for a boxed key, discriminating on what the receiver
+/// and key actually are rather than assuming either.
+fn computed_read(receiver: &Value, key: &Value) -> Option<Value> {
+    match (receiver, key) {
+        (Value::Object(object), Value::String(name)) => {
+            ordinary_data_property(object, name.as_str())
+        }
+        // A boxed key is not automatically a string: the same site carries an
+        // array index once a discovery forces its producer boxed. Answering
+        // both keeps that discovery from deoptimizing ordinary indexing.
+        (Value::Array(array), Value::Number(index)) => {
+            if *index < 0.0 || index.fract() != 0.0 || *index > u32::MAX as f64 {
+                return None;
+            }
+            array.direct_dense_index_value(*index as usize)
+        }
+        _ => None,
+    }
 }
 
 /// Reads one element of a dense array held in a boxed register.
