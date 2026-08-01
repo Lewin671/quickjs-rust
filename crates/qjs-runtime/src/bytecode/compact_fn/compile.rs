@@ -44,6 +44,24 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<CompactFunctionProgram> {
     let upvalue_slots = bytecode
         .direct_readonly_received_upvalue_slots()
         .unwrap_or(0);
+    // Slots a fresh activation is guaranteed to have a value in: parameters
+    // are seeded from the arguments, hoisted `var`s from `undefined`, and
+    // received upvalues from their cell. Requiring every read to land in this
+    // set is what lets the tier skip temporal-dead-zone checking entirely
+    // rather than reproduce the general path's diagnostics.
+    let mut initialized_slots = upvalue_slots;
+    for &slot in bytecode.parameter_slots() {
+        if slot >= u128::BITS as usize {
+            return None;
+        }
+        initialized_slots |= 1_u128 << slot;
+    }
+    for &slot in bytecode.hoisted_slots() {
+        if slot >= u128::BITS {
+            return None;
+        }
+        initialized_slots |= 1_u128 << slot;
+    }
 
     // Validate every instruction, including ones no path reaches. An
     // unsupported opcode in dead code means this body's shape is outside what
@@ -65,7 +83,14 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<CompactFunctionProgram> {
             Op::Jump(target) | Op::JumpIfFalse(target) if *target <= ip => return None,
             Op::Jump(target) | Op::JumpIfFalse(target) if *target > code.len() => return None,
             Op::LoadConst(index) if *index >= bytecode.constants.len() => return None,
-            Op::LoadLocal(slot) if *slot >= local_count => return None,
+            Op::LoadLocal(slot) => {
+                if *slot >= local_count || *slot >= u128::BITS as usize {
+                    return None;
+                }
+                if initialized_slots & (1_u128 << *slot) == 0 {
+                    return None;
+                }
+            }
             Op::StoreLocal(slot) => {
                 // A write must reach indexed storage directly: received
                 // upvalues are read-only here, and an immutable binding needs

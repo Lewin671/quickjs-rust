@@ -163,3 +163,20 @@ fn a_discarded_register_does_not_outlive_its_pop() {
         program.ops
     );
 }
+
+#[test]
+fn a_body_reading_a_lexically_declared_local_is_rejected() {
+    // Parameters and hoisted `var`s hold a value on entry; a `let` does not,
+    // so admitting one would require reproducing temporal-dead-zone
+    // diagnostics inside the tier. This is deliberately conservative -- the
+    // body below could never observe the dead zone -- and the point of the
+    // test is that widening admission must be a decision, not an accident.
+    let source = "function lexical(n) { let x = n + 1; return x; }";
+    assert!(compile::compile(&nested_function(source, "lexical")).is_none());
+}
+
+#[test]
+fn a_rejected_lexical_body_still_evaluates_correctly() {
+    let source = "function lexical(n) { let x = n + 1; return x; } lexical(41);";
+    assert_eq!(eval(source), Ok(Value::Number(42.0)));
+}
