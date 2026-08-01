@@ -36,6 +36,7 @@ mod vm_control_loop;
 mod vm_direct_upvalues;
 mod vm_dispose;
 mod vm_errors;
+mod vm_frame_init;
 mod vm_generator;
 mod vm_import;
 mod vm_iter;
