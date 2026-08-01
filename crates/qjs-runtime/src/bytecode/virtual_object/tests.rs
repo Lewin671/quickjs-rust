@@ -735,3 +735,60 @@ fn indexed_store_contract_matches_set_prop_index_stack_semantics() {
             .any(|use_kind| matches!(use_kind, VirtualUse::ElementRead { index: 0, .. }))
     );
 }
+
+/// A body the candidate analysis could not finish keeps its original stream.
+///
+/// Fusing the postfix increment there was reverted: applied to a body whose
+/// enclosing script contains a direct `eval`, the fused operation left the
+/// loop's induction variable unchanged, so `for (var i = 0; i < n; i++)`
+/// containing a `try` never terminated. A `try` anywhere in the function is
+/// enough to reach this path, and a direct `eval` anywhere in the script is
+/// enough to reach the shape that hangs, so the two meet in ordinary code.
+#[test]
+fn an_incomplete_analysis_leaves_the_increment_unfused() {
+    let bytecode = named_function(
+        "eval('1');\
+         function run(n) {\
+           var total = 0;\
+           for (var i = 0; i < n; i++) { try { total += 1; } catch (error) {} }\
+           return total;\
+         }",
+        "run",
+    );
+    let analysis = analyze(&bytecode);
+    assert!(
+        !analysis.complete,
+        "a body containing `try` should leave the candidate analysis incomplete"
+    );
+    let program = lower::lower(&bytecode);
+    assert!(
+        !program
+            .code(&bytecode.code)
+            .iter()
+            .any(|op| matches!(op, Op::IncrementLocal { .. })),
+        "an incomplete analysis must not fuse the increment"
+    );
+}
+
+/// The same loop, run. The guard bounds it so a regression fails the assertion
+/// instead of hanging the test process.
+#[test]
+fn a_try_inside_a_loop_terminates_when_the_script_uses_direct_eval() {
+    assert_eq!(
+        crate::eval(
+            "eval('1');\
+             var guard = 0;\
+             function run(n) {\
+               var total = 0;\
+               for (var i = 0; i < n; i++) {\
+                 guard = guard + 1;\
+                 if (guard > 100) { return -1; }\
+                 try { total += 1; } catch (error) {}\
+               }\
+               return total;\
+             }\
+             run(6);"
+        ),
+        Ok(crate::Value::Number(6.0))
+    );
+}

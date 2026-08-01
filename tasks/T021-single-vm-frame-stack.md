@@ -5064,9 +5064,60 @@ mutable captures found no callee the evaluators alone admit wrongly. The guard
 is retained as alignment with the interpreter's entry condition, and the code
 comment says so rather than claiming a defence it does not demonstrably provide.
 
-### 2026-08-01 pre-existing hang: eval-created class constructor called in a guarded loop
+### 2026-08-01 reverted increment fusion for incomplete analyses -- it hung ordinary loops
 
-Found while writing the unit above; **not** caused by it, and not fixed here.
+`92f49f8b` extended `fuse_local_increments` to bodies whose virtual-object
+candidate analysis did not complete. That is wrong, it was mine, and it shipped
+this morning. **The claim in an earlier draft of this file that the resulting
+hang predated 2026-08-01 was incorrect**; bisection across `92f49f8b`,
+`5b80dabc`, `d6fb08d5`, `771c4eef` and `f0e94f5f` puts it exactly at
+`92f49f8b`, whose parent is clean.
+
+Minimal reproduction -- no class, no throw, no call:
+
+```js
+eval('1');
+function run(n) {
+  var total = 0;
+  for (var i = 0; i < n; i++) { try { total += 1; } catch (error) {} }
+  return total;
+}
+run(6);   // QuickJS-NG: 6.  This engine: never terminates.
+```
+
+Both conditions are ordinary and independent. A `try` anywhere in the function
+leaves the candidate analysis incomplete, which is what routes the body to the
+new path; a direct `eval` anywhere in the *script* is what makes the fused
+operation wrong. `while` is unaffected, indirect `eval` and the `Function`
+constructor are unaffected, and a body without `try` is unaffected.
+
+The observable failure is that the loop's induction variable never advances
+while the body keeps running: instrumenting the loop shows `i` fixed at 0 while
+the body's own accumulator grows without bound. The static
+`is_assignment_authoritative` evidence the fusion relies on does not survive a
+script whose locals a direct `eval` can redirect, so the fused operation writes
+a slot that the surrounding reads no longer consult.
+
+Reverted rather than re-admitted under a narrower condition. The revert is
+neutral on five of the six sentinels and costs `string_key_map_churn` **1.0463**
+-- and that case is the next unit's target, which rewrites its loop entirely.
+Re-landing a hang-capable path to hold 4.6% on a case about to be replaced is
+not a trade worth making; a future attempt needs a run-time-checked condition,
+not a static one.
+
+Two regression tests cover it. The structural one asserts that a body with an
+incomplete analysis keeps an unfused stream, and the semantic one runs the
+loop with a guard counter so a regression returns `-1` instead of hanging the
+test process. Both were checked against the reverted code: they fail, and the
+semantic one fails rather than hangs.
+
+### 2026-08-01 the eval/class/loop hang, as first (mis)diagnosed
+
+Retained as a record of how the entry above was reached, and of a wrong
+attribution corrected in the same session. The reproduction below is real, but
+the class, the `eval`-created callee, and the `try`/`catch` were all incidental:
+the cause is the increment fusion recorded above, and the claim that it predated
+this day's work was wrong.
 
 ```js
 var C; eval('C = class { constructor(v) { this.v = v; } }');
@@ -5080,9 +5131,8 @@ All three conditions are required. A class *declared* rather than created
 through `eval` returns 42; the same `eval`-created class called outside a loop
 throws correctly; an ordinary throwing function in the same guarded loop returns
 42; and the loop without the call terminates. The suspect is
-`class_constructor_call_error`, which returns `thrown: None` unless the function
-carries `CROSS_REALM_TYPE_ERROR_PROTOTYPE` -- a non-`thrown` error reaching a
-try handler that then fails to advance the instruction pointer would reproduce
-exactly this. It reproduces on binaries built from `92f49f8b`, before any of
-2026-08-01's work. This deserves its own unit: a hang is a more serious defect
-than any of the throughput work around it.
+`class_constructor_call_error` -- which was wrong. Narrowing the reproduction
+showed the callee is irrelevant: an `eval`-created function that merely returns
+a constant hangs the same loop, and so does a bare `throw 1` with no call at
+all. What "reproduces on binaries built from `92f49f8b`" actually meant was
+that `92f49f8b` is the commit that introduced it.

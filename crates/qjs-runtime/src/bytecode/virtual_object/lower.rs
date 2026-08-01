@@ -65,7 +65,7 @@ impl VirtualObjectVariant {
 pub(in crate::bytecode) fn lower(bytecode: &Bytecode) -> VirtualObjectProgram {
     let analysis = analyze(bytecode);
     if !analysis.complete {
-        return super::peephole::peephole_only_program(bytecode, &analysis);
+        return original_program();
     }
 
     // Loop plans are compiled from the immutable source stream and prepare
@@ -230,20 +230,7 @@ fn virtual_use_ip(use_kind: &VirtualUse) -> usize {
     }
 }
 
-/// A program whose single variant is one already-rewritten stream, applicable
-/// to every frame.
-pub(super) fn peephole_variant(code: Rc<[Op]>) -> VirtualObjectProgram {
-    let variant = VirtualObjectVariant {
-        lowered_code: Some(code),
-        required_authoritative_slots: 0,
-    };
-    VirtualObjectProgram {
-        full: variant.clone(),
-        data_only: variant,
-    }
-}
-
-pub(super) fn original_program() -> VirtualObjectProgram {
+fn original_program() -> VirtualObjectProgram {
     VirtualObjectProgram {
         full: original_variant(),
         data_only: original_variant(),
