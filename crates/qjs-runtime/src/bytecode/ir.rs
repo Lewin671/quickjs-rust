@@ -825,6 +825,8 @@ pub struct Bytecode {
     /// single-slot pool only ever served the outermost frame and every nested
     /// call allocated and freed one. Cloned bytecode shares the same pool.
     operand_stack_pool: OperandStackRecycler,
+    /// Cleared local-slot allocations reused by slot-seeded direct calls.
+    local_slot_pool: super::operand_stack::LocalSlotRecycler,
     /// Per-call metadata precomputed once at construction. Each of these used to
     /// be recomputed on every call by recursively walking `code` (and nested
     /// function/class op trees) and materializing a fresh `BTreeSet`/`Vec`,
@@ -977,6 +979,7 @@ impl Bytecode {
             virtual_object_program: OnceCell::new(),
             template_objects: RefCell::new(HashMap::new()),
             operand_stack_pool: OperandStackRecycler::new(),
+            local_slot_pool: super::operand_stack::LocalSlotRecycler::new(),
             cached_closure_referenced_global_names: Vec::new(),
             cached_written_binding_names: Vec::new(),
             cached_closure_written_binding_names: Vec::new(),
@@ -1049,6 +1052,18 @@ impl Bytecode {
     /// for the frame's whole lifetime.
     pub(super) fn operand_stack_recycler(&self) -> OperandStackRecycler {
         self.operand_stack_pool.clone()
+    }
+
+    /// Takes `len` cleared local slots from this body's pool, or allocates
+    /// them. Unlike the operand stack this is not handed out as a cloned
+    /// handle: both call sites already hold the bytecode, and cloning an `Rc`
+    /// twice per call to save one allocation is a wash.
+    pub(super) fn take_local_slots(&self, len: usize) -> Vec<Option<Value>> {
+        self.local_slot_pool.take(len)
+    }
+
+    pub(super) fn recycle_local_slots(&self, slots: Vec<Option<Value>>) {
+        self.local_slot_pool.recycle(slots);
     }
 
     pub(crate) fn is_strict(&self) -> bool {

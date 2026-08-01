@@ -94,7 +94,12 @@ pub(super) fn eval_direct_call_bytecode(
         Vec::new(),
         Some(direct_call_slots),
     );
-    vm.run()
+    let value = vm.run();
+    // The direct-slot contract excludes closures over this frame's locals, so
+    // nothing outlives the call and the allocation can go back to the body's
+    // pool instead of being freed and rebuilt on the next invocation.
+    bytecode.recycle_local_slots(std::mem::take(&mut vm.current.locals));
+    value
 }
 
 pub(super) struct FrameState<'a> {

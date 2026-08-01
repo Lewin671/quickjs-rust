@@ -266,7 +266,7 @@ impl<'a> Vm<'a> {
     pub(super) fn initial_direct_call_slots(bytecode: &Bytecode) -> Vec<Slot> {
         // Fill, then seed only the hoisted slots. Testing every local's flag
         // made frame setup scale with the local count.
-        let mut locals = vec![None; bytecode.locals.len()];
+        let mut locals = bytecode.take_local_slots(bytecode.locals.len());
         for &slot in bytecode.hoisted_slots() {
             locals[slot as usize] = Some(Value::Undefined);
         }

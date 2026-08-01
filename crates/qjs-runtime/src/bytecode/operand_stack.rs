@@ -113,3 +113,54 @@ impl Drop for OperandStack {
         self.recycler.recycle(std::mem::take(&mut self.values));
     }
 }
+
+/// A shared pool of cleared local-slot allocations for one compiled body.
+///
+/// A slot-seeded direct call builds `vec![None; locals.len()]` on entry and
+/// frees it on exit, so a recursive or hot callee malloc/free pairs once per
+/// invocation for storage whose size is fixed at compile time. The frame's
+/// locals never outlive the call on that path -- the direct-slot contract
+/// excludes closures over them -- so the allocation can be handed back.
+#[derive(Clone)]
+pub(super) struct LocalSlotRecycler(Rc<RefCell<Vec<Vec<Option<Value>>>>>);
+
+impl std::fmt::Debug for LocalSlotRecycler {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("LocalSlotRecycler")
+            .field("pooled", &self.0.borrow().len())
+            .finish()
+    }
+}
+
+impl LocalSlotRecycler {
+    /// Deep recursion holds one vector per active frame; the bound keeps a
+    /// runaway depth from retaining unbounded storage after it unwinds.
+    const MAX_POOLED: usize = 32;
+    const MAX_RECYCLED_CAPACITY: usize = 256;
+
+    pub(super) fn new() -> Self {
+        Self(Rc::new(RefCell::new(Vec::new())))
+    }
+
+    /// Returns a vector of exactly `len` `None` slots, reusing a pooled
+    /// allocation when one is available.
+    pub(super) fn take(&self, len: usize) -> Vec<Option<Value>> {
+        let Some(mut slots) = self.0.borrow_mut().pop() else {
+            return vec![None; len];
+        };
+        slots.resize(len, None);
+        slots
+    }
+
+    pub(super) fn recycle(&self, mut slots: Vec<Option<Value>>) {
+        slots.clear();
+        if slots.capacity() > Self::MAX_RECYCLED_CAPACITY {
+            return;
+        }
+        let mut pooled = self.0.borrow_mut();
+        if pooled.len() < Self::MAX_POOLED {
+            pooled.push(slots);
+        }
+    }
+}
