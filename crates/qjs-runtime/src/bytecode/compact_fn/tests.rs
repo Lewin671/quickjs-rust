@@ -180,3 +180,51 @@ fn a_rejected_lexical_body_still_evaluates_correctly() {
     let source = "function lexical(n) { let x = n + 1; return x; } lexical(41);";
     assert_eq!(eval(source), Ok(Value::Number(42.0)));
 }
+
+#[test]
+fn an_admitted_body_calling_a_native_keeps_its_semantics() {
+    // A native callee is not direct-leaf, so it leaves the register dispatch
+    // and goes through `call_function`. That is a different entry from the one
+    // the ordinary interpreter would have used, so it needs its own coverage.
+    let source = "function useNative(a, b) { return Math.max(a, b); }
+        useNative(3, 9) + Math.min(1, 2);";
+    assert_eq!(eval(source), Ok(Value::Number(10.0)));
+}
+
+#[test]
+fn an_admitted_body_calling_a_bound_function_keeps_its_receiver() {
+    let source = "function target(x) { return this.base + x; }
+        var bound = target.bind({ base: 100 });
+        function useBound(n) { return bound(n); }
+        useBound(5);";
+    assert_eq!(eval(source), Ok(Value::Number(105.0)));
+}
+
+#[test]
+fn an_admitted_body_calling_a_proxy_keeps_its_trap() {
+    let source = "var proxied = new Proxy(function (x) { return x + 1; }, {
+            apply: function (target, thisArg, args) { return args[0] * 10; }
+        });
+        function useProxy(n) { return proxied(n); }
+        useProxy(7);";
+    assert_eq!(eval(source), Ok(Value::Number(70.0)));
+}
+
+#[test]
+fn an_admitted_body_calling_a_class_constructor_still_throws() {
+    let source = "class C {}
+        function useClass(n) { return C(n); }
+        try { useClass(1); 'no throw'; } catch (e) { e instanceof TypeError; }";
+    assert_eq!(eval(source), Ok(Value::Boolean(true)));
+}
+
+#[test]
+fn an_admitted_body_sees_a_replaced_self_binding() {
+    // The self-reference is read live from its cell on every call, so
+    // reassigning the outer binding must be observed rather than baked in.
+    let source = "function counter(n) { if (n <= 0) { return 0; } return counter(n - 1) + 1; }
+        var first = counter(3);
+        counter = function () { return 100; };
+        first + counter(3);";
+    assert_eq!(eval(source), Ok(Value::Number(103.0)));
+}

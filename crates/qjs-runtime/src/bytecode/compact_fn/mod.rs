@@ -34,10 +34,11 @@ use qjs_ast::BinaryOp;
 
 use super::ir::Bytecode;
 
+mod activation;
 mod compile;
 mod execute;
 
-pub(super) use execute::try_run_compact_function;
+pub(super) use activation::try_run_standalone;
 
 /// Bodies wider than this are not worth a register file; the limit also keeps
 /// register indices in `u16`.

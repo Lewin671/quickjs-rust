@@ -87,6 +87,21 @@ pub(super) fn eval_direct_call_bytecode(
     env: CallEnv,
     direct_call_slots: DirectCallSlots<'_>,
 ) -> Result<Value, RuntimeError> {
+    // A body the compact tier admits runs without a `Vm` at all: it has no
+    // handler, cannot suspend, runs no loop plans, and keeps its operands in
+    // registers, so none of `FrameState`'s 704 bytes would be read. Admission
+    // is decided before `env` or the slots are consumed, so a declined body
+    // builds exactly the frame it always did.
+    let mut pending_env = Some(env);
+    let mut pending_slots = Some(direct_call_slots);
+    if let Some(result) =
+        super::compact_fn::try_run_standalone(bytecode, &mut pending_env, &mut pending_slots)
+    {
+        return result;
+    }
+    let env = pending_env.expect("a declined standalone activation consumes nothing");
+    let direct_call_slots =
+        pending_slots.expect("a declined standalone activation consumes nothing");
     let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
         bytecode,
         env,
@@ -94,13 +109,7 @@ pub(super) fn eval_direct_call_bytecode(
         Vec::new(),
         Some(direct_call_slots),
     );
-    // A body the compact tier admits runs in its own small executor instead of
-    // the generic dispatch loop. Selection happens before any observable work,
-    // and a declined body falls through to exactly the previous path.
-    let value = match super::compact_fn::try_run_compact_function(&mut vm, bytecode) {
-        Some(value) => value,
-        None => vm.run(),
-    };
+    let value = vm.run();
     // The direct-slot contract excludes closures over this frame's locals, so
     // nothing outlives the call and the allocation can go back to the body's
     // pool instead of being freed and rebuilt on the next invocation.

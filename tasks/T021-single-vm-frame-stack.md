@@ -5312,3 +5312,71 @@ clone/drops.
 
 Note the product condition means recursion need not win individually if string
 churn wins strongly -- at `s = 0.40`, recursion may be as slow as 1.244x NG.
+
+### 2026-08-01 VM-free activation for compact bodies: mechanism met, timing gate missed by 0.045
+
+Built to the specification agreed with Codex above. `compact_fn/activation.rs`
+runs an admitted body with no `Vm` at all. Selection moved from inside
+`eval_direct_call_bytecode` to *before* `Vm::new...`; `env` and the direct-call
+slots are passed as `&mut Option<_>` and taken only once admission is certain,
+so a declined body builds exactly the frame it always did.
+
+A `CompactActivation` is four fields -- borrowed `Bytecode`, the callee's own
+`CallEnv`, `locals`, and the retained upvalue owner plus its slot mask --
+against `FrameState`'s 36 fields and 704 bytes. The admitted body can use none
+of the rest: it has no handler, cannot suspend, runs no loop plans, and holds
+its operands in registers.
+
+Entry guards, all checked before anything is consumed: the environment supplies
+no named binding, has no module imports, no deopt bindings, and no dynamic
+realm global; received cells are reachable from one retained function; and the
+bytecode's own authoritative mask covers every slot the program reads. With no
+per-slot cells the mask is `authoritative_mask_clean()`, so the check is two
+loads rather than a per-local environment query.
+
+Three semantics kept exactly one implementation rather than being reimplemented:
+a direct-leaf callee reaches `call_direct_leaf_function`, any other callee
+reaches `call_function`, and a non-numeric binary reaches
+`operations::eval_binary` on an empty realm frame -- which is what the
+interpreter's own path uses, since binary coercion never runs in the caller's
+lexical environment.
+
+**Mechanism gates: met exactly.** On the 2,000-iteration sentinel
+(254,004 calls):
+
+| counter | before | after |
+| --- | ---: | ---: |
+| `nested_vm_constructions` | 254,005 | **4** |
+| `compact_standalone_activations` | -- | 254,001 |
+| `compact_function_ops` | 4,680,009 | 4,680,009 |
+| `executed_ops` | 34,245 | 34,245 |
+| `ordinary_call_attempts` | 254,004 | 254,004 |
+
+**Timing gate: missed.** Paired alternating A/B against a base rebuilt from
+`63c775bd`, nine and eleven reps: `recursive_call_tree` **0.8909**
+[0.8475, 0.9137] and **0.8956** [0.8783, 0.9148]. The predeclared bar was
+`<= 0.85`. Per call that is 219 -> 195 ns, against Codex's predicted 165-190 ns
+band -- the mechanism landed where predicted, the bar was set below the band's
+midpoint.
+
+Every other sentinel passed its `<= 1.03` bar: `prototype_method_call` 0.9979,
+`polymorphic_call_site` 1.0116, `capturing_closure_call` 0.9994,
+`heterogeneous_property_read` 1.0066, `string_key_map_churn` 1.0136. Six-case
+geomean 0.9865.
+
+Retained despite the missed bar, for reasons that should be argued rather than
+assumed: the mechanism gate was met exactly, the change *removes* a code path
+rather than adding one, no sentinel regressed, and it is the prerequisite for
+the next unit -- compact-to-compact activation switching cannot be built on a
+path that constructs a `Vm` per call. The honest reading is that 0.85 was a
+slightly optimistic bar, not that the representation failed.
+
+Semantic coverage added for the call path that changed: native, bound, Proxy,
+and class-constructor callees, plus a live self-binding replacement observed
+across calls. 1,966 runtime tests, 218/218 `compare-qjs` fixtures.
+
+Remaining, and unchanged by this unit: `compact_fn::execute` self-time is still
+~25% of samples and the per-call construction budget is still negative against
+QuickJS-NG's ~35 ns. The next unit is the one Codex named: locals and operands
+in one register file, compact-to-compact switching in one loop, no per-call
+`CallEnv`.
