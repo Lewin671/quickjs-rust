@@ -437,6 +437,29 @@ iteration across all four sentinel loops. That measurement, not a raw probe
 count, is what a loop-dispatch-table change would have to justify itself
 against.
 
+`executed_ops` counts the bytecode instructions the interpreter actually
+dispatched. It answers a question wall time and per-path counters cannot:
+whether a slow workload runs *more* instructions than the reference engine or
+merely runs each one more slowly. Divide standard-build wall time by this
+count to get nanoseconds per dispatched instruction, and compare that against
+the reference engine's total time over the same count:
+
+| Case | Ops per iteration | Our ns/op | QuickJS-NG ns/op |
+| --- | ---: | ---: | ---: |
+| `recursive_call_tree` | 20.6 per call | 15.6 | 2.05 |
+| `prototype_method_call` | 28.0 | 13.8 | 2.36 |
+| `heterogeneous_property_read` | 28.0 | 9.5 | 2.14 |
+
+Instruction counts are at parity -- `callTree` compiles to 41 opcodes and
+dispatches about 20.6 per activation, which is what a comparable stack
+codegen emits. The gap is entirely per-instruction cost. Two controls bound
+where that cost is *not*: inflating the instruction word from 96 to 168 bytes
+costs 2.85% geometric mean and nothing at all on the two call-heavy cases, and
+a standalone 104-variant `match` dispatch loop over 96-byte words runs at
+1.3-1.4 ns per operation on the same machine. Dispatch and instruction-word
+size together account for at most 1.4 ns of a 9.5-15.6 ns budget, so the
+remainder is inside the opcode handler bodies.
+
 Use `--case ID` (repeatable) or `--filter TEXT` for a focused run. `--output`
 must name a new file; otherwise the runner writes under ignored
 `target/benchmarks/`. Candidate/base default to adapter `qjs-rust-raw`

@@ -643,6 +643,7 @@ impl<'a> Vm<'a> {
                     message: "bytecode instruction pointer out of bounds".to_owned(),
                 })?;
             self.ip += 1;
+            crate::diagnostics::count!(executed_ops);
             match op {
                 Op::LoadConst(index) => {
                     let value =

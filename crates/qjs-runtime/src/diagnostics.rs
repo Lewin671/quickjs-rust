@@ -89,6 +89,8 @@ declare_counters! {
     /// counter -- not a raw probe count -- is what a dispatch-table unit would
     /// have to justify itself against.
     declined_loop_plan_edges,
+    /// Bytecode instructions actually dispatched by the interpreter loop.
+    executed_ops,
 }
 
 /// Applies `update` to the calling thread's counters.
