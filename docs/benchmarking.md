@@ -336,23 +336,38 @@ silently omitting one.
 Three details are load-bearing rather than incidental. The lane writes its own
 receipts: `preview prepare` refuses to overwrite, so reusing the broad lane's
 paths would fail every run and reduce the section to "did not complete"
-permanently. The lane runs **last** and is **admitted only when the step demonstrably has
-room**. It compares elapsed time against the step's budget
-(`QJS_PREVIEW_STEP_BUDGET_SECONDS`) and refuses to start unless what remains,
-less a reserve for the fallback write and the publisher, covers its own
-deadline (`QJS_SENTINEL_TIMEOUT_SECONDS`, 600). Refusing prints a section
-saying so, with the numbers.
+permanently. The lane runs **last** and is **admitted only when both the step and the job
+demonstrably have room**. `tools/benchmark/preview_admission.py` compares
+elapsed time against each budget (`QJS_PREVIEW_STEP_BUDGET_SECONDS`,
+`QJS_PREVIEW_JOB_BUDGET_SECONDS`), subtracts a reserve for the fallback write
+and the publisher, and admits only when the tightest remainder covers the
+lane's deadline (`QJS_SENTINEL_TIMEOUT_SECONDS`, 600). Refusing prints a
+section saying so, with the numbers. The decision lives in Python rather than
+in shell arithmetic because it is logic, and logic belongs where it can be
+tested — its boundary cases are covered directly.
+
+The job budget matters separately from the step's. A job carries setup, cache,
+and publication steps the orchestrator never observes, so its clock can be far
+ahead of the step's; step-only arithmetic would admit a lane into a job about
+to expire and lose the publisher. The workflow records `QJS_PREVIEW_JOB_STARTED_AT`
+as its first step so the orchestrator can see that clock at all.
+
+The **whole** admitted pipeline shares one deadline — preparation, measurement,
+reporting, and rendering each run against the remaining time. Wrapping only the
+measurement would leave the advertised deadline untrue: a report that started
+just inside the limit could still overrun the step.
 
 Two weaker fixes were tried and are recorded because both are tempting.
 Bounding the lane alone does not work: the deadline starts only after
 compilation and the broad lane, so a slow prefix still lets the step expire
 mid-lane, after which the always-run publisher replaces the broad lane's
 durable conclusion with a failure notice. Raising the step timeout alone does
-not work either — nothing bounds the prefix, so it only moves the cliff.
-Measuring what is actually left is what makes the guarantee hold regardless of
-how long the prefix took. Running last is what makes that arithmetic honest:
-only the fallback write and the publisher follow, so the reserve does not have
-to cover the external corpus work as well.
+not work either — nothing bounds the prefix, so it only moves the cliff. And
+consulting the step alone is not enough, because the job has its own deadline
+and its own head start. Measuring what is actually left, against every deadline
+that can kill the run, is what makes the guarantee hold. Running last is what
+makes that arithmetic honest: only the fallback write and the publisher follow,
+so the reserve does not have to cover the external corpus work as well.
 
 Isolating the lane in its own non-fatal workflow step would remove the
 arithmetic entirely, and is left for a change that can thread the lane's

@@ -503,6 +503,7 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertIn("inputs.source-root", setup_action)
         self.assertIn('"$QJS_HARNESS_ROOT/scripts/performance-preview.sh"', workflow)
         self.assertIn("timeout-minutes: 47", workflow)
+        self.assertIn("QJS_PREVIEW_JOB_STARTED_AT", workflow)
         self.assertIn("$GITHUB_STEP_SUMMARY", workflow)
         self.assertIn("actions/upload-artifact@v6", workflow)
         self.assertEqual(workflow.count("uses: actions/cache/restore@v5"), 7)

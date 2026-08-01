@@ -116,6 +116,12 @@ jobs:
       PR_BASE_CLONE_URL: ${{ github.event.pull_request.base.repo.clone_url }}
       PR_HEAD_CLONE_URL: ${{ github.event.pull_request.head.repo.clone_url }}
     steps:
+      # The orchestrator can only see its own step's clock. The sentinel lane
+      # must also respect the job deadline, because a job carries setup, cache,
+      # and publication steps that the script never observes.
+      - name: Record when this job began
+        run: echo "QJS_PREVIEW_JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
       - name: Checkout explicit PR base as base-owned harness
         uses: actions/checkout@v6
         with:
@@ -281,6 +287,11 @@ jobs:
       RUN_WORKFLOW_SHA: ${{ github.sha }}
       RUN_CLONE_URL: ${{ github.event.repository.clone_url }}
     steps:
+      # Same reason as the base-owned job: the job deadline is not visible to
+      # the orchestrator unless it is recorded here.
+      - name: Record when this job began
+        run: echo "QJS_PREVIEW_JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
       - name: Checkout exact main revision as head-owned harness and candidate
         uses: actions/checkout@v6
         with:
