@@ -633,15 +633,14 @@ class SentinelProtocolBindingTests(unittest.TestCase):
             self.assertIn("sentinel_measurement", required, name)
 
     def test_a_diverging_sentinel_reference_fails_the_cross_check(self) -> None:
-        """Both lanes must measure against the same pinned QuickJS-NG.
+        """Mutate only the sentinel manifest, so the check under test is the
+        one that fires.
 
-        The protocol aggregate covers the protocol file list, not the
-        manifest's own fields, so without this check a sentinel manifest could
-        name a different reference revision and `prepare` would stamp it into
-        the lane's receipts unchallenged.
+        Changing `policy.reference_revision` instead would make the *broad*
+        manifest disagree first, and the test would still pass with the
+        sentinel check deleted -- proving some rejection rather than the
+        intended one.
         """
-        from dataclasses import replace
-
         from tools.benchmark.performance_policy import (
             cross_check_repository,
             load_policy,
@@ -649,6 +648,20 @@ class SentinelProtocolBindingTests(unittest.TestCase):
 
         policy = load_policy(ROOT / "benchmarks/performance-policy.json")
         cross_check_repository(policy, ROOT)
-        drifted = replace(policy, reference_revision="0" * 40)
-        with self.assertRaisesRegex(PerformancePolicyError, "reference_engine"):
-            cross_check_repository(drifted, ROOT)
+
+        manifest_path = ROOT / "benchmarks/generic-sentinels-manifest.json"
+        original = manifest_path.read_text(encoding="utf-8")
+        try:
+            drifted = json.loads(original)
+            drifted["reference_engine"]["revision"] = "0" * 40
+            manifest_path.write_text(json.dumps(drifted, indent=2) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                PerformancePolicyError, "does not match generic-sentinel manifest"
+            ):
+                cross_check_repository(policy, ROOT)
+        finally:
+            manifest_path.write_text(original, encoding="utf-8")
+
+        # Restoring must leave the repository passing again, so a failure here
+        # is the test's own cleanup rather than a real drift.
+        cross_check_repository(policy, ROOT)

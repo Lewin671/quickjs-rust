@@ -336,15 +336,27 @@ silently omitting one.
 Three details are load-bearing rather than incidental. The lane writes its own
 receipts: `preview prepare` refuses to overwrite, so reusing the broad lane's
 paths would fail every run and reduce the section to "did not complete"
-permanently. The measurement carries an internal deadline
-(`QJS_SENTINEL_TIMEOUT_SECONDS`, 600 by default) **and** the workflow's step and
-job budgets are sized to cover it (47 and 57 minutes). Bounding alone is the
-tempting half-fix and does not work: the deadline starts only after compilation
-and the broad lane, so a cache miss or slow broad run can still let the step
-expire mid-lane, after which the always-run publisher replaces the broad lane's
-durable conclusion with a failure notice. The guarantee needs both. Isolating
-the lane in its own non-fatal workflow step would be stronger still, and is
-left for a change that can thread the lane's inputs out of the orchestrator. And the sentinel section enforces the same
+permanently. The lane runs **last** and is **admitted only when the step demonstrably has
+room**. It compares elapsed time against the step's budget
+(`QJS_PREVIEW_STEP_BUDGET_SECONDS`) and refuses to start unless what remains,
+less a reserve for the fallback write and the publisher, covers its own
+deadline (`QJS_SENTINEL_TIMEOUT_SECONDS`, 600). Refusing prints a section
+saying so, with the numbers.
+
+Two weaker fixes were tried and are recorded because both are tempting.
+Bounding the lane alone does not work: the deadline starts only after
+compilation and the broad lane, so a slow prefix still lets the step expire
+mid-lane, after which the always-run publisher replaces the broad lane's
+durable conclusion with a failure notice. Raising the step timeout alone does
+not work either — nothing bounds the prefix, so it only moves the cliff.
+Measuring what is actually left is what makes the guarantee hold regardless of
+how long the prefix took. Running last is what makes that arithmetic honest:
+only the fallback write and the publisher follow, so the reserve does not have
+to cover the external corpus work as well.
+
+Isolating the lane in its own non-fatal workflow step would remove the
+arithmetic entirely, and is left for a change that can thread the lane's
+inputs out of the orchestrator. And the sentinel section enforces the same
 health invariants as the broad one: complete comparison input, three roles, the
 complete frozen six-case inventory, 3/3 valid non-claim blocks, and agreeing
 health/linearity status. It additionally requires **both** comparison maps to

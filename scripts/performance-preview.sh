@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# When this run began, so the optional sentinel lane can refuse to start
+# without a guaranteed budget rather than gamble that enough of the step is
+# left.
+PREVIEW_STARTED_AT="$(date +%s)"
+
 HARNESS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PYTHONDONTWRITEBYTECODE=1
 
@@ -404,64 +409,6 @@ CURRENT_PHASE="summary"
 # interpreter costs -- its cases are folded rather than accelerated -- so a
 # preview that reported only broad numbers would steer by a reading the
 # engine's own execution counters contradict.
-# `preview prepare` writes its receipts with a refuse-to-overwrite guard, so
-# this lane needs its own receipt paths; reusing the broad lane's would fail
-# every run and silently reduce this section to "did not complete".
-#
-# The measurement is bounded explicitly, and the workflow's step and job
-# budgets are sized to cover that bound on top of everything before it.
-#
-# Bounding alone is not enough, which is worth stating because it is the
-# tempting half-fix. This deadline starts only after compilation and the broad
-# lane, so on a cache miss or a slow broad run the *step* can still expire
-# mid-lane -- and the always-run publisher, seeing a non-success job status,
-# replaces the broad lane's durable conclusion with "no performance
-# conclusion". The guarantee needs both: a lane that cannot overrun, and an
-# outer budget with room for it.
-#
-# The better long-term shape is to isolate the lane in its own non-fatal
-# workflow step, where a timeout kills only that step. That needs the lane's
-# inputs threaded out of this script, so it is deliberately left for a change
-# that can carry it.
-SENTINEL_TIMEOUT_SECONDS="${QJS_SENTINEL_TIMEOUT_SECONDS:-600}"
-CURRENT_PHASE="sentinel_measurement"
-SENTINEL_MANIFEST="$HARNESS_ROOT/benchmarks/.hosted-sentinel-${CANDIDATE_REVISION:0:12}-${BASE_REVISION:0:12}-$$.json"
-if (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview prepare \
-      --template benchmarks/generic-sentinels-manifest.json \
-      --manifest-output "$SENTINEL_MANIFEST" \
-      --candidate-binary "$CANDIDATE_BINARY" --base-binary "$BASE_BINARY" \
-      --quickjs-binary "$QUICKJS_BINARY" \
-      --candidate-receipt "$OUTPUT/sentinel-candidate-receipt.json" \
-      --base-receipt "$OUTPUT/sentinel-base-receipt.json" \
-      --quickjs-receipt "$OUTPUT/sentinel-quickjs-ng-receipt.json" \
-      --candidate-repo "$CANDIDATE_REPO" --candidate-revision "$CANDIDATE_REVISION" \
-      --base-repo "$BASE_REPO" --base-revision "$BASE_REVISION" \
-      --profile-id "$PROFILE_ID" --platform "$PROFILE_PLATFORM" \
-      --rust-toolchain "$RUST_TOOLCHAIN" --rust-target "$RUST_TARGET" \
-      --quickjs-toolchain "$QUICKJS_TOOLCHAIN" --quickjs-target "$QUICKJS_TARGET" \
-      --quickjs-cc "$QUICKJS_CC") \
-   && (cd "$HARNESS_ROOT" && ./scripts/run-with-timeout.sh "$SENTINEL_TIMEOUT_SECONDS" \
-      ./scripts/benchmark.sh --manifest "$SENTINEL_MANIFEST" --blocks 3 \
-      --candidate "$CANDIDATE_BINARY" \
-      --candidate-receipt "$OUTPUT/sentinel-candidate-receipt.json" \
-      --base "$BASE_BINARY" --base-receipt "$OUTPUT/sentinel-base-receipt.json" \
-      --quickjs-ng "$QUICKJS_BINARY" \
-      --quickjs-ng-receipt "$OUTPUT/sentinel-quickjs-ng-receipt.json" \
-      --output "$OUTPUT/sentinel-raw.jsonl") \
-   && (cd "$HARNESS_ROOT" && ./scripts/benchmark-report.sh \
-      --manifest "$SENTINEL_MANIFEST" --analysis-manifest benchmarks/analysis.json \
-      --input "$OUTPUT/sentinel-raw.jsonl" --output "$OUTPUT/sentinel-report.json") \
-   && (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview sentinel-summary \
-      --report "$OUTPUT/sentinel-report.json" --markdown "$OUTPUT/sentinel-summary.md"); then
-  cp "$SENTINEL_MANIFEST" "$OUTPUT/sentinel-manifest.json"
-else
-  printf '%s\n' "" "### Generic-path sentinels" "" \
-    "> The sentinel lane did not complete. The broad summary above stands, but" \
-    "> it reports specializer coverage only; no ordinary-interpreter reading was" \
-    "> produced for this run." "" > "$OUTPUT/sentinel-summary.md"
-fi
-rm -f "$SENTINEL_MANIFEST"
-cat "$OUTPUT/sentinel-summary.md" >> "$OUTPUT/summary.md"
 
 # External corpora remain non-claim evidence in every admitted hosted mode.
 # The base-owned PR harness keeps corpus selection and reporting code trusted;
@@ -481,6 +428,86 @@ verify_source "$BASE_SOURCE" "$BASE_REVISION"
 verify_source "$QUICKJS_SOURCE" "$REFERENCE_REVISION"
 printf '\n' >> "$OUTPUT/summary.md"
 cat "$OUTPUT/external-summary.md" >> "$OUTPUT/summary.md"
+
+# The generic-path sentinel lane, deliberately last.
+#
+# The broad portfolio cannot answer what the ordinary interpreter costs -- its
+# cases are folded rather than accelerated -- so a preview reporting only broad
+# numbers steers by a reading the engine's own execution counters contradict.
+# This lane supplies the missing one, and everything it needs is already
+# durable by the time it runs.
+#
+# Running last is what makes its budget arithmetic honest: only the fallback
+# write and the publisher follow it, so the reserve below does not have to
+# cover the external corpus work as well.
+#
+# It is admitted only when the step demonstrably has room. Raising the step
+# timeout alone would merely move the cliff: nothing bounds how long build and
+# the broad lane take, so a slow prefix can still leave less than the deadline,
+# the step dies mid-lane, and the always-run publisher -- seeing a non-success
+# job status -- replaces the broad lane's durable conclusion with "no
+# performance conclusion".
+#
+# Isolating the lane in its own non-fatal workflow step would remove the
+# arithmetic entirely. That needs the lane's inputs threaded out of this
+# script, so it is left for a change that can carry it.
+CURRENT_PHASE="sentinel_admission"
+SENTINEL_TIMEOUT_SECONDS="${QJS_SENTINEL_TIMEOUT_SECONDS:-600}"
+PREVIEW_STEP_BUDGET_SECONDS="${QJS_PREVIEW_STEP_BUDGET_SECONDS:-2820}"
+# Room for the fallback write, the manifest copy, and the publisher.
+SENTINEL_RESERVE_SECONDS="${QJS_SENTINEL_RESERVE_SECONDS:-120}"
+SENTINEL_REMAINING=$(( PREVIEW_STEP_BUDGET_SECONDS - ( $(date +%s) - PREVIEW_STARTED_AT ) - SENTINEL_RESERVE_SECONDS ))
+if [ "$SENTINEL_REMAINING" -lt "$SENTINEL_TIMEOUT_SECONDS" ]; then
+  printf '%s\n' "" "### Generic-path sentinels" "" \
+    "> The sentinel lane was not started: ${SENTINEL_REMAINING}s of the step's" \
+    "> ${PREVIEW_STEP_BUDGET_SECONDS}s budget remained, below its" \
+    "> ${SENTINEL_TIMEOUT_SECONDS}s deadline. The broad summary above stands," \
+    "> but reports specializer coverage only; no ordinary-interpreter reading" \
+    "> was produced for this run." "" > "$OUTPUT/sentinel-summary.md"
+else
+  # `preview prepare` writes its receipts with a refuse-to-overwrite guard, so
+  # this lane needs its own receipt paths; reusing the broad lane's would fail
+  # every run and silently reduce this section to "did not complete".
+  CURRENT_PHASE="sentinel_measurement"
+  SENTINEL_MANIFEST="$HARNESS_ROOT/benchmarks/.hosted-sentinel-${CANDIDATE_REVISION:0:12}-${BASE_REVISION:0:12}-$$.json"
+  if (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview prepare \
+        --template benchmarks/generic-sentinels-manifest.json \
+        --manifest-output "$SENTINEL_MANIFEST" \
+        --candidate-binary "$CANDIDATE_BINARY" --base-binary "$BASE_BINARY" \
+        --quickjs-binary "$QUICKJS_BINARY" \
+        --candidate-receipt "$OUTPUT/sentinel-candidate-receipt.json" \
+        --base-receipt "$OUTPUT/sentinel-base-receipt.json" \
+        --quickjs-receipt "$OUTPUT/sentinel-quickjs-ng-receipt.json" \
+        --candidate-repo "$CANDIDATE_REPO" --candidate-revision "$CANDIDATE_REVISION" \
+        --base-repo "$BASE_REPO" --base-revision "$BASE_REVISION" \
+        --profile-id "$PROFILE_ID" --platform "$PROFILE_PLATFORM" \
+        --rust-toolchain "$RUST_TOOLCHAIN" --rust-target "$RUST_TARGET" \
+        --quickjs-toolchain "$QUICKJS_TOOLCHAIN" --quickjs-target "$QUICKJS_TARGET" \
+        --quickjs-cc "$QUICKJS_CC") \
+     && (cd "$HARNESS_ROOT" && ./scripts/run-with-timeout.sh "$SENTINEL_TIMEOUT_SECONDS" \
+        ./scripts/benchmark.sh --manifest "$SENTINEL_MANIFEST" --blocks 3 \
+        --candidate "$CANDIDATE_BINARY" \
+        --candidate-receipt "$OUTPUT/sentinel-candidate-receipt.json" \
+        --base "$BASE_BINARY" --base-receipt "$OUTPUT/sentinel-base-receipt.json" \
+        --quickjs-ng "$QUICKJS_BINARY" \
+        --quickjs-ng-receipt "$OUTPUT/sentinel-quickjs-ng-receipt.json" \
+        --output "$OUTPUT/sentinel-raw.jsonl") \
+     && (cd "$HARNESS_ROOT" && ./scripts/benchmark-report.sh \
+        --manifest "$SENTINEL_MANIFEST" --analysis-manifest benchmarks/analysis.json \
+        --input "$OUTPUT/sentinel-raw.jsonl" --output "$OUTPUT/sentinel-report.json") \
+     && (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview sentinel-summary \
+        --report "$OUTPUT/sentinel-report.json" \
+        --markdown "$OUTPUT/sentinel-summary.md"); then
+    cp "$SENTINEL_MANIFEST" "$OUTPUT/sentinel-manifest.json"
+  else
+    printf '%s\n' "" "### Generic-path sentinels" "" \
+      "> The sentinel lane did not complete. The broad summary above stands," \
+      "> but reports specializer coverage only; no ordinary-interpreter reading" \
+      "> was produced for this run." "" > "$OUTPUT/sentinel-summary.md"
+  fi
+  rm -f "$SENTINEL_MANIFEST"
+fi
+cat "$OUTPUT/sentinel-summary.md" >> "$OUTPUT/summary.md"
 
 RUN_COMPLETED=1
 CURRENT_PHASE="complete"
