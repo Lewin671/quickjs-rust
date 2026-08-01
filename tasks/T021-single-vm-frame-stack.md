@@ -5885,3 +5885,22 @@ session's work and present in every earlier build: `(true ? a : b).x` evaluated
 to the object rather than to `x`, because the named-property peephole removes a
 `LoadLocal` that a conditional's already-patched `Jump` lands on. Fixed
 separately in `e6aa57e1` with a `compare-qjs` fixture.
+
+### 2026-08-01 rejected again: moving register blanking from recycle to entry
+
+`recycle_registers` is 11.1% of the recursive profile, so it keeps looking like
+a target. The first attempt (a flag to skip the sweep entirely) measured 13.5%
+slower. This second attempt changed shape: the recycler rewrites only registers
+that actually own something -- a numeric register is read and compared but not
+written -- and a `blanked_locals` list re-initializes the hoisted locals at
+entry instead. No per-store cost this time.
+
+Measured **1.0283** on `recursive_call_tree`. Reverted.
+
+Walking a `Vec<u16>` of slots at entry, with its bounds check per element,
+costs more than the straight-line writes it removes. Two different shapes of
+the same idea have now lost, which is enough to call it: **the register sweep
+is not where this sentinel's remaining time is.** 61.8% is inside `execute`
+itself and 14.5% is `run` plus `call_from_activation` -- the per-activation
+setup and the Rust-stack recursion around it. Those need compact-to-compact
+activation switching in one loop, not another way to arrange the same writes.
