@@ -5937,3 +5937,39 @@ Both of the larger items need structural changes rather than peepholes:
 compact-to-compact activation switching in one loop for the second, and a value
 representation that does not need dropping for the first -- `Value` is 16 bytes
 with `needs_drop = true`, and every register write pays for that.
+
+### 2026-08-01 compact-to-compact activation switching: blocked on borrowed bytecode
+
+Attempted, and stopped at a precise architectural boundary rather than at a
+measurement. Recording it because the blocker is the same one the frame
+migration hit in July, and the fix is already known in this file.
+
+The design was straightforward and mostly written: one register buffer for the
+whole call chain, each activation a window at `base`; a `Call` whose callee
+`compact_callee` admits pushes a four-word `Suspended` and switches `program`,
+`base`, `pc` and the activation's bytecode/upvalue fields in place; `Return`
+pops. No Rust recursion, no per-call pool round trip, no `run` setup. That is
+the 14.5% of the recursive profile spent on `run` plus `call_from_activation`,
+plus most of `recycle_registers`.
+
+**It does not typecheck, for a real reason.** `CompactActivation` borrows its
+bytecode (`&'a Bytecode`), and so does `CompactFunctionProgram` -- it lives in
+a `OnceCell` on that bytecode. A callee's bytecode is reached through the
+`Function` sitting in a *register*, and that register is overwritten by the
+call's own result (`dst == base` for every `Call`). So the borrow the switch
+needs cannot outlive the value it came from, and the compiler is right to
+refuse: nothing in the types says the `Function` stays alive across the frames
+that use its bytecode.
+
+The fix is the one `e0cbc752`/`9d4da8d6`/`c7daae80` applied to `FrameState`:
+**an activation must own its bytecode handle**, `Rc<Bytecode>` rather than
+`&Bytecode`, so a frame can be built from a handle it holds instead of from a
+borrow with the caller's lifetime. `program` then has to be re-derived per
+switch (a `OnceCell` read) rather than held across the loop, or reached through
+a raw pointer whose validity the owned handle guarantees -- the second is the
+only version that keeps the dispatch loop's working set unchanged, and it is
+the only place in this tier where `unsafe` would be justified.
+
+That is a bounded unit, but it is a representation change to the activation,
+not an addition to it, so it is not something to land half-done at the end of a
+session. Reverted; nothing from the attempt is in the tree.
