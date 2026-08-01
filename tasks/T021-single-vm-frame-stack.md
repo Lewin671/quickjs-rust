@@ -5904,3 +5904,36 @@ is not where this sentinel's remaining time is.** 61.8% is inside `execute`
 itself and 14.5% is `run` plus `call_from_activation` -- the per-activation
 setup and the Rust-stack recursion around it. Those need compact-to-compact
 activation switching in one loop, not another way to arrange the same writes.
+
+### 2026-08-01 what the recursive sentinel's program actually looks like
+
+Dumping the compiled program settles what is left, and it is not a mystery:
+
+```
+PROGRAM ops=33 registers=11
+  0: Move { dst: 6, src: 1 }          <- LoadLocal
+  1: LoadConst { dst: 7, index: 0 }
+  2: Binary { dst: 6, op: Le, left: 6, right: 7 }
+  3: JumpIfFalsy { cond: 6, target: 9 }
+  ...
+ 16: Call { dst: 7, base: 7, argc: 2 }
+```
+
+**Twelve of the thirty-three operations are `Move`** -- a local copied into a
+stack register so the next operation can read it there. Removing them is what
+the virtual-stack unit was for, and it has now failed twice: once on aliasing
+and merge edges (rejected earlier today), and the register-sweep reshuffles
+twice more.
+
+Not all twelve are removable. A `Move` feeding a `Call`'s argument window has
+to stay -- the callee needs consecutive registers -- and one feeding a local
+store is the store. The removable subset is the four or five whose only
+consumer is a `Binary`, worth roughly 15% of the dispatch and so about 9% of
+this sentinel.
+
+That is the honest size of the remaining incremental work here, against
+`execute` at 61.8% and per-activation setup plus Rust-stack recursion at 14.5%.
+Both of the larger items need structural changes rather than peepholes:
+compact-to-compact activation switching in one loop for the second, and a value
+representation that does not need dropping for the first -- `Value` is 16 bytes
+with `needs_drop = true`, and every register write pays for that.
