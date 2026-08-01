@@ -12,6 +12,7 @@ use super::{CompactFunctionProgram, CompactOp};
 use crate::bytecode::ir::Bytecode;
 use crate::bytecode::util::stack_underflow;
 use crate::bytecode::vm::Vm;
+use crate::function::Upvalue;
 use crate::{RuntimeError, Value};
 
 /// Runs `bytecode` on the compact tier, or returns `None` to leave it to the
@@ -98,7 +99,17 @@ fn execute(
                 }
             }
             CompactOp::LoadUpvalueLocal { dst, slot } => {
-                registers[dst as usize] = load_local_general(vm, slot)?;
+                // Read the live cell directly. The general path would resolve
+                // the same cell through the binding machinery, which for a
+                // recursive body means re-answering per call what the frame
+                // already knows. An uninitialized cell still falls back, so the
+                // temporal dead zone keeps its own diagnostic.
+                match vm.local_upvalue_cell(slot as usize).map(Upvalue::get) {
+                    Some(value) if !value.is_uninitialized_lexical_marker() => {
+                        registers[dst as usize] = value;
+                    }
+                    _ => registers[dst as usize] = load_local_general(vm, slot)?,
+                }
             }
             CompactOp::StoreLocal { slot, src } => {
                 let Some(target) = vm.current.locals.get_mut(slot as usize) else {
