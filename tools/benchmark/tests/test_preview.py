@@ -616,3 +616,149 @@ class HostedPreviewControlTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SentinelLaneTests(unittest.TestCase):
+    """The second hosted lane.
+
+    The broad portfolio cannot answer what the ordinary interpreter costs --
+    its cases are folded rather than accelerated -- so a preview reporting only
+    broad numbers steers by a reading the engine's own execution counters
+    contradict. These tests pin that the sentinel lane exists, is frozen like
+    the broad one, and cannot be conflated with it.
+    """
+
+    def test_both_frozen_inventories_are_admissible_and_nothing_else(self) -> None:
+        from tools.benchmark.preview import HOSTED_CASES, HOSTED_SENTINEL_CASES
+
+        self.assertEqual(len(HOSTED_SENTINEL_CASES), 6)
+        self.assertEqual(set(HOSTED_CASES) & set(HOSTED_SENTINEL_CASES), set())
+        manifest = load_manifest(ROOT / "benchmarks/generic-sentinels-manifest.json")
+        self.assertEqual(tuple(case.id for case in manifest.cases), HOSTED_SENTINEL_CASES)
+
+    def test_the_broad_section_says_what_it_actually_measures(self) -> None:
+        import inspect
+
+        from tools.benchmark import preview
+
+        source = inspect.getsource(preview.summarize)
+        self.assertIn("specializer coverage", source)
+        self.assertIn("5 real calls", source)
+
+    def test_a_second_prepare_needs_its_own_receipt_paths(self) -> None:
+        """`prepare` refuses to overwrite, so the two lanes cannot share them.
+
+        Sharing them silently reduces the sentinel section to "did not
+        complete" on every run, which is precisely the failure this lane
+        exists to remove.
+        """
+        from tools.benchmark.preview import PreviewError, prepare
+
+        manifests = [
+            ROOT / "benchmarks" / f".hosted-lane-test-{uuid.uuid4().hex}.json"
+            for _ in range(3)
+        ]
+        try:
+            with tempfile.TemporaryDirectory() as directory_name:
+                directory = Path(directory_name)
+                binary = directory / "engine"
+                binary.write_bytes(b"engine-binary")
+                binary.chmod(0o700)
+
+                def run(template: str, manifest: Path, prefix: str) -> None:
+                    prepare(argparse.Namespace(
+                        template=ROOT / template, manifest_output=manifest,
+                        candidate_binary=binary, base_binary=binary,
+                        quickjs_binary=binary,
+                        candidate_receipt=directory / f"{prefix}candidate.json",
+                        base_receipt=directory / f"{prefix}base.json",
+                        quickjs_receipt=directory / f"{prefix}quickjs.json",
+                        candidate_repo="https://github.com/example/candidate.git",
+                        candidate_revision="a" * 40,
+                        base_repo="https://github.com/example/base.git",
+                        base_revision="b" * 40,
+                        profile_id="github-hosted-test-informational-v1",
+                        platform="Test-x86_64", rust_toolchain="rustc 1.95.0 test",
+                        rust_target="x86_64-unknown-linux-gnu",
+                        quickjs_toolchain="cc test; cmake test; make test",
+                        quickjs_target="x86_64-linux-gnu", quickjs_cc="/usr/bin/cc",
+                    ))
+
+                run("benchmarks/manifest.json", manifests[0], "")
+                # Distinct paths: the sentinel lane prepares cleanly.
+                run(
+                    "benchmarks/generic-sentinels-manifest.json",
+                    manifests[1],
+                    "sentinel-",
+                )
+                self.assertEqual(len(load_manifest(manifests[1]).cases), 6)
+                # Shared paths: it would fail on every run.
+                with self.assertRaisesRegex(PreviewError, "refusing to overwrite"):
+                    run(
+                        "benchmarks/generic-sentinels-manifest.json",
+                        manifests[2],
+                        "",
+                    )
+        finally:
+            for manifest in manifests:
+                manifest.unlink(missing_ok=True)
+
+    def _healthy(self, cases: dict[str, float]) -> dict:
+        return {
+            "coverage": {
+                "comparison_input_complete": True, "roles": 3,
+                "cases": 6, "blocks": 3,
+            },
+            "health": {
+                "status": "inconclusive",
+                "blocks": {"valid": 3, "invalid": 0, "status": "non_claim"},
+                "linearity": {"status": "pass"},
+            },
+            "comparisons": {
+                "candidate_vs_quickjs_ng": {
+                    "cases": {k: {"ratio": v} for k, v in cases.items()}
+                }
+            },
+        }
+
+    def _render(self, report: dict) -> str:
+        from tools.benchmark.preview_sentinel import sentinel_summary
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "report.json").write_text(json.dumps(report), encoding="utf-8")
+            sentinel_summary(argparse.Namespace(
+                report=root / "report.json", markdown=root / "summary.md"
+            ))
+            return (root / "summary.md").read_text(encoding="utf-8")
+
+    def test_a_healthy_sentinel_report_publishes_its_geometric_mean(self) -> None:
+        rendered = self._render(self._healthy({"a": 4.0, "b": 1.0}))
+        self.assertIn("2.0000×", rendered)
+
+    def test_a_degraded_sentinel_report_publishes_no_ratio(self) -> None:
+        from tools.benchmark.preview import PreviewError
+
+        # An incomplete comparison input, a short block, a narrowed inventory,
+        # and a failed linearity diagnostic must each stop the ratios.
+        broken = self._healthy({"a": 4.0})
+        broken["coverage"]["comparison_input_complete"] = False
+        with self.assertRaisesRegex(PreviewError, "comparison input is incomplete"):
+            self._render(broken)
+
+        broken = self._healthy({"a": 4.0})
+        broken["health"]["blocks"]["valid"] = 2
+        with self.assertRaisesRegex(PreviewError, "3/3 valid non-claim blocks"):
+            self._render(broken)
+
+        broken = self._healthy({"a": 4.0})
+        broken["coverage"]["cases"] = 5
+        with self.assertRaisesRegex(PreviewError, "complete frozen portfolio"):
+            self._render(broken)
+
+        degraded = self._healthy({"a": 4.0})
+        degraded["health"]["status"] = "invalid"
+        degraded["health"]["linearity"]["status"] = "fail"
+        rendered = self._render(degraded)
+        self.assertIn("No ordinary-interpreter reading is reported", rendered)
+        self.assertNotIn("×", rendered.split("Valid blocks")[0].split("Health")[0])

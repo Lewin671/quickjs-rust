@@ -396,6 +396,64 @@ CURRENT_PHASE="summary"
   --json-output "$OUTPUT/summary.json" --status-output "$OUTPUT/status.json" \
   --harness-mode "$HARNESS_MODE" --harness-revision "$HARNESS_REVISION")
 
+# The generic-path sentinel lane. It runs after the broad lane's summary is
+# durable so a sentinel problem can never cost the preview its conclusion:
+# every step below is allowed to fail, and the section simply records that.
+#
+# It exists because the broad portfolio cannot answer what the ordinary
+# interpreter costs -- its cases are folded rather than accelerated -- so a
+# preview that reported only broad numbers would steer by a reading the
+# engine's own execution counters contradict.
+# `preview prepare` writes its receipts with a refuse-to-overwrite guard, so
+# this lane needs its own receipt paths; reusing the broad lane's would fail
+# every run and silently reduce this section to "did not complete".
+#
+# The measurement is bounded explicitly. The `if`/`else` below survives a
+# failing lane, but it cannot survive the *step* timing out: the job would be
+# killed and the publish step, seeing a non-success job status, would replace
+# the broad lane's durable conclusion with a failure notice. Bounding the lane
+# is what keeps a slow sentinel run from costing the preview the answer it
+# already has.
+SENTINEL_TIMEOUT_SECONDS="${QJS_SENTINEL_TIMEOUT_SECONDS:-900}"
+CURRENT_PHASE="sentinel_measurement"
+SENTINEL_MANIFEST="$HARNESS_ROOT/benchmarks/.hosted-sentinel-${CANDIDATE_REVISION:0:12}-${BASE_REVISION:0:12}-$$.json"
+if (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview prepare \
+      --template benchmarks/generic-sentinels-manifest.json \
+      --manifest-output "$SENTINEL_MANIFEST" \
+      --candidate-binary "$CANDIDATE_BINARY" --base-binary "$BASE_BINARY" \
+      --quickjs-binary "$QUICKJS_BINARY" \
+      --candidate-receipt "$OUTPUT/sentinel-candidate-receipt.json" \
+      --base-receipt "$OUTPUT/sentinel-base-receipt.json" \
+      --quickjs-receipt "$OUTPUT/sentinel-quickjs-ng-receipt.json" \
+      --candidate-repo "$CANDIDATE_REPO" --candidate-revision "$CANDIDATE_REVISION" \
+      --base-repo "$BASE_REPO" --base-revision "$BASE_REVISION" \
+      --profile-id "$PROFILE_ID" --platform "$PROFILE_PLATFORM" \
+      --rust-toolchain "$RUST_TOOLCHAIN" --rust-target "$RUST_TARGET" \
+      --quickjs-toolchain "$QUICKJS_TOOLCHAIN" --quickjs-target "$QUICKJS_TARGET" \
+      --quickjs-cc "$QUICKJS_CC") \
+   && (cd "$HARNESS_ROOT" && ./scripts/run-with-timeout.sh "$SENTINEL_TIMEOUT_SECONDS" \
+      ./scripts/benchmark.sh --manifest "$SENTINEL_MANIFEST" --blocks 3 \
+      --candidate "$CANDIDATE_BINARY" \
+      --candidate-receipt "$OUTPUT/sentinel-candidate-receipt.json" \
+      --base "$BASE_BINARY" --base-receipt "$OUTPUT/sentinel-base-receipt.json" \
+      --quickjs-ng "$QUICKJS_BINARY" \
+      --quickjs-ng-receipt "$OUTPUT/sentinel-quickjs-ng-receipt.json" \
+      --output "$OUTPUT/sentinel-raw.jsonl") \
+   && (cd "$HARNESS_ROOT" && ./scripts/benchmark-report.sh \
+      --manifest "$SENTINEL_MANIFEST" --analysis-manifest benchmarks/analysis.json \
+      --input "$OUTPUT/sentinel-raw.jsonl" --output "$OUTPUT/sentinel-report.json") \
+   && (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview sentinel-summary \
+      --report "$OUTPUT/sentinel-report.json" --markdown "$OUTPUT/sentinel-summary.md"); then
+  cp "$SENTINEL_MANIFEST" "$OUTPUT/sentinel-manifest.json"
+else
+  printf '%s\n' "" "### Generic-path sentinels" "" \
+    "> The sentinel lane did not complete. The broad summary above stands, but" \
+    "> it reports specializer coverage only; no ordinary-interpreter reading was" \
+    "> produced for this run." "" > "$OUTPUT/sentinel-summary.md"
+fi
+rm -f "$SENTINEL_MANIFEST"
+cat "$OUTPUT/sentinel-summary.md" >> "$OUTPUT/summary.md"
+
 # External corpora remain non-claim evidence in every admitted hosted mode.
 # The base-owned PR harness keeps corpus selection and reporting code trusted;
 # source files are downloaded at pinned revisions into a sibling cache and are

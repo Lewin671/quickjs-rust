@@ -323,6 +323,38 @@ generic-path sentinels instead of the broad portfolio. The two series are never
 pooled: they answer different questions, and their absolute ratios are not
 comparable.
 
+The hosted Performance Preview runs **both** lanes. The broad lane keeps its
+existing summary, now labelled for what it measures, and the sentinel lane
+appends its own section with a geometric mean per comparison and a per-case
+table. `preview prepare` admits either frozen inventory and nothing else, so a
+preview still cannot quietly measure a narrowed or edited portfolio. The
+sentinel lane runs *after* the broad lane's summary is durable and every one of
+its steps may fail without costing the preview its conclusion; a failure prints
+a section saying no ordinary-interpreter reading was produced rather than
+silently omitting one.
+
+Three details are load-bearing rather than incidental. The lane writes its own
+receipts: `preview prepare` refuses to overwrite, so reusing the broad lane's
+paths would fail every run and reduce the section to "did not complete"
+permanently. The measurement carries an internal deadline
+(`QJS_SENTINEL_TIMEOUT_SECONDS`, 900 by default), because the `if`/`else` above
+survives a failing lane but not the workflow *step* timing out -- that would
+kill the job and let the always-run publisher replace the broad lane's durable
+conclusion with a failure notice. And the sentinel section enforces the same
+health invariants as the broad one: complete comparison input, three roles, the
+complete frozen six-case inventory, 3/3 valid non-claim blocks, and agreeing
+health/linearity status. A report can carry comparisons built from whatever
+measurements survived a timer-limited block, so a renderer that read ratios
+without those checks would publish a degraded number as ordinary-interpreter
+cost -- exactly the class of mistake the sentinels exist to stop.
+
+`benchmarks/performance-policy.json` pins the sentinel manifest and protocol
+under `protocols.sentinel_measurement`, declares the hosted portfolio as
+`complete-broad-25-case-and-generic-sentinels-6-case`, and requires the
+sentinel protocol hash in every gate's activation prerequisites. Without that
+binding a sentinel workload change would alter hosted evidence while passing
+`performance-policy-audit.sh` on the strength of its own manifest self-hash.
+
 ### Execution counters
 
 Wall time cannot tell an accelerated workload from a folded one. The

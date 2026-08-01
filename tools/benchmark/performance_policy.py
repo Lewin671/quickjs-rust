@@ -37,48 +37,15 @@ class PerformancePolicyError(ValueError):
     """The performance policy is malformed or cannot authorize an operation."""
 
 
-PROTOCOL_KEYS = (
-    "resource_analysis",
-    "resource_measurement",
-    "throughput_analysis",
-    "throughput_measurement",
+from .performance_policy_frozen import (  # noqa: E402
+    PREVIEW_IMPLEMENTATION_FILES,
+    PREVIEW_ORCHESTRATOR,
+    PREVIEW_ROLES,
+    PROTOCOL_KEYS,
+    PROTOCOL_SHAPES,
+    EXPECTED_WORKFLOW_SHA256,
 )
-PROTOCOL_SHAPES = {
-    "throughput_measurement": (
-        "benchmarks/manifest.json", "quickjs-measurement-protocol-v8"
-    ),
-    "throughput_analysis": (
-        "benchmarks/analysis.json", "quickjs-analysis-protocol-v5"
-    ),
-    "resource_measurement": (
-        "benchmarks/resources.json", "quickjs-resource-measurement-protocol-v1"
-    ),
-    "resource_analysis": (
-        "benchmarks/resource-analysis.json", "quickjs-resource-analysis-protocol-v1"
-    ),
-}
-EXPECTED_WORKFLOW_SHA256 = "72ce394337ab94b0c9436c714da7beefab44c39b409b55f89bcd5e567996a3d3"
-PREVIEW_ORCHESTRATOR = "scripts/performance-preview.sh"
-PREVIEW_ROLES = ("candidate", "base", "quickjs-ng")
-PREVIEW_IMPLEMENTATION_FILES = (
-    ".cargo/config.toml",
-    ".github/actions/setup-rust/action.yml",
-    ".github/workflows/performance-smoke.yml",
-    "benchmarks/external-corpora.json",
-    "benchmarks/external-preview.json",
-    "scripts/external-corpus-audit.sh",
-    "scripts/external-performance-preview.sh",
-    "scripts/performance-policy-audit.sh",
-    "scripts/performance-preview.sh",
-    "tools/benchmark/build_cache.py",
-    "tools/benchmark/build_cache_identity.py",
-    "tools/benchmark/external_corpora.py",
-    "tools/benchmark/external_preview.py",
-    "tools/benchmark/external_preview_markdown.py",
-    "tools/benchmark/hosted_preview.py",
-    "tools/benchmark/performance_policy.py",
-    "tools/benchmark/preview.py",
-)
+
 REFERENCE_ENGINE = (
     "quickjs-ng",
     "https://github.com/quickjs-ng/quickjs.git",
@@ -495,7 +462,10 @@ def load_policy(path: Path) -> PerformancePolicy:
     orchestrator = _path(hosted["orchestrator_path"], "policy.hosted_pr.orchestrator_path")
     if orchestrator != PREVIEW_ORCHESTRATOR:
         raise PerformancePolicyError("policy.hosted_pr.orchestrator_path: invalid frozen path")
-    if _string(hosted["portfolio"], "policy.hosted_pr.portfolio") != "complete-broad-25-case":
+    if (
+        _string(hosted["portfolio"], "policy.hosted_pr.portfolio")
+        != "complete-broad-25-case-and-generic-sentinels-6-case"
+    ):
         raise PerformancePolicyError("policy.hosted_pr.portfolio: invalid frozen portfolio")
     blocks = _integer(hosted["blocks"], "policy.hosted_pr.blocks", 1)
     if blocks != 3:
@@ -629,6 +599,7 @@ def cross_check_repository(policy: PerformancePolicy, root: Path) -> None:
     root = root.resolve()
     try:
         measurement = load_manifest(root / "benchmarks/manifest.json")
+        sentinels = load_manifest(root / "benchmarks/generic-sentinels-manifest.json")
         analysis = load_analysis_manifest(root / "benchmarks/analysis.json", measurement)
         resources = load_resource_manifest(root / "benchmarks/resources.json")
         resource_analysis = load_resource_analysis(
@@ -638,6 +609,7 @@ def cross_check_repository(policy: PerformancePolicy, root: Path) -> None:
             "throughput_measurement": (
                 measurement.protocol_id, measurement.protocol_sha256
             ),
+            "sentinel_measurement": (sentinels.protocol_id, sentinels.protocol_sha256),
             "throughput_analysis": (analysis.protocol_id, analysis.protocol_sha256),
             "resource_measurement": (resources.protocol_id, resources.protocol_sha256),
             "resource_analysis": (

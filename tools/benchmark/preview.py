@@ -53,6 +53,15 @@ HOSTED_CASES = (
     "math_abs", "array_index_of", "string_slice", "object_allocation",
     "array_allocation", "closure_allocation_call",
 )
+# The generic-path sentinels, the second frozen inventory a hosted preview may
+# measure. They are a separate lane rather than extra broad cases because the
+# two answer different questions: broad reports how much the specializing tiers
+# recognize, and these report what the ordinary interpreter costs when they
+# cannot.
+HOSTED_SENTINEL_CASES = (
+    "recursive_call_tree", "prototype_method_call", "polymorphic_call_site",
+    "capturing_closure_call", "heterogeneous_property_read", "string_key_map_churn",
+)
 
 
 def _integrity_scope(harness_mode: str) -> str:
@@ -66,6 +75,7 @@ def _integrity_scope(harness_mode: str) -> str:
 _GITHUB_CLONE_URL = re.compile(
     r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\.git\Z"
 )
+_SAFE_CASE_ID = re.compile(r"[a-z0-9][a-z0-9_]*")
 _SAFE_PROFILE = re.compile(r"[a-z0-9._-]+\Z")
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -240,8 +250,13 @@ def prepare(args: argparse.Namespace) -> None:
     template_path = args.template.expanduser().resolve()
     template = load_manifest(template_path)
     data = _read_object(template_path, "measurement manifest")
-    if tuple(case.id for case in template.cases) != HOSTED_CASES:
-        raise PreviewError("hosted preview requires the complete frozen broad portfolio")
+    # Either frozen inventory is admissible; anything else still fails closed,
+    # so a preview can never quietly measure a narrowed or edited portfolio.
+    if tuple(case.id for case in template.cases) not in {HOSTED_CASES, HOSTED_SENTINEL_CASES}:
+        raise PreviewError(
+            "hosted preview requires the complete frozen broad portfolio or the "
+            "complete frozen generic-path sentinels"
+        )
     profile_id = _string(args.profile_id, "profile id")
     platform = _string(args.platform, "platform")
     rust_flags = list(RUST_BUILD_FLAGS)
@@ -449,6 +464,46 @@ def _engine_provenance(run: dict[str, Any]) -> dict[str, dict[str, str]]:
     return result
 
 
+def _assert_lane_health(report: dict[str, Any], expected_cases: int) -> tuple[str, Any, int]:
+    """Enforces the invariants a lane must satisfy before it reports a ratio.
+
+    Both hosted lanes share these. A report can carry comparisons built from
+    the measurements that did survive a timer-limited block or a failed
+    linearity diagnostic, so a renderer that reads ratios without checking
+    coverage and health can publish a degraded number as if it were a clean
+    one -- which is exactly the class of mistake the sentinels exist to stop.
+    """
+    coverage = report.get("coverage")
+    health = report.get("health")
+    if not isinstance(coverage, dict) or not isinstance(health, dict):
+        raise PreviewError("report is missing run, coverage, or health")
+    if coverage.get("comparison_input_complete") is not True:
+        raise PreviewError("report comparison input is incomplete")
+    if (
+        coverage.get("roles") != 3
+        or coverage.get("cases") != expected_cases
+        or coverage.get("blocks") != 3
+    ):
+        raise PreviewError(
+            "hosted preview requires three roles, the complete frozen portfolio, "
+            "and three blocks"
+        )
+    blocks = health.get("blocks")
+    if not isinstance(blocks, dict) or type(blocks.get("valid")) is not int:
+        raise PreviewError("report is missing valid-block health")
+    valid_blocks = blocks["valid"]
+    if valid_blocks != 3 or blocks.get("invalid") != 0 or blocks.get("status") != "non_claim":
+        raise PreviewError("hosted preview requires exactly 3/3 valid non-claim blocks")
+    status = _string(health.get("status"), "health status")
+    linearity = health.get("linearity")
+    if not isinstance(linearity, dict):
+        raise PreviewError("hosted preview is missing linearity health")
+    linearity_status = linearity.get("status")
+    if (status, linearity_status) not in {("inconclusive", "pass"), ("invalid", "fail")}:
+        raise PreviewError("hosted preview health and linearity status disagree")
+    return status, linearity_status, valid_blocks
+
+
 def summarize(
     report: dict[str, Any], *, harness_mode: str, harness_revision: str,
 ) -> tuple[str, dict[str, Any]]:
@@ -461,34 +516,9 @@ def summarize(
     if not isinstance(bootstrap, dict) or bootstrap.get("confidence") != 0.95:
         raise PreviewError("hosted preview summary requires the frozen 95% confidence policy")
     run = report.get("run")
-    coverage = report.get("coverage")
-    health = report.get("health")
-    if not isinstance(run, dict) or not isinstance(coverage, dict) or not isinstance(health, dict):
+    status, linearity_status, valid_blocks = _assert_lane_health(report, len(HOSTED_CASES))
+    if not isinstance(run, dict):
         raise PreviewError("report is missing run, coverage, or health")
-    if coverage.get("comparison_input_complete") is not True:
-        raise PreviewError("report comparison input is incomplete")
-    if (
-        coverage.get("roles") != 3
-        or coverage.get("cases") != len(HOSTED_CASES)
-        or coverage.get("blocks") != 3
-    ):
-        raise PreviewError("hosted preview requires three roles, the broad portfolio, and three blocks")
-    blocks = health.get("blocks")
-    if not isinstance(blocks, dict) or type(blocks.get("valid")) is not int:
-        raise PreviewError("report is missing valid-block health")
-    valid_blocks = blocks["valid"]
-    if valid_blocks != 3 or blocks.get("invalid") != 0 or blocks.get("status") != "non_claim":
-        raise PreviewError("hosted preview requires exactly 3/3 valid non-claim blocks")
-    status = _string(health.get("status"), "health status")
-    linearity = health.get("linearity")
-    if not isinstance(linearity, dict):
-        raise PreviewError("hosted preview is missing linearity health")
-    linearity_status = linearity.get("status")
-    if (status, linearity_status) not in {
-        ("inconclusive", "pass"),
-        ("invalid", "fail"),
-    }:
-        raise PreviewError("hosted preview health and linearity status disagree")
     profile = run.get("profile")
     if not isinstance(profile, dict):
         raise PreviewError("report is missing profile identity")
@@ -550,6 +580,14 @@ def summarize(
         "> GitHub-hosted runners are variable. Missing or malformed evidence fails; a completed noisy measurement is inconclusive.",
         "",
         "Ratio = candidate wall ns/op ÷ comparator wall ns/op. Above 1.0 is higher ns/op; below 1.0 is lower ns/op.",
+        "",
+        "> **What this portfolio measures.** Every broad case names its callee "
+        "statically and holds its receiver fixed, so the specializing tiers can "
+        "fold the measured operation away rather than accelerate it. At 100,000 "
+        "nominal iterations `plain_function_call` performs 5 real calls and "
+        "`property_read` 11 real property operations. Read these ratios as "
+        "**specializer coverage**, not as ordinary-interpreter throughput, and "
+        "see the generic-path sentinels below for the latter.",
         "",
         "| Comparison | Overall ratio | 95% CI | Direction |",
         "| --- | ---: | ---: | --- |",
@@ -700,6 +738,15 @@ def _parser() -> argparse.ArgumentParser:
     state.add_argument("--reference-revision", required=True)
     state.add_argument("--message", required=True)
     state.set_defaults(function=status)
+
+    # Deferred so the renderer can read this module's shared vocabulary
+    # without the two forming an import cycle.
+    from .preview_sentinel import sentinel_summary
+
+    sentinel = commands.add_parser("sentinel-summary")
+    sentinel.add_argument("--report", type=Path, required=True)
+    sentinel.add_argument("--markdown", type=Path, required=True)
+    sentinel.set_defaults(function=sentinel_summary)
     return parser
 
 

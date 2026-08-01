@@ -584,3 +584,50 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SentinelProtocolBindingTests(unittest.TestCase):
+    """CI measures a second frozen portfolio, so policy must pin it too.
+
+    Without this binding a sentinel workload change would alter hosted
+    evidence while passing the audit on the strength of its own manifest
+    self-hash alone -- the manifest would agree with itself and the policy
+    would never have been asked.
+    """
+
+    def test_the_sentinel_protocol_is_frozen_like_the_broad_one(self) -> None:
+        from tools.benchmark.performance_policy import PROTOCOL_KEYS, PROTOCOL_SHAPES
+
+        self.assertIn("sentinel_measurement", PROTOCOL_KEYS)
+        self.assertEqual(
+            PROTOCOL_SHAPES["sentinel_measurement"],
+            (
+                "benchmarks/generic-sentinels-manifest.json",
+                "quickjs-generic-sentinel-protocol-v1",
+            ),
+        )
+        policy = json.loads(
+            (ROOT / "benchmarks/performance-policy.json").read_text(encoding="utf-8")
+        )
+        pinned = policy["protocols"]["sentinel_measurement"]["protocol_sha256"]
+        manifest = json.loads(
+            (ROOT / "benchmarks/generic-sentinels-manifest.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(pinned, manifest["protocol"]["aggregate_sha256"])
+
+    def test_the_hosted_portfolio_declares_both_lanes(self) -> None:
+        policy = json.loads(
+            (ROOT / "benchmarks/performance-policy.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            policy["hosted_pr"]["portfolio"],
+            "complete-broad-25-case-and-generic-sentinels-6-case",
+        )
+
+    def test_every_gate_prerequisite_requires_the_sentinel_protocol(self) -> None:
+        policy = json.loads(
+            (ROOT / "benchmarks/performance-policy.json").read_text(encoding="utf-8")
+        )
+        for name, gate in policy["gates"].items():
+            required = gate["activation_prerequisites"]["required_protocol_sha256"]
+            self.assertIn("sentinel_measurement", required, name)
