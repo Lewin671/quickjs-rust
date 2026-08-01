@@ -643,21 +643,46 @@ impl<'a> Vm<'a> {
                     message: "bytecode instruction pointer out of bounds".to_owned(),
                 })?;
             self.ip += 1;
-            crate::diagnostics::count!(executed_ops);
+            #[cfg(feature = "perf-counters")]
+            crate::diagnostics::update(|c| c.executed_ops += 1);
             match op {
                 Op::LoadConst(index) => {
-                    let value =
-                        bytecode
-                            .constants
-                            .get(*index)
-                            .cloned()
-                            .ok_or_else(|| RuntimeError {
-                                thrown: None,
-                                message: "bytecode constant index out of bounds".to_owned(),
-                            })?;
+                    let Some(value) = bytecode.constants.get(*index) else {
+                        return Err(RuntimeError {
+                            thrown: None,
+                            message: "bytecode constant index out of bounds".to_owned(),
+                        });
+                    };
+                    let value = value.clone();
                     self.stack.push(value);
                 }
                 Op::LoadLocal(slot) => {
+                    // The general path answers with `Result<Value,
+                    // RuntimeError>` (40 bytes) and `handle_runtime_result`
+                    // rewraps it as `Result<Option<Value>, RuntimeError>` (48).
+                    // Neither fits the two-register return, so the most
+                    // frequently dispatched opcode in the engine paid two
+                    // round trips through memory to report a success that
+                    // cannot fail. Answer the authoritative-slot case inline
+                    // instead, and keep the general path for everything else.
+                    let fast = if self.current.direct_eval_with_stack {
+                        None
+                    } else if *slot < u128::BITS as usize
+                        && self.current.authoritative_slots & (1_u128 << *slot) != 0
+                    {
+                        match self.current.locals.get(*slot) {
+                            Some(Some(value)) if !value.is_uninitialized_lexical_marker() => {
+                                Some(super::vm_bindings::clone_local_value(value))
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+                    if let Some(value) = fast {
+                        self.stack.push(value);
+                        continue;
+                    }
                     let result =
                         if self.direct_eval_with_stack && self.bytecode.local_is_from_env(*slot) {
                             let name = self.bytecode.locals[*slot].name.clone();
@@ -680,8 +705,26 @@ impl<'a> Vm<'a> {
                 op @ (Op::AppendStringLiteralLocal { .. }
                 | Op::AppendStringLiteralGlobal { .. }) => self.run_string_append_op(op.clone())?,
                 Op::StoreLocal(slot) => {
+                    // Same rationale as `LoadLocal`: keep the
+                    // authoritative-slot write off the memory-returned
+                    // `Result` path. Falling through when the stack is empty is
+                    // deliberate -- the general path raises the underflow.
+                    let slot = *slot;
+                    if slot < u128::BITS as usize
+                        && self.current.authoritative_slots & (1_u128 << slot) != 0
+                        && self
+                            .current
+                            .bytecode
+                            .locals
+                            .get(slot)
+                            .is_some_and(|local| local.mutable)
+                        && let Some(value) = self.current.stack.pop()
+                    {
+                        self.current.locals[slot] = Some(value);
+                        continue;
+                    }
                     let value = self.pop()?;
-                    let result = self.store_local(*slot, value);
+                    let result = self.store_local(slot, value);
                     self.handle_runtime_result(result)?;
                 }
                 Op::AssignLocal(slot) => {
@@ -1136,6 +1179,24 @@ impl<'a> Vm<'a> {
                     }
                 }
                 Op::Binary(op) => {
+                    // Number-number arithmetic rewrites the operand stack in
+                    // place. The general path is an out-of-line `eval_binary`
+                    // that pops twice, calls `fast_number_binary`, and returns
+                    // a memory-sized `Result`, which `handle_runtime_result`
+                    // then rewraps -- four values crossing a call boundary to
+                    // add two floats that are already adjacent on the stack.
+                    let stack = &mut *self.current.stack;
+                    let len = stack.len();
+                    if len >= 2
+                        && let (Value::Number(left), Value::Number(right)) =
+                            (&stack[len - 2], &stack[len - 1])
+                        && let Some(value) =
+                            super::vm_props::fast_number_binary_numbers(*left, *op, *right)
+                    {
+                        stack.truncate(len - 1);
+                        stack[len - 2] = value;
+                        continue;
+                    }
                     let result = self.eval_binary(*op);
                     if let Some(value) = self.handle_runtime_result(result)? {
                         self.stack.push(value);

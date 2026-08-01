@@ -710,3 +710,34 @@ fn propagates_bytecode_throw_errors() {
     let error = eval_bytecode_source("throw 'expected';").expect_err("throw should fail");
     assert_eq!(error.message, "throw statement executed: expected");
 }
+
+// The interpreter answers the hottest opcodes -- local read, local write,
+// number-number binary, constant load -- from an inline arm that never builds
+// a `Result`. Every guard in those arms is copied from the general path it
+// short-circuits, so the existing suite is what covers them: deleting the
+// slot-authority guards fails tests across array buffers, atomics, and
+// assignment compilation. Only the operand-type guard on the in-place numeric
+// arm has no existing case that distinguishes it, so it gets one here. Each
+// assertion below was checked to fail when that guard is removed.
+
+#[test]
+fn inline_number_binary_preserves_non_number_and_edge_semantics() {
+    // String concatenation, `-0`, and NaN must not be answered by the
+    // in-place numeric arm.
+    assert_eq!(
+        eval_bytecode_source("1 + '2';"),
+        Ok(Value::String("12".to_owned().into()))
+    );
+    assert_eq!(
+        eval_bytecode_source("Object.is(-1 * 0, -0);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval_bytecode_source("(0 / 0) === (0 / 0);"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval_bytecode_source("var a = { valueOf: function () { return 3; } }; a * 2;"),
+        Ok(Value::Number(6.0))
+    );
+}

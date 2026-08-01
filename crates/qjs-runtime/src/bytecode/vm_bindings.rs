@@ -1955,8 +1955,11 @@ impl Vm<'_> {
     }
 }
 
+/// Clones a slot value, keeping the four immediate variants off the general
+/// `Value::clone` path so a local read never reaches refcount code it cannot
+/// need. Shared with the interpreter's inline `LoadLocal` fast path.
 #[inline(always)]
-fn clone_local_value(value: &Value) -> Value {
+pub(super) fn clone_local_value(value: &Value) -> Value {
     match value {
         Value::Number(value) => Value::Number(*value),
         Value::Boolean(value) => Value::Boolean(*value),
