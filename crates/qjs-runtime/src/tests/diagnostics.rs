@@ -192,10 +192,12 @@ fn recursion_builds_slot_seeded_frames_and_receiver_arithmetic_builds_none() {
     // taking the slot-seeded path, not the general name-keyed prologue.
     //
     // The two halves have since diverged, which is the point of keeping them
-    // in one test. Recursion is still the migration's cohort. Prototype method
-    // calls of the `value + this.step` shape have left it entirely -- the
-    // closed-form receiver-property tier answers them with no frame and no
-    // nested VM -- so the migration no longer has to make them fast.
+    // in one test. Prototype method calls of the `value + this.step` shape
+    // left the cohort first -- the closed-form receiver-property tier answers
+    // them with no frame and no nested VM. Recursion has now left it too, from
+    // the other direction: the compact tier runs an admitted body with no `Vm`
+    // at all, so the calls this migration was written to route into one VM no
+    // longer construct one to route.
     let (_, recursion) = counted(
         "function tree(depth, value) {
              if (depth <= 0) { return value + 1; }
@@ -208,8 +210,13 @@ fn recursion_builds_slot_seeded_frames_and_receiver_arithmetic_builds_none() {
     assert_eq!(recursion.ordinary_call_attempts, 63);
     assert_eq!(recursion.direct_leaf_frames, 63);
     assert_eq!(recursion.generic_call_frames, 0);
-    // One nested VM per call is what the migration exists to remove.
-    assert!(recursion.nested_vm_constructions >= 63);
+    // Every one of the 63 calls now runs on a compact activation, and the only
+    // nested VM left is the top-level script's. This assertion used to read
+    // `nested_vm_constructions >= 63` -- one per call, the cost the migration
+    // was written to remove. It is asserted exactly, rather than as a bound,
+    // so that a body silently falling back to the ordinary frame fails here.
+    assert_eq!(recursion.compact_standalone_activations, 63);
+    assert_eq!(recursion.nested_vm_constructions, 1);
     assert_eq!(recursion.same_vm_frame_entries, 0);
 
     let (_, methods) = counted(
