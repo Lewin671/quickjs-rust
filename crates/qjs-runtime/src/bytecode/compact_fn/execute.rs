@@ -146,13 +146,17 @@ fn execute(
     }
 }
 
-/// Performs one call through the ordinary call path.
+/// Performs one call.
 ///
-/// The callee is staged on the VM's operand stack rather than dispatched here
-/// so that native functions, bound functions, proxies, getters, and every
-/// other callee shape keep exactly one implementation. The staging cost is
-/// paid per call, not per instruction, which is the opposite of the tradeoff
-/// this tier is built to fix.
+/// A slot-seeded direct-leaf callee -- which is every call in a recursive
+/// admitted body -- is dispatched straight from the registers. The entry it
+/// reaches already takes an argument slice, so staging the operands on the
+/// operand stack only for `Vm::call` to re-derive the same eligibility and pop
+/// them back off is pure round trip.
+///
+/// Every other callee shape (native, bound, Proxy, getter, constructor) still
+/// goes through the operand stack into `Vm::call`, so there remains exactly one
+/// implementation of general call semantics.
 #[inline(never)]
 fn call(
     vm: &mut Vm<'_>,
@@ -162,14 +166,28 @@ fn call(
 ) -> Result<Value, RuntimeError> {
     let base = base as usize;
     let argc = argc as usize;
+    if crate::function::is_direct_leaf_function(&registers[base]) {
+        let callee = registers[base].clone();
+        // An admitted body has no exception handler, so `handle_call_result`
+        // would only rewrap an error this frame must propagate anyway.
+        return crate::function::call_direct_leaf_function(
+            callee,
+            Value::Undefined,
+            &registers[base + 1..base + 1 + argc],
+            &vm.current.env,
+            vm.current.module_host.clone(),
+            #[cfg(feature = "agents")]
+            vm.current.agent_context.clone(),
+        );
+    }
     let depth = vm.current.stack.len();
     vm.current.stack.push(registers[base].clone());
     for offset in 1..=argc {
         vm.current.stack.push(registers[base + offset].clone());
     }
     vm.call(argc)?;
-    // An admitted body contains no exception handler, so the call either
-    // produced exactly one value or propagated an error.
+    // The same no-handler property means the call either produced exactly one
+    // value or propagated an error.
     if vm.current.stack.len() != depth + 1 {
         vm.current.stack.truncate(depth);
         return Err(unbalanced_call());
