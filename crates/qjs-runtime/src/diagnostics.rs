@@ -91,6 +91,13 @@ declare_counters! {
     declined_loop_plan_edges,
     /// Bytecode instructions actually dispatched by the interpreter loop.
     executed_ops,
+    /// Activations that ran on the whole-function compact register executor
+    /// instead of the generic dispatch loop.
+    compact_function_entries,
+    /// Register operations the compact executor dispatched. Read against
+    /// `executed_ops`: work moved to this tier must leave the generic loop, not
+    /// merely add to it.
+    compact_function_ops,
 }
 
 /// Applies `update` to the calling thread's counters.

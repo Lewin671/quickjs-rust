@@ -5136,3 +5136,75 @@ showed the callee is irrelevant: an `eval`-created function that merely returns
 a constant hangs the same loop, and so does a bare `throw 1` with no call at
 all. What "reproduces on binaries built from `92f49f8b`" actually meant was
 that `92f49f8b` is the commit that introduced it.
+
+### 2026-08-01 whole-function compact register executor: admitted, and it proves the gap is not dispatch
+
+R3's premise -- and the 2026-08-01 register-pressure root cause -- said the
+recursive sentinel is slow because its body runs through
+`Vm::run_current_activation`, whose dispatch preamble costs ~5 ns before any
+opcode works. The stated arithmetic was ~20.6 instructions per activation x
+~5 ns ~= 103 ns per call against QuickJS-NG's ~42 ns, concluding that "frame
+elimination alone can never win". This unit tested that premise by removing
+the dispatcher, and the premise is **wrong in the direction that matters**.
+
+`bytecode/compact_fn/` is a whole-function `Value`-register executor. It lowers
+a stack-machine body to fixed register indices (operand depth `d` becomes
+register `d`), admits all-or-nothing, and keeps the nested-`Vm` calling
+convention: a call inside an admitted body re-enters `Vm::call` and still
+builds a nested VM. Selection happens in `eval_direct_call_bytecode` before any
+observable work, so a declined body is bit-for-bit the previous path.
+
+Admission and mechanism are confirmed by counters, not inferred. At 2,000
+iterations of `recursive_call_tree` (254,004 calls):
+
+| counter | value |
+| --- | ---: |
+| `ordinary_call_attempts` | 254,004 |
+| `compact_function_entries` | 254,001 |
+| `executed_ops` (generic loop) | 34,245 |
+| `compact_function_ops` | 4,680,009 |
+| `nested_vm_constructions` | 254,005 |
+
+Generic dispatch inside `callTree` collapsed to ~0, the compact tier ran
+~18.4 operations per activation (against the 20.6 estimate), and the calling
+convention is untouched. Both of the unit's mechanism gates passed.
+
+The timing gate did not. Five paired alternating reps against QuickJS-NG:
+`recursive_call_tree` 6.3253 -> **6.0381**, six-sentinel geomean 1.8355 ->
+**1.8061**. Per call, over 7,620,000 calls:
+
+| build | seconds | ns/call |
+| --- | ---: | ---: |
+| QuickJS-NG | 0.301 | 39.5 |
+| base `7273d08a` | 1.904 | 249.9 |
+| compact tier | 1.814 | 238.1 |
+
+**Removing 100% of generic dispatch from this body saved 11.8 ns per call,
+against a predicted 92 ns.** The executor is not the reason: disassembly puts
+`compact_fn::execute` at 836 instructions and 17 stack slots, against
+`typed_loop::run`'s 3,204/56 and `run_current_activation`'s 24,600/332. It is
+the smallest executor in the engine, and it still bought 4.7%.
+
+So for a recursive body, ~200 of the ~238 ns per call is **call construction,
+not dispatch**. This inverts the unit ordering the task has assumed since R2:
+it is dispatch elimination that cannot win alone, and the 704-byte
+`FrameState` is the load-bearing cost. It also retroactively explains R3b
+(1.5%) and R3c: those measured the same 5% ceiling from the other side.
+
+One unambiguous secondary result, measured by bisection rather than assumed.
+Maximum recursion depth on a test thread's stack:
+
+| build | max depth |
+| --- | ---: |
+| base `7273d08a` | 40 |
+| compact tier | 250 |
+
+A compact activation's native frame is a fraction of `run_current_activation`'s
+~4.3 KB, so admitted recursion goes roughly 6x deeper before the Rust stack
+overflows. That is a correctness-relevant improvement on its own: QuickJS-NG
+raises a catchable error where this engine aborts the process.
+
+The unit is retained -- it is a prerequisite that removes dispatch from the
+measurement, so the next unit's frame work is no longer masked by it -- but the
+next unit must be frame construction, and it should be measured against this
+tier rather than against the generic interpreter.

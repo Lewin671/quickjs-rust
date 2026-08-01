@@ -811,6 +811,12 @@ pub struct Bytecode {
     /// value, while accessors, prototypes, proxies, and primitive receivers
     /// retain the ordinary VM path.
     pub(super) this_property_leaf_plan: Option<super::vm_this_property_leaf::ThisPropertyLeafPlan>,
+    /// Whole-function register program for a body the compact tier admits, or
+    /// `None` once compilation has proved it cannot be represented. Caching
+    /// the negative answer is what keeps an unadmitted body at one `OnceCell`
+    /// read per call.
+    pub(super) compact_function_program:
+        OnceCell<Option<super::compact_fn::CompactFunctionProgram>>,
     pub(super) numeric_loop_plans: OnceCell<Vec<super::vm_numeric_loop::NumericLoopPlan>>,
     /// Shape-independent register programs for this body's numeric loop
     /// regions, compiled on first entry to any loop.
@@ -972,6 +978,7 @@ impl Bytecode {
             code,
             numeric_leaf_plan: OnceCell::new(),
             this_property_leaf_plan,
+            compact_function_program: OnceCell::new(),
             numeric_loop_plans: OnceCell::new(),
             typed_loop_programs: OnceCell::new(),
             control_loop_plans: OnceCell::new(),

@@ -94,7 +94,13 @@ pub(super) fn eval_direct_call_bytecode(
         Vec::new(),
         Some(direct_call_slots),
     );
-    let value = vm.run();
+    // A body the compact tier admits runs in its own small executor instead of
+    // the generic dispatch loop. Selection happens before any observable work,
+    // and a declined body falls through to exactly the previous path.
+    let value = match super::compact_fn::try_run_compact_function(&mut vm, bytecode) {
+        Some(value) => value,
+        None => vm.run(),
+    };
     // The direct-slot contract excludes closures over this frame's locals, so
     // nothing outlives the call and the allocation can go back to the body's
     // pool instead of being freed and rebuilt on the next invocation.

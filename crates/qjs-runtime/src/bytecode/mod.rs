@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 mod call_context;
+mod compact_fn;
 mod compiler;
 mod compiler_assign;
 mod compiler_binding;
