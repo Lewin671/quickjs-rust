@@ -16,6 +16,12 @@ use super::ir::{Bytecode, Local, Op};
 use super::util::{stmt_accepts_pending_label, stmt_updates_statement_list_completion};
 
 pub(super) struct Compiler {
+    /// The furthest instruction index any emitted jump can land on.
+    ///
+    /// Peepholes that rewrite the tail of `code` consult this: an instruction
+    /// at or after it is reachable by a jump whose target was already fixed,
+    /// so removing it silently moves that landing point.
+    pub(super) highest_jump_target: usize,
     pub(super) constants: Vec<Value>,
     pub(super) locals: Vec<Local>,
     pub(super) local_slots: HashMap<String, usize>,
@@ -115,6 +121,7 @@ pub(super) struct LoopIterator {
 impl Default for Compiler {
     fn default() -> Self {
         Self {
+            highest_jump_target: 0,
             constants: Vec::new(),
             locals: Vec::new(),
             local_slots: HashMap::new(),
@@ -607,7 +614,29 @@ impl Compiler {
         self.code.len() - 1
     }
 
+    /// Whether the last emitted instruction may be rewritten or removed.
+    ///
+    /// It may not if any jump can land on it or after it: the target was fixed
+    /// against the current indices, and removing an instruction shifts every
+    /// later one down while the target stays put. `(cond ? a : b).x` is the
+    /// case that exposed this -- the conditional's `Jump` had already been
+    /// patched past the `LoadLocal` that the named-property peephole then
+    /// removed, so the true branch jumped over the property read entirely and
+    /// the expression evaluated to the object itself.
+    pub(super) fn tail_is_fusable(&self) -> bool {
+        self.code
+            .len()
+            .checked_sub(1)
+            .is_some_and(|last| self.highest_jump_target <= last)
+    }
+
     pub(super) fn patch_jump(&mut self, at: usize, target: usize) {
+        // Record the furthest instruction any jump can land on. A peephole that
+        // rewrites the tail of `code` must not disturb an instruction at or
+        // after this point: removing one shifts every later instruction down
+        // while the recorded target stays put, so the jump lands past where it
+        // meant to. See `Compiler::tail_is_fusable`.
+        self.highest_jump_target = self.highest_jump_target.max(target);
         match &mut self.code[at] {
             Op::Jump(dest)
             | Op::JumpIfFalse(dest)

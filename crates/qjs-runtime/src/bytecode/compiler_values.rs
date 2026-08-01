@@ -214,7 +214,9 @@ impl Compiler {
     ) -> Result<(), RuntimeError> {
         match property {
             MemberProperty::Named(name) => {
-                let cache = if let Some(Op::LoadLocal(slot)) = self.code.last() {
+                let cache = if let Some(Op::LoadLocal(slot)) = self.code.last()
+                    && self.tail_is_fusable()
+                {
                     let slot = *slot;
                     self.code.pop();
                     super::ir::NamedPropertyCache::for_local(slot)
@@ -235,6 +237,7 @@ impl Compiler {
                         // receiver into the index word when the shared IR
                         // codec says the host representation can hold it.
                         let encoded = if let Some(Op::LoadLocal(slot)) = self.code.last()
+                            && self.tail_is_fusable()
                             && let Some(encoded) = encode_index_receiver(index, Some(*slot))
                         {
                             self.code.pop();
