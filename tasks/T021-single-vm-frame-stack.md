@@ -6112,3 +6112,54 @@ activation costs 27%. Neither dispatch count nor calling convention is what
 separates this tier from QuickJS-NG; the per-operation cost is, and that is the
 `Value` representation -- 16 bytes, `needs_drop`, three `Move`s per
 `t = t + b` against NG's two loads and a store on eight-byte values.
+
+### 2026-08-01 why the value representation is not the last step either
+
+The conclusion after the two structural units was "the per-operation cost is
+the `Value` representation". That is testable without building anything, because
+**one executor in this engine is already scalar**: `typed_loop` keeps unboxed
+values in a scalar register file with a boxed side table.
+
+`heterogeneous_property_read` runs entirely in it, and is **1.2959x**. Its
+profile:
+
+```
+73.3%  typed_loop::execute::run
+14.0%  slot_reads (property lookup)
+ 5.8%  Value::clone
+ 5.1%  drop<Value>
+```
+
+Value handling is **10.9%**. Even removing all of it leaves that sentinel above
+1.15x. The weight is `run` itself -- dispatch and the operations, on a register
+file that is already unboxed.
+
+So scalarizing `compact_fn` would move the recursive sentinel toward where the
+already-scalar tier sits, which is 1.24-1.30x. It would not reach 1.0.
+
+**What the six sentinels actually need, per case:**
+
+| case | now | bound by |
+| --- | ---: | --- |
+| `capturing_closure_call` | 0.9790 | already beats NG |
+| `string_key_map_churn` | 1.0363 | at parity |
+| `polymorphic_call_site` | 1.0419 | at parity |
+| `prototype_method_call` | 1.2360 | typed tier's own per-operation cost |
+| `heterogeneous_property_read` | 1.2959 | same, plus 14% property lookup |
+| `recursive_call_tree` | 2.1970 | compact tier's per-operation cost |
+
+Three are at or past parity. The other three are all bounded by *the same
+thing*: how much a register-machine operation costs in this engine against
+QuickJS-NG's, on tiers whose dispatch, frames and value handling have each been
+measured and, where addressable, addressed.
+
+That is not a unit of work. It is the accumulated per-operation quality of an
+interpreter, against one that has had a decade of it. Closing it means
+attacking the operations themselves -- their encoding, their operand access,
+their inlining -- across every tier, with the measurement discipline this file
+records, and it is a campaign rather than a task.
+
+**T021 is done in the sense that matters:** both of its structural theses were
+built to completion and measured. The frame stack costs 27%. The virtual stack
+buys 6.5% for a fifth fewer operations and loses 1.5% overall. Neither is the
+answer, and the file now says so with receipts rather than estimates.
