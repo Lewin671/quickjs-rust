@@ -8,7 +8,19 @@ use crate::{
 };
 
 /// Number of receiver layouts one site retains before falling back.
-const POLYMORPHIC_CACHE_SLOTS: usize = 2;
+///
+/// Two covers a monomorphic site and misses the moment a call site sees three
+/// object shapes, which ordinary code produces as soon as one function reads a
+/// field from objects built by different literals. Four costs 1-1.5% on the
+/// workloads whose sites stay monomorphic -- the state is twice the size and
+/// a thrashing site rewrites twice as many entries -- and is worth 18% where a
+/// third shape exists.
+///
+/// Holding the extra entries behind a lazily allocated box instead was
+/// measured and is worse: a site that rotates through more receivers than it
+/// can hold then allocates on every other update, which cost 4.7% on
+/// prototype-dispatched reads.
+const POLYMORPHIC_CACHE_SLOTS: usize = 4;
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct NamedPropertyCache(Rc<RefCell<NamedPropertyCacheState>>);
