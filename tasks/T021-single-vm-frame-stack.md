@@ -5753,3 +5753,50 @@ element-assignment idiom, so no join bookkeeping for elided temporaries is
 needed. Note the receiver's array-ness is not decidable at compile time --
 `receiver_index` only allocates an index, and `seed_registers` is what
 validates -- so the ordinary path is the correct home for this shape.
+
+### 2026-08-01 churn admission: the fixpoint now advances, and where it still stops
+
+Building on the region-survival fix above, a prototype of the computed-access
+unit was written and **not landed**. It is recorded because it converts "six
+failed hypotheses" into a measured sequence, and because the remaining blocker
+is now one specific thing rather than an unknown.
+
+The prototype: `TypedOp::ComputedRead`/`ComputedWrite` over boxed registers,
+whose runtime helpers discriminate `(Object, String)` and `(Array, Number)`
+instead of asserting array semantics -- Codex's round-7 correction, that
+`boxed_element_reads` conflates "this read's result must be boxed" with "this
+read is an array access". Plus a `GetProp` arm that emits a computed access for
+a boxed key and demands a boxed key when the existing one came from an element
+read, and the `SetProp` arm that `compile_op` never had at all.
+
+With it, the fixpoint **advances every pass instead of standing still**:
+
+```
+pass 1  ip=21  GetProp        (normal discovery)
+pass 2  ip=29  GetProp        computed string read
+pass 3  ip=24  StoreLocal(12) receiver temp must be boxed
+pass 4  ip=39  SetProp        no arm existed
+pass 5  ip=39  SetProp        operands not yet boxed
+pass 6  ip=26  StoreLocal(13) index temp
+pass 7  ip=22  StoreLocal(7)  key slot
+pass 8  --     slots 7/12/13 all store successfully
+```
+
+Every one of those was a real missing capability, and each was answered. The
+walk stops producing `compile_op` failures entirely by pass 8.
+
+**It still declines, and the remaining stop is now located but not identified.**
+A probe on the post-fixpoint checks never fires, so `compile()` never reaches
+them: the fixpoint gives up because pass 8 fails *without* recording a new
+discovery, and that failure is no longer in `compile_op` -- it is one of
+`normalize`, `merge_states`, `open_site`, `compile_element_assignment`, or the
+forward-jump patch. Those are exactly the five places to instrument next.
+
+Not landed because the two new operations never executed: unverifiable code is
+not a performance change. The diagnosis is the deliverable; reproduce it by
+instrumenting each `?` in `Builder::compile`'s walk and running
+`string_key_map_churn` with two iterations.
+
+**Process note, now three sessions old.** Every inference about this blocker
+has been wrong and every trace has been right. Instrument the exits; do not
+reason about where a trace happens to print.
