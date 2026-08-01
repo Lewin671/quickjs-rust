@@ -6064,3 +6064,51 @@ earlier from `callTree` alone: on straight-line numeric code it removes about
 half the operations. It remains rejected on correctness (aliasing and merge
 edges, recorded above), but its value is now measured rather than guessed, and
 that changes the case for building it properly with a real liveness analysis.
+
+### 2026-08-01 the virtual stack, built correctly at last: still not worth it
+
+Third attempt, and the first one that is *correct*: 2,014 runtime tests and
+219/219 `compare-qjs` all pass. The discipline that finally worked is basic
+blocks -- the virtual stack is canonical at every block entry and made
+canonical again before every block exit, including the fall-through edge into a
+block entry, so no two paths into a merge can disagree about where a value
+lives.
+
+Three defects had to be fixed to get there, and the third is the one worth
+remembering:
+
+1. **Aliasing.** A stack level still *naming* a local observes a later
+   `StoreLocal` to it. Materialize aliases before the write.
+2. **Merge edges.** `cond ? a : b` whose arms share a `Return`: the branch edge
+   materializes before jumping, the fall-through edge must too.
+3. **A consumer that ate its operands.** `Binary`'s non-numeric bridge took its
+   operands with `mem::replace`, emptying their registers. That was sound while
+   every operand was a stack temporary; under a virtual stack an operand can be
+   *the local's own register*, so the bridge was destroying parameters.
+   `p('y')` returned `undefined`. **Any "this operand is consumed" assumption
+   becomes false the moment a virtual stack lets an operation read a local
+   directly** -- that is the class of bug to look for, not the individual site.
+
+**And the mechanism works.** `recursive_call_tree`'s compact program executes
+4,680,009 -> **3,668,008** operations, a 21.6% reduction.
+
+**It is still rejected: six-case geomean 1.0149.** Recursion improves 6.5%,
+which is already a poor return on a fifth fewer operations, and every other
+sentinel regresses 2-6.5% -- including `heterogeneous_property_read` at 1.0651,
+whose compact program executes *28* operations in the whole benchmark and which
+therefore cannot be affected by anything this unit executes. The regression is
+in code layout or compilation, not in the tier's work.
+
+**That closes the incremental question for this tier.** Two structural units
+have now been built to completion, verified by counters, and both lost:
+
+| unit | mechanism verified | timing |
+| --- | --- | ---: |
+| single-VM frame stack | activations 254,001 -> 2,001 | 1.2678 |
+| virtual stack / copy propagation | ops 4,680,009 -> 3,668,008 | 1.0149 |
+
+Removing a fifth of the operations buys 6.5%. Removing every per-call
+activation costs 27%. Neither dispatch count nor calling convention is what
+separates this tier from QuickJS-NG; the per-operation cost is, and that is the
+`Value` representation -- 16 bytes, `needs_drop`, three `Move`s per
+`t = t + b` against NG's two loads and a store on eight-byte values.
