@@ -270,6 +270,25 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                 };
                 registers[dst as usize] = value;
             }
+            TypedOp::CallClosedFormLeaf {
+                dst,
+                receiver,
+                callee,
+                first,
+                second,
+                arity,
+            } => {
+                let Some(value) = call_closed_form_leaf(
+                    &boxed[callee as usize],
+                    &boxed[receiver as usize],
+                    registers[first as usize],
+                    registers[second as usize],
+                    arity,
+                ) else {
+                    deopt_here!(op);
+                };
+                boxed[dst as usize] = value;
+            }
             TypedOp::JumpIfFalsy { cond, target } => {
                 if !registers[cond as usize].is_truthy() {
                     pc = target as usize;
@@ -492,6 +511,61 @@ fn call_numeric_native(callee: &Value, first: Typed, second: Typed, arity: u8) -
         _ => return None,
     };
     Some(Typed::Number(value))
+}
+
+/// Answers a resolved call whose whole body a closed-form leaf evaluator can
+/// compute, or declines so the loop stops before the call becomes observable.
+///
+/// `is_direct_leaf_function` is asked first because it is exactly the
+/// precondition under which the interpreter reaches these evaluators, and this
+/// operation's contract is to answer what the interpreter would answer. Probing
+/// found no callee the evaluators alone admit wrongly -- bound functions,
+/// `arguments` users, generators, async functions, and mutable captures are all
+/// declined by the plans themselves -- so this is alignment with the
+/// interpreter's own entry condition rather than a demonstrated last line of
+/// defence. It is memoized on the function object, so after the first iteration
+/// it is one load, which is not a price worth trading for an unverifiable
+/// assumption that the plans are independently total.
+fn call_closed_form_leaf(
+    callee: &Value,
+    receiver: &Value,
+    first: Typed,
+    second: Typed,
+    arity: u8,
+) -> Option<Value> {
+    // A hoisted `Math` receiver is compiled to the unboxed operation, but a
+    // callee that only turns out to be an intrinsic at run time still reaches
+    // here; answering it costs one predicate and keeps that shape working.
+    if let Some(value) = call_numeric_native(callee, first, second, arity) {
+        return Some(value.to_value());
+    }
+    if !crate::function::is_direct_leaf_function(callee) {
+        return None;
+    }
+    let Value::Function(function) = callee else {
+        return None;
+    };
+    let bytecode = function.bytecode.as_ref()?;
+    let arguments: [Value; 2] = [first.to_value(), second.to_value()];
+    let arguments = arguments.get(..usize::from(arity))?;
+    let value = super::super::vm_numeric_leaf::try_eval_numeric_leaf(
+        bytecode,
+        &function.params,
+        arguments,
+        &function.upvalues,
+    )
+    .or_else(|| {
+        super::super::vm_this_property_leaf::try_eval_this_property_leaf(
+            bytecode, receiver, arguments,
+        )
+    })?;
+    // This operation answers an ordinary call, so it owes the same two counts
+    // the interpreter's call path reports. They are taken here rather than
+    // before the evaluators so a declined callee, which the interpreter then
+    // runs and counts itself, is not counted twice.
+    crate::diagnostics::count!(ordinary_call_attempts);
+    crate::diagnostics::count!(closed_form_leaf_evaluations);
+    Some(value)
 }
 
 /// Reads an own data property, revalidating the cached (name, slot) pair by

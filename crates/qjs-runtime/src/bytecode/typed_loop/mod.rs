@@ -215,6 +215,28 @@ enum TypedOp {
         second: u16,
         arity: u8,
     },
+    /// Calls a callee whose entire body one of the closed-form leaf evaluators
+    /// can answer, keeping the call's receiver, callee, arguments, and result in
+    /// registers instead of on the operand stack.
+    ///
+    /// This is the only operation here that runs a user function, and it is
+    /// admitted in the one form that preserves this tier's rule that an
+    /// operation either succeeds or stops the program before becoming
+    /// observable. The closed-form evaluators answer with `Option<Value>`: they
+    /// compute a body they have already proven total, and a body they have not
+    /// proven yields `None` rather than running. There is therefore no state in
+    /// which the callee has half-executed and the loop has to unwind it.
+    ///
+    /// The receiver is kept rather than dropped, because a receiver-property
+    /// body is exactly what the second evaluator answers.
+    CallClosedFormLeaf {
+        dst: u16,
+        receiver: u16,
+        callee: u16,
+        first: u16,
+        second: u16,
+        arity: u8,
+    },
     /// Leaves the loop: the condition value goes back on the operand stack,
     /// because the instruction at the loop's exit pops it.
     Exit {
@@ -955,6 +977,164 @@ mod tests {
                  run(15);"
             ),
             Ok(Value::Number(105.0))
+        );
+    }
+
+    /// A loop whose body calls a function stays in the register program when
+    /// the callee is one a closed-form leaf evaluator can answer. The call was
+    /// already frameless before this; what changes is that its receiver,
+    /// callee, arguments, and result no longer round-trip through the operand
+    /// stack, which is what lets the surrounding loop run natively at all.
+    #[test]
+    fn closed_form_leaf_calls_keep_their_loop_in_registers() {
+        // Compiling is not enough to assert: a region whose call it cannot
+        // execute still produces a program, and then deoptimizes at the call on
+        // its first iteration. What has to hold is that the program contains
+        // the operation that answers the call in registers.
+        fn calls_in_registers(source: &str) -> bool {
+            super::compile_all(&nested_function(source))
+                .iter()
+                .any(|program| {
+                    program
+                        .ops
+                        .iter()
+                        .any(|op| matches!(op, super::TypedOp::CallClosedFormLeaf { .. }))
+                })
+        }
+
+        assert!(
+            calls_in_registers(
+                "function run(n, pool) { var t = 0;\
+                   for (var i = 0; i < n; i++) { t += pool[i & 63].advance(i); }\
+                   return t; }"
+            ),
+            "a prototype-dispatched method call should run in registers"
+        );
+        assert!(
+            calls_in_registers(
+                "function run(n, cs) { var t = 0;\
+                   for (var i = 0; i < n; i++) { t += cs[i & 3](i); }\
+                   return t; }"
+            ),
+            "a computed-callee call should run in registers"
+        );
+        // A hoisted `Math` receiver keeps the unboxed intrinsic operation
+        // instead, so its result feeds arithmetic without a boxing round trip.
+        assert!(
+            !calls_in_registers(
+                "function run(n) { var t = 0;\
+                   for (var i = 0; i < n; i++) { t += Math.sqrt(i); }\
+                   return t; }"
+            ),
+            "a Math call should stay on the intrinsic operation"
+        );
+    }
+
+    /// The call operation runs user code, so each way its assumptions can stop
+    /// holding has to hand the loop back with the same answer the interpreter
+    /// gives. Every expected value here was cross-checked against QuickJS-NG.
+    #[test]
+    fn closed_form_leaf_calls_match_interpreted_results() {
+        // `this` is the element, not the pool the element came from.
+        assert_eq!(
+            eval(
+                "function Stepper(s) { this.step = s; }\
+                 Stepper.prototype.advance = function (v) { return v + this.step; };\
+                 function run(n) { var pool = [new Stepper(1), new Stepper(10)], t = 0;\
+                   for (var i = 0; i < n; i++) { t += pool[i % 2].advance(i); }\
+                   return t; }\
+                 run(10);"
+            ),
+            Ok(Value::Number(100.0))
+        );
+        // A computed callee takes its container as the receiver.
+        assert_eq!(
+            eval(
+                "function run(n) { var a = [function (v) { return v + (this.length || 0); }], t = 0;\
+                   for (var i = 0; i < n; i++) { t += a[0](i); }\
+                   return t; }\
+                 run(10);"
+            ),
+            Ok(Value::Number(55.0))
+        );
+        // The callee is replaced mid-loop by a body the evaluators decline.
+        assert_eq!(
+            eval(
+                "function run(n) { var o = { f: function (v) { return v + 1; } }, t = 0;\
+                   for (var i = 0; i < n; i++) {\
+                     if (i === 4) { o.f = function (v) { return v + this.k; }; o.k = 100; }\
+                     t += o.f(i);\
+                   }\
+                   return t; }\
+                 run(10);"
+            ),
+            Ok(Value::Number(649.0))
+        );
+        // ... by a native, ...
+        assert_eq!(
+            eval(
+                "function run(n) { var o = { f: function (v) { return v + 1; } }, t = 0;\
+                   for (var i = 0; i < n; i++) { if (i === 4) { o.f = Math.abs; } t += o.f(-i); }\
+                   return t; }\
+                 run(10);"
+            ),
+            Ok(Value::Number(37.0))
+        );
+        // ... and by something not callable at all.
+        assert_eq!(
+            eval(
+                "function run(n) { var o = { f: function (v) { return v + 1; } }, t = 0;\
+                   for (var i = 0; i < n; i++) { if (i === 4) { o.f = null; }\
+                     try { t += o.f(i); } catch (e) { t += 1000; } }\
+                   return t; }\
+                 run(10);"
+            ),
+            Ok(Value::Number(6010.0))
+        );
+        // A leaf body that throws must throw, not be answered in registers.
+        assert_eq!(
+            eval(
+                "function run(n) { var o = { f: function (v) { return v.q; } }, t = 0;\
+                   for (var i = 0; i < n; i++) {\
+                     try { t += o.f(i === 5 ? null : { q: 1 }); } catch (e) { t += 500; }\
+                   }\
+                   return t; }\
+                 run(10);"
+            ),
+            Ok(Value::Number(509.0))
+        );
+        // A class constructor called without `new` must throw rather than be
+        // answered from registers.
+        assert_eq!(
+            eval(
+                "class C { constructor(v) { this.v = v; } }\
+                 function run(n) { var t = 0;\
+                   for (var i = 0; i < n; i++) { try { t += C(i); } catch (e) { t += 7; } }\
+                   return t; }\
+                 run(6);"
+            ),
+            Ok(Value::Number(42.0))
+        );
+        // An accessor that answers with a closed-form function still works.
+        assert_eq!(
+            eval(
+                "function run(n) { var o = {}, g = function (v) { return v + 5; };\
+                   Object.defineProperty(o, 'f', { get: function () { return g; } });\
+                   var t = 0; for (var i = 0; i < n; i++) { t += o.f(i); }\
+                   return t; }\
+                 run(10);"
+            ),
+            Ok(Value::Number(95.0))
+        );
+        // A hoisted `Math` receiver keeps the unboxed intrinsic operation.
+        assert_eq!(
+            eval(
+                "function run(n) { var t = 0;\
+                   for (var i = 0; i < n; i++) { t += Math.sqrt(i) + Math.min(i, 3); }\
+                   return t; }\
+                 run(10).toFixed(6);"
+            ),
+            Ok(Value::String("43.306001".to_owned().into()))
         );
     }
 

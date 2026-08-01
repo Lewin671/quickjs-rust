@@ -5003,3 +5003,86 @@ immediately. This is the same per-backedge probe cost that three separate
 memoization attempts failed to remove on 2026-08-01, so it was accepted rather
 than retried. It should convert into a win once a boxed-register call operation
 admits that loop instead of declining it.
+
+### 2026-08-01 retained closed-form leaf calls inside typed-loop regions
+
+Three of the six generic-path sentinels answer every one of their 200,000 calls
+with a closed-form leaf evaluation and build no frame, so their remaining cost
+was never the call: it was the generic dispatcher running 21-23 instructions per
+iteration *around* an already-free call, because `Op::CallResolved` compiled to
+`CallNumericNative`, whose run-time check rejects any callee that is not a
+`Math` intrinsic and deoptimized the whole region on its first iteration.
+
+`TypedOp::CallClosedFormLeaf` keeps a resolved call's receiver, callee,
+arguments, and result in registers. It is admitted only in the form that
+preserves this tier's rule that an operation either succeeds or stops the
+program before becoming observable: the two closed-form evaluators answer with
+`Option<Value>`, computing only bodies they have already proven total, so there
+is no state in which a callee has half-executed and the loop must unwind it.
+No `Outcome` variant for a thrown error was needed, and none was added. The
+receiver is kept rather than dropped, because a receiver-property body is what
+the second evaluator answers. `is_direct_leaf_function` is asked first because
+it is the interpreter's own precondition for reaching those evaluators.
+
+A receiver read straight from the `Math` global still compiles to the unboxed
+intrinsic operation, so hoisted-intrinsic loops keep a scalar result. The
+discrimination is a register hint and is sound in both directions: a false
+positive compiles the intrinsic operation, whose run-time check deoptimizes
+exactly as before; a false negative takes the general operation, which tries the
+same intrinsic first.
+
+Executed instructions per 200,000 iterations, and the closed-form evaluation
+count that proves the semantic work still happens:
+
+| case | executed ops before | after | closed-form evaluations |
+|---|---:|---:|---:|
+| `prototype_method_call` | 4,401,801 | 1,833 | 200,000 |
+| `polymorphic_call_site` | 4,200,262 | 292 | 200,000 |
+| `capturing_closure_call` | 4,600,287 | 320 | 200,000 |
+
+Nine alternating repetitions: `prototype_method_call` **0.5033**
+[0.4984, 0.5135], `polymorphic_call_site` **0.5090** [0.5057, 0.5096],
+`capturing_closure_call` **0.4696** [0.4672, 0.4729], the other three
+0.985-0.999, geomean **0.7001**. All six sentinel checksums are byte-identical
+to the base binary's.
+
+The 40-case SunSpider/Kraken corpus is geomean **1.0000** at seven repetitions.
+Five cases read above 1.03 there; at twenty-one repetitions two were noise
+(`crypto-sha1` 1.0707 -> **0.9875**, `string-tagcloud` 1.0353 -> **0.9951**) and
+three are real but inside the 1.03 control ceiling: `audio-fft` **1.0262**,
+`json-stringify-tinderbox` **1.0223**, `audio-beat-detection` **1.0082**. The
+218 QuickJS-NG comparison fixtures pass.
+
+Two of this unit's tests were fail-open when first written and were rewritten
+after checking. Asserting `compile_all` is non-empty does not test admission:
+the old path also produced a program, which then deoptimized at the call. The
+test now asserts the program *contains* the operation. Separately, a class
+constructor whose body writes `this` is declined by the evaluators regardless,
+so it does not demonstrate that `is_direct_leaf_function` is load-bearing --
+and probing bound functions, `arguments` users, generators, async functions and
+mutable captures found no callee the evaluators alone admit wrongly. The guard
+is retained as alignment with the interpreter's entry condition, and the code
+comment says so rather than claiming a defence it does not demonstrably provide.
+
+### 2026-08-01 pre-existing hang: eval-created class constructor called in a guarded loop
+
+Found while writing the unit above; **not** caused by it, and not fixed here.
+
+```js
+var C; eval('C = class { constructor(v) { this.v = v; } }');
+function run(n) { var t = 0;
+  for (var i = 0; i < n; i++) { try { t += C(i); } catch (e) { t += 7; } }
+  return t; }
+run(6);   // QuickJS-NG: 42.  This engine: hangs.
+```
+
+All three conditions are required. A class *declared* rather than created
+through `eval` returns 42; the same `eval`-created class called outside a loop
+throws correctly; an ordinary throwing function in the same guarded loop returns
+42; and the loop without the call terminates. The suspect is
+`class_constructor_call_error`, which returns `thrown: None` unless the function
+carries `CROSS_REALM_TYPE_ERROR_PROTOTYPE` -- a non-`thrown` error reaching a
+try handler that then fails to advance the instruction pointer would reproduce
+exactly this. It reproduces on binaries built from `92f49f8b`, before any of
+2026-08-01's work. This deserves its own unit: a hang is a more serious defect
+than any of the throughput work around it.

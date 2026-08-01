@@ -308,6 +308,12 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
                 visit(first);
                 visit(second);
             }
+            // Only the arguments are scalar; the receiver, callee, and result
+            // are boxed because a user callee takes and returns any value.
+            TypedOp::CallClosedFormLeaf { first, second, .. } => {
+                visit(first);
+                visit(second);
+            }
             TypedOp::Jump { .. }
             | TypedOp::MoveBoxed { .. }
             | TypedOp::GetNamed { .. }
@@ -333,6 +339,16 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
                 visit(receiver);
             }
             TypedOp::CallNumericNative { callee, .. } => visit(callee),
+            TypedOp::CallClosedFormLeaf {
+                dst,
+                receiver,
+                callee,
+                ..
+            } => {
+                visit(dst);
+                visit(receiver);
+                visit(callee);
+            }
             TypedOp::Move { .. }
             | TypedOp::ToNumeric { .. }
             | TypedOp::Binary { .. }
@@ -425,6 +441,17 @@ struct Builder<'a> {
     next_boxed: usize,
     boxed_locals: Vec<(u16, u32)>,
     numeric_native_callee_registers: Vec<u16>,
+    /// Boxed registers last written by a read of the `Math` global, so a
+    /// resolved call through one keeps the unboxed intrinsic path.
+    ///
+    /// A depth-indexed register is reused by whatever else reaches that depth,
+    /// so this is a hint rather than a proof -- which is sound in both
+    /// directions. A register wrongly listed here compiles the intrinsic
+    /// operation, whose run-time check rejects the callee and deoptimizes,
+    /// exactly as it did before this tier could call anything else. A register
+    /// wrongly missing takes the general operation, which tries the same
+    /// intrinsic first and only pays for boxing its result.
+    math_receiver_registers: Vec<u16>,
     written_boxed_locals: Vec<u16>,
     boxed_global_reads: Vec<(u16, String)>,
     names: Vec<Rc<str>>,
@@ -488,6 +515,7 @@ impl<'a> Builder<'a> {
             next_boxed: MAX_STACK_DEPTH,
             boxed_locals: Vec::new(),
             numeric_native_callee_registers: Vec::new(),
+            math_receiver_registers: Vec::new(),
             written_boxed_locals: Vec::new(),
             boxed_global_reads: Vec::new(),
             names: Vec::new(),
@@ -1172,6 +1200,33 @@ impl<'a> Builder<'a> {
         Some(())
     }
 
+    /// Lowers `[receiver, callee, args...]` into the closed-form leaf call.
+    ///
+    /// Arguments are taken from the scalar file: a closed-form body is one whose
+    /// result the evaluator can compute, and the shapes it proves total take
+    /// numbers. An argument that is not scalar declines the region rather than
+    /// widening what the evaluators accept.
+    fn compile_resolved_closed_form_leaf(&mut self, argc: usize) -> Option<()> {
+        let mut args = [0_u16; 2];
+        for index in (0..argc).rev() {
+            let (register, _) = self.pop()?;
+            args[index] = register;
+        }
+        let (callee, _) = self.pop_boxed()?;
+        let (receiver, _) = self.pop_boxed()?;
+        let dst = self.slot_boxed()?;
+        self.emit(TypedOp::CallClosedFormLeaf {
+            dst,
+            receiver,
+            callee,
+            first: args[0],
+            second: args[1],
+            arity: u8::try_from(argc).ok()?,
+        });
+        self.push_boxed(dst, Origin::Computed);
+        Some(())
+    }
+
     /// Lowers either conditional branch through the typed tier's single falsy
     /// branch operation. The original condition remains on the abstract stack;
     /// a truthy branch uses a separate logical-not register only for the branch
@@ -1407,6 +1462,13 @@ impl<'a> Builder<'a> {
                 let register = self.global_register(name)?;
                 let dst = self.slot_boxed()?;
                 self.emit(TypedOp::MoveBoxed { dst, src: register });
+                if name.as_str() == "Math" {
+                    if !self.math_receiver_registers.contains(&dst) {
+                        self.math_receiver_registers.push(dst);
+                    }
+                } else {
+                    self.math_receiver_registers.retain(|entry| *entry != dst);
+                }
                 self.push_boxed(dst, Origin::Computed);
             }
             Op::GetPropNamed { key, cache } => {
@@ -1444,7 +1506,19 @@ impl<'a> Builder<'a> {
                 self.push_boxed(dst, Origin::Computed);
             }
             Op::CallResolved(argc) if *argc <= 2 => {
-                self.compile_resolved_numeric_native(*argc)?;
+                // `[receiver, callee, args...]`. A receiver read straight from
+                // the `Math` global keeps the unboxed intrinsic operation, whose
+                // result feeds surrounding arithmetic without a boxing round
+                // trip. Everything else takes the general operation.
+                let receiver_depth = self.stack.len().checked_sub(*argc + 2)?;
+                let (receiver, receiver_class, _) = *self.stack.get(receiver_depth)?;
+                if receiver_class == Class::Boxed
+                    && self.math_receiver_registers.contains(&receiver)
+                {
+                    self.compile_resolved_numeric_native(*argc)?;
+                } else {
+                    self.compile_resolved_closed_form_leaf(*argc)?;
+                }
             }
             Op::CallResolvedGuardedMathUnary => {
                 self.compile_resolved_numeric_native(1)?;
