@@ -99,7 +99,7 @@ jobs:
       github.event_name == 'pull_request_target' &&
       github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 57
     env:
       QJS_HARNESS_ROOT: ${{ github.workspace }}
       QJS_HARNESS_MODE: base_owned_harness
@@ -216,8 +216,12 @@ jobs:
           path: target/performance-preview/build-cache/quickjs-ng/${{ steps.build-cache-plan.outputs.quickjs-key }}
           key: performance-preview-quickjs-ng-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-cache-plan.outputs.quickjs-key }}
 
+      # 47 rather than 35: the sentinel lane adds a hard-bounded 600 seconds
+      # after the broad lane, and the step must have room for that bound plus
+      # the fallback write, or a timeout here would discard the broad lane's
+      # durable conclusion.
       - name: Build and measure three pinned engines
-        timeout-minutes: 35
+        timeout-minutes: 47
         run: |
           "$QJS_HARNESS_ROOT/scripts/performance-preview.sh" \
             --harness-mode "$QJS_HARNESS_MODE" \
@@ -262,7 +266,7 @@ jobs:
       (github.event_name == 'push' ||
        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 57
     env:
       QJS_HARNESS_ROOT: ${{ github.workspace }}
       QJS_HARNESS_MODE: ${{ github.event_name == 'workflow_dispatch' && 'manual_main_head_owned_harness' || 'main_push_head_owned_harness' }}
@@ -388,8 +392,12 @@ jobs:
           path: target/performance-preview/build-cache/quickjs-ng/${{ steps.build-cache-plan.outputs.quickjs-key }}
           key: performance-preview-quickjs-ng-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-cache-plan.outputs.quickjs-key }}
 
+      # 47 rather than 35: the sentinel lane adds a hard-bounded 600 seconds
+      # after the broad lane, and the step must have room for that bound plus
+      # the fallback write, or a timeout here would discard the broad lane's
+      # durable conclusion.
       - name: Build and measure three pinned engines
-        timeout-minutes: 35
+        timeout-minutes: 47
         run: |
           "$QJS_HARNESS_ROOT/scripts/performance-preview.sh" \
             --harness-mode "$QJS_HARNESS_MODE" \

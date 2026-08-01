@@ -337,13 +337,19 @@ Three details are load-bearing rather than incidental. The lane writes its own
 receipts: `preview prepare` refuses to overwrite, so reusing the broad lane's
 paths would fail every run and reduce the section to "did not complete"
 permanently. The measurement carries an internal deadline
-(`QJS_SENTINEL_TIMEOUT_SECONDS`, 900 by default), because the `if`/`else` above
-survives a failing lane but not the workflow *step* timing out -- that would
-kill the job and let the always-run publisher replace the broad lane's durable
-conclusion with a failure notice. And the sentinel section enforces the same
+(`QJS_SENTINEL_TIMEOUT_SECONDS`, 600 by default) **and** the workflow's step and
+job budgets are sized to cover it (47 and 57 minutes). Bounding alone is the
+tempting half-fix and does not work: the deadline starts only after compilation
+and the broad lane, so a cache miss or slow broad run can still let the step
+expire mid-lane, after which the always-run publisher replaces the broad lane's
+durable conclusion with a failure notice. The guarantee needs both. Isolating
+the lane in its own non-fatal workflow step would be stronger still, and is
+left for a change that can thread the lane's inputs out of the orchestrator. And the sentinel section enforces the same
 health invariants as the broad one: complete comparison input, three roles, the
 complete frozen six-case inventory, 3/3 valid non-claim blocks, and agreeing
-health/linearity status. A report can carry comparisons built from whatever
+health/linearity status. It additionally requires **both** comparison maps to
+carry exactly the frozen inventory, because `coverage` reports how many cases
+were measured and does not prove the maps contain all of them. A report can carry comparisons built from whatever
 measurements survived a timer-limited block, so a renderer that read ratios
 without those checks would publish a degraded number as ordinary-interpreter
 cost -- exactly the class of mistake the sentinels exist to stop.
@@ -351,9 +357,14 @@ cost -- exactly the class of mistake the sentinels exist to stop.
 `benchmarks/performance-policy.json` pins the sentinel manifest and protocol
 under `protocols.sentinel_measurement`, declares the hosted portfolio as
 `complete-broad-25-case-and-generic-sentinels-6-case`, and requires the
-sentinel protocol hash in every gate's activation prerequisites. Without that
-binding a sentinel workload change would alter hosted evidence while passing
-`performance-policy-audit.sh` on the strength of its own manifest self-hash.
+sentinel protocol hash in every gate's activation prerequisites. The
+repository cross-check additionally requires the sentinel manifest to name the
+same pinned QuickJS-NG as the broad one, and requires the analysis policy to
+admit the sentinel series. Without those, a sentinel manifest could name a
+different reference revision -- which `prepare` would stamp straight into the
+lane's receipts -- and still pass `performance-policy-audit.sh`, because the
+protocol aggregate covers the protocol *file list* rather than the manifest's
+own fields.
 
 ### Execution counters
 

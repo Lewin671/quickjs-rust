@@ -65,6 +65,13 @@ def sentinel_summary(args: argparse.Namespace) -> None:
         "the ordinary interpreter's cost.",
         "",
     ]
+    # `coverage` reports how many cases were measured; it does not prove the
+    # comparison maps carry all of them. A report that claims complete coverage
+    # but omits a comparison, or carries a subset of cases, would otherwise
+    # publish a geometric mean over whatever survived -- the same class of
+    # mistake as reading a folded benchmark as throughput. Both comparisons
+    # must be present and cover exactly the frozen inventory.
+    expected = set(HOSTED_SENTINEL_CASES)
     rows = []
     for key, label in (
         ("candidate_vs_base", "candidate vs base"),
@@ -72,23 +79,22 @@ def sentinel_summary(args: argparse.Namespace) -> None:
     ):
         section = comparisons.get(key)
         if not isinstance(section, dict):
-            continue
+            raise PreviewError(f"sentinel report is missing the {key} comparison")
         cases = section.get("cases")
-        if not isinstance(cases, dict) or not cases:
-            continue
+        if not isinstance(cases, dict):
+            raise PreviewError(f"sentinel report {key} is missing its cases")
         ratios = []
         for case_id in sorted(cases):
             case = cases[case_id]
-            if isinstance(case, dict) and isinstance(case.get("ratio"), (int, float)):
-                ratios.append((case_id, float(case["ratio"])))
-        if not ratios:
-            continue
+            if not isinstance(case, dict) or not isinstance(case.get("ratio"), (int, float)):
+                raise PreviewError(f"sentinel report {key}/{case_id} is missing its ratio")
+            ratios.append((case_id, float(case["ratio"])))
+        if {case_id for case_id, _ in ratios} != expected:
+            raise PreviewError(
+                f"sentinel report {key} does not cover the complete frozen inventory"
+            )
         geomean = math.exp(sum(math.log(r) for _, r in ratios) / len(ratios))
         rows.append((label, geomean, ratios))
-    if not rows:
-        lines.append("> No complete sentinel comparison was produced.")
-        _write_replace(args.markdown, ("\n".join(lines) + "\n").encode("utf-8"))
-        return
     lines += ["| Comparison | Geometric mean | Cases |", "| --- | ---: | ---: |"]
     for label, geomean, ratios in rows:
         lines.append(f"| {label} | {geomean:.4f}× | {len(ratios)} |")

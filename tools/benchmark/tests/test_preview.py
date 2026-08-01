@@ -703,6 +703,11 @@ class SentinelLaneTests(unittest.TestCase):
             for manifest in manifests:
                 manifest.unlink(missing_ok=True)
 
+    ALL_SENTINELS = (
+        "recursive_call_tree", "prototype_method_call", "polymorphic_call_site",
+        "capturing_closure_call", "heterogeneous_property_read", "string_key_map_churn",
+    )
+
     def _healthy(self, cases: dict[str, float]) -> dict:
         return {
             "coverage": {
@@ -733,8 +738,42 @@ class SentinelLaneTests(unittest.TestCase):
             return (root / "summary.md").read_text(encoding="utf-8")
 
     def test_a_healthy_sentinel_report_publishes_its_geometric_mean(self) -> None:
-        rendered = self._render(self._healthy({"a": 4.0, "b": 1.0}))
+        cases = dict.fromkeys(self.ALL_SENTINELS, 1.0)
+        cases["recursive_call_tree"] = 64.0
+        report = self._healthy(cases)
+        report["comparisons"]["candidate_vs_base"] = report["comparisons"][
+            "candidate_vs_quickjs_ng"
+        ]
+        rendered = self._render(report)
+        # 64 ** (1/6) == 2
         self.assertIn("2.0000×", rendered)
+
+    def test_a_partial_comparison_map_publishes_nothing(self) -> None:
+        from tools.benchmark.preview import PreviewError
+
+        full = dict.fromkeys(self.ALL_SENTINELS, 2.0)
+
+        # One comparison absent entirely.
+        missing = self._healthy(full)
+        with self.assertRaisesRegex(PreviewError, "missing the candidate_vs_base"):
+            self._render(missing)
+
+        # Both present, but one carries a subset of the frozen inventory.
+        subset = self._healthy(full)
+        subset["comparisons"]["candidate_vs_base"] = {
+            "cases": {"recursive_call_tree": {"ratio": 2.0}}
+        }
+        with self.assertRaisesRegex(PreviewError, "complete frozen inventory"):
+            self._render(subset)
+
+        # A case present but carrying no ratio.
+        holed = self._healthy(full)
+        holed["comparisons"]["candidate_vs_base"] = {
+            "cases": {k: {"ratio": 2.0} for k in self.ALL_SENTINELS}
+        }
+        holed["comparisons"]["candidate_vs_base"]["cases"]["recursive_call_tree"] = {}
+        with self.assertRaisesRegex(PreviewError, "missing its ratio"):
+            self._render(holed)
 
     def test_a_degraded_sentinel_report_publishes_no_ratio(self) -> None:
         from tools.benchmark.preview import PreviewError

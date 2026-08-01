@@ -622,18 +622,31 @@ def cross_check_repository(policy: PerformancePolicy, root: Path) -> None:
                 raise PerformancePolicyError(
                     f"policy.protocols.{key}: does not match current repository protocol"
                 )
-        manifest_reference = (
-            measurement.reference_identity,
-            measurement.reference_repo,
-            measurement.reference_revision,
-        )
         policy_reference = (
             policy.reference_identity, policy.reference_repo, policy.reference_revision,
         )
-        if manifest_reference != policy_reference:
-            raise PerformancePolicyError(
-                "policy.reference_engine: does not match measurement manifest"
+        # Both hosted lanes measure against the same pinned reference. Checking
+        # only the broad manifest would let a sentinel manifest name a different
+        # QuickJS-NG repository or revision and still pass: the protocol
+        # aggregate covers the protocol *file list*, not the manifest's own
+        # fields, and `prepare` would stamp the changed pin straight into the
+        # sentinel receipts.
+        for name, manifest in (
+            ("measurement manifest", measurement),
+            ("generic-sentinel manifest", sentinels),
+        ):
+            manifest_reference = (
+                manifest.reference_identity,
+                manifest.reference_repo,
+                manifest.reference_revision,
             )
+            if manifest_reference != policy_reference:
+                raise PerformancePolicyError(
+                    f"policy.reference_engine: does not match {name}"
+                )
+        # The analysis policy must admit the sentinel series too, or the lane's
+        # report step would fail closed in CI after a clean measurement.
+        load_analysis_manifest(root / "benchmarks/analysis.json", sentinels)
         gitlink = subprocess.run(
             ["git", "-C", str(root), "ls-tree", "HEAD", "third_party/quickjs-ng"],
             capture_output=True, text=True, timeout=10, check=False,

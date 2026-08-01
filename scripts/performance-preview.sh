@@ -408,13 +408,22 @@ CURRENT_PHASE="summary"
 # this lane needs its own receipt paths; reusing the broad lane's would fail
 # every run and silently reduce this section to "did not complete".
 #
-# The measurement is bounded explicitly. The `if`/`else` below survives a
-# failing lane, but it cannot survive the *step* timing out: the job would be
-# killed and the publish step, seeing a non-success job status, would replace
-# the broad lane's durable conclusion with a failure notice. Bounding the lane
-# is what keeps a slow sentinel run from costing the preview the answer it
-# already has.
-SENTINEL_TIMEOUT_SECONDS="${QJS_SENTINEL_TIMEOUT_SECONDS:-900}"
+# The measurement is bounded explicitly, and the workflow's step and job
+# budgets are sized to cover that bound on top of everything before it.
+#
+# Bounding alone is not enough, which is worth stating because it is the
+# tempting half-fix. This deadline starts only after compilation and the broad
+# lane, so on a cache miss or a slow broad run the *step* can still expire
+# mid-lane -- and the always-run publisher, seeing a non-success job status,
+# replaces the broad lane's durable conclusion with "no performance
+# conclusion". The guarantee needs both: a lane that cannot overrun, and an
+# outer budget with room for it.
+#
+# The better long-term shape is to isolate the lane in its own non-fatal
+# workflow step, where a timeout kills only that step. That needs the lane's
+# inputs threaded out of this script, so it is deliberately left for a change
+# that can carry it.
+SENTINEL_TIMEOUT_SECONDS="${QJS_SENTINEL_TIMEOUT_SECONDS:-600}"
 CURRENT_PHASE="sentinel_measurement"
 SENTINEL_MANIFEST="$HARNESS_ROOT/benchmarks/.hosted-sentinel-${CANDIDATE_REVISION:0:12}-${BASE_REVISION:0:12}-$$.json"
 if (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview prepare \

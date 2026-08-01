@@ -502,7 +502,7 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertIn("working-directory: ${{ inputs.source-root }}", setup_action)
         self.assertIn("inputs.source-root", setup_action)
         self.assertIn('"$QJS_HARNESS_ROOT/scripts/performance-preview.sh"', workflow)
-        self.assertIn("timeout-minutes: 35", workflow)
+        self.assertIn("timeout-minutes: 47", workflow)
         self.assertIn("$GITHUB_STEP_SUMMARY", workflow)
         self.assertIn("actions/upload-artifact@v6", workflow)
         self.assertEqual(workflow.count("uses: actions/cache/restore@v5"), 7)
@@ -631,3 +631,24 @@ class SentinelProtocolBindingTests(unittest.TestCase):
         for name, gate in policy["gates"].items():
             required = gate["activation_prerequisites"]["required_protocol_sha256"]
             self.assertIn("sentinel_measurement", required, name)
+
+    def test_a_diverging_sentinel_reference_fails_the_cross_check(self) -> None:
+        """Both lanes must measure against the same pinned QuickJS-NG.
+
+        The protocol aggregate covers the protocol file list, not the
+        manifest's own fields, so without this check a sentinel manifest could
+        name a different reference revision and `prepare` would stamp it into
+        the lane's receipts unchallenged.
+        """
+        from dataclasses import replace
+
+        from tools.benchmark.performance_policy import (
+            cross_check_repository,
+            load_policy,
+        )
+
+        policy = load_policy(ROOT / "benchmarks/performance-policy.json")
+        cross_check_repository(policy, ROOT)
+        drifted = replace(policy, reference_revision="0" * 40)
+        with self.assertRaisesRegex(PerformancePolicyError, "reference_engine"):
+            cross_check_repository(drifted, ROOT)
