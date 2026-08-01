@@ -5208,3 +5208,107 @@ The unit is retained -- it is a prerequisite that removes dispatch from the
 measurement, so the next unit's frame work is no longer masked by it -- but the
 next unit must be frame construction, and it should be measured against this
 tier rather than against the generic interpreter.
+
+### 2026-08-01 compact tier follow-ups, and a measurement-hygiene correction
+
+Two follow-up units landed on the compact executor.
+
+`a69ecae6` dispatches a direct-leaf callee straight from the registers instead
+of staging it on the operand stack for `Vm::call` to pop back off. The entry it
+reaches, `call_direct_leaf_function`, already takes an argument slice, so the
+staging was a pure round trip. Non-direct-leaf callees still go through the
+operand stack, so general call semantics keep one implementation. Paired A/B,
+nine and seven reps: **0.9193** [0.9160, 0.9248].
+
+`67555208` reads an upvalue-backed local from `local_upvalue_cell` instead of
+re-resolving it through `Vm::load_local` on every read. **0.9914**
+[0.9581, 0.9973] -- small, but every repetition was below 1.0.
+
+One experiment was rejected: replacing the `Value::clone` of call operands and
+store sources with `mem::replace`, on the theory that the abstract stack
+consumes them. Measured **1.0235** and **1.0240** over nine and seven reps --
+consistently *slower*. `Value::clone` on an `Rc`-backed value is a
+non-atomic increment; `mem::replace` forces an extra discriminant write and
+appears to block keeping the value in a register. Reverted.
+
+**Measurement hygiene, and a correction to the entry above.** A hung test
+process from an earlier session (`closed_form_leaf_calls_match`, started
+04:53) was holding 100% of a core for four hours, with system load average at
+20.6, throughout this session's first measurements. It was killed at 08:57.
+
+Interleaved candidate/base *ratios* are unaffected, because both sides paid the
+contention -- but the **absolute per-call figures in the entry above are
+inflated**. The 238.1 ns/call and the 11.8 ns dispatch saving were measured
+under contention; on a quiet machine the same build measures ~212 ns/call. The
+*conclusion* stands unchanged -- dispatch elimination bought a few percent, not
+the predicted ~40% -- but treat the ns figures as an upper bound, and re-measure
+before using them as a budget. Kill stray `target/debug/deps/*` processes and
+check `uptime` before any timing run.
+
+Session totals against clean base `7273d08a`, quiet machine, seven paired reps:
+
+| case | cand/base |
+| --- | ---: |
+| `recursive_call_tree` | **0.8770** |
+| `prototype_method_call` | 0.9963 |
+| `polymorphic_call_site` | 1.0024 |
+| `capturing_closure_call` | 1.0064 |
+| `heterogeneous_property_read` | 1.0048 |
+| `string_key_map_churn` | 0.9971 |
+| **geomean** | **0.9795** |
+
+Against QuickJS-NG on the same quiet machine: `recursive_call_tree`
+6.30 -> **5.5279**, six-sentinel geomean 1.839 -> **1.8008**.
+
+### 2026-08-01 the next unit, and what the arithmetic says about winning
+
+Reviewed with Codex against this profile. Agreed next unit: a **VM-free
+activation path** for bodies the compact tier already admits, selected in
+`eval_direct_call_bytecode` *before* `Vm::new...`. On decline, the existing
+`Vm` is built unchanged.
+
+Expected movement, from Codex's read of the profile:
+
+| unit | expected |
+| --- | ---: |
+| VM-free compact activation (keeping `CallEnv`, locals, register pools) | ~165-190 ns |
+| lazy 112-byte `FrameColdState` extraction | ~228-235 ns |
+
+So cold-state extraction is *not* the next recursion unit, even though it is
+the cheaper change: `Vm` construction plus `FrameState` drop is only ~13.8% of
+samples, and shrinking 704 bytes by ~104 net bytes touches part of that.
+
+What the standalone path must preserve, in order of subtlety:
+
+1. The callee-specific `CallEnv` from `direct_leaf_function_env` -- **not** the
+   caller's. It performs `this` normalization, creation-realm selection,
+   dynamic-realm marking, module-host routing, and private-environment install.
+2. A value-level call helper. `CompactOp::Call` is *not* proven direct-leaf at
+   compile time (only arity is checked), so the guard must stay: direct leaf ->
+   `call_direct_leaf_function`, otherwise ordinary `call_function` semantics.
+3. A value-level binary helper extracted from `vm_ops.rs`, not a duplicate of
+   just the arithmetic cases -- `valueOf`, `toString`, `Symbol.toPrimitive` and
+   `@@hasInstance` all reach user code.
+4. Local loading beyond `locals[slot]`: TDZ diagnostics, received cells,
+   realm-backed cells. V1 may decline module-import frames.
+
+Predeclared gates against `815d8b79`: `nested_vm_constructions` 254,005 -> ~4 on
+the 2,000-iteration sentinel; no `Vm::new`/`FrameState` drop/operand-stack
+construction beneath compact activations in the profile; seven paired reps;
+retain only if `recursive_call_tree <= 0.85x` and every other sentinel
+`<= 1.03x`.
+
+**Can recursion beat QuickJS-NG? Not with the current executor.** With `E` the
+execution cost after construction is removed and `C` construction cost, parity
+needs `E + C < 39.5 ns`, and the portfolio condition
+(`recursive x string_key_map_churn < 0.49772`) needs `E + C < 19.66/s` ns.
+`compact_fn::execute` self-time alone is ~56 ns and the whole executor category
+~74 ns, so **the present construction budget is negative**. A plausible eventual
+split is 20-25 ns of compact execution plus 10-15 ns of construction, which
+requires a second structural stage after V1: compact-to-compact activation
+switching in one loop, locals and operands in one register file, no per-call
+`CallEnv`, no per-call vector resize or recycler borrow, and fewer `Value`
+clone/drops.
+
+Note the product condition means recursion need not win individually if string
+churn wins strongly -- at `s = 0.40`, recursion may be as slow as 1.244x NG.
