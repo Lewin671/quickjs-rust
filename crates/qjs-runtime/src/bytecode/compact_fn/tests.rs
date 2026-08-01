@@ -228,3 +228,45 @@ fn an_admitted_body_sees_a_replaced_self_binding() {
         first + counter(3);";
     assert_eq!(eval(source), Ok(Value::Number(103.0)));
 }
+
+#[test]
+fn a_callee_with_a_home_object_does_not_share_the_caller_environment() {
+    // A method carries a home object, so `direct_leaf_function_env` would
+    // install a private environment its caller's environment does not have.
+    // Sharing would silently drop that, so the callee must fall back.
+    let source = "class Base { #secret = 7; reveal() { return this.#secret; } }
+        var instance = new Base();
+        function useMethod(n) { return instance.reveal() + n; }
+        useMethod(35);";
+    assert_eq!(eval(source), Ok(Value::Number(42.0)));
+}
+
+#[test]
+fn a_shared_environment_callee_still_resolves_globals_through_the_realm() {
+    // The shared environment must remain a real realm view: a callee reached
+    // through the fast path resolves free names exactly as it would have.
+    let source = "var scale = 3;
+        function inner(n) { return n * scale; }
+        function outer(n) { return inner(n) + inner(n); }
+        outer(7);";
+    assert_eq!(eval(source), Ok(Value::Number(42.0)));
+}
+
+#[test]
+fn a_shared_environment_callee_sees_a_global_written_between_calls() {
+    // Sharing an environment must not freeze what it resolves to.
+    let source = "var offset = 1;
+        function reader(n) { return n + offset; }
+        function driver(n) { var first = reader(n); offset = 100; return first + reader(n); }
+        driver(0);";
+    assert_eq!(eval(source), Ok(Value::Number(101.0)));
+}
+
+#[test]
+fn errors_from_a_shared_environment_callee_keep_their_thrown_value() {
+    let source = "var sentinel = { tag: 'boom' };
+        function thrower(n) { return n.missing.deeper; }
+        function driver(n) { return thrower(n); }
+        try { driver(null); 'no throw'; } catch (e) { e instanceof TypeError; }";
+    assert_eq!(eval(source), Ok(Value::Boolean(true)));
+}

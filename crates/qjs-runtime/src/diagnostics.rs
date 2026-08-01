@@ -97,8 +97,14 @@ declare_counters! {
     compact_function_ops,
     /// Activations that ran with no `Vm` at all. Read against
     /// `nested_vm_constructions`: this tier exists to move calls from one
-    /// counter to the other.
+    /// counter to the other. This is a mechanism counter, not a tier
+    /// attribution -- a call entered through `call_direct_leaf_function` is
+    /// counted both there and here.
     compact_standalone_activations,
+    /// Calls a compact body dispatched straight to another compact body,
+    /// building neither a frame nor an environment. This is a tier
+    /// attribution: such a call is counted here and nowhere else.
+    compact_direct_calls,
 }
 
 /// Applies `update` to the calling thread's counters.

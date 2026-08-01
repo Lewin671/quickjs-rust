@@ -48,7 +48,8 @@ fn every_call_attempt_is_attributed_to_exactly_one_tier() {
     );
     let attributed = counters.closed_form_leaf_evaluations
         + counters.direct_leaf_frames
-        + counters.generic_call_frames;
+        + counters.generic_call_frames
+        + counters.compact_direct_calls;
     assert_eq!(
         counters.ordinary_call_attempts, attributed,
         "a bytecode call must be counted by exactly one execution tier"
@@ -208,7 +209,12 @@ fn recursion_builds_slot_seeded_frames_and_receiver_arithmetic_builds_none() {
          tree(5, 3);",
     );
     assert_eq!(recursion.ordinary_call_attempts, 63);
-    assert_eq!(recursion.direct_leaf_frames, 63);
+    // Only the outermost call still builds a slot-seeded frame, because only
+    // it is reached from the ordinary interpreter. The other 62 are compact
+    // bodies calling a compact body: borrowed environment, register file, no
+    // frame and no environment construction at all.
+    assert_eq!(recursion.direct_leaf_frames, 1);
+    assert_eq!(recursion.compact_direct_calls, 62);
     assert_eq!(recursion.generic_call_frames, 0);
     // Every one of the 63 calls now runs on a compact activation, and the only
     // nested VM left is the top-level script's. This assertion used to read

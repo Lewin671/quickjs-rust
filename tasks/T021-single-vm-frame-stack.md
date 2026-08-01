@@ -5460,3 +5460,54 @@ selection, dynamic-realm marking, module-host routing, and private-environment
 installation. For an admitted body most of those are no-ops -- so the opening
 is *proving* that per body and skipping the work, not sharing the caller's
 environment.
+
+### 2026-08-01 compact-to-compact calls share the environment they would have rebuilt
+
+The largest single unit of the session. A compact body calling another compact
+body no longer constructs a `CallEnv`, and no longer passes through
+`call_direct_leaf_function` or `eval_direct_call_bytecode` at all.
+
+The argument is an equality proof, not a shortcut.
+`new_direct_leaf_function_frame` derives realm, the global-lexical handles, the
+immutable bindings, the module host and the agent context from its parent and
+sets every other field to a fresh empty value. So two direct-leaf frames in one
+realm can differ only through what the four remaining steps of
+`direct_leaf_function_env` add: a `this` binding, a marked call realm, a module
+host, and a private environment. `shares_caller_environment` rejects a callee
+that would add any of them -- and, for the module host, accepts the ordinary
+case where callee and caller carry the *same* handle, since installing it again
+is idempotent. When it accepts, the environment the callee would have built is
+equal field for field to the one the caller holds, so borrowing it is not
+"reusing the caller's environment"; it is skipping the reconstruction of an
+identical one.
+
+`CompactActivation::env` is therefore `&CallEnv` rather than an owned one.
+`is_direct_leaf_function` remains the outer gate: it is what proves seeding
+parameters into slots is safe for a callee at all, and the compact program's
+own admission does not subsume it.
+
+**This condition was wrong on the first attempt, and the counters caught it.**
+Requiring `function.module_host.is_none()` looked obviously right and admitted
+*nothing*: an ordinary script's functions all carry the host of the environment
+that created them, so `compact_direct_calls` was 0 while the timing moved
+1.3% in the wrong direction. A probe on the predicate found it in one run. The
+lesson is the one this file keeps relearning -- assert the mechanism fired
+before believing a timing result, in either direction.
+
+Mechanism, 2,000-iteration sentinel (254,004 calls):
+
+| counter | before | after |
+| --- | ---: | ---: |
+| `compact_direct_calls` | -- | **252,000** |
+| `direct_leaf_frames` | 254,004 | **2,004** |
+| `ordinary_call_attempts` | 254,004 | 254,004 |
+| `nested_vm_constructions` | 4 | 4 |
+
+99.2% of calls now build neither a frame nor an environment. The counter
+invariant that every attempt is attributed to exactly one tier still holds,
+which is why `compact_direct_calls` is a separate counter from the mechanism
+counter `compact_standalone_activations`.
+
+Paired alternating A/B against a base rebuilt from `50be13ec`, nine reps twice:
+`recursive_call_tree` **0.7007** and **0.7036** [0.6997, 0.7106]. Every other
+sentinel between 0.9937 and 1.0052; six-case geomean **0.9443**.

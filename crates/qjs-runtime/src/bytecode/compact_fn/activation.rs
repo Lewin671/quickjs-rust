@@ -29,10 +29,15 @@ use crate::{RuntimeError, Value};
 /// carries for the general interpreter's sake.
 pub(super) struct CompactActivation<'a> {
     pub(super) bytecode: &'a Bytecode,
-    /// The callee's own environment, built by `direct_leaf_function_env`. It is
-    /// not the caller's: it carries `this` normalization, creation-realm
-    /// selection, module-host routing, and the private environment.
-    pub(super) env: CallEnv,
+    /// The environment this body runs in, borrowed rather than owned.
+    ///
+    /// It is still the callee's own environment in the sense that matters --
+    /// see `shares_caller_environment`, which proves that what
+    /// `direct_leaf_function_env` would build for an admitted callee is equal
+    /// field for field to what its compact caller already holds. Borrowing it
+    /// is therefore not "reusing the caller's environment"; it is skipping the
+    /// reconstruction of an identical one.
+    pub(super) env: &'a CallEnv,
     /// The function whose upvalue vector backs this body's received cells.
     /// Reads resolve through it by bytecode slot, keeping cell identity live.
     upvalue_owner: Option<Function>,
@@ -66,6 +71,123 @@ impl<'a> CompactActivation<'a> {
     }
 }
 
+/// The per-body facts this tier needs proven before it may run a call.
+struct CompactEntry<'a> {
+    program: &'a super::CompactFunctionProgram,
+    upvalue_owner: Option<Function>,
+    upvalue_slots: u128,
+}
+
+/// Proves a body may run on this tier with the given upvalue source.
+fn admit<'a>(
+    bytecode: &'a Bytecode,
+    upvalues: crate::bytecode::DirectCallUpvalues<'_>,
+) -> Option<CompactEntry<'a>> {
+    let program = super::program_for(bytecode)?;
+    // The body's received cells must be reachable from one retained function,
+    // which is what makes an upvalue read a cell load rather than a binding
+    // resolution.
+    let upvalue_slots = bytecode
+        .direct_readonly_received_upvalue_slots()
+        .unwrap_or(0);
+    let upvalue_owner = if upvalue_slots == 0 {
+        None
+    } else {
+        let owner = upvalues.function()?;
+        (owner.upvalues.len() == bytecode.received_upvalue_slots().len()
+            && upvalues.as_slice().len() == owner.upvalues.len())
+        .then(|| owner.clone())?
+        .into()
+    };
+    // With no per-slot cells, the authoritative mask is the bytecode's own.
+    if bytecode.authoritative_mask_clean() & !upvalue_slots & program.required_authoritative_slots
+        != program.required_authoritative_slots
+    {
+        return None;
+    }
+    Some(CompactEntry {
+        program,
+        upvalue_owner,
+        upvalue_slots,
+    })
+}
+
+/// Whether an environment can host an admitted body at all.
+fn environment_is_slot_only(env: &CallEnv) -> bool {
+    env.supplies_no_named_binding()
+        && !env.has_module_imports()
+        && env.deopt_bindings().is_none()
+        && env.dynamic_function_realm_global().is_none()
+}
+
+/// Whether `direct_leaf_function_env` would build, for this callee, an
+/// environment equal field for field to the one its compact caller holds.
+///
+/// `new_direct_leaf_function_frame` derives realm, the global-lexical handles,
+/// the immutable bindings, the module host, and the agent context from its
+/// parent, and sets everything else to a fresh empty value. So two direct-leaf
+/// frames in one realm differ only through what the four remaining steps of
+/// `direct_leaf_function_env` add: a `this` binding, a marked call realm, a
+/// module host, and a private environment. Excluding all four -- and empty
+/// module imports, which the caller's environment is already known to have --
+/// leaves the two environments indistinguishable.
+fn shares_caller_environment(function: &Function, bytecode: &Bytecode, env: &CallEnv) -> bool {
+    // `direct_leaf_function_env` installs the callee's own module host over
+    // the one the frame inherited from its parent. When they are the same
+    // handle -- which is the ordinary case, since a script's functions all
+    // carry the host of the environment that created them -- that install is
+    // idempotent and the two environments still agree.
+    let host_agrees = match (&function.module_host, env.module_host()) {
+        (None, _) => true,
+        (Some(callee), Some(caller)) => std::rc::Rc::ptr_eq(callee, &caller),
+        (Some(_), None) => false,
+    };
+    host_agrees
+        && !bytecode.uses_lexical_this()
+        && !function.has_dynamic_function_realm
+        && !function.has_dynamic_function_realm_override.get()
+        && function.module_imports.is_empty()
+        && function.private_environment().is_none()
+        && function.home_object().is_none()
+}
+
+/// Runs an admitted body in `env`.
+fn run(
+    bytecode: &Bytecode,
+    env: &CallEnv,
+    entry: CompactEntry<'_>,
+    parameter_slots: &[usize],
+    arguments: &[Value],
+) -> Result<Value, RuntimeError> {
+    crate::diagnostics::count!(compact_standalone_activations);
+    let mut activation = CompactActivation {
+        bytecode,
+        env,
+        upvalue_owner: entry.upvalue_owner,
+        upvalue_slots: entry.upvalue_slots,
+    };
+    let program = entry.program;
+    let mut registers = program.take_registers();
+    registers.clear();
+    // Locals live in the low registers. Everything starts `undefined`, which
+    // is already the correct seed for a hoisted `var`; parameters overwrite
+    // theirs below, and a received upvalue is read from its cell rather than
+    // from a register. `this` is not in the opcode set, so its slot is left
+    // alone. That is the whole frame-setup cost for an admitted body.
+    registers.resize(program.register_count, Value::Undefined);
+    for (index, &slot) in parameter_slots.iter().enumerate() {
+        let Some(target) = registers.get_mut(slot) else {
+            continue;
+        };
+        if let Some(argument) = arguments.get(index) {
+            *target = argument.clone();
+        }
+    }
+    let result = execute::execute(&mut activation, program, &mut registers);
+    program.recycle_registers(registers);
+    result
+}
+
 /// Runs `bytecode` without building a `Vm`, or returns `None` having consumed
 /// nothing, so the caller can construct the ordinary frame unchanged.
 ///
@@ -76,72 +198,23 @@ pub(in crate::bytecode) fn try_run_standalone(
     env: &mut Option<CallEnv>,
     slots: &mut Option<DirectCallSlots<'_>>,
 ) -> Option<Result<Value, RuntimeError>> {
-    let program = super::program_for(bytecode)?;
-    let call_env = env.as_ref()?;
-    let call_slots = slots.as_ref()?;
-
     // This tier resolves every name by slot index. An environment that can
     // still answer a name, that carries deoptimized dynamic bindings, or that
     // overrides the realm global belongs on the general path.
-    if !call_env.supplies_no_named_binding()
-        || call_env.has_module_imports()
-        || call_env.deopt_bindings().is_some()
-        || call_env.dynamic_function_realm_global().is_some()
-    {
+    if !environment_is_slot_only(env.as_ref()?) {
         return None;
     }
-    // The body's received cells must be reachable from one retained function,
-    // which is what makes an upvalue read a cell load rather than a binding
-    // resolution.
-    let upvalue_slots = bytecode
-        .direct_readonly_received_upvalue_slots()
-        .unwrap_or(0);
-    let upvalue_owner = if upvalue_slots == 0 {
-        None
-    } else {
-        let owner = call_slots.upvalues.function()?;
-        (owner.upvalues.len() == bytecode.received_upvalue_slots().len()
-            && call_slots.upvalues.as_slice().len() == owner.upvalues.len())
-        .then(|| owner.clone())?
-        .into()
-    };
-    // With no per-slot cells, the authoritative mask is the bytecode's own.
-    if bytecode.authoritative_mask_clean() & !upvalue_slots & program.required_authoritative_slots
-        != program.required_authoritative_slots
-    {
-        return None;
-    }
-
+    let entry = admit(bytecode, slots.as_ref()?.upvalues)?;
     // Admitted. From here on the caller's `env` and `slots` are ours.
     let call_env = env.take()?;
     let call_slots = slots.take()?;
-    crate::diagnostics::count!(compact_standalone_activations);
-    let mut activation = CompactActivation {
+    Some(run(
         bytecode,
-        env: call_env,
-        upvalue_owner,
-        upvalue_slots,
-    };
-
-    let mut registers = program.take_registers();
-    registers.clear();
-    // Locals live in the low registers. Everything starts `undefined`, which
-    // is already the correct seed for a hoisted `var`; parameters overwrite
-    // theirs below, and a received upvalue is read from its cell rather than
-    // from a register. `this` is not in the opcode set, so its slot is left
-    // alone. That is the whole frame-setup cost for an admitted body.
-    registers.resize(program.register_count, Value::Undefined);
-    for (index, &slot) in call_slots.parameter_slots.iter().enumerate() {
-        let Some(target) = registers.get_mut(slot) else {
-            continue;
-        };
-        if let Some(argument) = call_slots.arguments.get(index) {
-            *target = argument.clone();
-        }
-    }
-    let result = execute::execute(&mut activation, program, &mut registers);
-    program.recycle_registers(registers);
-    Some(result)
+        &call_env,
+        entry,
+        call_slots.parameter_slots,
+        call_slots.arguments,
+    ))
 }
 
 /// Runs one call out of an activation.
@@ -157,12 +230,41 @@ pub(super) fn call_from_activation(
     callee: Value,
     arguments: &[Value],
 ) -> Result<Value, RuntimeError> {
+    // A compact callee whose environment would be identical to this one runs
+    // directly: no `CallEnv` construction, no `eval_direct_call_bytecode`, no
+    // frame. `is_direct_leaf_function` stays the outer gate because it is what
+    // proves seeding parameters into slots is safe for this callee at all --
+    // default-parameter prologues and `arguments` objects are among the shapes
+    // it rejects, and the compact program's own admission does not subsume it.
+    if crate::function::is_direct_leaf_function(&callee)
+        && let Value::Function(function) = &callee
+        && let Some(callee_bytecode) = function.bytecode.as_ref()
+        && shares_caller_environment(function, callee_bytecode, activation.env)
+        && let Some(entry) = admit(
+            callee_bytecode,
+            crate::bytecode::DirectCallUpvalues::Function(function),
+        )
+    {
+        // The attempt counter's whole job is to prove a workload really
+        // performs the calls it claims, so it is raised for every dispatched
+        // call whatever tier answers it. The tier attribution is
+        // `compact_direct_calls`, not `direct_leaf_frames`: no frame is built.
+        crate::diagnostics::count!(ordinary_call_attempts);
+        crate::diagnostics::count!(compact_direct_calls);
+        return run(
+            callee_bytecode,
+            activation.env,
+            entry,
+            callee_bytecode.parameter_slots(),
+            arguments,
+        );
+    }
     if crate::function::is_direct_leaf_function(&callee) {
         return crate::function::call_direct_leaf_function(
             callee,
             Value::Undefined,
             arguments,
-            &activation.env,
+            activation.env,
             activation.env.module_host(),
             #[cfg(feature = "agents")]
             activation.env.agent_context(),
