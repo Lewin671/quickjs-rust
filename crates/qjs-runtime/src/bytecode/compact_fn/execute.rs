@@ -33,7 +33,10 @@ pub(super) fn execute(
                 let Some(value) = activation.bytecode.constants.get(index as usize) else {
                     return Err(constant_out_of_bounds());
                 };
-                registers[dst as usize] = value.clone();
+                // `Value::clone` stays an out-of-line call; the local-value
+                // clone inlines its primitive cases, which is what a constant
+                // pool of numbers actually needs.
+                registers[dst as usize] = crate::bytecode::vm_bindings::clone_local_value(value);
             }
             CompactOp::Move { dst, src } => {
                 registers[dst as usize] =

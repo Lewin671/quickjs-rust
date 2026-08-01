@@ -184,7 +184,7 @@ fn run(
             continue;
         };
         if let Some(argument) = arguments.get(index) {
-            *target = argument.clone();
+            *target = crate::bytecode::vm_bindings::clone_local_value(argument);
         }
     }
     let result = execute::execute(&mut activation, program, &mut registers);
