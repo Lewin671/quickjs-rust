@@ -5675,3 +5675,30 @@ Three tests cover what the shortcut must not break: non-primitive values
 flowing through an admitted body, a register alternating heap and primitive
 values across 200 activations, and string accumulation across a recycled
 buffer.
+
+### 2026-08-01 rejected: making the register reset conditional
+
+With the inline drop test landed, `recycle_registers` became the second entry
+in the recursive profile at **10.9%** -- a full sweep of the register file per
+activation, for a body whose registers only ever hold numbers.
+
+The obvious repair: track whether the activation ever stored a non-primitive,
+and skip the reset when it did not. A fresh activation blanks its hoisted
+locals (parameters are seeded, and stack registers are provably written before
+they are read), so skipping is safe.
+
+Measured **1.1348** [1.0016, 1.1447] against `377f614a` -- **13.5% slower**.
+Reverted.
+
+The reason is the shape of the trade, and it is worth stating because it keeps
+recurring in this file: the flag costs one test per `store` -- about eighteen
+per activation -- to avoid one sweep of about seven registers per activation.
+Per-operation cost on the hot path beats per-activation cost on the cold path
+almost every time, even when the operation counts look favourable. The same
+mechanism explains why `mem::replace` lost to `Value::clone` earlier, and why
+an extra match arm in `run_current_activation` costs 6.8%.
+
+That also rules out the analogous change in the generic interpreter's
+`StoreLocal`, which was the next candidate for the inline drop test:
+`run_current_activation` is 24,600 instructions with a saturated register
+allocator, so adding a test there is the same trade at worse odds.
