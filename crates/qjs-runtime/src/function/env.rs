@@ -558,6 +558,21 @@ impl DynamicBindings {
         self.0.borrow().keys().cloned().collect()
     }
 
+    /// Calls `visit` with every binding name that carries `prefix`, stripped.
+    ///
+    /// The caller used to ask the opposite question -- build `prefix + name`
+    /// for each candidate and look it up -- which allocated a `String` per
+    /// candidate. Walking this map instead allocates nothing, and it is the
+    /// smaller side: a frame has one binding per split parameter and many
+    /// locals.
+    pub(crate) fn for_each_prefixed_name(&self, prefix: &str, mut visit: impl FnMut(&str)) {
+        for (name, _) in self.0.borrow().iter() {
+            if let Some(rest) = name.strip_prefix(prefix) {
+                visit(rest);
+            }
+        }
+    }
+
     pub(crate) fn cells(&self) -> Vec<(String, Upvalue)> {
         self.0
             .borrow()

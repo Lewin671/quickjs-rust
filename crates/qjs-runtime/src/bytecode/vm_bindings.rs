@@ -41,24 +41,47 @@ impl Vm<'_> {
         let Some(parameter_bindings) = self.env.deopt_bindings().cloned() else {
             return;
         };
-        let split_slots = self
-            .bytecode
-            .locals
-            .iter()
-            .enumerate()
-            .filter_map(|(slot, local)| {
-                let marker = format!(
-                    "{}{}",
-                    crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
-                    local.name
-                );
-                (local.hoisted && !local.parameter && parameter_bindings.contains_key(&marker))
-                    .then_some(slot)
-            })
-            .collect::<Vec<_>>();
+        self.split_body_deopt_scope(parameter_bindings);
+    }
+
+    /// Splits a direct eval's parameter environment from the body's.
+    ///
+    /// Out of line and cold: every frame in the program runs the check above,
+    /// and only a frame whose function has both parameters and a direct eval
+    /// reaches this.
+    #[cold]
+    #[inline(never)]
+    fn split_body_deopt_scope(&mut self, parameter_bindings: crate::function::DynamicBindings) {
+        // Every frame in a script that contains a direct eval anywhere reaches
+        // this, so the discovery below must not allocate when it finds nothing.
+        // Building the `PREFIX + name` marker for each local did: on
+        // `string-tagcloud`, whose source evals a JSON payload, those `format!`
+        // calls were 11% of the profile's allocator traffic, all of it to
+        // discover an empty set. The bindings are the smaller side and already
+        // carry the marker, so strip the prefix from them instead.
+        let mut split_slots: Vec<usize> = Vec::new();
+        {
+            let bytecode = &self.current.bytecode;
+            parameter_bindings.for_each_prefixed_name(
+                crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
+                |name| {
+                    if let Some(slot) = bytecode.local_slot(name)
+                        && let Some(local) = bytecode.locals.get(slot)
+                        && local.hoisted
+                        && !local.parameter
+                    {
+                        split_slots.push(slot);
+                    }
+                },
+            );
+        }
         if split_slots.is_empty() {
             return;
         }
+        // The old walk visited locals in slot order; keep that, since the
+        // cells published below are inserted in this order.
+        split_slots.sort_unstable();
+        split_slots.dedup();
         let body_bindings = crate::function::DynamicBindings::new();
         for (name, upvalue) in parameter_bindings.cells() {
             if split_slots
