@@ -1633,6 +1633,40 @@ mod tests {
     }
 
     #[test]
+    fn a_break_leaves_the_region_instead_of_declining_it() {
+        // A `break` is an unconditional jump past the backedge. It used to
+        // decline the whole loop; `Leave` gives it the same one-instruction
+        // hand-back that the loop's own exit test already used.
+        let source = "function run(a, n, needle) { var found = -1;\
+             for (var i = 0; i < n; i++) { if (a[i] === needle) { found = i; break; } }\
+             return found; }";
+        let bytecode = named_function(source, "run");
+        let programs = super::compile_all(&bytecode);
+        assert_eq!(programs.len(), 1, "{:#?}", bytecode.code);
+        assert!(
+            programs[0]
+                .ops
+                .iter()
+                .any(|op| matches!(op, super::TypedOp::Leave { .. })),
+            "{:#?}",
+            programs[0].ops
+        );
+        // Taken early, taken late, and never taken.
+        assert_eq!(
+            eval(&format!("{source} run([3, 7, 9, 7], 4, 7);")),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(
+            eval(&format!("{source} run([3, 7, 9, 5], 4, 5);")),
+            Ok(Value::Number(3.0))
+        );
+        assert_eq!(
+            eval(&format!("{source} run([3, 7, 9, 7], 4, 4);")),
+            Ok(Value::Number(-1.0))
+        );
+    }
+
+    #[test]
     fn a_fused_constant_index_read_lowers_like_its_unfused_form() {
         // The compiler fuses `a[0]` into one `GetPropIndex` whose encoding
         // carries the receiver slot. Two regions of `access-fannkuch` declined

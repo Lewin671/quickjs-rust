@@ -1748,6 +1748,17 @@ impl<'a> Builder<'a> {
                 // The backedge itself: the executor loops on its own.
                 self.close_backedge()?;
             }
+            // A forward jump past the backedge is a `break`. `Exit` already
+            // hands one bytecode instruction back to the interpreter with the
+            // operand stack rebuilt from the registers, and `Leave` is its
+            // unconditional form, so the region leaves cleanly instead of
+            // declining. Without this a single `break` cost the whole loop.
+            Op::Jump(target) if *target > self.backedge => {
+                self.emit(TypedOp::Leave {
+                    exit_ip: u32::try_from(*target).ok()?,
+                });
+                self.unreachable = true;
+            }
             Op::Jump(target) => {
                 if *target < self.header || *target > self.backedge {
                     return None;
