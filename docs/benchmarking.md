@@ -855,6 +855,42 @@ self-hosted sentinel for performance-sensitive PRs and fixed nightly or
 release hardware for the full portfolio. A macOS claim needs dedicated Mac
 hardware; other hosts are supporting evidence only.
 
+## Diagnostic A/B Over the Cached Corpus
+
+`scripts/external-corpus-ab.py BASE CAND` compares two engine binaries over the
+SunSpider and Kraken files already in `target/benchmarks/external-cache/`. It is
+a **diagnostic** runner for choosing what to optimize next, not a claim-grade
+lane: it has no receipts, no frozen inventory, and no governance. Nothing it
+prints may be quoted as a series result.
+
+It exists because the obvious form of that comparison does not work. Process
+start is 5.2 ms for QuickJS-NG and 5.4 ms here, while most SunSpider cases do
+12-35 ms of work, so a one-run-per-binary ratio is mostly startup:
+
+- Dilution biases every short case toward 1.0. On 2026-08-02 `access-nbody`
+  read 1.92 that way and 3.06 amplified.
+- What remains is dominated by scheduling. The same case measured 1.92 and
+  3.69 against the same two binaries an hour apart.
+
+So the runner repeats each case's source *text* until a process runs for at
+least `--target` seconds. Repeating the text keeps every copy at top level,
+which is deliberate: scope participates in tier selection, so wrapping the body
+in a function would measure a different program. Per-copy time was verified
+constant across 1, 4 and 16 copies on `access-nbody`, `crypto-aes`,
+`string-base64`, `access-binary-trees`, `string-tagcloud` and `crypto-md5`.
+
+```sh
+./scripts/external-corpus-ab.py third_party/quickjs-ng/build/qjs target/release/qjs \
+  --reps 3 --label ours/NG
+./scripts/external-corpus-ab.py /tmp/base-qjs target/release/qjs --reps 11 --only fannkuch
+```
+
+Read a ratio whose `[min, max]` spans 1.0 as no evidence. Three repetitions
+ranks cases; take a suspected regression to `--reps 11` before believing it.
+
+Fourteen of the forty cached cases are skipped against QuickJS-NG because
+**NG** exits non-zero on them, not this engine.
+
 ## External Corpus Admission
 
 `benchmarks/external-corpora.json` is the strict, deny-only v1 governance
