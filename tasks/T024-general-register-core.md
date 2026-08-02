@@ -78,6 +78,39 @@ Two further measured facts shape the design rather than the schedule:
    tier. A tier that claims a body it cannot run well is worse than none, per
    constraint 1.
 
+## Slice 1 was built and reverted — read this before staging the next one
+
+A scalar-only whole-body core (`bytecode/general_core/`: `Scalar` registers,
+stack-depth-to-register lowering, `#[inline(never)]` executor, admission behind
+a default-off `general-core` feature) was written, tested and measured
+2026-08-02, then reverted. Three results, all of which change the staging above:
+
+1. **The hook point is below several tiers that already claim small bodies.**
+   `eval_direct_call_bytecode` is reached only for a direct-leaf call, and a
+   body small enough for the closed-form evaluators -- `return a - b;` -- is
+   answered before it. Worse, reachability depends on the **caller's** shape:
+   the same callee reached the core 4,000 times when the caller looped and zero
+   times when the caller was itself claimed by the compact tier. Any test that
+   asserts on a small body is therefore fail-open, and one written that way
+   passed with the entire tier deleted.
+2. **A scalar-only core is ~9% slower than what it replaces**, on the one shape
+   that does reach it: 0.0685s against 0.0626s with the feature off, NG 0.0595s.
+   Two iterations (a 16-entry register file instead of 64, then a
+   both-operands-are-numbers fast path) moved it from 0.0720 to 0.0685 and no
+   further.
+3. **The reason is the thing to design around.** The body it claims was already
+   running its loop on `typed_loop`'s scalar registers inside a direct-leaf
+   frame. Removing the frame is the core's whole advantage there, and it buys
+   *less* than a less-specialized loop dispatch costs -- `typed_loop` has fused
+   `Update`/`ToNumeric` forms this had no equivalent for.
+
+**So the first slice must not be scalar-only.** Bodies made of scalars are
+already well served; the core's first possible win is on bodies `typed_loop`
+cannot claim at all, which means starting at boxed registers and the
+representation fixpoint rather than deferring them. Stage accordingly, and
+judge the core on `access-binary-trees` or `crypto-md5`, never on an arithmetic
+microbenchmark.
+
 ## Scope
 
 - Allowed paths: `crates/qjs-runtime/src/bytecode/` (a new module),
