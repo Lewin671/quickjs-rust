@@ -106,14 +106,6 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
     } = builder;
     // A region that never leaves through its header test cannot be entered
     // safely, and one with no operations is not worth a program.
-    let post_probe = std::env::var_os("QJS_WALK_TRACE").is_some() && code.len() == 107;
-    if post_probe {
-        eprintln!(
-            "POST reached: region {header}..{backedge} ops={} has_exit={}",
-            ops.len(),
-            ops.iter().any(|op| matches!(op, TypedOp::Exit { .. }))
-        );
-    }
     if ops.is_empty() || !ops.iter().any(|op| matches!(op, TypedOp::Exit { .. })) {
         return None;
     }
@@ -716,11 +708,7 @@ impl<'a> Builder<'a> {
                     continue;
                 }
             }
-            let probe = std::env::var_os("QJS_WALK_TRACE").is_some() && code.len() == 107;
             if self.is_target[offset] && self.normalize().is_none() {
-                if probe {
-                    eprintln!("WALK ip={ip} EXIT normalize");
-                }
                 return None;
             }
             // A join must agree with every path that reaches it on depth and on
@@ -755,29 +743,16 @@ impl<'a> Builder<'a> {
             }
             match self.states[offset].clone() {
                 Some(state) => {
-                    let Some(merged) = merge_states(&state, &self.stack) else {
-                        if probe {
-                            eprintln!("WALK ip={ip} EXIT merge_states");
-                        }
-                        return None;
-                    };
+                    let merged = merge_states(&state, &self.stack)?;
                     self.stack = merged.clone();
                     self.states[offset] = Some(merged);
                 }
                 None => self.states[offset] = Some(self.stack.clone()),
             }
             self.program_index[offset] = u32::try_from(self.ops.len()).ok();
-            if self.open_site(ip).is_none() {
-                if probe {
-                    eprintln!("WALK ip={ip} EXIT open_site");
-                }
-                return None;
-            }
+            self.open_site(ip)?;
             match self.compile_element_assignment(ip) {
                 None => {
-                    if probe {
-                        eprintln!("WALK ip={ip} EXIT element_assignment");
-                    }
                     return None;
                 }
                 Some(Some(next)) => {
@@ -787,22 +762,13 @@ impl<'a> Builder<'a> {
                 Some(None) => {}
             }
             let op = code.get(ip)?;
-            if self.compile_op(op, ip).is_none() {
-                if probe {
-                    eprintln!("WALK ip={ip} EXIT compile_op {op:?}");
-                }
-                return None;
-            }
+            self.compile_op(op, ip)?;
             ip += 1 + std::mem::take(&mut self.pending_skip);
         }
         // Patch the forward jumps now that every program index is known.
-        let probe = std::env::var_os("QJS_WALK_TRACE").is_some() && code.len() == 107;
         for (program_slot, target_ip) in std::mem::take(&mut self.pending_jumps) {
             let offset = target_ip.checked_sub(self.header)?;
             let Some(Some(target)) = self.program_index.get(offset).copied() else {
-                if probe {
-                    eprintln!("WALK EXIT jump_patch target_ip={target_ip}");
-                }
                 return None;
             };
             match &mut self.ops[program_slot] {
@@ -1285,13 +1251,6 @@ impl<'a> Builder<'a> {
                 }
             }
             Op::StoreLocal(slot) | Op::AssignLocal(slot) => {
-                if std::env::var_os("QJS_WALK_TRACE").is_some() && self.bytecode.code.len() == 107 {
-                    eprintln!(
-                        "STORE slot={slot} is_boxed={} top_class={:?}",
-                        self.slot_is_boxed(*slot),
-                        self.stack.last().map(|(_, c, _)| *c)
-                    );
-                }
                 if self.slot_is_boxed(*slot) {
                     let (src, _) = self.pop_boxed()?;
                     let dst = self.boxed_local_register(*slot)?;

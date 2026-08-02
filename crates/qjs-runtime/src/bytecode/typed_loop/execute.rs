@@ -418,12 +418,7 @@ fn seed_registers(
         // The receiver must be a dense array for the whole loop, so a region
         // that also writes that slot declines.
         let Some(Value::Array(array)) = vm.local_slot_value(slot as usize) else {
-            {
-                if std::env::var_os("QJS_WALK_TRACE").is_some() {
-                    eprintln!("SEED reject #1");
-                }
-                return None;
-            }
+            return None;
         };
         receivers.push(array);
         if program
@@ -431,12 +426,7 @@ fn seed_registers(
             .iter()
             .any(|(_, written)| *written == slot)
         {
-            {
-                if std::env::var_os("QJS_WALK_TRACE").is_some() {
-                    eprintln!("SEED reject #2");
-                }
-                return None;
-            }
+            return None;
         }
     }
     registers.resize(program.register_count, Typed::Undefined);
@@ -452,12 +442,7 @@ fn seed_registers(
     }
     for &(_, slot) in &program.written_locals {
         if !vm.slot_accepts_typed_loop_write(slot as usize) {
-            {
-                if std::env::var_os("QJS_WALK_TRACE").is_some() {
-                    eprintln!("SEED reject #3");
-                }
-                return None;
-            }
+            return None;
         }
     }
     for (register, name) in &program.global_reads {
@@ -467,12 +452,7 @@ fn seed_registers(
             .global_this_own_property(name)
             .is_some_and(|property| property.is_accessor())
         {
-            {
-                if std::env::var_os("QJS_WALK_TRACE").is_some() {
-                    eprintln!("SEED reject #4");
-                }
-                return None;
-            }
+            return None;
         }
         // Resolving through the interpreter's own path keeps `this`, global
         // lexicals, and shadowing exactly as the loop would have seen them.
@@ -499,12 +479,7 @@ fn seed_registers(
     for &register in &program.written_boxed_locals {
         let slot = program.slot_for_boxed_register(register)? as usize;
         if !vm.slot_accepts_typed_loop_write(slot) {
-            {
-                if std::env::var_os("QJS_WALK_TRACE").is_some() {
-                    eprintln!("SEED reject #6");
-                }
-                return None;
-            }
+            return None;
         }
     }
     for (register, name) in &program.boxed_global_reads {
@@ -512,21 +487,11 @@ fn seed_registers(
             .global_this_own_property(name)
             .is_some_and(|property| property.is_accessor())
         {
-            {
-                if std::env::var_os("QJS_WALK_TRACE").is_some() {
-                    eprintln!("SEED reject #7");
-                }
-                return None;
-            }
+            return None;
         }
         let value = vm.load_global(name).ok()?;
         if !value_is_ordinary_object(&value) {
-            {
-                if std::env::var_os("QJS_WALK_TRACE").is_some() {
-                    eprintln!("SEED reject #8");
-                }
-                return None;
-            }
+            return None;
         }
         boxed[*register as usize] = value;
     }
