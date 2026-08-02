@@ -260,6 +260,32 @@ enum TypedOp {
         cond: u16,
         exit_ip: u32,
     },
+    /// Compares two boxed operands without running anything the property
+    /// protocol could observe, producing a scalar boolean.
+    ///
+    /// Unboxing an operand to compare it only works for numbers, so `a == b`
+    /// over two objects deoptimized on its first iteration -- the shape of
+    /// every identity search in JavaScript. The runtime side reuses the
+    /// interpreter's own predicates, so the two agree by construction, and any
+    /// pair that would need `ToPrimitive` deoptimizes instead of guessing.
+    BoxedEquality {
+        dst: u16,
+        op: BinaryOp,
+        left: u16,
+        right: u16,
+    },
+    /// Leaves the region unconditionally, handing the instruction at `exit_ip`
+    /// back to the interpreter with the operand stack this operation's site
+    /// describes.
+    ///
+    /// This is what lets a `return` inside a loop body be compiled at all: a
+    /// search loop leaves through its result, not through its header test, and
+    /// without this the whole region declined. Resuming *at* the instruction
+    /// rather than after it is the same contract [`Exit`] uses, so the
+    /// interpreter runs the return itself and nothing is replayed.
+    Leave {
+        exit_ip: u32,
+    },
 }
 
 /// Where the interpreter resumes when a program stops mid-region, and what the
@@ -1371,5 +1397,76 @@ mod tests {
             ),
             Ok(Value::Number(234.0))
         );
+    }
+
+    /// The search loop is the shape both `Leave` and `BoxedEquality` exist for:
+    /// it leaves through its result rather than its header test, and it compares
+    /// by identity. Before either operation the whole region declined.
+    const SEARCH: &str = "function run(list, target) {\
+           for (var i = 0; i < list.length; i++) {\
+             if (list[i].pos == target) { return i; }\
+           }\
+           return -1; }";
+
+    #[test]
+    fn a_search_loop_compiles_to_an_identity_test_and_an_early_leave() {
+        let bytecode = nested_function(SEARCH);
+        let programs = super::compile_all(&bytecode);
+        let program = programs.first().expect("search loop should be admitted");
+        assert!(
+            program
+                .ops
+                .iter()
+                .any(|op| matches!(op, super::TypedOp::BoxedEquality { .. })),
+            "{:#?}",
+            program.ops
+        );
+        assert!(
+            program
+                .ops
+                .iter()
+                .any(|op| matches!(op, super::TypedOp::Leave { .. })),
+            "{:#?}",
+            program.ops
+        );
+    }
+
+    #[test]
+    fn a_search_loop_returns_the_interpreted_answer() {
+        let script = format!(
+            "{SEARCH} var a = {{}}; var b = {{}}; \
+             run([{{ pos: a }}, {{ pos: b }}, {{ pos: a }}], b);"
+        );
+        assert_eq!(eval(&script), Ok(Value::Number(1.0)));
+        let missing = format!("{SEARCH} run([{{ pos: {{}} }}], {{}});");
+        assert_eq!(eval(&missing), Ok(Value::Number(-1.0)));
+    }
+
+    #[test]
+    fn a_comparison_that_would_coerce_still_runs_its_hook() {
+        // `number == object` is `ToPrimitive` on the object, which is user code.
+        // The tier must hand the instruction back rather than answer it, so the
+        // `valueOf` hook has to run once per iteration.
+        // Every name the loop body touches is a local or a parameter, so the
+        // region really is admitted and the assertion really does exercise the
+        // guard; the only global write lives inside the hook.
+        let script = "function run(list, probe) { var hits = 0;\
+               for (var i = 0; i < list.length; i++) {\
+                 if (list[i].pos == probe) { hits = hits + 1; } }\
+               return hits; }\
+             var calls = 0;\
+             var probe = { valueOf: function () { calls = calls + 1; return 2; } };\
+             run([{ pos: 1 }, { pos: 2 }, { pos: 3 }, { pos: 2 }], probe) * 100 + calls;";
+        assert_eq!(eval(script), Ok(Value::Number(204.0)));
+    }
+
+    #[test]
+    fn strict_equality_over_boxed_operands_matches_the_interpreter() {
+        let script = "function run(list, needle) { var hits = 0;\
+               for (var i = 0; i < list.length; i++) {\
+                 if (list[i] === needle) { hits = hits + 1; } }\
+               return hits; }\
+             run(['a', 'b', 'a', 'c'], 'a') * 10 + run([1, 2, 1], '1');";
+        assert_eq!(eval(script), Ok(Value::Number(20.0)));
     }
 }

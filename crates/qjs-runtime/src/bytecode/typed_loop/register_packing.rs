@@ -142,7 +142,9 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
                 visit(second);
             }
             // Every operand of a computed access is boxed.
+            TypedOp::BoxedEquality { dst, .. } => visit(dst),
             TypedOp::Jump { .. }
+            | TypedOp::Leave { .. }
             | TypedOp::MoveBoxed { .. }
             | TypedOp::GetNamed { .. }
             | TypedOp::SetNamed { .. }
@@ -182,6 +184,10 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
                 visit(dst);
                 visit(receiver);
             }
+            TypedOp::BoxedEquality { left, right, .. } => {
+                visit(left);
+                visit(right);
+            }
             TypedOp::CallNumericNative { callee, .. } => visit(callee),
             TypedOp::CallClosedFormLeaf {
                 dst,
@@ -203,6 +209,7 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
             | TypedOp::StoreSloppyGlobal { .. }
             | TypedOp::JumpIfFalsy { .. }
             | TypedOp::Jump { .. }
+            | TypedOp::Leave { .. }
             | TypedOp::Exit { .. } => {}
         },
     }

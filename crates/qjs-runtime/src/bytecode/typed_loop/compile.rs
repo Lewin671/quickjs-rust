@@ -536,6 +536,18 @@ impl<'a> Builder<'a> {
         }
     }
 
+    /// Whether either of the top two operands already lives in the boxed file.
+    ///
+    /// Two scalars stay on the scalar comparison: widening them would trade a
+    /// register compare for two `Box` operations and a value comparison.
+    fn top_operands_include_boxed(&self) -> bool {
+        self.stack
+            .iter()
+            .rev()
+            .take(2)
+            .any(|(_, class, _)| *class == Class::Boxed)
+    }
+
     /// Pops one operand as a boxed value, widening a scalar register.
     ///
     /// A scalar register that came straight from a frame slot cannot be widened
@@ -1237,10 +1249,44 @@ impl<'a> Builder<'a> {
             Op::Pop => {
                 self.pop()?;
             }
+            // A search loop leaves through its result rather than through its
+            // header test. Handing the `Return` itself back to the interpreter
+            // -- with the operand stack this instruction's site already
+            // describes -- is the same contract `Exit` uses, so the return value
+            // is computed natively and the return runs once, interpreted.
+            Op::Return => {
+                self.emit(TypedOp::Leave {
+                    exit_ip: u32::try_from(ip).ok()?,
+                });
+                self.unreachable = true;
+            }
             Op::ToNumeric => {
                 let (src, _) = self.pop()?;
                 let dst = self.slot_scalar()?;
                 self.emit(TypedOp::ToNumeric { dst, src });
+                self.push(dst, Origin::Computed);
+            }
+            // An equality whose operands are not both numbers is compared as
+            // values. Unboxing first only works for numbers, so `a.pos == b.pos`
+            // -- the shape of every identity search written in JavaScript --
+            // deoptimized on its first iteration instead. This arm must come
+            // first, and must require a genuinely boxed operand, so ordinary
+            // numeric comparisons keep the scalar file.
+            Op::Binary(binary)
+                if matches!(
+                    *binary,
+                    BinaryOp::Eq | BinaryOp::Ne | BinaryOp::StrictEq | BinaryOp::StrictNe
+                ) && self.top_operands_include_boxed() =>
+            {
+                let (right, _) = self.pop_boxed()?;
+                let (left, _) = self.pop_boxed()?;
+                let dst = self.slot_scalar()?;
+                self.emit(TypedOp::BoxedEquality {
+                    dst,
+                    op: *binary,
+                    left,
+                    right,
+                });
                 self.push(dst, Origin::Computed);
             }
             Op::Binary(binary) if admitted_binary(*binary) => {

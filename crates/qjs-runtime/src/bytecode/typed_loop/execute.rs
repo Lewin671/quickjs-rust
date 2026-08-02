@@ -357,6 +357,27 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                 vm.ip = exit_ip as usize;
                 return Outcome::Ran;
             }
+            TypedOp::BoxedEquality {
+                dst,
+                op,
+                left,
+                right,
+            } => {
+                let Some(value) = boxed_equality(op, &boxed[left as usize], &boxed[right as usize])
+                else {
+                    deopt_here!(op);
+                };
+                registers[dst as usize] = value;
+            }
+            TypedOp::Leave { exit_ip } => {
+                write_back(vm, program, registers, boxed);
+                // `exit_ip` is this operation's own instruction, so the site
+                // holds exactly the stack that instruction expects and the
+                // interpreter executes it as if the region had never run.
+                materialize_stack(vm, program, registers, boxed, program.sites[pc - 1]);
+                vm.ip = exit_ip as usize;
+                return Outcome::Ran;
+            }
         }
     }
 }
@@ -847,6 +868,29 @@ fn typed_binary(left: Typed, op: BinaryOp, right: Typed) -> Option<Typed> {
         _ => return None,
     };
     Some(value)
+}
+
+/// Answers `==`, `!=`, `===` and `!==` between two boxed values whenever the
+/// comparison cannot run user code.
+///
+/// Loose equality between two object-like values is reference identity and
+/// strict equality is decided for every pair except two numbers, which the
+/// scalar file already handles. Both facts come from the interpreter's own
+/// predicates rather than being restated here, so the tier cannot drift from
+/// it. Everything else -- a coercion `ToPrimitive` could observe -- is `None`,
+/// which deoptimizes to the exact bytecode instruction.
+fn boxed_equality(op: BinaryOp, left: &Value, right: &Value) -> Option<Typed> {
+    use super::super::vm_ops::{fast_reference_eq, fast_strict_eq, is_object_like};
+
+    let equal = match op {
+        BinaryOp::Eq | BinaryOp::Ne => {
+            (is_object_like(left) && is_object_like(right)).then(|| fast_reference_eq(left, right))
+        }
+        BinaryOp::StrictEq | BinaryOp::StrictNe => fast_strict_eq(left, right),
+        _ => None,
+    }?;
+    let negated = matches!(op, BinaryOp::Ne | BinaryOp::StrictNe);
+    Some(Typed::Boolean(equal != negated))
 }
 
 fn typed_unary(op: UnaryOp, argument: Typed) -> Option<Typed> {

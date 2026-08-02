@@ -281,7 +281,7 @@ fn primitive_js_string(value: &Value) -> Option<String> {
     })
 }
 
-fn fast_strict_eq(left: &Value, right: &Value) -> Option<bool> {
+pub(super) fn fast_strict_eq(left: &Value, right: &Value) -> Option<bool> {
     match (left, right) {
         (Value::String(left), Value::String(right)) => {
             Some(crate::string::js_string_eq(left, right))
@@ -314,7 +314,7 @@ fn fast_strict_eq(left: &Value, right: &Value) -> Option<bool> {
 /// equality against another such value is reference identity. A symbol
 /// primitive is stored as an object but has its own language type, so
 /// `symbol == object` still coerces the object side and is excluded here.
-fn is_object_like(value: &Value) -> bool {
+pub(super) fn is_object_like(value: &Value) -> bool {
     match value {
         Value::Object(object) => !crate::symbol::is_symbol_primitive(object),
         Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) => true,
@@ -326,7 +326,7 @@ fn is_object_like(value: &Value) -> bool {
 /// Reference identity for two object-like values. Values of different variants
 /// are distinct objects, and an object-like value is never identical to a
 /// primitive.
-fn fast_reference_eq(left: &Value, right: &Value) -> bool {
+pub(super) fn fast_reference_eq(left: &Value, right: &Value) -> bool {
     match (left, right) {
         (Value::Object(left), Value::Object(right)) => left.ptr_eq(right),
         (Value::Array(left), Value::Array(right)) => left.ptr_eq(right),
