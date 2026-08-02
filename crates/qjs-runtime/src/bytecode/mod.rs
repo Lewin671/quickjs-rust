@@ -57,6 +57,7 @@ mod vm_string_append;
 mod vm_this_property_leaf;
 mod vm_try;
 mod vm_virtual_object;
+mod vm_with;
 
 use qjs_ast::{FunctionParams, Script};
 use qjs_parser::parse_script;
