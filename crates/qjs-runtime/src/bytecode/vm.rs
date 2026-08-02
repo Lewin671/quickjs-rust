@@ -1,5 +1,4 @@
-use super::util::{stack_underflow, typeof_value};
-use super::vm_iter::DelegateStep;
+use super::util::stack_underflow;
 use super::vm_props::{
     array_index_from_number, array_index_from_string, get_property, get_property_key,
 };
@@ -11,12 +10,11 @@ use super::{
     ir::{Bytecode, NamedPropertyCache, Op, decode_index_receiver},
 };
 use crate::{
-    Function, HOME_OBJECT_BINDING, ObjectRef, PropertyKey, RuntimeError, SUPER_CONSTRUCTOR_BINDING,
-    Value, construct_function,
-    function::{CallEnv, CompiledUserFunction, Realm, Upvalue},
+    Function, ObjectRef, PropertyKey, RuntimeError, Value, construct_function,
+    function::{CallEnv, Realm, Upvalue},
     is_truthy,
     property::try_to_property_key_without_coercion,
-    to_js_string_with_env, to_property_key_value,
+    to_property_key_value,
     value::OwnDataPropertyWrite,
 };
 use std::{
@@ -24,6 +22,9 @@ use std::{
     rc::Rc,
 };
 pub(super) type Slot = Option<Value>;
+
+mod general_ops;
+mod rare_ops;
 
 use super::frame_program::{FrameBytecode, FrameProgramView};
 use super::frame_stack::FrameExit;
@@ -290,6 +291,11 @@ impl<'a> Vm<'a> {
     ///
     /// This is one *activation*: a generator body re-enters it on each resume,
     /// and the frame-stack driver re-enters it once per frame.
+    ///
+    /// Kept out of line so its register allocation is decided on its own terms
+    /// -- and stays measurable: the whole point of the split below is what this
+    /// function's disassembly does per dispatch.
+    #[inline(never)]
     pub(super) fn run_current_activation(&mut self) -> Result<FrameExit, RuntimeError> {
         // One owner clone per activation, held on this stack frame. The view
         // borrows the owner rather than the VM, which is what lets the current
@@ -306,28 +312,34 @@ impl<'a> Vm<'a> {
             self.current.authoritative_slots,
             self.current.virtual_function_context_safe,
         );
-        let bytecode = program.bytecode;
+        // The three hottest values in the engine -- the program counter, the
+        // code pointer and the code length -- lived in `FrameState` and in this
+        // function's spill slots, so every dispatch reloaded them before
+        // decoding anything. They are locals here, and `self.ip` is
+        // resynchronized around exactly the opcodes that can observe it: the
+        // ones answered below cannot, because they touch nothing but the
+        // operand stack, an authoritative local slot, or `pc` itself.
+        let code = program.execution_code;
+        let constants: &[Value] = &program.bytecode.constants;
+        let mut pc = self.current.ip;
         loop {
-            let op = program
-                .execution_code
-                .get(self.ip)
-                .ok_or_else(|| RuntimeError {
+            let Some(op) = code.get(pc) else {
+                self.current.ip = pc;
+                return Err(RuntimeError {
                     thrown: None,
                     message: "bytecode instruction pointer out of bounds".to_owned(),
-                })?;
-            self.ip += 1;
+                });
+            };
+            pc += 1;
             #[cfg(feature = "perf-counters")]
             crate::diagnostics::update(|c| c.executed_ops += 1);
             match op {
                 Op::LoadConst(index) => {
-                    let Some(value) = bytecode.constants.get(*index) else {
-                        return Err(RuntimeError {
-                            thrown: None,
-                            message: "bytecode constant index out of bounds".to_owned(),
-                        });
-                    };
-                    let value = value.clone();
-                    self.stack.push(value);
+                    if let Some(value) = constants.get(*index) {
+                        let value = value.clone();
+                        self.current.stack.push(value);
+                        continue;
+                    }
                 }
                 Op::LoadLocal(slot) => {
                     // The general path answers with `Result<Value,
@@ -336,47 +348,23 @@ impl<'a> Vm<'a> {
                     // Neither fits the two-register return, so the most
                     // frequently dispatched opcode in the engine paid two
                     // round trips through memory to report a success that
-                    // cannot fail. Answer the authoritative-slot case inline
-                    // instead, and keep the general path for everything else.
-                    let fast = if self.current.direct_eval_with_stack {
-                        None
-                    } else if *slot < u128::BITS as usize
+                    // cannot fail. Answer the authoritative-slot case here
+                    // instead, and leave everything else out of line.
+                    if !self.current.direct_eval_with_stack
+                        && *slot < u128::BITS as usize
                         && self.current.authoritative_slots & (1_u128 << *slot) != 0
+                        && let Some(Some(value)) = self.current.locals.get(*slot)
+                        && !value.is_uninitialized_lexical_marker()
                     {
-                        match self.current.locals.get(*slot) {
-                            Some(Some(value)) if !value.is_uninitialized_lexical_marker() => {
-                                Some(super::vm_bindings::clone_local_value(value))
-                            }
-                            _ => None,
-                        }
-                    } else {
-                        None
-                    };
-                    if let Some(value) = fast {
-                        self.stack.push(value);
+                        let value = super::vm_bindings::clone_local_value(value);
+                        self.current.stack.push(value);
                         continue;
                     }
-                    let result =
-                        if self.direct_eval_with_stack && self.bytecode.local_is_from_env(*slot) {
-                            let name = self.bytecode.locals[*slot].name.clone();
-                            self.load_ident_with(&name, Some(*slot), self.bytecode.is_strict())
-                        } else {
-                            self.load_local(*slot)
-                        };
-                    if let Some(value) = self.handle_runtime_result(result)? {
-                        self.stack.push(value);
-                    }
+                    self.current.ip = pc;
+                    self.op_load_local(*slot)?;
+                    pc = self.current.ip;
+                    continue;
                 }
-                Op::LoadLocalOrUndefined(slot) => {
-                    let value = self.load_local_or_undefined(*slot)?;
-                    self.stack.push(value);
-                }
-                Op::LoadNewTarget => {
-                    let value = self.load_new_target();
-                    self.stack.push(value);
-                }
-                op @ (Op::AppendStringLiteralLocal { .. }
-                | Op::AppendStringLiteralGlobal { .. }) => self.run_string_append_op(op.clone())?,
                 Op::StoreLocal(slot) => {
                     // Same rationale as `LoadLocal`: keep the
                     // authoritative-slot write off the memory-returned
@@ -396,14 +384,15 @@ impl<'a> Vm<'a> {
                         self.current.locals[slot] = Some(value);
                         continue;
                     }
-                    let value = self.pop()?;
-                    let result = self.store_local(slot, value);
-                    self.handle_runtime_result(result)?;
+                    self.current.ip = pc;
+                    self.op_store_local(slot)?;
+                    pc = self.current.ip;
+                    continue;
                 }
                 Op::AssignLocal(slot) => {
-                    // Mirrors `assign_local`'s own fast path, inline, so an
-                    // assignment to an initialized mutable slot never builds a
-                    // `Result` to report that it succeeded.
+                    // Mirrors `assign_local`'s own fast path, so an assignment
+                    // to an initialized mutable slot never builds a `Result` to
+                    // report that it succeeded.
                     let slot = *slot;
                     if !self.current.direct_eval_with_stack
                         && slot < u128::BITS as usize
@@ -424,189 +413,63 @@ impl<'a> Vm<'a> {
                         self.current.locals[slot] = Some(value);
                         continue;
                     }
-                    let value = self.pop()?;
-                    let result = if self.direct_eval_with_stack
-                        && self.bytecode.local_is_from_env(slot)
-                    {
-                        let name = self.bytecode.locals[slot].name.clone();
-                        self.store_ident_with(&name, Some(slot), self.bytecode.is_strict(), value)
-                    } else {
-                        self.assign_local(slot, value)
-                    };
-                    self.handle_runtime_result(result)?;
-                }
-                Op::ClearLocal(slot) => self.clear_local(*slot)?,
-                Op::DefineGlobalVar(name) => {
-                    let value = self.pop()?;
-                    let result = self.define_global_var(name.clone(), value);
-                    self.handle_runtime_result(result)?;
+                    self.current.ip = pc;
+                    self.op_assign_local(slot)?;
+                    pc = self.current.ip;
+                    continue;
                 }
                 Op::LoadGlobal(name) => {
-                    let result = if self.direct_eval_with_stack {
-                        self.load_ident_with(name, None, self.bytecode.is_strict())
-                    } else {
-                        self.load_global(name)
-                    };
-                    if let Some(value) = self.handle_runtime_result(result)? {
-                        self.stack.push(value);
-                    }
+                    self.current.ip = pc;
+                    self.op_load_global(name)?;
+                    pc = self.current.ip;
+                    continue;
                 }
                 Op::StoreGlobalStrict(name) => {
-                    let value = self.pop()?;
-                    let result = if self.direct_eval_with_stack {
-                        self.store_ident_with(name, None, true, value)
-                    } else {
-                        self.store_global_strict(name, value)
-                    };
-                    self.handle_runtime_result(result)?;
+                    self.current.ip = pc;
+                    self.op_store_global_strict(name)?;
+                    pc = self.current.ip;
+                    continue;
                 }
                 Op::StoreGlobalSloppy { slot, name } => {
-                    let value = self.pop()?;
-                    let result = if self.direct_eval_with_stack {
-                        self.store_ident_with(name, None, false, value)
-                    } else {
-                        self.store_global_sloppy_at_slot(*slot, name, value)
-                    };
-                    self.handle_runtime_result(result)?;
+                    self.current.ip = pc;
+                    self.op_store_global_sloppy(*slot, name)?;
+                    pc = self.current.ip;
+                    continue;
                 }
-                Op::StoreLocalOrGlobalSloppy { slot, name } => {
-                    let value = self.pop()?;
-                    let result = self.store_local_or_global_sloppy(*slot, name, value);
-                    self.handle_runtime_result(result)?;
-                }
-                Op::TypeofGlobal(name) => {
-                    let result: Result<Value, RuntimeError> = (|| {
-                        if self.direct_eval_with_stack {
-                            return self.typeof_ident_with(name, None);
-                        }
-                        let value = if let Some(value) = self.env.module_import_value(name) {
-                            if value.is_uninitialized_lexical_marker() {
-                                return Err(RuntimeError {
-                                    thrown: None,
-                                    message: format!(
-                                        "ReferenceError: undefined identifier `{name}`"
-                                    ),
-                                });
-                            }
-                            value
-                        } else if let Some(value) = self.env.get(name) {
-                            value
-                        } else {
-                            // A bare global name may resolve to a property on
-                            // globalThis added via assignment or
-                            // defineProperty; reading it invokes any getter.
-                            // typeof yields "undefined" only when the reference
-                            // is genuinely unresolvable.
-                            self.global_this_own_value(name)?
-                                .unwrap_or(Value::Undefined)
-                        };
-                        let value = if matches!(
-                            &value,
-                            Value::Function(function) if function.is_uninitialized_lexical_marker()
-                        ) {
-                            Value::Undefined
-                        } else {
-                            value
-                        };
-                        Ok(Value::String(typeof_value(value).into()))
-                    })();
-                    if let Some(value) = self.handle_runtime_result(result)? {
-                        self.stack.push(value);
-                    }
-                }
-                op @ (Op::EnterWith
-                | Op::ExitWith
-                | Op::LoadIdentWith { .. }
-                | Op::ResolveIdentWith { .. }
-                | Op::LoadResolvedIdentWith { .. }
-                | Op::StoreIdentWith { .. }
-                | Op::StoreResolvedIdentWith { .. }
-                | Op::TypeofIdentWith { .. }
-                | Op::DeleteIdentWith { .. }) => {
-                    self.run_with_op(op.clone())?;
-                }
-                Op::Pop => {
-                    if self.current.stack.pop().is_none() {
-                        return Err(stack_underflow());
-                    }
-                }
-                Op::Dup => {
-                    let stack = &mut *self.current.stack;
-                    let Some(value) = stack.last() else {
-                        return Err(stack_underflow());
-                    };
-                    let value = super::vm_bindings::clone_local_value(value);
-                    stack.push(value);
-                }
-                Op::NewArray { elements } => self.new_array(elements)?,
-                Op::NewTemplateObject { site, cooked, raw } => {
-                    self.new_template_object(*site, cooked, raw)
-                }
-                Op::NewObjectLiteral => self.new_object_literal(),
-                Op::NewObjectDataLiteral { shape } => {
-                    self.new_object_data_literal(shape.clone())?
-                }
-                Op::LoadVirtualNumber { value, skip } => {
-                    self.stack.push(Value::Number(*value));
-                    self.ip += *skip;
-                }
-                op @ (Op::InitVirtualObject { .. }
-                | Op::InitVirtualConstants { .. }
-                | Op::LoadVirtualValue { .. }
-                | Op::StoreVirtualValue { .. }
-                | Op::LoadVirtualLength { .. }
-                | Op::GuardVirtualObject
-                | Op::LoadVirtualBinary { .. }
-                | Op::BinaryAssignLocals { .. }
-                | Op::IncrementLocal { .. }
-                | Op::CopyLocal { .. }
-                | Op::CompareLocalsJumpFalse { .. }
-                | Op::InitVirtualFunction { .. }
-                | Op::CallVirtualFunction { .. }) => self.run_virtual_object_op(&program, op)?,
-                op @ (Op::EnterDisposableScope
-                | Op::RegisterDisposable
-                | Op::RegisterAsyncDisposable
-                | Op::DisposeScope { .. }) => {
-                    self.run_disposal_op(op)?;
-                }
-                Op::SetComputedFunctionName(kind) => self.set_computed_function_name(*kind)?,
-                Op::DefineObjectProperty(meta) => self.define_object_property(*meta)?,
-                Op::CopyObjectSpread => self.copy_object_spread()?,
-                Op::EnumerateKeys { cache } => self.enumerate_keys(cache)?,
-                Op::ForInKeyIsEnumerable => self.for_in_key_is_enumerable()?,
                 Op::GetPropNamed { key, cache } => {
                     crate::diagnostics::count!(named_property_reads);
-                    let result = self.get_named_prop(key, cache);
-                    self.handle_runtime_result(result)?;
+                    self.current.ip = pc;
+                    self.op_get_prop_named(key, cache)?;
+                    pc = self.current.ip;
+                    continue;
                 }
                 Op::GetPropIndex(index) => {
                     crate::diagnostics::count!(computed_property_reads);
-                    let result = self.get_index_prop(*index);
-                    self.handle_runtime_result(result)?;
+                    self.current.ip = pc;
+                    self.op_get_prop_index(*index)?;
+                    pc = self.current.ip;
+                    continue;
                 }
-                Op::GetIterator => self.get_iterator()?,
-                Op::GetAsyncIterator => self.get_async_iterator()?,
-                Op::AsyncIteratorComplete { done_slot } => {
-                    self.async_iterator_complete(*done_slot)?
-                }
-                Op::IteratorStep { done_slot } => self.iterator_step(*done_slot)?,
-                Op::IteratorRest { done_slot } => self.iterator_rest(*done_slot)?,
-                Op::ObjectRestExcluding { excluded } => self.object_rest_excluding(excluded)?,
-                Op::RequireObjectCoercible => self.require_object_coercible()?,
                 Op::GetProp => {
                     crate::diagnostics::count!(computed_property_reads);
-                    let result = self.get_prop();
-                    self.handle_runtime_result(result)?;
+                    self.current.ip = pc;
+                    self.op_get_prop()?;
+                    pc = self.current.ip;
+                    continue;
                 }
                 Op::SetProp { is_strict } => {
                     crate::diagnostics::count!(computed_property_writes);
-                    let result = self.set_prop(*is_strict);
-                    self.handle_runtime_result(result)?;
+                    self.current.ip = pc;
+                    self.op_set_prop(*is_strict)?;
+                    pc = self.current.ip;
+                    continue;
                 }
                 Op::SetPropIndex { index, is_strict } => {
                     crate::diagnostics::count!(computed_property_writes);
-                    let result = self.set_index_prop(*index, *is_strict);
-                    self.handle_runtime_result(result)?;
+                    self.current.ip = pc;
+                    self.op_set_prop_index(*index, *is_strict)?;
+                    pc = self.current.ip;
+                    continue;
                 }
                 Op::SetPropNamed {
                     key,
@@ -614,253 +477,65 @@ impl<'a> Vm<'a> {
                     is_strict,
                 } => {
                     crate::diagnostics::count!(named_property_writes);
-                    let result = self.set_named_prop(key, cache.as_ref(), *is_strict);
-                    self.handle_runtime_result(result)?;
+                    self.current.ip = pc;
+                    self.op_set_prop_named(key, cache.as_ref(), *is_strict)?;
+                    pc = self.current.ip;
+                    continue;
                 }
-                Op::GetPrivate(name) => {
-                    let result = self.get_private(name);
-                    if let Some(value) = self.handle_runtime_result(result)? {
-                        self.stack.push(value);
+                Op::Call(argc) => {
+                    self.current.ip = pc;
+                    self.call(*argc)?;
+                    pc = self.current.ip;
+                    continue;
+                }
+                Op::CallResolved(argc) => {
+                    self.current.ip = pc;
+                    self.call_resolved(*argc)?;
+                    pc = self.current.ip;
+                    continue;
+                }
+                Op::CallResolvedGuardedMathUnary => {
+                    self.current.ip = pc;
+                    self.call_resolved_guarded_math_unary()?;
+                    pc = self.current.ip;
+                    continue;
+                }
+                Op::New(argc) => {
+                    self.current.ip = pc;
+                    self.construct(*argc)?;
+                    pc = self.current.ip;
+                    continue;
+                }
+                Op::Unary(op) => {
+                    self.current.ip = pc;
+                    self.op_unary(*op)?;
+                    pc = self.current.ip;
+                    continue;
+                }
+                Op::Return => {
+                    self.current.ip = pc;
+                    if let Some(value) = self.op_return()? {
+                        return Ok(FrameExit::Completed(Completion::Return(value)));
                     }
+                    pc = self.current.ip;
+                    continue;
                 }
-                Op::SetPrivate(name) => {
-                    let result = self.set_private(name);
-                    if let Some(value) = self.handle_runtime_result(result)? {
-                        self.stack.push(value);
+                Op::Pop => {
+                    if self.current.stack.pop().is_some() {
+                        continue;
                     }
+                    self.current.ip = pc;
+                    return Err(stack_underflow());
                 }
-                Op::PrivateIn(name) => {
-                    let result = self.private_in(name);
-                    if let Some(value) = self.handle_runtime_result(result)? {
-                        self.stack.push(value);
-                    }
-                }
-                Op::DeleteProp { is_strict } => {
-                    let result = self.delete_prop(*is_strict);
-                    self.handle_runtime_result(result)?;
-                }
-                Op::DeleteIdent(name) => {
-                    let result = self.delete_ident(name);
-                    self.stack.push(Value::Boolean(result));
-                }
-                Op::RequireCallable => {
-                    let result = self.require_callable();
-                    self.handle_runtime_result(result)?;
-                }
-                Op::Call(argc) => self.call(*argc)?,
-                Op::CallDirectEval { argc, is_strict } => {
-                    self.call_direct_eval(*argc, *is_strict)?
-                }
-                Op::CallSpread => self.call_spread()?,
-                Op::CallDirectEvalSpread { is_strict } => {
-                    self.call_direct_eval_spread(*is_strict)?
-                }
-                Op::IteratorClose { swallow } => self.iterator_close(*swallow)?,
-                Op::New(argc) => self.construct(*argc)?,
-                Op::NewSpread => self.construct_spread()?,
-                Op::NewFunction {
-                    name,
-                    has_name_binding,
-                    immutable_name_binding,
-                    params,
-                    local_names,
-                    lexical_captures,
-                    bytecode,
-                    constructable,
-                    is_strict,
-                    lexical_this,
-                    lexical_arguments,
-                    is_generator,
-                    is_async,
-                    source_text,
-                } => {
-                    let (home_object, super_constructor) = if *lexical_this {
-                        let home_object = self.env.get_local(HOME_OBJECT_BINDING);
-                        let mut super_constructor = self.env.get(SUPER_CONSTRUCTOR_BINDING);
-                        if self.load_global("this").is_err() && super_constructor.is_none() {
-                            super_constructor = Some(Value::Undefined);
-                        }
-                        (home_object, super_constructor)
-                    } else {
-                        (None, None)
+                Op::Dup => {
+                    let stack = &mut *self.current.stack;
+                    let Some(value) = stack.last() else {
+                        self.current.ip = pc;
+                        return Err(stack_underflow());
                     };
-                    let upvalues = self.captured_upvalues_for_function(bytecode, lexical_captures);
-                    let immutable_env_binding =
-                        self.captured_immutable_function_name(bytecode, local_names);
-                    let immutable_env_value = immutable_env_binding
-                        .as_deref()
-                        .and_then(|name| self.env.get(name))
-                        .map(Upvalue::new);
-                    let lexical_new_target = if *lexical_this {
-                        self.env.get(crate::NEW_TARGET_BINDING).map(Upvalue::new)
-                    } else {
-                        None
-                    };
-                    let deopt_bindings = self.frame_deopt_bindings();
-                    let function = Function::new_user_compiled(CompiledUserFunction {
-                        name: name.clone(),
-                        has_name_binding: *has_name_binding,
-                        immutable_name_binding: *immutable_name_binding,
-                        immutable_env_binding,
-                        immutable_env_value,
-                        params: Rc::clone(params),
-                        realm: Rc::clone(&self.realm),
-                        module_host: self.module_host.clone(),
-                        module_imports: self.env.module_imports(),
-                        bytecode: Rc::clone(bytecode),
-                        source_text: source_text.clone(),
-                        local_names: Rc::clone(local_names),
-                        constructable: *constructable,
-                        is_strict: *is_strict,
-                        lexical_this: *lexical_this,
-                        lexical_arguments: *lexical_arguments,
-                        lexical_new_target,
-                        is_generator: *is_generator,
-                        is_async: *is_async,
-                        is_class_constructor: false,
-                        is_derived_constructor: false,
-                        is_field_initializer: *lexical_this
-                            && matches!(
-                                self.env.get(crate::FIELD_INITIALIZER_EVAL_BINDING),
-                                Some(Value::Boolean(true))
-                            ),
-                        home_object,
-                        super_constructor,
-                        deopt_bindings,
-                        with_stack: self.with_stack.clone(),
-                        upvalues,
-                    });
-                    self.capture_private_environment(&function);
-                    if *is_generator && *is_async {
-                        crate::async_generator::wire_async_generator_function_intrinsics(
-                            &function,
-                            &self.realm_env(),
-                        );
-                    } else if *is_generator {
-                        self.wire_generator_function_intrinsics(&function);
-                    } else if *is_async {
-                        self.wire_async_function_intrinsics(&function);
-                    }
-                    self.stack.push(Value::Function(function));
-                }
-                Op::NewClass { definition } => {
-                    let result = self.new_class(
-                        definition.name.as_deref(),
-                        &definition.constructor,
-                        &definition.elements,
-                        &definition.private_elements,
-                        &definition.computed_keys,
-                        definition.has_heritage,
-                    );
-                    if let Some(value) = self.handle_runtime_result(result)? {
-                        self.stack.push(value);
-                    }
-                }
-                Op::SuperGet { key } => {
-                    let result = self.super_get(&PropertyKey::String(key.clone()));
-                    if let Some(value) = self.handle_runtime_result(result)? {
-                        self.stack.push(value);
-                    }
-                }
-                Op::SuperReference => {
-                    let result = self.super_reference();
-                    if let Some((receiver, lookup_base)) = self.handle_runtime_result(result)? {
-                        self.stack.push(receiver);
-                        self.stack.push(lookup_base);
-                    }
-                }
-                Op::SuperGetComputed => {
-                    let key_value = self.pop()?;
-                    let key = self.coerce_property_key(key_value);
-                    if let Some(key) = self.handle_runtime_result(key)? {
-                        let lookup_base = self.pop()?;
-                        let receiver = self.pop()?;
-                        let result = self.super_get_from(lookup_base, receiver, &key);
-                        if let Some(value) = self.handle_runtime_result(result)? {
-                            self.stack.push(value);
-                        }
-                    }
-                }
-                Op::SuperSet { key, is_strict } => {
-                    let result = self.super_set(&PropertyKey::String(key.clone()), *is_strict);
-                    if let Some(value) = self.handle_runtime_result(result)? {
-                        self.stack.push(value);
-                    }
-                }
-                Op::SuperSetComputed { is_strict } => {
-                    let value = self.pop()?;
-                    let key_value = self.pop()?;
-                    let key = self.coerce_property_key(key_value);
-                    if let Some(key) = self.handle_runtime_result(key)? {
-                        let lookup_base = self.pop()?;
-                        let receiver = self.pop()?;
-                        let result = self.super_set_value_from(
-                            lookup_base,
-                            receiver,
-                            key,
-                            value,
-                            *is_strict,
-                        );
-                        if let Some(value) = self.handle_runtime_result(result)? {
-                            self.stack.push(value);
-                        }
-                    }
-                }
-                Op::SuperMethod { key } => {
-                    let result = self.super_method(PropertyKey::String(key.clone()));
-                    self.handle_runtime_result(result)?;
-                }
-                Op::SuperMethodComputed => {
-                    let key_value = self.pop()?;
-                    let key = self.coerce_property_key(key_value);
-                    if let Some(key) = self.handle_runtime_result(key)? {
-                        let lookup_base = self.pop()?;
-                        let receiver = self.pop()?;
-                        let result = self.super_method_from(lookup_base, receiver, key);
-                        self.handle_runtime_result(result)?;
-                    }
-                }
-                Op::CallResolved(argc) => self.call_resolved(*argc)?,
-                Op::CallResolvedGuardedMathUnary => self.call_resolved_guarded_math_unary()?,
-                Op::CallResolvedSpread => self.call_resolved_spread()?,
-                Op::SuperCall(argc) => {
-                    let arguments = self.pop_arguments(*argc)?;
-                    self.super_call(arguments)?;
-                }
-                Op::SuperCallSpread => {
-                    let arguments = self.pop_argument_array("super call spread")?;
-                    self.super_call(arguments)?;
-                }
-                Op::Typeof => {
-                    let value = self.pop()?;
-                    self.stack.push(Value::String(typeof_value(value).into()));
-                }
-                Op::ToString => {
-                    let value = self.pop()?;
-                    let mut env = self.callee_env();
-                    let result = to_js_string_with_env(value, &mut env);
-                    self.apply_env(env);
-                    // Route a throwing toString/Symbol.toPrimitive through the
-                    // try-handler stack so `` `${bad}` `` is catchable, instead
-                    // of escaping the VM loop.
-                    if let Some(string) = self.handle_runtime_result(result)? {
-                        self.stack.push(Value::String(string.into()));
-                    }
-                }
-                Op::ToPropertyKey => {
-                    let value = self.pop()?;
-                    let key = self.coerce_property_key(value)?;
-                    self.stack.push(key.into_value());
-                }
-                Op::ToPropertyKeyForAccess => {
-                    let value = self.pop()?;
-                    if matches!(&value, Value::Number(number) if array_index_from_number(*number).is_some())
-                    {
-                        self.stack.push(value);
-                    } else {
-                        let key = self.coerce_property_key(value)?;
-                        self.stack.push(key.into_value());
-                    }
+                    let value = super::vm_bindings::clone_local_value(value);
+                    stack.push(value);
+                    continue;
                 }
                 Op::ToNumeric => {
                     // `eval_to_numeric` is the identity on a number, so the
@@ -869,38 +544,31 @@ impl<'a> Vm<'a> {
                     if matches!(self.current.stack.last(), Some(Value::Number(_))) {
                         continue;
                     }
-                    let result = self.eval_to_numeric();
-                    if let Some(value) = self.handle_runtime_result(result)? {
-                        self.stack.push(value);
-                    }
-                }
-                Op::Unary(op) => {
-                    let result = self.eval_unary(*op);
-                    if let Some(value) = self.handle_runtime_result(result)? {
-                        self.stack.push(value);
-                    }
+                    self.current.ip = pc;
+                    self.op_to_numeric()?;
+                    pc = self.current.ip;
+                    continue;
                 }
                 Op::Update(op) => {
-                    let stack = &mut *self.current.stack;
-                    if let Some(Value::Number(number)) = stack.last_mut() {
+                    if let Some(Value::Number(number)) = self.current.stack.last_mut() {
                         *number = match op {
                             qjs_ast::UpdateOp::Increment => *number + 1.0,
                             qjs_ast::UpdateOp::Decrement => *number - 1.0,
                         };
                         continue;
                     }
-                    let result = self.eval_update(*op);
-                    if let Some(value) = self.handle_runtime_result(result)? {
-                        self.stack.push(value);
-                    }
+                    self.current.ip = pc;
+                    self.op_update(*op)?;
+                    pc = self.current.ip;
+                    continue;
                 }
                 Op::Binary(op) => {
                     // Number-number arithmetic rewrites the operand stack in
-                    // place. The general path is an out-of-line `eval_binary`
-                    // that pops twice, calls `fast_number_binary`, and returns
-                    // a memory-sized `Result`, which `handle_runtime_result`
-                    // then rewraps -- four values crossing a call boundary to
-                    // add two floats that are already adjacent on the stack.
+                    // place. The general path pops twice, calls
+                    // `fast_number_binary`, and returns a memory-sized
+                    // `Result`, which `handle_runtime_result` then rewraps --
+                    // four values crossing a call boundary to add two floats
+                    // that are already adjacent on the stack.
                     let stack = &mut *self.current.stack;
                     let len = stack.len();
                     if len >= 2
@@ -913,122 +581,59 @@ impl<'a> Vm<'a> {
                         stack[len - 2] = value;
                         continue;
                     }
-                    let result = self.eval_binary(*op);
-                    if let Some(value) = self.handle_runtime_result(result)? {
-                        self.stack.push(value);
-                    }
+                    self.current.ip = pc;
+                    self.op_binary(*op)?;
+                    pc = self.current.ip;
+                    continue;
                 }
                 Op::Jump(target) => {
-                    let backedge = self.ip - 1;
-                    self.jump_with_loop_plans(program.loop_plans(), *target, backedge);
-                }
-                Op::AbruptJump(target) => {
-                    self.abrupt_jump(*target)?;
-                }
-                Op::FreshIterationScope(slots) => self.fresh_iteration_scope(slots),
-                Op::JumpIfFalse(target) => {
-                    if !is_truthy(self.stack.last().ok_or_else(stack_underflow)?) {
-                        self.ip = *target;
+                    // A forward jump is the `if`/`else` and loop-exit shape and
+                    // carries no accelerator; only a backward edge consults the
+                    // loop plans, and that decision is out of line.
+                    if *target >= pc - 1 {
+                        pc = *target;
+                        continue;
                     }
+                    self.current.ip = pc;
+                    self.op_jump(&program, *target);
+                    pc = self.current.ip;
+                    continue;
+                }
+                Op::JumpIfFalse(target) => {
+                    let Some(value) = self.current.stack.last() else {
+                        self.current.ip = pc;
+                        return Err(stack_underflow());
+                    };
+                    if !is_truthy(value) {
+                        pc = *target;
+                    }
+                    continue;
                 }
                 Op::JumpIfTrue(target) => {
-                    if is_truthy(self.stack.last().ok_or_else(stack_underflow)?) {
-                        self.ip = *target;
+                    let Some(value) = self.current.stack.last() else {
+                        self.current.ip = pc;
+                        return Err(stack_underflow());
+                    };
+                    if is_truthy(value) {
+                        pc = *target;
                     }
+                    continue;
                 }
                 Op::JumpIfNotNullish(target) => {
-                    if !matches!(self.stack.last(), Some(Value::Null | Value::Undefined)) {
-                        self.ip = *target;
+                    if !matches!(
+                        self.current.stack.last(),
+                        Some(Value::Null | Value::Undefined)
+                    ) {
+                        pc = *target;
                     }
+                    continue;
                 }
-                Op::EnterTry {
-                    catch,
-                    finally,
-                    catch_scope,
-                    cleanup_slots,
-                } => self.enter_try(*catch, *finally, catch_scope.clone(), cleanup_slots.clone()),
-                Op::ExitTry => self.exit_try()?,
-                Op::EndFinally => {
-                    if let Some(value) = self.end_finally()? {
-                        return Ok(FrameExit::Completed(Completion::Return(value)));
-                    }
-                }
-                Op::DiscardPendingAbrupt => {
-                    self.pending_throw = None;
-                    self.pending_return = None;
-                }
-                Op::Return => {
-                    let value = self.stack.pop().unwrap_or(Value::Undefined);
-                    if let Some(value) = self.return_value(value)? {
-                        return Ok(FrameExit::Completed(Completion::Return(value)));
-                    }
-                }
-                Op::Throw => {
-                    let value = self.pop()?;
-                    self.throw_value(value)?;
-                }
-                Op::ThrowReferenceError(message) => {
-                    return Err(RuntimeError {
-                        thrown: None,
-                        message: format!("ReferenceError: {message}"),
-                    });
-                }
-                Op::FunctionPrologueEnd => {
-                    self.enter_body_deopt_scope();
-                    if self.stop_at_prologue {
-                        self.stop_at_prologue = false;
-                        return Ok(FrameExit::Completed(Completion::PrologueEnd));
-                    }
-                }
-                Op::Yield => {
-                    let value = self.pop()?;
-                    return Ok(FrameExit::Completed(Completion::Yield(value)));
-                }
-                Op::Await => {
-                    let value = self.pop()?;
-                    return Ok(FrameExit::Completed(Completion::Await(value)));
-                }
-                Op::YieldDelegate {
-                    iterator_slot,
-                    next_slot,
-                    async_delegate,
-                } => match self.yield_delegate(*iterator_slot, *next_slot, *async_delegate)? {
-                    DelegateStep::Suspend(value) if *async_delegate => {
-                        return Ok(FrameExit::Completed(Completion::YieldDelegateAsync(value)));
-                    }
-                    DelegateStep::Suspend(value) => {
-                        return Ok(FrameExit::Completed(Completion::YieldDelegate(value)));
-                    }
-                    DelegateStep::Await(value) => {
-                        return Ok(FrameExit::Completed(Completion::YieldDelegateAwait(value)));
-                    }
-                    DelegateStep::AwaitReturn(value) => {
-                        return Ok(FrameExit::Completed(Completion::YieldDelegateAwaitReturn(
-                            value,
-                        )));
-                    }
-                    DelegateStep::AwaitReturnValue(value) => {
-                        return Ok(FrameExit::Completed(
-                            Completion::YieldDelegateAwaitReturnValue(value),
-                        ));
-                    }
-                    DelegateStep::Return(value) => {
-                        return Ok(FrameExit::Completed(Completion::Return(value)));
-                    }
-                    DelegateStep::Continue => {}
-                },
-                Op::ImportCall { has_options } => self.import_call(*has_options)?,
-                Op::ImportMeta => {
-                    let Some(host) = self.current.module_host.as_ref() else {
-                        return Err(RuntimeError {
-                            thrown: None,
-                            message: "SyntaxError: 'import.meta' is only valid in a module"
-                                .to_owned(),
-                        });
-                    };
-                    let import_meta = host.borrow_mut().import_meta();
-                    self.current.stack.push(Value::Object(import_meta));
-                }
+                _ => {}
+            }
+            self.current.ip = pc;
+            match self.run_general_op(op, &program)? {
+                Some(exit) => return Ok(exit),
+                None => pc = self.current.ip,
             }
         }
     }
