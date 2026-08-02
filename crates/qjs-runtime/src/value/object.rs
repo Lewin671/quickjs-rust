@@ -798,6 +798,20 @@ impl PropertyStorage {
         dynamic.properties.insert(key, property)
     }
 
+    /// Appends a key the caller has already proved absent.
+    ///
+    /// `insert` re-probes the storage first, which is a second linear scan of a
+    /// receiver the creation path has just scanned twice.
+    fn insert_absent(&mut self, key: Rc<str>, property: Property) {
+        if let Self::Small { entries } = self
+            && entries.len() < Self::SMALL_LIMIT
+        {
+            entries.push((key, property));
+            return;
+        }
+        self.insert(key, property);
+    }
+
     fn insert_unordered(&mut self, key: Rc<str>, property: Property) -> Option<Property> {
         if let Some(existing) = self.get_mut(&key) {
             return Some(std::mem::replace(existing, property));
@@ -1283,6 +1297,41 @@ impl ObjectRef {
         if establishes_realm_identity {
             self.capture_realm_intrinsic_identity();
         }
+    }
+
+    /// Creates an own data property whose absence on this object the caller has
+    /// already established.
+    ///
+    /// Initializing a field in a constructor -- `this.a = a` -- used to scan
+    /// this object's storage three times: once through
+    /// `write_existing_own_data_property`, once through
+    /// `own_data_property_read`, and once more inside `set_shared_key` before
+    /// the push. On `new O(a, b)`, whose two field initializations are the
+    /// whole constructor body, those scans and the re-checks around them were
+    /// 232 of the profile's samples.
+    ///
+    /// Returns `false` for a receiver whose creation has side effects this
+    /// shortcut does not perform, leaving it to `set_shared_key`.
+    pub(crate) fn create_absent_own_data_property(&self, key: Rc<str>, value: Value) -> bool {
+        if self.0.array_prototype_exotic.get() || !self.0.extensible.get() {
+            return false;
+        }
+        let establishes_realm_identity = key.as_ref() == "globalThis"
+            && matches!(&value, Value::Object(global_this) if self.ptr_eq(global_this));
+        if is_array_index_key(&key) {
+            self.0
+                .index_property_count
+                .set(self.0.index_property_count.get() + 1);
+        }
+        {
+            let mut properties = self.0.properties.borrow_mut();
+            properties.insert_absent(key, Property::enumerable(value));
+            self.bump_property_revision();
+        }
+        if establishes_realm_identity {
+            self.capture_realm_intrinsic_identity();
+        }
+        true
     }
 
     pub(crate) fn define_property(&self, key: String, property: Property) {

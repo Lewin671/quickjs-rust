@@ -692,7 +692,9 @@ impl Vm<'_> {
                         if property.is_accessor() || !property.writable {
                             return false;
                         }
-                        object.set_shared_key(key, value.clone());
+                        if !object.create_absent_own_data_property(key.clone(), value.clone()) {
+                            object.set_shared_key(key, value.clone());
+                        }
                         return true;
                     }
                     current = prototype.prototype_slot();
@@ -705,7 +707,9 @@ impl Vm<'_> {
                     return false;
                 }
                 None => {
-                    object.set_shared_key(key, value.clone());
+                    if !object.create_absent_own_data_property(key.clone(), value.clone()) {
+                        object.set_shared_key(key, value.clone());
+                    }
                     return true;
                 }
             }
