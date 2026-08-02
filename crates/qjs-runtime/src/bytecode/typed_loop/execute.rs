@@ -650,10 +650,11 @@ fn call_closed_form_leaf(
     if let Some(value) = call_numeric_native(callee, first, second, arity) {
         return Some(value.to_value());
     }
-    // A body flattened at loop entry answers without any frame at all. The
-    // lookup is by function identity over at most a handful of prepared
-    // bodies, and an empty graph -- every program with no call site -- costs
-    // one length check.
+    // Before the closed-form evaluators, not after. Preparation already
+    // refused to flatten any body they can answer, so a graph hit here is a
+    // body they would decline -- and reaching it through them first means
+    // building an argument array and walking the body twice, which cost
+    // `imaging-darkroom` 4.1%.
     if let Some(value) = program
         .helper_graphs
         .borrow()

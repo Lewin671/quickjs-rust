@@ -50,6 +50,16 @@ const MAX_DEPTH: usize = 4;
 const MAX_GRAPHS: usize = 12;
 const MAX_OPS: usize = 96;
 
+/// How deep a flattened body may recurse into itself before handing the call
+/// back to the interpreter. `callTree`-shaped recursion is the reason this
+/// exists at all.
+///
+/// It is a stack-resource bound, not a correctness one: a flattened body is
+/// pure, so stopping at any depth and letting the interpreter run the call is
+/// not observable. No test fails when it is removed, because a recursion deep
+/// enough to exhaust the Rust stack here would also exhaust the interpreter's.
+const MAX_NATIVE_RECURSION: usize = 96;
+
 /// Registers a single helper body may use, arguments included. The runtime
 /// register file is a fixed array of this size on the Rust stack, which is what
 /// keeps a helper call free of allocation.
@@ -113,6 +123,10 @@ enum HelperOp {
 struct HelperProgram {
     ops: Vec<HelperOp>,
     arity: u8,
+    /// Frame slots the body assigns, each holding a register above the
+    /// arguments. They start `undefined`, which is the correct seed for a
+    /// hoisted `var`.
+    locals: u8,
     /// The exact function this body was flattened from. Every call compares
     /// against it, so a register that comes to hold a different function
     /// deoptimizes rather than running the wrong body.
@@ -147,16 +161,24 @@ impl HelperGraph {
             .programs
             .iter()
             .position(|program| program.arity == arity && program.callee == *function)?;
-        self.run(u16::try_from(index).ok()?, first, second)
+        self.run(u16::try_from(index).ok()?, first, second, 0)
     }
 
-    fn run(&self, index: u16, first: Typed, second: Typed) -> Option<Typed> {
+    /// Runs one body. `depth` bounds native recursion: a flattened body is pure,
+    /// so abandoning it at any point and letting the interpreter run the call
+    /// again is not observable, which is what makes a hard cap safe here.
+    fn run(&self, index: u16, first: Typed, second: Typed, depth: usize) -> Option<Typed> {
+        if depth >= MAX_NATIVE_RECURSION {
+            return None;
+        }
         let program = self.programs.get(index as usize)?;
         // `Typed` is `Copy`, so the whole file is a stack array: a helper call
         // allocates nothing and its registers stay in the frame the compiler
         // chose for this function.
         let mut registers = [Typed::Undefined; MAX_HELPER_REGISTERS];
-        registers[0] = first;
+        if program.arity > 0 {
+            registers[0] = first;
+        }
         if program.arity > 1 {
             registers[1] = second;
         }
@@ -221,8 +243,12 @@ impl HelperGraph {
                     if callee.arity != arity {
                         return None;
                     }
-                    registers[dst as usize] =
-                        self.run(graph, registers[first as usize], registers[second as usize])?;
+                    registers[dst as usize] = self.run(
+                        graph,
+                        registers[first as usize],
+                        registers[second as usize],
+                        depth + 1,
+                    )?;
                 }
                 HelperOp::Return { src } => return Some(registers[src as usize]),
             }
@@ -292,6 +318,14 @@ impl Preparation {
         };
         for site in &program.helper_sites {
             let callee = vm.local_slot_value(site.callee_slot as usize)?;
+            // A body the closed-form evaluators already answer is left to
+            // them: they resolve it in one pass with no interpretation, and
+            // shadowing one cost `math-cordic` 3.7%. The site then simply has
+            // no graph entry, which is the state every call site was in before
+            // this module existed.
+            if closed_form_already_answers(&callee, site.arity) {
+                continue;
+            }
             preparation.prepare_callee(vm, &callee, site.arity, 0)?;
         }
         Some(preparation.graph)
@@ -333,13 +367,28 @@ impl Preparation {
         if bytecode.parameter_slots().len() != usize::from(arity) {
             return None;
         }
-        let ops = self.flatten(vm, function, bytecode, arity, depth)?;
+        // Reserve this body's index *before* walking it, so a self-call inside
+        // finds itself rather than recursing until the depth bound. Mutual
+        // recursion resolves the same way.
+        //
+        // Everything this attempt appended is dropped if the walk fails. That
+        // is hygiene rather than a guard: `ops` is only filled on success, and
+        // an empty body stops at its first instruction and deoptimizes.
         let index = u16::try_from(self.graph.programs.len()).ok()?;
+        let reserved = self.graph.programs.len();
         self.graph.programs.push(HelperProgram {
-            ops,
+            ops: Vec::new(),
             arity,
             callee: function.clone(),
+            locals: 0,
         });
+        let Some((ops, locals)) = self.flatten(vm, function, bytecode, arity, depth) else {
+            self.graph.programs.truncate(reserved);
+            return None;
+        };
+        let program = self.graph.programs.get_mut(reserved)?;
+        program.ops = ops;
+        program.locals = locals;
         Some(index)
     }
 
@@ -350,11 +399,29 @@ impl Preparation {
         bytecode: &Bytecode,
         arity: u8,
         depth: usize,
-    ) -> Option<Vec<HelperOp>> {
+    ) -> Option<(Vec<HelperOp>, u8)> {
         let code = &bytecode.code;
         if code.len() > MAX_OPS || !matches!(code.first(), Some(Op::FunctionPrologueEnd)) {
             return None;
         }
+        // Slots the body assigns get a register each, above the arguments, so
+        // the abstract stack starts after both. Collected up front because the
+        // layout has to be fixed before the first operation is emitted.
+        let mut locals: Vec<usize> = Vec::new();
+        for op in code {
+            let (Op::StoreLocal(slot) | Op::AssignLocal(slot)) = op else {
+                continue;
+            };
+            if bytecode.parameter_slots().contains(slot) {
+                // Assigning a parameter would make the argument register live
+                // in two roles; nothing this tier needs does it.
+                return None;
+            }
+            if !locals.contains(slot) {
+                locals.push(*slot);
+            }
+        }
+        let local_count = u8::try_from(locals.len()).ok()?;
         let mut walk = Walk {
             ops: Vec::with_capacity(code.len()),
             stack: Vec::new(),
@@ -363,6 +430,7 @@ impl Preparation {
             pending: Vec::new(),
             unreachable: false,
             arity,
+            locals,
         };
         for ip in 0..code.len() {
             if walk.unreachable {
@@ -402,7 +470,7 @@ impl Preparation {
         }
         // A body that can fall off its end has an implicit `return undefined`
         // this representation does not model.
-        walk.unreachable.then_some(walk.ops)
+        walk.unreachable.then_some((walk.ops, local_count))
     }
 
     fn step(
@@ -428,6 +496,9 @@ impl Preparation {
                     .position(|parameter| parameter == slot)
                 {
                     let src = u16::try_from(index).ok()?;
+                    let dst = walk.push_register()?;
+                    walk.ops.push(HelperOp::Move { dst, src });
+                } else if let Some(src) = walk.local_register(*slot) {
                     let dst = walk.push_register()?;
                     walk.ops.push(HelperOp::Move { dst, src });
                 } else {
@@ -456,6 +527,11 @@ impl Preparation {
                 };
                 let value = super::execute::ordinary_data_property(&object, key)?;
                 walk.push_value(&value)?;
+            }
+            Op::StoreLocal(slot) | Op::AssignLocal(slot) => {
+                let src = walk.pop_register()?;
+                let dst = walk.local_register(*slot)?;
+                walk.ops.push(HelperOp::Move { dst, src });
             }
             Op::Dup => {
                 let top = walk.stack.last()?.clone();
@@ -563,6 +639,32 @@ impl Preparation {
     }
 }
 
+/// Whether `vm_numeric_leaf` resolves this callee on its own.
+///
+/// The probe evaluates the body once with numeric arguments. That is not
+/// observable: the evaluator's whole precondition is a closed-form numeric
+/// expression, which is why the tier is already allowed to call it in place of
+/// an ordinary call. It runs once per loop entry.
+fn closed_form_already_answers(callee: &Value, arity: u8) -> bool {
+    let Value::Function(function) = callee else {
+        return false;
+    };
+    let Some(bytecode) = function.bytecode.as_ref() else {
+        return false;
+    };
+    let probe = [Value::Number(1.0), Value::Number(1.0)];
+    let Some(arguments) = probe.get(..usize::from(arity)) else {
+        return false;
+    };
+    super::super::vm_numeric_leaf::try_eval_numeric_leaf(
+        bytecode,
+        &function.params,
+        arguments,
+        &function.upvalues,
+    )
+    .is_some()
+}
+
 /// Reads the read-only captured cell a helper body's non-parameter local names.
 ///
 /// Only a cell the body cannot write qualifies: its value is then fixed for the
@@ -584,13 +686,26 @@ struct Walk {
     pending: Vec<(usize, usize)>,
     unreachable: bool,
     arity: u8,
+    /// Frame slots this body assigns, in register order above the arguments.
+    locals: Vec<usize>,
 }
 
 impl Walk {
-    /// Registers `0..arity` hold the arguments, so an abstract stack entry at
-    /// depth `d` lives in register `arity + d`.
+    /// The register holding an assigned frame slot, or `None` when the body
+    /// never assigns it.
+    fn local_register(&self, slot: usize) -> Option<u16> {
+        let index = self
+            .locals
+            .iter()
+            .position(|candidate| *candidate == slot)?;
+        u16::try_from(usize::from(self.arity) + index).ok()
+    }
+
+    /// Registers `0..arity` hold the arguments and the assigned locals follow,
+    /// so an abstract stack entry at depth `d` lives above both.
     fn push_register(&mut self) -> Option<u16> {
-        let register = u16::try_from(usize::from(self.arity) + self.stack.len()).ok()?;
+        let base = usize::from(self.arity) + self.locals.len();
+        let register = u16::try_from(base + self.stack.len()).ok()?;
         (usize::from(register) < MAX_HELPER_REGISTERS).then_some(())?;
         self.stack.push(Slot::Register(register));
         Some(register)

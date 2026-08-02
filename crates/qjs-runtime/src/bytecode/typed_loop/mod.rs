@@ -1568,6 +1568,51 @@ mod tests {
     }
 
     #[test]
+    fn a_self_recursive_helper_flattens_and_agrees_with_the_interpreter() {
+        // `fib` reaches itself twice per body and keeps a local, which is the
+        // shape `recursive_call_tree` has. Its index is reserved before the
+        // walk, so the self-calls resolve to the body being built.
+        let source = "function fib(n) { var a = 0; if (n < 2) { return n; }\
+             a = fib(n - 1) + fib(n - 2); return a; }";
+        let looped = format!(
+            "{source} function run(n) {{ var total = 0;\
+               for (var i = 0; i < n; i++) {{ total = total + fib(i); }}\
+               return total; }} run(16);"
+        );
+        // 0+1+1+2+3+5+8+13+21+34+55+89+144+233+377+610
+        assert_eq!(eval(&looped), Ok(Value::Number(1596.0)));
+    }
+
+    #[test]
+    fn a_recursion_deeper_than_the_native_bound_still_answers() {
+        // Past the bound the flattened body stops and the interpreter runs the
+        // call instead. Because a flattened body is pure, stopping anywhere is
+        // not observable -- only the answer is. This pins that answer across
+        // the boundary; the bound itself is a stack-resource choice and has no
+        // behavioural witness.
+        let source = "function down(n) { if (n <= 0) { return 0; } return 1 + down(n - 1); }";
+        let looped = format!(
+            "{source} function run(n, depth) {{ var total = 0;\
+               for (var i = 0; i < n; i++) {{ total = total + down(depth); }}\
+               return total; }} run(3, 400);"
+        );
+        assert_eq!(eval(&looped), Ok(Value::Number(1200.0)));
+    }
+
+    #[test]
+    fn a_helper_local_is_a_register_of_its_own() {
+        let source = "function blend(a, b) { var mid = (a + b) * 0.5;\
+             var lift = mid * mid; return lift - mid; }";
+        let looped = format!(
+            "{source} function run(data, n) {{ var total = 0;\
+               for (var i = 0; i < n; i++) {{ total = total + blend(data[i], i); }}\
+               return total; }} run([2, 4, 6, 8], 4) * 10;"
+        );
+        // mid = 1, 2.5, 4, 5.5 -> lift-mid = 0, 3.75, 12, 24.75 -> 40.5
+        assert_eq!(eval(&looped), Ok(Value::Number(405.0)));
+    }
+
+    #[test]
     fn a_helper_that_is_not_pure_arithmetic_declines_without_losing_its_effect() {
         // The body writes a global, which no flattened graph can express, so
         // preparation fails and the loop stays interpreted. The counter proves
