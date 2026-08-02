@@ -1568,6 +1568,71 @@ mod tests {
     }
 
     #[test]
+    fn filling_a_hole_creates_the_own_property_it_should() {
+        // `new Array(n)` is n holes, so this loop stores into a hole every
+        // iteration -- the shape `access-nsieve` opens with.
+        assert_eq!(
+            eval(
+                "function run(n) { var a = new Array(n);\
+                   for (var i = 0; i < n; i++) { a[i] = i * 2; }\
+                   return a.join(','); } run(5);"
+            ),
+            Ok(Value::string_from_utf8("0,2,4,6,8"))
+        );
+        // A hole the loop skips stays absent, and the length is untouched.
+        assert_eq!(
+            eval(
+                "function run(n) { var a = new Array(n);\
+                   for (var i = 0; i < n; i++) { if (i % 2 === 0) { a[i] = i; } }\
+                   return (0 in a) + ':' + (1 in a) + ':' + a.length; } run(4);"
+            ),
+            Ok(Value::string_from_utf8("true:false:4"))
+        );
+        // Storing past the end grows the array, which is an ordinary store.
+        assert_eq!(
+            eval(
+                "function run(n) { var a = [];\
+                   for (var i = 0; i < n; i++) { a[i] = i; }\
+                   return a.length * 10 + a[3]; } run(5);"
+            ),
+            Ok(Value::Number(53.0))
+        );
+    }
+
+    /// These pin the semantics the tier's hole store must not change. They are
+    /// *not* witnesses for its guards: the tier and the interpreter are
+    /// required to agree, so a guard failure is invisible to any behavioural
+    /// test -- it only shows up as a deoptimization. The evidence that the
+    /// store is reached at all is `access-nsieve`, whose dispatched
+    /// instructions fall from 12,235,041 to 452.
+    #[test]
+    fn a_hole_that_is_not_an_ordinary_store_is_left_to_the_interpreter() {
+        // A sealed array is not extensible, so materializing a hole must fail
+        // rather than become a dense write.
+        assert_eq!(
+            eval(
+                "function run(n) { var a = new Array(n); Object.seal(a); var wrote = 0;\
+                   for (var i = 0; i < n; i++) { a[i] = i; if (i in a) { wrote = wrote + 1; } }\
+                   return wrote; } run(3);"
+            ),
+            Ok(Value::Number(0.0))
+        );
+        // An inherited index accessor has to run, and the receiver must not
+        // gain an own property at that index.
+        assert_eq!(
+            eval(
+                "var seen = 0;\
+                 Object.defineProperty(Array.prototype, '1',\
+                   { set: function (v) { seen = v; }, configurable: true });\
+                 function run(n) { var a = new Array(n);\
+                   for (var i = 0; i < n; i++) { a[i] = i + 10; }\
+                   return a.hasOwnProperty(1) + ':' + seen + ':' + a[0]; } run(3);"
+            ),
+            Ok(Value::string_from_utf8("false:11:10"))
+        );
+    }
+
+    #[test]
     fn a_self_recursive_helper_flattens_and_agrees_with_the_interpreter() {
         // `fib` reaches itself twice per body and keeps a local, which is the
         // shape `recursive_call_tree` has. Its index is reserved before the

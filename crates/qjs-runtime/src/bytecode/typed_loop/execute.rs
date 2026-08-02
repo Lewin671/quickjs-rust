@@ -198,11 +198,15 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                 index,
                 value,
             } => {
-                if !dense_write(
-                    &receivers[receiver as usize],
-                    registers[index as usize],
-                    registers[value as usize],
-                ) {
+                let array = &receivers[receiver as usize];
+                let index = registers[index as usize];
+                let value = registers[value as usize];
+                // The overwrite is the hot form and takes no `Vm`. Everything
+                // else -- a hole below the length, a store past it -- is cold
+                // and needs the realm's prototype facts, so it is reached only
+                // when the overwrite declined.
+                if !dense_write(array, index, value) && !fill_hole_or_grow(vm, array, index, value)
+                {
                     deopt_here!(op);
                 }
             }
@@ -854,7 +858,7 @@ fn dense_write(array: &crate::ArrayRef, index: Typed, value: Typed) -> bool {
     let index = number as usize;
     // `with_dense_writable_elements` already rejects a frozen array, holes, and
     // own indexed descriptors, so an in-bounds write there is the whole
-    // observable effect. Growth stays on the observable path.
+    // observable effect.
     array
         .with_dense_writable_elements(|elements| match elements.get_mut(index) {
             Some(element) => {
@@ -864,6 +868,36 @@ fn dense_write(array: &crate::ArrayRef, index: Typed, value: Typed) -> bool {
             None => false,
         })
         .unwrap_or(false)
+}
+
+/// Stores to an index the dense overwrite could not take: a hole below the
+/// length, or one past it.
+///
+/// `new Array(n)` produces `n` holes, so `for (i = 0; i < n; i++) a[i] = v` --
+/// the first loop of `access-nsieve` and of most sieve or table code -- was a
+/// hole fill on *every* iteration and deoptimized the whole region. The three
+/// conditions are exactly the ones the interpreter's own `a[i] = x` fast path
+/// checks before reaching `ArrayRef::set`, so the two agree by construction;
+/// they are evaluated here rather than per write because an overwrite, which is
+/// the common case, returns above.
+#[cold]
+#[inline(never)]
+fn fill_hole_or_grow(vm: &mut Vm<'_>, array: &crate::ArrayRef, index: Typed, value: Typed) -> bool {
+    let Some(number) = index.number() else {
+        return false;
+    };
+    if number < 0.0 || number.fract() != 0.0 || number > u32::MAX as f64 {
+        return false;
+    }
+    let index = number as usize;
+    if !array.dense_index_store_eligible(index)
+        || !vm.array_uses_realm_prototype(array)
+        || vm.array_prototype_chain_has_index_hazard().unwrap_or(true)
+    {
+        return false;
+    }
+    array.set(index, value.to_value());
+    true
 }
 
 #[inline(always)]
