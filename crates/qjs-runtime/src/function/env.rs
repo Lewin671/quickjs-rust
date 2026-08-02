@@ -637,6 +637,20 @@ impl IntoIterator for BindingSnapshot {
     }
 }
 
+/// The half of an execution environment that every frame of a realm shares.
+///
+/// Building a frame environment used to clone four `Rc`s that cannot differ
+/// between two frames of the same realm -- the realm itself and the three
+/// global binding maps -- and drop four again on return. Behind one handle
+/// they cost one increment and one decrement, which matters because an
+/// ordinary call builds one of these and nothing else about it is work.
+struct RealmScope {
+    realm: Realm,
+    global_lexical_bindings: GlobalLexicalBindings,
+    global_lexical_values: GlobalLexicalValues,
+    immutable_lexical_bindings: ImmutableLexicalBindings,
+}
+
 /// Cross-call runtime context: shared realm metadata plus a small frame view.
 ///
 /// Bytecode lexical bindings remain in VM slots/upvalue cells. Cloning this
@@ -644,11 +658,8 @@ impl IntoIterator for BindingSnapshot {
 /// compatibility frame vector.
 #[allow(dead_code)]
 pub(crate) struct CallEnv {
-    realm: Realm,
-    global_lexical_bindings: GlobalLexicalBindings,
-    global_lexical_values: GlobalLexicalValues,
+    scope: Rc<RealmScope>,
     expose_global_lexical_values: bool,
-    immutable_lexical_bindings: ImmutableLexicalBindings,
     frame_bindings: FrameBindings,
     /// `new.target` for this frame. It used to travel as a NUL-prefixed frame
     /// binding, which cost a name allocation and a linear frame-binding scan on
@@ -707,11 +718,8 @@ pub(crate) struct CallEnv {
 impl Clone for CallEnv {
     fn clone(&self) -> Self {
         Self {
-            realm: Rc::clone(&self.realm),
-            global_lexical_bindings: Rc::clone(&self.global_lexical_bindings),
-            global_lexical_values: Rc::clone(&self.global_lexical_values),
+            scope: Rc::clone(&self.scope),
             expose_global_lexical_values: self.expose_global_lexical_values,
-            immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
             // A cloned execution view is an isolated dynamic environment. The
             // cells themselves are shared only when a direct-eval/with deopt
             // path explicitly requests that identity.
@@ -735,14 +743,14 @@ impl Clone for CallEnv {
 impl std::fmt::Debug for CallEnv {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CallEnv")
-            .field("realm", &self.realm)
+            .field("realm", &self.scope.realm)
             .field(
                 "global_lexical_bindings",
-                &self.global_lexical_bindings.borrow().len(),
+                &self.scope.global_lexical_bindings.borrow().len(),
             )
             .field(
                 "global_lexical_values",
-                &self.global_lexical_values.borrow().len(),
+                &self.scope.global_lexical_values.borrow().len(),
             )
             .field(
                 "expose_global_lexical_values",
@@ -750,7 +758,7 @@ impl std::fmt::Debug for CallEnv {
             )
             .field(
                 "immutable_lexical_bindings",
-                &self.immutable_lexical_bindings.borrow().len(),
+                &self.scope.immutable_lexical_bindings.borrow().len(),
             )
             .field("frame_bindings", &self.snapshot_locals())
             .field("deopt_bindings", &self.deopt_bindings.is_some())
@@ -769,11 +777,13 @@ impl CallEnv {
     /// Builds an environment over `realm` with empty locals.
     pub(crate) fn new(realm: Realm) -> Self {
         Self {
-            realm,
-            global_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
-            global_lexical_values: Rc::new(RefCell::new(HashMap::default())),
+            scope: Rc::new(RealmScope {
+                realm,
+                global_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
+                global_lexical_values: Rc::new(RefCell::new(HashMap::default())),
+                immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
+            }),
             expose_global_lexical_values: false,
-            immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
             frame_bindings: FrameBindings::default(),
             new_target: None,
             deopt_bindings: None,
@@ -877,11 +887,13 @@ impl CallEnv {
     /// return `None`, matching the prior empty-`HashMap` behavior.
     pub(crate) fn detached() -> Self {
         Self {
-            realm: new_realm(HashMap::new()),
-            global_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
-            global_lexical_values: Rc::new(RefCell::new(HashMap::default())),
+            scope: Rc::new(RealmScope {
+                realm: new_realm(HashMap::new()),
+                global_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
+                global_lexical_values: Rc::new(RefCell::new(HashMap::default())),
+                immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
+            }),
             expose_global_lexical_values: false,
-            immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
             frame_bindings: FrameBindings::default(),
             new_target: None,
             deopt_bindings: None,
@@ -903,11 +915,13 @@ impl CallEnv {
     /// map rather than a live VM realm.
     pub(crate) fn from_map(map: HashMap<String, Value>) -> Self {
         Self {
-            realm: new_realm(map),
-            global_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
-            global_lexical_values: Rc::new(RefCell::new(HashMap::default())),
+            scope: Rc::new(RealmScope {
+                realm: new_realm(map),
+                global_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
+                global_lexical_values: Rc::new(RefCell::new(HashMap::default())),
+                immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
+            }),
             expose_global_lexical_values: false,
-            immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
             frame_bindings: FrameBindings::default(),
             new_target: None,
             deopt_bindings: None,
@@ -927,11 +941,13 @@ impl CallEnv {
     /// Builds an environment over `realm` with the given frame locals.
     pub(crate) fn with_locals(realm: Realm, locals: HashMap<String, Value>) -> Self {
         Self {
-            realm,
-            global_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
-            global_lexical_values: Rc::new(RefCell::new(HashMap::default())),
+            scope: Rc::new(RealmScope {
+                realm,
+                global_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
+                global_lexical_values: Rc::new(RefCell::new(HashMap::default())),
+                immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
+            }),
             expose_global_lexical_values: false,
-            immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::default())),
             frame_bindings: FrameBindings::from_values(locals),
             new_target: None,
             deopt_bindings: None,
@@ -950,12 +966,12 @@ impl CallEnv {
 
     /// The shared realm cell, for sharing into a new frame or snapshot.
     pub(crate) fn realm(&self) -> &Realm {
-        &self.realm
+        &self.scope.realm
     }
 
     /// A clone of the realm `Rc` (shared cell, not a deep copy).
     pub(crate) fn realm_rc(&self) -> Realm {
-        Rc::clone(&self.realm)
+        Rc::clone(&self.scope.realm)
     }
 
     /// Builds an empty frame that shares this environment's realm metadata.
@@ -974,11 +990,8 @@ impl CallEnv {
     /// will materialize, avoiding repeated small-vector growth on hot calls.
     pub(crate) fn new_function_frame_with_capacity(&self, capacity: usize) -> Self {
         Self {
-            realm: Rc::clone(&self.realm),
-            global_lexical_bindings: Rc::clone(&self.global_lexical_bindings),
-            global_lexical_values: Rc::clone(&self.global_lexical_values),
+            scope: Rc::clone(&self.scope),
             expose_global_lexical_values: false,
-            immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
             frame_bindings: FrameBindings::with_capacity(capacity),
             new_target: None,
             deopt_bindings: None,
@@ -1001,13 +1014,10 @@ impl CallEnv {
     /// state is installed by the caller, so copying the caller's transient maps
     /// here would only allocate them before immediately replacing them.
     pub(crate) fn new_direct_leaf_function_frame(&self, module_imports: ModuleImports) -> Self {
-        let empty_name_set = self.realm.empty_name_set();
+        let empty_name_set = self.scope.realm.empty_name_set();
         Self {
-            realm: Rc::clone(&self.realm),
-            global_lexical_bindings: Rc::clone(&self.global_lexical_bindings),
-            global_lexical_values: Rc::clone(&self.global_lexical_values),
+            scope: Rc::clone(&self.scope),
             expose_global_lexical_values: false,
-            immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
             frame_bindings: FrameBindings::default(),
             new_target: None,
             deopt_bindings: None,
@@ -1034,26 +1044,32 @@ impl CallEnv {
     }
 
     pub(crate) fn mark_global_lexical_binding(&self, name: String) {
-        self.global_lexical_bindings.borrow_mut().insert(name);
+        self.scope.global_lexical_bindings.borrow_mut().insert(name);
     }
 
     pub(crate) fn is_global_lexical_binding(&self, name: &str) -> bool {
-        self.global_lexical_bindings.borrow().contains(name)
+        self.scope.global_lexical_bindings.borrow().contains(name)
     }
 
     pub(crate) fn set_global_lexical_value(&self, name: String, value: Value) {
-        self.global_lexical_values.borrow_mut().insert(name, value);
+        self.scope
+            .global_lexical_values
+            .borrow_mut()
+            .insert(name, value);
     }
 
     pub(crate) fn mark_immutable_lexical_binding(&self, name: String) {
-        self.immutable_lexical_bindings.borrow_mut().insert(name);
+        self.scope
+            .immutable_lexical_bindings
+            .borrow_mut()
+            .insert(name);
     }
 
     pub(crate) fn is_immutable_lexical_binding(&self, name: &str) -> bool {
         // Most frames never mark any immutable lexical bindings; skip the
         // name-table hash on the common empty case instead of hashing `name`
         // against an empty set on every call.
-        let bindings = self.immutable_lexical_bindings.borrow();
+        let bindings = self.scope.immutable_lexical_bindings.borrow();
         !bindings.is_empty() && bindings.contains(name)
     }
 
@@ -1227,18 +1243,18 @@ impl CallEnv {
         {
             return Some(value);
         }
-        if let Some(value) = self.realm.get_value(name) {
+        if let Some(value) = self.scope.realm.get_value(name) {
             return Some(value);
         }
         if self.expose_global_lexical_values {
-            return self.global_lexical_values.borrow().get(name).cloned();
+            return self.scope.global_lexical_values.borrow().get(name).cloned();
         }
         None
     }
 
     /// Looks up `name` in the shared realm layer only.
     pub(crate) fn get_realm(&self, name: &str) -> Option<Value> {
-        self.realm.get_value(name)
+        self.scope.realm.get_value(name)
     }
 
     /// Returns the active global object override used by indirect eval and
@@ -1260,7 +1276,7 @@ impl CallEnv {
                 _ => None,
             };
         }
-        self.realm.dynamic_function_realm_global()
+        self.scope.realm.dynamic_function_realm_global()
     }
 
     pub(crate) fn cached_direct_eval_bytecode(
@@ -1268,7 +1284,9 @@ impl CallEnv {
         source: &JsString,
         context: &EvalParseContext,
     ) -> Option<Rc<Bytecode>> {
-        self.realm.cached_direct_eval_bytecode(source, context)
+        self.scope
+            .realm
+            .cached_direct_eval_bytecode(source, context)
     }
 
     pub(crate) fn cache_direct_eval_bytecode(
@@ -1277,13 +1295,14 @@ impl CallEnv {
         context: EvalParseContext,
         bytecode: Rc<Bytecode>,
     ) {
-        self.realm
+        self.scope
+            .realm
             .cache_direct_eval_bytecode(source, context, bytecode);
     }
 
     #[cfg(test)]
     pub(crate) fn direct_eval_cache_len(&self) -> usize {
-        self.realm.direct_eval_cache_len()
+        self.scope.realm.direct_eval_cache_len()
     }
 
     pub(crate) fn object_prototype_intrinsic_override(&self) -> Option<ObjectRef> {
@@ -1304,7 +1323,7 @@ impl CallEnv {
     /// private string key. The slot is fixed when a realm is created; writes
     /// to the public `globalThis` property do not replace this identity.
     pub(crate) fn global_this(&self) -> Option<Value> {
-        self.realm.global_this()
+        self.scope.realm.global_this()
     }
 
     /// Returns the one shared cell for a realm binding. Every realm binding is
@@ -1312,7 +1331,7 @@ impl CallEnv {
     /// `DynamicBindings` map), so this is just a lookup — no more lazy
     /// cell creation on first capture.
     pub(crate) fn realm_binding_cell(&self, name: &str) -> Option<Upvalue> {
-        self.realm.cell(name)
+        self.scope.realm.cell(name)
     }
 
     pub(crate) fn remove_realm(&self, name: &str) -> Option<Value> {
@@ -1321,17 +1340,19 @@ impl CallEnv {
         // cell (e.g. a closure that captured the binding) observes the
         // uninitialized marker, while the returned value here is the value
         // that was live immediately before removal.
-        let removed = self.realm.get_value(name);
-        if let Some(cell) = self.realm.cell(name) {
+        let removed = self.scope.realm.get_value(name);
+        if let Some(cell) = self.scope.realm.cell(name) {
             cell.set(Value::Function(Function::uninitialized_lexical_marker()));
         }
-        self.realm.remove_value(name);
-        self.realm.sync_dynamic_function_realm_binding(name, None);
+        self.scope.realm.remove_value(name);
+        self.scope
+            .realm
+            .sync_dynamic_function_realm_binding(name, None);
         removed
     }
 
     pub(crate) fn is_realm_binding_cell(&self, name: &str, cell: &Upvalue) -> bool {
-        self.realm.is_binding_cell(name, cell)
+        self.scope.realm.is_binding_cell(name, cell)
     }
 
     /// True if `name` is bound in either layer.
@@ -1341,7 +1362,7 @@ impl CallEnv {
                 .deopt_bindings
                 .as_ref()
                 .is_some_and(|bindings| bindings.contains_key(name))
-            || self.realm.contains(name)
+            || self.scope.realm.contains(name)
     }
 
     /// Inserts a frame-local binding (`this`, params, captures, caller-scope
@@ -1395,20 +1416,22 @@ impl CallEnv {
     /// Inserts directly into the shared realm cell (builtin install and global
     /// definition). Visible to every frame sharing the realm.
     pub(crate) fn insert_realm(&self, name: String, value: Value) -> Option<Value> {
-        self.realm
+        self.scope
+            .realm
             .sync_dynamic_function_realm_binding(&name, Some(&value));
-        self.realm.insert_value(name, value)
+        self.scope.realm.insert_value(name, value)
     }
 
     /// Replaces an existing realm binding. Hot global stores use this after
     /// proving that the corresponding global-object property is still an
     /// ordinary writable data property.
     pub(crate) fn replace_existing_realm(&self, name: &str, value: Value) -> bool {
-        let Some(cell) = self.realm.cell(name) else {
+        let Some(cell) = self.scope.realm.cell(name) else {
             return false;
         };
         cell.set(value.clone());
-        self.realm
+        self.scope
+            .realm
             .sync_dynamic_function_realm_binding(name, Some(&value));
         true
     }
@@ -1425,7 +1448,8 @@ impl CallEnv {
         cell: &Upvalue,
     ) -> bool {
         cell.set(value.clone());
-        self.realm
+        self.scope
+            .realm
             .sync_dynamic_function_realm_binding(name, Some(&value));
         true
     }
@@ -1434,10 +1458,11 @@ impl CallEnv {
     /// the realm value table and any already-captured global cell.
     pub(crate) fn sync_realm_global_object_property(&self, object: &ObjectRef, name: &str) {
         let is_global_object = self
+            .scope
             .realm
             .global_this()
             .is_some_and(|global| global.same_value(&Value::Object(object.clone())));
-        if !is_global_object || !self.realm.contains(name) {
+        if !is_global_object || !self.scope.realm.contains(name) {
             return;
         }
         let Some(property) = object.own_property(name) else {
@@ -1454,15 +1479,15 @@ impl CallEnv {
     /// Used by global-binding initialization (script and indirect-eval scopes).
     pub(crate) fn realm_entry_or_insert(&self, name: String, value: Value) {
         let refresh_dynamic_realm = name == DYNAMIC_FUNCTION_REALM_GLOBAL;
-        self.realm.entry_or_insert_value(name, value);
+        self.scope.realm.entry_or_insert_value(name, value);
         if refresh_dynamic_realm {
-            self.realm.refresh_dynamic_function_realm_global();
+            self.scope.realm.refresh_dynamic_function_realm_global();
         }
     }
 
     /// True if the shared realm cell binds `name`.
     pub(crate) fn realm_contains(&self, name: &str) -> bool {
-        self.realm.contains(name)
+        self.scope.realm.contains(name)
     }
 
     /// Removes a frame-local binding.
@@ -1559,11 +1584,8 @@ impl CallEnv {
     /// by the VM after it overlays live slot values.
     pub(crate) fn fork_current_frame_values(&self) -> Self {
         Self {
-            realm: Rc::clone(&self.realm),
-            global_lexical_bindings: Rc::clone(&self.global_lexical_bindings),
-            global_lexical_values: Rc::clone(&self.global_lexical_values),
+            scope: Rc::clone(&self.scope),
             expose_global_lexical_values: false,
-            immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
             frame_bindings: self.frame_bindings.fork_values(),
             new_target: self.new_target.clone(),
             deopt_bindings: None,
