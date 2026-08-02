@@ -111,6 +111,81 @@ representation fixpoint rather than deferring them. Stage accordingly, and
 judge the core on `access-binary-trees` or `crypto-md5`, never on an arithmetic
 microbenchmark.
 
+## The unit this task was queued behind has now been run, and it failed
+
+Codex's rank-1 "cheap probe" -- keep only the cheap opcode families in
+`run_current_activation`, route the rest through cold helpers, hold `pc`/code
+base/length as loop locals -- was built and landed as `4153f720`. Its
+mechanism gate was met exactly:
+
+| | before | after |
+|---|---|---|
+| `run_current_activation` machine instructions | 25,020 | **1,680** |
+| stack frame | 4.3 KB | 320 B |
+| `[sp]` reloads on the loop-back path | 8 per dispatch | **none** |
+
+`pc`, the code pointer, the code length and `self` are all in machine
+registers. The timing gate was not met: external corpus **0.9906** over 39
+cases, six generic sentinels **0.9989** -- about 1%, against the 3-6x the ~5 ns
+preamble estimate implied. Per that gate's own clause, **the preamble was
+over-attributed and dispatch mechanics are closed.**
+
+Two results from building it constrain anything that follows:
+
+- An intermediate build routing *all* non-trivial opcodes through one
+  out-of-line function measured **exactly 1.0004**, and `bitops-bitwise-and`
+  regressed **13%** on the extra call alone. One added call per opcode costs
+  about what the entire preamble saved. The landed shape calls a separate
+  `#[inline(never)]` body per hot opcode instead.
+- The dispatch loop is no longer at a register-allocation cliff, so the
+  8-11%-per-added-arm tax this task quotes for `typed_loop` should no longer
+  apply to `run_current_activation`. That is a prediction, not a measurement:
+  verify it the first time a unit adds an arm there.
+
+## Sequencing after the falsification
+
+The corpus is several independent problems. Ranked by expected value, with
+Codex's gates adopted (independent consult, `gpt-5.6-sol` high):
+
+1. **Allocation-free regexp backtracking.** `string-tagcloud` is the corpus's
+   worst case (4.10x) and malloc/free is ~38% of its profile; after the
+   `eval` deopt-scope fix (`2ab3e527`), `regexp::matcher::match_pattern_first`
+   is its largest single allocator caller at 467 samples. Replace
+   `MatchState`'s per-branch capture `Vec` clone with a choice stack plus a
+   capture undo trail, and reuse the repeat evaluator's work vector and
+   visited sets. Gate: tagcloud ≤0.80 with allocator samples at least halved;
+   abandon at ≥0.92. A speedup *without* the allocation drop means the
+   mechanism attribution is wrong -- re-profile before widening.
+2. **Compact the activation record, then reconsider a frame stack.**
+   `access-binary-trees` spends ~39% of its samples in call machinery against
+   15% in interpretation. `FrameState` is 704 bytes, `CallEnv` 208, and
+   `new_direct_leaf_function_frame` performs six `Rc::clone`s plus two more
+   per call. Split a small `HotFrame` from a lazily boxed cold sidecar
+   (try/generator/disposal/with/deopt state and the rarely used loop state),
+   and cache the immutable per-call derivations --
+   `initial_authoritative_slots`, `initial_realm_binding_slots`,
+   `initial_local_upvalues`, `virtual_function_context_safe` -- in a plan owned
+   by the bytecode. Gate: binary-trees ≤0.85 with no call sentinel above 1.03;
+   abandon at ≥0.92. Note the ceiling first: making call construction *free*
+   still leaves binary-trees near 2.2x, because the rest is allocation and
+   property access.
+3. **Interned property names.** `_platform_memcmp` is 9% of `access-nbody`'s
+   profile: `str`'s `==` lowers to a `bcmp` call even for a one-byte name, and
+   `Small` storage scans linearly. A pointer-identity test alone bought
+   **nothing** (nbody 0.9993) because each bytecode site interns its own
+   `Rc<str>`; an inline byte comparison bought nbody 5% and cost the corpus
+   0.5%. The version that could work is one interned name per realm, so the
+   comparison is a pointer test everywhere -- not a faster memcmp.
+
+Three units were built and rejected before this ordering was written; their
+numbers are in the commit history and in the session record. Do not rebuild a
+plain-assignment write cache without a poisoned state, do not box
+`Vm::pending_frame_entry` (struct size is not per-call cost: measured 1.0157 on
+binary-trees), and do not chase a "calls are 6x" microbenchmark without first
+wrapping each corpus case's source in a function -- that two-minute experiment
+sizes any scope- or admission-shaped hypothesis at corpus scale, and it says
+only `crypto-md5` is affected.
+
 ## Scope
 
 - Allowed paths: `crates/qjs-runtime/src/bytecode/` (a new module),
