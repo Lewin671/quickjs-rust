@@ -1633,6 +1633,54 @@ mod tests {
     }
 
     #[test]
+    fn a_fused_constant_index_read_lowers_like_its_unfused_form() {
+        // The compiler fuses `a[0]` into one `GetPropIndex` whose encoding
+        // carries the receiver slot. Two regions of `access-fannkuch` declined
+        // on nothing else.
+        let source = "function run(a, b, n) { var total = 0;\
+             for (var i = 0; i < n; i++) { total = total + a[0] + b[i]; }\
+             return total; }";
+        let bytecode = named_function(source, "run");
+        let programs = super::compile_all(&bytecode);
+        assert_eq!(programs.len(), 1, "{:#?}", bytecode.code);
+        assert_eq!(
+            programs[0]
+                .ops
+                .iter()
+                .filter(|op| matches!(op, super::TypedOp::DenseRead { .. }))
+                .count(),
+            2,
+            "{:#?}",
+            programs[0].ops
+        );
+        assert_eq!(
+            eval(&format!("{source} run([7], [1, 2, 3, 4], 4);")),
+            Ok(Value::Number(38.0))
+        );
+    }
+
+    #[test]
+    fn a_fused_constant_index_read_answers_out_of_bounds_and_holes() {
+        let source = "function run(a, n) { var total = 0;\
+             for (var i = 0; i < n; i++) { total = total + (a[0] === undefined ? 1 : a[0]); }\
+             return total; }";
+        // Empty array: every read is out of bounds.
+        assert_eq!(
+            eval(&format!("{source} run([], 4);")),
+            Ok(Value::Number(4.0))
+        );
+        // A hole reads as `undefined`, exactly as the interpreter reports it.
+        assert_eq!(
+            eval(&format!("{source} run(new Array(3), 4);")),
+            Ok(Value::Number(4.0))
+        );
+        assert_eq!(
+            eval(&format!("{source} run([5], 4);")),
+            Ok(Value::Number(20.0))
+        );
+    }
+
+    #[test]
     fn a_self_recursive_helper_flattens_and_agrees_with_the_interpreter() {
         // `fib` reaches itself twice per body and keeps a local, which is the
         // shape `recursive_call_tree` has. Its index is reserved before the

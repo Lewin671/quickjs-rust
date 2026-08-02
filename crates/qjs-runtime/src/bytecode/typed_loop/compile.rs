@@ -824,6 +824,94 @@ impl<'a> Builder<'a> {
     /// an unboxed scalar register can hold. The temporaries are bypassed
     /// entirely, which is only sound while nothing outside the region reads
     /// them — checked here.
+    /// Lowers a computed read whose receiver and key are already on the
+    /// abstract stack. `Op::GetProp` is its unfused form; `Op::GetPropIndex`
+    /// pushes the same two operands first and then reuses this, so the two
+    /// share one set of boxing discoveries rather than drifting apart.
+    fn compile_computed_read(&mut self, ip: usize) -> Option<()> {
+        // A boxed key is a computed access, not an array index.
+        if matches!(self.stack.last(), Some((_, Class::Boxed, _))) {
+            let (key, _, _) = self.stack.pop()?;
+            let (receiver_register, receiver_class, receiver) = self.stack.pop()?;
+            if receiver_class == Class::Scalar {
+                match receiver {
+                    Origin::Local(slot) => self.discovered_boxed.push(slot),
+                    Origin::ElementRead(site) => {
+                        self.discovered_boxed_element_reads.push(site);
+                    }
+                    Origin::Computed => return None,
+                }
+                return None;
+            }
+            let dst = self.slot_boxed()?;
+            self.emit(TypedOp::ComputedRead {
+                dst,
+                receiver: receiver_register,
+                key,
+            });
+            self.push_boxed(dst, Origin::Computed);
+            return Some(());
+        }
+        // Deliberately no discovery here. Demanding a boxed key from
+        // every read whose key came from an element read would force
+        // an ordinary `a[b[i]]` through the computed access as well,
+        // which measured a 19% regression on `regexp-dna` and 1% over
+        // the 40-case corpus. A dictionary loop reaches the boxed key
+        // through its *write* instead -- `SetProp`'s `pop_boxed`
+        // discovers it -- and the read then follows on the next pass.
+        let (index, _) = self.pop()?;
+        let (receiver_register, receiver_class, receiver) = self.stack.pop()?;
+        if receiver_class == Class::Scalar {
+            // An array is not something the scalar file can hold, so a
+            // receiver has to come from a boxed register: that is also
+            // what lets a deoptimization rebuild the operand stack.
+            match receiver {
+                Origin::Local(slot) => self.discovered_boxed.push(slot),
+                Origin::ElementRead(site) => self.discovered_boxed_element_reads.push(site),
+                Origin::Computed => return None,
+            }
+            return None;
+        }
+        let Origin::Local(receiver_slot) = receiver else {
+            // The receiver is a property read or a global, so the array
+            // it names is only known at run time.
+            let dst = self.slot_boxed()?;
+            self.emit(TypedOp::ElementRead {
+                dst,
+                receiver: receiver_register,
+                index,
+            });
+            self.push_boxed(dst, Origin::Computed);
+            return Some(());
+        };
+        let site = u32::try_from(ip).ok()?;
+        if self.boxed_element_reads.contains(&site) {
+            // This array element feeds another property read. Preserve
+            // the actual Value in a boxed register so a later guard can
+            // deopt with the exact intermediate receiver still present.
+            let dst = self.slot_boxed()?;
+            self.emit(TypedOp::ElementRead {
+                dst,
+                receiver: receiver_register,
+                index,
+            });
+            self.push_boxed(dst, Origin::Computed);
+            return Some(());
+        }
+        // A frame slot the region never writes is resolved to its array
+        // once per entry, which costs less than revalidating the slot on
+        // every element access.
+        let receiver = self.receiver_index(receiver_slot)?;
+        let dst = self.slot_scalar()?;
+        self.emit(TypedOp::DenseRead {
+            dst,
+            receiver,
+            index,
+        });
+        self.push(dst, Origin::ElementRead(site));
+        Some(())
+    }
+
     fn compile_element_assignment(&mut self, ip: usize) -> Option<Option<usize>> {
         let code = &self.bytecode.code;
         let (Some(Op::LoadLocal(receiver)), Some(Op::StoreLocal(receiver_temp))) =
@@ -1327,86 +1415,29 @@ impl<'a> Builder<'a> {
                 self.push(dst, Origin::Computed);
             }
             Op::GetProp => {
-                // A boxed key is a computed access, not an array index.
-                if matches!(self.stack.last(), Some((_, Class::Boxed, _))) {
-                    let (key, _, _) = self.stack.pop()?;
-                    let (receiver_register, receiver_class, receiver) = self.stack.pop()?;
-                    if receiver_class == Class::Scalar {
-                        match receiver {
-                            Origin::Local(slot) => self.discovered_boxed.push(slot),
-                            Origin::ElementRead(site) => {
-                                self.discovered_boxed_element_reads.push(site);
-                            }
-                            Origin::Computed => return None,
-                        }
-                        return None;
+                self.compile_computed_read(ip)?;
+            }
+            // The compiler fuses `local[constant]` into one instruction, with
+            // the receiver slot in the encoding's upper half. Pushing what the
+            // unfused `LoadLocal; LoadConst; GetProp` would have pushed lets it
+            // reuse the same lowering -- including the boxing discoveries that
+            // make the receiver and the result agree across passes -- instead
+            // of needing an operation of its own.
+            Op::GetPropIndex(encoded) => {
+                let (index, local_slot) = super::super::ir::decode_index_receiver(*encoded);
+                if let Some(slot) = local_slot {
+                    let origin = Origin::Local(u32::try_from(slot).ok()?);
+                    if self.slot_is_boxed(slot) {
+                        let register = self.boxed_local_register(slot)?;
+                        self.push_boxed(register, origin);
+                    } else {
+                        let register = self.local_register(slot)?;
+                        self.push(register, origin);
                     }
-                    let dst = self.slot_boxed()?;
-                    self.emit(TypedOp::ComputedRead {
-                        dst,
-                        receiver: receiver_register,
-                        key,
-                    });
-                    self.push_boxed(dst, Origin::Computed);
-                    return Some(());
                 }
-                // Deliberately no discovery here. Demanding a boxed key from
-                // every read whose key came from an element read would force
-                // an ordinary `a[b[i]]` through the computed access as well,
-                // which measured a 19% regression on `regexp-dna` and 1% over
-                // the 40-case corpus. A dictionary loop reaches the boxed key
-                // through its *write* instead -- `SetProp`'s `pop_boxed`
-                // discovers it -- and the read then follows on the next pass.
-                let (index, _) = self.pop()?;
-                let (receiver_register, receiver_class, receiver) = self.stack.pop()?;
-                if receiver_class == Class::Scalar {
-                    // An array is not something the scalar file can hold, so a
-                    // receiver has to come from a boxed register: that is also
-                    // what lets a deoptimization rebuild the operand stack.
-                    match receiver {
-                        Origin::Local(slot) => self.discovered_boxed.push(slot),
-                        Origin::ElementRead(site) => self.discovered_boxed_element_reads.push(site),
-                        Origin::Computed => return None,
-                    }
-                    return None;
-                }
-                let Origin::Local(receiver_slot) = receiver else {
-                    // The receiver is a property read or a global, so the array
-                    // it names is only known at run time.
-                    let dst = self.slot_boxed()?;
-                    self.emit(TypedOp::ElementRead {
-                        dst,
-                        receiver: receiver_register,
-                        index,
-                    });
-                    self.push_boxed(dst, Origin::Computed);
-                    return Some(());
-                };
-                let site = u32::try_from(ip).ok()?;
-                if self.boxed_element_reads.contains(&site) {
-                    // This array element feeds another property read. Preserve
-                    // the actual Value in a boxed register so a later guard can
-                    // deopt with the exact intermediate receiver still present.
-                    let dst = self.slot_boxed()?;
-                    self.emit(TypedOp::ElementRead {
-                        dst,
-                        receiver: receiver_register,
-                        index,
-                    });
-                    self.push_boxed(dst, Origin::Computed);
-                    return Some(());
-                }
-                // A frame slot the region never writes is resolved to its array
-                // once per entry, which costs less than revalidating the slot on
-                // every element access.
-                let receiver = self.receiver_index(receiver_slot)?;
-                let dst = self.slot_scalar()?;
-                self.emit(TypedOp::DenseRead {
-                    dst,
-                    receiver,
-                    index,
-                });
-                self.push(dst, Origin::ElementRead(site));
+                let key = self.constant_register(Typed::Number(index as f64))?;
+                self.push(key, Origin::Computed);
+                self.compile_computed_read(ip)?;
             }
             Op::LoadGlobal(name) => {
                 // A matching sloppy fallback read is the register that its
