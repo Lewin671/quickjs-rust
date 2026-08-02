@@ -44,6 +44,7 @@ use crate::Value;
 mod branchy_nested_tests;
 mod compile;
 mod execute;
+mod helper_graph;
 mod register_packing;
 
 pub(super) use compile::compile_all;
@@ -511,6 +512,24 @@ pub(super) struct TypedLoopProgram {
     /// revision are re-checked on every read, so a stale entry misses rather
     /// than reading a wrong slot.
     shape_caches: RefCell<Vec<ShapeWays>>,
+    /// The bodies `helper_sites` resolved to, rebuilt at every entry.
+    ///
+    /// Reached only from `call_closed_form_leaf`, which already has the
+    /// program. Threading it through `execute` instead measured 16% on
+    /// `heterogeneous_property_read`: one more loop-carried live value costs
+    /// this executor every opcode, whether or not the value is used.
+    helper_graphs: RefCell<helper_graph::HelperGraph>,
+    /// One entry per helper call site, in site order, naming the frame
+    /// slot its callee is read from. Entry resolves each one and flattens the
+    /// body it points at.
+    helper_sites: Vec<HelperSite>,
+}
+
+/// Where one helper call finds its callee at loop entry.
+#[derive(Clone, Copy, Debug)]
+struct HelperSite {
+    callee_slot: u32,
+    arity: u8,
 }
 
 impl TypedLoopProgram {
@@ -1067,26 +1086,33 @@ mod tests {
             eval(&format!("{unbound_source} run(8);")),
             Ok(Value::Number(12.0))
         );
-        // A generic Function local must stay out of typed-loop compilation:
-        // installing a plan only to deopt would add per-backedge dispatch to
-        // an otherwise ordinary callback loop. The counter proves its normal
-        // interpreter calls remain exact.
+        // A generic Function local now compiles: the region records a helper
+        // site and loop entry tries to flatten whatever the slot holds. This
+        // callee writes a global, so nothing can be flattened and the program
+        // declines *before* the loop runs -- one failed preparation per frame,
+        // not a deoptimization per iteration. The counter is what proves the
+        // interpreter still performed every call.
         let fallback_source = "var typedLoopCallCount = 0; function run(n, callbackValue) { var numeric = callbackValue, total = 0; for (var i = 0; i < n; i++) { total = total + numeric(i); } return total + ':' + typedLoopCallCount; } function callback(value) { typedLoopCallCount++; return value; }";
         assert_eq!(
             super::compile_all(&nested_function(fallback_source)).len(),
-            0,
+            1,
             "{fallback_source}"
         );
-        // The direct Math initializer is not enough when a later preheader
-        // write replaces it: the last write is the provenance authority.
         let overwritten_alias_source = "function run(n, callbackValue) { var numeric = Math.floor; numeric = callbackValue; var total = 0; for (var i = 0; i < n; i++) { total = total + numeric(i); } return total; }";
-        assert!(
-            super::compile_all(&nested_function(overwritten_alias_source)).is_empty(),
+        assert_eq!(
+            super::compile_all(&nested_function(overwritten_alias_source)).len(),
+            1,
             "{overwritten_alias_source}"
         );
         assert_eq!(
             eval(&format!("{fallback_source} run(4, callback);")),
             Ok(Value::String("6:4".to_owned().into()))
+        );
+        assert_eq!(
+            eval(&format!(
+                "{overwritten_alias_source} run(6, function (v) {{ return v + 1; }});"
+            )),
+            Ok(Value::Number(21.0))
         );
         // A string constant inside the region is held boxed and still compares
         // the way the interpreter does.
@@ -1458,6 +1484,101 @@ mod tests {
              var probe = { valueOf: function () { calls = calls + 1; return 2; } };\
              run([{ pos: 1 }, { pos: 2 }, { pos: 3 }, { pos: 2 }], probe) * 100 + calls;";
         assert_eq!(eval(script), Ok(Value::Number(204.0)));
+    }
+
+    /// The helper graph exists for this shape: a numeric loop whose body calls
+    /// ordinary functions, which used to abort the whole region. This is the
+    /// `imaging-darkroom` pixel loop reduced to its call structure -- three
+    /// levels of ordinary call, an intrinsic, a captured number and a captured
+    /// function.
+    const DARKROOM_HELPERS: &str = "function FastLog2(x) { return Math.log(x) / Math.LN2; }\
+         var LOG2_HALF = FastLog2(0.5);\
+         function FastBias(b, x) { return Math.pow(x, FastLog2(b) / LOG2_HALF); }\
+         function FastGain(g, x) { return (x < 0.5)\
+             ? FastBias(1.0 - g, 2.0 * x) * 0.5\
+             : 1.0 - FastBias(1.0 - g, 2.0 - 2.0 * x) * 0.5; }\
+         function Clamp(x) { return (x < 0.0) ? 0.0 : ((x > 1.0) ? 1.0 : x); }\
+         function pixel(x, contrast) { return FastGain(contrast, Clamp(x)); }\
+         function run(data, n, contrast) { var total = 0;\
+           for (var i = 0; i < n; i++) { total = total + pixel(data[i], contrast); }\
+           return total; }";
+
+    fn named_function(source: &str, name: &str) -> crate::bytecode::Bytecode {
+        let script = qjs_parser::parse_script(source).expect("source should parse");
+        let bytecode = crate::bytecode::compile_script(&script).expect("source should compile");
+        bytecode
+            .code
+            .iter()
+            .find_map(|op| match op {
+                super::super::ir::Op::NewFunction {
+                    name: actual,
+                    bytecode,
+                    ..
+                } if actual.as_deref() == Some(name) => Some(bytecode.as_ref().clone()),
+                _ => None,
+            })
+            .expect("named function should be nested in the script")
+    }
+
+    #[test]
+    fn a_nested_helper_graph_answers_exactly_as_the_interpreter_does() {
+        // The loop is admitted and runs its calls through the flattened graph;
+        // the straight-line sum has no loop at all, so it can only be
+        // interpreted. The two must agree bit for bit.
+        assert_eq!(
+            super::compile_all(&named_function(DARKROOM_HELPERS, "run")).len(),
+            1
+        );
+        let data = "[-0.5, 0.25, 0.75, 1.5, 0.5]";
+        let looped = format!("{DARKROOM_HELPERS} run({data}, 5, 0.4);");
+        let straight = format!(
+            "{DARKROOM_HELPERS} var d = {data};\
+             pixel(d[0], 0.4) + pixel(d[1], 0.4) + pixel(d[2], 0.4)\
+               + pixel(d[3], 0.4) + pixel(d[4], 0.4);"
+        );
+        let Ok(Value::Number(interpreted)) = eval(&straight) else {
+            panic!("straight-line sum should evaluate to a number");
+        };
+        assert!(interpreted.is_finite(), "{interpreted}");
+        assert_eq!(eval(&looped), Ok(Value::Number(interpreted)));
+    }
+
+    #[test]
+    fn a_flattened_helper_reproduces_its_own_branches() {
+        let script = "function Clamp(x) { return (x < 0.0) ? 0.0 : ((x > 1.0) ? 1.0 : x); }\
+             function run(data, n) { var total = 0;\
+               for (var i = 0; i < n; i++) { total = total + Clamp(data[i]); }\
+               return total; }\
+             run([-1, 0.25, 2, 0.5], 4) * 100;";
+        assert_eq!(eval(script), Ok(Value::Number(175.0)));
+    }
+
+    #[test]
+    fn a_helper_replaced_mid_loop_stops_using_the_prepared_body() {
+        // The prepared body is `twice`; the identity check at every call is
+        // what makes the switch to `thrice` produce the interpreted answer
+        // instead of the stale one.
+        let script = "function twice(x) { return x * 2; }\
+             function thrice(x) { return x * 3; }\
+             function run(a, b, n) { var f = a, total = 0;\
+               for (var i = 0; i < n; i++) { total = total + f(i); if (i === 1) { f = b; } }\
+               return total; }\
+             run(twice, thrice, 4);";
+        assert_eq!(eval(script), Ok(Value::Number(17.0)));
+    }
+
+    #[test]
+    fn a_helper_that_is_not_pure_arithmetic_declines_without_losing_its_effect() {
+        // The body writes a global, which no flattened graph can express, so
+        // preparation fails and the loop stays interpreted. The counter proves
+        // every call still ran.
+        let script = "var calls = 0;\
+             function step(x) { calls = calls + 1; return x + 1; }\
+             function run(n) { var total = 0;\
+               for (var i = 0; i < n; i++) { total = total + step(i); }\
+               return total; }\
+             run(5) * 100 + calls;";
+        assert_eq!(eval(script), Ok(Value::Number(1505.0)));
     }
 
     #[test]

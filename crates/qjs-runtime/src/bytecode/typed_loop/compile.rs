@@ -90,6 +90,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         mut local_slots,
         mut written_locals,
         receiver_slots,
+        helper_sites,
         mut global_reads,
         sloppy_global_writes,
         next_boxed,
@@ -172,6 +173,8 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
     ));
     Some(TypedLoopProgram {
         shape_caches: std::cell::RefCell::new(Vec::new()),
+        helper_sites,
+        helper_graphs: std::cell::RefCell::new(super::helper_graph::HelperGraph::default()),
         header,
         backedge,
         ops,
@@ -234,6 +237,7 @@ struct Builder<'a> {
     local_slots: Vec<(u16, u32)>,
     written_locals: Vec<(u16, u32)>,
     receiver_slots: Vec<u32>,
+    helper_sites: Vec<super::HelperSite>,
     global_reads: Vec<(u16, String)>,
     sloppy_global_writes: Vec<(u32, String)>,
     next_boxed: usize,
@@ -308,6 +312,7 @@ impl<'a> Builder<'a> {
             local_slots: Vec::new(),
             written_locals: Vec::new(),
             receiver_slots: Vec::new(),
+            helper_sites: Vec::new(),
             global_reads: Vec::new(),
             sloppy_global_writes: Vec::new(),
             next_boxed: MAX_STACK_DEPTH,
@@ -1504,7 +1509,38 @@ impl<'a> Builder<'a> {
                 }
                 let (callee, origin) = self.pop_boxed()?;
                 if !self.mark_numeric_native_callee(callee, origin) {
-                    return None;
+                    // Not an intrinsic reached through the `Math` global. A
+                    // call to an ordinary function used to abort the whole
+                    // region here, which is the terminal blocker on every
+                    // generic-path case left in the external corpus. Record a
+                    // site instead; entry resolves the callee from its frame
+                    // slot and flattens its body, and a callee that cannot be
+                    // flattened declines the program before it runs.
+                    let Origin::Local(callee_slot) = origin else {
+                        return None;
+                    };
+                    self.helper_sites.push(super::HelperSite {
+                        callee_slot,
+                        arity: u8::try_from(*argc).ok()?,
+                    });
+                    // Deliberately the *existing* closed-form operation rather
+                    // than one of its own. An unresolved call differs from a
+                    // resolved one only in having no receiver, and adding a
+                    // twenty-second arm to this dispatch loop measured 8-11% on
+                    // `heterogeneous_property_read` with the operation never
+                    // even reached -- the register allocator, not the work.
+                    let receiver = self.boxed_constant_register(&Value::Undefined)?;
+                    let dst = self.slot_boxed()?;
+                    self.emit(TypedOp::CallClosedFormLeaf {
+                        dst,
+                        receiver,
+                        callee,
+                        first: args[0],
+                        second: args[1],
+                        arity: u8::try_from(*argc).ok()?,
+                    });
+                    self.push_boxed(dst, Origin::Computed);
+                    return Some(());
                 }
                 let dst = self.slot_scalar()?;
                 self.emit(TypedOp::CallNumericNative {
@@ -1837,7 +1873,7 @@ fn expression_has_control_flow(op: &Op) -> bool {
     )
 }
 
-fn admitted_binary(op: BinaryOp) -> bool {
+pub(super) fn admitted_binary(op: BinaryOp) -> bool {
     matches!(
         op,
         BinaryOp::Add
@@ -1863,7 +1899,7 @@ fn admitted_binary(op: BinaryOp) -> bool {
     )
 }
 
-fn admitted_unary(op: UnaryOp) -> bool {
+pub(super) fn admitted_unary(op: UnaryOp) -> bool {
     matches!(
         op,
         UnaryOp::Minus | UnaryOp::Plus | UnaryOp::BitwiseNot | UnaryOp::Not

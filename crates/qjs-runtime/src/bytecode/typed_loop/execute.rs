@@ -98,6 +98,16 @@ enum Outcome {
 }
 
 fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
+    // Preparation reads the callees, their captured cells and the intrinsics
+    // they reach once per entry. A program with no call sites never pays for
+    // it, and one whose sites cannot be flattened declines here rather than
+    // deoptimizing on every iteration.
+    if !program.helper_sites.is_empty() {
+        let Some(graphs) = super::helper_graph::Preparation::prepare(vm, program) else {
+            return Outcome::Declined;
+        };
+        *program.helper_graphs.borrow_mut() = graphs;
+    }
     let mut scratch = program.take_scratch();
     let outcome = seed_registers(vm, program, &mut scratch)
         .map(|()| execute(vm, program, &mut scratch))
@@ -319,6 +329,7 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                 arity,
             } => {
                 let Some(value) = call_closed_form_leaf(
+                    program,
                     &boxed[callee as usize],
                     &boxed[receiver as usize],
                     registers[first as usize],
@@ -626,6 +637,7 @@ fn call_numeric_native(callee: &Value, first: Typed, second: Typed, arity: u8) -
 /// it is one load, which is not a price worth trading for an unverifiable
 /// assumption that the plans are independently total.
 fn call_closed_form_leaf(
+    program: &TypedLoopProgram,
     callee: &Value,
     receiver: &Value,
     first: Typed,
@@ -636,6 +648,17 @@ fn call_closed_form_leaf(
     // callee that only turns out to be an intrinsic at run time still reaches
     // here; answering it costs one predicate and keeps that shape working.
     if let Some(value) = call_numeric_native(callee, first, second, arity) {
+        return Some(value.to_value());
+    }
+    // A body flattened at loop entry answers without any frame at all. The
+    // lookup is by function identity over at most a handful of prepared
+    // bodies, and an empty graph -- every program with no call site -- costs
+    // one length check.
+    if let Some(value) = program
+        .helper_graphs
+        .borrow()
+        .call(callee, first, second, arity)
+    {
         return Some(value.to_value());
     }
     if !crate::function::is_direct_leaf_function(callee) {
@@ -742,7 +765,7 @@ fn get_named(
 /// Reads `name` as a plain data property of `object` or of its prototype chain,
 /// refusing anything the observable property protocol would have to run: an
 /// accessor, a proxy, an exotic object, a symbol wrapper.
-fn ordinary_data_property(object: &crate::ObjectRef, name: &str) -> Option<Value> {
+pub(super) fn ordinary_data_property(object: &crate::ObjectRef, name: &str) -> Option<Value> {
     use crate::value::{OwnDataPropertyRead, Prototype};
 
     let mut current = object.clone();
@@ -842,7 +865,8 @@ fn dense_write(array: &crate::ArrayRef, index: Typed, value: Typed) -> bool {
         .unwrap_or(false)
 }
 
-fn typed_binary(left: Typed, op: BinaryOp, right: Typed) -> Option<Typed> {
+#[inline(always)]
+pub(super) fn typed_binary(left: Typed, op: BinaryOp, right: Typed) -> Option<Typed> {
     let (Typed::Number(left), Typed::Number(right)) = (left, right) else {
         return None;
     };
@@ -893,7 +917,8 @@ fn boxed_equality(op: BinaryOp, left: &Value, right: &Value) -> Option<Typed> {
     Some(Typed::Boolean(equal != negated))
 }
 
-fn typed_unary(op: UnaryOp, argument: Typed) -> Option<Typed> {
+#[inline(always)]
+pub(super) fn typed_unary(op: UnaryOp, argument: Typed) -> Option<Typed> {
     if let UnaryOp::Not = op {
         return Some(Typed::Boolean(!argument.is_truthy()));
     }
