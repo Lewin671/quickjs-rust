@@ -654,6 +654,15 @@ fn get_named(
     cache: &mut Option<(Rc<str>, usize)>,
     shapes: &mut super::ShapeWays,
 ) -> Option<Value> {
+    // An array's `length` is an own data property whose value is the element
+    // count, and `try_direct_get_string` answers it exactly this way, without
+    // consulting any descriptor. `for (i = 0; i < a.length; i++)` puts that read
+    // in the header test of most loops written in JavaScript, so without it the
+    // tier deoptimized on the region's first instruction and the whole loop fell
+    // back to the generic interpreter.
+    if let Value::Array(elements) = receiver {
+        return (name.as_ref() == "length").then(|| Value::Number(elements.len() as f64));
+    }
     let Value::Object(object) = receiver else {
         return None;
     };
@@ -861,4 +870,59 @@ fn to_int32(number: f64) -> i32 {
 
 fn to_uint32(number: f64) -> u32 {
     crate::conversion::to_uint32_number(number)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::rc::Rc;
+
+    use super::super::ShapeWays;
+    use super::get_named;
+    use crate::value::ArrayRef;
+    use crate::{Value, eval};
+
+    fn read(receiver: &Value, name: &str) -> Option<Value> {
+        get_named(
+            receiver,
+            &Rc::from(name),
+            &mut None,
+            &mut ShapeWays::default(),
+        )
+    }
+
+    #[test]
+    fn an_array_answers_length_from_its_element_count() {
+        let array = Value::Array(ArrayRef::new(vec![
+            Value::Number(1.0),
+            Value::Number(2.0),
+            Value::Number(3.0),
+        ]));
+        assert_eq!(read(&array, "length"), Some(Value::Number(3.0)));
+    }
+
+    #[test]
+    fn an_array_declines_every_name_except_length() {
+        let array = Value::Array(ArrayRef::new(vec![Value::Number(1.0)]));
+        assert_eq!(read(&array, "push"), None);
+        assert_eq!(read(&array, "0"), None);
+    }
+
+    #[test]
+    fn a_length_guarded_loop_observes_growth_from_its_own_body() {
+        // The read is answered from the live element count, so an array grown
+        // inside the loop must extend it exactly as the interpreter does.
+        let source = "function run(a) { var seen = 0; \
+             for (var i = 0; i < a.length; i++) { seen++; \
+             if (a.length < 8) { a.push(a[i] + 1); } } \
+             return seen * 100 + a.length; } run([1]);";
+        assert_eq!(eval(source), Ok(Value::Number(808.0)));
+    }
+
+    #[test]
+    fn a_length_guarded_loop_observes_truncation_from_its_own_body() {
+        let source = "function run(a) { var seen = 0; \
+             for (var i = 0; i < a.length; i++) { seen++; a.length = 2; } \
+             return seen; } run([1, 2, 3, 4, 5]);";
+        assert_eq!(eval(source), Ok(Value::Number(2.0)));
+    }
 }
