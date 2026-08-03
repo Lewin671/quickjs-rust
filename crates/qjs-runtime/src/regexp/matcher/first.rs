@@ -6,15 +6,18 @@
 //! undo journal; remaining compatibility atoms and lookbehind still bridge to
 //! the all-state matcher until the explicit choice-stack stages replace them.
 
+mod capture_repeat;
+
 use std::collections::HashMap;
 
+use self::capture_repeat::{CaptureRepeatScratch, CaptureRepeatWork, CaptureStatePool};
 use super::escapes::PropertyCache;
 use super::fast_scan::{simple_atom_boundaries_into, simple_atom_matcher, simple_atom_max_count};
 use super::groups::{GroupKind, closing_group, group_alternatives, group_kind};
 use super::{
     CaptureFreeRepeatScratch, CaptureFreeRepeatWork, MatchOptions, MatchState, RepeatScratch,
-    RepeatWork, at_line_end, at_line_start, atom_capture_indices, atom_end,
-    match_repeated_atom_first, quantifier, regexp_word_char, repeat_accept_state,
+    at_line_end, at_line_start, atom_capture_indices, atom_end, match_repeated_atom_first,
+    quantifier, regexp_word_char, repeat_accept_state,
 };
 
 type Capture = Option<(usize, usize)>;
@@ -56,7 +59,10 @@ pub(super) struct FirstMatcher<'a> {
     repeat_scratch: RepeatScratch,
     simple_boundary_scratch: Vec<Vec<usize>>,
     simple_boundary_depth: usize,
-    repeated_group_results: Vec<Vec<MatchState>>,
+    capture_repeat_scratch: Vec<CaptureRepeatScratch>,
+    capture_repeat_depth: usize,
+    capture_state_pool: CaptureStatePool,
+    repeated_group_results: Vec<Vec<usize>>,
     repeated_group_result_depth: usize,
     capture_free_repeat_scratch: CaptureFreeRepeatScratch,
     capture_free_repeated_group_results: Vec<Vec<usize>>,
@@ -82,6 +88,9 @@ impl<'a> FirstMatcher<'a> {
             repeat_scratch: RepeatScratch::default(),
             simple_boundary_scratch: Vec::new(),
             simple_boundary_depth: 0,
+            capture_repeat_scratch: Vec::new(),
+            capture_repeat_depth: 0,
+            capture_state_pool: CaptureStatePool::default(),
             repeated_group_results: Vec::new(),
             repeated_group_result_depth: 0,
             capture_free_repeat_scratch: CaptureFreeRepeatScratch::default(),
@@ -106,6 +115,13 @@ impl<'a> FirstMatcher<'a> {
         debug_assert!(self.repeat_scratch.is_empty());
         debug_assert_eq!(self.simple_boundary_depth, 0);
         debug_assert!(self.simple_boundary_scratch.iter().all(Vec::is_empty));
+        debug_assert_eq!(self.capture_repeat_depth, 0);
+        debug_assert!(
+            self.capture_repeat_scratch
+                .iter()
+                .all(CaptureRepeatScratch::is_empty)
+        );
+        debug_assert!(self.capture_state_pool.is_clear());
         debug_assert_eq!(self.repeated_group_result_depth, 0);
         debug_assert!(self.repeated_group_results.iter().all(Vec::is_empty));
         debug_assert!(self.capture_free_repeat_scratch.is_empty());
@@ -121,6 +137,13 @@ impl<'a> FirstMatcher<'a> {
         debug_assert!(self.repeat_scratch.is_empty());
         debug_assert_eq!(self.simple_boundary_depth, 0);
         debug_assert!(self.simple_boundary_scratch.iter().all(Vec::is_empty));
+        debug_assert_eq!(self.capture_repeat_depth, 0);
+        debug_assert!(
+            self.capture_repeat_scratch
+                .iter()
+                .all(CaptureRepeatScratch::is_empty)
+        );
+        debug_assert!(self.capture_state_pool.is_clear());
         debug_assert_eq!(self.repeated_group_result_depth, 0);
         debug_assert!(self.repeated_group_results.iter().all(Vec::is_empty));
         debug_assert!(self.capture_free_repeat_scratch.is_empty());
@@ -210,7 +233,8 @@ impl<'a> FirstMatcher<'a> {
                 self.match_pattern(pc, end_pc, state, parent)
             }
             ContinuationTarget::CollectRepeatedGroup { slot } => {
-                self.repeated_group_results[slot].push(state.clone());
+                let state = self.capture_state_pool.acquire_clone(state);
+                self.repeated_group_results[slot].push(state);
                 false
             }
             ContinuationTarget::CollectCaptureFreeRepeatedGroup { slot } => {
@@ -457,49 +481,87 @@ impl<'a> FirstMatcher<'a> {
             self.properties,
             self.options.unicode,
         );
-        let mut scratch = std::mem::take(&mut self.repeat_scratch);
-        scratch.work.push(RepeatWork::Expand(state.clone(), 0));
-        let mut matched = None;
+        let scratch_slot = self.capture_repeat_depth;
+        self.capture_repeat_depth += 1;
+        if scratch_slot == self.capture_repeat_scratch.len() {
+            self.capture_repeat_scratch
+                .push(CaptureRepeatScratch::default());
+        }
+        let mut scratch = std::mem::take(&mut self.capture_repeat_scratch[scratch_slot]);
+        let initial_state = self.capture_state_pool.acquire_clone(state);
+        scratch.work.push(CaptureRepeatWork::Expand {
+            state: initial_state,
+            count: 0,
+        });
+        let mut matched = false;
 
         while let Some(work) = scratch.work.pop() {
             match work {
-                RepeatWork::Accept(candidate, count) => {
+                CaptureRepeatWork::Accept {
+                    state: candidate_slot,
+                    count,
+                } => {
+                    let candidate = self.capture_state_pool.take(candidate_slot);
                     let mut candidate = repeat_accept_state(candidate, count, &atom_captures);
                     if self.match_pattern(quantifier.next_pc, end_pc, &mut candidate, continuation)
                     {
-                        matched = Some(candidate);
+                        std::mem::swap(state, &mut candidate);
+                        self.capture_state_pool.put(candidate_slot, candidate);
+                        self.capture_state_pool.release(candidate_slot);
+                        self.capture_state_pool.release_work(&mut scratch.work);
+                        matched = true;
                         break;
                     }
+                    self.capture_state_pool.put(candidate_slot, candidate);
+                    self.capture_state_pool.release(candidate_slot);
                 }
-                RepeatWork::Expand(candidate, count) => {
+                CaptureRepeatWork::Expand {
+                    state: candidate_slot,
+                    count,
+                } => {
+                    let mut candidate = self.capture_state_pool.take(candidate_slot);
                     if !scratch
                         .expanded
                         .insert(candidate.index, count, &candidate.captures)
                     {
+                        self.capture_state_pool.put(candidate_slot, candidate);
+                        self.capture_state_pool.release(candidate_slot);
                         continue;
                     }
 
                     if count >= quantifier.min {
+                        let accepted_slot = self.capture_state_pool.acquire_clone(&candidate);
                         if quantifier.greedy {
-                            scratch
-                                .work
-                                .push(RepeatWork::Accept(candidate.clone(), count));
+                            scratch.work.push(CaptureRepeatWork::Accept {
+                                state: accepted_slot,
+                                count,
+                            });
                         } else {
-                            let mut accepted =
-                                repeat_accept_state(candidate.clone(), count, &atom_captures);
+                            let accepted = self.capture_state_pool.take(accepted_slot);
+                            let mut accepted = repeat_accept_state(accepted, count, &atom_captures);
                             if self.match_pattern(
                                 quantifier.next_pc,
                                 end_pc,
                                 &mut accepted,
                                 continuation,
                             ) {
-                                matched = Some(accepted);
+                                std::mem::swap(state, &mut accepted);
+                                self.capture_state_pool.put(accepted_slot, accepted);
+                                self.capture_state_pool.release(accepted_slot);
+                                self.capture_state_pool.put(candidate_slot, candidate);
+                                self.capture_state_pool.release(candidate_slot);
+                                self.capture_state_pool.release_work(&mut scratch.work);
+                                matched = true;
                                 break;
                             }
+                            self.capture_state_pool.put(accepted_slot, accepted);
+                            self.capture_state_pool.release(accepted_slot);
                         }
                     }
 
                     if quantifier.max.is_some_and(|max| count >= max) {
+                        self.capture_state_pool.put(candidate_slot, candidate);
+                        self.capture_state_pool.release(candidate_slot);
                         continue;
                     }
 
@@ -509,42 +571,50 @@ impl<'a> FirstMatcher<'a> {
                         self.repeated_group_results.push(Vec::new());
                     }
                     debug_assert!(self.repeated_group_results[result_slot].is_empty());
-                    let mut atom_state = candidate.clone();
                     let collected = self.match_group_once_to(
                         pc,
                         ContinuationTarget::CollectRepeatedGroup { slot: result_slot },
-                        &mut atom_state,
+                        &mut candidate,
                         None,
                         false,
                     );
                     self.repeated_group_result_depth -= 1;
+                    let candidate_index = candidate.index;
+                    self.capture_state_pool.put(candidate_slot, candidate);
+                    self.capture_state_pool.release(candidate_slot);
                     if collected.is_none() {
-                        self.repeated_group_results[result_slot].clear();
-                        scratch.work.clear();
+                        for result in self.repeated_group_results[result_slot].drain(..) {
+                            self.capture_state_pool.release(result);
+                        }
+                        self.capture_state_pool.release_work(&mut scratch.work);
                         scratch.expanded.clear();
-                        self.repeat_scratch = scratch;
+                        self.capture_repeat_depth -= 1;
+                        self.capture_repeat_scratch[scratch_slot] = scratch;
                         return None;
                     }
                     debug_assert_eq!(collected, Some(false));
 
                     for next_state in self.repeated_group_results[result_slot].drain(..).rev() {
-                        if count < quantifier.min || next_state.index != candidate.index {
-                            scratch.work.push(RepeatWork::Expand(next_state, count + 1));
+                        if count < quantifier.min
+                            || self.capture_state_pool.index(next_state) != candidate_index
+                        {
+                            scratch.work.push(CaptureRepeatWork::Expand {
+                                state: next_state,
+                                count: count + 1,
+                            });
+                        } else {
+                            self.capture_state_pool.release(next_state);
                         }
                     }
                 }
             }
         }
 
-        scratch.work.clear();
+        self.capture_state_pool.release_work(&mut scratch.work);
         scratch.expanded.clear();
-        self.repeat_scratch = scratch;
-        if let Some(candidate) = matched {
-            *state = candidate;
-            Some(true)
-        } else {
-            Some(false)
-        }
+        self.capture_repeat_depth -= 1;
+        self.capture_repeat_scratch[scratch_slot] = scratch;
+        Some(matched)
     }
 
     /// Capture-free quantified groups need only input positions on their

@@ -467,6 +467,38 @@ capture-free state ownership therefore does not eliminate repeated pattern-
 body interpretation. Capture-bearing quantified-group choices remain the
 last owned-state portion of Stage 3.
 
+The tenth Stage 3 slice replaces that capture-bearing ownership with a matcher-
+local reusable state pool. Work and result stacks carry integer slot ids;
+active ids retain branch isolation, temporarily taken slots cannot be reused by
+nested matching, and released slots keep their capture-vector capacity across
+later choices and candidate starts. Success swaps the winning state with the
+caller before recycling the old entry state. Failure releases the current
+state, collected results, and pending work, with debug entry/exit invariants
+requiring the entire pool and every depth-indexed scratch area to be clear.
+
+The exact base and candidate release executable SHA-256 values are
+`54fd1b43871b1ab05fcc4dae2d7cc1e59cf23815abf9ffc570614b6a9e3f300d`
+and `cb5702a4ae650da9e6f8a39cc6e24ecc8290d9da69a8df3c873c142319eb32d9`.
+A capture-bearing nested-repetition diagnostic (source SHA-256
+`998739780d0cbcd8a5ad86a2b0369a7a8ac5f8ccb5e5196f2b18de80754b8627`)
+is 0.9332 candidate/base across seven alternating pairs
+[0.9047, 0.9625]. The predeclared 40-copy Tagcloud target is neutral across
+eleven pairs at 1.0016 [0.9733, 1.0097]. Eleven-pair controls remain inside
+the 1.03 median ceiling: regexp-dna is 0.9873 [0.9650, 1.0040] over twelve
+executions per observation, validate-input is 1.0091 [1.0012, 1.0174] on the
+64-copy diagnostic source, and base64 is 1.0040 [0.9916, 1.0112] over five
+executions of the eight-copy wrapper.
+
+The candidate profile (SHA-256
+`c2693c44511747cad4c5f3b6fa00a1b594348bbd306ce8fb7846d9ee453f694b`)
+contains 3,894 main-thread samples. Its two largest `match_input` branches
+contain 524 and 54 samples. The primary quantified-group branch contains 29
+samples, including 26 in `match_group_once_to`, and has no allocator descendant
+in the sampled tree. The remaining cost is pattern-body interpretation plus
+capture-sensitive visited-state work, not owned choice-state allocation. This
+closes the owned-state portion of Stage 3 without claiming a Tagcloud timing
+improvement; formal advancement still requires the fixed-base decision path.
+
 ## Scope
 
 - Allowed paths: `crates/qjs-runtime/src/regexp/matcher.rs`,

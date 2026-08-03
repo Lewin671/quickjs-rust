@@ -140,6 +140,20 @@ fn nested_repeated_groups_keep_collected_outcomes_isolated() {
 }
 
 #[test]
+fn capture_bearing_repeated_group_choices_remain_failure_atomic() {
+    let matched = regexp_match_range(r"^((a|aa)+)+?aa$", "aaaa", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 4));
+    assert_eq!(matched.captures, vec![Some((0, 2)), Some((1, 2))]);
+
+    // Exhausting the same nested choice graph at successive candidate starts
+    // must not expose a retained capture or an active pooled state.
+    let matched = regexp_match_range(r"((a|aa)+)+z", "xxaaaaz", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (2, 7));
+    assert_eq!(matched.captures, vec![Some((2, 6)), Some((5, 6))]);
+    assert!(regexp_match_range(r"^((a|aa)+)+z$", "aaaa", 0, false, false, false).is_none());
+}
+
+#[test]
 fn nested_simple_repetitions_keep_boundary_scratch_isolated() {
     let matched =
         regexp_match_range(r"^(a+b+)+c$", "aaabbbaaabbc", 0, false, false, false).unwrap();
