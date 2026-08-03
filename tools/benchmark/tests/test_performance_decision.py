@@ -9,6 +9,7 @@ from pathlib import Path
 
 from tools.benchmark.performance_decision import (
     PerformanceDecisionError,
+    _atomic_write,
     _read_json,
     build_queue,
     decide,
@@ -22,6 +23,19 @@ class PerformanceDecisionTests(unittest.TestCase):
     base_sha = "a" * 40
     older_sha = "b" * 40
     candidate_sha = "c" * 40
+
+    def test_atomic_output_write_creates_once_without_leaking_temporary_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory_name:
+            directory = Path(directory_name)
+            output = directory / "nested" / "queue.json"
+            payload = {"artifact_type": "queue", "value": 1}
+
+            _atomic_write(output, payload)
+
+            self.assertEqual(json.loads(output.read_text(encoding="utf-8")), payload)
+            self.assertEqual(list(output.parent.iterdir()), [output])
+            with self.assertRaisesRegex(PerformanceDecisionError, "refusing to overwrite"):
+                _atomic_write(output, {"artifact_type": "queue", "value": 2})
 
     def _write(self, directory: Path, name: str, payload: object) -> Path:
         path = directory / name
