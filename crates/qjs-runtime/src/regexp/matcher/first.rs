@@ -30,6 +30,7 @@ struct Continuation {
     pc: usize,
     end_pc: usize,
     capture: Option<CaptureEnd>,
+    reject_empty_from: Option<usize>,
 }
 
 struct CaptureUndo {
@@ -110,6 +111,9 @@ impl FirstMatcher<'_> {
                 return true;
             };
             let continuation = self.continuations[continuation];
+            if continuation.reject_empty_from == Some(state.index) {
+                return false;
+            }
             if let Some(capture) = continuation.capture {
                 self.write_capture(state, capture.slot, Some((capture.start, state.index)));
             }
@@ -240,7 +244,14 @@ impl FirstMatcher<'_> {
             return None;
         }
         if quantifier.is_exactly_one() {
-            return self.match_group_once(pc, quantifier.next_pc, end_pc, state, continuation);
+            return self.match_group_once(
+                pc,
+                quantifier.next_pc,
+                end_pc,
+                state,
+                continuation,
+                false,
+            );
         }
 
         let captures = atom_capture_indices(
@@ -251,7 +262,14 @@ impl FirstMatcher<'_> {
             self.options.unicode,
         );
         if quantifier.greedy {
-            if self.match_group_once(pc, quantifier.next_pc, end_pc, state, continuation)? {
+            if self.match_group_once(
+                pc,
+                quantifier.next_pc,
+                end_pc,
+                state,
+                continuation,
+                quantifier.min == 0,
+            )? {
                 return Some(true);
             }
             return Some(self.match_group_zero(
@@ -265,7 +283,14 @@ impl FirstMatcher<'_> {
         if self.match_group_zero(&captures, quantifier.next_pc, end_pc, state, continuation) {
             return Some(true);
         }
-        self.match_group_once(pc, quantifier.next_pc, end_pc, state, continuation)
+        self.match_group_once(
+            pc,
+            quantifier.next_pc,
+            end_pc,
+            state,
+            continuation,
+            quantifier.min == 0,
+        )
     }
 
     fn match_group_zero(
@@ -301,6 +326,7 @@ impl FirstMatcher<'_> {
         end_pc: usize,
         state: &mut MatchState,
         continuation: Option<usize>,
+        reject_empty: bool,
     ) -> Option<bool> {
         let end = closing_group(self.pattern, pc)?;
         let kind = group_kind(self.pattern, pc);
@@ -337,6 +363,7 @@ impl FirstMatcher<'_> {
                 pc: next_pc,
                 end_pc,
                 capture,
+                reject_empty_from: reject_empty.then_some(state.index),
             });
             if self.match_pattern(
                 alternative_start,

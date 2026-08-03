@@ -111,6 +111,25 @@ fn capture_journal_restores_nested_alternatives_and_negative_lookahead() {
 }
 
 #[test]
+fn optional_zero_width_group_uses_the_zero_count_capture_state() {
+    // Derived from:
+    // test/built-ins/RegExp/lookahead-quantifier-match-groups.js
+    let unquantified =
+        regexp_match_range(r"(?:(?=(abc)))a", "abc", 0, false, false, false).unwrap();
+    assert_eq!(unquantified.captures, vec![Some((0, 3))]);
+
+    for source in [r"(?:(?=(abc)))?a", r"(?:(?=(abc))){0,1}a"] {
+        let matched = regexp_match_range(source, "abc", 0, false, false, false).unwrap();
+        assert_eq!((matched.start, matched.end), (0, 1));
+        assert_eq!(matched.captures, vec![None], "{source}");
+    }
+
+    let required =
+        regexp_match_range(r"(?:(?=(abc))){1,1}a", "abc", 0, false, false, false).unwrap();
+    assert_eq!(required.captures, vec![Some((0, 3))]);
+}
+
+#[test]
 fn prepared_input_slices_reuse_unicode_and_code_unit_views() {
     let unicode = PreparedRegexp::new(".", false, true, false, false)
         .prepare_input(&crate::JsString::from("A😀B"));

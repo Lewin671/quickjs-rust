@@ -109,6 +109,15 @@ Focused coverage proves that a failed nested alternative cannot leak capture
 lookahead discards a capture written before its body later fails. All 45
 matcher tests and qjs-runtime clippy pass.
 
+The first full post-push Test262 coverage run exposed one Stage 2 regression:
+`test/built-ins/RegExp/lookahead-quantifier-match-groups.js`. An optional
+compound group whose body succeeds without advancing must reject that
+one-repetition branch when its minimum is already zero, then take the
+zero-count continuation with the nested captures cleared. Continuation frames
+now carry that progress guard at the group boundary. The exact upstream case
+passes in both quickjs-rust and QuickJS-NG, with focused coverage for `?`,
+`{0,1}`, unquantified, and `{1,1}` forms.
+
 The standard-recipe Stage 2 and fixed-base executable SHA-256 values are
 `b757712e2a31bb8ecc470e0333560e591dff9f158f9b100ac455818deda276b4`
 and `922de75a13296fb7049fccc840de72d94466b32854ea301b5129e25eb290e4bb`.
