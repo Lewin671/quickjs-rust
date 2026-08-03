@@ -1,6 +1,6 @@
 # T028: Discarded binary-branch superinstruction
 
-## Status: planned from exact evidence; implementation not started
+## Status: rejected after the frozen one-attempt gate
 
 This T018 leaf unit is frozen in
 `performance-units/discarded-binary-branch-superinstruction.json` against the
@@ -110,3 +110,44 @@ Forbidden within this unit:
    only if the target passes.
 6. Record `retained`, `rejected`, or `inconclusive` without changing the cases,
    thresholds, or one-attempt budget after timing.
+
+## Result
+
+The one-attempt prototype appended the derived opcode while preserving the
+exact 96-byte `Op` layout. Lowering required the complete flow analysis, the
+exact two-`Pop` successor shape, checked targets, and a linear source range;
+the existing local-local comparison fusion retained priority. Focused tests
+covered both numeric outcomes, strings, observable left-to-right object
+coercion, thrown coercion, surrounding stack values, missing edge Pops,
+malformed targets, unproven ranges, and incomplete analysis. All 2,039
+prototype qjs-runtime tests passed, the 13 perf-counter diagnostics passed,
+and runtime clippy with `-D warnings` passed.
+
+The mechanism gate passed. The diagnostic candidate executable SHA-256 was
+`e5c1626914fc6138542e7b837b2828f5c0fe8eff0a28833310d30188e586d220`.
+It dispatched the fused operation 5,122,203 times, covering 99.9999% of the
+5,122,209 frozen HashMap sequences, and reduced `executed_ops` from
+105,261,606 to 95,017,200: 10,244,406 fewer dispatches, or 9.73%. The counter
+receipt SHA-256 is
+`16a7ba8d095622c06fccf3b608e142d7d6f9ff28f0b6922a63f7efa395cd4d0c`.
+
+The frozen payoff gate nevertheless failed. The exact base and standard
+prototype executable SHA-256 values were
+`f6bd01fd4fedabfa16ec133f937b6f3dc2476e31e3fdd680b037145c3d8aebe1`
+and
+`ab97ef4892c9af6c3fc9b1b790e914602c1d07bf63fccc9b08b2aa3953d4f7ed`.
+After one warmup per role, eleven strictly alternating HashMap pairs measured
+median candidate/base **0.983685x**, missing the required `<= 0.97x`. Median
+base and candidate times were 1.6493s and 1.6235s; all pair ratios were
+0.974149-0.987993. The A/B receipt SHA-256 is
+`431ac268b16478c7b16e3fca7d0adc171f19c1bfd72fe37f59c1667a6df5047a`.
+
+Because the sole payoff target failed, the frozen controls and complete
+promotion runs were unwarranted. The opcode, lowering, dispatch, diagnostics,
+and focused tests were reverted; the checked-in runtime is source-identical to
+the frozen base. The rejected prototype diff SHA-256 is
+`08a6601734a3c7127e5ea5f892d0f173c597d1742ef4a1d18966d743dc173422`.
+Do not retry this discarded binary-branch fusion or merely move its handler;
+a successor dispatch proposal needs new exact evidence and a structurally
+different mechanism capable of clearing the remaining roughly 1.4 percentage
+points to the frozen threshold.
