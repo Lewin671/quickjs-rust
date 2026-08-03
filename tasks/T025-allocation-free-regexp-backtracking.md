@@ -153,6 +153,12 @@ External raw/report SHA-256 are
 `96abc83d77625328a374442f3e3bb9bf82c855c8c3ddb19f677dc092ce58e4a6`
 and `8ae8d3bff6bde818d661afc4e329d2e695e0f8e82d464bbe7b9c3ee1e5f41d92`.
 
+The first trusted fixed-base dispatch, run `30824684273`, failed before setup:
+the ancestry guard ran inside the base checkout, which contained the selected
+ancestor but not the candidate object. The guard now runs in the full-history
+candidate checkout; the separately checked-out base remains exact and shallow.
+This run contains no timing evidence and cannot influence the stage decision.
+
 ## Scope
 
 - Allowed paths: `crates/qjs-runtime/src/regexp/matcher.rs`,

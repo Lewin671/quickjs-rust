@@ -302,7 +302,7 @@ jobs:
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
-          fetch-depth: 1
+          fetch-depth: ${{ github.event_name == 'workflow_dispatch' && 0 || 1 }}
           persist-credentials: false
           submodules: false
 
@@ -312,7 +312,7 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.event_name == 'push' && github.event.before || inputs.base_sha || github.sha }}
           path: target/performance-preview/base-source
-          fetch-depth: ${{ github.event_name == 'workflow_dispatch' && 0 || 1 }}
+          fetch-depth: 1
           persist-credentials: false
           submodules: false
 
@@ -338,7 +338,7 @@ jobs:
               --base-revision "$RUN_BASE_SHA" \
               --workflow-sha "$RUN_WORKFLOW_SHA" \
               --require-mode manual_main_head_owned_harness
-            git -C "$GITHUB_WORKSPACE/target/performance-preview/base-source" \
+            git -C "$GITHUB_WORKSPACE" \
               merge-base --is-ancestor "$RUN_BASE_SHA" "$RUN_CANDIDATE_SHA" || {
                 echo "error: manual base must be an ancestor of the selected main candidate" >&2
                 exit 2

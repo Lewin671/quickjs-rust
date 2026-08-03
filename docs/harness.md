@@ -214,8 +214,10 @@ repository, malformed or zero SHAs, or an after SHA different from
 compare the selected current `main` candidate against one explicit fixed
 base. The base must be a full non-zero SHA from the same repository and an
 ancestor of that candidate; the workflow fetches enough history to verify the
-relationship before measurement. Omitting `base_sha` preserves the
-same-revision integrity smoke. The current `main` checkout still owns the
+relationship from the full candidate checkout before measurement, while the
+separate base checkout stays pinned to the exact build source. Omitting
+`base_sha` preserves the same-revision integrity smoke. The current `main`
+checkout still owns the
 harness in both manual forms. Both paths use read-only permissions without
 secrets. This is a cooperative integrity scope, not a malicious candidate
 sandbox. It publishes ratios only after a strict three-block, 25-case

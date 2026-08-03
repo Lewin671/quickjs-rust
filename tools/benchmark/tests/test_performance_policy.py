@@ -530,6 +530,22 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         main_job = workflow.split("  main-push-preview:", 1)[1].split(
             "  fork-preview-unsupported:", 1
         )[0]
+        candidate_checkout = main_job.split(
+            "- name: Checkout exact main revision as head-owned harness and candidate", 1
+        )[1].split("- name: Checkout exact comparison revision", 1)[0]
+        base_checkout = main_job.split(
+            "- name: Checkout exact comparison revision", 1
+        )[1].split("- name: Admit exact trusted main update", 1)[0]
+        admission = main_job.split(
+            "- name: Admit exact trusted main update", 1
+        )[1].split("- name: Initialize pending evidence", 1)[0]
+        self.assertIn(
+            "fetch-depth: ${{ github.event_name == 'workflow_dispatch' && 0 || 1 }}",
+            candidate_checkout,
+        )
+        self.assertIn("fetch-depth: 1", base_checkout)
+        self.assertIn('git -C "$GITHUB_WORKSPACE"', admission)
+        self.assertNotIn("base-source\" \\", admission)
         self.assertIn("actions/cache/restore@v5", base_job)
         self.assertNotIn("actions/cache/save@v5", base_job)
         self.assertIn("actions/cache/save@v5", main_job)
