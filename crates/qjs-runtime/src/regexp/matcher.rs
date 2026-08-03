@@ -117,7 +117,7 @@ impl PreparedRegexp {
         };
         let group_indices = capture_group_indices(&pattern);
         let properties = PropertyCache::build(&pattern);
-        let alternatives = group_alternatives(&pattern, 0, pattern.len());
+        let alternatives = group_alternatives(&pattern, 0, pattern.len()).collect();
         Self {
             pattern,
             group_indices,

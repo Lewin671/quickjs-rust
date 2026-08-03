@@ -225,36 +225,73 @@ pub(super) fn group_alternatives(
     pattern: &[char],
     start_pc: usize,
     end_pc: usize,
-) -> Vec<(usize, usize)> {
-    let mut alternatives = Vec::new();
-    let mut start = start_pc;
-    let mut escaped = false;
-    let mut in_class = false;
-    let mut depth = 0usize;
-    for (index, char) in pattern
-        .iter()
-        .enumerate()
-        .take(end_pc)
-        .skip(start_pc)
-        .map(|(index, char)| (index, *char))
-    {
-        if escaped {
-            escaped = false;
-        } else if char == '\\' {
-            escaped = true;
-        } else if char == '[' {
-            in_class = true;
-        } else if char == ']' {
-            in_class = false;
-        } else if !in_class && char == '(' {
-            depth += 1;
-        } else if !in_class && char == ')' && depth > 0 {
-            depth -= 1;
-        } else if !in_class && char == '|' && depth == 0 {
-            alternatives.push((start, index));
-            start = index + 1;
-        }
+) -> GroupAlternatives<'_> {
+    GroupAlternatives {
+        pattern,
+        cursor: start_pc,
+        end: end_pc,
+        finished: false,
     }
-    alternatives.push((start, end_pc));
-    alternatives
+}
+
+/// Lazily yields top-level alternatives inside one pattern or group body.
+/// Escaped pipes, character-class pipes, and pipes in nested groups are not
+/// separators. Scanning stops at each separator, so hot group matching does
+/// not allocate a temporary range vector.
+pub(super) struct GroupAlternatives<'a> {
+    pattern: &'a [char],
+    cursor: usize,
+    end: usize,
+    finished: bool,
+}
+
+impl Iterator for GroupAlternatives<'_> {
+    type Item = (usize, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.finished {
+            return None;
+        }
+
+        let start = self.cursor;
+        let mut escaped = false;
+        let mut in_class = false;
+        let mut depth = 0usize;
+        for index in self.cursor..self.end {
+            let char = self.pattern[index];
+            if escaped {
+                escaped = false;
+            } else if char == '\\' {
+                escaped = true;
+            } else if char == '[' {
+                in_class = true;
+            } else if char == ']' {
+                in_class = false;
+            } else if !in_class && char == '(' {
+                depth += 1;
+            } else if !in_class && char == ')' && depth > 0 {
+                depth -= 1;
+            } else if !in_class && char == '|' && depth == 0 {
+                self.cursor = index + 1;
+                return Some((start, index));
+            }
+        }
+        self.finished = true;
+        Some((start, self.end))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::group_alternatives;
+
+    #[test]
+    fn alternatives_skip_nested_escaped_and_class_pipes_without_allocating() {
+        let pattern: Vec<char> = r"a|(b|c)|[d|e]|f\|g||h".chars().collect();
+        let alternatives: Vec<_> = group_alternatives(&pattern, 0, pattern.len()).collect();
+        assert_eq!(
+            alternatives,
+            vec![(0, 1), (2, 7), (8, 13), (14, 18), (19, 19), (20, 21)]
+        );
+    }
 }

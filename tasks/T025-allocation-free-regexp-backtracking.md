@@ -312,6 +312,33 @@ choice states and capture-bearing expanded keys remain Stage 3 work. All 49
 focused matcher tests, 2,030 runtime tests, 5,169 curated Test262 cases, and
 the QuickJS-NG fixture comparison pass.
 
+The fifth Stage 3 slice makes group-alternative discovery a lazy range
+iterator. Prepared patterns still collect their top-level alternatives once,
+while group, lookaround, and reverse-matching hot paths now consume ranges
+without constructing a temporary vector. A direct iterator test covers
+nested groups, escaped pipes, character-class pipes, and empty alternatives.
+
+The boundary-reuse profile above contains 31 samples in
+`group_alternatives`, 30 of which directly grow its temporary vector. The new
+profile, SHA-256
+`7fe47ad7d7a239892f8eb378e780afb42183724b06d16b16800312bbc5c6333a`,
+contains 4,894 main-thread samples and no `group_alternatives` allocation
+descendant anywhere below `PreparedRegexp::match_input`. Different host load
+again prevents a timing-ratio interpretation; this establishes removal of
+the measured route only. Both profiles use the same 40-copy source SHA-256
+`1a3650d435575a4497a6143749d6fde6b32bc1178ac9088d18ca713121cc3fe5`.
+
+The exact base and lazy-alternatives release executable SHA-256 values are
+`2d46be64f099b9ff3132cd2871cb2f1f455146b9ada05a1ae6c53c7c75aeb1ab`
+and `84da42beb6a60e156c725efa9fb329a3be7f5d2347e66d1f71d2cbf13b0233d9`.
+Eleven-pair amplified screens remain noise-bound and inside the 1.03 median
+control ceiling: Tagcloud 0.9863 [0.9072, 1.0828] at four copies, regexp-dna
+0.9997 [0.9110, 1.0236] at four, validate-input 0.9955 [0.9323, 1.0673]
+at eleven, and base64 0.9953 [0.9741, 1.0107] at ten. This is another
+allocation-removal slice, not a timing improvement claim. All 50 focused
+matcher tests, 2,031 runtime tests, 5,169 curated Test262 cases, and the
+QuickJS-NG fixture comparison pass.
+
 ## Scope
 
 - Allowed paths: `crates/qjs-runtime/src/regexp/matcher.rs`,
