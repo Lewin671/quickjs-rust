@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "compact-hot-op-error-abi",
+  "base_sha": "2093eeab73b907295fa25b1b4583465349a361c1",
+  "queue": {
+    "candidate_sha": "2093eeab73b907295fa25b1b4583465349a361c1",
+    "sha256": "d4aed5990fe8d59eb25558c681ffdedf91506e2b1b87b0682a61ad51c3ace3ec"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "rank_ceiling": 2,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Make the successful return from each hot out-of-line non-call opcode handler pointer-sized by returning a niche-optimized result whose error is an owned RuntimeError pointer. Convert that pointer back to the unchanged RuntimeError at the dispatch boundary, so ordinary success no longer writes and reloads a multiword Result through a caller-provided return buffer while exceptional execution alone pays one allocation.",
+    "generality": "The ABI applies uniformly to the existing out-of-line local, global, named and computed property, coercion, unary, update, and binary opcode bodies. Selection depends only on entering one of those opcode handlers; it does not inspect source paths, benchmark or function names, property names, value contents, iteration counts, checksums, or expected results. Inline authoritative-local and Number fast paths remain unchanged, and call, construction, return, rare-opcode, public RuntimeError, and global error-model boundaries retain their existing representations.",
+    "semantic_risks": [
+      "round-tripping every thrown value and diagnostic message through the private owned error pointer without cloning, replacing, or swallowing it",
+      "allocating only after an opcode has produced an abrupt completion and never on a successful handler return",
+      "preserving instruction-pointer synchronization and try/catch handling when the compact error is converted at the dispatch boundary",
+      "keeping the compact result pointer-sized through its non-null error niche on every supported target",
+      "leaving call, construction, return, suspension, rare-opcode, and public RuntimeError result contracts unchanged",
+      "not moving semantic work into the dispatch loop or widening any existing fast-path admission"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-08-03 /tmp/qjs-2093-hash-map.sample; amplified runner-equivalent JetStream HashMap executed by release executable SHA-256 cb5702a4ae650da9e6f8a39cc6e24ecc8290d9da69a8df3c873c142319eb32d9. The current 39f3b530 descendant changes documentation only and is runtime-identical to the queue candidate.",
+      "sha256": "ae13dd957a6190d3cabdf9c3456448b4080bbe30fd4d4b8ef410af89e0f55c1e",
+      "base_sha": "2093eeab73b907295fa25b1b4583465349a361c1",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Vm::run_current_activation itself owns 561 of 2,543 main-thread samples, a conservative 22.1 percent exclusive lower bound before counting its out-of-line handlers. Current ARM64 disassembly gives it a 448-byte frame and passes a caller stack address in x0 before hot property and arithmetic handlers, then reloads the memory-returned Result discriminant. The same sample independently reaches named-property reads, binary evaluation, local handling, and their post-call dispatch continuations.",
+      "inclusive_fraction": 0.2206
+    },
+    {
+      "source": "macOS sample 2026-08-03 /tmp/qjs-2093-raytrace.sample; amplified runner-equivalent JetStream raytrace-public-class-fields executed by the same release executable SHA-256 cb5702a4ae650da9e6f8a39cc6e24ecc8290d9da69a8df3c873c142319eb32d9.",
+      "sha256": "32472bd9c4d43e8d44cb15f0dd2a04a788fa3aeffb4f39f8d09c745eb720ba11",
+      "base_sha": "2093eeab73b907295fa25b1b4583465349a361c1",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/raytrace-public-class-fields"
+      ],
+      "shared_cost": "Vm::run_current_activation itself owns 171 of 1,365 main-thread samples, a conservative 12.5 percent exclusive lower bound. The profile independently reaches named-property access, binary operations, local handling, and the same memory-returned hot-handler boundary, alongside class construction and calls that remain outside this unit.",
+      "inclusive_fraction": 0.1253
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/date-format-xparb",
+      "external/sunspider-1.0/access-binary-trees",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/string-validate-input",
+      "external/sunspider-1.0/controlflow-recursive",
+      "broad/array_allocation",
+      "broad/object_allocation",
+      "broad/closure_allocation_call"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
