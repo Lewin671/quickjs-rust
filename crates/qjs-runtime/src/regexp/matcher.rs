@@ -24,7 +24,7 @@ use escapes::{
     regexp_control_escape, regexp_whitespace, regexp_word_char, unicode_escape,
 };
 use fast_scan::{repeat_simple_atom, simple_atom_matcher};
-use first::match_pattern_first;
+use first::FirstMatcher;
 use groups::{
     GroupKind, closing_group, group_alternatives, group_kind, is_non_capturing_group,
     named_backreference, named_group_index,
@@ -180,34 +180,32 @@ impl PreparedRegexp {
             return None;
         }
         let final_start = if exact_start { start_index } else { text.len() };
-        (start_index..=final_start)
-            .filter(|index| !self.options.unicode || !is_trailing_surrogate_position(text, *index))
-            .find_map(|start| {
-                let state = MatchState {
-                    index: start,
-                    captures: vec![None; self.group_indices.len()],
-                };
-                let mut state = state;
-                self.alternatives
-                    .iter()
-                    .find_map(|(alternative_start, alternative_end)| {
-                        match_pattern_first(
-                            &self.pattern,
-                            text,
-                            *alternative_start,
-                            *alternative_end,
-                            &mut state,
-                            &self.group_indices,
-                            &self.properties,
-                            self.options,
-                        )
-                        .then(|| RegexpMatch {
-                            start,
-                            end: state.index,
-                            captures: std::mem::take(&mut state.captures),
-                        })
-                    })
-            })
+        let mut matcher = FirstMatcher::new(
+            &self.pattern,
+            text,
+            &self.group_indices,
+            &self.properties,
+            self.options,
+        );
+        for start in start_index..=final_start {
+            if self.options.unicode && is_trailing_surrogate_position(text, start) {
+                continue;
+            }
+            let mut state = MatchState {
+                index: start,
+                captures: vec![None; self.group_indices.len()],
+            };
+            for (alternative_start, alternative_end) in &self.alternatives {
+                if matcher.match_pattern_first(*alternative_start, *alternative_end, &mut state) {
+                    return Some(RegexpMatch {
+                        start,
+                        end: state.index,
+                        captures: std::mem::take(&mut state.captures),
+                    });
+                }
+            }
+        }
+        None
     }
 }
 

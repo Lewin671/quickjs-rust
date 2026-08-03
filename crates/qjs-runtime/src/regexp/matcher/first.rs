@@ -38,7 +38,7 @@ struct CaptureUndo {
     previous: Capture,
 }
 
-struct FirstMatcher<'a> {
+pub(super) struct FirstMatcher<'a> {
     pattern: &'a [char],
     text: &'a [char],
     group_indices: &'a HashMap<usize, usize>,
@@ -48,35 +48,44 @@ struct FirstMatcher<'a> {
     capture_undo: Vec<CaptureUndo>,
 }
 
-/// Find the first match in ECMAScript backtracking priority order.
-///
-/// Returning `false` leaves `state` exactly as it was on entry. The invariant
-/// lets callers reuse one state across candidate boundaries and alternatives
-/// without cloning its capture vector at every choice point.
-#[allow(clippy::too_many_arguments)]
-pub(super) fn match_pattern_first(
-    pattern: &[char],
-    text: &[char],
-    pc: usize,
-    end_pc: usize,
-    state: &mut MatchState,
-    group_indices: &HashMap<usize, usize>,
-    properties: &PropertyCache,
-    options: MatchOptions,
-) -> bool {
-    FirstMatcher {
-        pattern,
-        text,
-        group_indices,
-        properties,
-        options,
-        continuations: Vec::new(),
-        capture_undo: Vec::new(),
+impl<'a> FirstMatcher<'a> {
+    pub(super) fn new(
+        pattern: &'a [char],
+        text: &'a [char],
+        group_indices: &'a HashMap<usize, usize>,
+        properties: &'a PropertyCache,
+        options: MatchOptions,
+    ) -> Self {
+        Self {
+            pattern,
+            text,
+            group_indices,
+            properties,
+            options,
+            continuations: Vec::new(),
+            capture_undo: Vec::new(),
+        }
     }
-    .match_pattern(pc, end_pc, state, None)
-}
 
-impl FirstMatcher<'_> {
+    /// Find the first match in ECMAScript backtracking priority order.
+    ///
+    /// Returning `false` leaves `state` exactly as it was on entry and both
+    /// scratch journals empty. The invariant lets one matcher reuse its
+    /// allocated storage across candidate boundaries and alternatives.
+    pub(super) fn match_pattern_first(
+        &mut self,
+        pc: usize,
+        end_pc: usize,
+        state: &mut MatchState,
+    ) -> bool {
+        debug_assert!(self.continuations.is_empty());
+        debug_assert!(self.capture_undo.is_empty());
+        let matched = self.match_pattern(pc, end_pc, state, None);
+        debug_assert!(matched || self.continuations.is_empty());
+        debug_assert!(matched || self.capture_undo.is_empty());
+        matched
+    }
+
     /// Every recursive entry is a rollback boundary. Continuation frames are
     /// append-only so a nested attempt cannot overwrite a parent frame that a
     /// later alternative still needs.

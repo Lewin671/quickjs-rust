@@ -205,6 +205,23 @@ report, and external report SHA-256 values are
 `149ce9d642155243968822c9c34df6db078b223f4c8dea2ef692ee633a010a74`,
 and `7f3c8500d4972011128ceca563a8eef24a5bcc09319243bdb06e10f1e4ec22f1`.
 
+## Stage 3 evidence
+
+The first Stage 3 slice gives one `FirstMatcher` the lifetime of an entire
+`PreparedRegexp::match_input` invocation. Failed candidate starts and
+top-level alternatives now retain the capacity of the continuation and
+capture-undo journals instead of constructing fresh vectors. The failure
+contract asserts that both journals are empty before reuse; successful
+matching still returns immediately and drops invocation-local scratch.
+
+The Stage 2 and slice-candidate release executable SHA-256 values are
+`b757712e2a31bb8ecc470e0333560e591dff9f158f9b100ac455818deda276b4`
+and `e46ea94a7eed5f005a5c0e9428a73c01d6966e5adebb399e73001ebbcc871033`.
+An 11-pair amplified Tagcloud A/B is noise-bound at 1.0018 Stage-3-slice/Stage
+2 with an observed range of 0.9508-1.0336. This slice establishes reusable
+storage for the ordered repetition work but does not claim a speedup by
+itself; generic repeated-atom state graphs still remain behind the bridge.
+
 ## Scope
 
 - Allowed paths: `crates/qjs-runtime/src/regexp/matcher.rs`,
