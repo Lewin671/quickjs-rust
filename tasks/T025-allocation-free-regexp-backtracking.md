@@ -158,6 +158,11 @@ the ancestry guard ran inside the base checkout, which contained the selected
 ancestor but not the candidate object. The guard now runs in the full-history
 candidate checkout; the separately checked-out base remains exact and shallow.
 This run contains no timing evidence and cannot influence the stage decision.
+Retry `30825469936` exposed that the GitHub expression `&& 0 || 1` evaluates
+to `1` because numeric zero is false, so the candidate checkout was still
+shallow. The workflow now returns string depths `'0'` and `'1'`; a regression
+assertion rejects the false-zero expression. This retry also contains no timing
+evidence.
 
 ## Scope
 

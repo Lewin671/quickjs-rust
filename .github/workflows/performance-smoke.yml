@@ -302,7 +302,7 @@ jobs:
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
-          fetch-depth: ${{ github.event_name == 'workflow_dispatch' && 0 || 1 }}
+          fetch-depth: ${{ github.event_name == 'workflow_dispatch' && '0' || '1' }}
           persist-credentials: false
           submodules: false
 

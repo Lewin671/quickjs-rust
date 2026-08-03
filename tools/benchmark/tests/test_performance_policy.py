@@ -471,9 +471,10 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertIn("path: target/performance-preview/base-source", workflow)
         self.assertEqual(workflow.count("fetch-depth: 1"), 4)
         self.assertIn(
-            "fetch-depth: ${{ github.event_name == 'workflow_dispatch' && 0 || 1 }}",
+            "fetch-depth: ${{ github.event_name == 'workflow_dispatch' && '0' || '1' }}",
             workflow,
         )
+        self.assertNotIn("&& 0 || 1", workflow)
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn("submodules: false", workflow)
         self.assertIn(BASE_MODE, workflow)
@@ -540,7 +541,7 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
             "- name: Admit exact trusted main update", 1
         )[1].split("- name: Initialize pending evidence", 1)[0]
         self.assertIn(
-            "fetch-depth: ${{ github.event_name == 'workflow_dispatch' && 0 || 1 }}",
+            "fetch-depth: ${{ github.event_name == 'workflow_dispatch' && '0' || '1' }}",
             candidate_checkout,
         )
         self.assertIn("fetch-depth: 1", base_checkout)
