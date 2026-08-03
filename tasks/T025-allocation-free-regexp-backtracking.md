@@ -182,6 +182,29 @@ The run's preview summary, broad report, and external report SHA-256 values are
 `0920666358882dec0aa5f9a748b9f06443e8d591e92017d27dea2b85121d6832`,
 and `789ec55f336fb341bf9fbf4900b81b85b79dc599539b3c17150f6f301fb41a3d`.
 
+Corrected fixed-base run `30828792160` measured candidate `7ab0814d` against
+the same `c62314aa` migration base. Formal Stage 2 decision SHA-256
+`e1d66d60a350811af340dd51441b3b77b8fa3bb6fa0f56ab9e03411ad5e3000f`
+is `advance`: Tagcloud is 0.8912 candidate/base and every declared control is
+inside the 1.10 cumulative stage budget. The largest watched ratio is
+`controlflow-recursive` at 1.0334; HashMap is 1.0284, raytrace 1.0022,
+`ai-astar` 1.0075, validate-input 0.9624, regexp-dna 0.7193, base64 0.9710,
+object allocation 0.9813, and closure allocation call 0.9656. The plan now
+advances to Stage 3; this classification earns the right to continue and is
+not a performance claim.
+
+The workflow-level preview remains inconclusive: all 3/3 broad blocks and all
+watched ratios are valid, but an unrelated QuickJS-NG `local_read` linearity
+probe read 1.1707 outside the frozen 0.85-1.15 interval, and the maximum broad
+relative half-width was 0.03283 against a 0.03 claim limit. The stage contract
+deliberately classifies only the complete predeclared cumulative target and
+controls; this distinction is retained rather than presenting the hosted
+summary as a broad performance direction. The rerun's preview summary, broad
+report, and external report SHA-256 values are
+`31105b796d92898a5b9aac70afbd8edf6402ea8cfb572e8b552777de2ea90eca`,
+`149ce9d642155243968822c9c34df6db078b223f4c8dea2ef692ee633a010a74`,
+and `7f3c8500d4972011128ceca563a8eef24a5bcc09319243bdb06e10f1e4ec22f1`.
+
 ## Scope
 
 - Allowed paths: `crates/qjs-runtime/src/regexp/matcher.rs`,
