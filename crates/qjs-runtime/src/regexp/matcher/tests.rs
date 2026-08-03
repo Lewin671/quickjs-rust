@@ -79,6 +79,22 @@ fn streamed_simple_repetition_preserves_first_full_match_priority() {
 }
 
 #[test]
+fn first_match_failure_restores_state_for_the_next_alternative() {
+    // The first alternative advances through a simple repetition before its
+    // continuation fails. The second alternative must start at the original
+    // index with untouched captures.
+    let matched = regexp_match_range(r"^a+b$|^(a)$", "a", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+    assert_eq!(matched.captures, vec![Some((0, 1))]);
+
+    // Exercise the same rollback after candidate-start scanning has skipped a
+    // prefix, so the restored index is not always zero.
+    let matched = regexp_match_range(r"a+b|(a)", "za", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (1, 2));
+    assert_eq!(matched.captures, vec![Some((1, 2))]);
+}
+
+#[test]
 fn prepared_input_slices_reuse_unicode_and_code_unit_views() {
     let unicode = PreparedRegexp::new(".", false, true, false, false)
         .prepare_input(&crate::JsString::from("A😀B"));

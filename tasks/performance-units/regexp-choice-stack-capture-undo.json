@@ -1,0 +1,85 @@
+{
+  "schema_version": 2,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_kind": "migration",
+  "unit_id": "regexp-choice-stack-capture-undo",
+  "base_sha": "c62314aa4e7bfc92b27882c2e575d3bfb0b4b294",
+  "queue": {
+    "candidate_sha": "c62314aa4e7bfc92b27882c2e575d3bfb0b4b294",
+    "sha256": "8dc7608cee0e90420b16c9b1b0bfbc6e2a2cd890aa5a7fdd13a9c0cb0228de4f"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-tagcloud"
+    ],
+    "rank_ceiling": 2,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Migrate first-match RegExp execution from cloned MatchState graphs to one mutable state with explicit choice points, a capture undo trail, and reusable repetition scratch. Stage 1 establishes failure-atomic mutable first matching while bridging capture-bearing atoms to the existing all-state matcher; stage 2 moves capture writes onto the journal; stage 3 replaces the generic repeated-atom state graph with the explicit choice stack and reusable visited/work storage; stage 4 removes the bridge and judges the complete allocation-free path.",
+    "generality": "The representation applies to ordinary first-match execution based only on RegExp syntax and flags. Candidate starts, top-level and nested alternatives, greedy and lazy repetition, captures, lookarounds, backreferences, Unicode advancement, and reverse-capture semantics use the same rollback contract. It contains no workload name, source path, pattern text, input size, checksum, iteration count, or expected-result condition, and it preserves the RegexpMatch boundary and observable exec protocol.",
+    "semantic_risks": [
+      "restoring the input index and every capture slot exactly when a continuation or alternative fails",
+      "preserving ECMAScript leftmost-first alternation plus greedy and lazy backtracking priority",
+      "preserving capture clearing for skipped quantified groups and the capture state observed by backreferences",
+      "preserving positive and negative lookaround isolation and reverse capture priority in lookbehind",
+      "avoiding infinite nullable repetition while replacing content-keyed state deduplication with explicit choice points",
+      "reusing scratch only within one matcher invocation so nested and repeated exec calls cannot observe stale state"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-08-03 /tmp/qjs-c623-string-tagcloud.sample; 32 top-level copies of the hash-verified official SunSpider string-tagcloud source (SHA-256 9634886bcb846c76141f97b681b33a11df444901e0b4c899d8f72a3b6544f9d5) run by release executable SHA-256 922de75a13296fb7049fccc840de72d94466b32854ea301b5129e25eb290e4bb. The current 2a3fe1cd executable has the same SHA-256 because that descendant changes only the performance controller and its tests.",
+      "sha256": "bf742a7a0ae415c3d51d13fe89e76a47be7b23b0b8b9ab719fd598df2e722c70",
+      "base_sha": "c62314aa4e7bfc92b27882c2e575d3bfb0b4b294",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-tagcloud"
+      ],
+      "shared_cost": "Of 4,661 main-thread samples, 1,498 are below PreparedRegexp::match_input. match_pattern_first and repeat_atom dominate that subtree, while malloc/free entry points account for roughly two fifths of the whole profile. The generic repeat evaluator allocates work, result, child, expanded, and dedup collections and clones capture vectors into branch states and hash keys.",
+      "inclusive_fraction": 0.3214
+    },
+    {
+      "source": "macOS sample 2026-08-03 /tmp/qjs-2a3-string-validate-input.sample; 64 top-level copies of the hash-verified official SunSpider string-validate-input source (SHA-256 518ed0c67fde0c0d65af6238b91f5e498d8ba5d188c428f4a76dd498704737d5) run by the byte-identical c62314aa/2a3fe1cd release executable SHA-256 922de75a13296fb7049fccc840de72d94466b32854ea301b5129e25eb290e4bb.",
+      "sha256": "452bd2d013472d981dc0c59c7b0148e0de81fe96410dc254c79cf0a23fdba43b",
+      "base_sha": "c62314aa4e7bfc92b27882c2e575d3bfb0b4b294",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-validate-input"
+      ],
+      "shared_cost": "The independent validation workload places 412 of 3,401 main-thread samples in PreparedRegexp::match_input. Its descendants independently include match_pattern_first, repeat_atom, capture-bearing email validation, vector growth, and allocator entry points. The 12.1 percent ceiling is too small for a payoff target, so this case remains a regression control.",
+      "inclusive_fraction": 0.1211
+    }
+  ],
+  "migration": {
+    "stages": 4,
+    "current_stage": 1,
+    "cumulative_target_ids": [
+      "external/sunspider-1.0/string-tagcloud"
+    ],
+    "stage_max_candidate_over_base": 1.1
+  },
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-tagcloud"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/string-validate-input",
+      "external/sunspider-1.0/regexp-dna",
+      "external/sunspider-1.0/string-base64",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "broad/object_allocation",
+      "broad/closure_allocation"
+    ],
+    "target_max_candidate_over_base": 0.8,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

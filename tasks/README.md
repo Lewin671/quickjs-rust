@@ -89,14 +89,16 @@ Campaign working rules:
   compact that same execution core into register/superinstructions. This is
   the next T018 unit; do not create a second independent VM or expand the
   direct-leaf eligibility predicate in the frame-stack commit.
-- `T024-general-register-core.md` — **the active structural performance
-  unit**, and the successor to T021. Replaces `run_current_activation` for
-  ordinary bodies with a register-addressed executor seeded from
-  `typed_loop`'s mixed scalar/boxed model. It records why the admission-widening
-  route cannot reach parity (measured hit rate and per-unit yield), the six
-  design constraints that each come from a falsified alternative, and the
-  falsification gate that ends it rather than widening it. Serialize on one
-  branch.
+- `T024-general-register-core.md` — **closed after falsification.** The retained
+  dispatch-preamble split moved the external corpus by only about one percent,
+  below its structural mechanism gate. Preserve its negative evidence; do not
+  infer current priority from it.
+- `T025-allocation-free-regexp-backtracking.md` — **the active structural
+  performance unit.** Migrate first-match RegExp execution from cloned state
+  graphs to one mutable state, explicit choice points, a capture undo trail,
+  and reusable repetition scratch. Its four schema-2 stages keep one fixed
+  base and require both a `string-tagcloud` payoff and a measured allocator
+  reduction before the final retain decision. Serialize on one branch.
 - `T022-performance-priority-controller.md` — evidence-bound selection and
   stop mechanism for T018. It derives the next profiling queue from current
   artifacts, freezes a unit's targets before timing, and records explicit

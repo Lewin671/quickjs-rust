@@ -1,5 +1,14 @@
 # T024: General Register Execution Core
 
+## Status: closed after the dispatch-mechanics falsification (2026-08-03)
+
+The retained dispatch-preamble split moved the external corpus by only about
+one percent, below this task's structural mechanism gate. The current profile
+and T022 queue select allocation-free RegExp backtracking instead; that work is
+tracked in T025. Keep the design constraints and rejected alternatives below
+as negative evidence, but do not treat this historical task as the active
+opportunity queue.
+
 ## Goal
 
 Replace `Vm::run_current_activation` as the path ordinary synchronous function
