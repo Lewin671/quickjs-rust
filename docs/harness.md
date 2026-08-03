@@ -210,13 +210,19 @@ path runs for every `main` update, including merges and direct pushes, using
 `github.event.after` as the head-owned harness/candidate and
 `github.event.before` as the base. Push admission rejects the wrong event, ref,
 repository, malformed or zero SHAs, or an after SHA different from
-`github.sha`. Both paths use read-only permissions without secrets. This is a
-cooperative integrity scope, not a malicious candidate sandbox. It publishes ratios
-only after a strict three-block, 25-case non-claim health check. Pending or
-failed runs still publish a status summary and any available provenance, but
-no ratio conclusion. Phase status identifies the failed build/measurement/
-summary stage, and even pre-orchestrator failure creates Markdown and JSON
-evidence. There is no threshold or gate.
+`github.sha`. A manual `main` dispatch can additionally supply `base_sha` to
+compare the selected current `main` candidate against one explicit fixed
+base. The base must be a full non-zero SHA from the same repository and an
+ancestor of that candidate; the workflow fetches enough history to verify the
+relationship before measurement. Omitting `base_sha` preserves the
+same-revision integrity smoke. The current `main` checkout still owns the
+harness in both manual forms. Both paths use read-only permissions without
+secrets. This is a cooperative integrity scope, not a malicious candidate
+sandbox. It publishes ratios only after a strict three-block, 25-case
+non-claim health check. Pending or failed runs still publish a status summary
+and any available provenance, but no ratio conclusion. Phase status identifies
+the failed build/measurement/summary stage, and even pre-orchestrator failure
+creates Markdown and JSON evidence. There is no threshold or gate.
 
 The main-push path first runs `reference-engine-cache`, which restores the
 exact pinned QuickJS-NG executable or builds and saves it before measurement.

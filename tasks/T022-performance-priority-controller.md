@@ -65,6 +65,10 @@ or "arenas".
 
 Raw timing artifacts remain outside Git. The queue and decision bind their
 SHA-256 values so a small reviewable plan cannot be detached from its evidence.
+For a migration whose plan freezes an older base, dispatch the hosted preview
+from current `main` with that ancestor as `base_sha`; immediate-parent push
+previews are useful incremental diagnostics but cannot satisfy the controller's
+base-SHA binding.
 
 ## Scope
 

@@ -186,7 +186,7 @@ class PerformancePolicyTests(unittest.TestCase):
             ("manual_event", "repository_dispatch"),
             ("manual_ref", "refs/heads/release"),
             ("manual_integrity_scope", "untrusted_dispatch"),
-            ("manual_comparison", "arbitrary_revision"),
+            ("manual_comparison", "same_revision_only"),
             ("manual_harness_owner", "caller_branch"),
         ):
             data = copy.deepcopy(self.data)
@@ -447,6 +447,8 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertIn("pull_request_target:", workflow)
         self.assertIn("push:", workflow)
         self.assertIn("workflow_dispatch:", workflow)
+        self.assertIn("base_sha:", workflow)
+        self.assertIn("Full SHA of a merged main ancestor", workflow)
         self.assertEqual(workflow.count("branches: [main]"), 2)
         self.assertNotIn("\n  pull_request:\n", workflow)
         self.assertNotIn("schedule:", workflow)
@@ -463,11 +465,15 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
             "RUN_EVENT_REPOSITORY: ${{ github.event.repository.full_name }}", workflow
         )
         self.assertIn(
-            "ref: ${{ github.event_name == 'push' && github.event.before || github.sha }}",
+            "ref: ${{ github.event_name == 'push' && github.event.before || inputs.base_sha || github.sha }}",
             workflow,
         )
         self.assertIn("path: target/performance-preview/base-source", workflow)
-        self.assertEqual(workflow.count("fetch-depth: 1"), 5)
+        self.assertEqual(workflow.count("fetch-depth: 1"), 4)
+        self.assertIn(
+            "fetch-depth: ${{ github.event_name == 'workflow_dispatch' && 0 || 1 }}",
+            workflow,
+        )
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn("submodules: false", workflow)
         self.assertIn(BASE_MODE, workflow)
@@ -480,7 +486,7 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertEqual(workflow.count('--pr-number "$PR_NUMBER"'), 1)
         self.assertEqual(workflow.count('--head-ref "$PR_HEAD_REF"'), 1)
         self.assertIn(
-            "RUN_BASE_SHA: ${{ github.event_name == 'push' && github.event.before || github.sha }}",
+            "RUN_BASE_SHA: ${{ github.event_name == 'push' && github.event.before || inputs.base_sha || github.sha }}",
             workflow,
         )
         self.assertIn("RUN_CANDIDATE_SHA: ${{ github.sha }}", workflow)
@@ -490,6 +496,11 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertIn('--workflow-sha "$RUN_WORKFLOW_SHA"', workflow)
         self.assertIn("admit-dispatch", workflow)
         self.assertIn('--revision "$RUN_CANDIDATE_SHA"', workflow)
+        self.assertIn('--base-revision "$RUN_BASE_SHA"', workflow)
+        self.assertIn(
+            'merge-base --is-ancestor "$RUN_BASE_SHA" "$RUN_CANDIDATE_SHA"',
+            workflow,
+        )
         self.assertIn("fork-preview-unsupported", workflow)
         self.assertIn("github.event.pull_request.number || github.run_id", workflow)
         self.assertIn("github.event_name == 'pull_request_target'", workflow)

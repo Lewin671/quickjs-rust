@@ -229,6 +229,7 @@ class PreviewPreparationTests(unittest.TestCase):
             'cat "$OUTPUT/external-summary.md" >> "$OUTPUT/summary.md"',
         ):
             self.assertIn(value, script)
+        self.assertNotIn("candidate and base revisions must match", script)
         self.assertGreaterEqual(script.count('verify_source "$CANDIDATE_SOURCE"'), 3)
         self.assertGreaterEqual(script.count('verify_source "$BASE_SOURCE"'), 3)
         self.assertGreaterEqual(script.count('verify_source "$QUICKJS_SOURCE"'), 2)
@@ -421,6 +422,7 @@ class HostedPreviewControlTests(unittest.TestCase):
         repository: str = "example/quickjs-rust",
         event_repository: str = "example/quickjs-rust",
         ref: str = HOSTED_PUSH_REF, revision: str = "2" * 40,
+        base_revision: str = "1" * 40,
         workflow_sha: str = "2" * 40,
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -429,7 +431,8 @@ class HostedPreviewControlTests(unittest.TestCase):
                 "admit-dispatch", "--event-name", event_name,
                 "--repository", repository,
                 "--event-repository", event_repository, "--ref", ref,
-                "--revision", revision, "--workflow-sha", workflow_sha,
+                "--revision", revision, "--base-revision", base_revision,
+                "--workflow-sha", workflow_sha,
                 "--require-mode", MANUAL_MODE,
             ],
             cwd=ROOT, capture_output=True, text=True, timeout=10, check=False,
@@ -505,6 +508,8 @@ class HostedPreviewControlTests(unittest.TestCase):
             ),
             ("zero", {"revision": "0" * 40, "workflow_sha": "0" * 40},
              "zero_dispatch_revision"),
+            ("zero-base", {"base_revision": "0" * 40},
+             "zero_dispatch_base_revision"),
             ("workflow", {"workflow_sha": "3" * 40}, "workflow_sha_mismatch"),
         ):
             with self.subTest(name=name):
@@ -515,6 +520,10 @@ class HostedPreviewControlTests(unittest.TestCase):
         wrong_event = self._admit_dispatch(event_name="push")
         self.assertEqual(wrong_event.returncode, 2)
         self.assertIn("event name: expected workflow_dispatch", wrong_event.stderr)
+
+        malformed_base = self._admit_dispatch(base_revision="not-a-sha")
+        self.assertEqual(malformed_base.returncode, 2)
+        self.assertIn("dispatch base revision", malformed_base.stderr)
 
     def test_shell_env_passes_hostile_head_ref_as_literal_cli_argument(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:

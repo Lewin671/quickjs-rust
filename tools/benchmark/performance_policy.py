@@ -535,7 +535,8 @@ def load_policy(path: Path) -> PerformancePolicy:
         PUSH_INTEGRITY_SCOPE, "event_after_candidate_vs_event_before_base",
         "event_after_candidate",
         MANUAL_MODE, "workflow_dispatch", HOSTED_PUSH_REF,
-        MANUAL_INTEGRITY_SCOPE, "selected_main_candidate_vs_same_revision_base",
+        MANUAL_INTEGRITY_SCOPE,
+        "selected_main_candidate_vs_explicit_ancestor_base",
         "selected_main_candidate",
         "trusted_merged_commits_only",
     ):

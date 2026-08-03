@@ -6,6 +6,11 @@ on:
   pull_request_target:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Full SHA of a merged main ancestor to use as the fixed base
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -282,7 +287,7 @@ jobs:
       RUN_REPOSITORY: ${{ github.repository }}
       RUN_EVENT_REPOSITORY: ${{ github.event.repository.full_name }}
       RUN_REF: ${{ github.ref }}
-      RUN_BASE_SHA: ${{ github.event_name == 'push' && github.event.before || github.sha }}
+      RUN_BASE_SHA: ${{ github.event_name == 'push' && github.event.before || inputs.base_sha || github.sha }}
       RUN_CANDIDATE_SHA: ${{ github.sha }}
       RUN_WORKFLOW_SHA: ${{ github.sha }}
       RUN_CLONE_URL: ${{ github.event.repository.clone_url }}
@@ -305,9 +310,9 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.event_name == 'push' && github.event.before || github.sha }}
+          ref: ${{ github.event_name == 'push' && github.event.before || inputs.base_sha || github.sha }}
           path: target/performance-preview/base-source
-          fetch-depth: 1
+          fetch-depth: ${{ github.event_name == 'workflow_dispatch' && 0 || 1 }}
           persist-credentials: false
           submodules: false
 
@@ -330,8 +335,14 @@ jobs:
               --event-repository "$RUN_EVENT_REPOSITORY" \
               --ref "$RUN_REF" \
               --revision "$RUN_CANDIDATE_SHA" \
+              --base-revision "$RUN_BASE_SHA" \
               --workflow-sha "$RUN_WORKFLOW_SHA" \
               --require-mode manual_main_head_owned_harness
+            git -C "$GITHUB_WORKSPACE/target/performance-preview/base-source" \
+              merge-base --is-ancestor "$RUN_BASE_SHA" "$RUN_CANDIDATE_SHA" || {
+                echo "error: manual base must be an ancestor of the selected main candidate" >&2
+                exit 2
+              }
           fi
 
       - name: Initialize pending evidence before setup and audit

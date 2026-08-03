@@ -125,13 +125,15 @@ def decide_dispatch_admission(
     event_repository: str,
     ref: str,
     revision: str,
+    base_revision: str,
     workflow_sha: str,
 ) -> Admission:
-    """Return the fail-closed head-owned decision for one manual main run."""
+    """Return the fail-closed head-owned decision for one manual fixed-base run."""
     _repository(repository, "workflow repository")
     _repository(event_repository, "event repository")
     _ref(ref, "dispatch ref")
     _revision(revision, "dispatch revision")
+    _revision(base_revision, "dispatch base revision")
     _revision(workflow_sha, "workflow SHA")
     if event_name != "workflow_dispatch":
         raise HostedPreviewError("event name: expected workflow_dispatch")
@@ -142,6 +144,8 @@ def decide_dispatch_admission(
         return Admission(False, None, "dispatch_repository_mismatch", event_name, scope)
     if revision == "0" * 40:
         return Admission(False, None, "zero_dispatch_revision", event_name, scope)
+    if base_revision == "0" * 40:
+        return Admission(False, None, "zero_dispatch_base_revision", event_name, scope)
     if revision != workflow_sha:
         return Admission(False, None, "workflow_sha_mismatch", event_name, scope)
     return Admission(True, MANUAL_MODE, "trusted_manual_main_dispatch", event_name, scope)
@@ -251,7 +255,7 @@ def _admit_push(args: argparse.Namespace) -> None:
 def _admit_dispatch(args: argparse.Namespace) -> None:
     admission = decide_dispatch_admission(
         args.event_name, args.repository, args.event_repository, args.ref,
-        args.revision, args.workflow_sha,
+        args.revision, args.base_revision, args.workflow_sha,
     )
     if args.require_mode is not None and (
         not admission.run or admission.mode != args.require_mode
@@ -299,6 +303,7 @@ def _parser() -> argparse.ArgumentParser:
     admit_dispatch.add_argument("--event-repository", required=True)
     admit_dispatch.add_argument("--ref", required=True)
     admit_dispatch.add_argument("--revision", required=True)
+    admit_dispatch.add_argument("--base-revision", required=True)
     admit_dispatch.add_argument("--workflow-sha", required=True)
     admit_dispatch.add_argument("--require-mode", choices=(MANUAL_MODE,))
     admit_dispatch.set_defaults(function=_admit_dispatch)

@@ -102,9 +102,6 @@ case "$HARNESS_MODE" in
     [ "$CANDIDATE_REPO" = "$BASE_REPO" ] || {
       echo "error: manual-main candidate and base repositories must match" >&2; exit 2;
     }
-    [ "$CANDIDATE_REVISION" = "$BASE_REVISION" ] || {
-      echo "error: manual-main candidate and base revisions must match" >&2; exit 2;
-    }
     OUTPUT_OWNER="$CANDIDATE_SOURCE"
     ;;
   *) echo "error: invalid harness mode" >&2; exit 2 ;;
