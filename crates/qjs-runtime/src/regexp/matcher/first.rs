@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use super::escapes::PropertyCache;
-use super::fast_scan::{simple_atom_boundaries, simple_atom_matcher};
+use super::fast_scan::{simple_atom_boundaries_into, simple_atom_matcher};
 use super::groups::{GroupKind, closing_group, group_alternatives, group_kind};
 use super::{
     MatchOptions, MatchState, RepeatScratch, RepeatWork, at_line_end, at_line_start,
@@ -53,6 +53,8 @@ pub(super) struct FirstMatcher<'a> {
     continuations: Vec<Continuation>,
     capture_undo: Vec<CaptureUndo>,
     repeat_scratch: RepeatScratch,
+    simple_boundary_scratch: Vec<Vec<usize>>,
+    simple_boundary_depth: usize,
     repeated_group_results: Vec<Vec<MatchState>>,
     repeated_group_result_depth: usize,
 }
@@ -74,6 +76,8 @@ impl<'a> FirstMatcher<'a> {
             continuations: Vec::new(),
             capture_undo: Vec::new(),
             repeat_scratch: RepeatScratch::default(),
+            simple_boundary_scratch: Vec::new(),
+            simple_boundary_depth: 0,
             repeated_group_results: Vec::new(),
             repeated_group_result_depth: 0,
         }
@@ -93,12 +97,16 @@ impl<'a> FirstMatcher<'a> {
         debug_assert!(self.continuations.is_empty());
         debug_assert!(self.capture_undo.is_empty());
         debug_assert!(self.repeat_scratch.is_empty());
+        debug_assert_eq!(self.simple_boundary_depth, 0);
+        debug_assert!(self.simple_boundary_scratch.iter().all(Vec::is_empty));
         debug_assert_eq!(self.repeated_group_result_depth, 0);
         debug_assert!(self.repeated_group_results.iter().all(Vec::is_empty));
         let matched = self.match_pattern(pc, end_pc, state, None);
         debug_assert!(matched || self.continuations.is_empty());
         debug_assert!(matched || self.capture_undo.is_empty());
         debug_assert!(self.repeat_scratch.is_empty());
+        debug_assert_eq!(self.simple_boundary_depth, 0);
+        debug_assert!(self.simple_boundary_scratch.iter().all(Vec::is_empty));
         debug_assert_eq!(self.repeated_group_result_depth, 0);
         debug_assert!(self.repeated_group_results.iter().all(Vec::is_empty));
         matched
@@ -211,35 +219,48 @@ impl<'a> FirstMatcher<'a> {
                 return self.match_pattern(quantifier.next_pc, end_pc, state, continuation);
             }
 
+            let boundary_slot = self.simple_boundary_depth;
+            self.simple_boundary_depth += 1;
+            if boundary_slot == self.simple_boundary_scratch.len() {
+                self.simple_boundary_scratch.push(Vec::new());
+            }
+            debug_assert!(self.simple_boundary_scratch[boundary_slot].is_empty());
             let entry_index = state.index;
-            let Some(boundaries) = simple_atom_boundaries(
+            if !simple_atom_boundaries_into(
                 self.text,
                 &matcher,
                 quantifier,
                 entry_index,
                 self.properties,
                 self.options,
-            ) else {
+                &mut self.simple_boundary_scratch[boundary_slot],
+            ) {
+                self.simple_boundary_depth -= 1;
                 return false;
-            };
+            }
             let lowest = quantifier.min;
-            let highest = boundaries.len() - 1;
+            let highest = self.simple_boundary_scratch[boundary_slot].len() - 1;
+            let mut matched = false;
             if quantifier.greedy {
                 for count in (lowest..=highest).rev() {
-                    state.index = boundaries[count];
+                    state.index = self.simple_boundary_scratch[boundary_slot][count];
                     if self.match_pattern(quantifier.next_pc, end_pc, state, continuation) {
-                        return true;
+                        matched = true;
+                        break;
                     }
                 }
             } else {
-                for boundary in &boundaries[lowest..=highest] {
-                    state.index = *boundary;
+                for count in lowest..=highest {
+                    state.index = self.simple_boundary_scratch[boundary_slot][count];
                     if self.match_pattern(quantifier.next_pc, end_pc, state, continuation) {
-                        return true;
+                        matched = true;
+                        break;
                     }
                 }
             }
-            return false;
+            self.simple_boundary_depth -= 1;
+            self.simple_boundary_scratch[boundary_slot].clear();
+            return matched;
         }
 
         if self.pattern[pc] == '(' {

@@ -278,6 +278,40 @@ required to avoid folding cold choice logic into hot `match_pattern`. All 48
 focused matcher tests, 2,029 runtime tests, 5,169 curated Test262 cases, and
 the QuickJS-NG fixture comparison pass.
 
+The fourth Stage 3 slice reuses simple-atom boundary buffers by active
+continuation depth. This preserves an outer quantifier's greedy/lazy retry
+order while a nested continuation scans into a separate slot, and retains
+capacity across candidate starts for the lifetime of one `FirstMatcher`.
+The preceding profile, SHA-256
+`dc0faefef0af4d4f107b277d80c701b400fa8046e68c96918b5dd7c4eccbaf3d`,
+places 35 of 86 inner `match_pattern` samples in
+`simple_atom_boundaries`, including 28 direct boundary-vector grow/realloc
+samples below the 195-sample quantified-group walker. That measured allocator
+cost supersedes the earlier tentative ordering that put capture-key clones
+first.
+
+The new profile, SHA-256
+`2e3607e3969cf644a88d3ea1b5ec9799ab0f40e2d2d3389f4c708d53f18444c3`,
+contains 4,956 main-thread samples. Its quantified-group walker has 50 samples
+and no boundary-buffer grow/realloc descendant; nine first-capacity growth
+samples remain in the direct top-level simple-atom path. The different host
+load and sample count prohibit treating this as a timing ratio, but the
+targeted allocation route is removed. Both profiles use the same 40-copy
+source SHA-256
+`1a3650d435575a4497a6143749d6fde6b32bc1178ac9088d18ca713121cc3fe5`.
+
+The exact base and boundary-reuse release executable SHA-256 values are
+`e52be1164dae878b1cf2347d5eb0acda895c071194e435a06fd83f90e04b0ebc`
+and `2d46be64f099b9ff3132cd2871cb2f1f455146b9ada05a1ae6c53c7c75aeb1ab`.
+Eleven-pair amplified screens remain noise-bound and inside the 1.03 median
+control ceiling: Tagcloud 0.9867 [0.9152, 1.0115] at four copies, regexp-dna
+0.9963 [0.9771, 1.0171] at four, validate-input 0.9990 [0.8014, 1.0169]
+at ten, and base64 0.9986 [0.9379, 1.0966] at ten. This slice removes a
+measured repeated allocation without claiming a timing improvement; owned
+choice states and capture-bearing expanded keys remain Stage 3 work. All 49
+focused matcher tests, 2,030 runtime tests, 5,169 curated Test262 cases, and
+the QuickJS-NG fixture comparison pass.
+
 ## Scope
 
 - Allowed paths: `crates/qjs-runtime/src/regexp/matcher.rs`,

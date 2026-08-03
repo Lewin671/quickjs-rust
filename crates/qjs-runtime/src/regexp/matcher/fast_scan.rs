@@ -255,7 +255,34 @@ pub(super) fn simple_atom_boundaries(
     properties: &PropertyCache,
     options: MatchOptions,
 ) -> Option<Vec<usize>> {
-    let mut boundaries = vec![start];
+    let mut boundaries = Vec::new();
+    simple_atom_boundaries_into(
+        text,
+        matcher,
+        quantifier,
+        start,
+        properties,
+        options,
+        &mut boundaries,
+    )
+    .then_some(boundaries)
+}
+
+/// Fill reusable storage with every reachable boundary for one simple atom.
+/// The buffer must be empty on entry and remains populated only when the
+/// quantifier's minimum is reachable.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn simple_atom_boundaries_into(
+    text: &[char],
+    matcher: &SimpleAtom<'_>,
+    quantifier: Quantifier,
+    start: usize,
+    properties: &PropertyCache,
+    options: MatchOptions,
+    boundaries: &mut Vec<usize>,
+) -> bool {
+    debug_assert!(boundaries.is_empty());
+    boundaries.push(start);
     let mut index = start;
     let max = quantifier.max.unwrap_or(usize::MAX);
     while boundaries.len() - 1 < max {
@@ -268,5 +295,9 @@ pub(super) fn simple_atom_boundaries(
         index = next;
         boundaries.push(index);
     }
-    (boundaries.len() > quantifier.min).then_some(boundaries)
+    if boundaries.len() <= quantifier.min {
+        boundaries.clear();
+        return false;
+    }
+    true
 }

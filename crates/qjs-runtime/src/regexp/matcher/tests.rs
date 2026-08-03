@@ -106,6 +106,17 @@ fn nested_repeated_groups_keep_collected_outcomes_isolated() {
 }
 
 #[test]
+fn nested_simple_repetitions_keep_boundary_scratch_isolated() {
+    let matched =
+        regexp_match_range(r"^(a+b+)+c$", "aaabbbaaabbc", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 12));
+    assert_eq!(matched.captures, vec![Some((6, 11))]);
+
+    let backtracked = regexp_match_range(r"^a+ab+$", "aaabb", 0, false, false, false).unwrap();
+    assert_eq!((backtracked.start, backtracked.end), (0, 5));
+}
+
+#[test]
 fn first_match_failure_restores_state_for_the_next_alternative() {
     // The first alternative advances through a simple repetition before its
     // continuation fails. The second alternative must start at the original
