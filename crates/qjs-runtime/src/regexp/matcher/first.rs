@@ -12,8 +12,9 @@ use super::escapes::PropertyCache;
 use super::fast_scan::{simple_atom_boundaries, simple_atom_matcher};
 use super::groups::{GroupKind, closing_group, group_alternatives, group_kind};
 use super::{
-    MatchOptions, MatchState, RepeatScratch, at_line_end, at_line_start, atom_capture_indices,
-    atom_end, match_repeated_atom_first, quantifier, regexp_word_char,
+    MatchOptions, MatchState, RepeatScratch, RepeatWork, at_line_end, at_line_start,
+    atom_capture_indices, atom_end, match_repeated_atom_first, quantifier, regexp_word_char,
+    repeat_accept_state,
 };
 
 type Capture = Option<(usize, usize)>;
@@ -25,10 +26,15 @@ struct CaptureEnd {
 }
 
 #[derive(Clone, Copy)]
+enum ContinuationTarget {
+    Pattern { pc: usize, end_pc: usize },
+    CollectRepeatedGroup { slot: usize },
+}
+
+#[derive(Clone, Copy)]
 struct Continuation {
     parent: Option<usize>,
-    pc: usize,
-    end_pc: usize,
+    target: ContinuationTarget,
     capture: Option<CaptureEnd>,
     reject_empty_from: Option<usize>,
 }
@@ -47,6 +53,8 @@ pub(super) struct FirstMatcher<'a> {
     continuations: Vec<Continuation>,
     capture_undo: Vec<CaptureUndo>,
     repeat_scratch: RepeatScratch,
+    repeated_group_results: Vec<Vec<MatchState>>,
+    repeated_group_result_depth: usize,
 }
 
 impl<'a> FirstMatcher<'a> {
@@ -66,6 +74,8 @@ impl<'a> FirstMatcher<'a> {
             continuations: Vec::new(),
             capture_undo: Vec::new(),
             repeat_scratch: RepeatScratch::default(),
+            repeated_group_results: Vec::new(),
+            repeated_group_result_depth: 0,
         }
     }
 
@@ -83,10 +93,14 @@ impl<'a> FirstMatcher<'a> {
         debug_assert!(self.continuations.is_empty());
         debug_assert!(self.capture_undo.is_empty());
         debug_assert!(self.repeat_scratch.is_empty());
+        debug_assert_eq!(self.repeated_group_result_depth, 0);
+        debug_assert!(self.repeated_group_results.iter().all(Vec::is_empty));
         let matched = self.match_pattern(pc, end_pc, state, None);
         debug_assert!(matched || self.continuations.is_empty());
         debug_assert!(matched || self.capture_undo.is_empty());
         debug_assert!(self.repeat_scratch.is_empty());
+        debug_assert_eq!(self.repeated_group_result_depth, 0);
+        debug_assert!(self.repeated_group_results.iter().all(Vec::is_empty));
         matched
     }
 
@@ -130,12 +144,7 @@ impl<'a> FirstMatcher<'a> {
             if let Some(capture) = continuation.capture {
                 self.write_capture(state, capture.slot, Some((capture.start, state.index)));
             }
-            return self.match_pattern(
-                continuation.pc,
-                continuation.end_pc,
-                state,
-                continuation.parent,
-            );
+            return self.continue_at(continuation.target, state, continuation.parent);
         }
         match self.pattern[pc] {
             '^' => {
@@ -158,6 +167,23 @@ impl<'a> FirstMatcher<'a> {
                     && self.match_pattern(pc + 2, end_pc, state, continuation)
             }
             _ => self.match_atom_and_continuation(pc, end_pc, state, continuation),
+        }
+    }
+
+    fn continue_at(
+        &mut self,
+        target: ContinuationTarget,
+        state: &mut MatchState,
+        parent: Option<usize>,
+    ) -> bool {
+        match target {
+            ContinuationTarget::Pattern { pc, end_pc } => {
+                self.match_pattern(pc, end_pc, state, parent)
+            }
+            ContinuationTarget::CollectRepeatedGroup { slot } => {
+                self.repeated_group_results[slot].push(state.clone());
+                false
+            }
         }
     }
 
@@ -216,12 +242,17 @@ impl<'a> FirstMatcher<'a> {
             return false;
         }
 
-        if self.pattern[pc] == '('
-            && quantifier.max == Some(1)
-            && quantifier.min <= 1
-            && let Some(matched) = self.match_group(pc, quantifier, end_pc, state, continuation)
-        {
-            return matched;
+        if self.pattern[pc] == '(' {
+            if quantifier.max == Some(1) && quantifier.min <= 1 {
+                if let Some(matched) = self.match_group(pc, quantifier, end_pc, state, continuation)
+                {
+                    return matched;
+                }
+            } else if let Some(matched) =
+                self.match_repeated_group(pc, quantifier, end_pc, state, continuation)
+            {
+                return matched;
+            }
         }
 
         // The migration bridge still owns each candidate state, so a failed
@@ -315,6 +346,121 @@ impl<'a> FirstMatcher<'a> {
         )
     }
 
+    /// Traverse quantified group choices without entering the all-state
+    /// matcher. Each single-iteration body enumerates into a reusable nested
+    /// result slot; the outer work stack preserves greedy/lazy priority and
+    /// stops as soon as the surrounding continuation succeeds.
+    #[inline(never)]
+    fn match_repeated_group(
+        &mut self,
+        pc: usize,
+        quantifier: super::Quantifier,
+        end_pc: usize,
+        state: &mut MatchState,
+        continuation: Option<usize>,
+    ) -> Option<bool> {
+        if matches!(group_kind(self.pattern, pc), GroupKind::Lookbehind { .. }) {
+            return None;
+        }
+
+        let atom_captures = atom_capture_indices(
+            self.pattern,
+            pc,
+            self.group_indices,
+            self.properties,
+            self.options.unicode,
+        );
+        let mut scratch = std::mem::take(&mut self.repeat_scratch);
+        scratch.work.push(RepeatWork::Expand(state.clone(), 0));
+        let mut matched = None;
+
+        while let Some(work) = scratch.work.pop() {
+            match work {
+                RepeatWork::Accept(candidate, count) => {
+                    let mut candidate = repeat_accept_state(candidate, count, &atom_captures);
+                    if self.match_pattern(quantifier.next_pc, end_pc, &mut candidate, continuation)
+                    {
+                        matched = Some(candidate);
+                        break;
+                    }
+                }
+                RepeatWork::Expand(candidate, count) => {
+                    if !scratch.expanded.insert((
+                        candidate.index,
+                        count,
+                        candidate.captures.clone(),
+                    )) {
+                        continue;
+                    }
+
+                    if count >= quantifier.min {
+                        if quantifier.greedy {
+                            scratch
+                                .work
+                                .push(RepeatWork::Accept(candidate.clone(), count));
+                        } else {
+                            let mut accepted =
+                                repeat_accept_state(candidate.clone(), count, &atom_captures);
+                            if self.match_pattern(
+                                quantifier.next_pc,
+                                end_pc,
+                                &mut accepted,
+                                continuation,
+                            ) {
+                                matched = Some(accepted);
+                                break;
+                            }
+                        }
+                    }
+
+                    if quantifier.max.is_some_and(|max| count >= max) {
+                        continue;
+                    }
+
+                    let result_slot = self.repeated_group_result_depth;
+                    self.repeated_group_result_depth += 1;
+                    if result_slot == self.repeated_group_results.len() {
+                        self.repeated_group_results.push(Vec::new());
+                    }
+                    debug_assert!(self.repeated_group_results[result_slot].is_empty());
+                    let mut atom_state = candidate.clone();
+                    let collected = self.match_group_once_to(
+                        pc,
+                        ContinuationTarget::CollectRepeatedGroup { slot: result_slot },
+                        &mut atom_state,
+                        None,
+                        false,
+                    );
+                    self.repeated_group_result_depth -= 1;
+                    if collected.is_none() {
+                        self.repeated_group_results[result_slot].clear();
+                        scratch.work.clear();
+                        scratch.expanded.clear();
+                        self.repeat_scratch = scratch;
+                        return None;
+                    }
+                    debug_assert_eq!(collected, Some(false));
+
+                    for next_state in self.repeated_group_results[result_slot].drain(..).rev() {
+                        if count < quantifier.min || next_state.index != candidate.index {
+                            scratch.work.push(RepeatWork::Expand(next_state, count + 1));
+                        }
+                    }
+                }
+            }
+        }
+
+        scratch.work.clear();
+        scratch.expanded.clear();
+        self.repeat_scratch = scratch;
+        if let Some(candidate) = matched {
+            *state = candidate;
+            Some(true)
+        } else {
+            Some(false)
+        }
+    }
+
     fn match_group_zero(
         &mut self,
         captures: &[usize],
@@ -350,18 +496,30 @@ impl<'a> FirstMatcher<'a> {
         continuation: Option<usize>,
         reject_empty: bool,
     ) -> Option<bool> {
+        self.match_group_once_to(
+            pc,
+            ContinuationTarget::Pattern {
+                pc: next_pc,
+                end_pc,
+            },
+            state,
+            continuation,
+            reject_empty,
+        )
+    }
+
+    fn match_group_once_to(
+        &mut self,
+        pc: usize,
+        target: ContinuationTarget,
+        state: &mut MatchState,
+        continuation: Option<usize>,
+        reject_empty: bool,
+    ) -> Option<bool> {
         let end = closing_group(self.pattern, pc)?;
         let kind = group_kind(self.pattern, pc);
         if let GroupKind::Lookahead { negative } = kind {
-            return Some(self.match_lookahead(
-                pc + 3,
-                end,
-                next_pc,
-                end_pc,
-                state,
-                continuation,
-                negative,
-            ));
+            return Some(self.match_lookahead(pc + 3, end, target, state, continuation, negative));
         }
         if matches!(kind, GroupKind::Lookbehind { .. }) {
             return None;
@@ -382,8 +540,7 @@ impl<'a> FirstMatcher<'a> {
             let continuation_id = self.continuations.len();
             self.continuations.push(Continuation {
                 parent: continuation,
-                pc: next_pc,
-                end_pc,
+                target,
                 capture,
                 reject_empty_from: reject_empty.then_some(state.index),
             });
@@ -405,8 +562,7 @@ impl<'a> FirstMatcher<'a> {
         &mut self,
         body_start: usize,
         body_end: usize,
-        next_pc: usize,
-        end_pc: usize,
+        target: ContinuationTarget,
         state: &mut MatchState,
         continuation: Option<usize>,
         negative: bool,
@@ -428,7 +584,7 @@ impl<'a> FirstMatcher<'a> {
         if negative {
             state.index = assertion_index;
             self.rollback_captures(state, undo_checkpoint);
-            return !matched && self.match_pattern(next_pc, end_pc, state, continuation);
+            return !matched && self.continue_at(target, state, continuation);
         }
         if !matched {
             return false;
@@ -437,7 +593,7 @@ impl<'a> FirstMatcher<'a> {
         // body match, restore its zero-width index, and do not revisit the body
         // if the outer continuation later fails.
         state.index = assertion_index;
-        self.match_pattern(next_pc, end_pc, state, continuation)
+        self.continue_at(target, state, continuation)
     }
 
     fn write_capture(&mut self, state: &mut MatchState, slot: usize, value: Capture) {

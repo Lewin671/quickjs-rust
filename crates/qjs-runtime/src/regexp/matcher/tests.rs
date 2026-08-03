@@ -95,6 +95,17 @@ fn streamed_compound_repetition_backtracks_to_first_full_match() {
 }
 
 #[test]
+fn nested_repeated_groups_keep_collected_outcomes_isolated() {
+    let greedy = regexp_match_range(r"^((a|aa)+)+b$", "aaab", 0, false, false, false).unwrap();
+    assert_eq!((greedy.start, greedy.end), (0, 4));
+    assert_eq!(greedy.captures, vec![Some((0, 3)), Some((2, 3))]);
+
+    let lazy = regexp_match_range(r"^((a|aa)+?)+?b$", "aaab", 0, false, false, false).unwrap();
+    assert_eq!((lazy.start, lazy.end), (0, 4));
+    assert_eq!(lazy.captures, vec![Some((2, 3)), Some((2, 3))]);
+}
+
+#[test]
 fn first_match_failure_restores_state_for_the_next_alternative() {
     // The first alternative advances through a simple repetition before its
     // continuation fails. The second alternative must start at the original

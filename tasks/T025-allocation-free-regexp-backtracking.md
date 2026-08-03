@@ -242,6 +242,42 @@ symbol inspection showed the choice walker folded into hot `match_pattern`.
 Keeping the generic walker out of line restored the control to neutral. This
 is a code-layout guard and a structural migration slice, not a speedup claim.
 
+The third Stage 3 slice moves forward quantified groups off the legacy
+all-state matcher. A continuation can now target either the surrounding
+pattern or a depth-indexed reusable result slot. That lets one group iteration
+enumerate through the mutable `FirstMatcher` and capture journal, including
+nested repeated groups, while the outer explicit work stack retains
+greedy/lazy order and stops after the first successful full continuation.
+Lookbehind remains on the reverse compatibility path. Owned choice states and
+capture-bearing expanded keys remain for the next slice, so Stage 3 is still
+open.
+
+The pre-change profile (SHA-256
+`0559960a89be4730d54afe84f76b46017b93729457f503f80501c0657194c81f`)
+contains 4,069 main-thread samples. `PreparedRegexp::match_input` accounts for
+759; the streamed repetition bridge accounts for 122, of which 113 enter
+legacy `match_atom` and 110 reach legacy all-state `match_pattern`. The new
+profile (SHA-256
+`dc0faefef0af4d4f107b277d80c701b400fa8046e68c96918b5dd7c4eccbaf3d`)
+contains 11,428 main-thread samples under heavier host load. Its RegExp path is
+1,721 samples and its new quantified-group walker is 195; the legacy
+all-state matcher is absent from that subtree. Both samples use the same
+40-copy source, SHA-256
+`1a3650d435575a4497a6143749d6fde6b32bc1178ac9088d18ca713121cc3fe5`.
+These profiles establish route removal, not a cross-run timing ratio.
+
+The exact prior and new release executable SHA-256 values are
+`7acf88f06971cc0667f98f70051acf3ff947fd1c4a91e6f8397e69f8b6304b4b`
+and `e52be1164dae878b1cf2347d5eb0acda895c071194e435a06fd83f90e04b0ebc`.
+Eleven-pair exact-increment screens remain noise-bound and inside the 1.03
+median control ceiling: Tagcloud 0.9915 [0.9088, 1.0949], regexp-dna 0.9960
+[0.9904, 1.0357], validate-input 1.0134 [0.9965, 1.0536], and base64 1.0099
+[0.9907, 1.0287]. As with the preceding representation slices, this is not a
+speedup claim. Keeping the large quantified-group walker out of line is again
+required to avoid folding cold choice logic into hot `match_pattern`. All 48
+focused matcher tests, 2,029 runtime tests, 5,169 curated Test262 cases, and
+the QuickJS-NG fixture comparison pass.
+
 ## Scope
 
 - Allowed paths: `crates/qjs-runtime/src/regexp/matcher.rs`,
