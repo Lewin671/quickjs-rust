@@ -93,12 +93,12 @@ Campaign working rules:
   dispatch-preamble split moved the external corpus by only about one percent,
   below its structural mechanism gate. Preserve its negative evidence; do not
   infer current priority from it.
-- `T025-allocation-free-regexp-backtracking.md` — **the active structural
-  performance unit.** Migrate first-match RegExp execution from cloned state
-  graphs to one mutable state, explicit choice points, a capture undo trail,
-  and reusable repetition scratch. Its four schema-2 stages keep one fixed
-  base and require both a `string-tagcloud` payoff and a measured allocator
-  reduction before the final retain decision. Serialize on one branch.
+- `T025-allocation-free-regexp-backtracking.md` — **closed after Stage 3
+  abort.** The staged migration moved `string-tagcloud` to 0.8218x and
+  regexp-dna to 0.6865x against its fixed base, but the predeclared closure
+  allocation control reached 1.1089x and crossed the 1.10 cumulative budget.
+  Preserve the implementation, stop before Stage 4, and require a new current
+  profile and frozen plan before revisiting the broader RegExp mechanism.
 - `T022-performance-priority-controller.md` — evidence-bound selection and
   stop mechanism for T018. It derives the next profiling queue from current
   artifacts, freezes a unit's targets before timing, and records explicit

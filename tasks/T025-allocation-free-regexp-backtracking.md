@@ -1,8 +1,8 @@
 # T025: Allocation-free RegExp backtracking
 
-## Status: active staged migration
+## Status: closed after Stage 3 abort
 
-This is the current T018 structural unit selected by the exact T022 queue at
+This was the T018 structural unit selected by the exact T022 queue at
 `c62314aa`. The evidence-only controller commit `2a3fe1cd` is runtime- and
 release-binary-identical to that migration base. Stage 1 is `6da38970`; Stage 2
 continues from it without changing the fixed migration base.
@@ -498,6 +498,34 @@ in the sampled tree. The remaining cost is pattern-body interpretation plus
 capture-sensitive visited-state work, not owned choice-state allocation. This
 closes the owned-state portion of Stage 3 without claiming a Tagcloud timing
 improvement; formal advancement still requires the fixed-base decision path.
+
+## Stage 3 decision and closure
+
+Trusted fixed-base run `30849231375` measured exact candidate `2093eeab`
+against the frozen `c62314aa` migration base. Formal Stage 3 decision SHA-256
+`7d8a7dafba7ca9c31e11af1dc00e789a2995d792f94f3e3d4c677fd5daccd1be`
+is `abort`: Tagcloud is 0.8218 candidate/base and regexp-dna is 0.6865, but
+the predeclared `closure_allocation_call` control is 1.1089 and exceeds the
+1.10 cumulative stage budget. The other watched ratios remain inside the
+budget: object allocation 1.0164, HashMap 0.9818, raytrace 1.0125, A* 0.9984,
+controlflow-recursive 1.0053, validate-input 0.9550, and base64 1.0189.
+
+The run retained 3/3 valid broad blocks, complete external comparisons, and
+passing linearity. Its workflow-level preview remains non-claim and
+`inconclusive` because the maximum critical-family relative half-width is
+0.05412 against the 0.03 claim limit; that does not override the schema-2
+stage decision. The preview summary, broad report, and external report
+SHA-256 values are
+`8eb6f0be2b8c5004c70b4fd2ab09e3ae7cc4b6ea3e724f8c3d1632bf1207aca2`,
+`786875ae6773d7e2c1c074ef373454b00b7ed978a70c64d0aa009d74c666966e`,
+and `0770ba0befb90d485be7be043227e3abc4828c68c81173c0d43716b309e2cae6`.
+
+Per the frozen controller contract, this closes the Stage 3 implementation
+shape without rejecting the broader RegExp mechanism family. Stage 4 is not
+attempted and `migration.current_stage` remains 3 so the checked-in plan does
+not imply an advancement that the decision denied. Any future RegExp unit
+must start from a new current profile and a newly frozen plan; it must not
+continue this staged migration or reinterpret the abort as noise.
 
 ## Scope
 
