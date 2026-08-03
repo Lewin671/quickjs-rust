@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "frame-verified-direct-local-opcodes",
+  "base_sha": "bea6aacf2540bcdb0465cedef365ade8c20789f3",
+  "queue": {
+    "candidate_sha": "bea6aacf2540bcdb0465cedef365ade8c20789f3",
+    "sha256": "02b163bebca28e2d6a177176430bfed008f1bab48eaeac7e6e5cd1ece3ec3dca"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Rewrite ordinary LoadLocal, StoreLocal, and AssignLocal instructions to appended direct-local variants only in the existing same-offset lowered execution stream when static bytecode analysis proves that the slot is frame-local, non-captured, and compatible with the operation. Add every rewritten slot to the lowered variant's required-authority mask, so one frame-entry compatibility check replaces the repeated dynamic-scope, authority, and mutability guards in the hot dispatch loop; TDZ, malformed-stack, and other exceptional states still fall back to the canonical binding helpers.",
+    "generality": "The rewrite is derived solely from immutable bytecode local metadata, capture and dynamic-scope analysis, operation kind, and the frame's authoritative-slot mask. It applies to every eligible function and never inspects source paths, benchmark or function names, property names, value contents, iteration counts, checksums, or expected results. Original bytecode, specialized loop plans, captured bindings, received upvalues, global and module bindings, direct eval and with scopes, class capture boundaries, and every frame that fails the authority mask retain the existing local opcodes and binding paths.",
+    "semantic_risks": [
+      "proving direct authority for parameters and ordinary locals without admitting captured slots, received upvalues, sloppy global fallbacks, eval-deletable bindings, or class capture uncertainty",
+      "selecting the lowered stream only when the live frame authoritative mask covers every rewritten slot, including generator setup and resume",
+      "preserving temporal-dead-zone ReferenceErrors and immutable-binding TypeErrors by retaining canonical fallback for uninitialized or unsupported states",
+      "preserving stack-underflow errors and instruction-pointer synchronization when a direct store or assignment cannot complete",
+      "keeping original bytecode and specialized numeric, mutation, and control loop plan recognition unchanged",
+      "appending opcode variants without changing the size of Op or producing a dispatch-layout regression larger than the saved guards"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "perf-counters 2026-08-03 /tmp/qjs-bea-hash-map-counters.txt; amplified runner-equivalent JetStream HashMap executed by perf-counters release executable SHA-256 295a7d4be76bff4900007fa2d5927dd4603f5c874af9b6647772729443a36825 from exact base bea6aacf. Wrapper target/benchmarks/hash-map.profile.js SHA-256 aa98bc1975d8824840df5c31a397b5dab27d514e1854ff5681ceea8ec4bf2c20.",
+      "sha256": "938ff6e79f6b15066e7bc779dede96f0107c17dddb6d7636af532cfa27bb1019",
+      "base_sha": "bea6aacf2540bcdb0465cedef365ade8c20789f3",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Local binding instructions account for 34,306,316 of 105,261,606 executed operations, or 32.59 percent: 23,936,248 loads, 8,880,546 stores, and 1,489,522 assignments. The current inline authoritative paths succeed 33,226,260 times, 31.57 percent of every dispatched operation and 96.85 percent of the local-binding family, but repeat dynamic-scope, slot-range, authority-mask, local-metadata, initialization, and stack guards at each instruction.",
+      "inclusive_fraction": 0.32591481
+    },
+    {
+      "source": "perf-counters 2026-08-03 /tmp/qjs-bea-raytrace-counters.txt; amplified runner-equivalent JetStream raytrace-public-class-fields executed by the same perf-counters release executable. Wrapper target/benchmarks/raytrace-public-class-fields.profile.js SHA-256 824daa5582289787f6e25a200892a1d6bdfa682afe9ce76a30e520dc7e03528c.",
+      "sha256": "c02e1a93ff5094acae89ba7d1b7a9821d6b9727429d47869fb5007b45a263817",
+      "base_sha": "bea6aacf2540bcdb0465cedef365ade8c20789f3",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/raytrace-public-class-fields"
+      ],
+      "shared_cost": "Local binding instructions account for 10,008,334 of 43,946,288 executed operations, or 22.77 percent. The current authoritative paths succeed 6,717,404 times, 15.29 percent of all dispatch and 67.12 percent of local binding operations, so this high-ranked non-target control tests both shared payoff and fail-closed behavior where a larger fraction must remain generic.",
+      "inclusive_fraction": 0.22774014
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "control_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/sunspider-1.0/date-format-xparb",
+      "external/sunspider-1.0/access-binary-trees",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/string-validate-input",
+      "external/sunspider-1.0/controlflow-recursive",
+      "broad/local_read",
+      "broad/array_allocation",
+      "broad/object_allocation",
+      "broad/closure_allocation_call"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
