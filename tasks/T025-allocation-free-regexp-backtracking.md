@@ -373,6 +373,40 @@ regexp-dna 1.0001 [0.9816, 1.0610] at six, validate-input 0.9965
 This slice removes the capture-bearing visited-key allocation route without a
 timing improvement claim. Owned `MatchState` choices remain Stage 3 work.
 
+The seventh Stage 3 slice reuses one top-level `MatchState` across candidate
+start positions. Failed first matching is already failure-atomic; before each
+new candidate the matcher now resets the input index and fills the retained
+capture buffer with `None` instead of allocating and freeing another buffer.
+A focused regression first writes capture 1 before an alternative and the
+entire candidate start fail, then verifies that the next start succeeds with
+only capture 2 set.
+
+The preceding profile (SHA-256
+`46c1f14c41fe82c11e41405b1366bff9cc4427b3fd99c9120f5356089ad04f9d`)
+contains 3,831 main-thread samples. Below its 521-sample
+`PreparedRegexp::match_input` subtree, the per-candidate state lifetime has 11
+direct allocation samples and 15 direct free samples. The new 4,722-sample
+profile (SHA-256
+`dd9b4420c2f8c95538cbecf16c97ed6b246c9c0859df190984b715c616693016`)
+contains 637 `match_input` samples and no corresponding per-candidate capture
+allocation or free descendant. Matcher destruction still frees invocation-
+local journals and scratch once after matching finishes. Both profiles use the
+same 40-copy source SHA-256
+`1a3650d435575a4497a6143749d6fde6b32bc1178ac9088d18ca713121cc3fe5`.
+
+The exact base and candidate release executable SHA-256 values are
+`b502de5b86eb32c5174fb1f7519bfa85a138f0234936542b2c4dd200ca017afe`
+and `f16c08c7a066a54130cff358d959e4f8263f30c7ff63f87a106a053a3c1ebd01`.
+An 11-pair fixed-source Tagcloud A/B is 0.9777 candidate/base and every pair
+favored the candidate, with an observed range of 0.9498-0.9993. Eleven-pair
+controls remain inside the 1.03 median ceiling: regexp-dna is 0.9890
+[0.9583, 1.0103] at nine copies, validate-input is 0.9989 [0.9565, 1.0049]
+at 17 copies, and base64 is 0.9991 [0.8651, 1.1565] at 28 copies. The base64
+range is noise-bound, so only its predeclared median gate is used. This slice
+removes a measured candidate-start allocation and records a local Tagcloud
+improvement; the quantified choice stack still owns `MatchState` snapshots,
+so Stage 3 remains open.
+
 ## Scope
 
 - Allowed paths: `crates/qjs-runtime/src/regexp/matcher.rs`,

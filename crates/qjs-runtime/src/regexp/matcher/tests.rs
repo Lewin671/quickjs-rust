@@ -133,6 +133,16 @@ fn first_match_failure_restores_state_for_the_next_alternative() {
 }
 
 #[test]
+fn candidate_start_reuse_clears_captures_from_failed_attempts() {
+    // At start zero the first alternative writes capture 1 before `y` fails,
+    // and no alternative succeeds. The next candidate start must reuse the
+    // capture buffer with only capture 2 set by the successful alternative.
+    let matched = regexp_match_range(r"(?:x(a)y)|(a)", "xa", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (1, 2));
+    assert_eq!(matched.captures, vec![None, Some((1, 2))]);
+}
+
+#[test]
 fn capture_journal_restores_nested_alternatives_and_negative_lookahead() {
     // The first nested alternative writes capture 1 before its continuation
     // fails. The second alternative and its backreference must observe an

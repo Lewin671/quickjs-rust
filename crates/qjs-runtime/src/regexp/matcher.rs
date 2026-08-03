@@ -189,14 +189,19 @@ impl PreparedRegexp {
             &self.properties,
             self.options,
         );
+        let mut state = MatchState {
+            index: start_index,
+            captures: vec![None; self.group_indices.len()],
+        };
         for start in start_index..=final_start {
             if self.options.unicode && is_trailing_surrogate_position(text, start) {
                 continue;
             }
-            let mut state = MatchState {
-                index: start,
-                captures: vec![None; self.group_indices.len()],
-            };
+            // Failed first matching is atomic, so the allocation can survive
+            // every candidate start. Reset explicitly as a defensive boundary
+            // before the next top-level attempt.
+            state.index = start;
+            state.captures.fill(None);
             for (alternative_start, alternative_end) in &self.alternatives {
                 if matcher.match_pattern_first(*alternative_start, *alternative_end, &mut state) {
                     return Some(RegexpMatch {
