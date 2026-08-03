@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "compilation-graph-static-property-names",
+  "base_sha": "13e5d22937a1dd53eb33418d64786a527acb446a",
+  "queue": {
+    "candidate_sha": "13e5d22937a1dd53eb33418d64786a527acb446a",
+    "sha256": "9b54feb69fd148e7291ab73aacc7475ee1c46c1698e8942b4f94165debc659e6"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/access-nbody"
+    ],
+    "rank_ceiling": 15,
+    "override_reason": "The exact rank-one HashMap, rank-three public-field Raytrace, and rank-six CDJS profiles remain distributed across generic dispatch, direct-call/frame setup, Value lifetime, and named-property work; their individually bounded dispatch/frame leaves have just failed T026-T028 at roughly 1.6 percent payoff despite mechanism coverage. Rank-two date formatting, rank-four Tagcloud, rank-five binary trees, and the intervening RegExp, string, constructor, helper-graph, typed-loop, cache, and object-storage mechanisms are likewise closed by current negative evidence. Rank-fifteen access-nbody exposes a different stable representation cost: 310 of 3,660 current samples are platform string comparison while repeated named reads and writes use seven static Body fields. A prior pointer-only comparison failed because each bytecode site owned a different Rc<str>; this unit changes that premise by sharing static property-name identity across one complete compilation graph, while retaining content equality across separately compiled code."
+  },
+  "mechanism": {
+    "summary": "Intern static named-property keys once per compilation graph, share that table with every nested-function compiler and any capture-recompilation pass, and let named Small-property reads, slot resolution, and writes accept pointer identity before falling back to textual equality.",
+    "generality": "Every script, module, eval body, Function body, and internally compiled body receives an independent compilation-local table. A root compiler and every nested compiler it creates share only equal static property names from that compilation graph; no workload name, source path, function name, property spelling, input, iteration count, checksum, or expected result controls admission. Object storage and named bytecode retain Rc<str> and their existing textual fallback, so separately compiled code, dynamic computed strings, cross-realm objects, eval, and Function-constructor results remain interoperable without global mutable state or a public representation change.",
+    "semantic_risks": [
+      "a nested function compiled once or recompiled after lexical-capture discovery must use the same interner as its root and siblings rather than silently creating a second identity domain",
+      "separately compiled scripts, direct eval, modules, Function bodies, and cross-realm accesses must continue to match equal property text even when their Rc identities differ",
+      "pointer equality may bypass textual comparison only for byte-equal immutable Rc<str> values; computed property-key coercion, Symbols, private names, and array-index semantics remain unchanged",
+      "named reads and writes must preserve accessor, Proxy, prototype, descriptor, extensibility, strict-error, cache-invalidation, and insertion-order behavior on both identity hits and textual fallbacks",
+      "the compile-time table must not survive as mutable realm-global state or keep unrelated source graphs alive"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-08-03 /private/tmp/qjs-91c-access-nbody.sample; 5-second execution of the existing source-faithful profiling wrapper SHA-256 1f65354dce2dcf44b2f38f2394ead3c1f167872e5270ae5e5684c8d97da94250 over official SunSpider access-nbody source SHA-256 84f08150e27c075e4a6b1b900b743cc2845abd3a47175cd444f6a1178493487c. The executable SHA-256 f6bd01fd4fedabfa16ec133f937b6f3dc2476e31e3fdd680b037145c3d8aebe1 is source-identical for 13e5d229 and its later T028 evidence-only descendant 91c23d10.",
+      "sha256": "595541f6b8d350d18f10e0c71c446226a6b5a50d9274172a09d7b98bf5cd2729",
+      "base_sha": "13e5d22937a1dd53eb33418d64786a527acb446a",
+      "opportunity_ids": [
+        "external/sunspider-1.0/access-nbody"
+      ],
+      "shared_cost": "The successful 3,660-sample main-thread profile records 276 flat samples in _platform_memcmp and 34 in its executable stub: 8.47 percent directly in string comparison. The same run separately records 134 samples in existing-own-data writes, 121 in shared-slot reads, 72 in shared-slot resolution, 52 in typed-loop writeback, and further named-cache/read/write frames. Body objects repeatedly use the same seven static field spellings across constructors, methods, and the typed loop, but those sites currently carry separately allocated Rc<str> values, so Small storage falls through to byte comparison.",
+      "inclusive_fraction": 0.0847
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/access-nbody"
+    ],
+    "control_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/jetstream3-js-subset/cdjs",
+      "external/kraken-1.1/ai-astar",
+      "external/sunspider-1.0/date-format-xparb",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/access-binary-trees",
+      "external/sunspider-1.0/controlflow-recursive",
+      "broad/property_read",
+      "broad/dynamic_method_call",
+      "broad/object_allocation",
+      "broad/local_read"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
