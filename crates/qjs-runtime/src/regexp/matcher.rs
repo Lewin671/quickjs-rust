@@ -232,6 +232,11 @@ enum RepeatWork {
     Accept(MatchState, usize),
 }
 
+enum CaptureFreeRepeatWork {
+    Expand(usize, usize),
+    Accept(usize),
+}
+
 #[derive(Default)]
 struct RepeatScratch {
     work: Vec<RepeatWork>,
@@ -239,6 +244,18 @@ struct RepeatScratch {
 }
 
 impl RepeatScratch {
+    fn is_empty(&self) -> bool {
+        self.work.is_empty() && self.expanded.is_empty()
+    }
+}
+
+#[derive(Default)]
+struct CaptureFreeRepeatScratch {
+    work: Vec<CaptureFreeRepeatWork>,
+    expanded: RepeatVisited,
+}
+
+impl CaptureFreeRepeatScratch {
     fn is_empty(&self) -> bool {
         self.work.is_empty() && self.expanded.is_empty()
     }

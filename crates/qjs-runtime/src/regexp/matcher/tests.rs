@@ -114,6 +114,21 @@ fn streamed_compound_repetition_backtracks_to_first_full_match() {
 }
 
 #[test]
+fn capture_free_repeated_groups_preserve_ordered_choices() {
+    let greedy = regexp_match_range(r"^(?:a|aa)*aa$", "aaa", 0, false, false, false).unwrap();
+    assert_eq!((greedy.start, greedy.end), (0, 3));
+
+    let lazy = regexp_match_range(r"^(?:a|aa)*?aa$", "aaa", 0, false, false, false).unwrap();
+    assert_eq!((lazy.start, lazy.end), (0, 3));
+
+    let nested = regexp_match_range(r"^(?:(?:a|aa)+)+b$", "aaab", 0, false, false, false).unwrap();
+    assert_eq!((nested.start, nested.end), (0, 4));
+
+    let empty = regexp_match_range(r"^(?:a?)*a$", "a", 0, false, false, false).unwrap();
+    assert_eq!((empty.start, empty.end), (0, 1));
+}
+
+#[test]
 fn nested_repeated_groups_keep_collected_outcomes_isolated() {
     let greedy = regexp_match_range(r"^((a|aa)+)+b$", "aaab", 0, false, false, false).unwrap();
     assert_eq!((greedy.start, greedy.end), (0, 4));

@@ -439,6 +439,34 @@ validate-input is 1.0027 [0.9879, 1.0230] at 29 copies, and base64 is 1.0049
 route and its per-repetition boundary writes while preserving the variable-
 width path; owned quantified-group choice states remain Stage 3 work.
 
+The ninth Stage 3 slice narrows quantified-group choice storage when the
+compiled pattern has no capture slots. Its explicit work stack now owns only
+`(input index, repetition count)` pairs, and group-body result slots retain
+only input indexes. Capture-bearing patterns keep the existing `MatchState`
+path, so this slice does not weaken capture-sensitive visited-state identity
+or backtracking semantics. Focused coverage includes greedy, lazy, nested,
+alternative, and empty-progress repetitions.
+
+The exact base and candidate release executable SHA-256 values are
+`7f2927427988c677f37f98b1721f4ab00658d112874d45c0cfd5445a4b2913df`
+and `54fd1b43871b1ab05fcc4dae2d7cc1e59cf23815abf9ffc570614b6a9e3f300d`.
+An 11-pair run of the same 40-copy Tagcloud source is noise-bound at 0.9972
+candidate/base [0.9679, 1.0536]. Eleven-pair controls remain inside the 1.03
+median ceiling: regexp-dna is 0.9615 [0.7951, 1.4535] over 12 executions per
+observation, validate-input is 0.9960 [0.9723, 1.0932] on the existing 64-copy
+diagnostic source, and base64 is 0.9982 [0.8918, 1.1573] over five executions
+of the existing eight-copy wrapper per observation. The wide individual-pair
+ranges make these regression screens, not improvement claims.
+
+The candidate profile (SHA-256
+`a2449f51f427275cab525bfd9cdbb01961a58efac788e7ba98dcc91ca8b7c0d6`)
+contains 3,547 main-thread samples. Its two largest `match_input` branches
+contain 476 and 45 samples. Quantified-group traversal remains visible with
+47 samples, including 34 in `match_group_once_to`; eliminating compact
+capture-free state ownership therefore does not eliminate repeated pattern-
+body interpretation. Capture-bearing quantified-group choices remain the
+last owned-state portion of Stage 3.
+
 ## Scope
 
 - Allowed paths: `crates/qjs-runtime/src/regexp/matcher.rs`,

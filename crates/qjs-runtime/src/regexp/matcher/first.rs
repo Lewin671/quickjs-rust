@@ -3,8 +3,8 @@
 //! Top-level RegExp execution only observes the first successful state. This
 //! path therefore mutates one state in place and restores it before returning
 //! failure. Ordinary exact-once groups and lookahead assertions use a capture
-//! undo journal; quantified compound atoms and lookbehind still bridge to the
-//! all-state matcher until the explicit choice-stack stages replace them.
+//! undo journal; remaining compatibility atoms and lookbehind still bridge to
+//! the all-state matcher until the explicit choice-stack stages replace them.
 
 use std::collections::HashMap;
 
@@ -12,9 +12,9 @@ use super::escapes::PropertyCache;
 use super::fast_scan::{simple_atom_boundaries_into, simple_atom_matcher, simple_atom_max_count};
 use super::groups::{GroupKind, closing_group, group_alternatives, group_kind};
 use super::{
-    MatchOptions, MatchState, RepeatScratch, RepeatWork, at_line_end, at_line_start,
-    atom_capture_indices, atom_end, match_repeated_atom_first, quantifier, regexp_word_char,
-    repeat_accept_state,
+    CaptureFreeRepeatScratch, CaptureFreeRepeatWork, MatchOptions, MatchState, RepeatScratch,
+    RepeatWork, at_line_end, at_line_start, atom_capture_indices, atom_end,
+    match_repeated_atom_first, quantifier, regexp_word_char, repeat_accept_state,
 };
 
 type Capture = Option<(usize, usize)>;
@@ -29,6 +29,7 @@ struct CaptureEnd {
 enum ContinuationTarget {
     Pattern { pc: usize, end_pc: usize },
     CollectRepeatedGroup { slot: usize },
+    CollectCaptureFreeRepeatedGroup { slot: usize },
 }
 
 #[derive(Clone, Copy)]
@@ -57,6 +58,9 @@ pub(super) struct FirstMatcher<'a> {
     simple_boundary_depth: usize,
     repeated_group_results: Vec<Vec<MatchState>>,
     repeated_group_result_depth: usize,
+    capture_free_repeat_scratch: CaptureFreeRepeatScratch,
+    capture_free_repeated_group_results: Vec<Vec<usize>>,
+    capture_free_repeated_group_result_depth: usize,
 }
 
 impl<'a> FirstMatcher<'a> {
@@ -80,6 +84,9 @@ impl<'a> FirstMatcher<'a> {
             simple_boundary_depth: 0,
             repeated_group_results: Vec::new(),
             repeated_group_result_depth: 0,
+            capture_free_repeat_scratch: CaptureFreeRepeatScratch::default(),
+            capture_free_repeated_group_results: Vec::new(),
+            capture_free_repeated_group_result_depth: 0,
         }
     }
 
@@ -101,6 +108,13 @@ impl<'a> FirstMatcher<'a> {
         debug_assert!(self.simple_boundary_scratch.iter().all(Vec::is_empty));
         debug_assert_eq!(self.repeated_group_result_depth, 0);
         debug_assert!(self.repeated_group_results.iter().all(Vec::is_empty));
+        debug_assert!(self.capture_free_repeat_scratch.is_empty());
+        debug_assert_eq!(self.capture_free_repeated_group_result_depth, 0);
+        debug_assert!(
+            self.capture_free_repeated_group_results
+                .iter()
+                .all(Vec::is_empty)
+        );
         let matched = self.match_pattern(pc, end_pc, state, None);
         debug_assert!(matched || self.continuations.is_empty());
         debug_assert!(matched || self.capture_undo.is_empty());
@@ -109,6 +123,13 @@ impl<'a> FirstMatcher<'a> {
         debug_assert!(self.simple_boundary_scratch.iter().all(Vec::is_empty));
         debug_assert_eq!(self.repeated_group_result_depth, 0);
         debug_assert!(self.repeated_group_results.iter().all(Vec::is_empty));
+        debug_assert!(self.capture_free_repeat_scratch.is_empty());
+        debug_assert_eq!(self.capture_free_repeated_group_result_depth, 0);
+        debug_assert!(
+            self.capture_free_repeated_group_results
+                .iter()
+                .all(Vec::is_empty)
+        );
         matched
     }
 
@@ -190,6 +211,11 @@ impl<'a> FirstMatcher<'a> {
             }
             ContinuationTarget::CollectRepeatedGroup { slot } => {
                 self.repeated_group_results[slot].push(state.clone());
+                false
+            }
+            ContinuationTarget::CollectCaptureFreeRepeatedGroup { slot } => {
+                debug_assert!(state.captures.is_empty());
+                self.capture_free_repeated_group_results[slot].push(state.index);
                 false
             }
         }
@@ -414,6 +440,16 @@ impl<'a> FirstMatcher<'a> {
             return None;
         }
 
+        if state.captures.is_empty() {
+            return self.match_capture_free_repeated_group(
+                pc,
+                quantifier,
+                end_pc,
+                state,
+                continuation,
+            );
+        }
+
         let atom_captures = atom_capture_indices(
             self.pattern,
             pc,
@@ -507,6 +543,105 @@ impl<'a> FirstMatcher<'a> {
             *state = candidate;
             Some(true)
         } else {
+            Some(false)
+        }
+    }
+
+    /// Capture-free quantified groups need only input positions on their
+    /// choice stack. This keeps the same explicit ordered traversal while
+    /// avoiding owned `MatchState` copies for patterns with no capture slots.
+    fn match_capture_free_repeated_group(
+        &mut self,
+        pc: usize,
+        quantifier: super::Quantifier,
+        end_pc: usize,
+        state: &mut MatchState,
+        continuation: Option<usize>,
+    ) -> Option<bool> {
+        debug_assert!(state.captures.is_empty());
+        let entry_index = state.index;
+        let mut scratch = std::mem::take(&mut self.capture_free_repeat_scratch);
+        scratch
+            .work
+            .push(CaptureFreeRepeatWork::Expand(entry_index, 0));
+        let mut matched = false;
+
+        while let Some(work) = scratch.work.pop() {
+            match work {
+                CaptureFreeRepeatWork::Accept(index) => {
+                    state.index = index;
+                    if self.match_pattern(quantifier.next_pc, end_pc, state, continuation) {
+                        matched = true;
+                        break;
+                    }
+                }
+                CaptureFreeRepeatWork::Expand(index, count) => {
+                    if !scratch.expanded.insert(index, count, &[]) {
+                        continue;
+                    }
+
+                    if count >= quantifier.min {
+                        if quantifier.greedy {
+                            scratch.work.push(CaptureFreeRepeatWork::Accept(index));
+                        } else {
+                            state.index = index;
+                            if self.match_pattern(quantifier.next_pc, end_pc, state, continuation) {
+                                matched = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if quantifier.max.is_some_and(|max| count >= max) {
+                        continue;
+                    }
+
+                    let result_slot = self.capture_free_repeated_group_result_depth;
+                    self.capture_free_repeated_group_result_depth += 1;
+                    if result_slot == self.capture_free_repeated_group_results.len() {
+                        self.capture_free_repeated_group_results.push(Vec::new());
+                    }
+                    debug_assert!(self.capture_free_repeated_group_results[result_slot].is_empty());
+                    state.index = index;
+                    let collected = self.match_group_once_to(
+                        pc,
+                        ContinuationTarget::CollectCaptureFreeRepeatedGroup { slot: result_slot },
+                        state,
+                        None,
+                        false,
+                    );
+                    self.capture_free_repeated_group_result_depth -= 1;
+                    if collected.is_none() {
+                        self.capture_free_repeated_group_results[result_slot].clear();
+                        scratch.work.clear();
+                        scratch.expanded.clear();
+                        self.capture_free_repeat_scratch = scratch;
+                        state.index = entry_index;
+                        return None;
+                    }
+                    debug_assert_eq!(collected, Some(false));
+
+                    for next_index in self.capture_free_repeated_group_results[result_slot]
+                        .drain(..)
+                        .rev()
+                    {
+                        if count < quantifier.min || next_index != index {
+                            scratch
+                                .work
+                                .push(CaptureFreeRepeatWork::Expand(next_index, count + 1));
+                        }
+                    }
+                }
+            }
+        }
+
+        scratch.work.clear();
+        scratch.expanded.clear();
+        self.capture_free_repeat_scratch = scratch;
+        if matched {
+            Some(true)
+        } else {
+            state.index = entry_index;
             Some(false)
         }
     }
