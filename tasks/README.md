@@ -104,12 +104,11 @@ Campaign working rules:
   and its symbol grew 272B. HashMap measured 1.0073x and Raytrace 0.9963x
   against the frozen base, missing the required 0.97 target in both cases; the
   runtime changes were reverted.
-- `T027-frame-verified-direct-local-opcodes.md` — frozen T022 leaf unit. Rewrite
-  eligible ordinary local operations only in the same-offset lowered stream,
-  then use the existing per-frame authoritative-slot mask to select that
-  stream once instead of repeating the full admission guards on every local
-  dispatch. HashMap is the sole payoff target; high-ranked shared cases and
-  broad local/allocation cases are controls.
+- `T027-frame-verified-direct-local-opcodes.md` — **rejected.** The prototype
+  preserved 96-byte opcodes and moved 99.9999% of HashMap's authoritative
+  local hits through frame-verified direct variants, with all 2,040 runtime
+  tests passing. HashMap improved only to 0.9841x candidate/base, missing the
+  frozen 0.97 target, so all runtime changes were reverted.
 - `T022-performance-priority-controller.md` — evidence-bound selection and
   stop mechanism for T018. It derives the next profiling queue from current
   artifacts, freezes a unit's targets before timing, and records explicit

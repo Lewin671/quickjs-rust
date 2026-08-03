@@ -1,6 +1,6 @@
 # T027: Frame-verified direct-local opcodes
 
-## Status: frozen before implementation
+## Status: closed after mechanism success and fast-gate rejection
 
 This is the next T018 leaf unit selected from the exact T022 queue for runtime
 candidate `bea6aacf`. The frozen plan is
@@ -111,3 +111,49 @@ Forbidden within this unit:
 5. Run strictly alternating same-host A/B for the target and controls.
 6. Record `retained`, `rejected`, or `inconclusive` from the exact frozen gate;
    do not retune the target list or threshold after timing.
+
+## Result
+
+The one-attempt prototype appended all three direct-local variants without
+changing `Op`'s exact 96-byte size. Static lowering admitted only real function
+bodies and excluded captures, descendant dynamic scope, class uncertainty,
+received upvalues, sloppy-global fallback, eval-deletable slots, scripts,
+modules, and direct-eval top-level code. Each existing full/data lowered
+variant retained its original fallback stream; an incomplete live authority
+mask therefore disabled only direct-local opcodes, not existing scalar
+replacement or superinstructions. Constant-binary lookahead inputs also kept
+their established `LoadLocal` shape because they are matcher data rather than
+dispatched operations.
+
+The mechanism gate passed. Focused tests covered derived-only emission,
+incomplete-mask fallback, captures, direct eval, TDZ, const assignment, mapped
+arguments, module bindings, and generator resume. All 2,040 qjs-runtime tests
+passed, the perf-counters partition test passed, and runtime clippy with
+`-D warnings` passed. The candidate HashMap diagnostic reported
+`direct_local_ops=33,226,238` against the frozen base's 33,226,260
+authoritative local hits: 99.9999 percent coverage, above the required 80
+percent. The diagnostic receipt SHA-256 is
+`429d1f94c2e8e281953650f794be9c3144e683f71fe49540091fc0afdf3fc423`.
+
+The frozen payoff gate nevertheless failed. The standard release base and
+prototype executable SHA-256 values were
+`f6bd01fd4fedabfa16ec133f937b6f3dc2476e31e3fdd680b037145c3d8aebe1`
+and
+`1c0a657c6e0346c4cf695780355dbc9e9b16aa0c0d3b52d1b3cc207591f06e28`.
+Eleven strictly alternating amplified HashMap pairs measured median
+candidate/base **0.984055x**, missing the required `<= 0.97x`. The full
+observed range was 0.780686-0.993385; the first pair contained a cold base
+outlier (2.600s versus the later 1.606-1.618s base range), while the ten warm
+pairs ranged from 0.977848 to 0.993385 and lead to the same rejection. Median
+base and candidate times were 1.6153s and 1.5888s. The A/B receipt SHA-256 is
+`22bc5a3b9cad4f803698eccca49947198f07bcfa62fbf032040ddff3cb12b095`.
+
+Because the sole payoff target failed, controls, complete hosted promotion,
+and Test262 promotion evidence were unwarranted. The runtime, diagnostics,
+tests, and benchmarking-doc changes were reverted; the checked-in engine is
+source-identical to the frozen base. The rejected prototype diff has SHA-256
+`eb149c9380415e8ea96a85231ecd743e16707e1e40b77bd0eea3babaebb6f695`.
+Do not retry direct-local variants, authority-proof placement, lowered-stream
+layering, or lookahead exclusions. A successor local-binding proposal needs a
+new current profile and a different mechanism capable of exceeding the
+remaining roughly 1.6 percent gain.
