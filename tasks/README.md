@@ -109,6 +109,11 @@ Campaign working rules:
   local hits through frame-verified direct variants, with all 2,040 runtime
   tests passing. HashMap improved only to 0.9841x candidate/base, missing the
   frozen 0.97 target, so all runtime changes were reverted.
+- `T028-discarded-binary-branch-superinstruction.md` — **planned.** Exact
+  dynamic opcode evidence finds a two-edge discarded binary condition capable
+  of removing 9.73% of HashMap dispatch, 5.17% of CDJS dispatch, and 2.73% of
+  public-field Raytrace dispatch without changing source bytecode or loop-plan
+  offsets. Its rank-one one-attempt plan is frozen before implementation.
 - `T022-performance-priority-controller.md` — evidence-bound selection and
   stop mechanism for T018. It derives the next profiling queue from current
   artifacts, freezes a unit's targets before timing, and records explicit

@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "discarded-binary-branch-superinstruction",
+  "base_sha": "e11b5d199a6e49efbc1ae3a47af4bb5d338afae0",
+  "queue": {
+    "candidate_sha": "e11b5d199a6e49efbc1ae3a47af4bb5d338afae0",
+    "sha256": "fe1b970103d53cf7408e6da4398d2d456bffda056b3d4172627f191d86a056f9"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Append one stack-based discarded-binary-branch superinstruction and derive it only for the exact Binary; JumpIfFalse; Pop shape whose false target is also a Pop. The existing lowered execution stream keeps every source instruction offset while the fused operation evaluates the same binary expression, applies the same truthiness test, discards the condition, and advances directly past the Pop on either edge. Existing local-local comparison fusion runs first, so this unit covers the remaining property, global, constant, and mixed-source conditions without replacing its stronger four-operation fusion.",
+    "generality": "Selection depends only on immutable bytecode control flow, the existing complete flow analysis, and the exact two-edge discard shape. It applies to every eligible function and never inspects source paths, benchmark or function names, property names, operand values, iteration counts, checksums, or expected results. The immutable source bytecode and all specialized loop plans remain unchanged; incomplete analysis, non-linear instruction ranges, unmatched Pop edges, malformed targets, suspension-sensitive code, and every nonmatching branch retain the original Binary and JumpIfFalse operations.",
+    "semantic_risks": [
+      "preserving left-to-right binary coercion, exceptions, Proxy and valueOf effects, and exact BinaryOp semantics before testing truthiness",
+      "discarding the computed value exactly once on both branch edges while preserving the operand stack seen at every merge target",
+      "preserving catchable stack-underflow and malformed-instruction errors rather than turning them into unchecked indexing",
+      "keeping original bytecode offsets, jump targets, source spans, and specialized loop-plan recognition unchanged",
+      "letting the existing local-local comparison superinstruction win before this more general stack-based fusion",
+      "appending one Op variant without changing size_of::<Op>() or causing a dispatch-layout regression larger than the removed operations"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "perf-counters 2026-08-03 /tmp/qjs-branch-sequence-hash-map.txt; temporary diagnostic-only opcode breakdown on runtime-identical bced98c4, executed by perf-counters release executable SHA-256 84144ca60f8d6d0a45fa5618880dbf019da8a9b03ac0aac8d71f1d1e4d0d1690. Wrapper target/benchmarks/hash-map.profile.js SHA-256 aa98bc1975d8824840df5c31a397b5dab27d514e1854ff5681ceea8ec4bf2c20. The diagnostic source changes were reverted after collection; e11b5d19 through bced98c4 differ only in performance-plan and rejection documentation.",
+      "sha256": "d6d9eedd7ddbf0e28a7b8be41a73b963149807ab5646ab21b042c119fe4c6839",
+      "base_sha": "e11b5d199a6e49efbc1ae3a47af4bb5d338afae0",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "HashMap executes 5,122,209 Binary followed by JumpIfFalse sequences whose fallthrough and false-target instructions are both Pop. Replacing each three-dispatch path with one derived operation removes a theoretical 10,244,418 of 105,261,606 generic dispatches, or 9.73 percent, while preserving both branch destinations and the original binary evaluator.",
+      "inclusive_fraction": 0.097323406
+    },
+    {
+      "source": "perf-counters 2026-08-03 /tmp/qjs-branch-sequence-raytrace-public-class-fields.txt; the same temporary diagnostic executable. Wrapper target/benchmarks/raytrace-public-class-fields.profile.js SHA-256 824daa5582289787f6e25a200892a1d6bdfa682afe9ce76a30e520dc7e03528c.",
+      "sha256": "b11eb64e66500c7b0a80226fa176d983517096cbc48d71798d0993fd9681a0e3",
+      "base_sha": "e11b5d199a6e49efbc1ae3a47af4bb5d338afae0",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/raytrace-public-class-fields"
+      ],
+      "shared_cost": "Public-field Raytrace executes 599,331 fully discardable binary branches, enough to remove 1,198,662 of 43,946,288 generic dispatches, or 2.73 percent. It is an independent high-ranked control for both shared reach and appended-variant code-layout risk.",
+      "inclusive_fraction": 0.027275614
+    },
+    {
+      "source": "perf-counters 2026-08-03 /tmp/qjs-branch-sequence-cdjs.txt; the same temporary diagnostic executable. Wrapper target/benchmarks/cdjs.profile.js SHA-256 8fdde63549dd457d375730cca98efc1be687c3fa32b84e5d63a9903b768fed47.",
+      "sha256": "afe74743db891cc305173d4cb519722f41ce9f34e7487ed9471780042dfa81cf",
+      "base_sha": "e11b5d199a6e49efbc1ae3a47af4bb5d338afae0",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/cdjs"
+      ],
+      "shared_cost": "CDJS independently executes 1,884,381 fully discardable binary branches, enough to remove 3,768,762 of 72,858,332 generic dispatches, or 5.17 percent. This establishes cross-workload reach rather than a HashMap-only bytecode shape.",
+      "inclusive_fraction": 0.051727262
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "control_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/date-format-xparb",
+      "external/sunspider-1.0/access-binary-trees",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/string-validate-input",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/sunspider-1.0/controlflow-recursive",
+      "external/kraken-1.1/ai-astar",
+      "broad/branch_arithmetic",
+      "broad/local_read",
+      "broad/array_allocation",
+      "broad/object_allocation",
+      "broad/closure_allocation_call"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
