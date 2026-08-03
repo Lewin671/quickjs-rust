@@ -52,7 +52,7 @@
   ],
   "migration": {
     "stages": 4,
-    "current_stage": 1,
+    "current_stage": 2,
     "cumulative_target_ids": [
       "external/sunspider-1.0/string-tagcloud"
     ],

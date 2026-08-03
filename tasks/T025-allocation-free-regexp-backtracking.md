@@ -3,9 +3,9 @@
 ## Status: active staged migration
 
 This is the current T018 structural unit selected by the exact T022 queue at
-`c62314aa`. The runtime at current descendant `2a3fe1cd` is source-identical
-and its release executable has the same SHA-256; that commit changes only the
-performance decision controller and tests.
+`c62314aa`. The evidence-only controller commit `2a3fe1cd` is runtime- and
+release-binary-identical to that migration base. Stage 1 is `6da38970`; Stage 2
+continues from it without changing the fixed migration base.
 
 ## Goal
 
@@ -72,6 +72,77 @@ drop. This confirms the mechanism direction while leaving most allocation in
 the compatibility bridge for stages 2-3. Stage 1 is inside the 1.10 cumulative
 budget; formal fixed-base portfolio classification remains pending complete
 same-host evidence.
+
+Trusted-main Performance Preview `30817505652` compared exact Stage 1
+`6da38970` with runtime-identical parent `2a3fe1cd`. All 225 broad measurements
+and three blocks were valid. The declared external target and controls were
+inside the 1.10 stage budget: Tagcloud 0.9772, validate-input 0.9866,
+regexp-dna 0.9823, base64 0.9958, recursive 0.9905, A* 0.9945, HashMap 0.9974,
+and raytrace 1.0022. Broad object allocation and closure allocation were
+0.9783 and 1.0014. This is exact-parent hosted evidence, not the required
+fixed-base decision.
+
+Two direct fixed-`c62314aa` local preview attempts were inconclusive under the
+formal broad protocol. The first invalidated every block on timer-limited
+`plain_function_call` and `captured_write` records; the retry hit the same
+host ceiling on six other candidate cases. The decision controller correctly
+rejects the otherwise complete hosted bundle with `preview summary base SHA
+does not match performance unit`. No formal `advance` artifact is claimed.
+The source- and binary-bound amplified fixed-base target/control screen and the
+hosted exact-parent screen both exclude the 1.10 abort condition, so the
+migration continues while a trusted arbitrary-fixed-base hosted lane remains
+an evidence-system follow-up.
+
+## Stage 2 evidence
+
+Stage 2 moves ordinary exact-once and optional groups plus lookahead assertions
+onto a capture undo journal. Append-only continuation frames preserve the
+outer sequence while nested alternatives retry; every recursive boundary
+restores the input index, capture writes, and speculative frames on failure.
+Positive lookahead retains the first body's captures but stays atomic and
+zero-width, while negative lookahead rolls every body capture back. Optional
+group capture clears use the same journal. Quantified groups beyond one and
+lookbehind remain on the compatibility bridge for Stage 3.
+
+Focused coverage proves that a failed nested alternative cannot leak capture
+1 into a successful capture-2/backreference path, and that a negative
+lookahead discards a capture written before its body later fails. All 45
+matcher tests and qjs-runtime clippy pass.
+
+The standard-recipe Stage 2 and fixed-base executable SHA-256 values are
+`b757712e2a31bb8ecc470e0333560e591dff9f158f9b100ac455818deda276b4`
+and `922de75a13296fb7049fccc840de72d94466b32854ea301b5129e25eb290e4bb`.
+An amplified 11-pair Tagcloud screen is 0.8705 fixed-base
+[0.7977, 0.8966]. The direct Stage-2/Stage-1 increment is noise-bound at
+1.0083 [0.9187, 1.0647], as expected for a representation stage rather than a
+leaf payoff claim.
+
+The complete three-block external diagnostic against the fixed binary reports:
+
+| Case | Stage 2 / fixed base | Role |
+| --- | ---: | --- |
+| `string-tagcloud` | 0.8676 | cumulative target |
+| `string-validate-input` | 0.9473 | RegExp control |
+| `regexp-dna` | 0.8129 | RegExp control |
+| `string-base64` | 0.9574 | string control |
+| `controlflow-recursive` | 1.0429 | non-RegExp control |
+| `ai-astar` | 1.0006 | Kraken control |
+| `hash-map` | 1.0002 | JetStream control |
+| `raytrace-public-class-fields` | 1.0137 | JetStream control |
+
+The first shorter recursive diagnostic read 1.1182, but the required longer
+11-pair rerun was neutral at 0.9992 [0.9940, 1.0290]. Eleven-pair direct broad
+screens put `object_allocation` at 0.9985 [0.9830, 1.0026] and
+`closure_allocation_call` at 1.0094 [0.9894, 1.0171]. Every declared watched
+case is therefore below the 1.10 stage budget. External suite geometric means
+are 1.0023 for JetStream, 0.9979 for Kraken, and 0.9806 over the 25 mutually
+comparable SunSpider cases. This remains diagnostic rather than a promotion
+claim because SunSpider comparison coverage is incomplete and the broad
+fixed-base formal report is host-inconclusive.
+
+External raw/report SHA-256 are
+`96abc83d77625328a374442f3e3bb9bf82c855c8c3ddb19f677dc092ce58e4a6`
+and `8ae8d3bff6bde818d661afc4e329d2e695e0f8e82d464bbe7b9c3ee1e5f41d92`.
 
 ## Scope
 

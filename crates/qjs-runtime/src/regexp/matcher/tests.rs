@@ -95,6 +95,22 @@ fn first_match_failure_restores_state_for_the_next_alternative() {
 }
 
 #[test]
+fn capture_journal_restores_nested_alternatives_and_negative_lookahead() {
+    // The first nested alternative writes capture 1 before its continuation
+    // fails. The second alternative and its backreference must observe an
+    // untouched first slot.
+    let matched = regexp_match_range(r"^(?:(a)c|(b))\2$", "bb", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 2));
+    assert_eq!(matched.captures, vec![None, Some((0, 1))]);
+
+    // A negative lookahead always discards captures from its body, including
+    // a capture written before a later atom makes the assertion body fail.
+    let matched = regexp_match_range(r"^(?!(a)b)(a)$", "a", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+    assert_eq!(matched.captures, vec![None, Some((0, 1))]);
+}
+
+#[test]
 fn prepared_input_slices_reuse_unicode_and_code_unit_views() {
     let unicode = PreparedRegexp::new(".", false, true, false, false)
         .prepare_input(&crate::JsString::from("A😀B"));
