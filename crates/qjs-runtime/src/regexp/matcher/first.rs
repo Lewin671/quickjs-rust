@@ -12,8 +12,8 @@ use super::escapes::PropertyCache;
 use super::fast_scan::{simple_atom_boundaries, simple_atom_matcher};
 use super::groups::{GroupKind, closing_group, group_alternatives, group_kind};
 use super::{
-    MatchOptions, MatchState, at_line_end, at_line_start, atom_capture_indices, atom_end,
-    quantifier, regexp_word_char, repeat_atom,
+    MatchOptions, MatchState, RepeatScratch, at_line_end, at_line_start, atom_capture_indices,
+    atom_end, match_repeated_atom_first, quantifier, regexp_word_char,
 };
 
 type Capture = Option<(usize, usize)>;
@@ -46,6 +46,7 @@ pub(super) struct FirstMatcher<'a> {
     options: MatchOptions,
     continuations: Vec<Continuation>,
     capture_undo: Vec<CaptureUndo>,
+    repeat_scratch: RepeatScratch,
 }
 
 impl<'a> FirstMatcher<'a> {
@@ -64,6 +65,7 @@ impl<'a> FirstMatcher<'a> {
             options,
             continuations: Vec::new(),
             capture_undo: Vec::new(),
+            repeat_scratch: RepeatScratch::default(),
         }
     }
 
@@ -80,9 +82,11 @@ impl<'a> FirstMatcher<'a> {
     ) -> bool {
         debug_assert!(self.continuations.is_empty());
         debug_assert!(self.capture_undo.is_empty());
+        debug_assert!(self.repeat_scratch.is_empty());
         let matched = self.match_pattern(pc, end_pc, state, None);
         debug_assert!(matched || self.continuations.is_empty());
         debug_assert!(matched || self.capture_undo.is_empty());
+        debug_assert!(self.repeat_scratch.is_empty());
         matched
     }
 
@@ -220,23 +224,32 @@ impl<'a> FirstMatcher<'a> {
             return matched;
         }
 
-        // The migration bridge owns every candidate state, so a failed
-        // continuation cannot mutate the caller. Later stages replace these
-        // state graphs with ordered choices plus reusable repetition scratch.
-        for mut candidate in repeat_atom(
-            self.pattern,
-            self.text,
+        // The migration bridge still owns each candidate state, so a failed
+        // continuation cannot mutate the caller. It now streams ordered
+        // choices and reuses its work storage rather than building every
+        // result before the first continuation attempt.
+        let pattern = self.pattern;
+        let text = self.text;
+        let group_indices = self.group_indices;
+        let properties = self.properties;
+        let options = self.options;
+        let mut scratch = std::mem::take(&mut self.repeat_scratch);
+        let matched = match_repeated_atom_first(
+            pattern,
+            text,
             pc,
             quantifier,
             state.clone(),
-            self.group_indices,
-            self.properties,
-            self.options,
-        ) {
-            if self.match_pattern(quantifier.next_pc, end_pc, &mut candidate, continuation) {
-                *state = candidate;
-                return true;
-            }
+            group_indices,
+            properties,
+            options,
+            &mut scratch,
+            |candidate| self.match_pattern(quantifier.next_pc, end_pc, candidate, continuation),
+        );
+        self.repeat_scratch = scratch;
+        if let Some(candidate) = matched {
+            *state = candidate;
+            return true;
         }
         false
     }

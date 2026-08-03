@@ -222,6 +222,26 @@ An 11-pair amplified Tagcloud A/B is noise-bound at 1.0018 Stage-3-slice/Stage
 storage for the ordered repetition work but does not claim a speedup by
 itself; generic repeated-atom state graphs still remain behind the bridge.
 
+The second Stage 3 slice streams generic repeated-atom accept states directly
+into the surrounding continuation instead of first materializing the complete
+result vector. One invocation-local scratch object retains the ordered work
+stack and expanded-state set across candidate starts and alternatives. The
+bridge still owns `MatchState` choices and capture-bearing hash keys; removing
+those clones is the next slice rather than a claim that Stage 3 is complete.
+Focused greedy and lazy compound-group coverage verifies that a failed trailing
+continuation retries the first viable accept state without losing the retained
+iteration's captures. All 47 focused matcher tests and runtime clippy pass.
+
+The first-slice base and streaming-candidate executable SHA-256 values are
+`e46ea94a7eed5f005a5c0e9428a73c01d6966e5adebb399e73001ebbcc871033`
+and `7acf88f06971cc0667f98f70051acf3ff947fd1c4a91e6f8397e69f8b6304b4b`.
+Eleven-pair amplified screens are noise-bound: Tagcloud is 0.9909
+streaming/first-slice [0.9634, 1.0592], while regexp-dna is 1.0073 [0.6792,
+1.3120]. An earlier inlined build regressed regexp-dna to a 1.0703 median;
+symbol inspection showed the choice walker folded into hot `match_pattern`.
+Keeping the generic walker out of line restored the control to neutral. This
+is a code-layout guard and a structural migration slice, not a speedup claim.
+
 ## Scope
 
 - Allowed paths: `crates/qjs-runtime/src/regexp/matcher.rs`,

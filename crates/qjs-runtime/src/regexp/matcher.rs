@@ -220,6 +220,25 @@ struct RepeatAtom<'a> {
     options: MatchOptions,
 }
 
+enum RepeatWork {
+    Expand(MatchState, usize),
+    Accept(MatchState, usize),
+}
+
+type RepeatKey = (usize, usize, Vec<Option<(usize, usize)>>);
+
+#[derive(Default)]
+struct RepeatScratch {
+    work: Vec<RepeatWork>,
+    expanded: HashSet<RepeatKey>,
+}
+
+impl RepeatScratch {
+    fn is_empty(&self) -> bool {
+        self.work.is_empty() && self.expanded.is_empty()
+    }
+}
+
 #[derive(Clone, Copy)]
 struct AtomStep {
     pc: usize,
@@ -1516,6 +1535,121 @@ fn repeat_atom(
     results
 }
 
+/// Stream repeated-atom accept states in backtracking priority order.
+///
+/// Unlike `repeat_atom`, this first-match bridge does not materialize the
+/// complete result graph before trying the surrounding continuation. Owned
+/// states remain a compatibility boundary until the capture journal absorbs
+/// these choices, but the work and visited allocations are invocation-local
+/// and reusable.
+#[allow(clippy::too_many_arguments)]
+#[inline(never)]
+fn match_repeated_atom_first(
+    pattern: &[char],
+    text: &[char],
+    atom_pc: usize,
+    quantifier: Quantifier,
+    state: MatchState,
+    group_indices: &HashMap<usize, usize>,
+    properties: &PropertyCache,
+    options: MatchOptions,
+    scratch: &mut RepeatScratch,
+    mut accept: impl FnMut(&mut MatchState) -> bool,
+) -> Option<MatchState> {
+    debug_assert!(scratch.is_empty());
+    if quantifier.is_exactly_one() {
+        for (_, mut candidate) in match_atom(
+            pattern,
+            text,
+            atom_pc,
+            state,
+            group_indices,
+            properties,
+            options,
+        ) {
+            if accept(&mut candidate) {
+                return Some(candidate);
+            }
+        }
+        return None;
+    }
+    let atom_captures =
+        atom_capture_indices(pattern, atom_pc, group_indices, properties, options.unicode);
+    let repeat = RepeatAtom {
+        pattern,
+        text,
+        atom_pc,
+        quantifier,
+        atom_captures,
+        group_indices,
+        properties,
+        options,
+    };
+    scratch.work.push(RepeatWork::Expand(state, 0));
+
+    let mut matched = None;
+    while let Some(work) = scratch.work.pop() {
+        match work {
+            RepeatWork::Accept(state, count) => {
+                let mut candidate = repeat_accept_state(state, count, &repeat.atom_captures);
+                if accept(&mut candidate) {
+                    matched = Some(candidate);
+                    break;
+                }
+            }
+            RepeatWork::Expand(state, count) => {
+                if count >= quantifier.min
+                    && !scratch
+                        .expanded
+                        .insert((state.index, count, state.captures.clone()))
+                {
+                    continue;
+                }
+
+                if count >= quantifier.min {
+                    if quantifier.greedy {
+                        scratch.work.push(RepeatWork::Accept(state.clone(), count));
+                    } else {
+                        let mut candidate =
+                            repeat_accept_state(state.clone(), count, &repeat.atom_captures);
+                        if accept(&mut candidate) {
+                            matched = Some(candidate);
+                            break;
+                        }
+                    }
+                }
+
+                if quantifier.max.is_some_and(|max| count >= max) {
+                    continue;
+                }
+                let mut children: Vec<MatchState> = match_atom(
+                    pattern,
+                    text,
+                    atom_pc,
+                    state.clone(),
+                    group_indices,
+                    properties,
+                    options,
+                )
+                .into_iter()
+                .filter_map(|(_, next_state)| {
+                    (count < quantifier.min || next_state.index != state.index)
+                        .then_some(next_state)
+                })
+                .collect();
+                dedup_match_states(&mut children);
+                children.reverse();
+                for next_state in children {
+                    scratch.work.push(RepeatWork::Expand(next_state, count + 1));
+                }
+            }
+        }
+    }
+    scratch.work.clear();
+    scratch.expanded.clear();
+    matched
+}
+
 #[allow(clippy::too_many_arguments)]
 fn repeat_atom_reverse(
     pattern: &[char],
@@ -1604,24 +1738,20 @@ fn repeat_atom_from(
     // For greedy matching we want to emit the accept state for a frame only
     // after all of its descendants, so we expand children first (pushed in
     // reverse so the first child is processed first) and defer the accept.
-    enum Work {
-        Expand(MatchState, usize),
-        Accept(MatchState, usize),
-    }
-    let mut stack = vec![Work::Expand(state, count)];
+    let mut stack = vec![RepeatWork::Expand(state, count)];
     let mut expanded = HashSet::new();
     while let Some(work) = stack.pop() {
         match work {
-            Work::Accept(state, count) => {
+            RepeatWork::Accept(state, count) => {
                 results.push(repeat_accept_state(state, count, &repeat.atom_captures));
             }
-            Work::Expand(state, count) => {
+            RepeatWork::Expand(state, count) => {
                 if !expanded.insert((state.index, count, state.captures.clone())) {
                     continue;
                 }
                 if repeat.quantifier.greedy {
                     // Defer this frame's own accept until after its children.
-                    stack.push(Work::Accept(state.clone(), count));
+                    stack.push(RepeatWork::Accept(state.clone(), count));
                 } else {
                     results.push(repeat_accept_state(
                         state.clone(),
@@ -1650,7 +1780,7 @@ fn repeat_atom_from(
                     // child is on top of the stack.
                     children.reverse();
                     for next_state in children {
-                        stack.push(Work::Expand(next_state, count + 1));
+                        stack.push(RepeatWork::Expand(next_state, count + 1));
                     }
                 }
             }

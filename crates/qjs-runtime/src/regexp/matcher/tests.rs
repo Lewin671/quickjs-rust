@@ -79,6 +79,22 @@ fn streamed_simple_repetition_preserves_first_full_match_priority() {
 }
 
 #[test]
+fn streamed_compound_repetition_backtracks_to_first_full_match() {
+    // The repeated group first consumes every `a`. Its trailing `aa` then
+    // forces the streamed choice walker to retry an earlier accept state
+    // without losing the capture from the final retained repetition.
+    let greedy = regexp_match_range(r"^(a|aa)*aa$", "aaa", 0, false, false, false).unwrap();
+    assert_eq!((greedy.start, greedy.end), (0, 3));
+    assert_eq!(greedy.captures, vec![Some((0, 1))]);
+
+    // Lazy traversal tries the zero-count continuation first, then expands
+    // just far enough for the same full match.
+    let lazy = regexp_match_range(r"^(a|aa)*?aa$", "aaa", 0, false, false, false).unwrap();
+    assert_eq!((lazy.start, lazy.end), (0, 3));
+    assert_eq!(lazy.captures, vec![Some((0, 1))]);
+}
+
+#[test]
 fn first_match_failure_restores_state_for_the_next_alternative() {
     // The first alternative advances through a simple repetition before its
     // continuation fails. The second alternative must start at the original
