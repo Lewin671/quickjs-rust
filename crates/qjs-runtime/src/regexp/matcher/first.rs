@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use super::escapes::PropertyCache;
-use super::fast_scan::{simple_atom_boundaries_into, simple_atom_matcher};
+use super::fast_scan::{simple_atom_boundaries_into, simple_atom_matcher, simple_atom_max_count};
 use super::groups::{GroupKind, closing_group, group_alternatives, group_kind};
 use super::{
     MatchOptions, MatchState, RepeatScratch, RepeatWork, at_line_end, at_line_start,
@@ -217,6 +217,36 @@ impl<'a> FirstMatcher<'a> {
                 };
                 state.index = next_index;
                 return self.match_pattern(quantifier.next_pc, end_pc, state, continuation);
+            }
+
+            if matcher.has_fixed_width_one(self.options) {
+                let entry_index = state.index;
+                let Some(highest) = simple_atom_max_count(
+                    self.text,
+                    &matcher,
+                    quantifier,
+                    entry_index,
+                    self.properties,
+                    self.options,
+                ) else {
+                    return false;
+                };
+                if quantifier.greedy {
+                    for count in (quantifier.min..=highest).rev() {
+                        state.index = entry_index + count;
+                        if self.match_pattern(quantifier.next_pc, end_pc, state, continuation) {
+                            return true;
+                        }
+                    }
+                } else {
+                    for count in quantifier.min..=highest {
+                        state.index = entry_index + count;
+                        if self.match_pattern(quantifier.next_pc, end_pc, state, continuation) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
             }
 
             let boundary_slot = self.simple_boundary_depth;

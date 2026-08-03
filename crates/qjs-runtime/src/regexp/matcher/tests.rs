@@ -43,6 +43,25 @@ fn greedy_simple_atom_backtracks_against_trailing_atom() {
 }
 
 #[test]
+fn fixed_width_simple_atoms_preserve_greedy_and_lazy_retries() {
+    let greedy = regexp_match_range(r"^[a-c]+c$", "abcc", 0, false, false, false).unwrap();
+    assert_eq!((greedy.start, greedy.end), (0, 4));
+
+    let lazy = regexp_match_range(r"^\d+?3$", "123", 0, false, false, false).unwrap();
+    assert_eq!((lazy.start, lazy.end), (0, 3));
+
+    // Unicode mode retains explicit boundaries because one dot can consume a
+    // surrogate pair; this also guards the fixed-width admission boundary.
+    let input = format!(
+        "{}{}x",
+        string_from_code_unit(0xD83D),
+        string_from_code_unit(0xDE00)
+    );
+    let unicode = regexp_match_range(r"^.+x$", &input, 0, false, true, false).unwrap();
+    assert_eq!((unicode.start, unicode.end), (0, 3));
+}
+
+#[test]
 fn exact_simple_atoms_preserve_captures_and_unicode_advancement() {
     // The literal, class, and decimal escape all have an implicit `{1}`
     // quantifier. Their direct route must retain the surrounding capture.

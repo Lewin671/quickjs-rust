@@ -407,6 +407,38 @@ removes a measured candidate-start allocation and records a local Tagcloud
 improvement; the quantified choice stack still owns `MatchState` snapshots,
 so Stage 3 remains open.
 
+The eighth Stage 3 slice removes boundary materialization for fixed-width
+simple atoms. In non-Unicode mode, ordinary literals, dot, character classes,
+and ordinary escapes advance exactly one UTF-16 code unit per successful step.
+The matcher now records only the greatest reachable repetition count and
+reconstructs greedy or lazy retry positions as `start + count`. Unicode mode,
+Unicode escapes, and property escapes retain the explicit boundary buffer
+because one successful step can span a surrogate pair. Focused coverage checks
+greedy and lazy retries plus the Unicode admission boundary.
+
+The preceding state-reuse profile (SHA-256
+`dd9b4420c2f8c95538cbecf16c97ed6b246c9c0859df190984b715c616693016`)
+contains 4,722 main-thread samples and 637 below `match_input`. Its largest
+direct RegExp allocation branch is 18 samples in
+`match_pattern -> Vec::grow_one`, including 17 in raw-vector growth and 12
+realloc descendants, while writing fixed-width repetition boundaries. The new
+4,769-sample profile (SHA-256
+`d8a345d62395baf71ac9dafff0176ff7c50db706645fdf7a35182b6ff81dc9ab`)
+contains 623 `match_input` samples and no simple-boundary vector growth or
+reallocation descendant. Both profiles use the same 40-copy source SHA-256
+`1a3650d435575a4497a6143749d6fde6b32bc1178ac9088d18ca713121cc3fe5`.
+
+The exact base and candidate release executable SHA-256 values are
+`f16c08c7a066a54130cff358d959e4f8263f30c7ff63f87a106a053a3c1ebd01`
+and `7f2927427988c677f37f98b1721f4ab00658d112874d45c0cfd5445a4b2913df`.
+An 11-pair fixed-source Tagcloud A/B is 0.9850 candidate/base, with an
+observed range of 0.8949-1.0080. Eleven-pair controls remain inside the 1.03
+median ceiling: regexp-dna is 1.0006 [0.9738, 1.0350] at 12 copies,
+validate-input is 1.0027 [0.9879, 1.0230] at 29 copies, and base64 is 1.0049
+[0.9576, 1.0333] at 29 copies. This slice removes both a measured allocation
+route and its per-repetition boundary writes while preserving the variable-
+width path; owned quantified-group choice states remain Stage 3 work.
+
 ## Scope
 
 - Allowed paths: `crates/qjs-runtime/src/regexp/matcher.rs`,

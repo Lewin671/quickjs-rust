@@ -116,6 +116,15 @@ pub(super) fn simple_atom_matcher<'a>(
 }
 
 impl SimpleAtom<'_> {
+    /// Whether every successful step consumes exactly one UTF-16 code unit.
+    ///
+    /// Non-Unicode matching advances one code unit for ordinary atoms. A
+    /// Unicode escape can still match a two-unit scalar through its legacy
+    /// fallback, while Unicode-mode atoms can advance across surrogate pairs.
+    pub(super) fn has_fixed_width_one(&self, options: MatchOptions) -> bool {
+        !options.unicode && !matches!(self, Self::UnicodeEscape(_) | Self::Property(_))
+    }
+
     /// Test the code point at `index`, returning the index just past a match.
     pub(super) fn step(
         &self,
@@ -198,6 +207,32 @@ impl SimpleAtom<'_> {
             }
         }
     }
+}
+
+/// Scan a fixed-width simple atom and return its greatest reachable count.
+/// The caller reconstructs every retry boundary as `start + count`, avoiding
+/// boundary storage when successful steps are known to consume one code unit.
+pub(super) fn simple_atom_max_count(
+    text: &[char],
+    matcher: &SimpleAtom<'_>,
+    quantifier: Quantifier,
+    start: usize,
+    properties: &PropertyCache,
+    options: MatchOptions,
+) -> Option<usize> {
+    debug_assert!(matcher.has_fixed_width_one(options));
+    let mut index = start;
+    let mut count = 0;
+    let max = quantifier.max.unwrap_or(usize::MAX);
+    while count < max {
+        let Some(next) = matcher.step(text, index, properties, options) else {
+            break;
+        };
+        debug_assert_eq!(next, index + 1);
+        index = next;
+        count += 1;
+    }
+    (count >= quantifier.min).then_some(count)
 }
 
 /// Linear-scan repetition of a single-code-point atom. Walks forward recording
