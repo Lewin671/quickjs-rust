@@ -99,11 +99,11 @@ Campaign working rules:
   allocation control reached 1.1089x and crossed the 1.10 cumulative budget.
   Preserve the implementation, stop before Stage 4, and require a new current
   profile and frozen plan before revisiting the broader RegExp mechanism.
-- `T026-compact-hot-op-error-abi.md` — **planned from the current queue.** Make
-  successful out-of-line local/global/property/coercion/arithmetic opcode
-  handlers return a pointer-sized private result instead of a multiword sret
-  buffer. The frozen unit targets current queue ranks 1-2 (HashMap and
-  raytrace) and requires both timing and release-disassembly mechanism gates.
+- `T026-compact-hot-op-error-abi.md` — **rejected.** The prototype removed sret
+  from all sixteen covered hot handlers, but the dispatch frame remained 448B
+  and its symbol grew 272B. HashMap measured 1.0073x and Raytrace 0.9963x
+  against the frozen base, missing the required 0.97 target in both cases; the
+  runtime changes were reverted.
 - `T022-performance-priority-controller.md` — evidence-bound selection and
   stop mechanism for T018. It derives the next profiling queue from current
   artifacts, freezes a unit's targets before timing, and records explicit

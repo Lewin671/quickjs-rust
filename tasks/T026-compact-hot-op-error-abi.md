@@ -1,6 +1,6 @@
 # T026: Compact hot-op error ABI
 
-## Status: planned from the exact current queue
+## Status: closed after mechanism and fast-gate rejection
 
 This is the next T018 leaf unit selected from the exact T022 queue for runtime
 candidate `2093eeab`. The current `39f3b530` descendant changes task documents
@@ -103,3 +103,51 @@ Forbidden within this unit:
    hosted evidence.
 6. Record `retained`, `rejected`, or `inconclusive` from the exact frozen gate;
    do not retune the target list or threshold after timing.
+
+## Result
+
+The one-attempt implementation changed all sixteen covered handlers to a
+pointer-sized `Result<(), HotOpError>`. A compile-time size assertion passed,
+and a focused runtime test preserved thrown-object identity through property,
+unary-coercion, and binary-coercion failures plus the native ReferenceError
+diagnostic through an outer caller. Runtime clippy passed.
+
+The release mechanism inspection was mixed and therefore failed the frozen
+all-of gate. The covered ARM64 calls no longer computed a stack sret address:
+they pass `Vm` in `x0`, receive the nullable owned-error pointer in `x0`, and
+branch directly on `cbz x0`. However, `run_current_activation` retained its
+exact 448-byte frame because the excluded `run_general_op`, call/return, and
+other payload-bearing results still require the same maximum return buffer.
+Its symbol interval also grew from 6,720 to 6,992 bytes because each compact
+error result needs an exceptional branch back to the cold unbox path. The
+mechanism gate required both sret removal and a smaller frame, so it did not
+pass.
+
+The standard release base and prototype executable SHA-256 values were
+`cb5702a4ae650da9e6f8a39cc6e24ecc8290d9da69a8df3c873c142319eb32d9`
+and
+`91e2bcee5128d1b9adc48eaa161071fd67582a5518e36f6ef906597f83d71f4d`.
+Eleven strictly alternating amplified pairs then rejected both frozen payoff
+targets independently:
+
+| Case | Candidate/base median | Observed range | Gate |
+| --- | ---: | ---: | ---: |
+| HashMap | 1.007270 | 1.000535-1.012563 | <= 0.97 |
+| public-field Raytrace | 0.996292 | 0.988754-1.004635 | <= 0.97 |
+| CDjs control | 0.996993 | 0.966791-1.001224 | <= 1.03 |
+
+The complete 11-pair amplified SunSpider/Kraken diagnostic was likewise
+neutral: 39 comparable cases had geometric mean 0.9949. The predeclared
+external controls were date-format-xparb 0.9828, access-binary-trees 0.9948,
+Tagcloud 0.9991, validate-input 1.0019, and recursive control flow 0.9972.
+Every interval crossed 1.0. The worst corpus medians were math-partial-sums
+1.0191, bitops-nsieve-bits 1.0138, and regexp-dna 1.0118, all below the 1.03
+control ceiling.
+
+The target failure makes the remaining broad controls, complete hosted
+portfolio, and Test262 promotion evidence unwarranted. The runtime and focused
+test changes were reverted; the checked-in engine is source-identical to the
+base. Do not retry compact error pointers, handler selection, or unbox-branch
+placement. A future completion representation would need to remove the
+payload-bearing dispatch returns as a different, newly profiled structural
+mechanism rather than widening this rejected leaf.
