@@ -164,6 +164,24 @@ shallow. The workflow now returns string depths `'0'` and `'1'`; a regression
 assertion rejects the false-zero expression. This retry also contains no timing
 evidence.
 
+Trusted fixed-base run `30826178138` then completed successfully with 3/3
+valid broad blocks, complete external comparisons, and the exact migration
+base. Formal Stage 2 decision SHA-256
+`38476819d822eb52add7756cb047262627c46da85773119ec5ec8d60ed428fca`
+is `inconclusive`: the frozen plan misspelled the existing canonical broad
+control `closure_allocation_call` as nonexistent `closure_allocation`. The
+available watched ratios were all below 1.10, including Tagcloud 0.8762,
+regexp-dna 0.7429, raytrace 1.0277, and object allocation 0.9739; these do not
+constitute `advance` while one declared ID is missing. The checked-in plan now
+uses the canonical ID already named by the pre-measurement T025 diagnostic.
+This clerical correction is frozen before a new hosted run; the completed run
+is retained only as inconclusive evidence and is not reclassified.
+
+The run's preview summary, broad report, and external report SHA-256 values are
+`6e187ac26e721b84c347d7ee628b0213e3c9f64f3215e5d3464e4377f5adcf78`,
+`0920666358882dec0aa5f9a748b9f06443e8d591e92017d27dea2b85121d6832`,
+and `789ec55f336fb341bf9fbf4900b81b85b79dc599539b3c17150f6f301fb41a3d`.
+
 ## Scope
 
 - Allowed paths: `crates/qjs-runtime/src/regexp/matcher.rs`,

@@ -71,7 +71,7 @@
       "external/jetstream3-js-subset/hash-map",
       "external/jetstream3-js-subset/raytrace-public-class-fields",
       "broad/object_allocation",
-      "broad/closure_allocation"
+      "broad/closure_allocation_call"
     ],
     "target_max_candidate_over_base": 0.8,
     "control_max_candidate_over_base": 1.03,
