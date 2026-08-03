@@ -444,6 +444,17 @@ merely runs each one more slowly. Divide standard-build wall time by this
 count to get nanoseconds per dispatched instruction, and compare that against
 the reference engine's total time over the same count:
 
+The `dispatched_*_ops` counters partition `executed_ops` into constant loads,
+local and global bindings, named and computed properties, calls/construction,
+stack traffic, numeric operations, branches/returns, and the remaining general
+opcode path. They are deliberately operation-family counts rather than one
+field per opcode: the diagnostic is meant to select a shared handler boundary,
+not to turn one benchmark's exact bytecode stream into an optimization rule.
+The three `dispatched_*_local_ops` fields split the local-binding family, while
+the corresponding `authoritative_*_hits` fields report how often dispatch
+completed on the direct slot path instead of calling the dynamic/cell-aware
+fallback.
+
 | Case | Ops per iteration | Our ns/op | QuickJS-NG ns/op |
 | --- | ---: | ---: | ---: |
 | `recursive_call_tree` | 20.6 per call | 15.6 | 2.05 |

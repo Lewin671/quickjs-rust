@@ -335,6 +335,7 @@ impl<'a> Vm<'a> {
             crate::diagnostics::update(|c| c.executed_ops += 1);
             match op {
                 Op::LoadConst(index) => {
+                    crate::diagnostics::count!(dispatched_load_const_ops);
                     if let Some(value) = constants.get(*index) {
                         let value = value.clone();
                         self.current.stack.push(value);
@@ -342,6 +343,8 @@ impl<'a> Vm<'a> {
                     }
                 }
                 Op::LoadLocal(slot) => {
+                    crate::diagnostics::count!(dispatched_local_binding_ops);
+                    crate::diagnostics::count!(dispatched_load_local_ops);
                     // The general path answers with `Result<Value,
                     // RuntimeError>` (40 bytes) and `handle_runtime_result`
                     // rewraps it as `Result<Option<Value>, RuntimeError>` (48).
@@ -358,6 +361,7 @@ impl<'a> Vm<'a> {
                     {
                         let value = super::vm_bindings::clone_local_value(value);
                         self.current.stack.push(value);
+                        crate::diagnostics::count!(authoritative_load_local_hits);
                         continue;
                     }
                     self.current.ip = pc;
@@ -366,6 +370,8 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::StoreLocal(slot) => {
+                    crate::diagnostics::count!(dispatched_local_binding_ops);
+                    crate::diagnostics::count!(dispatched_store_local_ops);
                     // Same rationale as `LoadLocal`: keep the
                     // authoritative-slot write off the memory-returned
                     // `Result` path. Falling through when the stack is empty is
@@ -382,6 +388,7 @@ impl<'a> Vm<'a> {
                         && let Some(value) = self.current.stack.pop()
                     {
                         self.current.locals[slot] = Some(value);
+                        crate::diagnostics::count!(authoritative_store_local_hits);
                         continue;
                     }
                     self.current.ip = pc;
@@ -390,6 +397,8 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::AssignLocal(slot) => {
+                    crate::diagnostics::count!(dispatched_local_binding_ops);
+                    crate::diagnostics::count!(dispatched_assign_local_ops);
                     // Mirrors `assign_local`'s own fast path, so an assignment
                     // to an initialized mutable slot never builds a `Result` to
                     // report that it succeeded.
@@ -411,6 +420,7 @@ impl<'a> Vm<'a> {
                         && let Some(value) = self.current.stack.pop()
                     {
                         self.current.locals[slot] = Some(value);
+                        crate::diagnostics::count!(authoritative_assign_local_hits);
                         continue;
                     }
                     self.current.ip = pc;
@@ -419,24 +429,28 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::LoadGlobal(name) => {
+                    crate::diagnostics::count!(dispatched_global_binding_ops);
                     self.current.ip = pc;
                     self.op_load_global(name)?;
                     pc = self.current.ip;
                     continue;
                 }
                 Op::StoreGlobalStrict(name) => {
+                    crate::diagnostics::count!(dispatched_global_binding_ops);
                     self.current.ip = pc;
                     self.op_store_global_strict(name)?;
                     pc = self.current.ip;
                     continue;
                 }
                 Op::StoreGlobalSloppy { slot, name } => {
+                    crate::diagnostics::count!(dispatched_global_binding_ops);
                     self.current.ip = pc;
                     self.op_store_global_sloppy(*slot, name)?;
                     pc = self.current.ip;
                     continue;
                 }
                 Op::GetPropNamed { key, cache } => {
+                    crate::diagnostics::count!(dispatched_named_property_ops);
                     crate::diagnostics::count!(named_property_reads);
                     self.current.ip = pc;
                     self.op_get_prop_named(key, cache)?;
@@ -444,6 +458,7 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::GetPropIndex(index) => {
+                    crate::diagnostics::count!(dispatched_computed_property_ops);
                     crate::diagnostics::count!(computed_property_reads);
                     self.current.ip = pc;
                     self.op_get_prop_index(*index)?;
@@ -451,6 +466,7 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::GetProp => {
+                    crate::diagnostics::count!(dispatched_computed_property_ops);
                     crate::diagnostics::count!(computed_property_reads);
                     self.current.ip = pc;
                     self.op_get_prop()?;
@@ -458,6 +474,7 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::SetProp { is_strict } => {
+                    crate::diagnostics::count!(dispatched_computed_property_ops);
                     crate::diagnostics::count!(computed_property_writes);
                     self.current.ip = pc;
                     self.op_set_prop(*is_strict)?;
@@ -465,6 +482,7 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::SetPropIndex { index, is_strict } => {
+                    crate::diagnostics::count!(dispatched_computed_property_ops);
                     crate::diagnostics::count!(computed_property_writes);
                     self.current.ip = pc;
                     self.op_set_prop_index(*index, *is_strict)?;
@@ -476,6 +494,7 @@ impl<'a> Vm<'a> {
                     cache,
                     is_strict,
                 } => {
+                    crate::diagnostics::count!(dispatched_named_property_ops);
                     crate::diagnostics::count!(named_property_writes);
                     self.current.ip = pc;
                     self.op_set_prop_named(key, cache.as_ref(), *is_strict)?;
@@ -483,36 +502,42 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::Call(argc) => {
+                    crate::diagnostics::count!(dispatched_call_construct_ops);
                     self.current.ip = pc;
                     self.call(*argc)?;
                     pc = self.current.ip;
                     continue;
                 }
                 Op::CallResolved(argc) => {
+                    crate::diagnostics::count!(dispatched_call_construct_ops);
                     self.current.ip = pc;
                     self.call_resolved(*argc)?;
                     pc = self.current.ip;
                     continue;
                 }
                 Op::CallResolvedGuardedMathUnary => {
+                    crate::diagnostics::count!(dispatched_call_construct_ops);
                     self.current.ip = pc;
                     self.call_resolved_guarded_math_unary()?;
                     pc = self.current.ip;
                     continue;
                 }
                 Op::New(argc) => {
+                    crate::diagnostics::count!(dispatched_call_construct_ops);
                     self.current.ip = pc;
                     self.construct(*argc)?;
                     pc = self.current.ip;
                     continue;
                 }
                 Op::Unary(op) => {
+                    crate::diagnostics::count!(dispatched_numeric_ops);
                     self.current.ip = pc;
                     self.op_unary(*op)?;
                     pc = self.current.ip;
                     continue;
                 }
                 Op::Return => {
+                    crate::diagnostics::count!(dispatched_branch_return_ops);
                     self.current.ip = pc;
                     if let Some(value) = self.op_return()? {
                         return Ok(FrameExit::Completed(Completion::Return(value)));
@@ -521,6 +546,7 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::Pop => {
+                    crate::diagnostics::count!(dispatched_stack_ops);
                     if self.current.stack.pop().is_some() {
                         continue;
                     }
@@ -528,6 +554,7 @@ impl<'a> Vm<'a> {
                     return Err(stack_underflow());
                 }
                 Op::Dup => {
+                    crate::diagnostics::count!(dispatched_stack_ops);
                     let stack = &mut *self.current.stack;
                     let Some(value) = stack.last() else {
                         self.current.ip = pc;
@@ -538,6 +565,7 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::ToNumeric => {
+                    crate::diagnostics::count!(dispatched_numeric_ops);
                     // `eval_to_numeric` is the identity on a number, so the
                     // general path pops and re-pushes the same value through
                     // two memory-sized results to change nothing.
@@ -550,6 +578,7 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::Update(op) => {
+                    crate::diagnostics::count!(dispatched_numeric_ops);
                     if let Some(Value::Number(number)) = self.current.stack.last_mut() {
                         *number = match op {
                             qjs_ast::UpdateOp::Increment => *number + 1.0,
@@ -563,6 +592,7 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::Binary(op) => {
+                    crate::diagnostics::count!(dispatched_numeric_ops);
                     // Number-number arithmetic rewrites the operand stack in
                     // place. The general path pops twice, calls
                     // `fast_number_binary`, and returns a memory-sized
@@ -587,6 +617,7 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::Jump(target) => {
+                    crate::diagnostics::count!(dispatched_branch_return_ops);
                     // A forward jump is the `if`/`else` and loop-exit shape and
                     // carries no accelerator; only a backward edge consults the
                     // loop plans, and that decision is out of line.
@@ -600,6 +631,7 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::JumpIfFalse(target) => {
+                    crate::diagnostics::count!(dispatched_branch_return_ops);
                     let Some(value) = self.current.stack.last() else {
                         self.current.ip = pc;
                         return Err(stack_underflow());
@@ -610,6 +642,7 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::JumpIfTrue(target) => {
+                    crate::diagnostics::count!(dispatched_branch_return_ops);
                     let Some(value) = self.current.stack.last() else {
                         self.current.ip = pc;
                         return Err(stack_underflow());
@@ -620,6 +653,7 @@ impl<'a> Vm<'a> {
                     continue;
                 }
                 Op::JumpIfNotNullish(target) => {
+                    crate::diagnostics::count!(dispatched_branch_return_ops);
                     if !matches!(
                         self.current.stack.last(),
                         Some(Value::Null | Value::Undefined)
@@ -628,7 +662,9 @@ impl<'a> Vm<'a> {
                     }
                     continue;
                 }
-                _ => {}
+                _ => {
+                    crate::diagnostics::count!(dispatched_general_ops);
+                }
             }
             self.current.ip = pc;
             match self.run_general_op(op, &program)? {

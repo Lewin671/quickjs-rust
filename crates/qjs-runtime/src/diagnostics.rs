@@ -91,6 +91,26 @@ declare_counters! {
     declined_loop_plan_edges,
     /// Bytecode instructions actually dispatched by the interpreter loop.
     executed_ops,
+    /// Generic-dispatch opcode families. Together these counters partition
+    /// `executed_ops`, so profiles can distinguish instruction-count pressure
+    /// from one particularly frequent handler family without adding a counter
+    /// to every individual opcode.
+    dispatched_load_const_ops,
+    dispatched_local_binding_ops,
+    dispatched_load_local_ops,
+    dispatched_store_local_ops,
+    dispatched_assign_local_ops,
+    authoritative_load_local_hits,
+    authoritative_store_local_hits,
+    authoritative_assign_local_hits,
+    dispatched_global_binding_ops,
+    dispatched_named_property_ops,
+    dispatched_computed_property_ops,
+    dispatched_call_construct_ops,
+    dispatched_stack_ops,
+    dispatched_numeric_ops,
+    dispatched_branch_return_ops,
+    dispatched_general_ops,
     /// Register operations the compact executor dispatched. Read against
     /// `executed_ops`: work moved to this tier must leave the generic loop, not
     /// merely add to it.

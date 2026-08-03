@@ -19,6 +19,39 @@ fn counted(source: &str) -> (Value, crate::Counters) {
 }
 
 #[test]
+fn dispatched_opcode_families_partition_the_generic_loop() {
+    let (_, counters) = counted(
+        "function calculate(value) {
+             var local = value + 1;
+             if (local > 2) { local = local * 3; }
+             return { result: local }.result;
+         }
+         calculate(4);",
+    );
+    let partitioned = counters.dispatched_load_const_ops
+        + counters.dispatched_local_binding_ops
+        + counters.dispatched_global_binding_ops
+        + counters.dispatched_named_property_ops
+        + counters.dispatched_computed_property_ops
+        + counters.dispatched_call_construct_ops
+        + counters.dispatched_stack_ops
+        + counters.dispatched_numeric_ops
+        + counters.dispatched_branch_return_ops
+        + counters.dispatched_general_ops;
+    assert!(counters.executed_ops > 0);
+    assert_eq!(partitioned, counters.executed_ops);
+    assert!(counters.dispatched_local_binding_ops > 0);
+    assert_eq!(
+        counters.dispatched_load_local_ops
+            + counters.dispatched_store_local_ops
+            + counters.dispatched_assign_local_ops,
+        counters.dispatched_local_binding_ops
+    );
+    assert!(counters.dispatched_numeric_ops > 0);
+    assert!(counters.dispatched_branch_return_ops > 0);
+}
+
+#[test]
 fn recursion_reports_one_call_attempt_per_call() {
     // A binary call tree of depth 4 performs 2**5 - 1 = 31 calls, so a
     // workload that claims 31 calls must report 31 attempts. This is the
