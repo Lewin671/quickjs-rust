@@ -339,6 +339,40 @@ allocation-removal slice, not a timing improvement claim. All 50 focused
 matcher tests, 2,031 runtime tests, 5,169 curated Test262 cases, and the
 QuickJS-NG fixture comparison pass.
 
+The sixth Stage 3 slice replaces capture-bearing `HashSet` keys with reusable
+exact visited slots. Each state computes a cheap fingerprint into a standard
+randomized map, then follows a collision chain and compares the full input
+index, repetition count, and capture vector. Fingerprint collisions therefore
+cannot change matching semantics. Slot capture buffers and both map and slot
+capacity survive failed candidate starts, while lookup remains approximately
+constant-time instead of turning large repetition graphs into a linear scan.
+A focused test proves that two states at the same index and count but with
+different captures remain distinct when a following backreference observes
+the difference.
+
+The preceding profile places eight of the 30 sampled quantified-group walker
+frames in capture-bearing `HashMap::insert` and its SipHash descendants. The
+new profile, SHA-256
+`46c1f14c41fe82c11e41405b1366bff9cc4427b3fd99c9120f5356089ad04f9d`,
+contains 3,831 main-thread samples. `PreparedRegexp::match_input` accounts for
+521 and the quantified-group walker for 60. Only two walker samples enter
+`RepeatVisited::insert`, including one integer-key map insertion; none hash or
+grow a capture buffer. This comparison uses the same 40-copy source SHA-256
+`1a3650d435575a4497a6143749d6fde6b32bc1178ac9088d18ca713121cc3fe5`
+and establishes removal of the measured path rather than a cross-profile
+timing ratio.
+
+The exact lazy-alternatives base and visited-slot candidate release executable
+SHA-256 values are
+`84da42beb6a60e156c725efa9fb329a3be7f5d2347e66d1f71d2cbf13b0233d9`
+and `b502de5b86eb32c5174fb1f7519bfa85a138f0234936542b2c4dd200ca017afe`.
+Eleven-pair exact-increment screens remain noise-bound and within the 1.03
+median control ceiling: Tagcloud 1.0150 [0.9869, 1.0934] at five copies,
+regexp-dna 1.0001 [0.9816, 1.0610] at six, validate-input 0.9965
+[0.9081, 1.0933] at nine, and base64 0.9291 [0.8478, 1.0078] at nine.
+This slice removes the capture-bearing visited-key allocation route without a
+timing improvement claim. Owned `MatchState` choices remain Stage 3 work.
+
 ## Scope
 
 - Allowed paths: `crates/qjs-runtime/src/regexp/matcher.rs`,

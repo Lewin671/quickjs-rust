@@ -406,11 +406,10 @@ impl<'a> FirstMatcher<'a> {
                     }
                 }
                 RepeatWork::Expand(candidate, count) => {
-                    if !scratch.expanded.insert((
-                        candidate.index,
-                        count,
-                        candidate.captures.clone(),
-                    )) {
+                    if !scratch
+                        .expanded
+                        .insert(candidate.index, count, &candidate.captures)
+                    {
                         continue;
                     }
 

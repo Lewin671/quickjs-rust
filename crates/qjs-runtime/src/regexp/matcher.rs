@@ -13,6 +13,7 @@ mod first;
 mod groups;
 mod lookaround;
 mod normalization;
+mod repeat_visited;
 #[cfg(test)]
 mod tests;
 
@@ -31,6 +32,7 @@ use groups::{
 };
 use lookaround::match_lookaround;
 use normalization::normalized_regexp_source;
+use repeat_visited::RepeatVisited;
 
 pub(super) use groups::regexp_group_names;
 
@@ -225,12 +227,10 @@ enum RepeatWork {
     Accept(MatchState, usize),
 }
 
-type RepeatKey = (usize, usize, Vec<Option<(usize, usize)>>);
-
 #[derive(Default)]
 struct RepeatScratch {
     work: Vec<RepeatWork>,
-    expanded: HashSet<RepeatKey>,
+    expanded: RepeatVisited,
 }
 
 impl RepeatScratch {
@@ -1599,9 +1599,7 @@ fn match_repeated_atom_first(
             }
             RepeatWork::Expand(state, count) => {
                 if count >= quantifier.min
-                    && !scratch
-                        .expanded
-                        .insert((state.index, count, state.captures.clone()))
+                    && !scratch.expanded.insert(state.index, count, &state.captures)
                 {
                     continue;
                 }
