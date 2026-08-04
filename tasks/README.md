@@ -119,6 +119,12 @@ Campaign working rules:
   identity and cut sampled `memcmp` about 96.8%, with all correctness gates
   passing. Exact hosted N-body improved only to 0.96469x against the frozen
   0.95 target, so the runtime changes were reverted.
+- `T030-packed-typed-loop-scalars.md` — **frozen before implementation.** Two
+  exact-current profiles place 35.5% of bits-in-byte and 29.7% of iterative
+  SHA-256 directly in the retained typed-loop executor. The one-attempt unit
+  packs its private 16-byte Number/Boolean/undefined scalar to eight bytes and
+  requires both external targets at or below 0.90x with complete correctness
+  and promotion gates.
 - `T022-performance-priority-controller.md` — evidence-bound selection and
   stop mechanism for T018. It derives the next profiling queue from current
   artifacts, freezes a unit's targets before timing, and records explicit

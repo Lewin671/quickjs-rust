@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "packed-typed-loop-scalars",
+  "base_sha": "e68abfc96e47dfb4b6581ff5d88a7c1b6c47742f",
+  "queue": {
+    "candidate_sha": "e68abfc96e47dfb4b6581ff5d88a7c1b6c47742f",
+    "sha256": "13493876129d438a3ecb1c758260f7836fda4798568f8c10b85a440a2f45b900"
+  },
+  "priority": {
+    "mode": "override",
+    "opportunity_ids": [
+      "external/sunspider-1.0/bitops-bits-in-byte",
+      "external/kraken-1.1/stanford-crypto-sha256-iterative"
+    ],
+    "rank_ceiling": 21,
+    "override_reason": "Ranks one through twelve are closed by exact-current retained or rejected frame, call, object, property, RegExp, string, constructor, and typed-loop admission evidence. Rank-thirteen bitops-bits-in-byte exposes a different representation boundary inside an already-retained executor: 1,297 of 3,658 current samples land directly in typed-loop run, and its 519,680,000 diagnosed typed operations use no boxed operations while every scalar register is a 16-byte enum. Rank-twenty-one iterative SHA-256 independently places 829 of 2,794 samples in the same executor and runs 291,670,744 typed operations, 99.98 percent scalar. Packing the private scalar register representation is distinct from the rejected register-count compaction and admission extensions because it changes the per-operation width and tag test for every already-admitted region without changing which bytecode is admitted."
+  },
+  "mechanism": {
+    "summary": "Replace the private 16-byte typed-loop scalar enum with a safe eight-byte packed scalar word that carries ECMAScript Numbers, Booleans, and undefined. Reserve explicit quiet-NaN payloads for non-number tags, canonicalize numeric NaNs away from those tags, and keep the existing typed-loop operations, deoptimization sites, boxed side table, and admission policy unchanged.",
+    "generality": "Every existing TypedLoopProgram uses the same packed scalar word solely because the program already classified a register as scalar. The representation never inspects workload names, source paths, function names, input sizes, iteration counts, checksums, or results. It is private to the retained typed-loop tier; public Value, bytecode IR, parser, AST, object ownership, and other execution tiers remain unchanged. The implementation is safe Rust and does not use pointer tagging or unsafe code.",
+    "semantic_risks": [
+      "numeric NaN payloads must never alias the reserved Boolean or undefined tags, while every NaN must retain ECMAScript Number behavior",
+      "positive zero, negative zero, infinities, ordinary finite numbers, Boolean truthiness, and undefined-to-numeric conversion must round-trip exactly through Value and deoptimization",
+      "numeric arithmetic, bitwise conversion, comparisons, unary operations, updates, dense reads and writes, helper results, sloppy-global publication, and boxed materialization must decode the same logical type as the current enum",
+      "a guard failure or residency exit must rebuild the generic operand stack and frame slots with the same Values and resume at the same bytecode site",
+      "the packed scalar must remain exactly eight bytes with no unsafe code, while TypedOp layout, program admission, operation counts, and boxed-register behavior remain unchanged"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "macOS sample 2026-08-03 target/performance-t030-profile/profiles/bitops-bits-in-byte/current.sample; exact e68abfc9 standard-recipe executable SHA-256 dc36fda062d6a1a1b15e9b21ea759fb65839b3ae799be1d64f565582ac98cbe4; source-faithful wrapper SHA-256 44867254eaf2b040b7add6aa9bf684129d8d0fa1e171901046e5f36fa4fbf265 over official SunSpider source SHA-256 4f1a917cd52ebc07ec30dbe9d3e369e03c09825f9d2898fc3403ebd34a9bd853. A feature-gated diagnostic build SHA-256 8a27eb05b058c12bdd594294a85ff3e9c317cc1353c1fe7bad5d847b71a0c96a produced counter receipt SHA-256 d78092d62aad96271f84c964751476ee8c4953140b94961ed35054f1ed3bbaa8 and was not used for timing.",
+      "sha256": "adb24ed6315943d0ec6aa6aaa9783ae43a2ca2759e3d27e15c5271cadc7dae6b",
+      "base_sha": "e68abfc96e47dfb4b6581ff5d88a7c1b6c47742f",
+      "opportunity_ids": [
+        "external/sunspider-1.0/bitops-bits-in-byte"
+      ],
+      "shared_cost": "The successful 3,658-sample main-thread profile places 1,297 flat samples, 35.46 percent, directly in typed-loop run. Diagnostic execution counts 519,680,000 typed operations: 228,480,000 numeric, 125,440,000 moves, and 165,760,000 control operations, with zero dense, boxed, or call operations. The current Typed scalar is 16 bytes while TypedOp is 12 bytes, so every operation reads or writes a register representation wider than the operation that names it.",
+      "inclusive_fraction": 0.3546
+    },
+    {
+      "source": "macOS sample 2026-08-03 target/performance-t030-profile/profiles/stanford-sha256/current.sample; exact e68abfc9 standard-recipe executable SHA-256 dc36fda062d6a1a1b15e9b21ea759fb65839b3ae799be1d64f565582ac98cbe4; source-faithful wrapper SHA-256 282d81e7773818a48d85b0bfc0bef826b74a6aa0781ffa21fd53819f9e4badd6 over official Kraken source files SHA-256 1a67b41e20ce28bb067282ff82cb83ad373e1e7b561919c22bd39741d8c90e32 and 8a38c82d9de7ace72d2796d48464d25603d7a7ad43ec41fde85a041ea9dd93b1. The same diagnostic build produced counter receipt SHA-256 477ec8ad0249e8d29b9d72de7c16a3e7e0a6ee40d94ecc5a49be920f87d7a598 and was not used for timing.",
+      "sha256": "244180ec1e4fdd80f219242b21b2fbdf66c99ee0aebe0638c820492bd4034aee",
+      "base_sha": "e68abfc96e47dfb4b6581ff5d88a7c1b6c47742f",
+      "opportunity_ids": [
+        "external/kraken-1.1/stanford-crypto-sha256-iterative"
+      ],
+      "shared_cost": "The successful 2,794-sample main-thread profile places 829 flat samples, 29.67 percent, directly in typed-loop run. Diagnostic execution counts 291,670,744 typed operations: 227,969,348 numeric, 37,557,826 moves, 18,013,428 dense, 8,073,274 control, and only 56,868 boxed operations. This independently exercises the same scalar representation under a different arithmetic and dense-array mix.",
+      "inclusive_fraction": 0.2967
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/bitops-bits-in-byte",
+      "external/kraken-1.1/stanford-crypto-sha256-iterative"
+    ],
+    "control_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar",
+      "external/kraken-1.1/stanford-crypto-ccm",
+      "external/kraken-1.1/stanford-crypto-pbkdf2",
+      "external/sunspider-1.0/crypto-aes",
+      "external/sunspider-1.0/crypto-sha1",
+      "external/sunspider-1.0/bitops-3bit-bits-in-byte",
+      "external/sunspider-1.0/math-spectral-norm",
+      "external/sunspider-1.0/controlflow-recursive",
+      "broad/local_read",
+      "broad/array_dynamic_read",
+      "broad/object_allocation",
+      "broad/dynamic_method_call"
+    ],
+    "target_max_candidate_over_base": 0.9,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 1
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
