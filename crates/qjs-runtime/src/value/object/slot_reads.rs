@@ -22,6 +22,13 @@ impl ObjectRef {
         self.0.properties.borrow().own_data_read(key)
     }
 
+    pub(crate) fn own_data_property_read_shared(&self, key: &Rc<str>) -> OwnDataPropertyRead {
+        if self.0.module_namespace_exotic.get() {
+            return OwnDataPropertyRead::NeedsSlowPath;
+        }
+        self.0.properties.borrow().own_data_read_shared(key)
+    }
+
     /// Resolves `key` to a stable own-property slot in this object's compact
     /// storage. Callers pair the slot with [`Self::layout_revision`]: the pair
     /// stays valid across ordinary value assignment, so a monomorphic read
@@ -36,6 +43,19 @@ impl ObjectRef {
                     candidate.as_ref() == key && !property.is_accessor()
                 })
             }
+            PropertyStorage::Dynamic(_)
+            | PropertyStorage::Shaped { .. }
+            | PropertyStorage::ShapedPair { .. } => None,
+        }
+    }
+
+    pub(crate) fn own_data_slot_shared(&self, key: &Rc<str>) -> Option<usize> {
+        if self.0.module_namespace_exotic.get() {
+            return None;
+        }
+        match &*self.0.properties.borrow() {
+            PropertyStorage::Small { entries } => super::shared_property_position(entries, key)
+                .filter(|index| !entries[*index].1.is_accessor()),
             PropertyStorage::Dynamic(_)
             | PropertyStorage::Shaped { .. }
             | PropertyStorage::ShapedPair { .. } => None,
@@ -64,6 +84,20 @@ impl ObjectRef {
                             .then(|| (Rc::clone(name), slot))
                     })
             }
+            PropertyStorage::Dynamic(_)
+            | PropertyStorage::Shaped { .. }
+            | PropertyStorage::ShapedPair { .. } => None,
+        }
+    }
+
+    pub(crate) fn shared_data_slot_shared(&self, key: &Rc<str>) -> Option<(Rc<str>, usize)> {
+        if self.0.module_namespace_exotic.get() {
+            return None;
+        }
+        match &*self.0.properties.borrow() {
+            PropertyStorage::Small { entries } => super::shared_property_position(entries, key)
+                .filter(|slot| !entries[*slot].1.is_accessor())
+                .map(|slot| (Rc::clone(&entries[slot].0), slot)),
             PropertyStorage::Dynamic(_)
             | PropertyStorage::Shaped { .. }
             | PropertyStorage::ShapedPair { .. } => None,

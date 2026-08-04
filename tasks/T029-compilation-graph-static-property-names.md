@@ -1,6 +1,6 @@
 # T029: Compilation-graph static property-name identity
 
-## Status: frozen before implementation
+## Status: local fast gate passed; exact promotion pending
 
 This T018 leaf unit is bound to the completed exact Performance Preview for
 `13e5d229`. The current `91c23d10` revision adds only the T028 rejection
@@ -126,3 +126,58 @@ Forbidden within this unit:
    the frozen controls only if the target passes.
 6. Record `retained`, `rejected`, or `inconclusive` without changing cases,
    thresholds, or the one-attempt budget after timing.
+
+## Local result
+
+The one-attempt implementation gives every root compilation a private static
+property-name table and shares it with ordinary nested functions, class
+thunks, and the lexical-capture recompilation pass. Static named get/set keys
+and static object-literal shapes retain the table's immutable `Rc<str>` keys.
+Small property storage performs a complete identity scan first and only scans
+text when no identity exists, so separately compiled scripts, dynamic keys,
+host objects, and cross-realm values keep content-based interoperability.
+
+Focused tests prove root/sibling/nested identity, capture recompilation,
+pointer-distinct independent compilations, textual read/write fallback,
+accessors, prototypes, frozen strict writes, and computed strings. The full
+2,064-test `qjs-runtime --all-features` suite passed, as did runtime Clippy
+with warnings denied. `Op`, AST, parser, and public value/property
+representations were not changed.
+
+The diagnostic release passed both mechanism thresholds. On the frozen N-body
+profile wrapper it reported 50,660,897 identity hits and 449,307 textual
+fallbacks: **99.12%** identity routing, above the required 90%. Candidate flat
+`_platform_memcmp` plus its executable stub fell from the frozen 310 samples
+to approximately 10, a **96.8%** reduction, above the required 70%. The
+candidate sample and standard executable SHA-256 values are
+`269c060159b6730c7363e42dac704ea754297d52a9f2d703635c1335f5348946`
+and
+`1a4f982bd3bf5caa738afdac839d829ddca861d26abdb12ee0ca03cfd04b9081`.
+
+Eleven warmup-then-strictly-alternating amplified N-body pairs measured median
+candidate/base **0.8613x**, with every pair in 0.8332-0.8903, clearing the
+frozen <=0.95 target. All twelve frozen controls passed their <=1.03 ceiling:
+
+| Control | Candidate/base median |
+| --- | ---: |
+| HashMap | 0.976943 |
+| public-field Raytrace | 0.994393 |
+| CDJS | 0.982043 |
+| A* | 0.9839 |
+| date-format-xparb | 0.9993 |
+| Tagcloud | 1.0073 |
+| binary trees | 0.9982 |
+| recursive control flow | 1.0079 |
+| broad property read | 1.000974 |
+| broad dynamic method call | 0.987592 |
+| broad object allocation | 0.997489 |
+| broad local read | 1.002182 |
+
+The seven JetStream/broad control record has SHA-256
+`5f177ea7bde7a0fa3d139d008512cd159962e9daa9d6411dea6df1e5806390fe`.
+A local three-role broad run physically completed all 25 cases, but its dirty,
+receiptless candidate correctly made the strict analyzer refuse promotion.
+The runtime is therefore locally retained, not yet promotion-complete. An
+exact committed candidate still needs clean-receipt complete broad/external
+reports and the zero-gap exact Test262 receipt before T022 can record the final
+`retained` decision.

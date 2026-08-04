@@ -411,6 +411,18 @@ A counter-enabled build is a **diagnostic build and must never be used for
 timing** — the counters add work to the paths they observe. Nothing is
 compiled in without the feature: every counting site expands to nothing.
 
+`static_property_name_identity_hits` and
+`static_property_name_text_fallbacks` diagnose the compilation-graph property
+name path. Equal static ordinary names in one root compilation, including its
+nested and capture-recompiled functions, retain one immutable `Rc<str>`.
+Small object storage scans those identities before falling back to text. The
+fallback is required: eval or `Function` bodies, modules, separately compiled
+scripts, dynamic computed keys, host objects, and cross-realm values may hold
+equal text under different identities. Count one fallback lookup, rather than
+every candidate string it examines, so
+`identity_hits / (identity_hits + text_fallbacks)` reports the fraction of
+eligible Small-storage resolutions that avoided byte comparison.
+
 This is what the two suites report for a nominal 100,000 iterations:
 
 | Case | Suite | Claims | Real calls | Real property ops | Declined plan edges |

@@ -185,7 +185,7 @@ impl NamedPropertyCache {
     pub(super) fn write(
         &self,
         object: &ObjectRef,
-        key: &str,
+        key: &Rc<str>,
         value: &Value,
     ) -> Option<OwnDataPropertyWrite> {
         let mut state = self.0.borrow_mut();
@@ -196,7 +196,7 @@ impl NamedPropertyCache {
                     revision,
                     ..
                 } if cached.ptr_eq(object) && *revision == object.property_revision() => {
-                    let slot = object.own_data_slot(key)?;
+                    let slot = object.own_data_slot_shared(key)?;
                     let result = object.own_data_slot_write(slot, value)?;
                     *entry = NamedPropertyCacheEntry::OwnSlot {
                         object: object.downgrade(),
@@ -225,7 +225,7 @@ impl NamedPropertyCache {
         None
     }
 
-    pub(super) fn record_write(&self, object: &ObjectRef, key: &str) {
+    pub(super) fn record_write(&self, object: &ObjectRef, key: &Rc<str>) {
         let mut state = self.0.borrow_mut();
         let saw_other_object = state.entries.iter().flatten().any(|entry| {
             matches!(
@@ -237,11 +237,11 @@ impl NamedPropertyCache {
         });
         let entry = if saw_other_object {
             object
-                .shared_data_slot(key)
+                .shared_data_slot_shared(key)
                 .map(|(key, slot)| NamedPropertyCacheEntry::SharedSlot { key, slot })
         } else {
             object
-                .own_data_slot(key)
+                .own_data_slot_shared(key)
                 .map(|slot| NamedPropertyCacheEntry::OwnSlot {
                     object: object.downgrade(),
                     layout_revision: object.layout_revision(),

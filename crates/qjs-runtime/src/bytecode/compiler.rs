@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use qjs_ast::{ForInLeft, ForInit, FunctionParams, Script, Stmt, VarKind};
 
@@ -82,6 +82,11 @@ pub(super) struct Compiler {
     pub(super) source: std::rc::Rc<str>,
     /// Mirrors `Script::source_is_wtf16` for nested source-text slices.
     pub(super) source_is_wtf16: bool,
+    /// Immutable ordinary property names shared by this root compilation and
+    /// every nested compiler it creates. The table itself dies after
+    /// compilation; only the `Rc<str>` keys retained by bytecode and static
+    /// object shapes survive.
+    pub(super) static_property_names: Rc<RefCell<crate::value::name_hash::NameMap<Rc<str>, ()>>>,
 }
 
 /// Tracks a try/catch/finally result slot for completion value propagation.
@@ -145,6 +150,9 @@ impl Default for Compiler {
             disposable_scope_depth: 0,
             source: std::rc::Rc::from(""),
             source_is_wtf16: true,
+            static_property_names: Rc::new(RefCell::new(
+                crate::value::name_hash::NameMap::default(),
+            )),
         }
     }
 }
@@ -241,6 +249,18 @@ pub(super) fn compile_function_body_with_strict_generator(
 }
 
 impl Compiler {
+    /// Returns the one immutable allocation for an ordinary static property
+    /// name in this compilation graph.
+    pub(super) fn intern_static_property_name(&self, name: &str) -> Rc<str> {
+        let mut names = self.static_property_names.borrow_mut();
+        if let Some((name, ())) = names.get_key_value(name) {
+            return Rc::clone(name);
+        }
+        let name: Rc<str> = Rc::from(name);
+        names.insert(Rc::clone(&name), ());
+        name
+    }
+
     pub(super) fn strict_function_compiler() -> Self {
         Self {
             strict: true,

@@ -306,8 +306,8 @@ impl Compiler {
             &body,
             &local_names,
             false,
-            false,
             &[],
+            &self.static_property_names,
         )?;
         let mut lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
         lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
@@ -328,8 +328,8 @@ impl Compiler {
                 &body,
                 &local_names,
                 false,
-                false,
                 &captured,
+                &self.static_property_names,
             )?;
             lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
             lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
@@ -527,6 +527,7 @@ impl Compiler {
             inferred_name.as_deref(),
             &local_names,
             &[],
+            &self.static_property_names,
         )?;
         let mut lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
         lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
@@ -547,6 +548,7 @@ impl Compiler {
                 inferred_name.as_deref(),
                 &local_names,
                 &captured,
+                &self.static_property_names,
             )?;
             lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
             lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
@@ -573,8 +575,8 @@ impl Compiler {
             &block.body,
             &local_names,
             false,
-            false,
             &[],
+            &self.static_property_names,
         )?;
         let mut lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
         lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
@@ -595,8 +597,8 @@ impl Compiler {
                 &block.body,
                 &local_names,
                 false,
-                false,
                 &captured,
+                &self.static_property_names,
             )?;
             lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
             lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
@@ -631,9 +633,9 @@ impl Compiler {
             params,
             body,
             local_names,
-            is_generator,
-            is_async,
+            is_generator && is_async,
             &[],
+            &self.static_property_names,
         )?;
         let mut lexical_captures = self.active_lexical_captures(&bytecode, local_names);
         lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
@@ -653,9 +655,9 @@ impl Compiler {
                 params,
                 body,
                 local_names,
-                is_generator,
-                is_async,
+                is_generator && is_async,
                 &captured_lexicals,
+                &self.static_property_names,
             )?;
             lexical_captures = self.active_lexical_captures(&bytecode, local_names);
             lexical_captures.retain(|capture| Some(capture.name.as_str()) != class_name);
@@ -669,12 +671,13 @@ fn compile_class_function_body_with_captures(
     params: &FunctionParams,
     body: &[Stmt],
     local_names: &[String],
-    is_generator: bool,
-    is_async: bool,
+    async_generator_body: bool,
     captured_lexicals: &[(&str, &str, bool)],
+    static_property_names: &Rc<std::cell::RefCell<crate::value::name_hash::NameMap<Rc<str>, ()>>>,
 ) -> Result<super::ir::Bytecode, RuntimeError> {
     let mut compiler = Compiler::strict_function_compiler();
-    compiler.async_generator_body = is_generator && is_async;
+    compiler.static_property_names = static_property_names.clone();
+    compiler.async_generator_body = async_generator_body;
     for (name, storage_name, mutable) in captured_lexicals {
         compiler.declare_captured_lexical_slot_with_storage_name(name, storage_name, *mutable);
     }
@@ -694,8 +697,10 @@ fn compile_class_field_initializer(
     inferred_name: Option<&str>,
     local_names: &[String],
     captured_lexicals: &[(&str, &str, bool)],
+    static_property_names: &Rc<std::cell::RefCell<crate::value::name_hash::NameMap<Rc<str>, ()>>>,
 ) -> Result<super::ir::Bytecode, RuntimeError> {
     let mut compiler = Compiler::strict_function_compiler();
+    compiler.static_property_names = static_property_names.clone();
     for (name, storage_name, mutable) in captured_lexicals {
         compiler.declare_captured_lexical_slot_with_storage_name(name, storage_name, *mutable);
     }

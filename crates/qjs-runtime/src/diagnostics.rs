@@ -77,6 +77,11 @@ declare_counters! {
     /// Statically named property reads and writes.
     named_property_reads,
     named_property_writes,
+    /// Immutable static property-name comparisons answered by shared
+    /// compilation-graph identity, or forced to the cross-graph textual
+    /// fallback. These are mechanism counters, not timing counters.
+    static_property_name_identity_hits,
+    static_property_name_text_fallbacks,
     /// Computed (bracket) property reads and writes.
     computed_property_reads,
     computed_property_writes,

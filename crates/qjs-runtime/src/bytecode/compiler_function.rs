@@ -17,6 +17,9 @@ fn compile_with_captured_lexicals(
     captured_lexicals: &[(&str, &str, bool)],
     source: &std::rc::Rc<str>,
     source_is_wtf16: bool,
+    static_property_names: &std::rc::Rc<
+        std::cell::RefCell<crate::value::name_hash::NameMap<std::rc::Rc<str>, ()>>,
+    >,
 ) -> Result<Bytecode, RuntimeError> {
     let mut compiler = Compiler::function_compiler_with_base_with_depth(
         is_strict,
@@ -25,6 +28,7 @@ fn compile_with_captured_lexicals(
     );
     compiler.source = source.clone();
     compiler.source_is_wtf16 = source_is_wtf16;
+    compiler.static_property_names = static_property_names.clone();
     for (name, storage_name, mutable) in captured_lexicals {
         compiler.declare_captured_lexical_slot_with_storage_name(name, storage_name, *mutable);
     }
@@ -81,6 +85,7 @@ impl Compiler {
             };
             compiler.source = self.source.clone();
             compiler.source_is_wtf16 = self.source_is_wtf16;
+            compiler.static_property_names = self.static_property_names.clone();
             compiler.compile_function(params, body)?
         };
         let mut lexical_captures = self.active_lexical_captures(&bytecode, local_names);
@@ -105,6 +110,7 @@ impl Compiler {
                 &captured_lexicals,
                 &self.source,
                 self.source_is_wtf16,
+                &self.static_property_names,
             )?;
             lexical_captures = self.active_lexical_captures(&bytecode, local_names);
         }

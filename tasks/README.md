@@ -114,11 +114,13 @@ Campaign working rules:
   of its generic dispatch with all 2,039 prototype runtime tests passing, but
   improved HashMap only to 0.9837x candidate/base against the frozen 0.97
   target. The one-attempt runtime changes were reverted.
-- `T029-compilation-graph-static-property-names.md` — **frozen.** Share equal
-  static property-name identities across a root compilation and all nested
-  function compilers, then use pointer-first Small-storage comparisons with a
-  mandatory textual fallback. The current N-body profile attributes 8.47% to
-  property-name `memcmp`; the one-attempt target is at most 0.95x base.
+- `T029-compilation-graph-static-property-names.md` — **local fast gate
+  passed; exact promotion pending.** Equal static names now share one identity
+  across a root compilation and nested/capture-recompiled functions, while
+  independent compilations retain textual fallback. N-body reached 0.8613x
+  base, identity routing reached 99.12%, `memcmp` samples fell about 96.8%, and
+  all twelve frozen controls stayed below 1.03. Clean-receipt complete
+  portfolios and exact Test262 remain before the final T022 decision.
 - `T022-performance-priority-controller.md` — evidence-bound selection and
   stop mechanism for T018. It derives the next profiling queue from current
   artifacts, freezes a unit's targets before timing, and records explicit

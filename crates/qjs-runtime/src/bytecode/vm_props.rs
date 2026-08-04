@@ -57,8 +57,8 @@ impl Vm<'_> {
         {
             let cached = cache.and_then(|cache| cache.write(object_ref, key, &value));
             let cached_hit = cached.is_some();
-            let write =
-                cached.unwrap_or_else(|| object_ref.write_existing_own_data_property(key, &value));
+            let write = cached
+                .unwrap_or_else(|| object_ref.write_existing_own_data_property_shared(key, &value));
             match write {
                 OwnDataPropertyWrite::Written => {
                     if !cached_hit {
@@ -627,7 +627,7 @@ impl Vm<'_> {
     pub(super) fn try_cached_get_string(
         &self,
         object: &Value,
-        key: &str,
+        key: &Rc<str>,
         cache: &NamedPropertyCache,
     ) -> Option<Value> {
         let Value::Object(object_ref) = object else {
@@ -644,7 +644,7 @@ impl Vm<'_> {
         if let Some(value) = cache.get(object_ref) {
             return Some(value);
         }
-        match object_ref.own_data_property_read(key) {
+        match object_ref.own_data_property_read_shared(key) {
             OwnDataPropertyRead::Data(value) => {
                 cache.update(object_ref, key, &value);
                 Some(value)

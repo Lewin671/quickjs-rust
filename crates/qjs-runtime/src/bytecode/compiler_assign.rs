@@ -141,7 +141,7 @@ impl Compiler {
                 self.compile_expr(object)?;
                 self.compile_expr(value)?;
                 self.emit(Op::SetPropNamed {
-                    key: name.as_str().into(),
+                    key: self.intern_static_property_name(name),
                     cache: None,
                     is_strict: self.strict,
                 });
@@ -534,7 +534,7 @@ impl Compiler {
         self.emit(Op::StoreLocal(object_slot));
         let cache = NamedPropertyCache::for_local(object_slot);
         self.emit(Op::GetPropNamed {
-            key: name.into(),
+            key: self.intern_static_property_name(name),
             cache: cache.clone(),
         });
         match op {
@@ -708,7 +708,7 @@ impl Compiler {
         self.emit(Op::StoreLocal(object_slot));
         let cache = NamedPropertyCache::for_local(object_slot);
         self.emit(Op::GetPropNamed {
-            key: name.into(),
+            key: self.intern_static_property_name(name),
             cache: cache.clone(),
         });
         self.emit(Op::ToNumeric);
@@ -732,7 +732,7 @@ impl Compiler {
         self.emit(Op::LoadLocal(object_slot));
         self.emit(Op::LoadLocal(value_slot));
         self.emit(Op::SetPropNamed {
-            key: name.into(),
+            key: self.intern_static_property_name(name),
             cache,
             is_strict: self.strict,
         });
