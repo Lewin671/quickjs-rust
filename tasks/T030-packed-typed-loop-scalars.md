@@ -1,11 +1,46 @@
 # T030: Packed typed-loop scalars
 
-## Status: frozen before implementation
+## Status: rejected after the fast target gate
 
 This T018 leaf unit is bound to the completed exact Performance Preview for
 `e68abfc9`. The frozen plan is
 `tasks/performance-units/packed-typed-loop-scalars.json`; its SHA-256 is
 `b3270727b546ae6ed2b44a0fe7f5bf8aee04676b56178003bb61d207282823ee`.
+
+The one allowed implementation attempt reduced the private scalar from 16 to
+8 bytes without changing `TypedOp` or using unsafe code, but the first frozen
+target regressed to **1.01702x** candidate/base against the required 0.90x.
+The runtime implementation was therefore reverted before testing the second
+target, controls, or promotion portfolio.
+
+## Decision evidence
+
+The standard candidate executable SHA-256 was
+`2b58b5985c715e0cbd1091515bbd9e2e6ddc1af0b8acf2d13e3f6f7feac769df`.
+It passed 62 focused typed-loop tests, all 2,039 qjs-runtime tests, 12
+`perf-counters` diagnostics tests, and Clippy with warnings denied. Exact
+wrapper output matched the preserved base. The diagnostic executable SHA-256
+was
+`96d0d7b0221a5b40e3b9a9825f32ebedc79117d5d0ab961904e3967e851826ad`;
+both frozen wrappers produced exactly the same operation-family counts and
+receipt hashes as the base, proving that the measured path did not change.
+
+The 31-block alternating direct-process target receipt is
+`target/performance-t030-profile/target-result.json`, SHA-256
+`ba598e9dbfd78e45f7ed07aa31fab22106ea3aaeb4d0b3deb8d35f0d44af6ac8`.
+Its runner SHA-256 is
+`53481b054fd1f20f52fb0c92b8715b694e461ebd4cb6b5c7521b4eaa66f22847`.
+For official SunSpider `bitops-bits-in-byte`, the candidate median was
+72,244,667 ns and the base median was 71,035,875 ns, giving
+**1.0170214455860147x**. An independent initial 31-block run had already
+reported 1.014836x. The repeated failure rejects the premise that this shared
+cost is materially caused by the private scalar's width.
+
+Per the frozen stop rule, iterative SHA-256, controls, complete promotion,
+and exact Test262 were not run for the rejected candidate. Do not retry a
+different NaN payload, tag constant, canonicalization detail, or another
+private eight-byte packed scalar under the same premise; new work must return
+to current exact queue and profile evidence.
 
 ## Goal
 
