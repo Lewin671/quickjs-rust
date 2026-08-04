@@ -70,7 +70,7 @@ impl Compiler {
                 let ObjectPropertyKey::Literal(key) = &property.key else {
                     unreachable!("static object literal key checked above")
                 };
-                keys.push(self.intern_static_property_name(key));
+                keys.push(Rc::from(key.as_str()));
                 if let qjs_ast::Expr::Function {
                     name: Some(function_name),
                     constructable: false,
@@ -224,7 +224,7 @@ impl Compiler {
                     Default::default()
                 };
                 self.emit(Op::GetPropNamed {
-                    key: self.intern_static_property_name(name),
+                    key: Rc::from(name.as_str()),
                     cache,
                 });
                 return Ok(());
@@ -778,11 +778,9 @@ fn is_guarded_math_unary_call(callee: &Expr, arguments: &[CallArgument]) -> bool
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
-
     use super::super::{
         compiler,
-        ir::{Bytecode, Op, decode_index_receiver},
+        ir::{Op, decode_index_receiver},
         vm_call::{guarded_math_unary_hits, reset_guarded_math_unary_hits},
     };
     use crate::{Value, eval};
@@ -867,113 +865,6 @@ mod tests {
                 .filter(|op| matches!(op, Op::GetProp))
                 .count(),
             1
-        );
-    }
-
-    fn collect_static_property_names(bytecode: &Bytecode, names: &mut Vec<Rc<str>>) {
-        for op in &bytecode.code {
-            match op {
-                Op::GetPropNamed { key, .. } | Op::SetPropNamed { key, .. } => {
-                    names.push(Rc::clone(key));
-                }
-                Op::NewObjectDataLiteral { shape } => {
-                    for index in 0..shape.unique_len() {
-                        names.push(Rc::clone(
-                            shape.key_at(index).expect("shape key must exist"),
-                        ));
-                    }
-                }
-                Op::NewFunction { bytecode, .. } => {
-                    collect_static_property_names(bytecode, names);
-                }
-                _ => {}
-            }
-        }
-    }
-
-    fn compile_static_property_names(source: &str) -> Vec<Rc<str>> {
-        let script = qjs_parser::parse_script(source).expect("source should parse");
-        let bytecode = compiler::compile_script(&script).expect("source should compile");
-        let mut names = Vec::new();
-        collect_static_property_names(&bytecode, &mut names);
-        names
-    }
-
-    #[test]
-    fn compilation_graph_shares_static_property_name_identity() {
-        let source = "
-            let root = { value: 0 };
-            root.value;
-            function read(object) { return object.value; }
-            function write(object, next) { object.value = next; return { value: next }; }
-        ";
-        let names = compile_static_property_names(source);
-
-        assert!(names.len() >= 5, "expected root and nested static names");
-        assert!(names.iter().all(|name| name.as_ref() == "value"));
-        assert!(
-            names.iter().skip(1).all(|name| Rc::ptr_eq(&names[0], name)),
-            "one root compilation must retain one allocation for equal static names"
-        );
-
-        let separately_compiled = compile_static_property_names(source);
-        assert!(!Rc::ptr_eq(&names[0], &separately_compiled[0]));
-    }
-
-    #[test]
-    fn capture_recompilation_keeps_the_compilation_graph_name_identity() {
-        let names = compile_static_property_names(
-            "function outer(seed) {
-                 let captured = seed;
-                 let holder = { value: captured };
-                 function read(object) { return object.value + captured; }
-                 return read(holder);
-             }",
-        );
-
-        assert_eq!(names.len(), 2, "expected literal and nested read names");
-        assert!(Rc::ptr_eq(&names[0], &names[1]));
-    }
-
-    #[test]
-    fn shared_static_names_preserve_ordinary_property_semantics() {
-        assert_eq!(
-            eval(
-                "let getterHits = 0;
-                 let setterHits = 0;
-                 let backing = 1;
-                 let accessor = {
-                     get value() { getterHits++; return backing; },
-                     set value(next) { setterHits++; backing = next; }
-                 };
-                 let first = accessor.value;
-                 accessor.value = 3;
-
-                 let inheritedBacking = 0;
-                 let prototype = {
-                     get value() { return inheritedBacking; },
-                     set value(next) { inheritedBacking = next; }
-                 };
-                 let child = Object.create(prototype);
-                 child.value = 5;
-                 let inherited = child.value;
-
-                 let frozen = Object.freeze({ value: 6 });
-                 let strictThrew = false;
-                 try {
-                     (function () { 'use strict'; frozen.value = 7; })();
-                 } catch (error) {
-                     strictThrew = error instanceof TypeError;
-                 }
-
-                 let dynamic = { value: 6 };
-                 let key = 'value';
-                 dynamic[key] = 7;
-                 [first, backing, getterHits, setterHits, inheritedBacking,
-                  Object.hasOwn(child, 'value'), inherited, strictThrew,
-                  frozen.value, dynamic[key]].join(',');"
-            ),
-            Ok(Value::String("1,3,1,1,5,false,5,true,6,7".into()))
         );
     }
 

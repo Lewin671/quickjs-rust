@@ -749,7 +749,7 @@ impl<'a> Vm<'a> {
 
     fn get_named_prop(
         &mut self,
-        key: &std::rc::Rc<str>,
+        key: &str,
         cache: &NamedPropertyCache,
     ) -> Result<(), RuntimeError> {
         let object = if let Some(slot) = cache.local_slot() {

@@ -165,27 +165,6 @@ fn existing_own_data_write_updates_or_rejects_without_slow_path() {
 }
 
 #[test]
-fn shared_name_lookup_falls_back_to_equal_text_across_compilation_domains() {
-    let stored_key: Rc<str> = Rc::from("value");
-    let separately_compiled_key: Rc<str> = Rc::from("value");
-    assert!(!Rc::ptr_eq(&stored_key, &separately_compiled_key));
-
-    let object = ObjectRef::new(HashMap::new());
-    object.set_shared_key(Rc::clone(&stored_key), Value::Number(1.0));
-
-    assert!(matches!(
-        object.own_data_property_read_shared(&separately_compiled_key),
-        super::OwnDataPropertyRead::Data(Value::Number(1.0))
-    ));
-    assert!(matches!(
-        object
-            .write_existing_own_data_property_shared(&separately_compiled_key, &Value::Number(2.0)),
-        OwnDataPropertyWrite::Written
-    ));
-    assert_eq!(object.get("value"), Some(Value::Number(2.0)));
-}
-
-#[test]
 fn literal_pair_keeps_inline_values_until_descriptor_mutation() {
     let shape = ObjectLiteralShape::new(vec![Rc::from("a"), Rc::from("b")]);
     let object =

@@ -500,11 +500,6 @@ impl ObjectLiteralShape {
         self.keys.len()
     }
 
-    #[cfg(test)]
-    pub(crate) fn key_at(&self, index: usize) -> Option<&Rc<str>> {
-        self.keys.get(index)
-    }
-
     /// Returns the input value that supplies `key` after duplicate literal
     /// definitions have been applied from left to right.
     ///
@@ -675,17 +670,6 @@ impl PropertyStorage {
         }
     }
 
-    fn own_data_read_shared(&self, key: &Rc<str>) -> OwnDataPropertyRead {
-        match self {
-            Self::Small { entries } => data_property_read(
-                shared_property_position(entries, key).map(|index| &entries[index].1),
-            ),
-            Self::Dynamic(_) | Self::Shaped { .. } | Self::ShapedPair { .. } => {
-                self.own_data_read(key)
-            }
-        }
-    }
-
     fn writable_number(&self, key: &str) -> Option<f64> {
         match self {
             Self::Small { entries } => writable_property_number(
@@ -730,19 +714,6 @@ impl PropertyStorage {
                     .get(key)
                     .and_then(|slot| properties.get_mut(*slot));
                 write_existing_property(property, value)
-            }
-        }
-    }
-
-    fn write_existing_data_shared(&mut self, key: &Rc<str>, value: &Value) -> OwnDataPropertyWrite {
-        match self {
-            Self::Small { entries } => {
-                let property =
-                    shared_property_position(entries, key).map(|index| &mut entries[index].1);
-                write_existing_property(property, value)
-            }
-            Self::Dynamic(_) | Self::Shaped { .. } | Self::ShapedPair { .. } => {
-                self.write_existing_data(key, value)
             }
         }
     }
@@ -878,25 +849,6 @@ fn data_property_read(property: Option<&Property>) -> OwnDataPropertyRead {
         Some(property) if property.is_accessor() => OwnDataPropertyRead::NeedsSlowPath,
         Some(property) => OwnDataPropertyRead::Data(property.value.clone()),
     }
-}
-
-pub(super) fn shared_property_position(
-    entries: &[(Rc<str>, Property)],
-    key: &Rc<str>,
-) -> Option<usize> {
-    if let Some(index) = entries
-        .iter()
-        .position(|(candidate, _)| Rc::ptr_eq(candidate, key))
-    {
-        crate::diagnostics::count!(static_property_name_identity_hits);
-        return Some(index);
-    }
-    if !entries.is_empty() {
-        crate::diagnostics::count!(static_property_name_text_fallbacks);
-    }
-    entries
-        .iter()
-        .position(|(candidate, _)| candidate.as_ref() == key.as_ref())
 }
 
 fn writable_property_number(property: &Property) -> Option<f64> {
@@ -1566,34 +1518,6 @@ impl ObjectRef {
             .properties
             .borrow_mut()
             .write_existing_data(key, value);
-        if matches!(result, OwnDataPropertyWrite::Written) {
-            self.bump_value_revision();
-            if establishes_realm_identity {
-                self.capture_realm_intrinsic_identity();
-            }
-        }
-        result
-    }
-
-    /// The named-bytecode variant of [`Self::write_existing_own_data_property`].
-    /// Compact storage can answer a shared compilation-graph key by identity;
-    /// other storage and independently compiled equal names retain textual
-    /// lookup.
-    pub(crate) fn write_existing_own_data_property_shared(
-        &self,
-        key: &Rc<str>,
-        value: &Value,
-    ) -> OwnDataPropertyWrite {
-        if self.0.module_namespace_exotic.get() {
-            return OwnDataPropertyWrite::NeedsSlowPath;
-        }
-        let establishes_realm_identity = key.as_ref() == "globalThis"
-            && matches!(value, Value::Object(global_this) if self.ptr_eq(global_this));
-        let result = self
-            .0
-            .properties
-            .borrow_mut()
-            .write_existing_data_shared(key, value);
         if matches!(result, OwnDataPropertyWrite::Written) {
             self.bump_value_revision();
             if establishes_realm_identity {

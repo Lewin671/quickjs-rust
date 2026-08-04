@@ -1,6 +1,6 @@
 # T029: Compilation-graph static property-name identity
 
-## Status: local fast gate passed; exact promotion pending
+## Status: rejected after the exact promotion gate
 
 This T018 leaf unit is bound to the completed exact Performance Preview for
 `13e5d229`. The current `91c23d10` revision adds only the T028 rejection
@@ -127,57 +127,77 @@ Forbidden within this unit:
 6. Record `retained`, `rejected`, or `inconclusive` without changing cases,
    thresholds, or the one-attempt budget after timing.
 
-## Local result
+## Result
 
-The one-attempt implementation gives every root compilation a private static
-property-name table and shares it with ordinary nested functions, class
-thunks, and the lexical-capture recompilation pass. Static named get/set keys
-and static object-literal shapes retain the table's immutable `Rc<str>` keys.
-Small property storage performs a complete identity scan first and only scans
-text when no identity exists, so separately compiled scripts, dynamic keys,
-host objects, and cross-realm values keep content-based interoperability.
+The one-attempt implementation gave each root compilation a private static
+property-name table shared by ordinary nested functions, class thunks, and the
+lexical-capture recompilation pass. Named get/set operations and static object
+shapes retained the interned `Rc<str>`. Small property storage scanned pointer
+identity first and fell back to text only when no identity matched, preserving
+interoperation with separately compiled scripts, dynamic keys, host objects,
+and cross-realm values.
 
-Focused tests prove root/sibling/nested identity, capture recompilation,
-pointer-distinct independent compilations, textual read/write fallback,
-accessors, prototypes, frozen strict writes, and computed strings. The full
-2,064-test `qjs-runtime --all-features` suite passed, as did runtime Clippy
-with warnings denied. `Op`, AST, parser, and public value/property
-representations were not changed.
-
-The diagnostic release passed both mechanism thresholds. On the frozen N-body
-profile wrapper it reported 50,660,897 identity hits and 449,307 textual
-fallbacks: **99.12%** identity routing, above the required 90%. Candidate flat
-`_platform_memcmp` plus its executable stub fell from the frozen 310 samples
-to approximately 10, a **96.8%** reduction, above the required 70%. The
-candidate sample and standard executable SHA-256 values are
+The mechanism gate passed. Focused tests covered root/sibling/nested identity,
+capture recompilation, pointer-distinct independent compilations, textual
+read/write fallback, accessors, prototypes, frozen strict writes, and computed
+strings. The 2,064-test all-features runtime suite, runtime Clippy, the complete
+5,169-case curated Test262 subset, and QuickJS-NG comparisons passed. On the
+frozen N-body profile wrapper the diagnostic candidate reported 50,660,897
+identity hits and 449,307 textual fallbacks: **99.12%** identity routing.
+Flat `_platform_memcmp` plus its executable stub fell from 310 samples to
+approximately 10, a **96.8%** reduction. The candidate sample and standard
+executable SHA-256 values are
 `269c060159b6730c7363e42dac704ea754297d52a9f2d703635c1335f5348946`
 and
 `1a4f982bd3bf5caa738afdac839d829ddca861d26abdb12ee0ca03cfd04b9081`.
 
-Eleven warmup-then-strictly-alternating amplified N-body pairs measured median
-candidate/base **0.8613x**, with every pair in 0.8332-0.8903, clearing the
-frozen <=0.95 target. All twelve frozen controls passed their <=1.03 ceiling:
+The local amplified screen appeared to pass: eleven warmup-then-alternating
+N-body pairs had median candidate/base 0.8613x and range 0.8332-0.8903, while
+all twelve controls stayed below 1.03. The exact clean-receipt hosted evidence
+did not reproduce enough of that payoff. Manual fixed-base Performance Preview
+run `30866529461` compared candidate
+`82a00257ced6708f166992c65ced999269f4e221` with frozen base
+`13e5d22937a1dd53eb33418d64786a527acb446a`: N-body measured
+**0.9646907032x**, missing the required `<= 0.95x`. Every frozen control passed:
 
-| Control | Candidate/base median |
+| Control | Candidate/base |
 | --- | ---: |
-| HashMap | 0.976943 |
-| public-field Raytrace | 0.994393 |
-| CDJS | 0.982043 |
-| A* | 0.9839 |
-| date-format-xparb | 0.9993 |
-| Tagcloud | 1.0073 |
-| binary trees | 0.9982 |
-| recursive control flow | 1.0079 |
-| broad property read | 1.000974 |
-| broad dynamic method call | 0.987592 |
-| broad object allocation | 0.997489 |
-| broad local read | 1.002182 |
+| HashMap | 0.981989 |
+| public-field Raytrace | 0.995479 |
+| CDJS | 0.969429 |
+| A* | 0.992994 |
+| date-format-xparb | 1.007601 |
+| Tagcloud | 1.002340 |
+| binary trees | 0.977075 |
+| recursive control flow | 0.984304 |
+| broad property read | 1.000424 |
+| broad dynamic method call | 1.003331 |
+| broad object allocation | 0.998953 |
+| broad local read | 0.999909 |
 
-The seven JetStream/broad control record has SHA-256
-`5f177ea7bde7a0fa3d139d008512cd159962e9daa9d6411dea6df1e5806390fe`.
-A local three-role broad run physically completed all 25 cases, but its dirty,
-receiptless candidate correctly made the strict analyzer refuse promotion.
-The runtime is therefore locally retained, not yet promotion-complete. An
-exact committed candidate still needs clean-receipt complete broad/external
-reports and the zero-gap exact Test262 receipt before T022 can record the final
-`retained` decision.
+The hosted broad report physically completed all 25 cases for candidate, base,
+and QuickJS-NG with verified clean receipts. Its three informational blocks
+were precision-inconclusive on variable GitHub hardware, but contained the
+complete comparisons required by the frozen unit. Exact Test262 Coverage run
+`30866752218` recorded Rust 42,672/42,672 configured cases, zero failures,
+timeouts, not-run cases, or actionable gaps. CI run `30866499527` passed.
+
+The T022 promotion decision is therefore `rejected`, specifically because the
+sole target missed its frozen threshold. The decision SHA-256 is
+`a912666d7e2e9172c468e7d17a66f9d409353e251fa7641d9f5f00f8126755f2`;
+its summary, broad, external, and Test262 evidence SHA-256 values are
+`f67c8790c5a182ad239a57c56e73e753ba1ee3022362d9eb3763c03ebca37c11`,
+`efaf0706a86f071ab00f10bb58fc011950d7d526f6788487e5c477eac74a8862`,
+`2f9d38fc7af0df1e7f25e70be1e511df7eed3927cd010527f7cb543b20645ac1`,
+and
+`79e8243de32a14a955746722a187d8acd050ae7f9c3807df8803e6468f8c0d7a`.
+
+The rejected prototype is commit
+`82a00257ced6708f166992c65ced999269f4e221`; its runtime, tests, diagnostics,
+and benchmarking-doc patch has SHA-256
+`282e4ecb407fe7083fa253df9873cf87248607cc2468e9b921c79ae2e5c4aec9`.
+Those changes were reverted, leaving the checked-in runtime source-identical
+to the frozen base. Do not retry compilation-graph string interning,
+pointer-first Small-storage scans, or another placement of the same identity
+test. A successor property-access unit needs a new exact queue, fresh profile,
+and a structurally different mechanism able to clear the remaining payoff.

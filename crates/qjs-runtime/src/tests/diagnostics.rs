@@ -52,24 +52,6 @@ fn dispatched_opcode_families_partition_the_generic_loop() {
 }
 
 #[test]
-fn shared_static_property_names_report_identity_matches() {
-    let (value, counters) = counted(
-        "function Holder(value) { this.value = value; }
-         let object = new Holder(1);
-         let first = object.value;
-         object.value = first + 1;
-         object.value;",
-    );
-
-    assert_eq!(value, Value::Number(2.0));
-    assert!(
-        counters.static_property_name_identity_hits > 0,
-        "a literal and named operations from one compilation graph must share a key"
-    );
-    assert_eq!(counters.static_property_name_text_fallbacks, 0);
-}
-
-#[test]
 fn recursion_reports_one_call_attempt_per_call() {
     // A binary call tree of depth 4 performs 2**5 - 1 = 31 calls, so a
     // workload that claims 31 calls must report 31 attempts. This is the

@@ -694,7 +694,7 @@ fn get_named(
             return Some(value);
         }
     }
-    if let Some((key, slot)) = object.shared_data_slot_shared(name)
+    if let Some((key, slot)) = object.shared_data_slot(name)
         && let Some(value) = object.shared_data_slot_value(&key, slot)
     {
         *cache = Some((key, slot));
@@ -729,29 +729,7 @@ fn get_named(
     // Storage the slot cache cannot address — a builtin's dynamic map, say — and
     // inherited data properties still read without observable behaviour, they
     // just resolve the name every time.
-    ordinary_data_property_shared(object, name)
-}
-
-fn ordinary_data_property_shared(object: &crate::ObjectRef, name: &Rc<str>) -> Option<Value> {
-    use crate::value::{OwnDataPropertyRead, Prototype};
-
-    let mut current = object.clone();
-    for _ in 0..8 {
-        if crate::symbol::is_symbol_primitive(&current) {
-            return None;
-        }
-        match current.own_data_property_read_shared(name) {
-            OwnDataPropertyRead::Data(value) => return Some(value),
-            OwnDataPropertyRead::NeedsSlowPath => return None,
-            OwnDataPropertyRead::Missing => {}
-        }
-        match current.prototype_slot() {
-            None => return Some(Value::Undefined),
-            Some(Prototype::Object(prototype)) => current = prototype,
-            Some(_) => return None,
-        }
-    }
-    None
+    ordinary_data_property(object, name)
 }
 
 /// Reads `name` as a plain data property of `object` or of its prototype chain,
@@ -787,7 +765,7 @@ fn set_named(receiver: &Value, name: &Rc<str>, value: &Value) -> bool {
         return false;
     };
     matches!(
-        object.write_existing_own_data_property_shared(name, value),
+        object.write_existing_own_data_property(name, value),
         crate::value::OwnDataPropertyWrite::Written
     )
 }
