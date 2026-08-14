@@ -805,6 +805,15 @@ impl CallEnv {
         self.module_host.clone()
     }
 
+    /// Borrows the dynamic-import host, for callers that only compare it.
+    ///
+    /// `module_host` hands out a clone, which is a reference-count round trip
+    /// per question asked. The call-admission predicates ask on every call and
+    /// only ever compare identity.
+    pub(crate) fn module_host_ref(&self) -> Option<&crate::module::ModuleHostRef> {
+        self.module_host.as_ref()
+    }
+
     /// Installs (or replaces) the dynamic-import host on this environment.
     pub(crate) fn set_module_host(&mut self, host: crate::module::ModuleHostRef) {
         self.module_host = Some(host);

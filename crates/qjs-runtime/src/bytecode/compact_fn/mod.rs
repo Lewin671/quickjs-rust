@@ -19,16 +19,13 @@
 //! - **All-or-nothing admission.** A body is either fully representable or is
 //!   not admitted at all. There is no deoptimization after entry, so there is
 //!   no replay-after-side-effects problem to solve.
-//! - **The calling convention is unchanged.** A call inside an admitted body
-//!   re-enters the ordinary path and still builds a nested `Vm`. This tier
-//!   removes generic dispatch, not frame construction; the explicit frame
-//!   stack is a separate unit.
+//! - **Admitted callees share the caller's loop.** A call to a body this tier
+//!   also admits is a frame push on `activation`'s explicit frame stack, not a
+//!   nested `Vm` and not a nested Rust activation. Everything else re-enters
+//!   the ordinary call path.
 //! - **The operand stack becomes registers.** Stack slots are assigned to
 //!   register indices at compile time, which is what removes the push/pop
 //!   traffic that dominates a small body.
-
-use std::cell::{OnceCell, RefCell};
-use std::rc::Rc;
 
 use qjs_ast::BinaryOp;
 
@@ -113,9 +110,6 @@ pub(super) struct CompactFunctionProgram {
     /// Locals this body reads through indexed storage. Entry declines unless
     /// the frame reports every one of them as authoritative.
     required_authoritative_slots: u128,
-    /// Recycled register files. Deep recursion holds one per active frame, so
-    /// this pools like the operand stack rather than keeping a single slot.
-    scratch_pool: OnceCell<Rc<RefCell<Vec<Vec<crate::Value>>>>>,
 }
 
 impl std::fmt::Debug for CompactFunctionProgram {
@@ -125,51 +119,6 @@ impl std::fmt::Debug for CompactFunctionProgram {
             .field("ops", &self.ops.len())
             .field("register_count", &self.register_count)
             .finish()
-    }
-}
-
-impl CompactFunctionProgram {
-    /// How many register files one body retains for reuse, mirroring the
-    /// operand-stack recycler's bound so runaway depth cannot retain unbounded
-    /// storage after it unwinds.
-    const MAX_POOLED: usize = 32;
-
-    fn take_registers(&self) -> Vec<crate::Value> {
-        self.scratch_pool
-            .get_or_init(|| Rc::new(RefCell::new(Vec::new())))
-            .borrow_mut()
-            .pop()
-            .unwrap_or_default()
-    }
-
-    fn recycle_registers(&self, mut registers: Vec<crate::Value>) {
-        // Reset in place rather than clearing. A cleared buffer has to be
-        // grown again by the next activation, which showed up as
-        // `Vec::extend_with` in the profile; keeping the length means the next
-        // `take_registers` can use it as-is.
-        //
-        // `fill` would call `drop_in_place` per element. Most registers hold a
-        // number by the time a body returns, so the same inline discriminant
-        // test the executor uses for its stores pays here too.
-        for slot in &mut registers {
-            let previous = std::mem::replace(slot, crate::Value::Undefined);
-            if matches!(
-                previous,
-                crate::Value::Number(_)
-                    | crate::Value::Boolean(_)
-                    | crate::Value::Null
-                    | crate::Value::Undefined
-            ) {
-                std::mem::forget(previous);
-            }
-        }
-        let mut pooled = self
-            .scratch_pool
-            .get_or_init(|| Rc::new(RefCell::new(Vec::new())))
-            .borrow_mut();
-        if pooled.len() < Self::MAX_POOLED {
-            pooled.push(registers);
-        }
     }
 }
 

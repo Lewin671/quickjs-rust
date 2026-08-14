@@ -251,7 +251,6 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<CompactFunctionProgram> {
         ops,
         register_count,
         required_authoritative_slots,
-        scratch_pool: std::cell::OnceCell::new(),
     })
 }
 

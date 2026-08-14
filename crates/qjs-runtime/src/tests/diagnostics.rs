@@ -249,12 +249,15 @@ fn recursion_builds_slot_seeded_frames_and_receiver_arithmetic_builds_none() {
     assert_eq!(recursion.direct_leaf_frames, 1);
     assert_eq!(recursion.compact_direct_calls, 62);
     assert_eq!(recursion.generic_call_frames, 0);
-    // Every one of the 63 calls now runs on a compact activation, and the only
-    // nested VM left is the top-level script's. This assertion used to read
-    // `nested_vm_constructions >= 63` -- one per call, the cost the migration
-    // was written to remove. It is asserted exactly, rather than as a bound,
-    // so that a body silently falling back to the ordinary frame fails here.
-    assert_eq!(recursion.compact_standalone_activations, 63);
+    // Every one of the 63 calls runs compact, and exactly *one* activation is
+    // built for all of them: the compact tier's frame stack runs an admitted
+    // callee in a window of the caller's own register stack, so entering a
+    // callee reserves registers rather than constructing an activation. This
+    // assertion has tightened twice -- it first read `nested_vm_constructions
+    // >= 63`, then `compact_standalone_activations == 63` -- and each value is
+    // exact rather than a bound so that a body falling back to the ordinary
+    // frame, or to a per-call activation, fails here.
+    assert_eq!(recursion.compact_standalone_activations, 1);
     assert_eq!(recursion.nested_vm_constructions, 1);
     assert_eq!(recursion.same_vm_frame_entries, 0);
 

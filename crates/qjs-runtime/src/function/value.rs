@@ -1489,6 +1489,20 @@ impl Function {
         Ok(())
     }
 
+    /// Whether this function carries either piece of cold lexical state that
+    /// a shared-environment call admission has to rule out.
+    ///
+    /// Asking through `private_environment` and `home_object` costs two
+    /// `RefCell` borrows and two clones -- one of them a full `Value` -- to
+    /// discover, on essentially every call, that both are absent.
+    pub(crate) fn has_cold_lexical_state(&self) -> bool {
+        self.auxiliary.with_cold(|cold| {
+            cold.is_some_and(|cold| {
+                cold.private_state.environment.is_some() || cold.home_object.is_some()
+            })
+        })
+    }
+
     pub(crate) fn home_object(&self) -> Option<Value> {
         self.auxiliary
             .with_cold(|cold| cold.and_then(|cold| cold.home_object.clone()))

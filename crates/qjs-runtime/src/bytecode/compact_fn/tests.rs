@@ -349,3 +349,61 @@ fn strings_concatenated_in_a_compact_body_survive_recycling() {
         acc.length + ':' + acc.slice(0, 4);";
     assert_eq!(eval(source), Ok(Value::String("100:abab".into())));
 }
+
+// An admitted callee runs on its caller's own loop, in a window of the shared
+// register stack. These pin the three properties that makes safe: the frame
+// stack unwinds on a throw, arguments reach the right parameters after being
+// moved rather than cloned, and recursion is bounded by a catchable error
+// instead of the native stack.
+
+#[test]
+fn a_throw_through_inlined_frames_unwinds_and_leaves_the_stack_reusable() {
+    // The throw crosses four inlined activations. Running the same body again
+    // afterwards is the actual assertion: a frame stack that kept its windows
+    // would hand the second run a register still holding the first run's
+    // values.
+    let source = "function down(n) { if (n <= 0) { throw 'bottom'; } return down(n - 1); }
+        function attempt(n) { try { return down(n); } catch (e) { return 'caught ' + e; } }
+        attempt(4) + '/' + attempt(2);";
+    assert_eq!(
+        eval(source),
+        Ok(Value::String("caught bottom/caught bottom".into()))
+    );
+}
+
+#[test]
+fn a_moved_argument_reaches_its_own_parameter() {
+    // Three parameters, used in an order that a transfer off by one would
+    // scramble, and a heap argument among them so the move path is exercised
+    // for a value that owns something.
+    let source = "function pick(a, b, c) { return c + '|' + b + '|' + a.tag; }
+        function outer(o) { return pick(o, 'B', 'C'); }
+        outer({ tag: 'A' }) + ';' + outer({ tag: 'Z' });";
+    assert_eq!(eval(source), Ok(Value::String("C|B|A;C|B|Z".into())));
+}
+
+#[test]
+fn an_argument_the_callee_ignores_is_still_released() {
+    // `ignore` names no parameter, so its argument register is released at the
+    // call rather than at the caller's return. The count proves the callee was
+    // really entered rather than declined.
+    let source = "function ignore() { return 1; }
+        var total = 0;
+        for (var i = 0; i < 100; i++) { total += ignore({ big: 'x' + i }, [i, i]); }
+        total;";
+    assert_eq!(eval(source), Ok(Value::Number(100.0)));
+}
+
+#[test]
+fn recursion_past_the_frame_bound_throws_instead_of_exhausting_the_native_stack() {
+    // Before the frame stack this recursed on the native stack and aborted the
+    // process. The guard is only meaningful if the body is admitted, so the
+    // depth reached is asserted too: a body that declined would fault long
+    // before `MAX_FRAMES`.
+    let source = "function down(n) { if (n <= 0) { return 0; } return 1 + down(n - 1); }
+        var deep = down(150000);
+        var threw = '';
+        try { down(1000000000); } catch (e) { threw = ('' + e).slice(0, 10); }
+        deep + ':' + threw;";
+    assert_eq!(eval(source), Ok(Value::String("150000:RangeError".into())));
+}
