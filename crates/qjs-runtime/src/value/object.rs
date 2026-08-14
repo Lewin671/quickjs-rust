@@ -1229,6 +1229,29 @@ impl ObjectRef {
         self.0.prototype.borrow().clone()
     }
 
+    /// This object's [[Prototype]] when it is an ordinary object.
+    ///
+    /// Separate from `prototype_slot` because a property-read cache only ever
+    /// wants the ordinary case and should not clone a slot it will discard.
+    pub(crate) fn ordinary_prototype(&self) -> Option<ObjectRef> {
+        match &*self.0.prototype.borrow() {
+            Some(Prototype::Object(prototype)) => Some(prototype.clone()),
+            _ => None,
+        }
+    }
+
+    /// Whether this object's [[Prototype]] is exactly `candidate`.
+    ///
+    /// One pointer comparison behind a `RefCell` borrow, with no clone: this
+    /// is the per-read guard of the prototype property cache, so it runs on
+    /// every method call.
+    pub(crate) fn prototype_is(&self, candidate: &ObjectRef) -> bool {
+        match &*self.0.prototype.borrow() {
+            Some(Prototype::Object(prototype)) => prototype.ptr_eq(candidate),
+            _ => false,
+        }
+    }
+
     pub(crate) fn set_prototype_slot(&self, prototype: Option<Prototype>) -> Result<(), ()> {
         if same_prototype_slot(self.0.prototype.borrow().as_ref(), prototype.as_ref()) {
             return Ok(());

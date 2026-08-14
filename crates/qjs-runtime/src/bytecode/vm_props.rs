@@ -12,6 +12,7 @@ use crate::{
 use super::vm::Vm;
 
 use super::ir::NamedPropertyCache;
+use super::named_property_cache::CacheProbe;
 use super::vm_set::property_set_uses_setter;
 use crate::CallEnv;
 use std::rc::Rc;
@@ -641,7 +642,8 @@ impl Vm<'_> {
             cache.clear();
             return self.try_direct_get_string(object, key);
         }
-        if let Some(value) = cache.get(object_ref) {
+        let probe = cache.probe(object_ref);
+        if let CacheProbe::Own(value) = probe {
             return Some(value);
         }
         match object_ref.own_data_property_read(key) {
@@ -649,7 +651,25 @@ impl Vm<'_> {
                 cache.update(object_ref, key, &value);
                 Some(value)
             }
-            OwnDataPropertyRead::Missing | OwnDataPropertyRead::NeedsSlowPath => {
+            // The receiver has no own property of this name, so the read
+            // resolves on the prototype chain -- the shape of every method
+            // call, and the one answer this site used to respond to by
+            // clearing itself and walking the chain again next time.
+            //
+            // The receiver miss proven just above is exactly the precondition
+            // a prototype entry needs, which is why the candidate from the
+            // probe may only be used here.
+            OwnDataPropertyRead::Missing => {
+                if let CacheProbe::PrototypeCandidate { holder, slot } = probe
+                    && let Some(value) = holder.own_data_slot_value(slot)
+                {
+                    return Some(value);
+                }
+                let value = self.try_direct_get_string(object, key)?;
+                cache.update_from_prototype(object_ref, key);
+                Some(value)
+            }
+            OwnDataPropertyRead::NeedsSlowPath => {
                 cache.clear();
                 self.try_direct_get_string(object, key)
             }

@@ -52,6 +52,47 @@ enum NamedPropertyCacheEntry {
         key: Rc<str>,
         slot: usize,
     },
+    /// A read that resolved on the receiver's direct prototype.
+    ///
+    /// Every method call has this shape, and it was the one shape this cache
+    /// could not hold: a receiver miss cleared the whole site and walked the
+    /// chain again on the next read. Measured, that made a prototype-resolved
+    /// read cost about 20 ns more than an own-property read, against 2.5 ns
+    /// for QuickJS-NG.
+    ///
+    /// It is keyed on the *holder*, not the receiver, which is what makes it
+    /// work for the many-receivers case: every instance of one constructor
+    /// shares one prototype, so one entry serves them all.
+    ///
+    /// Three facts guard it, each re-established on every hit:
+    ///
+    /// - the receiver has no own `key` -- proven by the caller, with the same
+    ///   `own_data_property_read` that used to clear the site, before this
+    ///   entry is consulted at all;
+    /// - the receiver's [[Prototype]] is still this holder, so
+    ///   `Object.setPrototypeOf` on the receiver misses;
+    /// - the holder's own-slot layout is unchanged, so `slot` still names the
+    ///   same property. Assigning through the property keeps the layout and is
+    ///   observed anyway, because the value is read from the slot rather than
+    ///   cached here.
+    PrototypeSlot {
+        holder: ObjectWeakRef,
+        holder_layout_revision: u64,
+        slot: usize,
+    },
+}
+
+/// What one pass over a site found.
+pub(super) enum CacheProbe {
+    /// An own-property answer, already fully guarded.
+    Own(Value),
+    /// The receiver's prototype matches a cached holder. Valid only once the
+    /// caller has proven the receiver has no own property of this name.
+    PrototypeCandidate {
+        holder: ObjectRef,
+        slot: usize,
+    },
+    Miss,
 }
 
 #[derive(Clone, Debug)]
@@ -85,6 +126,43 @@ impl NamedPropertyCache {
             .find_map(|entry| Self::read_entry(entry, object))
     }
 
+    /// One pass over the site for both answers it can give.
+    ///
+    /// A prototype-dominant site would otherwise be scanned twice -- once for
+    /// an own-property answer that is never there, and again after the
+    /// receiver miss is proven -- so the two are folded into one walk. The
+    /// prototype answer is returned as an unverified candidate, because using
+    /// it still requires the caller to establish that the receiver has no own
+    /// property of that name.
+    pub(super) fn probe(&self, object: &ObjectRef) -> CacheProbe {
+        let state = self.0.borrow();
+        let mut candidate = None;
+        for entry in state.entries.iter().flatten() {
+            if let NamedPropertyCacheEntry::PrototypeSlot {
+                holder,
+                holder_layout_revision,
+                slot,
+            } = entry
+            {
+                if candidate.is_none()
+                    && let Some(holder) = holder.upgrade()
+                    && object.prototype_is(&holder)
+                    && *holder_layout_revision == holder.layout_revision()
+                {
+                    candidate = Some((holder, *slot));
+                }
+                continue;
+            }
+            if let Some(value) = Self::read_entry(entry, object) {
+                return CacheProbe::Own(value);
+            }
+        }
+        match candidate {
+            Some((holder, slot)) => CacheProbe::PrototypeCandidate { holder, slot },
+            None => CacheProbe::Miss,
+        }
+    }
+
     fn read_entry(entry: &NamedPropertyCacheEntry, object: &ObjectRef) -> Option<Value> {
         let value = match entry {
             NamedPropertyCacheEntry::Exact {
@@ -113,6 +191,9 @@ impl NamedPropertyCache {
             NamedPropertyCacheEntry::SharedSlot { key, slot } => {
                 return object.shared_data_slot_value(key, *slot);
             }
+            // Only valid once the receiver is known to have no own `key`, so
+            // it is served by `get_from_prototype` rather than from here.
+            NamedPropertyCacheEntry::PrototypeSlot { .. } => return None,
         };
         Some(match value {
             CachedValue::Undefined => Value::Undefined,
@@ -121,6 +202,41 @@ impl NamedPropertyCache {
             CachedValue::Number(value) => Value::Number(*value),
             CachedValue::Object(value) => Value::Object(value.upgrade()?),
         })
+    }
+
+    /// Records that `key` resolved to a data property on `receiver`'s direct
+    /// prototype. Any other resolution -- an accessor, a deeper holder, a
+    /// non-ordinary prototype, or storage without stable slots -- installs
+    /// nothing, so the read stays on the general path.
+    pub(super) fn update_from_prototype(&self, receiver: &ObjectRef, key: &str) {
+        let Some(holder) = receiver.ordinary_prototype() else {
+            return;
+        };
+        let Some(slot) = holder.own_data_slot(key) else {
+            return;
+        };
+        let entry = NamedPropertyCacheEntry::PrototypeSlot {
+            holder: holder.downgrade(),
+            holder_layout_revision: holder.layout_revision(),
+            slot,
+        };
+        let mut state = self.0.borrow_mut();
+        // A site that already holds this exact holder is re-reading it, not
+        // rotating: replacing in place keeps a polymorphic site from spending
+        // all four entries on one prototype.
+        if let Some(existing) = state.entries.iter_mut().flatten().find(|existing| {
+            matches!(
+                existing,
+                NamedPropertyCacheEntry::PrototypeSlot { holder: cached, .. }
+                    if cached.ptr_eq(&holder)
+            )
+        }) {
+            *existing = entry;
+            return;
+        }
+        let slot = state.next_slot;
+        state.entries[slot] = Some(entry);
+        state.next_slot = (slot + 1) % POLYMORPHIC_CACHE_SLOTS;
     }
 
     pub(super) fn update(&self, object: &ObjectRef, key: &str, value: &Value) {
@@ -140,7 +256,8 @@ impl NamedPropertyCache {
                 NamedPropertyCacheEntry::Exact { object: cached, .. }
                 | NamedPropertyCacheEntry::OwnSlot { object: cached, .. } => !cached.ptr_eq(object),
                 NamedPropertyCacheEntry::LiteralShape { .. }
-                | NamedPropertyCacheEntry::SharedSlot { .. } => false,
+                | NamedPropertyCacheEntry::SharedSlot { .. }
+                | NamedPropertyCacheEntry::PrototypeSlot { .. } => false,
             });
         let entry = if let Some((shape, slot)) = object.literal_data_slot(key) {
             NamedPropertyCacheEntry::LiteralShape { shape, slot }
@@ -217,9 +334,13 @@ impl NamedPropertyCache {
                         return Some(result);
                     }
                 }
+                // A prototype entry says where a *read* resolved when the
+                // receiver had no own property of that name. A write creates
+                // the own property instead, which is the general path's job.
                 NamedPropertyCacheEntry::Exact { .. }
                 | NamedPropertyCacheEntry::LiteralShape { .. }
-                | NamedPropertyCacheEntry::OwnSlot { .. } => {}
+                | NamedPropertyCacheEntry::OwnSlot { .. }
+                | NamedPropertyCacheEntry::PrototypeSlot { .. } => {}
             }
         }
         None
