@@ -1,0 +1,70 @@
+{
+    "schema_version": 1,
+    "artifact_type": "quickjs-performance-unit",
+    "unit_id": "compact-named-property-access",
+    "base_sha": "adb775205e832ad165861f5cc53cf7b8075d30c4",
+    "queue": {
+        "candidate_sha": "adb775205e832ad165861f5cc53cf7b8075d30c4",
+        "sha256": "c3b523e776c62e2e184692aef0de9886b754d2d2f76549367b7fb95ef5b46917"
+    },
+    "priority": {
+        "mode": "queue",
+        "opportunity_ids": [
+            "external/sunspider-1.0/access-binary-trees"
+        ],
+        "rank_ceiling": 6,
+        "override_reason": null
+    },
+    "mechanism": {
+        "summary": "Extend the existing compact register tier with the two statically named property operations (GetPropNamed, SetPropNamed), the receiver-carrying resolved call (CallResolved), and backward jumps, so ordinary constructor and prototype-method bodies that read or write named properties on `this` and their parameters run on the compact frame stack instead of building a full Vm, FrameState, CallEnv, and operand stack per activation. Each new compact operation delegates to the exact same cached named-property fast paths and general [[Get]]/[[Set]] fallbacks the interpreter's own GetPropNamed/SetPropNamed/CallResolved handlers use, including the per-site NamedPropertyCache; a receiver, cache state, or exotic semantics those paths cannot answer declines to the unchanged general implementation with the same observable result. Constructor calls reach this tier through the existing direct-leaf construction path, with `this` seeded from the pre-built receiver exactly as the slot-seeded frame does today; a body that reads `this` is admitted only when a receiver is being seeded.",
+        "generality": "Admission is decided solely by the body's bytecode shape (supported opcodes, bounded register file, initialized local slots, loop-carried stack depths that agree at merge points), the existing direct-leaf eligibility proof, and the runtime presence of a seeded receiver. It never inspects benchmark names, source paths, function or property spellings, input values, iteration counts, checksums, or results. The same constructor-and-method shape dominates the top of the current queue: access-binary-trees (TreeNode + itemCheck, rank 6, 2.72x) is admitted completely; cdjs (rank 3, 3.50x), hash-map (rank 1, 5.35x), and 3d-raytrace (rank 4, 3.12x) share the identical per-call Vm/FrameState and named-property cost in their constructor and method bodies and gain whatever subset of their bodies the admitted opcode set covers, while their remaining computed element access, class-field installation, and string costs are separate mechanisms addressed by other units. A body with any unsupported opcode, an unbalanced merge point, direct eval, with, super, arguments, captures, or a receiver-free call shape keeps the ordinary interpreter unchanged.",
+        "semantic_risks": [
+            "GetPropNamed and SetPropNamed must delegate to the same cache state and fallbacks as the interpreter handlers so getters, setters, Proxies, typed arrays, module namespaces, prototype-resolved methods, read-only and strict-write failures, and symbol-primitive receivers behave identically, including error propagation through the compact driver's register unwinding",
+            "SetPropNamed must preserve strict-mode TypeError, the left-on-stack assigned value, and the exact [[Set]] order of effects when the fast path declines",
+            "CallResolved must seed the callee's `this` from the receiver register for inlined admitted callees and pass the same receiver value through call_direct_leaf_function for everything else, matching the interpreter's [receiver, callee, args] convention; plain Call keeps the undefined-receiver convention",
+            "a body that reads `this` may be admitted only when the direct-call slots seed a receiver (root activation) or a receiver register exists (inlined callee), so sloppy plain calls and function literals never observe a fabricated receiver",
+            "backward jumps require the operand-stack depth agreement the propagate_depths pass already proves, and loops must not grow frames, exhaust MAX_FRAMES, or interact with loop-plan decline state that exists only on the general Vm",
+            "unreachable code with unsupported opcodes, out-of-range constants or slots, and register files over MAX_REGISTERS must continue to decline the whole body so dead code never admits a shape the tier cannot run",
+            "existing admitted compact bodies (controlflow-recursive) must not regress from the widened opcode set enlarging the compact dispatch switch"
+        ]
+    },
+    "profile_evidence": [
+        {
+            "source": "macOS /usr/bin/sample 2026-08-15 target/benchmarks/profiles/bt-ours.txt; 300-copy amplified diagnostic wrapper target/benchmarks/profiles/binary-trees-long.js SHA-256 635c3b4bcda4a285bf86c80b4dea5006e5b30106fa13aba469dd8a560fe6db66 derived by top-level text repetition from the pinned SunSpider source; executed by the exact base adb77520 release build with debug info and frame pointers added (binary SHA-256 b9acf64d5f2250fdfec62daf646e70df9f07cfdb3ea7bc9206cff403fdcd804d, standard release twin SHA-256 6b6ee4a5648f905be5b534bff1933944bf9fcaded820d5ca9026dd9025c99abe); the process produced Undefined with empty stderr.",
+            "sha256": "67ef82ac546e4417633780d1f22e099b524832e6c663f50afde24277c9892d55",
+            "base_sha": "adb775205e832ad165861f5cc53cf7b8075d30c4",
+            "opportunity_ids": [
+                "external/sunspider-1.0/access-binary-trees"
+            ],
+            "shared_cost": "Of 2,075 main-thread samples, 530 (25.5%) construct a per-activation Vm and its 704-byte FrameState plus CallEnv for the direct-leaf call path (new_with_globals_upvalues_with_stack_and_direct_call_slots 164, call_direct_leaf_function 128, function_env 81, construct_function 55, eval_direct_call_bytecode 42, operand-stack and local-slot recyclers 38, try_run_standalone declined 23), and 257 further samples (12.4%) drop those frames again (drop_in_place Value 132, CallEnv 46, FrameState 45, plus Value clones 49 and malloc/free traffic). The named-property path adds another 200 samples (9.6%: NamedPropertyCache probe 96 and read_entry 18, own_data_property_read 19, op_get/set_prop_named 49, try_cached_get_string 18). Every TreeNode construction and every itemCheck call pays the full machinery because the compact tier admits no body that reads or writes a named property; the same shape drives the higher-ranked cdjs, hash-map, and 3d-raytrace constructor/method bodies, whose profiles show the identical new_with_globals/drop/probe dominance.",
+            "inclusive_fraction": 0.379
+        }
+    ],
+    "fast_gate": {
+        "target_ids": [
+            "external/sunspider-1.0/access-binary-trees"
+        ],
+        "control_ids": [
+            "external/sunspider-1.0/controlflow-recursive",
+            "external/jetstream3-js-subset/cdjs",
+            "external/jetstream3-js-subset/hash-map",
+            "external/sunspider-1.0/string-tagcloud",
+            "external/sunspider-1.0/access-nbody",
+            "external/sunspider-1.0/date-format-tofte",
+            "external/sunspider-1.0/3d-raytrace",
+            "broad/plain_function_call",
+            "broad/property_read",
+            "broad/property_write",
+            "broad/dynamic_method_call",
+            "broad/object_allocation"
+        ],
+        "target_max_candidate_over_base": 0.9,
+        "control_max_candidate_over_base": 1.03,
+        "max_attempts": 2
+    },
+    "promotion_gate": {
+        "require_complete_broad": true,
+        "require_complete_external": true,
+        "require_test262_zero_gap": true
+    }
+}
