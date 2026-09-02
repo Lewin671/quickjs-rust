@@ -680,7 +680,11 @@ pub(in crate::bytecode) fn try_run_standalone(
     if !environment_is_slot_only(env.as_ref()?) {
         return None;
     }
-    let entry = admit(bytecode, slots.as_ref()?.upvalues)?;
+    // A body outside this tier's numeric set may still be one the wide tier
+    // runs; that tier re-checks admission on its own program.
+    let Some(entry) = admit(bytecode, slots.as_ref()?.upvalues) else {
+        return super::wide::try_run_standalone(bytecode, env, slots);
+    };
     // Admitted. From here on the caller's `env` and `slots` are ours.
     let call_env = env.take()?;
     let call_slots = slots.take()?;

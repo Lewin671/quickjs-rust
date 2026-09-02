@@ -89,6 +89,22 @@ Internal organization target:
 - `convert`: ECMAScript conversion helpers.
 - `tests`: crate-local runtime behavior tests.
 
+Execution tiers inside `bytecode`, from most general to most specialized:
+
+- `vm`: the general interpreter over a `FrameState`; every body runs here
+  unless a tier below admits it, and every tier below falls back to it.
+- `typed_loop`, `vm_numeric_loop`, `vm_control_loop`,
+  `vm_numeric_mutation_loop`: loop-region accelerators consulted at a
+  frame's backward edges; they run one region and return to the frame.
+- `compact_fn`: whole-body register execution without a `FrameState`. The
+  numeric tier admits stack, local, binary and call operations only, and its
+  dispatch loop is kept small on purpose. `compact_fn::wide` is a separate
+  executor with a superset operation set (named property reads and writes,
+  `this`, resolved calls, unary and update operators, computed reads, loops
+  no accelerator claims); a body is tried on the numeric tier first, then
+  the wide tier. Both tiers run admitted callees in a window of their own
+  register stack and re-enter the ordinary call path for everything else.
+
 ### qjs-cli
 
 Thin wrapper for manual smoke tests. Keep policy and engine behavior in library

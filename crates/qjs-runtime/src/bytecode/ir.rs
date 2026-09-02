@@ -823,6 +823,8 @@ pub struct Bytecode {
     /// `None` once compilation has proved it cannot be represented. Caching
     /// the negative answer is what keeps an unadmitted body at one `OnceCell`
     /// read per call.
+    /// The wide compact tier's program for this body, compiled on first use.
+    pub(super) compact_wide_program: OnceCell<Option<super::compact_fn::wide::WideProgram>>,
     pub(super) compact_function_program:
         OnceCell<Option<super::compact_fn::CompactFunctionProgram>>,
     pub(super) numeric_loop_plans: OnceCell<Vec<super::vm_numeric_loop::NumericLoopPlan>>,
@@ -998,6 +1000,7 @@ impl Bytecode {
             numeric_leaf_plan: OnceCell::new(),
             this_property_leaf_plan,
             compact_function_program: OnceCell::new(),
+            compact_wide_program: OnceCell::new(),
             numeric_loop_plans: OnceCell::new(),
             typed_loop_programs: OnceCell::new(),
             control_loop_plans: OnceCell::new(),

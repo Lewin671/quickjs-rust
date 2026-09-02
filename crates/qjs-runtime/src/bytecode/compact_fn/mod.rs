@@ -34,6 +34,8 @@ use super::ir::Bytecode;
 mod activation;
 mod compile;
 mod execute;
+mod property;
+pub(in crate::bytecode) mod wide;
 
 pub(super) use activation::try_run_standalone;
 

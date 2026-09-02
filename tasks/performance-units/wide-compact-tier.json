@@ -1,0 +1,67 @@
+{
+    "schema_version": 1,
+    "artifact_type": "quickjs-performance-unit",
+    "unit_id": "wide-compact-tier",
+    "base_sha": "adb775205e832ad165861f5cc53cf7b8075d30c4",
+    "queue": {
+        "candidate_sha": "adb775205e832ad165861f5cc53cf7b8075d30c4",
+        "sha256": "c3b523e776c62e2e184692aef0de9886b754d2d2f76549367b7fb95ef5b46917"
+    },
+    "priority": {
+        "mode": "queue",
+        "opportunity_ids": [
+            "external/sunspider-1.0/access-binary-trees"
+        ],
+        "rank_ceiling": 6,
+        "override_reason": null
+    },
+    "mechanism": {
+        "summary": "A second whole-body register executor, compact_fn::wide, for bodies that read and write named properties, call methods on a receiver, use unary and update operators, read computed elements, and loop where no loop accelerator claims the loop. It supersedes the frozen compact-named-property-access plan, which extended the numeric compact tier's own dispatch loop: measured, carrying the property operations in that loop cost controlflow-recursive 20% whether the extra arms were filtered before the match, kept out of line, or packed into the same eight-byte operation word, so the numeric executor is left byte-identical (its driver symbol is 7360 bytes before and after) and the wide tier has its own operation set, compiler, and frame driver. A body is tried on the numeric tier first and on the wide tier only when the numeric tier declines; the wide set is a superset, so the wide driver runs any admitted callee in a window of its own register stack. Named-property operations delegate to the interpreter's own per-site NamedPropertyCache fast paths and general [[Get]]/[[Set]] fallbacks; register writes are admitted only to the frame's own parameters and hoisted declarations, which the numeric compiler now also requires.",
+        "generality": "Admission is decided solely by the body's bytecode shape (supported opcodes, initialized local slots, agreeing merge depths, no loop a frame-based accelerator has a plan for) and the direct-leaf predicate; it never inspects benchmark names, source paths, property spellings, values, iteration counts or results. The admitted shape -- a constructor or prototype method that reads and writes fields of this and its parameters -- is the shape at the top of the queue: access-binary-trees, cdjs, hash-map, 3d-raytrace and raytrace-public-class-fields all spend 16-35% of their profiles building and dropping the FrameState this tier does not build.",
+        "semantic_risks": [
+            "named reads and writes must follow the interpreter's cache state and fallbacks exactly: getters, setters, Proxies, typed arrays, module namespaces, prototype-resolved methods, read-only and strict-write failures, primitive and null receivers",
+            "a callee's this must be seeded from the resolved receiver with the general path's coercion (global object for a sloppy undefined receiver, boxed primitives for sloppy methods, unchanged for strict), and a body reading this is admitted only when a receiver is seeded",
+            "loops run by this tier are loops no frame-based accelerator claims, so admitting a body must not take a loop away from the typed, numeric, control or mutation plans",
+            "register writes reach only the frame's own bindings; a name resolved from an enclosing scope (global lexical binding, writable captured cell) keeps the general path",
+            "errors thrown at any depth of inlined method recursion unwind the wide register stack and propagate to the caller's handler, and recursion past MAX_FRAMES reports a catchable RangeError"
+        ]
+    },
+    "profile_evidence": [
+        {
+            "source": "macOS /usr/bin/sample 2026-08-15 target/benchmarks/profiles/bt-ours.txt; 300-copy amplified diagnostic wrapper target/benchmarks/profiles/binary-trees-long.js SHA-256 635c3b4bcda4a285bf86c80b4dea5006e5b30106fa13aba469dd8a560fe6db66 derived by top-level text repetition from the pinned SunSpider source; executed by the exact base adb77520 release build with debug info and frame pointers added; the process produced Undefined with empty stderr.",
+            "sha256": "67ef82ac546e4417633780d1f22e099b524832e6c663f50afde24277c9892d55",
+            "base_sha": "adb775205e832ad165861f5cc53cf7b8075d30c4",
+            "opportunity_ids": [
+                "external/sunspider-1.0/access-binary-trees"
+            ],
+            "shared_cost": "Of 2,075 main-thread samples, 530 (25.5%) construct a per-activation Vm and its FrameState plus CallEnv for the direct-leaf call path and 257 further samples (12.4%) drop those frames again; the named-property path adds another 200 samples (9.6%). Every TreeNode construction and every itemCheck call pays the full machinery because no compact tier admitted a body that reads or writes a named property; the same shape drives cdjs, hash-map, 3d-raytrace and raytrace-public-class-fields.",
+            "inclusive_fraction": 0.379
+        }
+    ],
+    "fast_gate": {
+        "target_ids": [
+            "external/sunspider-1.0/access-binary-trees"
+        ],
+        "control_ids": [
+            "external/sunspider-1.0/controlflow-recursive",
+            "external/sunspider-1.0/access-nbody",
+            "external/sunspider-1.0/string-tagcloud",
+            "external/sunspider-1.0/date-format-tofte",
+            "external/sunspider-1.0/crypto-md5",
+            "external/sunspider-1.0/string-unpack-code",
+            "broad/plain_function_call",
+            "broad/property_read",
+            "broad/property_write",
+            "broad/dynamic_method_call",
+            "broad/object_allocation"
+        ],
+        "target_max_candidate_over_base": 0.9,
+        "control_max_candidate_over_base": 1.03,
+        "max_attempts": 2
+    },
+    "promotion_gate": {
+        "require_complete_broad": true,
+        "require_complete_external": true,
+        "require_test262_zero_gap": true
+    }
+}

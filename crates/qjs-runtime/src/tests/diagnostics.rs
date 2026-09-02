@@ -284,9 +284,11 @@ fn recursion_builds_slot_seeded_frames_and_receiver_arithmetic_builds_none() {
     // path's name-keyed frame. No call in this program builds a general frame.
     assert_eq!(methods.direct_leaf_frames, 4);
     assert_eq!(methods.generic_call_frames, 0);
-    // Five nested VMs remain: the four constructions and the top-level script.
-    // The method calls contribute none.
-    assert_eq!(methods.nested_vm_constructions, 5);
+    // The four constructions run on the wide compact tier -- a body writing
+    // `this.step` needs no `FrameState` -- so the only nested VM is the
+    // top-level script's. The method calls contribute none either.
+    assert_eq!(methods.compact_standalone_activations, 4);
+    assert_eq!(methods.nested_vm_constructions, 1);
 }
 
 #[test]
@@ -297,13 +299,15 @@ fn a_base_class_construction_builds_one_frame_and_no_field_initializer_frames() 
          for (var i = 0; i < 10; i++) { s += new C(i).a; }
          s;",
     );
-    // Ten constructions, ten direct-leaf frames for the constructor body and
+    // Ten constructions, ten direct-leaf calls for the constructor body and
     // nothing else: every `return <literal>` field initializer is read as its
     // constant instead of being called, so neither the closed-form tier nor a
-    // frame sees it. Eleven nested VMs are the ten frames plus the script.
+    // frame sees it. The constructor body itself runs on the wide compact
+    // tier, so the only nested VM is the script's own.
     assert_eq!(counters.direct_leaf_frames, 10);
     assert_eq!(counters.closed_form_leaf_evaluations, 0);
-    assert_eq!(counters.nested_vm_constructions, 11);
+    assert_eq!(counters.compact_standalone_activations, 10);
+    assert_eq!(counters.nested_vm_constructions, 1);
 }
 
 #[test]
@@ -334,6 +338,27 @@ fn a_declining_same_region_plan_no_longer_blocks_the_typed_program() {
         counters.declined_loop_plan_edges <= 100,
         "the inner loop should not decline every edge: {counters:?}"
     );
+}
+
+#[test]
+fn a_method_body_runs_on_the_wide_compact_tier_without_a_frame() {
+    let (value, counters) = counted(
+        "function Acc(start) { this.total = start; }
+         Acc.prototype.add = function (by) { var before = this.total; this.total = before + by; return before; };
+         var acc = new Acc(1);
+         var sum = 0;
+         for (var i = 0; i < 50; i++) { sum += acc.add(i); }
+         sum + acc.total;",
+    );
+    assert_eq!(value, Value::Number(20_876.0));
+    // The construction and all fifty method calls run on the wide compact
+    // tier as standalone activations with no `FrameState` at all; the only
+    // nested VM is the script's own. `direct_leaf_frames` counts each call's
+    // attempt before the compact tiers are consulted. A body that quietly
+    // returns to the frame path is exactly what this pins.
+    assert_eq!(counters.compact_standalone_activations, 51);
+    assert_eq!(counters.direct_leaf_frames, 51);
+    assert_eq!(counters.nested_vm_constructions, 1);
 }
 
 #[test]

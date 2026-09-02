@@ -101,11 +101,15 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<CompactFunctionProgram> {
                 if upvalue_slots & (1_u128 << *slot) != 0 {
                     return None;
                 }
-                if !bytecode
-                    .locals
-                    .get(*slot)
-                    .is_some_and(|local| local.mutable)
-                {
+                // Only this frame's own bindings -- parameters and hoisted
+                // declarations -- live in the register file. A name resolved
+                // from an enclosing scope (a global lexical binding, a
+                // writable captured cell) is written through that binding.
+                if !bytecode.locals.get(*slot).is_some_and(|local| {
+                    local.mutable
+                        && (local.parameter || local.hoisted)
+                        && !local.sloppy_global_fallback
+                }) {
                     return None;
                 }
             }

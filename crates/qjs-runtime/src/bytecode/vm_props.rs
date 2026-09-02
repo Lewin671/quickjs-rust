@@ -1065,7 +1065,7 @@ fn typed_array_default_length_accessor(object: &ObjectRef) -> bool {
 /// paths defer Proxies and module namespaces to the generic path.
 pub(super) struct ProxyInChain;
 
-enum DirectPropertyRead {
+pub(super) enum DirectPropertyRead {
     Missing,
     Data(Value),
     NeedsSlowPath,
@@ -1082,7 +1082,7 @@ fn direct_property_read(property: Property) -> DirectPropertyRead {
 /// Walks an ordinary object's string-keyed prototype chain for the VM get fast
 /// path. Ordinary data properties copy only their value from the HashMap;
 /// accessors and other observable special cases signal a slow-path fallback.
-fn ordinary_chain_data_value(
+pub(super) fn ordinary_chain_data_value(
     object: &ObjectRef,
     key: &str,
 ) -> Result<DirectPropertyRead, ProxyInChain> {
