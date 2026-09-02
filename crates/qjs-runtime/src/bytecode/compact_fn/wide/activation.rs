@@ -55,6 +55,20 @@ impl WideActivation<'_> {
         })
     }
 
+    /// The interpreter's diagnostic for a lexical local read or assigned in
+    /// its temporal dead zone.
+    #[cold]
+    #[inline(never)]
+    fn uninitialized_lexical(&self, slot: usize) -> RuntimeError {
+        RuntimeError {
+            thrown: None,
+            message: format!(
+                "ReferenceError: undefined identifier `{}`",
+                self.bytecode.locals[slot].name
+            ),
+        }
+    }
+
     #[inline(never)]
     fn eval_binary(&self, left: Value, op: BinaryOp, right: Value) -> Result<Value, RuntimeError> {
         let mut env = self.env.empty_frame();
@@ -72,6 +86,12 @@ enum Action {
         resume_pc: usize,
     },
     CallResolved {
+        dst: u16,
+        base: u16,
+        argc: u8,
+        resume_pc: usize,
+    },
+    New {
         dst: u16,
         base: u16,
         argc: u8,
@@ -315,6 +335,7 @@ fn run_frames(
         };
         registers[slot] = crate::bytecode::vm_bindings::clone_local_value(argument);
     }
+    seed_lexical_markers(entry.program, &mut registers[..current_len]);
 
     loop {
         let outcome = {
@@ -505,6 +526,71 @@ fn run_frames(
                             Err(error) => break Err(error),
                         }
                     }
+                    WideOp::GetPropIndex { dst, obj, index } => {
+                        let object = if dst == obj {
+                            std::mem::replace(&mut window[obj as usize], Value::Undefined)
+                        } else {
+                            crate::bytecode::vm_bindings::clone_local_value(&window[obj as usize])
+                        };
+                        match property::get_prop_computed(
+                            object,
+                            Value::Number(f64::from(index)),
+                            env,
+                        ) {
+                            Ok(value) => execute::store(&mut window[dst as usize], value),
+                            Err(error) => break Err(error),
+                        }
+                    }
+                    WideOp::LoadGlobal { dst, index } => {
+                        let Some(name) = program.global_names.get(index as usize) else {
+                            break Err(execute::constant_out_of_bounds());
+                        };
+                        match property::load_global(name, env) {
+                            Ok(value) => execute::store(&mut window[dst as usize], value),
+                            Err(error) => break Err(error),
+                        }
+                    }
+                    WideOp::NewArray { dst, base, count } => {
+                        let values: Vec<Value> = (0..count as usize)
+                            .map(|offset| {
+                                std::mem::replace(
+                                    &mut window[base as usize + offset],
+                                    Value::Undefined,
+                                )
+                            })
+                            .collect();
+                        execute::store(
+                            &mut window[dst as usize],
+                            Value::Array(crate::ArrayRef::new(values)),
+                        );
+                    }
+                    WideOp::ClearLocal { slot } => {
+                        execute::store(&mut window[slot as usize], program.tdz_marker.clone());
+                    }
+                    WideOp::MoveChecked { dst, src } => {
+                        if window[src as usize].is_uninitialized_lexical_marker() {
+                            break Err(activation.uninitialized_lexical(src as usize));
+                        }
+                        let value =
+                            crate::bytecode::vm_bindings::clone_local_value(&window[src as usize]);
+                        execute::store(&mut window[dst as usize], value);
+                    }
+                    WideOp::AssignChecked { dst, src } => {
+                        if window[dst as usize].is_uninitialized_lexical_marker() {
+                            break Err(activation.uninitialized_lexical(dst as usize));
+                        }
+                        let value =
+                            crate::bytecode::vm_bindings::clone_local_value(&window[src as usize]);
+                        execute::store(&mut window[dst as usize], value);
+                    }
+                    WideOp::New { dst, base, argc } => {
+                        break Ok(Action::New {
+                            dst,
+                            base,
+                            argc,
+                            resume_pc: pc,
+                        });
+                    }
                     WideOp::Call { dst, base, argc } => {
                         break Ok(Action::Call {
                             dst,
@@ -537,6 +623,28 @@ fn run_frames(
                 return Err(error);
             }
         };
+        if let Action::New {
+            dst,
+            base,
+            argc,
+            resume_pc,
+        } = action
+        {
+            let callee_index = current_base + base as usize;
+            let callee = std::mem::replace(&mut registers[callee_index], Value::Undefined);
+            let arguments = &registers[callee_index + 1..callee_index + 1 + argc as usize];
+            match construct_from_activation(env, callee, arguments) {
+                Ok(value) => {
+                    execute::store(&mut registers[current_base + dst as usize], value);
+                    pc = resume_pc;
+                    continue;
+                }
+                Err(error) => {
+                    unwind(registers, frames, current_base + current_len);
+                    return Err(error);
+                }
+            }
+        }
         let (dst, base, argc, resume_pc, resolved) = match action {
             Action::Return(value) => {
                 clear_window(&mut registers[current_base..current_base + current_len]);
@@ -565,6 +673,7 @@ fn run_frames(
                 argc,
                 resume_pc,
             } => (dst, base, argc, resume_pc, true),
+            Action::New { .. } => unreachable!("construction was handled above"),
         };
         let callee_index = current_base + base as usize;
         // Both call forms pop the callee register (and a resolved call its
@@ -621,6 +730,12 @@ fn run_frames(
                 }
                 None
             };
+            if let Some(program) = super::program_for(running_bytecode(&callee, root_bytecode)) {
+                seed_lexical_markers(
+                    program,
+                    &mut registers[callee_base..callee_base + callee_len],
+                );
+            }
             frames.push(WideFrame {
                 callee: std::mem::replace(&mut current_callee, callee),
                 upvalue_owner: current_owner,
@@ -725,6 +840,41 @@ fn update(op: UpdateOp, value: Value, env: &CallEnv) -> Result<Value, RuntimeErr
             }
         }
     })
+}
+
+/// Starts every own lexical slot of a fresh window in its temporal dead
+/// zone, as the interpreter starts such slots uninitialized.
+#[inline]
+fn seed_lexical_markers(program: &WideProgram, window: &mut [Value]) {
+    for &slot in &program.lexical_slots {
+        if let Some(register) = window.get_mut(slot as usize) {
+            execute::store(register, program.tdz_marker.clone());
+        }
+    }
+}
+
+/// `new callee(arguments)` from an admitted body: the direct-leaf construct
+/// path first, then the general `construct_function`, in an empty realm
+/// frame exactly as the interpreter's own `construct_callee` does for a
+/// callee that cannot observe the caller's frame.
+#[inline(never)]
+fn construct_from_activation(
+    env: &CallEnv,
+    callee: Value,
+    arguments: &[Value],
+) -> Result<Value, RuntimeError> {
+    if let Some(result) = crate::function::try_construct_direct_leaf_function(
+        &callee,
+        arguments,
+        env,
+        env.module_host(),
+        #[cfg(feature = "agents")]
+        env.agent_context(),
+    ) {
+        return result;
+    }
+    let mut env = env.empty_frame();
+    crate::function::construct_function(callee.clone(), callee, arguments.to_vec(), &mut env)
 }
 
 #[cold]

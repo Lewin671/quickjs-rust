@@ -137,6 +137,47 @@ enum WideOp {
         obj: u16,
         key: u16,
     },
+    /// `obj[index]` with a constant index, the fused `Op::GetPropIndex`.
+    GetPropIndex {
+        dst: u16,
+        obj: u16,
+        index: u16,
+    },
+    /// Reads the global `global_names[index]` through the same resolution
+    /// `Vm::load_global` applies to a slot-only frame.
+    LoadGlobal {
+        dst: u16,
+        index: u16,
+    },
+    /// `new base(args...)`: constructs through the direct-leaf construct path
+    /// or the general `construct_function`, writing the instance to `dst`.
+    New {
+        dst: u16,
+        base: u16,
+        argc: u8,
+    },
+    /// An array literal of `count` expression elements held in the registers
+    /// starting at `base`; the array replaces `base`.
+    NewArray {
+        dst: u16,
+        base: u16,
+        count: u16,
+    },
+    /// Re-enters a lexical declaration's temporal dead zone.
+    ClearLocal {
+        slot: u16,
+    },
+    /// Reads a lexical local, throwing the interpreter's ReferenceError when
+    /// it is still in its temporal dead zone.
+    MoveChecked {
+        dst: u16,
+        src: u16,
+    },
+    /// Assigns a lexical local that must already be initialized.
+    AssignChecked {
+        dst: u16,
+        src: u16,
+    },
 }
 
 const _: () = assert!(std::mem::size_of::<WideOp>() == 8);
@@ -169,6 +210,16 @@ pub(in crate::bytecode) struct WideProgram {
     /// Whether the body reads `this`; such a body is admitted only when the
     /// activation seeds a receiver.
     requires_this: bool,
+    /// Global names read by `LoadGlobal`, by side-table index.
+    global_names: Vec<String>,
+    /// The frame's own `let`/`const` slots. An activation seeds each with the
+    /// temporal-dead-zone marker, exactly as the interpreter starts such a
+    /// slot uninitialized, so a read that precedes the declaration's
+    /// `ClearLocal`/store on some path still throws.
+    lexical_slots: Vec<u16>,
+    /// The marker every cleared lexical register holds; one allocation per
+    /// program rather than one per clear.
+    tdz_marker: crate::Value,
 }
 
 impl std::fmt::Debug for WideProgram {

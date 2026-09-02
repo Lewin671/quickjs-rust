@@ -32,6 +32,13 @@ struct VirtualObjectVariant {
 }
 
 impl VirtualObjectProgram {
+    /// Whether either variant rewrites the body at all. A body the lowering
+    /// leaves untouched gains nothing from the interpreter's virtual-object
+    /// path, so another tier may take it without losing that path's work.
+    pub(in crate::bytecode) fn lowers_anything(&self) -> bool {
+        self.full.lowered_code.is_some() || self.data_only.lowered_code.is_some()
+    }
+
     pub(in crate::bytecode) fn code<'a>(&'a self, original: &'a [Op]) -> &'a [Op] {
         self.full.code(original)
     }

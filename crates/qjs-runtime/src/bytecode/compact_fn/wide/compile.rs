@@ -71,6 +71,26 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
             && slot < u128::BITS as usize
             && initialized_slots & (1_u128 << slot) != 0
     };
+    // The frame's own `let`/`const` declarations: neither seeded on entry nor
+    // received from an enclosing scope. They live in the register file behind
+    // a temporal-dead-zone marker; a received cell that is not read-only is
+    // not admitted at all, since it would be written through the cell.
+    let slot_is_lexical = |slot: usize| -> bool {
+        slot < local_count
+            && slot < u128::BITS as usize
+            && bytecode.locals.get(slot).is_some_and(|local| {
+                !local.parameter
+                    && !local.hoisted
+                    && !local.is_received_upvalue()
+                    && !local.sloppy_global_fallback
+                    && !local.compiler_temporary
+            })
+    };
+    let slot_is_own_binding = |slot: usize| -> bool {
+        bytecode.locals.get(slot).is_some_and(|local| {
+            (local.parameter || local.hoisted) && !local.sloppy_global_fallback
+        })
+    };
     for (ip, op) in code.iter().enumerate() {
         effect_of(op)?;
         match op {
@@ -86,44 +106,77 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
                 return None;
             }
             Op::LoadConst(index) if *index >= bytecode.constants.len() => return None,
-            // `this` is the only free name; every other global read keeps the
-            // ordinary interpreter's resolution.
-            Op::LoadGlobal(name) if !is_this_read(name) => return None,
-            // A fused named read names its receiver local; it must be filled
-            // on entry exactly like a `LoadLocal`.
+            // A fused receiver local must be readable exactly like a
+            // `LoadLocal`: filled on entry, or an own lexical behind its
+            // marker.
             Op::GetPropNamed { cache, .. } => {
                 if let Some(slot) = cache.local_slot()
                     && !slot_is_initialized_local(slot)
+                    && !slot_is_lexical(slot)
                 {
                     return None;
                 }
             }
-            Op::LoadLocal(slot) if !slot_is_initialized_local(*slot) => return None,
-            // An assignment expression writes like a declaration store; the
-            // temporal-dead-zone check it adds is moot for a slot admission
-            // proved filled on entry.
-            Op::StoreLocal(slot) | Op::AssignLocal(slot) => {
-                // A write must reach indexed storage directly: received
-                // upvalues are read-only here, and an immutable binding needs
-                // the general path's diagnostic.
+            Op::GetPropIndex(encoded) => {
+                let (index, local_slot) = crate::bytecode::ir::decode_index_receiver(*encoded);
+                if u16::try_from(index).is_err() {
+                    return None;
+                }
+                if let Some(slot) = local_slot
+                    && !slot_is_initialized_local(slot)
+                    && !slot_is_lexical(slot)
+                {
+                    return None;
+                }
+            }
+            Op::LoadLocal(slot) if !slot_is_initialized_local(*slot) && !slot_is_lexical(*slot) => {
+                return None;
+            }
+            Op::ClearLocal(slot) if !slot_is_lexical(*slot) => return None,
+            // A declaration store initializes an own lexical (`const`
+            // included) or writes one of the frame's own hoisted bindings.
+            Op::StoreLocal(slot) => {
                 if *slot >= local_count || *slot >= u128::BITS as usize {
                     return None;
                 }
                 if upvalue_slots & (1_u128 << *slot) != 0 {
                     return None;
                 }
-                // Only this frame's own bindings -- parameters and hoisted
-                // declarations -- live in the register file. A name resolved
-                // from an enclosing scope (a global lexical binding, a
-                // writable captured cell) is written through that binding.
+                if !slot_is_lexical(*slot)
+                    && !bytecode
+                        .locals
+                        .get(*slot)
+                        .is_some_and(|local| local.mutable && slot_is_own_binding(*slot))
+                {
+                    return None;
+                }
+            }
+            // An assignment expression writes a mutable own binding: a hoisted
+            // one like a store, a lexical one after its initialization check.
+            // A name resolved from an enclosing scope (a global lexical
+            // binding, a writable captured cell) is written through that
+            // binding and keeps the interpreter.
+            Op::AssignLocal(slot) => {
+                if *slot >= local_count || *slot >= u128::BITS as usize {
+                    return None;
+                }
+                if upvalue_slots & (1_u128 << *slot) != 0 {
+                    return None;
+                }
                 if !bytecode.locals.get(*slot).is_some_and(|local| {
-                    local.mutable
-                        && (local.parameter || local.hoisted)
-                        && !local.sloppy_global_fallback
+                    local.mutable && (slot_is_own_binding(*slot) || slot_is_lexical(*slot))
                 }) {
                     return None;
                 }
             }
+            Op::NewArray { elements }
+                if !elements.iter().all(|element| {
+                    matches!(element, crate::bytecode::ir::ArrayElementKind::Expr)
+                }) || u16::try_from(elements.len()).is_err() =>
+            {
+                return None;
+            }
+            Op::New(argc) if *argc > 3 => return None,
             // Arity beyond the fixed forms drags in argument-vector
             // construction the tier has no evidence for.
             Op::Call(argc) | Op::CallResolved(argc) if *argc > 3 => return None,
@@ -146,6 +199,16 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
     if has_backward_edge && body_has_loop_accelerator(bytecode) {
         return None;
     }
+    // Likewise a body the interpreter's virtual-object lowering rewrites --
+    // an object or array literal it can keep in slots instead of allocating
+    // -- keeps the interpreter, where that lowering runs.
+    if bytecode
+        .virtual_object_program
+        .get_or_init(|| crate::bytecode::virtual_object::lower(bytecode))
+        .lowers_anything()
+    {
+        return None;
+    }
 
     let entry_depth = propagate_depths(code)?;
     let stack_registers = entry_depth
@@ -160,8 +223,14 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
     let local_registers = code
         .iter()
         .filter_map(|op| match op {
-            Op::LoadLocal(slot) | Op::StoreLocal(slot) => Some(*slot + 1),
+            Op::LoadLocal(slot)
+            | Op::StoreLocal(slot)
+            | Op::AssignLocal(slot)
+            | Op::ClearLocal(slot) => Some(*slot + 1),
             Op::GetPropNamed { cache, .. } => cache.local_slot().map(|slot| slot + 1),
+            Op::GetPropIndex(encoded) => crate::bytecode::ir::decode_index_receiver(*encoded)
+                .1
+                .map(|slot| slot + 1),
             _ => None,
         })
         .max()
@@ -178,6 +247,15 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
     let mut compact_index = vec![0_u32; code.len() + 1];
     let mut required_authoritative_slots = 0_u128;
     let mut requires_this = false;
+    let mut global_names: Vec<String> = Vec::new();
+    let mut lexical_slots: Vec<u16> = Vec::new();
+    let note_lexical = |slot: usize, lexical_slots: &mut Vec<u16>| -> Option<u16> {
+        let slot = u16::try_from(slot).ok()?;
+        if !lexical_slots.contains(&slot) {
+            lexical_slots.push(slot);
+        }
+        Some(slot)
+    };
 
     let register = |depth: u16| -> u16 { (local_registers as u16).saturating_add(depth) };
 
@@ -199,6 +277,27 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
                 dst: register(depth),
                 index: u32::try_from(*index).ok()?,
             }),
+            Op::LoadLocal(slot) if slot_is_lexical(*slot) => {
+                let src = note_lexical(*slot, &mut lexical_slots)?;
+                required_authoritative_slots |= 1_u128 << *slot;
+                ops.push(WideOp::MoveChecked {
+                    dst: register(depth),
+                    src,
+                });
+            }
+            Op::ClearLocal(slot) => {
+                let slot = note_lexical(*slot, &mut lexical_slots)?;
+                required_authoritative_slots |= 1_u128 << slot;
+                ops.push(WideOp::ClearLocal { slot });
+            }
+            Op::AssignLocal(slot) if slot_is_lexical(*slot) => {
+                let dst = note_lexical(*slot, &mut lexical_slots)?;
+                required_authoritative_slots |= 1_u128 << *slot;
+                ops.push(WideOp::AssignChecked {
+                    dst,
+                    src: register(depth.checked_sub(1)?),
+                });
+            }
             Op::LoadLocal(slot) => {
                 let slot_index = u16::try_from(*slot).ok()?;
                 let slot_bit = 1_u128 << *slot;
@@ -215,10 +314,85 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
                     });
                 }
             }
-            Op::LoadGlobal(_) => {
+            Op::LoadGlobal(name) if is_this_read(name) => {
                 requires_this = true;
                 ops.push(WideOp::LoadThis {
                     dst: register(depth),
+                });
+            }
+            Op::LoadGlobal(name) => {
+                let index = match global_names.iter().position(|known| known == name) {
+                    Some(index) => index,
+                    None => {
+                        global_names.push(name.clone());
+                        global_names.len() - 1
+                    }
+                };
+                ops.push(WideOp::LoadGlobal {
+                    dst: register(depth),
+                    index: u16::try_from(index).ok()?,
+                });
+            }
+            Op::GetPropIndex(encoded) => {
+                let (index, local_slot) = crate::bytecode::ir::decode_index_receiver(*encoded);
+                let index = u16::try_from(index).ok()?;
+                match local_slot {
+                    Some(slot) if slot_is_lexical(slot) => {
+                        let src = note_lexical(slot, &mut lexical_slots)?;
+                        required_authoritative_slots |= 1_u128 << slot;
+                        ops.push(WideOp::MoveChecked {
+                            dst: register(depth),
+                            src,
+                        });
+                        ops.push(WideOp::GetPropIndex {
+                            dst: register(depth),
+                            obj: register(depth),
+                            index,
+                        });
+                    }
+                    Some(slot) => {
+                        let slot_bit = 1_u128 << slot;
+                        if upvalue_slots & slot_bit != 0 {
+                            ops.push(WideOp::LoadUpvalueLocal {
+                                dst: register(depth),
+                                slot: u16::try_from(slot).ok()?,
+                            });
+                            ops.push(WideOp::GetPropIndex {
+                                dst: register(depth),
+                                obj: register(depth),
+                                index,
+                            });
+                        } else {
+                            required_authoritative_slots |= slot_bit;
+                            ops.push(WideOp::GetPropIndex {
+                                dst: register(depth),
+                                obj: u16::try_from(slot).ok()?,
+                                index,
+                            });
+                        }
+                    }
+                    None => ops.push(WideOp::GetPropIndex {
+                        dst: register(depth.checked_sub(1)?),
+                        obj: register(depth.checked_sub(1)?),
+                        index,
+                    }),
+                }
+            }
+            Op::New(argc) => {
+                let base = register(depth.checked_sub(u16::try_from(*argc).ok()? + 1)?);
+                ops.push(WideOp::New {
+                    dst: base,
+                    base,
+                    argc: u8::try_from(*argc).ok()?,
+                });
+            }
+            Op::NewArray { elements } => {
+                let count = u16::try_from(elements.len()).ok()?;
+                let base = register(depth.checked_sub(count)?);
+                ops.push(WideOp::NewArray {
+                    dst: base,
+                    base,
+                    count,
                 });
             }
             Op::GetPropNamed { key, cache } => {
@@ -228,6 +402,19 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
                     cache: cache.clone(),
                 });
                 match cache.local_slot() {
+                    Some(slot) if slot_is_lexical(slot) => {
+                        let src = note_lexical(slot, &mut lexical_slots)?;
+                        required_authoritative_slots |= 1_u128 << slot;
+                        ops.push(WideOp::MoveChecked {
+                            dst: register(depth),
+                            src,
+                        });
+                        ops.push(WideOp::GetPropNamed {
+                            dst: register(depth),
+                            obj: register(depth),
+                            index,
+                        });
+                    }
                     // A fused site reads its receiver local without consuming
                     // an operand, so the pushed depth is the destination. A
                     // plain local is read in place; an upvalue-backed one is
@@ -276,6 +463,14 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
                     obj: register(depth.checked_sub(2)?),
                     value: register(depth.checked_sub(1)?),
                     index,
+                });
+            }
+            Op::StoreLocal(slot) if slot_is_lexical(*slot) => {
+                let dst = note_lexical(*slot, &mut lexical_slots)?;
+                required_authoritative_slots |= 1_u128 << *slot;
+                ops.push(WideOp::Move {
+                    dst,
+                    src: register(depth.checked_sub(1)?),
                 });
             }
             Op::StoreLocal(slot) | Op::AssignLocal(slot) => {
@@ -377,6 +572,9 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
         register_count,
         required_authoritative_slots,
         requires_this,
+        global_names,
+        lexical_slots,
+        tdz_marker: crate::Value::Function(crate::Function::uninitialized_lexical_marker()),
     })
 }
 
@@ -422,9 +620,20 @@ fn effect_of(op: &Op) -> Option<Effect> {
         falls_through: true,
     };
     let effect = match op {
-        Op::FunctionPrologueEnd => simple(0, 0),
-        Op::LoadConst(_) | Op::LoadLocal(_) | Op::Dup => simple(0, 1),
-        Op::LoadGlobal(name) if is_this_read(name) => simple(0, 1),
+        Op::FunctionPrologueEnd | Op::ClearLocal(_) => simple(0, 0),
+        Op::LoadConst(_) | Op::LoadLocal(_) | Op::Dup | Op::LoadGlobal(_) => simple(0, 1),
+        Op::GetPropIndex(encoded) => {
+            if crate::bytecode::ir::decode_index_receiver(*encoded)
+                .1
+                .is_some()
+            {
+                simple(0, 1)
+            } else {
+                simple(1, 1)
+            }
+        }
+        Op::New(argc) => simple(u16::try_from(*argc).ok()?.checked_add(1)?, 1),
+        Op::NewArray { elements } => simple(u16::try_from(elements.len()).ok()?, 1),
         Op::Pop | Op::StoreLocal(_) | Op::AssignLocal(_) => simple(1, 0),
         Op::Binary(_) | Op::GetProp => simple(2, 1),
         Op::Unary(_) | Op::Typeof | Op::ToNumeric | Op::Update(_) => simple(1, 1),

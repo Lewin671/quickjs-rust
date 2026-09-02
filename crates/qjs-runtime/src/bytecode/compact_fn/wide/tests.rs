@@ -273,3 +273,113 @@ fn undefined_and_null_receivers_throw_the_ordinary_type_error() {
         Value::Boolean(true)
     );
 }
+
+#[test]
+fn lexical_locals_are_admitted_behind_their_dead_zone_marker() {
+    let program = compile::compile(&nested_function(
+        "function lex(a) { const x = a + 1; let y = x * 2; { let z = y; y = z + 1; } return y; }",
+        "lex",
+    ))
+    .expect("a body with let/const locals should be admitted");
+    assert!(
+        program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::ClearLocal { .. })),
+        "{:#?}",
+        program.ops
+    );
+    assert!(!program.lexical_slots.is_empty());
+    assert_eq!(
+        value_of(
+            "function lex(a) { const x = a + 1; let y = x * 2; { let z = y; y = z + 1; } return y; }
+             lex(1) * 100 + lex(2);"
+        ),
+        Value::Number(507.0)
+    );
+}
+
+#[test]
+fn a_dead_zone_read_and_a_const_assignment_keep_their_errors() {
+    assert_eq!(
+        value_of(
+            "function tdz(a) { var r; try { r = q; } catch (e) { r = e.constructor.name; } let q = a; return r + ':' + q; }
+             tdz(5) === 'ReferenceError:5';"
+        ),
+        Value::Boolean(true)
+    );
+    assert_eq!(
+        value_of(
+            "function ce(a) { const c = a; try { c = 2; } catch (e) { return e.constructor.name; } return c; }
+             ce(1) === 'TypeError';"
+        ),
+        Value::Boolean(true)
+    );
+    assert_eq!(
+        value_of(
+            "function shadow() { let a = 1; { let a = 2; } return a; }
+             function loopc(n) { let s = 0; for (let i = 0; i < n; i++) { const d = i * 2; s = s + d; } return s; }
+             shadow() * 100 + loopc(5);"
+        ),
+        Value::Number(120.0)
+    );
+}
+
+#[test]
+fn global_reads_resolve_like_the_interpreter() {
+    assert_eq!(
+        value_of("var G = 41; function g() { return G + 1; } g();"),
+        Value::Number(42.0)
+    );
+    assert_eq!(
+        value_of(
+            "Object.defineProperty(globalThis, 'acc', { get: function () { return 9; } });
+             function ga() { return acc + 1; } ga();"
+        ),
+        Value::Number(10.0)
+    );
+    assert_eq!(
+        value_of(
+            "function ug() { try { return undefinedName; } catch (e) { return e.constructor.name; } }
+             ug() === 'ReferenceError';"
+        ),
+        Value::Boolean(true)
+    );
+    assert_eq!(
+        value_of(
+            "let counter = 0;
+             function bump() { return counter + 1; }
+             var first = bump();
+             counter = 5;
+             first * 10 + bump();"
+        ),
+        Value::Number(16.0)
+    );
+}
+
+#[test]
+fn construction_array_literals_and_indexed_reads_inside_a_body() {
+    assert_eq!(
+        value_of(
+            "function P(v) { this.v = v; }
+             function mk(n) { var p = new P(n); return p.v * 2; }
+             function arr(a, b) { var t = [a, b, a + b]; return t[2] + t.length; }
+             function idx(v) { return v[0] * v[1]; }
+             mk(4) * 10000 + arr(1, 2) * 100 + idx([3, 4]);"
+        ),
+        Value::Number(80_612.0)
+    );
+    assert!(error_of("function mk() { return new 3(); } mk();").contains("TypeError"));
+    assert!(error_of("function idx(v) { return v[0]; } idx(null);").contains("TypeError"));
+}
+
+#[test]
+fn a_body_the_virtual_object_lowering_rewrites_keeps_the_interpreter() {
+    assert!(
+        compile::compile(&nested_function(
+            "function run(n) { var sum = 0; for (var i = 0; i < n; i++) { var values = [1, 2, 3]; sum += values[2]; } return sum; }",
+            "run",
+        ))
+        .is_none()
+    );
+}

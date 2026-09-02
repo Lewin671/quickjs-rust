@@ -274,3 +274,33 @@ pub(super) fn get_prop_computed(
     };
     crate::bytecode::vm_props::get_property_key(object, &key, &mut call_env)
 }
+
+/// Reads a global name from a slot-only environment, exactly as
+/// `Vm::load_global` resolves it for a function frame that carries no frame
+/// bindings, deoptimized bindings, module imports, sloppy fallbacks or
+/// immutable function name: the realm binding, then an own property of
+/// `globalThis` (invoking its getter), then the ReferenceError.
+#[inline(never)]
+pub(super) fn load_global(name: &str, env: &CallEnv) -> Result<Value, RuntimeError> {
+    if let Some(value) = env.get(name) {
+        if value.is_uninitialized_lexical_marker() {
+            return Err(undefined_identifier(name));
+        }
+        return Ok(value);
+    }
+    if let Some(Value::Object(global_this)) = env.global_this()
+        && global_this.has_own_property(name)
+    {
+        let mut call_env = env.empty_frame();
+        return crate::property_value(Value::Object(global_this), name, &mut call_env);
+    }
+    Err(undefined_identifier(name))
+}
+
+#[cold]
+fn undefined_identifier(name: &str) -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: format!("ReferenceError: undefined identifier `{name}`"),
+    }
+}
