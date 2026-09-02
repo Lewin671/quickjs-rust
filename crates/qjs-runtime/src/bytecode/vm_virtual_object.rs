@@ -44,7 +44,7 @@ impl<'a> Vm<'a> {
         // dispatch loop starts, so there is no live view to invalidate.
         self.current.virtual_function_context_safe = self.env.deopt_bindings().is_none()
             && self.env.immutable_function_name().is_none()
-            && self.with_stack.is_empty();
+            && self.with_stack().is_empty();
         self.virtual_values.clear();
     }
 

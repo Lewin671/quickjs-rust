@@ -21,6 +21,7 @@ mod frame_program;
 mod frame_stack;
 mod ir;
 mod ir_names;
+mod ir_pools;
 mod named_property_cache;
 mod operand_stack;
 mod typed_loop;

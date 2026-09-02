@@ -163,6 +163,11 @@ impl NamedPropertyCache {
         }
     }
 
+    /// Inlined into `probe` unconditionally: left to LLVM, whether this is
+    /// inlined and the four-entry walk unrolled varied from build to build
+    /// with unrelated code, and a build that keeps it out of line is about
+    /// 4% slower on every property-heavy workload (3d-raytrace, access-nbody).
+    #[inline(always)]
     fn read_entry(entry: &NamedPropertyCacheEntry, object: &ObjectRef) -> Option<Value> {
         let value = match entry {
             NamedPropertyCacheEntry::Exact {

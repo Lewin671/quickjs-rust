@@ -24,8 +24,9 @@ impl Vm<'_> {
         cleanup_slots: Vec<usize>,
     ) {
         let stack_depth = self.stack.len();
-        let with_depth = self.with_stack.len();
-        self.try_stack.push(TryFrame {
+        let cold = self.cold_mut();
+        let with_depth = cold.with_stack.len();
+        cold.try_stack.push(TryFrame {
             catch,
             finally,
             catch_scope,
@@ -37,7 +38,7 @@ impl Vm<'_> {
     }
 
     pub(super) fn exit_try(&mut self) -> Result<(), RuntimeError> {
-        if let Some(frame) = self.try_stack.pop() {
+        if let Some(frame) = self.cold_mut().try_stack.pop() {
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
         }
         Ok(())
@@ -48,12 +49,11 @@ impl Vm<'_> {
         // in-flight finally (e.g. an inner `finally { throw }` overriding the
         // exception/break/return it interrupted), so the stale pending
         // completion must not be re-raised later by an enclosing EndFinally.
-        self.pending_throw = None;
-        self.pending_return = None;
-        self.pending_jump = None;
-        if !self.try_stack.is_empty() {
+        self.clear_pending_abrupt();
+        if !self.try_stack_is_empty() {
             let (stack_depth, with_depth, catch, cleanup_slots) = {
                 let frame = self
+                    .cold_mut()
                     .try_stack
                     .last_mut()
                     .expect("non-empty try stack must have a final frame");
@@ -66,7 +66,7 @@ impl Vm<'_> {
             };
             self.stack.truncate(stack_depth);
             if let Some(catch) = catch {
-                self.with_stack.truncate(with_depth);
+                self.cold_mut().with_stack.truncate(with_depth);
                 self.cleanup_slots(
                     cleanup_slots
                         .as_deref()
@@ -78,13 +78,13 @@ impl Vm<'_> {
             }
         }
 
-        if let Some(frame) = self.try_stack.pop() {
+        if let Some(frame) = self.cold_mut().try_stack.pop() {
             self.stack.truncate(frame.stack_depth);
-            self.with_stack.truncate(frame.with_depth);
+            self.cold_mut().with_stack.truncate(frame.with_depth);
             self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
-                self.pending_throw = Some(value);
+                self.cold_mut().pending_throw = Some(value);
                 self.ip = finally;
             } else {
                 self.throw_value(value)?;
@@ -98,13 +98,17 @@ impl Vm<'_> {
     }
 
     pub(super) fn return_value(&mut self, value: Value) -> Result<Option<Value>, RuntimeError> {
-        while let Some(frame) = self.try_stack.pop() {
+        while let Some(frame) = self
+            .cold
+            .as_deref_mut()
+            .and_then(|cold| cold.try_stack.pop())
+        {
             self.stack.truncate(frame.stack_depth);
-            self.with_stack.truncate(frame.with_depth);
+            self.cold_mut().with_stack.truncate(frame.with_depth);
             self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
-                self.pending_return = Some(value);
+                self.cold_mut().pending_return = Some(value);
                 self.ip = finally;
                 return Ok(None);
             }
@@ -118,11 +122,15 @@ impl Vm<'_> {
     /// Unlike throw/return, the operand stack is not truncated because the
     /// break/continue target expects its completion value on top.
     pub(super) fn abrupt_jump(&mut self, target: usize) -> Result<(), RuntimeError> {
-        if let Some(frame) = self.try_stack.pop() {
+        if let Some(frame) = self
+            .cold
+            .as_deref_mut()
+            .and_then(|cold| cold.try_stack.pop())
+        {
             self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
-                self.pending_jump = Some(target);
+                self.cold_mut().pending_jump = Some(target);
                 self.ip = finally;
                 return Ok(());
             }
@@ -132,11 +140,11 @@ impl Vm<'_> {
     }
 
     pub(super) fn end_finally(&mut self) -> Result<Option<Value>, RuntimeError> {
-        if let Some(value) = self.pending_throw.take() {
+        if let Some(value) = self.take_pending_throw() {
             self.throw_value(value)?;
-        } else if let Some(value) = self.pending_return.take() {
+        } else if let Some(value) = self.take_pending_return() {
             return self.return_value(value);
-        } else if let Some(target) = self.pending_jump.take() {
+        } else if let Some(target) = self.take_pending_jump() {
             self.ip = target;
         }
         Ok(None)

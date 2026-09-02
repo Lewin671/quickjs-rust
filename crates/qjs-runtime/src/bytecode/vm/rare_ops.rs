@@ -224,7 +224,7 @@ impl Vm<'_> {
                     home_object,
                     super_constructor,
                     deopt_bindings,
-                    with_stack: self.with_stack.clone(),
+                    with_stack: self.with_stack().to_vec(),
                     upvalues,
                 });
                 self.capture_private_environment(&function);
@@ -362,8 +362,10 @@ impl Vm<'_> {
                 }
             }
             Op::DiscardPendingAbrupt => {
-                self.pending_throw = None;
-                self.pending_return = None;
+                if let Some(cold) = self.cold.as_deref_mut() {
+                    cold.pending_throw = None;
+                    cold.pending_return = None;
+                }
             }
             Op::Throw => {
                 let value = self.pop()?;

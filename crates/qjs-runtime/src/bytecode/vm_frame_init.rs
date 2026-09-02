@@ -11,7 +11,7 @@ use super::DirectCallSlots;
 use super::frame_program::FrameBytecode;
 use super::ir::Bytecode;
 use super::operand_stack::OperandStack;
-use super::vm::{FrameState, Slot, Vm};
+use super::vm::{ColdFrame, FrameState, Slot, Vm};
 use crate::{
     GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value,
     function::{CallEnv, DynamicBindings, Realm, Upvalue, new_realm},
@@ -126,8 +126,7 @@ impl<'a> Vm<'a> {
         let realm = env.realm_rc();
         let module_host = env.module_host();
         let array_literal_prototype_override = env
-            .dynamic_function_realm_global()
-            .is_some()
+            .has_dynamic_function_realm_global()
             .then(|| crate::array_prototype(&env))
             .flatten();
         #[cfg(feature = "agents")]
@@ -192,13 +191,20 @@ impl<'a> Vm<'a> {
         // initializer grows this bank only as far as the candidate needs.
         let virtual_values = Vec::new();
         let stack = OperandStack::new(bytecode);
+        let cold =
+            (!with_stack.is_empty() || array_literal_prototype_override.is_some()).then(|| {
+                Box::new(ColdFrame {
+                    with_stack,
+                    array_literal_prototype_override,
+                    ..ColdFrame::default()
+                })
+            });
         Self {
             current: FrameState {
                 bytecode: handle,
                 ip: 0,
                 declined_numeric_loop_plans: 0,
                 declined_typed_loop_programs: 0,
-                numeric_mutation_loop_plans: None,
                 virtual_function_context_safe,
                 virtual_values,
                 stack,
@@ -215,19 +221,11 @@ impl<'a> Vm<'a> {
                 module_host,
                 #[cfg(feature = "agents")]
                 agent_context,
-                sloppy_global_names: Vec::new(),
-                try_stack: Vec::new(),
-                pending_throw: None,
-                pending_return: None,
-                pending_jump: None,
-                resume_mode: None,
                 stop_at_prologue: false,
                 array_prototype_cache: None,
-                array_literal_prototype_override,
                 object_prototype_cache: None,
-                with_stack,
+                cold,
                 direct_eval_with_stack: false,
-                disposable_scopes: Vec::new(),
                 persist_global_lexicals: true,
                 transactional_realm_globals: false,
                 dynamic_code_executed: false,
@@ -243,7 +241,7 @@ impl<'a> Vm<'a> {
         direct_call_slots: DirectCallSlots<'_>,
     ) -> Option<Value> {
         let direct_this = if let Some(this_value) = direct_call_slots.this_value {
-            if let Some(slot) = bytecode.local_slot("this") {
+            if let Some(slot) = bytecode.this_slot() {
                 locals[slot] = Some(this_value);
                 None
             } else {

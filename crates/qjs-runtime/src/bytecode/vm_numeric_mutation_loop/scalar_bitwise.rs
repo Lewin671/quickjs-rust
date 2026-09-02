@@ -242,7 +242,7 @@ impl PreparedSloppyGlobalWrite {
             || !vm.persist_global_lexicals
             || vm.dynamic_code_executed
             || vm.direct_eval_with_stack
-            || !vm.with_stack.is_empty()
+            || !vm.with_stack().is_empty()
             || vm.bytecode.contains_direct_eval()
             || vm.bytecode.contains_with()
             || vm.env.deopt_bindings().is_some()

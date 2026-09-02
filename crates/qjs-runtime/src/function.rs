@@ -37,6 +37,7 @@ pub(crate) use arguments::{native_mapped_argument_get, native_mapped_argument_se
 pub(crate) use call::{
     call_direct_function_literal, call_direct_leaf_function, call_field_initializer, call_function,
     construct_function, ensure_constructor, initialize_instance_fields, is_direct_leaf_function,
+    try_construct_direct_leaf_function,
 };
 pub(crate) fn is_call_frame_binding(name: &str) -> bool {
     matches!(

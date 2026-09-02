@@ -606,8 +606,8 @@ pub(super) fn try_run_numeric_mutation_loop(
     // A frame that has diverged runs its own override; every other frame runs
     // the body's shared plans, which the caller supplies.
     let active = vm
-        .numeric_mutation_loop_plans
-        .as_deref()
+        .cold()
+        .and_then(|cold| cold.numeric_mutation_loop_plans.as_deref())
         .unwrap_or(plans.shared_numeric_mutation);
     let Some((index, plan)) = active
         .iter()

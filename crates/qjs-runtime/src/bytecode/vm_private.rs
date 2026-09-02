@@ -188,7 +188,7 @@ impl Vm<'_> {
             home_object: Some(home_object),
             super_constructor: None,
             deopt_bindings: self.frame_deopt_bindings(),
-            with_stack: self.with_stack.clone(),
+            with_stack: self.with_stack().to_vec(),
             upvalues: self.captured_upvalues_for_function_with_override(
                 &def.bytecode,
                 &def.lexical_captures,
@@ -247,7 +247,7 @@ impl Vm<'_> {
             home_object: Some(home_object),
             super_constructor: None,
             deopt_bindings: self.frame_deopt_bindings(),
-            with_stack: self.with_stack.clone(),
+            with_stack: self.with_stack().to_vec(),
             upvalues: self.captured_upvalues_for_function_with_override(
                 &definition.bytecode,
                 &definition.lexical_captures,

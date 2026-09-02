@@ -81,7 +81,10 @@ impl Vm<'_> {
         // cross-realm array must carry its creation realm's intrinsic
         // explicitly so observing it later from another realm cannot reinterpret
         // the default as the caller's Array.prototype.
-        if let Some(prototype) = &self.array_literal_prototype_override {
+        if let Some(prototype) = self
+            .cold()
+            .and_then(|cold| cold.array_literal_prototype_override.as_ref())
+        {
             let initialized = array
                 .set_prototype_slot(Some(Prototype::Object(prototype.clone())))
                 .is_ok();

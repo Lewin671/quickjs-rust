@@ -109,7 +109,7 @@ impl Vm<'_> {
             && self.persist_global_lexicals
             && !self.dynamic_code_executed
             && !self.direct_eval_with_stack
-            && self.with_stack.is_empty()
+            && self.with_stack().is_empty()
             && !self.bytecode.contains_direct_eval()
             && !self.bytecode.contains_with()
             // Calls forwarded through Function.prototype.call/apply or

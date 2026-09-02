@@ -277,11 +277,13 @@ fn recursion_builds_slot_seeded_frames_and_receiver_arithmetic_builds_none() {
     // all. The counters say so precisely, which is why the assertion is on the
     // tier rather than on wall time.
     assert_eq!(methods.closed_form_leaf_evaluations, 40);
-    assert_eq!(methods.direct_leaf_frames, 0);
-    // The four `new Stepper(1)` constructions are the only general frames:
-    // `Stepper` is an ordinary function, so constructing it is outside both
-    // slot-seeding predicates.
-    assert_eq!(methods.generic_call_frames, 4);
+    // The four `new Stepper(1)` constructions are the only frames built, and
+    // they are slot-seeded direct-leaf frames: an ordinary function
+    // constructor now takes the same activation an ordinary call does, with
+    // its receiver pre-built from its own `prototype`, instead of the general
+    // path's name-keyed frame. No call in this program builds a general frame.
+    assert_eq!(methods.direct_leaf_frames, 4);
+    assert_eq!(methods.generic_call_frames, 0);
     // Five nested VMs remain: the four constructions and the top-level script.
     // The method calls contribute none.
     assert_eq!(methods.nested_vm_constructions, 5);

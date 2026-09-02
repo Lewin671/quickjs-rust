@@ -287,6 +287,11 @@ fn run_prepared_bytecode_call(
 /// dynamic, and write-back-capable callees. A direct leaf creates its own
 /// slot-backed frame and cannot mutate caller compatibility bindings, so that
 /// outer shell would be allocated and snapshotted without carrying data.
+///
+/// Kept out of line: the typed-loop executor reaches this for helper calls,
+/// and inlining the whole activation into that executor makes its codegen
+/// track every change to the call path.
+#[inline(never)]
 pub(crate) fn call_direct_leaf_function(
     callee: Value,
     this_value: Value,
@@ -321,7 +326,7 @@ pub(crate) fn call_direct_leaf_function(
         env: mut call_env,
         direct_call_slots,
     } = direct_leaf_function_env(function, bytecode, this_value, argument_values, env);
-    if call_env.module_host().is_none()
+    if call_env.module_host_ref().is_none()
         && let Some(host) = module_host
     {
         call_env.set_module_host(host);
@@ -332,6 +337,90 @@ pub(crate) fn call_direct_leaf_function(
     }
     let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
     eval_direct_call_bytecode(bytecode, call_env, direct_call_slots)
+}
+
+/// Constructs an ordinary bytecode function through the same slot-seeded
+/// direct-leaf frame an ordinary call uses, instead of the general
+/// `construct_function` path that builds a name-keyed compatibility frame.
+///
+/// Declines, before any observable step, unless the callee is a plain
+/// constructable non-class bytecode function admitted by the direct-leaf
+/// predicate whose `prototype` is an own data property holding an object or
+/// function. Accessor or non-object prototypes (which fall back to the realm's
+/// `Object.prototype` or a cross-realm marker), class constructors (instance
+/// field initializers and the derived-constructor TDZ), bound and native
+/// constructors, and Proxies all keep the general path, which performs the
+/// identical `prototype` read first, so a decline repeats no side effect.
+pub(crate) fn try_construct_direct_leaf_function(
+    callee: &Value,
+    argument_values: &[Value],
+    env: &CallEnv,
+    module_host: Option<crate::module::ModuleHostRef>,
+    #[cfg(feature = "agents")] agent_context: Option<crate::agent::AgentContextRef>,
+) -> Option<Result<Value, RuntimeError>> {
+    let Value::Function(function) = callee else {
+        return None;
+    };
+    if function.native.is_some()
+        || function.bound.is_some()
+        || !function.constructable
+        || function.is_class_constructor
+        || !is_direct_leaf_function(callee)
+    {
+        return None;
+    }
+    let prototype = match function.own_property("prototype") {
+        Some(property) if !property.is_accessor() => match property.value {
+            Value::Object(prototype) if !symbol::is_symbol_primitive(&prototype) => {
+                crate::Prototype::Object(prototype)
+            }
+            Value::Function(prototype) => crate::Prototype::Function(prototype),
+            _ => return None,
+        },
+        _ => return None,
+    };
+    let bytecode = function
+        .bytecode
+        .as_ref()
+        .expect("direct leaf predicate requires bytecode");
+    crate::diagnostics::count!(ordinary_call_attempts);
+    crate::diagnostics::count!(direct_leaf_frames);
+    let receiver = ObjectRef::with_prototype_slot(HashMap::new(), Some(prototype));
+    let FunctionCallEnv {
+        env: mut call_env,
+        direct_call_slots,
+    } = direct_leaf_function_env(
+        function,
+        bytecode,
+        Value::Object(receiver.clone()),
+        argument_values,
+        env,
+    );
+    // `new.target` is the constructor itself for a direct `new` expression.
+    call_env.set_new_target(Some(callee.clone()));
+    if call_env.module_host_ref().is_none()
+        && let Some(host) = module_host
+    {
+        call_env.set_module_host(host);
+    }
+    #[cfg(feature = "agents")]
+    if let Some(context) = agent_context {
+        call_env.set_agent_context(context);
+    }
+    let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
+    let result = eval_direct_call_bytecode(bytecode, call_env, direct_call_slots);
+    Some(match result {
+        Ok(
+            value @ (Value::Array(_)
+            | Value::Function(_)
+            | Value::Map(_)
+            | Value::Set(_)
+            | Value::Object(_)
+            | Value::Proxy(_)),
+        ) => Ok(value),
+        Ok(_) => Ok(Value::Object(receiver)),
+        Err(error) => Err(error),
+    })
 }
 
 /// Executes a function literal whose allocation and identity were proven
@@ -789,7 +878,11 @@ fn direct_leaf_function_env<'a>(
     if let Some(host) = function.module_host.clone() {
         frame_env.set_module_host(host);
     }
-    frame_env.set_private_environment(function_private_environment(function));
+    // A fresh leaf frame starts with no private environment; only a function
+    // that carries one (or a home object that does) has anything to install.
+    if function.has_cold_lexical_state() {
+        frame_env.set_private_environment(function_private_environment(function));
+    }
     FunctionCallEnv {
         env: frame_env,
         direct_call_slots: Some(DirectCallSlots {

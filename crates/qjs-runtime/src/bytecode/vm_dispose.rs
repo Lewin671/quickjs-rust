@@ -34,7 +34,7 @@ impl Vm<'_> {
         use super::ir::Op;
         match op {
             Op::EnterDisposableScope => {
-                self.disposable_scopes.push(Vec::new());
+                self.cold_mut().disposable_scopes.push(Vec::new());
                 Ok(())
             }
             Op::RegisterDisposable => {
@@ -67,7 +67,8 @@ impl Vm<'_> {
         };
         if matches!(value, Value::Null | Value::Undefined) {
             if hint == DisposeHint::Async {
-                self.disposable_scopes
+                self.cold_mut()
+                    .disposable_scopes
                     .last_mut()
                     .expect("a disposable scope is open while registering")
                     .push(DisposeResource {
@@ -99,7 +100,8 @@ impl Vm<'_> {
                 message: not_callable_message(hint).to_owned(),
             });
         }
-        self.disposable_scopes
+        self.cold_mut()
+            .disposable_scopes
             .last_mut()
             .expect("a disposable scope is open while registering")
             .push(DisposeResource {
@@ -111,11 +113,15 @@ impl Vm<'_> {
     }
 
     fn dispose_scope(&mut self, await_async: bool) -> Result<(), RuntimeError> {
-        let resources = self.disposable_scopes.pop().unwrap_or_default();
+        let resources = self
+            .cold
+            .as_deref_mut()
+            .and_then(|cold| cold.disposable_scopes.pop())
+            .unwrap_or_default();
         // Seed the accumulated completion with any throw the block raised (the
         // finally was entered via throw_value, which stages pending_throw). A
         // dispose failure then suppresses it.
-        let mut pending = self.pending_throw.take();
+        let mut pending = self.take_pending_throw();
         let mut awaited = Value::Undefined;
         let mut did_await = false;
         for resource in resources.into_iter().rev() {
@@ -148,9 +154,10 @@ impl Vm<'_> {
         if let Some(error) = pending {
             // A throw (re-staged block throw or a dispose failure) overrides any
             // pending return/break that entered the finally.
-            self.pending_return = None;
-            self.pending_jump = None;
-            self.pending_throw = Some(error);
+            let cold = self.cold_mut();
+            cold.pending_return = None;
+            cold.pending_jump = None;
+            cold.pending_throw = Some(error);
         }
         if await_async {
             self.stack.push(awaited);

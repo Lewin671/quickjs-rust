@@ -18,6 +18,7 @@ use crate::{
     value::OwnDataPropertyWrite,
 };
 use std::{
+    cell::RefCell,
     ops::{Deref, DerefMut},
     rc::Rc,
 };
@@ -69,7 +70,7 @@ pub(super) fn eval_function_bytecode<'a>(
         env,
         locals,
         local_upvalues,
-        sloppy_global_names,
+        cold,
         ..
     } = vm.current;
     FunctionBytecodeResult {
@@ -78,7 +79,7 @@ pub(super) fn eval_function_bytecode<'a>(
         env,
         locals,
         local_upvalues,
-        sloppy_global_names,
+        sloppy_global_names: cold.map_or_else(Vec::new, |cold| cold.sloppy_global_names),
     }
 }
 
@@ -115,6 +116,9 @@ pub(super) fn eval_direct_call_bytecode(
     // nothing outlives the call and the allocation can go back to the body's
     // pool instead of being freed and rebuilt on the next invocation.
     bytecode.recycle_local_slots(std::mem::take(&mut vm.current.locals));
+    if let Some(cold) = vm.current.cold.take() {
+        bytecode.recycle_cold_frame(cold);
+    }
     value
 }
 
@@ -138,11 +142,6 @@ pub(super) struct FrameState<'a> {
     /// One bit per typed loop program this frame has already declined, so a
     /// region the frame cannot run natively is not re-examined per iteration.
     pub(super) declined_typed_loop_programs: u128,
-    /// Frame-local override of the shared numeric mutation loop plans,
-    /// materialized only when a deoptimization suppresses or rewrites one for
-    /// this invocation. Ordinary frames leave this `None`.
-    pub(super) numeric_mutation_loop_plans:
-        Option<Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>>,
     pub(super) virtual_values: Vec<Value>,
     pub(super) stack: OperandStack,
     pub(super) locals: Vec<Slot>,
@@ -176,35 +175,23 @@ pub(super) struct FrameState<'a> {
     /// (via `attach_host`), so native `Atomics`/`$262.agent` hooks reach it.
     #[cfg(feature = "agents")]
     pub(super) agent_context: Option<crate::agent::AgentContextRef>,
-    pub(super) sloppy_global_names: Vec<String>,
-    pub(super) try_stack: Vec<TryFrame>,
-    pub(super) pending_throw: Option<Value>,
-    pub(super) pending_return: Option<Value>,
-    /// Target IP for a break/continue routed through a finally block.
-    pub(super) pending_jump: Option<usize>,
-    /// Staged resume for a generator body suspended inside `yield*`.
-    pub(super) resume_mode: Option<ResumeMode>,
     /// Cached realm Array.prototype for the `a[i] = x` fast path.
     pub(super) array_prototype_cache: Option<ObjectRef>,
-    /// Explicit prototype required only for arrays created in a synthetic
-    /// cross-realm VM. Precomputed once so ordinary `[]` stays on a cheap
-    /// `None` branch instead of consulting realm metadata per allocation.
-    pub(super) array_literal_prototype_override: Option<ObjectRef>,
     /// Cached intrinsic Object.prototype for object-literal construction.
     /// Mutable `Object` global rebinding does not invalidate the realm slot.
     pub(super) object_prototype_cache: Option<ObjectRef>,
     /// Makes generators run parameter prologues before first suspension.
     pub(super) stop_at_prologue: bool,
-    /// Enclosing `with` object-environment records, innermost last.
-    pub(super) with_stack: Vec<Value>,
+    /// State most activations never touch: `try`/`finally` bookkeeping,
+    /// `with` scopes, generator resumes, `using` scopes, sloppy global names,
+    /// and per-frame loop-plan overrides. Kept out of line so an ordinary
+    /// call neither initializes nor drops it; see [`ColdFrame`].
+    pub(super) cold: Option<Box<ColdFrame>>,
     /// True only for direct eval VMs that inherited an active with-chain from
     /// their caller. Ordinary functions created inside `with` also retain the
     /// chain, but their own local/global opcodes must not be dynamically
     /// re-resolved through it.
     pub(super) direct_eval_with_stack: bool,
-    /// Active `using` disposal scopes (innermost last); each block's resources,
-    /// disposed LIFO when the scope exits via the block's implicit finally.
-    pub(super) disposable_scopes: Vec<Vec<super::vm_dispose::DisposeResource>>,
     /// Whether global-scope lexical declarations should become persistent
     /// global lexical bindings. Indirect eval uses global-scope bytecode, but
     /// its lexical environment is ephemeral.
@@ -217,6 +204,173 @@ pub(super) struct FrameState<'a> {
     /// identities outside the current bytecode stream. Once observed, guarded
     /// realm-global loop batching stays disabled for the rest of this frame.
     pub(super) dynamic_code_executed: bool,
+}
+
+/// The part of a frame that an ordinary activation never reads or writes.
+///
+/// `FrameState` is built and dropped once per general-path call, and measured
+/// per-call cost tracks its size: twelve extra empty fields cost an ordinary
+/// call about 18%. Everything here is reached only by `try`/`finally`,
+/// `with`, generator suspension, `using`, sloppy-global recording, or a
+/// deoptimized loop plan, so it lives behind one pointer that stays `None`
+/// until the first such operation materializes it.
+#[derive(Default)]
+pub(super) struct ColdFrame {
+    /// Frame-local override of the shared numeric mutation loop plans,
+    /// materialized only when a deoptimization suppresses or rewrites one for
+    /// this invocation.
+    pub(super) numeric_mutation_loop_plans:
+        Option<Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>>,
+    pub(super) sloppy_global_names: Vec<String>,
+    pub(super) try_stack: Vec<TryFrame>,
+    pub(super) pending_throw: Option<Value>,
+    pub(super) pending_return: Option<Value>,
+    /// Target IP for a break/continue routed through a finally block.
+    pub(super) pending_jump: Option<usize>,
+    /// Staged resume for a generator body suspended inside `yield*`.
+    pub(super) resume_mode: Option<ResumeMode>,
+    /// Explicit prototype required only for arrays created in a synthetic
+    /// cross-realm VM, so ordinary `[]` stays on a cheap `None` branch.
+    pub(super) array_literal_prototype_override: Option<ObjectRef>,
+    /// Enclosing `with` object-environment records, innermost last.
+    pub(super) with_stack: Vec<Value>,
+    /// Active `using` disposal scopes (innermost last); each block's resources,
+    /// disposed LIFO when the scope exits via the block's implicit finally.
+    pub(super) disposable_scopes: Vec<Vec<super::vm_dispose::DisposeResource>>,
+}
+
+/// A per-body pool of cleared [`ColdFrame`] boxes, shared like the operand
+/// stack recycler so a cloned `Bytecode` keeps handing out the same storage.
+// The pool exists to hand the same `Box` allocation back to the next frame,
+// so the boxes are the point, not an oversight.
+#[allow(clippy::vec_box)]
+#[derive(Clone, Default)]
+pub(super) struct ColdFramePool(Rc<RefCell<Vec<Box<ColdFrame>>>>);
+
+impl std::fmt::Debug for ColdFramePool {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ColdFramePool")
+    }
+}
+
+impl ColdFramePool {
+    const MAX_POOLED: usize = 8;
+
+    pub(super) fn take(&self) -> Box<ColdFrame> {
+        self.0.borrow_mut().pop().unwrap_or_default()
+    }
+
+    pub(super) fn recycle(&self, mut cold: Box<ColdFrame>) {
+        cold.reset();
+        let mut pooled = self.0.borrow_mut();
+        if pooled.len() < Self::MAX_POOLED {
+            pooled.push(cold);
+        }
+    }
+}
+
+impl ColdFrame {
+    /// Clears every field so a pooled box starts the next frame empty. A
+    /// frame that completed normally has already emptied its stacks, so this
+    /// is a handful of length checks.
+    pub(super) fn reset(&mut self) {
+        self.numeric_mutation_loop_plans = None;
+        self.sloppy_global_names.clear();
+        self.try_stack.clear();
+        self.pending_throw = None;
+        self.pending_return = None;
+        self.pending_jump = None;
+        self.resume_mode = None;
+        self.array_literal_prototype_override = None;
+        self.with_stack.clear();
+        self.disposable_scopes.clear();
+    }
+}
+
+impl<'a> FrameState<'a> {
+    #[inline]
+    pub(super) fn cold(&self) -> Option<&ColdFrame> {
+        self.cold.as_deref()
+    }
+
+    #[inline]
+    pub(super) fn cold_mut(&mut self) -> &mut ColdFrame {
+        if self.cold.is_none() {
+            self.materialize_cold();
+        }
+        self.cold
+            .as_deref_mut()
+            .unwrap_or_else(|| unreachable!("cold frame was just materialized"))
+    }
+
+    /// The pool round trip stays out of line: `cold_mut` is reached from the
+    /// loop-plan dispatch the typed executor inlines, and letting the pool
+    /// code into that executor measurably perturbs its register allocation.
+    #[cold]
+    #[inline(never)]
+    fn materialize_cold(&mut self) {
+        let bytecode: &Bytecode = &self.bytecode;
+        self.cold = Some(bytecode.take_cold_frame());
+    }
+
+    #[inline]
+    pub(super) fn with_stack(&self) -> &[Value] {
+        self.cold
+            .as_deref()
+            .map_or(&[], |cold| cold.with_stack.as_slice())
+    }
+
+    #[inline]
+    pub(super) fn sloppy_global_names(&self) -> &[String] {
+        self.cold
+            .as_deref()
+            .map_or(&[], |cold| cold.sloppy_global_names.as_slice())
+    }
+
+    #[inline]
+    pub(super) fn try_stack_is_empty(&self) -> bool {
+        self.cold
+            .as_deref()
+            .is_none_or(|cold| cold.try_stack.is_empty())
+    }
+
+    #[inline]
+    pub(super) fn take_pending_throw(&mut self) -> Option<Value> {
+        self.cold
+            .as_deref_mut()
+            .and_then(|cold| cold.pending_throw.take())
+    }
+
+    #[inline]
+    pub(super) fn take_pending_return(&mut self) -> Option<Value> {
+        self.cold
+            .as_deref_mut()
+            .and_then(|cold| cold.pending_return.take())
+    }
+
+    #[inline]
+    pub(super) fn take_pending_jump(&mut self) -> Option<usize> {
+        self.cold
+            .as_deref_mut()
+            .and_then(|cold| cold.pending_jump.take())
+    }
+
+    #[inline]
+    pub(super) fn take_resume_mode(&mut self) -> Option<ResumeMode> {
+        self.cold
+            .as_deref_mut()
+            .and_then(|cold| cold.resume_mode.take())
+    }
+
+    /// Drops every staged abrupt completion without materializing cold state.
+    #[inline]
+    pub(super) fn clear_pending_abrupt(&mut self) {
+        if let Some(cold) = self.cold.as_deref_mut() {
+            cold.pending_throw = None;
+            cold.pending_return = None;
+            cold.pending_jump = None;
+        }
+    }
 }
 
 pub(super) struct Vm<'a> {
@@ -1106,6 +1260,23 @@ impl<'a> Vm<'a> {
             }
             return Ok(());
         }
+        // An ordinary bytecode constructor admitted by the direct-leaf
+        // predicate builds its receiver and runs on a slot-seeded frame, the
+        // same activation an ordinary call gets, instead of the general
+        // construct path's name-keyed compatibility frame.
+        if let Some(result) = crate::function::try_construct_direct_leaf_function(
+            &callee,
+            &arguments,
+            &self.env,
+            self.module_host.clone(),
+            #[cfg(feature = "agents")]
+            self.agent_context.clone(),
+        ) {
+            if let Some(result) = self.handle_call_result(result)? {
+                self.stack.push(result);
+            }
+            return Ok(());
+        }
         // A native constructor, like a native call, does not inherit the
         // caller's lexical environment. Any coercion hooks or callbacks it
         // invokes carry their own closure cells, while realm writes are shared
@@ -1160,7 +1331,7 @@ impl<'a> Vm<'a> {
                 continue;
             };
             if !self
-                .sloppy_global_names
+                .sloppy_global_names()
                 .iter()
                 .any(|candidate| candidate == name)
             {

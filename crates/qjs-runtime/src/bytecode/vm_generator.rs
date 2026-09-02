@@ -14,7 +14,7 @@ use std::rc::Rc;
 use crate::{ObjectRef, RuntimeError, Value};
 
 use super::ir::Bytecode;
-use super::vm::{Slot, Vm};
+use super::vm::{ColdFrame, Slot, Vm};
 use super::vm_dispose::DisposeResource;
 use super::vm_result::Completion;
 use super::vm_try::TryFrame;
@@ -126,6 +126,10 @@ impl Vm<'_> {
     ) -> GeneratorSnapshot {
         let mut frame = self.into_frame();
         let immutable_function_name = frame.env.immutable_function_name().map(str::to_owned);
+        let cold = frame
+            .cold
+            .take()
+            .map_or_else(ColdFrame::default, |cold| *cold);
         GeneratorSnapshot {
             bytecode,
             ip: frame.ip,
@@ -134,14 +138,14 @@ impl Vm<'_> {
             local_upvalues: frame.local_upvalues,
             upvalues: frame.upvalues,
             env: frame.env,
-            with_stack: frame.with_stack,
+            with_stack: cold.with_stack,
             immutable_function_name,
-            sloppy_global_names: frame.sloppy_global_names,
-            try_stack: frame.try_stack,
-            disposable_scopes: frame.disposable_scopes,
-            pending_throw: frame.pending_throw,
-            pending_return: frame.pending_return,
-            pending_jump: frame.pending_jump,
+            sloppy_global_names: cold.sloppy_global_names,
+            try_stack: cold.try_stack,
+            disposable_scopes: cold.disposable_scopes,
+            pending_throw: cold.pending_throw,
+            pending_return: cold.pending_return,
+            pending_jump: cold.pending_jump,
             suspension,
         }
     }
@@ -230,12 +234,15 @@ fn run_from_yield(
     vm.locals = snapshot.locals;
     vm.local_upvalues = snapshot.local_upvalues;
     vm.refresh_authoritative_slots();
-    vm.sloppy_global_names = snapshot.sloppy_global_names;
-    vm.pending_throw = snapshot.pending_throw;
-    vm.pending_return = snapshot.pending_return;
-    vm.pending_jump = snapshot.pending_jump;
-    vm.try_stack = snapshot.try_stack;
-    vm.disposable_scopes = snapshot.disposable_scopes;
+    {
+        let cold = vm.cold_mut();
+        cold.sloppy_global_names = snapshot.sloppy_global_names;
+        cold.pending_throw = snapshot.pending_throw;
+        cold.pending_return = snapshot.pending_return;
+        cold.pending_jump = snapshot.pending_jump;
+        cold.try_stack = snapshot.try_stack;
+        cold.disposable_scopes = snapshot.disposable_scopes;
+    }
 
     // A suspension inside a `yield*` forwards the resume to the inner iterator:
     // the re-entered `Op::YieldDelegate` reads `resume_mode` and decides how to
@@ -243,7 +250,7 @@ fn run_from_yield(
     // continues, suspends again, or completes.
     match snapshot.suspension {
         SuspensionKind::DelegateYield | SuspensionKind::DelegateYieldAsync => {
-            vm.resume_mode = Some(match resume {
+            vm.cold_mut().resume_mode = Some(match resume {
                 Resume::Next(value) => super::vm_result::ResumeMode::Next(value),
                 Resume::Return(value)
                     if matches!(snapshot.suspension, SuspensionKind::DelegateYieldAsync) =>
@@ -264,7 +271,7 @@ fn run_from_yield(
             return drive(result, vm, &bytecode);
         }
         SuspensionKind::DelegateAwait => {
-            vm.resume_mode = Some(match resume {
+            vm.cold_mut().resume_mode = Some(match resume {
                 Resume::Next(value) => super::vm_result::ResumeMode::Awaited(value),
                 Resume::Throw(value) => super::vm_result::ResumeMode::AwaitRejected(value),
                 Resume::Return(value) | Resume::ReturnAlreadyAwaited(value) => {
@@ -275,7 +282,7 @@ fn run_from_yield(
             return drive(result, vm, &bytecode);
         }
         SuspensionKind::DelegateYieldReturnAwait => {
-            vm.resume_mode = Some(match resume {
+            vm.cold_mut().resume_mode = Some(match resume {
                 Resume::Next(value) => super::vm_result::ResumeMode::Return(value),
                 Resume::Throw(value) => {
                     super::vm_result::ResumeMode::AwaitReturnValueRejected(value)
@@ -288,7 +295,7 @@ fn run_from_yield(
             return drive(result, vm, &bytecode);
         }
         SuspensionKind::DelegateAwaitReturn => {
-            vm.resume_mode = Some(match resume {
+            vm.cold_mut().resume_mode = Some(match resume {
                 Resume::Next(value) => super::vm_result::ResumeMode::AwaitedReturn(value),
                 Resume::Throw(value) => super::vm_result::ResumeMode::AwaitReturnRejected(value),
                 Resume::Return(value) | Resume::ReturnAlreadyAwaited(value) => {
@@ -299,7 +306,7 @@ fn run_from_yield(
             return drive(result, vm, &bytecode);
         }
         SuspensionKind::DelegateAwaitReturnValue => {
-            vm.resume_mode = Some(match resume {
+            vm.cold_mut().resume_mode = Some(match resume {
                 Resume::Next(value) => super::vm_result::ResumeMode::AwaitedReturnValue(value),
                 Resume::Throw(value) => {
                     super::vm_result::ResumeMode::AwaitReturnValueRejected(value)

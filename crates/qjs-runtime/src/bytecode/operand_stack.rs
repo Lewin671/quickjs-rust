@@ -149,14 +149,20 @@ impl LocalSlotRecycler {
         let Some(mut slots) = self.0.borrow_mut().pop() else {
             return vec![None; len];
         };
-        slots.resize(len, None);
+        // A pooled vector is recycled at its body's slot count with every
+        // entry already cleared, so the common case needs no resize.
+        if slots.len() != len {
+            slots.resize(len, None);
+        }
         slots
     }
 
     pub(super) fn recycle(&self, mut slots: Vec<Option<Value>>) {
-        slots.clear();
         if slots.capacity() > Self::MAX_RECYCLED_CAPACITY {
             return;
+        }
+        for slot in slots.iter_mut() {
+            *slot = None;
         }
         let mut pooled = self.0.borrow_mut();
         if pooled.len() < Self::MAX_POOLED {

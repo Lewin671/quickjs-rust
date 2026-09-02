@@ -136,7 +136,7 @@ impl Vm<'_> {
     ) -> Option<CallEnv> {
         if self.bytecode.contains_with()
             || self.in_parameter_prologue()
-            || !self.with_stack.is_empty()
+            || !self.with_stack().is_empty()
         {
             return None;
         }
@@ -352,7 +352,8 @@ impl Vm<'_> {
                     Value::Boolean(true),
                 );
             }
-            env.env.set_direct_eval_with_stack(self.with_stack.clone());
+            env.env
+                .set_direct_eval_with_stack(self.with_stack().to_vec());
         } else if !marker_free {
             // A freshly built frame cannot carry a marker: `CallEnv::remove`
             // reaches only frame and deopt bindings, and both start empty.

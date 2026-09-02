@@ -39,11 +39,13 @@ impl Vm<'_> {
                     other => Ok(other),
                 };
                 if let Some(object) = self.handle_runtime_result(result)? {
-                    self.with_stack.push(object);
+                    self.cold_mut().with_stack.push(object);
                 }
             }
             Op::ExitWith => {
-                self.with_stack.pop();
+                if let Some(cold) = self.cold.as_deref_mut() {
+                    cold.with_stack.pop();
+                }
             }
             Op::LoadIdentWith {
                 name,
@@ -112,7 +114,7 @@ impl Vm<'_> {
     /// it, in which case the caller falls back to ordinary scope resolution.
     fn with_binding_object(&self, name: &str) -> Result<Option<Value>, RuntimeError> {
         let env = self.realm_env();
-        for object in self.with_stack.iter().rev() {
+        for object in self.with_stack().iter().rev() {
             if !has_property(object.clone(), &env, name)? {
                 continue;
             }

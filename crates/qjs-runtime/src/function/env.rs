@@ -60,7 +60,6 @@ pub(crate) struct RealmState {
     string_prototype: OnceCell<ObjectRef>,
     /// Canonical empty copy-on-write name set for ordinary frames. Sharing it
     /// avoids allocating catch/eval metadata that most calls never mutate.
-    empty_name_set: Rc<HashSet<String>>,
     global_this: Option<Value>,
     dynamic_function_realm_global: RefCell<Option<ObjectRef>>,
     /// Parsed/compiled blueprints for small, declaration-free direct eval
@@ -92,7 +91,6 @@ impl RealmState {
             object_prototype: OnceCell::new(),
             array_prototype: OnceCell::new(),
             string_prototype: OnceCell::new(),
-            empty_name_set: Rc::new(HashSet::new()),
             global_this,
             dynamic_function_realm_global: RefCell::new(dynamic_function_realm_global),
             direct_eval_cache: RefCell::new(DirectEvalCache::default()),
@@ -175,6 +173,10 @@ impl RealmState {
         self.dynamic_function_realm_global.borrow().clone()
     }
 
+    pub(crate) fn has_dynamic_function_realm_global(&self) -> bool {
+        self.dynamic_function_realm_global.borrow().is_some()
+    }
+
     pub(crate) fn cached_direct_eval_bytecode(
         &self,
         source: &JsString,
@@ -226,10 +228,6 @@ impl RealmState {
         self.bindings
             .cell(name)
             .is_some_and(|candidate| candidate.ptr_eq(cell))
-    }
-
-    fn empty_name_set(&self) -> Rc<HashSet<String>> {
-        Rc::clone(&self.empty_name_set)
     }
 }
 
@@ -672,7 +670,7 @@ pub(crate) struct CallEnv {
     /// Dynamic-scope metadata is inherited by nested execution views but is
     /// mutated only by catch setup. Share the ordinary call path and
     /// detach on those cold mutations instead of cloning a hash table per call.
-    catch_bindings: Rc<HashSet<String>>,
+    catch_bindings: Option<Rc<HashSet<String>>>,
     /// The immutable name binding of a named function expression, for this
     /// frame only. Assigning to it is a silent no-op in sloppy mode and a
     /// TypeError in strict mode (unless a parameter/`var`/lexical shadows it,
@@ -682,7 +680,7 @@ pub(crate) struct CallEnv {
     immutable_function_name: Option<String>,
     /// Share the inherited declaration-conflict set across ordinary frames and
     /// detach only when direct-eval setup rebuilds the active conflict names.
-    direct_eval_var_conflicts: Rc<HashSet<String>>,
+    direct_eval_var_conflicts: Option<Rc<HashSet<String>>>,
     /// The lexical private-name environment active for this frame. This is
     /// separate from `\0home_object`: ordinary nested functions do not inherit
     /// `super`, but they do retain access to private names declared by enclosing
@@ -1023,16 +1021,15 @@ impl CallEnv {
     /// state is installed by the caller, so copying the caller's transient maps
     /// here would only allocate them before immediately replacing them.
     pub(crate) fn new_direct_leaf_function_frame(&self, module_imports: ModuleImports) -> Self {
-        let empty_name_set = self.scope.realm.empty_name_set();
         Self {
             scope: Rc::clone(&self.scope),
             expose_global_lexical_values: false,
             frame_bindings: FrameBindings::default(),
             new_target: None,
             deopt_bindings: None,
-            catch_bindings: Rc::clone(&empty_name_set),
+            catch_bindings: None,
             immutable_function_name: None,
-            direct_eval_var_conflicts: empty_name_set,
+            direct_eval_var_conflicts: None,
             private_environment: None,
             direct_eval_with_stack: Vec::new(),
             module_host: self.module_host.clone(),
@@ -1083,15 +1080,19 @@ impl CallEnv {
     }
 
     pub(crate) fn mark_catch_binding(&mut self, name: String) {
-        Rc::make_mut(&mut self.catch_bindings).insert(name);
+        Rc::make_mut(self.catch_bindings.get_or_insert_with(Default::default)).insert(name);
     }
 
     pub(crate) fn unmark_catch_binding(&mut self, name: &str) {
-        Rc::make_mut(&mut self.catch_bindings).remove(name);
+        if let Some(bindings) = &mut self.catch_bindings {
+            Rc::make_mut(bindings).remove(name);
+        }
     }
 
     pub(crate) fn is_catch_binding(&self, name: &str) -> bool {
-        self.catch_bindings.contains(name)
+        self.catch_bindings
+            .as_ref()
+            .is_some_and(|bindings| bindings.contains(name))
     }
 
     /// Marks `name` as this frame's immutable named-function-expression binding.
@@ -1111,15 +1112,23 @@ impl CallEnv {
     }
 
     pub(crate) fn clear_direct_eval_var_conflicts(&mut self) {
-        Rc::make_mut(&mut self.direct_eval_var_conflicts).clear();
+        // `None` is the empty set; dropping the handle detaches from any
+        // frame that still shares the previous contents.
+        self.direct_eval_var_conflicts = None;
     }
 
     pub(crate) fn mark_direct_eval_var_conflict(&mut self, name: String) {
-        Rc::make_mut(&mut self.direct_eval_var_conflicts).insert(name);
+        Rc::make_mut(
+            self.direct_eval_var_conflicts
+                .get_or_insert_with(Default::default),
+        )
+        .insert(name);
     }
 
     pub(crate) fn is_direct_eval_var_conflict(&self, name: &str) -> bool {
-        self.direct_eval_var_conflicts.contains(name)
+        self.direct_eval_var_conflicts
+            .as_ref()
+            .is_some_and(|conflicts| conflicts.contains(name))
     }
 
     /// Owned compatibility snapshot for the few dynamic-name consumers.
@@ -1286,6 +1295,15 @@ impl CallEnv {
             };
         }
         self.scope.realm.dynamic_function_realm_global()
+    }
+
+    /// Whether [`Self::dynamic_function_realm_global`] would answer `Some`,
+    /// without cloning the object. Frame setup asks this on every call.
+    pub(crate) fn has_dynamic_function_realm_global(&self) -> bool {
+        if self.frame_bindings.is_empty() && self.deopt_bindings.is_none() {
+            return self.scope.realm.has_dynamic_function_realm_global();
+        }
+        self.dynamic_function_realm_global().is_some()
     }
 
     pub(crate) fn cached_direct_eval_bytecode(
@@ -1669,11 +1687,8 @@ mod tests {
         let mut first = caller.new_direct_leaf_function_frame(Rc::clone(&imports));
         let second = caller.new_direct_leaf_function_frame(Rc::clone(&imports));
 
-        assert!(Rc::ptr_eq(&first.catch_bindings, &second.catch_bindings));
-        assert!(Rc::ptr_eq(
-            &first.catch_bindings,
-            &first.direct_eval_var_conflicts
-        ));
+        assert!(first.catch_bindings.is_none() && second.catch_bindings.is_none());
+        assert!(first.direct_eval_var_conflicts.is_none());
         assert!(Rc::ptr_eq(&first.module_imports, &imports));
         assert!(Rc::ptr_eq(&second.module_imports, &imports));
 

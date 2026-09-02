@@ -65,12 +65,12 @@ impl Vm<'_> {
     }
 
     fn should_rethrow_js_error(&self, error: &RuntimeError) -> bool {
-        !self.try_stack.is_empty()
+        !self.try_stack_is_empty()
             && (error.thrown.is_some() || error.message.starts_with("throw statement executed: "))
     }
 
     fn should_throw_native_error(&self, error: &RuntimeError) -> bool {
-        !self.try_stack.is_empty() && !error.message.starts_with("throw statement executed:")
+        !self.try_stack_is_empty() && !error.message.starts_with("throw statement executed:")
     }
 
     fn native_error_value(&self, message: &str) -> Result<Value, RuntimeError> {

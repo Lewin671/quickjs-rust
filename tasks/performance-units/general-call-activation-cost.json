@@ -1,0 +1,64 @@
+{
+    "schema_version": 1,
+    "artifact_type": "quickjs-performance-unit",
+    "unit_id": "general-call-activation-cost",
+    "base_sha": "adb775205e832ad165861f5cc53cf7b8075d30c4",
+    "queue": {
+        "candidate_sha": "adb775205e832ad165861f5cc53cf7b8075d30c4",
+        "sha256": "c3b523e776c62e2e184692aef0de9886b754d2d2f76549367b7fb95ef5b46917"
+    },
+    "priority": {
+        "mode": "queue",
+        "opportunity_ids": [
+            "external/sunspider-1.0/access-binary-trees"
+        ],
+        "rank_ceiling": 6,
+        "override_reason": null
+    },
+    "mechanism": {
+        "summary": "Cut what one general-path activation builds and drops. A slot-seeded direct call constructs a 688-byte FrameState, a 184-byte CallEnv, and their drops on every call; a measured non-closed-form call costs 199 ns against QuickJS-NG's 23 ns, and an ordinary `new` 468 ns against 156 ns because constructors take the fully general prepare_bytecode_call path with a name-keyed frame. The unit (1) routes ordinary non-class bytecode constructors through the same direct-leaf frame an ordinary call uses, reading the constructor's own `prototype` data property and seeding new.target; (2) moves the frame state that ordinary calls never touch (try/finally bookkeeping, with scopes, generator resume, using scopes, sloppy-global names, per-frame loop-plan overrides, the cross-realm array prototype override) behind one pooled `Option<Box<ColdFrame>>`; (3) removes per-call work that recomputed constants: the SipHash lookup of the `this` local slot, cloned name-set handles and a cloned module host on the leaf CallEnv, a cloned private environment for functions that have none, a cloned realm global in the compact-tier admission check, and the clear-then-resize of pooled local slots.",
+        "generality": "Every call that reaches eval_direct_call_bytecode pays the frame construction, so the saving applies to any function body the direct-leaf predicate admits, on any workload, and to every ordinary function constructor regardless of what it constructs. Admission never inspects benchmark names, source paths, property spellings, values, iteration counts, or results; the constructor path declines, before any observable step, class constructors, bound, native, Proxy, non-constructable and accessor-prototype callees, which keep the unchanged general path. The same activation shape dominates the queue's top six: access-binary-trees (rank 6, TreeNode construction plus itemCheck calls), hash-map (rank 1), cdjs (rank 3), 3d-raytrace (rank 4) and raytrace-public-class-fields (rank 2) all spend 16-35% of their profiles in this machinery.",
+        "semantic_risks": [
+            "the direct-leaf construct path must produce the same receiver prototype as construct_prototype_slot for an own data `prototype` property, seed new.target with the constructor, return the receiver for a primitive completion and the returned object otherwise, and never touch the caller's environment",
+            "moving try/finally, with, generator, using and sloppy-global state behind a lazily materialized box must keep every reader's empty-state answer identical and keep generator snapshots and resumes carrying the whole cold state",
+            "a pooled cold box is reused across calls of one body, so it must be fully reset when recycled, including staged abrupt completions and per-frame loop-plan overrides",
+            "representing empty catch-binding and direct-eval-conflict sets as None must keep every membership answer and every detach-on-write behavior unchanged, including clear_direct_eval_var_conflicts detaching from a shared set",
+            "the precomputed this slot must equal the name lookup for every body, including bodies whose `this` local is added by the compiler"
+        ]
+    },
+    "profile_evidence": [
+        {
+            "source": "macOS /usr/bin/sample 2026-09-02, target/benchmarks/profiles/plain-real-probe.txt, taken on a probe build of base adb77520 with the activation steps marked #[inline(never)] so each appears as its own symbol; workload target/benchmarks/profiles/plain-real-8.js (SHA-256 fb377b8229d5d70869e4ba461d6a13a2ea1e315c1fc46d1db02c27e4109be9d3), an 8-call-per-iteration non-closed-form call loop; the process produced Undefined with empty stderr.",
+            "sha256": "36932fadf795417528a00e3985a530806fb410a389d6d30a721dc4574f45f4c0",
+            "base_sha": "adb775205e832ad165861f5cc53cf7b8075d30c4",
+            "opportunity_ids": [
+                "external/sunspider-1.0/access-binary-trees"
+            ],
+            "shared_cost": "Of 3,037 in-process samples, 1,390 (45.8%) are activation construction and teardown rather than the body: with_frame_bytecode 213 plus initial_direct_call_slots 47, seed_direct_call_slots 32 and initial_authoritative_slots 31; call_direct_leaf_function 182 plus direct_leaf_function_env 103, new_direct_leaf_function_frame 47, insert_marked_call_realm 27, private-environment drop 19 and the two closed-form probes 57; eval_direct_call_bytecode 139 plus try_run_standalone 74, the slot and stack recyclers 88; drop_in_place for FrameState 92, CallEnv 67 and Vm 36; call_direct_leaf_callee 55, run_completion 32 and Vm::run 25. The Aug-15 corpus profiles charge the same symbols 27% of hash-map, 32% of cdjs, 16% of 3d-raytrace and 35% of access-binary-trees.",
+            "inclusive_fraction": 0.458
+        }
+    ],
+    "fast_gate": {
+        "target_ids": [
+            "external/sunspider-1.0/access-binary-trees"
+        ],
+        "control_ids": [
+            "external/sunspider-1.0/controlflow-recursive",
+            "external/sunspider-1.0/access-nbody",
+            "external/sunspider-1.0/3d-raytrace",
+            "external/sunspider-1.0/string-tagcloud",
+            "external/sunspider-1.0/date-format-tofte",
+            "broad/plain_function_call",
+            "broad/property_read",
+            "broad/object_allocation"
+        ],
+        "target_max_candidate_over_base": 0.85,
+        "control_max_candidate_over_base": 1.03,
+        "max_attempts": 2
+    },
+    "promotion_gate": {
+        "require_complete_broad": true,
+        "require_complete_external": true,
+        "require_test262_zero_gap": true
+    }
+}

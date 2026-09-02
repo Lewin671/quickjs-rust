@@ -231,7 +231,7 @@ impl Vm<'_> {
         // Resolve the inner iterator on first entry; on a resume the iterator
         // and its `next` method are restored from the slots and `resume_mode`
         // carries the forwarded completion.
-        let mode = match self.resume_mode.take() {
+        let mode = match self.take_resume_mode() {
             Some(mode) => mode,
             None => {
                 let iterable = self.pop()?;

@@ -16,7 +16,10 @@ sync as slices land.
   `local_upvalues`, received indexed `upvalues`, `CallEnv`, retained
   `with_stack`, disposable/try stacks, and pending abrupt completions. All are
   owned; `bytecode` is the only borrow, and `Function` owns it as
-  `Rc<Bytecode>`.
+  `Rc<Bytecode>`. The rarely used part (`with_stack`, the try/disposable
+  stacks, pending completions, the staged generator resume) now sits behind
+  `FrameState::cold`, a pooled `Option<Box<ColdFrame>>` that an ordinary call
+  never materializes; a snapshot takes the whole box and a resume rebuilds it.
 - Completion plumbing: `Op::Return` -> `return_value()` (runs finally blocks
   via `try_stack`), and `throw_value()` walks `try_stack`
   (`bytecode/vm_try.rs`). Captured bindings are shared `Upvalue` cells, so

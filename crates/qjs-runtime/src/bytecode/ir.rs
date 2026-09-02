@@ -776,6 +776,10 @@ pub struct Bytecode {
     pub(super) constants: Vec<Value>,
     pub(super) locals: Vec<Local>,
     local_slots: crate::value::name_hash::NameMap<String, usize>,
+    /// The slot compiled for an own `this` local, if the body has one. Frame
+    /// setup seeds the receiver here on every call, so it is resolved once
+    /// rather than hashed per call.
+    this_slot: Option<usize>,
     /// Compiled local slot for each positional parameter. Function bytecode
     /// preserves duplicate parameter positions so direct-call seeding can use
     /// this vector without repeating name-table lookups.
@@ -830,9 +834,12 @@ pub struct Bytecode {
     /// has every enclosing frame holding its own stack at once, so a
     /// single-slot pool only ever served the outermost frame and every nested
     /// call allocated and freed one. Cloned bytecode shares the same pool.
-    operand_stack_pool: OperandStackRecycler,
+    pub(super) operand_stack_pool: OperandStackRecycler,
     /// Cleared local-slot allocations reused by slot-seeded direct calls.
-    local_slot_pool: super::operand_stack::LocalSlotRecycler,
+    pub(super) local_slot_pool: super::operand_stack::LocalSlotRecycler,
+    /// Cleared cold-frame boxes handed back by completed direct calls, so a
+    /// body that opens a `try` on every call does not allocate one per call.
+    pub(super) cold_frame_pool: super::vm::ColdFramePool,
     /// Per-call metadata precomputed once at construction. Each of these used to
     /// be recomputed on every call by recursively walking `code` (and nested
     /// function/class op trees) and materializing a fresh `BTreeSet`/`Vec`,
@@ -961,9 +968,12 @@ impl Bytecode {
             global_scope,
             &parameter_slots,
         );
+        let local_slots = collect_local_slots(&locals);
+        let this_slot = local_slots.get("this").copied();
         let mut bytecode = Self {
             constants,
-            local_slots: collect_local_slots(&locals),
+            local_slots,
+            this_slot,
             parameter_slots,
             received_upvalue_slots,
             has_direct_local_upvalue_routes,
@@ -987,6 +997,7 @@ impl Bytecode {
             template_objects: RefCell::new(HashMap::new()),
             operand_stack_pool: OperandStackRecycler::new(),
             local_slot_pool: super::operand_stack::LocalSlotRecycler::new(),
+            cold_frame_pool: super::vm::ColdFramePool::default(),
             cached_closure_referenced_global_names: Vec::new(),
             cached_written_binding_names: Vec::new(),
             cached_closure_written_binding_names: Vec::new(),
@@ -1050,27 +1061,6 @@ impl Bytecode {
         bytecode.direct_readonly_received_upvalue_slots =
             bytecode.compute_direct_readonly_received_upvalue_slots();
         bytecode
-    }
-
-    /// A handle on this body's operand-stack recycler.
-    ///
-    /// Handing out the handle rather than the `Bytecode` is what lets a frame
-    /// return its stack to the pool without holding a borrow of the bytecode
-    /// for the frame's whole lifetime.
-    pub(super) fn operand_stack_recycler(&self) -> OperandStackRecycler {
-        self.operand_stack_pool.clone()
-    }
-
-    /// Takes `len` cleared local slots from this body's pool, or allocates
-    /// them. Unlike the operand stack this is not handed out as a cloned
-    /// handle: both call sites already hold the bytecode, and cloning an `Rc`
-    /// twice per call to save one allocation is a wash.
-    pub(super) fn take_local_slots(&self, len: usize) -> Vec<Option<Value>> {
-        self.local_slot_pool.take(len)
-    }
-
-    pub(super) fn recycle_local_slots(&self, slots: Vec<Option<Value>>) {
-        self.local_slot_pool.recycle(slots);
     }
 
     pub(crate) fn is_strict(&self) -> bool {
@@ -1186,6 +1176,11 @@ impl Bytecode {
 
     pub(crate) fn local_slot(&self, name: &str) -> Option<usize> {
         self.local_slots.get(name).copied()
+    }
+
+    /// The slot of an own `this` local, precomputed at build time.
+    pub(crate) fn this_slot(&self) -> Option<usize> {
+        self.this_slot
     }
 
     pub(crate) fn parameter_slots(&self) -> &[usize] {

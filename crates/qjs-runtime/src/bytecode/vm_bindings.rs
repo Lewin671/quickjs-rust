@@ -746,7 +746,7 @@ impl Vm<'_> {
         name: &str,
     ) -> Option<TypedLoopSloppyGlobalWrite> {
         if self.direct_eval_with_stack
-            || !self.with_stack.is_empty()
+            || !self.with_stack().is_empty()
             || self.bytecode.contains_direct_eval()
             || self.bytecode.contains_with()
             || self.env.deopt_bindings().is_some()
@@ -1585,11 +1585,11 @@ impl Vm<'_> {
 
     pub(super) fn record_sloppy_global_name(&mut self, name: &str) {
         if !self
-            .sloppy_global_names
+            .sloppy_global_names()
             .iter()
             .any(|existing| existing == name)
         {
-            self.sloppy_global_names.push(name.to_owned());
+            self.cold_mut().sloppy_global_names.push(name.to_owned());
         }
     }
 

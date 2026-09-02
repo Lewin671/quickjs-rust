@@ -44,6 +44,7 @@ impl Vm<'_> {
         shared: &[super::vm_numeric_mutation_loop::NumericMutationLoopPlan],
     ) -> &mut Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan> {
         self.current
+            .cold_mut()
             .numeric_mutation_loop_plans
             .get_or_insert_with(|| shared.to_vec())
     }
