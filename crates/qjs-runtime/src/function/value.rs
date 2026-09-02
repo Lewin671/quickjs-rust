@@ -161,6 +161,11 @@ pub struct FunctionData {
     /// fixed once this function is created, so recomputing it — including an
     /// O(parameter count) scan — on every single call is pure waste.
     pub(crate) direct_leaf_call_eligible: Cell<Option<bool>>,
+    /// Memoized: whether `new` on this base class constructor may run on the
+    /// direct-leaf frame with its instance fields installed by the fast field
+    /// loop. Resolved on the first construction, after class definition has
+    /// recorded every instance element.
+    pub(crate) direct_construct_eligible: Cell<Option<bool>>,
     pub(crate) deopt_bindings: Option<DynamicBindings>,
     pub(crate) module_host: Option<ModuleHostRef>,
     pub(crate) module_imports: ModuleImports,
@@ -239,7 +244,7 @@ struct FunctionColdState {
     /// For a class constructor, the instance-field initializers run when a new
     /// instance is constructed (base class: at construction start; derived
     /// class: immediately after `super()` returns).
-    instance_elements: Vec<InstanceElementInitializer>,
+    instance_elements: Rc<Vec<InstanceElementInitializer>>,
     property_order: Vec<String>,
     symbol_properties: Vec<(ObjectRef, Property)>,
     /// Explicit [[Prototype]] override. `None` means "use the default
@@ -366,7 +371,7 @@ impl FunctionColdState {
         Self {
             home_object,
             super_constructor,
-            instance_elements: Vec::new(),
+            instance_elements: Rc::new(Vec::new()),
             property_order: Vec::new(),
             symbol_properties: Vec::new(),
             internal_prototype: None,
@@ -562,6 +567,7 @@ impl Function {
             has_dynamic_function_realm,
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
+            direct_construct_eligible: Cell::new(None),
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),
@@ -658,6 +664,7 @@ impl Function {
             has_dynamic_function_realm,
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
+            direct_construct_eligible: Cell::new(None),
             deopt_bindings,
             module_host,
             module_imports,
@@ -771,6 +778,7 @@ impl Function {
             },
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
+            direct_construct_eligible: Cell::new(None),
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),
@@ -825,6 +833,7 @@ impl Function {
             has_dynamic_function_realm: false,
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
+            direct_construct_eligible: Cell::new(None),
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),
@@ -1435,7 +1444,7 @@ impl Function {
     /// method/accessor brand) applied to each instance at construction time.
     pub(crate) fn push_instance_private_element(&self, element: InstancePrivateElement) {
         self.auxiliary.with_cold_mut(|cold| {
-            cold.instance_elements
+            Rc::make_mut(&mut cold.instance_elements)
                 .push(InstanceElementInitializer::PrivateElement(element));
         });
     }
@@ -1443,15 +1452,21 @@ impl Function {
     /// Records a public instance field applied at construction time.
     pub(crate) fn push_instance_public_field(&self, field: InstanceFieldInitializer) {
         self.auxiliary.with_cold_mut(|cold| {
-            cold.instance_elements
+            Rc::make_mut(&mut cold.instance_elements)
                 .push(InstanceElementInitializer::PublicField(field));
         });
     }
 
-    /// Returns a snapshot of this constructor's instance elements.
-    pub(crate) fn instance_elements(&self) -> Vec<InstanceElementInitializer> {
-        self.auxiliary
-            .with_cold(|cold| cold.map_or_else(Vec::new, |cold| cold.instance_elements.clone()))
+    /// Returns this constructor's instance elements. The list is shared, so a
+    /// construction borrows it for one reference-count increment instead of
+    /// cloning every initializer thunk per instance.
+    pub(crate) fn instance_elements(&self) -> Rc<Vec<InstanceElementInitializer>> {
+        self.auxiliary.with_cold(|cold| {
+            cold.map_or_else(
+                || Rc::new(Vec::new()),
+                |cold| Rc::clone(&cold.instance_elements),
+            )
+        })
     }
 
     /// The raw [[Prototype]] override slot, preserving a function prototype.

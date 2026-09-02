@@ -290,6 +290,23 @@ fn recursion_builds_slot_seeded_frames_and_receiver_arithmetic_builds_none() {
 }
 
 #[test]
+fn a_base_class_construction_builds_one_frame_and_no_field_initializer_frames() {
+    let (_, counters) = counted(
+        "class C { x = 0; y = null; z = 'z'; constructor(a) { this.a = a; } }
+         var s = 0;
+         for (var i = 0; i < 10; i++) { s += new C(i).a; }
+         s;",
+    );
+    // Ten constructions, ten direct-leaf frames for the constructor body and
+    // nothing else: every `return <literal>` field initializer is read as its
+    // constant instead of being called, so neither the closed-form tier nor a
+    // frame sees it. Eleven nested VMs are the ten frames plus the script.
+    assert_eq!(counters.direct_leaf_frames, 10);
+    assert_eq!(counters.closed_form_leaf_evaluations, 0);
+    assert_eq!(counters.nested_vm_constructions, 11);
+}
+
+#[test]
 fn supplying_loop_plans_externally_does_not_change_which_plan_claims_a_site() {
     // The loop accelerators are now handed to dispatch instead of read off the
     // frame, so the frame can stop borrowing its bytecode. That is a plumbing

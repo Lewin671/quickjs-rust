@@ -361,14 +361,20 @@ pub(crate) fn try_construct_direct_leaf_function(
     let Value::Function(function) = callee else {
         return None;
     };
-    if function.native.is_some()
-        || function.bound.is_some()
-        || !function.constructable
-        || function.is_class_constructor
-        || !is_direct_leaf_function(callee)
-    {
+    if function.native.is_some() || function.bound.is_some() || !function.constructable {
         return None;
     }
+    let class_fields = if function.is_class_constructor {
+        if !is_direct_construct_class(function) {
+            return None;
+        }
+        Some(function.instance_elements())
+    } else {
+        if !is_direct_leaf_function(callee) {
+            return None;
+        }
+        None
+    };
     let prototype = match function.own_property("prototype") {
         Some(property) if !property.is_accessor() => match property.value {
             Value::Object(prototype) if !symbol::is_symbol_primitive(&prototype) => {
@@ -386,6 +392,19 @@ pub(crate) fn try_construct_direct_leaf_function(
     crate::diagnostics::count!(ordinary_call_attempts);
     crate::diagnostics::count!(direct_leaf_frames);
     let receiver = ObjectRef::with_prototype_slot(HashMap::new(), Some(prototype));
+    // A base class initializes its instance fields before the body runs.
+    if let Some(elements) = class_fields
+        && let Err(error) = initialize_direct_instance_fields(
+            &elements,
+            &receiver,
+            env,
+            module_host.as_ref(),
+            #[cfg(feature = "agents")]
+            agent_context.as_ref(),
+        )
+    {
+        return Some(Err(error));
+    }
     let FunctionCallEnv {
         env: mut call_env,
         direct_call_slots,
@@ -421,6 +440,98 @@ pub(crate) fn try_construct_direct_leaf_function(
         Ok(_) => Ok(Value::Object(receiver)),
         Err(error) => Err(error),
     })
+}
+
+/// Whether `new` on a class constructor may take the direct-leaf construct
+/// path: a base class whose body the slot-seeding predicate admits and whose
+/// instance elements are all public string-keyed fields with initializers
+/// the direct-leaf call can run. Memoized on first construction, which is
+/// after class definition recorded every element.
+fn is_direct_construct_class(function: &Function) -> bool {
+    if let Some(eligible) = function.direct_construct_eligible.get() {
+        return eligible;
+    }
+    let eligible = !function.is_derived_constructor
+        && function
+            .bytecode
+            .as_ref()
+            .is_some_and(|bytecode| can_seed_base_class_constructor_slots(function, bytecode))
+        && function
+            .instance_elements()
+            .iter()
+            .all(|element| match element {
+                InstanceElementInitializer::PublicField(field) => {
+                    field.shared_string_key().is_some()
+                        && field.initializer.as_ref().is_none_or(|thunk| {
+                            thunk
+                                .bytecode
+                                .as_ref()
+                                .is_some_and(|bytecode| bytecode.constant_return().is_some())
+                                || is_direct_leaf_function(&Value::Function(thunk.clone()))
+                        })
+                }
+                InstanceElementInitializer::PrivateElement(_) => false,
+            });
+    function.direct_construct_eligible.set(Some(eligible));
+    eligible
+}
+
+/// Installs a base class's public string-keyed instance fields on a freshly
+/// built receiver, in definition order, exactly as `initialize_instance_fields`
+/// does: a literal initializer is read directly, any other runs as a
+/// direct-leaf call with `this` = the receiver, and the value is defined as
+/// an ordinary enumerable, writable, configurable data property. The receiver
+/// is fresh, so it is never the realm's global object; a previous
+/// initializer may still have made it non-extensible or defined the key, in
+/// which case the general define path (and its TypeError) is used.
+fn initialize_direct_instance_fields(
+    elements: &[InstanceElementInitializer],
+    receiver: &ObjectRef,
+    env: &CallEnv,
+    module_host: Option<&crate::module::ModuleHostRef>,
+    #[cfg(feature = "agents")] agent_context: Option<&crate::agent::AgentContextRef>,
+) -> Result<(), RuntimeError> {
+    for element in elements {
+        let InstanceElementInitializer::PublicField(field) = element else {
+            unreachable!("direct construct admission accepts public fields only");
+        };
+        let value = match &field.initializer {
+            None => Value::Undefined,
+            Some(thunk) => {
+                let bytecode = thunk
+                    .bytecode
+                    .as_ref()
+                    .expect("direct construct admission requires thunk bytecode");
+                match bytecode.constant_return() {
+                    Some(value) => value.clone(),
+                    None => call_direct_leaf_function(
+                        Value::Function(thunk.clone()),
+                        Value::Object(receiver.clone()),
+                        &[],
+                        env,
+                        module_host.cloned(),
+                        #[cfg(feature = "agents")]
+                        agent_context.cloned(),
+                    )?,
+                }
+            }
+        };
+        let key = field
+            .shared_string_key()
+            .expect("direct construct admission requires string keys");
+        if receiver.is_extensible() && !receiver.has_own_property(key) {
+            receiver.set_shared_key(key.clone(), value);
+        } else {
+            let mut define_env = env.empty_frame();
+            crate::bytecode::install_field_value(
+                &Value::Object(receiver.clone()),
+                field.property_key(),
+                value,
+                &mut define_env,
+            )?;
+        }
+    }
+    Ok(())
 }
 
 /// Executes a function literal whose allocation and identity were proven
@@ -562,6 +673,14 @@ pub(crate) fn call_field_initializer(
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    // `x = 0` compiles to `return 0`; the constant is the whole effect.
+    if let Some(value) = thunk
+        .bytecode
+        .as_ref()
+        .and_then(|bytecode| bytecode.constant_return())
+    {
+        return Ok(value.clone());
+    }
     let callee = Value::Function(thunk.clone());
     if is_direct_leaf_function(&callee) {
         return call_direct_leaf_function(
@@ -861,7 +980,9 @@ fn direct_leaf_function_env<'a>(
     argument_values: &'a [Value],
     env: &CallEnv,
 ) -> FunctionCallEnv<'a> {
-    debug_assert!(can_seed_direct_leaf_call(function, bytecode));
+    // Ordinary leaf calls and direct base class constructions both reach
+    // this frame; the class-constructor TypeError is the caller's concern.
+    debug_assert!(can_seed_slot_backed_call(function, bytecode));
     let mut frame_env = env.new_direct_leaf_function_frame(function.module_imports.clone());
     let direct_this_value = if bytecode.uses_lexical_this() {
         let this_env_storage = callee_this_realm_env(function, env);

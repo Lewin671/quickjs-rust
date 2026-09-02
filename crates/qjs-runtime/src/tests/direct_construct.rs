@@ -148,3 +148,91 @@ fn constructors_with_defaulted_and_missing_arguments_seed_every_parameter() {
         Value::Number(117.0)
     );
 }
+
+#[test]
+fn a_base_class_with_public_fields_constructs_on_the_direct_leaf_frame() {
+    assert_eq!(
+        value_of(
+            "class V { x = 0; y = null; z = []; w = V.d; static d = 7; constructor(a) { this.a = a; } }
+             var v = new V(3);
+             var v2 = new V(4);
+             v2.z.push(1);
+             v.x === 0 && v.y === null && Array.isArray(v.z) && v.z.length === 0 && v2.z.length === 1
+               && v.w === 7 && v.a === 3 && Object.keys(v).join() === 'x,y,z,w,a'
+               && Object.getPrototypeOf(v) === V.prototype;"
+        ),
+        Value::Boolean(true)
+    );
+}
+
+#[test]
+fn field_initializers_see_the_receiver_and_an_undefined_new_target() {
+    assert_eq!(
+        value_of(
+            "class T { p = this; q = (this.p === this); r = new.target; constructor() { this.nt = new.target === T; } }
+             var t = new T();
+             t.q && t.r === undefined && t.nt;"
+        ),
+        Value::Boolean(true)
+    );
+}
+
+#[test]
+fn an_initializer_that_makes_the_receiver_reject_a_field_still_throws() {
+    assert!(
+        error_of("class F { a = Object.preventExtensions(this); b = 1; } new F();")
+            .contains("TypeError")
+    );
+    assert!(
+        error_of(
+            "class G {
+               a = Object.defineProperty(this, 'b', { value: 9, writable: false, configurable: false });
+               b = 1;
+             }
+             new G();"
+        )
+        .contains("TypeError")
+    );
+}
+
+#[test]
+fn private_symbol_keyed_and_derived_classes_keep_the_general_construct_path() {
+    assert_eq!(
+        value_of("class P { #s = 5; get s() { return this.#s; } } new P().s;"),
+        Value::Number(5.0)
+    );
+    assert_eq!(
+        value_of(
+            "class E { [Symbol.iterator] = 1; x = 2; }
+             var e = new E();
+             e.x === 2 && e[Symbol.iterator] === 1;"
+        ),
+        Value::Boolean(true)
+    );
+    assert_eq!(
+        value_of(
+            "class B { k = 1; }
+             class D extends B { m = 2; constructor() { super(); this.n = 3; } }
+             var d = new D();
+             d.k === 1 && d.m === 2 && d.n === 3 && Object.keys(d).join() === 'k,m,n';"
+        ),
+        Value::Boolean(true)
+    );
+}
+
+#[test]
+fn a_constant_field_initializer_is_read_without_a_call() {
+    // `Object.defineProperty` on `Function.prototype.call` would detect a
+    // stray call; the observable contract is only the installed value, so
+    // pin that a literal, a string, and a boolean arrive intact and that a
+    // non-literal initializer still runs with `this` bound.
+    assert_eq!(
+        value_of(
+            "class C { n = 1.5; s = 'str'; b = false; u; d = this.n * 2; }
+             var c = new C();
+             c.n === 1.5 && c.s === 'str' && c.b === false && c.u === undefined && c.d === 3
+               && Object.keys(c).join() === 'n,s,b,u,d';"
+        ),
+        Value::Boolean(true)
+    );
+}

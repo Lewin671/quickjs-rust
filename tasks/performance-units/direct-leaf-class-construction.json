@@ -1,0 +1,62 @@
+{
+    "schema_version": 1,
+    "artifact_type": "quickjs-performance-unit",
+    "unit_id": "direct-leaf-class-construction",
+    "base_sha": "adb775205e832ad165861f5cc53cf7b8075d30c4",
+    "queue": {
+        "candidate_sha": "adb775205e832ad165861f5cc53cf7b8075d30c4",
+        "sha256": "c3b523e776c62e2e184692aef0de9886b754d2d2f76549367b7fb95ef5b46917"
+    },
+    "priority": {
+        "mode": "queue",
+        "opportunity_ids": [
+            "external/jetstream3-js-subset/raytrace-public-class-fields"
+        ],
+        "rank_ceiling": 2,
+        "override_reason": null
+    },
+    "mechanism": {
+        "summary": "Extend the direct-leaf construct path to base class constructors and stop paying a call per literal field initializer. A base class construction ran through the general function_env (two received-upvalue scans, name-keyed home-object and super-constructor inserts with their String allocations, a cloned instance-element vector) and then called one direct-leaf thunk per instance field, so `new Vector(x, y, z)` with three `= 0` fields cost four activations. Now (1) a field initializer whose whole body is `return <literal>` is read as its constant (Bytecode::constant_return, classified at build time); (2) a constructor's instance-element list is shared behind an Rc instead of cloned per construction; (3) a base class constructor whose body the slot-seeding predicate admits and whose instance elements are all public string-keyed fields with literal or direct-leaf initializers builds its receiver, installs its fields with the existing shared-key write (falling back to the general define, and its TypeError, when an earlier initializer made the receiver reject the key), and runs on the direct-leaf frame with new.target seeded.",
+        "generality": "Admission is decided from the constructor's own shape (base class, slot-seedable body, public string-keyed fields, literal or direct-leaf initializers) and memoized on the function; it never inspects benchmark names, source paths, property spellings, values, iteration counts, or results. Derived classes, private elements, symbol-keyed fields, and non-leaf initializers keep the general path unchanged. Literal field initializers are the dominant class-field shape in idiomatic code (`x = 0`, `p = null`, `flag = false`); the constant read applies on both the direct and the general construct path.",
+        "semantic_risks": [
+            "a literal initializer read must be indistinguishable from calling the thunk: the body `return <literal>` has no side effects and cannot observe this or new.target",
+            "field installation order, the enumerable/writable/configurable data-property shape, and the TypeError for a receiver that an earlier initializer made non-extensible or that already holds the key must match initialize_instance_fields",
+            "an initializer thunk runs with this = the receiver and new.target undefined, exactly as before",
+            "the constructor body still sees new.target = the constructor and a strict this, and a primitive completion yields the receiver",
+            "sharing the instance-element list must copy-on-write when class definition appends elements while an earlier snapshot is alive"
+        ]
+    },
+    "profile_evidence": [
+        {
+            "source": "macOS /usr/bin/sample 2026-09-02, target/benchmarks/profiles/rtcf-c9.txt on build d9d07f52 (the previous unit), driving target/benchmarks/profiles/rtcf-driver.js (SHA-256 71e277b52d07e2a2bf9f04976b262ae74b6cb69e776bcee218cdf292daffedc7: the pinned raytrace-public-class-fields source plus two runIteration calls); the process produced Undefined with empty stderr.",
+            "sha256": "04bc4c33fef7db62cf20c45b0253f91ecffa5c07f8df813f54c9d4e84bfd5726",
+            "base_sha": "adb775205e832ad165861f5cc53cf7b8075d30c4",
+            "opportunity_ids": [
+                "external/jetstream3-js-subset/raytrace-public-class-fields"
+            ],
+            "shared_cost": "Of 2,641 in-process samples, the general construct path takes 117 in function_env, 50 in construct_function, 32 in eval_function_bytecode, 26 in run_prepared_bytecode_call, 25 in apply_call_env, 27 in initialize_instance_fields, 26 in SipHash and 23 in FrameBindings::get for the name-keyed bindings, and about 270 (10%) in malloc/free for the per-construction strings and element vector; the per-field direct-leaf thunk calls add to the 112 new_with_globals and 51 eval_direct_call_bytecode samples. Every class in the case (Vector, Color, Ray, IntersectionInfo, Light, Camera, Scene, Material, Shape) is a base class with literal-initialized public fields or a derived class of one.",
+            "inclusive_fraction": 0.27
+        }
+    ],
+    "fast_gate": {
+        "target_ids": [
+            "external/jetstream3-js-subset/raytrace-public-class-fields"
+        ],
+        "control_ids": [
+            "external/sunspider-1.0/access-binary-trees",
+            "external/sunspider-1.0/3d-raytrace",
+            "external/sunspider-1.0/controlflow-recursive",
+            "external/sunspider-1.0/access-nbody",
+            "broad/object_allocation",
+            "broad/plain_function_call"
+        ],
+        "target_max_candidate_over_base": 0.85,
+        "control_max_candidate_over_base": 1.03,
+        "max_attempts": 2
+    },
+    "promotion_gate": {
+        "require_complete_broad": true,
+        "require_complete_external": true,
+        "require_test262_zero_gap": true
+    }
+}

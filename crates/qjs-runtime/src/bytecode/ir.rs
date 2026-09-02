@@ -780,6 +780,10 @@ pub struct Bytecode {
     /// setup seeds the receiver here on every call, so it is resolved once
     /// rather than hashed per call.
     this_slot: Option<usize>,
+    /// `Some` when the whole body is `return <literal>`, the shape of a class
+    /// field initializer like `x = 0` or `p = null`. A caller can use the value
+    /// directly: such a body has no observable effect besides its result.
+    constant_return: Option<Value>,
     /// Compiled local slot for each positional parameter. Function bytecode
     /// preserves duplicate parameter positions so direct-call seeding can use
     /// this vector without repeating name-table lookups.
@@ -970,10 +974,15 @@ impl Bytecode {
         );
         let local_slots = collect_local_slots(&locals);
         let this_slot = local_slots.get("this").copied();
+        let constant_return = match code.as_slice() {
+            [Op::LoadConst(index), Op::Return] => constants.get(*index).cloned(),
+            _ => None,
+        };
         let mut bytecode = Self {
             constants,
             local_slots,
             this_slot,
+            constant_return,
             parameter_slots,
             received_upvalue_slots,
             has_direct_local_upvalue_routes,
@@ -1181,6 +1190,12 @@ impl Bytecode {
     /// The slot of an own `this` local, precomputed at build time.
     pub(crate) fn this_slot(&self) -> Option<usize> {
         self.this_slot
+    }
+
+    /// The literal a `return <literal>` body produces, if that is the whole
+    /// body.
+    pub(crate) fn constant_return(&self) -> Option<&Value> {
+        self.constant_return.as_ref()
     }
 
     pub(crate) fn parameter_slots(&self) -> &[usize] {
