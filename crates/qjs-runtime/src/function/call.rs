@@ -1261,7 +1261,13 @@ fn can_seed_slot_backed_call(function: &Function, bytecode: &Bytecode) -> bool {
         && !function.is_async
         && !function.has_name_binding
         && !function.immutable_name_binding
-        && (function.immutable_env_binding.is_none() || function.is_field_initializer)
+        // A class's inner name reaches a method as a read-only cell; the
+        // immutable frame binding that normally accompanies it only serves
+        // the assignment diagnostic, so a body that never assigns the name
+        // can run without the binding.
+        && (function.immutable_env_binding.as_deref().is_none_or(|name| {
+            function.is_field_initializer || bytecode.reads_immutable_env_binding_through_cell(name)
+        }))
         && function.deopt_bindings.is_none()
         && function.with_stack.is_empty()
         && direct_seedable_parameter_list(&function.params)

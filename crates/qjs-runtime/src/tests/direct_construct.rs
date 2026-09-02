@@ -236,3 +236,30 @@ fn a_constant_field_initializer_is_read_without_a_call() {
         Value::Boolean(true)
     );
 }
+
+#[test]
+fn class_methods_that_only_read_their_class_name_take_the_direct_leaf_path() {
+    // `Vector.subtract` reads its class's inner name through a received cell
+    // to construct the result; a method that never assigns the name needs no
+    // frame binding for it, so it may run as a direct leaf. The diagnostics
+    // for a method that does assign the name are unchanged.
+    assert_eq!(
+        value_of(
+            "class V {
+               constructor(x) { this.x = x; }
+               static sub(a, b) { return new V(a.x - b.x); }
+               static tryAssign() { try { V = 1; } catch (e) { return e.constructor.name; } return 'no'; }
+               static strictAssign() { 'use strict'; try { V = 2; } catch (e) { return e.constructor.name; } return 'no'; }
+             }
+             var d = V.sub(new V(5), new V(2));
+             d.x === 3 && V.tryAssign() === 'TypeError' && V.strictAssign() === 'TypeError' && typeof V === 'function';"
+        ),
+        Value::Boolean(true)
+    );
+    // A named function expression that reads its own name by global lookup
+    // still keeps the frame binding the lookup resolves through.
+    assert_eq!(
+        value_of("var ref = function f() { f = 1; return f; }; ref() === ref;"),
+        Value::Boolean(true)
+    );
+}

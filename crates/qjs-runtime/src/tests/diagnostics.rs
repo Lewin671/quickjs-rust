@@ -362,6 +362,27 @@ fn a_method_body_runs_on_the_wide_compact_tier_without_a_frame() {
 }
 
 #[test]
+fn a_static_class_method_reading_its_class_name_builds_no_general_frame() {
+    let (value, counters) = counted(
+        "class V {
+           constructor(x) { this.x = x; }
+           static sub(a, b) { return new V(a.x - b.x); }
+         }
+         var acc = 0;
+         for (var i = 0; i < 20; i++) { acc += V.sub(new V(i), new V(1)).x; }
+         acc;",
+    );
+    assert_eq!(value, Value::Number(170.0));
+    // Twenty static calls that each construct: none of them, and none of the
+    // constructions, takes the general call path.
+    assert_eq!(counters.generic_call_frames, 0);
+    assert!(
+        counters.compact_standalone_activations >= 60,
+        "{counters:?}"
+    );
+}
+
+#[test]
 fn supplying_loop_plans_externally_does_not_change_which_plan_claims_a_site() {
     // The loop accelerators are now handed to dispatch instead of read off the
     // frame, so the frame can stop borrowing its bytecode. That is a plumbing
