@@ -150,6 +150,11 @@ impl NumericMutationLoopPlan {
             .collect()
     }
 
+    /// The bytecode range this plan owns, header through backedge.
+    pub(super) fn region(&self) -> (usize, usize) {
+        (self.header, self.backedge)
+    }
+
     pub(super) fn contains_instruction(&self, ip: usize) -> bool {
         match &self.kind {
             NumericMutationLoopKind::Named(_) | NumericMutationLoopKind::Dense(_) => {

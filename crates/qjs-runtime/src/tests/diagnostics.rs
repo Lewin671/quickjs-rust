@@ -307,6 +307,36 @@ fn a_base_class_construction_builds_one_frame_and_no_field_initializer_frames() 
 }
 
 #[test]
+fn a_declining_same_region_plan_no_longer_blocks_the_typed_program() {
+    // `s += pool[i & 63]` over an array held in an outer-scope variable: the
+    // numeric mutation plan recognizes the region but declines it on every
+    // edge at run time, and the typed program for exactly this region used to
+    // be blocked by that static claim, so the loop ran on the generic
+    // interpreter. Now the typed program enters once the same-region plan has
+    // declined on the edge.
+    let (value, counters) = counted(
+        "var pool = [];
+         for (var j = 0; j < 100; j++) pool.push(j);
+         (function () {
+           var s = 0;
+           for (var i = 0; i < 2000; i++) { s += pool[i & 63]; }
+           return s;
+         })();",
+    );
+    assert_eq!(value, Value::Number(62_616.0));
+    assert!(
+        counters.loop_plan_entries >= 1,
+        "typed program should have entered: {counters:?}"
+    );
+    // The 100 declined edges are the setup loop's `pool.push(j)` calls; the
+    // 2,000-iteration inner loop contributes none once the program enters.
+    assert!(
+        counters.declined_loop_plan_edges <= 100,
+        "the inner loop should not decline every edge: {counters:?}"
+    );
+}
+
+#[test]
 fn supplying_loop_plans_externally_does_not_change_which_plan_claims_a_site() {
     // The loop accelerators are now handed to dispatch instead of read off the
     // frame, so the frame can stop borrowing its bytecode. That is a plumbing

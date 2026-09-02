@@ -49,21 +49,30 @@ pub(crate) fn try_run_typed_loop(
         }
         false
     };
-    // A loop another tier already recognizes stays with that tier: those plans
-    // own their own deoptimization and replay protocol, and running the region
-    // twice through two accelerators is not equivalent to running it once.
+    // A loop that lies inside a region another tier recognizes stays with
+    // that tier: those plans own their own deoptimization and replay
+    // protocol, and an enclosing plan may be mid-replay through this inner
+    // edge, so running the inner region through this tier as well is not
+    // equivalent to running it once. A plan for exactly this region is
+    // different: the dispatch chain consulted it first on this very edge and
+    // it declined without entering, so the frame is at the header with
+    // every slot written back, which is the state this program seeds from.
+    let claimed_by_enclosing_region = |(plan_header, plan_backedge): (usize, usize)| {
+        (plan_header..=plan_backedge).contains(&backedge)
+            && !(plan_header == header && plan_backedge == backedge)
+    };
     if plans
         .numeric
         .iter()
-        .any(|plan| plan.contains_instruction(backedge))
+        .any(|plan| claimed_by_enclosing_region(plan.region()))
         || plans
             .shared_numeric_mutation
             .iter()
-            .any(|plan| plan.contains_instruction(backedge))
+            .any(|plan| claimed_by_enclosing_region(plan.region()))
         || plans
             .control
             .iter()
-            .any(|plan| plan.contains_instruction(backedge))
+            .any(|plan| claimed_by_enclosing_region(plan.region()))
     {
         return decline(vm);
     }

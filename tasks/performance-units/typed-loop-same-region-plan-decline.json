@@ -1,0 +1,61 @@
+{
+    "schema_version": 1,
+    "artifact_type": "quickjs-performance-unit",
+    "unit_id": "typed-loop-same-region-plan-decline",
+    "base_sha": "adb775205e832ad165861f5cc53cf7b8075d30c4",
+    "queue": {
+        "candidate_sha": "adb775205e832ad165861f5cc53cf7b8075d30c4",
+        "sha256": "c3b523e776c62e2e184692aef0de9886b754d2d2f76549367b7fb95ef5b46917"
+    },
+    "priority": {
+        "mode": "queue",
+        "opportunity_ids": [
+            "external/kraken-1.1/audio-fft",
+            "external/kraken-1.1/audio-beat-detection"
+        ],
+        "rank_ceiling": 37,
+        "override_reason": null
+    },
+    "mechanism": {
+        "summary": "Let the typed-loop program run a region whose exact-match competitor plan declined. try_run_typed_loop refused any region that a numeric, numeric-mutation or control plan statically contained, on the grounds that two accelerators must not both run one region. For a plan covering exactly the same header and backedge that refusal is wrong: the dispatch chain consults that plan first on the very same edge, and reaching the typed tier means it declined without entering, so the frame sits at the header with every slot written back, which is the state the typed program seeds from. Only plans for an enclosing region -- which may be mid-replay through this inner edge -- keep blocking. Measured on `s += pool[i & 63]` over an outer-scope array, where the numeric mutation plan matched the region and declined on all 2,000,100 edges: 45.8 ns per read to 17.5 ns (QuickJS-NG 14.0).",
+        "generality": "The change is one predicate in the dispatch chain and inspects only plan ranges; it never looks at benchmark names, sources, values or results. Every loop for which a same-region plan compiles but declines at run time -- dense reads through an outer-scope or global array, accumulations the mutation plan recognizes but cannot seed -- now reaches the typed program it already had.",
+        "semantic_risks": [
+            "an enclosing plan mid-replay through an inner edge must still block the typed program, which is why containment by a different region is still refused",
+            "a same-region plan that handled earlier iterations and then declined must have written the frame back at the header before the typed program seeds from it, which the plans' own run protocol guarantees on every non-entered edge"
+        ]
+    },
+    "profile_evidence": [
+        {
+            "source": "target/benchmarks/profiles/arr-index-claim-trace.txt: the typed-loop claim and compile-pass trace plus perf-counters for target/benchmarks/profiles/arr-index-only-8.js (SHA-256 f41bd05c984aac0dde74ceb8ba528cd57e8af40e89994824fa5428c3dec254d8) on build 97cec2c4, taken 2026-09-02 with temporary eprintln probes in typed_loop/compile.rs and execute.rs (removed afterwards); the process produced Number(504000000) with empty stderr.",
+            "sha256": "bcde642277756133076cdeff81ee6eef0b14ff96cfec42cd876b1f92f19b25a2",
+            "base_sha": "adb775205e832ad165861f5cc53cf7b8075d30c4",
+            "opportunity_ids": [
+                "external/kraken-1.1/audio-fft",
+                "external/kraken-1.1/audio-beat-detection"
+            ],
+            "shared_cost": "The region 11..88 compiled to a typed program on its second pass, but a numeric mutation plan for the identical region claimed it statically and declined at run time on every one of 2,000,100 backedges (loop_plan_entries 0, declined_loop_plan_edges 2,000,100), so 148 M generic ops ran for 16 M array reads: 9 dispatched ops and 45.8 ns per read where the typed program needs 17.5 ns.",
+            "inclusive_fraction": 0.62
+        }
+    ],
+    "fast_gate": {
+        "target_ids": [
+            "external/kraken-1.1/audio-fft",
+            "external/kraken-1.1/audio-beat-detection"
+        ],
+        "control_ids": [
+            "external/sunspider-1.0/access-nsieve",
+            "external/sunspider-1.0/crypto-sha1",
+            "external/sunspider-1.0/regexp-dna",
+            "external/kraken-1.1/imaging-darkroom",
+            "external/kraken-1.1/ai-astar"
+        ],
+        "target_max_candidate_over_base": 0.9,
+        "control_max_candidate_over_base": 1.03,
+        "max_attempts": 2
+    },
+    "promotion_gate": {
+        "require_complete_broad": true,
+        "require_complete_external": true,
+        "require_test262_zero_gap": true
+    }
+}
