@@ -1245,9 +1245,13 @@ impl ObjectRef {
     /// One pointer comparison behind a `RefCell` borrow, with no clone: this
     /// is the per-read guard of the prototype property cache, so it runs on
     /// every method call.
-    pub(crate) fn prototype_is(&self, candidate: &ObjectRef) -> bool {
+    /// Whether this object's [[Prototype]] is the object `candidate` weakly
+    /// refers to, by identity and without upgrading the weak reference: an
+    /// allocation a live `Weak` names cannot be reused, so a pointer match
+    /// means the prototype slot itself holds that object alive.
+    pub(crate) fn prototype_is_weak(&self, candidate: &ObjectWeakRef) -> bool {
         match &*self.0.prototype.borrow() {
-            Some(Prototype::Object(prototype)) => prototype.ptr_eq(candidate),
+            Some(Prototype::Object(prototype)) => candidate.ptr_eq(prototype),
             _ => false,
         }
     }

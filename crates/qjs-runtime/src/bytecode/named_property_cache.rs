@@ -144,9 +144,13 @@ impl NamedPropertyCache {
                 slot,
             } = entry
             {
+                // Compare the receiver's prototype by identity before
+                // upgrading, so a site rotating over several prototypes pays
+                // one reference-count round trip for the entry that matches
+                // rather than one per entry walked.
                 if candidate.is_none()
+                    && object.prototype_is_weak(holder)
                     && let Some(holder) = holder.upgrade()
-                    && object.prototype_is(&holder)
                     && *holder_layout_revision == holder.layout_revision()
                 {
                     candidate = Some((holder, *slot));
