@@ -209,3 +209,31 @@ fn module_namespace_own_data_write_stays_on_slow_path() {
     ));
     assert_eq!(object.get("exported"), Some(Value::Number(1.0)));
 }
+
+/// A literal's shared shape identifies its layout, so a value overwritten in
+/// place keeps the cached slot valid; redefining the slot as an accessor is
+/// what invalidates it.
+#[test]
+fn literal_slot_survives_value_writes_and_misses_on_accessors() {
+    let shape = ObjectLiteralShape::new(vec![Rc::from("a"), Rc::from("b")]);
+    let object =
+        ObjectRef::with_literal_pair(shape, [Value::Number(1.0), Value::Number(2.0)], None);
+    let (cached_shape, slot) = object.literal_data_slot("b").expect("literal slot");
+    assert_eq!(slot, 1);
+    assert!(matches!(
+        object.write_existing_own_data_property("b", &Value::Number(5.0)),
+        OwnDataPropertyWrite::Written
+    ));
+    assert_eq!(
+        object.literal_data_slot_value(&cached_shape, slot),
+        Some(Value::Number(5.0))
+    );
+    assert!(object.literal_data_slot("b").is_some());
+
+    object.define_property(
+        "b".to_owned(),
+        Property::accessor(Some(Value::Undefined), None, true, true),
+    );
+    assert_eq!(object.literal_data_slot_value(&cached_shape, slot), None);
+    assert!(object.literal_data_slot("b").is_none());
+}

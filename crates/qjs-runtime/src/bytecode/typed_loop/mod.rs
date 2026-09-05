@@ -416,6 +416,28 @@ pub(super) struct ShapeWays {
     /// The prototype resolution for this site, if it has one. Boxed for the
     /// same reason: a site answered by an own property never allocates it.
     inherited_way: Option<Box<InheritedWay>>,
+    /// The value last read from one exact receiver whose storage has no
+    /// stable slot to cache -- a builtin such as `Math`, whose property table
+    /// is dynamic. Validated by receiver identity and the receiver's property
+    /// revision, which every own-property write or layout change advances.
+    /// `Math.abs(i)` in a loop otherwise resolved `abs` by hash lookup and
+    /// name comparison on every iteration.
+    exact_way: Option<Box<ExactWay>>,
+}
+
+/// A value read from one specific receiver at one property revision.
+#[derive(Clone, Debug)]
+pub(super) struct ExactWay {
+    holder: crate::value::ObjectWeakRef,
+    revision: u64,
+    value: Value,
+}
+
+impl ExactWay {
+    pub(super) fn read(&self, receiver: &crate::ObjectRef) -> Option<Value> {
+        (self.holder.ptr_eq(receiver) && receiver.property_revision() == self.revision)
+            .then(|| self.value.clone())
+    }
 }
 
 impl InheritedWay {
@@ -456,6 +478,18 @@ impl ShapeWays {
 
     pub(super) fn entries(&self) -> &[ShapeWay] {
         self.ways.as_deref().map_or(&[], Vec::as_slice)
+    }
+
+    pub(super) fn exact(&self) -> Option<&ExactWay> {
+        self.exact_way.as_deref()
+    }
+
+    pub(super) fn record_exact(&mut self, holder: &crate::ObjectRef, value: Value) {
+        self.exact_way = Some(Box::new(ExactWay {
+            holder: holder.downgrade(),
+            revision: holder.property_revision(),
+            value,
+        }));
     }
 
     pub(super) fn record(&mut self, shape: Rc<crate::value::ObjectLiteralShape>, slot: usize) {
@@ -1170,6 +1204,43 @@ mod tests {
                 "function Body(v, m) {{ this.v = v; this.m = m; }} {source} var frozen = new Body(5, 1); Object.freeze(frozen); run([new Body(1, 2), frozen], 3);"
             )),
             Ok(Value::String("4:5".into()))
+        );
+    }
+
+    /// A builtin receiver such as `Math` keeps its properties in dynamic
+    /// storage with no slot to cache, so the site remembers the value against
+    /// the exact receiver and its revision; a write to the receiver is seen
+    /// on the next read. A literal whose field is rewritten every iteration
+    /// stays on the shared-shape path rather than resolving by name.
+    #[test]
+    fn typed_loops_cache_dynamic_receivers_by_revision_and_rewritten_literals_by_shape() {
+        assert_eq!(
+            eval(
+                "function run(n) { var s = 0;\
+                   for (var i = -n; i < n; i++) { s += Math.abs(i) + Math.max(i, 0); }\
+                   return s; }\
+                 run(10);"
+            ),
+            Ok(Value::Number(145.0))
+        );
+        assert_eq!(
+            eval(
+                "var table = { k: 1 };\
+                 function run(n) { var s = 0;\
+                   for (var i = 0; i < n; i++) { s += table.k; if (i === 4) table.k = 100; }\
+                   return s; }\
+                 run(10);"
+            ),
+            Ok(Value::Number(505.0))
+        );
+        assert_eq!(
+            eval(
+                "function run(n) { var node = { f: 0, g: 1 }, s = 0;\
+                   for (var i = 0; i < n; i++) { node.f = node.f + node.g; s += node.f; }\
+                   return s; }\
+                 run(10);"
+            ),
+            Ok(Value::Number(55.0))
         );
     }
 

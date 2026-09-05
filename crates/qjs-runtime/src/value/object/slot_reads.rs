@@ -157,37 +157,49 @@ impl ObjectRef {
         Some(result)
     }
 
-    /// Returns the shared literal shape and storage slot for an unmodified
-    /// data-only object literal. Named-property caches use this to share one
+    /// Returns the shared literal shape and storage slot of a data property
+    /// of an object literal. Named-property caches use this to share one
     /// cache entry across distinct objects created by the same bytecode site.
+    ///
+    /// The shape identifies the layout: adding or deleting a property, or
+    /// redefining one, leaves shaped storage for dynamic storage, so a value
+    /// overwritten in place keeps the slot valid. A literal whose field is
+    /// updated every iteration -- a search node's cost -- therefore stays on
+    /// this path; it used to fall off it at the first write.
     pub(crate) fn literal_data_slot(&self, key: &str) -> Option<(Rc<ObjectLiteralShape>, usize)> {
-        if self.0.module_namespace_exotic.get() || self.property_revision() != 0 {
+        if self.0.module_namespace_exotic.get() {
             return None;
         }
         let properties = self.0.properties.borrow();
-        let shape = match &*properties {
-            PropertyStorage::Shaped { shape, .. } | PropertyStorage::ShapedPair { shape, .. } => {
-                shape
+        let (shape, slot) = match &*properties {
+            PropertyStorage::Shaped { shape, properties } => {
+                let slot = *shape.lookup.get(key)?;
+                if properties.get(slot)?.is_accessor() {
+                    return None;
+                }
+                (shape, slot)
             }
+            PropertyStorage::ShapedPair { shape, .. } => (shape, *shape.lookup.get(key)?),
             PropertyStorage::Small { .. } | PropertyStorage::Dynamic(_) => return None,
         };
-        let slot = *shape.lookup.get(key)?;
         Some((shape.clone(), slot))
     }
 
     /// Reads a previously resolved literal slot after checking that this
-    /// object still has the same unmodified shared shape.
+    /// object still has the same shared shape and the slot still holds a data
+    /// property.
     pub(crate) fn literal_data_slot_value(
         &self,
         expected_shape: &Rc<ObjectLiteralShape>,
         slot: usize,
     ) -> Option<Value> {
-        if self.0.module_namespace_exotic.get() || self.property_revision() != 0 {
+        if self.0.module_namespace_exotic.get() {
             return None;
         }
         match &*self.0.properties.borrow() {
             PropertyStorage::Shaped { shape, properties } if Rc::ptr_eq(shape, expected_shape) => {
-                properties.get(slot).map(|property| property.value.clone())
+                let property = properties.get(slot)?;
+                (!property.is_accessor()).then(|| property.value.clone())
             }
             PropertyStorage::ShapedPair { shape, values } if Rc::ptr_eq(shape, expected_shape) => {
                 values.get(slot).cloned()
