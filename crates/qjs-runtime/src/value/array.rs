@@ -254,6 +254,12 @@ impl ArrayRef {
         self.0.uses_default_prototype()
     }
 
+    /// Whether the array carries no own properties beyond its dense
+    /// elements, so a named read resolves on its prototype.
+    pub(crate) fn has_no_own_named_properties(&self) -> bool {
+        self.0.properties_are_empty()
+    }
+
     /// Whether this array's explicit prototype slot names the supplied realm
     /// Array.prototype object. `new Array(...)` records the intrinsic object
     /// explicitly, while array literals normally use the implicit default

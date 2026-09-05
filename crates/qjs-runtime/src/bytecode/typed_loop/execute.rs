@@ -133,11 +133,34 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
     // Borrowed for the whole region: the program owns these across activations,
     // so a site stays warm across entries of a short inner loop.
     let mut shape_caches = program.shape_caches.borrow_mut();
+    // An array or string receiver's methods live on the realm's
+    // `Array.prototype` / `String.prototype`; resolved once per entry so
+    // `list.push(item)` and `text.charCodeAt(i)` read them by cached value.
+    let intrinsics = Intrinsics {
+        array_prototype: crate::array_prototype(&vm.env),
+        string_prototype: crate::string_prototype(&vm.env),
+    };
     let mut iterations = 0_u64;
     let mut pc = 0_usize;
     macro_rules! deopt_here {
         ($op:expr) => {{
             let site = program.sites[pc - 1];
+            // Diagnostic builds name every deoptimization: `QJS_TL_TRACE=1`
+            // on a `perf-counters` binary prints the region, the site, the
+            // operation and the bytecode it resumes at. A histogram of that
+            // output over a corpus is what found the array element writes and
+            // the `push` calls that were deoptimizing whole regions.
+            #[cfg(feature = "perf-counters")]
+            if std::env::var_os("QJS_TL_TRACE").is_some() {
+                eprintln!(
+                    "TLDEOPT region {}..{} ip {} op {:?} bc {:?}",
+                    program.header,
+                    program.backedge,
+                    site.ip,
+                    $op,
+                    vm.current.bytecode.code.get(site.ip as usize)
+                );
+            }
             return deopt(vm, program, registers, boxed, site);
         }};
     }
@@ -247,6 +270,7 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                     &boxed[object as usize],
                     &program.names[name as usize],
                     &mut shape_caches[cache as usize],
+                    &intrinsics,
                 ) else {
                     deopt_here!(op);
                 };
@@ -277,6 +301,7 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                     &boxed[object as usize],
                     &program.names[name as usize],
                     &mut shape_caches[cache as usize],
+                    &intrinsics,
                 )
                 .as_ref()
                 .and_then(Typed::from_value) else {
@@ -342,11 +367,48 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                             ),
                         }
                     }
+                    // A boxed key is not automatically a string, exactly as
+                    // for `computed_read`: `s[r][c] = v` writes through an
+                    // array an element read produced, with a number key that
+                    // arrived boxed. Refusing it deoptimized every state
+                    // update of the AES round functions on their first write.
+                    (Value::Array(array), Value::Number(index)) => {
+                        let index = Typed::Number(*index);
+                        let value = &boxed[value as usize];
+                        dense_write_value(array, index, value)
+                            || fill_hole_or_grow_value(vm, array, index, value)
+                    }
                     _ => false,
                 };
                 if !written {
                     deopt_here!(op);
                 }
+            }
+            TypedOp::ArrayPush {
+                dst,
+                receiver,
+                callee,
+                value,
+            } => {
+                let pushed = match (&boxed[receiver as usize], &boxed[callee as usize]) {
+                    (Value::Array(array), Value::Function(function))
+                        if function.native
+                            == Some(crate::function::NativeFunction::ArrayPrototypePush) =>
+                    {
+                        let value = &boxed[value as usize];
+                        // The same dense append the native takes, with the
+                        // same prototype-chain and descriptor checks.
+                        array.with_plain_dense_mutation(&vm.env, 1, |elements| {
+                            elements.push(value.clone());
+                            elements.len()
+                        })
+                    }
+                    _ => None,
+                };
+                let Some(length) = pushed else {
+                    deopt_here!(op);
+                };
+                registers[dst as usize] = Typed::Number(length as f64);
             }
             TypedOp::CallNumericNative {
                 dst,
@@ -375,6 +437,7 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
             } => {
                 let Some(value) = call_closed_form_leaf(
                     program,
+                    &vm.env,
                     &boxed[callee as usize],
                     &boxed[receiver as usize],
                     registers[first as usize],
@@ -646,6 +709,7 @@ fn call_numeric_native(callee: &Value, first: Typed, second: Typed, arity: u8) -
 /// assumption that the plans are independently total.
 fn call_closed_form_leaf(
     program: &TypedLoopProgram,
+    env: &crate::function::CallEnv,
     callee: &Value,
     receiver: &Value,
     first: Typed,
@@ -657,6 +721,24 @@ fn call_closed_form_leaf(
     // here; answering it costs one predicate and keeps that shape working.
     if let Some(value) = call_numeric_native(callee, first, second, arity) {
         return Some(value.to_value());
+    }
+    // Any other native goes through the interpreter's own fast native table
+    // -- `text.charCodeAt(i)` is the whole of a hash's input loop. Those
+    // arms are side-effect free, so an error answer deoptimizes and the
+    // interpreter's call raises it; an arm the table does not have
+    // deoptimizes the same way.
+    if matches!(callee, Value::Function(function) if function.native.is_some()) {
+        let arguments: [Value; 2] = [first.to_value(), second.to_value()];
+        let arguments = arguments.get(..usize::from(arity))?;
+        return match super::super::vm_call::try_fast_global_native_call(
+            callee,
+            receiver,
+            arguments,
+            &|| env.empty_frame(),
+        ) {
+            Some(Ok(value)) => Some(value),
+            Some(Err(_)) | None => None,
+        };
     }
     // Before the closed-form evaluators, not after. Preparation already
     // refused to flatten any body they can answer, so a graph hit here is a
@@ -701,7 +783,39 @@ fn call_closed_form_leaf(
 
 /// Reads an own data property, revalidating the cached (name, slot) pair by
 /// pointer and re-resolving it once when the receiver's layout differs.
-fn get_named(receiver: &Value, name: &Rc<str>, shapes: &mut super::ShapeWays) -> Option<Value> {
+/// The realm intrinsics a region's named reads resolve primitive receivers
+/// against, looked up once per entry.
+#[derive(Default)]
+struct Intrinsics {
+    array_prototype: Option<crate::ObjectRef>,
+    string_prototype: Option<crate::ObjectRef>,
+}
+
+/// Reads `name` from a builtin prototype for a primitive-like receiver,
+/// remembered by exact holder and revision as for `Math`.
+fn prototype_method(
+    prototype: &crate::ObjectRef,
+    name: &Rc<str>,
+    shapes: &mut super::ShapeWays,
+) -> Option<Value> {
+    if let Some(exact) = shapes.exact()
+        && let Some(value) = exact.read(prototype)
+    {
+        return Some(value);
+    }
+    if let crate::value::OwnDataPropertyRead::Data(value) = prototype.own_data_property_read(name) {
+        shapes.record_exact(prototype, value.clone());
+        return Some(value);
+    }
+    None
+}
+
+fn get_named(
+    receiver: &Value,
+    name: &Rc<str>,
+    shapes: &mut super::ShapeWays,
+    intrinsics: &Intrinsics,
+) -> Option<Value> {
     // An array's `length` is an own data property whose value is the element
     // count, and `try_direct_get_string` answers it exactly this way, without
     // consulting any descriptor. `for (i = 0; i < a.length; i++)` puts that read
@@ -709,7 +823,35 @@ fn get_named(receiver: &Value, name: &Rc<str>, shapes: &mut super::ShapeWays) ->
     // tier deoptimized on the region's first instruction and the whole loop fell
     // back to the generic interpreter.
     if let Value::Array(elements) = receiver {
-        return (name.as_ref() == "length").then(|| Value::Number(elements.len() as f64));
+        if name.as_ref() == "length" {
+            return Some(Value::Number(elements.len() as f64));
+        }
+        // Any other name on an ordinary array is a method on the realm's
+        // `Array.prototype`, which keeps its methods in dynamic storage:
+        // remembered by exact holder and revision, as for `Math`. An array
+        // with its own prototype or with own named properties keeps the
+        // interpreter's resolution.
+        let prototype = intrinsics.array_prototype.as_ref()?;
+        if !(elements.uses_default_prototype() || elements.uses_prototype_object(prototype))
+            || !elements.has_no_own_named_properties()
+        {
+            return None;
+        }
+        return prototype_method(prototype, name, shapes);
+    }
+    // A string's `length` is its code-unit count; `for (i < text.length)`
+    // is the header test of every string scan. Any other non-index name is a
+    // method on the realm's `String.prototype`.
+    if let Value::String(text) = receiver {
+        if name.as_ref() == "length" {
+            return Some(Value::Number(
+                crate::string::js_string_code_unit_len(text) as f64
+            ));
+        }
+        if name.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        return prototype_method(intrinsics.string_prototype.as_ref()?, name, shapes);
     }
     let Value::Object(object) = receiver else {
         return None;
@@ -909,6 +1051,52 @@ fn dense_write(array: &crate::ArrayRef, index: Typed, value: Typed) -> bool {
         .unwrap_or(false)
 }
 
+/// `dense_write` for a value already boxed.
+fn dense_write_value(array: &crate::ArrayRef, index: Typed, value: &Value) -> bool {
+    let Some(number) = index.number() else {
+        return false;
+    };
+    if number < 0.0 || number.fract() != 0.0 || number > u32::MAX as f64 {
+        return false;
+    }
+    let index = number as usize;
+    array
+        .with_dense_writable_elements(|elements| match elements.get_mut(index) {
+            Some(element) => {
+                *element = value.clone();
+                true
+            }
+            None => false,
+        })
+        .unwrap_or(false)
+}
+
+/// `fill_hole_or_grow` for a value already boxed.
+#[cold]
+#[inline(never)]
+fn fill_hole_or_grow_value(
+    vm: &mut Vm<'_>,
+    array: &crate::ArrayRef,
+    index: Typed,
+    value: &Value,
+) -> bool {
+    let Some(number) = index.number() else {
+        return false;
+    };
+    if number < 0.0 || number.fract() != 0.0 || number > u32::MAX as f64 {
+        return false;
+    }
+    let index = number as usize;
+    if !array.dense_index_store_eligible(index)
+        || !vm.array_uses_realm_prototype(array)
+        || vm.array_prototype_chain_has_index_hazard().unwrap_or(true)
+    {
+        return false;
+    }
+    array.set(index, value.clone());
+    true
+}
+
 /// Stores to an index the dense overwrite could not take: a hole below the
 /// length, or one past it.
 ///
@@ -1020,12 +1208,17 @@ mod tests {
     use std::rc::Rc;
 
     use super::super::ShapeWays;
-    use super::get_named;
+    use super::{Intrinsics, get_named};
     use crate::value::ArrayRef;
     use crate::{Value, eval};
 
     fn read(receiver: &Value, name: &str) -> Option<Value> {
-        get_named(receiver, &Rc::from(name), &mut ShapeWays::default())
+        get_named(
+            receiver,
+            &Rc::from(name),
+            &mut ShapeWays::default(),
+            &Intrinsics::default(),
+        )
     }
 
     #[test]
