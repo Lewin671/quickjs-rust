@@ -134,12 +134,11 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
     // so a site stays warm across entries of a short inner loop.
     let mut shape_caches = program.shape_caches.borrow_mut();
     // An array or string receiver's methods live on the realm's
-    // `Array.prototype` / `String.prototype`; resolved once per entry so
-    // `list.push(item)` and `text.charCodeAt(i)` read them by cached value.
-    let intrinsics = Intrinsics {
-        array_prototype: crate::array_prototype(&vm.env),
-        string_prototype: crate::string_prototype(&vm.env),
-    };
+    // `Array.prototype` / `String.prototype`; resolved at most once per entry,
+    // and only by a region that reads such a method, so `list.push(item)`
+    // and `text.charCodeAt(i)` read them by cached value while a numeric
+    // loop entered once per call never pays the lookup.
+    let intrinsics = Intrinsics::default();
     let mut iterations = 0_u64;
     let mut pc = 0_usize;
     macro_rules! deopt_here {
@@ -271,6 +270,7 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                     &program.names[name as usize],
                     &mut shape_caches[cache as usize],
                     &intrinsics,
+                    Some(&vm.env),
                 ) else {
                     deopt_here!(op);
                 };
@@ -302,6 +302,7 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                     &program.names[name as usize],
                     &mut shape_caches[cache as usize],
                     &intrinsics,
+                    Some(&vm.env),
                 )
                 .as_ref()
                 .and_then(Typed::from_value) else {
@@ -782,13 +783,29 @@ fn call_closed_form_leaf(
 }
 
 /// Reads an own data property, revalidating the cached (name, slot) pair by
-/// pointer and re-resolving it once when the receiver's layout differs.
 /// The realm intrinsics a region's named reads resolve primitive receivers
-/// against, looked up once per entry.
+/// against, each looked up on first use and at most once per entry.
 #[derive(Default)]
 struct Intrinsics {
-    array_prototype: Option<crate::ObjectRef>,
-    string_prototype: Option<crate::ObjectRef>,
+    array_prototype: std::cell::OnceCell<Option<crate::ObjectRef>>,
+    string_prototype: std::cell::OnceCell<Option<crate::ObjectRef>>,
+}
+
+impl Intrinsics {
+    fn array_prototype(&self, env: Option<&crate::function::CallEnv>) -> Option<&crate::ObjectRef> {
+        self.array_prototype
+            .get_or_init(|| env.and_then(crate::array_prototype))
+            .as_ref()
+    }
+
+    fn string_prototype(
+        &self,
+        env: Option<&crate::function::CallEnv>,
+    ) -> Option<&crate::ObjectRef> {
+        self.string_prototype
+            .get_or_init(|| env.and_then(crate::string_prototype))
+            .as_ref()
+    }
 }
 
 /// Reads `name` from a builtin prototype for a primitive-like receiver,
@@ -815,6 +832,7 @@ fn get_named(
     name: &Rc<str>,
     shapes: &mut super::ShapeWays,
     intrinsics: &Intrinsics,
+    env: Option<&crate::function::CallEnv>,
 ) -> Option<Value> {
     // An array's `length` is an own data property whose value is the element
     // count, and `try_direct_get_string` answers it exactly this way, without
@@ -831,7 +849,7 @@ fn get_named(
         // remembered by exact holder and revision, as for `Math`. An array
         // with its own prototype or with own named properties keeps the
         // interpreter's resolution.
-        let prototype = intrinsics.array_prototype.as_ref()?;
+        let prototype = intrinsics.array_prototype(env)?;
         if !(elements.uses_default_prototype() || elements.uses_prototype_object(prototype))
             || !elements.has_no_own_named_properties()
         {
@@ -851,7 +869,7 @@ fn get_named(
         if name.bytes().all(|byte| byte.is_ascii_digit()) {
             return None;
         }
-        return prototype_method(intrinsics.string_prototype.as_ref()?, name, shapes);
+        return prototype_method(intrinsics.string_prototype(env)?, name, shapes);
     }
     let Value::Object(object) = receiver else {
         return None;
@@ -1218,6 +1236,7 @@ mod tests {
             &Rc::from(name),
             &mut ShapeWays::default(),
             &Intrinsics::default(),
+            None,
         )
     }
 
