@@ -411,6 +411,14 @@ impl ArrayRef {
     /// property path; the usual descriptor representation marks a dense hole,
     /// while the explicit target-key check also protects transitional storage
     /// states without making unrelated descriptors reject the read.
+    /// Whether the array has no own element or indexed descriptor at `index`:
+    /// a hole below the length, or a position at or past it. A read there is
+    /// answered by the prototype chain.
+    pub(crate) fn index_is_absent(&self, index: usize) -> bool {
+        (index >= self.0.length.get() || self.0.has_hole(index))
+            && !self.0.has_property_at_index(index)
+    }
+
     pub(crate) fn direct_dense_index_value(&self, index: usize) -> Option<Value> {
         if index >= self.0.length.get()
             || self.0.has_hole(index)

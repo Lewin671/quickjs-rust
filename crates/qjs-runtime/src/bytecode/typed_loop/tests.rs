@@ -230,6 +230,38 @@ fn typed_loops_write_dense_elements_with_computed_scalar_indices() {
     );
 }
 
+/// A dense read that finds no element -- a hole below the length or an
+/// index past it -- answers `undefined` when no prototype on the chain can
+/// supply an indexed property, and deoptimizes to the interpreter when one
+/// can. `bin[i >> 5] |= word` over an array that starts empty is every
+/// hash's input conversion.
+#[test]
+fn typed_loops_read_missing_elements_as_undefined_unless_the_chain_answers() {
+    assert_eq!(
+        eval(
+            "function conv(str) { var bin = Array(); for (var i = 0; i < str.length * 8; i += 8) bin[i >> 5] |= (str.charCodeAt(i / 8) & 255) << (i % 32); return bin.join(); }\
+             conv('abcdefgh');"
+        ),
+        Ok(Value::String("1684234849,1751606885".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var holes = [1, , 3]; function read(n) { var s = ''; for (var i = 0; i < n; i++) { s += holes[i] + ','; } return s; }\
+             read(4);"
+        ),
+        Ok(Value::String("1,undefined,3,undefined,".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "Array.prototype[3] = 'proto'; function read(n) { var a = [1]; var s = ''; for (var i = 0; i < n; i++) { s += a[i] + ','; } return s; }\
+             read(5);"
+        ),
+        Ok(Value::String(
+            "1,undefined,undefined,proto,undefined,".to_owned().into()
+        ))
+    );
+}
+
 /// A helper call may take up to four arguments -- sha1's round function
 /// `ft(t, b, c, d)` -- whether it is flattened into the region's helper
 /// graph or answered as a closed-form leaf; a fifth argument keeps the

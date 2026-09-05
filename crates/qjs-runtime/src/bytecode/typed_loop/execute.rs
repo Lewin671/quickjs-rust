@@ -246,7 +246,15 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                 let Some(value) = dense_read(
                     &receivers[receiver as usize],
                     registers[index_register as usize],
-                ) else {
+                )
+                .or_else(|| {
+                    missing_element_is_undefined(
+                        vm,
+                        &receivers[receiver as usize],
+                        registers[index_register as usize],
+                    )
+                    .then_some(Typed::Undefined)
+                }) else {
                     deopt_here!(op);
                 };
                 registers[dst as usize] = value;
@@ -358,15 +366,32 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                 receiver,
                 index,
             } => {
-                let Some(value) =
-                    element_read(&boxed[receiver as usize], registers[index as usize])
-                else {
+                let Some(value) = element_read(
+                    &boxed[receiver as usize],
+                    registers[index as usize],
+                )
+                .or_else(|| match &boxed[receiver as usize] {
+                    Value::Array(array)
+                        if missing_element_is_undefined(vm, array, registers[index as usize]) =>
+                    {
+                        Some(Value::Undefined)
+                    }
+                    _ => None,
+                }) else {
                     deopt_here!(op);
                 };
                 boxed[dst as usize] = value;
             }
             TypedOp::ComputedRead { dst, receiver, key } => {
                 let Some(value) = computed_read(&boxed[receiver as usize], &boxed[key as usize])
+                    .or_else(|| match (&boxed[receiver as usize], &boxed[key as usize]) {
+                        (Value::Array(array), Value::Number(index))
+                            if missing_element_is_undefined(vm, array, Typed::Number(*index)) =>
+                        {
+                            Some(Value::Undefined)
+                        }
+                        _ => None,
+                    })
                 else {
                     deopt_here!(op);
                 };
@@ -1132,6 +1157,28 @@ fn dense_write(array: &crate::ArrayRef, index: Typed, value: Typed) -> bool {
         .unwrap_or(false)
 }
 
+/// Whether reading `index` from `array`, where the dense read found no
+/// element, answers `undefined`: the index is a valid array index (a hole
+/// below the length or a position past it) and no prototype on the chain
+/// could supply an indexed property. `bin[i >> 5] |= word` over an array
+/// that starts empty -- every hash's input conversion -- reads past the end
+/// on each new word, and deoptimized the region there.
+#[cold]
+#[inline(never)]
+fn missing_element_is_undefined(vm: &mut Vm<'_>, array: &crate::ArrayRef, index: Typed) -> bool {
+    let Some(number) = index.number() else {
+        return false;
+    };
+    if number < 0.0 || number.fract() != 0.0 || number >= u32::MAX as f64 {
+        return false;
+    }
+    if !array.index_is_absent(number as usize) {
+        return false;
+    }
+    vm.array_uses_realm_prototype(array)
+        && !vm.array_prototype_chain_has_index_hazard().unwrap_or(true)
+}
+
 /// `dense_write` for a value already boxed.
 fn dense_write_value(array: &crate::ArrayRef, index: Typed, value: &Value) -> bool {
     let Some(number) = index.number() else {
@@ -1210,8 +1257,21 @@ fn fill_hole_or_grow(vm: &mut Vm<'_>, array: &crate::ArrayRef, index: Typed, val
 
 #[inline(always)]
 pub(super) fn typed_binary(left: Typed, op: BinaryOp, right: Typed) -> Option<Typed> {
-    let (Typed::Number(left), Typed::Number(right)) = (left, right) else {
-        return None;
+    // Every admitted type coerces to a number without observing user code
+    // (`undefined` to NaN, a boolean to 0 or 1), and every operator here
+    // except equality applies that coercion: `bin[i >> 5] |= word` on a
+    // fresh word reads `undefined` and ORs through 0. Equality between two
+    // non-numbers is not numeric, so it keeps the boxed path.
+    let (left, right) = match (left, right) {
+        (Typed::Number(left), Typed::Number(right)) => (left, right),
+        _ if matches!(
+            op,
+            BinaryOp::Eq | BinaryOp::StrictEq | BinaryOp::Ne | BinaryOp::StrictNe
+        ) =>
+        {
+            return None;
+        }
+        (left, right) => (left.to_numeric().number()?, right.to_numeric().number()?),
     };
     let value = match op {
         BinaryOp::Add => Typed::Number(left + right),
@@ -1265,7 +1325,7 @@ pub(super) fn typed_unary(op: UnaryOp, argument: Typed) -> Option<Typed> {
     if let UnaryOp::Not = op {
         return Some(Typed::Boolean(!argument.is_truthy()));
     }
-    let number = argument.number()?;
+    let number = argument.to_numeric().number()?;
     let value = match op {
         UnaryOp::Minus => Typed::Number(-number),
         UnaryOp::Plus => Typed::Number(number),
