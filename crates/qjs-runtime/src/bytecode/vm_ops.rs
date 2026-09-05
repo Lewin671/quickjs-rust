@@ -203,8 +203,41 @@ impl Vm<'_> {
         target: Value,
         key: &str,
     ) -> Result<bool, RuntimeError> {
-        let property_key = crate::PropertyKey::String(key.to_owned());
+        // Ordinary objects answer from their own storage: no owned key, no
+        // descriptor clone, no environment. `for (c in table)` inside a hot
+        // loop re-checks every key once per iteration, and this used to be
+        // the loop's largest single cost. The walk drops to the observable
+        // path at the first exotic holder -- a Proxy, a typed array, a module
+        // namespace, an array or function prototype -- so nothing a trap or
+        // an exotic [[GetOwnProperty]] could observe is skipped.
         let mut current = target;
+        loop {
+            match current {
+                Value::Object(object)
+                    if !object.is_module_namespace_exotic() && !object.is_typed_array_exotic() =>
+                {
+                    if let Some(enumerable) = object.own_property_enumerable(key) {
+                        return Ok(enumerable);
+                    }
+                    match object.prototype_slot() {
+                        None => return Ok(false),
+                        Some(crate::value::Prototype::Object(prototype)) => {
+                            current = Value::Object(prototype);
+                        }
+                        Some(prototype) => {
+                            current = prototype.to_value();
+                            break;
+                        }
+                    }
+                }
+                Value::Null | Value::Undefined => return Ok(false),
+                other => {
+                    current = other;
+                    break;
+                }
+            }
+        }
+        let property_key = crate::PropertyKey::String(key.to_owned());
         loop {
             if matches!(current, Value::Null | Value::Undefined) {
                 return Ok(false);

@@ -1477,3 +1477,45 @@ fn for_in_shadowing_survives_the_hashed_seen_set() {
         Ok(Value::String("0,2,x".to_owned().into()))
     );
 }
+
+/// The per-key enumerability re-check answers ordinary objects from their
+/// own storage and walks the prototype chain the same way the observable
+/// path does: a key deleted mid-loop is skipped, a non-enumerable own
+/// property shadows an inherited enumerable one, a key added to the
+/// prototype after enumeration starts is not visited, and a Proxy on the
+/// chain still runs its trap.
+#[test]
+fn for_in_re_checks_each_key_through_ordinary_storage_and_exotic_holders() {
+    assert_eq!(
+        eval(
+            "var o = { a: 1, b: 2, c: 3 }; var seen = '';\
+             for (var k in o) { seen += k; if (k === 'a') delete o.b; } seen;"
+        ),
+        Ok(Value::String("ac".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var proto = { x: 1, y: 2 }; var o = Object.create(proto);\
+             Object.defineProperty(o, 'x', { value: 0, enumerable: false });\
+             var seen = ''; for (var k in o) { seen += k; } seen;"
+        ),
+        Ok(Value::String("y".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var proto = { x: 1 }; var o = Object.create(proto); o.own = 1;\
+             var seen = ''; for (var k in o) { seen += k; proto.late = 2; } seen;"
+        ),
+        Ok(Value::String("ownx".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var trapped = []; var proto = new Proxy({ p: 1 }, { getOwnPropertyDescriptor(t, k) { trapped.push(k); return Object.getOwnPropertyDescriptor(t, k); } });\
+             var o = Object.create(proto); o.a = 1;\
+             var seen = ''; for (var k in o) { seen += k; } seen + ':' + trapped.join();"
+        ),
+        // Once while collecting keys and once for the per-key re-check, as
+        // QuickJS-NG does.
+        Ok(Value::String("ap:p,p".to_owned().into()))
+    );
+}

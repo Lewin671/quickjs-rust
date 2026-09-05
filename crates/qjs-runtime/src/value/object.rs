@@ -599,6 +599,26 @@ impl PropertyStorage {
         }
     }
 
+    /// The enumerable flag of an own property, without cloning its value.
+    fn enumerable(&self, key: &str) -> Option<bool> {
+        match self {
+            Self::Small { entries } => entries
+                .iter()
+                .find(|(candidate, _)| candidate.as_ref() == key)
+                .map(|(_, property)| property.enumerable),
+            Self::Dynamic(dynamic) => dynamic
+                .properties
+                .get(key)
+                .map(|property| property.enumerable),
+            Self::Shaped { shape, properties } => shape
+                .lookup
+                .get(key)
+                .and_then(|slot| properties.get(*slot))
+                .map(|property| property.enumerable),
+            Self::ShapedPair { shape, values } => values.get(*shape.lookup.get(key)?).map(|_| true),
+        }
+    }
+
     fn value(&self, key: &str) -> Option<Value> {
         match self {
             Self::Small { entries } => entries
@@ -1156,6 +1176,14 @@ impl ObjectRef {
 
     pub(crate) fn is_module_namespace_exotic(&self) -> bool {
         self.0.module_namespace_exotic.get()
+    }
+
+    /// The enumerable flag of an own string-keyed property of an ordinary
+    /// object, or `None` when the property is absent. Exotic own-property
+    /// behaviour (a module namespace, a typed array) is not answered here;
+    /// callers check for it first.
+    pub(crate) fn own_property_enumerable(&self, key: &str) -> Option<bool> {
+        self.0.properties.borrow().enumerable(key)
     }
 
     pub(crate) fn set_module_namespace_bindings(&self, bindings: ModuleNamespaceBindings) {
