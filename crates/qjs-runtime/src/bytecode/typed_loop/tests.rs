@@ -260,6 +260,22 @@ fn typed_loops_read_missing_elements_as_undefined_unless_the_chain_answers() {
             "1,undefined,undefined,proto,undefined,".to_owned().into()
         ))
     );
+    // The `undefined` such a read produces coerces through the scalar
+    // operators exactly as ToNumber does: NaN for arithmetic and comparison,
+    // 0 for the bitwise operators, and never through an equality.
+    assert_eq!(
+        eval(
+            "function f(n) { var a = [], s = 0, t = '';\
+               for (var i = 0; i < n; i++) { a[i >> 1] |= i; s += a[9] + 1; t += (a[9] < 1) + ',' + (true + 1) + ',' + (a[9] == 0) + ',' + (-a[9]) + ',' + (~a[9]) + ';'; }\
+               return a.join() + '|' + s + '|' + t; }\
+             f(4);"
+        ),
+        Ok(Value::String(
+            "1,3|NaN|false,2,false,NaN,-1;false,2,false,NaN,-1;false,2,false,NaN,-1;false,2,false,NaN,-1;"
+                .to_owned()
+                .into()
+        ))
+    );
 }
 
 /// A helper call may take up to four arguments -- sha1's round function
