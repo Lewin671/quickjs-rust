@@ -11,6 +11,7 @@ use std::rc::Rc;
 
 use super::{NamedReadSite, NamedWriteSite, WideOp, WideProgram};
 use crate::bytecode::compact_fn::MAX_REGISTERS;
+use crate::bytecode::compact_fn::compile::MAX_CALL_ARITY;
 use crate::bytecode::ir::{Bytecode, Op};
 
 /// What one bytecode instruction does to the operand stack and control flow.
@@ -176,10 +177,10 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
             {
                 return None;
             }
-            Op::New(argc) if *argc > 3 => return None,
-            // Arity beyond the fixed forms drags in argument-vector
-            // construction the tier has no evidence for.
-            Op::Call(argc) | Op::CallResolved(argc) if *argc > 3 => return None,
+            Op::New(argc) if *argc > MAX_CALL_ARITY => return None,
+            // The register window passes any arity; see the numeric tier's
+            // `MAX_CALL_ARITY` for why it is bounded at all.
+            Op::Call(argc) | Op::CallResolved(argc) if *argc > MAX_CALL_ARITY => return None,
             _ => {}
         }
     }

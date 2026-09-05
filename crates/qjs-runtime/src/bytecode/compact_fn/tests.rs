@@ -446,3 +446,32 @@ fn a_compact_callee_runs_in_the_callers_environment_unchanged() {
         Ok(Value::Boolean(true))
     );
 }
+
+/// Hash and cipher round functions pass six or seven arguments. Those calls
+/// used to reject the whole body, so every round built a frame and a nested
+/// `Vm`; the register window passes any arity up to the bound.
+#[test]
+fn a_seven_argument_call_is_admitted_and_answers_like_the_interpreter() {
+    const ROUND: &str = "function safe_add(x, y) { var lsw = (x & 0xFFFF) + (y & 0xFFFF); var msw = (x >> 16) + (y >> 16) + (lsw >> 16); return (msw << 16) | (lsw & 0xFFFF); }
+        function bit_rol(num, cnt) { return (num << cnt) | (num >>> (32 - cnt)); }
+        function md5_cmn(q, a, b, x, s, t) { return safe_add(bit_rol(safe_add(safe_add(a, q), safe_add(x, t)), s), b); }
+        function md5_ff(a, b, c, d, x, s, t) { return md5_cmn((b & c) | ((~b) & d), a, b, x, s, t); }";
+    // `~b` is a unary operation only the wide tier carries; `md5_cmn` is
+    // purely numeric and lands on this tier.
+    assert!(
+        super::wide::program_for(&nested_function(ROUND, "md5_ff")).is_some(),
+        "a seven-parameter body calling with six arguments should be admitted"
+    );
+    assert!(compile::compile(&nested_function(ROUND, "md5_cmn")).is_some());
+    assert_eq!(
+        eval(&format!(
+            "{ROUND} var a = 1732584193, b = -271733879, c = -1732584194, d = 271733878;\
+             for (var i = 0; i < 64; i++) {{ a = md5_ff(a, b, c, d, i, 7, -680876936); }} a;"
+        )),
+        Ok(Value::Number(-2_078_482_107.0))
+    );
+    // Nine arguments stay outside the bound and keep the ordinary path.
+    let wide = "function nine(a, b, c, d, e, f, g, h, i) { return a + i; } function caller() { return nine(1, 2, 3, 4, 5, 6, 7, 8, 9); }";
+    assert!(compile::compile(&nested_function(wide, "caller")).is_none());
+    assert_eq!(eval(&format!("{wide} caller();")), Ok(Value::Number(10.0)));
+}

@@ -25,6 +25,9 @@ struct Effect {
     falls_through: bool,
 }
 
+/// Widest call the compact tiers admit.
+pub(in crate::bytecode::compact_fn) const MAX_CALL_ARITY: usize = 8;
+
 pub(super) fn compile(bytecode: &Bytecode) -> Option<CompactFunctionProgram> {
     // Bodies that suspend, catch, or resolve names dynamically keep the
     // ordinary interpreter: this tier has no completion protocol beyond
@@ -113,9 +116,11 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<CompactFunctionProgram> {
                     return None;
                 }
             }
-            // Arity beyond the fixed forms drags in argument-vector
-            // construction the tier has no evidence for.
-            Op::Call(argc) if *argc > 3 => return None,
+            // The register window passes any arity, but a wide call is not a
+            // shape the tier is tested for. Eight covers the hash and cipher
+            // round functions (`md5_ff(a, b, c, d, x, s, t)`) whose calls
+            // used to fall to a frame with a nested `Vm` per round.
+            Op::Call(argc) if *argc > MAX_CALL_ARITY => return None,
             _ => {}
         }
     }
