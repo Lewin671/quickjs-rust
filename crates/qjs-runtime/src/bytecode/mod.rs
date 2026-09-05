@@ -66,6 +66,7 @@ use qjs_parser::parse_script;
 
 use crate::{RuntimeError, Value};
 
+pub(crate) use compact_fn::try_run_in_caller_env as try_run_direct_leaf_in_caller_env;
 pub use ir::Bytecode;
 pub(crate) use vm_class::install_field_value;
 pub(crate) use vm_generator::{

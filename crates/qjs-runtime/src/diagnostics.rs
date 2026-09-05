@@ -125,6 +125,10 @@ declare_counters! {
     /// building neither a frame nor an environment. This is a tier
     /// attribution: such a call is counted here and nowhere else.
     compact_direct_calls,
+    /// Direct-leaf calls from the ordinary interpreter or a loop plan that a
+    /// compact tier ran in the caller's own environment, with no frame built.
+    /// Also a tier attribution: counted here and nowhere else.
+    compact_caller_env_calls,
 }
 
 /// Applies `update` to the calling thread's counters.

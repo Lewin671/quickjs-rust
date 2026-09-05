@@ -321,6 +321,24 @@ pub(crate) fn call_direct_leaf_function(
         crate::diagnostics::count!(closed_form_leaf_evaluations);
         return Ok(value);
     }
+    // A body a compact tier admits runs in the caller's environment when that
+    // environment is what its own frame would have been anyway; building and
+    // dropping the frame was a third of a small call's cost. The explicit host
+    // is only installed on a frame that lacks one, so a caller environment
+    // that already carries a host (or a call with none) loses nothing.
+    let host_is_redundant = module_host.is_none() || env.module_host_ref().is_some();
+    #[cfg(feature = "agents")]
+    let host_is_redundant = host_is_redundant && agent_context.is_none();
+    if host_is_redundant
+        && let Some(result) = crate::bytecode::try_run_direct_leaf_in_caller_env(
+            function,
+            bytecode,
+            argument_values,
+            env,
+        )
+    {
+        return result;
+    }
     crate::diagnostics::count!(direct_leaf_frames);
     let FunctionCallEnv {
         env: mut call_env,

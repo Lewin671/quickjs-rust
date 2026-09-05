@@ -697,6 +697,40 @@ pub(in crate::bytecode) fn try_run_standalone(
     ))
 }
 
+/// Runs a direct-leaf callee on a compact tier in the caller's own
+/// environment, without building the callee a frame environment first.
+///
+/// `direct_leaf_function_env` builds, for every direct-leaf call, a frame
+/// environment the compact tiers then never read beyond its realm: an
+/// admitted body resolves every name by slot. `shares_caller_environment` is
+/// the proof, already relied on by the in-loop inline path, that the frame
+/// `direct_leaf_function_env` would build is field for field the caller's
+/// own environment, so the caller's can stand in for it. A body neither tier
+/// admits returns `None` before anything is consumed, and the ordinary frame
+/// is built as before.
+pub(crate) fn try_run_in_caller_env(
+    function: &Function,
+    bytecode: &Bytecode,
+    arguments: &[Value],
+    env: &CallEnv,
+) -> Option<Result<Value, RuntimeError>> {
+    if !environment_is_slot_only(env) || !shares_caller_environment(function, bytecode, env) {
+        return None;
+    }
+    let upvalues = crate::bytecode::DirectCallUpvalues::Function(function);
+    if let Some(entry) = admit(bytecode, upvalues) {
+        crate::diagnostics::count!(compact_caller_env_calls);
+        return Some(run(
+            bytecode,
+            env,
+            entry,
+            bytecode.parameter_slots(),
+            arguments,
+        ));
+    }
+    super::wide::try_run_in_caller_env(bytecode, upvalues, arguments, env)
+}
+
 /// Runs one call the driver could not inline.
 ///
 /// A slot-seeded direct-leaf callee reaches `call_direct_leaf_function`, which

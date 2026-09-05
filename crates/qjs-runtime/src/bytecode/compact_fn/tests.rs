@@ -407,3 +407,42 @@ fn recursion_past_the_frame_bound_throws_instead_of_exhausting_the_native_stack(
         deep + ':' + threw;";
     assert_eq!(eval(source), Ok(Value::String("150000:RangeError".into())));
 }
+
+/// A direct-leaf callee a compact tier admits runs in its caller's
+/// environment when that environment is what its own frame would have been.
+/// The observable contract is unchanged: globals, array reads, `this`-free
+/// bodies, errors, and a callee whose environment differs (a lexical `this`
+/// read) all answer exactly as the framed path does.
+#[test]
+fn a_compact_callee_runs_in_the_callers_environment_unchanged() {
+    assert_eq!(
+        eval(
+            "var arr = [1, 2, 3, 4, 5, 6, 7, 8]; var g = 3;\
+             function f(a) { return arr[a & 7] + a + g; }\
+             function run(n) { var s = 0; for (var i = 0; i < n; i++) s += f(i); return s; }\
+             run(100);"
+        ),
+        Ok(Value::Number(5692.0))
+    );
+    // A body reading `this` keeps the framed path, which seeds the receiver.
+    assert_eq!(
+        eval(
+            "var g = 10;\
+             function f(a) { return this.k + a + g; }\
+             var o = { k: 5, f: f };\
+             function run(n) { var s = 0; for (var i = 0; i < n; i++) s += o.f(i); return s; }\
+             run(10);"
+        ),
+        Ok(Value::Number(195.0))
+    );
+    // An error thrown from the callee still propagates with its message.
+    assert_eq!(
+        eval(
+            "var arr = [1];\
+             function f(a) { return arr[a].x.y; }\
+             function run(n) { var s = 0; for (var i = 0; i < n; i++) s += f(i); return s; }\
+             try { run(3); } catch (error) { String(error).indexOf('TypeError') === 0; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

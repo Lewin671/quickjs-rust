@@ -930,6 +930,31 @@ pub(in crate::bytecode) fn try_run_standalone(
     ))
 }
 
+/// The wide half of `compact_fn::try_run_in_caller_env`: the caller has
+/// already proved the environment is shareable and the numeric tier declined.
+/// A body that reads `this` is excluded, as it is for a standalone activation
+/// whose caller seeded no receiver.
+pub(crate) fn try_run_in_caller_env(
+    bytecode: &Bytecode,
+    upvalues: crate::bytecode::DirectCallUpvalues<'_>,
+    arguments: &[Value],
+    env: &CallEnv,
+) -> Option<Result<Value, RuntimeError>> {
+    let entry = admit(bytecode, upvalues)?;
+    if entry.program.requires_this {
+        return None;
+    }
+    crate::diagnostics::count!(compact_caller_env_calls);
+    Some(run(
+        bytecode,
+        env,
+        entry,
+        bytecode.parameter_slots(),
+        arguments,
+        None,
+    ))
+}
+
 /// Runs one call the driver could not inline, through the same entries the
 /// interpreter's general call path reaches.
 #[inline(never)]

@@ -37,6 +37,7 @@ mod execute;
 mod property;
 pub(in crate::bytecode) mod wide;
 
+pub(crate) use activation::try_run_in_caller_env;
 pub(super) use activation::try_run_standalone;
 
 /// Bodies wider than this are not worth a register file; the limit also keeps
