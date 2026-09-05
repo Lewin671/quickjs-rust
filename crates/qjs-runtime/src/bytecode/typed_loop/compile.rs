@@ -53,6 +53,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
     // stay boxed, and recompile. Both sets only grow, so this converges.
     let mut boxed_slots: Vec<u32> = Vec::new();
     let mut boxed_element_reads: Vec<u32> = Vec::new();
+    let mut scalar_named_reads: Vec<u32> = Vec::new();
     let builder = loop {
         let mut builder = Builder::new(
             bytecode,
@@ -60,9 +61,22 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
             backedge,
             boxed_slots.clone(),
             boxed_element_reads.clone(),
+            scalar_named_reads.clone(),
         );
         if builder.compile().is_some() {
-            break builder;
+            // A successful pass may still have found named reads consumed as
+            // scalars; one more pass reads them into the scalar file.
+            let discovered_named: Vec<u32> = builder
+                .discovered_scalar_named_reads
+                .iter()
+                .copied()
+                .filter(|site| !scalar_named_reads.contains(site))
+                .collect();
+            if discovered_named.is_empty() {
+                break builder;
+            }
+            scalar_named_reads.extend(discovered_named);
+            continue;
         }
         let discovered_slots: Vec<u32> = builder
             .discovered_boxed
@@ -213,6 +227,10 @@ enum Origin {
     Computed,
     Local(u32),
     ElementRead(u32),
+    /// A boxed named-property read at this bytecode site. When a scalar pop
+    /// consumes it the site is recorded, and the next pass reads the property
+    /// straight into the scalar file.
+    NamedRead(u32),
 }
 
 struct Builder<'a> {
@@ -257,6 +275,13 @@ struct Builder<'a> {
     /// a later operation can use the live element as an object receiver.
     boxed_element_reads: Vec<u32>,
     discovered_boxed_element_reads: Vec<u32>,
+    /// Named-property read sites whose result the region consumes as a
+    /// scalar, and sites this pass discovered to be. A field read at such a
+    /// site lands in the scalar file directly instead of passing through a
+    /// boxed register and an `Unbox`; a non-scalar value deoptimizes at the
+    /// read, which is where the `Unbox` would have deoptimized anyway.
+    scalar_named_reads: Vec<u32>,
+    discovered_scalar_named_reads: Vec<u32>,
     /// Abstract operand stack of (register, class, origin).
     stack: Vec<(u16, Class, Origin)>,
     /// Abstract stack recorded for each bytecode index reached by a jump. Two
@@ -286,6 +311,7 @@ impl<'a> Builder<'a> {
         backedge: usize,
         boxed_slots: Vec<u32>,
         boxed_element_reads: Vec<u32>,
+        scalar_named_reads: Vec<u32>,
     ) -> Self {
         let span = backedge - header + 1;
         Self {
@@ -322,6 +348,8 @@ impl<'a> Builder<'a> {
             discovered_boxed: Vec::new(),
             boxed_element_reads,
             discovered_boxed_element_reads: Vec::new(),
+            scalar_named_reads,
+            discovered_scalar_named_reads: Vec::new(),
             stack: Vec::new(),
             pending_skip: 0,
             unreachable: false,
@@ -526,6 +554,11 @@ impl<'a> Builder<'a> {
         match class {
             Class::Scalar => Some((register, origin)),
             Class::Boxed => {
+                if let Origin::NamedRead(site) = origin
+                    && !self.discovered_scalar_named_reads.contains(&site)
+                {
+                    self.discovered_scalar_named_reads.push(site);
+                }
                 let dst = self.fresh()?;
                 self.emit(TypedOp::Unbox { dst, src: register });
                 Some((dst, origin))
@@ -564,7 +597,7 @@ impl<'a> Builder<'a> {
                         self.discovered_boxed_element_reads.push(site);
                         return None;
                     }
-                    Origin::Computed => {}
+                    Origin::Computed | Origin::NamedRead(_) => {}
                 }
                 let dst = self.fresh_boxed()?;
                 self.emit(TypedOp::Box { dst, src: register });
@@ -805,7 +838,7 @@ impl<'a> Builder<'a> {
                     Origin::ElementRead(site) => {
                         self.discovered_boxed_element_reads.push(site);
                     }
-                    Origin::Computed => return None,
+                    Origin::Computed | Origin::NamedRead(_) => return None,
                 }
                 return None;
             }
@@ -834,7 +867,7 @@ impl<'a> Builder<'a> {
             match receiver {
                 Origin::Local(slot) => self.discovered_boxed.push(slot),
                 Origin::ElementRead(site) => self.discovered_boxed_element_reads.push(site),
-                Origin::Computed => return None,
+                Origin::Computed | Origin::NamedRead(_) => return None,
             }
             return None;
         }
@@ -1455,6 +1488,18 @@ impl<'a> Builder<'a> {
                 };
                 let name = self.name_index(key)?;
                 let cache = self.next_cache()?;
+                let site = u32::try_from(ip).ok()?;
+                if self.scalar_named_reads.contains(&site) {
+                    let dst = self.slot_scalar()?;
+                    self.emit(TypedOp::GetNamedTyped {
+                        dst,
+                        object,
+                        name,
+                        cache,
+                    });
+                    self.push(dst, Origin::Computed);
+                    return Some(());
+                }
                 let dst = self.slot_boxed()?;
                 self.emit(TypedOp::GetNamed {
                     dst,
@@ -1462,7 +1507,7 @@ impl<'a> Builder<'a> {
                     name,
                     cache,
                 });
-                self.push_boxed(dst, Origin::Computed);
+                self.push_boxed(dst, Origin::NamedRead(site));
             }
             Op::SetProp { .. } => {
                 // All three operands must be boxed; `pop_boxed` records a
@@ -1482,14 +1527,35 @@ impl<'a> Builder<'a> {
                 if self.region_writes_a_sloppy_global() {
                     return None;
                 }
+                // A scalar value is written from the scalar file: boxing it
+                // first cost a `Box` plus the boxed copies of the value the
+                // assignment leaves on the operand stack.
+                if matches!(self.stack.last(), Some((_, Class::Scalar, _))) {
+                    let (value, _) = self.pop()?;
+                    let (object, _) = self.pop_boxed()?;
+                    let name = self.name_index(key)?;
+                    let cache = self.next_cache()?;
+                    self.emit(TypedOp::SetNamedTyped {
+                        object,
+                        name,
+                        value,
+                        cache,
+                    });
+                    let dst = self.slot_scalar()?;
+                    self.emit(TypedOp::Move { dst, src: value });
+                    self.push(dst, Origin::Computed);
+                    return Some(());
+                }
                 let (value, _) = self.pop_boxed()?;
                 let (object, _) = self.pop_boxed()?;
                 let _ = &object;
                 let name = self.name_index(key)?;
+                let cache = self.next_cache()?;
                 self.emit(TypedOp::SetNamed {
                     object,
                     name,
                     value,
+                    cache,
                 });
                 // The assignment's value stays on the operand stack.
                 let dst = self.slot_boxed()?;

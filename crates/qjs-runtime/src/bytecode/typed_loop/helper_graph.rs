@@ -298,6 +298,7 @@ impl Preparation {
                 op,
                 super::TypedOp::StoreSloppyGlobal { .. }
                     | super::TypedOp::SetNamed { .. }
+                    | super::TypedOp::SetNamedTyped { .. }
                     | super::TypedOp::ComputedWrite { .. }
             )
         })

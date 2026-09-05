@@ -130,10 +130,9 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
     let receivers = &scratch.receivers;
     let boxed = &mut scratch.boxed;
     let sloppy_global_writes = &scratch.sloppy_global_writes;
-    let caches = &mut scratch.caches;
-    // Borrowed for the whole region: the program owns these across activations.
+    // Borrowed for the whole region: the program owns these across activations,
+    // so a site stays warm across entries of a short inner loop.
     let mut shape_caches = program.shape_caches.borrow_mut();
-    // One inline cache per property access site, warmed on the first iteration.
     let mut iterations = 0_u64;
     let mut pc = 0_usize;
     macro_rules! deopt_here {
@@ -247,7 +246,6 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                 let Some(value) = get_named(
                     &boxed[object as usize],
                     &program.names[name as usize],
-                    &mut caches[cache as usize],
                     &mut shape_caches[cache as usize],
                 ) else {
                     deopt_here!(op);
@@ -258,11 +256,45 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                 object,
                 name,
                 value,
+                cache,
             } => {
                 if !set_named(
                     &boxed[object as usize],
                     &program.names[name as usize],
                     &boxed[value as usize],
+                    &mut shape_caches[cache as usize],
+                ) {
+                    deopt_here!(op);
+                }
+            }
+            TypedOp::GetNamedTyped {
+                dst,
+                object,
+                name,
+                cache,
+            } => {
+                let Some(value) = get_named(
+                    &boxed[object as usize],
+                    &program.names[name as usize],
+                    &mut shape_caches[cache as usize],
+                )
+                .as_ref()
+                .and_then(Typed::from_value) else {
+                    deopt_here!(op);
+                };
+                registers[dst as usize] = value;
+            }
+            TypedOp::SetNamedTyped {
+                object,
+                name,
+                value,
+                cache,
+            } => {
+                if !set_named(
+                    &boxed[object as usize],
+                    &program.names[name as usize],
+                    &registers[value as usize].to_value(),
+                    &mut shape_caches[cache as usize],
                 ) {
                     deopt_here!(op);
                 }
@@ -419,7 +451,6 @@ fn seed_registers(
         receivers,
         boxed,
         sloppy_global_writes,
-        caches,
     } = scratch;
     // Resolve every receiver once. Re-reading the slot per element access cost
     // more than the interpreter's own path did.
@@ -513,7 +544,6 @@ fn seed_registers(
     for (_, name) in &program.sloppy_global_writes {
         vm.record_sloppy_global_name(name);
     }
-    caches.resize(program.cache_count, None);
     program
         .shape_caches
         .borrow_mut()
@@ -671,12 +701,7 @@ fn call_closed_form_leaf(
 
 /// Reads an own data property, revalidating the cached (name, slot) pair by
 /// pointer and re-resolving it once when the receiver's layout differs.
-fn get_named(
-    receiver: &Value,
-    name: &Rc<str>,
-    cache: &mut Option<(Rc<str>, usize)>,
-    shapes: &mut super::ShapeWays,
-) -> Option<Value> {
+fn get_named(receiver: &Value, name: &Rc<str>, shapes: &mut super::ShapeWays) -> Option<Value> {
     // An array's `length` is an own data property whose value is the element
     // count, and `try_direct_get_string` answers it exactly this way, without
     // consulting any descriptor. `for (i = 0; i < a.length; i++)` puts that read
@@ -689,7 +714,7 @@ fn get_named(
     let Value::Object(object) = receiver else {
         return None;
     };
-    if let Some((key, slot)) = cache.as_ref()
+    if let Some((key, slot)) = shapes.slot.as_ref()
         && let Some(value) = object.shared_data_slot_value(key, *slot)
     {
         return Some(value);
@@ -706,7 +731,7 @@ fn get_named(
     if let Some((key, slot)) = object.shared_data_slot(name)
         && let Some(value) = object.shared_data_slot_value(&key, slot)
     {
-        *cache = Some((key, slot));
+        shapes.slot = Some((key, slot));
         return Some(value);
     }
     if let Some((shape, slot)) = object.literal_data_slot(name)
@@ -769,13 +794,42 @@ pub(super) fn ordinary_data_property(object: &crate::ObjectRef, name: &str) -> O
 
 /// Overwrites an existing own data property, declining a read-only property, an
 /// accessor, and anything the observable path would have to handle.
-fn set_named(receiver: &Value, name: &Rc<str>, value: &Value) -> bool {
+///
+/// The (name, slot) pair is cached exactly as `get_named` caches a read: the
+/// interned name pointer in the slot identifies the layout, so every object
+/// built by the same code site takes the cached slot without a name scan. A
+/// numeric field update per iteration otherwise paid a linear string
+/// comparison over the object's properties.
+fn set_named(
+    receiver: &Value,
+    name: &Rc<str>,
+    value: &Value,
+    shapes: &mut super::ShapeWays,
+) -> bool {
+    use crate::value::OwnDataPropertyWrite;
+
     let Value::Object(object) = receiver else {
         return false;
     };
+    if let Some((key, slot)) = shapes.slot.as_ref()
+        && let Some(OwnDataPropertyWrite::Written) =
+            object.shared_data_slot_write(key, *slot, value)
+    {
+        return true;
+    }
+    // `globalThis` as an own name establishes realm identity on the slow
+    // path, so it is never cached.
+    if name.as_ref() != "globalThis"
+        && let Some((key, slot)) = object.shared_data_slot(name)
+        && let Some(OwnDataPropertyWrite::Written) =
+            object.shared_data_slot_write(&key, slot, value)
+    {
+        shapes.slot = Some((key, slot));
+        return true;
+    }
     matches!(
         object.write_existing_own_data_property(name, value),
-        crate::value::OwnDataPropertyWrite::Written
+        OwnDataPropertyWrite::Written
     )
 }
 
@@ -960,12 +1014,7 @@ mod tests {
     use crate::{Value, eval};
 
     fn read(receiver: &Value, name: &str) -> Option<Value> {
-        get_named(
-            receiver,
-            &Rc::from(name),
-            &mut None,
-            &mut ShapeWays::default(),
-        )
+        get_named(receiver, &Rc::from(name), &mut ShapeWays::default())
     }
 
     #[test]

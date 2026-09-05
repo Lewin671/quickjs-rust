@@ -195,11 +195,29 @@ enum TypedOp {
         name: u16,
         cache: u16,
     },
-    /// Overwrites an existing own data property of a boxed object register.
+    /// Overwrites an existing own data property of a boxed object register,
+    /// through the site's (name, slot) cache.
     SetNamed {
         object: u16,
         name: u16,
         value: u16,
+        cache: u16,
+    },
+    /// `GetNamed` whose result the region consumes as a scalar: the property
+    /// value lands in the scalar file, and anything the scalar file cannot
+    /// hold deoptimizes at the read.
+    GetNamedTyped {
+        dst: u16,
+        object: u16,
+        name: u16,
+        cache: u16,
+    },
+    /// `SetNamed` of a scalar register.
+    SetNamedTyped {
+        object: u16,
+        name: u16,
+        value: u16,
+        cache: u16,
     },
     /// Reads one element of a dense array held in a boxed register.
     ElementRead {
@@ -326,7 +344,6 @@ struct TypedLoopScratch {
     receivers: Vec<crate::ArrayRef>,
     boxed: Vec<Value>,
     sloppy_global_writes: Vec<super::vm_bindings::TypedLoopSloppyGlobalWrite>,
-    caches: Vec<Option<(Rc<str>, usize)>>,
 }
 
 impl TypedLoopScratch {
@@ -335,7 +352,6 @@ impl TypedLoopScratch {
         self.receivers.clear();
         self.boxed.clear();
         self.sloppy_global_writes.clear();
-        self.caches.clear();
     }
 }
 
@@ -350,7 +366,6 @@ impl fmt::Debug for TypedLoopScratch {
                 "sloppy_global_write_count",
                 &self.sloppy_global_writes.len(),
             )
-            .field("cache_count", &self.caches.len())
             .finish()
     }
 }
@@ -384,6 +399,13 @@ pub(super) struct InheritedWay {
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct ShapeWays {
+    /// The (interned name, slot) pair the site last resolved on a small
+    /// object. Objects built by the same code site share the interned name,
+    /// so the pointer comparison serves all of them. This used to live in
+    /// the per-entry scratch and was cleared at every loop entry; an inner
+    /// loop that runs a few iterations per entry -- nbody's pair loop -- then
+    /// re-resolved every field access by name scan on each entry.
+    pub(super) slot: Option<(Rc<str>, usize)>,
     /// Boxed deliberately, against `clippy::box_collection`. Most sites are
     /// answered by the one-way cache and never resolve a shape at all, so this
     /// keeps their entry one pointer instead of three. Measured, not assumed:
@@ -601,10 +623,8 @@ mod tests {
         let mut first = program.take_scratch();
         first.registers.push(super::Typed::Number(1.0));
         first.boxed.push(Value::Number(2.0));
-        first.caches.push(Some((std::rc::Rc::from("value"), 3)));
         let register_capacity = first.registers.capacity();
         let boxed_capacity = first.boxed.capacity();
-        let cache_capacity = first.caches.capacity();
         program.recycle_scratch(first);
 
         let reused = program.take_scratch();
@@ -612,10 +632,8 @@ mod tests {
         assert!(reused.receivers.is_empty());
         assert!(reused.boxed.is_empty());
         assert!(reused.sloppy_global_writes.is_empty());
-        assert!(reused.caches.is_empty());
         assert!(reused.registers.capacity() >= register_capacity);
         assert!(reused.boxed.capacity() >= boxed_capacity);
-        assert!(reused.caches.capacity() >= cache_capacity);
         program.recycle_scratch(reused);
 
         // A nested call receives fresh storage when the one sequential-entry
@@ -1093,6 +1111,65 @@ mod tests {
                  run([[1, 2], [3, 4], [5, 6]], 10);"
             ),
             Ok(Value::String("10,20;30,40;50,60".to_owned().into()))
+        );
+    }
+
+    /// A field read the region consumes as a number lands in the scalar file
+    /// and a scalar written to a field never passes through a boxed register.
+    /// The site caches persist across entries, and a field that stops being a
+    /// number deoptimizes to the interpreter's answer.
+    #[test]
+    fn typed_loops_read_and_write_numeric_fields_as_scalars() {
+        let source = "function run(bodies, n) { for (var k = 0; k < n; k++) { for (var i = 0; i < bodies.length; i++) { var body = bodies[i]; body.v = body.v + body.m * 0.5; } } return bodies[0].v + ':' + bodies[1].v; }";
+        let programs = super::compile_all(&nested_function(source));
+        let inner = programs
+            .iter()
+            .find(|program| program.header > programs[0].header.min(programs[1].header))
+            .expect("inner region should compile");
+        assert!(
+            inner
+                .ops
+                .iter()
+                .any(|op| matches!(op, super::TypedOp::GetNamedTyped { .. })),
+            "{:#?}",
+            inner.ops
+        );
+        assert!(
+            inner
+                .ops
+                .iter()
+                .any(|op| matches!(op, super::TypedOp::SetNamedTyped { .. })),
+            "{:#?}",
+            inner.ops
+        );
+        assert!(
+            !inner.ops.iter().any(|op| matches!(
+                op,
+                super::TypedOp::Unbox { .. } | super::TypedOp::Box { .. }
+            )),
+            "{:#?}",
+            inner.ops
+        );
+        assert_eq!(
+            eval(&format!(
+                "function Body(v, m) {{ this.v = v; this.m = m; }} {source} run([new Body(1, 2), new Body(3, 4)], 10);"
+            )),
+            Ok(Value::String("11:23".into()))
+        );
+        // The second body's field is a string: the scalar read deoptimizes
+        // and the interpreter concatenates exactly as it would have.
+        assert_eq!(
+            eval(&format!(
+                "function Body(v, m) {{ this.v = v; this.m = m; }} {source} run([new Body(1, 2), new Body('s', 4)], 2);"
+            )),
+            Ok(Value::String("3:s22".into()))
+        );
+        // A read-only field deoptimizes the write instead of skipping it.
+        assert_eq!(
+            eval(&format!(
+                "function Body(v, m) {{ this.v = v; this.m = m; }} {source} var frozen = new Body(5, 1); Object.freeze(frozen); run([new Body(1, 2), frozen], 3);"
+            )),
+            Ok(Value::String("4:5".into()))
         );
     }
 

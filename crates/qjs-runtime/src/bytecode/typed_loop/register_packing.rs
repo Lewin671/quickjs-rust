@@ -127,6 +127,8 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
             TypedOp::JumpIfFalsy { cond, .. } | TypedOp::Exit { cond, .. } => visit(cond),
             TypedOp::Unbox { dst, .. } => visit(dst),
             TypedOp::Box { src, .. } => visit(src),
+            TypedOp::GetNamedTyped { dst, .. } => visit(dst),
+            TypedOp::SetNamedTyped { value, .. } => visit(value),
             TypedOp::ElementRead { index, .. } => visit(index),
             TypedOp::CallNumericNative {
                 dst, first, second, ..
@@ -165,6 +167,9 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
             TypedOp::SetNamed { object, value, .. } => {
                 visit(object);
                 visit(value);
+            }
+            TypedOp::GetNamedTyped { object, .. } | TypedOp::SetNamedTyped { object, .. } => {
+                visit(object);
             }
             TypedOp::ComputedRead { dst, receiver, key } => {
                 visit(dst);
