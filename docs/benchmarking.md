@@ -414,15 +414,26 @@ compiled in without the feature: every counting site expands to nothing.
 The same build also carries the typed-loop trace. With `QJS_TL_TRACE=1` in
 the environment it prints one line per region the compiler gave up on
 (`TLGIVEUP`, with the instruction and what the pass discovered), per region
-that failed or compiled (`TLFAIL`, `TLOK`), and per deoptimization at run
-time (`TLDEOPT`, with the site and the bytecode it resumes at). A histogram
-of `TLDEOPT` lines over a corpus names the shapes that deoptimize a region
-on every entry, which is how the array element write, `push`, and
-`charCodeAt` gaps were found:
+that failed or compiled (`TLFAIL`, `TLOK`), per entry outcome (`TLRUN`),
+per entry that declined with the reason (`TLDECLINE`: a helper that could
+not be flattened, a scalar slot holding a string, a global that is an
+accessor), per deoptimization at run time (`TLDEOPT`, with the site and the
+bytecode it resumes at), and per backward edge every loop accelerator
+declined (`TLEDGE`). `QJS_TL_TRACE=2` also lists a failed region's
+bytecode.
+
+Two histograms answer most questions. `TLDEOPT` names the shapes that
+deoptimize a region on every entry, which is how the array element write,
+`push`, and `charCodeAt` gaps were found. `TLEDGE` weights every region
+that runs interpreted by its iterations; joining it with the region's last
+`TLGIVEUP` or `TLDECLINE` line names the blocker worth removing next:
 
 ```sh
 QJS_TL_TRACE=1 ./target/perf-counters/release/qjs case.js 2>&1 >/dev/null \
   | grep TLDEOPT | sed 's/ ip [0-9]* / /; s/ bc .*//' | sort | uniq -c | sort -rn
+QJS_TL_TRACE=1 ./target/perf-counters/release/qjs case.js 2>&1 >/dev/null \
+  | awk '/^TLEDGE/ { n[$3]++ } /^TLGIVEUP|^TLDECLINE/ { why[$3] = $0 } \
+         END { for (r in n) print n[r], r, why[r] }' | sort -rn | head
 ```
 
 This is what the two suites report for a nominal 100,000 iterations:
