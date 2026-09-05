@@ -151,6 +151,23 @@ impl NumericMutationLoopPlan {
     }
 
     /// The bytecode range this plan owns, header through backedge.
+    /// Whether this is one of the special executors -- a predicate scan or a
+    /// scalar bitwise recurrence -- which run their shape far faster than a
+    /// typed-loop region running the same loop through element operations.
+    pub(super) fn is_special(&self) -> bool {
+        matches!(self.kind, NumericMutationLoopKind::Special(_))
+    }
+
+    /// The plan family, for the typed-loop trace.
+    #[cfg(feature = "perf-counters")]
+    pub(super) fn kind_name(&self) -> &'static str {
+        match &self.kind {
+            NumericMutationLoopKind::Named(_) => "named",
+            NumericMutationLoopKind::Special(_) => "special",
+            NumericMutationLoopKind::Dense(_) => "dense",
+        }
+    }
+
     pub(super) fn region(&self) -> (usize, usize) {
         (self.header, self.backedge)
     }

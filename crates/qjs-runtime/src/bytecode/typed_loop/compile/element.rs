@@ -98,6 +98,20 @@ impl Builder<'_> {
                 return Some(None);
             }
         }
+        // The key expression is lowered as a pure scalar expression. Decide
+        // that by inspection too: a compound element assignment
+        // (`a[i] ^= v`) carries `RequireObjectCoercible` and
+        // `ToPropertyKeyForAccess` in that range, and `a[d[i] = x] = y`
+        // carries a write. Both used to abort the region part-way through
+        // lowering; the ordinary per-instruction path handles either.
+        for probe in ip + 2..index_store {
+            let op = code.get(probe)?;
+            if scalar_expression_may_write_or_branch(op)
+                || matches!(op, Op::RequireObjectCoercible | Op::ToPropertyKeyForAccess)
+            {
+                return Some(None);
+            }
+        }
         let receiver_slot = u32::try_from(receiver).ok()?;
         let index_register = self.compile_pure_scalar_expression(ip + 2, index_store)?;
         let index_copy = self.fresh()?;

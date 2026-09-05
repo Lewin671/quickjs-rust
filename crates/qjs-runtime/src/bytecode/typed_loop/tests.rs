@@ -230,14 +230,56 @@ fn typed_loops_write_dense_elements_with_computed_scalar_indices() {
     );
 }
 
+/// A compound element assignment carries `RequireObjectCoercible` and
+/// `ToPropertyKeyForAccess` in its key range and discards the checked
+/// receiver with `Pop`; the region compiles through the ordinary path with
+/// runtime guards, and a receiver the guard cannot pass deoptimizes to the
+/// interpreter's TypeError.
 #[test]
-fn typed_loop_computed_index_with_assignment_stays_interpreted() {
+fn typed_loops_compile_compound_element_assignments() {
+    let source = "function xor(temp, table, i, nk) { for (var t = 0; t < 4; t++) temp[t] ^= table[i / nk][t]; return temp.join(); }";
+    let programs = super::compile_all(&nested_function(source));
+    assert_eq!(programs.len(), 1);
+    assert!(
+        programs[0]
+            .ops
+            .iter()
+            .any(|op| matches!(op, super::TypedOp::Guard { .. })),
+        "{:#?}",
+        programs[0].ops
+    );
+    assert_eq!(
+        eval(&format!(
+            "{source} xor([1, 2, 3, 4], [[8, 8, 8, 8], [16, 16, 16, 16]], 2, 2);"
+        )),
+        Ok(Value::String("17,18,19,20".to_owned().into()))
+    );
+    assert_eq!(
+        eval(&format!(
+            "{source} var caught = 0; try {{ xor(null, [[1]], 0, 1); }} catch (error) {{ caught = error instanceof TypeError ? 1 : 2; }} caught;"
+        )),
+        Ok(Value::Number(1.0))
+    );
+}
+
+/// A key expression that writes a local cannot be lowered as a dense write
+/// with its temporaries elided -- that would reorder the write -- so the
+/// element-assignment lowering declines by inspection and the ordinary
+/// per-instruction path, which keeps the interpreter's order, compiles the
+/// region instead.
+#[test]
+fn typed_loop_computed_index_with_assignment_takes_the_ordinary_path() {
     let source = "function run() { var values = [0, 0, 0, 0], key = 0; for (var i = 0; i < 4; i++) { values[key = (i + 1) & 3] = i; } return values.join(',') + ':' + key; }";
     let bytecode = nested_function(source);
+    let programs = super::compile_all(&bytecode);
+    assert_eq!(programs.len(), 1, "{:#?}", bytecode.code);
     assert!(
-        super::compile_all(&bytecode).is_empty(),
+        !programs[0]
+            .ops
+            .iter()
+            .any(|op| matches!(op, super::TypedOp::DenseWrite { .. })),
         "{:#?}",
-        bytecode.code
+        programs[0].ops
     );
     assert_eq!(
         eval(&format!("{source} run();")),

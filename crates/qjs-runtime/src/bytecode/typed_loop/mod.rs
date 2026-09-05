@@ -273,6 +273,17 @@ enum TypedOp {
         second: u16,
         arity: u8,
     },
+    /// A compound element access's operand check, on the register at the
+    /// top of the abstract stack. `Coercible` deoptimizes on `null` or
+    /// `undefined` (the interpreter raises the TypeError);
+    /// `PropertyKey` deoptimizes on anything but a number, string or
+    /// boolean, whose key conversion the consuming access performs itself.
+    /// Anything else is a no-op, which is why the operand stays in place.
+    Guard {
+        src: u16,
+        boxed: bool,
+        kind: GuardKind,
+    },
     /// `receiver.push(value)` where the callee register holds the realm's
     /// `Array.prototype.push` and the receiver is an ordinary dense array:
     /// the element is appended in place and the new length lands in the
@@ -508,6 +519,13 @@ impl ShapeWays {
             ways.push((shape, slot));
         }
     }
+}
+
+/// What a [`TypedOp::Guard`] checks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum GuardKind {
+    Coercible,
+    PropertyKey,
 }
 
 /// A compiled loop region.

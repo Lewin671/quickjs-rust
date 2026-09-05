@@ -61,14 +61,37 @@ pub(crate) fn try_run_typed_loop(
         (plan_header..=plan_backedge).contains(&backedge)
             && !(plan_header == header && plan_backedge == backedge)
     };
+    // The converse holds for the special mutation plans: a region that
+    // *encloses* a loop a predicate scan or scalar bitwise plan claims would
+    // run that loop itself and the plan would never be consulted, and those
+    // executors run their shape far faster -- an FFT butterfly went
+    // 0.58 s -> 1.30 s through this tier's element operations
+    // (audio-fft). A dense recurrence plan is not faster than an enclosing
+    // typed region: fannkuch's outer loop, enclosing two, runs 1.36 vs 1.96
+    // against QuickJS-NG when it is declined instead. So only the special
+    // plans keep their enclosing region on the interpreter.
+    let encloses_special_region =
+        |plan: &super::super::vm_numeric_mutation_loop::NumericMutationLoopPlan| {
+            let (plan_header, plan_backedge) = plan.region();
+            plan.is_special()
+                && (header..=backedge).contains(&plan_backedge)
+                && !(plan_header == header && plan_backedge == backedge)
+        };
     if plans
         .numeric
         .iter()
         .any(|plan| claimed_by_enclosing_region(plan.region()))
-        || plans
-            .shared_numeric_mutation
-            .iter()
-            .any(|plan| claimed_by_enclosing_region(plan.region()))
+        || plans.shared_numeric_mutation.iter().any(|plan| {
+            #[cfg(feature = "perf-counters")]
+            if encloses_special_region(plan) && std::env::var_os("QJS_TL_TRACE").is_some() {
+                eprintln!(
+                    "TLENCLOSE region {header}..{backedge} plan {:?} kind {:?}",
+                    plan.region(),
+                    plan.kind_name()
+                );
+            }
+            claimed_by_enclosing_region(plan.region()) || encloses_special_region(plan)
+        })
         || plans
             .control
             .iter()
@@ -80,7 +103,12 @@ pub(crate) fn try_run_typed_loop(
     // copying the slice handle keeps the borrow checker happy without cloning
     // the op list.
     let program = &programs[index];
-    match run(vm, program) {
+    let outcome = run(vm, program);
+    #[cfg(feature = "perf-counters")]
+    if std::env::var_os("QJS_TL_TRACE").is_some() {
+        eprintln!("TLRUN region {header}..{backedge} {outcome:?}");
+    }
+    match outcome {
         Outcome::Ran => true,
         // A region that deoptimizes once will almost certainly do so again — its
         // guards describe the data, not the moment — so the frame stops using
@@ -382,6 +410,33 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                     _ => false,
                 };
                 if !written {
+                    deopt_here!(op);
+                }
+            }
+            TypedOp::Guard {
+                src,
+                boxed: is_boxed,
+                kind,
+            } => {
+                let passes = if is_boxed {
+                    match kind {
+                        super::GuardKind::Coercible => {
+                            !matches!(boxed[src as usize], Value::Null | Value::Undefined)
+                        }
+                        super::GuardKind::PropertyKey => matches!(
+                            boxed[src as usize],
+                            Value::Number(_) | Value::String(_) | Value::Boolean(_)
+                        ),
+                    }
+                } else {
+                    match kind {
+                        super::GuardKind::Coercible => {
+                            !matches!(registers[src as usize], Typed::Undefined)
+                        }
+                        super::GuardKind::PropertyKey => true,
+                    }
+                };
+                if !passes {
                     deopt_here!(op);
                 }
             }

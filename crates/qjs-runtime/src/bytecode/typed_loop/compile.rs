@@ -1026,7 +1026,7 @@ impl<'a> Builder<'a> {
     #[allow(unused_variables)]
     fn trace_give_up(&self, label: &str, ip: usize) {
         #[cfg(feature = "perf-counters")]
-        if std::env::var_os("QJS_TL_TRACE").is_some() {
+        if let Some(level) = std::env::var_os("QJS_TL_TRACE") {
             eprintln!(
                 "{label} region {}..{} at ip {} op {:?} discovered_boxed={:?} discovered_reads={:?}",
                 self.header,
@@ -1036,6 +1036,16 @@ impl<'a> Builder<'a> {
                 self.discovered_boxed,
                 self.discovered_boxed_element_reads
             );
+            // `QJS_TL_TRACE=2` also lists the region's bytecode, which is
+            // what names a shape the small reproductions do not have.
+            if level == "2" {
+                for (offset, op) in self.bytecode.code[self.header..=self.backedge]
+                    .iter()
+                    .enumerate()
+                {
+                    eprintln!("    {:4} {op:?}", self.header + offset);
+                }
+            }
         }
     }
 
@@ -1260,8 +1270,25 @@ impl<'a> Builder<'a> {
                 let top = *self.stack.last()?;
                 self.stack.push(top);
             }
+            // Both peek: the operand stays where it is and a value the check
+            // cannot pass deoptimizes to the interpreter's own conversion.
+            Op::RequireObjectCoercible | Op::ToPropertyKeyForAccess => {
+                let (src, class, _) = *self.stack.last()?;
+                self.emit(TypedOp::Guard {
+                    src,
+                    boxed: class == Class::Boxed,
+                    kind: if matches!(op, Op::RequireObjectCoercible) {
+                        super::GuardKind::Coercible
+                    } else {
+                        super::GuardKind::PropertyKey
+                    },
+                });
+            }
+            // A discarded operand is dropped whatever its class: the scalar
+            // `pop` would emit an `Unbox`, which deoptimizes on an object --
+            // the receiver a compound element access checks and discards.
             Op::Pop => {
-                self.pop()?;
+                self.stack.pop()?;
             }
             // A search loop leaves through its result rather than through its
             // header test. Handing the `Return` itself back to the interpreter
