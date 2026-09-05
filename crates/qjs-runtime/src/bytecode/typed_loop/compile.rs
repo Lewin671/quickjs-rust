@@ -1532,6 +1532,29 @@ impl<'a> Builder<'a> {
                 self.compile_resolved_numeric_native(1)?;
             }
             Op::Call(argc) if (1..=MAX_HELPER_ARITY).contains(argc) => {
+                // A callee that is not a frame-local -- `parseInt` read from
+                // the global -- cannot be flattened at entry. It is called
+                // with boxed arguments through the fast native table, so
+                // `out.push(parseInt(text.substr(i, 8), 16))` stays native;
+                // a callee that turns out not to be such a native deoptimizes.
+                let callee_depth = self.stack.len().checked_sub(*argc + 1)?;
+                if !matches!(self.stack.get(callee_depth), Some((_, _, Origin::Local(_)))) {
+                    let mut args = [0_u16; MAX_HELPER_ARITY];
+                    for index in (0..*argc).rev() {
+                        let (register, _) = self.pop_boxed()?;
+                        args[index] = register;
+                    }
+                    let (callee, _) = self.pop_boxed()?;
+                    let dst = self.slot_boxed()?;
+                    self.emit(TypedOp::CallNativeBoxed {
+                        dst,
+                        callee,
+                        args,
+                        arity: u8::try_from(*argc).ok()?,
+                    });
+                    self.push_boxed(dst, Origin::Computed);
+                    return Some(());
+                }
                 let mut args = [0_u16; MAX_HELPER_ARITY];
                 for index in (0..*argc).rev() {
                     let (register, _) = self.pop()?;

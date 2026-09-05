@@ -141,6 +141,7 @@ fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
     // deoptimizing on every iteration.
     if !program.helper_sites.is_empty() {
         let Some(graphs) = super::helper_graph::Preparation::prepare(vm, program) else {
+            trace_decline(program, "helper preparation");
             return Outcome::Declined;
         };
         *program.helper_graphs.borrow_mut() = graphs;
@@ -438,6 +439,36 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                     deopt_here!(op);
                 }
             }
+            TypedOp::CallNativeBoxed {
+                dst,
+                callee,
+                args,
+                arity,
+            } => {
+                let callee_value = &boxed[callee as usize];
+                if !matches!(callee_value, Value::Function(function) if function.native.is_some()) {
+                    deopt_here!(op);
+                }
+                let arguments: [Value; super::helper_graph::MAX_HELPER_ARITY] =
+                    std::array::from_fn(|index| {
+                        if index < usize::from(arity) {
+                            boxed[args[index] as usize].clone()
+                        } else {
+                            Value::Undefined
+                        }
+                    });
+                let env = &vm.env;
+                let result = super::super::vm_call::try_fast_global_native_call(
+                    callee_value,
+                    &Value::Undefined,
+                    &arguments[..usize::from(arity)],
+                    &|| env.empty_frame(),
+                );
+                let Some(Ok(value)) = result else {
+                    deopt_here!(op);
+                };
+                boxed[dst as usize] = value;
+            }
             TypedOp::Guard {
                 src,
                 boxed: is_boxed,
@@ -582,11 +613,29 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
 
 /// Loads the frame slots the program uses, declining when any slot holds a type
 /// the register file cannot represent or a receiver is not a dense array.
+/// Names why an entry declined, on a diagnostic build with the trace on.
+#[allow(unused_variables)]
+fn trace_decline(program: &TypedLoopProgram, reason: &str) {
+    #[cfg(feature = "perf-counters")]
+    if std::env::var_os("QJS_TL_TRACE").is_some() {
+        eprintln!(
+            "TLDECLINE region {}..{} {reason}",
+            program.header, program.backedge
+        );
+    }
+}
+
 fn seed_registers(
     vm: &mut Vm<'_>,
     program: &TypedLoopProgram,
     scratch: &mut TypedLoopScratch,
 ) -> Option<()> {
+    macro_rules! decline {
+        ($reason:expr) => {{
+            trace_decline(program, &$reason);
+            return None;
+        }};
+    }
     scratch.clear();
     let TypedLoopScratch {
         registers,
@@ -600,7 +649,7 @@ fn seed_registers(
         // The receiver must be a dense array for the whole loop, so a region
         // that also writes that slot declines.
         let Some(Value::Array(array)) = vm.local_slot_value(slot as usize) else {
-            return None;
+            decline!(format!("receiver slot {slot} is not a dense array"));
         };
         receivers.push(array);
         if program
@@ -608,7 +657,7 @@ fn seed_registers(
             .iter()
             .any(|(_, written)| *written == slot)
         {
-            return None;
+            decline!(format!("receiver slot {slot} is written"));
         }
     }
     registers.resize(program.register_count, Typed::Undefined);
@@ -617,14 +666,17 @@ fn seed_registers(
     }
     for &(register, slot) in &program.local_slots {
         let value = match vm.local_slot_value(slot as usize) {
-            Some(value) => Typed::from_value(&value)?,
+            Some(value) => match Typed::from_value(&value) {
+                Some(value) => value,
+                None => decline!(format!("scalar slot {slot} holds {value:?}")),
+            },
             None => Typed::Undefined,
         };
         registers[register as usize] = value;
     }
     for &(_, slot) in &program.written_locals {
         if !vm.slot_accepts_typed_loop_write(slot as usize) {
-            return None;
+            decline!(format!("written slot {slot} is not writable directly"));
         }
     }
     for (register, name) in &program.global_reads {
@@ -634,12 +686,17 @@ fn seed_registers(
             .global_this_own_property(name)
             .is_some_and(|property| property.is_accessor())
         {
-            return None;
+            decline!(format!("global {name} is an accessor"));
         }
         // Resolving through the interpreter's own path keeps `this`, global
         // lexicals, and shadowing exactly as the loop would have seen them.
-        let value = vm.load_global(name).ok()?;
-        registers[*register as usize] = Typed::from_value(&value)?;
+        let Ok(value) = vm.load_global(name) else {
+            decline!(format!("global {name} is unresolvable"));
+        };
+        let Some(typed) = Typed::from_value(&value) else {
+            decline!(format!("scalar global {name} holds {value:?}"));
+        };
+        registers[*register as usize] = typed;
     }
     boxed.resize(program.boxed_count, Value::Undefined);
     for (register, value) in &program.boxed_constant_registers {
@@ -656,12 +713,17 @@ fn seed_registers(
         // It used to require an ordinary object here, which excluded a string
         // -- and a string key is the whole point of a computed access, so a
         // dictionary loop could compile and then always decline at entry.
-        boxed[register as usize] = vm.local_slot_value(slot as usize)?;
+        let Some(value) = vm.local_slot_value(slot as usize) else {
+            decline!(format!("boxed slot {slot} is uninitialized"));
+        };
+        boxed[register as usize] = value;
     }
     for &register in &program.written_boxed_locals {
         let slot = program.slot_for_boxed_register(register)? as usize;
         if !vm.slot_accepts_typed_loop_write(slot) {
-            return None;
+            decline!(format!(
+                "written boxed slot {slot} is not writable directly"
+            ));
         }
     }
     for (register, name) in &program.boxed_global_reads {
@@ -669,16 +731,21 @@ fn seed_registers(
             .global_this_own_property(name)
             .is_some_and(|property| property.is_accessor())
         {
-            return None;
+            decline!(format!("boxed global {name} is an accessor"));
         }
-        let value = vm.load_global(name).ok()?;
+        let Ok(value) = vm.load_global(name) else {
+            decline!(format!("boxed global {name} is unresolvable"));
+        };
         if !value_is_ordinary_object(&value) {
-            return None;
+            decline!(format!("boxed global {name} is not an ordinary object"));
         }
         boxed[*register as usize] = value;
     }
     for (slot, name) in &program.sloppy_global_writes {
-        sloppy_global_writes.push(vm.prepare_typed_loop_sloppy_global_write(*slot as usize, name)?);
+        let Some(write) = vm.prepare_typed_loop_sloppy_global_write(*slot as usize, name) else {
+            decline!(format!("sloppy global write {name} cannot be prepared"));
+        };
+        sloppy_global_writes.push(write);
     }
     // A later generic native call may refresh a fallback slot from the realm
     // after user code runs. Register every sink once on entry so that slow-path
@@ -700,6 +767,10 @@ fn value_is_ordinary_object(value: &Value) -> bool {
     match value {
         Value::Object(object) => !crate::symbol::is_symbol_primitive(object),
         Value::Array(_) => true,
+        // A function global is held only to be called: `parseInt` from a
+        // global read. Every operation that would use it as a receiver
+        // deoptimizes on a function, so holding it observes nothing.
+        Value::Function(_) => true,
         _ => false,
     }
 }

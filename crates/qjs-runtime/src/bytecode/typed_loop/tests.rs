@@ -230,6 +230,44 @@ fn typed_loops_write_dense_elements_with_computed_scalar_indices() {
     );
 }
 
+/// A call whose callee is a global rather than a frame-local is answered
+/// through the fast native table with boxed arguments -- `parseInt` over a
+/// substring is every hex decoder -- and a global that turns out to be an
+/// ordinary function deoptimizes to the interpreter's call.
+#[test]
+fn typed_loops_call_global_natives_with_boxed_arguments() {
+    let source = "function hex(str) { var out = []; for (var i = 0; i < str.length; i += 8) out.push(parseInt(str.substr(i, 8), 16) ^ 0); return out.join(); }";
+    let programs = super::compile_all(&nested_function(source));
+    assert_eq!(programs.len(), 1, "{source}");
+    assert!(
+        programs[0]
+            .ops
+            .iter()
+            .any(|op| matches!(op, super::TypedOp::CallNativeBoxed { arity: 2, .. })),
+        "{:#?}",
+        programs[0].ops
+    );
+    assert_eq!(
+        eval(&format!("{source} hex('ffb7317e00000001');")),
+        Ok(Value::String("-4771458,1".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var F = function (x) { return x + 1; };\
+             function g(n) { var s = 0; for (var i = 0; i < n; i++) { s += F(i); } return s; }\
+             g(4);"
+        ),
+        Ok(Value::Number(10.0))
+    );
+    assert_eq!(
+        eval(
+            "function bad(n) { var k = 0; for (var i = 0; i < n; i++) { try { decodeURIComponent('%'); } catch (error) { k += error instanceof URIError ? 1 : 100; } } return k; }\
+             bad(3);"
+        ),
+        Ok(Value::Number(3.0))
+    );
+}
+
 /// A dense read that finds no element -- a hole below the length or an
 /// index past it -- answers `undefined` when no prototype on the chain can
 /// supply an indexed property, and deoptimizes to the interpreter when one

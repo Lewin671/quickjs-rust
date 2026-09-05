@@ -272,6 +272,16 @@ enum TypedOp {
         args: [u16; helper_graph::MAX_HELPER_ARITY],
         arity: u8,
     },
+    /// A call whose callee is not a frame-local -- a global such as
+    /// `parseInt` -- with its arguments boxed: answered through the
+    /// interpreter's fast native table when the callee is a native it
+    /// carries, and deoptimized otherwise.
+    CallNativeBoxed {
+        dst: u16,
+        callee: u16,
+        args: [u16; helper_graph::MAX_HELPER_ARITY],
+        arity: u8,
+    },
     /// A compound element access's operand check, on the register at the
     /// top of the abstract stack. `Coercible` deoptimizes on `null` or
     /// `undefined` (the interpreter raises the TypeError);

@@ -135,6 +135,7 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
                     visit(src);
                 }
             }
+            TypedOp::CallNativeBoxed { .. } => {}
             TypedOp::ElementRead { index, .. } => visit(index),
             TypedOp::CallNumericNative {
                 dst, first, second, ..
@@ -191,6 +192,15 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
             TypedOp::Guard { src, boxed, .. } => {
                 if *boxed {
                     visit(src);
+                }
+            }
+            TypedOp::CallNativeBoxed {
+                dst, callee, args, ..
+            } => {
+                visit(dst);
+                visit(callee);
+                for register in args {
+                    visit(register);
                 }
             }
             TypedOp::ComputedRead { dst, receiver, key } => {
