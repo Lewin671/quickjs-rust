@@ -1545,12 +1545,14 @@ impl<'a> Builder<'a> {
                         args[index] = register;
                     }
                     let (callee, _) = self.pop_boxed()?;
+                    let receiver = self.boxed_constant_register(&Value::Undefined)?;
                     let dst = self.slot_boxed()?;
-                    self.emit(TypedOp::CallNativeBoxed {
+                    self.emit(TypedOp::CallClosedFormLeaf {
                         dst,
+                        receiver,
                         callee,
                         args,
-                        arity: u8::try_from(*argc).ok()?,
+                        arity: u8::try_from(*argc).ok()? | super::BOXED_ARGUMENTS,
                     });
                     self.push_boxed(dst, Origin::Computed);
                     return Some(());

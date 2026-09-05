@@ -135,7 +135,6 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
                     visit(src);
                 }
             }
-            TypedOp::CallNativeBoxed { .. } => {}
             TypedOp::ElementRead { index, .. } => visit(index),
             TypedOp::CallNumericNative {
                 dst, first, second, ..
@@ -146,9 +145,11 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
             }
             // Only the arguments are scalar; the receiver, callee, and result
             // are boxed because a user callee takes and returns any value.
-            TypedOp::CallClosedFormLeaf { args, .. } => {
-                for register in args {
-                    visit(register);
+            TypedOp::CallClosedFormLeaf { args, arity, .. } => {
+                if *arity & super::BOXED_ARGUMENTS == 0 {
+                    for register in args {
+                        visit(register);
+                    }
                 }
             }
             // Every operand of a computed access is boxed.
@@ -194,15 +195,6 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
                     visit(src);
                 }
             }
-            TypedOp::CallNativeBoxed {
-                dst, callee, args, ..
-            } => {
-                visit(dst);
-                visit(callee);
-                for register in args {
-                    visit(register);
-                }
-            }
             TypedOp::ComputedRead { dst, receiver, key } => {
                 visit(dst);
                 visit(receiver);
@@ -230,8 +222,14 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
                 dst,
                 receiver,
                 callee,
-                ..
+                args,
+                arity,
             } => {
+                if *arity & super::BOXED_ARGUMENTS != 0 {
+                    for register in args {
+                        visit(register);
+                    }
+                }
                 visit(dst);
                 visit(receiver);
                 visit(callee);

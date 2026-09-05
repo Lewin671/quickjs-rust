@@ -240,10 +240,10 @@ fn typed_loops_call_global_natives_with_boxed_arguments() {
     let programs = super::compile_all(&nested_function(source));
     assert_eq!(programs.len(), 1, "{source}");
     assert!(
-        programs[0]
-            .ops
-            .iter()
-            .any(|op| matches!(op, super::TypedOp::CallNativeBoxed { arity: 2, .. })),
+        programs[0].ops.iter().any(|op| matches!(
+            op,
+            super::TypedOp::CallClosedFormLeaf { arity, .. } if *arity == 2 | super::BOXED_ARGUMENTS
+        )),
         "{:#?}",
         programs[0].ops
     );

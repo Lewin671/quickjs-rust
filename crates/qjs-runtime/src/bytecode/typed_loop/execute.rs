@@ -141,7 +141,6 @@ fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
     // deoptimizing on every iteration.
     if !program.helper_sites.is_empty() {
         let Some(graphs) = super::helper_graph::Preparation::prepare(vm, program) else {
-            trace_decline(program, "helper preparation");
             return Outcome::Declined;
         };
         *program.helper_graphs.borrow_mut() = graphs;
@@ -439,36 +438,6 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                     deopt_here!(op);
                 }
             }
-            TypedOp::CallNativeBoxed {
-                dst,
-                callee,
-                args,
-                arity,
-            } => {
-                let callee_value = &boxed[callee as usize];
-                if !matches!(callee_value, Value::Function(function) if function.native.is_some()) {
-                    deopt_here!(op);
-                }
-                let arguments: [Value; super::helper_graph::MAX_HELPER_ARITY] =
-                    std::array::from_fn(|index| {
-                        if index < usize::from(arity) {
-                            boxed[args[index] as usize].clone()
-                        } else {
-                            Value::Undefined
-                        }
-                    });
-                let env = &vm.env;
-                let result = super::super::vm_call::try_fast_global_native_call(
-                    callee_value,
-                    &Value::Undefined,
-                    &arguments[..usize::from(arity)],
-                    &|| env.empty_frame(),
-                );
-                let Some(Ok(value)) = result else {
-                    deopt_here!(op);
-                };
-                boxed[dst as usize] = value;
-            }
             TypedOp::Guard {
                 src,
                 boxed: is_boxed,
@@ -539,21 +508,8 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                 };
                 registers[dst as usize] = value;
             }
-            TypedOp::CallClosedFormLeaf {
-                dst,
-                receiver,
-                callee,
-                args,
-                arity,
-            } => {
-                let values = args.map(|register| registers[register as usize]);
-                let Some(value) = call_closed_form_leaf(
-                    program,
-                    &vm.env,
-                    &boxed[callee as usize],
-                    &boxed[receiver as usize],
-                    &values[..usize::from(arity)],
-                ) else {
+            TypedOp::CallClosedFormLeaf { dst, .. } => {
+                let Some(value) = call_leaf(program, &vm.env, registers, boxed, op) else {
                     deopt_here!(op);
                 };
                 boxed[dst as usize] = value;
@@ -613,29 +569,11 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
 
 /// Loads the frame slots the program uses, declining when any slot holds a type
 /// the register file cannot represent or a receiver is not a dense array.
-/// Names why an entry declined, on a diagnostic build with the trace on.
-#[allow(unused_variables)]
-fn trace_decline(program: &TypedLoopProgram, reason: &str) {
-    #[cfg(feature = "perf-counters")]
-    if std::env::var_os("QJS_TL_TRACE").is_some() {
-        eprintln!(
-            "TLDECLINE region {}..{} {reason}",
-            program.header, program.backedge
-        );
-    }
-}
-
 fn seed_registers(
     vm: &mut Vm<'_>,
     program: &TypedLoopProgram,
     scratch: &mut TypedLoopScratch,
 ) -> Option<()> {
-    macro_rules! decline {
-        ($reason:expr) => {{
-            trace_decline(program, &$reason);
-            return None;
-        }};
-    }
     scratch.clear();
     let TypedLoopScratch {
         registers,
@@ -649,7 +587,7 @@ fn seed_registers(
         // The receiver must be a dense array for the whole loop, so a region
         // that also writes that slot declines.
         let Some(Value::Array(array)) = vm.local_slot_value(slot as usize) else {
-            decline!(format!("receiver slot {slot} is not a dense array"));
+            return None;
         };
         receivers.push(array);
         if program
@@ -657,7 +595,7 @@ fn seed_registers(
             .iter()
             .any(|(_, written)| *written == slot)
         {
-            decline!(format!("receiver slot {slot} is written"));
+            return None;
         }
     }
     registers.resize(program.register_count, Typed::Undefined);
@@ -666,17 +604,14 @@ fn seed_registers(
     }
     for &(register, slot) in &program.local_slots {
         let value = match vm.local_slot_value(slot as usize) {
-            Some(value) => match Typed::from_value(&value) {
-                Some(value) => value,
-                None => decline!(format!("scalar slot {slot} holds {value:?}")),
-            },
+            Some(value) => Typed::from_value(&value)?,
             None => Typed::Undefined,
         };
         registers[register as usize] = value;
     }
     for &(_, slot) in &program.written_locals {
         if !vm.slot_accepts_typed_loop_write(slot as usize) {
-            decline!(format!("written slot {slot} is not writable directly"));
+            return None;
         }
     }
     for (register, name) in &program.global_reads {
@@ -686,17 +621,12 @@ fn seed_registers(
             .global_this_own_property(name)
             .is_some_and(|property| property.is_accessor())
         {
-            decline!(format!("global {name} is an accessor"));
+            return None;
         }
         // Resolving through the interpreter's own path keeps `this`, global
         // lexicals, and shadowing exactly as the loop would have seen them.
-        let Ok(value) = vm.load_global(name) else {
-            decline!(format!("global {name} is unresolvable"));
-        };
-        let Some(typed) = Typed::from_value(&value) else {
-            decline!(format!("scalar global {name} holds {value:?}"));
-        };
-        registers[*register as usize] = typed;
+        let value = vm.load_global(name).ok()?;
+        registers[*register as usize] = Typed::from_value(&value)?;
     }
     boxed.resize(program.boxed_count, Value::Undefined);
     for (register, value) in &program.boxed_constant_registers {
@@ -713,17 +643,12 @@ fn seed_registers(
         // It used to require an ordinary object here, which excluded a string
         // -- and a string key is the whole point of a computed access, so a
         // dictionary loop could compile and then always decline at entry.
-        let Some(value) = vm.local_slot_value(slot as usize) else {
-            decline!(format!("boxed slot {slot} is uninitialized"));
-        };
-        boxed[register as usize] = value;
+        boxed[register as usize] = vm.local_slot_value(slot as usize)?;
     }
     for &register in &program.written_boxed_locals {
         let slot = program.slot_for_boxed_register(register)? as usize;
         if !vm.slot_accepts_typed_loop_write(slot) {
-            decline!(format!(
-                "written boxed slot {slot} is not writable directly"
-            ));
+            return None;
         }
     }
     for (register, name) in &program.boxed_global_reads {
@@ -731,21 +656,16 @@ fn seed_registers(
             .global_this_own_property(name)
             .is_some_and(|property| property.is_accessor())
         {
-            decline!(format!("boxed global {name} is an accessor"));
+            return None;
         }
-        let Ok(value) = vm.load_global(name) else {
-            decline!(format!("boxed global {name} is unresolvable"));
-        };
+        let value = vm.load_global(name).ok()?;
         if !value_is_ordinary_object(&value) {
-            decline!(format!("boxed global {name} is not an ordinary object"));
+            return None;
         }
         boxed[*register as usize] = value;
     }
     for (slot, name) in &program.sloppy_global_writes {
-        let Some(write) = vm.prepare_typed_loop_sloppy_global_write(*slot as usize, name) else {
-            decline!(format!("sloppy global write {name} cannot be prepared"));
-        };
-        sloppy_global_writes.push(write);
+        sloppy_global_writes.push(vm.prepare_typed_loop_sloppy_global_write(*slot as usize, name)?);
     }
     // A later generic native call may refresh a fallback slot from the realm
     // after user code runs. Register every sink once on entry so that slow-path
@@ -758,6 +678,71 @@ fn seed_registers(
         .borrow_mut()
         .resize_with(program.cache_count, super::ShapeWays::default);
     Some(())
+}
+
+/// `CallClosedFormLeaf`, whole. Out of line so the dispatch loop's arm is a
+/// call and a test: a branch on the argument mode inside the arm itself,
+/// executed a few thousand times, cost ai-astar 15% by re-rolling the
+/// loop's register allocation.
+#[inline(never)]
+fn call_leaf(
+    program: &TypedLoopProgram,
+    env: &crate::function::CallEnv,
+    registers: &[Typed],
+    boxed: &[Value],
+    op: &TypedOp,
+) -> Option<Value> {
+    let TypedOp::CallClosedFormLeaf {
+        receiver,
+        callee,
+        args,
+        arity,
+        ..
+    } = *op
+    else {
+        return None;
+    };
+    if arity & super::BOXED_ARGUMENTS != 0 {
+        return call_native_boxed(env, boxed, callee, &args, arity & !super::BOXED_ARGUMENTS);
+    }
+    let values = args.map(|register| registers[register as usize]);
+    call_closed_form_leaf(
+        program,
+        env,
+        &boxed[callee as usize],
+        &boxed[receiver as usize],
+        &values[..usize::from(arity)],
+    )
+}
+
+/// A call through the fast native table with boxed arguments.
+fn call_native_boxed(
+    env: &crate::function::CallEnv,
+    boxed: &[Value],
+    callee: u16,
+    args: &[u16; super::helper_graph::MAX_HELPER_ARITY],
+    arity: u8,
+) -> Option<Value> {
+    let callee_value = &boxed[callee as usize];
+    if !matches!(callee_value, Value::Function(function) if function.native.is_some()) {
+        return None;
+    }
+    let arguments: [Value; super::helper_graph::MAX_HELPER_ARITY] = std::array::from_fn(|index| {
+        if index < usize::from(arity) {
+            boxed[args[index] as usize].clone()
+        } else {
+            Value::Undefined
+        }
+    });
+    match super::super::vm_call::try_fast_global_native_call(
+        callee_value,
+        &Value::Undefined,
+        &arguments[..usize::from(arity)],
+        &|| env.empty_frame(),
+    ) {
+        Some(Ok(value)) => Some(value),
+        Some(Err(_)) | None => None,
+    }
 }
 
 /// Whether a value is an ordinary object or array the program may hold in a

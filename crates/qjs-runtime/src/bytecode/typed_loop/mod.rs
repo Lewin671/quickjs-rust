@@ -265,19 +265,18 @@ enum TypedOp {
     ///
     /// The receiver is kept rather than dropped, because a receiver-property
     /// body is exactly what the second evaluator answers.
+    ///
+    /// With `BOXED_ARGUMENTS` set in `arity`, the arguments are boxed
+    /// registers and the callee is not a frame-local -- a global such as
+    /// `parseInt` -- answered through the interpreter's fast native table
+    /// when the callee is a native it carries, and deoptimized otherwise. A
+    /// flag rather than an operation of its own, and the arm's work kept in
+    /// one out-of-line call: the dispatch loop's register allocation re-rolls
+    /// on any growth of an arm, and cost ai-astar 15% twice while this was
+    /// being added.
     CallClosedFormLeaf {
         dst: u16,
         receiver: u16,
-        callee: u16,
-        args: [u16; helper_graph::MAX_HELPER_ARITY],
-        arity: u8,
-    },
-    /// A call whose callee is not a frame-local -- a global such as
-    /// `parseInt` -- with its arguments boxed: answered through the
-    /// interpreter's fast native table when the callee is a native it
-    /// carries, and deoptimized otherwise.
-    CallNativeBoxed {
-        dst: u16,
         callee: u16,
         args: [u16; helper_graph::MAX_HELPER_ARITY],
         arity: u8,
@@ -529,6 +528,9 @@ impl ShapeWays {
         }
     }
 }
+
+/// Marks a `CallClosedFormLeaf` whose arguments are boxed registers.
+const BOXED_ARGUMENTS: u8 = 0x80;
 
 /// What a [`TypedOp::Guard`] checks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
