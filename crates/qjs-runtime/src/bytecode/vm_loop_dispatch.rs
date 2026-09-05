@@ -75,6 +75,12 @@ impl Vm<'_> {
         // Reaching here means all four engines were consulted and all four
         // declined, so the whole probe chain was overhead on this edge.
         crate::diagnostics::count!(declined_loop_plan_edges);
+        // With the typed-loop trace on, name the edge: a histogram of these
+        // lines weights each region that runs interpreted by its iterations.
+        #[cfg(feature = "perf-counters")]
+        if std::env::var_os("QJS_TL_TRACE").is_some() {
+            eprintln!("TLEDGE region {target}..{backedge}");
+        }
         self.ip = target;
     }
 }

@@ -487,18 +487,16 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                 dst,
                 receiver,
                 callee,
-                first,
-                second,
+                args,
                 arity,
             } => {
+                let values = args.map(|register| registers[register as usize]);
                 let Some(value) = call_closed_form_leaf(
                     program,
                     &vm.env,
                     &boxed[callee as usize],
                     &boxed[receiver as usize],
-                    registers[first as usize],
-                    registers[second as usize],
-                    arity,
+                    &values[..usize::from(arity)],
                 ) else {
                     deopt_here!(op);
                 };
@@ -768,14 +766,17 @@ fn call_closed_form_leaf(
     env: &crate::function::CallEnv,
     callee: &Value,
     receiver: &Value,
-    first: Typed,
-    second: Typed,
-    arity: u8,
+    args: &[Typed],
 ) -> Option<Value> {
+    let arity = u8::try_from(args.len()).ok()?;
+    let first = args.first().copied().unwrap_or(Typed::Undefined);
+    let second = args.get(1).copied().unwrap_or(Typed::Undefined);
     // A hoisted `Math` receiver is compiled to the unboxed operation, but a
     // callee that only turns out to be an intrinsic at run time still reaches
     // here; answering it costs one predicate and keeps that shape working.
-    if let Some(value) = call_numeric_native(callee, first, second, arity) {
+    if arity <= 2
+        && let Some(value) = call_numeric_native(callee, first, second, arity)
+    {
         return Some(value.to_value());
     }
     // Any other native goes through the interpreter's own fast native table
@@ -784,7 +785,13 @@ fn call_closed_form_leaf(
     // interpreter's call raises it; an arm the table does not have
     // deoptimizes the same way.
     if matches!(callee, Value::Function(function) if function.native.is_some()) {
-        let arguments: [Value; 2] = [first.to_value(), second.to_value()];
+        let arguments: [Value; super::helper_graph::MAX_HELPER_ARITY] =
+            std::array::from_fn(|index| {
+                args.get(index)
+                    .copied()
+                    .unwrap_or(Typed::Undefined)
+                    .to_value()
+            });
         let arguments = arguments.get(..usize::from(arity))?;
         return match super::super::vm_call::try_fast_global_native_call(
             callee,
@@ -801,11 +808,7 @@ fn call_closed_form_leaf(
     // body they would decline -- and reaching it through them first means
     // building an argument array and walking the body twice, which cost
     // `imaging-darkroom` 4.1%.
-    if let Some(value) = program
-        .helper_graphs
-        .borrow()
-        .call(callee, first, second, arity)
-    {
+    if let Some(value) = program.helper_graphs.borrow().call(callee, args) {
         return Some(value.to_value());
     }
     if !crate::function::is_direct_leaf_function(callee) {
@@ -815,7 +818,12 @@ fn call_closed_form_leaf(
         return None;
     };
     let bytecode = function.bytecode.as_ref()?;
-    let arguments: [Value; 2] = [first.to_value(), second.to_value()];
+    let arguments: [Value; super::helper_graph::MAX_HELPER_ARITY] = std::array::from_fn(|index| {
+        args.get(index)
+            .copied()
+            .unwrap_or(Typed::Undefined)
+            .to_value()
+    });
     let arguments = arguments.get(..usize::from(arity))?;
     let value = super::super::vm_numeric_leaf::try_eval_numeric_leaf(
         bytecode,

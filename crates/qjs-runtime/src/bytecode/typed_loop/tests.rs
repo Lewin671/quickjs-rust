@@ -230,6 +230,36 @@ fn typed_loops_write_dense_elements_with_computed_scalar_indices() {
     );
 }
 
+/// A helper call may take up to four arguments -- sha1's round function
+/// `ft(t, b, c, d)` -- whether it is flattened into the region's helper
+/// graph or answered as a closed-form leaf; a fifth argument keeps the
+/// interpreter.
+#[test]
+fn typed_loops_flatten_helpers_of_up_to_four_arguments() {
+    // `nested_function` takes the first function in the script, so the loop
+    // body comes first and its helper after.
+    let source = "function run(n) { var a = 0x67452301, b = 0xEFCDAB89, c = 0x98BADCFE, d = 0x10325476, acc = 0;\
+          for (var t = 0; t < n; t++) { acc = (acc + ft(t, b, c, d) + t) | 0; } return acc; }\
+        function ft(t, b, c, d) { if (t < 20) return (b & c) | ((~b) & d); if (t < 40) return b ^ c ^ d; return (b & c) | (b & d) | (c & d); }";
+    let programs = super::compile_all(&nested_function(source));
+    assert_eq!(programs.len(), 1, "{source}");
+    assert!(
+        programs[0]
+            .ops
+            .iter()
+            .any(|op| matches!(op, super::TypedOp::CallClosedFormLeaf { arity: 4, .. })),
+        "{:#?}",
+        programs[0].ops
+    );
+    assert_eq!(
+        eval(&format!("{source} run(60);")),
+        Ok(Value::Number(-291_943_762.0))
+    );
+    let wide = "function run(n) { var s = 0; for (var i = 0; i < n; i++) { s += five(i, 1, 2, 3, 4); } return s; } function five(a, b, c, d, e) { return a + b + c + d + e; }";
+    assert!(super::compile_all(&nested_function(wide)).is_empty());
+    assert_eq!(eval(&format!("{wide} run(10);")), Ok(Value::Number(145.0)));
+}
+
 /// A compound element assignment carries `RequireObjectCoercible` and
 /// `ToPropertyKeyForAccess` in its key range and discards the checked
 /// receiver with `Pop`; the region compiles through the ordinary path with

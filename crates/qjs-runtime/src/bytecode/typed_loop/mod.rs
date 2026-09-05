@@ -269,8 +269,7 @@ enum TypedOp {
         dst: u16,
         receiver: u16,
         callee: u16,
-        first: u16,
-        second: u16,
+        args: [u16; helper_graph::MAX_HELPER_ARITY],
         arity: u8,
     },
     /// A compound element access's operand check, on the register at the

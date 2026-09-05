@@ -64,6 +64,9 @@ const MAX_NATIVE_RECURSION: usize = 96;
 /// register file is a fixed array of this size on the Rust stack, which is what
 /// keeps a helper call free of allocation.
 pub(super) const MAX_HELPER_REGISTERS: usize = 24;
+/// Widest helper call a region admits. sha1's round function takes four
+/// (`sha1_ft(t, b, c, d)`); a wider call keeps the interpreter.
+pub(super) const MAX_HELPER_ARITY: usize = 4;
 
 /// One operation of a flattened helper body. Every operand is a register index
 /// into that body's own file, which starts at zero for every call — no window
@@ -109,8 +112,7 @@ enum HelperOp {
     Call {
         dst: u16,
         graph: u16,
-        first: u16,
-        second: u16,
+        args: [u16; MAX_HELPER_ARITY],
         arity: u8,
     },
     Return {
@@ -144,30 +146,25 @@ impl HelperGraph {
     /// Runs the body prepared for `callee`, or `None` when this entry prepared
     /// none -- which is every program without a call site, and every callee a
     /// site turned out not to reach.
-    pub(super) fn call(
-        &self,
-        callee: &Value,
-        first: Typed,
-        second: Typed,
-        arity: u8,
-    ) -> Option<Typed> {
+    pub(super) fn call(&self, callee: &Value, args: &[Typed]) -> Option<Typed> {
         if self.programs.is_empty() {
             return None;
         }
         let Value::Function(function) = callee else {
             return None;
         };
+        let arity = u8::try_from(args.len()).ok()?;
         let index = self
             .programs
             .iter()
             .position(|program| program.arity == arity && program.callee == *function)?;
-        self.run(u16::try_from(index).ok()?, first, second, 0)
+        self.run(u16::try_from(index).ok()?, args, 0)
     }
 
     /// Runs one body. `depth` bounds native recursion: a flattened body is pure,
     /// so abandoning it at any point and letting the interpreter run the call
     /// again is not observable, which is what makes a hard cap safe here.
-    fn run(&self, index: u16, first: Typed, second: Typed, depth: usize) -> Option<Typed> {
+    fn run(&self, index: u16, args: &[Typed], depth: usize) -> Option<Typed> {
         if depth >= MAX_NATIVE_RECURSION {
             return None;
         }
@@ -176,11 +173,11 @@ impl HelperGraph {
         // allocates nothing and its registers stay in the frame the compiler
         // chose for this function.
         let mut registers = [Typed::Undefined; MAX_HELPER_REGISTERS];
-        if program.arity > 0 {
-            registers[0] = first;
-        }
-        if program.arity > 1 {
-            registers[1] = second;
+        for (register, argument) in registers
+            .iter_mut()
+            .zip(args.iter().take(usize::from(program.arity)))
+        {
+            *register = *argument;
         }
         let mut pc = 0_usize;
         loop {
@@ -235,20 +232,16 @@ impl HelperGraph {
                 HelperOp::Call {
                     dst,
                     graph,
-                    first,
-                    second,
+                    args,
                     arity,
                 } => {
                     let callee = self.programs.get(graph as usize)?;
                     if callee.arity != arity {
                         return None;
                     }
-                    registers[dst as usize] = self.run(
-                        graph,
-                        registers[first as usize],
-                        registers[second as usize],
-                        depth + 1,
-                    )?;
+                    let values = args.map(|register| registers[register as usize]);
+                    registers[dst as usize] =
+                        self.run(graph, &values[..usize::from(arity)], depth + 1)?;
                 }
                 HelperOp::Return { src } => return Some(registers[src as usize]),
             }
@@ -572,10 +565,10 @@ impl Preparation {
                 walk.ops.push(HelperOp::Jump { target: 0 });
                 walk.unreachable = true;
             }
-            Op::Call(argc) if *argc <= 2 => {
+            Op::Call(argc) if *argc <= MAX_HELPER_ARITY => {
                 self.call(vm, walk, *argc, false, depth)?;
             }
-            Op::CallResolved(argc) if *argc <= 2 => {
+            Op::CallResolved(argc) if *argc <= MAX_HELPER_ARITY => {
                 self.call(vm, walk, *argc, true, depth)?;
             }
             Op::CallResolvedGuardedMathUnary => {
@@ -601,7 +594,7 @@ impl Preparation {
         resolved: bool,
         depth: usize,
     ) -> Option<()> {
-        let mut args = [0_u16; 2];
+        let mut args = [0_u16; MAX_HELPER_ARITY];
         for index in (0..argc).rev() {
             args[index] = walk.pop_register()?;
         }
@@ -617,6 +610,8 @@ impl Preparation {
         let arity = u8::try_from(argc).ok()?;
         let dst = walk.push_register()?;
         match callee {
+            // The numeric intrinsics take at most two arguments.
+            Slot::Native(_) if argc > 2 => return None,
             Slot::Native(native) => walk.ops.push(HelperOp::Native {
                 dst,
                 native,
@@ -629,8 +624,7 @@ impl Preparation {
                 walk.ops.push(HelperOp::Call {
                     dst,
                     graph,
-                    first: args[0],
-                    second: args[1],
+                    args,
                     arity,
                 });
             }
@@ -653,7 +647,7 @@ fn closed_form_already_answers(callee: &Value, arity: u8) -> bool {
     let Some(bytecode) = function.bytecode.as_ref() else {
         return false;
     };
-    let probe = [Value::Number(1.0), Value::Number(1.0)];
+    let probe = [const { Value::Number(1.0) }; MAX_HELPER_ARITY];
     let Some(arguments) = probe.get(..usize::from(arity)) else {
         return false;
     };

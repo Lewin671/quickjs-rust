@@ -12,6 +12,7 @@ use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 use std::{cell::OnceCell, rc::Rc};
 
 use super::super::ir::{Bytecode, Op};
+use super::helper_graph::MAX_HELPER_ARITY;
 use super::register_packing::{
     BoxedRegisterMetadata, compact_boxed_registers, compact_scalar_registers,
 };
@@ -1126,7 +1127,7 @@ impl<'a> Builder<'a> {
     /// numbers. An argument that is not scalar declines the region rather than
     /// widening what the evaluators accept.
     fn compile_resolved_closed_form_leaf(&mut self, argc: usize) -> Option<()> {
-        let mut args = [0_u16; 2];
+        let mut args = [0_u16; MAX_HELPER_ARITY];
         for index in (0..argc).rev() {
             let (register, _) = self.pop()?;
             args[index] = register;
@@ -1138,8 +1139,7 @@ impl<'a> Builder<'a> {
             dst,
             receiver,
             callee,
-            first: args[0],
-            second: args[1],
+            args,
             arity: u8::try_from(argc).ok()?,
         });
         self.push_boxed(dst, Origin::Computed);
@@ -1495,7 +1495,7 @@ impl<'a> Builder<'a> {
                 self.emit(TypedOp::MoveBoxed { dst, src: value });
                 self.push_boxed(dst, Origin::Computed);
             }
-            Op::CallResolved(argc) if *argc <= 2 => {
+            Op::CallResolved(argc) if *argc <= MAX_HELPER_ARITY => {
                 // `[receiver, callee, args...]`. A receiver read straight from
                 // the `Math` global keeps the unboxed intrinsic operation, whose
                 // result feeds surrounding arithmetic without a boxing round
@@ -1519,7 +1519,8 @@ impl<'a> Builder<'a> {
                     self.push(dst, Origin::Computed);
                     return Some(());
                 }
-                if receiver_class == Class::Boxed
+                if *argc <= 2
+                    && receiver_class == Class::Boxed
                     && self.math_receiver_registers.contains(&receiver)
                 {
                     self.compile_resolved_numeric_native(*argc)?;
@@ -1530,14 +1531,16 @@ impl<'a> Builder<'a> {
             Op::CallResolvedGuardedMathUnary => {
                 self.compile_resolved_numeric_native(1)?;
             }
-            Op::Call(argc) if (1..=2).contains(argc) => {
-                let mut args = [0_u16; 2];
+            Op::Call(argc) if (1..=MAX_HELPER_ARITY).contains(argc) => {
+                let mut args = [0_u16; MAX_HELPER_ARITY];
                 for index in (0..*argc).rev() {
                     let (register, _) = self.pop()?;
                     args[index] = register;
                 }
                 let (callee, origin) = self.pop_boxed()?;
-                if !self.mark_numeric_native_callee(callee, origin) {
+                // The numeric intrinsics take at most two arguments; a wider
+                // call is a helper site.
+                if *argc > 2 || !self.mark_numeric_native_callee(callee, origin) {
                     // Not an intrinsic reached through the `Math` global. A
                     // call to an ordinary function used to abort the whole
                     // region here, which is the terminal blocker on every
@@ -1564,8 +1567,7 @@ impl<'a> Builder<'a> {
                         dst,
                         receiver,
                         callee,
-                        first: args[0],
-                        second: args[1],
+                        args,
                         arity: u8::try_from(*argc).ok()?,
                     });
                     self.push_boxed(dst, Origin::Computed);

@@ -145,9 +145,10 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
             }
             // Only the arguments are scalar; the receiver, callee, and result
             // are boxed because a user callee takes and returns any value.
-            TypedOp::CallClosedFormLeaf { first, second, .. } => {
-                visit(first);
-                visit(second);
+            TypedOp::CallClosedFormLeaf { args, .. } => {
+                for register in args {
+                    visit(register);
+                }
             }
             // Every operand of a computed access is boxed.
             TypedOp::BoxedEquality { dst, .. } => visit(dst),
