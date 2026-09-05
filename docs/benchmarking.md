@@ -411,6 +411,20 @@ A counter-enabled build is a **diagnostic build and must never be used for
 timing** — the counters add work to the paths they observe. Nothing is
 compiled in without the feature: every counting site expands to nothing.
 
+The same build also carries the typed-loop trace. With `QJS_TL_TRACE=1` in
+the environment it prints one line per region the compiler gave up on
+(`TLGIVEUP`, with the instruction and what the pass discovered), per region
+that failed or compiled (`TLFAIL`, `TLOK`), and per deoptimization at run
+time (`TLDEOPT`, with the site and the bytecode it resumes at). A histogram
+of `TLDEOPT` lines over a corpus names the shapes that deoptimize a region
+on every entry, which is how the array element write, `push`, and
+`charCodeAt` gaps were found:
+
+```sh
+QJS_TL_TRACE=1 ./target/perf-counters/release/qjs case.js 2>&1 >/dev/null \
+  | grep TLDEOPT | sed 's/ ip [0-9]* / /; s/ bc .*//' | sort | uniq -c | sort -rn
+```
+
 This is what the two suites report for a nominal 100,000 iterations:
 
 | Case | Suite | Claims | Real calls | Real property ops | Declined plan edges |
