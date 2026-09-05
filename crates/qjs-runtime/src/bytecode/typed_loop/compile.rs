@@ -864,6 +864,22 @@ impl<'a> Builder<'a> {
             self.push_boxed(dst, Origin::Computed);
             return Some(());
         }
+        if self.writes_in_region(receiver_slot as usize) > 0 {
+            // The slot is reassigned inside the region -- `row = matrix[i]`
+            // ahead of an inner loop over `row[j]` -- so the array it names
+            // changes between entries of the inner loop. Read through the
+            // boxed register that mirrors the slot, which every `MoveBoxed`
+            // for that reassignment keeps current, instead of an array
+            // resolved once at region entry.
+            let dst = self.slot_boxed()?;
+            self.emit(TypedOp::ElementRead {
+                dst,
+                receiver: receiver_register,
+                index,
+            });
+            self.push_boxed(dst, Origin::Computed);
+            return Some(());
+        }
         // A frame slot the region never writes is resolved to its array
         // once per entry, which costs less than revalidating the slot on
         // every element access.
@@ -887,6 +903,13 @@ impl<'a> Builder<'a> {
         };
         let (receiver, receiver_temp) = (*receiver, *receiver_temp);
         if receiver == receiver_temp {
+            return Some(None);
+        }
+        // The dense write below resolves its receiver once per region entry,
+        // which is only sound for a slot the region never reassigns. A
+        // reassigned receiver takes the ordinary per-instruction path, whose
+        // computed write reads the boxed register on every store.
+        if self.writes_in_region(receiver) > 0 {
             return Some(None);
         }
         // Find `StoreLocal(index_temp)` followed later by the tail

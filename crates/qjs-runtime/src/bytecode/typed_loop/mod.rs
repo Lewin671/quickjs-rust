@@ -1057,6 +1057,45 @@ mod tests {
         );
     }
 
+    /// An inner loop's array receiver that the outer loop reassigns must be
+    /// read through the slot's current value, not an array resolved once at
+    /// region entry. SunSpider's 3d-cube verification loop had this shape
+    /// and summed the first vector nine times.
+    #[test]
+    fn typed_loops_follow_a_reassigned_element_receiver() {
+        let read_source = "function run(rows) { var sum = 0;\
+             for (var i = 0; i < rows.length; ++i) {\
+               var row = rows[i];\
+               for (var j = 0; j < row.length; ++j) sum += row[j];\
+             }\
+             return sum; }";
+        // Both the inner and the enclosing region compile; the enclosing one
+        // is the program that must not resolve `row` once.
+        assert_eq!(
+            super::compile_all(&nested_function(read_source)).len(),
+            2,
+            "{read_source}"
+        );
+        assert_eq!(
+            eval(&format!(
+                "{read_source} run([[10, 5, 7], [20, 5, 7], [30, 5, 7]]);"
+            )),
+            Ok(Value::Number(96.0))
+        );
+        assert_eq!(
+            eval(
+                "function run(rows, factor) {\
+                   for (var i = 0; i < rows.length; ++i) {\
+                     var row = rows[i];\
+                     for (var j = 0; j < row.length; ++j) row[j] = row[j] * factor;\
+                   }\
+                   return rows.join(';'); }\
+                 run([[1, 2], [3, 4], [5, 6]], 10);"
+            ),
+            Ok(Value::String("10,20;30,40;50,60".to_owned().into()))
+        );
+    }
+
     /// Property reads, `Math` intrinsics, and constants no register file can
     /// hold, all inside admitted regions.
     #[test]
