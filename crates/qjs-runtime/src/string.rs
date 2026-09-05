@@ -229,6 +229,26 @@ pub(crate) fn string_from_code_unit(code_unit: u16) -> String {
     result
 }
 
+thread_local! {
+    /// The 128 one-code-unit ASCII strings, built on first use. Indexed reads,
+    /// `charAt`, and `fromCharCode` produce these constantly in
+    /// string-building loops, and each used to cost two allocations. The
+    /// table is filled once and never mutated afterwards; JavaScript cannot
+    /// observe sharing because strings are immutable, and an in-place append
+    /// only reclaims a buffer it holds uniquely, which a table entry never is.
+    static ASCII_CODE_UNIT_STRINGS: Vec<JsString> =
+        (0..128_u16).map(|code_unit| JsString::new(string_from_code_unit(code_unit))).collect();
+}
+
+/// Returns the one-code-unit string for `code_unit`, sharing a cached buffer
+/// for ASCII.
+pub(crate) fn js_string_from_code_unit(code_unit: u16) -> JsString {
+    if code_unit < 128 {
+        return ASCII_CODE_UNIT_STRINGS.with(|table| table[usize::from(code_unit)].clone());
+    }
+    JsString::new(string_from_code_unit(code_unit))
+}
+
 pub(crate) fn char_from_code_unit(code_unit: u16) -> char {
     if (0xD800..=0xDFFF).contains(&code_unit) {
         char::from_u32(SURROGATE_ESCAPE_SENTINEL_BASE + u32::from(code_unit) - 0xD800)
@@ -337,5 +357,30 @@ mod tests {
             assert_eq!(string_code_units(&value), expected, "U+{code_point:05X}");
             assert_eq!(string_code_unit_len(&value), 2, "U+{code_point:05X}");
         }
+    }
+
+    #[test]
+    fn one_code_unit_strings_share_ascii_buffers() {
+        let first = super::js_string_from_code_unit(b'a'.into());
+        let second = super::js_string_from_code_unit(b'a'.into());
+        assert!(JsString::ptr_eq(&first, &second));
+        assert_eq!(first.as_str(), "a");
+        assert!(!first.is_unique());
+        let wide = super::js_string_from_code_unit(0xE9);
+        assert_eq!(wide.as_str(), "é");
+        assert_eq!(
+            js_string_code_unit_at(&super::js_string_from_code_unit(0xD800), 0),
+            Some(0xD800)
+        );
+        // Indexed reads, `charAt`, and `fromCharCode` all answer through it
+        // and still respect the string's own bounds and ToUint16.
+        assert_eq!(
+            crate::eval(
+                "var t = 'abc'; t[0] + t[2] + t[3] + t[-1] + 'é'[0] + t.charAt(1) + t.charAt(-1) + t.charAt(NaN) + t.charAt() + t.charAt(9) + String.fromCharCode(65) + String.fromCharCode(0x1F600) + String.fromCharCode(-1).charCodeAt(0);"
+            ),
+            Ok(crate::Value::String(
+                "acundefinedundefinedébaaA\u{f600}65535".into()
+            ))
+        );
     }
 }

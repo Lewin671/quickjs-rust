@@ -20,6 +20,7 @@ mod enumerate_keys_cache;
 mod frame_program;
 mod frame_stack;
 mod ir;
+mod ir_class;
 mod ir_names;
 mod ir_pools;
 mod named_property_cache;

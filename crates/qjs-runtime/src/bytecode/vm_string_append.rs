@@ -48,9 +48,29 @@ impl Vm<'_> {
             && matches!(local, Value::String(current) if crate::JsString::ptr_eq(current, expected))
         {
             *local = Value::Undefined;
+            self.release_dead_completion_copies(expected);
             return true;
         }
         self.detach_matching_shared_string(slot, expected)
+    }
+
+    /// Drops copies of `expected` parked in the frame's dead completion
+    /// temporaries. `if (c) text += part;` inside a function-body loop stores
+    /// the statement's value in the block's and the loop's result slots, which
+    /// nothing can read; left there, they kept the buffer shared and every
+    /// append copied the whole string.
+    pub(super) fn release_dead_completion_copies(&mut self, expected: &crate::JsString) {
+        if expected.is_unique() || self.bytecode.dead_completion_slots.is_empty() {
+            return;
+        }
+        let frame = &mut self.current;
+        for slot in frame.bytecode.dead_completion_slots.iter().copied() {
+            if let Some(Some(local)) = frame.locals.get_mut(slot)
+                && matches!(&*local, Value::String(current) if crate::JsString::ptr_eq(current, expected))
+            {
+                *local = Value::Undefined;
+            }
+        }
     }
 
     /// Temporarily clears the engine's internal mirrors of one shared binding
@@ -219,6 +239,13 @@ impl Vm<'_> {
         // compatibility slot snapshot left from function entry; refresh that
         // one slot before taking the mutable string reference.
         let shared_value = self.upvalue_slot_value(slot);
+        if shared_value.is_none()
+            && let Some(Some(Value::String(current))) = self.locals.get(slot)
+            && !current.is_unique()
+        {
+            let expected = current.clone();
+            self.release_dead_completion_copies(&expected);
+        }
         let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
             thrown: None,
             message: "bytecode local index out of bounds".to_owned(),
@@ -405,6 +432,54 @@ mod tests {
                 .any(|ops| matches!(ops, [Op::Binary(BinaryOp::Add), Op::AssignLocal(_)])),
             "discarded compound assignment should store directly: {:#?}",
             join.code
+        );
+    }
+
+    /// `if (c) text += part;` in a function-body loop parks each result in
+    /// the block's and loop's completion slots. Those are dead in a function
+    /// body, so the append must release them and keep the buffer unique; a
+    /// genuine alias of the string still forces a copy.
+    #[test]
+    fn conditional_string_append_in_function_loop_stays_unique() {
+        let script = qjs_parser::parse_script(
+            "function build(n) { var text = ''; for (var i = 0; i < n; i++) { if (i >= 0) text += 'a'; } return text; }",
+        )
+        .expect("script should parse");
+        let bytecode = compiler::compile_script(&script).expect("script should compile");
+        let build = bytecode
+            .code
+            .iter()
+            .find_map(|op| match op {
+                Op::NewFunction { bytecode, .. } => Some(bytecode),
+                _ => None,
+            })
+            .expect("build bytecode should be present");
+        assert_eq!(
+            build.dead_completion_slots.len(),
+            2,
+            "block and loop result slots: {:#?}",
+            build.locals
+        );
+        assert!(bytecode.dead_completion_slots.is_empty());
+        assert_eq!(
+            eval(
+                "function build(n) { var text = ''; for (var i = 0; i < n; i++) { if (i % 2) text += 'b'; else text += 'a'; } return text; } build(6);"
+            ),
+            Ok(Value::String("ababab".into()))
+        );
+        // With a real alias the completion slot is not the only other owner,
+        // and the alias must keep its old value.
+        assert_eq!(
+            eval(
+                "function build(n) { var text = '', seen; for (var i = 0; i < n; i++) { if (i >= 0) seen = text += 'a'; } return seen + ':' + text; } build(3);"
+            ),
+            Ok(Value::String("aaa:aaa".into()))
+        );
+        assert_eq!(
+            eval(
+                "function build(n) { var text = '', first; for (var i = 0; i < n; i++) { if (i == 0) first = text; if (i >= 0) text += 'a'; } return first + ':' + text; } build(3);"
+            ),
+            Ok(Value::String(":aaa".into()))
         );
     }
 

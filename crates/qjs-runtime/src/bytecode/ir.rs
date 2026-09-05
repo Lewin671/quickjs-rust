@@ -561,157 +561,11 @@ pub(super) enum Op {
     },
 }
 
-/// Cold, immutable payload used when evaluating a class definition.
-#[derive(Clone, Debug)]
-pub(super) struct ClassDefinition {
-    pub(super) name: Option<String>,
-    pub(super) constructor: ClassConstructorDef,
-    /// Class elements (methods, accessors, and fields) in source order.
-    pub(super) elements: Vec<ClassElementDef>,
-    /// Private elements (fields, methods, accessors) in source order. These are
-    /// not ordinary properties; they install into per-object private storage
-    /// keyed by fresh per-evaluation private-name identities.
-    pub(super) private_elements: Vec<ClassPrivateElementDef>,
-    /// Computed member keys in source order. Most are pre-evaluated by the
-    /// surrounding bytecode and left on the stack; keys that need the class
-    /// private environment are deferred until `NewClass` runs.
-    pub(super) computed_keys: Vec<ClassComputedKeyDef>,
-    /// Whether the class has an `extends` heritage clause. When set, the
-    /// heritage value was pushed onto the stack before this op.
-    pub(super) has_heritage: bool,
-}
-
-/// Compiled definition of a class constructor.
-#[derive(Clone, Debug)]
-pub(super) struct ClassConstructorDef {
-    pub(super) name: Option<String>,
-    pub(super) params: FunctionParams,
-    pub(super) local_names: Vec<String>,
-    pub(super) lexical_captures: Vec<(String, usize)>,
-    pub(super) bytecode: Rc<Bytecode>,
-}
-
-/// Whether a class member key is a literal name or a computed expression.
-#[derive(Clone, Debug)]
-pub(super) enum ClassMemberKeyDef {
-    /// A statically known string key.
-    Literal(String),
-    /// A computed key evaluated by `NewClass` in class-element order.
-    Computed,
-}
-
-/// The kind of a class method member.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum ClassMethodKind {
-    Method,
-    Getter,
-    Setter,
-}
-
-/// A class element in source order: a method/accessor or a field. Both kinds
-/// may carry a computed key evaluated by `NewClass`.
-#[derive(Clone, Debug)]
-pub(super) enum ClassElementDef {
-    Method(ClassMethodDef),
-    Field(ClassFieldDef),
-    /// A private field/method/accessor placeholder kept in source order so
-    /// instance initialization can interleave private and public elements.
-    Private(ClassPrivateElementDef),
-    /// A `static { ... }` initialization block, run at class definition with
-    /// `this` = the constructor, in source order with static fields.
-    StaticBlock(ClassStaticBlockDef),
-}
-
-/// Compiled `static { ... }` block: a parameterless thunk whose body runs with
-/// `this` = the constructor (its home object is the constructor too, so
-/// `super.x` resolves against the constructor's prototype).
-#[derive(Clone, Debug)]
-pub(super) struct ClassStaticBlockDef {
-    pub(super) local_names: Vec<String>,
-    pub(super) lexical_captures: Vec<(String, usize)>,
-    pub(super) bytecode: Rc<Bytecode>,
-}
-
-/// A private class element in source order. Private names are keyed by source
-/// text (`name`, without the `#`); a fresh identity is minted at class
-/// evaluation. Accessor halves for the same name merge into one binding.
-#[derive(Clone, Debug)]
-pub(super) enum ClassPrivateElementDef {
-    /// A private field. The initializer thunk runs at construction (instance)
-    /// or class definition (static); `None` installs `undefined`.
-    Field {
-        name: String,
-        is_static: bool,
-        initializer: Option<ClassFieldInitializerDef>,
-    },
-    /// A private method shared by all instances/the constructor.
-    Method {
-        name: String,
-        is_static: bool,
-        def: ClassMethodDef,
-    },
-    /// A private getter half.
-    Getter {
-        name: String,
-        is_static: bool,
-        def: ClassMethodDef,
-    },
-    /// A private setter half.
-    Setter {
-        name: String,
-        is_static: bool,
-        def: ClassMethodDef,
-    },
-}
-
-#[derive(Clone, Debug)]
-pub(super) enum ClassComputedKeyDef {
-    Precomputed,
-    Deferred {
-        local_names: Vec<String>,
-        lexical_captures: Vec<(String, usize)>,
-        bytecode: Rc<Bytecode>,
-    },
-}
-
-/// Compiled definition of a class method or accessor.
-#[derive(Clone, Debug)]
-pub(super) struct ClassMethodDef {
-    pub(super) key: ClassMemberKeyDef,
-    pub(super) method_kind: ClassMethodKind,
-    pub(super) is_static: bool,
-    /// Function `name`, when statically known. Computed keys derive the name
-    /// from the evaluated key at runtime.
-    pub(super) name: Option<String>,
-    pub(super) params: FunctionParams,
-    pub(super) local_names: Vec<String>,
-    pub(super) lexical_captures: Vec<(String, usize)>,
-    pub(super) bytecode: Rc<Bytecode>,
-    pub(super) source_text: Option<Rc<str>>,
-    /// Whether the method is a generator method (`*m() {}`).
-    pub(super) is_generator: bool,
-    /// Whether the method is an async method (`async m() {}`).
-    pub(super) is_async: bool,
-}
-
-/// Compiled definition of a public class field. The initializer is compiled
-/// as a thunk evaluated with `this` bound (the instance for an instance field,
-/// the constructor for a static field); `None` installs `undefined`.
-#[derive(Clone, Debug)]
-pub(super) struct ClassFieldDef {
-    pub(super) key: ClassMemberKeyDef,
-    pub(super) is_static: bool,
-    pub(super) initializer: Option<ClassFieldInitializerDef>,
-}
-
-/// Compiled field initializer thunk: a parameterless function body returning
-/// the field value.
-#[derive(Clone, Debug)]
-pub(super) struct ClassFieldInitializerDef {
-    pub(super) local_names: Vec<String>,
-    pub(super) lexical_captures: Vec<(String, usize)>,
-    pub(super) bytecode: Rc<Bytecode>,
-}
+pub(super) use super::ir_class::{
+    ClassComputedKeyDef, ClassConstructorDef, ClassDefinition, ClassElementDef, ClassFieldDef,
+    ClassFieldInitializerDef, ClassMemberKeyDef, ClassMethodDef, ClassMethodKind,
+    ClassPrivateElementDef, ClassStaticBlockDef,
+};
 
 #[derive(Clone, Debug)]
 pub(super) enum ArrayElementKind {
@@ -768,6 +622,35 @@ impl Local {
     pub(super) fn is_received_upvalue(&self) -> bool {
         self.from_env && !self.parameter && !self.hoisted
     }
+
+    /// Whether this compiler temporary only ever accumulates a statement
+    /// completion value (a block, loop, switch, or label result slot). The
+    /// compiler names each temporary after its purpose, so the name is the
+    /// classification.
+    pub(super) fn is_completion_temporary(&self) -> bool {
+        const COMPLETION_TEMPORARIES: [&str; 8] = [
+            "block_result",
+            "loop_result",
+            "switch_result",
+            "label_result",
+            "for_in_result",
+            "for_of_result",
+            "for_await_result",
+            "try_result",
+        ];
+        if !self.compiler_temporary {
+            return false;
+        }
+        let Some(name) = self.name.strip_prefix("\0\0") else {
+            return false;
+        };
+        COMPLETION_TEMPORARIES.iter().any(|prefix| {
+            name.strip_prefix(prefix).is_some_and(|rest| {
+                rest.strip_prefix('_')
+                    .is_some_and(|n| n.bytes().all(|b| b.is_ascii_digit()))
+            })
+        })
+    }
 }
 
 /// Compiled bytecode for a script.
@@ -807,6 +690,12 @@ pub struct Bytecode {
     /// `this` resolves to the realm global; function bodies resolve `this`
     /// from their own frame.
     pub(super) global_scope: bool,
+    /// Compiler temporaries that only ever hold a statement completion value
+    /// in a function body, where no completion value is observable. They are
+    /// dead stores kept for the operand-stack contract the loop recognizers
+    /// match; the string append fast path may drop a value they hold so the
+    /// appended string stays uniquely owned. Empty for script and eval code.
+    pub(super) dead_completion_slots: Vec<usize>,
     /// Whether this bytecode was compiled in strict mode after applying any
     /// source prologue. Direct eval needs this to choose the correct
     /// declaration instantiation environment.
@@ -949,6 +838,18 @@ impl Bytecode {
         strict: bool,
         parameter_slots: Option<Vec<usize>>,
     ) -> Self {
+        // Only a function body arrives with explicit parameter slots; script
+        // and eval bodies derive them, and their completion values are
+        // observable.
+        let dead_completion_slots = if parameter_slots.is_some() {
+            locals
+                .iter()
+                .enumerate()
+                .filter_map(|(slot, local)| local.is_completion_temporary().then_some(slot))
+                .collect()
+        } else {
+            Vec::new()
+        };
         let parameter_slots = parameter_slots.unwrap_or_else(|| {
             locals
                 .iter()
@@ -995,6 +896,7 @@ impl Bytecode {
             sloppy_global_assignment_names: collect_sloppy_global_assignment_names(&code),
             eval_deletable_local_names: BTreeSet::new(),
             global_scope,
+            dead_completion_slots,
             strict,
             code,
             numeric_leaf_plan: OnceCell::new(),

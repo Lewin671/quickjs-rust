@@ -873,6 +873,22 @@ impl<'a> Vm<'a> {
             self.stack.push(value);
             return Ok(());
         }
+        // String integer-index read fast path: `text[i]` used to format the
+        // number into a property key and parse it back into an index, which
+        // cost a float-to-decimal conversion and two allocations per code unit
+        // in a string-building loop. A string's own integer-keyed properties
+        // are exactly its code units, so answer them directly.
+        if let Value::Number(number) = &key_value
+            && let Some(index) = array_index_from_number(*number)
+            && let Value::String(text) = &object
+            && let Some(code_unit) = crate::string::js_string_code_unit_at(text, index)
+        {
+            self.stack
+                .push(Value::String(crate::string::js_string_from_code_unit(
+                    code_unit,
+                )));
+            return Ok(());
+        }
         // Fast path: a string-keyed read that the direct getter answers needs
         // no owned `PropertyKey`. Building one copies the string, so a
         // dictionary loop paid one allocation per access even when the lookup

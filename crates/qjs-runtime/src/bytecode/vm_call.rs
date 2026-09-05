@@ -272,9 +272,11 @@ impl Vm<'_> {
             self.dynamic_code_executed = true;
         }
         if matches!(&callee, Value::Function(function) if function.native.is_some()) {
-            let realm_env = self.realm_env();
+            // Most fast native paths never touch an environment, so the realm
+            // frame is built only by the arms that need one instead of once
+            // per native call.
             if let Some(result) =
-                try_fast_global_native_call(&callee, &this_value, &arguments, &realm_env)
+                try_fast_global_native_call(&callee, &this_value, &arguments, &|| self.realm_env())
             {
                 if let Some(value) = self.handle_runtime_result(result)? {
                     self.stack.push(value);
@@ -607,7 +609,7 @@ pub(super) fn try_fast_global_native_call(
     callee: &Value,
     this_value: &Value,
     arguments: &[Value],
-    realm_env: &CallEnv,
+    realm_env: &dyn Fn() -> CallEnv,
 ) -> Option<Result<Value, RuntimeError>> {
     let Value::Function(function) = callee else {
         return None;
@@ -637,6 +639,14 @@ pub(super) fn try_fast_global_native_call(
             result.map(|s| Value::String(s.into()))
         }
         NativeFunction::StringFromCharCode => {
+            if let [Value::Number(number)] = arguments {
+                // ToUint16 of a finite number, sharing the cached ASCII
+                // one-code-unit strings a string-building loop produces.
+                let code_unit = crate::to_uint32_number(*number) as u16;
+                return Some(Ok(Value::String(crate::string::js_string_from_code_unit(
+                    code_unit,
+                ))));
+            }
             let result = fast_string_from_char_code_primitives(arguments)?;
             result.map(|s| Value::String(s.into()))
         }
@@ -692,7 +702,9 @@ pub(super) fn try_fast_global_native_call(
         NativeFunction::MathPow => Ok(Value::Number(fast_primitive_math_pow(arguments)?)),
         NativeFunction::MathRandom if arguments.is_empty() => crate::math::native_math_random(),
         NativeFunction::ArrayPrototypeIndexOf => Ok(crate::array::fast_dense_array_index_of(
-            this_value, arguments, realm_env,
+            this_value,
+            arguments,
+            &realm_env(),
         )?),
         NativeFunction::Eval => {
             let Some(Value::String(source)) = arguments.first() else {
@@ -701,7 +713,7 @@ pub(super) fn try_fast_global_native_call(
             if crate::global::eval_source_is_only_comments_and_whitespace(source) {
                 return Some(Ok(Value::Undefined));
             }
-            match crate::global::try_eval_regexp_literal_source(source, realm_env) {
+            match crate::global::try_eval_regexp_literal_source(source, &realm_env()) {
                 Ok(Some(value)) => Ok(value),
                 Ok(None) => return None,
                 Err(error) => Err(error),
@@ -768,7 +780,7 @@ pub(super) fn try_fast_global_native_call(
             {
                 return None;
             }
-            let mut env = realm_env.clone();
+            let mut env = realm_env();
             crate::date::native_date_prototype_set_time(this_value.clone(), arguments, &mut env)
         }
         NativeFunction::StringPrototypeSlice
@@ -777,17 +789,27 @@ pub(super) fn try_fast_global_native_call(
             fast_string_sequence_native(native, this_value, arguments, realm_env)?
         }
         NativeFunction::StringPrototypeCharAt => {
-            let Value::String(_) = this_value else {
+            let Value::String(text) = this_value else {
                 return None;
             };
-            if !matches!(
-                arguments.first(),
-                None | Some(Value::Number(_) | Value::Undefined)
-            ) {
-                return None;
-            }
-            let mut env = realm_env.clone();
-            crate::string::native_string_prototype_char_at(this_value.clone(), arguments, &mut env)
+            // ToIntegerOrInfinity on a number needs no environment: NaN and
+            // `undefined` select position 0, and any position outside the
+            // string answers the empty string.
+            let position = match arguments.first() {
+                None | Some(Value::Undefined) => 0.0,
+                Some(Value::Number(number)) if number.is_nan() => 0.0,
+                Some(Value::Number(number)) => number.trunc(),
+                _ => return None,
+            };
+            let code_unit = if position < 0.0 || position >= usize::MAX as f64 {
+                None
+            } else {
+                crate::string::js_string_code_unit_at(text, position as usize)
+            };
+            Ok(Value::String(match code_unit {
+                Some(code_unit) => crate::string::js_string_from_code_unit(code_unit),
+                None => crate::JsString::default(),
+            }))
         }
         NativeFunction::StringPrototypeCharCodeAt => {
             Ok(fast_primitive_string_char_code_at(this_value, arguments)?)
@@ -802,7 +824,7 @@ pub(super) fn try_fast_global_native_call(
             {
                 return None;
             }
-            let mut env = realm_env.clone();
+            let mut env = realm_env();
             crate::string::native_string_prototype_concat(this_value.clone(), arguments, &mut env)
         }
         NativeFunction::RegExpPrototypeTest => {
@@ -811,7 +833,7 @@ pub(super) fn try_fast_global_native_call(
             {
                 return None;
             }
-            let mut env = realm_env.clone();
+            let mut env = realm_env();
             crate::regexp::native_regexp_prototype_test(this_value.clone(), arguments, &mut env)
         }
         NativeFunction::Test262AssertSameValue => {
@@ -891,7 +913,7 @@ fn fast_string_sequence_native(
     native: NativeFunction,
     this_value: &Value,
     arguments: &[Value],
-    realm_env: &CallEnv,
+    realm_env: &dyn Fn() -> CallEnv,
 ) -> Option<Result<Value, RuntimeError>> {
     if !matches!(this_value, Value::String(_)) {
         return None;
@@ -902,7 +924,7 @@ fn fast_string_sequence_native(
     {
         return None;
     }
-    let mut env = realm_env.clone();
+    let mut env = realm_env();
     let result = match native {
         NativeFunction::StringPrototypeSlice => {
             crate::string::native_string_prototype_slice(this_value.clone(), arguments, &mut env)
