@@ -2,9 +2,11 @@
 
 ## Status
 
-Candidate under measurement. Base: `a8e9d253b3ddf8e63e5963e37a5b6ac11cfba632`.
+Retained after formal same-host promotion. Code commit:
+`5702c78900d20317e765711a06e2659d774d2014`. Base: `a8e9d253b3ddf8e63e5963e37a5b6ac11cfba632`.
 The frozen plan is `performance-units/realm-single-code-unit-strings.json`.
-No retained or promotion claim is made before its gates pass.
+The frozen promotion gate passed for all 76 watched comparisons. This is a
+unit-level result on the recorded macOS series, not whole-engine superiority.
 
 ## Evidence and selection
 
@@ -76,4 +78,48 @@ pairs. Raw data and executable hashes are in
 
 All focused String/cache tests, the full local check (including the Test262
 subset), and QuickJS-NG comparison fixtures passed before the candidate commit.
-Formal thirty-block measurement and exact-commit Test262 coverage are next.
+Formal thirty-block measurement and exact-commit Test262 coverage followed;
+the results are recorded below.
+
+
+## Formal promotion result
+
+The first implementation passed the unchanged plan on a complete thirty-block
+candidate/base/NG run. All 25 broad cases, six generic sentinels and 45 external
+cases were present; internal linearity and block health passed with no invalid
+blocks. The sealed bundle was replayed before the decision.
+
+| Case | Candidate/base | 95% interval |
+| --- | ---: | ---: |
+| string-tagcloud | 0.884008 | 0.880853–0.887117 |
+| date-format-xparb | 0.973280 | 0.970259–0.975980 |
+| date-format-tofte | 0.997173 | 0.995624–0.998673 |
+| hash-map | 0.997609 | 0.996017–0.998823 |
+| ai-astar | 1.005213 | 1.004098–1.006681 |
+| object_allocation | 1.001624 | 0.999283–1.003228 |
+| closure_allocation_call | 0.997442 | 0.995372–0.999488 |
+
+The target saves 11.6% wall time; date-format-xparb saves 2.7%. Small costs are
+retained transparently: the six generic sentinels increase by 0.3–1.6%, with
+upper bounds no higher than 1.019185. The largest non-target point regression
+is access-nsieve at 1.021055 (upper 1.023815), within the frozen 1.03 ceiling.
+Per-suite external candidate/base geometric means are JetStream subset
+0.999320, Kraken 1.001797 and SunSpider 0.995643. This is a targeted allocation
+improvement, not an 11.6% whole-engine gain.
+
+The candidate profile's four principal malloc/free stack-top groups total
+972/7,574 samples (12.8%), against 1,610/7,166 (22.5%) in the base. These are
+diagnostic allocation-cost shares; they are not a resource/RSS benchmark.
+The runtime/cache tests cover bounded retention and independent copy-on-write.
+
+Promotion decision: `retained`, no reasons, 76 comparisons. SHA-256:
+`443c853b8d93b82e4dd9a988c04972b8fd45bbdcae25c1e2d7f9edfc72e534f1`.
+Evidence: `target/performance-high-roi-a8e9d253/candidate-r1-30/` and
+`target/performance-high-roi-a8e9d253/promotion-r1.json`.
+
+Candidate [CI](https://github.com/Lewin671/quickjs-rust/actions/runs/34018239503)
+and [Test262 coverage](https://github.com/Lewin671/quickjs-rust/actions/runs/34018425750)
+passed. The burndown artifact explicitly binds code commit 5702c789: all 42,672
+configured cases passed with zero actionable NG gaps, from a 53,572-case pinned
+inventory with 10,900 configuration exclusions. The workflow-run page's default
+branch SHA is not substituted for the artifact's candidate SHA.

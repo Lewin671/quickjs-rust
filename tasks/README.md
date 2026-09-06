@@ -125,10 +125,11 @@ Campaign working rules:
   the first frozen target, bits-in-byte, regressed to 1.01702x candidate/base
   against the required 0.90x. The runtime changes were reverted before the
   remaining timing and promotion gates.
-- `T031-realm-code-unit-strings.md` — current profile-backed candidate: reuse
-  bounded realm-owned immutable single-code-unit strings in String boxes;
-  preserve all indexed descriptors and ordinary object layout. Frozen gates
-  and evidence are recorded in its plan; performance acceptance is pending.
+- `T031-realm-code-unit-strings.md` — **retained** (`5702c789`). Bounded
+  realm-owned character values reduce String-box allocation without changing
+  indexed descriptors or ordinary object layout. Formal 30-block promotion
+  passed all 76 comparisons: tagcloud 0.8840x and date-format-xparb 0.9733x
+  candidate/base; maximum non-target regression 1.0211x, inside the 1.03 cap.
 - `T022-performance-priority-controller.md` — evidence-bound selection and
   stop mechanism for T018. It derives the next profiling queue from current
   artifacts, freezes a unit's targets before timing, and records explicit
