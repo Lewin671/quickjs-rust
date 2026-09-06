@@ -97,3 +97,27 @@ cohort. No diagnostic control exceeds the cap. Artifacts: `screen-r2/` and
 `screen-broad-r2/` under the unit evidence directory. These small-cohort
 results are not retention evidence. Run a new complete 30-block cohort for
 this final implementation; keep all thresholds and the original base fixed.
+
+### Complete thirty-block result: inconclusive
+
+The sealed `candidate-r2-30/` bundle completed all 76 comparisons without
+measurement issues. HashMap is **0.918x** base (95% interval 0.916-0.920),
+roughly an 8.2% reduction. Every broad and external control passes. The former
+array-search regression is 0.999464x (0.997365-1.000929). Exact candidate
+`9d344a0f` passes CI and all 42,672 configured Test262 cases with zero gaps.
+
+One sentinel prevents promotion: heterogeneous property reads are
+**1.026603x** with interval **1.023612-1.035302**. This crosses 1.03, so the
+verified decision is **inconclusive**, not retained. Preserve the full bundle
+and `promotion-r2-30.json` (SHA-256
+`d22b7af8f46f099fc1f8180a896179307869147db0aff8e911bfc7d03e2c7e84`).
+
+Before further measurement, declare exactly one independent **60-block**
+confirmation over all three complete lanes, using the same executable and
+unchanged plan/base/thresholds. This is a precision confirmation, not a third
+implementation. Do not pool or replace the first cohort, discard observations,
+change code, or repeat again conditional on the result. The confirmation is
+the final experiment: if rejected or still inconclusive, revert the runtime
+unit and preserve both results. Declaration:
+`target/performance-current-5702c789/confirmation-60-plan.json`, SHA-256
+`22e647ef39b1f582d651a274ea7d81547a7bb3bd23094f5e856efc4aeb2b9eb0`.
