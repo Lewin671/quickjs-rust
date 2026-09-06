@@ -42,6 +42,15 @@ impl ObjectRef {
         }
     }
 
+    /// Resolves a prototype read to a slot in small or literal storage.
+    /// The caller guards holder identity and layout before reading the slot.
+    /// Keep this separate from `own_data_slot`: that API also installs write
+    /// caches, whose supported storage and policy remain unchanged here.
+    pub(crate) fn prototype_data_slot(&self, key: &str) -> Option<usize> {
+        self.own_data_slot(key)
+            .or_else(|| self.literal_data_slot(key).map(|(_, slot)| slot))
+    }
+
     /// Resolves `key` to a slot together with the interned name the storage
     /// holds there.
     ///
@@ -87,7 +96,8 @@ impl ObjectRef {
         }
     }
 
-    /// Reads a slot previously resolved by [`Self::own_data_slot`]. The storage
+    /// Reads a slot resolved by [`Self::own_data_slot`] or
+    /// [`Self::prototype_data_slot`]. The storage
     /// kind is re-checked so a layout the revision counter cannot describe
     /// simply misses the cache instead of reading the wrong property.
     pub(crate) fn own_data_slot_value(&self, slot: usize) -> Option<Value> {
@@ -96,9 +106,12 @@ impl ObjectRef {
                 let (_, property) = entries.get(slot)?;
                 (!property.is_accessor()).then(|| property.value.clone())
             }
-            PropertyStorage::Dynamic(_)
-            | PropertyStorage::Shaped { .. }
-            | PropertyStorage::ShapedPair { .. } => None,
+            PropertyStorage::Shaped { properties, .. } => {
+                let property = properties.get(slot)?;
+                (!property.is_accessor()).then(|| property.value.clone())
+            }
+            PropertyStorage::ShapedPair { values, .. } => values.get(slot).cloned(),
+            PropertyStorage::Dynamic(_) => None,
         }
     }
 

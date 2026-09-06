@@ -133,3 +133,85 @@ fn an_inherited_accessor_is_never_answered_from_the_cache() {
          last + ',' + calls;";
     assert_eq!(eval(source), Ok(Value::String("40,40".into())));
 }
+
+#[test]
+fn literal_prototype_slots_revalidate_at_the_same_read_site_in_both_executors() {
+    // Two keys use ShapedPair, larger literals use Shaped. Direct eval forces
+    // the general VM; the plain read body can use the compact executor.
+    for fields in [2, 4, 20] {
+        let padding = (1..fields)
+            .map(|i| format!(", field{i}: {i}"))
+            .collect::<String>();
+        let setup = format!(
+            "function Kind() {{}}
+             Kind.prototype = {{ probe: 'proto'{padding} }};
+             var subject = new Kind();"
+        );
+        for (mutate, expected) in [
+            ("subject.probe = 'own';", "proto,own"),
+            ("Kind.prototype.probe = 'second';", "proto,second"),
+            ("delete Kind.prototype.probe;", "proto,undefined"),
+            (
+                "delete Kind.prototype.probe; Kind.prototype.extra = 'wrong';
+                 Kind.prototype.probe = 'reinstalled';",
+                "proto,reinstalled",
+            ),
+            (
+                "Object.setPrototypeOf(subject, {probe: 'new prototype'});",
+                "proto,new prototype",
+            ),
+            (
+                "Object.defineProperty(Kind.prototype, 'probe', {
+                    get: function() { return this === subject ? 'getter' : 'wrong'; }
+                 });",
+                "proto,getter",
+            ),
+            (
+                "Object.freeze(Kind.prototype); Kind.prototype.probe = 'ignored';",
+                "proto,proto",
+            ),
+            (
+                "Object.setPrototypeOf(subject, new Proxy({}, {
+                    get: function(target, key, receiver) {
+                        return receiver === subject ? 'proxy' : 'wrong';
+                    }
+                 }));",
+                "proto,proxy",
+            ),
+        ] {
+            let source = through_one_site(&setup, mutate);
+            for force_vm in [false, true] {
+                let source = if force_vm {
+                    source.replace("return o.probe;", "eval(''); return o.probe;")
+                } else {
+                    source.clone()
+                };
+                assert_eq!(
+                    eval(&source),
+                    Ok(Value::String(expected.into())),
+                    "{fields} fields, force_vm={force_vm}: {mutate}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn literal_prototype_methods_observe_replacement_and_receiver_shadowing() {
+    assert_eq!(
+        eval(
+            "var a = {m: function() { return this.x + 1; }, spare: 0};
+             var b = {m: function() { return this.x + 2; }, spare: 0};
+             var subjects = [Object.create(a), Object.create(b)];
+             subjects[0].x = 10; subjects[1].x = 20;
+             function call(o) { return o.m(); }
+             for (var i = 0; i < 80; i++) call(subjects[i % 2]);
+             a.m = function() { return this.x + 3; };
+             subjects[1].m = function() { return this.x + 4; };
+             var first = call(subjects[0]) + ',' + call(subjects[1]);
+             delete subjects[1].m;
+             first + ',' + call(subjects[1]);"
+        ),
+        Ok(Value::String("13,24,22".into()))
+    );
+}

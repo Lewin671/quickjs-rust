@@ -130,6 +130,10 @@ Campaign working rules:
   indexed descriptors or ordinary object layout. Formal 30-block promotion
   passed all 76 comparisons: tagcloud 0.8840x and date-format-xparb 0.9733x
   candidate/base; maximum non-target regression 1.0211x, inside the 1.03 cap.
+- `T032-shaped-prototype-slot-reads.md` — current unit. Extend the existing
+  prototype slot cache to object-literal storage; frozen against the complete
+  `5702c789` comparison and a fresh exact-binary HashMap profile. Acceptance
+  requires all sentinel controls, full portfolio evidence and Test262 parity.
 - `T022-performance-priority-controller.md` — evidence-bound selection and
   stop mechanism for T018. It derives the next profiling queue from current
   artifacts, freezes a unit's targets before timing, and records explicit

@@ -22,6 +22,9 @@ use crate::{
 /// prototype-dispatched reads.
 const POLYMORPHIC_CACHE_SLOTS: usize = 4;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Clone, Debug, Default)]
 pub(super) struct NamedPropertyCache(Rc<RefCell<NamedPropertyCacheState>>);
 
@@ -221,7 +224,7 @@ impl NamedPropertyCache {
         let Some(holder) = receiver.ordinary_prototype() else {
             return;
         };
-        let Some(slot) = holder.own_data_slot(key) else {
+        let Some(slot) = holder.prototype_data_slot(key) else {
             return;
         };
         let entry = NamedPropertyCacheEntry::PrototypeSlot {

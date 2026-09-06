@@ -1,0 +1,57 @@
+{
+  "schema_version": 2,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "shaped-prototype-slot-reads",
+  "base_sha": "5702c78900d20317e765711a06e2659d774d2014",
+  "queue": {
+    "candidate_sha": "5702c78900d20317e765711a06e2659d774d2014",
+    "sha256": "3428e375504c257349077ca31e0275b312b1a64ab1d6896988a77f241666f66e"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": ["external/jetstream3-js-subset/hash-map"],
+    "rank_ceiling": 1,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Extend identity-and-layout-guarded own data slot resolution and reads to Shaped and ShapedPair storage. The existing prototype cache can then serve object-literal prototypes without repeating name lookup and cache installation. Preserve all existing receiver absence, prototype identity, holder layout and data-descriptor guards; no new cache entries or object representation are needed.",
+    "generality": "Applies to every ordinary literal used as a direct prototype, independent of keys, body names, workloads or property count. Both the general VM and compact executor share the existing cache. Dynamic tables and exotics keep their current fallback. This changes slot addressability, not property-name identity, storage thresholds or binding representation.",
+    "semantic_risks": [
+      "Slot indices must remain valid across value assignment and invalidate on structural or descriptor changes",
+      "ShapedPair materialization must not allow stale slots to address reordered properties",
+      "Receiver shadowing, prototype replacement, accessors, proxies and exotic holders retain observable behavior",
+      "Cached slots must read the live value and must not retain prototype objects strongly"
+    ]
+  },
+  "profile_evidence": [{
+    "source": "hash-map/receipt.json",
+    "sha256": "b7e375a8b8142afd99330aff2b34b0e6179a9280df0c1897a42b6021ab88c78f",
+    "base_sha": "5702c78900d20317e765711a06e2659d774d2014",
+    "opportunity_ids": ["external/jetstream3-js-subset/hash-map"],
+    "shared_cost": "Fresh exact-binary macOS sample contains 7850 main-thread samples. OwnDataPropertyRead accounts for 245 flat samples, PropertyStorage::get 145, try_direct_get_string 45 and update_from_prototype 28. These 463 samples (5.90 percent) identify the shared lookup/fallback boundary, not a claim all are removable. Source inspection shows own_data_slot rejects both literal representations, forcing even stable literal prototypes through that fallback on every method read. The amplified workload is sampling-only; timing uses unchanged official bundles.",
+    "inclusive_fraction": 0.05898089171974522
+  }],
+  "fast_gate": {
+    "target_ids": ["external/jetstream3-js-subset/hash-map"],
+    "control_ids": [
+      "external/jetstream3-js-subset/cdjs",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/ai-astar",
+      "external/sunspider-1.0/3d-raytrace",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/controlflow-recursive",
+      "broad/property_read",
+      "broad/property_write",
+      "broad/object_allocation"
+    ],
+    "target_max_candidate_over_base": 0.97,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}
