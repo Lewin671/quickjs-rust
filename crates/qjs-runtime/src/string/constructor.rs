@@ -7,7 +7,7 @@ use crate::{
 
 use super::{
     STRING_DATA_PROPERTY, push_code_point, string_code_unit_len, string_code_units,
-    string_from_code_unit, string_from_code_units,
+    string_from_code_unit,
 };
 use crate::CallEnv;
 
@@ -35,7 +35,7 @@ pub(crate) fn native_string(
         Value::Object(object) => object,
         _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
     };
-    define_string_data(&object, &value);
+    define_string_data(&object, &value, env);
     Ok(Value::Object(object))
 }
 
@@ -150,7 +150,7 @@ fn require_object_coercible(value: Value, context: &str) -> Result<Value, Runtim
     }
 }
 
-pub(super) fn define_string_data(object: &ObjectRef, value: &str) {
+pub(super) fn define_string_data(object: &ObjectRef, value: &str, env: &CallEnv) {
     object.define_non_enumerable(
         STRING_DATA_PROPERTY.to_owned(),
         Value::String(value.to_owned().into()),
@@ -168,7 +168,7 @@ pub(super) fn define_string_data(object: &ObjectRef, value: &str) {
         object.define_property(
             index.to_string(),
             Property::data(
-                Value::String(string_from_code_units(&[code_unit]).into()),
+                Value::String(env.realm().string_code_unit(code_unit)),
                 true,
                 false,
                 false,

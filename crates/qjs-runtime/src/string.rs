@@ -1,11 +1,14 @@
 use crate::JsString;
 
+mod code_unit_strings;
 mod constructor;
 mod indexing;
 mod install;
 mod iterator;
 mod property;
 mod prototype;
+
+pub(crate) use code_unit_strings::CodeUnitStrings;
 
 pub(super) use constructor::{
     is_string_object, native_string, native_string_from_char_code, native_string_from_code_point,

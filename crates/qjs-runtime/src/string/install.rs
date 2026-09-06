@@ -79,7 +79,7 @@ pub(crate) fn install_string(env: &mut CallEnv, global_this: &Value, object_prot
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
     env.realm()
         .initialize_string_prototype(string_prototype.clone());
-    super::constructor::define_string_data(&string_prototype, "");
+    super::constructor::define_string_data(&string_prototype, "", env);
     let string_function = Function::new_native(Some("String"), 1, NativeFunction::String, true);
     string_prototype.define_non_enumerable(
         "constructor".to_owned(),

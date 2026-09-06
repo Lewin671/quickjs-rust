@@ -1,0 +1,77 @@
+{
+  "schema_version": 2,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "realm-single-code-unit-strings",
+  "base_sha": "a8e9d253b3ddf8e63e5963e37a5b6ac11cfba632",
+  "queue": {
+    "candidate_sha": "a8e9d253b3ddf8e63e5963e37a5b6ac11cfba632",
+    "sha256": "b49679df5916ffe237b2c94243f26317db8415523bf2de6f98b54758f429497e"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-tagcloud"
+    ],
+    "rank_ceiling": 4,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Lazily intern immutable Latin-1 code-unit JsString values within each realm and reuse them only when installing indexed String-box properties. Keep at most 256 entries; non-Latin-1 units use the existing canonical conversion. Both explicit new String and implicit/Object(string) boxing use the same factory. Expected target reduction is 5-15 percent. This removes repeated per-character allocations, not the wrapper source-buffer copy targeted by the rejected sharing unit, and does not virtualize or remove indexed properties.",
+    "generality": "Applies uniformly to every String box without workload/function/key/iteration recognition. The realm owns the bounded cache; ordinary ObjectData, PropertyStorage, frame/binding representation, and generic property semantics stay intact. The cache holds immutable primitive strings only, cannot create realm reference cycles, and copy-on-write preserves independent mutation of derived local values.",
+    "semantic_risks": [
+      "UTF-16 code-unit identity, including Latin-1 non-ASCII characters, lone surrogates and astral pairs",
+      "preserving indexed descriptor flags, own-key order and strict/Reflect writes and deletes",
+      "copy-on-write must keep pooled values and independent wrappers immutable",
+      "realm isolation and bounded lazy memory retention",
+      "subclasses, Proxy wrapping and sloppy primitive receiver boxing retain existing semantics"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "string-tagcloud/receipt.json",
+      "sha256": "cd886f9e04a1f68c482dbf1622b36ac2f336931f898cdc19b4796ef956a24ee4",
+      "base_sha": "a8e9d253b3ddf8e63e5963e37a5b6ac11cfba632",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-tagcloud"
+      ],
+      "shared_cost": "Current standard-recipe macOS sample records 1120/7166 main-thread samples under the ordinary indexed String-box installation path. This is an inclusive upper bound, not a claim that every sample is removable. Every indexed character currently creates a separate immutable JsString allocation and byte buffer; construction and later destruction repeat for identical code units. Preserve wrapper data, all descriptors and enumeration; share only these immutable leaf values through a bounded realm-owned cache. The workload is amplified only for sampling and never used for formal timings.",
+      "inclusive_fraction": 0.15629360870778677
+    },
+    {
+      "source": "date-format-xparb/receipt.json",
+      "sha256": "e766a6967925cf9054ae59ce1c607906b8cac9beb062cffe6ee7bb94f96a5fa2",
+      "base_sha": "a8e9d253b3ddf8e63e5963e37a5b6ac11cfba632",
+      "opportunity_ids": [
+        "external/sunspider-1.0/date-format-xparb"
+      ],
+      "shared_cost": "Current standard-recipe macOS sample records 653/7929 main-thread samples under the ordinary indexed String-box installation path. This is an inclusive upper bound, not a claim that every sample is removable. Every indexed character currently creates a separate immutable JsString allocation and byte buffer; construction and later destruction repeat for identical code units. Preserve wrapper data, all descriptors and enumeration; share only these immutable leaf values through a bounded realm-owned cache. The workload is amplified only for sampling and never used for formal timings.",
+      "inclusive_fraction": 0.08235590868962038
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-tagcloud"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/date-format-xparb",
+      "external/sunspider-1.0/date-format-tofte",
+      "external/sunspider-1.0/string-validate-input",
+      "external/sunspider-1.0/string-base64",
+      "external/sunspider-1.0/regexp-dna",
+      "external/jetstream3-js-subset/hash-map",
+      "external/kraken-1.1/ai-astar",
+      "broad/object_allocation",
+      "broad/closure_allocation_call",
+      "broad/string_slice"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

@@ -58,6 +58,9 @@ pub(crate) struct RealmState {
     /// Stable `%String.prototype%` identity used by primitive String reads.
     /// The mutable global `String` binding is not the intrinsic authority.
     string_prototype: OnceCell<ObjectRef>,
+    /// Lazily shared immutable index values for String boxes. This cache owns
+    /// no objects or realm references and retains at most 256 strings.
+    code_unit_strings: crate::string::CodeUnitStrings,
     /// Canonical empty copy-on-write name set for ordinary frames. Sharing it
     /// avoids allocating catch/eval metadata that most calls never mutate.
     global_this: Option<Value>,
@@ -91,6 +94,7 @@ impl RealmState {
             object_prototype: OnceCell::new(),
             array_prototype: OnceCell::new(),
             string_prototype: OnceCell::new(),
+            code_unit_strings: crate::string::CodeUnitStrings::default(),
             global_this,
             dynamic_function_realm_global: RefCell::new(dynamic_function_realm_global),
             direct_eval_cache: RefCell::new(DirectEvalCache::default()),
@@ -102,6 +106,10 @@ impl RealmState {
             let _ = realm.array_prototype.set(prototype);
         }
         realm
+    }
+
+    pub(crate) fn string_code_unit(&self, code_unit: u16) -> JsString {
+        self.code_unit_strings.get(code_unit)
     }
 
     pub(crate) fn initialize_object_prototype(&self, prototype: ObjectRef) {

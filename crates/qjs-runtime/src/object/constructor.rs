@@ -141,7 +141,7 @@ fn boxed_string(value: &str, env: &CallEnv) -> Value {
         object.define_property(
             index.to_string(),
             Property::data(
-                Value::String(string::string_from_code_unit(code_unit).into()),
+                Value::String(env.realm().string_code_unit(code_unit)),
                 true,
                 false,
                 false,
