@@ -661,7 +661,7 @@ impl Vm<'_> {
             // probe may only be used here.
             OwnDataPropertyRead::Missing => {
                 if let CacheProbe::PrototypeCandidate { holder, slot } = probe
-                    && let Some(value) = holder.own_data_slot_value(slot)
+                    && let Some(value) = holder.prototype_data_slot_value(slot)
                 {
                     return Some(value);
                 }

@@ -46,7 +46,7 @@ pub(super) fn get_prop_named(
             // once that receiver miss is proven.
             OwnDataPropertyRead::Missing => {
                 if let CacheProbe::PrototypeCandidate { holder, slot } = probe
-                    && let Some(value) = holder.own_data_slot_value(slot)
+                    && let Some(value) = holder.prototype_data_slot_value(slot)
                 {
                     return Ok(value);
                 }
