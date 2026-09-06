@@ -93,7 +93,7 @@ def _summary_revisions(summary: dict[str, Any]) -> tuple[str, str]:
 def _external_entries(report: dict[str, Any], target_ratio: float) -> list[dict[str, Any]]:
     if report.get("artifact_type") != "quickjs-external-preview-report":
         raise PerformanceDecisionError("external report: unsupported artifact type")
-    if report.get("schema_version") != 1:
+    if report.get("schema_version") != 2:
         raise PerformanceDecisionError("external report: unsupported schema version")
     entries: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -177,6 +177,7 @@ def build_queue(
     broad_path: Path,
     external_path: Path,
     target_ratio: float,
+    sentinel_path: Path | None = None,
 ) -> dict[str, Any]:
     if target_ratio <= 0 or not math.isfinite(target_ratio):
         raise PerformanceDecisionError("target ratio must be a finite positive number")
@@ -184,9 +185,15 @@ def build_queue(
     broad, broad_sha = _read_json(broad_path, "broad report")
     external, external_sha = _read_json(external_path, "external report")
     candidate_sha, base_sha = _summary_revisions(summary)
+    from .performance_evidence import validate_bundle
+    sentinel, sentinel_sha = (None, None) if sentinel_path is None else _read_json(sentinel_path, "sentinel report")
+    problems = validate_bundle(summary, broad, external, sentinel)
+    if problems:
+        raise PerformanceDecisionError("queue requires healthy complete evidence: " + "; ".join(problems))
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact_type": _QUEUE_TYPE,
+        "engines": summary["engines"],
         "candidate_sha": candidate_sha,
         "comparison_base_sha": base_sha,
         "target_ratio": target_ratio,
@@ -194,9 +201,14 @@ def build_queue(
             "preview_summary_sha256": summary_sha,
             "broad_report_sha256": broad_sha,
             "external_report_sha256": external_sha,
+            "sentinel_report_sha256": sentinel_sha,
         },
         "external": _external_entries(external, target_ratio),
         "broad": _broad_entries(broad, target_ratio),
+        "sentinel": [] if sentinel is None else [
+            {**entry, "id": entry["id"].replace("broad/", "sentinel/", 1)}
+            for entry in _broad_entries(sentinel, target_ratio)
+        ],
     }
 
 
@@ -206,25 +218,32 @@ def load_queue(path: Path) -> tuple[dict[str, Any], str]:
         queue,
         {
             "schema_version", "artifact_type", "candidate_sha", "comparison_base_sha",
-            "target_ratio", "evidence", "external", "broad",
+            "target_ratio", "evidence", "external", "broad", "sentinel", "engines",
         },
         "opportunity queue",
     )
-    if queue["schema_version"] != 1 or queue["artifact_type"] != _QUEUE_TYPE:
+    if queue["schema_version"] != 2 or queue["artifact_type"] != _QUEUE_TYPE:
         raise PerformanceDecisionError("opportunity queue: unsupported schema")
     _revision(queue["candidate_sha"], "opportunity queue.candidate_sha")
     _revision(queue["comparison_base_sha"], "opportunity queue.comparison_base_sha")
     _ratio(queue["target_ratio"], "opportunity queue.target_ratio")
+    from .performance_evidence import engine_identity
+    engines = engine_identity(queue)
+    if (engines["candidate"]["source_revision"] != queue["candidate_sha"]
+            or engines["base"]["source_revision"] != queue["comparison_base_sha"]):
+        raise PerformanceDecisionError("queue engine revisions disagree with queue identity")
     evidence = _object(queue["evidence"], "opportunity queue.evidence")
     _keys(
         evidence,
-        {"preview_summary_sha256", "broad_report_sha256", "external_report_sha256"},
+        {"preview_summary_sha256", "broad_report_sha256", "external_report_sha256", "sentinel_report_sha256"},
         "opportunity queue.evidence",
     )
     for key, value in evidence.items():
+        if key == "sentinel_report_sha256" and value is None:
+            continue
         _sha256(value, f"opportunity queue.evidence.{key}")
     seen: set[str] = set()
-    for channel in ("external", "broad"):
+    for channel in ("external", "broad", "sentinel"):
         entries = _array(queue[channel], f"opportunity queue.{channel}")
         expected_rank = 1
         for index, raw_entry in enumerate(entries):
@@ -402,7 +421,8 @@ def load_unit(path: Path) -> tuple[dict[str, Any], str]:
     )
     if control_max < 1:
         raise PerformanceDecisionError("performance unit control gate cannot require every control to improve")
-    _integer(fast_gate["max_attempts"], "performance unit.fast_gate.max_attempts", 1)
+    if _integer(fast_gate["max_attempts"], "performance unit.fast_gate.max_attempts", 1) > 2:
+        raise PerformanceDecisionError("performance unit max_attempts must not exceed two")
 
     promotion = _object(unit["promotion_gate"], "performance unit.promotion_gate")
     _keys(
@@ -436,7 +456,7 @@ def validate_unit_against_queue(unit: dict[str, Any], unit_sha: str, queue: dict
     if priority["mode"] == "queue":
         ranks = {
             item["id"]: item["rank"]
-            for channel in ("external", "broad")
+            for channel in ("external", "broad", "sentinel")
             for item in queue[channel]
         }
         missing = sorted(targets - set(ranks))
@@ -460,214 +480,7 @@ def validate_unit_against_queue(unit: dict[str, Any], unit_sha: str, queue: dict
     }
 
 
-def _base_metric_index(broad: dict[str, Any], external: dict[str, Any]) -> tuple[dict[str, float], bool, bool]:
-    metrics: dict[str, float] = {}
-    external_complete = True
-    if external.get("artifact_type") != "quickjs-external-preview-report":
-        raise PerformanceDecisionError("external report: unsupported artifact type")
-    for suite_index, raw_suite in enumerate(_array(external.get("suites"), "external report.suites")):
-        suite = _object(raw_suite, f"external report.suites[{suite_index}]")
-        suite_id = _string(suite.get("id"), f"external report.suites[{suite_index}].id")
-        if suite.get("complete_base_comparison") is not True or suite.get("complete_comparison") is not True:
-            external_complete = False
-        for raw_case in _array(suite.get("cases"), f"external report {suite_id}.cases"):
-            case = _object(raw_case, f"external report {suite_id}.case")
-            case_id = _string(case.get("id"), f"external report {suite_id}.case.id")
-            value = case.get("candidate_over_base")
-            if value is not None:
-                metrics[f"external/{suite_id}/{case_id}"] = _ratio(
-                    value, f"external report {suite_id}/{case_id}.candidate_over_base"
-                )
-    comparisons = _object(broad.get("comparisons"), "broad report.comparisons")
-    base = _object(
-        comparisons.get("candidate_vs_base"), "broad report.comparisons.candidate_vs_base"
-    )
-    cases = _object(base.get("cases"), "broad report.candidate_vs_base.cases")
-    broad_complete = len(cases) == 25
-    for case_id, raw_case in cases.items():
-        case = _object(raw_case, f"broad report case {case_id}")
-        metrics[f"broad/{case_id}"] = _ratio(
-            case.get("ratio"), f"broad report case {case_id}.ratio"
-        )
-    return metrics, broad_complete, external_complete
-
-
-def _test262_zero_gap(report: dict[str, Any], candidate_sha: str) -> bool:
-    if report.get("commit") != candidate_sha:
-        raise PerformanceDecisionError("Test262 burndown commit does not match candidate SHA")
-    rust = _object(report.get("rust"), "Test262 burndown.rust")
-    comparison = _object(report.get("comparison"), "Test262 burndown.comparison")
-    fields = (
-        (rust, "fail"), (rust, "timeout"), (rust, "not_run"),
-        (comparison, "actionable_gap"), (comparison, "ng_pass_rust_fail"),
-        (comparison, "ng_pass_rust_timeout"), (comparison, "ng_pass_rust_not_run"),
-    )
-    return all(_integer(container.get(key), f"Test262 burndown.{key}") == 0 for container, key in fields)
-
-
-def _stage_decision(
-    unit: dict[str, Any],
-    unit_sha: str,
-    base_sha: str,
-    candidate_sha: str,
-    metrics: dict[str, float],
-    validation: dict[str, Any],
-    queue_sha: str,
-    summary_sha: str,
-    broad_sha: str,
-    external_sha: str,
-) -> dict[str, Any]:
-    """Classifies one stage of a migration as advance, abort, or inconclusive.
-
-    `retained` and `rejected` are deliberately unavailable here. A stage that
-    does not regress past its budget has earned the right to continue, not a
-    performance claim; a stage that does closes that one implementation, not
-    the mechanism family it belongs to. Only the final stage's fast or
-    promotion decision can retain or reject the migration itself.
-    """
-    migration = unit["migration"]
-    budget = migration["stage_max_candidate_over_base"]
-    watched = tuple(migration["cumulative_target_ids"]) + tuple(unit["fast_gate"]["control_ids"])
-    reasons: list[str] = []
-    missing = sorted(set(watched) - set(metrics))
-    if missing:
-        state = "inconclusive"
-        reasons.append(f"missing candidate/base evidence for {missing}")
-    else:
-        regressed = [
-            opportunity_id for opportunity_id in watched if metrics[opportunity_id] > budget
-        ]
-        if regressed:
-            state = "abort"
-            reasons.append(
-                f"stage regression budget {budget} exceeded for {regressed}; this closes the "
-                "stage's implementation shape, not its mechanism family"
-            )
-        else:
-            state = "advance"
-    return {
-        "schema_version": 2,
-        "artifact_type": _DECISION_TYPE,
-        "unit_id": unit["unit_id"],
-        "unit_sha256": unit_sha,
-        "unit_kind": "migration",
-        "base_sha": base_sha,
-        "candidate_sha": candidate_sha,
-        "mode": "stage",
-        "stage": migration["current_stage"],
-        "stages": migration["stages"],
-        "decision": state,
-        "reasons": reasons,
-        "metrics": {
-            opportunity_id: metrics[opportunity_id]
-            for opportunity_id in watched
-            if opportunity_id in metrics
-        },
-        "evidence": {
-            "queue_sha256": queue_sha,
-            "preview_summary_sha256": summary_sha,
-            "broad_report_sha256": broad_sha,
-            "external_report_sha256": external_sha,
-            "test262_burndown_sha256": None,
-        },
-        "unit_validation": validation,
-    }
-
-
-def decide(
-    unit: dict[str, Any],
-    unit_sha: str,
-    queue: dict[str, Any],
-    queue_sha: str,
-    summary: dict[str, Any],
-    summary_sha: str,
-    broad: dict[str, Any],
-    broad_sha: str,
-    external: dict[str, Any],
-    external_sha: str,
-    mode: str,
-    test262: tuple[dict[str, Any], str] | None,
-) -> dict[str, Any]:
-    validation = validate_unit_against_queue(unit, unit_sha, queue, queue_sha)
-    candidate_sha, base_sha = _summary_revisions(summary)
-    # A migration keeps one base SHA across every stage, so this equality is
-    # what makes each stage measurement cumulative against the migration base
-    # rather than against the scaffolding commit before it.
-    if base_sha != unit["base_sha"]:
-        raise PerformanceDecisionError("preview summary base SHA does not match performance unit")
-    kind = unit_kind(unit)
-    if mode == "stage" and kind != "migration":
-        raise PerformanceDecisionError("stage mode requires a migration unit")
-    if kind == "migration" and mode != "stage":
-        migration = unit["migration"]
-        if migration["current_stage"] != migration["stages"]:
-            raise PerformanceDecisionError(
-                "a migration reaches fast or promotion mode only at its final stage; "
-                "use --mode stage for an intermediate stage"
-            )
-    metrics, broad_complete, external_complete = _base_metric_index(broad, external)
-    if mode == "stage":
-        return _stage_decision(
-            unit, unit_sha, base_sha, candidate_sha, metrics, validation,
-            queue_sha, summary_sha, broad_sha, external_sha,
-        )
-    fast_gate = unit["fast_gate"]
-    target_ids = tuple(fast_gate["target_ids"])
-    control_ids = tuple(fast_gate["control_ids"])
-    missing = sorted(set(target_ids + control_ids) - set(metrics))
-    reasons: list[str] = []
-    state = "retained"
-    if missing:
-        state = "inconclusive"
-        reasons.append(f"missing candidate/base evidence for {missing}")
-    else:
-        failed_targets = [
-            opportunity_id for opportunity_id in target_ids
-            if metrics[opportunity_id] > fast_gate["target_max_candidate_over_base"]
-        ]
-        failed_controls = [
-            opportunity_id for opportunity_id in control_ids
-            if metrics[opportunity_id] > fast_gate["control_max_candidate_over_base"]
-        ]
-        if failed_targets:
-            state = "rejected"
-            reasons.append(f"target improvement gate failed for {failed_targets}")
-        if failed_controls:
-            state = "rejected"
-            reasons.append(f"control regression gate failed for {failed_controls}")
-    if mode == "promotion" and state == "retained":
-        if not broad_complete:
-            state = "inconclusive"
-            reasons.append("broad report does not contain the complete 25-case base comparison")
-        if not external_complete:
-            state = "inconclusive"
-            reasons.append("external report does not contain complete base and QuickJS-NG comparisons")
-        if test262 is None:
-            state = "inconclusive"
-            reasons.append("promotion requires an exact Test262 burndown")
-        elif not _test262_zero_gap(test262[0], candidate_sha):
-            state = "rejected"
-            reasons.append("Test262 parity gate is not zero")
-    return {
-        "schema_version": 1,
-        "artifact_type": _DECISION_TYPE,
-        "unit_id": unit["unit_id"],
-        "unit_sha256": unit_sha,
-        "base_sha": base_sha,
-        "candidate_sha": candidate_sha,
-        "mode": mode,
-        "decision": state,
-        "reasons": reasons,
-        "metrics": {opportunity_id: metrics[opportunity_id] for opportunity_id in target_ids + control_ids if opportunity_id in metrics},
-        "evidence": {
-            "queue_sha256": queue_sha,
-            "preview_summary_sha256": summary_sha,
-            "broad_report_sha256": broad_sha,
-            "external_report_sha256": external_sha,
-            "test262_burndown_sha256": None if test262 is None else test262[1],
-        },
-        "unit_validation": validation,
-    }
+from .performance_evaluation import decide
 
 
 class _Parser(argparse.ArgumentParser):
@@ -684,6 +497,7 @@ def _parser() -> argparse.ArgumentParser:
     queue.add_argument("--broad-report", type=Path, required=True)
     queue.add_argument("--external-report", type=Path, required=True)
     queue.add_argument("--target-ratio", type=float, default=0.5)
+    queue.add_argument("--sentinel-report", type=Path)
     queue.add_argument("--output", type=Path, required=True)
 
     check = subparsers.add_parser("check-unit", help="validate one plan without evidence files")
@@ -692,6 +506,7 @@ def _parser() -> argparse.ArgumentParser:
     validate = subparsers.add_parser("validate-unit", help="bind one plan to an opportunity queue")
     validate.add_argument("--unit", type=Path, required=True)
     validate.add_argument("--queue", type=Path, required=True)
+    validate.add_argument("--profile-root", type=Path, required=True)
 
     decision = subparsers.add_parser("decide", help="classify measured evidence for one plan")
     decision.add_argument("--unit", type=Path, required=True)
@@ -699,6 +514,8 @@ def _parser() -> argparse.ArgumentParser:
     decision.add_argument("--summary", type=Path, required=True)
     decision.add_argument("--broad-report", type=Path, required=True)
     decision.add_argument("--external-report", type=Path, required=True)
+    decision.add_argument("--sentinel-report", type=Path, required=True)
+    decision.add_argument("--profile-root", type=Path, required=True)
     decision.add_argument("--test262-burndown", type=Path)
     decision.add_argument("--mode", choices=("stage", "fast", "promotion"), required=True)
     decision.add_argument("--require-retained", action="store_true")
@@ -710,8 +527,12 @@ def main() -> int:
     try:
         args = _parser().parse_args()
         if args.command == "queue":
+            from .performance_evidence import replay_reports
+            from .bundle import verify
+            verify(args.summary, args.broad_report, args.external_report, args.sentinel_report)
+            replay_reports(args.broad_report, args.external_report, args.sentinel_report)
             payload = build_queue(
-                args.summary, args.broad_report, args.external_report, args.target_ratio
+                args.summary, args.broad_report, args.external_report, args.target_ratio, args.sentinel_report
             )
             _atomic_write(args.output, payload)
             print(json.dumps(payload, sort_keys=True))
@@ -722,8 +543,15 @@ def main() -> int:
             return 0
         queue, queue_sha = load_queue(args.queue)
         if args.command == "validate-unit":
+            from .profile import verify_profiles
+            verify_profiles(unit, queue, args.profile_root)
             print(json.dumps(validate_unit_against_queue(unit, unit_sha, queue, queue_sha), sort_keys=True))
             return 0
+        from .performance_evidence import replay_reports
+        from .bundle import verify
+        verify(args.summary, args.broad_report, args.external_report, args.sentinel_report)
+        replay_reports(args.broad_report, args.external_report, args.sentinel_report)
+        sentinel, sentinel_sha = _read_json(args.sentinel_report, "sentinel report")
         summary, summary_sha = _read_json(args.summary, "preview summary")
         broad, broad_sha = _read_json(args.broad_report, "broad report")
         external, external_sha = _read_json(args.external_report, "external report")
@@ -732,7 +560,8 @@ def main() -> int:
             test262 = _read_json(args.test262_burndown, "Test262 burndown")
         payload = decide(
             unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_sha,
-            external, external_sha, args.mode, test262,
+            external, external_sha, args.mode, test262, sentinel=sentinel, sentinel_sha=sentinel_sha,
+            profile_root=args.profile_root,
         )
         _atomic_write(args.output, payload)
         print(json.dumps(payload, sort_keys=True))
@@ -740,7 +569,7 @@ def main() -> int:
             return 0
         accepted = "advance" if args.mode == "stage" else "retained"
         return 0 if payload["decision"] == accepted else 1
-    except PerformanceDecisionError as error:
+    except (ValueError, OSError, KeyError, TypeError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
 

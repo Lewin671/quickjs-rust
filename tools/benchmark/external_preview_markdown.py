@@ -11,7 +11,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         "> **Informational only.** These are pinned, neutral shell ports; no row is an official",
         "> JetStream, Kraken, or SunSpider score, and incomplete suites have no aggregate score.",
         "",
-        "| Suite | Candidate/base comparable | Candidate/base | Candidate/base wins | QuickJS comparable | Candidate/QuickJS-NG | Candidate/QuickJS-NG wins |",
+        "Win counts exclude inconclusive intervals and runs below 30 blocks.", "",
+        "| Suite | Candidate/base comparable | Candidate/base | Resolved candidate/base wins | QuickJS comparable | Candidate/QuickJS-NG | Resolved candidate/QuickJS-NG wins |",
         "|---|---:|---:|---:|---:|---:|---:|",
     ]
     for suite in report["suites"]:
@@ -27,8 +28,9 @@ def render_markdown(report: dict[str, Any]) -> str:
         )
     lines.extend([
         "", "### External per-case performance", "",
-        "Median wall time is the outer process duration per run. Lower ratios favor qjs-rust.", "",
-        "| Suite / case | Candidate ms/run | Base ms/run | QuickJS-NG ms/run | Candidate/base | Candidate/QuickJS-NG |",
+        "Median wall time includes startup, parsing, execution and shutdown. Ratios use paired blocks.",
+        "Three-block previews cannot accept or reject an optimization; decision evidence needs at least 30 blocks and narrow 95% intervals.", "",
+        "| Suite / case | Candidate ms/run | Base ms/run | QuickJS-NG ms/run | Candidate/base (95% CI) | Candidate/QuickJS-NG (95% CI) |",
         "|---|---:|---:|---:|---:|---:|",
     ])
     for suite in report["suites"]:
@@ -43,6 +45,15 @@ def render_markdown(report: dict[str, Any]) -> str:
             quickjs_text = "—" if quickjs is None else f"{quickjs / 1_000_000:.3f}"
             base_ratio_text = "—" if base_ratio is None else f"{base_ratio:.3f}x"
             ratio_text = "—" if ratio is None else f"{ratio:.3f}x"
+            for role, value in (("base", base_ratio), ("quickjs-ng", ratio)):
+                effect = case.get("paired_comparisons", {}).get(role)
+                if effect is not None:
+                    ci = effect["confidence_interval"]
+                    text = f"{value:.3f}x [{ci['lower']:.3f}, {ci['upper']:.3f}] ({effect['status']})"
+                    if role == "base":
+                        base_ratio_text = text
+                    else:
+                        ratio_text = text
             lines.append(
                 f"| `{suite['id']}/{case['id']}` | {candidate_text} | {base_text} | "
                 f"{quickjs_text} | {base_ratio_text} | {ratio_text} |"

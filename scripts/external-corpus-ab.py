@@ -93,23 +93,27 @@ def build(data, body, copies):
     return handle.name
 
 
-def run(binary, path):
+def run(binary, path, adapter="qjs-rust"):
+    flags = ["--script"] if adapter == "quickjs-ng" else ["--raw"]
     start = time.perf_counter()
-    result = subprocess.run(
-        [binary, path],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        timeout=900,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            [binary, *flags, path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=900,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return None
     return (time.perf_counter() - start) if result.returncode == 0 else None
 
 
-def copies_for(base, cand, data, body, target):
+def copies_for(base, cand, data, body, target, base_adapter="qjs-rust", cand_adapter="qjs-rust"):
     probe = build(data, body, 1)
     try:
-        once = run(base, probe)
-        other = run(cand, probe)
+        once = run(base, probe, base_adapter)
+        other = run(cand, probe, cand_adapter)
     finally:
         os.unlink(probe)
     if once is None or other is None:
@@ -118,19 +122,20 @@ def copies_for(base, cand, data, body, target):
     return max(1, min(MAX_COPIES, math.ceil(target / work)))
 
 
-def measure(base, cand, path, reps):
+def measure(base, cand, path, reps, base_adapter="qjs-rust", cand_adapter="qjs-rust"):
     ratios, base_times, cand_times = [], [], []
     for rep in range(reps):
-        order = (base, cand) if rep % 2 == 0 else (cand, base)
+        order = ("base", "cand") if rep % 2 == 0 else ("cand", "base")
         timing = {}
-        for binary in order:
-            value = run(binary, path)
+        for role in order:
+            binary, adapter = (base, base_adapter) if role == "base" else (cand, cand_adapter)
+            value = run(binary, path, adapter)
             if value is None or value <= 0:
                 return None
-            timing[binary] = value
-        ratios.append(timing[cand] / timing[base])
-        base_times.append(timing[base])
-        cand_times.append(timing[cand])
+            timing[role] = value
+        ratios.append(timing["cand"] / timing["base"])
+        base_times.append(timing["base"])
+        cand_times.append(timing["cand"])
     return ratios, base_times, cand_times
 
 
@@ -138,27 +143,33 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("base")
     parser.add_argument("cand")
+    parser.add_argument("--base-adapter", choices=("qjs-rust", "quickjs-ng"), default="qjs-rust")
+    parser.add_argument("--cand-adapter", choices=("qjs-rust", "quickjs-ng"), default="qjs-rust")
     parser.add_argument("--reps", type=int, default=5)
     parser.add_argument("--target", type=float, default=2.0)
     parser.add_argument("--label", default="cand/base")
     parser.add_argument("--only", default=None)
     args = parser.parse_args()
+    if args.reps < 1 or not math.isfinite(args.target) or args.target <= 0:
+        parser.error("--reps and --target must be positive")
+    print("DIAGNOSTIC ONLY: source amplification changes parsing and global state; "
+          "use external-performance-preview.sh for verified three-engine evidence.")
 
     if not os.path.isdir(ROOT):
         raise SystemExit(
-            f"no external corpus cache at {ROOT}; run scripts/benchmark.sh once to populate it"
+            f"no external corpus cache at {ROOT}; use external-performance-preview.sh fetch --cache-root target/benchmarks/external-cache"
         )
 
     print(f"{'case':34s} {args.label:>9s}   [min, max]     copies  base_s  cand_s")
     ratios, skipped = [], []
     for name, data, body in cases(args.only):
-        copies = copies_for(args.base, args.cand, data, body, args.target)
+        copies = copies_for(args.base, args.cand, data, body, args.target, args.base_adapter, args.cand_adapter)
         if copies is None:
             skipped.append(name)
             continue
         path = build(data, body, copies)
         try:
-            measured = measure(args.base, args.cand, path, args.reps)
+            measured = measure(args.base, args.cand, path, args.reps, args.base_adapter, args.cand_adapter)
         finally:
             os.unlink(path)
         if measured is None:

@@ -525,6 +525,8 @@ else
 fi
 cat "$OUTPUT/sentinel-summary.md" >> "$OUTPUT/summary.md"
 
+CURRENT_PHASE="seal_evidence"
+(cd "$HARNESS_ROOT" && python3 -m tools.benchmark.bundle --output-dir "$OUTPUT")
 RUN_COMPLETED=1
 CURRENT_PHASE="complete"
 printf 'performance preview evidence: %s\n' "$OUTPUT"

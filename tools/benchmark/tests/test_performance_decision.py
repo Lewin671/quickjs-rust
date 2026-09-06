@@ -24,6 +24,10 @@ class PerformanceDecisionTests(unittest.TestCase):
     older_sha = "b" * 40
     candidate_sha = "c" * 40
 
+    def setUp(self) -> None:
+        from tools.benchmark.tests.decision_fixtures import isolate_test262_inventory
+        isolate_test262_inventory(self)
+
     def test_atomic_output_write_creates_once_without_leaking_temporary_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory_name:
             directory = Path(directory_name)
@@ -42,70 +46,22 @@ class PerformanceDecisionTests(unittest.TestCase):
         path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
         return path
 
-    def _summary(self, candidate: str, base: str) -> dict[str, object]:
-        return {
-            "state": "success",
-            "engines": {
-                "candidate": {"source_revision": candidate},
-                "base": {"source_revision": base},
-            },
-        }
+    def _summary(self, candidate, base):
+        from tools.benchmark.tests.decision_fixtures import summary
+        result = summary(candidate, base)
+        self.engines = result["engines"]
+        return result
 
-    def _external(self, *, target_base: float = 0.9, complete: bool = True) -> dict[str, object]:
-        return {
-            "schema_version": 1,
-            "artifact_type": "quickjs-external-preview-report",
-            "suites": [
-                {
-                    "id": "suite",
-                    "complete_base_comparison": complete,
-                    "complete_comparison": complete,
-                    "cases": [
-                        {
-                            "id": "target",
-                            "capability": {"candidate": "ok", "base": "ok", "quickjs-ng": "ok"},
-                            "candidate_over_base": target_base,
-                            "candidate_over_quickjs_ng": 4.0,
-                        },
-                        {
-                            "id": "control",
-                            "capability": {"candidate": "ok", "base": "ok", "quickjs-ng": "ok"},
-                            "candidate_over_base": 1.01,
-                            "candidate_over_quickjs_ng": 2.0,
-                        },
-                        {
-                            "id": "already-fast",
-                            "capability": {"candidate": "ok", "base": "ok", "quickjs-ng": "ok"},
-                            "candidate_over_base": 0.98,
-                            "candidate_over_quickjs_ng": 0.4,
-                        },
-                        {
-                            "id": "not-comparable",
-                            "capability": {"candidate": "ok", "base": "ok", "quickjs-ng": "timeout"},
-                            "candidate_over_base": 0.8,
-                            "candidate_over_quickjs_ng": None,
-                        },
-                    ],
-                }
-            ],
-        }
+    def _external(self, *, target_base=0.9, complete=True):
+        from tools.benchmark.tests.decision_fixtures import external
+        return external(self.engines, target_base, complete)
 
-    def _broad(self, *, count: int = 25) -> dict[str, object]:
-        quickjs_cases: dict[str, object] = {}
-        base_cases: dict[str, object] = {}
-        for index in range(count):
-            case_id = "broad-hot" if index == 0 else f"case-{index}"
-            quickjs_cases[case_id] = {"family": "call", "ratio": 0.8 if index == 0 else 0.3}
-            base_cases[case_id] = {"ratio": 0.99}
-        return {
-            "comparisons": {
-                "candidate_vs_quickjs_ng": {"cases": quickjs_cases},
-                "candidate_vs_base": {"cases": base_cases},
-            }
-        }
+    def _broad(self, *, count=25, lane="broad"):
+        from tools.benchmark.tests.decision_fixtures import internal
+        return internal(self.engines, count, lane)
 
     def _unit(self, queue_sha: str, *, base: str | None = None) -> dict[str, object]:
-        target = "external/suite/target"
+        target = "external/sunspider-1.0/3d-cube"
         return {
             "schema_version": 1,
             "artifact_type": "quickjs-performance-unit",
@@ -125,8 +81,8 @@ class PerformanceDecisionTests(unittest.TestCase):
             },
             "profile_evidence": [
                 {
-                    "source": "target/profiles/shared-call.json",
-                    "sha256": "d" * 64,
+                    "source": self.profile_source,
+                    "sha256": self.profile_sha,
                     "base_sha": base or self.base_sha,
                     "opportunity_ids": [target],
                     "shared_cost": "Call environment materialization.",
@@ -135,7 +91,7 @@ class PerformanceDecisionTests(unittest.TestCase):
             ],
             "fast_gate": {
                 "target_ids": [target],
-                "control_ids": ["external/suite/control", "broad/broad-hot"],
+                "control_ids": ["external/sunspider-1.0/3d-morph", "broad/plain_function_call"],
                 "target_max_candidate_over_base": 0.95,
                 "control_max_candidate_over_base": 1.03,
                 "max_attempts": 2,
@@ -148,6 +104,9 @@ class PerformanceDecisionTests(unittest.TestCase):
         }
 
     def _queue_and_unit(self, directory: Path) -> tuple[dict[str, object], str, dict[str, object], str]:
+        self.directory = directory
+        from tools.benchmark.tests.decision_fixtures import profile
+        self.profile_source, self.profile_sha = profile(directory, self.base_sha)
         summary_path = self._write(directory, "queue-summary.json", self._summary(self.base_sha, self.older_sha))
         broad_path = self._write(directory, "queue-broad.json", self._broad())
         external_path = self._write(directory, "queue-external.json", self._external())
@@ -164,10 +123,10 @@ class PerformanceDecisionTests(unittest.TestCase):
             queue, _queue_sha, _unit, _unit_sha = self._queue_and_unit(directory)
         self.assertEqual(
             [entry["id"] for entry in queue["external"]],
-            ["external/suite/target", "external/suite/control"],
+            ["external/sunspider-1.0/3d-cube", "external/sunspider-1.0/3d-morph"],
         )
         self.assertEqual([entry["rank"] for entry in queue["external"]], [1, 2])
-        self.assertEqual(queue["broad"][0]["id"], "broad/broad-hot")
+        self.assertEqual(queue["broad"][0]["id"], "broad/plain_function_call")
         self.assertEqual(queue["candidate_sha"], self.base_sha)
 
     def test_unit_requires_current_queue_and_profile_coverage(self) -> None:
@@ -183,7 +142,7 @@ class PerformanceDecisionTests(unittest.TestCase):
                 validate_unit_against_queue(stale, unit_sha, queue, queue_sha)
 
             uncovered = copy.deepcopy(unit)
-            uncovered["profile_evidence"][0]["opportunity_ids"] = ["external/suite/control"]
+            uncovered["profile_evidence"][0]["opportunity_ids"] = ["external/sunspider-1.0/3d-morph"]
             with self.assertRaisesRegex(PerformanceDecisionError, "do not cover"):
                 validate_unit_against_queue(uncovered, unit_sha, queue, queue_sha)
 
@@ -192,7 +151,7 @@ class PerformanceDecisionTests(unittest.TestCase):
             directory = Path(directory_name)
             queue, queue_sha, _unit, _unit_sha = self._queue_and_unit(directory)
             post_hoc = self._unit(queue_sha)
-            post_hoc["fast_gate"]["target_ids"] = ["external/suite/control"]
+            post_hoc["fast_gate"]["target_ids"] = ["external/sunspider-1.0/3d-morph"]
             post_hoc_path = self._write(directory, "post-hoc.json", post_hoc)
             with self.assertRaisesRegex(PerformanceDecisionError, "must equal"):
                 load_unit(post_hoc_path)
@@ -215,6 +174,7 @@ class PerformanceDecisionTests(unittest.TestCase):
                 unit, unit_sha, queue, queue_sha,
                 summary, "1" * 64, broad, "2" * 64, external, "3" * 64,
                 "fast", None,
+            sentinel=self._broad(lane="sentinel"), sentinel_sha="5" * 64, profile_root=self.directory,
             )
             self.assertEqual(retained["decision"], "retained")
 
@@ -223,6 +183,7 @@ class PerformanceDecisionTests(unittest.TestCase):
                 unit, unit_sha, queue, queue_sha,
                 summary, "1" * 64, broad, "2" * 64, rejected_external, "3" * 64,
                 "fast", None,
+            sentinel=self._broad(lane="sentinel"), sentinel_sha="5" * 64, profile_root=self.directory,
             )
             self.assertEqual(rejected["decision"], "rejected")
             self.assertIn("target improvement", rejected["reasons"][0])
@@ -238,23 +199,17 @@ class PerformanceDecisionTests(unittest.TestCase):
                 unit, unit_sha, queue, queue_sha,
                 summary, "1" * 64, broad, "2" * 64, external, "3" * 64,
                 "promotion", None,
+            sentinel=self._broad(lane="sentinel"), sentinel_sha="5" * 64, profile_root=self.directory,
             )
             self.assertEqual(incomplete["decision"], "inconclusive")
 
-            test262 = {
-                "commit": self.candidate_sha,
-                "rust": {"fail": 0, "timeout": 0, "not_run": 0},
-                "comparison": {
-                    "actionable_gap": 0,
-                    "ng_pass_rust_fail": 0,
-                    "ng_pass_rust_timeout": 0,
-                    "ng_pass_rust_not_run": 0,
-                },
-            }
+            from tools.benchmark.tests.decision_fixtures import zero_gap
+            test262 = zero_gap(self.candidate_sha)
             retained = decide(
                 unit, unit_sha, queue, queue_sha,
                 summary, "1" * 64, broad, "2" * 64, self._external(), "3" * 64,
                 "promotion", (test262, "4" * 64),
+            sentinel=self._broad(lane="sentinel"), sentinel_sha="5" * 64, profile_root=self.directory,
             )
             self.assertEqual(retained["decision"], "retained")
 
@@ -264,6 +219,7 @@ class PerformanceDecisionTests(unittest.TestCase):
                 unit, unit_sha, queue, queue_sha,
                 summary, "1" * 64, broad, "2" * 64, self._external(), "3" * 64,
                 "promotion", (failing_test262, "4" * 64),
+            sentinel=self._broad(lane="sentinel"), sentinel_sha="5" * 64, profile_root=self.directory,
             )
             self.assertEqual(rejected["decision"], "rejected")
 
@@ -306,6 +262,8 @@ class MigrationStageTests(unittest.TestCase):
     fixtures = PerformanceDecisionTests
 
     def setUp(self) -> None:
+        from tools.benchmark.tests.decision_fixtures import isolate_test262_inventory
+        isolate_test262_inventory(self)
         self._directory = tempfile.TemporaryDirectory()
         self.addCleanup(self._directory.cleanup)
         self.directory = Path(self._directory.name)
@@ -320,7 +278,7 @@ class MigrationStageTests(unittest.TestCase):
         unit["migration"] = {
             "stages": stages,
             "current_stage": stage,
-            "cumulative_target_ids": ["external/suite/target"],
+            "cumulative_target_ids": ["external/sunspider-1.0/3d-cube"],
             "stage_max_candidate_over_base": budget,
         }
         return unit
@@ -343,7 +301,8 @@ class MigrationStageTests(unittest.TestCase):
         return decide(
             unit, unit_sha, self.queue, self.queue_sha, summary, summary_sha, broad, broad_sha,
             external, external_sha, mode, None,
-        )
+        sentinel=self.helper._broad(lane="sentinel"), sentinel_sha="5" * 64, profile_root=self.directory,
+            )
 
     def test_neutral_scaffolding_stage_advances_without_an_improvement(self) -> None:
         # 1.02x is a regression by the leaf gate and would consume the unit's
@@ -362,7 +321,7 @@ class MigrationStageTests(unittest.TestCase):
 
     def test_missing_evidence_is_inconclusive_not_an_abort(self) -> None:
         unit = self._migration_unit()
-        unit["migration"]["cumulative_target_ids"] = ["external/suite/absent"]
+        unit["migration"]["cumulative_target_ids"] = ["external/sunspider-1.0/absent"]
         payload = self._decide(unit, target_base=0.5)
         self.assertEqual(payload["decision"], "inconclusive")
         self.assertRegex(payload["reasons"][0], "missing candidate/base evidence")

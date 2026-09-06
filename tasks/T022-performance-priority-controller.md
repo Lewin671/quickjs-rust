@@ -43,6 +43,22 @@ external ratio identifies a workload to profile, not a code change to make.
    `rejected`; the migration itself reaches the ordinary payoff gate only at
    its final stage. Full contract in `docs/benchmarking.md`.
 
+## Evidence hardening (2026-09-05)
+
+- Queue schema 2 binds all three engine identities and optionally ranks the
+  generic sentinels. The CLI replays colocated raw evidence before queue or
+  decision generation; source revisions, binary hashes and exact inventories
+  must agree across lanes.
+- `validate-unit --profile-root` reads content-hashed receipts and verifies the
+  actual profile/workload assets against the queue candidate executable.
+  `check-unit` remains an archival structural check.
+- Decisions require at least 30 paired blocks, narrow 95% intervals, and all
+  six sentinels. Promotion applies the regression ceiling to every broad and
+  external case, not just the hand-selected controls.
+- `python3 -m tools.benchmark.compare` produces a complete local bundle and
+  lane-separated summary. Detailed commands and interpretation live in
+  [the performance workflow](../docs/performance-workflow.md).
+
 ## Why staged migrations exist
 
 The one-attempt leaf rule is correct for a recognizer and fatal for an

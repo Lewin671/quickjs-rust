@@ -8,6 +8,11 @@ base, and the pinned QuickJS-NG reference separately, then pass their executable
 paths to the runner. QuickJS-NG remains a black-box reference, never a Cargo or
 FFI dependency.
 
+For the unified comparison → profile → decision workflow, use
+[Comparing qjs-rust with QuickJS-NG](performance-workflow.md). It distinguishes
+three-block previews from 30/60-block decisions and specifies raw replay,
+profile artifact verification, and mandatory generic-path controls.
+
 ## Current Series Contract
 
 `benchmarks/manifest.json` freezes the schema, series and suite identities,
@@ -187,15 +192,17 @@ new optimization begins with the exact parent revision's `summary.json`,
 ./scripts/performance-decision.sh queue \
   --summary /path/to/summary.json \
   --broad-report /path/to/report.json \
+  --sentinel-report /path/to/sentinel-report.json \
   --external-report /path/to/external-report.json \
   --output target/performance-opportunity.json
 ```
 
-The output contains two ranked lists rather than a fabricated grand score:
+The output contains separate ranked lists rather than a fabricated grand score:
 
 - `external` ranks complete candidate/base/QuickJS-NG rows still above the
   campaign target (`0.50x` by default); and
-- `broad` ranks broad cases still above that target.
+- `broad` ranks specializer cases still above that target; and
+- `sentinel` ranks generic-path cases when that lane is supplied.
 
 Those lists identify workloads to profile, not implementation tactics. A
 highest-ratio external case must first be tied to a shared runtime cost in a
@@ -211,21 +218,27 @@ control regression ceiling, and maximum two attempts. Validate it before code:
 ```sh
 ./scripts/performance-decision.sh validate-unit \
   --unit tasks/performance-units/<unit>.json \
-  --queue target/performance-opportunity.json
+  --queue target/performance-opportunity.json \
+  --profile-root /path/to/profile-evidence
 ```
 
 After measurement, classify the plan using the exact candidate/base preview
-bundle. The fast mode checks only the predeclared targets and controls; the
-promotion mode additionally requires all 25 broad cases, complete external
-comparisons, and the exact zero-gap Test262 burndown for the candidate commit.
+bundle. The fast mode checks the predeclared targets/controls and all six generic
+sentinels. Promotion additionally checks every broad/external case against the
+control regression ceiling and requires complete NG comparisons plus the exact
+zero-gap Test262 burndown. Both require verified profile artifacts and
+30-block-or-larger, precise paired confidence intervals; hosted three-block
+point estimates can populate a queue but cannot retain or reject a unit.
 
 ```sh
 ./scripts/performance-decision.sh decide \
   --mode promotion \
   --unit tasks/performance-units/<unit>.json \
   --queue target/performance-opportunity.json \
+  --profile-root /path/to/profile-evidence \
   --summary /path/to/summary.json \
   --broad-report /path/to/report.json \
+  --sentinel-report /path/to/sentinel-report.json \
   --external-report /path/to/external-report.json \
   --test262-burndown /path/to/burndown.json \
   --require-retained \
@@ -917,15 +930,17 @@ constant across 1, 4 and 16 copies on `access-nbody`, `crypto-aes`,
 
 ```sh
 ./scripts/external-corpus-ab.py third_party/quickjs-ng/build/qjs target/release/qjs \
-  --reps 3 --label ours/NG
+  --base-adapter quickjs-ng --reps 3 --label ours/NG
 ./scripts/external-corpus-ab.py /tmp/base-qjs target/release/qjs --reps 11 --only fannkuch
 ```
 
 Read a ratio whose `[min, max]` spans 1.0 as no evidence. Three repetitions
 ranks cases; take a suspected regression to `--reps 11` before believing it.
 
-Fourteen of the forty cached cases are skipped against QuickJS-NG because
-**NG** exits non-zero on them, not this engine.
+The amplified diagnostic requires an explicit `--base-adapter quickjs-ng`
+when NG is the base. It now forces script mode for NG; historical nonzero exits
+from implicit shell mode are not evidence of an engine capability gap. Failed
+cases remain visible as skipped and never establish complete-suite superiority.
 
 ## External Corpus Admission
 
@@ -1029,7 +1044,10 @@ incomplete suite has no suite score. JetStream output is always named **JetStrea
 JavaScript subset** and never an official JetStream score. All hosted output
 keeps `claim_eligible=false`. The GitHub Step Summary shows both the three-suite
 overview and every named external case with candidate, base, and QuickJS-NG
-median wall time plus candidate/base and candidate/QuickJS-NG ratios. The
+median wall time plus paired candidate/base and candidate/QuickJS-NG ratios
+and 95% intervals. External report schema 2 binds raw bytes, executable hashes
+and host metadata. Three-block intervals remain explicitly inconclusive for
+acceptance; formal decisions require at least 30 blocks with a narrow interval. The
 internal portfolio is likewise
 rendered as a 25-case table instead of only an overall ratio.
 

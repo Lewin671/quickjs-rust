@@ -28,7 +28,7 @@ class PerformanceDecisionError(ValueError):
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _REVISION = re.compile(r"[0-9a-f]{40}\Z")
 _UNIT_ID = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
-_OPPORTUNITY_ID = re.compile(r"(?:external|broad)/[a-z0-9][a-z0-9._/-]*\Z")
+_OPPORTUNITY_ID = re.compile(r"(?:external|broad|sentinel)/[a-z0-9][a-z0-9._/-]*\Z")
 _ROLES = ("candidate", "base", "quickjs-ng")
 _QUEUE_TYPE = "quickjs-performance-opportunity-queue"
 _UNIT_TYPE = "quickjs-performance-unit"

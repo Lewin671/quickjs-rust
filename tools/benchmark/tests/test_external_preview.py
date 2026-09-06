@@ -270,6 +270,27 @@ class ExternalPreviewTests(unittest.TestCase):
                 for line in (output / "external-raw.jsonl").read_text().splitlines()
             ]
             self.assertTrue(all(row["schema_version"] == 2 for row in records))
+            from tools.benchmark.external_report import replay
+            raw_path = output / "external-raw.jsonl"
+            self.assertEqual(replay(raw_path, manifest), report)
+            original = raw_path.read_bytes()
+            for mutation in ("missing", "duplicate", "overlap", "wrong_binary", "wrong_adapter"):
+                changed = copy.deepcopy(records)
+                if mutation == "missing":
+                    changed.pop()
+                elif mutation == "duplicate":
+                    changed.append(changed[-1])
+                elif mutation == "overlap":
+                    changed[1]["timer_started_ns"] = changed[0]["timer_started_ns"]
+                elif mutation == "wrong_binary":
+                    changed[-1]["binary_sha256"] = "f" * 64
+                else:
+                    changed[-1]["argv"][1] = "--module"
+                raw_path.write_text("".join(json.dumps(row) + "\n" for row in changed))
+                with self.subTest(mutation=mutation):
+                    with self.assertRaises(ValueError):
+                        replay(raw_path, manifest)
+            raw_path.write_bytes(original)
             for row in records:
                 expected_sentinel_count = 1 if row["role"] == "quickjs-ng" else 2
                 self.assertEqual(

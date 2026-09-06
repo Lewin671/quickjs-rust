@@ -53,17 +53,25 @@
       "scripts/performance-preview.sh",
       "tools/benchmark/build_cache.py",
       "tools/benchmark/build_cache_identity.py",
+      "tools/benchmark/bundle.py",
+      "tools/benchmark/compare.py",
       "tools/benchmark/external_corpora.py",
       "tools/benchmark/external_preview.py",
       "tools/benchmark/external_preview_markdown.py",
+      "tools/benchmark/external_report.py",
       "tools/benchmark/hosted_preview.py",
+      "tools/benchmark/performance_decision.py",
+      "tools/benchmark/performance_evaluation.py",
+      "tools/benchmark/performance_evidence.py",
       "tools/benchmark/performance_policy.py",
       "tools/benchmark/performance_policy_frozen.py",
+      "tools/benchmark/performance_schema.py",
+      "tools/benchmark/profile.py",
       "tools/benchmark/preview.py",
       "tools/benchmark/preview_admission.py",
       "tools/benchmark/preview_sentinel.py"
     ],
-    "aggregate_sha256": "3b476744a1b504a3b0be37ca05e97338e8ea98be0b680e3b6803711852d8711e"
+    "aggregate_sha256": "4087b2baf0c61da9c1caf1d64c656686cd0622e051de01d5ecf3b80cac88f8db"
   },
   "hosted_pr": {
     "tier": "informational_preview",

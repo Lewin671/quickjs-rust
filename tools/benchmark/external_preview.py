@@ -439,10 +439,14 @@ def _record(
     result: ProcessResult,
     argv: list[str],
 ) -> dict[str, Any]:
+    from .runner import _host_metadata
     status, error = _sample_status(result, role)
     return {
+        "host": _host_metadata(),
         "schema_version": 2,
         "record_type": "sample",
+        "measurement_blocks": manifest.measurement.blocks,
+        "timeout_seconds": manifest.measurement.timeout_seconds,
         "preview_id": manifest.preview_id,
         "manifest_sha256": manifest.sha256,
         "claim_eligible": False,
@@ -513,106 +517,8 @@ def _print_sample_progress(
 
 
 def _report(manifest: Manifest, records: list[dict[str, Any]]) -> dict[str, Any]:
-    samples: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
-    for record in records:
-        key = (
-            record["suite_id"], record["case_id"], record["role"], record["phase"]
-        )
-        samples.setdefault(key, []).append(record)
-    suites: list[dict[str, Any]] = []
-    for suite in manifest.suites:
-        case_reports: list[dict[str, Any]] = []
-        quickjs_ratios: list[float] = []
-        base_ratios: list[float] = []
-        wins = {"candidate": 0, "quickjs-ng": 0, "tie": 0}
-        base_wins = {"candidate": 0, "base": 0, "tie": 0}
-        for case in suite.cases:
-            capability: dict[str, str] = {}
-            medians: dict[str, int | None] = {}
-            for role in EXTERNAL_ROLES:
-                probe = samples.get((suite.id, case.id, role, "capability"), [])
-                capability[role] = probe[0]["status"] if probe else "not_run"
-                measured = samples.get((suite.id, case.id, role, "measurement"), [])
-                durations = [
-                    row["duration_ns"] for row in measured if row["status"] == "ok"
-                ]
-                medians[role] = (
-                    int(statistics.median(durations))
-                    if len(durations) == manifest.measurement.blocks else None
-                )
-            ratio = None
-            base_ratio = None
-            if medians["candidate"] is not None and medians["quickjs-ng"] is not None:
-                ratio = medians["candidate"] / medians["quickjs-ng"]
-                quickjs_ratios.append(ratio)
-                if ratio < 1:
-                    wins["candidate"] += 1
-                elif ratio > 1:
-                    wins["quickjs-ng"] += 1
-                else:
-                    wins["tie"] += 1
-            if medians["candidate"] is not None and medians["base"] is not None:
-                base_ratio = medians["candidate"] / medians["base"]
-                base_ratios.append(base_ratio)
-                if base_ratio < 1:
-                    base_wins["candidate"] += 1
-                elif base_ratio > 1:
-                    base_wins["base"] += 1
-                else:
-                    base_wins["tie"] += 1
-            case_reports.append(
-                {
-                    "id": case.id,
-                    "capability": capability,
-                    "median_duration_ns": medians,
-                    "candidate_over_base": base_ratio,
-                    "candidate_over_quickjs_ng": ratio,
-                }
-            )
-        complete = len(quickjs_ratios) == len(suite.cases)
-        base_complete = len(base_ratios) == len(suite.cases)
-        diagnostic = (
-            math.exp(sum(math.log(ratio) for ratio in quickjs_ratios) / len(quickjs_ratios))
-            if quickjs_ratios else None
-        )
-        base_diagnostic = (
-            math.exp(sum(math.log(ratio) for ratio in base_ratios) / len(base_ratios))
-            if base_ratios else None
-        )
-        suites.append(
-            {
-                "id": suite.id,
-                "name": suite.name,
-                "source": {
-                    "repository": suite.source.repository,
-                    "revision": suite.source.revision,
-                },
-                "reporting_rule": suite.reporting_rule,
-                "case_count": len(suite.cases),
-                "comparable_case_count": len(quickjs_ratios),
-                "complete_comparison": complete,
-                "base_comparable_case_count": len(base_ratios),
-                "complete_base_comparison": base_complete,
-                "official_suite_score": None,
-                "diagnostic_comparable_case_geomean_ratio": diagnostic,
-                "diagnostic_candidate_over_base_geomean_ratio": base_diagnostic,
-                "wins": wins,
-                "base_wins": base_wins,
-                "cases": case_reports,
-            }
-        )
-    return {
-        "schema_version": 1,
-        "artifact_type": "quickjs-external-preview-report",
-        "preview_id": manifest.preview_id,
-        "manifest_sha256": manifest.sha256,
-        "claim_eligible": False,
-        "metric": manifest.measurement.metric,
-        "timer_phase_boundary": manifest.measurement.phase_boundary,
-        "roles": list(EXTERNAL_ROLES),
-        "blocks": manifest.measurement.blocks,
-        "suites": suites,
-    }
+    from .external_report import _report as analyze
+    return analyze(manifest, records)
 
 
 def run_preview(
@@ -639,7 +545,7 @@ def run_preview(
     )
     if selected_blocks < 1 or selected_timeout < 1:
         raise ExternalPreviewError("blocks and timeout must be positive")
-    if selected_blocks != manifest.measurement.blocks:
+    if (selected_blocks, selected_timeout) != (manifest.measurement.blocks, manifest.measurement.timeout_seconds):
         manifest = Manifest(
             manifest.path, manifest.sha256, manifest.preview_id,
             Measurement(
@@ -717,6 +623,7 @@ def run_preview(
             (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode()
             for record in records
         )
+        report["input"] = {"sha256": _sha256_bytes(raw), "byte_length": len(raw)}
         _atomic_write(output / "external-raw.jsonl", raw)
         _atomic_write(
             output / "external-report.json",
@@ -735,6 +642,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest", type=Path, default=Path("benchmarks/external-preview.json"))
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("audit")
+    report = commands.add_parser("report", help="validate and reanalyze external raw evidence")
+    report.add_argument("--input", type=Path, required=True)
+    report.add_argument("--output", type=Path, required=True)
     fetch = commands.add_parser("fetch")
     fetch.add_argument("--cache-root", type=Path, required=True)
     run = commands.add_parser("run")
@@ -761,6 +671,10 @@ def main(argv: list[str] | None = None) -> int:
                 "suite_count": len(manifest.suites),
                 "case_count": sum(len(suite.cases) for suite in manifest.suites),
             }, sort_keys=True, separators=(",", ":")))
+        elif args.command == "report":
+            from .external_report import replay
+            report = replay(args.input, manifest)
+            _atomic_write(args.output, (json.dumps(report, sort_keys=True, indent=2) + "\n").encode())
         elif args.command == "fetch":
             print(json.dumps(fetch_corpora(manifest, args.cache_root), sort_keys=True))
         else:
@@ -775,7 +689,7 @@ def main(argv: list[str] | None = None) -> int:
                 "suites": len(report["suites"]),
             }, sort_keys=True))
         return 0
-    except ExternalPreviewError as error:
+    except (ValueError, OSError, KeyError, TypeError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
 
