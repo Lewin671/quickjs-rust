@@ -25,8 +25,8 @@ This repository pins upstream references as git submodules:
 
 - `third_party/quickjs-ng`: mature QuickJS-derived engine used as a behavioral
   oracle and implementation reference.
-- `third_party/test262`: official ECMAScript conformance tests used as input for
-  future subset runners.
+- `third_party/test262`: official ECMAScript conformance input consumed by the
+  subset and baseline runners documented in `docs/harness.md`.
 
 These directories are intentionally outside the Cargo workspace. They should not
 be imported by library crates or edited as part of normal engine work.
@@ -125,8 +125,8 @@ small.
 - Crate unit tests validate local behavior.
 - Workspace checks validate formatting, lints, and all tests.
 - QuickJS-NG comparison tests should be added for selected semantic questions.
-- Test262 should be introduced through curated allowlists with explicit expected
-  failures.
+- Test262 subset checks use curated allowlists with explicit expected failures;
+  baseline and gap scans provide broader evidence as documented in the harness.
 
 ## Growth Strategy
 
