@@ -4,12 +4,21 @@
 
 Remove recursive per-call VM construction from ordinary synchronous bytecode
 calls, then compact the same execution core into register-oriented or
-superinstruction dispatch. This is the next structural T018 unit: it must
-produce general external wins while preserving the current zero-gap Test262
-baseline. It is a foundation for the final every-case `<= 0.50x` QuickJS-NG
+superinstruction dispatch. This structural T018 proposal must produce general
+external wins while preserving the verified Test262 correctness baseline.
+It is a foundation for the final every-case `<= 0.50x` QuickJS-NG
 contract, not permission to specialize benchmark identities or loop shapes.
 
-## Current Evidence
+## Selection and Evidence Scope
+
+The plans and experiment results below are historical records, not current
+execution priority or permission to resume an experimental branch. Before new
+work, follow `docs/performance-workflow.md` and T022: obtain current exact
+evidence, profile the proposed shared cost, and validate a new unit plan.
+Historical targets and continuation instructions below do not supersede that
+plan or T022's migration and stop rules.
+
+## Historical Proposal Evidence
 
 Trusted-main Performance Preview run `29865188694` at
 `b8d0c2385128ad823a18488326a64299cffc3b2a` reports:
