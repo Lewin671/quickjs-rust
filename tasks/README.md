@@ -65,6 +65,11 @@ Campaign working rules:
 
 ## Performance
 
+Entries below record campaign scope and historical outcomes, not execution
+priority. Select new work through `docs/performance-workflow.md` and T022 using
+current exact evidence, profiles, and a validated unit plan. Reopening a past
+proposal requires the same process.
+
 - `T018-broad-performance.md` — establish the 25-case, eight-family broad
   black-box benchmark, then drive candidate/QuickJS-NG overall wall ns/op to
   at most 0.50x without regressing any critical family above 1.00x or weakening
@@ -84,11 +89,13 @@ Campaign working rules:
   costs two name-table hash lookups per store. Verified with the full test
   suite, Test262 subset, `compare-qjs.sh`, and exact gap scans across
   eval/module/global-code/with/for/Function; zero regressions.
-- `T021-single-vm-frame-stack.md` — active structural performance unit. Move
-  ordinary synchronous bytecode calls onto one explicit VM frame stack, then
-  compact that same execution core into register/superinstructions. This is
-  the next T018 unit; do not create a second independent VM or expand the
-  direct-leaf eligibility predicate in the frame-stack commit.
+- `T021-single-vm-frame-stack.md` — structural proposal with historical
+  experiments recorded in the task. Move ordinary synchronous bytecode calls
+  onto one explicit VM frame stack, then
+  compact that same execution core into register/superinstructions. Further
+  work requires current T022 selection and validation; do not create a second
+  independent VM or expand the direct-leaf eligibility predicate in the
+  frame-stack commit.
 - `T024-general-register-core.md` — **closed after falsification.** The retained
   dispatch-preamble split moved the external corpus by only about one percent,
   below its structural mechanism gate. Preserve its negative evidence; do not

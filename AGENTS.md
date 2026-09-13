@@ -211,18 +211,29 @@ changed.
 
 ## Suggested Autonomous Loop
 
-1. Pick one task from `tasks/`. For gap work, take quick wins from the
-   `find-qjsng-gaps.sh` recommendation queue while they exist; when the queue
+1. Select work using the relevant context route. For gap work, take quick wins
+   from the `find-qjsng-gaps.sh` recommendation queue while they exist; when the queue
    is dominated by hard-hinted broad areas, switch to the next unchecked
    slice of the highest-priority campaign task in `tasks/README.md` instead
-   of re-running global probes.
-2. Read the related crate, `docs/architecture.md`, and `docs/harness.md`.
-3. Implement the smallest useful slice, with tests.
+   of re-running global probes. For performance work, read
+   `docs/performance-workflow.md`, then
+   `tasks/T022-performance-priority-controller.md`, and use the current exact
+   evidence queue and validated unit plan to select work. Historical task
+   order or an old "next" label does not establish current priority.
+2. Read the related crate and relevant sections of `docs/architecture.md` and
+   `docs/harness.md`, plus the selected task's design and evidence references.
+3. Implement a coherent, verifiable unit toward the task's acceptance criteria,
+   with tests. For structural changes, define the target architecture and
+   migration stages before coding; keep commits reviewable without restricting
+   the design to local patches. Performance migrations follow T022.
 4. Run `./scripts/check-touched.sh --staged --explain` before committing; for
    runtime, parser, or lexer semantics, include the focused Test262 slices it
    selects or explain why no slice matched.
 5. Run `./scripts/check.sh` before final handoff or push.
-6. Summarize behavior, risks, verification, and the next useful task.
+6. Update the task's current stage, verified revision and evidence, unresolved
+   issues, and next action so another session can resume. Link performance
+   plans and decisions instead of duplicating their metrics. Summarize
+   behavior, risks, verification, and the next useful task.
 
 When an LSP tool is available, prefer it over text search for semantic
 navigation: `findReferences`, `goToDefinition`, and call-hierarchy give
