@@ -69,6 +69,10 @@ pub(crate) struct RealmState {
     /// sources. Entries share only immutable bytecode; each invocation still
     /// receives an independent VM frame and runtime values.
     direct_eval_cache: RefCell<DirectEvalCache>,
+    /// Compiled regular-expression programs and validated patterns, shared
+    /// by every RegExp object with the same source and flags. Bounded; holds
+    /// no objects or realm references.
+    regexp_programs: RefCell<crate::regexp::ProgramCache>,
 }
 
 impl RealmState {
@@ -98,6 +102,7 @@ impl RealmState {
             global_this,
             dynamic_function_realm_global: RefCell::new(dynamic_function_realm_global),
             direct_eval_cache: RefCell::new(DirectEvalCache::default()),
+            regexp_programs: RefCell::default(),
         };
         if let Some(prototype) = object_prototype {
             let _ = realm.object_prototype.set(prototype);
@@ -110,6 +115,10 @@ impl RealmState {
 
     pub(crate) fn string_code_unit(&self, code_unit: u16) -> JsString {
         self.code_unit_strings.get(code_unit)
+    }
+
+    pub(crate) fn regexp_programs(&self) -> &RefCell<crate::regexp::ProgramCache> {
+        &self.regexp_programs
     }
 
     pub(crate) fn initialize_object_prototype(&self, prototype: ObjectRef) {

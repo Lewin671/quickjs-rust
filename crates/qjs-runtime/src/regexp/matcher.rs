@@ -267,68 +267,6 @@ struct AtomStep {
     quantifier: Quantifier,
 }
 
-pub(super) fn regexp_match_range(
-    source: &str,
-    input: &JsString,
-    start_index: usize,
-    ignore_case: bool,
-    unicode: bool,
-    dot_all: bool,
-    multiline: bool,
-) -> Option<RegexpMatch> {
-    regexp_match(
-        source,
-        input,
-        start_index,
-        ignore_case,
-        unicode,
-        dot_all,
-        multiline,
-        false,
-    )
-}
-
-pub(super) fn regexp_match_at(
-    source: &str,
-    input: &JsString,
-    start_index: usize,
-    ignore_case: bool,
-    unicode: bool,
-    dot_all: bool,
-    multiline: bool,
-) -> Option<RegexpMatch> {
-    regexp_match(
-        source,
-        input,
-        start_index,
-        ignore_case,
-        unicode,
-        dot_all,
-        multiline,
-        true,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn regexp_match(
-    source: &str,
-    input: &JsString,
-    start_index: usize,
-    ignore_case: bool,
-    unicode: bool,
-    dot_all: bool,
-    multiline: bool,
-    exact_start: bool,
-) -> Option<RegexpMatch> {
-    let prepared = PreparedRegexp::new(source, ignore_case, unicode, dot_all, multiline);
-    let prepared_input = prepared.prepare_input(input);
-    if exact_start {
-        prepared.match_at(input, &prepared_input, start_index)
-    } else {
-        prepared.match_range(input, &prepared_input, start_index)
-    }
-}
-
 enum AnchoredPropertyResult {
     NotAnchored,
     NoMatch,

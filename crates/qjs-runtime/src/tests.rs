@@ -39,6 +39,7 @@ mod promises;
 mod proxy;
 mod reflect;
 mod regexp;
+mod regexp_program_cache;
 mod sets;
 mod statements;
 mod strings;

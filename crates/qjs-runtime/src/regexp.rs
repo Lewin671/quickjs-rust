@@ -13,6 +13,7 @@ mod escape;
 mod formatting;
 mod match_all;
 mod matcher;
+mod program_cache;
 mod symbol_match;
 mod symbol_replace;
 mod symbol_search;
@@ -24,6 +25,7 @@ pub(crate) use escape::native_regexp_escape;
 use formatting::canonical_regexp_flags;
 pub(crate) use formatting::escape_regexp_source;
 pub(crate) use match_all::{native_regexp_prototype_match_all, native_regexp_string_iterator_next};
+pub(crate) use program_cache::ProgramCache;
 pub(crate) use symbol_match::native_regexp_prototype_match;
 pub(crate) use symbol_replace::native_regexp_prototype_replace;
 pub(crate) use symbol_search::native_regexp_prototype_search;
@@ -218,7 +220,7 @@ pub(crate) fn native_regexp(
 
     let source = regexp_source(pattern.clone(), pattern_is_regexp, env)?;
     let flags = regexp_flags(pattern.clone(), pattern_is_regexp, flags_value, env)?;
-    validate_regexp_init(&source, &flags)?;
+    validate_regexp_init_cached(&source, &flags, env)?;
 
     if !is_construct {
         let object = ObjectRef::with_prototype(HashMap::new(), function_prototype(function));
@@ -241,7 +243,7 @@ pub(crate) fn regexp_literal_value(
     flags: &str,
     env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
-    validate_regexp_init(source, flags)?;
+    validate_regexp_init_cached(source, flags, env)?;
     let prototype = match env.get(REGEXP_PROTOTYPE_BINDING) {
         Some(Value::Object(prototype)) => Some(prototype),
         _ => None,
@@ -292,7 +294,7 @@ pub(crate) fn native_regexp_prototype_compile(
             (source, flags)
         }
     };
-    validate_regexp_init(&source, &flags)?;
+    validate_regexp_init_cached(&source, &flags, env)?;
 
     define_regexp_data_without_last_index(object, &source, &flags);
     regexp_set_last_index_object(object, 0, env)?;
@@ -338,26 +340,18 @@ pub(crate) fn native_regexp_prototype_exec(
         start_code_unit
     };
 
+    let program = env.realm().regexp_programs().borrow_mut().program(
+        &source,
+        ignore_case,
+        unicode,
+        dot_all,
+        multiline,
+    );
+    let prepared_input = program.prepare_input(&input);
     let match_result = if sticky {
-        matcher::regexp_match_at(
-            &source,
-            &input,
-            start,
-            ignore_case,
-            unicode,
-            dot_all,
-            multiline,
-        )
+        program.match_at(&input, &prepared_input, start)
     } else {
-        matcher::regexp_match_range(
-            &source,
-            &input,
-            start,
-            ignore_case,
-            unicode,
-            dot_all,
-            multiline,
-        )
+        program.match_range(&input, &prepared_input, start)
     };
 
     let Some(match_result) = match_result else {
@@ -443,26 +437,18 @@ pub(crate) fn native_regexp_prototype_test(
         start_code_unit
     };
 
+    let program = env.realm().regexp_programs().borrow_mut().program(
+        &source,
+        ignore_case,
+        unicode,
+        dot_all,
+        multiline,
+    );
+    let prepared_input = program.prepare_input(&input);
     let match_result = if sticky {
-        matcher::regexp_match_at(
-            &source,
-            &input,
-            start,
-            ignore_case,
-            unicode,
-            dot_all,
-            multiline,
-        )
+        program.match_at(&input, &prepared_input, start)
     } else {
-        matcher::regexp_match_range(
-            &source,
-            &input,
-            start,
-            ignore_case,
-            unicode,
-            dot_all,
-            multiline,
-        )
+        program.match_range(&input, &prepared_input, start)
     };
 
     let Some(match_result) = match_result else {
@@ -1077,4 +1063,28 @@ fn char_code_unit_len(character: char) -> usize {
     } else {
         character.len_utf16()
     }
+}
+
+/// Pattern validation for `new RegExp(source, flags)`, remembered per realm:
+/// a literal in a loop constructs a fresh object from the same text on every
+/// evaluation, and the result depends on nothing else.
+fn validate_regexp_init_cached(
+    source: &str,
+    flags: &str,
+    env: &CallEnv,
+) -> Result<(), RuntimeError> {
+    if env
+        .realm()
+        .regexp_programs()
+        .borrow()
+        .is_validated(source, flags)
+    {
+        return Ok(());
+    }
+    validate_regexp_init(source, flags)?;
+    env.realm()
+        .regexp_programs()
+        .borrow_mut()
+        .mark_validated(source, flags);
+    Ok(())
 }

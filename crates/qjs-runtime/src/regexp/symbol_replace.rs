@@ -132,8 +132,13 @@ fn prepared_native_global_matches(
     let dot_all = flags.contains('s');
     let multiline = flags.contains('m');
     let sticky = flags.contains('y');
-    let matcher =
-        super::matcher::PreparedRegexp::new(&source, ignore_case, unicode, dot_all, multiline);
+    let matcher = env.realm().regexp_programs().borrow_mut().program(
+        &source,
+        ignore_case,
+        unicode,
+        dot_all,
+        multiline,
+    );
     let prepared_input = matcher.prepare_input(input);
     let group_names = super::matcher::regexp_group_names(&source);
     let mut matches = Vec::new();
