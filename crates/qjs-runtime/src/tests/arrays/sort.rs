@@ -156,3 +156,15 @@ fn strict_writes_to_frozen_or_nonextensible_array_reject() {
         Ok(Value::String("6:9".to_owned().into()))
     );
 }
+
+#[test]
+fn default_sort_orders_by_utf16_code_units() {
+    // An astral character's lead surrogate (U+D83D) sorts before U+FFFF, even
+    // though its code point is larger.
+    assert_eq!(
+        eval(
+            "['\\uFFFF', 'b', '\\uD83D\\uDE00', 'a'].sort().join() === ['a', 'b', '\\uD83D\\uDE00', '\\uFFFF'].join();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
