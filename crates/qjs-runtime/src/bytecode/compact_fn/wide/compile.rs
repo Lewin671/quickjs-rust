@@ -594,6 +594,9 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
             Op::Return => ops.push(WideOp::Return {
                 src: register(depth.checked_sub(1)?),
             }),
+            Op::Throw => ops.push(WideOp::Throw {
+                src: register(depth.checked_sub(1)?),
+            }),
             _ => return decline(trace, Some(ip), "operation not lowered"),
         }
     }
@@ -700,7 +703,7 @@ fn effect_of(op: &Op) -> Option<Effect> {
         },
         Op::Call(argc) => simple(u16::try_from(*argc).ok()?.checked_add(1)?, 1),
         Op::CallResolved(argc) => simple(u16::try_from(*argc).ok()?.checked_add(2)?, 1),
-        Op::Return => Effect {
+        Op::Return | Op::Throw => Effect {
             pops: 1,
             pushes: 0,
             target: None,

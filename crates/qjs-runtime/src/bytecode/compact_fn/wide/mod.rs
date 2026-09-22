@@ -75,6 +75,11 @@ enum WideOp {
     Return {
         src: u16,
     },
+    /// Throws the register's value. Admitted bodies contain no handlers, so a
+    /// throw always leaves the frame, exactly as a thrown callee error does.
+    Throw {
+        src: u16,
+    },
     /// Duplicates a register, which the compiler emits to keep a method-call
     /// receiver live while the method is loaded.
     Dup {

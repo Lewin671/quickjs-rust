@@ -71,6 +71,9 @@ impl WideActivation<'_> {
 
     #[inline(never)]
     fn eval_binary(&self, left: Value, op: BinaryOp, right: Value) -> Result<Value, RuntimeError> {
+        if let Some(value) = crate::operations::eval_binary_without_env(&left, op, &right) {
+            return Ok(value);
+        }
         let mut env = self.env.empty_frame();
         crate::operations::eval_binary(left, op, right, &mut env)
     }
@@ -274,6 +277,23 @@ fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
 }
 
 /// Runs an admitted body in `env`, together with every admitted body it calls.
+/// The error `Op::Throw` raises when no handler is active, which is always
+/// the case in an admitted body. Out of line: the dispatch loop's arms stay
+/// one call each (docs/performance-knowledge.md, "Keep hot dispatch arms
+/// tiny").
+#[cold]
+#[inline(never)]
+fn thrown(slot: &mut Value) -> RuntimeError {
+    let value = std::mem::replace(slot, Value::Undefined);
+    RuntimeError {
+        thrown: Some(Box::new(value.clone())),
+        message: format!(
+            "throw statement executed: {}",
+            crate::conversion::error_value(value)
+        ),
+    }
+}
+
 fn run(
     bytecode: &Bytecode,
     env: &CallEnv,
@@ -491,7 +511,7 @@ fn run_frames(
                     WideOp::Typeof { dst, src } => {
                         let value = std::mem::replace(&mut window[src as usize], Value::Undefined);
                         let name = crate::bytecode::util::typeof_value(value);
-                        execute::store(&mut window[dst as usize], Value::String(name.into()));
+                        execute::store(&mut window[dst as usize], Value::String(name));
                     }
                     WideOp::ToNumeric { dst } => {
                         if !matches!(window[dst as usize], Value::Number(_)) {
@@ -612,6 +632,9 @@ fn run_frames(
                             &mut window[src as usize],
                             Value::Undefined,
                         )));
+                    }
+                    WideOp::Throw { src } => {
+                        break Err(thrown(&mut window[src as usize]));
                     }
                 }
             }

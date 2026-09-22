@@ -1,0 +1,64 @@
+{
+  "schema_version": 2,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "frameless-string-equality",
+  "base_sha": "9c58edba10d158df9e943f3edd3a695f61229a3a",
+  "queue": {
+    "candidate_sha": "9c58edba10d158df9e943f3edd3a695f61229a3a",
+    "sha256": "90fa326e8bbf13b61487600a6410e9a10edabd3d902434ee1d998ba11f5d33da"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "rank_ceiling": 1,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Remove per-operation allocation and frame construction from string equality and typeof: compare stored strings by bytes and stream UTF-16 code units only for two distinct non-ASCII strings (string_utf16_eq and relational comparison materialized two Vec<u16> per compare), share the eight typeof result strings, let the wide compact tier evaluate strict equality and primitive loose equality without building a throwaway CallEnv, and admit wide-tier bodies whose only unsupported operation was a handler-free throw. Plan written after one exploratory screen of the implementation; the target is the queue's rank-1 opportunity named by the profile, not a case picked from screen results.",
+    "generality": "Every `typeof x == 'name'` test, string switch case, and string equality or ordering in any tier pays the removed allocations; every wide-tier binary operation on strings paid the removed frame. Bodies with throw-on-invalid-input branches are common library style. Nothing depends on a workload name, iteration count, or key set.",
+    "semantic_risks": [
+      "Lone surrogates stored as escape characters must still compare equal to the same code units stored as a whole surrogate pair",
+      "String ordering must stay by UTF-16 code unit, not code point",
+      "Loose equality with an object operand must still run ToPrimitive and user valueOf/toString",
+      "A throw inside an admitted body must reach the interpreter's handler with the identical value and uncaught message"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "hash-map/receipt.json",
+      "sha256": "88ceee17ba6594a8bfe0d6420319ee8fcc202473249ea2bba8c40f8d99a41385",
+      "base_sha": "9c58edba10d158df9e943f3edd3a695f61229a3a",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Exact queue-candidate binary, one-second macOS sample of the official hash-map bundle. malloc/free top-of-stack frames total about 70 samples, Value drop 50, general-path Vm construction 22 and CallEnv drop 12 of roughly 1000. A same-binary microbenchmark isolating computeHashCode/equals attributed a third of its samples to malloc/free, called from string_code_units under string_utf16_eq and from typeof_value, and 57 samples to CallEnv construction inside WideActivation::eval_binary. QJS_CF_TRACE named computeHashCode (declined for its throw) behind all 540k general-path frames.",
+      "inclusive_fraction": 0.07
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map"
+    ],
+    "control_ids": [
+      "external/jetstream3-js-subset/cdjs",
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/string-validate-input",
+      "external/sunspider-1.0/date-format-xparb",
+      "external/kraken-1.1/ai-astar",
+      "external/sunspider-1.0/controlflow-recursive",
+      "broad/property_read",
+      "broad/string_slice"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

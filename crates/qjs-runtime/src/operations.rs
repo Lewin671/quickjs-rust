@@ -337,14 +337,38 @@ fn eval_relational(
 }
 
 fn compare_utf16_code_units(left: &str, right: &str) -> Ordering {
-    string::string_code_units(left).cmp(&string::string_code_units(right))
+    string::string_utf16_cmp(left, right)
 }
 
 fn strict_eq(left: &Value, right: &Value) -> bool {
     match (left, right) {
-        (Value::String(left), Value::String(right)) => string::string_utf16_eq(left, right),
+        (Value::String(left), Value::String(right)) => string::js_string_eq(left, right),
         _ => left == right,
     }
+}
+
+/// `left op right` for the operand pairs whose evaluation runs no user code
+/// and needs no environment: strict equality always, and loose equality
+/// between two strings, two booleans, or `null`/`undefined`. `None` sends
+/// the caller down `eval_binary`. Executors that would otherwise build a
+/// throwaway frame just to compare two strings use this first.
+pub(crate) fn eval_binary_without_env(left: &Value, op: BinaryOp, right: &Value) -> Option<Value> {
+    let equal = match op {
+        BinaryOp::StrictEq => return Some(Value::Boolean(strict_eq(left, right))),
+        BinaryOp::StrictNe => return Some(Value::Boolean(!strict_eq(left, right))),
+        BinaryOp::Eq | BinaryOp::Ne => match (left, right) {
+            (Value::String(left), Value::String(right)) => string::js_string_eq(left, right),
+            (Value::Boolean(left), Value::Boolean(right)) => left == right,
+            (Value::Null | Value::Undefined, Value::Null | Value::Undefined) => true,
+            _ => return None,
+        },
+        _ => return None,
+    };
+    Some(Value::Boolean(if op == BinaryOp::Eq {
+        equal
+    } else {
+        !equal
+    }))
 }
 
 fn abstract_eq(left: &Value, right: &Value, env: &mut CallEnv) -> Result<bool, RuntimeError> {

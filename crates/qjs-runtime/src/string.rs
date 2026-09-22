@@ -43,6 +43,31 @@ pub(crate) const STRING_DATA_PROPERTY: &str = "\0StringData";
 
 const SURROGATE_ESCAPE_SENTINEL_BASE: u32 = 0xF0000;
 
+/// Iterates the UTF-16 code units of a stored string without allocating.
+fn code_units(value: &str) -> impl Iterator<Item = u16> + '_ {
+    value.chars().flat_map(|character| {
+        let mut buffer = [0_u16; 2];
+        let units: &[u16] = match surrogate_escape_code_unit(character) {
+            Some(code_unit) => {
+                buffer[0] = code_unit;
+                &buffer[..1]
+            }
+            None => character.encode_utf16(&mut buffer),
+        };
+        let (first, second) = (units[0], units.get(1).copied());
+        std::iter::once(first).chain(second)
+    })
+}
+
+/// Orders two stored strings by UTF-16 code units, as `<` on strings does.
+pub(crate) fn string_utf16_cmp(left: &str, right: &str) -> std::cmp::Ordering {
+    // An ASCII byte is its own code unit, so two ASCII strings order by bytes.
+    if left.is_ascii() && right.is_ascii() {
+        return left.as_bytes().cmp(right.as_bytes());
+    }
+    code_units(left).cmp(code_units(right))
+}
+
 pub(crate) fn string_code_units(value: &str) -> Vec<u16> {
     if value.is_ascii() {
         return value.bytes().map(u16::from).collect();
@@ -119,7 +144,17 @@ fn wide_string_code_unit_len(value: &str) -> usize {
 }
 
 pub(crate) fn string_utf16_eq(left: &str, right: &str) -> bool {
-    string_code_units(left) == string_code_units(right)
+    // Identical bytes are identical code units. Different bytes can still be
+    // equal code units only when both sides hold non-ASCII text (a surrogate
+    // pair stored whole on one side and as two escaped halves on the other);
+    // an ASCII string's code units are its bytes, which nothing else matches.
+    if left == right {
+        return true;
+    }
+    if left.is_ascii() || right.is_ascii() {
+        return false;
+    }
+    code_units(left).eq(code_units(right))
 }
 
 /// Compares two shared string values by code unit.

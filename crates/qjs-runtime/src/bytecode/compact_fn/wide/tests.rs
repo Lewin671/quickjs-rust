@@ -383,3 +383,59 @@ fn a_body_the_virtual_object_lowering_rewrites_keeps_the_interpreter() {
         .is_none()
     );
 }
+
+#[test]
+fn a_body_with_a_throw_statement_is_admitted_and_throws_the_same_value() {
+    let source = "function hash(key) {
+        switch (typeof key) {
+        case 'number': return key | 0;
+        case 'boolean': return key ? 1 : 0;
+        default: throw new Error('bad key');
+        }
+    }";
+    let program = compile::compile(&nested_function(source, "hash"))
+        .expect("a body whose only unusual operation is a throw should be admitted");
+    assert!(
+        program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::Throw { .. })),
+        "{:#?}",
+        program.ops
+    );
+    // The thrown value keeps its identity through the tier and reaches the
+    // interpreter's handler; an uncaught throw reports like the interpreter.
+    assert_eq!(
+        value_of(
+            "var token = { tag: 1 };
+             function raise(x) { if (x) throw token; return 7; }
+             function outer(x) { return raise(x) + 1; }
+             var caught;
+             try { outer(true); } catch (e) { caught = e; }
+             caught === token && outer(false) === 8;"
+        ),
+        Value::Boolean(true)
+    );
+    assert!(error_of("function f(x) { if (x) throw 'boom'; return 1; } f(1);").contains("boom"));
+}
+
+#[test]
+fn equality_without_a_frame_matches_the_general_path() {
+    // Loose and strict equality inside an admitted body, including the
+    // operand pairs that still need the general path (an object operand).
+    assert_eq!(
+        value_of(
+            "function eq(a, b) { return [a == b, a != b, a === b, a !== b].join(); }
+             var hint = { valueOf: function () { return 'x'; } };
+             [eq('x', 'x'), eq('x', 'y'), eq(null, undefined), eq(undefined, undefined),
+              eq(true, true), eq(true, false), eq(hint, 'x'), eq(1, '1'),
+              eq('\\uD83D' + '\\uDE00', '\\uD83D\\uDE00')].join('|');"
+        ),
+        Value::String(
+            "true,false,true,false|false,true,false,true|true,false,false,true|\
+             true,false,true,false|true,false,true,false|false,true,false,true|\
+             true,false,false,true|true,false,false,true|true,false,true,false"
+                .into()
+        )
+    );
+}

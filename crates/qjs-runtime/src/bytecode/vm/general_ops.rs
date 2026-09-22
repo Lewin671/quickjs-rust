@@ -94,7 +94,7 @@ impl Vm<'_> {
             Op::ForInKeyIsEnumerable => self.for_in_key_is_enumerable()?,
             Op::Typeof => {
                 let value = self.pop()?;
-                self.stack.push(Value::String(typeof_value(value).into()));
+                self.stack.push(Value::String(typeof_value(value)));
             }
             Op::FreshIterationScope(slots) => self.fresh_iteration_scope(slots),
             Op::JumpIfFalse(target) => {

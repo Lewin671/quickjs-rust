@@ -309,7 +309,7 @@ impl Vm<'_> {
             let mut env = self.current_env();
             let value = get_property(object, name, &mut env)?;
             self.apply_env(env);
-            return Ok(Value::String(typeof_value(value).into()));
+            return Ok(Value::String(typeof_value(value)));
         }
         let value = match slot {
             Some(slot) => self.load_local(slot)?,
@@ -335,7 +335,7 @@ impl Vm<'_> {
         } else {
             value
         };
-        Ok(Value::String(typeof_value(value).into()))
+        Ok(Value::String(typeof_value(value)))
     }
 
     /// `delete identifier` inside a `with` body in non-strict mode: checks the
