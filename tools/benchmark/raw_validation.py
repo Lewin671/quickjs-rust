@@ -6,7 +6,7 @@ import hashlib
 import json
 import statistics
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -54,6 +54,9 @@ class ValidatedRun:
     runner_end_status: str
     comparison_input_complete: bool
     runner_coverage: dict[str, Any]
+    # Cycles per operation for the same keys as `measurements`, or empty when
+    # any valid measurement lacks counters (no partial counter comparison).
+    cycle_measurements: dict[tuple[str, str, int], float] = field(default_factory=dict)
 
 
 def _read_jsonl(path: Path) -> tuple[list[dict[str, Any]], str, int]:
@@ -268,6 +271,7 @@ def validate_run(input_path: Path, manifest: Manifest) -> ValidatedRun:
         raise ReportError("run_start.engines: engine identity mismatch")
 
     eligible_measurements: dict[tuple[str, str, int], float] = {}
+    eligible_cycles: dict[tuple[str, str, int], float] = {}
     measurement_records: dict[tuple[str, str, int], dict[str, Any]] = {}
     measurement_reasons: dict[tuple[str, str, int], str] = {}
     measurement_rows = []
@@ -319,6 +323,8 @@ def validate_run(input_path: Path, manifest: Manifest) -> ValidatedRun:
                 validate_success(row, case, where)
                 if row["quality"] == "eligible" and row["measurement_eligible"] is True:
                     eligible_measurements[key] = row["duration_ns"] / row["operations"]
+                    if row["cycles"] is not None:
+                        eligible_cycles[key] = row["cycles"] / row["operations"]
                 elif row["quality"] == "timer_limited" and row["measurement_eligible"] is False:
                     measurement_reasons[key] = "timer_limited"
                 else:
@@ -478,6 +484,10 @@ def validate_run(input_path: Path, manifest: Manifest) -> ValidatedRun:
         key: value for key, value in eligible_measurements.items()
         if key[2] in valid_block_set
     }
+    cycle_measurements = {key: eligible_cycles[key] for key in filtered_measurements
+                          if key in eligible_cycles}
+    if len(cycle_measurements) != len(filtered_measurements):
+        cycle_measurements = {}
     return ValidatedRun(
         input_sha256=input_sha256,
         input_bytes=input_bytes,
@@ -494,4 +504,5 @@ def validate_run(input_path: Path, manifest: Manifest) -> ValidatedRun:
         runner_end_status=end["status"],
         comparison_input_complete=end["comparison_input_complete"],
         runner_coverage=end["coverage"],
+        cycle_measurements=cycle_measurements,
     )

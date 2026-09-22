@@ -86,6 +86,18 @@ each script is for.
   `--policy` input is structural only; checked-in-only `--require-gate` always
   fails for `nightly`, `release`, and `pr_sentinel` in v2. It neither calibrates
   hardware nor runs or enables a performance gate.
+- `perf-compare.sh`: Formal three-engine comparison on this host. Builds
+  candidate and base at exact commits in clean worktrees (cached under
+  `target/perf-loop/rev-<sha>/`), verifies the pinned QuickJS-NG build,
+  writes receipts with `tools.benchmark.local_receipt` (which refuses a
+  toolchain or reference checkout that differs from the frozen recipe), and
+  runs `python3 -m tools.benchmark.compare`.
+- `perf-loop.sh`: Local inner loop for a performance unit. Builds the plan's
+  (or `--base` ref's) executable once per commit under `target/perf-loop/`,
+  builds the working-tree candidate, runs the hardware-counter screen with the
+  plan's screen-gate verdict (exit 3 on fail), lists the largest function-size
+  changes, and with `--trace <case>` summarizes the typed-loop trace on a
+  perf-counters build. Diagnostic only; never decision evidence.
 - `performance-preview.sh`: From a policy-selected harness, prepares the candidate
   SHA, explicit base SHA, and manifest-pinned QuickJS-NG on one shared host.
   Same-repository PRs use a base-owned `pull_request_target` harness; every
@@ -142,6 +154,7 @@ each script is for.
 - `lib.sh`: Shared helpers (cargo resolution, QuickJS-NG build, qjs-cli
   build, timeout wrapper check) sourced by the other scripts.
 - `check-file-size.sh`: Enforces reviewability limits for first-party Rust,
-  Python (800 source / 1200 test lines), and shell files; called by `check.sh`.
+  Python (800 source / 1200 test lines), shell files, and active task files
+  (600 lines; `tasks/archive/` is exempt); called by `check.sh`.
 - `run-with-timeout.sh`: Runs a command with a timeout; shared by comparison,
   benchmark, and Test262 scripts.

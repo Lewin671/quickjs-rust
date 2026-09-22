@@ -10,6 +10,10 @@ from .records import parse_result
 from .receipts import ReceiptError, canonical_receipt_sha256
 from .schema import Manifest
 
+# Raw record format accepted from runner.py. Version 5 added per-sample
+# hardware counters (`instructions`, `cycles`).
+RECORD_SCHEMA_VERSION = 5
+
 
 class ReportError(ValueError):
     """Raw evidence violates its measurement contract."""
@@ -95,9 +99,9 @@ RUN_START_FIELDS = {
 SAMPLE_FIELDS = {
     "adapter_id", "argv", "binary_sha256", "binary_snapshot_path", "binary_source_path",
     "binary_version", "binary_version_probe_post_sha256", "binary_version_probe_pre_sha256",
-    "binary_version_probe_snapshot_path", "block", "case_id", "checksum",
+    "binary_version_probe_snapshot_path", "block", "case_id", "checksum", "cycles",
     "diagnostic_point", "duration_ns", "engine_identity", "error", "exit_code", "family",
-    "host", "iterations", "lane_id", "manifest_sha256", "measurement_eligible", "metric",
+    "host", "instructions", "iterations", "lane_id", "manifest_sha256", "measurement_eligible", "metric",
     "operations", "order", "phase", "profile_id", "protocol_id", "protocol_sha256",
     "provenance_status", "quality", "receipt", "receipt_sha256", "record_type", "role",
     "run_id", "runner_repo", "schema_version", "series_id", "started_at", "status",
@@ -151,8 +155,17 @@ def validate_coverage(value: Any, expected: dict[str, Any], where: str) -> None:
         raise ReportError(f"{where}: does not match recomputed coverage")
 
 
+def validate_counters(row: dict[str, Any], where: str) -> None:
+    """Counters are both present (positive) or both absent; never zero."""
+    values = (row["instructions"], row["cycles"])
+    if values == (None, None):
+        return
+    for field in ("instructions", "cycles"):
+        integer(row[field], f"{where}.{field}", minimum=1)
+
+
 def validate_identity(row: dict[str, Any], start: dict[str, Any], where: str) -> None:
-    if row["run_id"] != start["run_id"] or row["schema_version"] != 4:
+    if row["run_id"] != start["run_id"] or row["schema_version"] != RECORD_SCHEMA_VERSION:
         raise ReportError(f"{where}: run/schema identity mismatch")
 
 
@@ -306,6 +319,7 @@ def validate_success(row: dict[str, Any], case: Any, where: str) -> None:
     operations = integer(row["operations"], f"{where}.operations")
     integer(row["checksum"], f"{where}.checksum")
     integer(row["duration_ns"], f"{where}.duration_ns", minimum=1)
+    validate_counters(row, where)
     if (
         operations != case.expected_operations(iterations)
         or row["checksum"] != case.expected_checksum(iterations)
@@ -333,6 +347,7 @@ def validate_non_success(row: dict[str, Any], case: Any, where: str) -> str:
         expected = {
             "argv": [], "iterations": None, "operations": None, "checksum": None,
             "duration_ns": None, "started_at": None, "exit_code": None,
+            "instructions": None, "cycles": None,
             "timed_out": False, "stdout": "", "stderr": "",
             "stdout_truncated": False, "stderr_truncated": False,
             "error": "startup/calibration/warmup did not complete",
@@ -346,6 +361,7 @@ def validate_non_success(row: dict[str, Any], case: Any, where: str) -> str:
     iterations = integer(row["iterations"], f"{where}.iterations")
     nonempty_string(row["started_at"], f"{where}.started_at")
     number(row["duration_ns"], f"{where}.duration_ns", positive=True)
+    validate_counters(row, where)
     if not isinstance(row["stdout"], str) or not isinstance(row["stderr"], str):
         raise ReportError(f"{where}: stdout and stderr must be strings")
     nonempty_string(row["error"], f"{where}.error")

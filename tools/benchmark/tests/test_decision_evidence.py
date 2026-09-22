@@ -106,3 +106,50 @@ class DecisionEvidenceTests(unittest.TestCase):
         self.broad["health"]["linearity"]["status"] = "fail"
         self.broad["comparisons"]["candidate_vs_base"]["cases"]["plain_function_call"] = effect(10)
         self.assertEqual(self.run_decision()["decision"], "inconclusive")
+
+
+class CycleDecisionTests(unittest.TestCase):
+    """Decisions judge cycles when every lane carries them."""
+
+    TARGET = "external/sunspider-1.0/3d-cube"
+    run_decision = DecisionEvidenceTests.run_decision
+
+    def setUp(self):
+        DecisionEvidenceTests.setUp(self)
+        for report in (self.broad, self.sentinel):
+            report["counter_comparisons"]["cycles"] = copy.deepcopy(report["comparisons"])
+        for suite in self.external["suites"]:
+            for case in suite["cases"]:
+                case["paired_cycle_comparisons"] = copy.deepcopy(case["paired_comparisons"])
+
+    def _external_case(self, key, case_id="3d-cube"):
+        suite = next(s for s in self.external["suites"] if s["id"] == "sunspider-1.0")
+        return next(c for c in suite["cases"] if c["id"] == case_id)[key]
+
+    def test_cycles_decide_when_complete(self):
+        # Wall time alone would miss the target; cycles meet it.
+        self._external_case("paired_comparisons")["base"] = effect(0.99)
+        payload = self.run_decision()
+        self.assertEqual((payload["metric"], payload["decision"]), ("cycles", "retained"))
+        self.assertAlmostEqual(payload["metrics"][self.TARGET]["ratio"], 0.9)
+
+    def test_cycle_regression_rejects(self):
+        self._external_case("paired_cycle_comparisons", "3d-morph")["base"] = effect(1.5)
+        self.assertEqual(self.run_decision()["decision"], "rejected")
+
+    def test_target_wall_time_that_improves_less_is_not_a_divergence(self):
+        self._external_case("paired_comparisons")["base"] = effect(1.0)
+        self.assertEqual(self.run_decision()["wall_time_divergence"], [])
+
+    def test_precise_wall_regression_that_cycles_miss_is_inconclusive(self):
+        self._external_case("paired_comparisons", "3d-morph")["base"] = effect(1.5)
+        payload = self.run_decision()
+        self.assertEqual(payload["decision"], "inconclusive")
+        self.assertEqual(payload["wall_time_divergence"], ["external/sunspider-1.0/3d-morph"])
+
+    def test_partial_cycles_fall_back_to_wall_time(self):
+        self._external_case("paired_cycle_comparisons")["base"] = None
+        self._external_case("paired_cycle_comparisons", "3d-morph")["base"] = effect(1.5)
+        payload = self.run_decision()
+        self.assertEqual((payload["metric"], payload["decision"]), ("wall_time", "retained"))
+        self.assertEqual(payload["wall_time_divergence"], [])

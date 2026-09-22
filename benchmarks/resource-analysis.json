@@ -3,7 +3,7 @@
   "id": "quickjs-resource-analysis-v1",
   "compatible_measurement": {
     "schema_version": 1,
-    "protocol_id": "quickjs-resource-measurement-protocol-v1"
+    "protocol_id": "quickjs-resource-measurement-protocol-v2"
   },
   "protocol": {
     "id": "quickjs-resource-analysis-protocol-v1",

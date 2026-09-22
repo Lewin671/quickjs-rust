@@ -3,7 +3,8 @@
 The objective is a generally faster, correct engine. No single microbenchmark
 or geometric mean establishes that result. Keep the three performance lanes
 separate, and inspect resource measurements before a production-performance
-claim:
+claim. Durable measurement and codegen rules that apply to every lane are in
+[performance-knowledge.md](performance-knowledge.md).
 
 | Lane | Question | Acceptance use |
 | --- | --- | --- |
@@ -21,7 +22,17 @@ on the sentinel alone.
 
 ## One complete local comparison
 
-Build candidate, comparison base and the pinned NG reference separately. Use
+On the development host, one command builds candidate and base at exact
+commits in clean worktrees (cached per commit), verifies the pinned QuickJS-NG
+build, writes truthful receipts, and runs the comparison below:
+
+```sh
+./scripts/perf-compare.sh --base <plan base_sha> --candidate <commit> \
+  --blocks 30 --output-dir target/comparison/run-001
+```
+
+The rest of this section describes what it runs. Build candidate, comparison
+base and the pinned NG reference separately. Use
 verified build receipts matching the measurement manifests, as described in
 [benchmarking.md](benchmarking.md#running). Do not reuse a receipt after
 rebuilding an executable. The checked-in manifests describe macOS arm64; a
@@ -54,6 +65,69 @@ Use `--blocks 3` for quick diagnostic feedback. Use a predeclared 30- or
 interval appears, discard outliers, or pool unrelated runs. The frozen A/A
 noise calibration and hardware-qualification work remains necessary before
 turning this into a public claim or required CI performance gate.
+
+## Counter screen during implementation
+
+Iterate on a change with the counter screen before spending a formal run. It
+compares two executables on hardware counters, which background load barely
+moves, and reports wall time only as context:
+
+```sh
+python3 -m tools.benchmark.screen \
+  --candidate target/release/qjs --base /path/to/base/qjs \
+  --case sentinel --case external/jetstream3-js-subset/hash-map
+python3 -m tools.benchmark.screen --candidate target/release/qjs --aa
+```
+
+`--case` accepts `sentinel`, `broad`, `sentinel/<id>`, `broad/<id>`,
+`external/<suite>/<case>` (fetched into the hash-checked cache) and
+`file:<path>`; the default is the six sentinels. Internal cases calibrate N and
+keep the N-to-2N increment, which removes startup and parsing; external cases
+and scripts are whole-process. Candidate and base must print the same checksum
+or external sentinel, and a missing counter is an error, never a silent
+fallback to wall time. `--aa` screens the candidate against itself to show the
+current host's counter noise. Before starting, the screen waits up to
+`--settle` seconds for the load average to fall below `--max-load` (half the
+logical CPUs by default); on a host that stays busy it runs anyway and marks
+the wall column unreliable, since the counter ratios it judges tolerate load.
+`--require-quiet` refuses instead. Every measuring entry point holds one
+host-wide lock (`target/.perf-measure.lock`) for its whole run, so concurrent
+screens from parallel agents queue instead of disturbing each other, and each
+first waits for running `cargo`, `rustc`, linker, or `qjs` processes to finish.
+
+On macOS the counters come from `/usr/bin/time -l`; on Linux from `perf stat`,
+which needs a kernel that exposes user-space counters. The screen writes no
+decision artifact: its JSON output carries `"decision_evidence": false`, and
+acceptance still follows the formal procedure below.
+
+`./scripts/perf-loop.sh --plan tasks/performance-units/<unit>.json` wraps
+the whole iteration: it builds and caches the plan's base executable, builds
+the working tree, screens the plan's gate cases, prints the verdict below and
+the largest function-size changes, and with `--trace <case>` adds the
+typed-loop trace histograms from a perf-counters build. `--base <ref>` runs an
+exploratory screen without a plan or verdict.
+
+### Screen gate
+
+The screen runs after the unit plan is frozen (see below), so its cases and
+thresholds come from the plan's `fast_gate`, never from screen results. Screen
+each implementation attempt against the plan's base executable on
+`fast_gate.target_ids`, `fast_gate.control_ids`, and the six sentinels:
+
+- **pass** — every target's median cycles ratio is at most
+  `target_max_candidate_over_base` and every one of its pairs is below 1.0;
+  every control's and sentinel's median cycles ratio is at most
+  `control_max_candidate_over_base`;
+- **fail** — anything else. Failed screens count against the plan's
+  `max_attempts`, exactly as failed fast gates did. The unit's task file
+  records each screen result in one line; no formal run or decision artifact
+  is produced.
+
+Instructions and wall time are context: an instruction ratio that moves
+opposite to cycles usually means a layout or inlining change (see
+[performance-knowledge.md](performance-knowledge.md#codegen)), which is worth
+understanding before the formal run. Only a passing screen spends a formal
+measurement.
 
 ## Evidence replay and opportunity queue
 
@@ -155,7 +229,11 @@ queue, then evaluate the frozen plan:
   --require-retained --output target/comparison/decision.json
 ```
 
-Each watched comparison needs at least 30 complete paired blocks, a 95%
+The judged metric is cycles when every lane carries counters and wall time
+otherwise; see [benchmarking.md](benchmarking.md#performance-priority-and-decision-gate).
+A local run on a shared machine therefore does not need a quiet host to reach
+precise intervals, but it still holds the measurement lock and waits for
+builds before starting. Each watched comparison needs at least 30 complete paired blocks, a 95%
 confidence interval and at most 3% relative half-width. The entire interval
 must be within the target or control threshold to pass; an interval crossing
 the threshold is inconclusive. A precise interval wholly beyond the threshold
@@ -169,6 +247,23 @@ inventory, with consistent result counts. Improving one target cannot hide
 a tenfold regression elsewhere. Migration `stage` uses the same evidence and
 sentinel controls with its predeclared cumulative regression budget; it still
 produces `advance`/`abort`, not a final performance claim.
+
+### Batched promotion
+
+Units that passed the screen and were planned from the same queue share one
+`base_sha`, so one formal run can serve all of them: stack the units on one
+candidate, measure it once against that base, and run `decide` separately
+for each unit's frozen plan against the same bundle and the candidate's
+Test262 burndown. Each decision records the other unit IDs in the batch. The
+formal run then pays for the 30-block measurement and full Test262 once per
+batch instead of once per unit.
+
+Batching never relaxes a unit's gates. Every unit in the batch must pass its
+own targets and controls. If any unit is `rejected` or `inconclusive`, split
+the batch: remeasure each remaining unit on its own candidate before claiming
+it. Each unit's own screen result is what shows that its change, not a
+neighbour's, moved its targets; units whose targets overlap belong in
+separate batches.
 
 `retained` means this optimization passed its unit gates on this experiment.
 It never means the whole engine has surpassed NG. That broader conclusion

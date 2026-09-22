@@ -20,15 +20,11 @@ each change verifiable with focused tests — but no longer cap the design at
 structural, the right change is to lift the structure, not to add another
 heuristic around it.
 
-The **environment / binding model** remains a protected architectural boundary:
-T016 has already replaced the old snapshot/capture-writeback model with
-slot-indexed locals plus shared upvalue cells. Do not reintroduce a per-call
-name-keyed snapshot or infer the current highest-ROI work from a historical
-task description. For every new performance unit, derive priority from the
-latest exact candidate/base/QuickJS-NG evidence, attach a current profile of
-the proposed shared cost, and follow T022's queue/plan/decision workflow.
-Static architecture notes describe constraints and completed migrations; the
-evidence-bound opportunity queue decides what to optimize next.
+The **environment / binding model** (slot-indexed locals plus shared upvalue
+cells, landed in T016) is a protected architectural boundary: never
+reintroduce a per-call name-keyed snapshot. Performance priority comes from
+current exact evidence, never from a historical task description; the
+performance loop below is the contract.
 
 ## Standard Commands
 
@@ -44,6 +40,10 @@ evidence-bound opportunity queue decides what to optimize next.
 - Test262 subset runner: `./scripts/test262-subset.sh`
 - Test262 baseline scan: `./scripts/test262-baseline.sh`
 - Burndown recorder: `./scripts/test262-burndown.sh --report <dir> | --entry <file>`
+- Performance inner loop (counter screen, symbol sizes, optional trace):
+  `./scripts/perf-loop.sh --plan tasks/performance-units/<unit>.json`
+- Formal local comparison (feeds queue/decide):
+  `./scripts/perf-compare.sh --base <sha> --output-dir target/comparison/<run>`
 - Source size report: `./scripts/source-size-report.sh [limit] [--vendor]`
 - Agent worktree: `./scripts/create-agent-worktree.sh <task-slug> <owner-id> [base-ref]`
 - Branch scope check: `./scripts/validate-agent-branch.sh <branch> <base-sha> <path>...`
@@ -162,6 +162,8 @@ global error models, or broad architecture docs. Full runbook:
   pushing.
 - Pushed `agent/**` branches get CI; a red or unexplained latest run blocks
   integration, but green remote CI never replaces local checks.
+- Owners may build and test in parallel, but performance timing on one host
+  is serialized through the main agent; parallel load corrupts every timing.
 - Remove merged worktrees and branches unless retained for diagnosis.
 
 ## Architecture Expectations
@@ -215,11 +217,19 @@ changed.
    from the `find-qjsng-gaps.sh` recommendation queue while they exist; when the queue
    is dominated by hard-hinted broad areas, switch to the next unchecked
    slice of the highest-priority campaign task in `tasks/README.md` instead
-   of re-running global probes. For performance work, read
-   `docs/performance-workflow.md`, then
-   `tasks/T022-performance-priority-controller.md`, and use the current exact
-   evidence queue and validated unit plan to select work. Historical task
-   order or an old "next" label does not establish current priority.
+   of re-running global probes. For performance work, follow this loop
+   (mechanics in `docs/performance-workflow.md`):
+   1. Read `docs/performance-knowledge.md`.
+   2. Select from the current exact opportunity queue
+      (`tasks/T022-performance-priority-controller.md`) and profile the target
+      on the queue's candidate executable. Historical task order or an old
+      "next" label does not establish priority.
+   3. Freeze the unit plan and pass `performance-decision.sh validate-unit`
+      before writing runtime code.
+   4. Iterate with `./scripts/perf-loop.sh --plan <unit>`. Two failed screens
+      close the implementation; record each in one line in the task file.
+   5. Spend a formal run only on a passing screen (screened units from the
+      same queue may share one batched run), then record the decision.
 2. Read the related crate and relevant sections of `docs/architecture.md` and
    `docs/harness.md`, plus the selected task's design and evidence references.
 3. Implement a coherent, verifiable unit toward the task's acceptance criteria,

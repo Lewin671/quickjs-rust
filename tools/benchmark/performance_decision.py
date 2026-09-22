@@ -93,7 +93,7 @@ def _summary_revisions(summary: dict[str, Any]) -> tuple[str, str]:
 def _external_entries(report: dict[str, Any], target_ratio: float) -> list[dict[str, Any]]:
     if report.get("artifact_type") != "quickjs-external-preview-report":
         raise PerformanceDecisionError("external report: unsupported artifact type")
-    if report.get("schema_version") != 2:
+    if report.get("schema_version") != 3:
         raise PerformanceDecisionError("external report: unsupported schema version")
     entries: list[dict[str, Any]] = []
     seen: set[str] = set()

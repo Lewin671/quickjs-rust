@@ -24,7 +24,7 @@ class ManifestTests(unittest.TestCase):
         manifest = load_manifest(ROOT / "benchmarks/manifest.json")
         self.assertEqual(manifest.schema_version, 4)
         self.assertEqual(manifest.series_id, "broad-black-box-v2")
-        self.assertEqual(manifest.protocol_id, "quickjs-measurement-protocol-v8")
+        self.assertEqual(manifest.protocol_id, "quickjs-measurement-protocol-v9")
         self.assertEqual(manifest.lane_id, "throughput/wall_ns_per_operation")
         self.assertEqual(
             [case.id for case in manifest.cases],
@@ -82,6 +82,7 @@ class ManifestTests(unittest.TestCase):
                 "tools/benchmark/__init__.py",
                 "tools/benchmark/__main__.py",
                 "tools/benchmark/adapters.py",
+                "tools/benchmark/counters.py",
                 "tools/benchmark/linearity.py",
                 "tools/benchmark/planning.py",
                 "tools/benchmark/process.py",
@@ -101,7 +102,7 @@ class ManifestTests(unittest.TestCase):
         manifest = load_manifest(ROOT / "benchmarks/generic-sentinels-manifest.json")
         self.assertEqual(manifest.schema_version, 4)
         self.assertEqual(manifest.series_id, "generic-sentinels-v1")
-        self.assertEqual(manifest.protocol_id, "quickjs-generic-sentinel-protocol-v1")
+        self.assertEqual(manifest.protocol_id, "quickjs-generic-sentinel-protocol-v2")
         self.assertEqual(manifest.lane_id, "throughput/wall_ns_per_operation")
         # The sentinels are the holdout for the ordinary interpreter, so their
         # inventory is frozen exactly like the broad portfolio's: a later

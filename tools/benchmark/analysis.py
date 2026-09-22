@@ -20,6 +20,7 @@ def _comparison(
     manifest: Manifest,
     analysis: AnalysisManifest,
     comparator: str,
+    unit: str = "ns",
 ) -> dict[str, Any]:
     case_blocks = {}
     case_results = {}
@@ -48,8 +49,8 @@ def _comparison(
         case_results[case.id] = {
             "critical": case.critical,
             "family": case.family,
-            "candidate_median_ns_per_op": statistics.median(candidate_values),
-            "comparator_median_ns_per_op": statistics.median(comparator_values),
+            f"candidate_median_{unit}_per_op": statistics.median(candidate_values),
+            f"comparator_median_{unit}_per_op": statistics.median(comparator_values),
             "ratio": estimate,
             "confidence_interval": {"lower": lower, "upper": upper},
             "relative_half_width": relative_half_width(estimate, lower, upper),
@@ -207,6 +208,18 @@ def analyze_run(
                     comparison["families"][family]["relative_half_width"]
                     for family in sorted(critical_families)
                 )
+    # Cycles use the same paired-block statistics. They are reported only
+    # when every valid measurement carried counters; a partial set is None.
+    cycle_comparisons = {"candidate_vs_base": None, "candidate_vs_quickjs_ng": None}
+    if validated.valid_blocks and validated.cycle_measurements:
+        cycle_comparisons = {
+            "candidate_vs_base": _comparison(
+                validated.cycle_measurements, measurement, analysis, "base", "cycles"
+            ),
+            "candidate_vs_quickjs_ng": _comparison(
+                validated.cycle_measurements, measurement, analysis, "quickjs-ng", "cycles"
+            ),
+        }
     prerequisites_healthy = (
         block_result["status"] != "invalid"
         and linearity_status == "pass"
@@ -251,4 +264,5 @@ def analyze_run(
             "status": precision["status"],
         },
         "comparisons": comparisons,
+        "counter_comparisons": {"cycles": cycle_comparisons},
     }

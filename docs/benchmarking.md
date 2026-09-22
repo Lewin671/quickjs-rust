@@ -245,6 +245,22 @@ point estimates can populate a queue but cannot retain or reject a unit.
   --output target/performance-decision.json
 ```
 
+**Decision metric.** Every measured process also records its hardware
+counters (`instructions`, `cycles`) where the host exposes them per process;
+on macOS the runner reads them from the exited child before reaping it, so
+argv and the wall timer are unchanged. Internal record schema 5 and external
+record schema 3 carry the counters, internal report schema 4 adds
+`counter_comparisons.cycles`, and external report schema 3 adds
+`paired_cycle_comparisons`; both use the same paired-block statistics as wall
+time. When every comparable case in every lane has cycle evidence, `decide`
+judges cycles (`"metric": "cycles"`); otherwise, as on hosted Linux runners, it
+judges wall time. Cycles exclude scheduling and frequency noise on a shared
+host (a 30-pair same-binary control on a busy development machine measured
+cycle intervals roughly three to six times narrower than wall time), but they
+also exclude time off-CPU. A precise wall-time regression beyond the control
+ceiling that cycles do not show therefore makes the decision `inconclusive`
+and is listed in `wall_time_divergence` for a human to explain.
+
 `retained` means the frozen gates passed; `rejected` is valid negative evidence
 that closes that mechanism after its attempt budget; `inconclusive` means the
 artifact is incomplete/noisy and cannot be counted as progress. Hosted preview
@@ -1018,7 +1034,7 @@ startup, parsing, execution, and shutdown. A seeded three-role Latin-square
 rotation gives every engine each order position once across the three
 measurement blocks.
 
-External raw sample schema v2 records both `timer_started_ns` and
+External raw sample schema v3 records both `timer_started_ns` and
 `timer_finished_ns` from that same monotonic clock. `duration_ns` is required
 to equal their difference, and adjacent samples can therefore be audited for
 overlap without mixing the monotonic timer with the diagnostic UTC
@@ -1045,7 +1061,7 @@ JavaScript subset** and never an official JetStream score. All hosted output
 keeps `claim_eligible=false`. The GitHub Step Summary shows both the three-suite
 overview and every named external case with candidate, base, and QuickJS-NG
 median wall time plus paired candidate/base and candidate/QuickJS-NG ratios
-and 95% intervals. External report schema 2 binds raw bytes, executable hashes
+and 95% intervals. External report schema 3 binds raw bytes, executable hashes
 and host metadata. Three-block intervals remain explicitly inconclusive for
 acceptance; formal decisions require at least 30 blocks with a narrow interval. The
 internal portfolio is likewise

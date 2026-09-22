@@ -20,6 +20,12 @@ from .records import parse_result
 from .schema import Case, Manifest, next_calibration_iterations, sha256_file
 from .snapshots import SnapshotStore
 
+# Raw record format written by this runner. Version 5 added per-sample
+# hardware counters (`instructions`, `cycles`); raw_contract.py freezes the
+# same number on the analysis side.
+RECORD_SCHEMA_VERSION = 5
+
+
 def _runner_repo_metadata(root: Path) -> dict[str, Any]:
     def command(*args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -180,6 +186,8 @@ class BenchmarkRun:
             "block": block,
             "case_id": case.id,
             "checksum": checksum,
+            "cycles": result.cycles if result is not None else None,
+            "instructions": result.instructions if result is not None else None,
             "measurement_eligible": (
                 phase == "measurement" and status == "ok" and quality == "eligible"
             ),
@@ -204,7 +212,7 @@ class BenchmarkRun:
             "role": engine.role,
             "run_id": self.run_id,
             "runner_repo": self.runner_repo,
-            "schema_version": 4,
+            "schema_version": RECORD_SCHEMA_VERSION,
             "series_id": self.manifest.series_id,
             "started_at": result.started_at if result is not None else None,
             "status": status,
@@ -495,7 +503,7 @@ class BenchmarkRun:
             "run_id": self.run_id,
             "runner_repo": self.runner_repo,
             "snapshot_root": str(self.snapshot_store.path),
-            "schema_version": 4,
+            "schema_version": RECORD_SCHEMA_VERSION,
             "seed": self.seed,
             "selected_cases": list(self.cases),
             "series_id": self.manifest.series_id,
@@ -533,7 +541,7 @@ class BenchmarkRun:
             "provenance_status": "verified" if self.provenance_verified else "unverified",
             "record_type": "run_end",
             "run_id": self.run_id,
-            "schema_version": 4,
+            "schema_version": RECORD_SCHEMA_VERSION,
             "status": "failed" if self.failed else "complete",
         })
         return not self.failed

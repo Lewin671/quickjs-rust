@@ -24,11 +24,17 @@ def summary(candidate, base):
             ("quickjs-ng", BROAD["reference_engine"]["revision"])])}}
 
 
-def internal(engines, count=25, lane="broad"):
+def internal(engines, count=25, lane="broad", cycles=None):
+    """`cycles` (a candidate/base ratio) adds complete counter comparisons."""
     inventory = (BROAD if lane == "broad" else SENTINEL)["cases"]
     if lane == "broad":
         inventory = inventory[:count]
-    return {"schema_id": "quickjs-benchmark-report", "schema_version": 3,
+    counter = {"candidate_vs_base": None, "candidate_vs_quickjs_ng": None}
+    if cycles is not None:
+        counter = {"candidate_vs_base": {"cases": {c["id"]: effect(cycles) for c in inventory}},
+                   "candidate_vs_quickjs_ng": {"cases": {c["id"]: effect(0.3) for c in inventory}}}
+    return {"schema_id": "quickjs-benchmark-report", "schema_version": 4,
+            "counter_comparisons": {"cycles": counter},
             "run": {"host": HOST, "engines": [
                 {"role": role, "binary_sha256": engine["binary_sha256"],
                  "receipt": {"source": {"revision": engine["source_revision"], "dirty": False}}}
@@ -44,7 +50,9 @@ def internal(engines, count=25, lane="broad"):
                               "family": c["family"]} for c in inventory}}}}
 
 
-def external(engines, target_base=0.9, complete=True):
+def external(engines, target_base=0.9, complete=True, cycles=None):
+    """`cycles` maps case id -> candidate/base cycle ratio; absent cases get none."""
+    cycles = cycles or {}
     suites = []
     for suite in sorted(EXTERNAL["suites"], key=lambda s: s["id"] != "sunspider-1.0"):
         cases = []
@@ -57,13 +65,16 @@ def external(engines, target_base=0.9, complete=True):
                     ratio, ng = 1.01, 2.0
             cases.append({"id": c["id"], "capability": dict.fromkeys(engines, "ok"),
                           "candidate_over_base": ratio, "candidate_over_quickjs_ng": ng,
-                          "paired_comparisons": {"base": effect(ratio), "quickjs-ng": effect(ng)}})
+                          "paired_comparisons": {"base": effect(ratio), "quickjs-ng": effect(ng)},
+                          "paired_cycle_comparisons": {
+                              "base": effect(cycles[c["id"]]) if c["id"] in cycles else None,
+                              "quickjs-ng": effect(ng) if c["id"] in cycles else None}})
         if not complete:
             cases[-1]["paired_comparisons"]["base"] = None
             cases[-1]["candidate_over_base"] = None
         suites.append({"id": suite["id"], "cases": cases,
                        "complete_base_comparison": complete, "complete_comparison": complete})
-    return {"schema_version": 2, "artifact_type": "quickjs-external-preview-report",
+    return {"schema_version": 3, "artifact_type": "quickjs-external-preview-report",
             "host": HOST, "blocks": 30,
             "binary_sha256": {role: engine["binary_sha256"] for role, engine in engines.items()},
             "suites": suites}

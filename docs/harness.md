@@ -101,6 +101,14 @@ branch immediately to trigger branch CI while other owners continue in separate
 worktrees. The main agent should poll or watch those runs with `gh`, record any
 failed run URL in the handoff, and route fixes back to the same owner branch.
 
+Performance timing does not parallelize. Concurrent builds, test runs and
+other owners' work on the same host distort wall time and can turn slow cases
+into spurious timeouts. Owners may implement, build, test, and collect
+diagnostic counters or traces in parallel; any comparison whose timing feeds a
+decision runs one at a time, queued through the main agent, on an otherwise
+idle host. The measurement rules themselves are in
+[performance-knowledge.md](performance-knowledge.md).
+
 Global files stay main-agent owned unless explicitly assigned:
 
 - `Cargo.toml`

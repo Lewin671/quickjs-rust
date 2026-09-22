@@ -4,7 +4,7 @@
 //! recursive sentinel, which established that dispatch is not what makes a
 //! recursive call slow: at ~212 ns per call against QuickJS-NG's ~35 ns,
 //! roughly two thirds of the remaining time is spent building and tearing down
-//! the activation itself (`tasks/T021-single-vm-frame-stack.md`).
+//! the activation itself (`tasks/archive/T021-single-vm-frame-stack-log.md`).
 //!
 //! A `Vm` carries a 704-byte `FrameState` with 36 fields -- unwinding state,
 //! suspension state, loop-plan decline bitsets, prototype caches, an operand

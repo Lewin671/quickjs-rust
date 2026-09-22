@@ -443,7 +443,8 @@ def _record(
     status, error = _sample_status(result, role)
     return {
         "host": _host_metadata(),
-        "schema_version": 2,
+        # Version 3 added per-sample hardware counters (`instructions`, `cycles`).
+        "schema_version": 3,
         "record_type": "sample",
         "measurement_blocks": manifest.measurement.blocks,
         "timeout_seconds": manifest.measurement.timeout_seconds,
@@ -462,6 +463,8 @@ def _record(
         "timer_started_ns": result.timer_started_ns,
         "timer_finished_ns": result.timer_finished_ns,
         "duration_ns": result.duration_ns,
+        "instructions": result.instructions,
+        "cycles": result.cycles,
         "started_at": result.started_at,
         "status": status,
         "error": error,

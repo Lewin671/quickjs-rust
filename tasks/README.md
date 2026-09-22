@@ -74,7 +74,8 @@ proposal requires the same process.
   black-box benchmark, then drive candidate/QuickJS-NG overall wall ns/op to
   at most 0.50x without regressing any critical family above 1.00x or weakening
   correctness. This is the active performance campaign; each runtime change
-  remains a separately measured, reviewable unit.
+  remains a separately measured, reviewable unit. The file holds the contract;
+  its unit log through 2026-07-29 is in `archive/`.
 - `T019-object-layout-rewrite.md` — feeds T018 B3/B4. Shrinks `ObjectData`/
   `ArrayData`/`PropertyStorage` layout to close the `allocation` critical
   family's persistent QuickJS-NG gap, as a narrower alternative to a full
@@ -89,13 +90,11 @@ proposal requires the same process.
   costs two name-table hash lookups per store. Verified with the full test
   suite, Test262 subset, `compare-qjs.sh`, and exact gap scans across
   eval/module/global-code/with/for/Function; zero regressions.
-- `T021-single-vm-frame-stack.md` — structural proposal with historical
-  experiments recorded in the task. Move ordinary synchronous bytecode calls
-  onto one explicit VM frame stack, then
-  compact that same execution core into register/superinstructions. Further
-  work requires current T022 selection and validation; do not create a second
-  independent VM or expand the direct-leaf eligibility predicate in the
-  frame-stack commit.
+- `T021-single-vm-frame-stack.md` — **closed.** Both structural theses (a
+  single-VM frame stack and compact dispatch) were built and measured; the
+  compact register tier landed, the windowed frame stack and virtual stack
+  were reverted. The full experiment log is in `archive/`. New work in this
+  area requires current T022 selection.
 - `T024-general-register-core.md` — **closed after falsification.** The retained
   dispatch-preamble split moved the external corpus by only about one percent,
   below its structural mechanism gate. Preserve its negative evidence; do not
@@ -166,7 +165,15 @@ proposal requires the same process.
   durable failure status; fork previews are unsupported and fail-closed M6/M7 policy infrastructure is ready,
   while fixed-hardware A/A calibration and every performance gate remain
   intentionally incomplete and disabled.
-- `T011-call-performance.md` — **subsumed by T016.** Cut per-call
+- `archive/T011-call-performance.md` — **subsumed by T016.** Cut per-call
   environment-cloning cost. The leaf-call activation-snapshot clone landed; the
   remaining per-call locals-map clone is deleted by T016 S5, which unblocks the
   `TypedArray/*` cases that time out under heavy nested-call load.
+
+## Archive
+
+`tasks/archive/` holds closed tasks and the verbatim experiment logs split
+out of long-running task files. They are historical evidence bound to their
+own revisions; they never establish current priority. Active task files stay
+under the `scripts/check-file-size.sh` limit by moving finished logs here
+rather than growing without bound.

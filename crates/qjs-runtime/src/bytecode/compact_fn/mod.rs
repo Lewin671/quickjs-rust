@@ -5,7 +5,7 @@
 //! and the code pointer from the stack before any opcode does work. That
 //! preamble is most of the per-instruction gap against QuickJS-NG, and it is
 //! paid by all ninety-odd opcodes at once, so no per-opcode change can remove
-//! it (`tasks/T021-single-vm-frame-stack.md`, 2026-08-01 root cause).
+//! it (`tasks/archive/T021-single-vm-frame-stack-log.md`, 2026-08-01 root cause).
 //!
 //! This module is the other half of the answer that `typed_loop` gives for
 //! loops: a small, separate executor that keeps its program counter and
