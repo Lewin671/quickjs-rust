@@ -143,43 +143,52 @@ fn a_primitive_receiver_is_boxed_for_a_sloppy_method_and_kept_for_a_strict_one()
     );
 }
 
+/// Whether every backward edge of the program exits to the interpreter.
+fn backward_edges_exit(program: &super::WideProgram) -> bool {
+    let has_exit = program
+        .ops
+        .iter()
+        .any(|op| matches!(op, WideOp::Exit { .. }));
+    let backward_jump = program.ops.iter().enumerate().any(|(index, op)| {
+        matches!(op, WideOp::Jump { target } | WideOp::JumpIfFalsy { target, .. }
+            | WideOp::JumpIfTruthy { target, .. } if (*target as usize) <= index)
+    });
+    has_exit && !backward_jump
+}
+
 #[test]
-fn a_loop_the_typed_tier_claims_keeps_the_interpreter() {
+fn a_loop_the_typed_tier_claims_exits_to_the_interpreter_at_its_backedge() {
     // The typed loop tier compiles a program for this property-walking loop,
-    // so the wide tier must leave the body to the interpreter, where that
-    // program runs at the backedge.
-    assert!(
-        compile::compile(&nested_function(
-            "function walk(node) { var sum = 0; while (node) { sum = sum + node.item; node = node.next; } return sum; }",
-            "walk",
-        ))
-        .is_none()
-    );
+    // so the wide tier runs the body only up to the loop and hands the loop
+    // to the interpreter, where that program runs at the backedge.
+    let source = "function walk(node) { var sum = 0; while (node) { sum = sum + node.item; node = node.next; } return sum; }";
+    let program = compile::compile(&nested_function(source, "walk"))
+        .expect("a body whose loop an accelerator claims should be admitted with an exit");
+    assert!(backward_edges_exit(&program), "{:#?}", program.ops);
     assert_eq!(
-        value_of(
-            "function walk(node) { var sum = 0; while (node) { sum = sum + node.item; node = node.next; } return sum; }
+        value_of(&format!(
+            "{source}
              var list = null;
-             for (var i = 1; i <= 10; i++) list = { item: i, next: list };
-             walk(list);"
-        ),
+             for (var i = 1; i <= 10; i++) list = {{ item: i, next: list }};
+             walk(list) + walk(null);"
+        )),
         Value::Number(55.0)
     );
 }
 
 #[test]
-fn a_body_with_a_counted_numeric_loop_keeps_the_interpreter_and_its_accelerators() {
+fn a_body_with_a_counted_numeric_loop_hands_the_loop_to_its_accelerators() {
+    let source =
+        "function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s = s + i; } return s; }";
+    let program = compile::compile(&nested_function(source, "sum"))
+        .expect("the body should be admitted with its loop left to the interpreter");
     assert!(
-        compile::compile(&nested_function(
-            "function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s = s + i; } return s; }",
-            "sum",
-        ))
-        .is_none(),
-        "a loop a frame-based accelerator claims must not be taken away from it"
+        backward_edges_exit(&program),
+        "a loop a frame-based accelerator claims must not be taken away from it: {:#?}",
+        program.ops
     );
     assert_eq!(
-        value_of(
-            "function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s = s + i; } return s; } sum(100);"
-        ),
+        value_of(&format!("{source} sum(100) + sum(0);")),
         Value::Number(4950.0)
     );
 }
@@ -374,7 +383,7 @@ fn construction_array_literals_and_indexed_reads_inside_a_body() {
 }
 
 #[test]
-fn a_body_the_virtual_object_lowering_rewrites_keeps_the_interpreter() {
+fn a_body_whose_lowering_keeps_a_literal_in_slots_keeps_the_interpreter() {
     assert!(
         compile::compile(&nested_function(
             "function run(n) { var sum = 0; for (var i = 0; i < n; i++) { var values = [1, 2, 3]; sum += values[2]; } return sum; }",
@@ -437,5 +446,70 @@ fn equality_without_a_frame_matches_the_general_path() {
              true,false,false,true|true,false,false,true|true,false,true,false"
                 .into()
         )
+    );
+}
+
+#[test]
+fn an_exit_mid_expression_hands_over_locals_and_operands() {
+    // `SetProp` is left to the interpreter; the exit happens with the
+    // receiver, key and value on the operand stack and a lexical still in its
+    // dead zone, and the interpreter continues with every local intact.
+    let source = "function fill(target, key, a, b) {
+        var before = a * 2;
+        let later;
+        target[key] = before + b;
+        later = target[key] + 1;
+        return [before, later, target[key], typeof a].join();
+    }";
+    let program = compile::compile(&nested_function(source, "fill"))
+        .expect("a computed store should exit, not decline the body");
+    assert!(
+        program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::Exit { depth, .. } if *depth >= 3)),
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(&format!(
+            "{source} fill({{}}, 'x', 3, 4) + '|' + fill([], 0, 1, 1);"
+        )),
+        Value::String("6,11,10,number|2,4,3,number".into())
+    );
+    // A dead-zone read after the exit still throws the interpreter's error.
+    assert!(
+        error_of("function early(o) { o['k'] = 1; let late = late; return late; } early({});")
+            .contains("ReferenceError")
+    );
+}
+
+#[test]
+fn an_exit_in_a_nested_activation_returns_to_its_caller() {
+    assert_eq!(
+        value_of(
+            "function store(o, k, v) { o[k] = v; return o[k] * 2; }
+             function outer(o) { var first = store(o, 'a', 5); return first + store(o, 'b', 7); }
+             var o = {}; outer(o) + o.a + o.b;"
+        ),
+        Value::Number(36.0)
+    );
+}
+
+#[test]
+fn code_past_an_exit_sees_the_receiver_parameters_and_handlers() {
+    assert_eq!(
+        value_of(
+            "function Box(v) { this.v = v; }
+             Box.prototype.put = function (o, k, unusedUntilLater) {
+                 o[k] = 1;
+                 return this.v + unusedUntilLater;
+             };
+             function risky(o, k) { o[k] = 1; throw new TypeError('after exit'); }
+             var caught = '';
+             try { risky({}, 'z'); } catch (e) { caught = e.message; }
+             new Box(40).put({}, 'x', 2) + '|' + caught;"
+        ),
+        Value::String("42|after exit".into())
     );
 }

@@ -229,29 +229,35 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
 
     // A loop this tier would run natively is a loop the frame-based loop
     // accelerators can no longer see: they attach to backward edges of the
-    // ordinary interpreter, and an admitted body never returns to it. A body
-    // whose loops any of those accelerators claims therefore keeps the
-    // ordinary interpreter, where the loop runs faster than this tier's
-    // per-operation dispatch; only loops none of them handles are admitted.
+    // ordinary interpreter. A body whose loops any of those accelerators
+    // claims must therefore not run them here, where they run slower than
+    // under the accelerators; only loops none of them handles run natively.
     let has_backward_edge = code.iter().enumerate().any(|(ip, op)| {
         matches!(
             op,
             Op::Jump(target) | Op::JumpIfFalse(target) | Op::JumpIfTrue(target) if *target <= ip
         )
     });
-    if has_backward_edge && body_has_loop_accelerator(bytecode) {
-        return decline(trace, None, "loop claimed by a loop accelerator");
-    }
-    // Likewise a body the interpreter's virtual-object lowering rewrites --
-    // an object or array literal it can keep in slots instead of allocating
-    // -- keeps the interpreter, where that lowering runs.
-    if bytecode
+    // Such a body still runs here up to the loop: each backward edge exits
+    // to the interpreter, whose edge dispatch gives the accelerators the loop
+    // exactly as a frame that ran from entry would.
+    let lowering = bytecode
         .virtual_object_program
-        .get_or_init(|| crate::bytecode::virtual_object::lower(bytecode))
-        .lowers_anything()
-    {
-        return decline(trace, None, "virtual-object lowering rewrites this body");
+        .get_or_init(|| crate::bytecode::virtual_object::lower(bytecode));
+    // A body whose virtual-object lowering keeps a literal in slots instead
+    // of allocating it keeps the interpreter, where that lowering runs; an
+    // exit could not hand such a literal over. A body lowered only by
+    // in-place fusion runs here, but its loops stay with the interpreter's
+    // fused instructions, as they did before it was admitted.
+    if lowering.virtualizes_values() {
+        return decline(
+            trace,
+            None,
+            "virtual-object lowering keeps a literal in slots",
+        );
     }
+    let exit_backedges =
+        has_backward_edge && (lowering.lowers_anything() || body_has_loop_accelerator(bytecode));
 
     let Some(entry_depth) = propagate_depths(code) else {
         return decline(trace, None, "inconsistent operand-stack depth");
@@ -281,6 +287,35 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         .max()
         .unwrap_or(0)
         .min(local_count);
+    // An exit hands every own local to the interpreter frame, so every
+    // parameter must have a register even when only code past the exit reads
+    // it: the frame the interpreter builds seeds no argument values.
+    let has_exit = exit_backedges || code.iter().any(is_exit_safe);
+    let local_registers = if has_exit {
+        let parameters = bytecode
+            .parameter_slots()
+            .iter()
+            .map(|slot| slot + 1)
+            .max()
+            .unwrap_or(0);
+        local_registers.max(parameters).min(local_count)
+    } else {
+        local_registers
+    };
+    if has_exit && local_registers > u128::BITS as usize {
+        return decline(trace, None, "exit with more than 128 locals");
+    }
+    // The locals an exit hands over: the frame's own bindings. Received
+    // cells and global-fallback slots are read through their cells or the
+    // realm on both sides and are never copied.
+    let own_locals = (0..local_registers)
+        .filter(|&slot| {
+            bytecode
+                .locals
+                .get(slot)
+                .is_some_and(|local| !local.is_received_upvalue() && !local.sloppy_global_fallback)
+        })
+        .fold(0_u128, |mask, slot| mask | (1_u128 << slot));
     let register_count = local_registers.checked_add(stack_registers)?;
     if register_count > MAX_REGISTERS {
         return decline(trace, None, "too many registers");
@@ -535,6 +570,18 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                     right,
                 });
             }
+            Op::Jump(target) | Op::JumpIfFalse(target) | Op::JumpIfTrue(target)
+                if exit_backedges && *target <= ip =>
+            {
+                ops.push(WideOp::Exit {
+                    ip: u32::try_from(ip).ok()?,
+                    depth,
+                });
+            }
+            op if is_exit_safe(op) => ops.push(WideOp::Exit {
+                ip: u32::try_from(ip).ok()?,
+                depth,
+            }),
             Op::JumpIfFalse(target) => ops.push(WideOp::JumpIfFalsy {
                 cond: register(depth.checked_sub(1)?),
                 target: u32::try_from(*target).ok()?,
@@ -613,6 +660,13 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         }
     }
 
+    // Lowering skips what only an exit can reach, but the interpreter frame
+    // an exit builds runs that code too, and it must be seeded with the same
+    // receiver: a `this` read anywhere requires one.
+    requires_this |= code
+        .iter()
+        .any(|op| matches!(op, Op::LoadGlobal(name) if is_this_read(name)));
+
     Some(WideProgram {
         ops,
         named_reads,
@@ -623,6 +677,12 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         global_names,
         lexical_slots,
         tdz_marker: crate::Value::Function(crate::Function::uninitialized_lexical_marker()),
+        local_registers: u16::try_from(local_registers).ok()?,
+        own_locals,
+        has_exits: has_exit,
+        activations: std::cell::Cell::new(0),
+        exits: std::cell::Cell::new(0),
+        exit_heavy: std::cell::Cell::new(false),
     })
 }
 
@@ -658,6 +718,25 @@ fn propagate_depths(code: &[Op]) -> Option<Vec<Option<u16>>> {
         }
     }
     Some(entry_depth)
+}
+
+/// Operations this tier does not run but may leave to the interpreter
+/// mid-body: at one of them the activation exits, handing its locals and
+/// operand stack to an interpreter frame that continues from that
+/// instruction (`vm::resume_direct_call_bytecode`). Each depends only on the
+/// frame's locals, stack and environment -- nothing that must have been set
+/// up at entry, such as an `arguments` object, a closure over this frame's
+/// locals, a handler, or a per-iteration scope.
+fn is_exit_safe(op: &Op) -> bool {
+    matches!(
+        op,
+        Op::SetProp { .. }
+            | Op::SetPropIndex { .. }
+            | Op::CallResolvedGuardedMathUnary
+            | Op::RequireObjectCoercible
+            | Op::NewObjectDataLiteral { .. }
+            | Op::AppendStringLiteralLocal { .. }
+    )
 }
 
 fn effect_of(op: &Op) -> Option<Effect> {
@@ -705,6 +784,14 @@ fn effect_of(op: &Op) -> Option<Effect> {
         Op::CallResolved(argc) => simple(u16::try_from(*argc).ok()?.checked_add(2)?, 1),
         Op::Return | Op::Throw => Effect {
             pops: 1,
+            pushes: 0,
+            target: None,
+            falls_through: false,
+        },
+        // An exit ends this tier's view of the path: whatever follows runs
+        // in the interpreter.
+        op if is_exit_safe(op) => Effect {
+            pops: 0,
             pushes: 0,
             target: None,
             falls_through: false,

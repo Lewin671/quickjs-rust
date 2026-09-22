@@ -115,6 +115,9 @@ fn admit<'a>(
     upvalues: crate::bytecode::DirectCallUpvalues<'_>,
 ) -> Option<WideEntry<'a>> {
     let program = super::program_for(bytecode)?;
+    if !program.admit_activation() {
+        return None;
+    }
     let upvalue_slots = bytecode
         .direct_readonly_received_upvalue_slots()
         .unwrap_or(0);
@@ -294,6 +297,80 @@ fn thrown(slot: &mut Value) -> RuntimeError {
     }
 }
 
+/// The arity an exit is spelled with; no call has it (`MAX_CALL_ARITY`).
+const EXIT_ARGC: u8 = u8::MAX;
+
+/// Where a root activation's received cells come from, for an exit to hand
+/// the same source to the interpreter frame. An inlined callee's comes from
+/// its own `Function`.
+#[derive(Clone, Copy)]
+struct RootExit<'a> {
+    upvalues: crate::bytecode::DirectCallUpvalues<'a>,
+    realm_upvalue_slots: u128,
+}
+
+/// Hands the current activation to an interpreter frame that resumes at
+/// bytecode instruction `ip`, and returns that frame's completion value. The
+/// frame is the one the general call path builds for this call -- the same
+/// environment (which admission proved the activation's own), the same
+/// received cells and `this` -- brought to this activation's state.
+#[cold]
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+fn exit_to_interpreter(
+    callee: &Value,
+    root_bytecode: &Bytecode,
+    root: RootExit<'_>,
+    ip: u32,
+    depth: u16,
+    window: &mut [Value],
+    env: &CallEnv,
+    this_value: Option<Value>,
+) -> Result<Value, RuntimeError> {
+    let (upvalues, realm_upvalue_slots) = match callee {
+        Value::Function(function) => (
+            crate::bytecode::DirectCallUpvalues::Function(function),
+            function.realm_upvalue_slots,
+        ),
+        _ => (root.upvalues, root.realm_upvalue_slots),
+    };
+    let bytecode = running_bytecode(callee, root_bytecode);
+    let Some(program) = super::program_for(bytecode) else {
+        return Err(missing_program());
+    };
+    program.record_exit();
+    // `QJS_CF_TRACE=1` names every exit: the body, and the instruction the
+    // interpreter resumes at.
+    #[cfg(feature = "perf-counters")]
+    if std::env::var_os("QJS_CF_TRACE").is_some() {
+        eprintln!(
+            "CFEXIT params=({}) len={} ip {} op {:?}",
+            bytecode.parameter_names().join(","),
+            bytecode.code.len(),
+            ip,
+            bytecode.code.get(ip as usize)
+        );
+    }
+    let local_registers = program.local_registers as usize;
+    let (locals, stack) = window.split_at_mut(local_registers);
+    let slots = DirectCallSlots {
+        this_value,
+        parameter_slots: bytecode.parameter_slots(),
+        arguments: &[],
+        upvalues,
+        realm_upvalue_slots,
+    };
+    crate::bytecode::vm::resume_direct_call_bytecode(
+        bytecode,
+        env.clone(),
+        slots,
+        ip as usize,
+        locals,
+        program.own_locals,
+        &mut stack[..depth as usize],
+    )
+}
+
 fn run(
     bytecode: &Bytecode,
     env: &CallEnv,
@@ -301,6 +378,7 @@ fn run(
     parameter_slots: &[usize],
     arguments: &[Value],
     this_value: Option<Value>,
+    root: RootExit<'_>,
 ) -> Result<Value, RuntimeError> {
     crate::diagnostics::count!(compact_standalone_activations);
     let mut storage = FRAME_STORAGE.with(|cell| cell.take());
@@ -311,6 +389,7 @@ fn run(
         parameter_slots,
         arguments,
         this_value,
+        root,
         &mut storage,
     );
     storage.frames.clear();
@@ -323,7 +402,12 @@ fn run(
 }
 
 /// The frame-stack driver. Exactly one activation is "current", and its
-/// fields are loop locals; a call pushes it and a return pops.
+/// fields are loop locals; a call pushes it and a return pops. Inlined into
+/// `run`, as it always was before exits enlarged it: the split changed the
+/// dispatch loop's register allocation (docs/performance-knowledge.md,
+/// "Codegen").
+#[inline(always)]
+#[allow(clippy::too_many_arguments)]
 fn run_frames(
     root_bytecode: &Bytecode,
     env: &CallEnv,
@@ -331,6 +415,7 @@ fn run_frames(
     parameter_slots: &[usize],
     arguments: &[Value],
     root_this: Option<Value>,
+    root: RootExit<'_>,
     storage: &mut FrameStorage,
 ) -> Result<Value, RuntimeError> {
     let registers = &mut storage.registers;
@@ -636,10 +721,45 @@ fn run_frames(
                     WideOp::Throw { src } => {
                         break Err(thrown(&mut window[src as usize]));
                     }
+                    // Spelled as a call with an arity no call has, so the
+                    // driver's action type and its match stay exactly as they
+                    // were: growing either re-rolls this loop's register
+                    // allocation (docs/performance-knowledge.md, "Codegen").
+                    WideOp::Exit { ip, depth } => {
+                        break Ok(Action::Call {
+                            dst: depth,
+                            base: 0,
+                            argc: EXIT_ARGC,
+                            resume_pc: ip as usize,
+                        });
+                    }
                 }
             }
         };
         let action = match outcome {
+            Ok(Action::Call {
+                dst: depth,
+                argc: EXIT_ARGC,
+                resume_pc: ip,
+                ..
+            }) => {
+                match exit_to_interpreter(
+                    &current_callee,
+                    root_bytecode,
+                    root,
+                    ip as u32,
+                    depth,
+                    &mut registers[current_base..current_base + current_len],
+                    env,
+                    current_this.take(),
+                ) {
+                    Ok(value) => Action::Return(value),
+                    Err(error) => {
+                        unwind(registers, frames, current_base + current_len);
+                        return Err(error);
+                    }
+                }
+            }
             Ok(action) => action,
             Err(error) => {
                 unwind(registers, frames, current_base + current_len);
@@ -943,6 +1063,10 @@ pub(in crate::bytecode) fn try_run_standalone(
     }
     let call_env = env.take()?;
     let call_slots = slots.take()?;
+    let root = RootExit {
+        upvalues: call_slots.upvalues,
+        realm_upvalue_slots: call_slots.realm_upvalue_slots,
+    };
     Some(run(
         bytecode,
         &call_env,
@@ -950,6 +1074,7 @@ pub(in crate::bytecode) fn try_run_standalone(
         call_slots.parameter_slots,
         call_slots.arguments,
         call_slots.this_value,
+        root,
     ))
 }
 
@@ -968,6 +1093,12 @@ pub(crate) fn try_run_in_caller_env(
         return None;
     }
     crate::diagnostics::count!(compact_caller_env_calls);
+    let root = RootExit {
+        upvalues,
+        realm_upvalue_slots: upvalues
+            .function()
+            .map_or(0, |function| function.realm_upvalue_slots),
+    };
     Some(run(
         bytecode,
         env,
@@ -975,6 +1106,7 @@ pub(crate) fn try_run_in_caller_env(
         bytecode.parameter_slots(),
         arguments,
         None,
+        root,
     ))
 }
 

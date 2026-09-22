@@ -1,0 +1,76 @@
+{
+  "schema_version": 2,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "wide-tier-interpreter-exits",
+  "base_sha": "93f98a4acc1f59b4d6907218c4353408f639c922",
+  "queue": {
+    "candidate_sha": "93f98a4acc1f59b4d6907218c4353408f639c922",
+    "sha256": "64135e0bd75d49e3defdfe6324990117e1fc9f992cbce9880c05a9f285fadc3e"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/cdjs"
+    ],
+    "rank_ceiling": 2,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Let the wide compact tier run a body up to an instruction it does not implement, then hand its locals and operand stack to an interpreter frame built exactly as the general call path builds it, which resumes at that instruction (vm::resume_direct_call_bytecode). Exits replace whole-body declines for computed stores, guarded Math calls, object literals, RequireObjectCoercible and literal appends, and for the backward edges of loops an accelerator claims or in-place fusion rewrote; bodies whose lowering only fuses instructions are admitted. A program that exits on three activations in four after 64 is left to the general path. Plan written after exploratory screens of this implementation; targets are the queue's two top opportunities, named by the CF trace, not cases picked from screen results.",
+    "generality": "Every direct-leaf body that is representable except for a rare path or a loop pays a full interpreter frame per call today; corpus-wide CF traces count 1.14M such frames for claimed loops, 0.73M for fusion-lowered bodies, 0.27M for guarded Math and 0.26M for computed stores. The exit reuses the interpreter's own semantics for everything past it, so nothing is reimplemented.",
+    "semantic_risks": [
+      "Locals, lexical dead zones and operand stack must reach the interpreter frame exactly, including parameters read only past the exit",
+      "The resumed frame must see the same environment, received cells and receiver as a frame built at entry",
+      "Loop accelerators must still claim a loop reached through an exit at its backward edge",
+      "Errors thrown past an exit must propagate to the caller's handlers unchanged"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "jetstream3-js-subset--hash-map/receipt.json",
+      "sha256": "c9307a0ff6d8ad55f3e73342846cc1e9caeafb0dee10b3f49c3b46fea57bce0a",
+      "base_sha": "93f98a4acc1f59b4d6907218c4353408f639c922",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/hash-map"
+      ],
+      "shared_cost": "Exact queue-candidate binary, one-second sample of the official bundle. QJS_CF_TRACE on the same source names computeHashCode (declined for a loop that never runs on number keys) behind 540k general-path frames and the entry-set iterator behind 180k; each builds a Vm, CallEnv and locals.",
+      "inclusive_fraction": 0.2
+    },
+    {
+      "source": "jetstream3-js-subset--cdjs/receipt.json",
+      "sha256": "8d33bc7b08a8657c9f390dbb1bdfcc486944aa03dd916cd8954a6c67f100ccb1",
+      "base_sha": "93f98a4acc1f59b4d6907218c4353408f639c922",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/cdjs"
+      ],
+      "shared_cost": "Exact queue-candidate binary, one-second sample of the official bundle. QJS_CF_TRACE counts 933k general-path frames, 701k of them for bodies declined only because in-place instruction fusion rewrote them.",
+      "inclusive_fraction": 0.2
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/cdjs"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/bitops-bits-in-byte",
+      "external/sunspider-1.0/access-binary-trees",
+      "external/sunspider-1.0/crypto-md5",
+      "external/kraken-1.1/ai-astar",
+      "external/jetstream3-js-subset/raytrace-public-class-fields",
+      "external/kraken-1.1/json-parse-financial",
+      "external/sunspider-1.0/string-tagcloud",
+      "broad/property_read"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

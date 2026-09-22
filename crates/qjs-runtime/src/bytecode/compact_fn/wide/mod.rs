@@ -75,6 +75,13 @@ enum WideOp {
     Return {
         src: u16,
     },
+    /// Leaves the rest of this activation to the interpreter, which resumes
+    /// at bytecode instruction `ip` with this activation's locals and its
+    /// `depth` operand-stack registers.
+    Exit {
+        ip: u32,
+        depth: u16,
+    },
     /// Throws the register's value. Admitted bodies contain no handlers, so a
     /// throw always leaves the frame, exactly as a thrown callee error does.
     Throw {
@@ -226,6 +233,51 @@ pub(in crate::bytecode) struct WideProgram {
     /// The marker every cleared lexical register holds; one allocation per
     /// program rather than one per clear.
     tdz_marker: crate::Value,
+    /// Registers `0..local_registers` hold locals; the operand stack follows.
+    local_registers: u16,
+    /// The locals an exit hands to the interpreter frame (see `WideOp::Exit`).
+    own_locals: u128,
+    /// Whether any path can exit; only such programs keep exit statistics.
+    has_exits: bool,
+    /// Activations and exits of this program, counted until it is judged.
+    activations: std::cell::Cell<u32>,
+    exits: std::cell::Cell<u32>,
+    /// Set once a program has exited on most activations: an exit costs the
+    /// interpreter frame the general path would have built plus the work run
+    /// here first, so such a body is left to the general path from then on.
+    exit_heavy: std::cell::Cell<bool>,
+}
+
+/// Activations observed before a program's exit rate is judged.
+const EXIT_JUDGEMENT_ACTIVATIONS: u32 = 64;
+
+impl WideProgram {
+    /// Counts one activation; `false` once the program has proved exit-heavy.
+    #[inline]
+    pub(super) fn admit_activation(&self) -> bool {
+        if !self.has_exits {
+            return true;
+        }
+        if self.exit_heavy.get() {
+            return false;
+        }
+        let activations = self.activations.get();
+        if activations < EXIT_JUDGEMENT_ACTIVATIONS {
+            self.activations.set(activations + 1);
+        }
+        true
+    }
+
+    /// Counts one exit and judges the program after enough activations: at
+    /// three exits in four it is exit-heavy.
+    pub(super) fn record_exit(&self) {
+        let exits = self.exits.get().saturating_add(1);
+        self.exits.set(exits);
+        let activations = self.activations.get();
+        if activations >= EXIT_JUDGEMENT_ACTIVATIONS && exits.saturating_mul(4) >= activations * 3 {
+            self.exit_heavy.set(true);
+        }
+    }
 }
 
 impl std::fmt::Debug for WideProgram {

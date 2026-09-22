@@ -122,6 +122,57 @@ pub(super) fn eval_direct_call_bytecode(
     value
 }
 
+/// Continues, in the interpreter, a slot-seeded direct call the wide compact
+/// tier began: the tier reached an instruction it leaves to the interpreter
+/// (an operation outside its set, or the backward edge of a loop a loop
+/// accelerator claims) and hands over its locals and operand stack.
+///
+/// The frame is built exactly as `eval_direct_call_bytecode` builds it for
+/// the same call, then brought to the state the tier had reached: what the
+/// `FunctionPrologueEnd` at instruction 0 does, the tier's own locals (its
+/// temporal-dead-zone marker becoming an uninitialized slot), and the stack.
+/// Admitted bodies run no lowered program, so `ip` indexes the code this
+/// frame executes.
+pub(in crate::bytecode) fn resume_direct_call_bytecode(
+    bytecode: &Bytecode,
+    env: CallEnv,
+    direct_call_slots: DirectCallSlots<'_>,
+    ip: usize,
+    locals: &mut [Value],
+    own_locals: u128,
+    stack: &mut [Value],
+) -> Result<Value, RuntimeError> {
+    let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
+        bytecode,
+        env,
+        Vec::new(),
+        Vec::new(),
+        Some(direct_call_slots),
+    );
+    vm.enter_body_deopt_scope();
+    for (slot, register) in locals.iter_mut().enumerate() {
+        if slot >= u128::BITS as usize || own_locals & (1_u128 << slot) == 0 {
+            continue;
+        }
+        let value = std::mem::replace(register, Value::Undefined);
+        if let Some(target) = vm.current.locals.get_mut(slot) {
+            *target = (!value.is_uninitialized_lexical_marker()).then_some(value);
+        }
+    }
+    for register in stack {
+        vm.current
+            .stack
+            .push(std::mem::replace(register, Value::Undefined));
+    }
+    vm.current.ip = ip;
+    let value = vm.run();
+    bytecode.recycle_local_slots(std::mem::take(&mut vm.current.locals));
+    if let Some(cold) = vm.current.cold.take() {
+        bytecode.recycle_cold_frame(cold);
+    }
+    value
+}
+
 pub(super) struct FrameState<'a> {
     pub(super) bytecode: FrameBytecode<'a>,
     /// Whether this frame may run the lowered stream that also virtualizes
