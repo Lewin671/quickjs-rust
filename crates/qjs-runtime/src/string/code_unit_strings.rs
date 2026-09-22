@@ -30,6 +30,40 @@ impl CodeUnitStrings {
     }
 }
 
+/// Indices whose property keys a String object shares instead of allocating.
+const SHARED_INDEX_KEYS: usize = 64;
+
+/// Property keys every boxed String installs, allocated once per realm: the
+/// internal data key, `length`, and the first indices. Installing them by
+/// shared handle skips the two allocations each owned key cost (the
+/// `String` and its `Rc<str>` copy). Keys are immutable and hold nothing.
+#[derive(Default)]
+pub(crate) struct StringObjectKeys {
+    data: OnceCell<std::rc::Rc<str>>,
+    length: OnceCell<std::rc::Rc<str>>,
+    indices: OnceCell<Box<[OnceCell<std::rc::Rc<str>>; SHARED_INDEX_KEYS]>>,
+}
+
+impl StringObjectKeys {
+    pub(crate) fn data(&self) -> std::rc::Rc<str> {
+        std::rc::Rc::clone(self.data.get_or_init(|| super::STRING_DATA_PROPERTY.into()))
+    }
+
+    pub(crate) fn length(&self) -> std::rc::Rc<str> {
+        std::rc::Rc::clone(self.length.get_or_init(|| "length".into()))
+    }
+
+    pub(crate) fn index(&self, index: usize) -> std::rc::Rc<str> {
+        if index >= SHARED_INDEX_KEYS {
+            return index.to_string().into();
+        }
+        let entries = self
+            .indices
+            .get_or_init(|| Box::new(std::array::from_fn(|_| OnceCell::new())));
+        std::rc::Rc::clone(entries[index].get_or_init(|| index.to_string().into()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -73,5 +107,24 @@ mod tests {
         assert!(!value.is_ascii());
         assert_eq!(first.get(u16::from(b'A')).as_str(), "A");
         assert_eq!(second.get(u16::from(b'A')).as_str(), "A");
+    }
+}
+
+#[cfg(test)]
+mod key_tests {
+    use super::*;
+
+    #[test]
+    fn shares_the_first_index_keys_and_builds_the_rest() {
+        let keys = StringObjectKeys::default();
+        assert!(std::rc::Rc::ptr_eq(&keys.index(3), &keys.index(3)));
+        assert_eq!(&*keys.index(3), "3");
+        assert_eq!(
+            &*keys.index(SHARED_INDEX_KEYS),
+            SHARED_INDEX_KEYS.to_string()
+        );
+        assert!(!std::rc::Rc::ptr_eq(&keys.index(100), &keys.index(100)));
+        assert_eq!(&*keys.length(), "length");
+        assert_eq!(&*keys.data(), crate::string::STRING_DATA_PROPERTY);
     }
 }

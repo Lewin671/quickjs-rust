@@ -8,8 +8,9 @@ mod iterator;
 mod property;
 mod prototype;
 
-pub(crate) use code_unit_strings::CodeUnitStrings;
+pub(crate) use code_unit_strings::{CodeUnitStrings, StringObjectKeys};
 
+pub(crate) use constructor::define_string_data;
 pub(super) use constructor::{
     is_string_object, native_string, native_string_from_char_code, native_string_from_code_point,
     native_string_raw, string_from_code_point_numbers, string_object_value,
@@ -44,7 +45,7 @@ pub(crate) const STRING_DATA_PROPERTY: &str = "\0StringData";
 const SURROGATE_ESCAPE_SENTINEL_BASE: u32 = 0xF0000;
 
 /// Iterates the UTF-16 code units of a stored string without allocating.
-fn code_units(value: &str) -> impl Iterator<Item = u16> + '_ {
+pub(crate) fn code_units(value: &str) -> impl Iterator<Item = u16> + '_ {
     value.chars().flat_map(|character| {
         let mut buffer = [0_u16; 2];
         let units: &[u16] = match surrogate_escape_code_unit(character) {
