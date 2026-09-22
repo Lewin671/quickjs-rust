@@ -465,6 +465,21 @@ QJS_TL_TRACE=1 ./target/perf-counters/release/qjs case.js 2>&1 >/dev/null \
          END { for (r in n) print n[r], r, why[r] }' | sort -rn | head
 ```
 
+Calls have the same kind of trace. With `QJS_CF_TRACE=1` the build prints
+one line per function body the wide compact tier compiles (`CFOK`) or
+declines (`CFDECLINE`, naming the instruction and the reason), and one line
+per general-path frame it had to build (`CFVM`), each identified by the
+body's parameter names and length. A histogram of `CFVM` ranks the callees
+that still pay for a full interpreter frame; the matching `CFDECLINE` line
+says what keeps each one out:
+
+```sh
+QJS_CF_TRACE=1 ./target/perf-counters/release/qjs case.js 2>&1 >/dev/null \
+  | grep '^CFVM' | sort | uniq -c | sort -rn | head
+QJS_CF_TRACE=1 ./target/perf-counters/release/qjs case.js 2>&1 >/dev/null \
+  | grep '^CFDECLINE'
+```
+
 This is what the two suites report for a nominal 100,000 iterations:
 
 | Case | Suite | Claims | Real calls | Real property ops | Declined plan edges |

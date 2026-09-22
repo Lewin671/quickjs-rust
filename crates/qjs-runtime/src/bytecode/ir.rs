@@ -1107,6 +1107,15 @@ impl Bytecode {
         &self.parameter_slots
     }
 
+    /// Parameter names in slot order; diagnostics use them to identify a body.
+    #[cfg(feature = "perf-counters")]
+    pub(crate) fn parameter_names(&self) -> Vec<&str> {
+        self.parameter_slots
+            .iter()
+            .filter_map(|&slot| self.locals.get(slot).map(|local| local.name.as_str()))
+            .collect()
+    }
+
     pub(crate) fn received_upvalue_slots(&self) -> &[usize] {
         &self.received_upvalue_slots
     }

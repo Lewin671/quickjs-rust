@@ -27,20 +27,46 @@ fn is_this_read(name: &str) -> bool {
     name == "this"
 }
 
+/// Why a body was declined: the instruction (if one is to blame) and a
+/// reason. Only diagnostic builds read it (`QJS_CF_TRACE`, see
+/// docs/benchmarking.md "Execution counters").
+#[derive(Debug, Default)]
+#[cfg_attr(not(feature = "perf-counters"), allow(dead_code))]
+pub(super) struct Decline {
+    pub(super) ip: Option<usize>,
+    pub(super) reason: &'static str,
+}
+
+fn decline<T>(trace: &mut Decline, ip: Option<usize>, reason: &'static str) -> Option<T> {
+    *trace = Decline { ip, reason };
+    None
+}
+
 pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
+    compile_traced(bytecode, &mut Decline::default())
+}
+
+/// `compile`, recording in `trace` why a declined body was declined. A
+/// representation limit hit while lowering an admitted body (an index that
+/// does not fit its field) leaves the reason "lowering limit".
+pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option<WideProgram> {
+    *trace = Decline {
+        ip: None,
+        reason: "lowering limit",
+    };
     // Bodies that suspend, catch, or resolve names dynamically keep the
     // ordinary interpreter: this tier has no completion protocol beyond
     // return-or-propagate.
     if bytecode.contains_direct_eval() || bytecode.contains_with() || bytecode.global_scope {
-        return None;
+        return decline(trace, None, "direct eval, with, or global code");
     }
     let code = &bytecode.code;
     if code.is_empty() {
-        return None;
+        return decline(trace, None, "empty body");
     }
     let local_count = bytecode.locals.len();
     if local_count >= MAX_REGISTERS {
-        return None;
+        return decline(trace, None, "too many locals");
     }
     let upvalue_slots = bytecode
         .direct_readonly_received_upvalue_slots()
@@ -51,13 +77,13 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
     let mut initialized_slots = upvalue_slots;
     for &slot in bytecode.parameter_slots() {
         if slot >= u128::BITS as usize {
-            return None;
+            return decline(trace, None, "parameter slot beyond 128");
         }
         initialized_slots |= 1_u128 << slot;
     }
     for &slot in bytecode.hoisted_slots() {
         if slot >= u128::BITS {
-            return None;
+            return decline(trace, None, "hoisted slot beyond 128");
         }
         initialized_slots |= 1_u128 << slot;
     }
@@ -65,7 +91,7 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
     // Validate every instruction, including unreachable ones: the opcode set
     // is closed, not the reachability analysis.
     if !matches!(code[0], Op::FunctionPrologueEnd) {
-        return None;
+        return decline(trace, None, "no FunctionPrologueEnd at ip 0");
     }
     let slot_is_initialized_local = |slot: usize| -> bool {
         slot < local_count
@@ -93,9 +119,13 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
         })
     };
     for (ip, op) in code.iter().enumerate() {
-        effect_of(op)?;
+        if effect_of(op).is_none() {
+            return decline(trace, Some(ip), "operation not in this tier");
+        }
         match op {
-            Op::FunctionPrologueEnd if ip != 0 => return None,
+            Op::FunctionPrologueEnd if ip != 0 => {
+                return decline(trace, Some(ip), "FunctionPrologueEnd after ip 0");
+            }
             // Backward edges are loops. The operand-stack depth at the target
             // is checked by `propagate_depths`, and a loop grows no frames --
             // a backward jump only moves the program counter -- so a loop
@@ -104,9 +134,11 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
             Op::Jump(target) | Op::JumpIfFalse(target) | Op::JumpIfTrue(target)
                 if *target > code.len() =>
             {
-                return None;
+                return decline(trace, Some(ip), "jump target out of range");
             }
-            Op::LoadConst(index) if *index >= bytecode.constants.len() => return None,
+            Op::LoadConst(index) if *index >= bytecode.constants.len() => {
+                return decline(trace, Some(ip), "constant index out of range");
+            }
             // A fused receiver local must be readable exactly like a
             // `LoadLocal`: filled on entry, or an own lexical behind its
             // marker.
@@ -115,33 +147,39 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
                     && !slot_is_initialized_local(slot)
                     && !slot_is_lexical(slot)
                 {
-                    return None;
+                    return decline(trace, Some(ip), "fused receiver local not initialized");
                 }
             }
             Op::GetPropIndex(encoded) => {
                 let (index, local_slot) = crate::bytecode::ir::decode_index_receiver(*encoded);
                 if u16::try_from(index).is_err() {
-                    return None;
+                    return decline(trace, Some(ip), "index out of range");
                 }
                 if let Some(slot) = local_slot
                     && !slot_is_initialized_local(slot)
                     && !slot_is_lexical(slot)
                 {
-                    return None;
+                    return decline(trace, Some(ip), "indexed receiver local not initialized");
                 }
             }
             Op::LoadLocal(slot) if !slot_is_initialized_local(*slot) && !slot_is_lexical(*slot) => {
-                return None;
+                return decline(
+                    trace,
+                    Some(ip),
+                    "local read may be uninitialized (TDZ or received cell)",
+                );
             }
-            Op::ClearLocal(slot) if !slot_is_lexical(*slot) => return None,
+            Op::ClearLocal(slot) if !slot_is_lexical(*slot) => {
+                return decline(trace, Some(ip), "clear of a non-lexical slot");
+            }
             // A declaration store initializes an own lexical (`const`
             // included) or writes one of the frame's own hoisted bindings.
             Op::StoreLocal(slot) => {
                 if *slot >= local_count || *slot >= u128::BITS as usize {
-                    return None;
+                    return decline(trace, Some(ip), "store slot out of range");
                 }
                 if upvalue_slots & (1_u128 << *slot) != 0 {
-                    return None;
+                    return decline(trace, Some(ip), "store to a received upvalue");
                 }
                 if !slot_is_lexical(*slot)
                     && !bytecode
@@ -149,7 +187,7 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
                         .get(*slot)
                         .is_some_and(|local| local.mutable && slot_is_own_binding(*slot))
                 {
-                    return None;
+                    return decline(trace, Some(ip), "store to a non-own or immutable binding");
                 }
             }
             // An assignment expression writes a mutable own binding: a hoisted
@@ -159,15 +197,15 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
             // binding and keeps the interpreter.
             Op::AssignLocal(slot) => {
                 if *slot >= local_count || *slot >= u128::BITS as usize {
-                    return None;
+                    return decline(trace, Some(ip), "assign slot out of range");
                 }
                 if upvalue_slots & (1_u128 << *slot) != 0 {
-                    return None;
+                    return decline(trace, Some(ip), "assign to a received upvalue");
                 }
                 if !bytecode.locals.get(*slot).is_some_and(|local| {
                     local.mutable && (slot_is_own_binding(*slot) || slot_is_lexical(*slot))
                 }) {
-                    return None;
+                    return decline(trace, Some(ip), "assign to a non-own or immutable binding");
                 }
             }
             Op::NewArray { elements }
@@ -175,12 +213,16 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
                     matches!(element, crate::bytecode::ir::ArrayElementKind::Expr)
                 }) || u16::try_from(elements.len()).is_err() =>
             {
-                return None;
+                return decline(trace, Some(ip), "array literal with holes or spreads");
             }
-            Op::New(argc) if *argc > MAX_CALL_ARITY => return None,
+            Op::New(argc) if *argc > MAX_CALL_ARITY => {
+                return decline(trace, Some(ip), "construct arity above the limit");
+            }
             // The register window passes any arity; see the numeric tier's
             // `MAX_CALL_ARITY` for why it is bounded at all.
-            Op::Call(argc) | Op::CallResolved(argc) if *argc > MAX_CALL_ARITY => return None,
+            Op::Call(argc) | Op::CallResolved(argc) if *argc > MAX_CALL_ARITY => {
+                return decline(trace, Some(ip), "call arity above the limit");
+            }
             _ => {}
         }
     }
@@ -198,7 +240,7 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
         )
     });
     if has_backward_edge && body_has_loop_accelerator(bytecode) {
-        return None;
+        return decline(trace, None, "loop claimed by a loop accelerator");
     }
     // Likewise a body the interpreter's virtual-object lowering rewrites --
     // an object or array literal it can keep in slots instead of allocating
@@ -208,10 +250,12 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
         .get_or_init(|| crate::bytecode::virtual_object::lower(bytecode))
         .lowers_anything()
     {
-        return None;
+        return decline(trace, None, "virtual-object lowering rewrites this body");
     }
 
-    let entry_depth = propagate_depths(code)?;
+    let Some(entry_depth) = propagate_depths(code) else {
+        return decline(trace, None, "inconsistent operand-stack depth");
+    };
     let stack_registers = entry_depth
         .iter()
         .flatten()
@@ -239,7 +283,7 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
         .min(local_count);
     let register_count = local_registers.checked_add(stack_registers)?;
     if register_count > MAX_REGISTERS {
-        return None;
+        return decline(trace, None, "too many registers");
     }
 
     let mut ops = Vec::with_capacity(code.len());
@@ -550,7 +594,7 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
             Op::Return => ops.push(WideOp::Return {
                 src: register(depth.checked_sub(1)?),
             }),
-            _ => return None,
+            _ => return decline(trace, Some(ip), "operation not lowered"),
         }
     }
     compact_index[code.len()] = u32::try_from(ops.len()).ok()?;

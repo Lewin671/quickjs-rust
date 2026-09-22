@@ -239,6 +239,39 @@ impl std::fmt::Debug for WideProgram {
 pub(super) fn program_for(bytecode: &Bytecode) -> Option<&WideProgram> {
     bytecode
         .compact_wide_program
-        .get_or_init(|| compile::compile(bytecode))
+        .get_or_init(|| {
+            #[cfg(feature = "perf-counters")]
+            if std::env::var_os("QJS_CF_TRACE").is_some() {
+                let mut decline = compile::Decline::default();
+                let program = compile::compile_traced(bytecode, &mut decline);
+                trace_decline(bytecode, program.is_none().then_some(&decline));
+                return program;
+            }
+            compile::compile(bytecode)
+        })
         .as_ref()
+}
+
+/// Diagnostic builds with `QJS_CF_TRACE=1` name every body this tier
+/// compiles (`CFOK`) or declines (`CFDECLINE`, with the instruction and the
+/// reason). Bodies are identified by their parameter names and length; join
+/// the lines with `nested_vm_constructions` to find which callees still take
+/// the general call path.
+#[cfg(feature = "perf-counters")]
+fn trace_decline(bytecode: &Bytecode, decline: Option<&compile::Decline>) {
+    let params = bytecode.parameter_names().join(",");
+    let len = bytecode.code.len();
+    match decline {
+        None => eprintln!("CFOK wide params=({params}) len={len}"),
+        Some(decline) => {
+            let op = decline
+                .ip
+                .and_then(|ip| bytecode.code.get(ip).map(|op| format!("ip {ip} op {op:?}")))
+                .unwrap_or_else(|| "whole body".to_string());
+            eprintln!(
+                "CFDECLINE wide params=({params}) len={len} {op}: {}",
+                decline.reason
+            );
+        }
+    }
 }
