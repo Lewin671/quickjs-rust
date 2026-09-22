@@ -216,7 +216,7 @@ changed.
    is dominated by hard-hinted broad areas, switch to the next unchecked
    slice of the highest-priority campaign task in `tasks/README.md` instead
    of re-running global probes. For performance work, read
-   `docs/performance-workflow.md`, then
+   `docs/performance-knowledge.md` and `docs/performance-workflow.md`, then
    `tasks/T022-performance-priority-controller.md`, and use the current exact
    evidence queue and validated unit plan to select work. Historical task
    order or an old "next" label does not establish current priority.

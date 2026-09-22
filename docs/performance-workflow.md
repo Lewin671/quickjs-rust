@@ -3,7 +3,8 @@
 The objective is a generally faster, correct engine. No single microbenchmark
 or geometric mean establishes that result. Keep the three performance lanes
 separate, and inspect resource measurements before a production-performance
-claim:
+claim. Durable measurement and codegen rules that apply to every lane are in
+[performance-knowledge.md](performance-knowledge.md).
 
 | Lane | Question | Acceptance use |
 | --- | --- | --- |
