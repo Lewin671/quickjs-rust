@@ -86,6 +86,12 @@ each script is for.
   `--policy` input is structural only; checked-in-only `--require-gate` always
   fails for `nightly`, `release`, and `pr_sentinel` in v2. It neither calibrates
   hardware nor runs or enables a performance gate.
+- `perf-compare.sh`: Formal three-engine comparison on this host. Builds
+  candidate and base at exact commits in clean worktrees (cached under
+  `target/perf-loop/rev-<sha>/`), verifies the pinned QuickJS-NG build,
+  writes receipts with `tools.benchmark.local_receipt` (which refuses a
+  toolchain or reference checkout that differs from the frozen recipe), and
+  runs `python3 -m tools.benchmark.compare`.
 - `perf-loop.sh`: Local inner loop for a performance unit. Builds the plan's
   (or `--base` ref's) executable once per commit under `target/perf-loop/`,
   builds the working-tree candidate, runs the hardware-counter screen with the

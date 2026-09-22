@@ -42,6 +42,8 @@ performance loop below is the contract.
 - Burndown recorder: `./scripts/test262-burndown.sh --report <dir> | --entry <file>`
 - Performance inner loop (counter screen, symbol sizes, optional trace):
   `./scripts/perf-loop.sh --plan tasks/performance-units/<unit>.json`
+- Formal local comparison (feeds queue/decide):
+  `./scripts/perf-compare.sh --base <sha> --output-dir target/comparison/<run>`
 - Source size report: `./scripts/source-size-report.sh [limit] [--vendor]`
 - Agent worktree: `./scripts/create-agent-worktree.sh <task-slug> <owner-id> [base-ref]`
 - Branch scope check: `./scripts/validate-agent-branch.sh <branch> <base-sha> <path>...`

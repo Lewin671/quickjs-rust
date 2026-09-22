@@ -24,7 +24,8 @@ usage: scripts/perf-loop.sh (--plan <unit.json> | --base <git-ref>) [options]
                        perf-counters build of the working tree
   --require-quiet      refuse to screen while the load average is high
 
-The base executable is cached per commit under target/perf-loop/.
+The base executable is built in a clean worktree and cached per commit under
+target/perf-loop/rev-<sha>/.
 EOF
 }
 
@@ -65,21 +66,10 @@ if [ -n "$plan" ]; then
 fi
 base_sha="$(git rev-parse --verify "${base_ref}^{commit}")"
 
-cache_dir="$ROOT_DIR/target/perf-loop"
-base_bin="$cache_dir/base-$base_sha/qjs"
-if [ ! -x "$base_bin" ]; then
-  echo "perf-loop: building base $base_sha" >&2
-  worktree="$(mktemp -d "${TMPDIR:-/tmp}/qjs-perf-loop-base.XXXXXX")"
-  rmdir "$worktree"
-  git worktree add --detach --quiet "$worktree" "$base_sha"
-  trap 'git -C "$ROOT_DIR" worktree remove --force "$worktree" 2>/dev/null || true' EXIT
-  (cd "$worktree" && "$cargo_bin" build --release -p qjs-cli --target-dir "$cache_dir/build-base" --quiet)
-  mkdir -p "$(dirname "$base_bin")"
-  cp "$cache_dir/build-base/release/qjs" "$base_bin.tmp"
-  mv "$base_bin.tmp" "$base_bin"
-  git worktree remove --force "$worktree"
-  trap - EXIT
-fi
+base_bin="$(qjs_build_revision "$ROOT_DIR" "$cargo_bin" "$base_sha")" || {
+  echo "error: cannot build base $base_sha" >&2
+  exit 1
+}
 
 echo "perf-loop: building candidate from the working tree" >&2
 "$cargo_bin" build --release -p qjs-cli --quiet

@@ -22,7 +22,17 @@ on the sentinel alone.
 
 ## One complete local comparison
 
-Build candidate, comparison base and the pinned NG reference separately. Use
+On the development host, one command builds candidate and base at exact
+commits in clean worktrees (cached per commit), verifies the pinned QuickJS-NG
+build, writes truthful receipts, and runs the comparison below:
+
+```sh
+./scripts/perf-compare.sh --base <plan base_sha> --candidate <commit> \
+  --blocks 30 --output-dir target/comparison/run-001
+```
+
+The rest of this section describes what it runs. Build candidate, comparison
+base and the pinned NG reference separately. Use
 verified build receipts matching the measurement manifests, as described in
 [benchmarking.md](benchmarking.md#running). Do not reuse a receipt after
 rebuilding an executable. The checked-in manifests describe macOS arm64; a

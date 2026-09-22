@@ -112,3 +112,29 @@ qjs_build_cli_bin() {
   fi
   printf '%s\n' "$bin"
 }
+
+# Builds qjs-cli (release) for one exact commit in a clean detached worktree
+# and caches the executable as target/perf-loop/rev-<sha>/qjs; echoes its path.
+# A clean worktree is what lets a build receipt state `dirty: false`. Usage:
+#   bin="$(qjs_build_revision "$ROOT_DIR" "$cargo_bin" <sha>)"
+qjs_build_revision() {
+  local root="$1" cargo_bin="$2" sha="$3"
+  local cache="$root/target/perf-loop"
+  local bin="$cache/rev-$sha/qjs"
+  if [ ! -x "$bin" ]; then
+    local worktree
+    worktree="$(mktemp -d "${TMPDIR:-/tmp}/qjs-rev-build.XXXXXX")" || return 1
+    rmdir "$worktree"
+    echo "building qjs at $sha" >&2
+    git -C "$root" worktree add --detach --quiet "$worktree" "$sha" || return 1
+    if ! (cd "$worktree" && "$cargo_bin" build --release -p qjs-cli \
+        --target-dir "$cache/build-rev" --quiet >&2); then
+      git -C "$root" worktree remove --force "$worktree"
+      return 1
+    fi
+    mkdir -p "$(dirname "$bin")"
+    cp "$cache/build-rev/release/qjs" "$bin.tmp" && mv "$bin.tmp" "$bin"
+    git -C "$root" worktree remove --force "$worktree"
+  fi
+  printf '%s\n' "$bin"
+}
