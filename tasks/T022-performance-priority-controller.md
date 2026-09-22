@@ -124,9 +124,13 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
 
 The next runtime optimization starts by generating a queue from the exact
 parent revision's preview artifact and profiling the top external opportunities.
-It may proceed only after its plan passes `validate-unit`. Two failed fast
-screens close that mechanism and require a new profile; they do not justify a
-third variation of the same leaf specialization.
+It may proceed only after its plan passes `validate-unit`. Each implementation
+attempt is first checked with the hardware-counter screen; only a passing
+screen spends a formal run, and screened units planned from the same queue may
+share one batched promotion run (gates and batching rules in
+[the performance workflow](../docs/performance-workflow.md#screen-gate)). Two
+failed screens close that mechanism and require a new profile; they do not
+justify a third variation of the same leaf specialization.
 
 A neutrality control must execute the path it is guarding. Broad portfolio
 cases do not: at 100,000 nominal iterations `plain_function_call` performs five

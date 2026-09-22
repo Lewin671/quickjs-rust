@@ -84,6 +84,28 @@ which needs a kernel that exposes user-space counters. The screen writes no
 decision artifact: its JSON output carries `"decision_evidence": false`, and
 acceptance still follows the formal procedure below.
 
+### Screen gate
+
+The screen runs after the unit plan is frozen (see below), so its cases and
+thresholds come from the plan's `fast_gate`, never from screen results. Screen
+each implementation attempt against the plan's base executable on
+`fast_gate.target_ids`, `fast_gate.control_ids`, and the six sentinels:
+
+- **pass** — every target's median cycles ratio is at most
+  `target_max_candidate_over_base` and every one of its pairs is below 1.0;
+  every control's and sentinel's median cycles ratio is at most
+  `control_max_candidate_over_base`;
+- **fail** — anything else. Failed screens count against the plan's
+  `max_attempts`, exactly as failed fast gates did. The unit's task file
+  records each screen result in one line; no formal run or decision artifact
+  is produced.
+
+Instructions and wall time are context: an instruction ratio that moves
+opposite to cycles usually means a layout or inlining change (see
+[performance-knowledge.md](performance-knowledge.md#codegen)), which is worth
+understanding before the formal run. Only a passing screen spends a formal
+measurement.
+
 ## Evidence replay and opportunity queue
 
 Keep the generated filenames together in the evidence directory:
@@ -198,6 +220,23 @@ inventory, with consistent result counts. Improving one target cannot hide
 a tenfold regression elsewhere. Migration `stage` uses the same evidence and
 sentinel controls with its predeclared cumulative regression budget; it still
 produces `advance`/`abort`, not a final performance claim.
+
+### Batched promotion
+
+Units that passed the screen and were planned from the same queue share one
+`base_sha`, so one formal run can serve all of them: stack the units on one
+candidate, measure it once against that base, and run `decide` separately
+for each unit's frozen plan against the same bundle and the candidate's
+Test262 burndown. Each decision records the other unit IDs in the batch. The
+formal run then pays for the 30-block measurement and full Test262 once per
+batch instead of once per unit.
+
+Batching never relaxes a unit's gates. Every unit in the batch must pass its
+own targets and controls. If any unit is `rejected` or `inconclusive`, split
+the batch: remeasure each remaining unit on its own candidate before claiming
+it. Each unit's own screen result is what shows that its change, not a
+neighbour's, moved its targets; units whose targets overlap belong in
+separate batches.
 
 `retained` means this optimization passed its unit gates on this experiment.
 It never means the whole engine has surpassed NG. That broader conclusion
