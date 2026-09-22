@@ -56,6 +56,34 @@ interval appears, discard outliers, or pool unrelated runs. The frozen A/A
 noise calibration and hardware-qualification work remains necessary before
 turning this into a public claim or required CI performance gate.
 
+## Counter screen during implementation
+
+Iterate on a change with the counter screen before spending a formal run. It
+compares two executables on hardware counters, which background load barely
+moves, and reports wall time only as context:
+
+```sh
+python3 -m tools.benchmark.screen \
+  --candidate target/release/qjs --base /path/to/base/qjs \
+  --case sentinel --case external/jetstream3-js-subset/hash-map
+python3 -m tools.benchmark.screen --candidate target/release/qjs --aa
+```
+
+`--case` accepts `sentinel`, `broad`, `sentinel/<id>`, `broad/<id>`,
+`external/<suite>/<case>` (fetched into the hash-checked cache) and
+`file:<path>`; the default is the six sentinels. Internal cases calibrate N and
+keep the N-to-2N increment, which removes startup and parsing; external cases
+and scripts are whole-process. Candidate and base must print the same checksum
+or external sentinel, and a missing counter is an error, never a silent
+fallback to wall time. `--aa` screens the candidate against itself to show the
+current host's counter noise. The screen refuses to start above `--max-load`
+(half the logical CPUs by default) unless `--force` is given.
+
+On macOS the counters come from `/usr/bin/time -l`; on Linux from `perf stat`,
+which needs a kernel that exposes user-space counters. The screen writes no
+decision artifact: its JSON output carries `"decision_evidence": false`, and
+acceptance still follows the formal procedure below.
+
 ## Evidence replay and opportunity queue
 
 Keep the generated filenames together in the evidence directory:
