@@ -50,6 +50,17 @@ pub(super) fn get_prop_named(
                 {
                     return Ok(value);
                 }
+                // An inherited getter the interpreter would call directly.
+                if let Some(result) = crate::bytecode::vm_props::direct_leaf_getter(
+                    &object,
+                    key,
+                    env,
+                    env.module_host(),
+                    #[cfg(feature = "agents")]
+                    env.agent_context(),
+                ) {
+                    return result;
+                }
                 let mut call_env = env.empty_frame();
                 let value =
                     crate::bytecode::vm_props::get_property(object.clone(), key, &mut call_env)?;

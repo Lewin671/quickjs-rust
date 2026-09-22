@@ -438,3 +438,22 @@ fn supplying_loop_plans_externally_does_not_change_which_plan_claims_a_site() {
         );
     }
 }
+
+#[test]
+fn an_inherited_getter_read_on_the_wide_tier_builds_no_general_frame() {
+    let (value, counters) = counted(
+        "function Entry(k) { this._key = k; }
+         Entry.prototype = { get key() { return this._key; } };
+         function sum(entries) {
+             var total = 0;
+             for (var i = 0; i < entries.length; i++) total += entries[i].key;
+             return total;
+         }
+         var entries = [];
+         for (var i = 0; i < 100; i++) entries.push(new Entry(i));
+         sum(entries);",
+    );
+    assert_eq!(value, Value::Number(4950.0));
+    assert_eq!(counters.generic_call_frames, 0, "{counters:?}");
+    assert!(counters.nested_vm_constructions <= 2, "{counters:?}");
+}
