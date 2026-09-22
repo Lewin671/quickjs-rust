@@ -5,23 +5,23 @@
   "protocols": {
     "throughput_measurement": {
       "manifest_path": "benchmarks/manifest.json",
-      "protocol_id": "quickjs-measurement-protocol-v8",
-      "protocol_sha256": "ce158c449331f311b2b027367d37df01b6a33a6ddd592937a5146b6d9b715e06"
+      "protocol_id": "quickjs-measurement-protocol-v9",
+      "protocol_sha256": "c4bf9a5b24c880d0349c9a2b94dd1b70c2b620569af7a87ea8959050d006b91a"
     },
     "sentinel_measurement": {
       "manifest_path": "benchmarks/generic-sentinels-manifest.json",
-      "protocol_id": "quickjs-generic-sentinel-protocol-v1",
-      "protocol_sha256": "0d40e1690fe2c5abab85db2f4a3999fd3bfaf6eecdc970570807a7dbd00cf41a"
+      "protocol_id": "quickjs-generic-sentinel-protocol-v2",
+      "protocol_sha256": "d4faefeb4e5d60cceb91e02b089105e7df7c7d50926e1b5a5b465245aa0f5195"
     },
     "throughput_analysis": {
       "manifest_path": "benchmarks/analysis.json",
-      "protocol_id": "quickjs-analysis-protocol-v5",
-      "protocol_sha256": "9353f38eb13a16550bd2d08055000fc1c5e68c453d0e760f5a2c4262f49cd080"
+      "protocol_id": "quickjs-analysis-protocol-v6",
+      "protocol_sha256": "0a59121cee6e7a71098dc0f5aca2712bab6437e07741b692f40923cf93cad176"
     },
     "resource_measurement": {
       "manifest_path": "benchmarks/resources.json",
-      "protocol_id": "quickjs-resource-measurement-protocol-v1",
-      "protocol_sha256": "e1c096a39e78e1087410ef7209f23292628c7e29cbd4598956a9dfc25dd9a5ce"
+      "protocol_id": "quickjs-resource-measurement-protocol-v2",
+      "protocol_sha256": "ea1414c2d37a0468994fc145d484bbc593a0011d4542db89a60479bd626d4d89"
     },
     "resource_analysis": {
       "manifest_path": "benchmarks/resource-analysis.json",
@@ -60,6 +60,7 @@
       "tools/benchmark/external_preview_markdown.py",
       "tools/benchmark/external_report.py",
       "tools/benchmark/hosted_preview.py",
+      "tools/benchmark/measure_lock.py",
       "tools/benchmark/performance_decision.py",
       "tools/benchmark/performance_evaluation.py",
       "tools/benchmark/performance_evidence.py",
@@ -71,7 +72,7 @@
       "tools/benchmark/preview_admission.py",
       "tools/benchmark/preview_sentinel.py"
     ],
-    "aggregate_sha256": "4087b2baf0c61da9c1caf1d64c656686cd0622e051de01d5ecf3b80cac88f8db"
+    "aggregate_sha256": "94ce79f3050b468dc1af59f1bf130979a464f181f220fe2ab267718352648a04"
   },
   "hosted_pr": {
     "tier": "informational_preview",
@@ -136,11 +137,11 @@
           "qualified_fixed_hardware_fingerprint"
         ],
         "required_protocol_sha256": {
-          "throughput_measurement": "ce158c449331f311b2b027367d37df01b6a33a6ddd592937a5146b6d9b715e06",
-          "throughput_analysis": "9353f38eb13a16550bd2d08055000fc1c5e68c453d0e760f5a2c4262f49cd080",
-          "resource_measurement": "e1c096a39e78e1087410ef7209f23292628c7e29cbd4598956a9dfc25dd9a5ce",
+          "throughput_measurement": "c4bf9a5b24c880d0349c9a2b94dd1b70c2b620569af7a87ea8959050d006b91a",
+          "throughput_analysis": "0a59121cee6e7a71098dc0f5aca2712bab6437e07741b692f40923cf93cad176",
+          "resource_measurement": "ea1414c2d37a0468994fc145d484bbc593a0011d4542db89a60479bd626d4d89",
           "resource_analysis": "4d28b20cd3090bdc74a4350774c1d12807458a957ebfe85ae03d286f4b59e14a",
-          "sentinel_measurement": "0d40e1690fe2c5abab85db2f4a3999fd3bfaf6eecdc970570807a7dbd00cf41a"
+          "sentinel_measurement": "d4faefeb4e5d60cceb91e02b089105e7df7c7d50926e1b5a5b465245aa0f5195"
         }
       }
     },
@@ -158,11 +159,11 @@
           "qualified_fixed_hardware_fingerprint"
         ],
         "required_protocol_sha256": {
-          "throughput_measurement": "ce158c449331f311b2b027367d37df01b6a33a6ddd592937a5146b6d9b715e06",
-          "throughput_analysis": "9353f38eb13a16550bd2d08055000fc1c5e68c453d0e760f5a2c4262f49cd080",
-          "resource_measurement": "e1c096a39e78e1087410ef7209f23292628c7e29cbd4598956a9dfc25dd9a5ce",
+          "throughput_measurement": "c4bf9a5b24c880d0349c9a2b94dd1b70c2b620569af7a87ea8959050d006b91a",
+          "throughput_analysis": "0a59121cee6e7a71098dc0f5aca2712bab6437e07741b692f40923cf93cad176",
+          "resource_measurement": "ea1414c2d37a0468994fc145d484bbc593a0011d4542db89a60479bd626d4d89",
           "resource_analysis": "4d28b20cd3090bdc74a4350774c1d12807458a957ebfe85ae03d286f4b59e14a",
-          "sentinel_measurement": "0d40e1690fe2c5abab85db2f4a3999fd3bfaf6eecdc970570807a7dbd00cf41a"
+          "sentinel_measurement": "d4faefeb4e5d60cceb91e02b089105e7df7c7d50926e1b5a5b465245aa0f5195"
         }
       }
     },
@@ -181,11 +182,11 @@
           "qualified_fixed_hardware_fingerprint"
         ],
         "required_protocol_sha256": {
-          "throughput_measurement": "ce158c449331f311b2b027367d37df01b6a33a6ddd592937a5146b6d9b715e06",
-          "throughput_analysis": "9353f38eb13a16550bd2d08055000fc1c5e68c453d0e760f5a2c4262f49cd080",
-          "resource_measurement": "e1c096a39e78e1087410ef7209f23292628c7e29cbd4598956a9dfc25dd9a5ce",
+          "throughput_measurement": "c4bf9a5b24c880d0349c9a2b94dd1b70c2b620569af7a87ea8959050d006b91a",
+          "throughput_analysis": "0a59121cee6e7a71098dc0f5aca2712bab6437e07741b692f40923cf93cad176",
+          "resource_measurement": "ea1414c2d37a0468994fc145d484bbc593a0011d4542db89a60479bd626d4d89",
           "resource_analysis": "4d28b20cd3090bdc74a4350774c1d12807458a957ebfe85ae03d286f4b59e14a",
-          "sentinel_measurement": "0d40e1690fe2c5abab85db2f4a3999fd3bfaf6eecdc970570807a7dbd00cf41a"
+          "sentinel_measurement": "d4faefeb4e5d60cceb91e02b089105e7df7c7d50926e1b5a5b465245aa0f5195"
         }
       }
     }

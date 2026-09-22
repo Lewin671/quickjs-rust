@@ -507,7 +507,7 @@ def _assert_lane_health(report: dict[str, Any], expected_cases: int) -> tuple[st
 def summarize(
     report: dict[str, Any], *, harness_mode: str, harness_revision: str,
 ) -> tuple[str, dict[str, Any]]:
-    if report.get("schema_id") != "quickjs-benchmark-report" or report.get("schema_version") != 3:
+    if report.get("schema_id") != "quickjs-benchmark-report" or report.get("schema_version") != 4:
         raise PreviewError("report has an unsupported schema identity")
     if report.get("claim_eligible") is not False:
         raise PreviewError("hosted preview report must remain non-claim evidence")

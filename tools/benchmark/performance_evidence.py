@@ -14,6 +14,10 @@ ROOT = Path(__file__).resolve().parents[2]
 ROLES = ("candidate", "base", "quickjs-ng")
 MIN_BLOCKS = 30
 MAX_WIDTH = 0.03
+# Promotion judges cycles when every lane carries them: on a shared host they
+# exclude scheduling and frequency noise that wall time includes. Wall time
+# remains the metric wherever counters are unavailable (e.g. hosted Linux).
+METRICS = ("cycles", "wall_time")
 
 
 def inventories() -> dict[str, set[str]]:
@@ -39,7 +43,7 @@ def engine_identity(summary: dict) -> dict:
 
 
 def validate_internal(report: dict, engines: dict, lane: str) -> list[str]:
-    if report.get("schema_id") != "quickjs-benchmark-report" or report.get("schema_version") != 3:
+    if report.get("schema_id") != "quickjs-benchmark-report" or report.get("schema_version") != 4:
         raise PerformanceDecisionError(f"{lane}: unsupported report schema")
     run = _object(report.get("run"), f"{lane}.run")
     rows = run.get("engines", [])
@@ -76,8 +80,8 @@ def validate_bundle(summary: dict, broad: dict, external: dict,
     """Identity mismatch is invalid input; missing/noisy lanes are inconclusive."""
     engines = engine_identity(summary)
     reasons = validate_internal(broad, engines, "broad")
-    if external.get("schema_version") != 2 or external.get("artifact_type") != "quickjs-external-preview-report":
-        raise PerformanceDecisionError("external: requires paired report schema 2; remeasure/replay legacy evidence")
+    if external.get("schema_version") != 3 or external.get("artifact_type") != "quickjs-external-preview-report":
+        raise PerformanceDecisionError("external: requires paired report schema 3; remeasure legacy evidence")
     if external.get("binary_sha256") != {role: engines[role]["binary_sha256"] for role in ROLES}:
         raise PerformanceDecisionError("external: binary identities do not match summary")
     if external.get("host") != broad["run"].get("host"):
@@ -98,7 +102,21 @@ def validate_bundle(summary: dict, broad: dict, external: dict,
     return reasons
 
 
-def comparison_index(broad: dict, external: dict, sentinel: dict | None) -> dict[str, dict]:
+def _internal_section(report: dict, metric: str) -> dict:
+    if metric == "cycles":
+        return (report.get("counter_comparisons", {}).get("cycles") or {}).get("candidate_vs_base") or {}
+    return report.get("comparisons", {}).get("candidate_vs_base") or {}
+
+
+def _external_effect(case: dict, metric: str) -> dict | None:
+    key = "paired_cycle_comparisons" if metric == "cycles" else "paired_comparisons"
+    return (case.get(key) or {}).get("base")
+
+
+def comparison_index(broad: dict, external: dict, sentinel: dict | None,
+                     metric: str = "wall_time") -> dict[str, dict]:
+    if metric not in METRICS:
+        raise PerformanceDecisionError(f"unknown comparison metric {metric!r}")
     result = {}
     for lane, report in (("broad", broad), ("sentinel", sentinel)):
         if report is None:
@@ -109,16 +127,23 @@ def comparison_index(broad: dict, external: dict, sentinel: dict | None) -> dict
                 or health.get("blocks", {}).get("invalid") != 0
                 or report.get("coverage", {}).get("comparison_input_complete") is not True):
             continue
-        section = report.get("comparisons", {}).get("candidate_vs_base") or {}
+        section = _internal_section(report, metric)
         count = report.get("health", {}).get("blocks", {}).get("valid", 0)
         for case_id, case in section.get("cases", {}).items():
             result[f"{lane}/{case_id}"] = {**case, "valid_blocks": count}
     for suite in external.get("suites", []):
         for case in suite.get("cases", []):
-            paired = case.get("paired_comparisons", {}).get("base")
+            paired = _external_effect(case, metric)
             if paired is not None:
                 result[f"external/{suite['id']}/{case['id']}"] = paired
     return result
+
+
+def promotion_metric(broad: dict, external: dict, sentinel: dict | None) -> str:
+    """`cycles` when every comparable case in every lane has cycle evidence."""
+    wall = comparison_index(broad, external, sentinel, "wall_time")
+    cycles = comparison_index(broad, external, sentinel, "cycles")
+    return "cycles" if wall and set(cycles) == set(wall) else "wall_time"
 
 
 def interval(row: dict, where: str) -> tuple[float, float, bool]:

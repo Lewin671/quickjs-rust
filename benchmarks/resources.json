@@ -5,13 +5,14 @@
     "suite_id": "quickjs-rust-t017-resources@quickjs-ng-f7830186-v1"
   },
   "protocol": {
-    "id": "quickjs-resource-measurement-protocol-v1",
+    "id": "quickjs-resource-measurement-protocol-v2",
     "files": [
       "benchmarks/workloads/resource-probe.js",
       "scripts/resource-benchmark.sh",
       "tools/__init__.py",
       "tools/benchmark/__init__.py",
       "tools/benchmark/adapters.py",
+      "tools/benchmark/counters.py",
       "tools/benchmark/planning.py",
       "tools/benchmark/process.py",
       "tools/benchmark/receipts.py",
@@ -24,7 +25,7 @@
       "tools/benchmark/schema.py",
       "tools/benchmark/snapshots.py"
     ],
-    "aggregate_sha256": "e1c096a39e78e1087410ef7209f23292628c7e29cbd4598956a9dfc25dd9a5ce"
+    "aggregate_sha256": "ea1414c2d37a0468994fc145d484bbc593a0011d4542db89a60479bd626d4d89"
   },
   "reference_engine": {
     "identity": "quickjs-ng",

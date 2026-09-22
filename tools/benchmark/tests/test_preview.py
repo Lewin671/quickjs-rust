@@ -66,7 +66,7 @@ def report(ratio_base: float = 1.25, ratio_qjs: float = 0.8) -> dict[str, object
         })
     return {
         "schema_id": "quickjs-benchmark-report",
-        "schema_version": 3,
+        "schema_version": 4,
         "claim_eligible": False,
         "analysis_contract": {"bootstrap": {"confidence": 0.95}},
         "run": {

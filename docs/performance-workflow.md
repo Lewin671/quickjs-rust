@@ -219,7 +219,11 @@ queue, then evaluate the frozen plan:
   --require-retained --output target/comparison/decision.json
 ```
 
-Each watched comparison needs at least 30 complete paired blocks, a 95%
+The judged metric is cycles when every lane carries counters and wall time
+otherwise; see [benchmarking.md](benchmarking.md#performance-priority-and-decision-gate).
+A local run on a shared machine therefore does not need a quiet host to reach
+precise intervals, but it still holds the measurement lock and waits for
+builds before starting. Each watched comparison needs at least 30 complete paired blocks, a 95%
 confidence interval and at most 3% relative half-width. The entire interval
 must be within the target or control threshold to pass; an interval crossing
 the threshold is inconclusive. A precise interval wholly beyond the threshold

@@ -31,8 +31,10 @@ class CompareTests(unittest.TestCase):
     def test_complete_bundle_has_separate_lanes_and_no_headline_score(self):
         result = summary_for(self.broad, self.external, self.sentinel)
         self.assertEqual(result["decision_readiness"], "ready_for_unit_gates")
+        self.assertEqual(result["promotion_metric"], "wall_time")
         self.assertFalse(result["claim_eligible"])
         text = markdown_for(result, self.broad, self.external, self.sentinel)
+        self.assertIn("promotion metric: **wall_time**", text)
         for name in ("Specializer coverage", "Generic-path sentinels", "External Benchmark Preview"):
             self.assertIn(name, text)
 

@@ -311,7 +311,7 @@ class MigrationStageTests(unittest.TestCase):
         self.assertEqual(payload["decision"], "advance")
         self.assertEqual(payload["mode"], "stage")
         self.assertEqual((payload["stage"], payload["stages"]), (1, 8))
-        self.assertEqual(payload["schema_version"], 2)
+        self.assertEqual(payload["schema_version"], 3)
         self.assertIsNone(payload["evidence"]["test262_burndown_sha256"])
 
     def test_stage_beyond_its_budget_aborts_without_closing_the_family(self) -> None:

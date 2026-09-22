@@ -36,6 +36,7 @@ class ResourceSchemaTests(unittest.TestCase):
                 "tools/__init__.py",
                 "tools/benchmark/__init__.py",
                 "tools/benchmark/adapters.py",
+                "tools/benchmark/counters.py",
                 "tools/benchmark/planning.py",
                 "tools/benchmark/process.py",
                 "tools/benchmark/receipts.py",
@@ -81,7 +82,7 @@ class ResourceSchemaTests(unittest.TestCase):
         )
         self.assertEqual(
             measurement.protocol_sha256,
-            "e1c096a39e78e1087410ef7209f23292628c7e29cbd4598956a9dfc25dd9a5ce",
+            "ea1414c2d37a0468994fc145d484bbc593a0011d4542db89a60479bd626d4d89",
         )
         self.assertEqual(
             analysis.protocol_sha256,

@@ -10,6 +10,8 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from . import counters
+
 OUTPUT_LIMIT = 64 * 1024
 
 
@@ -25,6 +27,10 @@ class ProcessResult:
     stderr: str
     stdout_truncated: bool
     stderr_truncated: bool
+    # Hardware counters of the whole child process; None where the host
+    # cannot report them (see counters.py). Never a substitute zero.
+    instructions: int | None = None
+    cycles: int | None = None
 
 
 class _Capture:
@@ -108,8 +114,26 @@ def run_process(argv: list[str], timeout_seconds: float) -> ProcessResult:
     watchdog = threading.Timer(timeout_seconds, terminate_at_deadline)
     watchdog.daemon = True
     watchdog.start()
-    exit_code = process.wait()
-    timer_finished_ns = time.perf_counter_ns()
+    sample = None
+    if counters.supported():
+        # Wait for exit without reaping, so the zombie's counters are still
+        # readable; the timer still ends when the child has exited.
+        try:
+            os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOWAIT)
+        except ChildProcessError:
+            pass
+        timer_finished_ns = time.perf_counter_ns()
+        # The watchdog may reap concurrently (its poll()); counters read after
+        # that could belong to a recycled pid, so they only count if the child
+        # was still unreaped both before and after the read.
+        if process.returncode is None:
+            sample = counters.read_zombie(process.pid)
+            if process.returncode is not None:
+                sample = None
+        exit_code = process.wait()
+    else:
+        exit_code = process.wait()
+        timer_finished_ns = time.perf_counter_ns()
     duration_ns = timer_finished_ns - timer_started_ns
     watchdog.cancel()
     stdout_thread.join(timeout=0.1)
@@ -140,4 +164,6 @@ def run_process(argv: list[str], timeout_seconds: float) -> ProcessResult:
         stderr=stderr_capture.text(),
         stdout_truncated=stdout_capture.truncated,
         stderr_truncated=stderr_capture.truncated,
+        instructions=sample[0] if sample else None,
+        cycles=sample[1] if sample else None,
     )

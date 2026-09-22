@@ -74,7 +74,9 @@ class ReportTests(unittest.TestCase):
         )
         return replace(engine, receipt=receipt)
 
-    def _complete_rows(self, blocks: int = 2, startup_ns: int = 1_000_000) -> list[dict]:
+    def _complete_rows(self, blocks: int = 2, startup_ns: int = 1_000_000,
+                       cycles_per_op: dict[str, int] | None = None) -> list[dict]:
+        """`cycles_per_op` (by role) adds hardware counters to every sample."""
         engines = [self._engine(role) for role in ("candidate", "base", "quickjs-ng")]
         per_op = {"candidate": 120, "base": 100, "quickjs-ng": 150}
         case_by_id = {case.id: case for case in self.manifest.cases}
@@ -110,6 +112,10 @@ class ReportTests(unittest.TestCase):
                 stderr="",
                 stdout_truncated=False,
                 stderr_truncated=False,
+                instructions=(None if cycles_per_op is None
+                              else 3 * cycles_per_op[role] * max(1, operations)),
+                cycles=(None if cycles_per_op is None
+                        else cycles_per_op[role] * max(1, operations)),
             )
 
         output = io.StringIO()

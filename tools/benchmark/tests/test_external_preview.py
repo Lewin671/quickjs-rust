@@ -269,7 +269,7 @@ class ExternalPreviewTests(unittest.TestCase):
                 json.loads(line)
                 for line in (output / "external-raw.jsonl").read_text().splitlines()
             ]
-            self.assertTrue(all(row["schema_version"] == 2 for row in records))
+            self.assertTrue(all(row["schema_version"] == 3 for row in records))
             from tools.benchmark.external_report import replay
             raw_path = output / "external-raw.jsonl"
             self.assertEqual(replay(raw_path, manifest), report)

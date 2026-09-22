@@ -53,7 +53,8 @@ def build_report(
     start = validated.start
     return {
         "schema_id": "quickjs-benchmark-report",
-        "schema_version": 3,
+        # Version 4 added `counter_comparisons` (cycles per operation).
+        "schema_version": 4,
         "claim_eligible": False,
         "input": {
             "sha256": validated.input_sha256,

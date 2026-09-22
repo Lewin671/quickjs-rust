@@ -17,13 +17,14 @@ The procedure (queue, plan, decision) is in
 
 ## Measuring
 
-- **Screen with hardware counters, promote with wall time.** On a shared
-  machine, background load moves wall time far more than it moves the work
-  done. `cycles elapsed` and `instructions retired` (from `/usr/bin/time -l`
-  on macOS, `perf stat` on Linux) are nearly unaffected. Use them to decide
-  whether a change is worth measuring; use paired wall-time blocks on quiet,
-  fixed hardware to accept it. Counters miss memory-bandwidth and frequency
-  effects, so they never replace the promotion measurement.
+- **Judge CPU work by cycles; watch wall time for everything else.** On a
+  shared machine, background load moves wall time far more than it moves
+  cycles or instructions retired. Cycles still include cache misses and
+  pipeline stalls, so they measure what the engine costs on the CPU; they
+  exclude time off-CPU (I/O, syscalls blocked in the kernel, waiting,
+  descheduling) and frequency changes. Use cycles to judge single-threaded,
+  CPU-bound changes and keep wall time beside them: a wall-time regression
+  that cycles do not show is a real cost the counters cannot see.
 - **Measure the noise floor, do not assume it.** Before trusting a
   comparison, compare a binary against a byte-identical copy of itself on the
   same host and harness. A difference smaller than that A/A spread

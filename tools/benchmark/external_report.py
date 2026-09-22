@@ -25,13 +25,15 @@ BOOTSTRAP_SAMPLES = 20000
 BOOTSTRAP_SEED = 20260905
 
 
-def paired_effect(candidate: list[dict], comparator: list[dict], blocks: int) -> dict | None:
+def paired_effect(candidate: list[dict], comparator: list[dict], blocks: int,
+                  metric: str = "duration_ns") -> dict | None:
+    """Paired-block effect on `metric`; None unless every block has it."""
     if len(candidate) != blocks or len(comparator) != blocks:
         return None
-    if any(row["status"] != "ok" for row in candidate + comparator):
+    if any(row["status"] != "ok" or row.get(metric) is None for row in candidate + comparator):
         return None
-    left = {row["block"]: row["duration_ns"] for row in candidate}
-    right = {row["block"]: row["duration_ns"] for row in comparator}
+    left = {row["block"]: row[metric] for row in candidate}
+    right = {row["block"]: row[metric] for row in comparator}
     if set(left) != set(range(blocks)) or set(right) != set(left):
         return None
     logs = {block: math.log(left[block] / right[block]) for block in left}
@@ -81,6 +83,13 @@ def _report(manifest: Manifest, records: list[dict[str, Any]]) -> dict[str, Any]
                     manifest.measurement.blocks,
                 ) for role in ("base", "quickjs-ng")
             }
+            cycle_effects = {
+                role: paired_effect(
+                    samples.get((suite.id, case.id, "candidate", "measurement"), []),
+                    samples.get((suite.id, case.id, role, "measurement"), []),
+                    manifest.measurement.blocks, "cycles",
+                ) for role in ("base", "quickjs-ng")
+            }
             ratio = None
             base_ratio = None
             if effects["quickjs-ng"] is not None:
@@ -111,6 +120,7 @@ def _report(manifest: Manifest, records: list[dict[str, Any]]) -> dict[str, Any]
                     "capability": capability,
                     "median_duration_ns": medians,
                     "paired_comparisons": effects,
+                    "paired_cycle_comparisons": cycle_effects,
                     "candidate_over_base": base_ratio,
                     "candidate_over_quickjs_ng": ratio,
                 }
@@ -148,7 +158,8 @@ def _report(manifest: Manifest, records: list[dict[str, Any]]) -> dict[str, Any]
             }
         )
     return {
-        "schema_version": 2,
+        # Version 3 added `paired_cycle_comparisons` per case.
+        "schema_version": 3,
         "artifact_type": "quickjs-external-preview-report",
         "preview_id": manifest.preview_id,
         "manifest_sha256": manifest.sha256,
@@ -199,7 +210,7 @@ def replay(path: Path, manifest: Manifest) -> dict[str, Any]:
         row = records[cursor]
         cursor += 1
         expected = {
-            "schema_version": 2, "record_type": "sample", "claim_eligible": False,
+            "schema_version": 3, "record_type": "sample", "claim_eligible": False,
             "preview_id": manifest.preview_id, "manifest_sha256": manifest.sha256,
             "measurement_blocks": blocks, "timeout_seconds": timeout,
             "host": records[0]["host"],
@@ -216,6 +227,10 @@ def replay(path: Path, manifest: Manifest) -> dict[str, Any]:
         duration = _integer(row.get("duration_ns"), "external duration", 1)
         if start < previous_end or end - start != duration:
             raise ExternalPreviewError("external raw: overlapping or inconsistent timers")
+        counters = (row.get("instructions"), row.get("cycles"))
+        if counters != (None, None):
+            for value in counters:
+                _integer(value, "external counter", 1)
         previous_end = end
         digest = _sha256(row.get("binary_sha256"), "external binary")
         if binary_hashes.setdefault(role, digest) != digest:

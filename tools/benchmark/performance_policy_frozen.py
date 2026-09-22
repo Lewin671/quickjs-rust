@@ -21,10 +21,10 @@ PROTOCOL_KEYS = (
 )
 PROTOCOL_SHAPES = {
     "throughput_measurement": (
-        "benchmarks/manifest.json", "quickjs-measurement-protocol-v8"
+        "benchmarks/manifest.json", "quickjs-measurement-protocol-v9"
     ),
     "throughput_analysis": (
-        "benchmarks/analysis.json", "quickjs-analysis-protocol-v5"
+        "benchmarks/analysis.json", "quickjs-analysis-protocol-v6"
     ),
     # The hosted preview measures a second frozen portfolio, so its manifest
     # and workload must be pinned here too. Without this, a sentinel workload
@@ -32,10 +32,10 @@ PROTOCOL_SHAPES = {
     # strength of its own self-hash alone.
     "sentinel_measurement": (
         "benchmarks/generic-sentinels-manifest.json",
-        "quickjs-generic-sentinel-protocol-v1",
+        "quickjs-generic-sentinel-protocol-v2",
     ),
     "resource_measurement": (
-        "benchmarks/resources.json", "quickjs-resource-measurement-protocol-v1"
+        "benchmarks/resources.json", "quickjs-resource-measurement-protocol-v2"
     ),
     "resource_analysis": (
         "benchmarks/resource-analysis.json", "quickjs-resource-analysis-protocol-v1"
@@ -63,6 +63,7 @@ PREVIEW_IMPLEMENTATION_FILES = (
     "tools/benchmark/external_preview_markdown.py",
     "tools/benchmark/external_report.py",
     "tools/benchmark/hosted_preview.py",
+    "tools/benchmark/measure_lock.py",
     "tools/benchmark/performance_decision.py",
     "tools/benchmark/performance_evaluation.py",
     "tools/benchmark/performance_evidence.py",

@@ -59,6 +59,18 @@ external ratio identifies a workload to profile, not a code change to make.
   lane-separated summary. Detailed commands and interpretation live in
   [the performance workflow](../docs/performance-workflow.md).
 
+## Single-host cycles promotion (2026-09-22)
+
+There is no separate measurement machine. On the development host, a 30-pair
+same-binary control under normal interactive load measured cycle intervals of
+about ±0.3-0.5% against ±0.7-1.8% for wall time, with single wall pairs off
+by up to 22%. Measurement protocol v9 (sentinel v2, analysis v6) therefore
+records per-process `instructions` and `cycles`, and `decide` judges cycles
+whenever every lane carries them, falling back to wall time elsewhere. A
+precise wall-time regression that cycles do not show keeps the decision
+`inconclusive` until explained. Measurements hold a host-wide lock and wait
+for concurrent builds. Mechanics: `docs/benchmarking.md`, "Decision metric".
+
 ## Why staged migrations exist
 
 The one-attempt leaf rule is correct for a recognizer and fatal for an
@@ -108,6 +120,8 @@ base-SHA binding.
   judged against a bounded regression budget, measured cumulatively against one
   migration base, and an aborted stage closes an implementation rather than a
   mechanism family.
+- [x] Promotion evidence that a single shared development host can produce:
+  cycle-based decisions with a wall-time divergence guard.
 - [ ] Add a repository ruleset-required `Performance decision` check once
   fixed-hardware or approved same-host promotion infrastructure is available.
 

@@ -4,7 +4,9 @@ from __future__ import annotations
 import subprocess
 from typing import Any
 
-from .performance_evidence import ROOT, comparison_index, interval, inventories, validate_bundle
+from .performance_evidence import (
+    ROOT, comparison_index, interval, inventories, promotion_metric, validate_bundle,
+)
 from .performance_schema import PerformanceDecisionError, _integer, _object
 from .profile import verify_profiles
 
@@ -70,7 +72,9 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
     profiles = verify_profiles(unit, queue, profile_root)
     if sentinel is None:
         reasons.append("missing generic-path sentinel evidence")
-    metrics = comparison_index(broad, external, sentinel)
+    metric = promotion_metric(broad, external, sentinel)
+    metrics = comparison_index(broad, external, sentinel, metric)
+    wall = comparison_index(broad, external, sentinel, "wall_time") if metric == "cycles" else metrics
     gate = unit["fast_gate"]
     controls = set(gate["control_ids"])
     controls.update(f"sentinel/{case}" for case in inventories()["sentinel"])
@@ -104,6 +108,20 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
             failed.append(case)
         elif upper > limit:
             reasons.append(f"{case}: confidence interval crosses acceptance threshold {limit}")
+    # Cycles exclude time off-CPU. A precise wall-time regression beyond the
+    # control ceiling that cycles do not show points at I/O, syscalls, or
+    # waiting, which the promotion metric cannot see; a human must explain it
+    # first. The ceiling is the regression limit for every case, targets too:
+    # a target whose wall time merely improves less is not a regression.
+    wall_divergence = []
+    if metric == "cycles":
+        for case in sorted(limits):
+            if case in wall and case not in failed:
+                lower, _upper, precise = interval(wall[case], f"wall {case}")
+                if precise and lower > control_limit:
+                    wall_divergence.append(case)
+        if wall_divergence:
+            reasons.append(f"wall time regressed beyond {control_limit} where cycles did not: {wall_divergence}")
     state = "inconclusive" if reasons else ("advance" if mode == "stage" else "retained")
     if failed:
         # A clear regression is actionable even if another lane is noisy.
@@ -121,12 +139,14 @@ def decide(unit, unit_sha, queue, queue_sha, summary, summary_sha, broad, broad_
             state = "rejected"
             reasons.append("Test262 parity gate is not zero")
     result = {
-        "schema_version": 2,
+        # Version 3 records the judged metric and any wall-time divergence.
+        "schema_version": 3,
         "artifact_type": "quickjs-performance-decision",
         "claim_eligible": False,
         "unit_id": unit["unit_id"], "unit_sha256": unit_sha, "unit_kind": kind,
         "base_sha": base_sha, "candidate_sha": candidate_sha, "mode": mode,
         "decision": state, "reasons": reasons,
+        "metric": metric, "wall_time_divergence": wall_divergence,
         "metrics": {key: metrics[key] for key in sorted(limits) if key in metrics},
         "evidence": {"queue_sha256": queue_sha, "preview_summary_sha256": summary_sha,
                      "broad_report_sha256": broad_sha, "external_report_sha256": external_sha,

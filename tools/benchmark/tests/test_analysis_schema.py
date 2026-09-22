@@ -118,7 +118,7 @@ class CompatibleProtocolListTests(unittest.TestCase):
         data = json.loads((ROOT / "benchmarks/analysis.json").read_text(encoding="utf-8"))
         self.assertEqual(
             data["compatible_measurement"]["protocol_ids"],
-            ["quickjs-generic-sentinel-protocol-v1", "quickjs-measurement-protocol-v8"],
+            ["quickjs-generic-sentinel-protocol-v2", "quickjs-measurement-protocol-v9"],
         )
         for manifest_path in (
             "benchmarks/manifest.json",

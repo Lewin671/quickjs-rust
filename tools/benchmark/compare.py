@@ -16,7 +16,11 @@ from .adapters import load_engine
 from .analysis_schema import load_analysis_manifest
 from .external_preview import load_manifest as load_external, run_preview
 from .external_preview_markdown import render_markdown
-from .performance_evidence import ROOT, ROLES, validate_bundle, validate_internal, comparison_index, interval, inventories
+from .measure_lock import measurement_lock, wait_for_builds
+from .performance_evidence import (
+    ROOT, ROLES, validate_bundle, validate_internal, comparison_index, interval, inventories,
+    promotion_metric,
+)
 from .preview import _engine_provenance, _write_replace
 from .receipts import load_receipt
 from .report import build_report, write_report
@@ -47,7 +51,9 @@ def summary_for(broad, external, sentinel):
                "classification": "same_host_diagnostic_not_fixed_hardware_claim",
                "engines": _engine_provenance(broad["run"])}
     reasons = validate_bundle(summary, broad, external, sentinel)
-    rows = comparison_index(broad, external, sentinel)
+    metric = promotion_metric(broad, external, sentinel)
+    summary["promotion_metric"] = metric
+    rows = comparison_index(broad, external, sentinel, metric)
     imprecise = [key for key, row in rows.items() if not interval(row, key)[2]]
     if len(rows) != sum(len(cases) for cases in inventories().values()):
         reasons.append("missing candidate/base comparisons")
@@ -64,20 +70,23 @@ def markdown_for(summary, broad, external, sentinel):
              "Ratios are candidate/comparator; lower is faster. Informational, not a fixed-hardware claim.",
              "Broad measures specializer coverage; sentinels measure dynamic workloads; external measures whole-process latency.",
              "These lanes are never pooled into a headline engine score.", "",
-             f"Decision readiness: **{summary['decision_readiness']}**.", ""]
+             f"Decision readiness: **{summary['decision_readiness']}**; "
+             f"promotion metric: **{summary['promotion_metric']}**.", ""]
     for name, report in (("Specializer coverage", broad), ("Generic-path sentinels", sentinel)):
         lane = "broad" if report is broad else "sentinel"
         issues = validate_internal(report, summary["engines"], lane)
         if issues:
             lines += [f"## {name}", "", "No ratios: " + "; ".join(issues) + ".", ""]
             continue
-        lines += [f"## {name}", "", "| Case | Candidate/base (95% CI) | Candidate/NG (95% CI) |",
-                  "|---|---:|---:|"]
+        lines += [f"## {name}", "",
+                  "| Case | Candidate/base (95% CI) | Candidate/NG (95% CI) | Cycles candidate/base (95% CI) |",
+                  "|---|---:|---:|---:|"]
         base = report["comparisons"]["candidate_vs_base"] or {"cases": {}}
         ng = report["comparisons"]["candidate_vs_quickjs_ng"] or {"cases": {}}
+        cycles = report["counter_comparisons"]["cycles"]["candidate_vs_base"] or {"cases": {}}
         for case in base["cases"]:
             cells = []
-            for comparison in (base, ng):
+            for comparison in (base, ng, cycles):
                 row = comparison["cases"].get(case)
                 if row is None:
                     cells.append("missing")
@@ -97,6 +106,15 @@ def run(args):
     broad_engines = _engines(args, broad_manifest)
     sentinel_engines = _engines(args, sentinel_manifest)
     args.output_dir.mkdir(parents=True, exist_ok=False)
+    with measurement_lock("compare"):
+        competing = wait_for_builds(args.settle)
+        if competing:
+            print(f"compare: warning: competing processes still running: {', '.join(competing[:8])}",
+                  file=sys.stderr, flush=True)
+        return _measure(args, broad_manifest, sentinel_manifest, broad_engines, sentinel_engines)
+
+
+def _measure(args, broad_manifest, sentinel_manifest, broad_engines, sentinel_engines):
     phase = "initialization"
 
     def status(state, error=None):
@@ -153,6 +171,8 @@ def main():
     parser.add_argument("--blocks", type=int, choices=(3, 30, 60), default=30)
     parser.add_argument("--seed", type=int, default=20250713)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--settle", type=float, default=300.0,
+                        help="seconds to wait for running builds or engines to finish before measuring")
     try:
         result = run(parser.parse_args())
         print(json.dumps(result, sort_keys=True))
