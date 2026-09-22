@@ -1443,6 +1443,26 @@ fn discarded_assignment_statements_keep_assignment_semantics() {
 }
 
 #[test]
+fn if_clauses_keep_their_semantics_where_their_value_is_unobservable() {
+    // In a function body an `if` clause compiles as a statement-list entry,
+    // so an assignment or declaration clause leaves no value behind. Script
+    // and `eval` code still observe the clause's completion value.
+    assert_eq!(
+        eval(
+            "function f(n) { var s = ''; for (var i = 0; i < n; i++) { if (i) s += ','; s += i; \
+               if (i == 1) var seen = s; else seen = seen; } return s + '|' + seen; } f(3);"
+        ),
+        Ok(Value::String("0,1,2|0,1".to_owned().into()))
+    );
+    assert_eq!(eval("var x; if (true) x = 3;"), Ok(Value::Number(3.0)));
+    assert_eq!(
+        eval("function f() { return eval('var y = 1; if (y) y += 4;'); } f();"),
+        Ok(Value::Number(5.0))
+    );
+    assert_eq!(eval("if (false) 1; else 2;"), Ok(Value::Number(2.0)));
+}
+
+#[test]
 fn for_in_shadowing_survives_the_hashed_seen_set() {
     // Enumeration reports each name once, in the order the layers are walked,
     // with a shadowed prototype name suppressed even when its own descriptor

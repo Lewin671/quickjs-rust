@@ -62,6 +62,16 @@ impl Compiler {
                     })
             });
         }
+        // Where nothing observes the `if` statement's value, a clause is a
+        // statement-list entry: `if (c) text += piece;` then stores without
+        // leaving the new string behind in a completion temporary, which would
+        // keep a second reference and make every later append copy.
+        if !self.tracks_completion_values {
+            if !self.compile_statement_list_entry(stmt)? {
+                self.emit_load_undefined();
+            }
+            return Ok(());
+        }
         self.compile_stmt(stmt)
     }
 
