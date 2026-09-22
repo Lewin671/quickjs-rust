@@ -489,3 +489,17 @@ fn an_inherited_getter_read_on_the_wide_tier_builds_no_general_frame() {
     assert_eq!(counters.generic_call_frames, 0, "{counters:?}");
     assert!(counters.nested_vm_constructions <= 2, "{counters:?}");
 }
+
+#[test]
+fn a_native_fast_path_called_from_the_wide_tier_builds_no_frame() {
+    let (value, counters) = counted(
+        "function code(s, i) { return s.charCodeAt(i) + String.fromCharCode(65 + i).length; }
+         var total = 0;
+         for (var i = 0; i < 50; i++) total += code('abc', i % 3);
+         total;",
+    );
+    assert_eq!(value, Value::Number(4_949.0));
+    // Both natives are answered by the interpreter's frameless fast paths,
+    // which the general native call path would count.
+    assert!(counters.native_calls <= 2, "{counters:?}");
+}

@@ -1190,6 +1190,19 @@ fn call_from_activation(
             activation.env.agent_context(),
         );
     }
+    // The interpreter's native fast paths (`charCodeAt`, `String.fromCharCode`,
+    // the Math functions, ...) need no frame, and the realm frame is built
+    // only by the arms that ask for one.
+    if matches!(&callee, Value::Function(function) if function.native_kind().is_some())
+        && let Some(result) = crate::bytecode::vm_call::try_fast_global_native_call(
+            &callee,
+            &this_value,
+            arguments,
+            &|| activation.env.empty_frame(),
+        )
+    {
+        return result;
+    }
     let mut env = activation.env.empty_frame();
     crate::function::call_function(callee, this_value, arguments.to_vec(), &mut env, false)
 }
