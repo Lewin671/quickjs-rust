@@ -34,6 +34,7 @@ from .external_preview import (
     load_manifest,
 )
 from . import symbols
+from .measure_lock import measurement_lock, wait_for_builds
 from .process import ProcessResult, run_process
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -53,6 +54,8 @@ DEFAULT_CACHE = ROOT / "target/benchmarks/external-cache"
 RESULT_PREFIX = "QJS_BENCH_RESULT "
 CALIBRATION_TARGET_NS = 200_000_000
 CALIBRATION_MAX_ITERATIONS = 1 << 26
+# An increment shorter than this is dominated by startup jitter.
+MIN_INCREMENT_NS = 50_000_000
 
 
 class ScreenError(RuntimeError):
@@ -301,6 +304,11 @@ def screen_case(case: CaseSpec, candidate: Path, base: Path, pairs: int, tool: C
                 if _check_output(case, taken["candidate"][size].stdout) != _check_output(
                         case, taken["base"][size].stdout):
                     raise ScreenError(f"{case.id}: candidate and base disagree on the result checksum")
+        if pair == 0 and case.kind == "internal":
+            span = increment(taken["base"]["small"], taken["base"]["large"], "wall_ns")
+            if span < MIN_INCREMENT_NS:
+                print(f"warning: {case.id}: the N-to-2N increment is {span / 1e6:.1f} ms; "
+                      "ratios below ~50 ms are dominated by startup jitter", file=sys.stderr)
         for metric in METRICS:
             if case.kind == "internal":
                 base_cost = increment(taken["base"]["small"], taken["base"]["large"], metric)
@@ -481,22 +489,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"error: not an executable: {binary}", file=sys.stderr)
             return 2
     try:
-        load_before = check_load(args.max_load, args.require_quiet, args.settle)
         tool = counter_tool()
-        with tempfile.TemporaryDirectory(prefix="qjs-screen-") as work:
-            gate = load_plan_gate(args.plan) if args.plan else None
+        gate = load_plan_gate(args.plan) if args.plan else None
+        with measurement_lock("screen"), tempfile.TemporaryDirectory(prefix="qjs-screen-") as work:
             specs = list(dict.fromkeys([*(gate.case_specs() if gate else []), *args.case]))
             cases = resolve_cases(specs or ["sentinel"], args.cache_root, Path(work))
+            competing = wait_for_builds(args.settle)
+            if competing and args.require_quiet:
+                raise ScreenError(f"competing processes still running: {', '.join(competing[:8])}")
+            load_before = check_load(args.max_load, args.require_quiet, args.settle)
             results = []
             for case in cases:
                 print(f"screening {case.id} ...", file=sys.stderr, flush=True)
                 results.append(screen_case(case, candidate, base, args.pairs, tool, args.timeout, args.iterations))
-        load_after = os.getloadavg()[0]
+            load_after = os.getloadavg()[0]
     except (ScreenError, ExternalPreviewError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
     print(render(results, args.pairs, args.aa))
     print(f"load average: {load_before:.2f} before, {load_after:.2f} after")
+    if competing:
+        print(f"warning: competing processes were running: {', '.join(competing[:8])}")
     if max(load_before, load_after) > args.max_load:
         print(f"warning: load exceeded {args.max_load:.2f}; the wall column is unreliable, "
               "counter ratios are still usable")

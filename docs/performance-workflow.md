@@ -80,7 +80,10 @@ current host's counter noise. Before starting, the screen waits up to
 `--settle` seconds for the load average to fall below `--max-load` (half the
 logical CPUs by default); on a host that stays busy it runs anyway and marks
 the wall column unreliable, since the counter ratios it judges tolerate load.
-`--require-quiet` refuses instead.
+`--require-quiet` refuses instead. Every measuring entry point holds one
+host-wide lock (`target/.perf-measure.lock`) for its whole run, so concurrent
+screens from parallel agents queue instead of disturbing each other, and each
+first waits for running `cargo`, `rustc`, linker, or `qjs` processes to finish.
 
 On macOS the counters come from `/usr/bin/time -l`; on Linux from `perf stat`,
 which needs a kernel that exposes user-space counters. The screen writes no
