@@ -6,7 +6,8 @@
       "engine_identity": "qjs-rust",
       "features": [],
       "flags": [
-        "-Cllvm-args=-align-all-functions=4"
+        "-Cllvm-args=-align-all-functions=4",
+        "-Csymbol-mangling-version=v0"
       ],
       "host_features": "target-default",
       "lto": "off",

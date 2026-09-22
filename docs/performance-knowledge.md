@@ -74,6 +74,14 @@ The procedure (queue, plan, decision) is in
   a case regresses without an explanation, diff symbol sizes between the two
   builds (`nm -S` / `nm -n`) before blaming the change's own logic, and pin
   load-bearing hot helpers with `#[inline(always)]` or `#[inline(never)]`.
+- **Pin the hot layout.** Where a function lands decides which cache sets
+  and branch-predictor entries its loops share, so an edit that only moves
+  hot code can change a case's cycles with identical instruction counts.
+  The linker places the functions listed in `crates/qjs-cli/hot-functions.order`
+  first, in that order. A change that adds hot functions, or that makes the
+  profile's hottest set differ, regenerates the list in the same commit;
+  until then the new functions sit outside the pinned region and their
+  measurements carry layout noise.
 - **Keep hot dispatch arms tiny.** Growing an arm of a hot interpreter
   `match` can degrade register allocation and layout for the whole loop, and
   slow workloads that never reach the new arm. Put new work behind a single

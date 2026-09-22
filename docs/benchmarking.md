@@ -465,6 +465,29 @@ QJS_TL_TRACE=1 ./target/perf-counters/release/qjs case.js 2>&1 >/dev/null \
          END { for (r in n) print n[r], r, why[r] }' | sort -rn | head
 ```
 
+### Pinned code layout and reading profiles
+
+The `qjs` binary links its hottest functions first, in the order listed by
+`crates/qjs-cli/hot-functions.order` (`crates/qjs-cli/build.rs` passes it to
+the macOS linker; other hosts ignore it). Without it, an edit anywhere could
+re-partition code generation and move the dispatch loops, shifting some
+cases' cycles by several percent with identical instruction counts. The
+workspace mangles symbols with Rust's v0 scheme (`.cargo/config.toml`),
+whose names carry no signature hash, so the list keeps naming a function
+whose parameters change. Regenerate it from a release build after a change
+that adds hot functions:
+
+```sh
+cargo build --release -p qjs-cli
+python3 -m tools.benchmark.order_file --binary target/release/qjs
+cargo build --release -p qjs-cli   # relink with the new list
+```
+
+The generator samples every external, sentinel and broad case, weights each
+case equally, and lists every sampled function, hottest first. macOS `sample`
+prints v0 names mangled; pipe a profile through
+`/opt/homebrew/opt/llvm/bin/llvm-cxxfilt` to read it.
+
 Calls have the same kind of trace. With `QJS_CF_TRACE=1` the build prints
 one line per function body the wide compact tier compiles (`CFOK`) or
 declines (`CFDECLINE`, naming the instruction and the reason), and one line
