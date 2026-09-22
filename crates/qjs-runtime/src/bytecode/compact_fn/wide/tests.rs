@@ -518,3 +518,47 @@ fn code_past_an_exit_sees_the_receiver_parameters_and_handlers() {
         Value::String("42|after exit".into())
     );
 }
+
+#[test]
+fn an_update_of_a_local_reads_and_writes_the_local_in_place() {
+    // `s += ','` compiles to its own fused append, so the separator is a
+    // parameter here.
+    let source = "function join(parts, sep) {
+        var s = '';
+        for (var i = 0; i < parts.length; i++) { if (i) s += sep; s += parts[i]; s = s + '.'; }
+        return s;
+    }";
+    let program =
+        compile::compile(&nested_function(source, "join")).expect("the body should be admitted");
+    let in_place = program
+        .ops
+        .iter()
+        .filter(|op| matches!(op, WideOp::Binary { dst, left, .. } if dst == left && *dst < program.local_registers))
+        .count();
+    assert_eq!(in_place, 3, "{:#?}", program.ops);
+    assert_eq!(
+        value_of(&format!(
+            "{source} join(['a', 'b', 'c'], ',') + '|' + join([], ',');"
+        )),
+        Value::String("a.,b.,c.|".into())
+    );
+}
+
+#[test]
+fn an_in_place_update_keeps_the_operand_order_of_the_general_path() {
+    assert_eq!(
+        value_of(
+            "function twice(s) { s = s + s; return s; }
+             function reads(s, o) { s = s + o.v; return s; }
+             function writes(s) { s = s + (s = 'x'); return s; }
+             function calls(n) { var t = 1; n = n * g(); return n + t; }
+             function g() { return 3; }
+             function throws(s) { try { s = s + boom(); } catch (e) { return s; } }
+             function boom() { throw 1; }
+             function nested(acc, t) { acc = (acc + g() + t) | 0; return acc; }
+             [twice('ab'), reads('a', { v: 'b' }), writes('y'), calls(2), throws('kept'),
+              nested(10, 5)].join(',');"
+        ),
+        Value::String("abab,ab,yx,7,kept,18".into())
+    );
+}
