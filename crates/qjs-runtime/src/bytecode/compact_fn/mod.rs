@@ -36,6 +36,7 @@ mod compile;
 mod execute;
 mod property;
 pub(in crate::bytecode) mod wide;
+pub(in crate::bytecode) use wide::hands_back_at;
 
 pub(crate) use activation::try_run_in_caller_env;
 pub(super) use activation::try_run_standalone;

@@ -127,6 +127,9 @@ impl<'a> Vm<'a> {
                 bytecode.parameter_names().join(","),
                 bytecode.code.len()
             );
+            if std::env::var_os("QJS_CF_TRACE").is_some_and(|v| v == "3") {
+                eprintln!("CFVMCODE {:?}", bytecode.code);
+            }
         }
         if (bytecode.contains_direct_eval() || bytecode.contains_with())
             && env.deopt_bindings().is_none()

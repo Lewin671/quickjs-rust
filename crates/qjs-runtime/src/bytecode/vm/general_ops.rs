@@ -415,10 +415,24 @@ impl Vm<'_> {
     }
 
     /// A backward edge, which is where the loop accelerators are consulted.
+    /// A frame continuing a wide activation may stop here instead, to hand
+    /// a loop no accelerator claims back to the tier.
     #[inline(never)]
-    pub(super) fn op_jump(&mut self, program: &FrameProgramView<'_>, target: usize) {
+    pub(super) fn op_jump(
+        &mut self,
+        program: &FrameProgramView<'_>,
+        target: usize,
+    ) -> Option<FrameExit> {
         let backedge = self.ip - 1;
-        self.jump_with_loop_plans(program.loop_plans(), target, backedge);
+        if self.jump_with_loop_plans(program.loop_plans(), target, backedge)
+            || self
+                .current
+                .cold()
+                .is_none_or(|cold| cold.wide_handback.is_none())
+        {
+            return None;
+        }
+        self.hand_back_to_wide(backedge)
     }
 
     /// Pops the return value and lets any `finally` claim it first.

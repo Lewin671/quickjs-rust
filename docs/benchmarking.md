@@ -491,9 +491,13 @@ prints v0 names mangled; pipe a profile through
 Calls have the same kind of trace. With `QJS_CF_TRACE=1` the build prints
 one line per function body the wide compact tier compiles (`CFOK`) or
 declines (`CFDECLINE`, naming the instruction and the reason), and one line
-per general-path frame it had to build (`CFVM`), and one line per exit to
-the interpreter (`CFEXIT`, with the instruction it resumes at), each
-identified by the body's parameter names and length. A histogram of `CFVM` ranks the callees
+per general-path frame it had to build (`CFVM`), one line per exit to
+the interpreter (`CFEXIT`, with the instruction it resumes at, `probed` for
+a loop backedge), and one line per loop the interpreter handed back to the
+tier (`CFNATIVE`), each identified by the body's parameter names and length.
+`QJS_CF_TRACE=3` also prints each `CFVM` body's bytecode (`CFVMCODE`), which
+names a callee that the parameter list alone does not, such as a getter.
+A histogram of `CFVM` ranks the callees
 that still pay for a full interpreter frame; the matching `CFDECLINE` line
 says what keeps each one out:
 

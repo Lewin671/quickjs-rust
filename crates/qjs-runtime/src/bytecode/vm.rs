@@ -26,6 +26,9 @@ pub(super) type Slot = Option<Value>;
 
 mod general_ops;
 mod rare_ops;
+mod wide_resume;
+
+pub(in crate::bytecode) use wide_resume::{Resumed, WideRegisters, resume_direct_call_bytecode};
 
 use super::frame_program::{FrameBytecode, FrameProgramView};
 use super::frame_stack::FrameExit;
@@ -115,57 +118,6 @@ pub(super) fn eval_direct_call_bytecode(
     // The direct-slot contract excludes closures over this frame's locals, so
     // nothing outlives the call and the allocation can go back to the body's
     // pool instead of being freed and rebuilt on the next invocation.
-    bytecode.recycle_local_slots(std::mem::take(&mut vm.current.locals));
-    if let Some(cold) = vm.current.cold.take() {
-        bytecode.recycle_cold_frame(cold);
-    }
-    value
-}
-
-/// Continues, in the interpreter, a slot-seeded direct call the wide compact
-/// tier began: the tier reached an instruction it leaves to the interpreter
-/// (an operation outside its set, or the backward edge of a loop a loop
-/// accelerator claims) and hands over its locals and operand stack.
-///
-/// The frame is built exactly as `eval_direct_call_bytecode` builds it for
-/// the same call, then brought to the state the tier had reached: what the
-/// `FunctionPrologueEnd` at instruction 0 does, the tier's own locals (its
-/// temporal-dead-zone marker becoming an uninitialized slot), and the stack.
-/// Admitted bodies run no lowered program, so `ip` indexes the code this
-/// frame executes.
-pub(in crate::bytecode) fn resume_direct_call_bytecode(
-    bytecode: &Bytecode,
-    env: CallEnv,
-    direct_call_slots: DirectCallSlots<'_>,
-    ip: usize,
-    locals: &mut [Value],
-    own_locals: u128,
-    stack: &mut [Value],
-) -> Result<Value, RuntimeError> {
-    let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
-        bytecode,
-        env,
-        Vec::new(),
-        Vec::new(),
-        Some(direct_call_slots),
-    );
-    vm.enter_body_deopt_scope();
-    for (slot, register) in locals.iter_mut().enumerate() {
-        if slot >= u128::BITS as usize || own_locals & (1_u128 << slot) == 0 {
-            continue;
-        }
-        let value = std::mem::replace(register, Value::Undefined);
-        if let Some(target) = vm.current.locals.get_mut(slot) {
-            *target = (!value.is_uninitialized_lexical_marker()).then_some(value);
-        }
-    }
-    for register in stack {
-        vm.current
-            .stack
-            .push(std::mem::replace(register, Value::Undefined));
-    }
-    vm.current.ip = ip;
-    let value = vm.run();
     bytecode.recycle_local_slots(std::mem::take(&mut vm.current.locals));
     if let Some(cold) = vm.current.cold.take() {
         bytecode.recycle_cold_frame(cold);
@@ -288,6 +240,10 @@ pub(super) struct ColdFrame {
     /// Active `using` disposal scopes (innermost last); each block's resources,
     /// disposed LIFO when the scope exits via the block's implicit finally.
     pub(super) disposable_scopes: Vec<Vec<super::vm_dispose::DisposeResource>>,
+    /// Set for a frame continuing a wide activation from a probed backedge:
+    /// `Some(None)` while it may hand a loop back to the tier, and
+    /// `Some(Some(backedge))` once it has (`vm/wide_resume.rs`).
+    pub(super) wide_handback: Option<Option<usize>>,
 }
 
 /// A per-body pool of cleared [`ColdFrame`] boxes, shared like the operand
@@ -335,6 +291,7 @@ impl ColdFrame {
         self.array_literal_prototype_override = None;
         self.with_stack.clear();
         self.disposable_scopes.clear();
+        self.wide_handback = None;
     }
 }
 
@@ -831,7 +788,9 @@ impl<'a> Vm<'a> {
                         continue;
                     }
                     self.current.ip = pc;
-                    self.op_jump(&program, *target);
+                    if let Some(exit) = self.op_jump(&program, *target) {
+                        return Ok(exit);
+                    }
                     pc = self.current.ip;
                     continue;
                 }

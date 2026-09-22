@@ -115,21 +115,7 @@ impl<'a> FrameProgramView<'a> {
     /// The loop accelerators for this body, derived at the backward edge that
     /// needs them.
     pub(super) fn loop_plans(&self) -> LoopPlanView<'a> {
-        let bytecode = self.bytecode;
-        LoopPlanView {
-            control: bytecode
-                .control_loop_plans
-                .get_or_init(|| super::vm_control_loop::ControlLoopPlan::compile_all(bytecode)),
-            numeric: bytecode
-                .numeric_loop_plans
-                .get_or_init(|| super::vm_numeric_loop::NumericLoopPlan::compile_all(bytecode)),
-            typed: bytecode
-                .typed_loop_programs
-                .get_or_init(|| super::typed_loop::compile_all(bytecode)),
-            shared_numeric_mutation: bytecode.numeric_mutation_loop_plans.get_or_init(|| {
-                super::vm_numeric_mutation_loop::NumericMutationLoopPlan::compile_all(bytecode)
-            }),
-        }
+        LoopPlanView::for_bytecode(self.bytecode)
     }
 }
 

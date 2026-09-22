@@ -77,7 +77,9 @@ enum WideOp {
     },
     /// Leaves the rest of this activation to the interpreter, which resumes
     /// at bytecode instruction `ip` with this activation's locals and its
-    /// `depth` operand-stack registers.
+    /// `depth` operand-stack registers. At a probed backedge the jump itself
+    /// follows: once no accelerator claims that loop the exit declines and
+    /// execution falls through to it.
     Exit {
         ip: u32,
         depth: u16,
@@ -246,6 +248,24 @@ pub(in crate::bytecode) struct WideProgram {
     /// interpreter frame the general path would have built plus the work run
     /// here first, so such a body is left to the general path from then on.
     exit_heavy: std::cell::Cell<bool>,
+    /// The unconditional backward jumps that exit only so a loop accelerator
+    /// can claim the loop, by ascending instruction index. Each such exit is
+    /// followed by the jump itself (see `WideOp::Exit`).
+    probed_backedges: Box<[ProbedBackedge]>,
+    /// One bit per probed backedge, in `probed_backedges` order, set once no
+    /// accelerator claimed that loop: the loop then runs here.
+    native_backedges: std::cell::Cell<u64>,
+}
+
+/// A backward jump whose exit is probed (`WideProgram::probed_backedges`).
+#[derive(Clone, Copy, Debug)]
+struct ProbedBackedge {
+    /// The bytecode instruction index of the jump.
+    ip: u32,
+    /// The index of the wide jump that follows the exit.
+    jump_pc: u32,
+    /// The operand-stack depth at the jump.
+    depth: u16,
 }
 
 /// Activations observed before a program's exit rate is judged.
@@ -266,6 +286,29 @@ impl WideProgram {
             self.activations.set(activations + 1);
         }
         true
+    }
+
+    /// The probe index of the backedge exit at `ip`, if it is one.
+    pub(super) fn probed_backedge(&self, ip: u32) -> Option<usize> {
+        self.probed_backedges
+            .binary_search_by_key(&ip, |site| site.ip)
+            .ok()
+            .filter(|&index| index < u64::BITS as usize)
+    }
+
+    /// Where the tier continues a loop an interpreter frame handed back at
+    /// the probed backedge `index`: at the jump that follows its exit.
+    pub(super) fn backedge_jump_pc(&self, index: usize) -> usize {
+        self.probed_backedges[index].jump_pc as usize
+    }
+
+    pub(super) fn backedge_is_native(&self, index: usize) -> bool {
+        self.native_backedges.get() & (1 << index) != 0
+    }
+
+    pub(super) fn keep_backedge_native(&self, index: usize) {
+        self.native_backedges
+            .set(self.native_backedges.get() | (1 << index));
     }
 
     /// Counts one exit and judges the program after enough activations: at
@@ -331,4 +374,17 @@ fn trace_decline(bytecode: &Bytecode, decline: Option<&compile::Decline>) {
             );
         }
     }
+}
+
+/// Whether an interpreter frame continuing a wide activation of `bytecode`
+/// may hand it back at the backward jump `ip` with `depth` operand-stack
+/// values: the jump must be a probed backedge of the same depth.
+pub(in crate::bytecode) fn hands_back_at(bytecode: &Bytecode, ip: usize, depth: usize) -> bool {
+    let Some(program) = bytecode.compact_wide_program.get().and_then(Option::as_ref) else {
+        return false;
+    };
+    u32::try_from(ip)
+        .ok()
+        .and_then(|ip| program.probed_backedge(ip))
+        .is_some_and(|index| usize::from(program.probed_backedges[index].depth) == depth)
 }

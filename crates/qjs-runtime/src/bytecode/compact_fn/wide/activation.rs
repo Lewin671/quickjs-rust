@@ -15,6 +15,7 @@ use crate::bytecode::DirectCallSlots;
 use crate::bytecode::compact_fn::execute;
 use crate::bytecode::compact_fn::property;
 use crate::bytecode::ir::Bytecode;
+use crate::bytecode::vm::Resumed;
 use crate::function::{CallEnv, Function, Upvalue};
 use crate::{RuntimeError, Value};
 
@@ -309,11 +310,24 @@ struct RootExit<'a> {
     realm_upvalue_slots: u128,
 }
 
+/// What became of an exit.
+enum ExitOutcome {
+    /// The interpreter frame finished the activation.
+    Finished(Result<Value, RuntimeError>),
+    /// The activation continues here at wide instruction `pc`: a loop no
+    /// accelerator claims came back, or its exit was already known to.
+    Continue { pc: usize },
+}
+
 /// Hands the current activation to an interpreter frame that resumes at
 /// bytecode instruction `ip`, and returns that frame's completion value. The
 /// frame is the one the general call path builds for this call -- the same
 /// environment (which admission proved the activation's own), the same
 /// received cells and `this` -- brought to this activation's state.
+///
+/// At a probed backedge the frame may hand the activation back instead
+/// (`vm/wide_resume.rs`); that backedge's exit then stays declined, so the
+/// loop runs here from then on.
 #[cold]
 #[inline(never)]
 #[allow(clippy::too_many_arguments)]
@@ -326,7 +340,19 @@ fn exit_to_interpreter(
     window: &mut [Value],
     env: &CallEnv,
     this_value: Option<Value>,
-) -> Result<Value, RuntimeError> {
+) -> ExitOutcome {
+    let bytecode = running_bytecode(callee, root_bytecode);
+    let Some(program) = super::program_for(bytecode) else {
+        return ExitOutcome::Finished(Err(missing_program()));
+    };
+    let probe = program.probed_backedge(ip);
+    if let Some(index) = probe
+        && program.backedge_is_native(index)
+    {
+        return ExitOutcome::Continue {
+            pc: program.backedge_jump_pc(index),
+        };
+    }
     let (upvalues, realm_upvalue_slots) = match callee {
         Value::Function(function) => (
             crate::bytecode::DirectCallUpvalues::Function(function),
@@ -334,21 +360,18 @@ fn exit_to_interpreter(
         ),
         _ => (root.upvalues, root.realm_upvalue_slots),
     };
-    let bytecode = running_bytecode(callee, root_bytecode);
-    let Some(program) = super::program_for(bytecode) else {
-        return Err(missing_program());
-    };
     program.record_exit();
     // `QJS_CF_TRACE=1` names every exit: the body, and the instruction the
     // interpreter resumes at.
     #[cfg(feature = "perf-counters")]
     if std::env::var_os("QJS_CF_TRACE").is_some() {
         eprintln!(
-            "CFEXIT params=({}) len={} ip {} op {:?}",
+            "CFEXIT params=({}) len={} ip {} op {:?}{}",
             bytecode.parameter_names().join(","),
             bytecode.code.len(),
             ip,
-            bytecode.code.get(ip as usize)
+            bytecode.code.get(ip as usize),
+            if probe.is_some() { " probed" } else { "" }
         );
     }
     let local_registers = program.local_registers as usize;
@@ -360,15 +383,48 @@ fn exit_to_interpreter(
         upvalues,
         realm_upvalue_slots,
     };
-    crate::bytecode::vm::resume_direct_call_bytecode(
+    let probe_target = probe.and_then(|_| match bytecode.code.get(ip as usize) {
+        Some(crate::bytecode::ir::Op::Jump(target)) => Some(*target),
+        _ => None,
+    });
+    let registers = crate::bytecode::vm::WideRegisters {
+        locals,
+        own_locals: program.own_locals,
+        stack,
+        depth: depth as usize,
+        tdz_marker: &program.tdz_marker,
+    };
+    match crate::bytecode::vm::resume_direct_call_bytecode(
         bytecode,
         env.clone(),
         slots,
         ip as usize,
-        locals,
-        program.own_locals,
-        &mut stack[..depth as usize],
-    )
+        registers,
+        probe_target,
+    ) {
+        Resumed::Finished(result) => ExitOutcome::Finished(result),
+        Resumed::HandedBack { backedge } => {
+            let Some(index) = u32::try_from(backedge)
+                .ok()
+                .and_then(|backedge| program.probed_backedge(backedge))
+            else {
+                return ExitOutcome::Finished(Err(missing_program()));
+            };
+            // `QJS_CF_TRACE=1` names each loop handed back to this tier.
+            #[cfg(feature = "perf-counters")]
+            if std::env::var_os("QJS_CF_TRACE").is_some() {
+                eprintln!(
+                    "CFNATIVE params=({}) len={} ip {backedge}",
+                    bytecode.parameter_names().join(","),
+                    bytecode.code.len()
+                );
+            }
+            program.keep_backedge_native(index);
+            ExitOutcome::Continue {
+                pc: program.backedge_jump_pc(index),
+            }
+        }
+    }
 }
 
 fn run(
@@ -751,10 +807,14 @@ fn run_frames(
                     depth,
                     &mut registers[current_base..current_base + current_len],
                     env,
-                    current_this.take(),
+                    current_this.clone(),
                 ) {
-                    Ok(value) => Action::Return(value),
-                    Err(error) => {
+                    ExitOutcome::Continue { pc: resume } => {
+                        pc = resume;
+                        continue;
+                    }
+                    ExitOutcome::Finished(Ok(value)) => Action::Return(value),
+                    ExitOutcome::Finished(Err(error)) => {
                         unwind(registers, frames, current_base + current_len);
                         return Err(error);
                     }

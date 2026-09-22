@@ -439,6 +439,38 @@ fn supplying_loop_plans_externally_does_not_change_which_plan_claims_a_site() {
     }
 }
 
+const HANDED_BACK_LOOP: &str = "function Box(v) { this.v = v; }
+     function twice(x) { return x + x; }
+     Box.prototype.get = function (i) { return twice(this.v) + i; };
+     function run(n) {
+         var box = new Box(1); var total = 0;
+         for (var i = 0; i < n; i++) { BODY }
+         return total;
+     }
+     run(2000);";
+
+#[test]
+fn a_loop_whose_accelerator_deoptimizes_is_handed_back_to_the_wide_tier() {
+    // The typed tier claims this loop and deoptimizes on its first call,
+    // because `get` is no closed-form leaf. The interpreter frame the loop
+    // exited to hands it back at the next backedge instead of running every
+    // remaining iteration generically.
+    let (value, counters) = counted(&HANDED_BACK_LOOP.replace("BODY", "total += box.get(i);"));
+    assert_eq!(value, Value::Number(2_003_000.0));
+    assert!(counters.executed_ops < 500, "{counters:?}");
+}
+
+#[test]
+fn a_loop_no_accelerator_enters_stays_on_the_wide_tier() {
+    // No typed program compiles for a loop with a block-scoped `let`, so the
+    // probe at the exit declines before any instruction runs and the tier
+    // keeps the loop, dead-zone marker and all.
+    let (value, counters) =
+        counted(&HANDED_BACK_LOOP.replace("BODY", "let step = box.get(i); total += step;"));
+    assert_eq!(value, Value::Number(2_003_000.0));
+    assert!(counters.executed_ops < 500, "{counters:?}");
+}
+
 #[test]
 fn an_inherited_getter_read_on_the_wide_tier_builds_no_general_frame() {
     let (value, counters) = counted(

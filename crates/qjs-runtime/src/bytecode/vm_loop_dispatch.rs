@@ -34,6 +34,26 @@ pub(super) struct LoopPlanView<'a> {
     pub(super) shared_numeric_mutation: &'a [NumericMutationLoopPlan],
 }
 
+impl<'a> LoopPlanView<'a> {
+    /// The accelerators for `bytecode`, compiling each family on first use.
+    pub(super) fn for_bytecode(bytecode: &'a super::ir::Bytecode) -> Self {
+        Self {
+            control: bytecode
+                .control_loop_plans
+                .get_or_init(|| ControlLoopPlan::compile_all(bytecode)),
+            numeric: bytecode
+                .numeric_loop_plans
+                .get_or_init(|| NumericLoopPlan::compile_all(bytecode)),
+            typed: bytecode
+                .typed_loop_programs
+                .get_or_init(|| super::typed_loop::compile_all(bytecode)),
+            shared_numeric_mutation: bytecode
+                .numeric_mutation_loop_plans
+                .get_or_init(|| NumericMutationLoopPlan::compile_all(bytecode)),
+        }
+    }
+}
+
 impl Vm<'_> {
     /// Frame-local numeric mutation loop plans, materialized from the shared
     /// bytecode plans on first deoptimization. Suppressing or rewriting a plan
@@ -50,16 +70,17 @@ impl Vm<'_> {
     }
 
     /// Performs one bytecode jump while preserving the counted-loop
-    /// accelerators attached to ordinary backward edges.
+    /// accelerators attached to ordinary backward edges. Returns whether an
+    /// accelerator took the loop; a declined edge only moved `ip`.
     pub(super) fn jump_with_loop_plans(
         &mut self,
         plans: LoopPlanView<'_>,
         target: usize,
         backedge: usize,
-    ) {
+    ) -> bool {
         if target >= backedge {
             self.ip = target;
-            return;
+            return false;
         }
         crate::diagnostics::count!(loop_backedges);
         let entered =
@@ -70,7 +91,7 @@ impl Vm<'_> {
                 || super::typed_loop::try_run_typed_loop(self, plans, target, backedge);
         if entered {
             crate::diagnostics::count!(loop_plan_entries);
-            return;
+            return true;
         }
         // Reaching here means all four engines were consulted and all four
         // declined, so the whole probe chain was overhead on this edge.
@@ -82,5 +103,6 @@ impl Vm<'_> {
             eprintln!("TLEDGE region {target}..{backedge}");
         }
         self.ip = target;
+        false
     }
 }

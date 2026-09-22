@@ -9,7 +9,7 @@
 
 use std::rc::Rc;
 
-use super::{NamedReadSite, NamedWriteSite, WideOp, WideProgram};
+use super::{NamedReadSite, NamedWriteSite, ProbedBackedge, WideOp, WideProgram};
 use crate::bytecode::compact_fn::MAX_REGISTERS;
 use crate::bytecode::compact_fn::compile::MAX_CALL_ARITY;
 use crate::bytecode::ir::{Bytecode, Op};
@@ -258,6 +258,12 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
     }
     let exit_backedges =
         has_backward_edge && (lowering.lowers_anything() || body_has_loop_accelerator(bytecode));
+    // A fused body's loops belong to the interpreter's fused instructions
+    // whether or not an accelerator claims them. Otherwise an unconditional
+    // backedge exits only for the accelerators, and is probed: when none
+    // claims the loop, the loop stays here instead of running generically.
+    let probe_backedges = exit_backedges;
+    let mut probed_backedges: Vec<ProbedBackedge> = Vec::new();
 
     let Some(entry_depth) = propagate_depths(code) else {
         return decline(trace, None, "inconsistent operand-stack depth");
@@ -570,6 +576,18 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                     right,
                 });
             }
+            Op::Jump(target) if probe_backedges && *target <= ip => {
+                let ip = u32::try_from(ip).ok()?;
+                ops.push(WideOp::Exit { ip, depth });
+                probed_backedges.push(ProbedBackedge {
+                    ip,
+                    jump_pc: u32::try_from(ops.len()).ok()?,
+                    depth,
+                });
+                ops.push(WideOp::Jump {
+                    target: u32::try_from(*target).ok()?,
+                });
+            }
             Op::Jump(target) | Op::JumpIfFalse(target) | Op::JumpIfTrue(target)
                 if exit_backedges && *target <= ip =>
             {
@@ -683,6 +701,8 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         activations: std::cell::Cell::new(0),
         exits: std::cell::Cell::new(0),
         exit_heavy: std::cell::Cell::new(false),
+        probed_backedges: probed_backedges.into_boxed_slice(),
+        native_backedges: std::cell::Cell::new(0),
     })
 }
 

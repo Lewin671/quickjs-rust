@@ -143,17 +143,22 @@ fn a_primitive_receiver_is_boxed_for_a_sloppy_method_and_kept_for_a_strict_one()
     );
 }
 
-/// Whether every backward edge of the program exits to the interpreter.
+/// Whether every backward edge of the program exits to the interpreter first:
+/// the only backward jumps are the probed ones, each right after its exit.
 fn backward_edges_exit(program: &super::WideProgram) -> bool {
     let has_exit = program
         .ops
         .iter()
         .any(|op| matches!(op, WideOp::Exit { .. }));
-    let backward_jump = program.ops.iter().enumerate().any(|(index, op)| {
-        matches!(op, WideOp::Jump { target } | WideOp::JumpIfFalsy { target, .. }
-            | WideOp::JumpIfTruthy { target, .. } if (*target as usize) <= index)
+    let unprobed_backward_jump = program.ops.iter().enumerate().any(|(index, op)| {
+        let backward = matches!(op, WideOp::Jump { target } | WideOp::JumpIfFalsy { target, .. }
+            | WideOp::JumpIfTruthy { target, .. } if (*target as usize) <= index);
+        backward
+            && (index == 0
+                || !matches!(program.ops[index - 1], WideOp::Exit { .. })
+                || !matches!(op, WideOp::Jump { .. }))
     });
-    has_exit && !backward_jump
+    has_exit && !unprobed_backward_jump
 }
 
 #[test]

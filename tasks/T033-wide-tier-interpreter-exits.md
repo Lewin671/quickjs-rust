@@ -23,6 +23,14 @@ then hands over its state; the interpreter resumes at that instruction.
   instruction reads it.
 - Exit-heavy judgement: after 64 activations, a program that exited on three
   in four is left to the general path.
+- Hand-back (`vm/wide_resume.rs`): an unconditional backward jump exits only
+  so the accelerators can claim its loop, and is probed. The exit is
+  followed by the jump itself. When no accelerator claims the loop at the
+  exit, no instruction runs and the tier keeps the loop; when one enters and
+  deoptimizes, the interpreter frame stops at the next probed backedge whose
+  accelerators decline and returns its locals and stack (a `Yield`
+  completion carrying no value). Either way that backedge's exit is declined
+  from then on, and the loop runs on the tier instead of generically.
 - The dispatch arm spells an exit as a call with arity `EXIT_ARGC`, so the
   driver's action type and match are unchanged (lottery rule).
 
@@ -51,7 +59,16 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   re-rolls: rejected, call-heavy cases paid the per-action boundary
   (binary-trees 1.026, md5 1.034, cdjs 1.023; sentinels 0.97-0.99).
 
+- Hand-back, on 309a604e + the getter change (single-run cycles):
+  hash-map 3.12G -> 2.78G, cdjs 3.38G -> 3.07G (both together with the
+  IsHTMLDDA tag check), raytrace-public-class-fields 2.94G -> 2.87G. Not yet
+  screened; hash-map's remaining generic work is `_rehash` running after its
+  computed-store exit.
+
 ## Next
+
+- Run computed stores (`SetProp`) natively; each exit leaves the rest of a
+  loop body, and its loop, to the interpreter.
 
 - Run guarded Math unary calls natively instead of exiting on them.
 - Admit bodies with a parameter prologue (default values) once their dead-zone
