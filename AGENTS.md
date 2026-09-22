@@ -162,6 +162,8 @@ global error models, or broad architecture docs. Full runbook:
   pushing.
 - Pushed `agent/**` branches get CI; a red or unexplained latest run blocks
   integration, but green remote CI never replaces local checks.
+- Owners may build and test in parallel, but performance timing on one host
+  is serialized through the main agent; parallel load corrupts every timing.
 - Remove merged worktrees and branches unless retained for diagnosis.
 
 ## Architecture Expectations
