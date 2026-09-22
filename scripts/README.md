@@ -86,6 +86,12 @@ each script is for.
   `--policy` input is structural only; checked-in-only `--require-gate` always
   fails for `nightly`, `release`, and `pr_sentinel` in v2. It neither calibrates
   hardware nor runs or enables a performance gate.
+- `perf-loop.sh`: Local inner loop for a performance unit. Builds the plan's
+  (or `--base` ref's) executable once per commit under `target/perf-loop/`,
+  builds the working-tree candidate, runs the hardware-counter screen with the
+  plan's screen-gate verdict (exit 3 on fail), lists the largest function-size
+  changes, and with `--trace <case>` summarizes the typed-loop trace on a
+  perf-counters build. Diagnostic only; never decision evidence.
 - `performance-preview.sh`: From a policy-selected harness, prepares the candidate
   SHA, explicit base SHA, and manifest-pinned QuickJS-NG on one shared host.
   Same-repository PRs use a base-owned `pull_request_target` harness; every

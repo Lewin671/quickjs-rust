@@ -76,13 +76,23 @@ keep the N-to-2N increment, which removes startup and parsing; external cases
 and scripts are whole-process. Candidate and base must print the same checksum
 or external sentinel, and a missing counter is an error, never a silent
 fallback to wall time. `--aa` screens the candidate against itself to show the
-current host's counter noise. The screen refuses to start above `--max-load`
-(half the logical CPUs by default) unless `--force` is given.
+current host's counter noise. Before starting, the screen waits up to
+`--settle` seconds for the load average to fall below `--max-load` (half the
+logical CPUs by default); on a host that stays busy it runs anyway and marks
+the wall column unreliable, since the counter ratios it judges tolerate load.
+`--require-quiet` refuses instead.
 
 On macOS the counters come from `/usr/bin/time -l`; on Linux from `perf stat`,
 which needs a kernel that exposes user-space counters. The screen writes no
 decision artifact: its JSON output carries `"decision_evidence": false`, and
 acceptance still follows the formal procedure below.
+
+`./scripts/perf-loop.sh --plan tasks/performance-units/<unit>.json` wraps
+the whole iteration: it builds and caches the plan's base executable, builds
+the working tree, screens the plan's gate cases, prints the verdict below and
+the largest function-size changes, and with `--trace <case>` adds the
+typed-loop trace histograms from a perf-counters build. `--base <ref>` runs an
+exploratory screen without a plan or verdict.
 
 ### Screen gate
 

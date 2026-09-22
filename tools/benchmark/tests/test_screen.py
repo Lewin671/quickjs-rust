@@ -143,11 +143,24 @@ class ScreenCaseTests(unittest.TestCase):
 
 
 class CliTests(unittest.TestCase):
-    def test_high_load_refuses_without_force(self):
+    def test_busy_host_is_reported_not_refused(self):
         with mock.patch("os.getloadavg", return_value=(9.0, 9.0, 9.0)):
+            self.assertEqual(screen.check_load(4.0, require_quiet=False), 9.0)
             with self.assertRaises(screen.ScreenError):
-                screen.check_load(4.0, force=False)
-            self.assertEqual(screen.check_load(4.0, force=True), 9.0)
+                screen.check_load(4.0, require_quiet=True)
+
+    def test_load_is_given_time_to_settle(self):
+        loads = iter([9.0, 7.0, 3.0])
+        slept = []
+        load = screen.check_load(4.0, require_quiet=True, settle_seconds=60,
+                                 sleep=slept.append, loadavg=lambda: (next(loads), 0.0, 0.0))
+        self.assertEqual((load, slept), (3.0, [5.0, 5.0]))
+
+    def test_settling_stops_after_its_budget(self):
+        slept = []
+        load = screen.check_load(4.0, require_quiet=False, settle_seconds=10,
+                                 sleep=slept.append, loadavg=lambda: (9.0, 0.0, 0.0))
+        self.assertEqual((load, slept), (9.0, [5.0, 5.0]))
 
     def test_aa_rejects_an_explicit_base(self):
         with tempfile.TemporaryDirectory() as work:

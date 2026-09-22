@@ -33,6 +33,7 @@ from .external_preview import (
     fetch_corpora,
     load_manifest,
 )
+from . import symbols
 from .process import ProcessResult, run_process
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -319,14 +320,83 @@ def geomean(values: Sequence[float]) -> float:
     return math.exp(sum(math.log(value) for value in values) / len(values))
 
 
-def check_load(max_load: float, force: bool) -> float:
-    load = os.getloadavg()[0]
-    if load > max_load and not force:
-        raise ScreenError(
-            f"1-minute load average {load:.2f} exceeds {max_load:.2f}; "
-            "quiet the machine or pass --force (counter ratios tolerate load, wall time does not)"
-        )
+def check_load(max_load: float, require_quiet: bool, settle_seconds: float = 0.0,
+               sleep: Callable[[float], None] | None = None,
+               loadavg: Callable[[], tuple[float, float, float]] | None = None) -> float:
+    """Wait up to `settle_seconds` for the 1-minute load to drop below
+    `max_load` (a build that just finished keeps it high for a while). A
+    still-busy host is reported, not refused, because the counter ratios the
+    screen judges tolerate load; `require_quiet` refuses instead."""
+    import time
+
+    sleep = sleep or time.sleep
+    loadavg = loadavg or os.getloadavg
+    waited = 0.0
+    load = loadavg()[0]
+    while load > max_load and waited < settle_seconds:
+        if waited == 0.0:
+            print(f"waiting for load {load:.2f} to settle below {max_load:.2f} ...", file=sys.stderr, flush=True)
+        sleep(5.0)
+        waited += 5.0
+        load = loadavg()[0]
+    if load > max_load and require_quiet:
+        raise ScreenError(f"1-minute load average {load:.2f} exceeds {max_load:.2f} and --require-quiet was given")
     return load
+
+
+# Plan gate ---------------------------------------------------------------
+
+@dataclass(frozen=True)
+class PlanGate:
+    unit_id: str
+    base_sha: str
+    target_ids: tuple[str, ...]
+    control_ids: tuple[str, ...]
+    target_max: float
+    control_max: float
+
+    def case_specs(self) -> list[str]:
+        """Targets, controls, then every sentinel, without duplicates."""
+        specs = [*self.target_ids, *self.control_ids]
+        specs += [f"sentinel/{case_id}" for case_id in _internal_case_ids("sentinel")]
+        return list(dict.fromkeys(specs))
+
+
+def load_plan_gate(path: Path) -> PlanGate:
+    with path.open(encoding="utf-8") as handle:
+        unit = json.load(handle)
+    try:
+        gate = unit["fast_gate"]
+        return PlanGate(
+            unit_id=unit["unit_id"],
+            base_sha=unit["base_sha"],
+            target_ids=tuple(gate["target_ids"]),
+            control_ids=tuple(gate["control_ids"]),
+            target_max=float(gate["target_max_candidate_over_base"]),
+            control_max=float(gate["control_max_candidate_over_base"]),
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise ScreenError(f"{path}: not a performance unit plan with a fast_gate ({error})") from error
+
+
+def gate_verdict(results: Sequence[CaseResult], gate: PlanGate) -> tuple[bool, list[str]]:
+    """Apply the screen gate from docs/performance-workflow.md to cycles."""
+    by_id = {result.id: result for result in results}
+    failures: list[str] = []
+    for case_id in gate.target_ids:
+        result = by_id[case_id]
+        median = result.median("cycles")
+        if median > gate.target_max:
+            failures.append(f"target {case_id}: median cycles {median:.4f} > {gate.target_max}")
+        if result.spread("cycles")[1] >= 1.0:
+            failures.append(f"target {case_id}: a pair did not improve (max {result.spread('cycles')[1]:.4f})")
+    for case_id in gate.case_specs():
+        if case_id in gate.target_ids:
+            continue
+        median = by_id[case_id].median("cycles")
+        if median > gate.control_max:
+            failures.append(f"control {case_id}: median cycles {median:.4f} > {gate.control_max}")
+    return not failures, failures
 
 
 # Report and CLI ----------------------------------------------------------
@@ -379,8 +449,16 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--cache-root", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--max-load", type=float, default=(os.cpu_count() or 2) / 2)
-    parser.add_argument("--force", action="store_true", help="run even when the load average is high")
+    parser.add_argument("--settle", type=float, default=30.0,
+                        help="seconds to wait for a high load average to drop before starting")
+    parser.add_argument("--require-quiet", action="store_true",
+                        help="refuse to run while the load average exceeds --max-load")
     parser.add_argument("--json", type=Path, help="also write per-pair ratios as JSON")
+    parser.add_argument("--plan", type=Path,
+                        help="unit plan: screen its fast_gate targets/controls plus the sentinels and "
+                             "print a pass/fail verdict (exit 3 on fail)")
+    parser.add_argument("--symbols", type=int, metavar="N", default=0,
+                        help="also list the N largest function-size changes between the executables")
     return parser
 
 
@@ -403,10 +481,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"error: not an executable: {binary}", file=sys.stderr)
             return 2
     try:
-        load_before = check_load(args.max_load, args.force)
+        load_before = check_load(args.max_load, args.require_quiet, args.settle)
         tool = counter_tool()
         with tempfile.TemporaryDirectory(prefix="qjs-screen-") as work:
-            cases = resolve_cases(args.case or ["sentinel"], args.cache_root, Path(work))
+            gate = load_plan_gate(args.plan) if args.plan else None
+            specs = list(dict.fromkeys([*(gate.case_specs() if gate else []), *args.case]))
+            cases = resolve_cases(specs or ["sentinel"], args.cache_root, Path(work))
             results = []
             for case in cases:
                 print(f"screening {case.id} ...", file=sys.stderr, flush=True)
@@ -417,6 +497,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     print(render(results, args.pairs, args.aa))
     print(f"load average: {load_before:.2f} before, {load_after:.2f} after")
+    if max(load_before, load_after) > args.max_load:
+        print(f"warning: load exceeded {args.max_load:.2f}; the wall column is unreliable, "
+              "counter ratios are still usable")
+    verdict = None
+    if gate is not None:
+        passed, failures = gate_verdict(results, gate)
+        verdict = {"unit_id": gate.unit_id, "passed": passed, "failures": failures}
+        print(f"\nscreen gate for {gate.unit_id}: {'PASS' if passed else 'FAIL'}")
+        for failure in failures:
+            print(f"  - {failure}")
+    if args.symbols:
+        try:
+            print("\n" + symbols.render(symbols.size_diff(base, candidate), args.symbols))
+        except symbols.SymbolError as error:
+            print(f"\nsymbol sizes unavailable: {error}")
     if args.json:
         args.json.write_text(json.dumps({
             "artifact_type": "quickjs-screen",
@@ -427,8 +522,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             "pairs": args.pairs,
             "load_average": {"before": load_before, "after": load_after},
             "cases": [{"id": r.id, "kind": r.kind, "iterations": r.iterations, "ratios": r.ratios} for r in results],
+            "gate": verdict,
         }, indent=2) + "\n", encoding="utf-8")
-    return 0
+    return 3 if verdict is not None and not verdict["passed"] else 0
 
 
 if __name__ == "__main__":
