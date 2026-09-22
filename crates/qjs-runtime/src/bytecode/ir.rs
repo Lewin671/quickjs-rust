@@ -738,7 +738,7 @@ pub struct Bytecode {
     /// Per-call metadata precomputed once at construction. Each of these used to
     /// be recomputed on every call by recursively walking `code` (and nested
     /// function/class op trees) and materializing a fresh `BTreeSet`/`Vec`,
-    /// which dominated call cost (`tasks/T011-call-performance.md`). A
+    /// which dominated call cost (`tasks/archive/T011-call-performance.md`). A
     /// `Bytecode` is immutable after compilation and lives behind `Rc`, and
     /// nested bytecodes are fully built before their parent, so memoizing here
     /// is a pure optimization with identical results.

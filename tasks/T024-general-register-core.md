@@ -70,7 +70,8 @@ Two further measured facts shape the design rather than the schedule:
 2. **Not a repacked stack instruction stream.** A "compact generic bytecode
    core" that lowered ordinary bytecode while keeping the VM helpers was
    already built and measured A* 0.997, hash-map 1.125, dynamic-method-call
-   1.621 (`tasks/T021-single-vm-frame-stack.md:2086`). That shape is closed.
+   1.621 (`tasks/archive/T021-single-vm-frame-stack-log.md`, "2026-07-29
+   rejected compact generic bytecode core"). That shape is closed.
 3. **Zero-based registers per activation.** The single-VM frame stack worked
    mechanically — 254,001 nested activations became 2,001 window switches —
    and measured 1.2678, because every register access then paid a `base +`

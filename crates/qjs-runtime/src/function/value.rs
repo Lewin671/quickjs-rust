@@ -137,7 +137,7 @@ pub struct FunctionData {
     /// Parameter names. Held behind `Rc` so the frequent `Function` value
     /// clones (every property read, capture sync, and call setup) only bump a
     /// refcount instead of deep-cloning the parameter AST, which dominated call
-    /// cost (`tasks/T011-call-performance.md`). Parameters are immutable after
+    /// cost (`tasks/archive/T011-call-performance.md`). Parameters are immutable after
     /// the function is created.
     pub params: Rc<FunctionParams>,
     /// Opaque state carried by native closure-like functions (promise

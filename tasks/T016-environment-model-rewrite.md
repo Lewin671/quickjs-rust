@@ -12,7 +12,7 @@ This campaign subsumes:
 
 - `T014-var-closure-binding-staleness.md` — capture staleness is removed at the
   root because every captured binding is one shared cell, read/written by index.
-- `T011-call-performance.md` — `with_frame_locals` / `function_capture_env` stop
+- `archive/T011-call-performance.md` — `with_frame_locals` / `function_capture_env` stop
   cloning a per-call name-keyed locals map, cutting the dominant nested-call
   cost behind the ~536 `TypedArray/*` timeouts.
 

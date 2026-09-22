@@ -326,7 +326,7 @@ T019 scope (it is VM dispatch / environment-sync work, not object/array
 layout) and it is **not** a safe quick fix: it sits in the same
 historically fragile realm/globalThis-sync territory that took many
 dedicated sessions to stabilize (see memory `Parity progress` sessions on
-realm semantics). Recorded here and in `T018-broad-performance.md` as the
+realm semantics). Recorded here and in `archive/T018-broad-performance-log.md` as the
 clear next priority, deliberately not attempted without a full session's
 verification budget (focused Annex B / sloppy-var Test262 scans before and
 after, not just the broad-micro portfolio).

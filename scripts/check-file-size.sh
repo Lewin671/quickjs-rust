@@ -78,4 +78,8 @@ check_limit "Python source" 800 '*.py' exclude '/tests/'
 
 check_limit "Python test" 1200 '*.py' include '/tests/'
 
+# Active task files carry a contract and current status; finished experiment
+# logs move to tasks/archive/, which this pattern does not match.
+check_limit "task" 600 '*.md' include '(^|/)tasks/[^/]+\.md$'
+
 exit "$status"
