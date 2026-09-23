@@ -119,13 +119,13 @@ fn prototype_receiver_named_value(
             if let Some(value) = crate::string::string_property(text, key) {
                 return Some(value);
             }
-            if env.dynamic_function_realm_global().is_some() {
+            if env.has_dynamic_function_realm_global() {
                 return None;
             }
             env.realm().string_prototype()?
         }
         Value::Number(_) => {
-            if env.dynamic_function_realm_global().is_some() {
+            if env.has_dynamic_function_realm_global() {
                 return None;
             }
             env.realm().number_prototype()?

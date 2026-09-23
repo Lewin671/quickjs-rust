@@ -803,7 +803,7 @@ impl Vm<'_> {
             || self.bytecode.contains_with()
             || self.env.deopt_bindings().is_some()
             || self.env.has_module_imports()
-            || self.env.dynamic_function_realm_global().is_some()
+            || self.env.has_dynamic_function_realm_global()
             || self.env.has_local_binding(name)
             || self.env.has_module_import(name)
             || self.env.is_global_lexical_binding(name)

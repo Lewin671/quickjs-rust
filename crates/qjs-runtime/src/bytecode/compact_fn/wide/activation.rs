@@ -1609,7 +1609,7 @@ fn construct_plain_array(env: &CallEnv, callee: &Value, arguments: &[Value]) -> 
     if function.native != Some(crate::NativeFunction::Array)
         || function.bound.is_some()
         || env.array_prototype_intrinsic_override().is_some()
-        || env.dynamic_function_realm_global().is_some()
+        || env.has_dynamic_function_realm_global()
     {
         return None;
     }

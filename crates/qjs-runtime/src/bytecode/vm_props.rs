@@ -124,7 +124,7 @@ impl Vm<'_> {
                 .any(|name| matches!(name.as_str(), "eval" | "Function" | "$262"))
             && self.env.deopt_bindings().is_none()
             && !self.env.has_module_imports()
-            && self.env.dynamic_function_realm_global().is_none()
+            && !self.env.has_dynamic_function_realm_global()
     }
 
     /// Validates a realm-backed slot as a stable ordinary global data read.
@@ -293,7 +293,7 @@ impl Vm<'_> {
     }
 
     fn primitive_prototype_env(&self) -> CallEnv {
-        if self.env.dynamic_function_realm_global().is_some() {
+        if self.env.has_dynamic_function_realm_global() {
             self.current_env()
         } else {
             self.realm_env()
@@ -551,7 +551,7 @@ impl Vm<'_> {
                 // rebuild a CallEnv and rediscover the mutable String binding
                 // on every iteration. Accessors, Proxies, and exotic links
                 // decline before observable work and replay the generic path.
-                if self.env.dynamic_function_realm_global().is_none()
+                if !self.env.has_dynamic_function_realm_global()
                     && let Some(prototype) = self.realm.string_prototype()
                 {
                     return match ordinary_chain_data_value(&prototype, key) {

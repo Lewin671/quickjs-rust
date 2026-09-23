@@ -57,7 +57,7 @@ pub(super) fn array_species_create(
 fn species_is_intrinsic_array(array: &ArrayRef, env: &CallEnv) -> bool {
     if !array.has_no_own_named_properties()
         || env.array_prototype_intrinsic_override().is_some()
-        || env.dynamic_function_realm_global().is_some()
+        || env.has_dynamic_function_realm_global()
     {
         return false;
     }
