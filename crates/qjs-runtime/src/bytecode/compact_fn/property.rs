@@ -629,3 +629,31 @@ pub(super) fn try_store_global_var(name: &str, value: &Value, env: &CallEnv) -> 
     }
     env.replace_existing_realm_with_cell(name, value.clone(), &cell)
 }
+
+/// A class field initializer that only reads a named property of a binding
+/// it captured -- `color = Material.defaultColor` -- answered without a call
+/// frame: its body is exactly that read and a return, and the captured
+/// binding is initialized. `None` leaves the thunk to the ordinary call.
+pub(in crate::bytecode) fn field_initializer_member_read(
+    thunk: &crate::Function,
+    env: &CallEnv,
+) -> Option<Result<Value, RuntimeError>> {
+    let bytecode = thunk.bytecode.as_ref()?;
+    let [
+        crate::bytecode::ir::Op::GetPropNamed { key, cache },
+        crate::bytecode::ir::Op::Return,
+    ] = bytecode.code.as_slice()
+    else {
+        return None;
+    };
+    let slot = cache.local_slot()?;
+    if thunk.upvalues.len() != bytecode.received_upvalue_slots().len() {
+        return None;
+    }
+    let index = bytecode.readonly_received_upvalue_index(slot)?;
+    let receiver = thunk.upvalues.get(index)?.get();
+    if receiver.is_uninitialized_lexical_marker() {
+        return None;
+    }
+    Some(get_prop_named(&receiver, key, cache, env))
+}
