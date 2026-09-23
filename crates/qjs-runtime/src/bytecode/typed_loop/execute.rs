@@ -838,14 +838,22 @@ fn call_numeric_native(callee: &Value, first: Typed, second: Typed, arity: u8) -
         // `Math.random` advances the realm's generator and nothing else, and
         // this operation either answers or stops the program before the call,
         // so no draw is ever replayed.
-        0 if native == crate::function::NativeFunction::MathRandom => {
-            crate::math::random_unit_interval()
-        }
+        0 => return draw_random(native),
         1 => super::super::vm_numeric_leaf::math_unary(native, first.number()?)?,
         2 => super::super::vm_numeric_leaf::math_binary(native, first.number()?, second.number()?)?,
         _ => return None,
     };
     Some(Typed::Number(value))
+}
+
+/// `Math.random()`, the one intrinsic answered without arguments. Out of
+/// line: `call_numeric_native` is inlined into the dispatch loop, whose
+/// register allocation re-rolls when its arms grow.
+#[cold]
+#[inline(never)]
+fn draw_random(native: crate::function::NativeFunction) -> Option<Typed> {
+    (native == crate::function::NativeFunction::MathRandom)
+        .then(|| Typed::Number(crate::math::random_unit_interval()))
 }
 
 /// Answers a resolved call whose whole body a closed-form leaf evaluator can
