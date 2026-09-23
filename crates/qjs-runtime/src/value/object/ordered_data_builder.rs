@@ -55,6 +55,7 @@ impl OrderedDataPropertyBuilder {
             symbol_brand: Cell::new(SymbolBrand::None),
             immutable_prototype_exotic: Cell::new(false),
             module_namespace_exotic: Cell::new(false),
+            string_indices_pending: Cell::new(false),
             cold: OnceCell::new(),
         }))
     }

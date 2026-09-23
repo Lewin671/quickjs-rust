@@ -160,3 +160,38 @@ fn typeof_name_literals_compare_by_identity_and_by_text() {
         ))
     );
 }
+
+#[test]
+fn string_wrapper_index_properties_are_defined_when_observed() {
+    // A wrapper defines its index properties only when its property table is
+    // read by index or as a whole; every observation below must match a
+    // wrapper that defined them eagerly.
+    assert_eq!(
+        eval(
+            "var out = []; \
+             var s = new String(\"ab\"); \
+             s.foo = 1; \
+             out.push(Object.getOwnPropertyNames(s).join()); \
+             out.push(JSON.stringify(Object.getOwnPropertyDescriptor(s, \"1\"))); \
+             out.push(s[1], \"0\" in s, s.hasOwnProperty(\"1\"), s.hasOwnProperty(\"2\"), delete s[0], s[0]); \
+             try { Object.defineProperty(s, \"0\", { value: \"z\" }); out.push(\"no throw\"); } catch (e) { out.push(e instanceof TypeError); } \
+             out.push(Object.keys(s).join()); \
+             var keys = []; for (var k in s) keys.push(k); out.push(keys.join()); \
+             s[1] = \"q\"; out.push(s[1]); \
+             out.push(Object.isFrozen(Object.freeze(new String(\"xy\")))); \
+             String.prototype.probe = function () { return this.length + \":\" + this[1] + \":\" + typeof this + \":\" + Object.keys(this).join(); }; \
+             out.push(\"cd\".probe()); \
+             String.prototype.plain = function () { return this.replace(\"c\", \"C\") + this.toUpperCase(); }; \
+             out.push(\"cd\".plain()); \
+             var t = new String(\"hi\"); t[5] = \"x\"; out.push(Object.getOwnPropertyNames(t).join(), t.length); \
+             out.push(Object.entries(new String(\"ok\")).join(\"|\")); \
+             out.push(Reflect.ownKeys(new String(\"12\")).join()); \
+             out.join(\" \");"
+        ),
+        Ok(Value::String(
+            "0,1,length,foo {\"value\":\"b\",\"writable\":false,\"enumerable\":true,\"configurable\":false} b true true false false a true 0,1,foo 0,1,foo b true 2:d:object:0,1 CdCD 0,1,5,length 2 0,o|1,k 0,1,length"
+                .to_owned()
+                .into()
+        ))
+    );
+}

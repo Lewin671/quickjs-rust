@@ -5,7 +5,7 @@ use crate::{
     to_js_string_with_env, to_length_with_env, to_number_with_env, to_uint16_with_env,
 };
 
-use super::{STRING_DATA_PROPERTY, push_code_point, string_from_code_unit};
+use super::{push_code_point, string_from_code_unit};
 use crate::CallEnv;
 
 pub(crate) fn native_string(
@@ -147,10 +147,9 @@ fn require_object_coercible(value: Value, context: &str) -> Result<Value, Runtim
     }
 }
 
-/// Installs a String object's internal data, `length`, and one ordinary
-/// non-writable index property per UTF-16 code unit. Keys come from the
-/// realm's shared set and index values from its code-unit strings, so a short
-/// wrapper such as `new String(7)` allocates only its property storage.
+/// Installs a String object's internal data and `length`, and defers its
+/// ordinary non-writable index properties, one per UTF-16 code unit, until
+/// its property table is first read (`ObjectRef::properties`).
 pub(crate) fn define_string_data(object: &ObjectRef, value: &crate::JsString, env: &CallEnv) {
     let keys = env.realm().string_object_keys();
     object.define_shared_property(
@@ -166,27 +165,13 @@ pub(crate) fn define_string_data(object: &ObjectRef, value: &crate::JsString, en
             false,
         ),
     );
-    for (index, code_unit) in crate::string::code_units(value).enumerate() {
-        object.define_shared_property(
-            keys.index(index),
-            Property::data(
-                Value::String(env.realm().string_code_unit(code_unit)),
-                true,
-                false,
-                false,
-            ),
-        );
-    }
+    // The index properties are defined when the wrapper's property table
+    // is first read; a wrapper made only to call a method never needs them.
+    object.defer_string_indices();
 }
 
 pub(crate) fn string_object_value(object: &ObjectRef) -> Option<String> {
-    match object.own_property(STRING_DATA_PROPERTY) {
-        Some(Property {
-            value: Value::String(value),
-            ..
-        }) => Some(value.to_string()),
-        _ => None,
-    }
+    object.string_data().map(|value| value.to_string())
 }
 
 pub(crate) fn is_string_object(object: &ObjectRef) -> bool {

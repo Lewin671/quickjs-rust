@@ -19,7 +19,7 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return OwnDataPropertyRead::NeedsSlowPath;
         }
-        self.0.properties.borrow().own_data_read(key)
+        self.properties_for(key).borrow().own_data_read(key)
     }
 
     /// Resolves `key` to a stable own-property slot in this object's compact
@@ -30,7 +30,7 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return None;
         }
-        match &*self.0.properties.borrow() {
+        match &*self.properties_for(key).borrow() {
             PropertyStorage::Small { entries } => {
                 entries.iter().position(|(candidate, property)| {
                     candidate.as_ref() == key && !property.is_accessor()
@@ -63,7 +63,7 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return None;
         }
-        match &*self.0.properties.borrow() {
+        match &*self.properties_for(key).borrow() {
             PropertyStorage::Small { entries } => {
                 entries
                     .iter()
@@ -199,7 +199,7 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return None;
         }
-        let properties = self.0.properties.borrow();
+        let properties = self.properties_for(key).borrow();
         let (shape, slot) = match &*properties {
             PropertyStorage::Shaped { shape, properties } => {
                 let slot = *shape.lookup.get(key)?;
@@ -241,7 +241,7 @@ impl ObjectRef {
 impl ObjectRef {
     #[cfg(feature = "perf-counters")]
     pub(crate) fn storage_kind_for_trace(&self) -> &'static str {
-        match &*self.0.properties.borrow() {
+        match &*self.properties().borrow() {
             PropertyStorage::Small { .. } => "small",
             PropertyStorage::Dynamic(_) => "dynamic",
             PropertyStorage::Shaped { .. } => "shaped",

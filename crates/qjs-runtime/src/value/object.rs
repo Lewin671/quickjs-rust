@@ -370,6 +370,12 @@ struct ObjectData {
     symbol_brand: Cell<SymbolBrand>,
     immutable_prototype_exotic: Cell<bool>,
     module_namespace_exotic: Cell<bool>,
+    /// A String wrapper whose index properties are not defined yet: they are
+    /// defined, from its [[StringData]], before anything reads its property
+    /// table (`ObjectRef::properties`). Boxing a string as a sloppy
+    /// function's `this` used to define one property per code unit on every
+    /// call, which is quadratic in a method called on a long string.
+    string_indices_pending: Cell<bool>,
     cold: OnceCell<Box<ObjectColdData>>,
 }
 
@@ -907,7 +913,7 @@ impl fmt::Debug for ObjectRef {
             .and_then(|cold| cold.to_string_tag.borrow().clone());
         formatter
             .debug_struct("ObjectRef")
-            .field("properties", &self.0.properties.borrow().len())
+            .field("properties", &self.properties().borrow().len())
             .field("symbol_properties", &symbol_property_count)
             .field("has_prototype", &self.0.prototype.borrow().is_some())
             .field("to_string_tag", &to_string_tag)
@@ -925,6 +931,66 @@ impl fmt::Debug for ObjectRef {
 }
 
 impl ObjectRef {
+    /// The own string-keyed property table, after defining a String
+    /// wrapper's pending index properties.
+    #[inline(always)]
+    fn properties(&self) -> &RefCell<PropertyStorage> {
+        if self.0.string_indices_pending.get() {
+            self.define_pending_string_indices();
+        }
+        &self.0.properties
+    }
+
+    /// The property table for an operation on `key` alone: a String
+    /// wrapper's pending index properties matter only to an index key.
+    #[inline(always)]
+    fn properties_for(&self, key: &str) -> &RefCell<PropertyStorage> {
+        if self.0.string_indices_pending.get() && is_array_index_key(key) {
+            self.define_pending_string_indices();
+        }
+        &self.0.properties
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn define_pending_string_indices(&self) {
+        self.0.string_indices_pending.set(false);
+        let Some(text) = self.string_data() else {
+            return;
+        };
+        for (index, code_unit) in crate::string::code_units(&text).enumerate() {
+            self.define_shared_property(
+                Rc::from(index.to_string()),
+                Property::data(
+                    Value::String(crate::string::js_string_from_code_unit(code_unit)),
+                    true,
+                    false,
+                    false,
+                ),
+            );
+        }
+    }
+
+    /// Defers a String wrapper's index properties -- one per code unit of
+    /// its [[StringData]] -- until its property table is next read.
+    pub(crate) fn defer_string_indices(&self) {
+        self.0.string_indices_pending.set(true);
+    }
+
+    /// A String wrapper's [[StringData]], read without defining its index
+    /// properties.
+    pub(crate) fn string_data(&self) -> Option<crate::JsString> {
+        match self
+            .0
+            .properties
+            .borrow()
+            .value(crate::string::STRING_DATA_PROPERTY)
+        {
+            Some(Value::String(text)) => Some(text),
+            _ => None,
+        }
+    }
+
     pub(crate) fn new(properties: HashMap<String, Value>) -> Self {
         Self::with_prototype(properties, None)
     }
@@ -963,6 +1029,7 @@ impl ObjectRef {
             symbol_brand: Cell::new(SymbolBrand::None),
             immutable_prototype_exotic: Cell::new(false),
             module_namespace_exotic: Cell::new(false),
+            string_indices_pending: Cell::new(false),
             cold: OnceCell::new(),
         }))
     }
@@ -1010,6 +1077,7 @@ impl ObjectRef {
             symbol_brand: Cell::new(SymbolBrand::None),
             immutable_prototype_exotic: Cell::new(false),
             module_namespace_exotic: Cell::new(false),
+            string_indices_pending: Cell::new(false),
             cold: OnceCell::new(),
         }))
     }
@@ -1038,6 +1106,7 @@ impl ObjectRef {
             symbol_brand: Cell::new(SymbolBrand::None),
             immutable_prototype_exotic: Cell::new(false),
             module_namespace_exotic: Cell::new(false),
+            string_indices_pending: Cell::new(false),
             cold: OnceCell::new(),
         }))
     }
@@ -1183,7 +1252,7 @@ impl ObjectRef {
     /// behaviour (a module namespace, a typed array) is not answered here;
     /// callers check for it first.
     pub(crate) fn own_property_enumerable(&self, key: &str) -> Option<bool> {
-        self.0.properties.borrow().enumerable(key)
+        self.properties_for(key).borrow().enumerable(key)
     }
 
     pub(crate) fn set_module_namespace_bindings(&self, bindings: ModuleNamespaceBindings) {
@@ -1191,7 +1260,7 @@ impl ObjectRef {
     }
 
     pub(crate) fn get(&self, key: &str) -> Option<Value> {
-        self.0.properties.borrow().value(key).or_else(|| {
+        self.properties_for(key).borrow().value(key).or_else(|| {
             self.0
                 .prototype
                 .borrow()
@@ -1201,7 +1270,7 @@ impl ObjectRef {
     }
 
     pub(crate) fn property(&self, key: &str) -> Option<Property> {
-        self.0.properties.borrow().get(key).or_else(|| {
+        self.properties_for(key).borrow().get(key).or_else(|| {
             self.0
                 .prototype
                 .borrow()
@@ -1215,6 +1284,7 @@ impl ObjectRef {
     /// property cannot intercept an index store with an inherited accessor or a
     /// non-writable data property.
     pub(crate) fn has_own_index_property(&self) -> bool {
+        let _ = self.properties();
         self.0.index_property_count.get() > 0
     }
 
@@ -1313,7 +1383,7 @@ impl ObjectRef {
     pub(crate) fn set_shared_key(&self, key: Rc<str>, value: Value) {
         let establishes_realm_identity = key.as_ref() == "globalThis"
             && matches!(&value, Value::Object(global_this) if self.ptr_eq(global_this));
-        let mut properties = self.0.properties.borrow_mut();
+        let mut properties = self.properties_for(&key).borrow_mut();
         if let Some(property) = properties.get_mut(&key) {
             if property.writable {
                 property.value = value;
@@ -1379,7 +1449,7 @@ impl ObjectRef {
                 .set(self.0.index_property_count.get() + 1);
         }
         {
-            let mut properties = self.0.properties.borrow_mut();
+            let mut properties = self.properties_for(&key).borrow_mut();
             properties.insert_absent(key, Property::enumerable(value));
             self.bump_property_revision();
         }
@@ -1393,7 +1463,7 @@ impl ObjectRef {
         let establishes_realm_identity = key == "globalThis"
             && !property.is_accessor()
             && matches!(&property.value, Value::Object(global_this) if self.ptr_eq(global_this));
-        let mut properties = self.0.properties.borrow_mut();
+        let mut properties = self.properties_for(&key).borrow_mut();
         if let Some(existing) = properties.get_mut(key.as_str()) {
             *existing = property;
         } else {
@@ -1421,7 +1491,7 @@ impl ObjectRef {
             &*key, "globalThis",
             "the realm identity capture needs define_property"
         );
-        let mut properties = self.0.properties.borrow_mut();
+        let mut properties = self.properties_for(&key).borrow_mut();
         if let Some(existing) = properties.get_mut(&key) {
             *existing = property;
         } else {
@@ -1452,7 +1522,7 @@ impl ObjectRef {
     }
 
     pub(crate) fn set_internal_non_enumerable(&self, key: &str, value: Value) {
-        let mut properties = self.0.properties.borrow_mut();
+        let mut properties = self.properties_for(key).borrow_mut();
         if let Some(property) = properties.get_mut(key) {
             property.value = value;
             self.bump_property_revision();
@@ -1466,7 +1536,7 @@ impl ObjectRef {
     /// in this object's chain. Used by `isPrototypeOf`/`instanceof` to walk past
     /// a function sitting mid-chain.
     pub(crate) fn has_own_property(&self, key: &str) -> bool {
-        self.0.properties.borrow().contains_key(key)
+        self.properties_for(key).borrow().contains_key(key)
     }
 
     pub(crate) fn has_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
@@ -1488,8 +1558,7 @@ impl ObjectRef {
 
     pub(crate) fn seal(&self) {
         self.prevent_extensions();
-        self.0
-            .properties
+        self.properties()
             .borrow_mut()
             .for_each_mut(Property::make_non_configurable);
         if let Some(cold) = self.0.cold_if_present() {
@@ -1500,7 +1569,7 @@ impl ObjectRef {
     }
 
     pub(crate) fn append_string_property(&self, key: &str, suffix: &str) -> Option<Value> {
-        let mut properties = self.0.properties.borrow_mut();
+        let mut properties = self.properties_for(key).borrow_mut();
         let property = properties.get_mut(key)?;
         if !property.writable || property.is_accessor() {
             return None;
@@ -1516,8 +1585,7 @@ impl ObjectRef {
     pub(crate) fn is_sealed(&self) -> bool {
         !self.0.extensible.get()
             && self
-                .0
-                .properties
+                .properties()
                 .borrow()
                 .all(|property| !property.configurable)
             && self.0.cold_if_present().is_none_or(|cold| {
@@ -1530,8 +1598,7 @@ impl ObjectRef {
 
     pub(crate) fn freeze(&self) {
         self.prevent_extensions();
-        self.0
-            .properties
+        self.properties()
             .borrow_mut()
             .for_each_mut(Property::freeze_data);
         if let Some(cold) = self.0.cold_if_present() {
@@ -1544,8 +1611,7 @@ impl ObjectRef {
     pub(crate) fn is_frozen(&self) -> bool {
         !self.0.extensible.get()
             && self
-                .0
-                .properties
+                .properties()
                 .borrow()
                 .all(|property| !property.configurable && !property.writable)
             && self.0.cold_if_present().is_none_or(|cold| {
@@ -1557,7 +1623,7 @@ impl ObjectRef {
     }
 
     pub(crate) fn own_property(&self, key: &str) -> Option<Property> {
-        let mut property = self.0.properties.borrow().get(key)?;
+        let mut property = self.properties_for(key).borrow().get(key)?;
         if self.0.module_namespace_exotic.get()
             && let Some(cold) = self.0.cold_if_present()
             && let Some(bindings) = cold.module_namespace_bindings.borrow().as_ref()
@@ -1575,7 +1641,7 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return None;
         }
-        self.0.properties.borrow().writable_number(key)
+        self.properties_for(key).borrow().writable_number(key)
     }
 
     /// Updates an existing ordinary own data property without cloning its
@@ -1592,8 +1658,7 @@ impl ObjectRef {
         let establishes_realm_identity = key == "globalThis"
             && matches!(value, Value::Object(global_this) if self.ptr_eq(global_this));
         let result = self
-            .0
-            .properties
+            .properties_for(key)
             .borrow_mut()
             .write_existing_data(key, value);
         if matches!(result, OwnDataPropertyWrite::Written) {
@@ -1657,7 +1722,7 @@ impl ObjectRef {
         if !self.0.module_namespace_exotic.get() {
             return Ok(None);
         }
-        let mut property = match self.0.properties.borrow().get(key) {
+        let mut property = match self.properties().borrow().get(key) {
             Some(property) => property,
             None => return Ok(None),
         };
@@ -1687,7 +1752,7 @@ impl ObjectRef {
     }
 
     pub(crate) fn delete_own_property(&self, key: &str) -> bool {
-        let mut properties = self.0.properties.borrow_mut();
+        let mut properties = self.properties_for(key).borrow_mut();
         if properties
             .get(key)
             .is_some_and(|property| !property.configurable)
@@ -1733,7 +1798,7 @@ impl ObjectRef {
     }
 
     fn ordered_property_names(&self, include: impl Fn(&Property) -> bool) -> Vec<String> {
-        let properties = self.0.properties.borrow();
+        let properties = self.properties().borrow();
         if let PropertyStorage::Small { entries } = &*properties {
             if self.0.index_property_count.get() == 0 {
                 return entries
