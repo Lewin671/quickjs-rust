@@ -733,6 +733,7 @@ fn run_frames(
                             site.is_strict,
                             assigned,
                             env,
+                            Some(&site.creation),
                         ) {
                             // The assigned value stays in the object's
                             // register, matching `SetPropNamed`'s stack effect.

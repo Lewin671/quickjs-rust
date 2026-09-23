@@ -689,3 +689,32 @@ fn primitive_string_reads_answer_like_the_interpreter() {
         Value::String("3|b|98||||a/3|é|233|patched|||x".into())
     );
 }
+
+#[test]
+fn a_remembered_property_creation_still_meets_later_setters_and_locks() {
+    assert_eq!(
+        value_of(
+            "function Point(x) { this.x = x; }
+             var made = [];
+             for (var i = 0; i < 5; i++) made.push(new Point(i).x);
+             var log = [];
+             Object.defineProperty(Point.prototype, 'x', {
+                 set(v) { log.push('proto:' + v); }, get() { return 'accessor'; }, configurable: true });
+             var a = new Point(7);
+             delete Point.prototype.x;
+             var b = new Point(8);
+             Object.defineProperty(Object.prototype, 'x', {
+                 set(v) { log.push('object:' + v); }, configurable: true });
+             var c = new Point(9);
+             delete Object.prototype.x;
+             Object.defineProperty(Point.prototype, 'x', { value: 1, writable: false, configurable: true });
+             var d = new Point(10);
+             delete Point.prototype.x;
+             Object.setPrototypeOf(Point.prototype, { set x(v) { log.push('swapped:' + v); } });
+             var e = new Point(11);
+             [made.join(''), a.x, b.x, c.hasOwnProperty('x'), d.x, d.hasOwnProperty('x'),
+              e.hasOwnProperty('x'), log.join(',')].join('|');"
+        ),
+        Value::String("01234||8|false||false|false|proto:7,object:9,swapped:11".into())
+    );
+}

@@ -577,6 +577,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                     key: Rc::clone(key),
                     cache: cache.clone(),
                     is_strict: *is_strict,
+                    creation: Default::default(),
                 });
                 ops.push(WideOp::SetPropNamed {
                     obj: register(depth.checked_sub(2)?),

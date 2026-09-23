@@ -118,6 +118,7 @@ pub(super) fn set_prop_named(
     is_strict: bool,
     value: Value,
     env: &CallEnv,
+    creation: Option<&super::creation_cache::CreationCache>,
 ) -> Result<Value, RuntimeError> {
     let updates_global_binding = is_global_object(env, &object);
     if !updates_global_binding
@@ -142,7 +143,15 @@ pub(super) fn set_prop_named(
                 return Ok(value);
             }
             OwnDataPropertyWrite::NeedsSlowPath => {
+                // A constructor's `this.x = x` creates the property on every
+                // instance; the site's proof skips the prototype walk.
+                if creation.is_some_and(|creation| creation.try_create(object_ref, key, &value)) {
+                    return Ok(value);
+                }
                 if try_create_ordinary_own_data_property(object_ref, Rc::clone(key), &value) {
+                    if let Some(creation) = creation {
+                        creation.record(object_ref, key);
+                    }
                     if let Some(cache) = cache {
                         cache.record_write(object_ref, key);
                     }

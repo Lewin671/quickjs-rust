@@ -211,6 +211,7 @@ pub(super) struct NamedWriteSite {
     pub(super) key: Rc<str>,
     pub(super) cache: Option<NamedPropertyCache>,
     pub(super) is_strict: bool,
+    pub(super) creation: super::creation_cache::CreationCache,
 }
 
 #[derive(Clone)]

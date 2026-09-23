@@ -33,6 +33,7 @@ use super::ir::Bytecode;
 
 mod activation;
 mod compile;
+mod creation_cache;
 mod execute;
 mod property;
 pub(in crate::bytecode) mod wide;
