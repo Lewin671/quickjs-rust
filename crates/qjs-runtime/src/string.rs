@@ -166,7 +166,14 @@ pub(crate) fn string_utf16_eq(left: &str, right: &str) -> bool {
 /// buffers. Those are rare; string equality is otherwise a shared-pointer test
 /// or one `memcmp`.
 pub(crate) fn js_string_eq(left: &JsString, right: &JsString) -> bool {
-    if JsString::ptr_eq(left, right) || left.as_str() == right.as_str() {
+    if JsString::ptr_eq(left, right) {
+        return true;
+    }
+    // Two distinct atoms have distinct texts.
+    if left.is_atom() && right.is_atom() {
+        return false;
+    }
+    if left.as_str() == right.as_str() {
         return true;
     }
     if left.is_ascii() || right.is_ascii() {

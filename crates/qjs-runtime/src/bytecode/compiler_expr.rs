@@ -1161,7 +1161,9 @@ impl Compiler {
         let value = match literal {
             Literal::Number { raw, .. } => Value::Number(parse_number_literal(raw)?),
             Literal::BigInt { raw, .. } => Value::bigint(crate::bigint::parse_bigint_literal(raw)?),
-            Literal::String { value, .. } => Value::String(value.clone().into()),
+            Literal::String { value, .. } => Value::String(
+                super::util::typeof_name_atom(value).unwrap_or_else(|| value.clone().into()),
+            ),
             Literal::Boolean { value, .. } => Value::Boolean(*value),
             Literal::Null { .. } => Value::Null,
         };
