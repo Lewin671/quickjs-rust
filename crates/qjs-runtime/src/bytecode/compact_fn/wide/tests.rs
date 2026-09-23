@@ -1030,13 +1030,16 @@ fn global_stores_the_fast_path_cannot_prove_keep_their_semantics() {
 }
 
 #[test]
-fn a_global_store_in_an_accelerated_loop_or_appending_to_itself_stays_interpreted() {
+fn a_global_store_in_an_accelerated_loop_or_keeping_its_appended_value_stays_interpreted() {
     for (source, name) in [
         (
             "var n = 0; function count(k) { for (var i = 0; i < k; i++) { n = n + 1; } return n; }",
             "count",
         ),
-        ("var text = ''; function add(s) { text = text + s; }", "add"),
+        (
+            "var text = ''; function add(s) { return text = text + s; }",
+            "add",
+        ),
     ] {
         assert!(
             compile::compile(&nested_function(source, name)).is_none(),
@@ -1284,5 +1287,48 @@ fn a_local_stored_and_reloaded_is_not_copied_back() {
             "{source} pick({{ a: 5 }}) + ':' + pick({{ a: 0 }}) + ':' + pick({{}});"
         )),
         Value::String("5:0:0".to_owned().into())
+    );
+}
+
+#[test]
+fn a_global_string_append_is_admitted_and_extends_in_place_semantics() {
+    let program = compile::compile(&nested_function(
+        "var acc = ''; function add(r) { acc += ',' + r; }",
+        "add",
+    ))
+    .expect("a statement appending to a global string should be admitted");
+    assert!(
+        program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::Exit { .. })),
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(
+            "var acc = \"\", other = 0, log = []; \
+         function add(r) { acc += \",\" + r; } \
+         function addNum(r) { other += r; } \
+         for (var i = 0; i < 5; i++) add(i); \
+         var alias = acc; add(\"x\"); \
+         log.push(acc, alias); \
+         addNum(2); addNum(3); log.push(other); \
+         acc2 = \"\"; \
+         function add2(r) { acc2 = acc2 + r; } \
+         add2(\"a\"); add2(1); add2(null); \
+         log.push(acc2); \
+         Object.defineProperty(globalThis, \"acc2\", { get: function () { return \"G\"; }, set: function (v) { log.push(\"set:\" + v); }, configurable: true }); \
+         add2(\"y\"); \
+         log.push(acc2); \
+         var o = { toString: function () { return \"T\"; } }; \
+         delete globalThis.acc2; acc2 = \"s\"; add2(o); log.push(acc2); \
+         log.join(\"|\");"
+        ),
+        Value::String(
+            ",0,1,2,3,4,x|,0,1,2,3,4|5|a1null|set:Gy|G|sT"
+                .to_owned()
+                .into()
+        )
     );
 }
