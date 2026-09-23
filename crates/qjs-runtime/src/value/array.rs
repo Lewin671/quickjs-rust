@@ -276,6 +276,32 @@ impl ArrayRef {
         self.0.uses_default_prototype()
     }
 
+    /// Overwrites every element of a fully dense array with `values`, as
+    /// Set at each index would, when each index is a writable own data
+    /// element that no descriptor or setter intercepts: no holes, no own
+    /// properties, not frozen, and `values` exactly as long. `false`, with the
+    /// array unchanged, otherwise.
+    pub(crate) fn replace_dense_elements(&self, values: &[Value]) -> bool {
+        let plain_cold = self.0.cold_if_present().is_none_or(|cold| {
+            cold.holes.try_borrow().is_ok_and(|holes| holes.is_empty())
+                && cold
+                    .properties
+                    .try_borrow()
+                    .is_ok_and(|properties| properties.is_empty())
+        });
+        if !plain_cold || self.0.frozen.get() {
+            return false;
+        }
+        let Ok(mut elements) = self.0.elements.try_borrow_mut() else {
+            return false;
+        };
+        if elements.len() != self.0.length.get() || elements.len() != values.len() {
+            return false;
+        }
+        elements.clone_from_slice(values);
+        true
+    }
+
     /// Defines `values` as own data elements from index `start`, as
     /// CreateDataPropertyOrThrow at each index would, when nothing can
     /// intercept or refuse a definition: no recorded holes or own

@@ -92,6 +92,16 @@ fn sorted_present_array_like_values(
     comparator: Option<&Function>,
     env: &mut CallEnv,
 ) -> Result<Vec<Value>, RuntimeError> {
+    // A fully dense array's elements are all present own data values, so the
+    // per-index HasProperty/Get pairs read exactly its storage.
+    if let Value::Array(array) = &receiver
+        && let Some(values) = array.with_dense_readable_elements(|elements| {
+            (elements.len() == length).then(|| elements.to_vec())
+        })
+        && let Some(values) = values
+    {
+        return sorted_array_values(values, comparator, env);
+    }
     let mut values = Vec::new();
     for index in 0..length {
         let key = index.to_string();
@@ -108,6 +118,14 @@ fn write_sorted_array_like_values(
     values: Vec<Value>,
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
+    // Writing every index of a fully dense, writable array whose indices no
+    // setter or read-only descriptor intercepts is replacing its storage.
+    if let Value::Array(array) = &receiver
+        && values.len() == length
+        && array.replace_dense_elements(&values)
+    {
+        return Ok(());
+    }
     let item_count = values.len();
     for (index, value) in values.into_iter().enumerate() {
         set_array_like_property(receiver.clone(), index.to_string(), value, env)?;
@@ -209,13 +227,26 @@ fn compare_values(
     env: &mut CallEnv,
 ) -> Result<Ordering, RuntimeError> {
     if let Some(function) = comparator {
-        let result = call_function(
-            Value::Function(function.clone()),
-            Value::Undefined,
-            vec![left.clone(), right.clone()],
-            env,
-            false,
-        )?;
+        let callee = Value::Function(function.clone());
+        let result = if crate::function::is_direct_leaf_function(&callee) {
+            crate::function::call_direct_leaf_function(
+                callee,
+                Value::Undefined,
+                &[left.clone(), right.clone()],
+                env,
+                env.module_host(),
+                #[cfg(feature = "agents")]
+                env.agent_context(),
+            )?
+        } else {
+            call_function(
+                callee,
+                Value::Undefined,
+                vec![left.clone(), right.clone()],
+                env,
+                false,
+            )?
+        };
         let order = to_number_with_env(result, env)?;
         if order.is_nan() || order == 0.0 {
             Ok(Ordering::Equal)
@@ -228,6 +259,9 @@ fn compare_values(
         // SortCompare orders the ToString results by UTF-16 code units, which
         // differs from Rust's code-point order once astral characters meet
         // U+E000..U+FFFF.
+        if let (Value::String(left), Value::String(right)) = (left, right) {
+            return Ok(crate::string::string_utf16_cmp(left, right));
+        }
         let left = to_js_string_with_env(left.clone(), env)?;
         let right = to_js_string_with_env(right.clone(), env)?;
         Ok(crate::string::string_utf16_cmp(&left, &right))
