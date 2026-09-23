@@ -707,14 +707,32 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 ip: u32::try_from(ip).ok()?,
                 depth,
             }),
-            Op::JumpIfFalse(target) => ops.push(WideOp::JumpIfFalsy {
-                cond: register(depth.checked_sub(1)?),
-                target: u32::try_from(*target).ok()?,
-            }),
-            Op::JumpIfTrue(target) => ops.push(WideOp::JumpIfTruthy {
-                cond: register(depth.checked_sub(1)?),
-                target: u32::try_from(*target).ok()?,
-            }),
+            Op::JumpIfFalse(target) | Op::JumpIfTrue(target) => {
+                let copied = register(depth.checked_sub(1)?);
+                // `if (x)` on a local: both successors discard the condition,
+                // so the branch tests the local where it is instead of a copy.
+                let cond = match ops.last() {
+                    Some(WideOp::Move { dst, src })
+                        if *dst == copied
+                            && ip > 0
+                            && matches!(code[ip - 1], Op::LoadLocal(_))
+                            && !jump_targets[ip]
+                            && matches!(code.get(ip + 1), Some(Op::Pop))
+                            && matches!(code.get(*target), Some(Op::Pop)) =>
+                    {
+                        let src = *src;
+                        ops.pop();
+                        src
+                    }
+                    _ => copied,
+                };
+                let target = u32::try_from(*target).ok()?;
+                ops.push(if matches!(op, Op::JumpIfFalse(_)) {
+                    WideOp::JumpIfFalsy { cond, target }
+                } else {
+                    WideOp::JumpIfTruthy { cond, target }
+                });
+            }
             Op::Unary(unary_op) => {
                 let src = register(depth.checked_sub(1)?);
                 ops.push(WideOp::Unary {

@@ -876,3 +876,15 @@ fn a_method_lookup_reads_the_receiver_in_place() {
         Value::String("x1b2.0x2".into())
     );
 }
+
+#[test]
+fn a_branch_on_a_local_tests_it_in_place() {
+    let source = "function pick(a, b) { if (a) { b = 1; } else { b = 2; } var c = a && b; while (b) { b = b - 1; } return c + ':' + b; }";
+    compile::compile(&nested_function(source, "pick")).expect("the body should be admitted");
+    assert_eq!(
+        value_of(&format!(
+            "{source} [pick({{}}, 0), pick(0, 0), pick('', 5), pick(NaN, 1)].join(',');"
+        )),
+        Value::String("1:0,0:0,:0,NaN:0".into())
+    );
+}
