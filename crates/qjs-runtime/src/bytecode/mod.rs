@@ -67,6 +67,14 @@ use qjs_parser::parse_script;
 use crate::{RuntimeError, Value};
 
 pub(crate) use compact_fn::try_run_in_caller_env as try_run_direct_leaf_in_caller_env;
+
+/// See `compact_fn::property::field_initializer_member_read`.
+pub(crate) fn field_initializer_member_read(
+    thunk: &crate::Function,
+    env: &crate::CallEnv,
+) -> Option<Result<crate::Value, RuntimeError>> {
+    compact_fn::field_initializer_member_read(thunk, env)
+}
 pub use ir::Bytecode;
 pub(crate) use vm_class::install_field_value;
 pub(crate) use vm_generator::{

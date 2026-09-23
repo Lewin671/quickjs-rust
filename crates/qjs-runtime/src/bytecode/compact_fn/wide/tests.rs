@@ -1030,7 +1030,7 @@ fn global_stores_the_fast_path_cannot_prove_keep_their_semantics() {
 }
 
 #[test]
-fn a_global_store_in_a_loop_or_appending_to_itself_stays_interpreted() {
+fn a_global_store_in_an_accelerated_loop_or_appending_to_itself_stays_interpreted() {
     for (source, name) in [
         (
             "var n = 0; function count(k) { for (var i = 0; i < k; i++) { n = n + 1; } return n; }",
@@ -1043,6 +1043,15 @@ fn a_global_store_in_a_loop_or_appending_to_itself_stays_interpreted() {
             "{source}"
         );
     }
+    // A loop no accelerator compiles -- it constructs an object -- keeps
+    // its global stores on this tier.
+    let source = "var last = 0; function Step(v) { this.v = v + 1; }
+        function walk(k) { for (i = 0; i < k; i++) { last = new Step(i).v; } return last + i; }";
+    compile::compile(&nested_function(source, "walk")).expect("the body should be admitted");
+    assert_eq!(
+        value_of(&format!("{source} walk(10) + last + i;")),
+        Value::Number(40.0)
+    );
 }
 
 #[test]
@@ -1170,5 +1179,69 @@ fn builtin_statics_arrays_and_instanceof_keep_their_hooks() {
              false | true | true | true"
                 .into()
         )
+    );
+}
+
+#[test]
+fn a_repeated_method_read_sees_an_own_property_added_later() {
+    let source = "function Counter() { this.n = 0; }
+        Counter.prototype.step = function () { return 1; };
+        function run(c, k) { var t = 0; for (var i = 0; i < k; i++) { var o = new Counter(); t += c.step(); } return t; }";
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var c = new Counter(), out = [run(c, 5)];
+             c.step = function () {{ return 10; }};
+             out.push(run(c, 5));
+             delete c.step;
+             out.push(run(c, 5));
+             Object.defineProperty(c, 'step', {{ get() {{ return function () {{ return 100; }}; }}, configurable: true }});
+             out.push(run(c, 5));
+             out.join(',');"
+        )),
+        Value::String("5,50,5,500".into())
+    );
+}
+
+#[test]
+fn compound_member_assignment_converts_its_key_once_and_checks_its_object() {
+    let source = "function bump(o, k) { o[k] += 1; o[k] *= 2; return o[k]; }";
+    let program =
+        compile::compile(&nested_function(source, "bump")).expect("the body should be admitted");
+    assert!(
+        program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::ToPropertyKey { .. })),
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var log = [];
+             var key = {{ toString() {{ log.push('key'); return 'x'; }} }};
+             var sym = Symbol('s');
+             var o = {{ x: 1, 1.5: 2, [sym]: 3 }}, a = [5, 6];
+             var out = [bump(o, key), bump(o, 1.5), bump(o, sym), bump(a, 1), bump(a, '0'), log.join('')];
+             try {{ bump(null, 'x'); }} catch (e) {{ out.push(e instanceof TypeError); }}
+             try {{ bump(undefined, key); }} catch (e) {{ out.push(e instanceof TypeError, log.length); }}
+             out.join(',');"
+        )),
+        Value::String("4,6,8,14,12,keykeykey,true,true,3".into())
+    );
+}
+
+#[test]
+fn an_assignment_to_an_undeclared_name_creates_the_global() {
+    let source = "function make(v) { fresh = v; also = fresh + 1; return also; }";
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var out = [make(1), make(5), fresh, also, 'fresh' in globalThis,
+                        Object.getOwnPropertyDescriptor(globalThis, 'fresh').enumerable];
+             out.join(',');"
+        )),
+        Value::String("2,6,5,6,true,true".into())
     );
 }

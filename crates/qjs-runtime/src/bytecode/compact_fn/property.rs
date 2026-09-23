@@ -36,6 +36,12 @@ pub(super) fn get_prop_named(
         if let CacheProbe::Own(value) = probe {
             return Ok(value);
         }
+        if let CacheProbe::PrototypeCandidate { holder, slot } = &probe
+            && cache.receiver_miss_proven(object_ref)
+            && let Some(value) = holder.prototype_data_slot_value(*slot)
+        {
+            return Ok(value);
+        }
         match object_ref.own_data_property_read(key) {
             OwnDataPropertyRead::Data(value) => {
                 cache.update(object_ref, key, &value);
@@ -48,6 +54,7 @@ pub(super) fn get_prop_named(
                 if let CacheProbe::PrototypeCandidate { holder, slot } = probe
                     && let Some(value) = holder.prototype_data_slot_value(slot)
                 {
+                    cache.remember_receiver_miss(object_ref);
                     return Ok(value);
                 }
                 // An inherited getter the interpreter would call directly.
@@ -566,15 +573,15 @@ fn undefined_identifier(name: &str) -> RuntimeError {
     }
 }
 
-/// A sloppy assignment to an existing global variable, the store
+/// A sloppy assignment to a global variable, the store
 /// `Op::StoreLocalOrGlobalSloppy` performs for a name the function neither
 /// declares nor receives: the realm binding and the `globalThis` data
-/// property that mirrors it are both overwritten, as the interpreter's
-/// store does once the binding exists. Returns `false`, having changed
-/// nothing, for anything else -- a lexical or immutable binding, a module
-/// binding, an accessor or read-only property, a name not yet bound, or a
-/// mirror that disagrees with its binding -- which the caller leaves to the
-/// interpreter.
+/// property that mirrors it are both written, or both created for a name
+/// not yet bound, as the interpreter's store does. Returns `false`, having
+/// changed nothing, for anything else -- a lexical or immutable binding, a
+/// module binding, an accessor or read-only property, a global property
+/// without a realm binding, or a mirror that disagrees with its binding --
+/// which the caller leaves to the interpreter.
 #[inline(never)]
 pub(super) fn try_store_global_var(name: &str, value: &Value, env: &CallEnv) -> bool {
     if env.is_global_lexical_binding(name)
@@ -585,10 +592,19 @@ pub(super) fn try_store_global_var(name: &str, value: &Value, env: &CallEnv) -> 
     {
         return false;
     }
-    let (Some(Value::Object(global_this)), Some(cell)) =
-        (env.global_this(), env.realm_binding_cell(name))
-    else {
+    let Some(Value::Object(global_this)) = env.global_this() else {
         return false;
+    };
+    let Some(cell) = env.realm_binding_cell(name) else {
+        // The first assignment of an undeclared name creates it, as the
+        // interpreter's store does: a global data property and the realm
+        // binding that mirrors it.
+        if global_this.own_property(name).is_some() || !global_this.is_extensible() {
+            return false;
+        }
+        global_this.set(name.to_owned(), value.clone());
+        env.insert_realm(name.to_owned(), value.clone());
+        return true;
     };
     let Some(property) = global_this.own_property(name) else {
         return false;
@@ -612,4 +628,32 @@ pub(super) fn try_store_global_var(name: &str, value: &Value, env: &CallEnv) -> 
         return false;
     }
     env.replace_existing_realm_with_cell(name, value.clone(), &cell)
+}
+
+/// A class field initializer that only reads a named property of a binding
+/// it captured -- `color = Material.defaultColor` -- answered without a call
+/// frame: its body is exactly that read and a return, and the captured
+/// binding is initialized. `None` leaves the thunk to the ordinary call.
+pub(in crate::bytecode) fn field_initializer_member_read(
+    thunk: &crate::Function,
+    env: &CallEnv,
+) -> Option<Result<Value, RuntimeError>> {
+    let bytecode = thunk.bytecode.as_ref()?;
+    let [
+        crate::bytecode::ir::Op::GetPropNamed { key, cache },
+        crate::bytecode::ir::Op::Return,
+    ] = bytecode.code.as_slice()
+    else {
+        return None;
+    };
+    let slot = cache.local_slot()?;
+    if thunk.upvalues.len() != bytecode.received_upvalue_slots().len() {
+        return None;
+    }
+    let index = bytecode.readonly_received_upvalue_index(slot)?;
+    let receiver = thunk.upvalues.get(index)?.get();
+    if receiver.is_uninitialized_lexical_marker() {
+        return None;
+    }
+    Some(get_prop_named(&receiver, key, cache, env))
 }

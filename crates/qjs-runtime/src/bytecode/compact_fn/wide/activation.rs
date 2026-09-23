@@ -103,6 +103,32 @@ impl WideActivation<'_> {
     }
 }
 
+/// The interpreter's error for `RequireObjectCoercible` on `undefined` or
+/// `null`.
+#[cold]
+#[inline(never)]
+fn not_coercible() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: cannot destructure undefined or null".to_owned(),
+    }
+}
+
+/// `ToPropertyKey` of a register that is not already a key, as the
+/// interpreter's `ToPropertyKeyForAccess` converts it.
+#[cold]
+#[inline(never)]
+fn to_property_key(register: &mut Value, env: &CallEnv) -> Result<(), RuntimeError> {
+    let value = std::mem::replace(register, Value::Undefined);
+    let mut env = env.empty_frame();
+    let key = match crate::property::try_to_property_key_without_coercion(value) {
+        Ok(key) => key,
+        Err(value) => crate::to_property_key_value(value, &mut env)?,
+    };
+    *register = key.into_value();
+    Ok(())
+}
+
 /// A relational or equality operator between two numbers; the compiler
 /// fuses no other operator into `CompareJump`.
 #[inline(always)]
@@ -200,13 +226,26 @@ fn shares_caller_environment(function: &Function, bytecode: &Bytecode, env: &Cal
         (Some(callee), Some(caller)) => std::rc::Rc::ptr_eq(callee, caller),
         (Some(_), None) => false,
     };
-    let inherits_lexical_this = function.lexical_this && bytecode.uses_lexical_this();
     host_agrees
-        && !inherits_lexical_this
-        && !function.has_dynamic_function_realm
         && !function.has_dynamic_function_realm_override.get()
+        && fixed_inline_facts_hold(function, bytecode)
+}
+
+/// The part of the inlining proof that depends only on the function, fixed
+/// once it is created -- its lexical `this`, its dynamic-realm origin, its
+/// module imports, its private environment and home object -- memoized on
+/// the function object. Direct-leaf eligibility is itself memoized.
+fn fixed_inline_facts_hold(function: &Function, bytecode: &Bytecode) -> bool {
+    if let Some(eligible) = function.wide_inline_eligible.get() {
+        return eligible;
+    }
+    let inherits_lexical_this = function.lexical_this && bytecode.uses_lexical_this();
+    let eligible = !inherits_lexical_this
+        && !function.has_dynamic_function_realm
         && function.module_imports.is_empty()
-        && !function.has_cold_lexical_state()
+        && !function.has_cold_lexical_state();
+    function.wide_inline_eligible.set(Some(eligible));
+    eligible
 }
 
 /// One suspended wide activation.
@@ -291,6 +330,8 @@ struct InlineCallee {
     register_count: usize,
     requires_this: bool,
     is_strict: bool,
+    /// Whether the callee's window starts with dead-zone markers to seed.
+    has_lexical_slots: bool,
 }
 
 /// Proves a callee may run on this driver, in a window of its register stack.
@@ -315,6 +356,7 @@ fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
         upvalue_slots: entry.upvalue_slots,
         requires_this: entry.program.requires_this,
         is_strict: function.is_strict,
+        has_lexical_slots: !entry.program.lexical_slots.is_empty(),
     })
 }
 
@@ -396,7 +438,9 @@ fn enter_constructor(
             }
         }
     }
-    if let Some(program) = super::program_for(running_bytecode(&callee, root_bytecode)) {
+    if inline.has_lexical_slots
+        && let Some(program) = super::program_for(running_bytecode(&callee, root_bytecode))
+    {
         seed_lexical_markers(
             program,
             &mut registers[callee_base..callee_base + callee_len],
@@ -1019,6 +1063,26 @@ fn run_frames(
                         }
                     }
                     WideOp::Jump { target } => pc = target as usize,
+                    WideOp::CheckCoercible { src } => {
+                        if matches!(window[src as usize], Value::Undefined | Value::Null) {
+                            break Err(not_coercible());
+                        }
+                    }
+                    WideOp::ToPropertyKey { dst } => {
+                        let is_key = match &window[dst as usize] {
+                            Value::String(_) => true,
+                            Value::Number(number) => {
+                                crate::bytecode::vm_props::array_index_from_number(*number)
+                                    .is_some()
+                            }
+                            _ => false,
+                        };
+                        if !is_key
+                            && let Err(error) = to_property_key(&mut window[dst as usize], env)
+                        {
+                            break Err(error);
+                        }
+                    }
                     WideOp::CompareJump {
                         op,
                         left,
@@ -1364,7 +1428,9 @@ fn run_frames(
                 }
                 None
             };
-            if let Some(program) = super::program_for(running_bytecode(&callee, root_bytecode)) {
+            if inline.has_lexical_slots
+                && let Some(program) = super::program_for(running_bytecode(&callee, root_bytecode))
+            {
                 seed_lexical_markers(
                     program,
                     &mut registers[callee_base..callee_base + callee_len],

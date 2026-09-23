@@ -37,6 +37,7 @@ mod creation_cache;
 mod execute;
 mod property;
 pub(in crate::bytecode) mod wide;
+pub(in crate::bytecode) use property::field_initializer_member_read;
 pub(in crate::bytecode) use wide::{hands_back_at, resumes_at};
 
 pub(crate) use activation::try_run_in_caller_env;

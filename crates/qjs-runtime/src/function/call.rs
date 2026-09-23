@@ -522,6 +522,11 @@ fn initialize_direct_instance_fields(
                     .expect("direct construct admission requires thunk bytecode");
                 match bytecode.constant_return() {
                     Some(value) => value.clone(),
+                    None if let Some(result) =
+                        crate::bytecode::field_initializer_member_read(thunk, env) =>
+                    {
+                        result?
+                    }
                     None => call_direct_leaf_function(
                         Value::Function(thunk.clone()),
                         Value::Object(receiver.clone()),
@@ -698,6 +703,10 @@ pub(crate) fn call_field_initializer(
         .and_then(|bytecode| bytecode.constant_return())
     {
         return Ok(value.clone());
+    }
+    // `color = Material.defaultColor` reads a captured binding's property.
+    if let Some(result) = crate::bytecode::field_initializer_member_read(thunk, env) {
+        return result;
     }
     let callee = Value::Function(thunk.clone());
     if is_direct_leaf_function(&callee) {

@@ -187,6 +187,11 @@ pub struct FunctionData {
     /// function last (`crate::native`), so later calls go straight to it
     /// instead of asking every family in turn. Zero until the first call.
     pub(crate) native_family: Cell<u8>,
+    /// Memoized: whether the compact wide tier may run this function in a
+    /// window of its caller's register stack, as far as the function's own
+    /// fixed facts decide (`compact_fn::wide`); the caller-dependent checks
+    /// still run on every call.
+    pub(crate) wide_inline_eligible: Cell<Option<bool>>,
     pub(crate) deopt_bindings: Option<DynamicBindings>,
     pub(crate) module_host: Option<ModuleHostRef>,
     pub(crate) module_imports: ModuleImports,
@@ -590,6 +595,7 @@ impl Function {
             direct_leaf_call_eligible: Cell::new(None),
             direct_construct_eligible: Cell::new(None),
             native_family: Cell::new(0),
+            wide_inline_eligible: Cell::new(None),
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),
@@ -688,6 +694,7 @@ impl Function {
             direct_leaf_call_eligible: Cell::new(None),
             direct_construct_eligible: Cell::new(None),
             native_family: Cell::new(0),
+            wide_inline_eligible: Cell::new(None),
             deopt_bindings,
             module_host,
             module_imports,
@@ -807,6 +814,7 @@ impl Function {
             direct_leaf_call_eligible: Cell::new(None),
             direct_construct_eligible: Cell::new(None),
             native_family: Cell::new(0),
+            wide_inline_eligible: Cell::new(None),
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),
@@ -863,6 +871,7 @@ impl Function {
             direct_leaf_call_eligible: Cell::new(None),
             direct_construct_eligible: Cell::new(None),
             native_family: Cell::new(0),
+            wide_inline_eligible: Cell::new(None),
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),

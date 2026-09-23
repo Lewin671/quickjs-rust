@@ -297,3 +297,22 @@ fn derived_public_fields_define_through_proxy_receiver() {
         ))
     );
 }
+
+#[test]
+fn a_field_reading_a_captured_binding_s_property_sees_its_current_value() {
+    assert_eq!(
+        eval(
+            "class Palette { static base = 'red'; }
+             class Swatch { color = Palette.base; tone = Palette.missing; }
+             var out = [new Swatch().color];
+             Palette.base = 'blue';
+             out.push(new Swatch().color, String(new Swatch().tone));
+             Object.defineProperty(Palette, 'base', { get() { return 'computed'; } });
+             out.push(new Swatch().color);
+             class Early { static seen = new Early().probe; probe = Early.name; }
+             out.push(Early.seen);
+             out.join(',');"
+        ),
+        Ok(Value::String("red,blue,undefined,computed,Early".into()))
+    );
+}

@@ -353,6 +353,21 @@ fn strict_eq(left: &Value, right: &Value) -> bool {
 /// the caller down `eval_binary`. Executors that would otherwise build a
 /// throwaway frame just to compare two strings use this first.
 pub(crate) fn eval_binary_without_env(left: &Value, op: BinaryOp, right: &Value) -> Option<Value> {
+    if let (
+        BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge,
+        Value::String(left),
+        Value::String(right),
+    ) = (op, left, right)
+    {
+        // Two strings compare by code units; no conversion can run.
+        let ordering = string::js_string_cmp(left, right);
+        return Some(Value::Boolean(match op {
+            BinaryOp::Lt => ordering.is_lt(),
+            BinaryOp::Le => ordering.is_le(),
+            BinaryOp::Gt => ordering.is_gt(),
+            _ => ordering.is_ge(),
+        }));
+    }
     let equal = match op {
         BinaryOp::StrictEq => return Some(Value::Boolean(strict_eq(left, right))),
         BinaryOp::StrictNe => return Some(Value::Boolean(!strict_eq(left, right))),
