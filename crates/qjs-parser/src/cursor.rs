@@ -29,7 +29,13 @@ impl Parser {
     }
 
     pub(crate) fn at(&self, kind: &TokenKind) -> bool {
-        self.peek().is_some_and(|token| token.kind == *kind)
+        // Every precedence level asks this about each of its operators for
+        // every operand, and nearly every answer is no: comparing the variant
+        // first answers those without the out-of-line derived comparison.
+        self.peek().is_some_and(|token| {
+            std::mem::discriminant(&token.kind) == std::mem::discriminant(kind)
+                && token.kind == *kind
+        })
     }
 
     pub(crate) fn match_kind(&mut self, kind: &TokenKind) -> bool {
