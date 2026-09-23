@@ -22,12 +22,12 @@ use crate::{PropertyKey, RuntimeError, Value};
 #[cold]
 #[inline(never)]
 pub(super) fn get_prop_named(
-    object: Value,
+    object: &Value,
     key: &Rc<str>,
     cache: &NamedPropertyCache,
     env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
-    if let Value::Object(object_ref) = &object
+    if let Value::Object(object_ref) = object
         && !crate::symbol::is_symbol_primitive(object_ref)
         && !crate::typed_array::is_typed_array_object(object_ref)
         && !object_ref.is_module_namespace_exotic()
@@ -52,7 +52,7 @@ pub(super) fn get_prop_named(
                 }
                 // An inherited getter the interpreter would call directly.
                 if let Some(result) = crate::bytecode::vm_props::direct_leaf_getter(
-                    &object,
+                    object,
                     key,
                     env,
                     env.module_host(),
@@ -70,14 +70,14 @@ pub(super) fn get_prop_named(
             OwnDataPropertyRead::NeedsSlowPath => {}
         }
     }
-    if let Value::String(text) = &object
+    if let Value::String(text) = object
         && let Some(value) = string_named_value(text, key, env)
     {
         return Ok(value);
     }
     cache.clear();
     let mut call_env = env.empty_frame();
-    crate::bytecode::vm_props::get_property(object, key, &mut call_env)
+    crate::bytecode::vm_props::get_property(object.clone(), key, &mut call_env)
 }
 
 /// A named read on a primitive string, as `Vm::try_direct_get_string`

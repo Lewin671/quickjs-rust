@@ -855,14 +855,14 @@ fn run_frames(
                         let Some(site) = program.named_reads.get(index as usize) else {
                             break Err(execute::constant_out_of_bounds());
                         };
-                        // A fused site peeks its receiver local, so the
-                        // register survives; the plain form replaces its own.
-                        let object = if dst == obj {
-                            std::mem::replace(&mut window[obj as usize], Value::Undefined)
-                        } else {
-                            crate::bytecode::vm_bindings::clone_local_value(&window[obj as usize])
-                        };
-                        match property::get_prop_named(object, &site.key, &site.cache, env) {
+                        // The receiver is borrowed: a fused site peeks its
+                        // local, and the plain form's result replaces it.
+                        match property::get_prop_named(
+                            &window[obj as usize],
+                            &site.key,
+                            &site.cache,
+                            env,
+                        ) {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
                         }
