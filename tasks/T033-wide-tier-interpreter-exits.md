@@ -9,10 +9,11 @@ then hands over its state; the interpreter resumes at that instruction.
 
 ## Design
 
+- Data-only object literals are built at their exit, which always continues.
 - Exit points (`compact_fn/wide/compile.rs`): operations in `is_exit_safe`
   (computed stores the tier cannot answer as a plain dense-index or
-  own-data store -- it tries that first at the exit and continues --, object
-  literals,
+  own-data store -- it tries that first at the exit and continues --,
+
   `RequireObjectCoercible`, literal appends) and the backward edges of loops
   an accelerator claims or in-place fusion rewrote. Bodies whose lowering
   keeps a literal in virtual slots, and anything needing set-up at entry

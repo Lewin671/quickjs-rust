@@ -327,6 +327,45 @@ pub(in crate::bytecode) fn array_access_is_plain(array: &crate::ArrayRef, env: &
         ))
 }
 
+/// An object literal of statically known data properties from the values in
+/// `registers`, which it takes, as `Vm::new_object_data_literal` builds it:
+/// the realm's `Object.prototype`, and each non-constructor function value's
+/// home object set to the literal.
+#[inline(never)]
+pub(super) fn object_data_literal(
+    shape: &Rc<crate::value::ObjectLiteralShape>,
+    registers: &mut [Value],
+    env: &CallEnv,
+) -> Value {
+    let values: Vec<Value> = registers
+        .iter_mut()
+        .map(|register| std::mem::replace(register, Value::Undefined))
+        .collect();
+    let home_functions: Vec<crate::Function> = values
+        .iter()
+        .filter_map(|value| match value {
+            Value::Function(function) if !function.constructable => Some(function.clone()),
+            _ => None,
+        })
+        .collect();
+    let prototype = crate::object_prototype(env);
+    let object = if let [first, second] = values.as_slice()
+        && shape.unique_len() == 2
+    {
+        crate::ObjectRef::with_literal_pair(
+            Rc::clone(shape),
+            [first.clone(), second.clone()],
+            prototype,
+        )
+    } else {
+        crate::ObjectRef::with_literal_properties(Rc::clone(shape), values, prototype)
+    };
+    for function in home_functions {
+        function.set_home_object(Value::Object(object.clone()));
+    }
+    Value::Object(object)
+}
+
 #[cold]
 fn read_only_set_error() -> RuntimeError {
     RuntimeError {

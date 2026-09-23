@@ -473,6 +473,15 @@ fn exit_to_interpreter(
             pc: program.backedge_jump_pc(index),
         };
     }
+    if let Some(crate::bytecode::ir::Op::NewObjectDataLiteral { shape }) =
+        bytecode.code.get(ip as usize)
+    {
+        let top = usize::from(program.local_registers) + usize::from(depth);
+        let base = top - shape.input_len();
+        let object = property::object_data_literal(shape, &mut window[base..top], env);
+        execute::store(&mut window[base], object);
+        return ExitOutcome::Continue { pc: resume_pc };
+    }
     if let Some(crate::bytecode::ir::Op::SetProp { .. }) = bytecode.code.get(ip as usize) {
         let operand = |offset: u16| program.local_registers + depth - offset;
         if property::try_plain_set_prop(window, operand(3), operand(2), operand(1), env) {

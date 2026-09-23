@@ -1053,6 +1053,8 @@ fn effect_of(op: &Op) -> Option<Effect> {
         // (`WideOp::Exit`); any other store leaves the rest to the
         // interpreter.
         Op::SetProp { .. } => simple(3, 1),
+        // An object literal is built at its exit, which always continues.
+        Op::NewObjectDataLiteral { shape } => simple(u16::try_from(shape.input_len()).ok()?, 1),
         Op::JumpIfFalse(target) | Op::JumpIfTrue(target) => Effect {
             pops: 0,
             pushes: 0,

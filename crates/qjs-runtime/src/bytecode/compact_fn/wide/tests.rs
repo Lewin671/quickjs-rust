@@ -759,3 +759,20 @@ fn a_plain_computed_store_continues_on_the_tier_and_others_keep_their_semantics(
         Value::String("9,h3,3,4,,1,14,5,TypeError".into())
     );
 }
+
+#[test]
+fn an_object_literal_built_at_its_exit_matches_the_interpreter() {
+    assert_eq!(
+        value_of(
+            "Object.prototype.inherited = 'proto';
+             function make(a, b) { var o = { a: a, b: b }; var p = { x: a, y: b, z: a + b }; return [o, p]; }
+             function withMethod(v) { return { v: v, m() { return this.v + super.inherited; } }; }
+             var total = 0;
+             for (var i = 0; i < 100; i++) { var pair = make(i, 1); total += pair[0].a + pair[1].z; }
+             var o = make(2, 3)[0];
+             [total, Object.keys(o).join(''), o.inherited, withMethod(4).m(),
+              Object.getPrototypeOf(o) === Object.prototype].join(',');"
+        ),
+        Value::String("10000,ab,proto,4proto,true".into())
+    );
+}
