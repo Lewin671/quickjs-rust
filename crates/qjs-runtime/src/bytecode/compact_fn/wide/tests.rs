@@ -562,3 +562,41 @@ fn an_in_place_update_keeps_the_operand_order_of_the_general_path() {
         Value::String("abab,ab,yx,7,kept,18".into())
     );
 }
+
+#[test]
+fn a_guarded_math_call_runs_as_a_method_call_without_an_exit() {
+    let source = "function pick(n) { var s = 0; for (var i = 0; i < n; i++) s += Math.floor(i / 2); return s; }";
+    let program = compile::compile(&nested_function(source, "pick"))
+        .expect("a body with a guarded Math call should be admitted");
+    assert!(
+        program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::CallResolved { argc: 1, .. })),
+        "{:#?}",
+        program.ops
+    );
+    assert!(
+        !program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::Exit { ip, .. }
+            if !matches!(nested_function(source, "pick").code[*ip as usize], Op::Jump(_)))),
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(&format!("{source} pick(10);")),
+        Value::Number(20.0)
+    );
+    // A replaced `Math` or a non-number argument takes the ordinary call.
+    assert_eq!(
+        value_of(
+            "function f(x) { return Math.floor(x); }
+             var a = f(2.5) + f('7.9');
+             var saved = Math; Math = { floor(v) { return this === Math ? v * 10 : -1; } };
+             var b = f(3); Math = saved; a + ':' + b;"
+        ),
+        Value::String("9:30".into())
+    );
+}

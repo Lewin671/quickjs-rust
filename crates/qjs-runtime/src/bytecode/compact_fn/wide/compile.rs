@@ -665,6 +665,14 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                     argc: u8::try_from(*argc).ok()?,
                 });
             }
+            // The guarded form is a plain one-argument method call with a
+            // frameless answer for the intrinsic Math functions, which the
+            // driver's native fast paths give it here.
+            Op::CallResolvedGuardedMathUnary => ops.push(WideOp::CallResolved {
+                dst: register(depth.checked_sub(3)?),
+                base: register(depth.checked_sub(2)?),
+                argc: 1,
+            }),
             Op::CallResolved(argc) => {
                 let argc_u16 = u16::try_from(*argc).ok()?;
                 // `[receiver, callee, args...]` collapses to the result, which
@@ -866,7 +874,6 @@ fn is_exit_safe(op: &Op) -> bool {
         op,
         Op::SetProp { .. }
             | Op::SetPropIndex { .. }
-            | Op::CallResolvedGuardedMathUnary
             | Op::RequireObjectCoercible
             | Op::NewObjectDataLiteral { .. }
             | Op::AppendStringLiteralLocal { .. }
@@ -916,6 +923,7 @@ fn effect_of(op: &Op) -> Option<Effect> {
         },
         Op::Call(argc) => simple(u16::try_from(*argc).ok()?.checked_add(1)?, 1),
         Op::CallResolved(argc) => simple(u16::try_from(*argc).ok()?.checked_add(2)?, 1),
+        Op::CallResolvedGuardedMathUnary => simple(3, 1),
         Op::Return | Op::Throw => Effect {
             pops: 1,
             pushes: 0,

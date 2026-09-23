@@ -10,7 +10,7 @@ then hands over its state; the interpreter resumes at that instruction.
 ## Design
 
 - Exit points (`compact_fn/wide/compile.rs`): operations in `is_exit_safe`
-  (computed stores, guarded Math calls, object literals,
+  (computed stores, object literals,
   `RequireObjectCoercible`, literal appends) and the backward edges of loops
   an accelerator claims or in-place fusion rewrote. Bodies whose lowering
   keeps a literal in virtual slots, and anything needing set-up at entry
@@ -65,12 +65,15 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   screened; hash-map's remaining generic work is `_rehash` running after its
   computed-store exit.
 
+- Guarded Math unary calls run as one-argument method calls, whose native
+  fast path answers the intrinsics without a frame (string-validate-input
+  -4.7% single-run cycles; makeName/makeNumber no longer judged exit-heavy).
+
 ## Next
 
 - Run computed stores (`SetProp`) natively; each exit leaves the rest of a
   loop body, and its loop, to the interpreter.
 
-- Run guarded Math unary calls natively instead of exiting on them.
 - Admit bodies with a parameter prologue (default values) once their dead-zone
   behaviour is covered; CF traces count 179k general frames for them.
 - The exit-heavy counter costs binary-trees and md5 about 2% instructions;
