@@ -451,7 +451,8 @@ bytecode it resumes at), per interpreter backward edge an accelerator
 claimed (`TLCLAIM`, naming the numeric-mutation, numeric, control or typed
 accelerator), and per backward edge every loop accelerator declined
 (`TLEDGE`). `QJS_TL_TRACE=2` also lists a failed region's
-bytecode.
+bytecode, and `QJS_TL_TRACE=3` lists each compiled program's operations
+(`TLOP`).
 
 Two histograms answer most questions. `TLDEOPT` names the shapes that
 deoptimize a region on every entry, which is how the array element write,

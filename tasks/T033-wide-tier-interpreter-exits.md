@@ -110,8 +110,33 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   fast path answers the intrinsics without a frame (string-validate-input
   -4.7% single-run cycles; makeName/makeNumber no longer judged exit-heavy).
 
+- Peephole rewrites (wide/peephole.rs, 3147d10b): CompareJump fusion,
+  results stored straight into locals, discarded constants not loaded;
+  hash-map runs 24% fewer wide operations (0.916 single-run cycles).
+  Folding `typeof local` and `return local` in place on top: 1.001,
+  closed.
+- Existing global variables assigned on the tier (7477de9e): fasta 0.80.
+- Measured wide costs (instruction increments against QuickJS-NG): a
+  call-and-return 700-800 instructions vs 300; a cached named read about
+  240 vs 50; `s = s + i` 95 vs 36. Typed loop programs run at parity with
+  NG's interpreter per operation (75 cycles per iteration on the same
+  8-operation loop).
+
+## Found, not fixed
+
+- A sloppy assignment in a function to a global that has become an
+  accessor does not call the setter (`Object.defineProperty(globalThis,
+  'g', { set })` then `g = 4` in a function); QuickJS-NG calls it. The
+  interpreter path, before this task's changes too.
+- A function that assigned a global and then lets a native write it
+  (`Reflect.set(globalThis, 'w', 'X')`) reads its own stale copy of `w`
+  afterwards. Interpreter path, also predates this task.
+
 ## Next
 
+- Math.random from interpreted code costs 840 cycles per call (5.7x NG):
+  the call runs through the generic path because the typed loop cannot
+  call a stateful native.
 
 - Admit bodies with a parameter prologue (default values) once their dead-zone
   behaviour is covered; CF traces count 179k general frames for them.

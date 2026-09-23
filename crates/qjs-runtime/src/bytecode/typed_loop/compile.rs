@@ -77,6 +77,12 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
                 #[cfg(feature = "perf-counters")]
                 if std::env::var_os("QJS_TL_TRACE").is_some() {
                     eprintln!("TLOK region {header}..{backedge} ops {}", builder.ops.len());
+                    // `QJS_TL_TRACE=3` also lists the compiled program.
+                    if std::env::var_os("QJS_TL_TRACE").is_some_and(|value| value == "3") {
+                        for (index, op) in builder.ops.iter().enumerate() {
+                            eprintln!("TLOP {index:3} {op:?}");
+                        }
+                    }
                 }
                 break builder;
             }
