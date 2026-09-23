@@ -144,6 +144,22 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
 - The implicit-global loop rule (eedfb4ae) measured 0.96-0.99 on
   3d-raytrace over repeats, not the 0.90 of its first run.
 
+- Stack run 7ea40cb2 vs main 986839a1 (30 blocks, cycles, quiet host;
+  `target/comparison/builtins2-7ea40cb2`): string relational compares
+  without an environment, memoized inlining facts, remembered receiver
+  misses, compound member assignment on the wide tier, accelerated-loop-only
+  global store declines, undeclared globals created on the tier, field
+  initializer member reads. External geomean 0.995 against main (JetStream
+  subset 0.991, Kraken 0.997, SunSpider 0.996) and **0.985 against
+  QuickJS-NG** in wall time -- the first formal run below it.
+  string-validate-input 0.928, stanford-crypto-ccm 0.950, crypto-md5 0.956,
+  3d-raytrace 0.968, raytrace-public-class-fields 0.972, hash-map 0.980.
+  Worst against main: math-spectral-norm 1.031, imaging-gaussian-blur
+  1.023, crypto-sha1 1.020. Sentinels 0.982-0.999; broad lane flat.
+  Largest remaining against NG: hash-map 2.16, tagcloud 2.03, 3d-raytrace
+  1.94, ai-astar 1.82, controlflow-recursive 1.80, tofte/xparb 1.78,
+  raytrace-class-fields 1.77, nbody 1.76.
+
 ## Found, not fixed
 
 - Deleting a global created by a sloppy assignment in a function
