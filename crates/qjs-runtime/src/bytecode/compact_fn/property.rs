@@ -95,6 +95,14 @@ fn prototype_receiver_named_value(
     env: &CallEnv,
 ) -> Option<Value> {
     let prototype = match object {
+        // A function's own data property -- `String.fromCharCode`,
+        // `Array.isArray` -- read where it is.
+        Value::Function(function) => {
+            return function
+                .own_property(key)
+                .filter(|property| !property.is_accessor())
+                .map(|property| property.value);
+        }
         Value::String(text) => {
             if &**key == "length" {
                 return Some(Value::Number(

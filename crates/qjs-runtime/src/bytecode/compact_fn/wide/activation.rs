@@ -1508,8 +1508,48 @@ fn construct_from_activation(
     ) {
         return result;
     }
+    if let Some(array) = construct_plain_array(env, &callee, arguments) {
+        return Ok(array);
+    }
     let mut env = env.empty_frame();
     crate::function::construct_function(callee.clone(), callee, arguments.to_vec(), &mut env)
+}
+
+/// `new Array(...)` on the realm's own Array constructor, whose `prototype`
+/// is non-writable and non-configurable: the array the constructor builds,
+/// without first allocating the ordinary receiver the general construct
+/// path makes for it. A length that is not a valid array length, or any
+/// other constructor, takes the general path and its errors.
+fn construct_plain_array(env: &CallEnv, callee: &Value, arguments: &[Value]) -> Option<Value> {
+    let Value::Function(function) = callee else {
+        return None;
+    };
+    if function.native != Some(crate::NativeFunction::Array)
+        || function.bound.is_some()
+        || env.array_prototype_intrinsic_override().is_some()
+        || env.dynamic_function_realm_global().is_some()
+    {
+        return None;
+    }
+    let realm_prototype = env.realm().array_prototype()?;
+    match function.own_property("prototype") {
+        Some(property)
+            if !property.is_accessor()
+                && matches!(&property.value, Value::Object(prototype) if prototype.ptr_eq(&realm_prototype)) =>
+            {}
+        _ => return None,
+    }
+    let array = match arguments {
+        [Value::Number(length)] => {
+            let valid = length.fract() == 0.0 && (0.0..4_294_967_296.0).contains(length);
+            if !valid {
+                return None;
+            }
+            crate::ArrayRef::new_with_length(*length as usize)
+        }
+        values => crate::ArrayRef::new(values.to_vec()),
+    };
+    Some(Value::Array(array))
 }
 
 #[cold]

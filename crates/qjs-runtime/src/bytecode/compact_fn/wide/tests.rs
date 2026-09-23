@@ -1142,3 +1142,33 @@ fn number_method_reads_follow_number_prototype() {
         Value::String("1/1.0 2.5/2.5 3/fixed".into())
     );
 }
+
+#[test]
+fn builtin_statics_arrays_and_instanceof_keep_their_hooks() {
+    let source = "function probe(n, C) {
+        var a = new Array(n), b = new Array(1, 2), c = new Array('x');
+        return [a.length, 0 in a, b.join(), c[0], String.fromCharCode(65 + n),
+                Array.isArray(a), a instanceof Array, b instanceof C].join(',');
+    }";
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             function Plain() {{}}
+             class Base {{}} class Derived extends Base {{}}
+             class Hooked {{ static [Symbol.hasInstance](v) {{ return v === 7; }} }}
+             var out = [probe(2, Array), probe(0, Plain), probe(1, Derived)];
+             String.fromCharCode = function () {{ return 'patched'; }};
+             out.push(probe(3, Base));
+             out.push([7] instanceof Hooked, 7 instanceof Hooked);
+             try {{ new Array(-1); }} catch (e) {{ out.push(e instanceof RangeError); }}
+             try {{ probe(1.5, Array); }} catch (e) {{ out.push(e instanceof RangeError); }}
+             out.join(' | ');"
+        )),
+        Value::String(
+            "2,false,1,2,x,C,true,true,true | 0,false,1,2,x,A,true,true,false | \
+             1,false,1,2,x,B,true,true,false | 3,false,1,2,x,patched,true,true,false | \
+             false | true | true | true"
+                .into()
+        )
+    );
+}
