@@ -14,6 +14,7 @@ mod groups;
 mod lookaround;
 mod normalization;
 mod repeat_visited;
+mod start_filter;
 #[cfg(test)]
 mod tests;
 
@@ -33,6 +34,7 @@ use groups::{
 use lookaround::match_lookaround;
 use normalization::normalized_regexp_source;
 use repeat_visited::RepeatVisited;
+use start_filter::StartFilter;
 
 pub(super) use groups::regexp_group_names;
 
@@ -75,6 +77,7 @@ pub(super) struct PreparedRegexp {
     group_indices: HashMap<usize, usize>,
     properties: PropertyCache,
     alternatives: Vec<(usize, usize)>,
+    start_filter: Option<StartFilter>,
     options: MatchOptions,
 }
 
@@ -119,12 +122,14 @@ impl PreparedRegexp {
         };
         let group_indices = capture_group_indices(&pattern);
         let properties = PropertyCache::build(&pattern);
-        let alternatives = group_alternatives(&pattern, 0, pattern.len()).collect();
+        let alternatives: Vec<_> = group_alternatives(&pattern, 0, pattern.len()).collect();
+        let start_filter = StartFilter::analyze(&pattern, &alternatives, &properties, options);
         Self {
             pattern,
             group_indices,
             properties,
             alternatives,
+            start_filter,
             options,
         }
     }
@@ -193,8 +198,20 @@ impl PreparedRegexp {
             index: start_index,
             captures: vec![None; self.group_indices.len()],
         };
+        let start_atoms = self
+            .start_filter
+            .as_ref()
+            .map(|filter| filter.atoms(&self.pattern, &self.properties, self.options));
         for start in start_index..=final_start {
             if self.options.unicode && is_trailing_surrogate_position(text, start) {
+                continue;
+            }
+            if let (Some(filter), Some(atoms)) = (&self.start_filter, &start_atoms)
+                && !filter.admits(atoms, text, start, &self.properties, self.options)
+            {
+                if atoms.is_empty() {
+                    break;
+                }
                 continue;
             }
             // Failed first matching is atomic, so the allocation can survive

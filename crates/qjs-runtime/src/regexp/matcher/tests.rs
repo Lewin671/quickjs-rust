@@ -910,3 +910,83 @@ fn lookbehind_backreferences_use_reverse_matching_order() {
     assert_eq!((matched.start, matched.end), (4, 5));
     assert_eq!(matched.captures, vec![Some((0, 4))]);
 }
+
+/// Whether the search skips start positions for `source` (see
+/// `start_filter`), so a test of skipped positions cannot pass vacuously.
+fn filters_starts(source: &str, ignore_case: bool, multiline: bool) -> bool {
+    PreparedRegexp::new(source, ignore_case, false, false, multiline)
+        .start_filter
+        .is_some()
+}
+
+#[test]
+fn start_filter_skips_positions_no_alternative_can_begin_at() {
+    let source = r#""[^"]*"|true|-?\d+(?:\.\d*)?"#;
+    assert!(filters_starts(source, false, false));
+    let matched = regexp_match_range(source, "x = -12.5, y", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (4, 9));
+    let matched = regexp_match_range(source, "a 7", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (2, 3));
+    let matched = regexp_match_range(source, "q \"ab\" true", 1, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (2, 6));
+    assert!(regexp_match_range(source, "abc xyz", 0, false, false, false).is_none());
+
+    assert!(filters_starts(r"B+", true, false));
+    let matched = regexp_match_range(r"B+", "aabb", 0, true, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (2, 4));
+
+    assert!(filters_starts(r"(?<name>q)z|(r)", false, false));
+    let matched = regexp_match_range(r"(?<name>q)z|(r)", "aqqzr", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (2, 4));
+    assert_eq!(matched.captures, vec![Some((2, 3)), None]);
+}
+
+#[test]
+fn start_filter_admits_only_input_start_for_a_leading_caret() {
+    assert!(filters_starts(r"^ab", false, false));
+    assert!(regexp_match_range(r"^ab", "abab", 1, false, false, false).is_none());
+    let matched = regexp_match_range(r"^ab", "abab", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 2));
+
+    // `^` inside a leading group mixes with consuming alternatives.
+    assert!(filters_starts(r"(?:^|:|,)(?:\s*\[)+", false, false));
+    let matched =
+        regexp_match_range(r"(?:^|:|,)(?:\s*\[)+", "a: [[x", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (1, 5));
+    let matched = regexp_match_range(r"(?:^|:|,)(?:\s*\[)+", "[x", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+
+    // Under multiline `^` also matches after a line terminator.
+    assert!(!filters_starts(r"^ab", false, true));
+    let matched = regexp_match_range_inner(
+        r"^ab",
+        &crate::JsString::from("x\nab"),
+        0,
+        false,
+        false,
+        false,
+        true,
+    )
+    .unwrap();
+    assert_eq!((matched.start, matched.end), (2, 4));
+}
+
+#[test]
+fn start_filter_leaves_every_position_to_patterns_it_does_not_model() {
+    for source in [
+        r"a?",
+        r"a*b?",
+        r"(?:ab)?c",
+        r"(?=a)a",
+        r"\ba",
+        r"$",
+        r"a|",
+        r"(a)?b",
+    ] {
+        assert!(!filters_starts(source, false, false), "{source}");
+    }
+    let matched = regexp_match_range(r"(a)?b", "xxb", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (2, 3));
+    let matched = regexp_match_range(r"\ba", "b a", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (2, 3));
+}
