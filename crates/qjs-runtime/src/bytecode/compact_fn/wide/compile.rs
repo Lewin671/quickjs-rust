@@ -9,6 +9,7 @@
 
 use std::rc::Rc;
 
+use super::peephole::{fuse_compare_jump, retarget, sole_op_of_previous};
 use super::{NamedReadSite, NamedWriteSite, ProbedBackedge, WideOp, WideProgram};
 use crate::bytecode::compact_fn::MAX_REGISTERS;
 use crate::bytecode::compact_fn::compile::MAX_CALL_ARITY;
@@ -380,12 +381,20 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
     };
 
     let register = |depth: u16| -> u16 { (local_registers as u16).saturating_add(depth) };
+    // The `Pop`s a fused `CompareJump` performs itself (see below).
+    let mut fused_pops = vec![false; code.len()];
+    // Instructions whose effect an earlier operation took over: the tier
+    // cannot resume at them with their operands on the stack.
+    let mut no_resume = vec![false; code.len()];
 
     for (ip, op) in code.iter().enumerate() {
         compact_index[ip] = u32::try_from(ops.len()).ok()?;
         let Some(depth) = entry_depth[ip] else {
             continue;
         };
+        if fused_pops[ip] {
+            continue;
+        }
         if folds[ip] == LocalFold::Elided {
             if let Op::LoadLocal(slot) | Op::StoreLocal(slot) | Op::AssignLocal(slot) = op {
                 required_authoritative_slots |= 1_u128 << *slot;
@@ -394,6 +403,15 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         }
         match op {
             Op::FunctionPrologueEnd | Op::FreshIterationScope(_) => {}
+            // A constant loaded only to be discarded -- a statement's
+            // completion value -- is not loaded at all.
+            Op::Pop
+                if sole_op_of_previous(ip, &jump_targets, &compact_index, &ops)
+                    && matches!(ops.last(), Some(WideOp::LoadConst { dst, .. })
+                        if *dst == register(depth.checked_sub(1)?)) =>
+            {
+                ops.pop();
+            }
             Op::Pop => ops.push(WideOp::Drop {
                 src: register(depth.checked_sub(1)?),
             }),
@@ -650,16 +668,29 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
             // A store into a dead completion temporary only releases the
             // value.
             Op::StoreLocal(slot) | Op::AssignLocal(slot) if completion_is_dead(*slot) => {
-                ops.push(WideOp::Drop {
-                    src: register(depth.checked_sub(1)?),
-                });
+                let src = register(depth.checked_sub(1)?);
+                if sole_op_of_previous(ip, &jump_targets, &compact_index, &ops)
+                    && matches!(ops.last(), Some(WideOp::LoadConst { dst, .. }) if *dst == src)
+                {
+                    ops.pop();
+                } else {
+                    ops.push(WideOp::Drop { src });
+                }
             }
             Op::StoreLocal(slot) | Op::AssignLocal(slot) => {
                 required_authoritative_slots |= 1_u128 << *slot;
-                ops.push(WideOp::Move {
-                    dst: u16::try_from(*slot).ok()?,
-                    src: register(depth.checked_sub(1)?),
-                });
+                let dst = u16::try_from(*slot).ok()?;
+                let src = register(depth.checked_sub(1)?);
+                // The operation that produced the value writes the local
+                // itself.
+                if sole_op_of_previous(ip, &jump_targets, &compact_index, &ops)
+                    && let Some(last) = ops.last_mut()
+                    && retarget(last, src, dst)
+                {
+                    no_resume[ip] = true;
+                } else {
+                    ops.push(WideOp::Move { dst, src });
+                }
             }
             Op::Update(update_op) if let LocalFold::Update(slot) = folds[ip] => {
                 ops.push(WideOp::Update {
@@ -709,6 +740,38 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 ip: u32::try_from(ip).ok()?,
                 depth,
             }),
+            Op::JumpIfFalse(target)
+                if let Some(fused) = fuse_compare_jump(
+                    code,
+                    ip,
+                    *target,
+                    register(depth.checked_sub(1)?),
+                    &jump_targets,
+                    &compact_index,
+                    &ops,
+                ) =>
+            {
+                ops.truncate(fused.first);
+                ops.extend(fused.kept);
+                let target = u16::try_from(*target + 1).ok()?;
+                ops.push(WideOp::CompareJump {
+                    op: fused.op,
+                    left: fused.left,
+                    right: fused.right,
+                    target,
+                });
+                // The loads and the comparison it absorbed resume, like a
+                // jump to the first of them, at the start of the group.
+                let start = u32::try_from(fused.first).ok()?;
+                for index in &mut compact_index[fused.first_ip..=ip] {
+                    *index = start;
+                }
+                fused_pops[ip + 1] = true;
+                no_resume[ip + 1] = true;
+                for flag in &mut no_resume[fused.first_ip + 1..=ip] {
+                    *flag = true;
+                }
+            }
             Op::JumpIfFalse(target) | Op::JumpIfTrue(target) => {
                 let copied = register(depth.checked_sub(1)?);
                 // `if (x)` on a local: both successors discard the condition,
@@ -812,6 +875,9 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
             | WideOp::JumpIfTruthy { target, .. } => {
                 *target = *compact_index.get(*target as usize)?;
             }
+            WideOp::CompareJump { target, .. } => {
+                *target = u16::try_from(*compact_index.get(*target as usize)?).ok()?;
+            }
             _ => {}
         }
     }
@@ -844,7 +910,11 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         ip_to_pc: compact_index.into_boxed_slice(),
         ip_depth: entry_depth
             .iter()
-            .map(|depth| depth.unwrap_or(u16::MAX))
+            .zip(no_resume.iter().chain(std::iter::repeat(&false)))
+            .map(|(depth, &merged)| match depth {
+                Some(depth) if !merged => *depth,
+                _ => u16::MAX,
+            })
             .collect(),
     })
 }

@@ -27,6 +27,7 @@ use crate::bytecode::named_property_cache::NamedPropertyCache;
 mod activation;
 mod compile;
 mod loop_frame;
+mod peephole;
 #[cfg(test)]
 mod tests;
 
@@ -130,6 +131,17 @@ enum WideOp {
     JumpIfTruthy {
         cond: u16,
         target: u32,
+    },
+    /// `if (left op right)`: compares two registers with a relational or
+    /// equality operator and jumps to `target` when the result is false.
+    /// It stands for the comparison, the conditional jump and the pops of
+    /// the condition on both successors, so the result is never
+    /// materialized; the operands are only read.
+    CompareJump {
+        op: BinaryOp,
+        left: u16,
+        right: u16,
+        target: u16,
     },
     Unary {
         dst: u16,

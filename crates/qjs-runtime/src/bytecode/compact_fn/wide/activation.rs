@@ -71,6 +71,20 @@ impl WideActivation<'_> {
         }
     }
 
+    /// `CompareJump` on operands that are not both numbers: the comparison
+    /// the interpreter's `Binary` would run, on copies, since the operands
+    /// may be locals.
+    #[inline(never)]
+    fn compare(&self, left: &Value, op: BinaryOp, right: &Value) -> Result<bool, RuntimeError> {
+        if matches!(op, BinaryOp::StrictEq | BinaryOp::StrictNe)
+            && let Some(equal) = crate::bytecode::vm_ops::fast_strict_eq(left, right)
+        {
+            return Ok(equal == (op == BinaryOp::StrictEq));
+        }
+        let value = self.eval_binary(left.clone(), op, right.clone())?;
+        Ok(crate::is_truthy(&value))
+    }
+
     #[inline(never)]
     fn eval_binary(&self, left: Value, op: BinaryOp, right: Value) -> Result<Value, RuntimeError> {
         if let Some(value) = crate::operations::eval_binary_without_env(&left, op, &right) {
@@ -78,6 +92,20 @@ impl WideActivation<'_> {
         }
         let mut env = self.env.empty_frame();
         crate::operations::eval_binary(left, op, right, &mut env)
+    }
+}
+
+/// A relational or equality operator between two numbers; the compiler
+/// fuses no other operator into `CompareJump`.
+#[inline(always)]
+fn compare_numbers(left: f64, op: BinaryOp, right: f64) -> bool {
+    match op {
+        BinaryOp::Lt => left < right,
+        BinaryOp::Le => left <= right,
+        BinaryOp::Gt => left > right,
+        BinaryOp::Ge => left >= right,
+        BinaryOp::Ne | BinaryOp::StrictNe => left != right,
+        _ => left == right,
     }
 }
 
@@ -968,6 +996,25 @@ fn run_frames(
                         }
                     }
                     WideOp::Jump { target } => pc = target as usize,
+                    WideOp::CompareJump {
+                        op,
+                        left,
+                        right,
+                        target,
+                    } => {
+                        let holds = match (&window[left as usize], &window[right as usize]) {
+                            (Value::Number(left), Value::Number(right)) => {
+                                compare_numbers(*left, op, *right)
+                            }
+                            (left, right) => match activation.compare(left, op, right) {
+                                Ok(holds) => holds,
+                                Err(error) => break Err(error),
+                            },
+                        };
+                        if !holds {
+                            pc = target as usize;
+                        }
+                    }
                     WideOp::Unary { dst, op, src } => {
                         let value = std::mem::replace(&mut window[src as usize], Value::Undefined);
                         match eval_unary(op, value, env) {

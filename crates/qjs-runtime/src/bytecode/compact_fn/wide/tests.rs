@@ -1,3 +1,5 @@
+use qjs_ast::BinaryOp;
+
 use super::{WideOp, compile};
 use crate::bytecode::{compiler, ir::Bytecode, ir::Op};
 use crate::{Value, eval};
@@ -886,5 +888,85 @@ fn a_branch_on_a_local_tests_it_in_place() {
             "{source} [pick({{}}, 0), pick(0, 0), pick('', 5), pick(NaN, 1)].join(',');"
         )),
         Value::String("1:0,0:0,:0,NaN:0".into())
+    );
+}
+
+#[test]
+fn a_comparison_branch_is_one_operation_on_its_operands() {
+    let source = "function order(a, b) {
+        var out = 0;
+        if (a < b) out = out + 1;
+        if (a === b) out = out + 10;
+        if (a >= 2) out = out + 100;
+        if (typeof a == 'object') out = out + 1000;
+        return out;
+    }";
+    let program =
+        compile::compile(&nested_function(source, "order")).expect("the body should be admitted");
+    let fused = program
+        .ops
+        .iter()
+        .filter(|op| matches!(op, WideOp::CompareJump { .. }))
+        .count();
+    assert_eq!(fused, 4, "{:#?}", program.ops);
+    assert!(
+        !program.ops.iter().any(|op| matches!(
+            op,
+            WideOp::JumpIfFalsy { .. }
+                | WideOp::Binary {
+                    op: BinaryOp::Lt | BinaryOp::StrictEq | BinaryOp::Ge | BinaryOp::Eq,
+                    ..
+                }
+        )),
+        "{:#?}",
+        program.ops
+    );
+    // Numbers, NaN, strings, and objects whose conversion is observable,
+    // converted left before right exactly once per comparison.
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var log = [];
+             function v(name, n) {{ return {{ valueOf() {{ log.push(name); return n; }} }}; }}
+             [order(1, 2), order(2, 2), order(NaN, NaN), order('b', 'a'), order('a', 'a'),
+              order(v('x', 1), v('y', 3)), log.join('')].join(',');"
+        )),
+        Value::String("1,110,0,0,10,1001,xyx".into())
+    );
+}
+
+#[test]
+fn a_stored_result_is_written_to_the_local_directly() {
+    let source =
+        "function sum(a, b) { var t = a + b; var u = t; var w = typeof u; return t + u + w; }";
+    let program =
+        compile::compile(&nested_function(source, "sum")).expect("the body should be admitted");
+    let moves = program
+        .ops
+        .iter()
+        .filter(|op| {
+            matches!(op, WideOp::Move { dst, src }
+                if *dst < program.local_registers && *src >= program.local_registers)
+        })
+        .count();
+    assert_eq!(moves, 0, "{:#?}", program.ops);
+    assert_eq!(
+        value_of(&format!("{source} sum(1, 2) + '|' + sum('a', 'b');")),
+        Value::String("6number|ababstring".into())
+    );
+}
+
+#[test]
+fn a_loop_condition_reentered_from_its_backedge_reads_the_current_values() {
+    // The loop header is the comparison's first operand load, so the
+    // backedge lands on the fused comparison.
+    let source = "function count(n) {
+        var i = 0, hits = 0, guard = 0;
+        while (i < n) { if (++guard > 1000) throw 'hang'; if (i !== 3) hits++; i++; }
+        return hits;
+    }";
+    assert_eq!(
+        value_of(&format!("{source} count(10);")),
+        Value::Number(9.0)
     );
 }
