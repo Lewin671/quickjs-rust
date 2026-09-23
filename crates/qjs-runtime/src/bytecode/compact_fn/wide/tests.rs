@@ -1097,3 +1097,33 @@ fn the_rest_of_a_body_runs_here_after_an_accelerator_finishes_its_loop() {
         ))
     );
 }
+
+#[test]
+fn array_and_string_method_reads_follow_their_prototypes() {
+    // Each read site sees the realm prototype's method, an own shadowing
+    // property, a replaced prototype method, and a subclass prototype.
+    let source = "function use(list, text) {
+        list.push(text.charAt(0));
+        return list.length + ':' + list.join('') + ':' + text.toUpperCase();
+    }";
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var out = [];
+             for (var i = 0; i < 3; i++) out.push(use([i], 'ab'));
+             var shadow = [9]; shadow.join = function () {{ return 'own'; }};
+             out.push(use(shadow, 'cd'));
+             var saved = Array.prototype.push;
+             Array.prototype.push = function (v) {{ return saved.call(this, v, v); }};
+             var patched = use([7], 'ef');
+             Array.prototype.push = saved;
+             out.push(patched);
+             String.prototype.charAt = function () {{ return '#'; }};
+             out.push(use([], 'gh'));
+             class Stack extends Array {{ join() {{ return 'stack'; }} }}
+             out.push(use(new Stack(), 'ij'));
+             out.join(' ');"
+        )),
+        Value::String("2:0a:AB 2:1a:AB 2:2a:AB 2:own:CD 3:7ee:EF 1:#:GH 1:stack:IJ".into())
+    );
+}

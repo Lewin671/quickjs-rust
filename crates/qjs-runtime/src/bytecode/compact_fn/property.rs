@@ -70,9 +70,7 @@ pub(super) fn get_prop_named(
             OwnDataPropertyRead::NeedsSlowPath => {}
         }
     }
-    if let Value::String(text) = object
-        && let Some(value) = string_named_value(text, key, env)
-    {
+    if let Some(value) = prototype_receiver_named_value(object, key, cache, env) {
         return Ok(value);
     }
     cache.clear();
@@ -80,29 +78,65 @@ pub(super) fn get_prop_named(
     crate::bytecode::vm_props::get_property(object.clone(), key, &mut call_env)
 }
 
-/// A named read on a primitive string, as `Vm::try_direct_get_string`
-/// answers it: `length`, an own index, then a data property on the realm's
-/// live `%String.prototype%`. `text.charCodeAt` in a loop otherwise walked
-/// the general [[Get]], which rediscovers the `String` binding by name and
-/// builds a realm frame per read.
-fn string_named_value(text: &crate::JsString, key: &str, env: &CallEnv) -> Option<Value> {
-    if key == "length" {
-        return Some(Value::Number(
-            crate::string::js_string_code_unit_len(text) as f64
-        ));
-    }
-    if let Some(value) = crate::string::string_property(text, key) {
+/// A named read on a primitive string or an array: `length`, an own index
+/// or (for an array) an own named property, then a data property on the
+/// realm's live `%String.prototype%` or `%Array.prototype%`, as
+/// `Vm::try_direct_get_string` answers it. The prototype's answer is the
+/// site's cached entry for that prototype object, revalidated by its
+/// revision like any receiver's, so `text.charCodeAt` and `list.push` read
+/// their method without walking the chain. `None` leaves the read to the
+/// general [[Get]].
+#[inline(never)]
+fn prototype_receiver_named_value(
+    object: &Value,
+    key: &Rc<str>,
+    cache: &NamedPropertyCache,
+    env: &CallEnv,
+) -> Option<Value> {
+    let prototype = match object {
+        Value::String(text) => {
+            if &**key == "length" {
+                return Some(Value::Number(
+                    crate::string::js_string_code_unit_len(text) as f64
+                ));
+            }
+            if let Some(value) = crate::string::string_property(text, key) {
+                return Some(value);
+            }
+            if env.dynamic_function_realm_global().is_some() {
+                return None;
+            }
+            env.realm().string_prototype()?
+        }
+        Value::Array(array) => {
+            if &**key == "length" {
+                return Some(Value::Number(array.len() as f64));
+            }
+            if crate::array_index_property_key(key).is_some() || array.property(key).is_some() {
+                return None;
+            }
+            match array.effective_prototype_slot(env)? {
+                crate::Prototype::Object(prototype) => prototype,
+                _ => return None,
+            }
+        }
+        _ => return None,
+    };
+    if let CacheProbe::Own(value) = cache.probe(&prototype) {
         return Some(value);
     }
-    if env.dynamic_function_realm_global().is_some() {
-        return None;
-    }
-    let prototype = env.realm().string_prototype()?;
     use crate::bytecode::vm_props::{DirectPropertyRead, ordinary_chain_data_value};
-    match ordinary_chain_data_value(&prototype, key) {
-        Ok(DirectPropertyRead::Data(value)) => Some(value),
-        Ok(DirectPropertyRead::Missing) => Some(Value::Undefined),
-        Ok(DirectPropertyRead::NeedsSlowPath) | Err(_) => None,
+    match prototype.own_data_property_read(key) {
+        OwnDataPropertyRead::Data(value) => {
+            cache.update(&prototype, key, &value);
+            Some(value)
+        }
+        OwnDataPropertyRead::Missing => match ordinary_chain_data_value(&prototype, key) {
+            Ok(DirectPropertyRead::Data(value)) => Some(value),
+            Ok(DirectPropertyRead::Missing) => Some(Value::Undefined),
+            Ok(DirectPropertyRead::NeedsSlowPath) | Err(_) => None,
+        },
+        OwnDataPropertyRead::NeedsSlowPath => None,
     }
 }
 
