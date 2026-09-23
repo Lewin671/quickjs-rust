@@ -498,10 +498,17 @@ pub(super) fn get_prop_computed(
     if let Value::Number(number) = &key_value
         && let Some(index) = crate::bytecode::vm_props::array_index_from_number(*number)
     {
-        if let Value::Array(elements) = &object
-            && let Some(value) = elements.direct_dense_index_value(index)
-        {
-            return Ok(value);
+        if let Value::Array(elements) = &object {
+            if let Some(value) = elements.direct_dense_index_value(index) {
+                return Ok(value);
+            }
+            // A hole, or an index past the end, of an array whose prototype
+            // chain holds no indexed property reads `undefined`: a bucket
+            // table made by `new Array(n)` reads its empty buckets this way,
+            // which otherwise formatted the index as a key and walked the chain.
+            if elements.index_is_absent(index) && array_access_is_plain(elements, env) {
+                return Ok(Value::Undefined);
+            }
         }
         if let Value::Object(object) = &object
             && crate::typed_array::is_typed_array_object(object)
@@ -584,31 +591,107 @@ fn undefined_identifier(name: &str) -> RuntimeError {
 /// which the caller leaves to the interpreter.
 #[inline(never)]
 pub(super) fn try_store_global_var(name: &str, value: &Value, env: &CallEnv) -> bool {
+    match plain_global_var(name, env) {
+        Some(GlobalVar::Absent(global_this)) => {
+            // The first assignment of an undeclared name creates it, as the
+            // interpreter's store does: a global data property and the realm
+            // binding that mirrors it.
+            global_this.set(name.to_owned(), value.clone());
+            env.insert_realm(name.to_owned(), value.clone());
+            true
+        }
+        Some(GlobalVar::Bound(global_this, cell)) => {
+            if !matches!(
+                global_this.write_existing_own_data_property(name, value),
+                OwnDataPropertyWrite::Written
+            ) {
+                return false;
+            }
+            env.replace_existing_realm_with_cell(name, value.clone(), &cell)
+        }
+        None => false,
+    }
+}
+
+/// `name = name + right` for the global variable `name`, whose value `left`
+/// was read into a register: the concatenation extends the string in place,
+/// as the interpreter's compound assignment does, instead of copying the
+/// whole accumulator. The binding's two mirrors -- the realm cell and the
+/// `globalThis` property -- are released first, so the register holds the
+/// only reference unless JavaScript holds another. Returns `false`, having
+/// changed nothing, unless `name` is a plain global variable holding exactly
+/// `left`, a string, and `right` needs no `ToPrimitive`.
+#[inline(never)]
+pub(super) fn try_append_global_var(
+    name: &str,
+    left: &mut Value,
+    right: &mut Value,
+    env: &CallEnv,
+) -> bool {
+    let Value::String(current) = &*left else {
+        return false;
+    };
+    if !crate::bytecode::vm_string_append::is_appendable(right) {
+        return false;
+    }
+    let Some(GlobalVar::Bound(global_this, cell)) = plain_global_var(name, env) else {
+        return false;
+    };
+    if !cell.with_value(
+        |value| matches!(value, Value::String(bound) if crate::JsString::ptr_eq(bound, current)),
+    ) {
+        return false;
+    }
+    cell.set(Value::Undefined);
+    if !matches!(
+        global_this.write_existing_own_data_property(name, &Value::Undefined),
+        OwnDataPropertyWrite::Written
+    ) {
+        cell.set(left.clone());
+        return false;
+    }
+    let left = std::mem::replace(left, Value::Undefined);
+    let right = std::mem::replace(right, Value::Undefined);
+    let Ok(result) = crate::bytecode::vm_string_append::concat_primitives(left, right) else {
+        unreachable!("a string and a plain primitive concatenate");
+    };
+    global_this.write_existing_own_data_property(name, &result);
+    env.replace_existing_realm_with_cell(name, result, &cell)
+}
+
+/// A global variable a sloppy function may assign on this tier.
+enum GlobalVar {
+    /// Not bound yet, on an extensible global object: an assignment creates it.
+    Absent(crate::ObjectRef),
+    /// A writable global data property with the realm binding that mirrors
+    /// it, the two in sync.
+    Bound(crate::ObjectRef, crate::function::Upvalue),
+}
+
+/// The global variable `name` resolves to from a function that neither
+/// declares nor receives it, when a store to it is the plain one; `None` for
+/// a lexical or immutable binding, a module binding, an accessor or
+/// read-only property, a global property without a realm binding, or a
+/// mirror that disagrees with its binding -- which the interpreter handles.
+fn plain_global_var(name: &str, env: &CallEnv) -> Option<GlobalVar> {
     if env.is_global_lexical_binding(name)
         || env.is_immutable_lexical_binding(name)
         || env.is_immutable_function_name(name)
         || env.has_module_import(name)
         || env.module_live_binding_cell(name).is_some()
     {
-        return false;
+        return None;
     }
     let Some(Value::Object(global_this)) = env.global_this() else {
-        return false;
+        return None;
     };
     let Some(cell) = env.realm_binding_cell(name) else {
-        // The first assignment of an undeclared name creates it, as the
-        // interpreter's store does: a global data property and the realm
-        // binding that mirrors it.
         if global_this.own_property(name).is_some() || !global_this.is_extensible() {
-            return false;
+            return None;
         }
-        global_this.set(name.to_owned(), value.clone());
-        env.insert_realm(name.to_owned(), value.clone());
-        return true;
+        return Some(GlobalVar::Absent(global_this));
     };
-    let Some(property) = global_this.own_property(name) else {
-        return false;
-    };
+    let property = global_this.own_property(name)?;
     let current = cell.get();
     // Identity is enough to prove the mirror in sync, and a string
     // accumulator compared by content would cost its whole length per store.
@@ -617,17 +700,9 @@ pub(super) fn try_store_global_var(name: &str, value: &Value, env: &CallEnv) -> 
         (left, right) => left.same_value(right),
     };
     if property.is_accessor() || !property.writable || !in_sync {
-        return false;
+        return None;
     }
-    drop(current);
-    drop(property);
-    if !matches!(
-        global_this.write_existing_own_data_property(name, value),
-        OwnDataPropertyWrite::Written
-    ) {
-        return false;
-    }
-    env.replace_existing_realm_with_cell(name, value.clone(), &cell)
+    Some(GlobalVar::Bound(global_this, cell))
 }
 
 /// A class field initializer that only reads a named property of a binding

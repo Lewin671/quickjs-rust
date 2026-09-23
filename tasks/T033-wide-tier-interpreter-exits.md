@@ -160,6 +160,35 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   1.94, ai-astar 1.82, controlflow-recursive 1.80, tofte/xparb 1.78,
   raytrace-class-fields 1.77, nbody 1.76.
 
+- Stack run 99275d24 vs main 3daba0ec (30 blocks, cycles, quiet host;
+  `target/comparison/strings3-99275d24`): lazy String-wrapper index
+  properties, wide array-hole reads and the store/reload peephole, in-place
+  global string appends on the wide tier, String-wrapper ToPrimitive
+  without a call. External geomean 0.988 against main (SunSpider 0.978)
+  and **0.971 against QuickJS-NG**; string-tagcloud 0.769,
+  string-validate-input 0.825, date-format-xparb 0.895. Worst against
+  main: audio-dft 1.022, stanford-crypto-sha256-iterative 1.018.
+  Sentinels 0.960-1.003 (`prototype_method_call` 0.960).
+
+- Rejected (single-run, no measurable gain; 2026-09-23):
+  - Running closures a direct `eval` made (`Function::deopt_bindings`) on
+    the wide tier over their named environment: admitted and ran (xparb's
+    format functions, tofte's nested formatters), but xparb 1.007 and tofte
+    0.993 -- their time is in the natives and conversions they call, not in
+    the interpreter frame.
+  - Proving a typed-loop receiver's own miss once per receiver for inherited
+    reads (three name lookups per `this.method` read): 489 -> 302
+    instructions on a micro, corpus 0.996, sentinels 1.005
+    (`prototype_method_call` 1.014). Patch /tmp/typed-receiver-miss.patch.
+  - Skipping already-empty registers in the wide return's window clear:
+    -19 instructions per call (of 1005; QuickJS-NG 364), corpus 0.998.
+  - Keeping a wide loop native instead of entering its typed program: 2.3x
+    slower on bits-in-byte, 3.4x on ai-astar -- the typed tier's per-entry
+    cost is worth paying even for 8-iteration loops.
+- Measured (instructions): a wide method call and return costs about 1005
+  instructions against QuickJS-NG's 364 (`this.f(k)` one level deeper).
+  Clearing the returning window is 72 of them.
+
 ## Found, then fixed
 
 - Fixed in 03bcf182 (all predated this task, interpreter paths):

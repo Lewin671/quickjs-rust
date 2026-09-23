@@ -1,14 +1,14 @@
 use crate::JsString;
 
-mod code_unit_strings;
 mod constructor;
 mod indexing;
 mod install;
 mod iterator;
+mod object_keys;
 mod property;
 mod prototype;
 
-pub(crate) use code_unit_strings::{CodeUnitStrings, StringObjectKeys};
+pub(crate) use object_keys::StringObjectKeys;
 
 pub(crate) use constructor::define_string_data;
 pub(super) use constructor::{

@@ -501,6 +501,9 @@ tier (`CFNATIVE`), one line per typed loop program the tier ran against its
 own registers at such a backedge (`CFLOOP`, `ran` or `deoptimized`), each identified by the body's parameter names and length.
 `QJS_CF_TRACE=3` also prints each `CFVM` body's bytecode (`CFVMCODE`), which
 names a callee that the parameter list alone does not, such as a getter.
+`QJS_CF_TRACE=2` instead prints each compiled body (`CFLIST`) as its
+bytecode (`bc`) followed by the wide operations it lowered to (`w`), which is
+where a redundant register copy or an unexpected exit shows up.
 A histogram of `CFVM` ranks the callees
 that still pay for a full interpreter frame; the matching `CFDECLINE` line
 says what keeps each one out:

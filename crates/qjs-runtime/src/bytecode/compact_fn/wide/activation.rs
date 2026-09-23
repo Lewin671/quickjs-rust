@@ -568,6 +568,22 @@ fn exit_to_interpreter(
             return ExitOutcome::Continue { pc: resume_pc };
         }
     }
+    // `g = g + value` on a global string: appended in place, then the store
+    // is skipped (see `compile::appends_to_global`).
+    if let (
+        Some(crate::bytecode::ir::Op::Binary(qjs_ast::BinaryOp::Add)),
+        Some(crate::bytecode::ir::Op::StoreLocalOrGlobalSloppy { name, .. }),
+    ) = (
+        bytecode.code.get(ip as usize),
+        bytecode.code.get(ip as usize + 1),
+    ) && let Some(pc) = program.resume_pc(ip as usize + 2, usize::from(depth) - 2)
+    {
+        let top = usize::from(program.local_registers) + usize::from(depth);
+        let (left, right) = window[top - 2..top].split_at_mut(1);
+        if property::try_append_global_var(name, &mut left[0], &mut right[0], env) {
+            return ExitOutcome::Continue { pc };
+        }
+    }
     if let Some(crate::bytecode::ir::Op::StoreLocalOrGlobalSloppy { name, .. }) =
         bytecode.code.get(ip as usize)
     {

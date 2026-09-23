@@ -459,10 +459,22 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                     });
                 } else {
                     required_authoritative_slots |= slot_bit;
-                    ops.push(WideOp::Move {
-                        dst: register(depth),
-                        src: slot_index,
-                    });
+                    // `x = value; ... x` stores and reloads the same local:
+                    // the store copied the value out of the register this
+                    // load would write, which still holds it.
+                    let reloads_stored_value =
+                        sole_op_of_previous(ip, &jump_targets, &compact_index, &ops)
+                            && matches!(code[ip - 1], Op::StoreLocal(stored) if stored == *slot)
+                            && matches!(ops.last(), Some(WideOp::Move { dst, src })
+                            if *dst == slot_index && *src == register(depth));
+                    if reloads_stored_value {
+                        no_resume[ip] = true;
+                    } else {
+                        ops.push(WideOp::Move {
+                            dst: register(depth),
+                            src: slot_index,
+                        });
+                    }
                 }
             }
             Op::LoadGlobal(name) if is_this_read(name) && this_stores[ip] => {
@@ -701,6 +713,12 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 ops.push(WideOp::Update {
                     dst: slot,
                     op: *update_op,
+                });
+            }
+            Op::Binary(BinaryOp::Add) if appends_to_global(code, ip) => {
+                ops.push(WideOp::Exit {
+                    ip: u32::try_from(ip).ok()?,
+                    depth,
                 });
             }
             Op::Binary(binary_op) if let LocalFold::Binary(slot) = folds[ip] => {
@@ -962,13 +980,29 @@ fn global_store_stays_interpreted(
         Some(Op::Dup) => ip - 1,
         _ => ip,
     };
+    // An append with its value kept (`Dup`) would copy the accumulator: the
+    // tier appends in place only at a statement's exit (`appends_to_global`).
     let appends = value_end >= 1
+        && value_end != ip
         && matches!(code[value_end - 1], Op::Binary(BinaryOp::Add))
         && matches!(
             expression_start(code, value_end).map(|start| &code[start]),
             Some(Op::LoadGlobal(read)) if read == name
         );
-    appends.then_some("sloppy global store appending to itself")
+    appends.then_some("sloppy global store appending to itself, value kept")
+}
+
+/// Whether the `Binary(Add)` at `ip` computes `g + value` for the sloppy
+/// global store of `g` right after it: that addition exits, and the exit
+/// extends the global string in place and continues past the store
+/// (`property::try_append_global_var`) rather than copying the accumulator.
+fn appends_to_global(code: &[Op], ip: usize) -> bool {
+    matches!(code.get(ip), Some(Op::Binary(BinaryOp::Add)))
+        && matches!(
+            (code.get(ip + 1), expression_start(code, ip + 1).map(|start| &code[start])),
+            (Some(Op::StoreLocalOrGlobalSloppy { name, .. }), Some(Op::LoadGlobal(read)))
+                if read == name
+        )
 }
 
 /// The first instruction of the straight-line expression whose value is on

@@ -63,9 +63,6 @@ pub(crate) struct RealmState {
     /// The realm's well-known symbols, in `symbol::WELL_KNOWN_SYMBOL_NAMES`
     /// order.
     well_known_symbols: OnceCell<Vec<ObjectRef>>,
-    /// Lazily shared immutable index values for String boxes. This cache owns
-    /// no objects or realm references and retains at most 256 strings.
-    code_unit_strings: crate::string::CodeUnitStrings,
     /// Property keys every boxed String installs, shared instead of allocated.
     string_object_keys: crate::string::StringObjectKeys,
     /// Canonical empty copy-on-write name set for ordinary frames. Sharing it
@@ -107,7 +104,6 @@ impl RealmState {
             string_prototype: OnceCell::new(),
             number_prototype: OnceCell::new(),
             well_known_symbols: OnceCell::new(),
-            code_unit_strings: crate::string::CodeUnitStrings::default(),
             string_object_keys: crate::string::StringObjectKeys::default(),
             global_this,
             dynamic_function_realm_global: RefCell::new(dynamic_function_realm_global),
@@ -121,10 +117,6 @@ impl RealmState {
             let _ = realm.array_prototype.set(prototype);
         }
         realm
-    }
-
-    pub(crate) fn string_code_unit(&self, code_unit: u16) -> JsString {
-        self.code_unit_strings.get(code_unit)
     }
 
     pub(crate) fn string_object_keys(&self) -> &crate::string::StringObjectKeys {
