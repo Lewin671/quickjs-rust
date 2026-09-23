@@ -393,3 +393,22 @@ fn number_remainder_matches_ieee_fmod() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn integral_numbers_format_like_the_float_formatter() {
+    assert_eq!(
+        eval(
+            "[0, -0, 7, -7, 10, 1234567890, -999999999999999, 999999999999999, 1e15,
+              123456789012345680, 2 ** 53, -(2 ** 53), 1.5, -0.25, 1e21, 5e-7].map(String).join(',');"
+        ),
+        Ok(Value::String(
+            "0,0,7,-7,10,1234567890,-999999999999999,999999999999999,1000000000000000,\
+             123456789012345680,9007199254740992,-9007199254740992,1.5,-0.25,1e+21,5e-7"
+                .into()
+        ))
+    );
+    assert_eq!(
+        eval("var s = ''; for (var i = -3; i <= 3; i++) s += i + ';'; s + (42).toString();"),
+        Ok(Value::String("-3;-2;-1;0;1;2;3;42".into()))
+    );
+}
