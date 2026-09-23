@@ -136,6 +136,14 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   `heterogeneous_property_read` 1.107 and broad `array_dynamic_read` 1.041
   are open.
 
+- Rejected: fusing a typed-loop comparison with the Exit/JumpIfFalsy that
+  tests it (`CompareSkip`, one new dispatch arm): corpus 1.0025,
+  access-fannkuch 1.03, math-partial-sums 1.02-1.09 with fewer
+  instructions -- the arm re-rolled the dispatch loop. Patch in
+  /tmp/typed-compare-skip.patch at the time.
+- The implicit-global loop rule (eedfb4ae) measured 0.96-0.99 on
+  3d-raytrace over repeats, not the 0.90 of its first run.
+
 ## Found, not fixed
 
 - A sloppy assignment in a function to a global that has become an
