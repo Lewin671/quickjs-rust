@@ -447,8 +447,10 @@ that failed or compiled (`TLFAIL`, `TLOK`), per entry outcome (`TLRUN`),
 per entry that declined with the reason (`TLDECLINE`: a helper that could
 not be flattened, a scalar slot holding a string, a global that is an
 accessor), per deoptimization at run time (`TLDEOPT`, with the site and the
-bytecode it resumes at), and per backward edge every loop accelerator
-declined (`TLEDGE`). `QJS_TL_TRACE=2` also lists a failed region's
+bytecode it resumes at), per interpreter backward edge an accelerator
+claimed (`TLCLAIM`, naming the numeric-mutation, numeric, control or typed
+accelerator), and per backward edge every loop accelerator declined
+(`TLEDGE`). `QJS_TL_TRACE=2` also lists a failed region's
 bytecode.
 
 Two histograms answer most questions. `TLDEOPT` names the shapes that
@@ -493,8 +495,9 @@ one line per function body the wide compact tier compiles (`CFOK`) or
 declines (`CFDECLINE`, naming the instruction and the reason), and one line
 per general-path frame it had to build (`CFVM`), one line per exit to
 the interpreter (`CFEXIT`, with the instruction it resumes at, `probed` for
-a loop backedge), and one line per loop the interpreter handed back to the
-tier (`CFNATIVE`), each identified by the body's parameter names and length.
+a loop backedge), one line per loop the interpreter handed back to the
+tier (`CFNATIVE`), one line per typed loop program the tier ran against its
+own registers at such a backedge (`CFLOOP`, `ran` or `deoptimized`), each identified by the body's parameter names and length.
 `QJS_CF_TRACE=3` also prints each `CFVM` body's bytecode (`CFVMCODE`), which
 names a callee that the parameter list alone does not, such as a getter.
 A histogram of `CFVM` ranks the callees

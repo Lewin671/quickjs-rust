@@ -43,7 +43,7 @@ fn a_method_body_reading_and_writing_this_is_admitted() {
     let writes = program
         .ops
         .iter()
-        .filter(|op| matches!(op, WideOp::SetPropNamed { .. }))
+        .filter(|op| matches!(op, WideOp::SetPropNamed { .. } | WideOp::SetPropThis { .. }))
         .count();
     assert_eq!(writes, 3, "{:#?}", program.ops);
     assert!(program.requires_this);
@@ -687,5 +687,204 @@ fn primitive_string_reads_answer_like_the_interpreter() {
              before + '/' + probe('xy\\u00e9', 2);"
         ),
         Value::String("3|b|98||||a/3|é|233|patched|||x".into())
+    );
+}
+
+#[test]
+fn a_remembered_property_creation_still_meets_later_setters_and_locks() {
+    assert_eq!(
+        value_of(
+            "function Point(x) { this.x = x; }
+             var made = [];
+             for (var i = 0; i < 5; i++) made.push(new Point(i).x);
+             var log = [];
+             Object.defineProperty(Point.prototype, 'x', {
+                 set(v) { log.push('proto:' + v); }, get() { return 'accessor'; }, configurable: true });
+             var a = new Point(7);
+             delete Point.prototype.x;
+             var b = new Point(8);
+             Object.defineProperty(Object.prototype, 'x', {
+                 set(v) { log.push('object:' + v); }, configurable: true });
+             var c = new Point(9);
+             delete Object.prototype.x;
+             Object.defineProperty(Point.prototype, 'x', { value: 1, writable: false, configurable: true });
+             var d = new Point(10);
+             delete Point.prototype.x;
+             Object.setPrototypeOf(Point.prototype, { set x(v) { log.push('swapped:' + v); } });
+             var e = new Point(11);
+             [made.join(''), a.x, b.x, c.hasOwnProperty('x'), d.x, d.hasOwnProperty('x'),
+              e.hasOwnProperty('x'), log.join(',')].join('|');"
+        ),
+        Value::String("01234||8|false||false|false|proto:7,object:9,swapped:11".into())
+    );
+}
+
+#[test]
+fn a_constructor_entered_on_the_wide_driver_builds_like_the_general_path() {
+    assert_eq!(
+        value_of(
+            "function Node(l, r) { this.l = l; this.r = r; }
+             function Boxed(v) { this.v = v; return { wrapped: v }; }
+             function Prim(v) { this.v = v; return 7; }
+             function Odd() { this.p = Object.getPrototypeOf(this) === Odd.prototype; }
+             function Thrower(v) { this.v = v; if (v) throw new Error('bad'); }
+             Odd.prototype = 5;
+             function build(d) { return d ? new Node(build(d - 1), build(d - 1)) : new Node(null, null); }
+             function count(n) { return n.l ? 1 + count(n.l) + count(n.r) : 1; }
+             var caught = '';
+             try { new Thrower(1); } catch (e) { caught = e.message; }
+             [count(build(4)), new Boxed(3).wrapped, new Prim(4).v, new Odd().p,
+              new Node(1).r, new Node(1, 2, 3).r, caught, new Thrower(0).v].join(',');"
+        ),
+        Value::String("31,3,4,false,,2,bad,0".into())
+    );
+}
+
+#[test]
+fn a_plain_computed_store_continues_on_the_tier_and_others_keep_their_semantics() {
+    assert_eq!(
+        value_of(
+            "function put(t, k, v) { t[k] = v; return t[k]; }
+             var holes = new Array(3);
+             var log = [];
+             var withSetter = Object.create({ set s(v) { log.push(v); } });
+             var frozen = Object.freeze({ f: 1 });
+             function strictPut(t, k, v) { 'use strict'; t[k] = v; }
+             var caught = '';
+             try { strictPut(frozen, 'f', 2); } catch (e) { caught = e.constructor.name; }
+             [put([1, 2], 1, 9), put(holes, 2, 'h') + holes.length, put({}, 'k', 3),
+              put({ k: 1 }, 'k', 4), put(withSetter, 's', 5), put(frozen, 'f', 6),
+              put(globalThis, 'gw', 7) + gw, log.join(''), caught].join(',');"
+        ),
+        Value::String("9,h3,3,4,,1,14,5,TypeError".into())
+    );
+}
+
+#[test]
+fn an_object_literal_built_at_its_exit_matches_the_interpreter() {
+    assert_eq!(
+        value_of(
+            "Object.prototype.inherited = 'proto';
+             function make(a, b) { var o = { a: a, b: b }; var p = { x: a, y: b, z: a + b }; return [o, p]; }
+             function withMethod(v) { return { v: v, m() { return this.v + super.inherited; } }; }
+             var total = 0;
+             for (var i = 0; i < 100; i++) { var pair = make(i, 1); total += pair[0].a + pair[1].z; }
+             var o = make(2, 3)[0];
+             [total, Object.keys(o).join(''), o.inherited, withMethod(4).m(),
+              Object.getPrototypeOf(o) === Object.prototype].join(',');"
+        ),
+        Value::String("10000,ab,proto,4proto,true".into())
+    );
+}
+
+#[test]
+fn a_constant_index_store_at_its_exit_matches_the_interpreter() {
+    assert_eq!(
+        value_of(
+            "function first(a, v) { a[0] = v; return a[0]; }
+             var typed = new Int8Array(2);
+             var frozen = Object.freeze([1]);
+             var obj = {};
+             var hole = [];
+             [first([5], 6), first(typed, 300), first(frozen, 9), first(obj, 'o'), obj[0],
+              first(hole, 'h') + hole.length].join(',');"
+        ),
+        Value::String("6,44,1,o,o,h1".into())
+    );
+}
+
+#[test]
+fn a_named_read_of_this_borrows_the_receiver() {
+    let source = "function Pt(x) { this.x = x; }
+         Pt.prototype.get = function (o, c) { return this.x + (c ? this : o).x; };";
+    let program = compile::compile(&nested_function(
+        "function get(o, c) { return this.x + (c ? this : o).x; }",
+        "get",
+    ))
+    .expect("a method reading this should be admitted");
+    assert_eq!(
+        program
+            .ops
+            .iter()
+            .filter(|op| matches!(op, WideOp::GetPropThis { .. }))
+            .count(),
+        1,
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var p = new Pt(1), q = new Pt(10);
+             function s() {{ 'use strict'; return this === undefined ? 'u' : this.length; }}
+             function loose() {{ return this.length; }}
+             var withGetter = Object.create({{ get x() {{ return 5; }} }}, {{ get: {{ value: Pt.prototype.get }} }});
+             [p.get(q, false), p.get(q, true), withGetter.get(q, true), s.call('abc'), s(),
+              loose.call('abcd')].join(',');"
+        )),
+        Value::String("11,2,10,3,u,4".into())
+    );
+}
+
+#[test]
+fn a_named_write_to_this_borrows_the_receiver() {
+    let source = "function Pt(x, y) { this.x = x; this.y = this.x + y; this.z = (this.x = 5); }";
+    let program =
+        compile::compile(&nested_function(source, "Pt")).expect("a constructor should be admitted");
+    assert_eq!(
+        program
+            .ops
+            .iter()
+            .filter(|op| matches!(op, WideOp::SetPropThis { .. }))
+            .count(),
+        4,
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var p = new Pt(1, 2);
+             var log = [];
+             function Watched() {{ this.w = 1; }}
+             Object.defineProperty(Watched.prototype, 'w', {{ set(v) {{ log.push(v); }} }});
+             new Watched();
+             [p.x, p.y, p.z, log.join('')].join(',');"
+        )),
+        Value::String("5,3,5,1".into())
+    );
+}
+
+#[test]
+fn a_method_lookup_reads_the_receiver_in_place() {
+    let source =
+        "function call(o, s, n) { return o.m(1) + s.charAt(1) + n.toFixed(1) + o.m.call(o, 2); }";
+    let program =
+        compile::compile(&nested_function(source, "call")).expect("the body should be admitted");
+    assert!(
+        !program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::Dup { .. })),
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(&format!(
+            "{source} call({{ k: 'x', m(v) {{ return this.k + v; }} }}, 'abc', 2);"
+        )),
+        Value::String("x1b2.0x2".into())
+    );
+}
+
+#[test]
+fn a_branch_on_a_local_tests_it_in_place() {
+    let source = "function pick(a, b) { if (a) { b = 1; } else { b = 2; } var c = a && b; while (b) { b = b - 1; } return c + ':' + b; }";
+    compile::compile(&nested_function(source, "pick")).expect("the body should be admitted");
+    assert_eq!(
+        value_of(&format!(
+            "{source} [pick({{}}, 0), pick(0, 0), pick('', 5), pick(NaN, 1)].join(',');"
+        )),
+        Value::String("1:0,0:0,:0,NaN:0".into())
     );
 }

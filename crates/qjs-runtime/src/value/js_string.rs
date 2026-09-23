@@ -26,6 +26,10 @@ const UTF16_LEN_UNKNOWN: usize = usize::MAX;
 #[derive(Debug)]
 struct StringData {
     text: String,
+    /// Set only on the one shared instance an atom table hands out for its
+    /// text, so two atoms are equal exactly when they are the same instance.
+    /// A copy, or a buffer mutated in place, is never an atom.
+    atom: Cell<bool>,
     ascii: Cell<u8>,
     utf16_len: Cell<usize>,
     /// The matcher-indexed character view and the Unicode mode it was built
@@ -38,6 +42,7 @@ impl StringData {
     fn new(text: String) -> Self {
         Self {
             text,
+            atom: Cell::new(false),
             ascii: Cell::new(ASCII_UNKNOWN),
             utf16_len: Cell::new(UTF16_LEN_UNKNOWN),
             matcher_view: RefCell::new(None),
@@ -45,6 +50,7 @@ impl StringData {
     }
 
     fn invalidate(&mut self) {
+        self.atom.set(false);
         self.ascii.set(ASCII_UNKNOWN);
         self.utf16_len.set(UTF16_LEN_UNKNOWN);
         *self.matcher_view.borrow_mut() = None;
@@ -55,6 +61,7 @@ impl Clone for StringData {
     fn clone(&self) -> Self {
         Self {
             text: self.text.clone(),
+            atom: Cell::new(false),
             ascii: Cell::new(self.ascii.get()),
             utf16_len: Cell::new(self.utf16_len.get()),
             matcher_view: RefCell::new(self.matcher_view.borrow().clone()),
@@ -76,6 +83,20 @@ impl JsString {
     /// sentinel representation.
     pub fn new(text: String) -> Self {
         Self(Rc::new(StringData::new(text)))
+    }
+
+    /// An atom: the one instance of `text` an atom table shares. The caller
+    /// guarantees it builds at most one atom per text per table.
+    pub(crate) fn atom(text: &str) -> Self {
+        let string = Self::new(text.to_owned());
+        string.0.atom.set(true);
+        string
+    }
+
+    /// Whether this is an atom (see [`JsString::atom`]).
+    #[inline]
+    pub(crate) fn is_atom(&self) -> bool {
+        self.0.atom.get()
     }
 
     /// Borrows the underlying UTF-8 buffer.

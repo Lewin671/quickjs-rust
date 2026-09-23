@@ -15,7 +15,8 @@ use crate::bytecode::DirectCallSlots;
 use crate::bytecode::compact_fn::execute;
 use crate::bytecode::compact_fn::property;
 use crate::bytecode::ir::Bytecode;
-use crate::bytecode::vm::Resumed;
+use crate::bytecode::typed_loop::LoopFrame;
+use crate::bytecode::vm::{ResumeFrom, Resumed};
 use crate::function::{CallEnv, Function, Upvalue};
 use crate::{RuntimeError, Value};
 
@@ -184,6 +185,9 @@ struct WideFrame {
     len: usize,
     resume_pc: usize,
     dst: u16,
+    /// Whether the activation above this one was entered by `new`: its
+    /// return value is replaced by its receiver unless it is an object.
+    constructs: bool,
 }
 
 #[derive(Default)]
@@ -280,6 +284,121 @@ fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
     })
 }
 
+/// Proves `new callee(...)` may run on this driver: an ordinary (not class,
+/// bound or native) constructor the driver would inline as a call, whose
+/// `prototype` is an ordinary object. Returns the fresh receiver.
+#[inline(never)]
+fn inline_constructor(callee: &Value, env: &CallEnv) -> Option<(InlineCallee, crate::ObjectRef)> {
+    let Value::Function(function) = callee else {
+        return None;
+    };
+    if function.native.is_some()
+        || function.bound.is_some()
+        || !function.constructable
+        || function.is_class_constructor
+    {
+        return None;
+    }
+    let inline = inline_callee(callee, env)?;
+    let prototype = match function.own_property("prototype") {
+        Some(property) if !property.is_accessor() => match property.value {
+            Value::Object(prototype) if !crate::symbol::is_symbol_primitive(&prototype) => {
+                prototype
+            }
+            _ => return None,
+        },
+        _ => return None,
+    };
+    let receiver = crate::ObjectRef::with_prototype_slot(
+        std::collections::HashMap::new(),
+        Some(crate::Prototype::Object(prototype)),
+    );
+    Some((inline, receiver))
+}
+
+/// Enters `new callee(...)` as a frame of this driver when
+/// `inline_constructor` admits it, returning `Ok(None)`; otherwise hands the
+/// callee back for the general construct path. Out of line, so the driver
+/// loop's own code is the same whether or not a body constructs.
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+fn enter_constructor(
+    callee: Value,
+    root_bytecode: &Bytecode,
+    env: &CallEnv,
+    registers: &mut Vec<Value>,
+    frames: &mut Vec<WideFrame>,
+    current_callee: &mut Value,
+    current_owner: &mut Option<Function>,
+    current_slots: &mut u128,
+    current_this: &mut Option<Value>,
+    current_base: &mut usize,
+    current_len: &mut usize,
+    argument_index: usize,
+    argc: u8,
+    dst: u16,
+    resume_pc: usize,
+) -> Result<Option<Value>, RuntimeError> {
+    let Some((inline, receiver)) = inline_constructor(&callee, env) else {
+        return Ok(Some(callee));
+    };
+    if frames.len() >= MAX_FRAMES {
+        return Err(call_stack_exhausted());
+    }
+    crate::diagnostics::count!(ordinary_call_attempts);
+    crate::diagnostics::count!(compact_direct_calls);
+    let callee_base = *current_base + *current_len;
+    let callee_len = inline.register_count;
+    reserve_registers(registers, callee_base + callee_len);
+    {
+        let parameter_slots = callee_parameter_slots(&callee);
+        let (caller_side, callee_side) = registers.split_at_mut(callee_base);
+        for index in 0..argc as usize {
+            let value =
+                std::mem::replace(&mut caller_side[argument_index + index], Value::Undefined);
+            match parameter_slots.get(index) {
+                Some(&slot) if slot < callee_len => callee_side[slot] = value,
+                _ => release(value),
+            }
+        }
+    }
+    if let Some(program) = super::program_for(running_bytecode(&callee, root_bytecode)) {
+        seed_lexical_markers(
+            program,
+            &mut registers[callee_base..callee_base + callee_len],
+        );
+    }
+    frames.push(WideFrame {
+        callee: std::mem::replace(current_callee, callee),
+        upvalue_owner: std::mem::replace(current_owner, inline.upvalue_owner),
+        upvalue_slots: std::mem::replace(current_slots, inline.upvalue_slots),
+        this_value: current_this.replace(Value::Object(receiver)),
+        base: std::mem::replace(current_base, callee_base),
+        len: std::mem::replace(current_len, callee_len),
+        resume_pc,
+        dst,
+        constructs: true,
+    });
+    Ok(None)
+}
+
+/// A constructor's result: the returned value when it is an object, else
+/// the receiver, as the general construct path decides.
+fn constructed(value: Value, receiver: Option<Value>) -> Value {
+    match value {
+        Value::Array(_)
+        | Value::Function(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Object(_)
+        | Value::Proxy(_) => value,
+        other => {
+            release(other);
+            receiver.unwrap_or(Value::Undefined)
+        }
+    }
+}
+
 /// Runs an admitted body in `env`, together with every admitted body it calls.
 /// The error `Op::Throw` raises when no handler is active, which is always
 /// the case in an admitted body. Out of line: the dispatch loop's arms stay
@@ -337,6 +456,7 @@ fn exit_to_interpreter(
     root: RootExit<'_>,
     ip: u32,
     depth: u16,
+    resume_pc: usize,
     window: &mut [Value],
     env: &CallEnv,
     this_value: Option<Value>,
@@ -353,6 +473,29 @@ fn exit_to_interpreter(
             pc: program.backedge_jump_pc(index),
         };
     }
+    if let Some(crate::bytecode::ir::Op::NewObjectDataLiteral { shape }) =
+        bytecode.code.get(ip as usize)
+    {
+        let top = usize::from(program.local_registers) + usize::from(depth);
+        let base = top - shape.input_len();
+        let object = property::object_data_literal(shape, &mut window[base..top], env);
+        execute::store(&mut window[base], object);
+        return ExitOutcome::Continue { pc: resume_pc };
+    }
+    if let Some(crate::bytecode::ir::Op::SetPropIndex { index, .. }) =
+        bytecode.code.get(ip as usize)
+    {
+        let top = program.local_registers + depth;
+        if property::try_plain_set_index(window, top - 2, top - 1, *index, env) {
+            return ExitOutcome::Continue { pc: resume_pc };
+        }
+    }
+    if let Some(crate::bytecode::ir::Op::SetProp { .. }) = bytecode.code.get(ip as usize) {
+        let operand = |offset: u16| program.local_registers + depth - offset;
+        if property::try_plain_set_prop(window, operand(3), operand(2), operand(1), env) {
+            return ExitOutcome::Continue { pc: resume_pc };
+        }
+    }
     let (upvalues, realm_upvalue_slots) = match callee {
         Value::Function(function) => (
             crate::bytecode::DirectCallUpvalues::Function(function),
@@ -360,6 +503,48 @@ fn exit_to_interpreter(
         ),
         _ => (root.upvalues, root.realm_upvalue_slots),
     };
+    let (mut ip, mut depth) = (ip, depth);
+    let probe_target = probe.and_then(|_| match bytecode.code.get(ip as usize) {
+        Some(crate::bytecode::ir::Op::Jump(target)) => Some(*target),
+        _ => None,
+    });
+    let mut from = match probe_target {
+        Some(target) => ResumeFrom::ProbedBackedge(target),
+        None => ResumeFrom::Exit,
+    };
+    if let Some(header) = probe_target {
+        match run_typed_loop_here(
+            bytecode,
+            program,
+            env,
+            window,
+            upvalues.as_slice(),
+            this_value.as_ref(),
+            header,
+            ip as usize,
+            depth as usize,
+        ) {
+            LoopHere::Declined => {}
+            LoopHere::Continue { pc } => return ExitOutcome::Continue { pc },
+            // The program deoptimized: the interpreter resumes where it
+            // stopped, with the stack it rebuilt.
+            LoopHere::Deoptimized {
+                ip: resume,
+                depth: stack_depth,
+                declined_typed_loop_programs,
+            } => {
+                let (Ok(resume), Ok(stack_depth)) =
+                    (u32::try_from(resume), u16::try_from(stack_depth))
+                else {
+                    return ExitOutcome::Finished(Err(missing_program()));
+                };
+                (ip, depth) = (resume, stack_depth);
+                from = ResumeFrom::LoopDeoptimized {
+                    declined_typed_loop_programs,
+                };
+            }
+        }
+    }
     program.record_exit();
     // `QJS_CF_TRACE=1` names every exit: the body, and the instruction the
     // interpreter resumes at.
@@ -383,10 +568,6 @@ fn exit_to_interpreter(
         upvalues,
         realm_upvalue_slots,
     };
-    let probe_target = probe.and_then(|_| match bytecode.code.get(ip as usize) {
-        Some(crate::bytecode::ir::Op::Jump(target)) => Some(*target),
-        _ => None,
-    });
     let registers = crate::bytecode::vm::WideRegisters {
         locals,
         own_locals: program.own_locals,
@@ -400,7 +581,7 @@ fn exit_to_interpreter(
         slots,
         ip as usize,
         registers,
-        probe_target,
+        from,
     ) {
         Resumed::Finished(result) => ExitOutcome::Finished(result),
         Resumed::HandedBack { backedge } => {
@@ -424,6 +605,117 @@ fn exit_to_interpreter(
                 pc: program.backedge_jump_pc(index),
             }
         }
+    }
+}
+
+/// What running a loop's typed program from an exit did.
+enum LoopHere {
+    /// No program ran; the exit proceeds as before.
+    Declined,
+    /// The loop finished; the activation continues at wide instruction `pc`.
+    Continue { pc: usize },
+    /// The program stopped at bytecode `ip` with `depth` stack values in the
+    /// activation's stack registers, for the interpreter to continue with
+    /// the programs it would have declined.
+    Deoptimized {
+        ip: usize,
+        depth: usize,
+        declined_typed_loop_programs: u128,
+    },
+}
+
+/// Runs, against this activation's registers, the typed loop program the
+/// interpreter would enter at the probed backedge `backedge` -- unless one of
+/// the accelerators the interpreter consults before it has a plan there.
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+fn run_typed_loop_here(
+    bytecode: &Bytecode,
+    program: &WideProgram,
+    env: &CallEnv,
+    window: &mut [Value],
+    upvalues: &[Upvalue],
+    this_value: Option<&Value>,
+    header: usize,
+    backedge: usize,
+    base_depth: usize,
+) -> LoopHere {
+    let plans = crate::bytecode::vm_loop_dispatch::LoopPlanView::for_bytecode(bytecode);
+    // The interpreter consults the other accelerators before the typed tier,
+    // at this edge and at the edges of loops inside this one; a region any
+    // of them has a plan in stays with the interpreter's order.
+    let overlaps = |(plan_header, plan_backedge): (usize, usize)| {
+        plan_backedge == backedge || (header..=backedge).contains(&plan_header)
+    };
+    let consulted_first = plans.numeric.iter().any(|plan| overlaps(plan.region()))
+        || plans
+            .shared_numeric_mutation
+            .iter()
+            .any(|plan| overlaps(plan.region()))
+        || plans.control.iter().any(|plan| overlaps(plan.region()));
+    if consulted_first
+        || !plans
+            .typed
+            .iter()
+            .any(|typed| typed.header() == header && typed.backedge() == backedge)
+    {
+        return LoopHere::Declined;
+    }
+    let local_registers = program.local_registers as usize;
+    let (locals, stack) = window.split_at_mut(local_registers);
+    let mut frame = super::loop_frame::WideLoopFrame::new(
+        bytecode,
+        env,
+        locals,
+        program.own_locals,
+        upvalues,
+        bytecode
+            .direct_readonly_received_upvalue_slots()
+            .unwrap_or(0),
+        this_value,
+    );
+    if !crate::bytecode::typed_loop::try_run_typed_loop(&mut frame, plans, header, backedge) {
+        return LoopHere::Declined;
+    }
+    // A declined attempt hands the edge to the interpreter, which counts it.
+    crate::diagnostics::count!(loop_backedges);
+    crate::diagnostics::count!(loop_plan_entries);
+    let (resume, deoptimized) = (frame.resume_ip, frame.deoptimized);
+    let declined_typed_loop_programs = frame.declined_typed_loop_programs();
+    let values = std::mem::take(&mut frame.stack);
+    let Some(resume) = resume else {
+        return LoopHere::Declined;
+    };
+    // The program rebuilt the stack above the loop's own base; what lay
+    // below it when the loop began is still in its registers.
+    let depth = base_depth + values.len();
+    if depth > stack.len() {
+        return LoopHere::Declined;
+    }
+    for (register, value) in stack[base_depth..].iter_mut().zip(values) {
+        execute::store(register, value);
+    }
+    // `QJS_CF_TRACE=1` names each loop program run from an exit.
+    #[cfg(feature = "perf-counters")]
+    if std::env::var_os("QJS_CF_TRACE").is_some() {
+        eprintln!(
+            "CFLOOP params=({}) len={} ip {backedge} {} at {resume} depth {depth} expects {:?}",
+            bytecode.parameter_names().join(","),
+            bytecode.code.len(),
+            if deoptimized { "deoptimized" } else { "ran" },
+            program.ip_depth.get(resume)
+        );
+    }
+    match (!deoptimized)
+        .then(|| program.resume_pc(resume, depth))
+        .flatten()
+    {
+        Some(pc) => LoopHere::Continue { pc },
+        None => LoopHere::Deoptimized {
+            ip: resume,
+            depth,
+            declined_typed_loop_programs,
+        },
     }
 }
 
@@ -559,18 +851,30 @@ fn run_frames(
                         };
                         execute::store(&mut window[dst as usize], value.clone());
                     }
+                    WideOp::GetPropThis { dst, index } => {
+                        let (Some(site), Some(receiver)) = (
+                            program.named_reads.get(index as usize),
+                            activation.this_value,
+                        ) else {
+                            break Err(execute::uninitialized_local());
+                        };
+                        match property::get_prop_named(receiver, &site.key, &site.cache, env) {
+                            Ok(value) => execute::store(&mut window[dst as usize], value),
+                            Err(error) => break Err(error),
+                        }
+                    }
                     WideOp::GetPropNamed { dst, obj, index } => {
                         let Some(site) = program.named_reads.get(index as usize) else {
                             break Err(execute::constant_out_of_bounds());
                         };
-                        // A fused site peeks its receiver local, so the
-                        // register survives; the plain form replaces its own.
-                        let object = if dst == obj {
-                            std::mem::replace(&mut window[obj as usize], Value::Undefined)
-                        } else {
-                            crate::bytecode::vm_bindings::clone_local_value(&window[obj as usize])
-                        };
-                        match property::get_prop_named(object, &site.key, &site.cache, env) {
+                        // The receiver is borrowed: a fused site peeks its
+                        // local, and the plain form's result replaces it.
+                        match property::get_prop_named(
+                            &window[obj as usize],
+                            &site.key,
+                            &site.cache,
+                            env,
+                        ) {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
                         }
@@ -579,20 +883,42 @@ fn run_frames(
                         let Some(site) = program.named_writes.get(index as usize) else {
                             break Err(execute::constant_out_of_bounds());
                         };
-                        let object = std::mem::replace(&mut window[obj as usize], Value::Undefined);
                         let assigned =
                             std::mem::replace(&mut window[value as usize], Value::Undefined);
                         match property::set_prop_named(
-                            object,
+                            &window[obj as usize],
                             &site.key,
                             site.cache.as_ref(),
                             site.is_strict,
                             assigned,
                             env,
+                            Some(&site.creation),
                         ) {
                             // The assigned value stays in the object's
                             // register, matching `SetPropNamed`'s stack effect.
                             Ok(value) => execute::store(&mut window[obj as usize], value),
+                            Err(error) => break Err(error),
+                        }
+                    }
+                    WideOp::SetPropThis { dst, value, index } => {
+                        let (Some(site), Some(receiver)) = (
+                            program.named_writes.get(index as usize),
+                            activation.this_value,
+                        ) else {
+                            break Err(execute::uninitialized_local());
+                        };
+                        let assigned =
+                            std::mem::replace(&mut window[value as usize], Value::Undefined);
+                        match property::set_prop_named(
+                            receiver,
+                            &site.key,
+                            site.cache.as_ref(),
+                            site.is_strict,
+                            assigned,
+                            env,
+                            Some(&site.creation),
+                        ) {
+                            Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
                         }
                     }
@@ -805,6 +1131,7 @@ fn run_frames(
                     root,
                     ip as u32,
                     depth,
+                    pc,
                     &mut registers[current_base..current_base + current_len],
                     env,
                     current_this.clone(),
@@ -835,6 +1162,35 @@ fn run_frames(
         {
             let callee_index = current_base + base as usize;
             let callee = std::mem::replace(&mut registers[callee_index], Value::Undefined);
+            // An admitted ordinary constructor runs on this driver like a
+            // call, with a fresh receiver as `this`.
+            let callee = match enter_constructor(
+                callee,
+                root_bytecode,
+                env,
+                registers,
+                frames,
+                &mut current_callee,
+                &mut current_owner,
+                &mut current_slots,
+                &mut current_this,
+                &mut current_base,
+                &mut current_len,
+                callee_index + 1,
+                argc,
+                dst,
+                resume_pc,
+            ) {
+                Ok(None) => {
+                    pc = 0;
+                    continue;
+                }
+                Ok(Some(callee)) => callee,
+                Err(error) => {
+                    unwind(registers, frames, current_base + current_len);
+                    return Err(error);
+                }
+            };
             let arguments = &registers[callee_index + 1..callee_index + 1 + argc as usize];
             match construct_from_activation(env, callee, arguments) {
                 Ok(value) => {
@@ -853,6 +1209,11 @@ fn run_frames(
                 clear_window(&mut registers[current_base..current_base + current_len]);
                 let Some(caller) = frames.pop() else {
                     return Ok(value);
+                };
+                let value = if caller.constructs {
+                    constructed(value, current_this.take())
+                } else {
+                    value
                 };
                 current_callee = caller.callee;
                 current_owner = caller.upvalue_owner;
@@ -948,6 +1309,7 @@ fn run_frames(
                 len: current_len,
                 resume_pc,
                 dst,
+                constructs: false,
             });
             current_owner = inline.upvalue_owner;
             current_slots = inline.upvalue_slots;

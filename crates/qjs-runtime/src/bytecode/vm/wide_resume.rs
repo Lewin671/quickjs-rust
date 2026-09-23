@@ -54,7 +54,21 @@ pub(in crate::bytecode) struct WideRegisters<'r> {
 /// Admitted bodies run no lowered program, so `ip` indexes the code this
 /// frame executes.
 ///
-/// With `probe_backedge`, `ip` is a probed backward `Jump` to that target.
+/// Where a continuation starts, beyond its instruction.
+pub(in crate::bytecode) enum ResumeFrom {
+    /// An instruction the tier leaves to the interpreter.
+    Exit,
+    /// A probed backward `Jump` to this loop header (see below).
+    ProbedBackedge(usize),
+    /// Inside a loop whose typed program the tier ran and which
+    /// deoptimized: the frame starts with those programs declined, as an
+    /// interpreter frame that ran them itself would, and may hand the loop
+    /// back at the next probed backedge whose accelerators decline.
+    LoopDeoptimized { declined_typed_loop_programs: u128 },
+}
+
+/// With `ResumeFrom::ProbedBackedge`, `ip` is a probed backward `Jump` to
+/// that target.
 /// If no accelerator claims the loop there, no instruction runs and the
 /// frame hands back at once; otherwise the frame may hand back at a later
 /// probed backedge whose accelerators decline.
@@ -64,7 +78,7 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
     direct_call_slots: DirectCallSlots<'_>,
     ip: usize,
     registers: WideRegisters<'_>,
-    probe_backedge: Option<usize>,
+    from: ResumeFrom,
 ) -> Resumed {
     let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
         bytecode,
@@ -89,8 +103,8 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
             .push(std::mem::replace(register, Value::Undefined));
     }
     vm.current.ip = ip;
-    let resumed = match probe_backedge {
-        Some(target) => {
+    let resumed = match from {
+        ResumeFrom::ProbedBackedge(target) => {
             vm.current.ip = ip + 1;
             if vm.jump_with_loop_plans(LoopPlanView::for_bytecode(bytecode), target, ip) {
                 vm.current.cold_mut().wide_handback = Some(None);
@@ -100,7 +114,14 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
                 Resumed::HandedBack { backedge: ip }
             }
         }
-        None => Resumed::Finished(vm.run()),
+        ResumeFrom::LoopDeoptimized {
+            declined_typed_loop_programs,
+        } => {
+            vm.current.declined_typed_loop_programs = declined_typed_loop_programs;
+            vm.current.cold_mut().wide_handback = Some(None);
+            run(&mut vm)
+        }
+        ResumeFrom::Exit => Resumed::Finished(vm.run()),
     };
     if let Resumed::HandedBack { .. } = resumed {
         hand_back(&mut vm, registers);

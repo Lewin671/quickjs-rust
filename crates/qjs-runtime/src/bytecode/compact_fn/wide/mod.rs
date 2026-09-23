@@ -26,6 +26,7 @@ use crate::bytecode::named_property_cache::NamedPropertyCache;
 
 mod activation;
 mod compile;
+mod loop_frame;
 #[cfg(test)]
 mod tests;
 
@@ -79,7 +80,9 @@ enum WideOp {
     /// at bytecode instruction `ip` with this activation's locals and its
     /// `depth` operand-stack registers. At a probed backedge the jump itself
     /// follows: once no accelerator claims that loop the exit declines and
-    /// execution falls through to it.
+    /// execution falls through to it. At a computed store (`Op::SetProp`)
+    /// the exit first tries the store as a plain one and, if it is,
+    /// continues with the next operation instead.
     Exit {
         ip: u32,
         depth: u16,
@@ -152,6 +155,20 @@ enum WideOp {
         obj: u16,
         key: u16,
     },
+    /// `this.key`: the named read `named_reads[index]` of the activation's
+    /// receiver, borrowed where the activation keeps it.
+    GetPropThis {
+        dst: u16,
+        index: u16,
+    },
+    /// `this.key = value`: the named write `named_writes[index]` to the
+    /// activation's receiver, borrowed where the activation keeps it; the
+    /// assigned value lands in `dst`, where the receiver would have been.
+    SetPropThis {
+        dst: u16,
+        value: u16,
+        index: u16,
+    },
     /// `obj[index]` with a constant index, the fused `Op::GetPropIndex`.
     GetPropIndex {
         dst: u16,
@@ -210,6 +227,7 @@ pub(super) struct NamedWriteSite {
     pub(super) key: Rc<str>,
     pub(super) cache: Option<NamedPropertyCache>,
     pub(super) is_strict: bool,
+    pub(super) creation: super::creation_cache::CreationCache,
 }
 
 #[derive(Clone)]
@@ -255,6 +273,11 @@ pub(in crate::bytecode) struct WideProgram {
     /// One bit per probed backedge, in `probed_backedges` order, set once no
     /// accelerator claimed that loop: the loop then runs here.
     native_backedges: std::cell::Cell<u64>,
+    /// The wide instruction each bytecode instruction begins at, and the
+    /// operand-stack depth there (`u16::MAX` where unreachable): where a
+    /// typed loop program run from an exit hands the activation back.
+    ip_to_pc: Box<[u32]>,
+    ip_depth: Box<[u16]>,
 }
 
 /// A backward jump whose exit is probed (`WideProgram::probed_backedges`).
@@ -286,6 +309,15 @@ impl WideProgram {
             self.activations.set(activations + 1);
         }
         true
+    }
+
+    /// The wide instruction to continue at for bytecode instruction `ip`
+    /// with `depth` operand-stack values, if the tier can continue there.
+    pub(super) fn resume_pc(&self, ip: usize, depth: usize) -> Option<usize> {
+        let expected = *self.ip_depth.get(ip)?;
+        (usize::from(expected) == depth)
+            .then(|| self.ip_to_pc.get(ip).map(|&pc| pc as usize))
+            .flatten()
     }
 
     /// The probe index of the backedge exit at `ip`, if it is one.

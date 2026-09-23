@@ -237,3 +237,15 @@ impl ObjectRef {
         }
     }
 }
+
+impl ObjectRef {
+    #[cfg(feature = "perf-counters")]
+    pub(crate) fn storage_kind_for_trace(&self) -> &'static str {
+        match &*self.0.properties.borrow() {
+            PropertyStorage::Small { .. } => "small",
+            PropertyStorage::Dynamic(_) => "dynamic",
+            PropertyStorage::Shaped { .. } => "shaped",
+            PropertyStorage::ShapedPair { .. } => "pair",
+        }
+    }
+}

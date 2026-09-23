@@ -38,8 +38,8 @@
 use qjs_ast::{BinaryOp, UnaryOp};
 
 use super::super::ir::{Bytecode, Op};
-use super::super::vm::Vm;
 use super::Typed;
+use super::frame::LoopFrame;
 use crate::Value;
 use crate::function::{Function, NativeFunction};
 
@@ -300,8 +300,8 @@ impl Preparation {
     /// Prepares every call site of `program`, or `None` if any of them cannot
     /// be flattened -- in which case the whole loop program declines rather
     /// than paying a deoptimization per iteration.
-    pub(super) fn prepare(
-        vm: &mut Vm<'_>,
+    pub(super) fn prepare<F: LoopFrame>(
+        vm: &mut F,
         program: &super::TypedLoopProgram,
     ) -> Option<HelperGraph> {
         if Self::region_may_mutate_bindings(program) {
@@ -325,9 +325,9 @@ impl Preparation {
         Some(preparation.graph)
     }
 
-    fn prepare_callee(
+    fn prepare_callee<F: LoopFrame>(
         &mut self,
-        vm: &mut Vm<'_>,
+        vm: &mut F,
         callee: &Value,
         arity: u8,
         depth: usize,
@@ -386,9 +386,9 @@ impl Preparation {
         Some(index)
     }
 
-    fn flatten(
+    fn flatten<F: LoopFrame>(
         &mut self,
-        vm: &mut Vm<'_>,
+        vm: &mut F,
         function: &Function,
         bytecode: &Bytecode,
         arity: u8,
@@ -467,9 +467,9 @@ impl Preparation {
         walk.unreachable.then_some((walk.ops, local_count))
     }
 
-    fn step(
+    fn step<F: LoopFrame>(
         &mut self,
-        vm: &mut Vm<'_>,
+        vm: &mut F,
         walk: &mut Walk,
         function: &Function,
         bytecode: &Bytecode,
@@ -586,9 +586,9 @@ impl Preparation {
 
     /// Lowers one call inside a helper body. `resolved` marks the receiver-
     /// carrying form, whose abstract stack is `[receiver, callee, args...]`.
-    fn call(
+    fn call<F: LoopFrame>(
         &mut self,
-        vm: &mut Vm<'_>,
+        vm: &mut F,
         walk: &mut Walk,
         argc: usize,
         resolved: bool,

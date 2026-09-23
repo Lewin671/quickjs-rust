@@ -84,9 +84,12 @@ function slowOperators(left, right, size, outerLimit, stride) {
 }
 "#;
 
+// The empty handler keeps `region` on the interpreter, whose accelerator
+// entries, commits and bailouts these tests count: the wide tier would run
+// the body itself and hand a declined loop back after one attempt.
 const FORWARDING_REGION: &str = r#"
 function region(left, right, size, outerLimit, stride, start) {
-  var i;
+  var i; try {} catch (e) {}
   for (var outer = start; outer < outerLimit; outer++) {
     i = outer;
     while (i < size) {
@@ -509,9 +512,10 @@ fn nested_dense_guard_miss_switches_to_the_ordinary_dense_fallback() {
 
 #[test]
 fn nested_dense_fallback_maps_decline_and_suppress_without_losing_semantics() {
+    let interpreted = FORWARDING_REGION;
     dense::reset_test_iterations();
     let declined = format!(
-        "{FORWARDING_REGION} var checks=0, size={{valueOf:function(){{checks++;return 4;}}}}; region([1,2,3,4], [10,20,30,40], size, 2, 2, 0) + '|' + checks;"
+        "{interpreted} var checks=0, size={{valueOf:function(){{checks++;return 4;}}}}; region([1,2,3,4], [10,20,30,40], size, 2, 2, 0) + '|' + checks;"
     );
     assert_eq!(
         eval(&declined),
@@ -524,7 +528,7 @@ fn nested_dense_fallback_maps_decline_and_suppress_without_losing_semantics() {
 
     dense::reset_test_iterations();
     let suppressed = format!(
-        "{FORWARDING_REGION} var buffer=new ArrayBuffer(16), left=new Uint16Array(buffer,0,4), right=new Uint16Array(buffer,8,4); left.set([1,2,3,4]); right.set([10,20,30,40]); region(left,right,4,2,2,0);"
+        "{interpreted} var buffer=new ArrayBuffer(16), left=new Uint16Array(buffer,0,4), right=new Uint16Array(buffer,8,4); left.set([1,2,3,4]); right.set([10,20,30,40]); region(left,right,4,2,2,0);"
     );
     assert_eq!(
         eval(&suppressed),

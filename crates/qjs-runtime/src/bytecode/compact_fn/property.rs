@@ -22,12 +22,12 @@ use crate::{PropertyKey, RuntimeError, Value};
 #[cold]
 #[inline(never)]
 pub(super) fn get_prop_named(
-    object: Value,
+    object: &Value,
     key: &Rc<str>,
     cache: &NamedPropertyCache,
     env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
-    if let Value::Object(object_ref) = &object
+    if let Value::Object(object_ref) = object
         && !crate::symbol::is_symbol_primitive(object_ref)
         && !crate::typed_array::is_typed_array_object(object_ref)
         && !object_ref.is_module_namespace_exotic()
@@ -52,7 +52,7 @@ pub(super) fn get_prop_named(
                 }
                 // An inherited getter the interpreter would call directly.
                 if let Some(result) = crate::bytecode::vm_props::direct_leaf_getter(
-                    &object,
+                    object,
                     key,
                     env,
                     env.module_host(),
@@ -70,14 +70,14 @@ pub(super) fn get_prop_named(
             OwnDataPropertyRead::NeedsSlowPath => {}
         }
     }
-    if let Value::String(text) = &object
+    if let Value::String(text) = object
         && let Some(value) = string_named_value(text, key, env)
     {
         return Ok(value);
     }
     cache.clear();
     let mut call_env = env.empty_frame();
-    crate::bytecode::vm_props::get_property(object, key, &mut call_env)
+    crate::bytecode::vm_props::get_property(object.clone(), key, &mut call_env)
 }
 
 /// A named read on a primitive string, as `Vm::try_direct_get_string`
@@ -112,16 +112,17 @@ fn string_named_value(text: &crate::JsString, key: &str, env: &CallEnv) -> Optio
 #[cold]
 #[inline(never)]
 pub(super) fn set_prop_named(
-    object: Value,
+    object: &Value,
     key: &Rc<str>,
     cache: Option<&NamedPropertyCache>,
     is_strict: bool,
     value: Value,
     env: &CallEnv,
+    creation: Option<&super::creation_cache::CreationCache>,
 ) -> Result<Value, RuntimeError> {
-    let updates_global_binding = is_global_object(env, &object);
+    let updates_global_binding = is_global_object(env, object);
     if !updates_global_binding
-        && let Value::Object(object_ref) = &object
+        && let Value::Object(object_ref) = object
         && !crate::symbol::is_symbol_primitive(object_ref)
     {
         let cached = cache.and_then(|cache| cache.write(object_ref, key, &value));
@@ -142,7 +143,15 @@ pub(super) fn set_prop_named(
                 return Ok(value);
             }
             OwnDataPropertyWrite::NeedsSlowPath => {
+                // A constructor's `this.x = x` creates the property on every
+                // instance; the site's proof skips the prototype walk.
+                if creation.is_some_and(|creation| creation.try_create(object_ref, key, &value)) {
+                    return Ok(value);
+                }
                 if try_create_ordinary_own_data_property(object_ref, Rc::clone(key), &value) {
+                    if let Some(creation) = creation {
+                        creation.record(object_ref, key);
+                    }
                     if let Some(cache) = cache {
                         cache.record_write(object_ref, key);
                     }
@@ -156,7 +165,7 @@ pub(super) fn set_prop_named(
     // primitive-property semantics below rather than the symbol-key check.
     let mut call_env = env.empty_frame();
     let wrote_data = crate::bytecode::vm_set::set_property_key(
-        object,
+        object.clone(),
         PropertyKey::String(key.to_string()),
         value.clone(),
         &mut call_env,
@@ -185,7 +194,7 @@ fn is_global_object(env: &CallEnv, object: &Value) -> bool {
 /// Creates a missing ordinary own string data property without cloning the
 /// call environment when the complete [[Set]] result is already known.
 /// Mirrors `Vm::try_create_ordinary_own_data_property`.
-fn try_create_ordinary_own_data_property(
+pub(in crate::bytecode) fn try_create_ordinary_own_data_property(
     object: &crate::ObjectRef,
     key: Rc<str>,
     value: &Value,
@@ -237,6 +246,157 @@ fn try_create_ordinary_own_data_property(
             }
         }
     }
+}
+
+/// `registers[obj][registers[key]] = registers[value]` when the store is
+/// plain, leaving the value in `obj`'s register as `Op::SetProp` leaves it on
+/// the stack: a dense index of an array whose prototype chain is the realm's
+/// ordinary one, or a string-keyed own data property of an ordinary object
+/// other than the global object, overwritten or created. These are the
+/// interpreter's own `set_prop` fast paths and give its result. Returns
+/// `false`, with every register untouched, for any other store, which the
+/// caller hands to the interpreter.
+#[inline(never)]
+pub(super) fn try_plain_set_prop(
+    registers: &mut [Value],
+    obj: u16,
+    key: u16,
+    value: u16,
+    env: &CallEnv,
+) -> bool {
+    let (obj, key_register, value_register) = (obj as usize, key as usize, value as usize);
+    let (object, key, value) = (
+        &registers[obj],
+        &registers[key_register],
+        &registers[value_register],
+    );
+    let stored = match object {
+        Value::Array(elements) => {
+            let index = match key {
+                Value::Number(number) => {
+                    crate::bytecode::vm_props::array_index_from_number(*number)
+                }
+                Value::String(key) => crate::bytecode::vm_props::array_index_from_string(key),
+                _ => None,
+            };
+            match index {
+                Some(index)
+                    if elements.dense_index_store_eligible(index)
+                        && array_access_is_plain(elements, env) =>
+                {
+                    elements.set(index, value.clone());
+                    true
+                }
+                _ => false,
+            }
+        }
+        Value::Object(object_ref) => match key {
+            Value::String(name) if !is_global_object(env, object) => {
+                match object_ref.write_existing_own_data_property(name.as_str(), value) {
+                    OwnDataPropertyWrite::Written => true,
+                    OwnDataPropertyWrite::ReadOnly => false,
+                    OwnDataPropertyWrite::NeedsSlowPath => try_create_ordinary_own_data_property(
+                        object_ref,
+                        Rc::from(name.as_str()),
+                        value,
+                    ),
+                }
+            }
+            _ => false,
+        },
+        _ => false,
+    };
+    if stored {
+        let value = std::mem::replace(&mut registers[value_register], Value::Undefined);
+        registers[key_register] = Value::Undefined;
+        registers[obj] = value;
+    }
+    stored
+}
+
+/// `registers[obj][index] = registers[value]` for a constant index when the
+/// store is plain -- a dense index of an array with the realm's ordinary
+/// prototype chain, or an in-range element of a typed array given a
+/// primitive -- leaving the value in `obj`'s register as `Op::SetPropIndex`
+/// leaves it on the stack. `false`, with the registers untouched, otherwise.
+#[inline(never)]
+pub(super) fn try_plain_set_index(
+    registers: &mut [Value],
+    obj: u16,
+    value: u16,
+    index: usize,
+    env: &CallEnv,
+) -> bool {
+    let (obj, value_register) = (obj as usize, value as usize);
+    let stored = match (&registers[obj], &registers[value_register]) {
+        (Value::Array(elements), value) => {
+            elements.dense_index_store_eligible(index) && array_access_is_plain(elements, env) && {
+                elements.set(index, value.clone());
+                true
+            }
+        }
+        (Value::Object(object), value) if crate::typed_array::is_typed_array_object(object) => {
+            crate::typed_array::try_set_integer_indexed_primitive_element(object, index, value)
+                == Some(true)
+        }
+        _ => false,
+    };
+    if stored {
+        registers[obj] = std::mem::replace(&mut registers[value_register], Value::Undefined);
+    }
+    stored
+}
+
+/// Whether an element access on `array` meets no index accessor or exotic
+/// object on its prototype chain: `Vm::array_uses_realm_prototype` and
+/// `Vm::array_prototype_chain_has_index_hazard` without the VM's caches.
+pub(in crate::bytecode) fn array_access_is_plain(array: &crate::ArrayRef, env: &CallEnv) -> bool {
+    let Some(array_prototype) = crate::property::array_prototype(env) else {
+        return false;
+    };
+    (array.uses_default_prototype() || array.uses_prototype_object(&array_prototype))
+        && !crate::bytecode::vm_props::prototype_chain_has_index_hazard(Some(
+            crate::Prototype::Object(array_prototype),
+        ))
+}
+
+/// An object literal of statically known data properties from the values in
+/// `registers`, which it takes, as `Vm::new_object_data_literal` builds it:
+/// the realm's `Object.prototype`, and each non-constructor function value's
+/// home object set to the literal.
+#[inline(never)]
+pub(super) fn object_data_literal(
+    shape: &Rc<crate::value::ObjectLiteralShape>,
+    registers: &mut [Value],
+    env: &CallEnv,
+) -> Value {
+    let values: Vec<Value> = registers
+        .iter_mut()
+        .map(|register| std::mem::replace(register, Value::Undefined))
+        .collect();
+    let home_functions: Vec<crate::Function> = values
+        .iter()
+        .filter_map(|value| match value {
+            Value::Function(function) if !function.constructable => Some(function.clone()),
+            _ => None,
+        })
+        .collect();
+    let prototype = crate::object_prototype(env);
+    let object = if let [first, second] = values.as_slice()
+        && shape.unique_len() == 2
+    {
+        crate::ObjectRef::with_literal_pair(
+            Rc::clone(shape),
+            [first.clone(), second.clone()],
+            prototype,
+        )
+    } else {
+        crate::ObjectRef::with_literal_properties(Rc::clone(shape), values, prototype)
+    };
+    for function in home_functions {
+        function.set_home_object(Value::Object(object.clone()));
+    }
+    Value::Object(object)
 }
 
 #[cold]
@@ -333,7 +493,7 @@ pub(super) fn get_prop_computed(
 /// immutable function name: the realm binding, then an own property of
 /// `globalThis` (invoking its getter), then the ReferenceError.
 #[inline(never)]
-pub(super) fn load_global(name: &str, env: &CallEnv) -> Result<Value, RuntimeError> {
+pub(in crate::bytecode) fn load_global(name: &str, env: &CallEnv) -> Result<Value, RuntimeError> {
     if let Some(value) = env.get(name) {
         if value.is_uninitialized_lexical_marker() {
             return Err(undefined_identifier(name));

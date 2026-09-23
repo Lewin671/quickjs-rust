@@ -112,6 +112,23 @@ pub(crate) struct PrivateFieldInit {
 #[derive(Clone)]
 pub struct Function(Rc<FunctionData>);
 
+/// A non-owning handle to a [`Function`], for caches that must not keep
+/// the function, or a cycle through its own code, alive.
+#[derive(Clone)]
+pub(crate) struct FunctionWeakRef(std::rc::Weak<FunctionData>);
+
+impl FunctionWeakRef {
+    pub(crate) fn upgrade(&self) -> Option<Function> {
+        self.0.upgrade().map(Function)
+    }
+}
+
+impl fmt::Debug for FunctionWeakRef {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("FunctionWeakRef(..)")
+    }
+}
+
 /// Storage behind [`Function`]. Public only because it is the target of the
 /// handle's public `Deref` implementation; the runtime does not re-export it.
 #[doc(hidden)]
@@ -738,6 +755,10 @@ impl Function {
             NativeFunction::UninitializedLexical,
             false,
         )
+    }
+
+    pub(crate) fn downgrade(&self) -> FunctionWeakRef {
+        FunctionWeakRef(Rc::downgrade(&self.0))
     }
 
     pub(crate) fn is_uninitialized_lexical_marker(&self) -> bool {

@@ -28,7 +28,9 @@ mod general_ops;
 mod rare_ops;
 mod wide_resume;
 
-pub(in crate::bytecode) use wide_resume::{Resumed, WideRegisters, resume_direct_call_bytecode};
+pub(in crate::bytecode) use wide_resume::{
+    ResumeFrom, Resumed, WideRegisters, resume_direct_call_bytecode,
+};
 
 use super::frame_program::{FrameBytecode, FrameProgramView};
 use super::frame_stack::FrameExit;

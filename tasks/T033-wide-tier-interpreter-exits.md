@@ -9,8 +9,11 @@ then hands over its state; the interpreter resumes at that instruction.
 
 ## Design
 
+- Data-only object literals are built at their exit, which always continues.
 - Exit points (`compact_fn/wide/compile.rs`): operations in `is_exit_safe`
-  (computed stores, object literals,
+  (computed stores the tier cannot answer as a plain dense-index or
+  own-data store -- it tries that first at the exit and continues --,
+
   `RequireObjectCoercible`, literal appends) and the backward edges of loops
   an accelerator claims or in-place fusion rewrote. Bodies whose lowering
   keeps a literal in virtual slots, and anything needing set-up at entry
@@ -21,6 +24,13 @@ then hands over its state; the interpreter resumes at that instruction.
   an uninitialized slot) and operand stack, resumed at the exit's ip. Every
   parameter has a register when a body can exit; `this` is required when any
   instruction reads it.
+- Typed loops from the tier (`wide/loop_frame.rs`, `typed_loop/frame.rs`):
+  at a probed backedge no other accelerator plans for, the loop's typed
+  program runs against the activation's registers through the `LoopFrame`
+  trait the interpreter's `Vm` also implements. A finished loop continues in
+  the tier at its exit; a deoptimized one resumes in an interpreter frame
+  with that program declined and hand-back armed. Such exits are not
+  counted, so a function around a short loop stays on the tier.
 - Exit-heavy judgement: after 64 activations, a program that exited on three
   in four is left to the general path.
 - Hand-back (`vm/wide_resume.rs`): an unconditional backward jump exits only
@@ -64,6 +74,18 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   the loop hand-back; fixed in f08fb6c2 (single-run 0.70 of 2b799a31).
   Broad lane 0.997, sentinels 1.004 (worst string_key_map_churn 1.019).
 
+- Stack run bf07567d vs main 98f8f113 (30 blocks, cycles, quiet host;
+  `target/comparison/typed-in-wide-bf07567d-30b`): typed loops against
+  wide registers, slot-cached function/array/string reads, creation
+  caches, inlined constructors, plain stores and literals at exits, string
+  atoms, receiver-in-place `this` reads/writes, in-place local branches.
+  External geomean 0.944 against the base (JetStream subset 0.933, Kraken
+  0.967, SunSpider 0.935) and 1.063 against QuickJS-NG in wall time;
+  fannkuch 0.527, binary-trees 0.815, bits-in-byte 0.808, cdjs 0.829.
+  Controls above 1.01: xparb 1.026, unpack-code 1.023, md5 1.019. Broad
+  lane flat except `array_index_of` 1.062 and `array_dynamic_read` 0.934;
+  sentinels 0.87-1.005.
+
 ## Screen log
 
 - `wide-tier-math-calls-and-field-thunks` (native guarded Math calls, field
@@ -90,8 +112,6 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
 
 ## Next
 
-- Run computed stores (`SetProp`) natively; each exit leaves the rest of a
-  loop body, and its loop, to the interpreter.
 
 - Admit bodies with a parameter prologue (default values) once their dead-zone
   behaviour is covered; CF traces count 179k general frames for them.

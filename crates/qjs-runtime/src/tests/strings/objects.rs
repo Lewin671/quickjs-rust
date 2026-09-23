@@ -141,3 +141,22 @@ fn string_objects_install_index_properties_with_shared_and_fresh_keys() {
         ))
     );
 }
+
+#[test]
+fn typeof_name_literals_compare_by_identity_and_by_text() {
+    // `typeof` results and literals naming them share one instance; a string
+    // built with the same text, or an appended copy, still compares equal.
+    assert_eq!(
+        eval(
+            "function f(x) { return typeof x === 'number'; }
+             var s = 'num'; s += 'ber';
+             var t = 'number'; t += '';
+             [f(1), f('1'), s === 'number', t === 'number', typeof s === 'string',
+              'number' === 'object', ('obj' + 'ect') == typeof null,
+              ['number', 'object'].indexOf(typeof {})].join(',');"
+        ),
+        Ok(crate::Value::String(
+            "true,false,true,true,true,false,true,1".to_owned().into()
+        ))
+    );
+}

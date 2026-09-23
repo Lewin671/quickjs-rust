@@ -503,3 +503,57 @@ fn a_native_fast_path_called_from_the_wide_tier_builds_no_frame() {
     // which the general native call path would count.
     assert!(counters.native_calls <= 2, "{counters:?}");
 }
+
+#[test]
+fn a_short_typed_loop_in_a_frequent_callee_runs_without_an_interpreter_frame() {
+    // Every call reaches its loop's backedge, where the typed loop tier
+    // claims the loop. It runs against the wide activation's registers, so
+    // no call builds an interpreter frame and the program is never judged
+    // exit-heavy.
+    let (value, counters) = counted(
+        "function bits(b) { var m = 1, c = 0; while (m < 0x100) { if (b & m) c++; m <<= 1; } return c; }
+         var total = 0;
+         for (var i = 0; i < 300; i++) total += bits(i & 255);
+         total;",
+    );
+    assert_eq!(value, Value::Number(1_136.0));
+    assert!(counters.nested_vm_constructions <= 2, "{counters:?}");
+    assert!(counters.loop_plan_entries >= 300, "{counters:?}");
+}
+
+#[test]
+fn a_typed_loop_run_from_the_wide_tier_deoptimizes_into_the_interpreter() {
+    // The program guards on numbers; a string element deoptimizes it
+    // mid-loop, and the interpreter finishes the call from that point.
+    let (value, _) = counted(
+        "function sum(a) { var t = 0; for (var i = 0; i < a.length; i++) { t = t + a[i]; } return t; }
+         var numbers = [1, 2, 3, 4];
+         var total = 0;
+         for (var k = 0; k < 100; k++) total += sum(numbers);
+         total + ':' + sum([1, 2, 'x', 4]);",
+    );
+    assert_eq!(value, Value::String("1000:3x4".into()));
+}
+
+#[test]
+fn a_typed_loop_run_from_the_wide_tier_reads_the_receiver_and_keeps_the_stack() {
+    // The loop reads `this`, which a program resolves as the name `this`
+    // and the tier answers from the activation; and the function's earlier
+    // expression statement leaves a value below the loop on the operand
+    // stack, which must still be there when the loop hands back.
+    let (value, counters) = counted(
+        "function Bag(items) { this.items = items; }
+         Bag.prototype.total = function (scale) {
+             scale * 2;
+             var t = 0;
+             for (var i = 0; i < this.items.length; i++) t += this.items[i] * scale;
+             return t;
+         };
+         var bag = new Bag([1, 2, 3, 4]);
+         var sum = 0;
+         for (var k = 0; k < 200; k++) sum += bag.total(k % 3);
+         sum;",
+    );
+    assert_eq!(value, Value::Number(1_990.0));
+    assert!(counters.nested_vm_constructions <= 3, "{counters:?}");
+}

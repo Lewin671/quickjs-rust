@@ -105,6 +105,9 @@ enum CachedValue {
     Boolean(bool),
     Number(f64),
     Object(ObjectWeakRef),
+    Function(crate::function::FunctionWeakRef),
+    Array(crate::value::ArrayWeakRef),
+    String(crate::JsString),
 }
 
 impl NamedPropertyCache {
@@ -213,6 +216,9 @@ impl NamedPropertyCache {
             CachedValue::Boolean(value) => Value::Boolean(*value),
             CachedValue::Number(value) => Value::Number(*value),
             CachedValue::Object(value) => Value::Object(value.upgrade()?),
+            CachedValue::Function(value) => Value::Function(value.upgrade()?),
+            CachedValue::Array(value) => Value::Array(value.upgrade()?),
+            CachedValue::String(value) => Value::String(value.clone()),
         })
     }
 
@@ -252,6 +258,14 @@ impl NamedPropertyCache {
     }
 
     pub(super) fn update(&self, object: &ObjectRef, key: &str, value: &Value) {
+        #[cfg(feature = "perf-counters")]
+        if std::env::var_os("QJS_IC_TRACE").is_some() {
+            eprintln!(
+                "ICUPDATE {key} {} {}",
+                object.storage_kind_for_trace(),
+                self.0.borrow().entries.iter().flatten().count()
+            );
+        }
         let value_entry_went_stale = self.0.borrow().entries.iter().flatten().any(|entry| {
             matches!(
                 entry,
@@ -288,7 +302,7 @@ impl NamedPropertyCache {
                 slot,
             }
         } else {
-            let cached = match value {
+            let by_value = match value {
                 Value::Undefined => Some(CachedValue::Undefined),
                 Value::Null => Some(CachedValue::Null),
                 Value::Boolean(value) => Some(CachedValue::Boolean(*value)),
@@ -296,26 +310,34 @@ impl NamedPropertyCache {
                 Value::Object(value) => Some(CachedValue::Object(value.downgrade())),
                 _ => None,
             };
-            match cached {
-                Some(value) => NamedPropertyCacheEntry::Exact {
-                    object: object.downgrade(),
-                    revision: object.property_revision(),
-                    value,
-                },
-                // An array, string or function value has no by-value entry;
-                // its slot still answers every later read of this object
-                // (`this.triangles`, `this.name`). Clearing the site instead
-                // sent each read back to the named lookup.
+            let exact = |value| NamedPropertyCacheEntry::Exact {
+                object: object.downgrade(),
+                revision: object.property_revision(),
+                value,
+            };
+            match by_value {
+                Some(value) => exact(value),
+                // An array, string or function value is answered from its slot
+                // (`this.triangles`, `this.name`), which survives writes to the
+                // object's other properties. Storage without stable slots --
+                // `Math`, whose functions every `Math.floor(x)` reads -- keeps
+                // the value itself against the object's revision instead.
+                // Clearing the site sent each such read back to the lookup.
                 None => match object.own_data_slot(key) {
                     Some(slot) => NamedPropertyCacheEntry::OwnSlot {
                         object: object.downgrade(),
                         layout_revision: object.layout_revision(),
                         slot,
                     },
-                    None => {
-                        self.clear();
-                        return;
-                    }
+                    None => match value {
+                        Value::Function(value) => exact(CachedValue::Function(value.downgrade())),
+                        Value::Array(value) => exact(CachedValue::Array(value.downgrade())),
+                        Value::String(value) => exact(CachedValue::String(value.clone())),
+                        _ => {
+                            self.clear();
+                            return;
+                        }
+                    },
                 },
             }
         };

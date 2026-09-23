@@ -354,6 +354,15 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         return decline(trace, None, "too many registers");
     }
 
+    let mut jump_targets = vec![false; code.len() + 1];
+    for op in code {
+        if let Op::Jump(target) | Op::JumpIfFalse(target) | Op::JumpIfTrue(target) = op
+            && let Some(flag) = jump_targets.get_mut(*target)
+        {
+            *flag = true;
+        }
+    }
+    let this_stores = fold_this_stores(code, &entry_depth, &jump_targets);
     let mut ops = Vec::with_capacity(code.len());
     let mut named_reads: Vec<NamedReadSite> = Vec::new();
     let mut named_writes: Vec<NamedWriteSite> = Vec::new();
@@ -432,6 +441,9 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                         src: slot_index,
                     });
                 }
+            }
+            Op::LoadGlobal(name) if is_this_read(name) && this_stores[ip] => {
+                requires_this = true;
             }
             Op::LoadGlobal(name) if is_this_read(name) => {
                 requires_this = true;
@@ -560,6 +572,40 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                             });
                         }
                     }
+                    // `this.key`: the receiver is read where the activation
+                    // keeps it instead of being copied into a register first.
+                    None if ip > 0
+                        && matches!(&code[ip - 1], Op::LoadGlobal(name) if is_this_read(name))
+                        && !jump_targets[ip]
+                        && matches!(ops.last(), Some(WideOp::LoadThis { dst })
+                            if *dst == register(depth.checked_sub(1)?)) =>
+                    {
+                        ops.pop();
+                        compact_index[ip] = u32::try_from(ops.len()).ok()?;
+                        ops.push(WideOp::GetPropThis {
+                            dst: register(depth.checked_sub(1)?),
+                            index,
+                        });
+                    }
+                    // `Dup` then a named read -- the method lookup of
+                    // `o.m(...)` -- reads the receiver below in place instead
+                    // of copying it.
+                    None if ip > 0
+                        && matches!(code[ip - 1], Op::Dup)
+                        && !jump_targets[ip]
+                        && matches!(ops.last(), Some(WideOp::Dup { dst, .. })
+                            if *dst == register(depth.checked_sub(1)?)) =>
+                    {
+                        let Some(WideOp::Dup { src, .. }) = ops.pop() else {
+                            return None;
+                        };
+                        compact_index[ip] = u32::try_from(ops.len()).ok()?;
+                        ops.push(WideOp::GetPropNamed {
+                            dst: register(depth.checked_sub(1)?),
+                            obj: src,
+                            index,
+                        });
+                    }
                     None => ops.push(WideOp::GetPropNamed {
                         dst: register(depth.checked_sub(1)?),
                         obj: register(depth.checked_sub(1)?),
@@ -577,12 +623,21 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                     key: Rc::clone(key),
                     cache: cache.clone(),
                     is_strict: *is_strict,
+                    creation: Default::default(),
                 });
-                ops.push(WideOp::SetPropNamed {
-                    obj: register(depth.checked_sub(2)?),
-                    value: register(depth.checked_sub(1)?),
-                    index,
-                });
+                if this_stores[ip] {
+                    ops.push(WideOp::SetPropThis {
+                        dst: register(depth.checked_sub(2)?),
+                        value: register(depth.checked_sub(1)?),
+                        index,
+                    });
+                } else {
+                    ops.push(WideOp::SetPropNamed {
+                        obj: register(depth.checked_sub(2)?),
+                        value: register(depth.checked_sub(1)?),
+                        index,
+                    });
+                }
             }
             Op::StoreLocal(slot) if slot_is_lexical(*slot) => {
                 let dst = note_lexical(*slot, &mut lexical_slots)?;
@@ -654,14 +709,35 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 ip: u32::try_from(ip).ok()?,
                 depth,
             }),
-            Op::JumpIfFalse(target) => ops.push(WideOp::JumpIfFalsy {
-                cond: register(depth.checked_sub(1)?),
-                target: u32::try_from(*target).ok()?,
-            }),
-            Op::JumpIfTrue(target) => ops.push(WideOp::JumpIfTruthy {
-                cond: register(depth.checked_sub(1)?),
-                target: u32::try_from(*target).ok()?,
-            }),
+            Op::JumpIfFalse(target) | Op::JumpIfTrue(target) => {
+                let copied = register(depth.checked_sub(1)?);
+                // `if (x)` on a local: both successors discard the condition,
+                // so the branch tests the local where it is instead of a copy.
+                let cond = match ops.last() {
+                    Some(WideOp::Move { dst, src })
+                        if *dst == copied
+                            && ip > 0
+                            && matches!(code[ip - 1], Op::LoadLocal(_))
+                            && !jump_targets[ip]
+                            && matches!(code.get(ip + 1), Some(Op::Pop))
+                            && matches!(code.get(*target), Some(Op::Pop)) =>
+                    {
+                        let src = *src;
+                        ops.pop();
+                        // A resume at this instruction lands on the fused
+                        // operation (see `WideProgram::resume_pc`).
+                        compact_index[ip] = u32::try_from(ops.len()).ok()?;
+                        src
+                    }
+                    _ => copied,
+                };
+                let target = u32::try_from(*target).ok()?;
+                ops.push(if matches!(op, Op::JumpIfFalse(_)) {
+                    WideOp::JumpIfFalsy { cond, target }
+                } else {
+                    WideOp::JumpIfTruthy { cond, target }
+                });
+            }
             Op::Unary(unary_op) => {
                 let src = register(depth.checked_sub(1)?);
                 ops.push(WideOp::Unary {
@@ -765,6 +841,11 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         exit_heavy: std::cell::Cell::new(false),
         probed_backedges: probed_backedges.into_boxed_slice(),
         native_backedges: std::cell::Cell::new(0),
+        ip_to_pc: compact_index.into_boxed_slice(),
+        ip_depth: entry_depth
+            .iter()
+            .map(|depth| depth.unwrap_or(u16::MAX))
+            .collect(),
     })
 }
 
@@ -962,6 +1043,48 @@ fn fold_binary(
     folds[binary + 1..=tail].fill(LocalFold::Elided);
 }
 
+/// Finds `this.key = <expr>`: a receiver load, straight-line code pushing
+/// the value above it, and the named write. Both the load and the write are
+/// marked; the write then reads the receiver where the activation keeps it
+/// and the load is elided. Nothing between them touches the receiver's
+/// register, and no jump lands inside.
+fn fold_this_stores(code: &[Op], entry_depth: &[Option<u16>], jump_target: &[bool]) -> Vec<bool> {
+    let mut marks = vec![false; code.len()];
+    for (store, op) in code.iter().enumerate() {
+        if !matches!(op, Op::SetPropNamed { .. }) || jump_target[store] {
+            continue;
+        }
+        let Some(depth) = entry_depth[store].and_then(|depth| depth.checked_sub(2)) else {
+            continue;
+        };
+        for ip in (0..store).rev() {
+            let Some(entry) = entry_depth[ip] else {
+                break;
+            };
+            if entry == depth {
+                if matches!(&code[ip], Op::LoadGlobal(name) if is_this_read(name)) && !marks[ip] {
+                    marks[ip] = true;
+                    marks[store] = true;
+                }
+                break;
+            }
+            let consumes_receiver = effect_of(&code[ip])
+                .is_none_or(|effect| entry.saturating_sub(effect.pops) <= depth);
+            if consumes_receiver
+                || jump_target[ip]
+                || is_exit_safe(&code[ip])
+                || matches!(
+                    code[ip],
+                    Op::Jump(_) | Op::JumpIfFalse(_) | Op::JumpIfTrue(_)
+                )
+            {
+                break;
+            }
+        }
+    }
+    marks
+}
+
 /// Computes the operand-stack depth on entry to each instruction, rejecting a
 /// body whose merge points disagree. Backward edges are ordinary edges here:
 /// a loop header already visited must be reached at the same depth.
@@ -1043,6 +1166,13 @@ fn effect_of(op: &Op) -> Option<Effect> {
         Op::GetPropNamed { cache, .. } if cache.local_slot().is_some() => simple(0, 1),
         Op::GetPropNamed { .. } => simple(1, 1),
         Op::SetPropNamed { .. } => simple(2, 1),
+        // A plain computed store runs at its exit and falls through
+        // (`WideOp::Exit`); any other store leaves the rest to the
+        // interpreter.
+        Op::SetProp { .. } => simple(3, 1),
+        Op::SetPropIndex { .. } => simple(2, 1),
+        // An object literal is built at its exit, which always continues.
+        Op::NewObjectDataLiteral { shape } => simple(u16::try_from(shape.input_len()).ok()?, 1),
         Op::JumpIfFalse(target) | Op::JumpIfTrue(target) => Effect {
             pops: 0,
             pushes: 0,

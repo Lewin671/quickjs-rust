@@ -66,10 +66,26 @@ thread_local! {
     /// The eight `typeof` results, built on first use and never mutated.
     /// Every `typeof` used to allocate its result; sharing is unobservable
     /// because strings are immutable (see `ASCII_CODE_UNIT_STRINGS`).
-    static TYPEOF_NAMES: [JsString; 8] = [
-        "undefined", "boolean", "number", "bigint", "string", "function", "symbol", "object",
-    ]
-    .map(JsString::from);
+    static TYPEOF_NAMES: [JsString; 8] = TYPEOF_TEXTS.map(JsString::atom);
+}
+
+const TYPEOF_TEXTS: [&str; 8] = [
+    "undefined",
+    "boolean",
+    "number",
+    "bigint",
+    "string",
+    "function",
+    "symbol",
+    "object",
+];
+
+/// The shared atom for a string literal naming a `typeof` result, so the
+/// literal in `typeof x === "number"` is the very instance `typeof` returns
+/// and the comparison is a pointer test.
+pub(super) fn typeof_name_atom(text: &str) -> Option<JsString> {
+    let index = TYPEOF_TEXTS.iter().position(|name| *name == text)?;
+    Some(TYPEOF_NAMES.with(|names| names[index].clone()))
 }
 
 pub(super) fn typeof_value(value: Value) -> JsString {
