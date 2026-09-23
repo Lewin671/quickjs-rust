@@ -51,3 +51,24 @@ fn prototype_cache_records_and_reads_both_literal_representations() {
         assert!(holder.prototype_data_slot_value(slot).is_none());
     }
 }
+
+#[test]
+fn a_value_with_no_by_value_entry_is_cached_by_slot() {
+    let object = ObjectRef::with_prototype(HashMap::new(), None);
+    object.set("items".to_owned(), Value::String("first".into()));
+    object.set("name".to_owned(), Value::String("n".into()));
+    let cache = NamedPropertyCache::default();
+    let value = Value::String("first".into());
+    cache.update(&object, "items", &value);
+    let CacheProbe::Own(hit) = cache.probe(&object) else {
+        panic!("a string-valued property must install a slot entry");
+    };
+    assert_eq!(hit, value);
+    // The slot follows a later write, and a layout change invalidates it.
+    object.write_existing_own_data_property("items", &Value::String("second".into()));
+    assert!(
+        matches!(cache.probe(&object), CacheProbe::Own(Value::String(s)) if s.as_str() == "second")
+    );
+    object.delete_own_property("items");
+    assert!(matches!(cache.probe(&object), CacheProbe::Miss));
+}
