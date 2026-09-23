@@ -676,3 +676,16 @@ fn a_declaration_without_an_initializer_leaves_the_stack_balanced() {
         .expect("a body whose loop declares uninitialized bindings should be admitted");
     assert_eq!(value_of(&format!("{source} f(5);")), Value::Number(10.0));
 }
+
+#[test]
+fn primitive_string_reads_answer_like_the_interpreter() {
+    assert_eq!(
+        value_of(
+            "function probe(s, i) { return [s.length, s[i], s.charCodeAt(i), s.missing, s[9], s[-1], s['0']].join('|'); }
+             var before = probe('abc', 1);
+             String.prototype.missing = 'patched';
+             before + '/' + probe('xy\\u00e9', 2);"
+        ),
+        Value::String("3|b|98||||a/3|é|233|patched|||x".into())
+    );
+}

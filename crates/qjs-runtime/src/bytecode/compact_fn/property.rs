@@ -70,9 +70,40 @@ pub(super) fn get_prop_named(
             OwnDataPropertyRead::NeedsSlowPath => {}
         }
     }
+    if let Value::String(text) = &object
+        && let Some(value) = string_named_value(text, key, env)
+    {
+        return Ok(value);
+    }
     cache.clear();
     let mut call_env = env.empty_frame();
     crate::bytecode::vm_props::get_property(object, key, &mut call_env)
+}
+
+/// A named read on a primitive string, as `Vm::try_direct_get_string`
+/// answers it: `length`, an own index, then a data property on the realm's
+/// live `%String.prototype%`. `text.charCodeAt` in a loop otherwise walked
+/// the general [[Get]], which rediscovers the `String` binding by name and
+/// builds a realm frame per read.
+fn string_named_value(text: &crate::JsString, key: &str, env: &CallEnv) -> Option<Value> {
+    if key == "length" {
+        return Some(Value::Number(
+            crate::string::js_string_code_unit_len(text) as f64
+        ));
+    }
+    if let Some(value) = crate::string::string_property(text, key) {
+        return Some(value);
+    }
+    if env.dynamic_function_realm_global().is_some() {
+        return None;
+    }
+    let prototype = env.realm().string_prototype()?;
+    use crate::bytecode::vm_props::{DirectPropertyRead, ordinary_chain_data_value};
+    match ordinary_chain_data_value(&prototype, key) {
+        Ok(DirectPropertyRead::Data(value)) => Some(value),
+        Ok(DirectPropertyRead::Missing) => Some(Value::Undefined),
+        Ok(DirectPropertyRead::NeedsSlowPath) | Err(_) => None,
+    }
 }
 
 /// Writes `value` to the statically named property `key` of `object`, honoring
@@ -260,6 +291,16 @@ pub(super) fn get_prop_computed(
             && crate::typed_array::is_typed_array_object(object)
         {
             return Ok(crate::typed_array::integer_indexed_value(object, index));
+        }
+        // A string's own integer-keyed properties are exactly its code units,
+        // as `Vm::get_prop` answers them: `table[i]` in an encoder loop
+        // otherwise built a property key and a realm frame per read.
+        if let Value::String(text) = &object
+            && let Some(code_unit) = crate::string::js_string_code_unit_at(text, index)
+        {
+            return Ok(Value::String(crate::string::js_string_from_code_unit(
+                code_unit,
+            )));
         }
     }
     // A string key on an ordinary object needs no owned `PropertyKey`: the
