@@ -74,6 +74,18 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   the loop hand-back; fixed in f08fb6c2 (single-run 0.70 of 2b799a31).
   Broad lane 0.997, sentinels 1.004 (worst string_key_map_churn 1.019).
 
+- Stack run bf07567d vs main 98f8f113 (30 blocks, cycles, quiet host;
+  `target/comparison/typed-in-wide-bf07567d-30b`): typed loops against
+  wide registers, slot-cached function/array/string reads, creation
+  caches, inlined constructors, plain stores and literals at exits, string
+  atoms, receiver-in-place `this` reads/writes, in-place local branches.
+  External geomean 0.944 against the base (JetStream subset 0.933, Kraken
+  0.967, SunSpider 0.935) and 1.063 against QuickJS-NG in wall time;
+  fannkuch 0.527, binary-trees 0.815, bits-in-byte 0.808, cdjs 0.829.
+  Controls above 1.01: xparb 1.026, unpack-code 1.023, md5 1.019. Broad
+  lane flat except `array_index_of` 1.062 and `array_dynamic_read` 0.934;
+  sentinels 0.87-1.005.
+
 ## Screen log
 
 - `wide-tier-math-calls-and-field-thunks` (native guarded Math calls, field
