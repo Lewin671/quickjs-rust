@@ -34,7 +34,13 @@ pub(crate) fn native_reflect_delete_property(
     )?;
 
     let success = match target {
-        Value::Object(object) => delete_object_property(object, &key),
+        Value::Object(object) => {
+            let deleted = delete_object_property(object.clone(), &key);
+            if deleted && let crate::PropertyKey::String(name) = &key {
+                env.forget_deleted_global_object_property(&object, name);
+            }
+            deleted
+        }
         Value::Proxy(proxy) => crate::proxy::proxy_delete_property(proxy, &key, env)?,
         Value::Map(map) => delete_object_property(map.object(), &key),
         Value::Set(set) => delete_object_property(set.object(), &key),

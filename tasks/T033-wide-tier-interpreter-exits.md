@@ -160,20 +160,15 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   1.94, ai-astar 1.82, controlflow-recursive 1.80, tofte/xparb 1.78,
   raytrace-class-fields 1.77, nbody 1.76.
 
-## Found, not fixed
+## Found, then fixed
 
-- Deleting a global created by a sloppy assignment in a function
-  (`f() { x = 1 }`, then `delete globalThis.x`) leaves the realm binding:
-  `typeof x` stays "number" (QuickJS-NG: "undefined"). Interpreter path,
-  predates the wide-tier store.
-
-- A sloppy assignment in a function to a global that has become an
-  accessor does not call the setter (`Object.defineProperty(globalThis,
-  'g', { set })` then `g = 4` in a function); QuickJS-NG calls it. The
-  interpreter path, before this task's changes too.
-- A function that assigned a global and then lets a native write it
-  (`Reflect.set(globalThis, 'w', 'X')`) reads its own stale copy of `w`
-  afterwards. Interpreter path, also predates this task.
+- Fixed in 03bcf182 (all predated this task, interpreter paths):
+  a sloppy or strict assignment to an accessor global now calls its setter
+  (strict without a setter throws); `delete globalThis.x` and
+  `Reflect.deleteProperty` unbind the mirroring realm binding; `Reflect.set`
+  and `Object.assign` on the global object update it; and a `var` declared
+  by a direct eval in a sloppy function shadows the global for the
+  function's later assignments (they wrote the global before).
 
 ## Next
 

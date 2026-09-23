@@ -220,6 +220,11 @@ impl RealmState {
         self.global_this.clone()
     }
 
+    /// Whether `object` is this realm's global object, without cloning it.
+    fn is_global_object(&self, object: &ObjectRef) -> bool {
+        matches!(&self.global_this, Some(Value::Object(global)) if global.ptr_eq(object))
+    }
+
     /// Returns the internal global object used by dynamically constructed
     /// functions without hashing its private binding name for every closure.
     pub(crate) fn dynamic_function_realm_global(&self) -> Option<ObjectRef> {
@@ -1537,12 +1542,7 @@ impl CallEnv {
     /// Mirrors a data-property definition on this realm's global object into
     /// the realm value table and any already-captured global cell.
     pub(crate) fn sync_realm_global_object_property(&self, object: &ObjectRef, name: &str) {
-        let is_global_object = self
-            .scope
-            .realm
-            .global_this()
-            .is_some_and(|global| global.same_value(&Value::Object(object.clone())));
-        if !is_global_object || !self.scope.realm.contains(name) {
+        if !self.scope.realm.is_global_object(object) || !self.scope.realm.contains(name) {
             return;
         }
         let Some(property) = object.own_property(name) else {
@@ -1553,6 +1553,21 @@ impl CallEnv {
         } else {
             self.insert_realm(name.to_owned(), property.value);
         }
+    }
+
+    /// Forgets the realm binding that mirrored a property just deleted from
+    /// this realm's global object (`delete globalThis.x`,
+    /// `Reflect.deleteProperty(globalThis, 'x')`), so the name stops
+    /// resolving exactly as it does after `delete x`. A script-level lexical
+    /// binding of the same name is a different binding and stays.
+    pub(crate) fn forget_deleted_global_object_property(&self, object: &ObjectRef, name: &str) {
+        if !self.scope.realm.is_global_object(object)
+            || !self.scope.realm.contains(name)
+            || self.is_global_lexical_binding(name)
+        {
+            return;
+        }
+        self.remove_realm(name);
     }
 
     /// Defines `name` in the shared realm only if it is not already bound there.

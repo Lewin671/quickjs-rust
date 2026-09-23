@@ -155,6 +155,7 @@ fn set_receiver_data_property(
                 None => Property::enumerable(value),
             };
             object.define_property(key.to_owned(), descriptor);
+            env.sync_realm_global_object_property(&object, key);
             Ok(true)
         }
         Value::Array(elements) => {
