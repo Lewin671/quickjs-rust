@@ -1245,3 +1245,44 @@ fn an_assignment_to_an_undeclared_name_creates_the_global() {
         Value::String("2,6,5,6,true,true".into())
     );
 }
+
+#[test]
+fn an_array_hole_reads_undefined_unless_a_prototype_has_the_index() {
+    assert_eq!(
+        value_of(
+            "function get(a, i) { return a[i]; } \
+         var a = new Array(4); a[1] = 7; \
+         var r = [get(a, 0), get(a, 1), get(a, 9)]; \
+         Array.prototype[2] = 'p'; r.push(get(a, 2)); \
+         Object.prototype[3] = 'q'; r.push(get(a, 3)); \
+         Object.defineProperty(Array.prototype, 0, { get: function () { return 'g'; }, configurable: true }); \
+         r.push(get(a, 0)); \
+         delete Array.prototype[2]; delete Array.prototype[0]; delete Object.prototype[3]; \
+         r.push(get(a, 2), get(a, 3)); \
+         r.map(String).join();"
+        ),
+        Value::String(
+            "undefined,7,undefined,p,q,g,undefined,undefined"
+                .to_owned()
+                .into()
+        )
+    );
+}
+
+#[test]
+fn a_local_stored_and_reloaded_is_not_copied_back() {
+    let source = "function pick(o) { var x = o.a; if (x) { return x; } return 0; }";
+    let program =
+        compile::compile(&nested_function(source, "pick")).expect("the body should be admitted");
+    let copied_back = program.ops.windows(2).any(|pair| {
+        matches!(pair, [WideOp::Move { dst: a, src: t }, WideOp::Move { dst: t2, src: a2 }]
+            if a == a2 && t == t2)
+    });
+    assert!(!copied_back, "{:#?}", program.ops);
+    assert_eq!(
+        value_of(&format!(
+            "{source} pick({{ a: 5 }}) + ':' + pick({{ a: 0 }}) + ':' + pick({{}});"
+        )),
+        Value::String("5:0:0".to_owned().into())
+    );
+}

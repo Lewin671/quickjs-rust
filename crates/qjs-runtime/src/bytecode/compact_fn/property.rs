@@ -498,10 +498,17 @@ pub(super) fn get_prop_computed(
     if let Value::Number(number) = &key_value
         && let Some(index) = crate::bytecode::vm_props::array_index_from_number(*number)
     {
-        if let Value::Array(elements) = &object
-            && let Some(value) = elements.direct_dense_index_value(index)
-        {
-            return Ok(value);
+        if let Value::Array(elements) = &object {
+            if let Some(value) = elements.direct_dense_index_value(index) {
+                return Ok(value);
+            }
+            // A hole, or an index past the end, of an array whose prototype
+            // chain holds no indexed property reads `undefined`: a bucket
+            // table made by `new Array(n)` reads its empty buckets this way,
+            // which otherwise formatted the index as a key and walked the chain.
+            if elements.index_is_absent(index) && array_access_is_plain(elements, env) {
+                return Ok(Value::Undefined);
+            }
         }
         if let Value::Object(object) = &object
             && crate::typed_array::is_typed_array_object(object)

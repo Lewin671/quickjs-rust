@@ -399,6 +399,22 @@ pub(super) fn program_for(bytecode: &Bytecode) -> Option<&WideProgram> {
                 let mut decline = compile::Decline::default();
                 let program = compile::compile_traced(bytecode, &mut decline);
                 trace_decline(bytecode, program.is_none().then_some(&decline));
+                if std::env::var_os("QJS_CF_TRACE").is_some_and(|v| v == "2")
+                    && let Some(program) = &program
+                {
+                    eprintln!(
+                        "CFLIST params=({}) len={} locals={}",
+                        bytecode.parameter_names().join(","),
+                        bytecode.code.len(),
+                        program.local_registers
+                    );
+                    for (i, op) in bytecode.code.iter().enumerate() {
+                        eprintln!("  bc {i}: {op:?}");
+                    }
+                    for (i, op) in program.ops.iter().enumerate() {
+                        eprintln!("  w {i}: {op:?}");
+                    }
+                }
                 return program;
             }
             compile::compile(bytecode)

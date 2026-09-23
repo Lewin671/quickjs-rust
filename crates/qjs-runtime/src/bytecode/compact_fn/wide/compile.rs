@@ -459,10 +459,22 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                     });
                 } else {
                     required_authoritative_slots |= slot_bit;
-                    ops.push(WideOp::Move {
-                        dst: register(depth),
-                        src: slot_index,
-                    });
+                    // `x = value; ... x` stores and reloads the same local:
+                    // the store copied the value out of the register this
+                    // load would write, which still holds it.
+                    let reloads_stored_value =
+                        sole_op_of_previous(ip, &jump_targets, &compact_index, &ops)
+                            && matches!(code[ip - 1], Op::StoreLocal(stored) if stored == *slot)
+                            && matches!(ops.last(), Some(WideOp::Move { dst, src })
+                            if *dst == slot_index && *src == register(depth));
+                    if reloads_stored_value {
+                        no_resume[ip] = true;
+                    } else {
+                        ops.push(WideOp::Move {
+                            dst: register(depth),
+                            src: slot_index,
+                        });
+                    }
                 }
             }
             Op::LoadGlobal(name) if is_this_read(name) && this_stores[ip] => {
