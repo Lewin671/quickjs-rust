@@ -1505,3 +1505,16 @@ fn exec_and_test_read_each_flag_and_group_name() {
         ))
     );
 }
+
+#[test]
+fn last_index_writes_in_place_and_a_read_only_one_still_throws() {
+    assert_eq!(
+        eval(
+            "var r = /a/g; Object.defineProperty(r, 'lastIndex', { writable: false }); \
+             var t; try { 'aa'.replace(r, 'b'); t = 'no'; } catch (e) { t = e instanceof TypeError; } \
+             var q = /a/g; q.exec('xa'); var s = /o/g; var n = 0; while (s.exec('foo boo')) n++; \
+             t + ':' + q.lastIndex + ':' + n + ':' + s.lastIndex;"
+        ),
+        Ok(Value::String("true:2:4:0".to_owned().into()))
+    );
+}
