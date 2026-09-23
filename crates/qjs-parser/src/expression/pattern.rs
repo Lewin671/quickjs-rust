@@ -22,6 +22,19 @@ impl Parser {
         if !self.at(&TokenKind::LeftBrace) && !self.at(&TokenKind::LeftBracket) {
             return Ok(None);
         }
+        // A destructuring assignment's pattern is followed by `=`. Checking the
+        // token after the matching closer first keeps an array or object
+        // literal from being parsed twice -- once as a pattern -- at every
+        // level of its nesting.
+        let followed_by_equal = self
+            .closers
+            .get(self.cursor)
+            .filter(|&&close| close != crate::cursor::NO_CLOSER)
+            .and_then(|&close| self.tokens.get(close as usize + 1))
+            .is_some_and(|token| token.kind == TokenKind::Equal);
+        if !followed_by_equal {
+            return Ok(None);
+        }
         let start_cursor = self.cursor;
         let Ok(target) = self.assignment_pattern() else {
             self.cursor = start_cursor;

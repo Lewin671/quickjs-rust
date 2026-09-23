@@ -219,6 +219,9 @@ struct Parser {
     source: String,
     source_is_wtf16: bool,
     tokens: Vec<Token>,
+    /// For each `(`, `[` or `{` token, the index of the token that closes it
+    /// (`NO_CLOSER` for any other token or an unbalanced opener).
+    closers: Vec<u32>,
     cursor: usize,
     /// The grammar goal symbol: script or module. Module source allows
     /// top-level `import`/`export` declarations.

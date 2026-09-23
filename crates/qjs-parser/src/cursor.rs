@@ -4,10 +4,12 @@ use crate::{ParseError, Parser};
 
 impl Parser {
     pub(crate) fn new(tokens: Vec<Token>, source: String, source_is_wtf16: bool) -> Self {
+        let closers = matching_closers(&tokens);
         Self {
             source,
             source_is_wtf16,
             tokens,
+            closers,
             cursor: 0,
             goal: crate::Goal::Script,
             strict: false,
@@ -89,4 +91,34 @@ impl Parser {
         self.cursor += 1;
         token
     }
+}
+
+/// Marks a token that closes nothing, or an opener without a closer.
+pub(crate) const NO_CLOSER: u32 = u32::MAX;
+
+/// The index of the token closing each bracket token, found in one pass.
+fn matching_closers(tokens: &[Token]) -> Vec<u32> {
+    let mut closers = vec![NO_CLOSER; tokens.len()];
+    let mut open: Vec<usize> = Vec::new();
+    for (index, token) in tokens.iter().enumerate() {
+        let opener = match token.kind {
+            TokenKind::LeftParen | TokenKind::LeftBracket | TokenKind::LeftBrace => {
+                open.push(index);
+                continue;
+            }
+            TokenKind::RightParen => TokenKind::LeftParen,
+            TokenKind::RightBracket => TokenKind::LeftBracket,
+            TokenKind::RightBrace => TokenKind::LeftBrace,
+            _ => continue,
+        };
+        if let Some(&start) = open.last()
+            && tokens[start].kind == opener
+        {
+            open.pop();
+            if let Ok(close) = u32::try_from(index) {
+                closers[start] = close;
+            }
+        }
+    }
+    closers
 }

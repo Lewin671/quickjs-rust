@@ -624,3 +624,47 @@ fn tagged_template_binds_inside_new_callee() {
         matches!(arguments.as_slice(), [CallArgument::Expr(Expr::Identifier { name, .. })] if name == "argument")
     );
 }
+
+#[test]
+fn nested_literals_parse_once_and_patterns_still_need_their_equals() {
+    // Every level of this literal used to be parsed as an assignment pattern
+    // first, doubling the work per level of nesting.
+    let depth = 12;
+    let source = format!("var x = {}1{};", "[{a: ".repeat(depth), "}]".repeat(depth));
+    let started = std::time::Instant::now();
+    parse_script(&source).expect("a deeply nested literal parses");
+    assert!(started.elapsed() < std::time::Duration::from_secs(2));
+
+    for source in [
+        "[a, [b, {c}]] = [1, [2, {c: 3}]];",
+        "({a, b: [c]} = obj);",
+        "[x.y, z[0]] = w;",
+        "for (;;) [a] = b;",
+    ] {
+        let script = parse_script(source).expect(source);
+        assert!(
+            matches!(
+                &script.body[0],
+                Stmt::Expr(Expr::Assignment { target, .. })
+                    if !matches!(target, AssignmentTarget::Identifier { .. })
+            ) || source.starts_with("for"),
+            "{source}"
+        );
+    }
+    // A literal with a member continuation is a reference, not a pattern.
+    let script = parse_script("[x][0] = 1;").expect("a member target parses");
+    assert!(matches!(
+        &script.body[0],
+        Stmt::Expr(Expr::Assignment {
+            target: AssignmentTarget::Member { .. },
+            ..
+        })
+    ));
+    // Comparing literals is not an assignment.
+    assert!(matches!(
+        &parse_script("[a] == [b];")
+            .expect("a comparison parses")
+            .body[0],
+        Stmt::Expr(Expr::Binary { .. })
+    ));
+}
