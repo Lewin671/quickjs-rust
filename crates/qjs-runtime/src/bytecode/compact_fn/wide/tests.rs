@@ -1127,3 +1127,18 @@ fn array_and_string_method_reads_follow_their_prototypes() {
         Value::String("2:0a:AB 2:1a:AB 2:2a:AB 2:own:CD 3:7ee:EF 1:#:GH 1:stack:IJ".into())
     );
 }
+
+#[test]
+fn number_method_reads_follow_number_prototype() {
+    let source = "function show(n) { return n.toString() + '/' + n.toFixed(1); }";
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var out = [show(1), show(2.5)];
+             Number.prototype.toFixed = function () {{ return 'fixed'; }};
+             out.push(show(3));
+             out.join(' ');"
+        )),
+        Value::String("1/1.0 2.5/2.5 3/fixed".into())
+    );
+}

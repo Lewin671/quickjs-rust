@@ -78,9 +78,10 @@ pub(super) fn get_prop_named(
     crate::bytecode::vm_props::get_property(object.clone(), key, &mut call_env)
 }
 
-/// A named read on a primitive string or an array: `length`, an own index
-/// or (for an array) an own named property, then a data property on the
-/// realm's live `%String.prototype%` or `%Array.prototype%`, as
+/// A named read on a primitive string or number, or an array: `length`, an
+/// own index or (for an array) an own named property, then a data property
+/// on the realm's live `%String.prototype%`, `%Number.prototype%` or
+/// `%Array.prototype%`, as
 /// `Vm::try_direct_get_string` answers it. The prototype's answer is the
 /// site's cached entry for that prototype object, revalidated by its
 /// revision like any receiver's, so `text.charCodeAt` and `list.push` read
@@ -107,6 +108,12 @@ fn prototype_receiver_named_value(
                 return None;
             }
             env.realm().string_prototype()?
+        }
+        Value::Number(_) => {
+            if env.dynamic_function_realm_global().is_some() {
+                return None;
+            }
+            env.realm().number_prototype()?
         }
         Value::Array(array) => {
             if &**key == "length" {
