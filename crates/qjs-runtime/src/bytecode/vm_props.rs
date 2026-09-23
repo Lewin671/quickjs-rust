@@ -1492,16 +1492,37 @@ pub(super) fn enumerable_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Val
     // layer's enumerable own string keys (shadowing already-seen names). An
     // exotic Proxy in the chain is consulted through its ownKeys /
     // getOwnPropertyDescriptor / getPrototypeOf traps.
-    let mut keys: Vec<String> = Vec::new();
+    let mut keys: Vec<Rc<str>> = Vec::new();
     // Shadowing is decided per key, so the already-seen set is consulted once
     // per property of every layer. A linear scan made enumerating an object
     // quadratic in its property count.
-    let mut seen: crate::value::name_hash::NameSet<String> = <_>::default();
+    let mut seen: crate::value::name_hash::NameSet<Rc<str>> = <_>::default();
     let mut current = value;
     loop {
         let prototype = match &current {
             Value::Proxy(proxy) => {
                 proxy_enumerable_layer(proxy.clone(), &mut keys, &mut seen, env)?
+            }
+            // An ordinary object's layer comes straight from its storage: its
+            // own keys cannot change while they are read, and the enumerable
+            // flag is all the walk needs from each descriptor. A prototype
+            // with a library's methods on it (`Object.prototype.toJSONString`)
+            // is walked for every object a `for-in` visits.
+            Value::Object(object)
+                if !object.is_module_namespace_exotic()
+                    && !crate::typed_array::is_typed_array_object(object) =>
+            {
+                for (key, enumerable) in object.own_string_keys_with_enumerability() {
+                    if !seen.contains(&key) {
+                        if enumerable {
+                            keys.push(key.clone());
+                        }
+                        seen.insert(key);
+                    }
+                }
+                crate::value_prototype_slot(current.clone(), env)
+                    .map(|slot| slot.to_value())
+                    .unwrap_or(Value::Null)
             }
             Value::Object(_)
             | Value::Array(_)
@@ -1509,13 +1530,14 @@ pub(super) fn enumerable_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Val
             | Value::Map(_)
             | Value::Set(_) => {
                 for key in own_string_keys(&current) {
-                    if !seen.contains(&key) {
+                    if !seen.contains(key.as_str()) {
                         let property_key = PropertyKey::String(key.clone());
                         if let Some(property) = crate::object::own_property_descriptor_key(
                             current.clone(),
                             &property_key,
                             env,
                         )? {
+                            let key: Rc<str> = Rc::from(key);
                             if property.enumerable {
                                 keys.push(key.clone());
                             }
@@ -1540,7 +1562,10 @@ pub(super) fn enumerable_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Val
             next => current = next,
         }
     }
-    Ok(keys.into_iter().map(|s| Value::String(s.into())).collect())
+    Ok(keys
+        .into_iter()
+        .map(|key| Value::String(crate::JsString::from(&*key)))
+        .collect())
 }
 
 /// The ordinary own string key list for a prototype-chain layer. The caller
@@ -1575,8 +1600,8 @@ fn own_string_keys(value: &Value) -> Vec<String> {
 /// the caller can continue up the chain.
 fn proxy_enumerable_layer(
     proxy: crate::proxy::ProxyRef,
-    keys: &mut Vec<String>,
-    seen: &mut crate::value::name_hash::NameSet<String>,
+    keys: &mut Vec<Rc<str>>,
+    seen: &mut crate::value::name_hash::NameSet<Rc<str>>,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     for key in crate::proxy::proxy_own_keys(proxy.clone(), env)? {
@@ -1591,7 +1616,8 @@ fn proxy_enumerable_layer(
             |target, env| crate::object::own_property_descriptor_key(target, &property_key, env),
         )?;
         if let Some(property) = descriptor {
-            if !seen.contains(&name) {
+            if !seen.contains(name.as_str()) {
+                let name: Rc<str> = Rc::from(name);
                 if property.enumerable {
                     keys.push(name.clone());
                 }

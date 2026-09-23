@@ -12,6 +12,7 @@ use super::{Property, Value};
 
 mod array_buffer_methods;
 mod dynamic_storage;
+mod key_order;
 mod ordered_data_builder;
 mod slot_reads;
 mod typed_array_methods;
@@ -1795,93 +1796,6 @@ impl ObjectRef {
         }
         properties.remove(index);
         true
-    }
-
-    pub(crate) fn own_property_keys(&self) -> Vec<String> {
-        self.ordered_property_names(|property| property.enumerable)
-    }
-
-    pub(crate) fn own_property_names(&self) -> Vec<String> {
-        self.ordered_property_names(|_| true)
-    }
-
-    fn ordered_property_names(&self, include: impl Fn(&Property) -> bool) -> Vec<String> {
-        let properties = self.properties().borrow();
-        if let PropertyStorage::Small { entries } = &*properties {
-            if self.0.index_property_count.get() == 0 {
-                return entries
-                    .iter()
-                    .filter_map(|(key, property)| {
-                        if is_internal_property_key(key) {
-                            return None;
-                        }
-                        include(property).then(|| key.to_string())
-                    })
-                    .collect();
-            }
-
-            let mut indices = Vec::new();
-            let mut strings = Vec::new();
-            for (key, property) in entries {
-                if is_internal_property_key(key) || !include(property) {
-                    continue;
-                }
-                if let Some(index) = array_index_property_key(key) {
-                    indices.push((index, key.to_string()));
-                } else {
-                    strings.push(key.to_string());
-                }
-            }
-            indices.sort_by_key(|(index, _)| *index);
-            return indices
-                .into_iter()
-                .map(|(_, key)| key)
-                .chain(strings)
-                .collect();
-        }
-
-        let order = properties
-            .order()
-            .expect("non-small property storage has a separate order");
-        if self.0.index_property_count.get() == 0 {
-            return order
-                .iter()
-                .filter_map(|key| {
-                    if is_internal_property_key(key) {
-                        return None;
-                    }
-                    let property = properties.get(key.as_ref())?;
-                    include(&property).then(|| key.to_string())
-                })
-                .collect();
-        }
-
-        let mut indices = Vec::new();
-        let mut strings = Vec::new();
-
-        for key in order.iter() {
-            if is_internal_property_key(key) {
-                continue;
-            }
-            let Some(property) = properties.get(key.as_ref()) else {
-                continue;
-            };
-            if !include(&property) {
-                continue;
-            }
-            if let Some(index) = array_index_property_key(key) {
-                indices.push((index, key.to_string()));
-            } else {
-                strings.push(key.to_string());
-            }
-        }
-
-        indices.sort_by_key(|(index, _)| *index);
-        indices
-            .into_iter()
-            .map(|(_, key)| key)
-            .chain(strings)
-            .collect()
     }
 
     pub(crate) fn own_property_symbols(&self) -> Vec<ObjectRef> {

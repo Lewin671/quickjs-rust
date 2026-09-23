@@ -1539,3 +1539,37 @@ fn for_in_re_checks_each_key_through_ordinary_storage_and_exotic_holders() {
         Ok(Value::String("ap:p,p".to_owned().into()))
     );
 }
+
+#[test]
+fn for_in_enumerates_each_prototype_layer_in_key_order_with_shadowing() {
+    assert_eq!(
+        eval(
+            "var out = []; \
+             function keys(o) { var r = []; for (var k in o) r.push(k); return r.join(\",\"); } \
+             var proto = { inherited: 1, shadowed: 2, 7: \"p\" }; \
+             Object.defineProperty(proto, \"hidden\", { value: 1, enumerable: false }); \
+             var o = Object.create(proto); \
+             o.b = 1; o[2] = 1; o.a = 1; o[0] = 1; \
+             Object.defineProperty(o, \"shadowed\", { value: 3, enumerable: false }); \
+             o.hidden = 5; \
+             out.push(keys(o)); \
+             var d = { x: 1, y: 2, z: 3 }; var seen = []; \
+             for (var k in d) { seen.push(k); delete d.y; d.w = 4; } \
+             out.push(seen.join(\",\")); \
+             out.push(keys(new String(\"ab\"))); \
+             var big = {}; for (var i = 0; i < 20; i++) big[\"k\" + (19 - i)] = i; delete big.k5; big[3] = 0; \
+             out.push(keys(big)); \
+             var p = new Proxy({ pa: 1 }, {}); var c = Object.create(p); c.own = 1; \
+             out.push(keys(c)); \
+             Object.prototype.lib = function () {}; \
+             out.push(keys({ q: 1 })); \
+             delete Object.prototype.lib; \
+             out.join(\"|\");"
+        ),
+        Ok(Value::String(
+            "0,2,b,a,7,inherited|x,z|0,1|3,k19,k18,k17,k16,k15,k14,k13,k12,k11,k10,k9,k8,k7,k6,k4,k3,k2,k1,k0|own,pa|q,lib"
+                .to_owned()
+                .into()
+        ))
+    );
+}
