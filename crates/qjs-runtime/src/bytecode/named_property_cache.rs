@@ -33,6 +33,11 @@ struct NamedPropertyCacheState {
     entries: [Option<NamedPropertyCacheEntry>; POLYMORPHIC_CACHE_SLOTS],
     next_slot: usize,
     local_slot: Option<usize>,
+    /// The last receiver proven to have no own property of the site's name,
+    /// with the layout revision it had then. A method read on the same
+    /// receiver (`this.m()` in a loop) skips re-proving the miss until an own
+    /// property is added, removed or reconfigured.
+    receiver_miss: Option<(ObjectWeakRef, u64)>,
 }
 
 #[derive(Clone, Debug)]
@@ -116,6 +121,7 @@ impl NamedPropertyCache {
             entries: Default::default(),
             next_slot: 0,
             local_slot: Some(slot),
+            receiver_miss: None,
         })))
     }
 
@@ -429,5 +435,23 @@ impl NamedPropertyCache {
         let mut state = self.0.borrow_mut();
         state.entries = Default::default();
         state.next_slot = 0;
+        state.receiver_miss = None;
+    }
+
+    /// Whether `receiver` is the receiver this site last proved to have no
+    /// own property of its name, with its layout unchanged since.
+    pub(super) fn receiver_miss_proven(&self, receiver: &ObjectRef) -> bool {
+        self.0
+            .borrow()
+            .receiver_miss
+            .as_ref()
+            .is_some_and(|(object, revision)| {
+                object.ptr_eq(receiver) && *revision == receiver.layout_revision()
+            })
+    }
+
+    pub(super) fn remember_receiver_miss(&self, receiver: &ObjectRef) {
+        self.0.borrow_mut().receiver_miss =
+            Some((receiver.downgrade(), receiver.layout_revision()));
     }
 }

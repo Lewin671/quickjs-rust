@@ -36,6 +36,12 @@ pub(super) fn get_prop_named(
         if let CacheProbe::Own(value) = probe {
             return Ok(value);
         }
+        if let CacheProbe::PrototypeCandidate { holder, slot } = &probe
+            && cache.receiver_miss_proven(object_ref)
+            && let Some(value) = holder.prototype_data_slot_value(*slot)
+        {
+            return Ok(value);
+        }
         match object_ref.own_data_property_read(key) {
             OwnDataPropertyRead::Data(value) => {
                 cache.update(object_ref, key, &value);
@@ -48,6 +54,7 @@ pub(super) fn get_prop_named(
                 if let CacheProbe::PrototypeCandidate { holder, slot } = probe
                     && let Some(value) = holder.prototype_data_slot_value(slot)
                 {
+                    cache.remember_receiver_miss(object_ref);
                     return Ok(value);
                 }
                 // An inherited getter the interpreter would call directly.

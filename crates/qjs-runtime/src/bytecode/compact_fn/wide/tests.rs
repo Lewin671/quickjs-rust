@@ -1172,3 +1172,24 @@ fn builtin_statics_arrays_and_instanceof_keep_their_hooks() {
         )
     );
 }
+
+#[test]
+fn a_repeated_method_read_sees_an_own_property_added_later() {
+    let source = "function Counter() { this.n = 0; }
+        Counter.prototype.step = function () { return 1; };
+        function run(c, k) { var t = 0; for (var i = 0; i < k; i++) { var o = new Counter(); t += c.step(); } return t; }";
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var c = new Counter(), out = [run(c, 5)];
+             c.step = function () {{ return 10; }};
+             out.push(run(c, 5));
+             delete c.step;
+             out.push(run(c, 5));
+             Object.defineProperty(c, 'step', {{ get() {{ return function () {{ return 100; }}; }}, configurable: true }});
+             out.push(run(c, 5));
+             out.join(',');"
+        )),
+        Value::String("5,50,5,500".into())
+    );
+}
