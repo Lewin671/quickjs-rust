@@ -5,10 +5,7 @@ use crate::{
     to_js_string_with_env, to_length_with_env, to_number_with_env, to_uint16_with_env,
 };
 
-use super::{
-    STRING_DATA_PROPERTY, push_code_point, string_code_unit_len, string_code_units,
-    string_from_code_unit,
-};
+use super::{STRING_DATA_PROPERTY, push_code_point, string_from_code_unit};
 use crate::CallEnv;
 
 pub(crate) fn native_string(
@@ -35,7 +32,7 @@ pub(crate) fn native_string(
         Value::Object(object) => object,
         _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
     };
-    define_string_data(&object, &value, env);
+    define_string_data(&object, &crate::JsString::from(value), env);
     Ok(Value::Object(object))
 }
 
@@ -150,23 +147,28 @@ fn require_object_coercible(value: Value, context: &str) -> Result<Value, Runtim
     }
 }
 
-pub(super) fn define_string_data(object: &ObjectRef, value: &str, env: &CallEnv) {
-    object.define_non_enumerable(
-        STRING_DATA_PROPERTY.to_owned(),
-        Value::String(value.to_owned().into()),
+/// Installs a String object's internal data, `length`, and one ordinary
+/// non-writable index property per UTF-16 code unit. Keys come from the
+/// realm's shared set and index values from its code-unit strings, so a short
+/// wrapper such as `new String(7)` allocates only its property storage.
+pub(crate) fn define_string_data(object: &ObjectRef, value: &crate::JsString, env: &CallEnv) {
+    let keys = env.realm().string_object_keys();
+    object.define_shared_property(
+        keys.data(),
+        Property::non_enumerable(Value::String(value.clone())),
     );
-    object.define_property(
-        "length".to_owned(),
+    object.define_shared_property(
+        keys.length(),
         Property::data(
-            Value::Number(string_code_unit_len(value) as f64),
+            Value::Number(crate::string::js_string_code_unit_len(value) as f64),
             false,
             false,
             false,
         ),
     );
-    for (index, code_unit) in string_code_units(value).into_iter().enumerate() {
-        object.define_property(
-            index.to_string(),
+    for (index, code_unit) in crate::string::code_units(value).enumerate() {
+        object.define_shared_property(
+            keys.index(index),
             Property::data(
                 Value::String(env.realm().string_code_unit(code_unit)),
                 true,

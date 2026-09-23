@@ -104,6 +104,12 @@ Execution tiers inside `bytecode`, from most general to most specialized:
   no accelerator claims); a body is tried on the numeric tier first, then
   the wide tier. Both tiers run admitted callees in a window of their own
   register stack and re-enter the ordinary call path for everything else.
+  The wide tier can also *exit*: at an operation outside its set that
+  depends only on locals, stack and environment, or at the backward edge of
+  a loop an accelerator claims, it hands its locals and operand stack to an
+  interpreter frame built exactly as the general call path builds it, which
+  resumes at that instruction. Semantics past an exit are the interpreter's
+  own; a program that exits on most activations is left to the general path.
 
 ### qjs-cli
 

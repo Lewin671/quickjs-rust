@@ -1,2 +1,5 @@
 [build]
-rustflags = ["-Cllvm-args=-align-all-functions=4"]
+# v0 symbol names carry no signature hash, so the linker order file
+# (crates/qjs-cli/hot-functions.order) keeps naming a hot function after its
+# signature changes.
+rustflags = ["-Cllvm-args=-align-all-functions=4", "-Csymbol-mangling-version=v0"]

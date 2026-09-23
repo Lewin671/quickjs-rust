@@ -131,3 +131,38 @@ fn evaluates_string_code_unit_builtins() {
     );
     assert!(eval("new String.prototype.charAt();").is_err());
 }
+
+#[test]
+fn equality_and_order_follow_code_units_across_storage_forms() {
+    // A surrogate pair stored whole and the same pair built from two lone
+    // halves are equal; order is by UTF-16 code unit, not by code point.
+    assert_eq!(
+        eval(
+            "var joined = '\\uD83D' + '\\uDE00', whole = '\\uD83D\\uDE00';
+             [joined === whole, joined == whole, joined !== whole,
+              whole < '\\uFFFF', '\\uFFFF' > whole, 'abc' < 'abd', 'ab' < 'abc',
+              'é' > 'z', whole === '\\uD83D'].join();"
+        ),
+        Ok(Value::String(
+            "true,true,false,true,true,true,true,true,false"
+                .to_owned()
+                .into()
+        ))
+    );
+}
+
+#[test]
+fn typeof_names_are_ordinary_strings() {
+    assert_eq!(
+        eval(
+            "var names = [typeof 1, typeof 'a', typeof true, typeof undefined, typeof null,
+                          typeof {}, typeof function () {}, typeof Symbol(), typeof 1n];
+             names.join() + '|' + (typeof 1 === 'number') + (names[0] + 's');"
+        ),
+        Ok(Value::String(
+            "number,string,boolean,undefined,object,object,function,symbol,bigint|truenumbers"
+                .to_owned()
+                .into()
+        ))
+    );
+}

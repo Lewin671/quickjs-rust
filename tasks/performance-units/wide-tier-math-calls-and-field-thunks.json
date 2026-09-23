@@ -1,0 +1,63 @@
+{
+  "schema_version": 2,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "wide-tier-math-calls-and-field-thunks",
+  "base_sha": "93f98a4acc1f59b4d6907218c4353408f639c922",
+  "queue": {
+    "candidate_sha": "93f98a4acc1f59b4d6907218c4353408f639c922",
+    "sha256": "64135e0bd75d49e3defdfe6324990117e1fc9f992cbce9880c05a9f285fadc3e"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "rank_ceiling": 9,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Stacked on wide-tier-interpreter-exits and planned from the same queue for a batched promotion. The wide tier runs guarded Math unary calls as resolved calls whose call path answers the interpreter's own guard, admits compiler-built thunks (class field initializers) that have no parameters and no FunctionPrologueEnd, treats FreshIterationScope as the no-op it is for a body without closures, and exits only at the backward edges of loops an accelerator claims (fusion-lowered loops run natively). Plan written after exploratory screens; the target is the queue opportunity the CF trace ties to these declines.",
+    "generality": "Every class with public field initializers calls one thunk per field per construction; corpus CF traces counted 179k general-path frames for them and 270k for guarded Math calls. The Math path reuses math_unary, the interpreter's guard.",
+    "semantic_risks": [
+      "A guarded Math call on a non-number or a replaced Math function must take the ordinary call",
+      "A field initializer's receiver and captured class binding must be the construction's",
+      "Per-iteration let bindings must still be fresh when a closure could capture them"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "jetstream3-js-subset--raytrace-public-class-fields/receipt.json",
+      "sha256": "41dabcc48bc890ecebb18374abe6ddcd7d8a6491571a404a224fa578e9246dbd",
+      "base_sha": "93f98a4acc1f59b4d6907218c4353408f639c922",
+      "opportunity_ids": [
+        "external/jetstream3-js-subset/raytrace-public-class-fields"
+      ],
+      "shared_cost": "Exact queue-candidate binary, one-second sample of the official bundle. QJS_CF_TRACE on the same source counts 179k general-path frames for two-instruction field-initializer thunks declined for lacking FunctionPrologueEnd, and 61k for bodies declined at FreshIterationScope.",
+      "inclusive_fraction": 0.15
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/jetstream3-js-subset/raytrace-public-class-fields"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/3d-raytrace",
+      "external/jetstream3-js-subset/cdjs",
+      "external/jetstream3-js-subset/hash-map",
+      "external/sunspider-1.0/access-binary-trees",
+      "external/sunspider-1.0/crypto-md5",
+      "external/kraken-1.1/ai-astar",
+      "external/sunspider-1.0/math-partial-sums",
+      "broad/math_abs"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

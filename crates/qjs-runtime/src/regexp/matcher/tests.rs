@@ -1,6 +1,27 @@
-use super::regexp_match_range as regexp_match_range_inner;
-use super::{PreparedRegexp, RegexpMatch, regexp_match_at};
+use super::{PreparedRegexp, RegexpMatch};
 use crate::string::{string_code_units, string_from_code_unit, string_from_utf8_scalars};
+
+/// Compiles `source` and matches it once, as `exec` does through the realm's
+/// program cache.
+#[allow(clippy::too_many_arguments)]
+fn prepared_match(
+    source: &str,
+    input: &crate::JsString,
+    start_index: usize,
+    ignore_case: bool,
+    unicode: bool,
+    dot_all: bool,
+    multiline: bool,
+    exact_start: bool,
+) -> Option<RegexpMatch> {
+    let program = PreparedRegexp::new(source, ignore_case, unicode, dot_all, multiline);
+    let prepared_input = program.prepare_input(input);
+    if exact_start {
+        program.match_at(input, &prepared_input, start_index)
+    } else {
+        program.match_range(input, &prepared_input, start_index)
+    }
+}
 
 /// Test wrapper keeping the historical six-argument signature (multiline off).
 fn regexp_match_range(
@@ -11,7 +32,7 @@ fn regexp_match_range(
     unicode: bool,
     dot_all: bool,
 ) -> Option<RegexpMatch> {
-    regexp_match_range_inner(
+    prepared_match(
         source,
         &crate::JsString::from(input),
         start_index,
@@ -19,6 +40,49 @@ fn regexp_match_range(
         unicode,
         dot_all,
         false,
+        false,
+    )
+}
+
+fn regexp_match_range_inner(
+    source: &str,
+    input: &crate::JsString,
+    start_index: usize,
+    ignore_case: bool,
+    unicode: bool,
+    dot_all: bool,
+    multiline: bool,
+) -> Option<RegexpMatch> {
+    prepared_match(
+        source,
+        input,
+        start_index,
+        ignore_case,
+        unicode,
+        dot_all,
+        multiline,
+        false,
+    )
+}
+
+fn regexp_match_at(
+    source: &str,
+    input: &crate::JsString,
+    start_index: usize,
+    ignore_case: bool,
+    unicode: bool,
+    dot_all: bool,
+    multiline: bool,
+) -> Option<RegexpMatch> {
+    prepared_match(
+        source,
+        input,
+        start_index,
+        ignore_case,
+        unicode,
+        dot_all,
+        multiline,
+        true,
     )
 }
 

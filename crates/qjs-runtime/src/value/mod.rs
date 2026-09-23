@@ -93,7 +93,7 @@ impl PartialEq for Value {
         match (self, other) {
             (Self::Number(left), Self::Number(right)) => left == right,
             (Self::BigInt(left), Self::BigInt(right)) => left == right,
-            (Self::String(left), Self::String(right)) => string::string_utf16_eq(left, right),
+            (Self::String(left), Self::String(right)) => string::js_string_eq(left, right),
             (Self::Boolean(left), Self::Boolean(right)) => left == right,
             (Self::Null, Self::Null) | (Self::Undefined, Self::Undefined) => true,
             (Self::Function(left), Self::Function(right)) => left == right,
@@ -138,7 +138,7 @@ impl Value {
                 (left.is_nan() && right.is_nan()) || left.to_bits() == right.to_bits()
             }
             (Self::BigInt(left), Self::BigInt(right)) => left == right,
-            (Self::String(left), Self::String(right)) => string::string_utf16_eq(left, right),
+            (Self::String(left), Self::String(right)) => string::js_string_eq(left, right),
             (Self::Boolean(left), Self::Boolean(right)) => left == right,
             (Self::Null, Self::Null) | (Self::Undefined, Self::Undefined) => true,
             (Self::Function(left), Self::Function(right)) => left == right,

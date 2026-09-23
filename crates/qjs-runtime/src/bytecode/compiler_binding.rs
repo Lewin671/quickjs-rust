@@ -267,8 +267,6 @@ impl Compiler {
                     continue;
                 }
                 self.compile_declaration_init(&declaration.binding, init)?;
-            } else {
-                self.emit_load_undefined();
             }
             // A `using`/`await using` registers its initializer value with the
             // enclosing disposal scope before the binding store consumes it

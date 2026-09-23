@@ -1,6 +1,6 @@
 use qjs_ast::{AssignmentOp, AssignmentTarget, BinaryOp, Stmt};
 
-use crate::{RuntimeError, Value, symbol};
+use crate::{JsString, RuntimeError, Value, symbol};
 
 pub(super) fn assignment_binary_op(op: AssignmentOp) -> Result<BinaryOp, RuntimeError> {
     match op {
@@ -62,28 +62,39 @@ fn parse_radix_number(digits: &str, radix: u32) -> f64 {
     })
 }
 
-pub(super) fn typeof_value(value: Value) -> String {
-    if crate::html_dda::is_html_dda(&value) {
-        return "undefined".to_owned();
-    }
-    match value {
-        Value::Undefined => "undefined",
-        Value::Boolean(_) => "boolean",
-        Value::Number(_) => "number",
-        Value::BigInt(_) => "bigint",
-        Value::String(_) => "string",
-        Value::Function(_) => "function",
-        // A Proxy reports `function` exactly when its target is callable.
-        Value::Proxy(ref proxy) if crate::proxy::proxy_is_callable(proxy) => "function",
-        Value::Object(object) if symbol::is_symbol_primitive(&object) => "symbol",
-        Value::Null
-        | Value::Array(_)
-        | Value::Map(_)
-        | Value::Set(_)
-        | Value::Object(_)
-        | Value::Proxy(_) => "object",
-    }
-    .to_owned()
+thread_local! {
+    /// The eight `typeof` results, built on first use and never mutated.
+    /// Every `typeof` used to allocate its result; sharing is unobservable
+    /// because strings are immutable (see `ASCII_CODE_UNIT_STRINGS`).
+    static TYPEOF_NAMES: [JsString; 8] = [
+        "undefined", "boolean", "number", "bigint", "string", "function", "symbol", "object",
+    ]
+    .map(JsString::from);
+}
+
+pub(super) fn typeof_value(value: Value) -> JsString {
+    let index = if crate::html_dda::is_html_dda(&value) {
+        0
+    } else {
+        match value {
+            Value::Undefined => 0,
+            Value::Boolean(_) => 1,
+            Value::Number(_) => 2,
+            Value::BigInt(_) => 3,
+            Value::String(_) => 4,
+            Value::Function(_) => 5,
+            // A Proxy reports `function` exactly when its target is callable.
+            Value::Proxy(ref proxy) if crate::proxy::proxy_is_callable(proxy) => 5,
+            Value::Object(object) if symbol::is_symbol_primitive(&object) => 6,
+            Value::Null
+            | Value::Array(_)
+            | Value::Map(_)
+            | Value::Set(_)
+            | Value::Object(_)
+            | Value::Proxy(_) => 7,
+        }
+    };
+    TYPEOF_NAMES.with(|names| names[index].clone())
 }
 
 pub(super) fn is_object_value(value: &Value) -> bool {

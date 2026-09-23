@@ -1412,6 +1412,29 @@ impl ObjectRef {
         }
     }
 
+    /// `define_property` for a key the caller already shares, such as a
+    /// realm-cached String object key; it never copies the key. A separate
+    /// entry rather than a change to `define_property`, whose callers are the
+    /// ordinary object core.
+    pub(crate) fn define_shared_property(&self, key: Rc<str>, property: Property) {
+        debug_assert_ne!(
+            &*key, "globalThis",
+            "the realm identity capture needs define_property"
+        );
+        let mut properties = self.0.properties.borrow_mut();
+        if let Some(existing) = properties.get_mut(&key) {
+            *existing = property;
+        } else {
+            if is_array_index_key(&key) {
+                self.0
+                    .index_property_count
+                    .set(self.0.index_property_count.get() + 1);
+            }
+            properties.insert(key, property);
+        }
+        self.bump_property_revision();
+    }
+
     pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
         let mut properties = self.0.cold().symbol_properties.borrow_mut();
         if let Some((_, existing)) = properties

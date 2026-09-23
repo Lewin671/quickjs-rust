@@ -192,7 +192,7 @@ def _internal_case_ids(lane: str) -> list[str]:
 
 
 def resolve_cases(specs: Sequence[str], cache_root: Path, work_dir: Path) -> list[CaseSpec]:
-    """Expand `sentinel`, `broad`, `sentinel/<id>`, `broad/<id>`,
+    """Expand `sentinel`, `broad`, `external`, `sentinel/<id>`, `broad/<id>`,
     `external/<suite>/<case>` and `file:<path>` into runnable cases."""
     cases: list[CaseSpec] = []
     external_manifest = None
@@ -207,6 +207,13 @@ def resolve_cases(specs: Sequence[str], cache_root: Path, work_dir: Path) -> lis
             if case_id not in _internal_case_ids(lane):
                 raise ScreenError(f"unknown {lane} case {case_id}")
             cases.append(CaseSpec(spec, "internal", INTERNAL_WORKLOADS[lane], case_id))
+        elif spec == "external":
+            if external_manifest is None:
+                external_manifest = load_manifest(EXTERNAL_MANIFEST)
+                fetch_corpora(external_manifest, cache_root)
+            for suite in external_manifest.suites:
+                for case in suite.cases:
+                    cases.extend(resolve_cases([f"external/{suite.id}/{case.id}"], cache_root, work_dir))
         elif spec.startswith("external/"):
             parts = spec.split("/")
             if len(parts) != 3:
@@ -449,7 +456,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--aa", action="store_true", help="use the candidate as both roles to measure the noise floor")
     parser.add_argument(
         "--case", action="append", default=[],
-        help="sentinel | broad | sentinel/<id> | broad/<id> | external/<suite>/<case> | file:<path>; "
+        help="sentinel | broad | external | sentinel/<id> | broad/<id> | external/<suite>/<case> | file:<path>; "
              "repeatable (default: sentinel)",
     )
     parser.add_argument("--pairs", type=int, default=5)

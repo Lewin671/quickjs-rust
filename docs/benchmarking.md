@@ -465,6 +465,49 @@ QJS_TL_TRACE=1 ./target/perf-counters/release/qjs case.js 2>&1 >/dev/null \
          END { for (r in n) print n[r], r, why[r] }' | sort -rn | head
 ```
 
+### Pinned code layout and reading profiles
+
+The `qjs` binary links its hottest functions first, in the order listed by
+`crates/qjs-cli/hot-functions.order` (`crates/qjs-cli/build.rs` passes it to
+the macOS linker; other hosts ignore it). Without it, an edit anywhere could
+re-partition code generation and move the dispatch loops, shifting some
+cases' cycles by several percent with identical instruction counts. The
+workspace mangles symbols with Rust's v0 scheme (`.cargo/config.toml`),
+whose names carry no signature hash, so the list keeps naming a function
+whose parameters change. Regenerate it from a release build after a change
+that adds hot functions:
+
+```sh
+cargo build --release -p qjs-cli
+python3 -m tools.benchmark.order_file --binary target/release/qjs
+cargo build --release -p qjs-cli   # relink with the new list
+```
+
+The generator samples every external, sentinel and broad case, weights each
+case equally, and lists every sampled function, hottest first. macOS `sample`
+prints v0 names mangled; pipe a profile through
+`/opt/homebrew/opt/llvm/bin/llvm-cxxfilt` to read it.
+
+Calls have the same kind of trace. With `QJS_CF_TRACE=1` the build prints
+one line per function body the wide compact tier compiles (`CFOK`) or
+declines (`CFDECLINE`, naming the instruction and the reason), and one line
+per general-path frame it had to build (`CFVM`), one line per exit to
+the interpreter (`CFEXIT`, with the instruction it resumes at, `probed` for
+a loop backedge), and one line per loop the interpreter handed back to the
+tier (`CFNATIVE`), each identified by the body's parameter names and length.
+`QJS_CF_TRACE=3` also prints each `CFVM` body's bytecode (`CFVMCODE`), which
+names a callee that the parameter list alone does not, such as a getter.
+A histogram of `CFVM` ranks the callees
+that still pay for a full interpreter frame; the matching `CFDECLINE` line
+says what keeps each one out:
+
+```sh
+QJS_CF_TRACE=1 ./target/perf-counters/release/qjs case.js 2>&1 >/dev/null \
+  | grep '^CFVM' | sort | uniq -c | sort -rn | head
+QJS_CF_TRACE=1 ./target/perf-counters/release/qjs case.js 2>&1 >/dev/null \
+  | grep '^CFDECLINE'
+```
+
 This is what the two suites report for a nominal 100,000 iterations:
 
 | Case | Suite | Claims | Real calls | Real property ops | Declined plan edges |

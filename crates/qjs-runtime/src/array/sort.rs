@@ -225,7 +225,11 @@ fn compare_values(
             Ok(Ordering::Greater)
         }
     } else {
-        Ok(to_js_string_with_env(left.clone(), env)?
-            .cmp(&to_js_string_with_env(right.clone(), env)?))
+        // SortCompare orders the ToString results by UTF-16 code units, which
+        // differs from Rust's code-point order once astral characters meet
+        // U+E000..U+FFFF.
+        let left = to_js_string_with_env(left.clone(), env)?;
+        let right = to_js_string_with_env(right.clone(), env)?;
+        Ok(crate::string::string_utf16_cmp(&left, &right))
     }
 }

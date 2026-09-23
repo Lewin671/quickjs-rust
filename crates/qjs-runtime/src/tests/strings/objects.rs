@@ -117,3 +117,27 @@ fn boxed_character_sharing_preserves_copy_on_write_subclasses_and_proxy_invarian
         ))
     );
 }
+
+#[test]
+fn string_objects_install_index_properties_with_shared_and_fresh_keys() {
+    // Short wrappers take realm-shared keys; indices past the shared range
+    // get their own. Attributes, order and values must not differ.
+    assert_eq!(
+        eval(
+            "var long = '';
+             for (var i = 0; i < 70; i++) long += String.fromCharCode(97 + i % 26);
+             var wrapped = new String(long), boxed = Object('\\uD83D\\uDE00x');
+             var d = Object.getOwnPropertyDescriptor(wrapped, '65');
+             [Object.keys(new String(7)).join(), wrapped[3] + wrapped[65], wrapped.length,
+              d.value + d.writable + d.enumerable + d.configurable,
+              Object.getOwnPropertyNames(boxed).join(), boxed[0].length, boxed.length,
+              Object.getOwnPropertyDescriptor(new String('ab'), 'length').writable,
+              Object.keys(new String('')).length].join('|');"
+        ),
+        Ok(Value::String(
+            "0|dn|70|nfalsetruefalse|0,1,2,length|1|3|false|0"
+                .to_owned()
+                .into()
+        ))
+    );
+}

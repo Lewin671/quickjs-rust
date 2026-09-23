@@ -142,6 +142,10 @@ proposal requires the same process.
   comparisons: HashMap 0.920749x base; maximum regression 1.022257x (upper
   1.026347), inside the 1.03 cap. Exact Test262 parity is zero-gap. HashMap
   still takes 5.022x NG time; the all-benchmark NG target remains open.
+- `T033-wide-tier-interpreter-exits.md` — the wide compact tier runs a body up
+  to an instruction it leaves to the interpreter, then hands its state to an
+  interpreter frame that resumes there. Screen gate passed (hash-map, cdjs);
+  formal promotion pending.
 - `T022-performance-priority-controller.md` — evidence-bound selection and
   stop mechanism for T018. It derives the next profiling queue from current
   artifacts, freezes a unit's targets before timing, and records explicit

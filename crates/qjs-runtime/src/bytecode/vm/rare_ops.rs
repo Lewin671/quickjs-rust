@@ -85,7 +85,7 @@ impl Vm<'_> {
                     } else {
                         value
                     };
-                    Ok(Value::String(typeof_value(value).into()))
+                    Ok(Value::String(typeof_value(value)))
                 })();
                 if let Some(value) = self.handle_runtime_result(result)? {
                     self.stack.push(value);

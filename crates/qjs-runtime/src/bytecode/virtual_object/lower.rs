@@ -29,6 +29,9 @@ pub(in crate::bytecode) struct VirtualObjectProgram {
 struct VirtualObjectVariant {
     lowered_code: Option<Rc<[Op]>>,
     required_authoritative_slots: u128,
+    /// Whether the variant keeps a literal's values in virtual slots rather
+    /// than only fusing instructions in place.
+    virtualizes: bool,
 }
 
 impl VirtualObjectProgram {
@@ -37,6 +40,15 @@ impl VirtualObjectProgram {
     /// path, so another tier may take it without losing that path's work.
     pub(in crate::bytecode) fn lowers_anything(&self) -> bool {
         self.full.lowered_code.is_some() || self.data_only.lowered_code.is_some()
+    }
+
+    /// Whether a variant keeps some literal's values in virtual slots. A body
+    /// lowered only by in-place instruction fusion computes exactly what its
+    /// original code does, instruction offsets included, so executing the
+    /// original elsewhere, or resuming the lowered code at any offset, loses
+    /// nothing but the fusion.
+    pub(in crate::bytecode) fn virtualizes_values(&self) -> bool {
+        self.full.virtualizes || self.data_only.virtualizes
     }
 
     pub(in crate::bytecode) fn code<'a>(&'a self, original: &'a [Op]) -> &'a [Op] {
@@ -206,6 +218,7 @@ fn lower_variant(
     VirtualObjectVariant {
         lowered_code: Some(Rc::from(code.into_boxed_slice())),
         required_authoritative_slots,
+        virtualizes: has_replacements,
     }
 }
 
@@ -248,6 +261,7 @@ fn original_variant() -> VirtualObjectVariant {
     VirtualObjectVariant {
         lowered_code: None,
         required_authoritative_slots: 0,
+        virtualizes: false,
     }
 }
 

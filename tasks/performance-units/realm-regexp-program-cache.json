@@ -1,0 +1,62 @@
+{
+  "schema_version": 2,
+  "unit_kind": "leaf",
+  "artifact_type": "quickjs-performance-unit",
+  "unit_id": "realm-regexp-program-cache",
+  "base_sha": "93f98a4acc1f59b4d6907218c4353408f639c922",
+  "queue": {
+    "candidate_sha": "93f98a4acc1f59b4d6907218c4353408f639c922",
+    "sha256": "64135e0bd75d49e3defdfe6324990117e1fc9f992cbce9880c05a9f285fadc3e"
+  },
+  "priority": {
+    "mode": "queue",
+    "opportunity_ids": [
+      "external/sunspider-1.0/string-validate-input"
+    ],
+    "rank_ceiling": 3,
+    "override_reason": null
+  },
+  "mechanism": {
+    "summary": "Stacked on wide-tier-interpreter-exits and planned from the same queue for a batched promotion. Every exec/test rebuilt its PreparedRegexp from the source text, and every evaluation of a regular-expression literal re-validated its pattern. A realm-owned, bounded cache now shares one compiled program per source and matching-flag set, and remembers validated source/flags pairs; String.prototype.replace's global path uses the same programs. Plan written after one exploratory screen; the target is the queue opportunity whose profile named these costs.",
+    "generality": "Every RegExp object, literal or constructed, with a source seen before in the realm reuses its program; the cache is keyed only by source and flags and holds no objects.",
+    "semantic_risks": [
+      "lastIndex and every other per-object state must stay on the object",
+      "Different flag sets over one source must compile separately",
+      "An invalid pattern must fail on every construction",
+      "Clearing a full table must not change any match result"
+    ]
+  },
+  "profile_evidence": [
+    {
+      "source": "sunspider-1.0--string-validate-input/receipt.json",
+      "sha256": "4d8906b41dd661209abab4ed87ca2631f19c55afa27706d3b47aa69477484946",
+      "base_sha": "93f98a4acc1f59b4d6907218c4353408f639c922",
+      "opportunity_ids": [
+        "external/sunspider-1.0/string-validate-input"
+      ],
+      "shared_cost": "Exact queue-candidate binary sampling the official bundle repeated 30 times in one script (one-second window; a single run is shorter than sampler attach). The literal evaluation reaches the RegExp constructor on every loop iteration: construct_function 61 of 982 samples, validate_regexp_init about 29, and every test rebuilds a PreparedRegexp before matching.",
+      "inclusive_fraction": 0.09
+    }
+  ],
+  "fast_gate": {
+    "target_ids": [
+      "external/sunspider-1.0/string-validate-input"
+    ],
+    "control_ids": [
+      "external/sunspider-1.0/string-tagcloud",
+      "external/sunspider-1.0/regexp-dna",
+      "external/sunspider-1.0/date-format-xparb",
+      "external/sunspider-1.0/string-unpack-code",
+      "external/jetstream3-js-subset/hash-map",
+      "external/jetstream3-js-subset/cdjs"
+    ],
+    "target_max_candidate_over_base": 0.95,
+    "control_max_candidate_over_base": 1.03,
+    "max_attempts": 2
+  },
+  "promotion_gate": {
+    "require_complete_broad": true,
+    "require_complete_external": true,
+    "require_test262_zero_gap": true
+  }
+}

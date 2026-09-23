@@ -9,7 +9,7 @@
 
 use std::rc::Rc;
 
-use super::{NamedReadSite, NamedWriteSite, WideOp, WideProgram};
+use super::{NamedReadSite, NamedWriteSite, ProbedBackedge, WideOp, WideProgram};
 use crate::bytecode::compact_fn::MAX_REGISTERS;
 use crate::bytecode::compact_fn::compile::MAX_CALL_ARITY;
 use crate::bytecode::ir::{Bytecode, Op};
@@ -27,20 +27,46 @@ fn is_this_read(name: &str) -> bool {
     name == "this"
 }
 
+/// Why a body was declined: the instruction (if one is to blame) and a
+/// reason. Only diagnostic builds read it (`QJS_CF_TRACE`, see
+/// docs/benchmarking.md "Execution counters").
+#[derive(Debug, Default)]
+#[cfg_attr(not(feature = "perf-counters"), allow(dead_code))]
+pub(super) struct Decline {
+    pub(super) ip: Option<usize>,
+    pub(super) reason: &'static str,
+}
+
+fn decline<T>(trace: &mut Decline, ip: Option<usize>, reason: &'static str) -> Option<T> {
+    *trace = Decline { ip, reason };
+    None
+}
+
 pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
+    compile_traced(bytecode, &mut Decline::default())
+}
+
+/// `compile`, recording in `trace` why a declined body was declined. A
+/// representation limit hit while lowering an admitted body (an index that
+/// does not fit its field) leaves the reason "lowering limit".
+pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option<WideProgram> {
+    *trace = Decline {
+        ip: None,
+        reason: "lowering limit",
+    };
     // Bodies that suspend, catch, or resolve names dynamically keep the
     // ordinary interpreter: this tier has no completion protocol beyond
     // return-or-propagate.
     if bytecode.contains_direct_eval() || bytecode.contains_with() || bytecode.global_scope {
-        return None;
+        return decline(trace, None, "direct eval, with, or global code");
     }
     let code = &bytecode.code;
     if code.is_empty() {
-        return None;
+        return decline(trace, None, "empty body");
     }
     let local_count = bytecode.locals.len();
     if local_count >= MAX_REGISTERS {
-        return None;
+        return decline(trace, None, "too many locals");
     }
     let upvalue_slots = bytecode
         .direct_readonly_received_upvalue_slots()
@@ -51,13 +77,13 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
     let mut initialized_slots = upvalue_slots;
     for &slot in bytecode.parameter_slots() {
         if slot >= u128::BITS as usize {
-            return None;
+            return decline(trace, None, "parameter slot beyond 128");
         }
         initialized_slots |= 1_u128 << slot;
     }
     for &slot in bytecode.hoisted_slots() {
         if slot >= u128::BITS {
-            return None;
+            return decline(trace, None, "hoisted slot beyond 128");
         }
         initialized_slots |= 1_u128 << slot;
     }
@@ -65,7 +91,7 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
     // Validate every instruction, including unreachable ones: the opcode set
     // is closed, not the reachability analysis.
     if !matches!(code[0], Op::FunctionPrologueEnd) {
-        return None;
+        return decline(trace, None, "no FunctionPrologueEnd at ip 0");
     }
     let slot_is_initialized_local = |slot: usize| -> bool {
         slot < local_count
@@ -93,9 +119,23 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
         })
     };
     for (ip, op) in code.iter().enumerate() {
-        effect_of(op)?;
+        if effect_of(op).is_none() {
+            return decline(trace, Some(ip), "operation not in this tier");
+        }
         match op {
-            Op::FunctionPrologueEnd if ip != 0 => return None,
+            Op::FunctionPrologueEnd if ip != 0 => {
+                return decline(trace, Some(ip), "FunctionPrologueEnd after ip 0");
+            }
+            // A per-iteration scope renews the cell of each loop binding a
+            // closure captured. An admitted body creates no closures, so its
+            // own lexical bindings have no cells and the scope is a no-op.
+            Op::FreshIterationScope(slots) if !slots.iter().all(|&slot| slot_is_lexical(slot)) => {
+                return decline(
+                    trace,
+                    Some(ip),
+                    "per-iteration scope over a non-own binding",
+                );
+            }
             // Backward edges are loops. The operand-stack depth at the target
             // is checked by `propagate_depths`, and a loop grows no frames --
             // a backward jump only moves the program counter -- so a loop
@@ -104,9 +144,11 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
             Op::Jump(target) | Op::JumpIfFalse(target) | Op::JumpIfTrue(target)
                 if *target > code.len() =>
             {
-                return None;
+                return decline(trace, Some(ip), "jump target out of range");
             }
-            Op::LoadConst(index) if *index >= bytecode.constants.len() => return None,
+            Op::LoadConst(index) if *index >= bytecode.constants.len() => {
+                return decline(trace, Some(ip), "constant index out of range");
+            }
             // A fused receiver local must be readable exactly like a
             // `LoadLocal`: filled on entry, or an own lexical behind its
             // marker.
@@ -115,33 +157,39 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
                     && !slot_is_initialized_local(slot)
                     && !slot_is_lexical(slot)
                 {
-                    return None;
+                    return decline(trace, Some(ip), "fused receiver local not initialized");
                 }
             }
             Op::GetPropIndex(encoded) => {
                 let (index, local_slot) = crate::bytecode::ir::decode_index_receiver(*encoded);
                 if u16::try_from(index).is_err() {
-                    return None;
+                    return decline(trace, Some(ip), "index out of range");
                 }
                 if let Some(slot) = local_slot
                     && !slot_is_initialized_local(slot)
                     && !slot_is_lexical(slot)
                 {
-                    return None;
+                    return decline(trace, Some(ip), "indexed receiver local not initialized");
                 }
             }
             Op::LoadLocal(slot) if !slot_is_initialized_local(*slot) && !slot_is_lexical(*slot) => {
-                return None;
+                return decline(
+                    trace,
+                    Some(ip),
+                    "local read may be uninitialized (TDZ or received cell)",
+                );
             }
-            Op::ClearLocal(slot) if !slot_is_lexical(*slot) => return None,
+            Op::ClearLocal(slot) if !slot_is_lexical(*slot) => {
+                return decline(trace, Some(ip), "clear of a non-lexical slot");
+            }
             // A declaration store initializes an own lexical (`const`
             // included) or writes one of the frame's own hoisted bindings.
             Op::StoreLocal(slot) => {
                 if *slot >= local_count || *slot >= u128::BITS as usize {
-                    return None;
+                    return decline(trace, Some(ip), "store slot out of range");
                 }
                 if upvalue_slots & (1_u128 << *slot) != 0 {
-                    return None;
+                    return decline(trace, Some(ip), "store to a received upvalue");
                 }
                 if !slot_is_lexical(*slot)
                     && !bytecode
@@ -149,7 +197,7 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
                         .get(*slot)
                         .is_some_and(|local| local.mutable && slot_is_own_binding(*slot))
                 {
-                    return None;
+                    return decline(trace, Some(ip), "store to a non-own or immutable binding");
                 }
             }
             // An assignment expression writes a mutable own binding: a hoisted
@@ -159,15 +207,15 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
             // binding and keeps the interpreter.
             Op::AssignLocal(slot) => {
                 if *slot >= local_count || *slot >= u128::BITS as usize {
-                    return None;
+                    return decline(trace, Some(ip), "assign slot out of range");
                 }
                 if upvalue_slots & (1_u128 << *slot) != 0 {
-                    return None;
+                    return decline(trace, Some(ip), "assign to a received upvalue");
                 }
                 if !bytecode.locals.get(*slot).is_some_and(|local| {
                     local.mutable && (slot_is_own_binding(*slot) || slot_is_lexical(*slot))
                 }) {
-                    return None;
+                    return decline(trace, Some(ip), "assign to a non-own or immutable binding");
                 }
             }
             Op::NewArray { elements }
@@ -175,43 +223,79 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
                     matches!(element, crate::bytecode::ir::ArrayElementKind::Expr)
                 }) || u16::try_from(elements.len()).is_err() =>
             {
-                return None;
+                return decline(trace, Some(ip), "array literal with holes or spreads");
             }
-            Op::New(argc) if *argc > MAX_CALL_ARITY => return None,
+            Op::New(argc) if *argc > MAX_CALL_ARITY => {
+                return decline(trace, Some(ip), "construct arity above the limit");
+            }
             // The register window passes any arity; see the numeric tier's
             // `MAX_CALL_ARITY` for why it is bounded at all.
-            Op::Call(argc) | Op::CallResolved(argc) if *argc > MAX_CALL_ARITY => return None,
+            Op::Call(argc) | Op::CallResolved(argc) if *argc > MAX_CALL_ARITY => {
+                return decline(trace, Some(ip), "call arity above the limit");
+            }
             _ => {}
         }
     }
 
     // A loop this tier would run natively is a loop the frame-based loop
     // accelerators can no longer see: they attach to backward edges of the
-    // ordinary interpreter, and an admitted body never returns to it. A body
-    // whose loops any of those accelerators claims therefore keeps the
-    // ordinary interpreter, where the loop runs faster than this tier's
-    // per-operation dispatch; only loops none of them handles are admitted.
+    // ordinary interpreter. A body whose loops any of those accelerators
+    // claims must therefore not run them here, where they run slower than
+    // under the accelerators; only loops none of them handles run natively.
     let has_backward_edge = code.iter().enumerate().any(|(ip, op)| {
         matches!(
             op,
             Op::Jump(target) | Op::JumpIfFalse(target) | Op::JumpIfTrue(target) if *target <= ip
         )
     });
-    if has_backward_edge && body_has_loop_accelerator(bytecode) {
-        return None;
-    }
-    // Likewise a body the interpreter's virtual-object lowering rewrites --
-    // an object or array literal it can keep in slots instead of allocating
-    // -- keeps the interpreter, where that lowering runs.
-    if bytecode
+    // Such a body still runs here up to the loop: each backward edge exits
+    // to the interpreter, whose edge dispatch gives the accelerators the loop
+    // exactly as a frame that ran from entry would.
+    let lowering = bytecode
         .virtual_object_program
-        .get_or_init(|| crate::bytecode::virtual_object::lower(bytecode))
-        .lowers_anything()
-    {
-        return None;
+        .get_or_init(|| crate::bytecode::virtual_object::lower(bytecode));
+    // A body whose virtual-object lowering keeps a literal in slots instead
+    // of allocating it keeps the interpreter, where that lowering runs; an
+    // exit could not hand such a literal over. A body lowered only by
+    // in-place fusion runs here, but its loops stay with the interpreter's
+    // fused instructions, as they did before it was admitted.
+    if lowering.virtualizes_values() {
+        return decline(
+            trace,
+            None,
+            "virtual-object lowering keeps a literal in slots",
+        );
     }
+    let exit_backedges =
+        has_backward_edge && (lowering.lowers_anything() || body_has_loop_accelerator(bytecode));
+    // A fused body's loops belong to the interpreter's fused instructions
+    // whether or not an accelerator claims them. Otherwise an unconditional
+    // backedge exits only for the accelerators, and is probed: when none
+    // claims the loop, the loop stays here instead of running generically.
+    let probe_backedges = exit_backedges;
+    let mut probed_backedges: Vec<ProbedBackedge> = Vec::new();
 
-    let entry_depth = propagate_depths(code)?;
+    let Some(entry_depth) = propagate_depths(code) else {
+        return decline(trace, None, "inconsistent operand-stack depth");
+    };
+    let has_exit = exit_backedges || code.iter().any(is_exit_safe);
+    // Nothing in an admitted body -- a function body -- observes a statement
+    // completion value, but the interpreter's loop accelerators type-guard
+    // the completion temporaries of the loops an exit hands them; keep those
+    // written where an exit can reach them.
+    let completion_is_dead = |slot: usize| {
+        !has_exit
+            && bytecode
+                .locals
+                .get(slot)
+                .is_some_and(|local| local.is_completion_temporary())
+    };
+    let folds = fold_local_binaries(code, &entry_depth, &completion_is_dead, |slot| {
+        slot < local_count
+            && slot < u128::BITS as usize
+            && upvalue_slots & (1_u128 << slot) == 0
+            && !slot_is_lexical(slot)
+    });
     let stack_registers = entry_depth
         .iter()
         .flatten()
@@ -237,9 +321,37 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
         .max()
         .unwrap_or(0)
         .min(local_count);
+    // An exit hands every own local to the interpreter frame, so every
+    // parameter must have a register even when only code past the exit reads
+    // it: the frame the interpreter builds seeds no argument values.
+    let local_registers = if has_exit {
+        let parameters = bytecode
+            .parameter_slots()
+            .iter()
+            .map(|slot| slot + 1)
+            .max()
+            .unwrap_or(0);
+        local_registers.max(parameters).min(local_count)
+    } else {
+        local_registers
+    };
+    if has_exit && local_registers > u128::BITS as usize {
+        return decline(trace, None, "exit with more than 128 locals");
+    }
+    // The locals an exit hands over: the frame's own bindings. Received
+    // cells and global-fallback slots are read through their cells or the
+    // realm on both sides and are never copied.
+    let own_locals = (0..local_registers)
+        .filter(|&slot| {
+            bytecode
+                .locals
+                .get(slot)
+                .is_some_and(|local| !local.is_received_upvalue() && !local.sloppy_global_fallback)
+        })
+        .fold(0_u128, |mask, slot| mask | (1_u128 << slot));
     let register_count = local_registers.checked_add(stack_registers)?;
     if register_count > MAX_REGISTERS {
-        return None;
+        return decline(trace, None, "too many registers");
     }
 
     let mut ops = Vec::with_capacity(code.len());
@@ -265,8 +377,14 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
         let Some(depth) = entry_depth[ip] else {
             continue;
         };
+        if folds[ip] == LocalFold::Elided {
+            if let Op::LoadLocal(slot) | Op::StoreLocal(slot) | Op::AssignLocal(slot) = op {
+                required_authoritative_slots |= 1_u128 << *slot;
+            }
+            continue;
+        }
         match op {
-            Op::FunctionPrologueEnd => {}
+            Op::FunctionPrologueEnd | Op::FreshIterationScope(_) => {}
             Op::Pop => ops.push(WideOp::Drop {
                 src: register(depth.checked_sub(1)?),
             }),
@@ -474,11 +592,32 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
                     src: register(depth.checked_sub(1)?),
                 });
             }
+            // A store into a dead completion temporary only releases the
+            // value.
+            Op::StoreLocal(slot) | Op::AssignLocal(slot) if completion_is_dead(*slot) => {
+                ops.push(WideOp::Drop {
+                    src: register(depth.checked_sub(1)?),
+                });
+            }
             Op::StoreLocal(slot) | Op::AssignLocal(slot) => {
                 required_authoritative_slots |= 1_u128 << *slot;
                 ops.push(WideOp::Move {
                     dst: u16::try_from(*slot).ok()?,
                     src: register(depth.checked_sub(1)?),
+                });
+            }
+            Op::Update(update_op) if let LocalFold::Update(slot) = folds[ip] => {
+                ops.push(WideOp::Update {
+                    dst: slot,
+                    op: *update_op,
+                });
+            }
+            Op::Binary(binary_op) if let LocalFold::Binary(slot) = folds[ip] => {
+                ops.push(WideOp::Binary {
+                    dst: slot,
+                    op: *binary_op,
+                    left: slot,
+                    right: register(depth.checked_sub(1)?),
                 });
             }
             Op::Binary(binary_op) => {
@@ -491,6 +630,30 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
                     right,
                 });
             }
+            Op::Jump(target) if probe_backedges && *target <= ip => {
+                let ip = u32::try_from(ip).ok()?;
+                ops.push(WideOp::Exit { ip, depth });
+                probed_backedges.push(ProbedBackedge {
+                    ip,
+                    jump_pc: u32::try_from(ops.len()).ok()?,
+                    depth,
+                });
+                ops.push(WideOp::Jump {
+                    target: u32::try_from(*target).ok()?,
+                });
+            }
+            Op::Jump(target) | Op::JumpIfFalse(target) | Op::JumpIfTrue(target)
+                if exit_backedges && *target <= ip =>
+            {
+                ops.push(WideOp::Exit {
+                    ip: u32::try_from(ip).ok()?,
+                    depth,
+                });
+            }
+            op if is_exit_safe(op) => ops.push(WideOp::Exit {
+                ip: u32::try_from(ip).ok()?,
+                depth,
+            }),
             Op::JumpIfFalse(target) => ops.push(WideOp::JumpIfFalsy {
                 cond: register(depth.checked_sub(1)?),
                 target: u32::try_from(*target).ok()?,
@@ -537,6 +700,14 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
                     argc: u8::try_from(*argc).ok()?,
                 });
             }
+            // The guarded form is a plain one-argument method call with a
+            // frameless answer for the intrinsic Math functions, which the
+            // driver's native fast paths give it here.
+            Op::CallResolvedGuardedMathUnary => ops.push(WideOp::CallResolved {
+                dst: register(depth.checked_sub(3)?),
+                base: register(depth.checked_sub(2)?),
+                argc: 1,
+            }),
             Op::CallResolved(argc) => {
                 let argc_u16 = u16::try_from(*argc).ok()?;
                 // `[receiver, callee, args...]` collapses to the result, which
@@ -550,7 +721,10 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
             Op::Return => ops.push(WideOp::Return {
                 src: register(depth.checked_sub(1)?),
             }),
-            _ => return None,
+            Op::Throw => ops.push(WideOp::Throw {
+                src: register(depth.checked_sub(1)?),
+            }),
+            _ => return decline(trace, Some(ip), "operation not lowered"),
         }
     }
     compact_index[code.len()] = u32::try_from(ops.len()).ok()?;
@@ -566,6 +740,13 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
         }
     }
 
+    // Lowering skips what only an exit can reach, but the interpreter frame
+    // an exit builds runs that code too, and it must be seeded with the same
+    // receiver: a `this` read anywhere requires one.
+    requires_this |= code
+        .iter()
+        .any(|op| matches!(op, Op::LoadGlobal(name) if is_this_read(name)));
+
     Some(WideProgram {
         ops,
         named_reads,
@@ -576,7 +757,209 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<WideProgram> {
         global_names,
         lexical_slots,
         tdz_marker: crate::Value::Function(crate::Function::uninitialized_lexical_marker()),
+        local_registers: u16::try_from(local_registers).ok()?,
+        own_locals,
+        has_exits: has_exit,
+        activations: std::cell::Cell::new(0),
+        exits: std::cell::Cell::new(0),
+        exit_heavy: std::cell::Cell::new(false),
+        probed_backedges: probed_backedges.into_boxed_slice(),
+        native_backedges: std::cell::Cell::new(0),
     })
+}
+
+/// How an instruction takes part in `x = x op y` folded onto the local.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LocalFold {
+    None,
+    /// The load of the left operand or the store of the result: emits
+    /// nothing, since the binary operation reads and writes the local.
+    Elided,
+    /// A binary operation whose left operand and destination are this local.
+    Binary(u16),
+    /// An increment or decrement applied to this local in place.
+    Update(u16),
+}
+
+/// Finds the statement shapes whose value only moves between a local and
+/// the operand stack, and folds each onto the local:
+///
+/// - `x = x op y` and `x op= y`: `LoadLocal(x) <expr> Binary` followed by
+///   `StoreLocal(x)` (or `AssignLocal(x)`), or by `Dup Store(x) Pop` where
+///   the value is discarded, with `<expr>` straight-line code that neither
+///   writes `x` nor exits. The binary operation reads its left operand from
+///   the local when it executes, which is the value the load would have
+///   copied, and writes the result back: the local is the only reference to
+///   its value, so a string append reuses the buffer instead of copying the
+///   accumulator every time.
+/// - a discarded `x++` or `x--`: `LoadLocal(x) ToNumeric Dup Update
+///   Store(x) Pop` becomes one update of the local, which applies the same
+///   single numeric conversion.
+/// - `LoadLocal(c) Store(d)` between two dead completion temporaries: a
+///   statement value no function body can observe.
+///
+/// No jump may land inside a folded shape.
+fn fold_local_binaries(
+    code: &[Op],
+    entry_depth: &[Option<u16>],
+    completion: &impl Fn(usize) -> bool,
+    plain_local: impl Fn(usize) -> bool,
+) -> Vec<LocalFold> {
+    let mut folds = vec![LocalFold::None; code.len()];
+    let mut jump_target = vec![false; code.len() + 1];
+    for op in code {
+        if let Op::Jump(target) | Op::JumpIfFalse(target) | Op::JumpIfTrue(target) = op
+            && let Some(flag) = jump_target.get_mut(*target)
+        {
+            *flag = true;
+        }
+    }
+    let store_to = |ip: usize| match code.get(ip) {
+        Some(Op::StoreLocal(slot) | Op::AssignLocal(slot)) if !completion(*slot) => Some(*slot),
+        _ => None,
+    };
+    // A store into a completion temporary discards the value as `Pop` does.
+    let discards = |ip: usize| match code.get(ip) {
+        Some(Op::Pop) => true,
+        Some(Op::StoreLocal(slot) | Op::AssignLocal(slot)) => completion(*slot),
+        _ => false,
+    };
+    let free = |range: std::ops::RangeInclusive<usize>, folds: &[LocalFold]| {
+        range
+            .clone()
+            .all(|ip| !jump_target[ip] && folds.get(ip) == Some(&LocalFold::None))
+    };
+    for (ip, op) in code.iter().enumerate() {
+        match op {
+            // Postfix `LoadLocal ToNumeric Dup Update Store Pop` and prefix
+            // `LoadLocal ToNumeric Update Dup Store Pop`.
+            Op::Update(_) if ip >= 2 => {
+                let postfix = matches!(code[ip - 1], Op::Dup);
+                let (load, store) = if postfix {
+                    (ip.checked_sub(3), ip + 1)
+                } else {
+                    (Some(ip - 2), ip + 2)
+                };
+                let Some(load) = load else {
+                    continue;
+                };
+                let Some(slot) = store_to(store) else {
+                    continue;
+                };
+                let shape = if postfix {
+                    matches!(code[ip - 2], Op::ToNumeric)
+                } else {
+                    matches!(code[ip - 1], Op::ToNumeric) && matches!(code[ip + 1], Op::Dup)
+                };
+                if shape
+                    && matches!(code[load], Op::LoadLocal(loaded) if loaded == slot)
+                    && discards(store + 1)
+                    && plain_local(slot)
+                    && let Ok(slot_u16) = u16::try_from(slot)
+                    && free(load + 1..=store + 1, &folds)
+                    && folds[load] == LocalFold::None
+                {
+                    folds[load..=store + 1].fill(LocalFold::Elided);
+                    folds[ip] = LocalFold::Update(slot_u16);
+                }
+            }
+            Op::LoadLocal(from)
+                if completion(*from) && discards(ip + 1) && free(ip..=ip + 1, &folds) =>
+            {
+                folds[ip] = LocalFold::Elided;
+                folds[ip + 1] = LocalFold::Elided;
+            }
+            Op::Binary(_) => fold_binary(
+                code,
+                entry_depth,
+                &plain_local,
+                &store_to,
+                &discards,
+                &jump_target,
+                ip,
+                &mut folds,
+            ),
+            _ => {}
+        }
+    }
+    folds
+}
+
+/// The `x = x op y` fold of [`fold_local_binaries`] for the binary operation
+/// at `binary`.
+#[allow(clippy::too_many_arguments)]
+fn fold_binary(
+    code: &[Op],
+    entry_depth: &[Option<u16>],
+    plain_local: &impl Fn(usize) -> bool,
+    store_to: &impl Fn(usize) -> Option<usize>,
+    discards: &impl Fn(usize) -> bool,
+    jump_target: &[bool],
+    binary: usize,
+    folds: &mut [LocalFold],
+) {
+    let (slot, tail) = if let Some(slot) = store_to(binary + 1) {
+        (slot, binary + 1)
+    } else if matches!(code.get(binary + 1), Some(Op::Dup))
+        && let Some(slot) = store_to(binary + 2)
+        && discards(binary + 3)
+    {
+        (slot, binary + 3)
+    } else {
+        return;
+    };
+    let Ok(slot_u16) = u16::try_from(slot) else {
+        return;
+    };
+    let Some(depth) = entry_depth[binary].and_then(|depth| depth.checked_sub(2)) else {
+        return;
+    };
+    if !plain_local(slot)
+        || (binary..=tail).any(|ip| jump_target[ip] || folds[ip] != LocalFold::None)
+    {
+        return;
+    }
+    let mut load = None;
+    for ip in (0..binary).rev() {
+        let Some(entry) = entry_depth[ip] else {
+            break;
+        };
+        if entry == depth {
+            load = Some(ip);
+            break;
+        }
+        let writes_slot = matches!(
+            code[ip],
+            Op::StoreLocal(target) | Op::AssignLocal(target) | Op::ClearLocal(target)
+                if target == slot
+        );
+        // Everything after the load is the right operand: it must leave the
+        // loaded value alone, never popping down to it.
+        let consumes_left =
+            effect_of(&code[ip]).is_none_or(|effect| entry.saturating_sub(effect.pops) <= depth);
+        if consumes_left
+            || jump_target[ip]
+            || writes_slot
+            || is_exit_safe(&code[ip])
+            || matches!(
+                code[ip],
+                Op::Jump(_) | Op::JumpIfFalse(_) | Op::JumpIfTrue(_)
+            )
+        {
+            break;
+        }
+    }
+    let Some(load) = load else {
+        return;
+    };
+    if !matches!(code[load], Op::LoadLocal(loaded) if loaded == slot)
+        || folds[load] != LocalFold::None
+    {
+        return;
+    }
+    folds[load] = LocalFold::Elided;
+    folds[binary] = LocalFold::Binary(slot_u16);
+    folds[binary + 1..=tail].fill(LocalFold::Elided);
 }
 
 /// Computes the operand-stack depth on entry to each instruction, rejecting a
@@ -613,6 +996,24 @@ fn propagate_depths(code: &[Op]) -> Option<Vec<Option<u16>>> {
     Some(entry_depth)
 }
 
+/// Operations this tier does not run but may leave to the interpreter
+/// mid-body: at one of them the activation exits, handing its locals and
+/// operand stack to an interpreter frame that continues from that
+/// instruction (`vm::resume_direct_call_bytecode`). Each depends only on the
+/// frame's locals, stack and environment -- nothing that must have been set
+/// up at entry, such as an `arguments` object, a closure over this frame's
+/// locals, a handler, or a per-iteration scope.
+fn is_exit_safe(op: &Op) -> bool {
+    matches!(
+        op,
+        Op::SetProp { .. }
+            | Op::SetPropIndex { .. }
+            | Op::RequireObjectCoercible
+            | Op::NewObjectDataLiteral { .. }
+            | Op::AppendStringLiteralLocal { .. }
+    )
+}
+
 fn effect_of(op: &Op) -> Option<Effect> {
     let simple = |pops: u16, pushes: u16| Effect {
         pops,
@@ -621,7 +1022,7 @@ fn effect_of(op: &Op) -> Option<Effect> {
         falls_through: true,
     };
     let effect = match op {
-        Op::FunctionPrologueEnd | Op::ClearLocal(_) => simple(0, 0),
+        Op::FunctionPrologueEnd | Op::ClearLocal(_) | Op::FreshIterationScope(_) => simple(0, 0),
         Op::LoadConst(_) | Op::LoadLocal(_) | Op::Dup | Op::LoadGlobal(_) => simple(0, 1),
         Op::GetPropIndex(encoded) => {
             if crate::bytecode::ir::decode_index_receiver(*encoded)
@@ -656,8 +1057,17 @@ fn effect_of(op: &Op) -> Option<Effect> {
         },
         Op::Call(argc) => simple(u16::try_from(*argc).ok()?.checked_add(1)?, 1),
         Op::CallResolved(argc) => simple(u16::try_from(*argc).ok()?.checked_add(2)?, 1),
-        Op::Return => Effect {
+        Op::CallResolvedGuardedMathUnary => simple(3, 1),
+        Op::Return | Op::Throw => Effect {
             pops: 1,
+            pushes: 0,
+            target: None,
+            falls_through: false,
+        },
+        // An exit ends this tier's view of the path: whatever follows runs
+        // in the interpreter.
+        op if is_exit_safe(op) => Effect {
+            pops: 0,
             pushes: 0,
             target: None,
             falls_through: false,

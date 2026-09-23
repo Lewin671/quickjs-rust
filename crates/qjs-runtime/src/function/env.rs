@@ -61,6 +61,8 @@ pub(crate) struct RealmState {
     /// Lazily shared immutable index values for String boxes. This cache owns
     /// no objects or realm references and retains at most 256 strings.
     code_unit_strings: crate::string::CodeUnitStrings,
+    /// Property keys every boxed String installs, shared instead of allocated.
+    string_object_keys: crate::string::StringObjectKeys,
     /// Canonical empty copy-on-write name set for ordinary frames. Sharing it
     /// avoids allocating catch/eval metadata that most calls never mutate.
     global_this: Option<Value>,
@@ -69,6 +71,10 @@ pub(crate) struct RealmState {
     /// sources. Entries share only immutable bytecode; each invocation still
     /// receives an independent VM frame and runtime values.
     direct_eval_cache: RefCell<DirectEvalCache>,
+    /// Compiled regular-expression programs and validated patterns, shared
+    /// by every RegExp object with the same source and flags. Bounded; holds
+    /// no objects or realm references.
+    regexp_programs: RefCell<crate::regexp::ProgramCache>,
 }
 
 impl RealmState {
@@ -95,9 +101,11 @@ impl RealmState {
             array_prototype: OnceCell::new(),
             string_prototype: OnceCell::new(),
             code_unit_strings: crate::string::CodeUnitStrings::default(),
+            string_object_keys: crate::string::StringObjectKeys::default(),
             global_this,
             dynamic_function_realm_global: RefCell::new(dynamic_function_realm_global),
             direct_eval_cache: RefCell::new(DirectEvalCache::default()),
+            regexp_programs: RefCell::default(),
         };
         if let Some(prototype) = object_prototype {
             let _ = realm.object_prototype.set(prototype);
@@ -110,6 +118,14 @@ impl RealmState {
 
     pub(crate) fn string_code_unit(&self, code_unit: u16) -> JsString {
         self.code_unit_strings.get(code_unit)
+    }
+
+    pub(crate) fn string_object_keys(&self) -> &crate::string::StringObjectKeys {
+        &self.string_object_keys
+    }
+
+    pub(crate) fn regexp_programs(&self) -> &RefCell<crate::regexp::ProgramCache> {
+        &self.regexp_programs
     }
 
     pub(crate) fn initialize_object_prototype(&self, prototype: ObjectRef) {

@@ -75,6 +75,20 @@ enum WideOp {
     Return {
         src: u16,
     },
+    /// Leaves the rest of this activation to the interpreter, which resumes
+    /// at bytecode instruction `ip` with this activation's locals and its
+    /// `depth` operand-stack registers. At a probed backedge the jump itself
+    /// follows: once no accelerator claims that loop the exit declines and
+    /// execution falls through to it.
+    Exit {
+        ip: u32,
+        depth: u16,
+    },
+    /// Throws the register's value. Admitted bodies contain no handlers, so a
+    /// throw always leaves the frame, exactly as a thrown callee error does.
+    Throw {
+        src: u16,
+    },
     /// Duplicates a register, which the compiler emits to keep a method-call
     /// receiver live while the method is loaded.
     Dup {
@@ -221,6 +235,92 @@ pub(in crate::bytecode) struct WideProgram {
     /// The marker every cleared lexical register holds; one allocation per
     /// program rather than one per clear.
     tdz_marker: crate::Value,
+    /// Registers `0..local_registers` hold locals; the operand stack follows.
+    local_registers: u16,
+    /// The locals an exit hands to the interpreter frame (see `WideOp::Exit`).
+    own_locals: u128,
+    /// Whether any path can exit; only such programs keep exit statistics.
+    has_exits: bool,
+    /// Activations and exits of this program, counted until it is judged.
+    activations: std::cell::Cell<u32>,
+    exits: std::cell::Cell<u32>,
+    /// Set once a program has exited on most activations: an exit costs the
+    /// interpreter frame the general path would have built plus the work run
+    /// here first, so such a body is left to the general path from then on.
+    exit_heavy: std::cell::Cell<bool>,
+    /// The unconditional backward jumps that exit only so a loop accelerator
+    /// can claim the loop, by ascending instruction index. Each such exit is
+    /// followed by the jump itself (see `WideOp::Exit`).
+    probed_backedges: Box<[ProbedBackedge]>,
+    /// One bit per probed backedge, in `probed_backedges` order, set once no
+    /// accelerator claimed that loop: the loop then runs here.
+    native_backedges: std::cell::Cell<u64>,
+}
+
+/// A backward jump whose exit is probed (`WideProgram::probed_backedges`).
+#[derive(Clone, Copy, Debug)]
+struct ProbedBackedge {
+    /// The bytecode instruction index of the jump.
+    ip: u32,
+    /// The index of the wide jump that follows the exit.
+    jump_pc: u32,
+    /// The operand-stack depth at the jump.
+    depth: u16,
+}
+
+/// Activations observed before a program's exit rate is judged.
+const EXIT_JUDGEMENT_ACTIVATIONS: u32 = 64;
+
+impl WideProgram {
+    /// Counts one activation; `false` once the program has proved exit-heavy.
+    #[inline]
+    pub(super) fn admit_activation(&self) -> bool {
+        if !self.has_exits {
+            return true;
+        }
+        if self.exit_heavy.get() {
+            return false;
+        }
+        let activations = self.activations.get();
+        if activations < EXIT_JUDGEMENT_ACTIVATIONS {
+            self.activations.set(activations + 1);
+        }
+        true
+    }
+
+    /// The probe index of the backedge exit at `ip`, if it is one.
+    pub(super) fn probed_backedge(&self, ip: u32) -> Option<usize> {
+        self.probed_backedges
+            .binary_search_by_key(&ip, |site| site.ip)
+            .ok()
+            .filter(|&index| index < u64::BITS as usize)
+    }
+
+    /// Where the tier continues a loop an interpreter frame handed back at
+    /// the probed backedge `index`: at the jump that follows its exit.
+    pub(super) fn backedge_jump_pc(&self, index: usize) -> usize {
+        self.probed_backedges[index].jump_pc as usize
+    }
+
+    pub(super) fn backedge_is_native(&self, index: usize) -> bool {
+        self.native_backedges.get() & (1 << index) != 0
+    }
+
+    pub(super) fn keep_backedge_native(&self, index: usize) {
+        self.native_backedges
+            .set(self.native_backedges.get() | (1 << index));
+    }
+
+    /// Counts one exit and judges the program after enough activations: at
+    /// three exits in four it is exit-heavy.
+    pub(super) fn record_exit(&self) {
+        let exits = self.exits.get().saturating_add(1);
+        self.exits.set(exits);
+        let activations = self.activations.get();
+        if activations >= EXIT_JUDGEMENT_ACTIVATIONS && exits.saturating_mul(4) >= activations * 3 {
+            self.exit_heavy.set(true);
+        }
+    }
 }
 
 impl std::fmt::Debug for WideProgram {
@@ -239,6 +339,52 @@ impl std::fmt::Debug for WideProgram {
 pub(super) fn program_for(bytecode: &Bytecode) -> Option<&WideProgram> {
     bytecode
         .compact_wide_program
-        .get_or_init(|| compile::compile(bytecode))
+        .get_or_init(|| {
+            #[cfg(feature = "perf-counters")]
+            if std::env::var_os("QJS_CF_TRACE").is_some() {
+                let mut decline = compile::Decline::default();
+                let program = compile::compile_traced(bytecode, &mut decline);
+                trace_decline(bytecode, program.is_none().then_some(&decline));
+                return program;
+            }
+            compile::compile(bytecode)
+        })
         .as_ref()
+}
+
+/// Diagnostic builds with `QJS_CF_TRACE=1` name every body this tier
+/// compiles (`CFOK`) or declines (`CFDECLINE`, with the instruction and the
+/// reason). Bodies are identified by their parameter names and length; join
+/// the lines with `nested_vm_constructions` to find which callees still take
+/// the general call path.
+#[cfg(feature = "perf-counters")]
+fn trace_decline(bytecode: &Bytecode, decline: Option<&compile::Decline>) {
+    let params = bytecode.parameter_names().join(",");
+    let len = bytecode.code.len();
+    match decline {
+        None => eprintln!("CFOK wide params=({params}) len={len}"),
+        Some(decline) => {
+            let op = decline
+                .ip
+                .and_then(|ip| bytecode.code.get(ip).map(|op| format!("ip {ip} op {op:?}")))
+                .unwrap_or_else(|| "whole body".to_string());
+            eprintln!(
+                "CFDECLINE wide params=({params}) len={len} {op}: {}",
+                decline.reason
+            );
+        }
+    }
+}
+
+/// Whether an interpreter frame continuing a wide activation of `bytecode`
+/// may hand it back at the backward jump `ip` with `depth` operand-stack
+/// values: the jump must be a probed backedge of the same depth.
+pub(in crate::bytecode) fn hands_back_at(bytecode: &Bytecode, ip: usize, depth: usize) -> bool {
+    let Some(program) = bytecode.compact_wide_program.get().and_then(Option::as_ref) else {
+        return false;
+    };
+    u32::try_from(ip)
+        .ok()
+        .and_then(|ip| program.probed_backedge(ip))
+        .is_some_and(|index| usize::from(program.probed_backedges[index].depth) == depth)
 }

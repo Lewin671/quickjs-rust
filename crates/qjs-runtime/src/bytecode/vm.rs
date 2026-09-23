@@ -26,6 +26,9 @@ pub(super) type Slot = Option<Value>;
 
 mod general_ops;
 mod rare_ops;
+mod wide_resume;
+
+pub(in crate::bytecode) use wide_resume::{Resumed, WideRegisters, resume_direct_call_bytecode};
 
 use super::frame_program::{FrameBytecode, FrameProgramView};
 use super::frame_stack::FrameExit;
@@ -237,6 +240,10 @@ pub(super) struct ColdFrame {
     /// Active `using` disposal scopes (innermost last); each block's resources,
     /// disposed LIFO when the scope exits via the block's implicit finally.
     pub(super) disposable_scopes: Vec<Vec<super::vm_dispose::DisposeResource>>,
+    /// Set for a frame continuing a wide activation from a probed backedge:
+    /// `Some(None)` while it may hand a loop back to the tier, and
+    /// `Some(Some(backedge))` once it has (`vm/wide_resume.rs`).
+    pub(super) wide_handback: Option<Option<usize>>,
 }
 
 /// A per-body pool of cleared [`ColdFrame`] boxes, shared like the operand
@@ -284,6 +291,7 @@ impl ColdFrame {
         self.array_literal_prototype_override = None;
         self.with_stack.clear();
         self.disposable_scopes.clear();
+        self.wide_handback = None;
     }
 }
 
@@ -780,7 +788,9 @@ impl<'a> Vm<'a> {
                         continue;
                     }
                     self.current.ip = pc;
-                    self.op_jump(&program, *target);
+                    if let Some(exit) = self.op_jump(&program, *target) {
+                        return Ok(exit);
+                    }
                     pc = self.current.ip;
                     continue;
                 }

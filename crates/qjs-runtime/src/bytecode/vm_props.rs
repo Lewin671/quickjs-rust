@@ -599,30 +599,14 @@ impl Vm<'_> {
         receiver: &Value,
         key: &str,
     ) -> Option<Result<Value, RuntimeError>> {
-        let Value::Object(object) = receiver else {
-            return None;
-        };
-        if symbol::is_symbol_primitive(object)
-            || crate::typed_array::is_typed_array_object(object)
-            || object.is_module_namespace_exotic()
-        {
-            return None;
-        }
-        let property = ordinary_chain_property(object, key).ok().flatten()?;
-        let (getter, _) = property.into_accessor_parts()?;
-        let getter = getter?;
-        if !crate::function::is_direct_leaf_function(&getter) {
-            return None;
-        }
-        Some(crate::function::call_direct_leaf_function(
-            getter,
-            receiver.clone(),
-            &[],
+        direct_leaf_getter(
+            receiver,
+            key,
             &self.env,
             self.module_host.clone(),
             #[cfg(feature = "agents")]
             self.agent_context.clone(),
-        ))
+        )
     }
 
     pub(super) fn try_cached_get_string(
@@ -1113,6 +1097,42 @@ pub(super) fn ordinary_chain_data_value(
             None => return Ok(DirectPropertyRead::Missing),
         }
     }
+}
+
+/// `Vm::try_direct_leaf_getter` for an executor without a `Vm`: `env` is the
+/// caller's environment and the host fields are the ones the caller's frame
+/// would install.
+pub(super) fn direct_leaf_getter(
+    receiver: &Value,
+    key: &str,
+    env: &CallEnv,
+    module_host: Option<crate::module::ModuleHostRef>,
+    #[cfg(feature = "agents")] agent_context: Option<crate::agent::AgentContextRef>,
+) -> Option<Result<Value, RuntimeError>> {
+    let Value::Object(object) = receiver else {
+        return None;
+    };
+    if symbol::is_symbol_primitive(object)
+        || crate::typed_array::is_typed_array_object(object)
+        || object.is_module_namespace_exotic()
+    {
+        return None;
+    }
+    let property = ordinary_chain_property(object, key).ok().flatten()?;
+    let (getter, _) = property.into_accessor_parts()?;
+    let getter = getter?;
+    if !crate::function::is_direct_leaf_function(&getter) {
+        return None;
+    }
+    Some(crate::function::call_direct_leaf_function(
+        getter,
+        receiver.clone(),
+        &[],
+        env,
+        module_host,
+        #[cfg(feature = "agents")]
+        agent_context,
+    ))
 }
 
 /// Walks `object`'s own property then its [[Prototype]] chain for `key`,

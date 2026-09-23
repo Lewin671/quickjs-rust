@@ -118,6 +118,19 @@ impl<'a> Vm<'a> {
     ) -> Self {
         crate::diagnostics::count!(nested_vm_constructions);
         let bytecode: &Bytecode = &handle;
+        // `QJS_CF_TRACE=1` names the body behind every general-path frame, so
+        // a histogram of these lines ranks the callees no compact tier runs.
+        #[cfg(feature = "perf-counters")]
+        if std::env::var_os("QJS_CF_TRACE").is_some() {
+            eprintln!(
+                "CFVM params=({}) len={}",
+                bytecode.parameter_names().join(","),
+                bytecode.code.len()
+            );
+            if std::env::var_os("QJS_CF_TRACE").is_some_and(|v| v == "3") {
+                eprintln!("CFVMCODE {:?}", bytecode.code);
+            }
+        }
         if (bytecode.contains_direct_eval() || bytecode.contains_with())
             && env.deopt_bindings().is_none()
         {

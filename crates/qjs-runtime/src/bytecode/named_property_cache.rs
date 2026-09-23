@@ -288,21 +288,35 @@ impl NamedPropertyCache {
                 slot,
             }
         } else {
-            let value = match value {
-                Value::Undefined => CachedValue::Undefined,
-                Value::Null => CachedValue::Null,
-                Value::Boolean(value) => CachedValue::Boolean(*value),
-                Value::Number(value) => CachedValue::Number(*value),
-                Value::Object(value) => CachedValue::Object(value.downgrade()),
-                _ => {
-                    self.clear();
-                    return;
-                }
+            let cached = match value {
+                Value::Undefined => Some(CachedValue::Undefined),
+                Value::Null => Some(CachedValue::Null),
+                Value::Boolean(value) => Some(CachedValue::Boolean(*value)),
+                Value::Number(value) => Some(CachedValue::Number(*value)),
+                Value::Object(value) => Some(CachedValue::Object(value.downgrade())),
+                _ => None,
             };
-            NamedPropertyCacheEntry::Exact {
-                object: object.downgrade(),
-                revision: object.property_revision(),
-                value,
+            match cached {
+                Some(value) => NamedPropertyCacheEntry::Exact {
+                    object: object.downgrade(),
+                    revision: object.property_revision(),
+                    value,
+                },
+                // An array, string or function value has no by-value entry;
+                // its slot still answers every later read of this object
+                // (`this.triangles`, `this.name`). Clearing the site instead
+                // sent each read back to the named lookup.
+                None => match object.own_data_slot(key) {
+                    Some(slot) => NamedPropertyCacheEntry::OwnSlot {
+                        object: object.downgrade(),
+                        layout_revision: object.layout_revision(),
+                        slot,
+                    },
+                    None => {
+                        self.clear();
+                        return;
+                    }
+                },
             }
         };
         let mut state = self.0.borrow_mut();

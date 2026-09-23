@@ -10,18 +10,21 @@ impl Vm<'_> {
     /// optional preceding `Dup` when the assignment value remains observable.
     /// Any real JavaScript alias keeps the Rc shared and therefore immutable.
     pub(super) fn prepare_compound_string_reuse(&mut self, expected: &crate::JsString) -> bool {
-        let store = match self.bytecode.code.get(self.ip).cloned() {
-            Some(Op::Dup) => self.bytecode.code.get(self.ip + 1).cloned(),
-            op => op,
+        // A handle, not a copy of the instruction: cloning the store op
+        // cloned its binding name, an allocation on every string `+`.
+        let bytecode = self.bytecode.clone();
+        let store_ip = match bytecode.code.get(self.ip) {
+            Some(Op::Dup) => self.ip + 1,
+            _ => self.ip,
         };
-        match store {
-            Some(Op::AssignLocal(slot)) => self.detach_matching_local_string(slot, expected),
+        match bytecode.code.get(store_ip) {
+            Some(Op::AssignLocal(slot)) => self.detach_matching_local_string(*slot, expected),
             Some(Op::StoreGlobalStrict(name)) | Some(Op::StoreGlobalSloppy { name, .. }) => {
-                self.detach_matching_realm_string(&name, expected)
+                self.detach_matching_realm_string(name, expected)
             }
             Some(Op::StoreLocalOrGlobalSloppy { slot, name }) => {
-                self.detach_matching_local_string(slot, expected)
-                    || self.detach_matching_realm_string(&name, expected)
+                self.detach_matching_local_string(*slot, expected)
+                    || self.detach_matching_realm_string(name, expected)
             }
             _ => false,
         }
@@ -34,12 +37,12 @@ impl Vm<'_> {
         let Some(local_meta) = self.bytecode.locals.get(slot) else {
             return false;
         };
-        let name = local_meta.name.clone();
+        let name = local_meta.name.as_str();
         if !local_meta.mutable
-            || self.env.has_module_import(&name)
-            || self.env.is_immutable_lexical_binding(&name)
-            || self.env.is_immutable_function_name(&name)
-            || self.local_slot_targets_non_writable_global(slot, &name)
+            || self.env.has_module_import(name)
+            || self.env.is_immutable_lexical_binding(name)
+            || self.env.is_immutable_function_name(name)
+            || self.local_slot_targets_non_writable_global(slot, name)
         {
             return false;
         }
