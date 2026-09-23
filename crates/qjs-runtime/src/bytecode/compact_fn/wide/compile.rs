@@ -362,6 +362,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
             *flag = true;
         }
     }
+    let this_stores = fold_this_stores(code, &entry_depth, &jump_targets);
     let mut ops = Vec::with_capacity(code.len());
     let mut named_reads: Vec<NamedReadSite> = Vec::new();
     let mut named_writes: Vec<NamedWriteSite> = Vec::new();
@@ -440,6 +441,9 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                         src: slot_index,
                     });
                 }
+            }
+            Op::LoadGlobal(name) if is_this_read(name) && this_stores[ip] => {
+                requires_this = true;
             }
             Op::LoadGlobal(name) if is_this_read(name) => {
                 requires_this = true;
@@ -601,11 +605,19 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                     is_strict: *is_strict,
                     creation: Default::default(),
                 });
-                ops.push(WideOp::SetPropNamed {
-                    obj: register(depth.checked_sub(2)?),
-                    value: register(depth.checked_sub(1)?),
-                    index,
-                });
+                if this_stores[ip] {
+                    ops.push(WideOp::SetPropThis {
+                        dst: register(depth.checked_sub(2)?),
+                        value: register(depth.checked_sub(1)?),
+                        index,
+                    });
+                } else {
+                    ops.push(WideOp::SetPropNamed {
+                        obj: register(depth.checked_sub(2)?),
+                        value: register(depth.checked_sub(1)?),
+                        index,
+                    });
+                }
             }
             Op::StoreLocal(slot) if slot_is_lexical(*slot) => {
                 let dst = note_lexical(*slot, &mut lexical_slots)?;
@@ -988,6 +1000,48 @@ fn fold_binary(
     folds[load] = LocalFold::Elided;
     folds[binary] = LocalFold::Binary(slot_u16);
     folds[binary + 1..=tail].fill(LocalFold::Elided);
+}
+
+/// Finds `this.key = <expr>`: a receiver load, straight-line code pushing
+/// the value above it, and the named write. Both the load and the write are
+/// marked; the write then reads the receiver where the activation keeps it
+/// and the load is elided. Nothing between them touches the receiver's
+/// register, and no jump lands inside.
+fn fold_this_stores(code: &[Op], entry_depth: &[Option<u16>], jump_target: &[bool]) -> Vec<bool> {
+    let mut marks = vec![false; code.len()];
+    for (store, op) in code.iter().enumerate() {
+        if !matches!(op, Op::SetPropNamed { .. }) || jump_target[store] {
+            continue;
+        }
+        let Some(depth) = entry_depth[store].and_then(|depth| depth.checked_sub(2)) else {
+            continue;
+        };
+        for ip in (0..store).rev() {
+            let Some(entry) = entry_depth[ip] else {
+                break;
+            };
+            if entry == depth {
+                if matches!(&code[ip], Op::LoadGlobal(name) if is_this_read(name)) && !marks[ip] {
+                    marks[ip] = true;
+                    marks[store] = true;
+                }
+                break;
+            }
+            let consumes_receiver = effect_of(&code[ip])
+                .is_none_or(|effect| entry.saturating_sub(effect.pops) <= depth);
+            if consumes_receiver
+                || jump_target[ip]
+                || is_exit_safe(&code[ip])
+                || matches!(
+                    code[ip],
+                    Op::Jump(_) | Op::JumpIfFalse(_) | Op::JumpIfTrue(_)
+                )
+            {
+                break;
+            }
+        }
+    }
+    marks
 }
 
 /// Computes the operand-stack depth on entry to each instruction, rejecting a

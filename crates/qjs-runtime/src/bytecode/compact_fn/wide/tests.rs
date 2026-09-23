@@ -43,7 +43,7 @@ fn a_method_body_reading_and_writing_this_is_admitted() {
     let writes = program
         .ops
         .iter()
-        .filter(|op| matches!(op, WideOp::SetPropNamed { .. }))
+        .filter(|op| matches!(op, WideOp::SetPropNamed { .. } | WideOp::SetPropThis { .. }))
         .count();
     assert_eq!(writes, 3, "{:#?}", program.ops);
     assert!(program.requires_this);
@@ -823,5 +823,34 @@ fn a_named_read_of_this_borrows_the_receiver() {
               loose.call('abcd')].join(',');"
         )),
         Value::String("11,2,10,3,u,4".into())
+    );
+}
+
+#[test]
+fn a_named_write_to_this_borrows_the_receiver() {
+    let source = "function Pt(x, y) { this.x = x; this.y = this.x + y; this.z = (this.x = 5); }";
+    let program =
+        compile::compile(&nested_function(source, "Pt")).expect("a constructor should be admitted");
+    assert_eq!(
+        program
+            .ops
+            .iter()
+            .filter(|op| matches!(op, WideOp::SetPropThis { .. }))
+            .count(),
+        4,
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var p = new Pt(1, 2);
+             var log = [];
+             function Watched() {{ this.w = 1; }}
+             Object.defineProperty(Watched.prototype, 'w', {{ set(v) {{ log.push(v); }} }});
+             new Watched();
+             [p.x, p.y, p.z, log.join('')].join(',');"
+        )),
+        Value::String("5,3,5,1".into())
     );
 }

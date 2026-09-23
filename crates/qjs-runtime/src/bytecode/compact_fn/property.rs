@@ -112,7 +112,7 @@ fn string_named_value(text: &crate::JsString, key: &str, env: &CallEnv) -> Optio
 #[cold]
 #[inline(never)]
 pub(super) fn set_prop_named(
-    object: Value,
+    object: &Value,
     key: &Rc<str>,
     cache: Option<&NamedPropertyCache>,
     is_strict: bool,
@@ -120,9 +120,9 @@ pub(super) fn set_prop_named(
     env: &CallEnv,
     creation: Option<&super::creation_cache::CreationCache>,
 ) -> Result<Value, RuntimeError> {
-    let updates_global_binding = is_global_object(env, &object);
+    let updates_global_binding = is_global_object(env, object);
     if !updates_global_binding
-        && let Value::Object(object_ref) = &object
+        && let Value::Object(object_ref) = object
         && !crate::symbol::is_symbol_primitive(object_ref)
     {
         let cached = cache.and_then(|cache| cache.write(object_ref, key, &value));
@@ -165,7 +165,7 @@ pub(super) fn set_prop_named(
     // primitive-property semantics below rather than the symbol-key check.
     let mut call_env = env.empty_frame();
     let wrote_data = crate::bytecode::vm_set::set_property_key(
-        object,
+        object.clone(),
         PropertyKey::String(key.to_string()),
         value.clone(),
         &mut call_env,

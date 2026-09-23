@@ -161,6 +161,14 @@ enum WideOp {
         dst: u16,
         index: u16,
     },
+    /// `this.key = value`: the named write `named_writes[index]` to the
+    /// activation's receiver, borrowed where the activation keeps it; the
+    /// assigned value lands in `dst`, where the receiver would have been.
+    SetPropThis {
+        dst: u16,
+        value: u16,
+        index: u16,
+    },
     /// `obj[index]` with a constant index, the fused `Op::GetPropIndex`.
     GetPropIndex {
         dst: u16,

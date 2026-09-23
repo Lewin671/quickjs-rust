@@ -883,11 +883,10 @@ fn run_frames(
                         let Some(site) = program.named_writes.get(index as usize) else {
                             break Err(execute::constant_out_of_bounds());
                         };
-                        let object = std::mem::replace(&mut window[obj as usize], Value::Undefined);
                         let assigned =
                             std::mem::replace(&mut window[value as usize], Value::Undefined);
                         match property::set_prop_named(
-                            object,
+                            &window[obj as usize],
                             &site.key,
                             site.cache.as_ref(),
                             site.is_strict,
@@ -898,6 +897,28 @@ fn run_frames(
                             // The assigned value stays in the object's
                             // register, matching `SetPropNamed`'s stack effect.
                             Ok(value) => execute::store(&mut window[obj as usize], value),
+                            Err(error) => break Err(error),
+                        }
+                    }
+                    WideOp::SetPropThis { dst, value, index } => {
+                        let (Some(site), Some(receiver)) = (
+                            program.named_writes.get(index as usize),
+                            activation.this_value,
+                        ) else {
+                            break Err(execute::uninitialized_local());
+                        };
+                        let assigned =
+                            std::mem::replace(&mut window[value as usize], Value::Undefined);
+                        match property::set_prop_named(
+                            receiver,
+                            &site.key,
+                            site.cache.as_ref(),
+                            site.is_strict,
+                            assigned,
+                            env,
+                            Some(&site.creation),
+                        ) {
+                            Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
                         }
                     }
