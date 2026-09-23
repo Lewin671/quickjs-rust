@@ -268,7 +268,19 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
     let Some(entry_depth) = propagate_depths(code) else {
         return decline(trace, None, "inconsistent operand-stack depth");
     };
-    let folds = fold_local_binaries(code, &entry_depth, |slot| {
+    let has_exit = exit_backedges || code.iter().any(is_exit_safe);
+    // Nothing in an admitted body -- a function body -- observes a statement
+    // completion value, but the interpreter's loop accelerators type-guard
+    // the completion temporaries of the loops an exit hands them; keep those
+    // written where an exit can reach them.
+    let completion_is_dead = |slot: usize| {
+        !has_exit
+            && bytecode
+                .locals
+                .get(slot)
+                .is_some_and(|local| local.is_completion_temporary())
+    };
+    let folds = fold_local_binaries(code, &entry_depth, &completion_is_dead, |slot| {
         slot < local_count
             && slot < u128::BITS as usize
             && upvalue_slots & (1_u128 << slot) == 0
@@ -302,7 +314,6 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
     // An exit hands every own local to the interpreter frame, so every
     // parameter must have a register even when only code past the exit reads
     // it: the frame the interpreter builds seeds no argument values.
-    let has_exit = exit_backedges || code.iter().any(is_exit_safe);
     let local_registers = if has_exit {
         let parameters = bytecode
             .parameter_slots()
@@ -356,6 +367,12 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         let Some(depth) = entry_depth[ip] else {
             continue;
         };
+        if folds[ip] == LocalFold::Elided {
+            if let Op::LoadLocal(slot) | Op::StoreLocal(slot) | Op::AssignLocal(slot) = op {
+                required_authoritative_slots |= 1_u128 << *slot;
+            }
+            continue;
+        }
         match op {
             Op::FunctionPrologueEnd => {}
             Op::Pop => ops.push(WideOp::Drop {
@@ -389,11 +406,6 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                     dst,
                     src: register(depth.checked_sub(1)?),
                 });
-            }
-            Op::LoadLocal(slot) | Op::StoreLocal(slot) | Op::AssignLocal(slot)
-                if folds[ip] == LocalFold::Elided =>
-            {
-                required_authoritative_slots |= 1_u128 << *slot;
             }
             Op::LoadLocal(slot) => {
                 let slot_index = u16::try_from(*slot).ok()?;
@@ -570,11 +582,24 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                     src: register(depth.checked_sub(1)?),
                 });
             }
+            // A store into a dead completion temporary only releases the
+            // value.
+            Op::StoreLocal(slot) | Op::AssignLocal(slot) if completion_is_dead(*slot) => {
+                ops.push(WideOp::Drop {
+                    src: register(depth.checked_sub(1)?),
+                });
+            }
             Op::StoreLocal(slot) | Op::AssignLocal(slot) => {
                 required_authoritative_slots |= 1_u128 << *slot;
                 ops.push(WideOp::Move {
                     dst: u16::try_from(*slot).ok()?,
                     src: register(depth.checked_sub(1)?),
+                });
+            }
+            Op::Update(update_op) if let LocalFold::Update(slot) = folds[ip] => {
+                ops.push(WideOp::Update {
+                    dst: slot,
+                    op: *update_op,
                 });
             }
             Op::Binary(binary_op) if let LocalFold::Binary(slot) = folds[ip] => {
@@ -742,18 +767,32 @@ enum LocalFold {
     Elided,
     /// A binary operation whose left operand and destination are this local.
     Binary(u16),
+    /// An increment or decrement applied to this local in place.
+    Update(u16),
 }
 
-/// Finds `LoadLocal(x) <expr> Binary StoreLocal(x)` (or `AssignLocal(x)`),
-/// the shape of `x = x op y` and `x op= y`, where `<expr>` is straight-line
-/// code that neither writes `x` nor exits, and no jump lands inside. Such a
-/// binary operation reads its left operand from the local when it executes,
-/// which is the value the load would have copied, and writes the result
-/// back: the local is the only reference to its value, so a string append
-/// reuses the buffer instead of copying the accumulator every time.
+/// Finds the statement shapes whose value only moves between a local and
+/// the operand stack, and folds each onto the local:
+///
+/// - `x = x op y` and `x op= y`: `LoadLocal(x) <expr> Binary` followed by
+///   `StoreLocal(x)` (or `AssignLocal(x)`), or by `Dup Store(x) Pop` where
+///   the value is discarded, with `<expr>` straight-line code that neither
+///   writes `x` nor exits. The binary operation reads its left operand from
+///   the local when it executes, which is the value the load would have
+///   copied, and writes the result back: the local is the only reference to
+///   its value, so a string append reuses the buffer instead of copying the
+///   accumulator every time.
+/// - a discarded `x++` or `x--`: `LoadLocal(x) ToNumeric Dup Update
+///   Store(x) Pop` becomes one update of the local, which applies the same
+///   single numeric conversion.
+/// - `LoadLocal(c) Store(d)` between two dead completion temporaries: a
+///   statement value no function body can observe.
+///
+/// No jump may land inside a folded shape.
 fn fold_local_binaries(
     code: &[Op],
     entry_depth: &[Option<u16>],
+    completion: &impl Fn(usize) -> bool,
     plain_local: impl Fn(usize) -> bool,
 ) -> Vec<LocalFold> {
     let mut folds = vec![LocalFold::None; code.len()];
@@ -765,67 +804,152 @@ fn fold_local_binaries(
             *flag = true;
         }
     }
-    for (binary, op) in code.iter().enumerate() {
-        if !matches!(op, Op::Binary(_)) {
-            continue;
-        }
-        let store = binary + 1;
-        let Some(Op::StoreLocal(slot) | Op::AssignLocal(slot)) = code.get(store) else {
-            continue;
-        };
-        let slot = *slot;
-        let Ok(slot_u16) = u16::try_from(slot) else {
-            continue;
-        };
-        let Some(depth) = entry_depth[binary].and_then(|depth| depth.checked_sub(2)) else {
-            continue;
-        };
-        if !plain_local(slot) || jump_target[binary] || jump_target[store] {
-            continue;
-        }
-        let mut load = None;
-        for ip in (0..binary).rev() {
-            let Some(entry) = entry_depth[ip] else {
-                break;
-            };
-            if entry == depth {
-                load = Some(ip);
-                break;
+    let store_to = |ip: usize| match code.get(ip) {
+        Some(Op::StoreLocal(slot) | Op::AssignLocal(slot)) if !completion(*slot) => Some(*slot),
+        _ => None,
+    };
+    // A store into a completion temporary discards the value as `Pop` does.
+    let discards = |ip: usize| match code.get(ip) {
+        Some(Op::Pop) => true,
+        Some(Op::StoreLocal(slot) | Op::AssignLocal(slot)) => completion(*slot),
+        _ => false,
+    };
+    let free = |range: std::ops::RangeInclusive<usize>, folds: &[LocalFold]| {
+        range
+            .clone()
+            .all(|ip| !jump_target[ip] && folds.get(ip) == Some(&LocalFold::None))
+    };
+    for (ip, op) in code.iter().enumerate() {
+        match op {
+            // Postfix `LoadLocal ToNumeric Dup Update Store Pop` and prefix
+            // `LoadLocal ToNumeric Update Dup Store Pop`.
+            Op::Update(_) if ip >= 2 => {
+                let postfix = matches!(code[ip - 1], Op::Dup);
+                let (load, store) = if postfix {
+                    (ip.checked_sub(3), ip + 1)
+                } else {
+                    (Some(ip - 2), ip + 2)
+                };
+                let Some(load) = load else {
+                    continue;
+                };
+                let Some(slot) = store_to(store) else {
+                    continue;
+                };
+                let shape = if postfix {
+                    matches!(code[ip - 2], Op::ToNumeric)
+                } else {
+                    matches!(code[ip - 1], Op::ToNumeric) && matches!(code[ip + 1], Op::Dup)
+                };
+                if shape
+                    && matches!(code[load], Op::LoadLocal(loaded) if loaded == slot)
+                    && discards(store + 1)
+                    && plain_local(slot)
+                    && let Ok(slot_u16) = u16::try_from(slot)
+                    && free(load + 1..=store + 1, &folds)
+                    && folds[load] == LocalFold::None
+                {
+                    folds[load..=store + 1].fill(LocalFold::Elided);
+                    folds[ip] = LocalFold::Update(slot_u16);
+                }
             }
-            let writes_slot = matches!(
-                code[ip],
-                Op::StoreLocal(target) | Op::AssignLocal(target) | Op::ClearLocal(target)
-                    if target == slot
-            );
-            // Everything after the load is the right operand: it must leave
-            // the loaded value alone, never popping down to it.
-            let consumes_left = effect_of(&code[ip])
-                .is_none_or(|effect| entry.saturating_sub(effect.pops) <= depth);
-            if consumes_left
-                || jump_target[ip]
-                || writes_slot
-                || is_exit_safe(&code[ip])
-                || matches!(
-                    code[ip],
-                    Op::Jump(_) | Op::JumpIfFalse(_) | Op::JumpIfTrue(_)
-                )
+            Op::LoadLocal(from)
+                if completion(*from) && discards(ip + 1) && free(ip..=ip + 1, &folds) =>
             {
-                break;
+                folds[ip] = LocalFold::Elided;
+                folds[ip + 1] = LocalFold::Elided;
             }
+            Op::Binary(_) => fold_binary(
+                code,
+                entry_depth,
+                &plain_local,
+                &store_to,
+                &discards,
+                &jump_target,
+                ip,
+                &mut folds,
+            ),
+            _ => {}
         }
-        let Some(load) = load else {
-            continue;
-        };
-        if !matches!(code[load], Op::LoadLocal(loaded) if loaded == slot)
-            || folds[load] != LocalFold::None
-        {
-            continue;
-        }
-        folds[load] = LocalFold::Elided;
-        folds[binary] = LocalFold::Binary(slot_u16);
-        folds[store] = LocalFold::Elided;
     }
     folds
+}
+
+/// The `x = x op y` fold of [`fold_local_binaries`] for the binary operation
+/// at `binary`.
+#[allow(clippy::too_many_arguments)]
+fn fold_binary(
+    code: &[Op],
+    entry_depth: &[Option<u16>],
+    plain_local: &impl Fn(usize) -> bool,
+    store_to: &impl Fn(usize) -> Option<usize>,
+    discards: &impl Fn(usize) -> bool,
+    jump_target: &[bool],
+    binary: usize,
+    folds: &mut [LocalFold],
+) {
+    let (slot, tail) = if let Some(slot) = store_to(binary + 1) {
+        (slot, binary + 1)
+    } else if matches!(code.get(binary + 1), Some(Op::Dup))
+        && let Some(slot) = store_to(binary + 2)
+        && discards(binary + 3)
+    {
+        (slot, binary + 3)
+    } else {
+        return;
+    };
+    let Ok(slot_u16) = u16::try_from(slot) else {
+        return;
+    };
+    let Some(depth) = entry_depth[binary].and_then(|depth| depth.checked_sub(2)) else {
+        return;
+    };
+    if !plain_local(slot)
+        || (binary..=tail).any(|ip| jump_target[ip] || folds[ip] != LocalFold::None)
+    {
+        return;
+    }
+    let mut load = None;
+    for ip in (0..binary).rev() {
+        let Some(entry) = entry_depth[ip] else {
+            break;
+        };
+        if entry == depth {
+            load = Some(ip);
+            break;
+        }
+        let writes_slot = matches!(
+            code[ip],
+            Op::StoreLocal(target) | Op::AssignLocal(target) | Op::ClearLocal(target)
+                if target == slot
+        );
+        // Everything after the load is the right operand: it must leave the
+        // loaded value alone, never popping down to it.
+        let consumes_left =
+            effect_of(&code[ip]).is_none_or(|effect| entry.saturating_sub(effect.pops) <= depth);
+        if consumes_left
+            || jump_target[ip]
+            || writes_slot
+            || is_exit_safe(&code[ip])
+            || matches!(
+                code[ip],
+                Op::Jump(_) | Op::JumpIfFalse(_) | Op::JumpIfTrue(_)
+            )
+        {
+            break;
+        }
+    }
+    let Some(load) = load else {
+        return;
+    };
+    if !matches!(code[load], Op::LoadLocal(loaded) if loaded == slot)
+        || folds[load] != LocalFold::None
+    {
+        return;
+    }
+    folds[load] = LocalFold::Elided;
+    folds[binary] = LocalFold::Binary(slot_u16);
+    folds[binary + 1..=tail].fill(LocalFold::Elided);
 }
 
 /// Computes the operand-stack depth on entry to each instruction, rejecting a

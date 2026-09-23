@@ -600,3 +600,50 @@ fn a_guarded_math_call_runs_as_a_method_call_without_an_exit() {
         Value::String("9:30".into())
     );
 }
+
+#[test]
+fn a_discarded_update_or_compound_assignment_of_a_local_is_one_operation() {
+    // A body with no exit: its statement completion values are dead, so the
+    // statement forms fold as well as the discarded ones.
+    let source = "function step(x, o) { if (o) { x++; ++x; x--; x += o.v; if (x > 3) { x -= 1; } } return x; }";
+    let program =
+        compile::compile(&nested_function(source, "step")).expect("the body should be admitted");
+    let in_place = program
+        .ops
+        .iter()
+        .filter(|op| {
+            matches!(op, WideOp::Update { dst, .. } | WideOp::Binary { dst, .. }
+                if *dst < program.local_registers)
+        })
+        .count();
+    assert_eq!(in_place, 5, "{:#?}", program.ops);
+    assert!(
+        !program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::ToNumeric { .. } | WideOp::Dup { .. })),
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(&format!(
+            "{source} step(1, {{ v: 5 }}) + ':' + step(0, {{ v: 0 }});"
+        )),
+        Value::String("6:1".into())
+    );
+}
+
+#[test]
+fn a_folded_update_converts_its_local_once_like_the_general_path() {
+    assert_eq!(
+        value_of(
+            "function bump(x) { x++; return x; }
+             function drop(x) { --x; return x; }
+             function add(x) { x += 1; return x; }
+             var log = [];
+             var o = { valueOf() { log.push('v'); return 4; } };
+             [bump('5'), drop('5'), add('5'), bump(o), log.length, bump(10n), typeof bump(null)].join(',');"
+        ),
+        Value::String("6,4,51,5,1,11,number".into())
+    );
+}
