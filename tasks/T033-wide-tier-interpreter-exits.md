@@ -183,6 +183,22 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   xparb 1.021; sentinel `string_key_map_churn` 1.020 (dictionary churn pays
   the slot index's upkeep on removal).
 
+- Stack run 745de05c vs main b3179386 (30 blocks, cycles, quiet host;
+  `target/comparison/calls4-745de05c`): wide call/return trims (packed
+  inlining facts, object receivers as `this`, slimmer frames, empty-register
+  skip; 1007 -> 894 instructions per call), strings and JSON text built
+  without per-value temporaries, repeated JSON.parse keys shared, RegExp
+  lastIndex written in place. External geomean 0.984 against main and
+  **0.922 against QuickJS-NG**; json-stringify-tinderbox 0.730,
+  json-parse-financial 0.831, crypto-md5 0.953, binary-trees 0.957, cdjs
+  0.960, hash-map 0.970. Worst against main: access-nsieve 1.017.
+  Sentinels 0.9995-1.008.
+- Rejected: a proven-receiver prototype read ahead of the own-entry probe
+  (method read 333 -> 268 instructions on a micro) -- hash-map 1.052,
+  raytrace-class-fields 1.045, cdjs 1.041 in cycles with slightly more
+  instructions: their sites rarely repeat a receiver. Patch
+  /tmp/proven-prototype.patch.
+
 - Rejected (single-run, no measurable gain; 2026-09-23):
   - Running closures a direct `eval` made (`Function::deopt_bindings`) on
     the wide tier over their named environment: admitted and ran (xparb's
