@@ -405,3 +405,24 @@ fn stringify_reads_array_elements_by_index_and_writes_numbers_in_place() {
         ))
     );
 }
+
+#[test]
+fn parse_shares_repeated_keys_without_sharing_objects() {
+    assert_eq!(
+        eval(
+            "var out = []; \
+             var rows = JSON.parse('[{\"a\":1,\"b\":2},{\"a\":3,\"b\":4,\"a\":5},{\"__proto__\":7,\"b\\\\u0041\":8}]'); \
+             out.push(rows.map(function (r) { return Object.keys(r).join(\"+\") + \"=\" + Object.keys(r).map(function (k) { return r[k]; }).join(\"+\"); }).join(\";\")); \
+             out.push(Object.getPrototypeOf(rows[2]) === Object.prototype, rows[2].__proto__); \
+             var big = \"{\"; for (var i = 0; i < 300; i++) big += (i ? \",\" : \"\") + '\"k' + i + '\":' + i; big += \"}\"; \
+             var o = JSON.parse(big); out.push(Object.keys(o).length, o.k299, o.k0); \
+             var rs = JSON.parse('[{\"x\":1},{\"x\":2}]'); rs[0].x = 9; rs[0].y = 1; out.push(rs[1].x, Object.keys(rs[1]).join()); \
+             out.join(\"|\");"
+        ),
+        Ok(Value::String(
+            "a+b=1+2;a+b=5+4;__proto__+bA=7+8|true|7|300|299|0|2|x"
+                .to_owned()
+                .into()
+        ))
+    );
+}
