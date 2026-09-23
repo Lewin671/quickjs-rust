@@ -222,6 +222,16 @@ enum WideOp {
         dst: u16,
         src: u16,
     },
+    /// `RequireObjectCoercible` on a register: throws the interpreter's
+    /// TypeError for `undefined` or `null`, and leaves the value in place.
+    CheckCoercible {
+        src: u16,
+    },
+    /// `ToPropertyKey` in place for a computed member access: an array index
+    /// or a string is already a key; anything else is converted.
+    ToPropertyKey {
+        dst: u16,
+    },
 }
 
 const _: () = assert!(std::mem::size_of::<WideOp>() == 8);

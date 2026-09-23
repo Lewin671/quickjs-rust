@@ -1193,3 +1193,32 @@ fn a_repeated_method_read_sees_an_own_property_added_later() {
         Value::String("5,50,5,500".into())
     );
 }
+
+#[test]
+fn compound_member_assignment_converts_its_key_once_and_checks_its_object() {
+    let source = "function bump(o, k) { o[k] += 1; o[k] *= 2; return o[k]; }";
+    let program =
+        compile::compile(&nested_function(source, "bump")).expect("the body should be admitted");
+    assert!(
+        program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::ToPropertyKey { .. })),
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var log = [];
+             var key = {{ toString() {{ log.push('key'); return 'x'; }} }};
+             var sym = Symbol('s');
+             var o = {{ x: 1, 1.5: 2, [sym]: 3 }}, a = [5, 6];
+             var out = [bump(o, key), bump(o, 1.5), bump(o, sym), bump(a, 1), bump(a, '0'), log.join('')];
+             try {{ bump(null, 'x'); }} catch (e) {{ out.push(e instanceof TypeError); }}
+             try {{ bump(undefined, key); }} catch (e) {{ out.push(e instanceof TypeError, log.length); }}
+             out.join(',');"
+        )),
+        Value::String("4,6,8,14,12,keykeykey,true,true,3".into())
+    );
+}

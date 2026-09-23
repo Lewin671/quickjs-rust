@@ -806,6 +806,12 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                     WideOp::JumpIfTruthy { cond, target }
                 });
             }
+            Op::RequireObjectCoercible => ops.push(WideOp::CheckCoercible {
+                src: register(depth.checked_sub(1)?),
+            }),
+            Op::ToPropertyKeyForAccess => ops.push(WideOp::ToPropertyKey {
+                dst: register(depth.checked_sub(1)?),
+            }),
             Op::Unary(unary_op) => {
                 let src = register(depth.checked_sub(1)?);
                 ops.push(WideOp::Unary {
@@ -1230,7 +1236,6 @@ fn is_exit_safe(op: &Op) -> bool {
         op,
         Op::SetProp { .. }
             | Op::SetPropIndex { .. }
-            | Op::RequireObjectCoercible
             | Op::NewObjectDataLiteral { .. }
             | Op::AppendStringLiteralLocal { .. }
             | Op::StoreLocalOrGlobalSloppy { .. }
@@ -1274,6 +1279,10 @@ fn effect_of(op: &Op) -> Option<Effect> {
         // A store to an existing global variable runs at its exit and
         // continues; any other sloppy global store is the interpreter's.
         Op::StoreLocalOrGlobalSloppy { .. } => simple(1, 0),
+        // A compound member assignment checks its object and converts its
+        // key in place.
+        Op::RequireObjectCoercible => simple(0, 0),
+        Op::ToPropertyKeyForAccess => simple(1, 1),
         // An object literal is built at its exit, which always continues.
         Op::NewObjectDataLiteral { shape } => simple(u16::try_from(shape.input_len()).ok()?, 1),
         Op::JumpIfFalse(target) | Op::JumpIfTrue(target) => Effect {

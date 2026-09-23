@@ -103,6 +103,32 @@ impl WideActivation<'_> {
     }
 }
 
+/// The interpreter's error for `RequireObjectCoercible` on `undefined` or
+/// `null`.
+#[cold]
+#[inline(never)]
+fn not_coercible() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: cannot destructure undefined or null".to_owned(),
+    }
+}
+
+/// `ToPropertyKey` of a register that is not already a key, as the
+/// interpreter's `ToPropertyKeyForAccess` converts it.
+#[cold]
+#[inline(never)]
+fn to_property_key(register: &mut Value, env: &CallEnv) -> Result<(), RuntimeError> {
+    let value = std::mem::replace(register, Value::Undefined);
+    let mut env = env.empty_frame();
+    let key = match crate::property::try_to_property_key_without_coercion(value) {
+        Ok(key) => key,
+        Err(value) => crate::to_property_key_value(value, &mut env)?,
+    };
+    *register = key.into_value();
+    Ok(())
+}
+
 /// A relational or equality operator between two numbers; the compiler
 /// fuses no other operator into `CompareJump`.
 #[inline(always)]
@@ -1037,6 +1063,26 @@ fn run_frames(
                         }
                     }
                     WideOp::Jump { target } => pc = target as usize,
+                    WideOp::CheckCoercible { src } => {
+                        if matches!(window[src as usize], Value::Undefined | Value::Null) {
+                            break Err(not_coercible());
+                        }
+                    }
+                    WideOp::ToPropertyKey { dst } => {
+                        let is_key = match &window[dst as usize] {
+                            Value::String(_) => true,
+                            Value::Number(number) => {
+                                crate::bytecode::vm_props::array_index_from_number(*number)
+                                    .is_some()
+                            }
+                            _ => false,
+                        };
+                        if !is_key
+                            && let Err(error) = to_property_key(&mut window[dst as usize], env)
+                        {
+                            break Err(error);
+                        }
+                    }
                     WideOp::CompareJump {
                         op,
                         left,
