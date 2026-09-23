@@ -21,6 +21,12 @@ pub(super) struct TypedLoopSloppyGlobalWrite {
     name: String,
     cell: Upvalue,
     global_this: crate::ObjectRef,
+    /// The global object's own-property slot for `name`, with the layout
+    /// revision it was resolved at: while the layout holds, each write goes
+    /// straight to the slot instead of hashing the name into the global
+    /// object's table (`math-partial-sums` writes eleven such globals per
+    /// iteration). `None` for a name whose store has a side effect of its own.
+    property_slot: Option<(usize, u64)>,
 }
 
 impl Vm<'_> {
@@ -843,11 +849,19 @@ impl Vm<'_> {
         {
             return None;
         }
+        // `globalThis` itself and the dynamic-function realm marker have
+        // effects beyond the value (`write_existing_own_data_property`,
+        // `replace_existing_realm_with_cell`); they keep the named path.
+        let property_slot = (name != "globalThis" && name != "__quickjsRustDynamicFunctionRealm")
+            .then(|| global_this.any_storage_data_slot(name))
+            .flatten()
+            .map(|slot| (slot, global_this.layout_revision()));
         Some(TypedLoopSloppyGlobalWrite {
             slot,
             name: name.to_owned(),
             cell,
             global_this,
+            property_slot,
         })
     }
 
@@ -860,6 +874,20 @@ impl Vm<'_> {
         target: &TypedLoopSloppyGlobalWrite,
         value: Value,
     ) -> bool {
+        if let Some((slot, layout)) = target.property_slot
+            && target.global_this.layout_revision() == layout
+        {
+            if !matches!(
+                target.global_this.any_storage_data_slot_write(slot, &value),
+                Some(OwnDataPropertyWrite::Written)
+            ) {
+                return false;
+            }
+            debug_assert!(self.env.is_realm_binding_cell(&target.name, &target.cell));
+            target.cell.set(value.clone());
+            self.locals[target.slot] = Some(value);
+            return true;
+        }
         if !matches!(
             target
                 .global_this
