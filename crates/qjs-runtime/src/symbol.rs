@@ -33,6 +33,13 @@ pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prot
 
     let symbol_function = Function::new_native(Some("Symbol"), 0, NativeFunction::Symbol, true);
     install_well_known_symbols(&symbol_function, &symbol_prototype);
+    if let Some(symbols) = WELL_KNOWN_SYMBOL_NAMES
+        .iter()
+        .map(|name| well_known_symbol_from_function(&symbol_function, name))
+        .collect()
+    {
+        env.realm().initialize_well_known_symbols(symbols);
+    }
     install_function_has_instance(env, &symbol_function);
     if let Some(to_string_tag) = well_known_symbol_from_function(&symbol_function, "toStringTag") {
         define_to_string_tag_property(&symbol_prototype, to_string_tag, "Symbol");
@@ -303,7 +310,21 @@ pub(crate) fn unscopables_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "unscopables")
 }
 
+/// A well-known symbol is a realm intrinsic, fixed when the realm installs
+/// `Symbol`: it is read from the realm's table rather than through the
+/// current `Symbol` binding, which user code may rebind.
 fn well_known_symbol(env: &CallEnv, name: &str) -> Option<ObjectRef> {
+    if let Some(index) = WELL_KNOWN_SYMBOL_NAMES
+        .iter()
+        .position(|candidate| *candidate == name)
+        && let Some(symbol) = env.realm().well_known_symbol(index)
+    {
+        return Some(symbol);
+    }
+    well_known_symbol_from_binding(env, name)
+}
+
+fn well_known_symbol_from_binding(env: &CallEnv, name: &str) -> Option<ObjectRef> {
     let Some(Value::Function(symbol_function)) = env.get("Symbol") else {
         return None;
     };
