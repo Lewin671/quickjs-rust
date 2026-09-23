@@ -61,6 +61,17 @@ pub(crate) fn native_array_prototype_slice(
     validate_array_species_constructor(array_like.receiver.clone(), "slice", env)?;
 
     let result = array_species_create(array_like.receiver.clone(), count, "slice", env)?;
+    // A dense source reads each element as a plain own value, and a plain
+    // target takes each definition as is: copy the range in one step.
+    if let (Value::Array(source), Value::Array(target)) = (&array_like.receiver, &result)
+        && let Some(true) = source.with_dense_readable_elements(|elements| {
+            elements
+                .get(start..end)
+                .is_some_and(|values| target.define_plain_elements(0, values))
+        })
+    {
+        return Ok(result);
+    }
     for (target_index, source_index) in (start..end).enumerate() {
         let source_key = source_index.to_string();
         if has_property(array_like.receiver.clone(), env, &source_key)? {
@@ -250,6 +261,15 @@ fn concat_spread_array(
         concat_spread_typed_array_fast_path(result.clone(), next_index, &value, length)?
     {
         return Ok(next_index);
+    }
+    // A dense source array appended to a plain dense result.
+    if let (Value::Array(source), Value::Array(target)) = (&value, &result)
+        && !source.ptr_eq(target)
+        && let Some(true) = source.with_dense_readable_elements(|elements| {
+            elements.len() == length && target.define_plain_elements(next_index, elements)
+        })
+    {
+        return Ok(new_length);
     }
     for index in 0..length {
         let key = index.to_string();

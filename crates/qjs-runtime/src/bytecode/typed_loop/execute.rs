@@ -821,7 +821,8 @@ fn materialize_stack<F: LoopFrame>(
 }
 
 /// Evaluates a `Math` intrinsic whose entire effect is a floating-point
-/// computation, after proving the callee is that intrinsic. Anything else — a
+/// computation (or, for `Math.random`, a draw from the realm's generator),
+/// after proving the callee is that intrinsic. Anything else — a
 /// user function, a bound function, a different native — declines.
 fn call_numeric_native(callee: &Value, first: Typed, second: Typed, arity: u8) -> Option<Typed> {
     let Value::Function(function) = callee else {
@@ -834,11 +835,25 @@ fn call_numeric_native(callee: &Value, first: Typed, second: Typed, arity: u8) -
     // The same admitted set the counted-loop tier uses, so a region that hoists
     // its own receiver reaches every intrinsic that one does.
     let value = match arity {
+        // `Math.random` advances the realm's generator and nothing else, and
+        // this operation either answers or stops the program before the call,
+        // so no draw is ever replayed.
+        0 => return draw_random(native),
         1 => super::super::vm_numeric_leaf::math_unary(native, first.number()?)?,
         2 => super::super::vm_numeric_leaf::math_binary(native, first.number()?, second.number()?)?,
         _ => return None,
     };
     Some(Typed::Number(value))
+}
+
+/// `Math.random()`, the one intrinsic answered without arguments. Out of
+/// line: `call_numeric_native` is inlined into the dispatch loop, whose
+/// register allocation re-rolls when its arms grow.
+#[cold]
+#[inline(never)]
+fn draw_random(native: crate::function::NativeFunction) -> Option<Typed> {
+    (native == crate::function::NativeFunction::MathRandom)
+        .then(|| Typed::Number(crate::math::random_unit_interval()))
 }
 
 /// Answers a resolved call whose whole body a closed-form leaf evaluator can
@@ -1422,6 +1437,33 @@ mod tests {
     use super::{Intrinsics, get_named};
     use crate::value::ArrayRef;
     use crate::{Value, eval};
+
+    #[test]
+    fn math_random_is_drawn_in_registers_and_nothing_else_without_arguments() {
+        use super::{Typed, call_numeric_native};
+        let random = eval("Math.random").expect("Math.random");
+        for _ in 0..100 {
+            let Some(Typed::Number(value)) =
+                call_numeric_native(&random, Typed::Undefined, Typed::Undefined, 0)
+            else {
+                panic!("Math.random should be answered in registers");
+            };
+            assert!((0.0..1.0).contains(&value), "{value}");
+        }
+        let sqrt = eval("Math.sqrt").expect("Math.sqrt");
+        assert!(call_numeric_native(&sqrt, Typed::Undefined, Typed::Undefined, 0).is_none());
+        let user = eval("(function () { return 0.5; })").expect("function");
+        assert!(call_numeric_native(&user, Typed::Undefined, Typed::Undefined, 0).is_none());
+        assert_eq!(
+            eval(
+                "function draw(n) { var inside = 0;\
+                   for (var i = 0; i < n; i++) { var r = Math.random(); if (r >= 0 && r < 1) inside++; }\
+                   return inside; }\
+                 draw(1000);"
+            ),
+            Ok(Value::Number(1000.0))
+        );
+    }
 
     fn read(receiver: &Value, name: &str) -> Option<Value> {
         get_named(

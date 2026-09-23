@@ -312,11 +312,19 @@ pub(crate) fn native_regexp_prototype_exec(
             message: "RegExp.prototype.exec requires an object receiver".to_owned(),
         });
     };
-    let source =
-        regexp_string_data(&object, REGEXP_SOURCE_PROPERTY).ok_or_else(|| RuntimeError {
-            thrown: None,
-            message: "RegExp.prototype.exec requires a RegExp receiver".to_owned(),
-        })?;
+    let RegexpData {
+        source,
+        global,
+        sticky,
+        ignore_case,
+        unicode,
+        dot_all,
+        multiline,
+        has_indices,
+    } = regexp_data(&object).ok_or_else(|| RuntimeError {
+        thrown: None,
+        message: "RegExp.prototype.exec requires a RegExp receiver".to_owned(),
+    })?;
     // Keep the argument's own string value where it already is one: the
     // matcher memoizes its character view, so a `/g` scan reuses it instead of
     // rebuilding it per match.
@@ -324,13 +332,6 @@ pub(crate) fn native_regexp_prototype_exec(
         Value::String(value) => value,
         value => crate::JsString::from(to_js_string_with_env(value, env)?),
     };
-    let global = regexp_flags_contains(&object, 'g');
-    let sticky = regexp_flags_contains(&object, 'y');
-    let ignore_case = regexp_flags_contains(&object, 'i');
-    let unicode = regexp_flags_contains(&object, 'u') || regexp_flags_contains(&object, 'v');
-    let dot_all = regexp_flags_contains(&object, 's');
-    let multiline = regexp_flags_contains(&object, 'm');
-    let has_indices = regexp_flags_contains(&object, 'd');
     let stateful = global || sticky;
     let last_index = regexp_last_index(&this_value, env)?;
     let start_code_unit = if stateful { last_index } else { 0 };
@@ -410,11 +411,19 @@ pub(crate) fn native_regexp_prototype_test(
             message: "RegExp.prototype.exec requires an object receiver".to_owned(),
         });
     };
-    let source =
-        regexp_string_data(&object, REGEXP_SOURCE_PROPERTY).ok_or_else(|| RuntimeError {
-            thrown: None,
-            message: "RegExp.prototype.exec requires a RegExp receiver".to_owned(),
-        })?;
+    let RegexpData {
+        source,
+        global,
+        sticky,
+        ignore_case,
+        unicode,
+        dot_all,
+        multiline,
+        ..
+    } = regexp_data(&object).ok_or_else(|| RuntimeError {
+        thrown: None,
+        message: "RegExp.prototype.exec requires a RegExp receiver".to_owned(),
+    })?;
     // Keep the argument's own string value where it already is one: the
     // matcher memoizes its character view, so a `/g` scan reuses it instead of
     // rebuilding it per match.
@@ -422,12 +431,6 @@ pub(crate) fn native_regexp_prototype_test(
         Value::String(value) => value,
         value => crate::JsString::from(to_js_string_with_env(value, env)?),
     };
-    let global = regexp_flags_contains(&object, 'g');
-    let sticky = regexp_flags_contains(&object, 'y');
-    let ignore_case = regexp_flags_contains(&object, 'i');
-    let unicode = regexp_flags_contains(&object, 'u') || regexp_flags_contains(&object, 'v');
-    let dot_all = regexp_flags_contains(&object, 's');
-    let multiline = regexp_flags_contains(&object, 'm');
     let stateful = global || sticky;
     let last_index = regexp_last_index(&this_value, env)?;
     let start_code_unit = if stateful { last_index } else { 0 };
@@ -770,6 +773,42 @@ pub(crate) fn native_regexp_global_match(
     } else {
         Ok(Value::Array(ArrayRef::new(matches)))
     }
+}
+
+/// A RegExp object's source and flags as the strings it holds, and the
+/// flags decoded once, for `exec` and `test`.
+struct RegexpData {
+    source: JsString,
+    global: bool,
+    sticky: bool,
+    ignore_case: bool,
+    unicode: bool,
+    dot_all: bool,
+    multiline: bool,
+    has_indices: bool,
+}
+
+fn regexp_data(object: &ObjectRef) -> Option<RegexpData> {
+    let string = |key: &str| match object.own_property(key) {
+        Some(Property {
+            value: Value::String(value),
+            ..
+        }) => Some(value),
+        _ => None,
+    };
+    let source = string(REGEXP_SOURCE_PROPERTY)?;
+    let flags = string(REGEXP_FLAGS_PROPERTY).unwrap_or_default();
+    let has = |flag: char| flags.contains(flag);
+    Some(RegexpData {
+        global: has('g'),
+        sticky: has('y'),
+        ignore_case: has('i'),
+        unicode: has('u') || has('v'),
+        dot_all: has('s'),
+        multiline: has('m'),
+        has_indices: has('d'),
+        source,
+    })
 }
 
 fn regexp_flags_contains(object: &ObjectRef, flag: char) -> bool {

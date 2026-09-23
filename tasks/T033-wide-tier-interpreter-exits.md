@@ -110,8 +110,47 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   fast path answers the intrinsics without a frame (string-validate-input
   -4.7% single-run cycles; makeName/makeNumber no longer judged exit-heavy).
 
+- Peephole rewrites (wide/peephole.rs, 3147d10b): CompareJump fusion,
+  results stored straight into locals, discarded constants not loaded;
+  hash-map runs 24% fewer wide operations (0.916 single-run cycles).
+  Folding `typeof local` and `return local` in place on top: 1.001,
+  closed.
+- Existing global variables assigned on the tier (7477de9e): fasta 0.80.
+- Measured wide costs (instruction increments against QuickJS-NG): a
+  call-and-return 700-800 instructions vs 300; a cached named read about
+  240 vs 50; `s = s + i` 95 vs 36. Typed loop programs run at parity with
+  NG's interpreter per operation (75 cycles per iteration on the same
+  8-operation loop).
+
+- Stack run 819a6ba4 vs main 0c2b38f1 (30 blocks, cycles, quiet host;
+  `target/comparison/wide-calls-819a6ba4-30b`): peephole rewrites, global
+  variable stores, post-accelerator hand-back, Math.random in typed loops,
+  string concatenation in place, native family dispatch, ASCII case
+  mapping, array/string/number method caches, integer formatting, dense
+  slice/concat/sort with default species, RegExp exec/test prelude.
+  External geomean 0.951 against main (JetStream subset 0.933, Kraken
+  0.939, SunSpider 0.960) and 1.0015 against QuickJS-NG in wall time;
+  stanford-crypto-pbkdf2/ccm, string-validate-input 0.872,
+  date-format-xparb 0.859, hash-map 0.879. Worst against main:
+  math-partial-sums 1.017, access-nsieve 1.016. Sentinel
+  `heterogeneous_property_read` 1.107 and broad `array_dynamic_read` 1.041
+  are open.
+
+## Found, not fixed
+
+- A sloppy assignment in a function to a global that has become an
+  accessor does not call the setter (`Object.defineProperty(globalThis,
+  'g', { set })` then `g = 4` in a function); QuickJS-NG calls it. The
+  interpreter path, before this task's changes too.
+- A function that assigned a global and then lets a native write it
+  (`Reflect.set(globalThis, 'w', 'X')`) reads its own stale copy of `w`
+  afterwards. Interpreter path, also predates this task.
+
 ## Next
 
+- Math.random from interpreted code costs 840 cycles per call (5.7x NG):
+  the call runs through the generic path because the typed loop cannot
+  call a stateful native.
 
 - Admit bodies with a parameter prologue (default values) once their dead-zone
   behaviour is covered; CF traces count 179k general frames for them.

@@ -38,7 +38,7 @@ impl WideActivation<'_> {
         let owner = self.upvalue_owner.as_ref()?;
         let bit = (slot < u128::BITS as usize).then(|| 1_u128 << slot)?;
         (self.upvalue_slots & bit != 0).then_some(())?;
-        let index = self.bytecode.direct_readonly_received_upvalue_index(slot)?;
+        let index = self.bytecode.readonly_received_upvalue_index(slot)?;
         owner.upvalues.get(index)
     }
 
@@ -71,13 +71,49 @@ impl WideActivation<'_> {
         }
     }
 
+    /// `CompareJump` on operands that are not both numbers: the comparison
+    /// the interpreter's `Binary` would run, on copies, since the operands
+    /// may be locals.
+    #[inline(never)]
+    fn compare(&self, left: &Value, op: BinaryOp, right: &Value) -> Result<bool, RuntimeError> {
+        if matches!(op, BinaryOp::StrictEq | BinaryOp::StrictNe)
+            && let Some(equal) = crate::bytecode::vm_ops::fast_strict_eq(left, right)
+        {
+            return Ok(equal == (op == BinaryOp::StrictEq));
+        }
+        let value = self.eval_binary(left.clone(), op, right.clone())?;
+        Ok(crate::is_truthy(&value))
+    }
+
     #[inline(never)]
     fn eval_binary(&self, left: Value, op: BinaryOp, right: Value) -> Result<Value, RuntimeError> {
         if let Some(value) = crate::operations::eval_binary_without_env(&left, op, &right) {
             return Ok(value);
         }
+        let (left, right) = if op == BinaryOp::Add {
+            match crate::bytecode::vm_string_append::concat_primitives(left, right) {
+                Ok(value) => return Ok(value),
+                Err(operands) => operands,
+            }
+        } else {
+            (left, right)
+        };
         let mut env = self.env.empty_frame();
         crate::operations::eval_binary(left, op, right, &mut env)
+    }
+}
+
+/// A relational or equality operator between two numbers; the compiler
+/// fuses no other operator into `CompareJump`.
+#[inline(always)]
+fn compare_numbers(left: f64, op: BinaryOp, right: f64) -> bool {
+    match op {
+        BinaryOp::Lt => left < right,
+        BinaryOp::Le => left <= right,
+        BinaryOp::Gt => left > right,
+        BinaryOp::Ge => left >= right,
+        BinaryOp::Ne | BinaryOp::StrictNe => left != right,
+        _ => left == right,
     }
 }
 
@@ -120,9 +156,7 @@ fn admit<'a>(
     if !program.admit_activation() {
         return None;
     }
-    let upvalue_slots = bytecode
-        .direct_readonly_received_upvalue_slots()
-        .unwrap_or(0);
+    let upvalue_slots = bytecode.readonly_received_upvalue_slots().unwrap_or(0);
     let upvalue_owner = if upvalue_slots == 0 {
         None
     } else {
@@ -490,6 +524,15 @@ fn exit_to_interpreter(
             return ExitOutcome::Continue { pc: resume_pc };
         }
     }
+    if let Some(crate::bytecode::ir::Op::StoreLocalOrGlobalSloppy { name, .. }) =
+        bytecode.code.get(ip as usize)
+    {
+        let top = usize::from(program.local_registers) + usize::from(depth) - 1;
+        if property::try_store_global_var(name, &window[top], env) {
+            execute::store(&mut window[top], Value::Undefined);
+            return ExitOutcome::Continue { pc: resume_pc };
+        }
+    }
     if let Some(crate::bytecode::ir::Op::SetProp { .. }) = bytecode.code.get(ip as usize) {
         let operand = |offset: u16| program.local_registers + depth - offset;
         if property::try_plain_set_prop(window, operand(3), operand(2), operand(1), env) {
@@ -545,7 +588,6 @@ fn exit_to_interpreter(
             }
         }
     }
-    program.record_exit();
     // `QJS_CF_TRACE=1` names every exit: the body, and the instruction the
     // interpreter resumes at.
     #[cfg(feature = "perf-counters")]
@@ -583,8 +625,19 @@ fn exit_to_interpreter(
         registers,
         from,
     ) {
-        Resumed::Finished(result) => ExitOutcome::Finished(result),
+        Resumed::Finished(result) => {
+            program.record_exit();
+            ExitOutcome::Finished(result)
+        }
+        // The interpreter frame only ran the accelerated loop, which is the
+        // cost the general path would have paid too; such an exit does not
+        // count toward judging the body exit-heavy.
+        Resumed::LoopFinished { ip: resume, depth } => match program.resume_pc(resume, depth) {
+            Some(pc) => ExitOutcome::Continue { pc },
+            None => ExitOutcome::Finished(Err(missing_program())),
+        },
         Resumed::HandedBack { backedge } => {
+            program.record_exit();
             let Some(index) = u32::try_from(backedge)
                 .ok()
                 .and_then(|backedge| program.probed_backedge(backedge))
@@ -669,9 +722,7 @@ fn run_typed_loop_here(
         locals,
         program.own_locals,
         upvalues,
-        bytecode
-            .direct_readonly_received_upvalue_slots()
-            .unwrap_or(0),
+        bytecode.readonly_received_upvalue_slots().unwrap_or(0),
         this_value,
     );
     if !crate::bytecode::typed_loop::try_run_typed_loop(&mut frame, plans, header, backedge) {
@@ -968,6 +1019,25 @@ fn run_frames(
                         }
                     }
                     WideOp::Jump { target } => pc = target as usize,
+                    WideOp::CompareJump {
+                        op,
+                        left,
+                        right,
+                        target,
+                    } => {
+                        let holds = match (&window[left as usize], &window[right as usize]) {
+                            (Value::Number(left), Value::Number(right)) => {
+                                compare_numbers(*left, op, *right)
+                            }
+                            (left, right) => match activation.compare(left, op, right) {
+                                Ok(holds) => holds,
+                                Err(error) => break Err(error),
+                            },
+                        };
+                        if !holds {
+                            pc = target as usize;
+                        }
+                    }
                     WideOp::Unary { dst, op, src } => {
                         let value = std::mem::replace(&mut window[src as usize], Value::Undefined);
                         match eval_unary(op, value, env) {
@@ -1438,8 +1508,48 @@ fn construct_from_activation(
     ) {
         return result;
     }
+    if let Some(array) = construct_plain_array(env, &callee, arguments) {
+        return Ok(array);
+    }
     let mut env = env.empty_frame();
     crate::function::construct_function(callee.clone(), callee, arguments.to_vec(), &mut env)
+}
+
+/// `new Array(...)` on the realm's own Array constructor, whose `prototype`
+/// is non-writable and non-configurable: the array the constructor builds,
+/// without first allocating the ordinary receiver the general construct
+/// path makes for it. A length that is not a valid array length, or any
+/// other constructor, takes the general path and its errors.
+fn construct_plain_array(env: &CallEnv, callee: &Value, arguments: &[Value]) -> Option<Value> {
+    let Value::Function(function) = callee else {
+        return None;
+    };
+    if function.native != Some(crate::NativeFunction::Array)
+        || function.bound.is_some()
+        || env.array_prototype_intrinsic_override().is_some()
+        || env.dynamic_function_realm_global().is_some()
+    {
+        return None;
+    }
+    let realm_prototype = env.realm().array_prototype()?;
+    match function.own_property("prototype") {
+        Some(property)
+            if !property.is_accessor()
+                && matches!(&property.value, Value::Object(prototype) if prototype.ptr_eq(&realm_prototype)) =>
+            {}
+        _ => return None,
+    }
+    let array = match arguments {
+        [Value::Number(length)] => {
+            let valid = length.fract() == 0.0 && (0.0..4_294_967_296.0).contains(length);
+            if !valid {
+                return None;
+            }
+            crate::ArrayRef::new_with_length(*length as usize)
+        }
+        values => crate::ArrayRef::new(values.to_vec()),
+    };
+    Some(Value::Array(array))
 }
 
 #[cold]
@@ -1566,5 +1676,17 @@ fn call_from_activation(
         return result;
     }
     let mut env = activation.env.empty_frame();
+    // A plain native takes its arguments where they are; only a bytecode
+    // callee, a bound function or a proxy needs an owned vector.
+    if let Value::Function(function) = &callee
+        && let Some(native) = function.native
+        && function.bound.is_none()
+        && !function.is_class_constructor
+    {
+        crate::diagnostics::count!(native_calls);
+        return crate::native::call_native_function(
+            function, native, this_value, arguments, false, &mut env,
+        );
+    }
     crate::function::call_function(callee, this_value, arguments.to_vec(), &mut env, false)
 }

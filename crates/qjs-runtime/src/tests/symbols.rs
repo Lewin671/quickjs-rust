@@ -304,3 +304,18 @@ fn registered_symbol_checks_work_inside_function_frames() {
         Ok(Value::String("threw:true".to_owned().into()))
     );
 }
+
+#[test]
+fn well_known_symbols_are_realm_intrinsics_not_the_symbol_binding() {
+    assert_eq!(
+        eval(
+            "var iterator = Symbol.iterator, sum = 0;
+             Symbol = undefined;
+             for (var x of [1, 2, 3]) sum += x;
+             var custom = { [iterator]: function () { var i = 0; return { next: function () { return { done: i >= 2, value: i++ }; } }; } };
+             for (var y of custom) sum += 10 * y;
+             [sum, [1, 2] instanceof Array, [...'ab'].join('')].join(',');"
+        ),
+        Ok(Value::String("16,true,ab".into()))
+    );
+}

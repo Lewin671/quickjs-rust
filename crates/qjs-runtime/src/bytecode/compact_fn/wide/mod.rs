@@ -27,6 +27,7 @@ use crate::bytecode::named_property_cache::NamedPropertyCache;
 mod activation;
 mod compile;
 mod loop_frame;
+mod peephole;
 #[cfg(test)]
 mod tests;
 
@@ -130,6 +131,17 @@ enum WideOp {
     JumpIfTruthy {
         cond: u16,
         target: u32,
+    },
+    /// `if (left op right)`: compares two registers with a relational or
+    /// equality operator and jumps to `target` when the result is false.
+    /// It stands for the comparison, the conditional jump and the pops of
+    /// the condition on both successors, so the result is never
+    /// materialized; the operands are only read.
+    CompareJump {
+        op: BinaryOp,
+        left: u16,
+        right: u16,
+        target: u16,
     },
     Unary {
         dst: u16,
@@ -419,4 +431,16 @@ pub(in crate::bytecode) fn hands_back_at(bytecode: &Bytecode, ip: usize, depth: 
         .ok()
         .and_then(|ip| program.probed_backedge(ip))
         .is_some_and(|index| usize::from(program.probed_backedges[index].depth) == depth)
+}
+
+/// Whether the tier can continue this body at instruction `ip` with `depth`
+/// operand-stack values: a loop accelerator that finished the loop at a
+/// probed backedge leaves the frame there, and the rest of the body runs
+/// here again.
+pub(in crate::bytecode) fn resumes_at(bytecode: &Bytecode, ip: usize, depth: usize) -> bool {
+    bytecode
+        .compact_wide_program
+        .get()
+        .and_then(Option::as_ref)
+        .is_some_and(|program| program.resume_pc(ip, depth).is_some())
 }

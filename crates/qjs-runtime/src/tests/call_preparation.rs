@@ -228,3 +228,32 @@ fn closed_form_receiver_arithmetic_declines_every_non_numeric_input() {
         assert_eq!(value_of(&format!("{SETUP}{source}")), *expected, "{label}");
     }
 }
+
+/// Native dispatch remembers which builtin family owns each function; the
+/// answers stay the same on every later call, whichever family owns it.
+#[test]
+fn natives_answer_the_same_on_repeated_calls_across_families() {
+    assert_eq!(
+        eval(
+            "var out = [];
+             var m = new Map(), a = [], p = Promise.resolve(1);
+             for (var i = 0; i < 3; i++) {
+                 a.push(i);
+                 m.set(i, i * 2);
+                 out.push([
+                     Math.max(i, 1), 'xyz'.charAt(i), JSON.stringify({ i: i }), m.get(i),
+                     a.length, Object.keys({ a: 1, b: 2 }).length, (255).toString(16),
+                     Array.isArray(a), /b+/.test('abbc'), typeof p.then, new Date(0).getTime(),
+                     Reflect.has(a, 0), String.fromCharCode(65 + i), parseInt('7' + i)
+                 ].join(','));
+             }
+             out.join(';');"
+        ),
+        Ok(Value::String(
+            "1,x,{\"i\":0},0,1,2,ff,true,true,function,0,true,A,70;\
+             1,y,{\"i\":1},2,2,2,ff,true,true,function,0,true,B,71;\
+             2,z,{\"i\":2},4,3,2,ff,true,true,function,0,true,C,72"
+                .into()
+        ))
+    );
+}

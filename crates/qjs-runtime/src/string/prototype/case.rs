@@ -7,10 +7,42 @@ use unicode_normalization::UnicodeNormalization;
 use super::super::indexing::this_string_value;
 use super::super::{string_code_units, string_from_code_unit, surrogate_escape_code_unit};
 
+/// Case-maps an ASCII string receiver without decoding it: an ASCII
+/// string maps to ASCII, and one with nothing to map is returned as it is.
+fn ascii_case(this_value: &Value, upper: bool) -> Option<Value> {
+    let Value::String(text) = this_value else {
+        return None;
+    };
+    if !text.is_ascii() {
+        return None;
+    }
+    let changes = |byte: &u8| {
+        if upper {
+            byte.is_ascii_lowercase()
+        } else {
+            byte.is_ascii_uppercase()
+        }
+    };
+    if !text.as_bytes().iter().any(changes) {
+        return Some(this_value.clone());
+    }
+    Some(Value::String(
+        if upper {
+            text.to_ascii_uppercase()
+        } else {
+            text.to_ascii_lowercase()
+        }
+        .into(),
+    ))
+}
+
 pub(crate) fn native_string_prototype_to_lower_case(
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    if let Some(value) = ascii_case(&this_value, false) {
+        return Ok(value);
+    }
     Ok(Value::String(
         case_convert(&this_string_value(this_value, env)?, str::to_lowercase).into(),
     ))
@@ -20,6 +52,9 @@ pub(crate) fn native_string_prototype_to_upper_case(
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    if let Some(value) = ascii_case(&this_value, true) {
+        return Ok(value);
+    }
     Ok(Value::String(
         case_convert(&this_string_value(this_value, env)?, str::to_uppercase).into(),
     ))

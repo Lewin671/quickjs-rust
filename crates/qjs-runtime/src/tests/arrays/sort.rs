@@ -168,3 +168,32 @@ fn default_sort_orders_by_utf16_code_units() {
         Ok(Value::Boolean(true))
     );
 }
+
+/// A dense array sorts in place of its storage; anything a per-index
+/// read or write could observe keeps the element-wise path.
+#[test]
+fn dense_sort_matches_the_element_wise_reads_and_writes() {
+    assert_eq!(
+        eval(
+            "var out = [];
+             var nums = [5, 3, 8, 1, 9, 2];
+             out.push(nums.sort(function (a, b) { return a - b; }) === nums, nums.join());
+             out.push(['b', 'a', 'c', 'aa'].sort().join(), [10, 9, 1, 100].sort().join());
+             var stable = [{k: 1, v: 'a'}, {k: 0, v: 'b'}, {k: 1, v: 'c'}, {k: 0, v: 'd'}];
+             out.push(stable.sort(function (x, y) { return x.k - y.k; }).map(function (e) { return e.v; }).join(''));
+             var growing = [3, 1, 2];
+             growing.sort(function (a, b) { if (growing.length < 5) growing.push(0); return a - b; });
+             out.push(growing.join());
+             out.push([3, undefined, 1, , 2].sort().join());
+             var frozen = Object.freeze([2, 1]);
+             try { frozen.sort(); out.push('no throw'); } catch (e) { out.push(e instanceof TypeError); }
+             var withSetter = [2, 1];
+             Object.defineProperty(withSetter, 0, { set(v) { out.push('set ' + v); }, get() { return 2; } });
+             withSetter.sort(); out.push(withSetter[1]);
+             out.join('|');"
+        ),
+        Ok(Value::String(
+            "true|1,2,3,5,8,9|a,aa,b,c|1,10,100,9|bdac|1,2,3,0,0|1,2,3,,|true|set 1|2".into()
+        ))
+    );
+}

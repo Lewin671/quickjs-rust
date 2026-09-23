@@ -70,9 +70,7 @@ pub(super) fn get_prop_named(
             OwnDataPropertyRead::NeedsSlowPath => {}
         }
     }
-    if let Value::String(text) = object
-        && let Some(value) = string_named_value(text, key, env)
-    {
+    if let Some(value) = prototype_receiver_named_value(object, key, cache, env) {
         return Ok(value);
     }
     cache.clear();
@@ -80,29 +78,80 @@ pub(super) fn get_prop_named(
     crate::bytecode::vm_props::get_property(object.clone(), key, &mut call_env)
 }
 
-/// A named read on a primitive string, as `Vm::try_direct_get_string`
-/// answers it: `length`, an own index, then a data property on the realm's
-/// live `%String.prototype%`. `text.charCodeAt` in a loop otherwise walked
-/// the general [[Get]], which rediscovers the `String` binding by name and
-/// builds a realm frame per read.
-fn string_named_value(text: &crate::JsString, key: &str, env: &CallEnv) -> Option<Value> {
-    if key == "length" {
-        return Some(Value::Number(
-            crate::string::js_string_code_unit_len(text) as f64
-        ));
-    }
-    if let Some(value) = crate::string::string_property(text, key) {
+/// A named read on a primitive string or number, or an array: `length`, an
+/// own index or (for an array) an own named property, then a data property
+/// on the realm's live `%String.prototype%`, `%Number.prototype%` or
+/// `%Array.prototype%`, as
+/// `Vm::try_direct_get_string` answers it. The prototype's answer is the
+/// site's cached entry for that prototype object, revalidated by its
+/// revision like any receiver's, so `text.charCodeAt` and `list.push` read
+/// their method without walking the chain. `None` leaves the read to the
+/// general [[Get]].
+#[inline(never)]
+fn prototype_receiver_named_value(
+    object: &Value,
+    key: &Rc<str>,
+    cache: &NamedPropertyCache,
+    env: &CallEnv,
+) -> Option<Value> {
+    let prototype = match object {
+        // A function's own data property -- `String.fromCharCode`,
+        // `Array.isArray` -- read where it is.
+        Value::Function(function) => {
+            return function
+                .own_property(key)
+                .filter(|property| !property.is_accessor())
+                .map(|property| property.value);
+        }
+        Value::String(text) => {
+            if &**key == "length" {
+                return Some(Value::Number(
+                    crate::string::js_string_code_unit_len(text) as f64
+                ));
+            }
+            if let Some(value) = crate::string::string_property(text, key) {
+                return Some(value);
+            }
+            if env.dynamic_function_realm_global().is_some() {
+                return None;
+            }
+            env.realm().string_prototype()?
+        }
+        Value::Number(_) => {
+            if env.dynamic_function_realm_global().is_some() {
+                return None;
+            }
+            env.realm().number_prototype()?
+        }
+        Value::Array(array) => {
+            if &**key == "length" {
+                return Some(Value::Number(array.len() as f64));
+            }
+            if crate::array_index_property_key(key).is_some() || array.property(key).is_some() {
+                return None;
+            }
+            match array.effective_prototype_slot(env)? {
+                crate::Prototype::Object(prototype) => prototype,
+                _ => return None,
+            }
+        }
+        _ => return None,
+    };
+    if let CacheProbe::Own(value) = cache.probe(&prototype) {
         return Some(value);
     }
-    if env.dynamic_function_realm_global().is_some() {
-        return None;
-    }
-    let prototype = env.realm().string_prototype()?;
     use crate::bytecode::vm_props::{DirectPropertyRead, ordinary_chain_data_value};
-    match ordinary_chain_data_value(&prototype, key) {
-        Ok(DirectPropertyRead::Data(value)) => Some(value),
-        Ok(DirectPropertyRead::Missing) => Some(Value::Undefined),
-        Ok(DirectPropertyRead::NeedsSlowPath) | Err(_) => None,
+    match prototype.own_data_property_read(key) {
+        OwnDataPropertyRead::Data(value) => {
+            cache.update(&prototype, key, &value);
+            Some(value)
+        }
+        OwnDataPropertyRead::Missing => match ordinary_chain_data_value(&prototype, key) {
+            Ok(DirectPropertyRead::Data(value)) => Some(value),
+            Ok(DirectPropertyRead::Missing) => Some(Value::Undefined),
+            Ok(DirectPropertyRead::NeedsSlowPath) | Err(_) => None,
+        },
+        OwnDataPropertyRead::NeedsSlowPath => None,
     }
 }
 
@@ -515,4 +564,52 @@ fn undefined_identifier(name: &str) -> RuntimeError {
         thrown: None,
         message: format!("ReferenceError: undefined identifier `{name}`"),
     }
+}
+
+/// A sloppy assignment to an existing global variable, the store
+/// `Op::StoreLocalOrGlobalSloppy` performs for a name the function neither
+/// declares nor receives: the realm binding and the `globalThis` data
+/// property that mirrors it are both overwritten, as the interpreter's
+/// store does once the binding exists. Returns `false`, having changed
+/// nothing, for anything else -- a lexical or immutable binding, a module
+/// binding, an accessor or read-only property, a name not yet bound, or a
+/// mirror that disagrees with its binding -- which the caller leaves to the
+/// interpreter.
+#[inline(never)]
+pub(super) fn try_store_global_var(name: &str, value: &Value, env: &CallEnv) -> bool {
+    if env.is_global_lexical_binding(name)
+        || env.is_immutable_lexical_binding(name)
+        || env.is_immutable_function_name(name)
+        || env.has_module_import(name)
+        || env.module_live_binding_cell(name).is_some()
+    {
+        return false;
+    }
+    let (Some(Value::Object(global_this)), Some(cell)) =
+        (env.global_this(), env.realm_binding_cell(name))
+    else {
+        return false;
+    };
+    let Some(property) = global_this.own_property(name) else {
+        return false;
+    };
+    let current = cell.get();
+    // Identity is enough to prove the mirror in sync, and a string
+    // accumulator compared by content would cost its whole length per store.
+    let in_sync = match (&property.value, &current) {
+        (Value::String(left), Value::String(right)) => crate::JsString::ptr_eq(left, right),
+        (left, right) => left.same_value(right),
+    };
+    if property.is_accessor() || !property.writable || !in_sync {
+        return false;
+    }
+    drop(current);
+    drop(property);
+    if !matches!(
+        global_this.write_existing_own_data_property(name, value),
+        OwnDataPropertyWrite::Written
+    ) {
+        return false;
+    }
+    env.replace_existing_realm_with_cell(name, value.clone(), &cell)
 }

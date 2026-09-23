@@ -134,6 +134,10 @@ pub(super) fn is_non_capturing_group(pattern: &[char], pc: usize) -> bool {
 /// (`None` for unnamed groups). Returns an empty vector when there are no
 /// named groups, so callers can set `groups` to `undefined`.
 pub(in crate::regexp) fn regexp_group_names(source: &str) -> Vec<Option<String>> {
+    // A named group is spelled `(?<name>` in the source itself.
+    if !source.contains("(?<") {
+        return Vec::new();
+    }
     let source = super::normalization::normalized_regexp_source(source);
     let pattern: Vec<char> = source.chars().collect();
     let mut names = Vec::new();

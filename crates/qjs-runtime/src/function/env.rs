@@ -58,6 +58,11 @@ pub(crate) struct RealmState {
     /// Stable `%String.prototype%` identity used by primitive String reads.
     /// The mutable global `String` binding is not the intrinsic authority.
     string_prototype: OnceCell<ObjectRef>,
+    /// Stable `%Number.prototype%` identity used by primitive Number reads.
+    number_prototype: OnceCell<ObjectRef>,
+    /// The realm's well-known symbols, in `symbol::WELL_KNOWN_SYMBOL_NAMES`
+    /// order.
+    well_known_symbols: OnceCell<Vec<ObjectRef>>,
     /// Lazily shared immutable index values for String boxes. This cache owns
     /// no objects or realm references and retains at most 256 strings.
     code_unit_strings: crate::string::CodeUnitStrings,
@@ -100,6 +105,8 @@ impl RealmState {
             object_prototype: OnceCell::new(),
             array_prototype: OnceCell::new(),
             string_prototype: OnceCell::new(),
+            number_prototype: OnceCell::new(),
+            well_known_symbols: OnceCell::new(),
             code_unit_strings: crate::string::CodeUnitStrings::default(),
             string_object_keys: crate::string::StringObjectKeys::default(),
             global_this,
@@ -140,6 +147,28 @@ impl RealmState {
             self.array_prototype.set(prototype).is_ok(),
             "realm Array.prototype intrinsic initialized twice"
         );
+    }
+
+    pub(crate) fn initialize_number_prototype(&self, prototype: ObjectRef) {
+        assert!(
+            self.number_prototype.set(prototype).is_ok(),
+            "realm Number.prototype intrinsic initialized twice"
+        );
+    }
+
+    pub(crate) fn initialize_well_known_symbols(&self, symbols: Vec<ObjectRef>) {
+        assert!(
+            self.well_known_symbols.set(symbols).is_ok(),
+            "realm well-known symbols initialized twice"
+        );
+    }
+
+    pub(crate) fn well_known_symbol(&self, index: usize) -> Option<ObjectRef> {
+        self.well_known_symbols.get()?.get(index).cloned()
+    }
+
+    pub(crate) fn number_prototype(&self) -> Option<ObjectRef> {
+        self.number_prototype.get().cloned()
     }
 
     pub(crate) fn initialize_string_prototype(&self, prototype: ObjectRef) {

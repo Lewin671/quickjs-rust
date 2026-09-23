@@ -26,6 +26,10 @@ pub(in crate::bytecode) enum Resumed {
     /// accelerator claimed, before performing it. The locals and the
     /// operand stack are back in the tier's registers.
     HandedBack { backedge: usize },
+    /// An accelerator ran the loop at the probed backedge to its end; the
+    /// frame stopped at instruction `ip` after it, with the locals and the
+    /// operand stack, `depth` values deep, back in the tier's registers.
+    LoopFinished { ip: usize, depth: usize },
 }
 
 /// The tier's registers an interpreter continuation takes over.
@@ -107,8 +111,19 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
         ResumeFrom::ProbedBackedge(target) => {
             vm.current.ip = ip + 1;
             if vm.jump_with_loop_plans(LoopPlanView::for_bytecode(bytecode), target, ip) {
-                vm.current.cold_mut().wide_handback = Some(None);
-                run(&mut vm)
+                // A loop the accelerator finished leaves the frame past its
+                // backedge; the rest of the body runs on the tier again.
+                if vm.current.ip > ip
+                    && compact_fn::resumes_at(bytecode, vm.current.ip, vm.current.stack.len())
+                {
+                    Resumed::LoopFinished {
+                        ip: vm.current.ip,
+                        depth: vm.current.stack.len(),
+                    }
+                } else {
+                    vm.current.cold_mut().wide_handback = Some(None);
+                    run(&mut vm)
+                }
             } else {
                 vm.current.ip = ip;
                 Resumed::HandedBack { backedge: ip }
@@ -123,7 +138,7 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
         }
         ResumeFrom::Exit => Resumed::Finished(vm.run()),
     };
-    if let Resumed::HandedBack { .. } = resumed {
+    if let Resumed::HandedBack { .. } | Resumed::LoopFinished { .. } = resumed {
         hand_back(&mut vm, registers);
     }
     bytecode.recycle_local_slots(std::mem::take(&mut vm.current.locals));

@@ -1,3 +1,5 @@
+use qjs_ast::BinaryOp;
+
 use super::{WideOp, compile};
 use crate::bytecode::{compiler, ir::Bytecode, ir::Op};
 use crate::{Value, eval};
@@ -886,5 +888,287 @@ fn a_branch_on_a_local_tests_it_in_place() {
             "{source} [pick({{}}, 0), pick(0, 0), pick('', 5), pick(NaN, 1)].join(',');"
         )),
         Value::String("1:0,0:0,:0,NaN:0".into())
+    );
+}
+
+#[test]
+fn a_comparison_branch_is_one_operation_on_its_operands() {
+    let source = "function order(a, b) {
+        var out = 0;
+        if (a < b) out = out + 1;
+        if (a === b) out = out + 10;
+        if (a >= 2) out = out + 100;
+        if (typeof a == 'object') out = out + 1000;
+        return out;
+    }";
+    let program =
+        compile::compile(&nested_function(source, "order")).expect("the body should be admitted");
+    let fused = program
+        .ops
+        .iter()
+        .filter(|op| matches!(op, WideOp::CompareJump { .. }))
+        .count();
+    assert_eq!(fused, 4, "{:#?}", program.ops);
+    assert!(
+        !program.ops.iter().any(|op| matches!(
+            op,
+            WideOp::JumpIfFalsy { .. }
+                | WideOp::Binary {
+                    op: BinaryOp::Lt | BinaryOp::StrictEq | BinaryOp::Ge | BinaryOp::Eq,
+                    ..
+                }
+        )),
+        "{:#?}",
+        program.ops
+    );
+    // Numbers, NaN, strings, and objects whose conversion is observable,
+    // converted left before right exactly once per comparison.
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var log = [];
+             function v(name, n) {{ return {{ valueOf() {{ log.push(name); return n; }} }}; }}
+             [order(1, 2), order(2, 2), order(NaN, NaN), order('b', 'a'), order('a', 'a'),
+              order(v('x', 1), v('y', 3)), log.join('')].join(',');"
+        )),
+        Value::String("1,110,0,0,10,1001,xyx".into())
+    );
+}
+
+#[test]
+fn a_stored_result_is_written_to_the_local_directly() {
+    let source =
+        "function sum(a, b) { var t = a + b; var u = t; var w = typeof u; return t + u + w; }";
+    let program =
+        compile::compile(&nested_function(source, "sum")).expect("the body should be admitted");
+    let moves = program
+        .ops
+        .iter()
+        .filter(|op| {
+            matches!(op, WideOp::Move { dst, src }
+                if *dst < program.local_registers && *src >= program.local_registers)
+        })
+        .count();
+    assert_eq!(moves, 0, "{:#?}", program.ops);
+    assert_eq!(
+        value_of(&format!("{source} sum(1, 2) + '|' + sum('a', 'b');")),
+        Value::String("6number|ababstring".into())
+    );
+}
+
+#[test]
+fn a_loop_condition_reentered_from_its_backedge_reads_the_current_values() {
+    // The loop header is the comparison's first operand load, so the
+    // backedge lands on the fused comparison.
+    let source = "function count(n) {
+        var i = 0, hits = 0, guard = 0;
+        while (i < n) { if (++guard > 1000) throw 'hang'; if (i !== 3) hits++; i++; }
+        return hits;
+    }";
+    assert_eq!(
+        value_of(&format!("{source} count(10);")),
+        Value::Number(9.0)
+    );
+}
+
+#[test]
+fn a_function_assigning_an_existing_global_variable_runs_here() {
+    let source = "var last = 42, A = 3877, C = 29573, M = 139968;
+        function rand(max) { last = (last * A + C) % M; return max * last / M; }";
+    let program =
+        compile::compile(&nested_function(source, "rand")).expect("the body should be admitted");
+    assert!(
+        program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::Exit { .. })),
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var sum = 0; for (var i = 0; i < 100; i++) sum += rand(100);
+             [Math.round(sum), last, globalThis.last].join(',');"
+        )),
+        value_of(
+            "var last = 42, A = 3877, C = 29573, M = 139968;
+             var sum = 0; for (var i = 0; i < 100; i++) {
+                 last = (last * A + C) % M; sum += 100 * last / M;
+             }
+             [Math.round(sum), last, globalThis.last].join(',');"
+        )
+    );
+}
+
+#[test]
+fn global_stores_the_fast_path_cannot_prove_keep_their_semantics() {
+    let source = "function set(v) { g = v; return v; }
+        // Created by the first store, then overwritten.
+        set(1); set(2);
+        var created = g;
+        // Read-only: a sloppy store is silently ignored.
+        Object.defineProperty(globalThis, 'g', { value: 7, writable: false, configurable: true });
+        set(3);
+        var readOnly = g;
+        // Writable again, through a redefinition the store must observe.
+        Object.defineProperty(globalThis, 'g', { value: 8, writable: true, configurable: true });
+        set(4); set(5);
+        [created, readOnly, g, globalThis.g].join(',');";
+    assert_eq!(value_of(source), Value::String("2,7,5,5".into()));
+    assert_eq!(
+        value_of(
+            "let lex = 1; function setLex(v) { lex = v; } setLex(2); setLex(3);
+             [lex, 'lex' in globalThis].join(',');"
+        ),
+        Value::String("3,false".into())
+    );
+    assert!(
+        error_of("const fixed = 1; function setFixed() { fixed = 2; } setFixed(); setFixed();")
+            .contains("TypeError")
+    );
+}
+
+#[test]
+fn a_global_store_in_a_loop_or_appending_to_itself_stays_interpreted() {
+    for (source, name) in [
+        (
+            "var n = 0; function count(k) { for (var i = 0; i < k; i++) { n = n + 1; } return n; }",
+            "count",
+        ),
+        ("var text = ''; function add(s) { text = text + s; }", "add"),
+    ] {
+        assert!(
+            compile::compile(&nested_function(source, name)).is_none(),
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn a_caller_that_assigned_the_global_itself_reads_the_callee_s_store() {
+    // Test262 S12.2_A3: the enclosing function routes its own sloppy
+    // assignment through the realm cell, which the store here writes.
+    assert_eq!(
+        value_of(
+            "var shared = 'OUT';
+             (function () {
+                 shared = 'IN';
+                 (function () { shared = 'INNER'; })();
+                 (function () { var shared = 'SHADOW'; })();
+                 if (shared !== 'INNER') throw new Error('stale ' + shared);
+             })();
+             shared;"
+        ),
+        Value::String("INNER".into())
+    );
+}
+
+#[test]
+fn the_rest_of_a_body_runs_here_after_an_accelerator_finishes_its_loop() {
+    // The AES round shape: a numeric-mutation loop over table lookups, then
+    // more work on locals and the receiver, called far more often than the
+    // exit-heavy judgement's sample.
+    let source = "function Box() { this.k = [1, 2, 3, 4, 5, 6, 7, 8]; this.out = 0; }
+        Box.prototype.round = function (a, b) {
+            var k = this.k, x = a, y = b, j, n = k.length;
+            for (j = 0; j < n; j++) { x = (x ^ k[j]) + y; y = (y * 3) & 1023; }
+            var tail = [x & 255, y & 255];
+            this.out = tail[0] + tail[1];
+            return this.out + j;
+        };";
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var box = new Box(), total = 0;
+             for (var i = 0; i < 200; i++) total += box.round(i, i + 1);
+             total;"
+        )),
+        value_of(&format!(
+            "{source}
+             function reference(a, b) {{
+                 var k = [1, 2, 3, 4, 5, 6, 7, 8], x = a, y = b, j;
+                 for (j = 0; j < 8; j++) {{ x = (x ^ k[j]) + y; y = (y * 3) & 1023; }}
+                 return (x & 255) + (y & 255) + j;
+             }}
+             var total = 0;
+             for (var i = 0; i < 200; i++) total += reference(i, i + 1);
+             total;"
+        ))
+    );
+}
+
+#[test]
+fn array_and_string_method_reads_follow_their_prototypes() {
+    // Each read site sees the realm prototype's method, an own shadowing
+    // property, a replaced prototype method, and a subclass prototype.
+    let source = "function use(list, text) {
+        list.push(text.charAt(0));
+        return list.length + ':' + list.join('') + ':' + text.toUpperCase();
+    }";
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var out = [];
+             for (var i = 0; i < 3; i++) out.push(use([i], 'ab'));
+             var shadow = [9]; shadow.join = function () {{ return 'own'; }};
+             out.push(use(shadow, 'cd'));
+             var saved = Array.prototype.push;
+             Array.prototype.push = function (v) {{ return saved.call(this, v, v); }};
+             var patched = use([7], 'ef');
+             Array.prototype.push = saved;
+             out.push(patched);
+             String.prototype.charAt = function () {{ return '#'; }};
+             out.push(use([], 'gh'));
+             class Stack extends Array {{ join() {{ return 'stack'; }} }}
+             out.push(use(new Stack(), 'ij'));
+             out.join(' ');"
+        )),
+        Value::String("2:0a:AB 2:1a:AB 2:2a:AB 2:own:CD 3:7ee:EF 1:#:GH 1:stack:IJ".into())
+    );
+}
+
+#[test]
+fn number_method_reads_follow_number_prototype() {
+    let source = "function show(n) { return n.toString() + '/' + n.toFixed(1); }";
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var out = [show(1), show(2.5)];
+             Number.prototype.toFixed = function () {{ return 'fixed'; }};
+             out.push(show(3));
+             out.join(' ');"
+        )),
+        Value::String("1/1.0 2.5/2.5 3/fixed".into())
+    );
+}
+
+#[test]
+fn builtin_statics_arrays_and_instanceof_keep_their_hooks() {
+    let source = "function probe(n, C) {
+        var a = new Array(n), b = new Array(1, 2), c = new Array('x');
+        return [a.length, 0 in a, b.join(), c[0], String.fromCharCode(65 + n),
+                Array.isArray(a), a instanceof Array, b instanceof C].join(',');
+    }";
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             function Plain() {{}}
+             class Base {{}} class Derived extends Base {{}}
+             class Hooked {{ static [Symbol.hasInstance](v) {{ return v === 7; }} }}
+             var out = [probe(2, Array), probe(0, Plain), probe(1, Derived)];
+             String.fromCharCode = function () {{ return 'patched'; }};
+             out.push(probe(3, Base));
+             out.push([7] instanceof Hooked, 7 instanceof Hooked);
+             try {{ new Array(-1); }} catch (e) {{ out.push(e instanceof RangeError); }}
+             try {{ probe(1.5, Array); }} catch (e) {{ out.push(e instanceof RangeError); }}
+             out.join(' | ');"
+        )),
+        Value::String(
+            "2,false,1,2,x,C,true,true,true | 0,false,1,2,x,A,true,true,false | \
+             1,false,1,2,x,B,true,true,false | 3,false,1,2,x,patched,true,true,false | \
+             false | true | true | true"
+                .into()
+        )
     );
 }

@@ -7,6 +7,8 @@ use crate::CallEnv;
 
 pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let number_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    env.realm()
+        .initialize_number_prototype(number_prototype.clone());
     let number_function = Function::new_native(Some("Number"), 1, NativeFunction::Number, true);
     number_prototype.define_non_enumerable(NUMBER_DATA_PROPERTY.to_owned(), Value::Number(0.0));
     number_prototype.define_non_enumerable(

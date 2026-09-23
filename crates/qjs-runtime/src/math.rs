@@ -530,7 +530,7 @@ fn sign_extend(value: u64) -> u64 {
 
 static RANDOM_STATE: AtomicU64 = AtomicU64::new(0);
 
-fn random_unit_interval() -> f64 {
+pub(crate) fn random_unit_interval() -> f64 {
     let value = next_random_u64();
     ((value >> 11) as f64) * (1.0 / ((1_u64 << 53) as f64))
 }
