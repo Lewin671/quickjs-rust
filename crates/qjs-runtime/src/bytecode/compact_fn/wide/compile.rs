@@ -9,6 +9,8 @@
 
 use std::rc::Rc;
 
+use qjs_ast::BinaryOp;
+
 use super::peephole::{fuse_compare_jump, retarget, sole_op_of_previous};
 use super::{NamedReadSite, NamedWriteSite, ProbedBackedge, WideOp, WideProgram};
 use crate::bytecode::compact_fn::MAX_REGISTERS;
@@ -69,9 +71,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
     if local_count >= MAX_REGISTERS {
         return decline(trace, None, "too many locals");
     }
-    let upvalue_slots = bytecode
-        .direct_readonly_received_upvalue_slots()
-        .unwrap_or(0);
+    let upvalue_slots = bytecode.readonly_received_upvalue_slots().unwrap_or(0);
     // Slots a fresh activation is guaranteed to have a value in; requiring
     // every read to land in this set is what lets the tier skip
     // temporal-dead-zone checking rather than reproduce its diagnostics.
@@ -233,6 +233,11 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
             // `MAX_CALL_ARITY` for why it is bounded at all.
             Op::Call(argc) | Op::CallResolved(argc) if *argc > MAX_CALL_ARITY => {
                 return decline(trace, Some(ip), "call arity above the limit");
+            }
+            Op::StoreLocalOrGlobalSloppy { name, .. } => {
+                if let Some(reason) = global_store_stays_interpreted(code, ip, name) {
+                    return decline(trace, Some(ip), reason);
+                }
             }
             _ => {}
         }
@@ -919,6 +924,30 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
     })
 }
 
+/// Why a sloppy global store at `ip` keeps its body on the interpreter,
+/// whose frame does it faster: inside a loop, where the interpreter's typed
+/// loops write such globals without leaving the loop; or appending to the
+/// global it reads, where the interpreter drops its own mirrors of the
+/// string first so the append reuses the buffer instead of copying it.
+fn global_store_stays_interpreted(code: &[Op], ip: usize, name: &str) -> Option<&'static str> {
+    let in_loop = code.iter().enumerate().any(|(jump_ip, op)| {
+        matches!(op, Op::Jump(target) | Op::JumpIfFalse(target) | Op::JumpIfTrue(target)
+            if *target <= ip && ip <= jump_ip)
+    });
+    if in_loop {
+        return Some("sloppy global store inside a loop");
+    }
+    let appends = match ip.checked_sub(1).map(|at| &code[at]) {
+        Some(Op::Binary(BinaryOp::Add)) => true,
+        Some(Op::Dup) => ip >= 2 && matches!(code[ip - 2], Op::Binary(BinaryOp::Add)),
+        _ => false,
+    };
+    let reads_it = code
+        .iter()
+        .any(|op| matches!(op, Op::LoadGlobal(read) if read == name));
+    (appends && reads_it).then_some("sloppy global store appending to itself")
+}
+
 /// How an instruction takes part in `x = x op y` folded onto the local.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LocalFold {
@@ -1204,6 +1233,7 @@ fn is_exit_safe(op: &Op) -> bool {
             | Op::RequireObjectCoercible
             | Op::NewObjectDataLiteral { .. }
             | Op::AppendStringLiteralLocal { .. }
+            | Op::StoreLocalOrGlobalSloppy { .. }
     )
 }
 
@@ -1241,6 +1271,9 @@ fn effect_of(op: &Op) -> Option<Effect> {
         // interpreter.
         Op::SetProp { .. } => simple(3, 1),
         Op::SetPropIndex { .. } => simple(2, 1),
+        // A store to an existing global variable runs at its exit and
+        // continues; any other sloppy global store is the interpreter's.
+        Op::StoreLocalOrGlobalSloppy { .. } => simple(1, 0),
         // An object literal is built at its exit, which always continues.
         Op::NewObjectDataLiteral { shape } => simple(u16::try_from(shape.input_len()).ok()?, 1),
         Op::JumpIfFalse(target) | Op::JumpIfTrue(target) => Effect {

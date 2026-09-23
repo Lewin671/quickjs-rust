@@ -516,3 +516,51 @@ fn undefined_identifier(name: &str) -> RuntimeError {
         message: format!("ReferenceError: undefined identifier `{name}`"),
     }
 }
+
+/// A sloppy assignment to an existing global variable, the store
+/// `Op::StoreLocalOrGlobalSloppy` performs for a name the function neither
+/// declares nor receives: the realm binding and the `globalThis` data
+/// property that mirrors it are both overwritten, as the interpreter's
+/// store does once the binding exists. Returns `false`, having changed
+/// nothing, for anything else -- a lexical or immutable binding, a module
+/// binding, an accessor or read-only property, a name not yet bound, or a
+/// mirror that disagrees with its binding -- which the caller leaves to the
+/// interpreter.
+#[inline(never)]
+pub(super) fn try_store_global_var(name: &str, value: &Value, env: &CallEnv) -> bool {
+    if env.is_global_lexical_binding(name)
+        || env.is_immutable_lexical_binding(name)
+        || env.is_immutable_function_name(name)
+        || env.has_module_import(name)
+        || env.module_live_binding_cell(name).is_some()
+    {
+        return false;
+    }
+    let (Some(Value::Object(global_this)), Some(cell)) =
+        (env.global_this(), env.realm_binding_cell(name))
+    else {
+        return false;
+    };
+    let Some(property) = global_this.own_property(name) else {
+        return false;
+    };
+    let current = cell.get();
+    // Identity is enough to prove the mirror in sync, and a string
+    // accumulator compared by content would cost its whole length per store.
+    let in_sync = match (&property.value, &current) {
+        (Value::String(left), Value::String(right)) => crate::JsString::ptr_eq(left, right),
+        (left, right) => left.same_value(right),
+    };
+    if property.is_accessor() || !property.writable || !in_sync {
+        return false;
+    }
+    drop(current);
+    drop(property);
+    if !matches!(
+        global_this.write_existing_own_data_property(name, value),
+        OwnDataPropertyWrite::Written
+    ) {
+        return false;
+    }
+    env.replace_existing_realm_with_cell(name, value.clone(), &cell)
+}

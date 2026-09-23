@@ -38,7 +38,7 @@ impl WideActivation<'_> {
         let owner = self.upvalue_owner.as_ref()?;
         let bit = (slot < u128::BITS as usize).then(|| 1_u128 << slot)?;
         (self.upvalue_slots & bit != 0).then_some(())?;
-        let index = self.bytecode.direct_readonly_received_upvalue_index(slot)?;
+        let index = self.bytecode.readonly_received_upvalue_index(slot)?;
         owner.upvalues.get(index)
     }
 
@@ -148,9 +148,7 @@ fn admit<'a>(
     if !program.admit_activation() {
         return None;
     }
-    let upvalue_slots = bytecode
-        .direct_readonly_received_upvalue_slots()
-        .unwrap_or(0);
+    let upvalue_slots = bytecode.readonly_received_upvalue_slots().unwrap_or(0);
     let upvalue_owner = if upvalue_slots == 0 {
         None
     } else {
@@ -518,6 +516,15 @@ fn exit_to_interpreter(
             return ExitOutcome::Continue { pc: resume_pc };
         }
     }
+    if let Some(crate::bytecode::ir::Op::StoreLocalOrGlobalSloppy { name, .. }) =
+        bytecode.code.get(ip as usize)
+    {
+        let top = usize::from(program.local_registers) + usize::from(depth) - 1;
+        if property::try_store_global_var(name, &window[top], env) {
+            execute::store(&mut window[top], Value::Undefined);
+            return ExitOutcome::Continue { pc: resume_pc };
+        }
+    }
     if let Some(crate::bytecode::ir::Op::SetProp { .. }) = bytecode.code.get(ip as usize) {
         let operand = |offset: u16| program.local_registers + depth - offset;
         if property::try_plain_set_prop(window, operand(3), operand(2), operand(1), env) {
@@ -697,9 +704,7 @@ fn run_typed_loop_here(
         locals,
         program.own_locals,
         upvalues,
-        bytecode
-            .direct_readonly_received_upvalue_slots()
-            .unwrap_or(0),
+        bytecode.readonly_received_upvalue_slots().unwrap_or(0),
         this_value,
     );
     if !crate::bytecode::typed_loop::try_run_typed_loop(&mut frame, plans, header, backedge) {

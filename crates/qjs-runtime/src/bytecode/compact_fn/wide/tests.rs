@@ -970,3 +970,96 @@ fn a_loop_condition_reentered_from_its_backedge_reads_the_current_values() {
         Value::Number(9.0)
     );
 }
+
+#[test]
+fn a_function_assigning_an_existing_global_variable_runs_here() {
+    let source = "var last = 42, A = 3877, C = 29573, M = 139968;
+        function rand(max) { last = (last * A + C) % M; return max * last / M; }";
+    let program =
+        compile::compile(&nested_function(source, "rand")).expect("the body should be admitted");
+    assert!(
+        program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::Exit { .. })),
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var sum = 0; for (var i = 0; i < 100; i++) sum += rand(100);
+             [Math.round(sum), last, globalThis.last].join(',');"
+        )),
+        value_of(
+            "var last = 42, A = 3877, C = 29573, M = 139968;
+             var sum = 0; for (var i = 0; i < 100; i++) {
+                 last = (last * A + C) % M; sum += 100 * last / M;
+             }
+             [Math.round(sum), last, globalThis.last].join(',');"
+        )
+    );
+}
+
+#[test]
+fn global_stores_the_fast_path_cannot_prove_keep_their_semantics() {
+    let source = "function set(v) { g = v; return v; }
+        // Created by the first store, then overwritten.
+        set(1); set(2);
+        var created = g;
+        // Read-only: a sloppy store is silently ignored.
+        Object.defineProperty(globalThis, 'g', { value: 7, writable: false, configurable: true });
+        set(3);
+        var readOnly = g;
+        // Writable again, through a redefinition the store must observe.
+        Object.defineProperty(globalThis, 'g', { value: 8, writable: true, configurable: true });
+        set(4); set(5);
+        [created, readOnly, g, globalThis.g].join(',');";
+    assert_eq!(value_of(source), Value::String("2,7,5,5".into()));
+    assert_eq!(
+        value_of(
+            "let lex = 1; function setLex(v) { lex = v; } setLex(2); setLex(3);
+             [lex, 'lex' in globalThis].join(',');"
+        ),
+        Value::String("3,false".into())
+    );
+    assert!(
+        error_of("const fixed = 1; function setFixed() { fixed = 2; } setFixed(); setFixed();")
+            .contains("TypeError")
+    );
+}
+
+#[test]
+fn a_global_store_in_a_loop_or_appending_to_itself_stays_interpreted() {
+    for (source, name) in [
+        (
+            "var n = 0; function count(k) { for (var i = 0; i < k; i++) { n = n + 1; } return n; }",
+            "count",
+        ),
+        ("var text = ''; function add(s) { text = text + s; }", "add"),
+    ] {
+        assert!(
+            compile::compile(&nested_function(source, name)).is_none(),
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn a_caller_that_assigned_the_global_itself_reads_the_callee_s_store() {
+    // Test262 S12.2_A3: the enclosing function routes its own sloppy
+    // assignment through the realm cell, which the store here writes.
+    assert_eq!(
+        value_of(
+            "var shared = 'OUT';
+             (function () {
+                 shared = 'IN';
+                 (function () { shared = 'INNER'; })();
+                 (function () { var shared = 'SHADOW'; })();
+                 if (shared !== 'INNER') throw new Error('stale ' + shared);
+             })();
+             shared;"
+        ),
+        Value::String("INNER".into())
+    );
+}

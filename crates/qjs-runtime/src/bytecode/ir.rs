@@ -681,6 +681,10 @@ pub struct Bytecode {
     /// its body only reads the cell; writes, clearing, dynamic scope, module
     /// imports, and sloppy-global routes retain owned per-frame storage.
     direct_readonly_received_upvalue_slots: u128,
+    /// The same proof without the sloppy-global exclusion: received cells
+    /// the body only reads, for an executor that resolves sloppy globals
+    /// through the realm rather than through per-frame routes.
+    readonly_received_upvalue_slots: u128,
     global_names: Vec<String>,
     global_lexical_names: Vec<String>,
     sloppy_global_assignment_names: Vec<String>,
@@ -890,6 +894,7 @@ impl Bytecode {
             received_upvalue_slots,
             has_direct_local_upvalue_routes,
             direct_readonly_received_upvalue_slots: 0,
+            readonly_received_upvalue_slots: 0,
             locals,
             global_names: collect_global_names(&code),
             global_lexical_names,
@@ -972,8 +977,17 @@ impl Bytecode {
             )
         });
         bytecode.cached_uses_lexical_this = bytecode.compute_uses_lexical_this();
-        bytecode.direct_readonly_received_upvalue_slots =
-            bytecode.compute_direct_readonly_received_upvalue_slots();
+        bytecode.readonly_received_upvalue_slots =
+            bytecode.compute_readonly_received_upvalue_slots();
+        bytecode.direct_readonly_received_upvalue_slots = if bytecode
+            .locals
+            .iter()
+            .any(|local| local.sloppy_global_fallback)
+        {
+            0
+        } else {
+            bytecode.readonly_received_upvalue_slots
+        };
         bytecode
     }
 
@@ -1145,6 +1159,25 @@ impl Bytecode {
         })
     }
 
+    /// [`Self::direct_readonly_received_upvalue_slots`] for the compact
+    /// wide tier, which also admits bodies with sloppy-global fallbacks: it
+    /// reads and writes those globals through the realm, never through a
+    /// frame route.
+    pub(super) fn readonly_received_upvalue_slots(&self) -> Option<u128> {
+        (self.readonly_received_upvalue_slots != 0).then_some(self.readonly_received_upvalue_slots)
+    }
+
+    /// The upvalue position of a slot in
+    /// [`Self::readonly_received_upvalue_slots`].
+    pub(super) fn readonly_received_upvalue_index(&self, slot: usize) -> Option<usize> {
+        if slot >= u128::BITS as usize {
+            return None;
+        }
+        let slot_bit = 1_u128 << slot;
+        (self.readonly_received_upvalue_slots & slot_bit != 0)
+            .then(|| (self.readonly_received_upvalue_slots & (slot_bit - 1)).count_ones() as usize)
+    }
+
     pub(crate) fn local_name_at(&self, slot: usize) -> Option<&str> {
         self.locals.get(slot).map(|local| local.name.as_str())
     }
@@ -1261,16 +1294,18 @@ impl Bytecode {
         })
     }
 
-    fn compute_direct_readonly_received_upvalue_slots(&self) -> u128 {
+    fn compute_readonly_received_upvalue_slots(&self) -> u128 {
         // This proof deliberately sits below direct-call eligibility. It only
         // establishes that received cells are never written or re-captured by
         // this immutable body; call setup still rejects dynamic scope and
-        // module routing before it borrows the function-owned vector.
+        // module routing before it borrows the function-owned vector. A
+        // direct interpreter frame additionally needs no sloppy-global
+        // fallback, whose realm-cell route lives in the per-frame vector
+        // this proof lets it skip (see the caller).
         if self.cached_creates_capturing_closures
             || self.cached_contains_direct_eval
             || self.cached_contains_with
             || self.received_upvalue_slots.is_empty()
-            || self.locals.iter().any(|local| local.sloppy_global_fallback)
         {
             return 0;
         }
@@ -1823,6 +1858,43 @@ mod tests {
             }],
         );
         assert_eq!(append.direct_readonly_received_upvalue_slots(), None);
+    }
+
+    #[test]
+    fn a_sloppy_global_fallback_keeps_only_the_frame_independent_read_only_mask() {
+        let captured = Local {
+            name: "captured".to_owned(),
+            compiler_temporary: false,
+            hoisted: false,
+            hoisted_function: false,
+            parameter: false,
+            catch_binding: false,
+            mutable: true,
+            from_env: true,
+            sloppy_global_fallback: false,
+        };
+        let fallback = Local {
+            name: "assigned".to_owned(),
+            from_env: false,
+            sloppy_global_fallback: true,
+            ..captured.clone()
+        };
+        let bytecode = Bytecode::new(
+            Vec::new(),
+            vec![captured, fallback],
+            vec![
+                Op::LoadLocal(0),
+                Op::StoreLocalOrGlobalSloppy {
+                    slot: 1,
+                    name: "assigned".to_owned(),
+                },
+            ],
+        );
+        // An interpreter frame routes the fallback through its own cell
+        // vector, so it cannot borrow the function's; the wide tier can.
+        assert_eq!(bytecode.direct_readonly_received_upvalue_slots(), None);
+        assert_eq!(bytecode.readonly_received_upvalue_slots(), Some(1));
+        assert_eq!(bytecode.readonly_received_upvalue_index(0), Some(0));
     }
 
     #[test]
