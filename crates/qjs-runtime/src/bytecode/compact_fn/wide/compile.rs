@@ -235,7 +235,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 return decline(trace, Some(ip), "call arity above the limit");
             }
             Op::StoreLocalOrGlobalSloppy { name, .. } => {
-                if let Some(reason) = global_store_stays_interpreted(code, ip, name) {
+                if let Some(reason) = global_store_stays_interpreted(bytecode, ip, name) {
                     return decline(trace, Some(ip), reason);
                 }
             }
@@ -931,17 +931,32 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
 }
 
 /// Why a sloppy global store at `ip` keeps its body on the interpreter,
-/// whose frame does it faster: inside a loop, where the interpreter's typed
-/// loops write such globals without leaving the loop; or appending to the
-/// global it reads, where the interpreter drops its own mirrors of the
-/// string first so the append reuses the buffer instead of copying it.
-fn global_store_stays_interpreted(code: &[Op], ip: usize, name: &str) -> Option<&'static str> {
-    let in_loop = code.iter().enumerate().any(|(jump_ip, op)| {
-        matches!(op, Op::Jump(target) | Op::JumpIfFalse(target) | Op::JumpIfTrue(target)
-            if *target <= ip && ip <= jump_ip)
-    });
-    if in_loop {
-        return Some("sloppy global store inside a loop");
+/// whose frame does it faster: inside a loop one of the interpreter's loop
+/// accelerators compiles, which writes such globals without leaving the
+/// loop; or appending to the global it reads, where the interpreter drops
+/// its own mirrors of the string first so the append reuses the buffer
+/// instead of copying it. A loop no accelerator compiles -- one that calls a
+/// method, say -- runs no faster there than here.
+fn global_store_stays_interpreted(
+    bytecode: &Bytecode,
+    ip: usize,
+    name: &str,
+) -> Option<&'static str> {
+    let code = &bytecode.code;
+    let plans = crate::bytecode::vm_loop_dispatch::LoopPlanView::for_bytecode(bytecode);
+    let covers = |(header, backedge): (usize, usize)| (header..=backedge).contains(&ip);
+    if plans
+        .typed
+        .iter()
+        .any(|program| covers((program.header(), program.backedge())))
+        || plans.numeric.iter().any(|plan| covers(plan.region()))
+        || plans.control.iter().any(|plan| covers(plan.region()))
+        || plans
+            .shared_numeric_mutation
+            .iter()
+            .any(|plan| covers(plan.region()))
+    {
+        return Some("sloppy global store inside an accelerated loop");
     }
     let appends = match ip.checked_sub(1).map(|at| &code[at]) {
         Some(Op::Binary(BinaryOp::Add)) => true,

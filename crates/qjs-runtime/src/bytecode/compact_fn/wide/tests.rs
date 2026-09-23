@@ -1030,7 +1030,7 @@ fn global_stores_the_fast_path_cannot_prove_keep_their_semantics() {
 }
 
 #[test]
-fn a_global_store_in_a_loop_or_appending_to_itself_stays_interpreted() {
+fn a_global_store_in_an_accelerated_loop_or_appending_to_itself_stays_interpreted() {
     for (source, name) in [
         (
             "var n = 0; function count(k) { for (var i = 0; i < k; i++) { n = n + 1; } return n; }",
@@ -1043,6 +1043,15 @@ fn a_global_store_in_a_loop_or_appending_to_itself_stays_interpreted() {
             "{source}"
         );
     }
+    // A loop no accelerator compiles -- it constructs an object -- keeps
+    // its global stores on this tier.
+    let source = "var last = 0; function Step(v) { this.v = v + 1; }
+        function walk(k) { for (i = 0; i < k; i++) { last = new Step(i).v; } return last + i; }";
+    compile::compile(&nested_function(source, "walk")).expect("the body should be admitted");
+    assert_eq!(
+        value_of(&format!("{source} walk(10) + last + i;")),
+        Value::Number(40.0)
+    );
 }
 
 #[test]
