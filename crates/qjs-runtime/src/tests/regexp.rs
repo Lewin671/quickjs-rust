@@ -1483,3 +1483,25 @@ fn regexp_split_counts_code_units_and_recombines_pairs() {
         Ok(Value::String("2:d83d:de00".to_owned().into()))
     );
 }
+
+#[test]
+fn exec_and_test_read_each_flag_and_group_name() {
+    assert_eq!(
+        eval(
+            "var out = [];
+             var g = /a(b)?/g; var s = 'ab a ab';
+             var m; while ((m = g.exec(s)) !== null) out.push(m[0] + '@' + m.index + ':' + m[1] + ':' + g.lastIndex);
+             var named = /(?<word>\\w+) (?<rest>\\w+)/.exec('hello world');
+             out.push(named.groups.word + '/' + named.groups.rest, /x/.exec('y'));
+             var sticky = /b/y; sticky.lastIndex = 1;
+             out.push(sticky.test('ab'), sticky.lastIndex, /B/i.test('abc'), /^b/m.test('a\\nb'),
+                      /a.c/s.test('a\\nc'), /\\u{1F600}/u.test('\\u{1F600}'), /a/d.exec('ba').indices[0].join());
+             out.push(/(a)|(b)/.exec('b').length, /(?:x)/.exec('x').groups);
+             out.join('|');"
+        ),
+        Ok(Value::String(
+            "ab@0:b:2|a@3:undefined:4|ab@5:b:7|hello/world||true|2|true|true|true|true|1,2|3|"
+                .into()
+        ))
+    );
+}
