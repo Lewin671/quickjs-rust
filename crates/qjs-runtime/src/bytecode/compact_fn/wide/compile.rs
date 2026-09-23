@@ -581,6 +581,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                             if *dst == register(depth.checked_sub(1)?)) =>
                     {
                         ops.pop();
+                        compact_index[ip] = u32::try_from(ops.len()).ok()?;
                         ops.push(WideOp::GetPropThis {
                             dst: register(depth.checked_sub(1)?),
                             index,
@@ -598,6 +599,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                         let Some(WideOp::Dup { src, .. }) = ops.pop() else {
                             return None;
                         };
+                        compact_index[ip] = u32::try_from(ops.len()).ok()?;
                         ops.push(WideOp::GetPropNamed {
                             dst: register(depth.checked_sub(1)?),
                             obj: src,
@@ -722,6 +724,9 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                     {
                         let src = *src;
                         ops.pop();
+                        // A resume at this instruction lands on the fused
+                        // operation (see `WideProgram::resume_pc`).
+                        compact_index[ip] = u32::try_from(ops.len()).ok()?;
                         src
                     }
                     _ => copied,
