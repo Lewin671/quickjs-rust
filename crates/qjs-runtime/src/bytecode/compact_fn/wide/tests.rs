@@ -647,3 +647,21 @@ fn a_folded_update_converts_its_local_once_like_the_general_path() {
         Value::String("6,4,51,5,1,11,number".into())
     );
 }
+
+#[test]
+fn a_per_iteration_let_loop_without_closures_is_admitted() {
+    let source = "function sum(xs) { var t = 0; for (let i = 0; i < xs.length; i++) { let x = xs[i]; t += x * i; } return t; }";
+    compile::compile(&nested_function(source, "sum"))
+        .expect("a let loop whose bindings no closure captures should be admitted");
+    assert_eq!(
+        value_of(&format!("{source} sum([1, 2, 3]);")),
+        Value::Number(8.0)
+    );
+    // Captured per-iteration bindings keep one cell per iteration.
+    let captured = "function make(n) { var fs = []; for (let i = 0; i < n; i++) fs.push(() => i); return fs; }";
+    assert!(compile::compile(&nested_function(captured, "make")).is_none());
+    assert_eq!(
+        value_of(&format!("{captured} make(3).map(f => f()).join(',');")),
+        Value::String("0,1,2".into())
+    );
+}

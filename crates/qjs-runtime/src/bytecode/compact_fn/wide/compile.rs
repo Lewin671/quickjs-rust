@@ -126,6 +126,16 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
             Op::FunctionPrologueEnd if ip != 0 => {
                 return decline(trace, Some(ip), "FunctionPrologueEnd after ip 0");
             }
+            // A per-iteration scope renews the cell of each loop binding a
+            // closure captured. An admitted body creates no closures, so its
+            // own lexical bindings have no cells and the scope is a no-op.
+            Op::FreshIterationScope(slots) if !slots.iter().all(|&slot| slot_is_lexical(slot)) => {
+                return decline(
+                    trace,
+                    Some(ip),
+                    "per-iteration scope over a non-own binding",
+                );
+            }
             // Backward edges are loops. The operand-stack depth at the target
             // is checked by `propagate_depths`, and a loop grows no frames --
             // a backward jump only moves the program counter -- so a loop
@@ -374,7 +384,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
             continue;
         }
         match op {
-            Op::FunctionPrologueEnd => {}
+            Op::FunctionPrologueEnd | Op::FreshIterationScope(_) => {}
             Op::Pop => ops.push(WideOp::Drop {
                 src: register(depth.checked_sub(1)?),
             }),
@@ -1012,7 +1022,7 @@ fn effect_of(op: &Op) -> Option<Effect> {
         falls_through: true,
     };
     let effect = match op {
-        Op::FunctionPrologueEnd | Op::ClearLocal(_) => simple(0, 0),
+        Op::FunctionPrologueEnd | Op::ClearLocal(_) | Op::FreshIterationScope(_) => simple(0, 0),
         Op::LoadConst(_) | Op::LoadLocal(_) | Op::Dup | Op::LoadGlobal(_) => simple(0, 1),
         Op::GetPropIndex(encoded) => {
             if crate::bytecode::ir::decode_index_receiver(*encoded)
