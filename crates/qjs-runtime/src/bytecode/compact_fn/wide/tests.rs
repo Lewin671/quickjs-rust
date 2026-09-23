@@ -776,3 +776,19 @@ fn an_object_literal_built_at_its_exit_matches_the_interpreter() {
         Value::String("10000,ab,proto,4proto,true".into())
     );
 }
+
+#[test]
+fn a_constant_index_store_at_its_exit_matches_the_interpreter() {
+    assert_eq!(
+        value_of(
+            "function first(a, v) { a[0] = v; return a[0]; }
+             var typed = new Int8Array(2);
+             var frozen = Object.freeze([1]);
+             var obj = {};
+             var hole = [];
+             [first([5], 6), first(typed, 300), first(frozen, 9), first(obj, 'o'), obj[0],
+              first(hole, 'h') + hole.length].join(',');"
+        ),
+        Value::String("6,44,1,o,o,h1".into())
+    );
+}

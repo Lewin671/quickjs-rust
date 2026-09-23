@@ -314,6 +314,39 @@ pub(super) fn try_plain_set_prop(
     stored
 }
 
+/// `registers[obj][index] = registers[value]` for a constant index when the
+/// store is plain -- a dense index of an array with the realm's ordinary
+/// prototype chain, or an in-range element of a typed array given a
+/// primitive -- leaving the value in `obj`'s register as `Op::SetPropIndex`
+/// leaves it on the stack. `false`, with the registers untouched, otherwise.
+#[inline(never)]
+pub(super) fn try_plain_set_index(
+    registers: &mut [Value],
+    obj: u16,
+    value: u16,
+    index: usize,
+    env: &CallEnv,
+) -> bool {
+    let (obj, value_register) = (obj as usize, value as usize);
+    let stored = match (&registers[obj], &registers[value_register]) {
+        (Value::Array(elements), value) => {
+            elements.dense_index_store_eligible(index) && array_access_is_plain(elements, env) && {
+                elements.set(index, value.clone());
+                true
+            }
+        }
+        (Value::Object(object), value) if crate::typed_array::is_typed_array_object(object) => {
+            crate::typed_array::try_set_integer_indexed_primitive_element(object, index, value)
+                == Some(true)
+        }
+        _ => false,
+    };
+    if stored {
+        registers[obj] = std::mem::replace(&mut registers[value_register], Value::Undefined);
+    }
+    stored
+}
+
 /// Whether an element access on `array` meets no index accessor or exotic
 /// object on its prototype chain: `Vm::array_uses_realm_prototype` and
 /// `Vm::array_prototype_chain_has_index_hazard` without the VM's caches.

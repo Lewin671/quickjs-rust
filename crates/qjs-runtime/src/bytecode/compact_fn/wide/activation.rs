@@ -482,6 +482,14 @@ fn exit_to_interpreter(
         execute::store(&mut window[base], object);
         return ExitOutcome::Continue { pc: resume_pc };
     }
+    if let Some(crate::bytecode::ir::Op::SetPropIndex { index, .. }) =
+        bytecode.code.get(ip as usize)
+    {
+        let top = program.local_registers + depth;
+        if property::try_plain_set_index(window, top - 2, top - 1, *index, env) {
+            return ExitOutcome::Continue { pc: resume_pc };
+        }
+    }
     if let Some(crate::bytecode::ir::Op::SetProp { .. }) = bytecode.code.get(ip as usize) {
         let operand = |offset: u16| program.local_registers + depth - offset;
         if property::try_plain_set_prop(window, operand(3), operand(2), operand(1), env) {
