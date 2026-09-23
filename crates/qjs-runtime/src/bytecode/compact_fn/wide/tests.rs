@@ -1332,3 +1332,27 @@ fn a_global_string_append_is_admitted_and_extends_in_place_semantics() {
         )
     );
 }
+
+#[test]
+fn an_inlined_method_receives_object_receivers_unchanged_and_coerces_the_rest() {
+    assert_eq!(
+        value_of(
+            "function kind() { return typeof this + \":\" + (this instanceof Object); } \
+         function strictKind() { \"use strict\"; return typeof this; } \
+         function wrap(f, r) { return f.call(r); } \
+         var out = []; \
+         function viaMethod(r) { r.k = kind; return r.k(); } \
+         out.push(viaMethod([1]), viaMethod(function () {}), viaMethod({})); \
+         var sym = Symbol(\"s\"); \
+         Symbol.prototype.k = kind; Symbol.prototype.sk = strictKind; \
+         out.push(sym.k(), sym.sk()); \
+         Number.prototype.k = kind; out.push((5).k()); \
+         out.join(\",\");"
+        ),
+        Value::String(
+            "object:true,function:true,object:true,object:true,symbol,object:true"
+                .to_owned()
+                .into()
+        )
+    );
+}
