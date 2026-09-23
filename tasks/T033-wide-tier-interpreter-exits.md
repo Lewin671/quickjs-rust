@@ -43,7 +43,17 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   exits in nested activations, receivers, handlers and parameters read only
   past an exit, and loops handed to their accelerators.
 - [x] `test/language` and `test/built-ins` gap scans show no new NG gaps.
-- [ ] Formal promotion (batched) records a decision.
+- [x] Formal promotion (batched) records a decision: **rejected** on
+  batch 309a604e vs 93f98a4a (30 blocks, cycles; with
+  `realm-regexp-program-cache`). Targets moved (hash-map 0.873, cdjs 0.927,
+  string-validate-input 0.950 crossing its 0.95 target), but
+  access-binary-trees read 1.074 and crypto-md5 1.032 -- the dispatch-loop
+  codegen band this task already records, with the same instruction mix --
+  and the broad lane failed its linearity check (base
+  `property_dynamic_read` 1.37) because builds and tests ran on the host
+  during the run. At 10cef53c the same two controls read 1.011 and 0.986
+  against 93f98a4a in single-run cycles. Test262 at 309a604e and 10cef53c:
+  CI aggregate zero gap.
 
 ## Screen log
 
