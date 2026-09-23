@@ -18,15 +18,11 @@ impl Vm<'_> {
         }
         let (left, right) = if op == BinaryOp::Add {
             match (left, right) {
-                (Value::String(left), right) => {
-                    match super::vm_string_append::primitive_append_suffix(right) {
-                        Ok(suffix) => {
-                            self.prepare_compound_string_reuse(&left);
-                            let mut result = left.into_string();
-                            result.push_str(&suffix);
-                            return Ok(Value::String(result.into()));
-                        }
-                        Err(right) => (Value::String(left), right),
+                (Value::String(left), right) if super::vm_string_append::is_appendable(&right) => {
+                    self.prepare_compound_string_reuse(&left);
+                    match super::vm_string_append::concat_primitives(Value::String(left), right) {
+                        Ok(value) => return Ok(value),
+                        Err(operands) => operands,
                     }
                 }
                 operands => operands,

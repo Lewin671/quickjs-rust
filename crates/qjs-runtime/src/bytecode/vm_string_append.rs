@@ -380,17 +380,80 @@ impl Vm<'_> {
     }
 }
 
-pub(super) fn primitive_append_suffix(value: Value) -> Result<String, Value> {
-    Ok(match value {
-        Value::Number(number) => crate::number::number_to_js_string(number),
-        Value::BigInt(value) => value.to_string(),
-        Value::String(value) => value.into_string(),
-        Value::Boolean(true) => "true".to_owned(),
-        Value::Boolean(false) => "false".to_owned(),
-        Value::Null => "null".to_owned(),
-        Value::Undefined => "undefined".to_owned(),
-        value => return Err(value),
-    })
+/// Appends the string form of a primitive that needs no `ToPrimitive`,
+/// borrowing a string operand rather than copying it into a buffer of its
+/// own first; `false`, with `out` unchanged, for anything else.
+pub(super) fn push_primitive(out: &mut String, value: &Value) -> bool {
+    match value {
+        Value::String(value) => out.push_str(value),
+        Value::Number(number) => out.push_str(&crate::number::number_to_js_string(*number)),
+        Value::BigInt(value) => out.push_str(&value.to_string()),
+        Value::Boolean(true) => out.push_str("true"),
+        Value::Boolean(false) => out.push_str("false"),
+        Value::Null => out.push_str("null"),
+        Value::Undefined => out.push_str("undefined"),
+        _ => return false,
+    }
+    true
+}
+
+/// Whether [`push_primitive`] appends `value`.
+pub(super) fn is_appendable(value: &Value) -> bool {
+    is_plain_primitive(value)
+}
+
+fn is_plain_primitive(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::String(_)
+            | Value::Number(_)
+            | Value::BigInt(_)
+            | Value::Boolean(_)
+            | Value::Null
+            | Value::Undefined
+    )
+}
+
+/// `left + right` when one side is a string and neither needs
+/// `ToPrimitive`: the concatenation, extending the left string's own buffer
+/// when nothing else holds it -- the intermediate of `a + b + c` is such a
+/// buffer -- and borrowing the right operand. Hands both operands back
+/// otherwise.
+pub(in crate::bytecode) fn concat_primitives(
+    left: Value,
+    right: Value,
+) -> Result<Value, (Value, Value)> {
+    if !(matches!(left, Value::String(_)) || matches!(right, Value::String(_)))
+        || !is_plain_primitive(&left)
+        || !is_plain_primitive(&right)
+    {
+        return Err((left, right));
+    }
+    let right_len = match &right {
+        Value::String(right) => right.len(),
+        _ => 16,
+    };
+    let mut out = match left {
+        // Grown in place: the buffer and its box are both reused.
+        Value::String(mut left) if left.is_unique() => {
+            let text = left.make_mut();
+            text.reserve(right_len);
+            push_primitive(text, &right);
+            return Ok(Value::String(left));
+        }
+        Value::String(left) => {
+            let mut text = String::with_capacity(left.len() + right_len);
+            text.push_str(&left);
+            text
+        }
+        left => {
+            let mut text = String::with_capacity(16 + right_len);
+            push_primitive(&mut text, &left);
+            text
+        }
+    };
+    push_primitive(&mut out, &right);
+    Ok(Value::String(out.into()))
 }
 
 #[cfg(test)]
@@ -398,6 +461,55 @@ mod tests {
     use super::*;
     use crate::bytecode::compiler;
     use crate::{Value, eval};
+
+    #[test]
+    fn primitive_concatenation_extends_an_unshared_left_string() {
+        let text = |value: &Value| match value {
+            Value::String(text) => text.as_str().to_owned(),
+            other => panic!("expected a string, got {other:?}"),
+        };
+        let left = crate::JsString::from("ab".to_owned());
+        let before = left.clone();
+        // Shared: the original keeps its text.
+        let shared = concat_primitives(Value::String(left), Value::Number(1.5)).unwrap();
+        assert_eq!(text(&shared), "ab1.5");
+        assert_eq!(before.as_str(), "ab");
+        // Unshared: extended where it is.
+        let Value::String(unique) = shared else {
+            unreachable!()
+        };
+        let grown = concat_primitives(Value::String(unique), Value::Boolean(true)).unwrap();
+        assert_eq!(text(&grown), "ab1.5true");
+        let appended = concat_primitives(grown, Value::Null).unwrap();
+        assert_eq!(text(&appended), "ab1.5truenull");
+        for (left, right, expected) in [
+            (
+                Value::Number(2.0),
+                Value::String("x".to_owned().into()),
+                "2x",
+            ),
+            (
+                Value::Undefined,
+                Value::String("!".to_owned().into()),
+                "undefined!",
+            ),
+            (
+                Value::String("s".to_owned().into()),
+                Value::Undefined,
+                "sundefined",
+            ),
+        ] {
+            assert_eq!(text(&concat_primitives(left, right).unwrap()), expected);
+        }
+        // Neither side a string, or an object that needs `ToPrimitive`.
+        assert!(concat_primitives(Value::Number(1.0), Value::Number(2.0)).is_err());
+        let object = eval("({ toString() { return 'o'; } })").unwrap();
+        assert!(concat_primitives(Value::String("a".to_owned().into()), object).is_err());
+        assert_eq!(
+            eval("var o = { toString() { return 'o'; } }; var s = 'a' + 1; s + o + s;"),
+            Ok(Value::String("a1oa1".to_owned().into()))
+        );
+    }
 
     #[test]
     fn captured_global_string_append_releases_realm_read_before_sync() {

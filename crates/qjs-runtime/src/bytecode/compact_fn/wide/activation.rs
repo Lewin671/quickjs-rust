@@ -90,6 +90,14 @@ impl WideActivation<'_> {
         if let Some(value) = crate::operations::eval_binary_without_env(&left, op, &right) {
             return Ok(value);
         }
+        let (left, right) = if op == BinaryOp::Add {
+            match crate::bytecode::vm_string_append::concat_primitives(left, right) {
+                Ok(value) => return Ok(value),
+                Err(operands) => operands,
+            }
+        } else {
+            (left, right)
+        };
         let mut env = self.env.empty_frame();
         crate::operations::eval_binary(left, op, right, &mut env)
     }
