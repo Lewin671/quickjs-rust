@@ -958,15 +958,39 @@ fn global_store_stays_interpreted(
     {
         return Some("sloppy global store inside an accelerated loop");
     }
-    let appends = match ip.checked_sub(1).map(|at| &code[at]) {
-        Some(Op::Binary(BinaryOp::Add)) => true,
-        Some(Op::Dup) => ip >= 2 && matches!(code[ip - 2], Op::Binary(BinaryOp::Add)),
-        _ => false,
+    let value_end = match ip.checked_sub(1).map(|at| &code[at]) {
+        Some(Op::Dup) => ip - 1,
+        _ => ip,
     };
-    let reads_it = code
-        .iter()
-        .any(|op| matches!(op, Op::LoadGlobal(read) if read == name));
-    (appends && reads_it).then_some("sloppy global store appending to itself")
+    let appends = value_end >= 1
+        && matches!(code[value_end - 1], Op::Binary(BinaryOp::Add))
+        && matches!(
+            expression_start(code, value_end).map(|start| &code[start]),
+            Some(Op::LoadGlobal(read)) if read == name
+        );
+    appends.then_some("sloppy global store appending to itself")
+}
+
+/// The first instruction of the straight-line expression whose value is on
+/// top of the stack just before `end`, found by walking back until the
+/// instructions consumed have produced exactly one value; `None` across a
+/// jump or an operation this tier does not model.
+fn expression_start(code: &[Op], end: usize) -> Option<usize> {
+    let mut needed = 1_i32;
+    for start in (0..end).rev() {
+        let effect = effect_of(&code[start])?;
+        if effect.target.is_some() || !effect.falls_through {
+            return None;
+        }
+        needed = needed - i32::from(effect.pushes) + i32::from(effect.pops);
+        if needed == 0 {
+            return Some(start);
+        }
+        if needed < 0 {
+            return None;
+        }
+    }
+    None
 }
 
 /// How an instruction takes part in `x = x op y` folded onto the local.

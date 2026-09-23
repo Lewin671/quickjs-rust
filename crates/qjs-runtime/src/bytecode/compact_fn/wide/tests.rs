@@ -1231,3 +1231,17 @@ fn compound_member_assignment_converts_its_key_once_and_checks_its_object() {
         Value::String("4,6,8,14,12,keykeykey,true,true,3".into())
     );
 }
+
+#[test]
+fn an_assignment_to_an_undeclared_name_creates_the_global() {
+    let source = "function make(v) { fresh = v; also = fresh + 1; return also; }";
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var out = [make(1), make(5), fresh, also, 'fresh' in globalThis,
+                        Object.getOwnPropertyDescriptor(globalThis, 'fresh').enumerable];
+             out.join(',');"
+        )),
+        Value::String("2,6,5,6,true,true".into())
+    );
+}

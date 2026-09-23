@@ -573,15 +573,15 @@ fn undefined_identifier(name: &str) -> RuntimeError {
     }
 }
 
-/// A sloppy assignment to an existing global variable, the store
+/// A sloppy assignment to a global variable, the store
 /// `Op::StoreLocalOrGlobalSloppy` performs for a name the function neither
 /// declares nor receives: the realm binding and the `globalThis` data
-/// property that mirrors it are both overwritten, as the interpreter's
-/// store does once the binding exists. Returns `false`, having changed
-/// nothing, for anything else -- a lexical or immutable binding, a module
-/// binding, an accessor or read-only property, a name not yet bound, or a
-/// mirror that disagrees with its binding -- which the caller leaves to the
-/// interpreter.
+/// property that mirrors it are both written, or both created for a name
+/// not yet bound, as the interpreter's store does. Returns `false`, having
+/// changed nothing, for anything else -- a lexical or immutable binding, a
+/// module binding, an accessor or read-only property, a global property
+/// without a realm binding, or a mirror that disagrees with its binding --
+/// which the caller leaves to the interpreter.
 #[inline(never)]
 pub(super) fn try_store_global_var(name: &str, value: &Value, env: &CallEnv) -> bool {
     if env.is_global_lexical_binding(name)
@@ -592,10 +592,19 @@ pub(super) fn try_store_global_var(name: &str, value: &Value, env: &CallEnv) -> 
     {
         return false;
     }
-    let (Some(Value::Object(global_this)), Some(cell)) =
-        (env.global_this(), env.realm_binding_cell(name))
-    else {
+    let Some(Value::Object(global_this)) = env.global_this() else {
         return false;
+    };
+    let Some(cell) = env.realm_binding_cell(name) else {
+        // The first assignment of an undeclared name creates it, as the
+        // interpreter's store does: a global data property and the realm
+        // binding that mirrors it.
+        if global_this.own_property(name).is_some() || !global_this.is_extensible() {
+            return false;
+        }
+        global_this.set(name.to_owned(), value.clone());
+        env.insert_realm(name.to_owned(), value.clone());
+        return true;
     };
     let Some(property) = global_this.own_property(name) else {
         return false;

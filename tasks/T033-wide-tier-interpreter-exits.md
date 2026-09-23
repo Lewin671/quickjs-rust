@@ -146,6 +146,11 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
 
 ## Found, not fixed
 
+- Deleting a global created by a sloppy assignment in a function
+  (`f() { x = 1 }`, then `delete globalThis.x`) leaves the realm binding:
+  `typeof x` stays "number" (QuickJS-NG: "undefined"). Interpreter path,
+  predates the wide-tier store.
+
 - A sloppy assignment in a function to a global that has become an
   accessor does not call the setter (`Object.defineProperty(globalThis,
   'g', { set })` then `g = 4` in a function); QuickJS-NG calls it. The
