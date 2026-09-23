@@ -364,3 +364,21 @@ fn json_parse_reviver_uses_property_internal_methods() {
         Ok(Value::String("0,a,1,".to_owned().into()))
     );
 }
+
+#[test]
+fn stringify_escapes_only_what_needs_escaping_between_plain_runs() {
+    assert_eq!(
+        eval(
+            r#"[JSON.stringify("plain"), JSON.stringify('q"b\\s/'),
+                JSON.stringify("\b\f\n\r\t\u0001\u001f\u007f"),
+                JSON.stringify("héllo 世界 😀"), JSON.stringify("\ud800x\udfff"),
+                JSON.stringify("a😀b"), JSON.stringify("\udc00\ud800"),
+                JSON.stringify({ "k\"ey": "v " })].join("|");"#
+        ),
+        Ok(Value::String(
+            "\"plain\"|\"q\\\"b\\\\s/\"|\"\\b\\f\\n\\r\\t\\u0001\\u001f\u{7f}\"|\"héllo 世界 😀\"|\"\\ud800x\\udfff\"|\"a😀b\"|\"\\udc00\\ud800\"|{\"k\\\"ey\":\"v \"}"
+                .to_owned()
+                .into()
+        ))
+    );
+}
