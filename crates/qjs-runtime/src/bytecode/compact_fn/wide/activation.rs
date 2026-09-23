@@ -1636,5 +1636,17 @@ fn call_from_activation(
         return result;
     }
     let mut env = activation.env.empty_frame();
+    // A plain native takes its arguments where they are; only a bytecode
+    // callee, a bound function or a proxy needs an owned vector.
+    if let Value::Function(function) = &callee
+        && let Some(native) = function.native
+        && function.bound.is_none()
+        && !function.is_class_constructor
+    {
+        crate::diagnostics::count!(native_calls);
+        return crate::native::call_native_function(
+            function, native, this_value, arguments, false, &mut env,
+        );
+    }
     crate::function::call_function(callee, this_value, arguments.to_vec(), &mut env, false)
 }

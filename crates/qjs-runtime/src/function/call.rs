@@ -114,7 +114,7 @@ pub(crate) fn call_function(
             function,
             native,
             this_value,
-            argument_values,
+            &argument_values,
             is_construct,
             env,
         );
