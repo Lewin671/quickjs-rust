@@ -822,6 +822,11 @@ impl Vm<'_> {
             self.sync_marked_dynamic_global(name);
             return Ok(());
         }
+        if !self.env.has_local_binding(name)
+            && let Some(result) = self.store_global_this_accessor(name, &value, true)
+        {
+            return result;
+        }
         // Reject writes to non-writable global properties (e.g. NaN, Infinity,
         // undefined) before any env/realm write. In strict mode this is a
         // TypeError per the spec.
@@ -948,6 +953,11 @@ impl Vm<'_> {
                 self.sync_marked_dynamic_global(name);
                 return Ok(());
             }
+        }
+        if !self.env.has_local_binding(name)
+            && let Some(result) = self.store_global_this_accessor(name, &value, false)
+        {
+            return result;
         }
         // Silently reject writes to non-writable global properties (e.g. NaN,
         // Infinity, undefined) in sloppy mode.
@@ -1408,7 +1418,11 @@ fn delete_property(object: Value, key: &str, env: &mut CallEnv) -> Result<Value,
             {
                 return Ok(Value::Boolean(success));
             }
-            Ok(Value::Boolean(object.delete_own_property(key)))
+            let deleted = object.delete_own_property(key);
+            if deleted {
+                env.forget_deleted_global_object_property(&object, key);
+            }
+            Ok(Value::Boolean(deleted))
         }
         Value::Proxy(proxy) => Ok(Value::Boolean(crate::proxy::proxy_delete_property(
             proxy,

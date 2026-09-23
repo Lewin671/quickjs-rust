@@ -1854,3 +1854,131 @@ fn native_constructors_see_the_realm_and_callbacks_keep_captured_cells() {
         Ok(Value::Number(9.0))
     );
 }
+
+#[test]
+fn assigning_an_accessor_global_calls_its_setter() {
+    let prelude = "var log = []; \
+         Object.defineProperty(globalThis, 'g', { \
+           get() { return 7; }, \
+           set(value) { log.push(this === globalThis ? 'set' + value : 'wrong this'); }, \
+           configurable: true \
+         }); ";
+    let cases = [
+        ("g = 3;", "set3|7"),
+        (
+            "function f() { g = 4; return g; } log.push(f());",
+            "set4,7|7",
+        ),
+        ("function h() { 'use strict'; g = 5; } h();", "set5|7"),
+        ("function k() { g += 1; } k();", "set8|7"),
+        (
+            "function shadowed() { eval('var g = 1'); g = 2; return g; } log.push(shadowed());",
+            "2|7",
+        ),
+    ];
+    for (body, expected) in cases {
+        let source = format!("{prelude}{body} log.join(',') + '|' + g;");
+        assert_eq!(
+            eval(&source),
+            Ok(Value::String(expected.to_owned().into())),
+            "{body}"
+        );
+    }
+    // Without a setter the assignment fails: silently in sloppy code, with a
+    // TypeError in strict code.
+    assert_eq!(
+        eval(
+            "Object.defineProperty(globalThis, 'readOnly', { get() { return 1; }, configurable: true }); \
+             readOnly = 2; \
+             function strictStore() { 'use strict'; readOnly = 3; } \
+             var caught = false; \
+             try { strictStore(); } catch (error) { caught = error instanceof TypeError; } \
+             caught + ':' + readOnly;"
+        ),
+        Ok(Value::String("true:1".to_owned().into()))
+    );
+}
+
+#[test]
+fn deleting_a_global_object_property_unbinds_the_global() {
+    assert_eq!(
+        eval(
+            "function f() { x = 1; } f(); \
+             var r = [delete globalThis.x, typeof x, 'x' in globalThis]; \
+             function g() { return typeof x; } r.push(g()); \
+             globalThis.y = 2; \
+             r.push(Reflect.deleteProperty(globalThis, 'y'), typeof y); \
+             var caught; try { x; } catch (e) { caught = e instanceof ReferenceError; } \
+             r.push(caught); \
+             f(); r.push(x); \
+             r.join(',');"
+        ),
+        Ok(Value::String(
+            "true,undefined,false,undefined,true,undefined,true,1"
+                .to_owned()
+                .into()
+        ))
+    );
+}
+
+#[test]
+fn native_sets_on_the_global_object_update_the_global_binding() {
+    assert_eq!(
+        eval(
+            "var w = 'a'; \
+             function f() { \
+               w = 'b'; \
+               Reflect.set(globalThis, 'w', 'X'); var r1 = w; \
+               globalThis.w = 'Y'; var r2 = w; \
+               Object.assign(globalThis, { w: 'Z' }); \
+               return [r1, r2, w].join(','); \
+             } \
+             f() + '|' + w;"
+        ),
+        Ok(Value::String("X,Y,Z|Z".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function f() { \
+               w2 = 'b'; \
+               Reflect.set(globalThis, 'w2', 'X'); var r1 = w2; \
+               globalThis.w2 = 'Y'; \
+               return [r1, w2].join(','); \
+             } \
+             f() + '|' + w2;"
+        ),
+        Ok(Value::String("X,Y|Y".to_owned().into()))
+    );
+}
+
+#[test]
+fn a_function_eval_var_shadows_the_global_for_later_assignments() {
+    assert_eq!(
+        eval(
+            "function fresh() { eval('var q = 1'); q = 2; return q; } \
+             fresh() + ':' + typeof q;"
+        ),
+        Ok(Value::String("2:undefined".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var shadowedGlobal = 0; \
+             function s() { \
+               eval('var shadowedGlobal = 1'); \
+               var r = shadowedGlobal; shadowedGlobal = 2; \
+               var f = function () { return shadowedGlobal; }; \
+               shadowedGlobal = 3; \
+               return r + ',' + f(); \
+             } \
+             s() + ':' + shadowedGlobal;"
+        ),
+        Ok(Value::String("1,3:0".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function t() { eval('var z = 1'); eval('z = 3'); var a = z; z = 4; eval('z++'); return a + ',' + z; } \
+             t() + ':' + typeof z;"
+        ),
+        Ok(Value::String("3,5:undefined".to_owned().into()))
+    );
+}

@@ -557,6 +557,49 @@ impl Vm<'_> {
         Ok(Some(value))
     }
 
+    /// Assigns an accessor own property of `globalThis` -- one made by
+    /// `Object.defineProperty(globalThis, name, { get, set })` -- by calling
+    /// its setter with the global object as `this`, as the global
+    /// environment record's SetMutableBinding does. Without a setter the
+    /// assignment fails: a TypeError in strict code, nothing in sloppy code.
+    /// `None` when the property is absent or a data property, which the
+    /// caller's own store handles.
+    pub(super) fn store_global_this_accessor(
+        &mut self,
+        name: &str,
+        value: &Value,
+        strict: bool,
+    ) -> Option<Result<(), RuntimeError>> {
+        let global_this = self.cached_global_this()?;
+        let property = global_this.own_property(name)?;
+        if !property.is_accessor() {
+            return None;
+        }
+        let (_, setter) = property.into_accessor_parts()?;
+        let Some(setter) = setter else {
+            return Some(if strict {
+                Err(RuntimeError {
+                    thrown: None,
+                    message: format!(
+                        "TypeError: Cannot set property '{name}' which has only a getter"
+                    ),
+                })
+            } else {
+                Ok(())
+            });
+        };
+        let mut env = self.current_env();
+        let result = crate::call_function(
+            setter,
+            Value::Object(global_this),
+            vec![value.clone()],
+            &mut env,
+            false,
+        );
+        self.apply_env(env);
+        Some(result.map(|_| ()))
+    }
+
     pub(super) fn load_new_target(&self) -> Value {
         self.env
             .get(crate::NEW_TARGET_BINDING)
@@ -585,6 +628,9 @@ impl Vm<'_> {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
+        }
+        if let Some(result) = self.store_global_this_accessor(&name, &value, false) {
+            return result;
         }
         if let Some(property) = self.global_this_own_property(&name)
             && !property.writable
@@ -1183,6 +1229,17 @@ impl Vm<'_> {
             .locals
             .get(slot)
             .is_some_and(|local| local.sloppy_global_fallback);
+        // A `var` a direct eval declared in this function shadows the global.
+        if is_sloppy_global_fallback
+            && self.env.has_local_binding(name)
+            && self.env.has_local_binding(&format!(
+                "{}{name}",
+                crate::DIRECT_EVAL_FUNCTION_VAR_BINDING_PREFIX
+            ))
+        {
+            self.env.insert(name.to_owned(), value.clone());
+            return self.store_local(slot, value);
+        }
         if is_sloppy_global_fallback
             && self.locals.get(slot).is_some_and(Option::is_some)
             && let Some(Value::Object(global_this)) = self.env.global_this()
@@ -1199,6 +1256,11 @@ impl Vm<'_> {
                 OwnDataPropertyWrite::ReadOnly => return Ok(()),
                 OwnDataPropertyWrite::NeedsSlowPath => {}
             }
+        }
+        if is_sloppy_global_fallback
+            && let Some(result) = self.store_global_this_accessor(name, &value, false)
+        {
+            return result;
         }
         match self.locals.get(slot) {
             Some(Some(_)) => {
@@ -1408,7 +1470,36 @@ impl Vm<'_> {
                     .collect::<HashMap<_, _>>()
             })
             .unwrap_or_default();
+        // A direct eval in this function declares its `var`s as deopt
+        // bindings; one named like a sloppy-global fallback local is now
+        // the function's own variable, which the fallback slot must keep
+        // rather than mirror the global of the same name.
         let locals = env.visible_local_entries();
+        let eval_declared_vars = match env.deopt_bindings().filter(|_| !self.bytecode.global_scope)
+        {
+            Some(bindings) => locals
+                .iter()
+                .filter(|(name, _)| bindings.contains_key(name))
+                .map(|(name, _)| name.clone())
+                .collect::<HashSet<_>>(),
+            None => HashSet::new(),
+        };
+        let eval_declared_fallbacks =
+            match env.deopt_bindings().filter(|_| !self.bytecode.global_scope) {
+                Some(bindings) => locals
+                    .iter()
+                    .filter(|(name, _)| {
+                        bindings.contains_key(name)
+                            && self
+                                .active_local_slot_for_env_name(name)
+                                .is_some_and(|index| {
+                                    self.bytecode.local_is_sloppy_global_fallback(index)
+                                })
+                    })
+                    .map(|(name, _)| name.clone())
+                    .collect::<HashSet<_>>(),
+                None => HashSet::new(),
+            };
         let direct_parameter_eval_vars = locals
             .iter()
             .filter_map(|(name, _)| {
@@ -1446,6 +1537,22 @@ impl Vm<'_> {
                     && (is_call_frame_binding(&name) || !self.bytecode.local_is_from_env(index))
                 {
                     self.env.insert(name, value);
+                    continue;
+                }
+                if eval_declared_fallbacks.contains(&name) {
+                    self.locals[index] = Some(value.clone());
+                    // The slot's cell was the global's own realm cell; the
+                    // function's variable needs a cell of its own.
+                    if let Some(cell) = self.local_upvalues.get_mut(index)
+                        && cell.is_some()
+                    {
+                        *cell = Some(Upvalue::new(value.clone()));
+                    }
+                    self.env.insert_deopt(
+                        format!("{}{name}", crate::DIRECT_EVAL_FUNCTION_VAR_BINDING_PREFIX),
+                        Value::Boolean(true),
+                    );
+                    self.env.insert_deopt(name, value);
                     continue;
                 }
                 let syncs_global_this = self.bytecode.local_is_sloppy_global_fallback(index)
@@ -1496,6 +1603,10 @@ impl Vm<'_> {
                     && !is_compiler_temporary(&name))
             {
                 self.env.insert(name, value);
+            } else if eval_declared_vars.contains(&name) {
+                // A `var` a direct eval declared in this function, shadowing
+                // a global of the same name.
+                self.env.insert_deopt(name, value);
             } else if self.realm.contains(&name) {
                 // Already a realm binding (shared cell) — leave it; a mutation
                 // would have hit the cell directly.

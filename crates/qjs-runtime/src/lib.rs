@@ -107,6 +107,10 @@ pub(crate) const DIRECT_EVAL_ARGUMENTS_BINDING: &str = "\0\0direct_eval_argument
 pub(crate) const DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING: &str =
     "\0\0direct_eval_in_parameter_scope";
 pub(crate) const DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX: &str = "\0\0direct_eval_parameter_var:";
+/// Marks a function-scope `var` that a direct eval declared under the name of
+/// a sloppy-global fallback local: later assignments in the function write
+/// that variable, not the global of the same name.
+pub(crate) const DIRECT_EVAL_FUNCTION_VAR_BINDING_PREFIX: &str = "\0\0direct_eval_function_var:";
 pub(crate) const DIRECT_EVAL_FUNCTION_CONTEXT_BINDING: &str = "\0\0direct_eval_function_context";
 /// Per-frame marker used by direct eval to apply class-field-initializer early
 /// errors.

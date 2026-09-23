@@ -484,7 +484,11 @@ fn ordinary_set_object(
             if object.own_property(&key).is_none() && !object.is_extensible() {
                 return Ok(false);
             }
-            object.set(key, value);
+            object.set(key.clone(), value);
+            // A native [[Set]] on the global object (`Reflect.set`,
+            // `Object.assign`) must be seen by the realm binding that the
+            // name resolves through.
+            env.sync_realm_global_object_property(object, &key);
             Ok(true)
         }
     }
