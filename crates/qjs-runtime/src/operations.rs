@@ -576,6 +576,18 @@ fn eval_instanceof(left: Value, right: Value, env: &mut CallEnv) -> Result<Value
     }
 
     if let Some(symbol) = symbol::has_instance_symbol(env) {
+        // An ordinary function with no own @@hasInstance whose [[Prototype]]
+        // is %Function.prototype% inherits that object's method, which is
+        // non-writable and non-configurable: OrdinaryHasInstance.
+        if let Value::Function(function) = &right
+            && function.bound.is_none()
+            && !function.is_generator
+            && !function.is_async
+            && function.internal_prototype_slot().is_none()
+            && function.own_symbol_property(&symbol).is_none()
+        {
+            return ordinary_has_instance(left, right, env).map(Value::Boolean);
+        }
         let method = crate::property_value_key(right.clone(), &PropertyKey::Symbol(symbol), env)?;
         // `Function.prototype[Symbol.hasInstance]` is OrdinaryHasInstance, so
         // invoking it observably does nothing the direct call does not. Skipping
