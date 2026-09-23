@@ -1049,6 +1049,10 @@ fn effect_of(op: &Op) -> Option<Effect> {
         Op::GetPropNamed { cache, .. } if cache.local_slot().is_some() => simple(0, 1),
         Op::GetPropNamed { .. } => simple(1, 1),
         Op::SetPropNamed { .. } => simple(2, 1),
+        // A plain computed store runs at its exit and falls through
+        // (`WideOp::Exit`); any other store leaves the rest to the
+        // interpreter.
+        Op::SetProp { .. } => simple(3, 1),
         Op::JumpIfFalse(target) | Op::JumpIfTrue(target) => Effect {
             pops: 0,
             pushes: 0,

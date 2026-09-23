@@ -739,3 +739,23 @@ fn a_constructor_entered_on_the_wide_driver_builds_like_the_general_path() {
         Value::String("31,3,4,false,,2,bad,0".into())
     );
 }
+
+#[test]
+fn a_plain_computed_store_continues_on_the_tier_and_others_keep_their_semantics() {
+    assert_eq!(
+        value_of(
+            "function put(t, k, v) { t[k] = v; return t[k]; }
+             var holes = new Array(3);
+             var log = [];
+             var withSetter = Object.create({ set s(v) { log.push(v); } });
+             var frozen = Object.freeze({ f: 1 });
+             function strictPut(t, k, v) { 'use strict'; t[k] = v; }
+             var caught = '';
+             try { strictPut(frozen, 'f', 2); } catch (e) { caught = e.constructor.name; }
+             [put([1, 2], 1, 9), put(holes, 2, 'h') + holes.length, put({}, 'k', 3),
+              put({ k: 1 }, 'k', 4), put(withSetter, 's', 5), put(frozen, 'f', 6),
+              put(globalThis, 'gw', 7) + gw, log.join(''), caught].join(',');"
+        ),
+        Value::String("9,h3,3,4,,1,14,5,TypeError".into())
+    );
+}

@@ -32,6 +32,10 @@ pub(super) struct WideLoopFrame<'a> {
     pub(super) deoptimized: bool,
     pub(super) stack: Vec<Value>,
     declined: u128,
+    /// The realm's `Array.prototype` and whether its chain has an indexed
+    /// property, resolved on the first element access that needs them: a
+    /// program runs no user code, so neither changes while it runs.
+    array_prototype: Option<Option<(ObjectRef, bool)>>,
 }
 
 impl<'a> WideLoopFrame<'a> {
@@ -57,6 +61,7 @@ impl<'a> WideLoopFrame<'a> {
             deoptimized: false,
             stack: Vec::new(),
             declined: 0,
+            array_prototype: None,
         }
     }
 
@@ -138,7 +143,18 @@ impl LoopFrame for WideLoopFrame<'_> {
     }
 
     fn array_access_is_plain(&mut self, array: &ArrayRef) -> bool {
-        crate::bytecode::compact_fn::property::array_access_is_plain(array, self.env)
+        let env = self.env;
+        let resolved = self.array_prototype.get_or_insert_with(|| {
+            let prototype = crate::property::array_prototype(env)?;
+            let hazard = crate::bytecode::vm_props::prototype_chain_has_index_hazard(Some(
+                crate::Prototype::Object(prototype.clone()),
+            ));
+            Some((prototype, hazard))
+        });
+        let Some((prototype, hazard)) = resolved else {
+            return false;
+        };
+        !*hazard && (array.uses_default_prototype() || array.uses_prototype_object(prototype))
     }
 
     fn try_create_ordinary_own_data_property(

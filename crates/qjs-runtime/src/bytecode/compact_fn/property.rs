@@ -248,6 +248,72 @@ pub(in crate::bytecode) fn try_create_ordinary_own_data_property(
     }
 }
 
+/// `registers[obj][registers[key]] = registers[value]` when the store is
+/// plain, leaving the value in `obj`'s register as `Op::SetProp` leaves it on
+/// the stack: a dense index of an array whose prototype chain is the realm's
+/// ordinary one, or a string-keyed own data property of an ordinary object
+/// other than the global object, overwritten or created. These are the
+/// interpreter's own `set_prop` fast paths and give its result. Returns
+/// `false`, with every register untouched, for any other store, which the
+/// caller hands to the interpreter.
+#[inline(never)]
+pub(super) fn try_plain_set_prop(
+    registers: &mut [Value],
+    obj: u16,
+    key: u16,
+    value: u16,
+    env: &CallEnv,
+) -> bool {
+    let (obj, key_register, value_register) = (obj as usize, key as usize, value as usize);
+    let (object, key, value) = (
+        &registers[obj],
+        &registers[key_register],
+        &registers[value_register],
+    );
+    let stored = match object {
+        Value::Array(elements) => {
+            let index = match key {
+                Value::Number(number) => {
+                    crate::bytecode::vm_props::array_index_from_number(*number)
+                }
+                Value::String(key) => crate::bytecode::vm_props::array_index_from_string(key),
+                _ => None,
+            };
+            match index {
+                Some(index)
+                    if elements.dense_index_store_eligible(index)
+                        && array_access_is_plain(elements, env) =>
+                {
+                    elements.set(index, value.clone());
+                    true
+                }
+                _ => false,
+            }
+        }
+        Value::Object(object_ref) => match key {
+            Value::String(name) if !is_global_object(env, object) => {
+                match object_ref.write_existing_own_data_property(name.as_str(), value) {
+                    OwnDataPropertyWrite::Written => true,
+                    OwnDataPropertyWrite::ReadOnly => false,
+                    OwnDataPropertyWrite::NeedsSlowPath => try_create_ordinary_own_data_property(
+                        object_ref,
+                        Rc::from(name.as_str()),
+                        value,
+                    ),
+                }
+            }
+            _ => false,
+        },
+        _ => false,
+    };
+    if stored {
+        let value = std::mem::replace(&mut registers[value_register], Value::Undefined);
+        registers[key_register] = Value::Undefined;
+        registers[obj] = value;
+    }
+    stored
+}
+
 /// Whether an element access on `array` meets no index accessor or exotic
 /// object on its prototype chain: `Vm::array_uses_realm_prototype` and
 /// `Vm::array_prototype_chain_has_index_hazard` without the VM's caches.

@@ -80,7 +80,9 @@ enum WideOp {
     /// at bytecode instruction `ip` with this activation's locals and its
     /// `depth` operand-stack registers. At a probed backedge the jump itself
     /// follows: once no accelerator claims that loop the exit declines and
-    /// execution falls through to it.
+    /// execution falls through to it. At a computed store (`Op::SetProp`)
+    /// the exit first tries the store as a plain one and, if it is,
+    /// continues with the next operation instead.
     Exit {
         ip: u32,
         depth: u16,

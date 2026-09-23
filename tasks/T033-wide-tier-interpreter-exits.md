@@ -10,7 +10,9 @@ then hands over its state; the interpreter resumes at that instruction.
 ## Design
 
 - Exit points (`compact_fn/wide/compile.rs`): operations in `is_exit_safe`
-  (computed stores, object literals,
+  (computed stores the tier cannot answer as a plain dense-index or
+  own-data store -- it tries that first at the exit and continues --, object
+  literals,
   `RequireObjectCoercible`, literal appends) and the backward edges of loops
   an accelerator claims or in-place fusion rewrote. Bodies whose lowering
   keeps a literal in virtual slots, and anything needing set-up at entry
@@ -97,8 +99,6 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
 
 ## Next
 
-- Run computed stores (`SetProp`) natively; each exit leaves the rest of a
-  loop body, and its loop, to the interpreter.
 
 - Admit bodies with a parameter prologue (default values) once their dead-zone
   behaviour is covered; CF traces count 179k general frames for them.

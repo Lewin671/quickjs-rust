@@ -456,6 +456,7 @@ fn exit_to_interpreter(
     root: RootExit<'_>,
     ip: u32,
     depth: u16,
+    resume_pc: usize,
     window: &mut [Value],
     env: &CallEnv,
     this_value: Option<Value>,
@@ -471,6 +472,12 @@ fn exit_to_interpreter(
         return ExitOutcome::Continue {
             pc: program.backedge_jump_pc(index),
         };
+    }
+    if let Some(crate::bytecode::ir::Op::SetProp { .. }) = bytecode.code.get(ip as usize) {
+        let operand = |offset: u16| program.local_registers + depth - offset;
+        if property::try_plain_set_prop(window, operand(3), operand(2), operand(1), env) {
+            return ExitOutcome::Continue { pc: resume_pc };
+        }
     }
     let (upvalues, realm_upvalue_slots) = match callee {
         Value::Function(function) => (
@@ -617,12 +624,18 @@ fn run_typed_loop_here(
     base_depth: usize,
 ) -> LoopHere {
     let plans = crate::bytecode::vm_loop_dispatch::LoopPlanView::for_bytecode(bytecode);
-    let consulted_first = plans.numeric.iter().any(|plan| plan.region().1 == backedge)
+    // The interpreter consults the other accelerators before the typed tier,
+    // at this edge and at the edges of loops inside this one; a region any
+    // of them has a plan in stays with the interpreter's order.
+    let overlaps = |(plan_header, plan_backedge): (usize, usize)| {
+        plan_backedge == backedge || (header..=backedge).contains(&plan_header)
+    };
+    let consulted_first = plans.numeric.iter().any(|plan| overlaps(plan.region()))
         || plans
             .shared_numeric_mutation
             .iter()
-            .any(|plan| plan.region().1 == backedge)
-        || plans.control.iter().any(|plan| plan.region().1 == backedge);
+            .any(|plan| overlaps(plan.region()))
+        || plans.control.iter().any(|plan| overlaps(plan.region()));
     if consulted_first
         || !plans
             .typed
@@ -1068,6 +1081,7 @@ fn run_frames(
                     root,
                     ip as u32,
                     depth,
+                    pc,
                     &mut registers[current_base..current_base + current_len],
                     env,
                     current_this.clone(),
