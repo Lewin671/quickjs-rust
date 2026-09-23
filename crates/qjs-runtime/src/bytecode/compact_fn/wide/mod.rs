@@ -26,6 +26,7 @@ use crate::bytecode::named_property_cache::NamedPropertyCache;
 
 mod activation;
 mod compile;
+mod loop_frame;
 #[cfg(test)]
 mod tests;
 
@@ -255,6 +256,11 @@ pub(in crate::bytecode) struct WideProgram {
     /// One bit per probed backedge, in `probed_backedges` order, set once no
     /// accelerator claimed that loop: the loop then runs here.
     native_backedges: std::cell::Cell<u64>,
+    /// The wide instruction each bytecode instruction begins at, and the
+    /// operand-stack depth there (`u16::MAX` where unreachable): where a
+    /// typed loop program run from an exit hands the activation back.
+    ip_to_pc: Box<[u32]>,
+    ip_depth: Box<[u16]>,
 }
 
 /// A backward jump whose exit is probed (`WideProgram::probed_backedges`).
@@ -286,6 +292,15 @@ impl WideProgram {
             self.activations.set(activations + 1);
         }
         true
+    }
+
+    /// The wide instruction to continue at for bytecode instruction `ip`
+    /// with `depth` operand-stack values, if the tier can continue there.
+    pub(super) fn resume_pc(&self, ip: usize, depth: usize) -> Option<usize> {
+        let expected = *self.ip_depth.get(ip)?;
+        (usize::from(expected) == depth)
+            .then(|| self.ip_to_pc.get(ip).map(|&pc| pc as usize))
+            .flatten()
     }
 
     /// The probe index of the backedge exit at `ip`, if it is one.

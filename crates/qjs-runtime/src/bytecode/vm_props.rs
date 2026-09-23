@@ -1248,7 +1248,7 @@ pub(super) fn prototype_chain_needs_recursive_set(slot: Option<crate::Prototype>
 /// Whether any object in a non-standard prototype chain can affect an indexed
 /// assignment. Ordinary objects expose an O(1) own-index count; unusual exotic
 /// nodes fail closed so the caller uses the fully observable `[[Set]]` path.
-fn prototype_chain_has_index_hazard(slot: Option<crate::Prototype>) -> bool {
+pub(super) fn prototype_chain_has_index_hazard(slot: Option<crate::Prototype>) -> bool {
     let mut current = slot;
     loop {
         match current {

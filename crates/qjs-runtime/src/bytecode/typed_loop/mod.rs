@@ -44,11 +44,13 @@ use crate::Value;
 mod branchy_nested_tests;
 mod compile;
 mod execute;
+mod frame;
 mod helper_graph;
 mod register_packing;
 
 pub(super) use compile::compile_all;
 pub(super) use execute::try_run_typed_loop;
+pub(in crate::bytecode) use frame::LoopFrame;
 
 /// Registers are addressed with 16 bits, which bounds a compiled region.
 const MAX_REGISTERS: usize = 1 << 12;

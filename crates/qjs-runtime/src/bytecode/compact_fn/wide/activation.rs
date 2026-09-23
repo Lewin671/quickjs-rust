@@ -15,7 +15,8 @@ use crate::bytecode::DirectCallSlots;
 use crate::bytecode::compact_fn::execute;
 use crate::bytecode::compact_fn::property;
 use crate::bytecode::ir::Bytecode;
-use crate::bytecode::vm::Resumed;
+use crate::bytecode::typed_loop::LoopFrame;
+use crate::bytecode::vm::{ResumeFrom, Resumed};
 use crate::function::{CallEnv, Function, Upvalue};
 use crate::{RuntimeError, Value};
 
@@ -360,6 +361,48 @@ fn exit_to_interpreter(
         ),
         _ => (root.upvalues, root.realm_upvalue_slots),
     };
+    let (mut ip, mut depth) = (ip, depth);
+    let probe_target = probe.and_then(|_| match bytecode.code.get(ip as usize) {
+        Some(crate::bytecode::ir::Op::Jump(target)) => Some(*target),
+        _ => None,
+    });
+    let mut from = match probe_target {
+        Some(target) => ResumeFrom::ProbedBackedge(target),
+        None => ResumeFrom::Exit,
+    };
+    if let Some(header) = probe_target {
+        match run_typed_loop_here(
+            bytecode,
+            program,
+            env,
+            window,
+            upvalues.as_slice(),
+            this_value.as_ref(),
+            header,
+            ip as usize,
+            depth as usize,
+        ) {
+            LoopHere::Declined => {}
+            LoopHere::Continue { pc } => return ExitOutcome::Continue { pc },
+            // The program deoptimized: the interpreter resumes where it
+            // stopped, with the stack it rebuilt.
+            LoopHere::Deoptimized {
+                ip: resume,
+                depth: stack_depth,
+                declined_typed_loop_programs,
+            } => {
+                let (Ok(resume), Ok(stack_depth)) =
+                    (u32::try_from(resume), u16::try_from(stack_depth))
+                else {
+                    return ExitOutcome::Finished(Err(missing_program()));
+                };
+                (ip, depth) = (resume, stack_depth);
+                from = ResumeFrom::LoopDeoptimized {
+                    declined_typed_loop_programs,
+                };
+            }
+        }
+    }
     program.record_exit();
     // `QJS_CF_TRACE=1` names every exit: the body, and the instruction the
     // interpreter resumes at.
@@ -383,10 +426,6 @@ fn exit_to_interpreter(
         upvalues,
         realm_upvalue_slots,
     };
-    let probe_target = probe.and_then(|_| match bytecode.code.get(ip as usize) {
-        Some(crate::bytecode::ir::Op::Jump(target)) => Some(*target),
-        _ => None,
-    });
     let registers = crate::bytecode::vm::WideRegisters {
         locals,
         own_locals: program.own_locals,
@@ -400,7 +439,7 @@ fn exit_to_interpreter(
         slots,
         ip as usize,
         registers,
-        probe_target,
+        from,
     ) {
         Resumed::Finished(result) => ExitOutcome::Finished(result),
         Resumed::HandedBack { backedge } => {
@@ -424,6 +463,111 @@ fn exit_to_interpreter(
                 pc: program.backedge_jump_pc(index),
             }
         }
+    }
+}
+
+/// What running a loop's typed program from an exit did.
+enum LoopHere {
+    /// No program ran; the exit proceeds as before.
+    Declined,
+    /// The loop finished; the activation continues at wide instruction `pc`.
+    Continue { pc: usize },
+    /// The program stopped at bytecode `ip` with `depth` stack values in the
+    /// activation's stack registers, for the interpreter to continue with
+    /// the programs it would have declined.
+    Deoptimized {
+        ip: usize,
+        depth: usize,
+        declined_typed_loop_programs: u128,
+    },
+}
+
+/// Runs, against this activation's registers, the typed loop program the
+/// interpreter would enter at the probed backedge `backedge` -- unless one of
+/// the accelerators the interpreter consults before it has a plan there.
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+fn run_typed_loop_here(
+    bytecode: &Bytecode,
+    program: &WideProgram,
+    env: &CallEnv,
+    window: &mut [Value],
+    upvalues: &[Upvalue],
+    this_value: Option<&Value>,
+    header: usize,
+    backedge: usize,
+    base_depth: usize,
+) -> LoopHere {
+    let plans = crate::bytecode::vm_loop_dispatch::LoopPlanView::for_bytecode(bytecode);
+    let consulted_first = plans.numeric.iter().any(|plan| plan.region().1 == backedge)
+        || plans
+            .shared_numeric_mutation
+            .iter()
+            .any(|plan| plan.region().1 == backedge)
+        || plans.control.iter().any(|plan| plan.region().1 == backedge);
+    if consulted_first
+        || !plans
+            .typed
+            .iter()
+            .any(|typed| typed.header() == header && typed.backedge() == backedge)
+    {
+        return LoopHere::Declined;
+    }
+    let local_registers = program.local_registers as usize;
+    let (locals, stack) = window.split_at_mut(local_registers);
+    let mut frame = super::loop_frame::WideLoopFrame::new(
+        bytecode,
+        env,
+        locals,
+        program.own_locals,
+        upvalues,
+        bytecode
+            .direct_readonly_received_upvalue_slots()
+            .unwrap_or(0),
+        this_value,
+    );
+    if !crate::bytecode::typed_loop::try_run_typed_loop(&mut frame, plans, header, backedge) {
+        return LoopHere::Declined;
+    }
+    // A declined attempt hands the edge to the interpreter, which counts it.
+    crate::diagnostics::count!(loop_backedges);
+    crate::diagnostics::count!(loop_plan_entries);
+    let (resume, deoptimized) = (frame.resume_ip, frame.deoptimized);
+    let declined_typed_loop_programs = frame.declined_typed_loop_programs();
+    let values = std::mem::take(&mut frame.stack);
+    let Some(resume) = resume else {
+        return LoopHere::Declined;
+    };
+    // The program rebuilt the stack above the loop's own base; what lay
+    // below it when the loop began is still in its registers.
+    let depth = base_depth + values.len();
+    if depth > stack.len() {
+        return LoopHere::Declined;
+    }
+    for (register, value) in stack[base_depth..].iter_mut().zip(values) {
+        execute::store(register, value);
+    }
+    // `QJS_CF_TRACE=1` names each loop program run from an exit.
+    #[cfg(feature = "perf-counters")]
+    if std::env::var_os("QJS_CF_TRACE").is_some() {
+        eprintln!(
+            "CFLOOP params=({}) len={} ip {backedge} {} at {resume} depth {depth} expects {:?}",
+            bytecode.parameter_names().join(","),
+            bytecode.code.len(),
+            if deoptimized { "deoptimized" } else { "ran" },
+            program.ip_depth.get(resume)
+        );
+    }
+    match (!deoptimized)
+        .then(|| program.resume_pc(resume, depth))
+        .flatten()
+    {
+        Some(pc) => LoopHere::Continue { pc },
+        None => LoopHere::Deoptimized {
+            ip: resume,
+            depth,
+            declined_typed_loop_programs,
+        },
     }
 }
 

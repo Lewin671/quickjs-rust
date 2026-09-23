@@ -493,8 +493,9 @@ one line per function body the wide compact tier compiles (`CFOK`) or
 declines (`CFDECLINE`, naming the instruction and the reason), and one line
 per general-path frame it had to build (`CFVM`), one line per exit to
 the interpreter (`CFEXIT`, with the instruction it resumes at, `probed` for
-a loop backedge), and one line per loop the interpreter handed back to the
-tier (`CFNATIVE`), each identified by the body's parameter names and length.
+a loop backedge), one line per loop the interpreter handed back to the
+tier (`CFNATIVE`), one line per typed loop program the tier ran against its
+own registers at such a backedge (`CFLOOP`, `ran` or `deoptimized`), each identified by the body's parameter names and length.
 `QJS_CF_TRACE=3` also prints each `CFVM` body's bytecode (`CFVMCODE`), which
 names a callee that the parameter list alone does not, such as a getter.
 A histogram of `CFVM` ranks the callees

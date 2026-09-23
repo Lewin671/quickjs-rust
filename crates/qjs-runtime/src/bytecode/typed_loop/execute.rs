@@ -11,7 +11,7 @@ use std::rc::Rc;
 
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
-use super::super::vm::Vm;
+use super::frame::LoopFrame;
 use super::{
     Class, DeoptSite, MAX_NATIVE_ITERATIONS, Typed, TypedLoopProgram, TypedLoopScratch, TypedOp,
 };
@@ -19,13 +19,13 @@ use crate::Value;
 
 /// Runs the program covering the backedge at `ip`, if one exists and this
 /// frame admits it. Returns whether the loop was executed natively.
-pub(crate) fn try_run_typed_loop(
-    vm: &mut Vm<'_>,
+pub(crate) fn try_run_typed_loop<F: LoopFrame>(
+    vm: &mut F,
     plans: crate::bytecode::vm_loop_dispatch::LoopPlanView<'_>,
     header: usize,
     backedge: usize,
 ) -> bool {
-    if vm.direct_eval_with_stack {
+    if vm.direct_eval_with_stack() {
         return false;
     }
     let programs = plans.typed;
@@ -40,12 +40,12 @@ pub(crate) fn try_run_typed_loop(
     };
     // A frame that has already declined this region does not re-examine it.
     let declined_bit = (index < u128::BITS as usize).then(|| 1_u128 << index);
-    if declined_bit.is_some_and(|bit| vm.declined_typed_loop_programs & bit != 0) {
+    if declined_bit.is_some_and(|bit| vm.declined_typed_loop_programs() & bit != 0) {
         return false;
     }
-    let decline = |vm: &mut Vm<'_>| {
+    let decline = |vm: &mut F| {
         if let Some(bit) = declined_bit {
-            vm.declined_typed_loop_programs |= bit;
+            vm.decline_typed_loop_program(bit);
         }
         false
     };
@@ -115,7 +115,7 @@ pub(crate) fn try_run_typed_loop(
         // the program rather than paying the entry cost every iteration.
         Outcome::Deoptimized => {
             if let Some(bit) = declined_bit {
-                vm.declined_typed_loop_programs |= bit;
+                vm.decline_typed_loop_program(bit);
             }
             true
         }
@@ -134,7 +134,7 @@ enum Outcome {
     Declined,
 }
 
-fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
+fn run<F: LoopFrame>(vm: &mut F, program: &TypedLoopProgram) -> Outcome {
     // Preparation reads the callees, their captured cells and the intrinsics
     // they reach once per entry. A program with no call sites never pays for
     // it, and one whose sites cannot be flattened declines here rather than
@@ -153,7 +153,11 @@ fn run(vm: &mut Vm<'_>, program: &TypedLoopProgram) -> Outcome {
     outcome
 }
 
-fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopScratch) -> Outcome {
+fn execute<F: LoopFrame>(
+    vm: &mut F,
+    program: &TypedLoopProgram,
+    scratch: &mut TypedLoopScratch,
+) -> Outcome {
     let registers = &mut scratch.registers;
     let receivers = &scratch.receivers;
     let boxed = &mut scratch.boxed;
@@ -185,7 +189,7 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                     program.backedge,
                     site.ip,
                     $op,
-                    vm.current.bytecode.code.get(site.ip as usize)
+                    vm.bytecode_op(site.ip as usize)
                 );
             }
             return deopt(vm, program, registers, boxed, site);
@@ -306,7 +310,7 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                     &program.names[name as usize],
                     &mut shape_caches[cache as usize],
                     &intrinsics,
-                    Some(&vm.env),
+                    Some(vm.loop_env()),
                 ) else {
                     deopt_here!(op);
                 };
@@ -338,7 +342,7 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                     &program.names[name as usize],
                     &mut shape_caches[cache as usize],
                     &intrinsics,
-                    Some(&vm.env),
+                    Some(vm.loop_env()),
                 )
                 .as_ref()
                 .and_then(Typed::from_value) else {
@@ -479,7 +483,7 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                         let value = &boxed[value as usize];
                         // The same dense append the native takes, with the
                         // same prototype-chain and descriptor checks.
-                        array.with_plain_dense_mutation(&vm.env, 1, |elements| {
+                        array.with_plain_dense_mutation(vm.loop_env(), 1, |elements| {
                             elements.push(value.clone());
                             elements.len()
                         })
@@ -509,7 +513,7 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                 registers[dst as usize] = value;
             }
             TypedOp::CallClosedFormLeaf { dst, .. } => {
-                let Some(value) = call_leaf(program, &vm.env, registers, boxed, op) else {
+                let Some(value) = call_leaf(program, vm.loop_env(), registers, boxed, op) else {
                     deopt_here!(op);
                 };
                 boxed[dst as usize] = value;
@@ -539,7 +543,7 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                 // The exit target is reached with the same operand stack the
                 // branch instruction started from, condition included.
                 materialize_stack(vm, program, registers, boxed, program.sites[pc - 1]);
-                vm.ip = exit_ip as usize;
+                vm.resume_at(exit_ip as usize, false);
                 return Outcome::Ran;
             }
             TypedOp::BoxedEquality {
@@ -560,7 +564,7 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
                 // holds exactly the stack that instruction expects and the
                 // interpreter executes it as if the region had never run.
                 materialize_stack(vm, program, registers, boxed, program.sites[pc - 1]);
-                vm.ip = exit_ip as usize;
+                vm.resume_at(exit_ip as usize, false);
                 return Outcome::Ran;
             }
         }
@@ -569,8 +573,8 @@ fn execute(vm: &mut Vm<'_>, program: &TypedLoopProgram, scratch: &mut TypedLoopS
 
 /// Loads the frame slots the program uses, declining when any slot holds a type
 /// the register file cannot represent or a receiver is not a dense array.
-fn seed_registers(
-    vm: &mut Vm<'_>,
+fn seed_registers<F: LoopFrame>(
+    vm: &mut F,
     program: &TypedLoopProgram,
     scratch: &mut TypedLoopScratch,
 ) -> Option<()> {
@@ -603,6 +607,9 @@ fn seed_registers(
         registers[register as usize] = value;
     }
     for &(register, slot) in &program.local_slots {
+        if !vm.can_seed_slot(slot as usize) {
+            return None;
+        }
         let value = match vm.local_slot_value(slot as usize) {
             Some(value) => Typed::from_value(&value)?,
             None => Typed::Undefined,
@@ -760,7 +767,12 @@ fn value_is_ordinary_object(value: &Value) -> bool {
     }
 }
 
-fn write_back(vm: &mut Vm<'_>, program: &TypedLoopProgram, registers: &[Typed], boxed: &[Value]) {
+fn write_back<F: LoopFrame>(
+    vm: &mut F,
+    program: &TypedLoopProgram,
+    registers: &[Typed],
+    boxed: &[Value],
+) {
     for &(register, slot) in &program.written_locals {
         vm.write_typed_loop_slot(slot as usize, registers[register as usize].to_value());
     }
@@ -776,8 +788,8 @@ fn write_back(vm: &mut Vm<'_>, program: &TypedLoopProgram, registers: &[Typed], 
 /// Abandons the program at `site`: the frame's slots take the register values,
 /// the operand stack is rebuilt from the registers the site names, and the
 /// interpreter resumes at the bytecode instruction that was about to run.
-fn deopt(
-    vm: &mut Vm<'_>,
+fn deopt<F: LoopFrame>(
+    vm: &mut F,
     program: &TypedLoopProgram,
     registers: &[Typed],
     boxed: &[Value],
@@ -785,14 +797,14 @@ fn deopt(
 ) -> Outcome {
     write_back(vm, program, registers, boxed);
     materialize_stack(vm, program, registers, boxed, site);
-    vm.ip = site.ip as usize;
+    vm.resume_at(site.ip as usize, true);
     Outcome::Deoptimized
 }
 
 /// Pushes the operand stack `site` describes, so the interpreter sees exactly
 /// what the bytecode instruction at `site.ip` expects.
-fn materialize_stack(
-    vm: &mut Vm<'_>,
+fn materialize_stack<F: LoopFrame>(
+    vm: &mut F,
     program: &TypedLoopProgram,
     registers: &[Typed],
     boxed: &[Value],
@@ -804,7 +816,7 @@ fn materialize_stack(
             Class::Scalar => registers[register as usize].to_value(),
             Class::Boxed => boxed[register as usize].clone(),
         };
-        vm.stack.push(value);
+        vm.push_stack(value);
     }
 }
 
@@ -1221,7 +1233,11 @@ fn dense_write(array: &crate::ArrayRef, index: Typed, value: Typed) -> bool {
 /// on each new word, and deoptimized the region there.
 #[cold]
 #[inline(never)]
-fn missing_element_is_undefined(vm: &mut Vm<'_>, array: &crate::ArrayRef, index: Typed) -> bool {
+fn missing_element_is_undefined<F: LoopFrame>(
+    vm: &mut F,
+    array: &crate::ArrayRef,
+    index: Typed,
+) -> bool {
     let Some(number) = index.number() else {
         return false;
     };
@@ -1231,8 +1247,7 @@ fn missing_element_is_undefined(vm: &mut Vm<'_>, array: &crate::ArrayRef, index:
     if !array.index_is_absent(number as usize) {
         return false;
     }
-    vm.array_uses_realm_prototype(array)
-        && !vm.array_prototype_chain_has_index_hazard().unwrap_or(true)
+    vm.array_access_is_plain(array)
 }
 
 /// `dense_write` for a value already boxed.
@@ -1258,8 +1273,8 @@ fn dense_write_value(array: &crate::ArrayRef, index: Typed, value: &Value) -> bo
 /// `fill_hole_or_grow` for a value already boxed.
 #[cold]
 #[inline(never)]
-fn fill_hole_or_grow_value(
-    vm: &mut Vm<'_>,
+fn fill_hole_or_grow_value<F: LoopFrame>(
+    vm: &mut F,
     array: &crate::ArrayRef,
     index: Typed,
     value: &Value,
@@ -1271,10 +1286,7 @@ fn fill_hole_or_grow_value(
         return false;
     }
     let index = number as usize;
-    if !array.dense_index_store_eligible(index)
-        || !vm.array_uses_realm_prototype(array)
-        || vm.array_prototype_chain_has_index_hazard().unwrap_or(true)
-    {
+    if !array.dense_index_store_eligible(index) || !vm.array_access_is_plain(array) {
         return false;
     }
     array.set(index, value.clone());
@@ -1293,7 +1305,12 @@ fn fill_hole_or_grow_value(
 /// the common case, returns above.
 #[cold]
 #[inline(never)]
-fn fill_hole_or_grow(vm: &mut Vm<'_>, array: &crate::ArrayRef, index: Typed, value: Typed) -> bool {
+fn fill_hole_or_grow<F: LoopFrame>(
+    vm: &mut F,
+    array: &crate::ArrayRef,
+    index: Typed,
+    value: Typed,
+) -> bool {
     let Some(number) = index.number() else {
         return false;
     };
@@ -1301,10 +1318,7 @@ fn fill_hole_or_grow(vm: &mut Vm<'_>, array: &crate::ArrayRef, index: Typed, val
         return false;
     }
     let index = number as usize;
-    if !array.dense_index_store_eligible(index)
-        || !vm.array_uses_realm_prototype(array)
-        || vm.array_prototype_chain_has_index_hazard().unwrap_or(true)
-    {
+    if !array.dense_index_store_eligible(index) || !vm.array_access_is_plain(array) {
         return false;
     }
     array.set(index, value.to_value());

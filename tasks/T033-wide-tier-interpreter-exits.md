@@ -21,6 +21,13 @@ then hands over its state; the interpreter resumes at that instruction.
   an uninitialized slot) and operand stack, resumed at the exit's ip. Every
   parameter has a register when a body can exit; `this` is required when any
   instruction reads it.
+- Typed loops from the tier (`wide/loop_frame.rs`, `typed_loop/frame.rs`):
+  at a probed backedge no other accelerator plans for, the loop's typed
+  program runs against the activation's registers through the `LoopFrame`
+  trait the interpreter's `Vm` also implements. A finished loop continues in
+  the tier at its exit; a deoptimized one resumes in an interpreter frame
+  with that program declined and hand-back armed. Such exits are not
+  counted, so a function around a short loop stays on the tier.
 - Exit-heavy judgement: after 64 activations, a program that exited on three
   in four is left to the general path.
 - Hand-back (`vm/wide_resume.rs`): an unconditional backward jump exits only

@@ -185,7 +185,7 @@ fn is_global_object(env: &CallEnv, object: &Value) -> bool {
 /// Creates a missing ordinary own string data property without cloning the
 /// call environment when the complete [[Set]] result is already known.
 /// Mirrors `Vm::try_create_ordinary_own_data_property`.
-fn try_create_ordinary_own_data_property(
+pub(in crate::bytecode) fn try_create_ordinary_own_data_property(
     object: &crate::ObjectRef,
     key: Rc<str>,
     value: &Value,
@@ -237,6 +237,19 @@ fn try_create_ordinary_own_data_property(
             }
         }
     }
+}
+
+/// Whether an element access on `array` meets no index accessor or exotic
+/// object on its prototype chain: `Vm::array_uses_realm_prototype` and
+/// `Vm::array_prototype_chain_has_index_hazard` without the VM's caches.
+pub(in crate::bytecode) fn array_access_is_plain(array: &crate::ArrayRef, env: &CallEnv) -> bool {
+    let Some(array_prototype) = crate::property::array_prototype(env) else {
+        return false;
+    };
+    (array.uses_default_prototype() || array.uses_prototype_object(&array_prototype))
+        && !crate::bytecode::vm_props::prototype_chain_has_index_hazard(Some(
+            crate::Prototype::Object(array_prototype),
+        ))
 }
 
 #[cold]
@@ -333,7 +346,7 @@ pub(super) fn get_prop_computed(
 /// immutable function name: the realm binding, then an own property of
 /// `globalThis` (invoking its getter), then the ReferenceError.
 #[inline(never)]
-pub(super) fn load_global(name: &str, env: &CallEnv) -> Result<Value, RuntimeError> {
+pub(in crate::bytecode) fn load_global(name: &str, env: &CallEnv) -> Result<Value, RuntimeError> {
     if let Some(value) = env.get(name) {
         if value.is_uninitialized_lexical_marker() {
             return Err(undefined_identifier(name));

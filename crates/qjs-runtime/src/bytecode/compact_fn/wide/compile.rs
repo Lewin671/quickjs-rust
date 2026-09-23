@@ -765,6 +765,11 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         exit_heavy: std::cell::Cell::new(false),
         probed_backedges: probed_backedges.into_boxed_slice(),
         native_backedges: std::cell::Cell::new(0),
+        ip_to_pc: compact_index.into_boxed_slice(),
+        ip_depth: entry_depth
+            .iter()
+            .map(|depth| depth.unwrap_or(u16::MAX))
+            .collect(),
     })
 }
 
