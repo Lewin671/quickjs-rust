@@ -55,6 +55,15 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   against 93f98a4a in single-run cycles. Test262 at 309a604e and 10cef53c:
   CI aggregate zero gap.
 
+- Stack run 2b799a31 vs 93f98a4a (30 blocks, cycles, quiet host, every
+  lane healthy; `target/comparison/stack-2b799a31-30b`): external geomean
+  0.968 against the base and 1.138 against QuickJS-NG; hash-map 0.734,
+  cdjs 0.812, string-validate-input 0.856, date-format-xparb 0.868,
+  date-format-tofte 0.879, 3d-raytrace 0.880. One control failed:
+  string-base64 1.097, from primitive string reads on the wide tier after
+  the loop hand-back; fixed in f08fb6c2 (single-run 0.70 of 2b799a31).
+  Broad lane 0.997, sentinels 1.004 (worst string_key_map_churn 1.019).
+
 ## Screen log
 
 - `wide-tier-math-calls-and-field-thunks` (native guarded Math calls, field
