@@ -1538,3 +1538,28 @@ fn strict_equality_over_boxed_operands_matches_the_interpreter() {
          run(['a', 'b', 'a', 'c'], 'a') * 10 + run([1, 2, 1], '1');";
     assert_eq!(eval(script), Ok(Value::Number(20.0)));
 }
+
+#[test]
+fn a_loop_writes_its_implicit_globals_by_slot_and_falls_back_after_a_layout_change() {
+    assert_eq!(
+        crate::eval(
+            "function run(n) { \
+           var a1 = a2 = a3 = 0.0; \
+           for (var k = 1; k <= n; k++) { a2 += 1 / k; a3 += k; sk = k * 2; } \
+           return [a1, a2.toFixed(6), a3, sk, globalThis.a3, globalThis.sk].join(\",\"); \
+         } \
+         var out = [run(10)]; \
+         delete globalThis.sk; globalThis.extra1 = 1; globalThis.extra2 = 2; \
+         out.push(run(5)); \
+         Object.defineProperty(globalThis, \"a3\", { value: 100, writable: false, configurable: true }); \
+         out.push(run(3)); \
+         out.push(Object.keys(globalThis).filter(function (k) { return /^(a2|a3|sk|extra1|extra2)$/.test(k); }).join(\"+\")); \
+         out.join(\"|\");"
+        ),
+        Ok(Value::String(
+            "0,2.928968,55,20,55,20|0,2.283333,15,10,15,10|0,1.833333,100,6,100,6|a3+a2+extra1+extra2+sk"
+                .to_owned()
+                .into()
+        ))
+    );
+}

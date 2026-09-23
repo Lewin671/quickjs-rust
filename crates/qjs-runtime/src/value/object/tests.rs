@@ -83,7 +83,7 @@ fn ordinary_small_object_promotes_only_after_the_compact_limit() {
     assert!(matches!(
         &*object.0.properties.borrow(),
         PropertyStorage::Dynamic(dynamic)
-            if dynamic.properties.len() == PropertyStorage::SMALL_LIMIT + 1
+            if dynamic.entries.len() == PropertyStorage::SMALL_LIMIT + 1
                 && dynamic.order.len() == PropertyStorage::SMALL_LIMIT + 1
     ));
     assert_eq!(
@@ -236,4 +236,31 @@ fn literal_slot_survives_value_writes_and_misses_on_accessors() {
     );
     assert_eq!(object.literal_data_slot_value(&cached_shape, slot), None);
     assert!(object.literal_data_slot("b").is_none());
+}
+
+#[test]
+fn dynamic_storage_keeps_order_values_and_slots_across_a_removal() {
+    let object = ObjectRef::with_prototype(HashMap::new(), None);
+    let count = PropertyStorage::SMALL_LIMIT + 4;
+    for index in 0..count {
+        object.set(format!("k{index}"), Value::Number(index as f64));
+    }
+    let last = format!("k{}", count - 1);
+    assert_eq!(object.any_storage_data_slot(&last), Some(count - 1));
+    let layout = object.layout_revision();
+    assert!(object.delete_own_property("k2"));
+    assert_ne!(object.layout_revision(), layout);
+    // The last property moved into the removed slot; the order is unchanged.
+    assert_eq!(object.any_storage_data_slot(&last), Some(2));
+    assert_eq!(object.get(&last), Some(Value::Number((count - 1) as f64)));
+    let expected: Vec<String> = (0..count)
+        .filter(|&index| index != 2)
+        .map(|index| format!("k{index}"))
+        .collect();
+    assert_eq!(object.own_property_names(), expected);
+    assert!(matches!(
+        object.any_storage_data_slot_write(2, &Value::Number(-1.0)),
+        Some(OwnDataPropertyWrite::Written)
+    ));
+    assert_eq!(object.get(&last), Some(Value::Number(-1.0)));
 }

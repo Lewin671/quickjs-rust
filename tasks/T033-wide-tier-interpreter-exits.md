@@ -170,6 +170,19 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   main: audio-dft 1.022, stanford-crypto-sha256-iterative 1.018.
   Sentinels 0.960-1.003 (`prototype_method_call` 0.960).
 
+- Stack run 520a5734 vs main 9f13933a (30 blocks, cycles, quiet host;
+  `target/comparison/json-parse-520a5734`): JSON.stringify copying
+  unescaped runs, operator-token variant checks, typed-loop global writes
+  by slot (dynamic property storage now slot-addressed), nested literals
+  parsed once (the parser tried every `[`/`{` as a destructuring pattern
+  first -- exponential in nesting depth), for-in layers read from storage,
+  the cheap dynamic-realm predicate. External geomean 0.965 against main
+  and **0.938 against QuickJS-NG**; json-stringify-tinderbox 0.551,
+  math-partial-sums 0.771 (now 0.991 against NG), jetstream
+  stanford-crypto-aes 0.783, string-tagcloud 0.885. Worst against main:
+  xparb 1.021; sentinel `string_key_map_churn` 1.020 (dictionary churn pays
+  the slot index's upkeep on removal).
+
 - Rejected (single-run, no measurable gain; 2026-09-23):
   - Running closures a direct `eval` made (`Function::deopt_bindings`) on
     the wide tier over their named environment: admitted and ran (xparb's

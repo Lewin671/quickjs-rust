@@ -441,41 +441,72 @@ fn truncate_string_code_units(value: &str, max_units: usize) -> String {
 }
 
 fn push_quoted_json_string(output: &mut String, value: &str) {
+    output.reserve(value.len() + 2);
     output.push('"');
-    let mut characters = value.chars().peekable();
-    while let Some(character) = characters.next() {
-        if let Some(code_unit) = string::surrogate_escape_code_unit(character) {
-            if matches!(
-                (
-                    code_unit,
-                    characters
-                        .peek()
-                        .copied()
-                        .and_then(string::surrogate_escape_code_unit)
-                ),
-                (0xD800..=0xDBFF, Some(0xDC00..=0xDFFF))
-            ) {
-                output.push(character);
-                output.push(characters.next().expect("peeked surrogate must remain"));
+    let bytes = value.as_bytes();
+    // Characters that need no escape are copied a run at a time; only a
+    // quote, a backslash, a control character or a lone surrogate's sentinel
+    // stops the run.
+    let mut run_start = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if byte < 0x80 {
+            if byte >= 0x20 && byte != b'"' && byte != b'\\' {
+                index += 1;
                 continue;
             }
-            write!(output, "\\u{code_unit:04x}").expect("writing to a String cannot fail");
-            continue;
-        }
-        match character {
-            '"' => output.push_str("\\\""),
-            '\\' => output.push_str("\\\\"),
-            '\u{0008}' => output.push_str("\\b"),
-            '\u{000c}' => output.push_str("\\f"),
-            '\n' => output.push_str("\\n"),
-            '\r' => output.push_str("\\r"),
-            '\t' => output.push_str("\\t"),
-            '\u{0000}'..='\u{001f}' => {
-                let code_unit = character as u32;
-                write!(output, "\\u{code_unit:04x}").expect("writing to a String cannot fail")
+        } else {
+            let character = value[index..]
+                .chars()
+                .next()
+                .expect("a string index is on a character boundary");
+            if string::surrogate_escape_code_unit(character).is_none() {
+                index += character.len_utf8();
+                continue;
             }
-            _ => output.push(character),
+        }
+        output.push_str(&value[run_start..index]);
+        index = push_json_escape(output, value, index);
+        run_start = index;
+    }
+    output.push_str(&value[run_start..]);
+    output.push('"');
+}
+
+/// Writes the escape for the character at byte `index` of `value` -- or, for
+/// a surrogate pair written as two sentinels, the pair unescaped -- and
+/// returns the index after what it consumed.
+fn push_json_escape(output: &mut String, value: &str, index: usize) -> usize {
+    let mut characters = value[index..].chars();
+    let character = characters.next().expect("an escape starts at a character");
+    let next_index = index + character.len_utf8();
+    if let Some(code_unit) = string::surrogate_escape_code_unit(character) {
+        if let Some(next) = characters.next()
+            && matches!(
+                (code_unit, string::surrogate_escape_code_unit(next)),
+                (0xD800..=0xDBFF, Some(0xDC00..=0xDFFF))
+            )
+        {
+            output.push(character);
+            output.push(next);
+            return next_index + next.len_utf8();
+        }
+        write!(output, "\\u{code_unit:04x}").expect("writing to a String cannot fail");
+        return next_index;
+    }
+    match character {
+        '"' => output.push_str("\\\""),
+        '\\' => output.push_str("\\\\"),
+        '\u{0008}' => output.push_str("\\b"),
+        '\u{000c}' => output.push_str("\\f"),
+        '\n' => output.push_str("\\n"),
+        '\r' => output.push_str("\\r"),
+        '\t' => output.push_str("\\t"),
+        _ => {
+            let code_unit = character as u32;
+            write!(output, "\\u{code_unit:04x}").expect("writing to a String cannot fail")
         }
     }
-    output.push('"');
+    next_index
 }

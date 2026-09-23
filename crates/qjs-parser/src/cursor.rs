@@ -4,10 +4,12 @@ use crate::{ParseError, Parser};
 
 impl Parser {
     pub(crate) fn new(tokens: Vec<Token>, source: String, source_is_wtf16: bool) -> Self {
+        let closers = matching_closers(&tokens);
         Self {
             source,
             source_is_wtf16,
             tokens,
+            closers,
             cursor: 0,
             goal: crate::Goal::Script,
             strict: false,
@@ -29,7 +31,13 @@ impl Parser {
     }
 
     pub(crate) fn at(&self, kind: &TokenKind) -> bool {
-        self.peek().is_some_and(|token| token.kind == *kind)
+        // Every precedence level asks this about each of its operators for
+        // every operand, and nearly every answer is no: comparing the variant
+        // first answers those without the out-of-line derived comparison.
+        self.peek().is_some_and(|token| {
+            std::mem::discriminant(&token.kind) == std::mem::discriminant(kind)
+                && token.kind == *kind
+        })
     }
 
     pub(crate) fn match_kind(&mut self, kind: &TokenKind) -> bool {
@@ -83,4 +91,34 @@ impl Parser {
         self.cursor += 1;
         token
     }
+}
+
+/// Marks a token that closes nothing, or an opener without a closer.
+pub(crate) const NO_CLOSER: u32 = u32::MAX;
+
+/// The index of the token closing each bracket token, found in one pass.
+fn matching_closers(tokens: &[Token]) -> Vec<u32> {
+    let mut closers = vec![NO_CLOSER; tokens.len()];
+    let mut open: Vec<usize> = Vec::new();
+    for (index, token) in tokens.iter().enumerate() {
+        let opener = match token.kind {
+            TokenKind::LeftParen | TokenKind::LeftBracket | TokenKind::LeftBrace => {
+                open.push(index);
+                continue;
+            }
+            TokenKind::RightParen => TokenKind::LeftParen,
+            TokenKind::RightBracket => TokenKind::LeftBracket,
+            TokenKind::RightBrace => TokenKind::LeftBrace,
+            _ => continue,
+        };
+        if let Some(&start) = open.last()
+            && tokens[start].kind == opener
+        {
+            open.pop();
+            if let Ok(close) = u32::try_from(index) {
+                closers[start] = close;
+            }
+        }
+    }
+    closers
 }

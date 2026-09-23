@@ -564,7 +564,7 @@ impl Function {
             lexical_bindings,
         } = options;
         let realm = super::env::new_realm(env);
-        let has_dynamic_function_realm = realm.dynamic_function_realm_global().is_some();
+        let has_dynamic_function_realm = realm.has_dynamic_function_realm_global();
         let prototype = ObjectRef::with_prototype(
             HashMap::new(),
             object_prototype(&crate::CallEnv::new(Rc::clone(&realm))),
@@ -678,7 +678,7 @@ impl Function {
                 .then_some(1_u128 << *slot)
             })
             .fold(0, |slots, slot| slots | slot);
-        let has_dynamic_function_realm = realm.dynamic_function_realm_global().is_some();
+        let has_dynamic_function_realm = realm.has_dynamic_function_realm_global();
         let auxiliary = FunctionAuxiliaryState::new(home_object, super_constructor);
         let function = Self(Rc::new(FunctionData {
             has_name_binding,

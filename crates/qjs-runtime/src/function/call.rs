@@ -1229,7 +1229,7 @@ fn function_env<'a>(
 }
 
 fn apply_marked_realm_array_prototype(array: &ArrayRef, env: &CallEnv) {
-    if env.dynamic_function_realm_global().is_none() {
+    if !env.has_dynamic_function_realm_global() {
         return;
     }
     let Some(prototype) = crate::array_prototype(env) else {

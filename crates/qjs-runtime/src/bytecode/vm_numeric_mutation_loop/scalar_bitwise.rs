@@ -247,7 +247,7 @@ impl PreparedSloppyGlobalWrite {
             || vm.bytecode.contains_with()
             || vm.env.deopt_bindings().is_some()
             || vm.env.has_module_imports()
-            || vm.env.dynamic_function_realm_global().is_some()
+            || vm.env.has_dynamic_function_realm_global()
             || vm
                 .bytecode
                 .global_names()

@@ -42,6 +42,55 @@ impl ObjectRef {
         }
     }
 
+    /// Resolves `key` to a data-property slot in small or dynamic storage,
+    /// for a writer that validates it with [`Self::layout_revision`] and
+    /// writes it with [`Self::any_storage_data_slot_write`]. The read caches
+    /// keep [`Self::own_data_slot`], which leaves dynamic storage to their
+    /// own entries.
+    pub(crate) fn any_storage_data_slot(&self, key: &str) -> Option<usize> {
+        if self.0.module_namespace_exotic.get() {
+            return None;
+        }
+        match &*self.properties_for(key).borrow() {
+            PropertyStorage::Small { entries } => {
+                entries.iter().position(|(candidate, property)| {
+                    candidate.as_ref() == key && !property.is_accessor()
+                })
+            }
+            PropertyStorage::Dynamic(dynamic) => dynamic
+                .slot(key)
+                .filter(|&slot| !dynamic.entries[slot].1.is_accessor()),
+            PropertyStorage::Shaped { .. } | PropertyStorage::ShapedPair { .. } => None,
+        }
+    }
+
+    /// Writes a slot resolved by [`Self::any_storage_data_slot`] under an
+    /// unchanged layout; still checks writability.
+    pub(crate) fn any_storage_data_slot_write(
+        &self,
+        slot: usize,
+        value: &Value,
+    ) -> Option<OwnDataPropertyWrite> {
+        if self.0.module_namespace_exotic.get() {
+            return None;
+        }
+        let result = match &mut *self.0.properties.borrow_mut() {
+            PropertyStorage::Small { entries } => {
+                let (_, property) = entries.get_mut(slot)?;
+                super::write_existing_property(Some(property), value)
+            }
+            PropertyStorage::Dynamic(dynamic) => {
+                let (_, property) = dynamic.entries.get_mut(slot)?;
+                super::write_existing_property(Some(property), value)
+            }
+            PropertyStorage::Shaped { .. } | PropertyStorage::ShapedPair { .. } => return None,
+        };
+        if matches!(result, OwnDataPropertyWrite::Written) {
+            self.bump_value_revision();
+        }
+        Some(result)
+    }
+
     /// Resolves a prototype read to a slot in small or literal storage.
     /// The caller guards holder identity and layout before reading the slot.
     /// Keep this separate from `own_data_slot`: that API also installs write
