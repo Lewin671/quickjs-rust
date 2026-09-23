@@ -172,3 +172,20 @@ fn evaluates_string_case_and_trim_builtins() {
         Ok(Value::Boolean(false))
     );
 }
+
+#[test]
+fn ascii_case_mapping_matches_the_general_mapping() {
+    assert_eq!(
+        eval(
+            "var plain = 'already lower 123';
+             [plain.toLowerCase() === plain, 'HeLLo, World!'.toLowerCase(),
+              'HeLLo, World!'.toUpperCase(), 'ABC'.toUpperCase(), ''.toLowerCase().length,
+              'ÀBÇ'.toLowerCase(), 'straße'.toUpperCase(), 'İ'.toLowerCase().length,
+              String.prototype.toLowerCase.call(new String('XyZ')),
+              String.prototype.toUpperCase.call(12)].join('|');"
+        ),
+        Ok(Value::String(
+            "true|hello, world!|HELLO, WORLD!|ABC|0|àbç|STRASSE|2|xyz|12".into()
+        ))
+    );
+}
