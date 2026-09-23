@@ -665,3 +665,14 @@ fn a_per_iteration_let_loop_without_closures_is_admitted() {
         Value::String("0,1,2".into())
     );
 }
+
+#[test]
+fn a_declaration_without_an_initializer_leaves_the_stack_balanced() {
+    // `var x;` in a loop body used to leave an `undefined` behind on every
+    // iteration, so the loop header's stack depth disagreed with its
+    // backedge and the body was declined.
+    let source = "function f(n) { var t = 0; for (var i = 0; i < n; i++) { var x; let y; x = i; y = x; t += y; } return t; }";
+    compile::compile(&nested_function(source, "f"))
+        .expect("a body whose loop declares uninitialized bindings should be admitted");
+    assert_eq!(value_of(&format!("{source} f(5);")), Value::Number(10.0));
+}
