@@ -586,6 +586,24 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                             index,
                         });
                     }
+                    // `Dup` then a named read -- the method lookup of
+                    // `o.m(...)` -- reads the receiver below in place instead
+                    // of copying it.
+                    None if ip > 0
+                        && matches!(code[ip - 1], Op::Dup)
+                        && !jump_targets[ip]
+                        && matches!(ops.last(), Some(WideOp::Dup { dst, .. })
+                            if *dst == register(depth.checked_sub(1)?)) =>
+                    {
+                        let Some(WideOp::Dup { src, .. }) = ops.pop() else {
+                            return None;
+                        };
+                        ops.push(WideOp::GetPropNamed {
+                            dst: register(depth.checked_sub(1)?),
+                            obj: src,
+                            index,
+                        });
+                    }
                     None => ops.push(WideOp::GetPropNamed {
                         dst: register(depth.checked_sub(1)?),
                         obj: register(depth.checked_sub(1)?),

@@ -854,3 +854,25 @@ fn a_named_write_to_this_borrows_the_receiver() {
         Value::String("5,3,5,1".into())
     );
 }
+
+#[test]
+fn a_method_lookup_reads_the_receiver_in_place() {
+    let source =
+        "function call(o, s, n) { return o.m(1) + s.charAt(1) + n.toFixed(1) + o.m.call(o, 2); }";
+    let program =
+        compile::compile(&nested_function(source, "call")).expect("the body should be admitted");
+    assert!(
+        !program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::Dup { .. })),
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(&format!(
+            "{source} call({{ k: 'x', m(v) {{ return this.k + v; }} }}, 'abc', 2);"
+        )),
+        Value::String("x1b2.0x2".into())
+    );
+}
