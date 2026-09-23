@@ -718,3 +718,24 @@ fn a_remembered_property_creation_still_meets_later_setters_and_locks() {
         Value::String("01234||8|false||false|false|proto:7,object:9,swapped:11".into())
     );
 }
+
+#[test]
+fn a_constructor_entered_on_the_wide_driver_builds_like_the_general_path() {
+    assert_eq!(
+        value_of(
+            "function Node(l, r) { this.l = l; this.r = r; }
+             function Boxed(v) { this.v = v; return { wrapped: v }; }
+             function Prim(v) { this.v = v; return 7; }
+             function Odd() { this.p = Object.getPrototypeOf(this) === Odd.prototype; }
+             function Thrower(v) { this.v = v; if (v) throw new Error('bad'); }
+             Odd.prototype = 5;
+             function build(d) { return d ? new Node(build(d - 1), build(d - 1)) : new Node(null, null); }
+             function count(n) { return n.l ? 1 + count(n.l) + count(n.r) : 1; }
+             var caught = '';
+             try { new Thrower(1); } catch (e) { caught = e.message; }
+             [count(build(4)), new Boxed(3).wrapped, new Prim(4).v, new Odd().p,
+              new Node(1).r, new Node(1, 2, 3).r, caught, new Thrower(0).v].join(',');"
+        ),
+        Value::String("31,3,4,false,,2,bad,0".into())
+    );
+}

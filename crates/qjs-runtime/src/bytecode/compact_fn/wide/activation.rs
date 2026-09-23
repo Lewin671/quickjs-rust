@@ -185,6 +185,9 @@ struct WideFrame {
     len: usize,
     resume_pc: usize,
     dst: u16,
+    /// Whether the activation above this one was entered by `new`: its
+    /// return value is replaced by its receiver unless it is an object.
+    constructs: bool,
 }
 
 #[derive(Default)]
@@ -279,6 +282,121 @@ fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
         requires_this: entry.program.requires_this,
         is_strict: function.is_strict,
     })
+}
+
+/// Proves `new callee(...)` may run on this driver: an ordinary (not class,
+/// bound or native) constructor the driver would inline as a call, whose
+/// `prototype` is an ordinary object. Returns the fresh receiver.
+#[inline(never)]
+fn inline_constructor(callee: &Value, env: &CallEnv) -> Option<(InlineCallee, crate::ObjectRef)> {
+    let Value::Function(function) = callee else {
+        return None;
+    };
+    if function.native.is_some()
+        || function.bound.is_some()
+        || !function.constructable
+        || function.is_class_constructor
+    {
+        return None;
+    }
+    let inline = inline_callee(callee, env)?;
+    let prototype = match function.own_property("prototype") {
+        Some(property) if !property.is_accessor() => match property.value {
+            Value::Object(prototype) if !crate::symbol::is_symbol_primitive(&prototype) => {
+                prototype
+            }
+            _ => return None,
+        },
+        _ => return None,
+    };
+    let receiver = crate::ObjectRef::with_prototype_slot(
+        std::collections::HashMap::new(),
+        Some(crate::Prototype::Object(prototype)),
+    );
+    Some((inline, receiver))
+}
+
+/// Enters `new callee(...)` as a frame of this driver when
+/// `inline_constructor` admits it, returning `Ok(None)`; otherwise hands the
+/// callee back for the general construct path. Out of line, so the driver
+/// loop's own code is the same whether or not a body constructs.
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+fn enter_constructor(
+    callee: Value,
+    root_bytecode: &Bytecode,
+    env: &CallEnv,
+    registers: &mut Vec<Value>,
+    frames: &mut Vec<WideFrame>,
+    current_callee: &mut Value,
+    current_owner: &mut Option<Function>,
+    current_slots: &mut u128,
+    current_this: &mut Option<Value>,
+    current_base: &mut usize,
+    current_len: &mut usize,
+    argument_index: usize,
+    argc: u8,
+    dst: u16,
+    resume_pc: usize,
+) -> Result<Option<Value>, RuntimeError> {
+    let Some((inline, receiver)) = inline_constructor(&callee, env) else {
+        return Ok(Some(callee));
+    };
+    if frames.len() >= MAX_FRAMES {
+        return Err(call_stack_exhausted());
+    }
+    crate::diagnostics::count!(ordinary_call_attempts);
+    crate::diagnostics::count!(compact_direct_calls);
+    let callee_base = *current_base + *current_len;
+    let callee_len = inline.register_count;
+    reserve_registers(registers, callee_base + callee_len);
+    {
+        let parameter_slots = callee_parameter_slots(&callee);
+        let (caller_side, callee_side) = registers.split_at_mut(callee_base);
+        for index in 0..argc as usize {
+            let value =
+                std::mem::replace(&mut caller_side[argument_index + index], Value::Undefined);
+            match parameter_slots.get(index) {
+                Some(&slot) if slot < callee_len => callee_side[slot] = value,
+                _ => release(value),
+            }
+        }
+    }
+    if let Some(program) = super::program_for(running_bytecode(&callee, root_bytecode)) {
+        seed_lexical_markers(
+            program,
+            &mut registers[callee_base..callee_base + callee_len],
+        );
+    }
+    frames.push(WideFrame {
+        callee: std::mem::replace(current_callee, callee),
+        upvalue_owner: std::mem::replace(current_owner, inline.upvalue_owner),
+        upvalue_slots: std::mem::replace(current_slots, inline.upvalue_slots),
+        this_value: current_this.replace(Value::Object(receiver)),
+        base: std::mem::replace(current_base, callee_base),
+        len: std::mem::replace(current_len, callee_len),
+        resume_pc,
+        dst,
+        constructs: true,
+    });
+    Ok(None)
+}
+
+/// A constructor's result: the returned value when it is an object, else
+/// the receiver, as the general construct path decides.
+fn constructed(value: Value, receiver: Option<Value>) -> Value {
+    match value {
+        Value::Array(_)
+        | Value::Function(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Object(_)
+        | Value::Proxy(_) => value,
+        other => {
+            release(other);
+            receiver.unwrap_or(Value::Undefined)
+        }
+    }
 }
 
 /// Runs an admitted body in `env`, together with every admitted body it calls.
@@ -980,6 +1098,35 @@ fn run_frames(
         {
             let callee_index = current_base + base as usize;
             let callee = std::mem::replace(&mut registers[callee_index], Value::Undefined);
+            // An admitted ordinary constructor runs on this driver like a
+            // call, with a fresh receiver as `this`.
+            let callee = match enter_constructor(
+                callee,
+                root_bytecode,
+                env,
+                registers,
+                frames,
+                &mut current_callee,
+                &mut current_owner,
+                &mut current_slots,
+                &mut current_this,
+                &mut current_base,
+                &mut current_len,
+                callee_index + 1,
+                argc,
+                dst,
+                resume_pc,
+            ) {
+                Ok(None) => {
+                    pc = 0;
+                    continue;
+                }
+                Ok(Some(callee)) => callee,
+                Err(error) => {
+                    unwind(registers, frames, current_base + current_len);
+                    return Err(error);
+                }
+            };
             let arguments = &registers[callee_index + 1..callee_index + 1 + argc as usize];
             match construct_from_activation(env, callee, arguments) {
                 Ok(value) => {
@@ -998,6 +1145,11 @@ fn run_frames(
                 clear_window(&mut registers[current_base..current_base + current_len]);
                 let Some(caller) = frames.pop() else {
                     return Ok(value);
+                };
+                let value = if caller.constructs {
+                    constructed(value, current_this.take())
+                } else {
+                    value
                 };
                 current_callee = caller.callee;
                 current_owner = caller.upvalue_owner;
@@ -1093,6 +1245,7 @@ fn run_frames(
                 len: current_len,
                 resume_pc,
                 dst,
+                constructs: false,
             });
             current_owner = inline.upvalue_owner;
             current_slots = inline.upvalue_slots;
