@@ -15,6 +15,28 @@ const MAX_ARRAY_INDEX: usize = u32::MAX as usize - 1;
 #[derive(Clone)]
 pub struct ArrayRef(Rc<ArrayData>);
 
+/// A non-owning handle to an [`ArrayRef`], for caches.
+#[derive(Clone)]
+pub(crate) struct ArrayWeakRef(std::rc::Weak<ArrayData>);
+
+impl ArrayWeakRef {
+    pub(crate) fn upgrade(&self) -> Option<ArrayRef> {
+        self.0.upgrade().map(ArrayRef)
+    }
+}
+
+impl std::fmt::Debug for ArrayWeakRef {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("ArrayWeakRef(..)")
+    }
+}
+
+impl ArrayRef {
+    pub(crate) fn downgrade(&self) -> ArrayWeakRef {
+        ArrayWeakRef(Rc::downgrade(&self.0))
+    }
+}
+
 struct ArrayData {
     elements: RefCell<Vec<Value>>,
     length: Cell<usize>,

@@ -72,3 +72,23 @@ fn a_value_with_no_by_value_entry_is_cached_by_slot() {
     object.delete_own_property("items");
     assert!(matches!(cache.probe(&object), CacheProbe::Miss));
 }
+
+#[test]
+fn a_function_on_slotless_storage_is_cached_by_value_and_revision() {
+    // Enough properties to leave the small slot storage, as `Math` has.
+    let object = ObjectRef::with_prototype(HashMap::new(), None);
+    for index in 0..20 {
+        object.set(format!("p{index}"), Value::Number(index as f64));
+    }
+    let function = crate::Function::new_native(Some("f"), 0, crate::NativeFunction::MathAbs, false);
+    object.set("f".to_owned(), Value::Function(function.clone()));
+    assert!(object.own_data_slot("f").is_none());
+    let cache = NamedPropertyCache::default();
+    cache.update(&object, "f", &Value::Function(function.clone()));
+    assert!(
+        matches!(cache.probe(&object), CacheProbe::Own(Value::Function(hit)) if hit.ptr_eq(&function))
+    );
+    // Any write to the object advances its revision and retires the entry.
+    object.set("p0".to_owned(), Value::Number(-1.0));
+    assert!(matches!(cache.probe(&object), CacheProbe::Miss));
+}

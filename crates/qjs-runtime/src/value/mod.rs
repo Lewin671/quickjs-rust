@@ -13,7 +13,7 @@ mod property;
 mod set;
 
 pub use array::ArrayRef;
-pub(crate) use array::{MAX_DENSE_STORAGE_LENGTH, array_index_property_key};
+pub(crate) use array::{ArrayWeakRef, MAX_DENSE_STORAGE_LENGTH, array_index_property_key};
 pub(crate) use collection_key::CollectionKey;
 pub use js_string::JsString;
 pub use map::MapRef;
