@@ -851,6 +851,18 @@ fn run_frames(
                         };
                         execute::store(&mut window[dst as usize], value.clone());
                     }
+                    WideOp::GetPropThis { dst, index } => {
+                        let (Some(site), Some(receiver)) = (
+                            program.named_reads.get(index as usize),
+                            activation.this_value,
+                        ) else {
+                            break Err(execute::uninitialized_local());
+                        };
+                        match property::get_prop_named(receiver, &site.key, &site.cache, env) {
+                            Ok(value) => execute::store(&mut window[dst as usize], value),
+                            Err(error) => break Err(error),
+                        }
+                    }
                     WideOp::GetPropNamed { dst, obj, index } => {
                         let Some(site) = program.named_reads.get(index as usize) else {
                             break Err(execute::constant_out_of_bounds());

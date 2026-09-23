@@ -354,6 +354,14 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         return decline(trace, None, "too many registers");
     }
 
+    let mut jump_targets = vec![false; code.len() + 1];
+    for op in code {
+        if let Op::Jump(target) | Op::JumpIfFalse(target) | Op::JumpIfTrue(target) = op
+            && let Some(flag) = jump_targets.get_mut(*target)
+        {
+            *flag = true;
+        }
+    }
     let mut ops = Vec::with_capacity(code.len());
     let mut named_reads: Vec<NamedReadSite> = Vec::new();
     let mut named_writes: Vec<NamedWriteSite> = Vec::new();
@@ -559,6 +567,20 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                                 index,
                             });
                         }
+                    }
+                    // `this.key`: the receiver is read where the activation
+                    // keeps it instead of being copied into a register first.
+                    None if ip > 0
+                        && matches!(&code[ip - 1], Op::LoadGlobal(name) if is_this_read(name))
+                        && !jump_targets[ip]
+                        && matches!(ops.last(), Some(WideOp::LoadThis { dst })
+                            if *dst == register(depth.checked_sub(1)?)) =>
+                    {
+                        ops.pop();
+                        ops.push(WideOp::GetPropThis {
+                            dst: register(depth.checked_sub(1)?),
+                            index,
+                        });
                     }
                     None => ops.push(WideOp::GetPropNamed {
                         dst: register(depth.checked_sub(1)?),

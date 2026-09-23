@@ -155,6 +155,12 @@ enum WideOp {
         obj: u16,
         key: u16,
     },
+    /// `this.key`: the named read `named_reads[index]` of the activation's
+    /// receiver, borrowed where the activation keeps it.
+    GetPropThis {
+        dst: u16,
+        index: u16,
+    },
     /// `obj[index]` with a constant index, the fused `Op::GetPropIndex`.
     GetPropIndex {
         dst: u16,

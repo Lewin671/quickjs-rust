@@ -792,3 +792,36 @@ fn a_constant_index_store_at_its_exit_matches_the_interpreter() {
         Value::String("6,44,1,o,o,h1".into())
     );
 }
+
+#[test]
+fn a_named_read_of_this_borrows_the_receiver() {
+    let source = "function Pt(x) { this.x = x; }
+         Pt.prototype.get = function (o, c) { return this.x + (c ? this : o).x; };";
+    let program = compile::compile(&nested_function(
+        "function get(o, c) { return this.x + (c ? this : o).x; }",
+        "get",
+    ))
+    .expect("a method reading this should be admitted");
+    assert_eq!(
+        program
+            .ops
+            .iter()
+            .filter(|op| matches!(op, WideOp::GetPropThis { .. }))
+            .count(),
+        1,
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var p = new Pt(1), q = new Pt(10);
+             function s() {{ 'use strict'; return this === undefined ? 'u' : this.length; }}
+             function loose() {{ return this.length; }}
+             var withGetter = Object.create({{ get x() {{ return 5; }} }}, {{ get: {{ value: Pt.prototype.get }} }});
+             [p.get(q, false), p.get(q, true), withGetter.get(q, true), s.call('abc'), s(),
+              loose.call('abcd')].join(',');"
+        )),
+        Value::String("11,2,10,3,u,4".into())
+    );
+}
