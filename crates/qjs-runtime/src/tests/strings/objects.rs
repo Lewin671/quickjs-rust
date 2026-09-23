@@ -195,3 +195,37 @@ fn string_wrapper_index_properties_are_defined_when_observed() {
         ))
     );
 }
+
+#[test]
+fn string_wrapper_to_primitive_follows_overridden_methods() {
+    // The intrinsic `toString`/`valueOf` answer a wrapper's [[StringData]]
+    // without a call; any override, on the wrapper or its prototype, runs.
+    assert_eq!(
+        eval(
+            "var r = []; \
+             var s = new String(\"a\"); \
+             r.push(s + \"\", new String(\"x\") + 1, +new String(\"5\"), `${new String(\"t\")}`); \
+             s.valueOf = function () { return \"v\"; }; r.push(s + \"\", String(s)); \
+             var saved = String.prototype.valueOf; \
+             String.prototype.valueOf = function () { return \"pv\"; }; \
+             r.push(new String(\"b\") + \"\", String(new String(\"b\"))); \
+             String.prototype.valueOf = saved; \
+             var savedTo = String.prototype.toString; \
+             String.prototype.toString = function () { return \"pt\"; }; \
+             r.push(new String(\"c\") + \"\", String(new String(\"c\")), `${new String(\"c\")}`); \
+             String.prototype.toString = savedTo; \
+             String.prototype[Symbol.toPrimitive] = function (hint) { return \"sym:\" + hint; }; \
+             r.push(new String(\"d\") + \"\", `${new String(\"d\")}`); \
+             delete String.prototype[Symbol.toPrimitive]; \
+             var n = new String(\"e\"); Object.setPrototypeOf(n, null); \
+             try { n + \"\"; r.push(\"no\"); } catch (e) { r.push(e instanceof TypeError); } \
+             r.push(new String(\"f\") + \"\"); \
+             r.join(\",\");"
+        ),
+        Ok(Value::String(
+            "a,x1,5,t,v,a,pv,b,c,pt,pt,sym:default,sym:string,true,f"
+                .to_owned()
+                .into()
+        ))
+    );
+}

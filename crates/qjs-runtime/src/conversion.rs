@@ -255,6 +255,9 @@ pub(crate) fn ordinary_to_primitive(
     hint: PreferredType,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    if let Some(text) = intrinsic_string_wrapper_primitive(&value, hint) {
+        return Ok(Value::String(text));
+    }
     let methods = match hint {
         PreferredType::String => ["toString", "valueOf"],
         PreferredType::Number => ["valueOf", "toString"],
@@ -285,6 +288,41 @@ pub(crate) fn ordinary_to_primitive(
         thrown: None,
         message: "TypeError: cannot convert object to primitive".to_owned(),
     })
+}
+
+/// A String wrapper's primitive when the method `OrdinaryToPrimitive` would
+/// call first is `String.prototype.toString` or `valueOf` itself, read from
+/// the wrapper's prototype: both answer the wrapper's [[StringData]], so the
+/// call -- a frame and a copy of the whole string -- is skipped. `None` for
+/// anything else, which takes the general path.
+fn intrinsic_string_wrapper_primitive(
+    value: &Value,
+    hint: PreferredType,
+) -> Option<crate::JsString> {
+    let Value::Object(object) = value else {
+        return None;
+    };
+    let text = object.string_data()?;
+    let first = match hint {
+        PreferredType::String => "toString",
+        PreferredType::Number | PreferredType::Default => "valueOf",
+    };
+    if object.own_property(first).is_some() {
+        return None;
+    }
+    let method = object.ordinary_prototype()?.own_property(first)?;
+    let Value::Function(function) = &method.value else {
+        return None;
+    };
+    (!method.is_accessor()
+        && matches!(
+            function.native,
+            Some(
+                crate::function::NativeFunction::StringPrototypeToString
+                    | crate::function::NativeFunction::StringPrototypeValueOf
+            )
+        ))
+    .then_some(text)
 }
 
 fn object_to_number(value: Value, env: &mut CallEnv) -> Result<f64, RuntimeError> {
