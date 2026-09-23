@@ -160,6 +160,16 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   1.94, ai-astar 1.82, controlflow-recursive 1.80, tofte/xparb 1.78,
   raytrace-class-fields 1.77, nbody 1.76.
 
+- Stack run 99275d24 vs main 3daba0ec (30 blocks, cycles, quiet host;
+  `target/comparison/strings3-99275d24`): lazy String-wrapper index
+  properties, wide array-hole reads and the store/reload peephole, in-place
+  global string appends on the wide tier, String-wrapper ToPrimitive
+  without a call. External geomean 0.988 against main (SunSpider 0.978)
+  and **0.971 against QuickJS-NG**; string-tagcloud 0.769,
+  string-validate-input 0.825, date-format-xparb 0.895. Worst against
+  main: audio-dft 1.022, stanford-crypto-sha256-iterative 1.018.
+  Sentinels 0.960-1.003 (`prototype_method_call` 0.960).
+
 - Rejected (single-run, no measurable gain; 2026-09-23):
   - Running closures a direct `eval` made (`Function::deopt_bindings`) on
     the wide tier over their named environment: admitted and ran (xparb's
