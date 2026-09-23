@@ -83,13 +83,28 @@ impl Vm<'_> {
             return false;
         }
         crate::diagnostics::count!(loop_backedges);
-        let entered =
-            super::vm_numeric_mutation_loop::try_run_numeric_mutation_loop(
-                self, plans, target, backedge,
-            ) || super::vm_numeric_loop::try_run_numeric_loop(self, plans, target, backedge)
-                || super::vm_control_loop::try_run_control_loop(self, plans, target, backedge)
-                || super::typed_loop::try_run_typed_loop(self, plans, target, backedge);
-        if entered {
+        let claimed = if super::vm_numeric_mutation_loop::try_run_numeric_mutation_loop(
+            self, plans, target, backedge,
+        ) {
+            Some("numeric-mutation")
+        } else if super::vm_numeric_loop::try_run_numeric_loop(self, plans, target, backedge) {
+            Some("numeric")
+        } else if super::vm_control_loop::try_run_control_loop(self, plans, target, backedge) {
+            Some("control")
+        } else if super::typed_loop::try_run_typed_loop(self, plans, target, backedge) {
+            Some("typed")
+        } else {
+            None
+        };
+        // With the typed-loop trace on, name the accelerator that claimed
+        // the edge (the typed tier also reports its own `TLRUN`).
+        #[cfg(feature = "perf-counters")]
+        if let Some(kind) = claimed
+            && std::env::var_os("QJS_TL_TRACE").is_some()
+        {
+            eprintln!("TLCLAIM {kind} region {target}..{backedge}");
+        }
+        if claimed.is_some() {
             crate::diagnostics::count!(loop_plan_entries);
             return true;
         }

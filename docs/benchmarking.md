@@ -447,8 +447,10 @@ that failed or compiled (`TLFAIL`, `TLOK`), per entry outcome (`TLRUN`),
 per entry that declined with the reason (`TLDECLINE`: a helper that could
 not be flattened, a scalar slot holding a string, a global that is an
 accessor), per deoptimization at run time (`TLDEOPT`, with the site and the
-bytecode it resumes at), and per backward edge every loop accelerator
-declined (`TLEDGE`). `QJS_TL_TRACE=2` also lists a failed region's
+bytecode it resumes at), per interpreter backward edge an accelerator
+claimed (`TLCLAIM`, naming the numeric-mutation, numeric, control or typed
+accelerator), and per backward edge every loop accelerator declined
+(`TLEDGE`). `QJS_TL_TRACE=2` also lists a failed region's
 bytecode.
 
 Two histograms answer most questions. `TLDEOPT` names the shapes that
