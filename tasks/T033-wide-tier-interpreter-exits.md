@@ -122,6 +122,20 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   NG's interpreter per operation (75 cycles per iteration on the same
   8-operation loop).
 
+- Stack run 819a6ba4 vs main 0c2b38f1 (30 blocks, cycles, quiet host;
+  `target/comparison/wide-calls-819a6ba4-30b`): peephole rewrites, global
+  variable stores, post-accelerator hand-back, Math.random in typed loops,
+  string concatenation in place, native family dispatch, ASCII case
+  mapping, array/string/number method caches, integer formatting, dense
+  slice/concat/sort with default species, RegExp exec/test prelude.
+  External geomean 0.951 against main (JetStream subset 0.933, Kraken
+  0.939, SunSpider 0.960) and 1.0015 against QuickJS-NG in wall time;
+  stanford-crypto-pbkdf2/ccm, string-validate-input 0.872,
+  date-format-xparb 0.859, hash-map 0.879. Worst against main:
+  math-partial-sums 1.017, access-nsieve 1.016. Sentinel
+  `heterogeneous_property_read` 1.107 and broad `array_dynamic_read` 1.041
+  are open.
+
 ## Found, not fixed
 
 - A sloppy assignment in a function to a global that has become an
