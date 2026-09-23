@@ -15,6 +15,11 @@ pub(super) fn array_species_create(
     if !is_array_species_receiver(&receiver)? {
         return default_array_species_create(length);
     }
+    if let Value::Array(array) = &receiver
+        && species_is_intrinsic_array(array, env)
+    {
+        return default_array_species_create(length);
+    }
 
     let mut constructor = property_value(receiver, "constructor", env)?;
     if is_cross_realm_array_constructor(constructor.clone(), env)? {
@@ -43,6 +48,47 @@ pub(super) fn array_species_create(
     )
 }
 
+/// Whether ArraySpeciesCreate on `array` is observably `new Array(length)`
+/// without running anything: no own property (so no own `constructor`), the
+/// realm's Array.prototype, whose own `constructor` is the intrinsic Array,
+/// whose own `@@species` is the intrinsic getter returning Array itself.
+/// Constructing the intrinsic with a length makes the same fresh array the
+/// default creation does. Anything else takes the observable lookups.
+fn species_is_intrinsic_array(array: &ArrayRef, env: &CallEnv) -> bool {
+    if !array.has_no_own_named_properties()
+        || env.array_prototype_intrinsic_override().is_some()
+        || env.dynamic_function_realm_global().is_some()
+    {
+        return false;
+    }
+    let Some(prototype) = env.realm().array_prototype() else {
+        return false;
+    };
+    if !(array.uses_default_prototype() || array.uses_prototype_object(&prototype)) {
+        return false;
+    }
+    let crate::value::OwnDataPropertyRead::Data(Value::Function(constructor)) =
+        prototype.own_data_property_read("constructor")
+    else {
+        return false;
+    };
+    if constructor.native != Some(crate::NativeFunction::Array) || constructor.bound.is_some() {
+        return false;
+    }
+    let Some(species) = symbol::species_symbol(env) else {
+        return false;
+    };
+    constructor
+        .own_symbol_property(&species)
+        .is_some_and(|property| {
+            matches!(
+                property.getter(),
+                Some(Value::Function(getter))
+                    if getter.native == Some(crate::NativeFunction::SpeciesGetter)
+            )
+        })
+}
+
 fn default_array_species_create(length: usize) -> Result<Value, RuntimeError> {
     if length > MAX_ARRAY_LENGTH {
         return Err(RuntimeError {
@@ -58,7 +104,10 @@ pub(super) fn validate_array_species_constructor(
     method: &str,
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
-    if !matches!(receiver, Value::Array(_)) {
+    let Value::Array(array) = &receiver else {
+        return Ok(());
+    };
+    if species_is_intrinsic_array(array, env) {
         return Ok(());
     }
 

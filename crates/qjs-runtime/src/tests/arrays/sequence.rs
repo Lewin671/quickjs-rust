@@ -465,3 +465,36 @@ fn evaluates_array_with() {
     assert!(eval("[1].with(1, 2);").is_err());
     assert!(eval("Array.prototype.with.call(null, 0, 1);").is_err());
 }
+
+/// `slice` and `concat` copy dense arrays in one step when nothing can
+/// observe the element-wise definitions, and keep every observable lookup
+/// otherwise: holes read through the prototype, and a species constructor
+/// or a redefined `constructor` still runs.
+#[test]
+fn dense_slice_and_concat_match_the_element_wise_definitions() {
+    assert_eq!(
+        eval(
+            "var a = [1, 2, 3, 4, 5];
+             var out = [a.slice(1, 3).join(), a.slice(-2).join(), a.concat([6, 7], 8, [9]).join(),
+                        a.slice(2, 2).length, [].concat(a, a).length];
+             var holes = [1, , 3];
+             Array.prototype[1] = 'proto';
+             out.push(holes.slice(0, 3).join(), [].concat(holes).join(), holes.slice(0, 3).hasOwnProperty(1));
+             delete Array.prototype[1];
+             class Tagged extends Array {}
+             var tagged = Tagged.from([1, 2, 3]);
+             out.push(tagged.slice(1) instanceof Tagged, tagged.concat([4]) instanceof Tagged);
+             var log = [];
+             var spied = [1, 2];
+             spied.constructor = { [Symbol.species]: function (n) { log.push('species ' + n); return new Array(n); } };
+             out.push(spied.slice(0).join(), log.join());
+             Object.defineProperty(Array, Symbol.species, { get() { log.push('getter'); return undefined; }, configurable: true });
+             out.push([3, 4].slice(1).join(), log.join());
+             out.join('|');"
+        ),
+        Ok(Value::String(
+            "2,3|4,5|1,2,3,4,5,6,7,8,9|0|10|1,proto,3|1,proto,3|true|true|true|1,2|species 2|4|species 2,getter"
+                .into()
+        ))
+    );
+}
