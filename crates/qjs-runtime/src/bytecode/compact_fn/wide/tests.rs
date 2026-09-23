@@ -1063,3 +1063,37 @@ fn a_caller_that_assigned_the_global_itself_reads_the_callee_s_store() {
         Value::String("INNER".into())
     );
 }
+
+#[test]
+fn the_rest_of_a_body_runs_here_after_an_accelerator_finishes_its_loop() {
+    // The AES round shape: a numeric-mutation loop over table lookups, then
+    // more work on locals and the receiver, called far more often than the
+    // exit-heavy judgement's sample.
+    let source = "function Box() { this.k = [1, 2, 3, 4, 5, 6, 7, 8]; this.out = 0; }
+        Box.prototype.round = function (a, b) {
+            var k = this.k, x = a, y = b, j, n = k.length;
+            for (j = 0; j < n; j++) { x = (x ^ k[j]) + y; y = (y * 3) & 1023; }
+            var tail = [x & 255, y & 255];
+            this.out = tail[0] + tail[1];
+            return this.out + j;
+        };";
+    assert_eq!(
+        value_of(&format!(
+            "{source}
+             var box = new Box(), total = 0;
+             for (var i = 0; i < 200; i++) total += box.round(i, i + 1);
+             total;"
+        )),
+        value_of(&format!(
+            "{source}
+             function reference(a, b) {{
+                 var k = [1, 2, 3, 4, 5, 6, 7, 8], x = a, y = b, j;
+                 for (j = 0; j < 8; j++) {{ x = (x ^ k[j]) + y; y = (y * 3) & 1023; }}
+                 return (x & 255) + (y & 255) + j;
+             }}
+             var total = 0;
+             for (var i = 0; i < 200; i++) total += reference(i, i + 1);
+             total;"
+        ))
+    );
+}

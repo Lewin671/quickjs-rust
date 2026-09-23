@@ -580,7 +580,6 @@ fn exit_to_interpreter(
             }
         }
     }
-    program.record_exit();
     // `QJS_CF_TRACE=1` names every exit: the body, and the instruction the
     // interpreter resumes at.
     #[cfg(feature = "perf-counters")]
@@ -618,8 +617,19 @@ fn exit_to_interpreter(
         registers,
         from,
     ) {
-        Resumed::Finished(result) => ExitOutcome::Finished(result),
+        Resumed::Finished(result) => {
+            program.record_exit();
+            ExitOutcome::Finished(result)
+        }
+        // The interpreter frame only ran the accelerated loop, which is the
+        // cost the general path would have paid too; such an exit does not
+        // count toward judging the body exit-heavy.
+        Resumed::LoopFinished { ip: resume, depth } => match program.resume_pc(resume, depth) {
+            Some(pc) => ExitOutcome::Continue { pc },
+            None => ExitOutcome::Finished(Err(missing_program())),
+        },
         Resumed::HandedBack { backedge } => {
+            program.record_exit();
             let Some(index) = u32::try_from(backedge)
                 .ok()
                 .and_then(|backedge| program.probed_backedge(backedge))

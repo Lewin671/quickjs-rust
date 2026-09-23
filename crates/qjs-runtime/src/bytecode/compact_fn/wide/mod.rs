@@ -432,3 +432,15 @@ pub(in crate::bytecode) fn hands_back_at(bytecode: &Bytecode, ip: usize, depth: 
         .and_then(|ip| program.probed_backedge(ip))
         .is_some_and(|index| usize::from(program.probed_backedges[index].depth) == depth)
 }
+
+/// Whether the tier can continue this body at instruction `ip` with `depth`
+/// operand-stack values: a loop accelerator that finished the loop at a
+/// probed backedge leaves the frame there, and the rest of the body runs
+/// here again.
+pub(in crate::bytecode) fn resumes_at(bytecode: &Bytecode, ip: usize, depth: usize) -> bool {
+    bytecode
+        .compact_wide_program
+        .get()
+        .and_then(Option::as_ref)
+        .is_some_and(|program| program.resume_pc(ip, depth).is_some())
+}
