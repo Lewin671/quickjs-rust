@@ -289,25 +289,21 @@ fn fast_primitive_string_binary(left: &Value, op: BinaryOp, right: &Value) -> Op
     {
         return None;
     }
-    let left = primitive_js_string(left)?;
-    let right = primitive_js_string(right)?;
-    let mut result = String::with_capacity(left.len().checked_add(right.len())?);
-    result.push_str(&left);
-    result.push_str(&right);
+    // Both operands are written straight into the result, rather than each
+    // into a string of its own first.
+    if !super::vm_string_append::is_appendable(left)
+        || !super::vm_string_append::is_appendable(right)
+    {
+        return None;
+    }
+    let estimate = |value: &Value| match value {
+        Value::String(text) => text.len(),
+        _ => 24,
+    };
+    let mut result = String::with_capacity(estimate(left).checked_add(estimate(right))?);
+    super::vm_string_append::push_primitive(&mut result, left);
+    super::vm_string_append::push_primitive(&mut result, right);
     Some(Value::String(result.into()))
-}
-
-fn primitive_js_string(value: &Value) -> Option<String> {
-    Some(match value {
-        Value::Number(number) => crate::number::number_to_js_string(*number),
-        Value::BigInt(value) => value.to_string(),
-        Value::String(value) => value.to_string(),
-        Value::Boolean(true) => "true".to_owned(),
-        Value::Boolean(false) => "false".to_owned(),
-        Value::Null => "null".to_owned(),
-        Value::Undefined => "undefined".to_owned(),
-        _ => return None,
-    })
 }
 
 pub(super) fn fast_strict_eq(left: &Value, right: &Value) -> Option<bool> {

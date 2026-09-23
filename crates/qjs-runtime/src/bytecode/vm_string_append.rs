@@ -386,7 +386,7 @@ impl Vm<'_> {
 pub(super) fn push_primitive(out: &mut String, value: &Value) -> bool {
     match value {
         Value::String(value) => out.push_str(value),
-        Value::Number(number) => out.push_str(&crate::number::number_to_js_string(*number)),
+        Value::Number(number) => crate::number::push_number_js_string(out, *number),
         Value::BigInt(value) => out.push_str(&value.to_string()),
         Value::Boolean(true) => out.push_str("true"),
         Value::Boolean(false) => out.push_str("false"),

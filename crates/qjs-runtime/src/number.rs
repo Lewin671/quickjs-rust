@@ -4,7 +4,7 @@ mod parsing;
 mod prototype;
 mod statics;
 
-pub(crate) use formatting::number_to_js_string;
+pub(crate) use formatting::{number_to_js_string, push_number_js_string};
 pub(super) use install::{install_number, is_number_object};
 pub(super) use parsing::{native_parse_float, native_parse_int};
 pub(crate) use parsing::{parse_float_string, parse_int_string};

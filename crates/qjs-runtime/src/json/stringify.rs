@@ -116,7 +116,20 @@ fn serialize_json_property_into(
     env: &mut CallEnv,
     output: &mut String,
 ) -> Result<bool, RuntimeError> {
-    let mut value = property_value(holder.clone(), key, env)?;
+    let value = property_value(holder.clone(), key, env)?;
+    serialize_json_value_into(|| key.to_owned(), holder, value, ctx, env, output)
+}
+
+/// SerializeJSONProperty after the value is read: `key` is built only for a
+/// `toJSON` method or a replacer, which receive it.
+fn serialize_json_value_into(
+    key: impl Fn() -> String,
+    holder: Value,
+    mut value: Value,
+    ctx: &mut StringifyContext,
+    env: &mut CallEnv,
+    output: &mut String,
+) -> Result<bool, RuntimeError> {
     if matches!(
         value,
         Value::Array(_)
@@ -132,7 +145,7 @@ fn serialize_json_property_into(
             value = call_function(
                 to_json,
                 value,
-                vec![Value::String(key.to_owned().into())],
+                vec![Value::String(key().into())],
                 env,
                 false,
             )?;
@@ -142,7 +155,7 @@ fn serialize_json_property_into(
         value = call_function(
             replacer.clone(),
             holder,
-            vec![Value::String(key.to_owned().into()), value],
+            vec![Value::String(key().into()), value],
             env,
             false,
         )?;
@@ -155,7 +168,7 @@ fn serialize_json_property_into(
             Ok(true)
         }
         Value::Number(value) if value.is_finite() => {
-            output.push_str(&number::number_to_js_string(value));
+            number::push_number_js_string(output, value);
             Ok(true)
         }
         Value::Number(_) | Value::Null => {
@@ -225,7 +238,26 @@ fn serialize_json_array_into(
             output.push('\n');
             output.push_str(&ctx.indent);
         }
-        if !serialize_json_property_into(&index.to_string(), value.clone(), ctx, env, output)? {
+        // A present element of a plain array is read by index, without
+        // formatting the index as a key.
+        let element = match &value {
+            Value::Array(elements) => elements.direct_dense_index_value(index),
+            _ => None,
+        };
+        let written = match element {
+            Some(element) => serialize_json_value_into(
+                || index.to_string(),
+                value.clone(),
+                element,
+                ctx,
+                env,
+                output,
+            )?,
+            None => {
+                serialize_json_property_into(&index.to_string(), value.clone(), ctx, env, output)?
+            }
+        };
+        if !written {
             output.push_str("null");
         }
     }
