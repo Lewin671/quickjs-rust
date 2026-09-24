@@ -193,7 +193,7 @@ impl Vm<'_> {
                 } else {
                     None
                 };
-                let deopt_bindings = self.frame_deopt_bindings();
+                let deopt_bindings = self.frame_deopt_bindings_memoized();
                 let function = Function::new_user_compiled(CompiledUserFunction {
                     name: name.clone(),
                     has_name_binding: *has_name_binding,

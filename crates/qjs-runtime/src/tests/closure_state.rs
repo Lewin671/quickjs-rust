@@ -816,3 +816,36 @@ fn direct_call_frames_host_only_non_capturing_closures() {
         Ok(Value::Number(42.0))
     );
 }
+
+#[test]
+fn closures_made_beside_a_direct_eval_see_every_rebinding() {
+    // Every closure a body with a direct `eval` creates re-exposes the
+    // body's locals to it; repeated creations must still observe names the
+    // eval adds, per-iteration `let` cells, and shadowing redeclarations.
+    assert_eq!(
+        eval(
+            "function run() {
+                 var out = [];
+                 var a = 1;
+                 var read = function (name) { return eval(name); };
+                 out.push(read('a'));
+                 eval('var b = 2');
+                 var readB = function () { return eval('b'); };
+                 out.push(readB());
+                 for (let i = 0; i < 3; i++) {
+                     let c = i * 10;
+                     var readC = function () { return eval('c + i'); };
+                     out.push(readC());
+                 }
+                 a = 5;
+                 var readA = function () { return eval('a'); };
+                 out.push(readA(), read('a'));
+                 eval('var a = 7');
+                 out.push(function () { return eval('a'); }());
+                 return out.join();
+             }
+             run() + '|' + run();"
+        ),
+        Ok(Value::String("1,2,0,11,22,5,5,7|1,2,0,11,22,5,5,7".into()))
+    );
+}
