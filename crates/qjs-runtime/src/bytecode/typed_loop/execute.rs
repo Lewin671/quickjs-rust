@@ -552,6 +552,7 @@ fn execute<F: LoopFrame>(
                 // The exit target is reached with the same operand stack the
                 // branch instruction started from, condition included.
                 materialize_stack(vm, program, registers, boxed, program.sites[pc - 1]);
+                vm.ran_iterations(iterations);
                 vm.resume_at(exit_ip as usize, false);
                 return Outcome::Ran;
             }

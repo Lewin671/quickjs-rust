@@ -31,6 +31,8 @@ pub(super) struct WideLoopFrame<'a> {
     pub(super) resume_ip: Option<usize>,
     pub(super) deoptimized: bool,
     pub(super) stack: Vec<Value>,
+    /// Backedges the program took before its loop exited normally.
+    pub(super) iterations: Option<u64>,
     declined: u128,
     /// The realm's `Array.prototype` and whether its chain has an indexed
     /// property, resolved on the first element access that needs them: a
@@ -60,6 +62,7 @@ impl<'a> WideLoopFrame<'a> {
             resume_ip: None,
             deoptimized: false,
             stack: Vec::new(),
+            iterations: None,
             declined: 0,
             array_prototype: None,
         }
@@ -190,6 +193,10 @@ impl LoopFrame for WideLoopFrame<'_> {
 
     fn push_stack(&mut self, value: Value) {
         self.stack.push(value);
+    }
+
+    fn ran_iterations(&mut self, iterations: u64) {
+        self.iterations = Some(iterations);
     }
 
     fn resume_at(&mut self, ip: usize, deoptimized: bool) {

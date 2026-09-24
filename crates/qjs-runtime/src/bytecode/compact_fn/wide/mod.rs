@@ -295,6 +295,9 @@ pub(in crate::bytecode) struct WideProgram {
     /// One bit per probed backedge, in `probed_backedges` order, set once no
     /// accelerator claimed that loop: the loop then runs here.
     native_backedges: std::cell::Cell<u64>,
+    /// Per probed backedge, the typed-program entries that exited normally
+    /// and the backedges they took between them, counted until judged.
+    typed_entry_counts: Box<[std::cell::Cell<(u16, u32)>]>,
     /// The wide instruction each bytecode instruction begins at, and the
     /// operand-stack depth there (`u16::MAX` where unreachable): where a
     /// typed loop program run from an exit hands the activation back.
@@ -312,6 +315,12 @@ struct ProbedBackedge {
     /// The operand-stack depth at the jump.
     depth: u16,
 }
+
+/// Typed-program entries observed before a loop is judged short.
+const SHORT_LOOP_JUDGEMENT_ENTRIES: u16 = 64;
+/// Fewer backedges per entry than this, on average, and a loop runs on the
+/// wide tier rather than entering its typed program each time.
+const SHORT_LOOP_ITERATIONS: u32 = 3;
 
 /// Activations observed before a program's exit rate is judged.
 const EXIT_JUDGEMENT_ACTIVATIONS: u32 = 64;
@@ -358,6 +367,28 @@ impl WideProgram {
 
     pub(super) fn backedge_is_native(&self, index: usize) -> bool {
         self.native_backedges.get() & (1 << index) != 0
+    }
+
+    /// Counts one normal exit of the typed program entered at probed backedge
+    /// `index` after `iterations` backedges. Entering costs about as much as
+    /// three iterations run here, so a loop that averages fewer is judged,
+    /// after `SHORT_LOOP_JUDGEMENT_ENTRIES` entries, to run here from then on.
+    pub(super) fn record_typed_entry(&self, index: usize, iterations: u64) {
+        let Some(counts) = self.typed_entry_counts.get(index) else {
+            return;
+        };
+        let (entries, total) = counts.get();
+        if entries >= SHORT_LOOP_JUDGEMENT_ENTRIES {
+            return;
+        }
+        let entries = entries + 1;
+        let total = total.saturating_add(u32::try_from(iterations).unwrap_or(u32::MAX));
+        counts.set((entries, total));
+        if entries == SHORT_LOOP_JUDGEMENT_ENTRIES
+            && total < u32::from(entries) * SHORT_LOOP_ITERATIONS
+        {
+            self.keep_backedge_native(index);
+        }
     }
 
     pub(super) fn keep_backedge_native(&self, index: usize) {
