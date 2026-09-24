@@ -45,10 +45,17 @@ fn prototype_cache_records_and_reads_both_literal_representations() {
         ));
 
         // An insertion materializes the literal table and invalidates the old
-        // slot. No new lookup is allowed to mistake a dynamic table for it.
+        // slot; the dynamic table it becomes is cached afresh by its own slot.
         holder.set("extra".to_owned(), Value::Null);
         assert!(matches!(cache.probe(&receiver), CacheProbe::Miss));
-        assert!(holder.prototype_data_slot_value(slot).is_none());
+        cache.update_from_prototype(&receiver, &key);
+        let CacheProbe::PrototypeCandidate { holder: hit, slot } = cache.probe(&receiver) else {
+            panic!("a dynamic prototype table must install a prototype slot");
+        };
+        assert_eq!(
+            hit.prototype_data_slot_value(slot),
+            Some(Value::Number(99.0))
+        );
     }
 }
 
