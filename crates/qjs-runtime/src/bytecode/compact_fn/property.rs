@@ -238,13 +238,7 @@ pub(super) fn set_prop_named(
 /// Whether `object` is the realm's global object, matching
 /// `Vm::is_global_object` without a VM-local cache.
 fn is_global_object(env: &CallEnv, object: &Value) -> bool {
-    let Value::Object(object_ref) = object else {
-        return false;
-    };
-    match env.global_this() {
-        Some(Value::Object(global_this)) => object_ref.ptr_eq(&global_this),
-        _ => false,
-    }
+    matches!(object, Value::Object(object_ref) if env.is_realm_global_object(object_ref))
 }
 
 /// Creates a missing ordinary own string data property without cloning the
