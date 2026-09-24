@@ -413,3 +413,33 @@ fn a_computed_string_write_to_the_global_object_still_updates_the_binding() {
         Ok(Value::Number(9.0))
     );
 }
+
+#[test]
+fn a_warmed_named_write_site_observes_descriptor_and_layout_changes() {
+    // One write site, warmed on one object and then on another shape, must
+    // still honour a frozen property, a setter and a reordered layout.
+    assert_eq!(
+        eval(
+            "'use strict';
+             function write(o, v) { o.x = v; return o.x; }
+             var a = { x: 0, y: 0 };
+             for (var i = 0; i < 50; i++) write(a, i);
+             var log = [write(a, 'warm')];
+             Object.defineProperty(a, 'x', { writable: false });
+             try { write(a, 'frozen'); log.push('no throw'); } catch (e) { log.push(e instanceof TypeError); }
+             log.push(a.x);
+             var b = { y: 1, x: 2 };
+             var seen;
+             Object.defineProperty(b, 'x', { get: function () { return seen; }, set: function (v) { seen = 'set:' + v; } });
+             log.push(write(b, 'accessor'));
+             var c = { x: 1 };
+             for (var i = 0; i < 50; i++) write(c, i);
+             delete c.x; c.z = 0; c.x = 'back';
+             log.push(write(c, 'relaid'), Object.keys(c).join());
+             log.join('|');"
+        ),
+        Ok(Value::String(
+            "warm|true|warm|set:accessor|relaid|z,x".into()
+        ))
+    );
+}

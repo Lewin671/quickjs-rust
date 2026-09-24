@@ -963,11 +963,13 @@ fn global_store_stays_interpreted(
     let code = &bytecode.code;
     let plans = crate::bytecode::vm_loop_dispatch::LoopPlanView::for_bytecode(bytecode);
     let covers = |(header, backedge): (usize, usize)| (header..=backedge).contains(&ip);
-    if plans
-        .typed
-        .iter()
-        .any(|program| covers((program.header(), program.backedge())))
-        || plans.numeric.iter().any(|plan| covers(plan.region()))
+    // A typed program that calls a user function deoptimizes whenever the
+    // callee is not a closed-form leaf -- a method, typically -- and the
+    // interpreter then runs the rest of the loop generically, so the typed
+    // tier's global writes are no reason to stay there.
+    if plans.typed.iter().any(|program| {
+        covers((program.header(), program.backedge())) && !program.calls_user_functions()
+    }) || plans.numeric.iter().any(|plan| covers(plan.region()))
         || plans.control.iter().any(|plan| covers(plan.region()))
         || plans
             .shared_numeric_mutation

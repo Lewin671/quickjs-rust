@@ -135,6 +135,45 @@ fn an_inherited_accessor_is_never_answered_from_the_cache() {
 }
 
 #[test]
+fn dynamic_prototype_slots_revalidate_at_the_same_read_site() {
+    // Past a dozen properties a prototype built by assignment keeps dynamic
+    // storage, whose slots a removal renumbers.
+    let padding = (1..20)
+        .map(|i| format!("Kind.prototype.field{i} = {i};"))
+        .collect::<String>();
+    let setup = format!(
+        "function Kind() {{}}
+         {padding}
+         Kind.prototype.probe = 'proto';
+         var subject = new Kind();"
+    );
+    for (mutate, expected) in [
+        ("subject.probe = 'own';", "proto,own"),
+        ("Kind.prototype.probe = 'second';", "proto,second"),
+        ("delete Kind.prototype.probe;", "proto,undefined"),
+        ("delete Kind.prototype.field1;", "proto,proto"),
+        (
+            "delete Kind.prototype.field3; delete Kind.prototype.probe;
+             Kind.prototype.field3 = 'wrong'; Kind.prototype.probe = 'reinstalled';",
+            "proto,reinstalled",
+        ),
+        (
+            "Object.defineProperty(Kind.prototype, 'probe', {
+                get: function() { return this === subject ? 'getter' : 'wrong'; }
+             });",
+            "proto,getter",
+        ),
+    ] {
+        let source = through_one_site(&setup, mutate);
+        assert_eq!(
+            eval(&source),
+            Ok(Value::String(expected.into())),
+            "{mutate}"
+        );
+    }
+}
+
+#[test]
 fn literal_prototype_slots_revalidate_at_the_same_read_site_in_both_executors() {
     // Two keys use ShapedPair, larger literals use Shaped. Direct eval forces
     // the general VM; the plain read body can use the compact executor.

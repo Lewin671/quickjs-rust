@@ -1531,6 +1531,11 @@ impl CallEnv {
         true
     }
 
+    /// Whether `object` is this realm's global object, without cloning it.
+    pub(crate) fn is_realm_global_object(&self, object: &ObjectRef) -> bool {
+        self.scope.realm.is_global_object(object)
+    }
+
     /// Mirrors a data-property definition on this realm's global object into
     /// the realm value table and any already-captured global cell.
     pub(crate) fn sync_realm_global_object_property(&self, object: &ObjectRef, name: &str) {

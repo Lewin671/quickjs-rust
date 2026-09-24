@@ -91,12 +91,15 @@ impl ObjectRef {
         Some(result)
     }
 
-    /// Resolves a prototype read to a slot in small or literal storage.
-    /// The caller guards holder identity and layout before reading the slot.
-    /// Keep this separate from `own_data_slot`: that API also installs write
-    /// caches, whose supported storage and policy remain unchanged here.
+    /// Resolves a prototype read to a slot in small, dynamic or literal
+    /// storage. The caller guards holder identity and layout before reading
+    /// the slot. Keep this separate from `own_data_slot`: that API also
+    /// installs write caches, whose supported storage and policy remain
+    /// unchanged here. Dynamic storage matters most on this side: a class or
+    /// constructor prototype with more than a dozen methods is one, and every
+    /// method call on its instances reads through it.
     pub(crate) fn prototype_data_slot(&self, key: &str) -> Option<usize> {
-        self.own_data_slot(key)
+        self.any_storage_data_slot(key)
             .or_else(|| self.literal_data_slot(key).map(|(_, slot)| slot))
     }
 
@@ -176,7 +179,11 @@ impl ObjectRef {
                 (!property.is_accessor()).then(|| property.value.clone())
             }
             PropertyStorage::ShapedPair { values, .. } => values.get(slot).cloned(),
-            PropertyStorage::Small { .. } | PropertyStorage::Dynamic(_) => None,
+            PropertyStorage::Dynamic(dynamic) => {
+                let (_, property) = dynamic.entries.get(slot)?;
+                (!property.is_accessor()).then(|| property.value.clone())
+            }
+            PropertyStorage::Small { .. } => None,
         }
     }
 

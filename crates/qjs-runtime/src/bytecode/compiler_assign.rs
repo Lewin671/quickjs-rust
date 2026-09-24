@@ -142,7 +142,7 @@ impl Compiler {
                 self.compile_expr(value)?;
                 self.emit(Op::SetPropNamed {
                     key: name.as_str().into(),
-                    cache: None,
+                    cache: Some(NamedPropertyCache::default()),
                     is_strict: self.strict,
                 });
                 Ok(())
@@ -1022,6 +1022,22 @@ mod tests {
                 .constants
                 .iter()
                 .all(|value| !matches!(value, Value::Number(number) if *number == 0.0))
+        );
+    }
+
+    #[test]
+    fn plain_named_member_assignments_carry_a_write_cache() {
+        let script =
+            qjs_parser::parse_script("let object = {}; object.value = 1; object.other = 2;")
+                .expect("source should parse");
+        let bytecode = compiler::compile_script(&script).expect("source should compile");
+        assert_eq!(
+            bytecode
+                .code
+                .iter()
+                .filter(|op| matches!(op, Op::SetPropNamed { cache: Some(_), .. }))
+                .count(),
+            2
         );
     }
 

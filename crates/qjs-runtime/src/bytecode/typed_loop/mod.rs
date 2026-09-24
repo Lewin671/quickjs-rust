@@ -650,6 +650,15 @@ impl TypedLoopProgram {
         self.backedge
     }
 
+    /// Whether the program calls a user function, which it can only answer
+    /// when the callee turns out to be a closed-form leaf and otherwise
+    /// deoptimizes, leaving the rest of the loop to the interpreter.
+    pub(super) fn calls_user_functions(&self) -> bool {
+        self.ops
+            .iter()
+            .any(|op| matches!(op, TypedOp::CallClosedFormLeaf { .. }))
+    }
+
     fn slot_for_boxed_register(&self, register: u16) -> Option<u32> {
         self.boxed_locals
             .iter()

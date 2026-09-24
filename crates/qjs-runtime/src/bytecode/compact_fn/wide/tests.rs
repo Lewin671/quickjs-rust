@@ -1055,6 +1055,20 @@ fn a_global_store_in_an_accelerated_loop_or_keeping_its_appended_value_stays_int
         value_of(&format!("{source} walk(10) + last + i;")),
         Value::Number(40.0)
     );
+    // A loop the typed tier compiles only by calling a user method, which
+    // deoptimizes it whenever the method is not a closed-form leaf -- 3d-raytrace's
+    // `for (i = 0; ...) triangle.intersect(...)` -- is no reason to stay.
+    let source = "function Tri(k) { this.k = k; }
+        Tri.prototype.hit = function (x) { var o = { x: x }; return o.x < this.k; };
+        var tris = [new Tri(3), new Tri(5), new Tri(7)];
+        function blocked(x) { for (i = 0; i < tris.length; i++) { if (tris[i].hit(x)) return i; } return -1; }";
+    compile::compile(&nested_function(source, "blocked")).expect("the body should be admitted");
+    assert_eq!(
+        value_of(&format!(
+            "{source} [blocked(4), blocked(9), blocked(1), i].join();"
+        )),
+        Value::String("1,-1,0,0".into())
+    );
 }
 
 #[test]
