@@ -2,8 +2,8 @@ use num_bigint::BigInt;
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
 use crate::{
-    ArrayRef, PreferredType, RuntimeError, Value, error, is_truthy, operations, to_number_with_env,
-    to_primitive_with_hint,
+    ArrayRef, CallEnv, PreferredType, RuntimeError, Value, error, is_truthy, operations,
+    to_number_with_env, to_primitive_with_hint,
 };
 
 use super::vm_props::{enumerable_keys, fast_number_binary, fast_number_unary};
@@ -164,12 +164,7 @@ impl Vm<'_> {
         cache: &EnumerateKeysCache,
     ) -> Result<(), RuntimeError> {
         let value = self.pop()?;
-        if let Some(keys) = cache.get(&value) {
-            self.stack.push(Value::Array(keys));
-            return Ok(());
-        }
-        let keys = ArrayRef::new(enumerable_keys(value.clone(), &mut self.env)?);
-        cache.record(&value, keys.clone());
+        let keys = enumerate_keys_cached(&value, cache, &mut self.env)?;
         self.stack.push(Value::Array(keys));
         Ok(())
     }
@@ -183,75 +178,96 @@ impl Vm<'_> {
                 message: "for-in key must be a string".to_owned(),
             });
         };
-        let enumerable = self.for_in_property_is_enumerable(target, &key)?;
+        let enumerable = for_in_property_is_enumerable(target, &key, &mut self.env)?;
         self.stack.push(Value::Boolean(enumerable));
         Ok(())
     }
+}
 
-    /// Walks `target`'s live `[[Prototype]]` chain looking for an own descriptor
-    /// of `key`, dispatching each Proxy's `[[GetOwnProperty]]` and
-    /// `[[GetPrototypeOf]]` traps. A structural descriptor lookup is not
-    /// sufficient here: an ordinary object can reach a Proxy through a live
-    /// array or function prototype, and the key must be re-checked through that
-    /// Proxy before the loop body observes it.
-    fn for_in_property_is_enumerable(
-        &mut self,
-        target: Value,
-        key: &str,
-    ) -> Result<bool, RuntimeError> {
-        // Ordinary objects answer from their own storage: no owned key, no
-        // descriptor clone, no environment. `for (c in table)` inside a hot
-        // loop re-checks every key once per iteration, and this used to be
-        // the loop's largest single cost. The walk drops to the observable
-        // path at the first exotic holder -- a Proxy, a typed array, a module
-        // namespace, an array or function prototype -- so nothing a trap or
-        // an exotic [[GetOwnProperty]] could observe is skipped.
-        let mut current = target;
-        loop {
-            match current {
-                Value::Object(object)
-                    if !object.is_module_namespace_exotic() && !object.is_typed_array_exotic() =>
-                {
-                    if let Some(enumerable) = object.own_property_enumerable(key) {
-                        return Ok(enumerable);
+/// The keys a `for-in` over `value` visits, from the site's cache when every
+/// object on the chain is unchanged since the last enumeration there.
+pub(in crate::bytecode) fn enumerate_keys_cached(
+    value: &Value,
+    cache: &EnumerateKeysCache,
+    env: &mut CallEnv,
+) -> Result<ArrayRef, RuntimeError> {
+    if let Some(keys) = cache.get(value) {
+        return Ok(keys);
+    }
+    let keys = ArrayRef::new(enumerable_keys(value.clone(), env)?);
+    cache.record(value, keys.clone());
+    Ok(keys)
+}
+
+/// Walks `target`'s live `[[Prototype]]` chain looking for an own descriptor
+/// of `key`, dispatching each Proxy's `[[GetOwnProperty]]` and
+/// `[[GetPrototypeOf]]` traps. A structural descriptor lookup is not
+/// sufficient here: an ordinary object can reach a Proxy through a live
+/// array or function prototype, and the key must be re-checked through that
+/// Proxy before the loop body observes it.
+pub(in crate::bytecode) fn for_in_property_is_enumerable(
+    target: Value,
+    key: &str,
+    env: &mut CallEnv,
+) -> Result<bool, RuntimeError> {
+    // Ordinary objects answer from their own storage: no owned key, no
+    // descriptor clone, no environment. `for (c in table)` inside a hot
+    // loop re-checks every key once per iteration, and this used to be
+    // the loop's largest single cost. The walk drops to the observable
+    // path at the first exotic holder -- a Proxy, a typed array, a module
+    // namespace, an array or function prototype -- so nothing a trap or
+    // an exotic [[GetOwnProperty]] could observe is skipped.
+    // A primitive target was enumerated through its wrapper (ToObject), so
+    // its keys are rechecked there too, inherited ones included.
+    let target = match target {
+        Value::String(_) | Value::Number(_) | Value::Boolean(_) | Value::BigInt(_) => {
+            crate::object::boxed_primitive(target, env).unwrap_or(Value::Null)
+        }
+        target => target,
+    };
+    let mut current = target;
+    loop {
+        match current {
+            Value::Object(object)
+                if !object.is_module_namespace_exotic() && !object.is_typed_array_exotic() =>
+            {
+                if let Some(enumerable) = object.own_property_enumerable(key) {
+                    return Ok(enumerable);
+                }
+                match object.prototype_slot() {
+                    None => return Ok(false),
+                    Some(crate::value::Prototype::Object(prototype)) => {
+                        current = Value::Object(prototype);
                     }
-                    match object.prototype_slot() {
-                        None => return Ok(false),
-                        Some(crate::value::Prototype::Object(prototype)) => {
-                            current = Value::Object(prototype);
-                        }
-                        Some(prototype) => {
-                            current = prototype.to_value();
-                            break;
-                        }
+                    Some(prototype) => {
+                        current = prototype.to_value();
+                        break;
                     }
                 }
-                Value::Null | Value::Undefined => return Ok(false),
-                other => {
-                    current = other;
-                    break;
-                }
+            }
+            Value::Null | Value::Undefined => return Ok(false),
+            other => {
+                current = other;
+                break;
             }
         }
-        let property_key = crate::PropertyKey::String(key.to_owned());
-        loop {
-            if matches!(current, Value::Null | Value::Undefined) {
-                return Ok(false);
-            }
-            if let Some(property) = crate::object::observable_own_property_descriptor(
-                current.clone(),
-                &property_key,
-                &mut self.env,
-            )? {
-                return Ok(property.enumerable);
-            }
-            current = match current {
-                Value::Proxy(proxy) => crate::proxy::proxy_get_prototype_of(proxy, &mut self.env)?,
-                value => crate::value_prototype_slot(value, &self.env)
-                    .map(|prototype| prototype.to_value())
-                    .unwrap_or(Value::Null),
-            };
+    }
+    let property_key = crate::PropertyKey::String(key.to_owned());
+    loop {
+        if matches!(current, Value::Null | Value::Undefined) {
+            return Ok(false);
         }
+        if let Some(property) =
+            crate::object::observable_own_property_descriptor(current.clone(), &property_key, env)?
+        {
+            return Ok(property.enumerable);
+        }
+        current = match current {
+            Value::Proxy(proxy) => crate::proxy::proxy_get_prototype_of(proxy, env)?,
+            value => crate::value_prototype_slot(value, env)
+                .map(|prototype| prototype.to_value())
+                .unwrap_or(Value::Null),
+        };
     }
 }
 
