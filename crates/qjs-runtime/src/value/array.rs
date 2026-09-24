@@ -47,6 +47,38 @@ struct ArrayData {
     cold: OnceCell<Box<ArrayColdData>>,
 }
 
+// An array's side of `value::teardown`: its elements are the children a
+// nested chain runs through.
+impl ArrayRef {
+    pub(super) fn is_last_reference(&self) -> bool {
+        Rc::strong_count(&self.0) == 1
+    }
+
+    /// Drops this reference; when it was the last, the array's own
+    /// children go onto `pending` first.
+    pub(super) fn release_into(self, pending: &mut Vec<Value>) {
+        if let Some(mut data) = Rc::into_inner(self.0) {
+            defer_children(data.elements.get_mut(), pending);
+        }
+    }
+}
+
+fn defer_children(elements: &mut [Value], pending: &mut Vec<Value>) {
+    for element in elements {
+        super::teardown::defer_if_last(element, pending);
+    }
+}
+
+impl Drop for ArrayData {
+    fn drop(&mut self) {
+        let mut pending = Vec::new();
+        defer_children(self.elements.get_mut(), &mut pending);
+        if !pending.is_empty() {
+            super::teardown::release(pending);
+        }
+    }
+}
+
 #[derive(Default)]
 struct ArrayColdData {
     holes: RefCell<BTreeSet<usize>>,
@@ -492,6 +524,15 @@ impl ArrayRef {
         elements.get(index).cloned()
     }
 
+    /// Whether the array has no own element or indexed descriptor at `index`:
+    /// a hole in its element storage, a position past that storage -- which
+    /// `new Array(n)` leaves for all of `0..n` -- or one at or past the
+    /// length. A read there is answered by the prototype chain.
+    pub(crate) fn index_is_absent(&self, index: usize) -> bool {
+        (index >= self.0.elements.borrow().len() || self.0.has_hole(index))
+            && !self.0.has_property_at_index(index)
+    }
+
     /// Reads a present dense element when ordinary `array[index]` lookup cannot
     /// observe a different value. Unlike absent-element reads, a present own
     /// dense element always wins over the prototype chain, so unrelated holes,
@@ -500,14 +541,6 @@ impl ArrayRef {
     /// property path; the usual descriptor representation marks a dense hole,
     /// while the explicit target-key check also protects transitional storage
     /// states without making unrelated descriptors reject the read.
-    /// Whether the array has no own element or indexed descriptor at `index`:
-    /// a hole below the length, or a position at or past it. A read there is
-    /// answered by the prototype chain.
-    pub(crate) fn index_is_absent(&self, index: usize) -> bool {
-        (index >= self.0.length.get() || self.0.has_hole(index))
-            && !self.0.has_property_at_index(index)
-    }
-
     pub(crate) fn direct_dense_index_value(&self, index: usize) -> Option<Value> {
         if index >= self.0.length.get()
             || self.0.has_hole(index)

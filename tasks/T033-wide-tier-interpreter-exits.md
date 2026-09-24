@@ -193,6 +193,20 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   json-parse-financial 0.831, crypto-md5 0.953, binary-trees 0.957, cdjs
   0.960, hash-map 0.970. Worst against main: access-nsieve 1.017.
   Sentinels 0.9995-1.008.
+- Stack run 26c1ba7a vs main b62e9326 (30 blocks, cycles, quiet host;
+  `target/comparison/perf5-26c1ba7a`): number-only callees evaluated on
+  typed-loop argument numbers, number-only leaves in register form,
+  typed-loop invariant reads hoisted to loop entry, home-object methods
+  and base-class `new` inlined on the wide tier. External geomean 0.980
+  against main and **0.901 against QuickJS-NG**; bits-in-byte 0.701,
+  raytrace-public-class-fields 0.743, spectral-norm 0.869, ai-astar 0.874,
+  sha1 0.893. Worst against main: imaging-gaussian-blur 1.033,
+  imaging-desaturate 1.031. The sentinels regressed 2-3%
+  (`prototype_method_call` 1.031); bisected to e1f94e22, whose inline
+  number-only path made the compiler emit the typed loop's boxed argument
+  array drop out of line. Fixed in 1d7564cd (evaluation out of line,
+  argument array `ManuallyDrop`): sentinels 0.963 against main
+  (`polymorphic_call_site` 0.915), corpus 0.999 single-run.
 - Rejected: a proven-receiver prototype read ahead of the own-entry probe
   (method read 333 -> 268 instructions on a micro) -- hash-map 1.052,
   raytrace-class-fields 1.045, cdjs 1.041 in cycles with slightly more

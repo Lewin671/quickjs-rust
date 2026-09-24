@@ -46,6 +46,7 @@ mod compile;
 mod execute;
 mod frame;
 mod helper_graph;
+mod hoist;
 mod register_packing;
 
 pub(super) use compile::compile_all;
@@ -180,6 +181,12 @@ enum TypedOp {
     /// Narrows a boxed register to a scalar one, deoptimizing when the value is
     /// not one of the representable types.
     Unbox {
+        dst: u16,
+        src: u16,
+    },
+    /// A boxed register's ToBoolean, as a scalar boolean: a branch on an
+    /// object or string -- `while (entry && ...)` -- needs no unboxing.
+    Truthy {
         dst: u16,
         src: u16,
     },
@@ -592,6 +599,9 @@ pub(super) struct TypedLoopProgram {
     boxed_constant_registers: Vec<(u16, Value)>,
     /// Number of property-access cache entries the run needs.
     cache_count: usize,
+    /// Loop-invariant property reads performed once on entry, each into its
+    /// own register (`hoist`).
+    hoisted_reads: Vec<TypedOp>,
     /// Created only after the first native entry, so a program that compiles
     /// but never runs in this tier pays no pool allocation. One cleared bundle
     /// then serves the common sequential-entry case without retaining scratch

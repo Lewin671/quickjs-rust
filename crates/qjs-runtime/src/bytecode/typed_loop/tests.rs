@@ -1563,3 +1563,99 @@ fn a_loop_writes_its_implicit_globals_by_slot_and_falls_back_after_a_layout_chan
         ))
     );
 }
+
+#[test]
+fn a_number_only_callee_is_evaluated_on_its_argument_numbers() {
+    // Numbers take the direct evaluation; a boolean argument and a missing
+    // one fall back to the ordinary leaf path with the same answers.
+    assert_eq!(
+        eval(
+            "function add(a, b) { return (a + b) | 0; } \
+             function rol(num, cnt) { return (num << cnt) | (num >>> (32 - cnt)); } \
+             function sum3(a, b, c) { return a + b + c; } \
+             function f(n) { var s = 0; for (var i = 0; i < n; i++) { s = add(s, i); } return s; } \
+             function g(n) { var s = 1; for (var i = 0; i < n; i++) { s = rol(s, 3) ^ i; } return s; } \
+             function h(n) { var s = 0, t = true; for (var i = 0; i < n; i++) { s = add(s, t); } return s; } \
+             function k(n) { var r = 0; for (var i = 0; i < n; i++) { r = sum3(i, 1); } return r; } \
+             [f(1000), g(1000), h(1000), k(10)].join(\",\");"
+        ),
+        Ok(Value::String("499500,536448733,1000,NaN".to_owned().into()))
+    );
+}
+
+#[test]
+fn an_invariant_read_is_taken_once_per_entry_and_never_across_a_write() {
+    // A changed receiver is re-read on the next entry, a getter declines the
+    // hoist (and runs once per iteration), and a region that writes -- a push
+    // growing the length it tests, a field it updates -- hoists nothing.
+    assert_eq!(
+        eval(
+            "function find(list, obj) { for (var i = 0; i < list.length; i++) { if (list[i].pos == obj.pos) return i; } return -1; } \
+             var a = { pos: 1 }, b = { pos: 2 }, c = { pos: 3 }; \
+             var list = [a, b, c], probe = { pos: 2 }; \
+             var out = [find(list, probe)]; \
+             probe.pos = 3; out.push(find(list, probe)); \
+             var n = 0; var getterObj = { get pos() { n++; return 3; } }; \
+             out.push(find(list, getterObj), n); \
+             function grow(arr, limit) { for (var i = 0; i < arr.length && i < limit; i++) { if (arr[i] > 0) arr.push(0); } return arr.length; } \
+             out.push(grow([1, 2, 3], 10)); \
+             function sum(o) { var s = 0; for (var i = 0; i < 5; i++) { s += o.v; o.v = o.v + 1; } return s; } \
+             out.push(sum({ v: 1 })); \
+             out.join(\",\");"
+        ),
+        Ok(Value::String("1,2,2,3,6,15".to_owned().into()))
+    );
+}
+
+#[test]
+fn a_read_of_a_name_the_region_never_writes_survives_writes_of_other_names() {
+    // The inner loop writes `vx` (and rewrites `x` in place) while reading
+    // `x` and `mass`: only names nothing writes may be read once per entry.
+    assert_eq!(
+        eval(
+            "function advance(bodies) { \
+               for (var i = 0; i < bodies.length; i++) { \
+                 var bi = bodies[i]; \
+                 for (var j = i + 1; j < bodies.length; j++) { \
+                   var bj = bodies[j]; \
+                   var dx = bi.x - bj.x; \
+                   bi.vx -= dx * bj.mass; \
+                   bj.vx += dx * bi.mass; \
+                   bi.x = bi.x; \
+                 } \
+               } \
+             } \
+             function step(bodies) { for (var i = 0; i < bodies.length; i++) { var b = bodies[i]; b.w = b.w + b.vx; } } \
+             var bodies = [{x: 1, vx: 0, mass: 2, w: 0}, {x: 4, vx: 1, mass: 3, w: 0}, {x: 9, vx: -1, mass: 1, w: 0}]; \
+             for (var k = 0; k < 3; k++) { advance(bodies); step(bodies); } \
+             bodies.map(function (b) { return b.vx + \":\" + b.w; }).join(\",\");"
+        ),
+        Ok(Value::String("51:102,-2:-3,-94:-189".to_owned().into()))
+    );
+}
+
+/// A branch on a boxed value -- an object, a string, `undefined` -- tests
+/// its ToBoolean in place instead of unboxing it, which deoptimized on
+/// anything but a number or boolean.
+#[test]
+fn typed_loops_branch_on_boxed_truthiness() {
+    let source = "function run(m, n) { var c = 0; for (var j = 0; j < n; j++) { if (m.d[j & 7]) c++; } return c; }";
+    let programs = super::compile_all(&nested_function(source));
+    assert!(
+        programs.iter().any(|program| program
+            .ops
+            .iter()
+            .any(|op| matches!(op, super::TypedOp::Truthy { .. }))),
+        "{:#?}",
+        programs
+            .iter()
+            .map(|program| &program.ops)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        eval(&format!(
+            "{source} var d = new Array(8); d[0] = {{}}; d[2] = 'x'; d[3] = ''; d[4] = 0; d[5] = 7; d[6] = null; run({{ d: d }}, 80);"
+        )),
+        Ok(Value::Number(30.0))
+    );
+}

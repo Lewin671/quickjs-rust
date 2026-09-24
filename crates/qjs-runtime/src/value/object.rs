@@ -15,6 +15,7 @@ mod dynamic_storage;
 mod key_order;
 mod ordered_data_builder;
 mod slot_reads;
+mod teardown;
 mod typed_array_methods;
 
 use dynamic_storage::DynamicPropertyStorage;

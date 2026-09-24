@@ -89,3 +89,23 @@ fn number_only_program_declines_to_full_vm_for_coercive_arguments() {
         Ok(Value::Number(3.0))
     );
 }
+
+#[test]
+fn register_form_keeps_locals_read_before_they_are_overwritten() {
+    // Swaps, reads of a local that is then stored, parameter reassignment and
+    // every operator family, called directly and from a typed loop.
+    assert_eq!(
+        crate::eval(
+            "function swap(x, y) { var t = x; x = y; y = t; return x * 100 + y; } \
+             function reuse(a) { var b = a; a = a + 1; return b * 10 + a; } \
+             function chain(a, b) { a = a * 2; b = b + a; a = b - a; return (a << 3) ^ (b >>> 1) | (a & 7); } \
+             function shifts(v) { return (v << 31) + (v >> 1) + (v >>> 0) + (-v >>> 28); } \
+             function mixed(n) { var m = n % 7; var d = n / 4; return m * d - (n ** 2) + (n | 0); } \
+             function run(k) { var s = 0; for (var i = 0; i < k; i++) { s += swap(i, 3) + reuse(i) + chain(i, 5) + shifts(i - 2) + mixed(i); } return s; } \
+             [swap(1, 2), reuse(4), chain(3, 4), shifts(-5), mixed(9), run(50)].join(\",\");"
+        ),
+        Ok(crate::Value::String(
+            "201,45,37,2147483640,-67.5,-45097160957".to_owned().into()
+        ))
+    );
+}

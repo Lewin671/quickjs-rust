@@ -125,7 +125,7 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
             }
             TypedOp::StoreSloppyGlobal { value, .. } => visit(value),
             TypedOp::JumpIfFalsy { cond, .. } | TypedOp::Exit { cond, .. } => visit(cond),
-            TypedOp::Unbox { dst, .. } => visit(dst),
+            TypedOp::Unbox { dst, .. } | TypedOp::Truthy { dst, .. } => visit(dst),
             TypedOp::Box { src, .. } => visit(src),
             TypedOp::GetNamedTyped { dst, .. } => visit(dst),
             TypedOp::SetNamedTyped { value, .. } => visit(value),
@@ -167,7 +167,7 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
                 visit(dst);
                 visit(src);
             }
-            TypedOp::Unbox { src, .. } => visit(src),
+            TypedOp::Unbox { src, .. } | TypedOp::Truthy { src, .. } => visit(src),
             TypedOp::Box { dst, .. } => visit(dst),
             TypedOp::GetNamed { dst, object, .. } => {
                 visit(dst);

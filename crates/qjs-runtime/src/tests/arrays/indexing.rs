@@ -539,3 +539,20 @@ fn indexed_assignment_below_non_writable_length_materializes_without_extending()
         Ok(Value::String("2:7:undefined:true:false".to_owned().into()))
     );
 }
+
+#[test]
+fn reads_past_new_array_storage_as_holes_the_prototype_can_answer() {
+    assert_eq!(
+        eval(
+            "function at(a, i) { return a[i]; }
+             var a = new Array(8); a[1] = 'own';
+             var before = '';
+             for (var k = 0; k < 200; k++) before = at(a, 5) + ':' + at(a, 1);
+             Array.prototype[5] = 'inherited';
+             var after = at(a, 5);
+             delete Array.prototype[5];
+             before + '|' + after + '|' + at(a, 5);"
+        ),
+        Ok(Value::String("undefined:own|inherited|undefined".into()))
+    );
+}

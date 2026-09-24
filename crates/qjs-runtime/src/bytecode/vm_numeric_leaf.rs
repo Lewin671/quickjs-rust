@@ -70,7 +70,7 @@ enum NumberOnlyOp {
 /// attaching its vectors to ordinary plans or extending shortcut dispatch.
 #[derive(Clone, Debug)]
 pub(super) struct NumberOnlyProgram {
-    ops: Vec<NumberOnlyOp>,
+    ops: Vec<registers::RegisterOp>,
     parameter_slots: Vec<usize>,
 }
 
@@ -514,7 +514,7 @@ impl NumberOnlyProgram {
     fn compile(ops: &[FastOp], bytecode: &Bytecode) -> Option<Self> {
         let (ops, parameter_slots) = compile_number_only_program(ops, bytecode)?;
         Some(Self {
-            ops,
+            ops: registers::lower(&ops)?,
             parameter_slots,
         })
     }
@@ -524,45 +524,21 @@ impl NumberOnlyProgram {
     // locality for object and control-flow leaves that cannot use it.
     #[inline(never)]
     fn eval(&self, arguments: &[Value]) -> Option<Value> {
-        let mut locals = [0.0; MAX_FAST_LOCALS];
-        for (index, &slot) in self.parameter_slots.iter().enumerate() {
+        let mut numbers = [0.0; MAX_FAST_LOCALS];
+        let count = self.parameter_slots.len();
+        for (index, number) in numbers.iter_mut().enumerate().take(count) {
             let Value::Number(value) = arguments.get(index)? else {
                 return None;
             };
-            *locals.get_mut(slot)? = *value;
+            *number = *value;
         }
-        let mut stack = [0.0; MAX_FAST_STACK];
-        let mut stack_len = 0;
-        for op in &self.ops {
-            match op {
-                NumberOnlyOp::LoadConst(value) => {
-                    push_number(&mut stack, &mut stack_len, *value)?;
-                }
-                NumberOnlyOp::LoadLocal(slot) => {
-                    push_number(&mut stack, &mut stack_len, *locals.get(*slot)?)?;
-                }
-                NumberOnlyOp::StoreLocal(slot) => {
-                    *locals.get_mut(*slot)? = pop_number(&stack, &mut stack_len)?;
-                }
-                NumberOnlyOp::Binary(op) => {
-                    let right = pop_number(&stack, &mut stack_len)?;
-                    let left = pop_number(&stack, &mut stack_len)?;
-                    push_number(&mut stack, &mut stack_len, number_binary(left, *op, right)?)?;
-                }
-                NumberOnlyOp::BinaryConstRight(op, right) => {
-                    let left = pop_number(&stack, &mut stack_len)?;
-                    push_number(
-                        &mut stack,
-                        &mut stack_len,
-                        number_binary(left, *op, *right)?,
-                    )?;
-                }
-                NumberOnlyOp::Return => {
-                    return Some(Value::Number(pop_number(&stack, &mut stack_len)?));
-                }
-            }
-        }
-        None
+        self.eval_numbers(numbers.get(..count)?).map(Value::Number)
+    }
+
+    /// The program's result for number arguments, one per parameter; `None`
+    /// for too few arguments or anything the plan does not model.
+    pub(super) fn eval_numbers(&self, arguments: &[f64]) -> Option<f64> {
+        registers::eval(&self.ops, &self.parameter_slots, arguments)
     }
 }
 
@@ -991,6 +967,38 @@ impl FastValue {
 /// numeric operations. Received upvalue writes are delayed until a supported
 /// `Return`, so an unsupported value or opcode can fall back to the full VM
 /// without duplicating observable work.
+/// Whether a direct-leaf body already compiled to a number-only plan. Only a
+/// discriminant read, so a caller can test it before paying for a call; a
+/// body whose plan is not built yet answers `false` and builds it on the
+/// general evaluator's first visit.
+#[inline(always)]
+pub(super) fn has_number_only_leaf(bytecode: &Bytecode) -> bool {
+    matches!(
+        bytecode.numeric_leaf_plan.get(),
+        Some(Some(NumericLeafPlan::NumberOnly(_)))
+    )
+}
+
+/// The number-only program's result for number arguments, when its
+/// parameter and upvalue layout match the function's.
+#[inline(never)]
+pub(super) fn eval_number_only_leaf(
+    bytecode: &Bytecode,
+    params: &FunctionParams,
+    upvalues: &[Upvalue],
+    arguments: &[f64],
+) -> Option<f64> {
+    let Some(Some(NumericLeafPlan::NumberOnly(program))) = bytecode.numeric_leaf_plan.get() else {
+        return None;
+    };
+    if bytecode.parameter_slots().len() != params.positional.len()
+        || bytecode.received_upvalue_slots().len() != upvalues.len()
+    {
+        return None;
+    }
+    program.eval_numbers(arguments)
+}
+
 pub(crate) fn try_eval_numeric_leaf(
     bytecode: &Bytecode,
     params: &FunctionParams,
@@ -1420,6 +1428,9 @@ pub(super) fn number_binary(left: f64, op: BinaryOp, right: f64) -> Option<f64> 
         _ => return None,
     })
 }
+
+#[path = "vm_numeric_leaf_registers.rs"]
+mod registers;
 
 #[cfg(test)]
 #[path = "vm_numeric_leaf_number_tests.rs"]

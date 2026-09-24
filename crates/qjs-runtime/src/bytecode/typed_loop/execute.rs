@@ -147,6 +147,12 @@ fn run<F: LoopFrame>(vm: &mut F, program: &TypedLoopProgram) -> Outcome {
     }
     let mut scratch = program.take_scratch();
     let outcome = seed_registers(vm, program, &mut scratch)
+        .and_then(|()| {
+            if program.hoisted_reads.is_empty() {
+                return Some(());
+            }
+            perform_hoisted_reads(vm, program, &mut scratch.registers, &mut scratch.boxed)
+        })
         .map(|()| execute(vm, program, &mut scratch))
         .unwrap_or(Outcome::Declined);
     program.recycle_scratch(scratch);
@@ -295,6 +301,9 @@ fn execute<F: LoopFrame>(
                     deopt_here!(op);
                 };
                 registers[dst as usize] = value;
+            }
+            TypedOp::Truthy { dst, src } => {
+                registers[dst as usize] = boxed_truthiness(&boxed[src as usize]);
             }
             TypedOp::Box { dst, src } => {
                 boxed[dst as usize] = registers[src as usize].to_value();
@@ -687,6 +696,49 @@ fn seed_registers<F: LoopFrame>(
     Some(())
 }
 
+/// The region's loop-invariant reads (`hoist`), performed once on entry; a
+/// read that would not succeed declines the entry before anything has run.
+#[inline(never)]
+fn perform_hoisted_reads<F: LoopFrame>(
+    vm: &mut F,
+    program: &TypedLoopProgram,
+    registers: &mut [Typed],
+    boxed: &mut [Value],
+) -> Option<()> {
+    let mut shape_caches = program.shape_caches.borrow_mut();
+    let intrinsics = Intrinsics::default();
+    for read in &program.hoisted_reads {
+        let (TypedOp::GetNamed {
+            dst,
+            object,
+            name,
+            cache,
+        }
+        | TypedOp::GetNamedTyped {
+            dst,
+            object,
+            name,
+            cache,
+        }) = *read
+        else {
+            return None;
+        };
+        let value = get_named(
+            &boxed[object as usize],
+            &program.names[name as usize],
+            shape_caches.get_mut(cache as usize)?,
+            &intrinsics,
+            Some(vm.loop_env()),
+        )?;
+        if matches!(read, TypedOp::GetNamedTyped { .. }) {
+            *registers.get_mut(dst as usize)? = Typed::from_value(&value)?;
+        } else {
+            *boxed.get_mut(dst as usize)? = value;
+        }
+    }
+    Some(())
+}
+
 /// `CallClosedFormLeaf`, whole. Out of line so the dispatch loop's arm is a
 /// call and a test: a branch on the argument mode inside the arm itself,
 /// executed a few thousand times, cost ai-astar 15% by re-rolling the
@@ -869,6 +921,45 @@ fn draw_random(native: crate::function::NativeFunction) -> Option<Typed> {
 /// defence. It is memoized on the function object, so after the first iteration
 /// it is one load, which is not a price worth trading for an unverifiable
 /// assumption that the plans are independently total.
+/// The arguments as numbers, when every one is a number.
+// Out of line: a branch on a boxed value is rare next to the dispatch
+// loop's other arms, and ToBoolean never runs user code.
+#[inline(never)]
+fn boxed_truthiness(value: &Value) -> Typed {
+    Typed::Boolean(crate::conversion::is_truthy(value))
+}
+
+fn typed_numbers(args: &[Typed]) -> Option<[f64; super::helper_graph::MAX_HELPER_ARITY]> {
+    let mut numbers = [0.0; super::helper_graph::MAX_HELPER_ARITY];
+    for (number, arg) in numbers.iter_mut().zip(args) {
+        let Typed::Number(value) = arg else {
+            return None;
+        };
+        *number = *value;
+    }
+    Some(numbers)
+}
+
+// Out of line: `call_closed_form_leaf` is inlined into the typed loop's
+// dispatch, and growing that body costs every other call arm.
+#[inline(never)]
+fn call_number_only_leaf(
+    function: &crate::function::Function,
+    bytecode: &crate::bytecode::Bytecode,
+    args: &[Typed],
+) -> Option<Value> {
+    let numbers = typed_numbers(args)?;
+    let value = super::super::vm_numeric_leaf::eval_number_only_leaf(
+        bytecode,
+        &function.params,
+        &function.upvalues,
+        numbers.get(..args.len())?,
+    )?;
+    crate::diagnostics::count!(ordinary_call_attempts);
+    crate::diagnostics::count!(closed_form_leaf_evaluations);
+    Some(Value::Number(value))
+}
+
 fn call_closed_form_leaf(
     program: &TypedLoopProgram,
     env: &crate::function::CallEnv,
@@ -926,12 +1017,23 @@ fn call_closed_form_leaf(
         return None;
     };
     let bytecode = function.bytecode.as_ref()?;
-    let arguments: [Value; super::helper_graph::MAX_HELPER_ARITY] = std::array::from_fn(|index| {
-        args.get(index)
-            .copied()
-            .unwrap_or(Typed::Undefined)
-            .to_value()
-    });
+    // A body that is number-only arithmetic -- a hash's `safe_add` or `rol`,
+    // spectral-norm's `A(i, j)` -- is evaluated on the argument numbers
+    // directly, without boxing them for the general leaf evaluators.
+    if super::super::vm_numeric_leaf::has_number_only_leaf(bytecode)
+        && let Some(value) = call_number_only_leaf(function, bytecode, args)
+    {
+        return Some(value);
+    }
+    // Every element comes from a `Typed`, so none owns anything to release;
+    // skipping the array's drop keeps it from becoming an out-of-line call.
+    let arguments: std::mem::ManuallyDrop<[Value; super::helper_graph::MAX_HELPER_ARITY]> =
+        std::mem::ManuallyDrop::new(std::array::from_fn(|index| {
+            args.get(index)
+                .copied()
+                .unwrap_or(Typed::Undefined)
+                .to_value()
+        }));
     let arguments = arguments.get(..usize::from(arity))?;
     let value = super::super::vm_numeric_leaf::try_eval_numeric_leaf(
         bytecode,
