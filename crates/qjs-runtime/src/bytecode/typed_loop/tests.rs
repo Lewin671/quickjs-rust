@@ -1582,3 +1582,27 @@ fn a_number_only_callee_is_evaluated_on_its_argument_numbers() {
         Ok(Value::String("499500,536448733,1000,NaN".to_owned().into()))
     );
 }
+
+#[test]
+fn an_invariant_read_is_taken_once_per_entry_and_never_across_a_write() {
+    // A changed receiver is re-read on the next entry, a getter declines the
+    // hoist (and runs once per iteration), and a region that writes -- a push
+    // growing the length it tests, a field it updates -- hoists nothing.
+    assert_eq!(
+        eval(
+            "function find(list, obj) { for (var i = 0; i < list.length; i++) { if (list[i].pos == obj.pos) return i; } return -1; } \
+             var a = { pos: 1 }, b = { pos: 2 }, c = { pos: 3 }; \
+             var list = [a, b, c], probe = { pos: 2 }; \
+             var out = [find(list, probe)]; \
+             probe.pos = 3; out.push(find(list, probe)); \
+             var n = 0; var getterObj = { get pos() { n++; return 3; } }; \
+             out.push(find(list, getterObj), n); \
+             function grow(arr, limit) { for (var i = 0; i < arr.length && i < limit; i++) { if (arr[i] > 0) arr.push(0); } return arr.length; } \
+             out.push(grow([1, 2, 3], 10)); \
+             function sum(o) { var s = 0; for (var i = 0; i < 5; i++) { s += o.v; o.v = o.v + 1; } return s; } \
+             out.push(sum({ v: 1 })); \
+             out.join(\",\");"
+        ),
+        Ok(Value::String("1,2,2,3,6,15".to_owned().into()))
+    );
+}

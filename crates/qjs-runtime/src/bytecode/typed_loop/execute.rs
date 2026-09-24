@@ -147,6 +147,12 @@ fn run<F: LoopFrame>(vm: &mut F, program: &TypedLoopProgram) -> Outcome {
     }
     let mut scratch = program.take_scratch();
     let outcome = seed_registers(vm, program, &mut scratch)
+        .and_then(|()| {
+            if program.hoisted_reads.is_empty() {
+                return Some(());
+            }
+            perform_hoisted_reads(vm, program, &mut scratch.registers, &mut scratch.boxed)
+        })
         .map(|()| execute(vm, program, &mut scratch))
         .unwrap_or(Outcome::Declined);
     program.recycle_scratch(scratch);
@@ -684,6 +690,49 @@ fn seed_registers<F: LoopFrame>(
         .shape_caches
         .borrow_mut()
         .resize_with(program.cache_count, super::ShapeWays::default);
+    Some(())
+}
+
+/// The region's loop-invariant reads (`hoist`), performed once on entry; a
+/// read that would not succeed declines the entry before anything has run.
+#[inline(never)]
+fn perform_hoisted_reads<F: LoopFrame>(
+    vm: &mut F,
+    program: &TypedLoopProgram,
+    registers: &mut [Typed],
+    boxed: &mut [Value],
+) -> Option<()> {
+    let mut shape_caches = program.shape_caches.borrow_mut();
+    let intrinsics = Intrinsics::default();
+    for read in &program.hoisted_reads {
+        let (TypedOp::GetNamed {
+            dst,
+            object,
+            name,
+            cache,
+        }
+        | TypedOp::GetNamedTyped {
+            dst,
+            object,
+            name,
+            cache,
+        }) = *read
+        else {
+            return None;
+        };
+        let value = get_named(
+            &boxed[object as usize],
+            &program.names[name as usize],
+            shape_caches.get_mut(cache as usize)?,
+            &intrinsics,
+            Some(vm.loop_env()),
+        )?;
+        if matches!(read, TypedOp::GetNamedTyped { .. }) {
+            *registers.get_mut(dst as usize)? = Typed::from_value(&value)?;
+        } else {
+            *boxed.get_mut(dst as usize)? = value;
+        }
+    }
     Some(())
 }
 

@@ -188,6 +188,18 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         },
         next_boxed,
     )?;
+    let (mut register_count, mut boxed_count) = (register_count, boxed_count);
+    let invariant = boxed_locals.iter().map(|&(register, _)| register);
+    let invariant = invariant.chain(boxed_global_reads.iter().map(|(register, _)| *register));
+    let invariant: Vec<u16> = invariant
+        .filter(|register| !written_boxed_locals.contains(register))
+        .collect();
+    let hoisted_reads = super::hoist::hoist_invariant_reads(
+        &mut ops,
+        invariant,
+        &mut register_count,
+        &mut boxed_count,
+    );
     debug_assert!(matches!(
         code.get(backedge.min(code.len() - 1)),
         Some(Op::Jump(_) | Op::IncrementLocal { .. } | Op::Pop | Op::LoadConst(_))
@@ -215,6 +227,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         constant_registers: constants,
         boxed_constant_registers: boxed_constants,
         cache_count,
+        hoisted_reads,
         scratch_pool: OnceCell::new(),
     })
 }

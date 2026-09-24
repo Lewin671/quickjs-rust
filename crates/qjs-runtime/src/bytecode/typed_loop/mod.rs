@@ -46,6 +46,7 @@ mod compile;
 mod execute;
 mod frame;
 mod helper_graph;
+mod hoist;
 mod register_packing;
 
 pub(super) use compile::compile_all;
@@ -592,6 +593,9 @@ pub(super) struct TypedLoopProgram {
     boxed_constant_registers: Vec<(u16, Value)>,
     /// Number of property-access cache entries the run needs.
     cache_count: usize,
+    /// Loop-invariant property reads performed once on entry, each into its
+    /// own register (`hoist`).
+    hoisted_reads: Vec<TypedOp>,
     /// Created only after the first native entry, so a program that compiles
     /// but never runs in this tier pays no pool allocation. One cleared bundle
     /// then serves the common sequential-entry case without retaining scratch
