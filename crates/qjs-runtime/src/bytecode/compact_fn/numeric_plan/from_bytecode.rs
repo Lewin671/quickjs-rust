@@ -507,6 +507,7 @@ pub(super) fn lower(bytecode: &Bytecode) -> Option<NumericPlan> {
         .unwrap_or(0)
         .max(register_count);
     Some(NumericPlan {
+        leaf: NumericPlan::is_leaf(&ops, registers),
         ops: ops.into_boxed_slice(),
         registers,
         parameters: parameters.into_boxed_slice(),

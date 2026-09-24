@@ -52,6 +52,18 @@ pub(in crate::bytecode) struct NumericPlan {
     constants: Box<[(u16, f64)]>,
     /// What every return returns: `NUMBER`, or `BOOLEAN` encoded as 0 or 1.
     returns: u8,
+    /// Whether the plan makes no call and fits [`LEAF_REGISTERS`], so a run
+    /// needs no frame stack and keeps its registers on the native stack.
+    leaf: bool,
+}
+
+/// Widest leaf plan run on a native-stack register array.
+const LEAF_REGISTERS: usize = 32;
+
+impl NumericPlan {
+    fn is_leaf(ops: &[NumOp], registers: usize) -> bool {
+        registers <= LEAF_REGISTERS && !ops.iter().any(|op| matches!(op, NumOp::Call { .. }))
+    }
 }
 
 impl NumericPlan {
@@ -161,6 +173,7 @@ impl NumericPlan {
             .unwrap_or(0)
             .max(program.register_count);
         Some(Self {
+            leaf: Self::is_leaf(&ops, registers),
             ops: ops.into_boxed_slice(),
             registers,
             parameters: parameters.into_boxed_slice(),
@@ -238,18 +251,42 @@ pub(in crate::bytecode) fn run(
     cells: &[Upvalue],
     args: &[f64],
 ) -> Option<Value> {
-    let mut scratch = SCRATCH.with(|slot| slot.take());
-    let result = run_with(plan, root_bytecode, cells, args, &mut scratch);
-    scratch.registers.clear();
-    scratch.frames.clear();
-    scratch.bodies.clear();
-    SCRATCH.with(|slot| slot.replace(scratch));
-    let result = result?;
+    let result = if plan.leaf {
+        run_leaf(plan, args)?
+    } else {
+        let mut scratch = SCRATCH.with(|slot| slot.take());
+        let result = run_with(plan, root_bytecode, cells, args, &mut scratch);
+        scratch.registers.clear();
+        scratch.frames.clear();
+        scratch.bodies.clear();
+        SCRATCH.with(|slot| slot.replace(scratch));
+        result?
+    };
     Some(if plan.returns == BOOLEAN {
         Value::Boolean(result != 0.0)
     } else {
         Value::Number(result)
     })
+}
+
+/// Runs a leaf plan: one frame, registers on the native stack.
+#[inline(never)]
+fn run_leaf(plan: &NumericPlan, args: &[f64]) -> Option<f64> {
+    if args.len() < plan.parameters.len() {
+        return None;
+    }
+    let mut registers = [f64::NAN; LEAF_REGISTERS];
+    for &(register, value) in &*plan.constants {
+        *registers.get_mut(usize::from(register))? = value;
+    }
+    for (&register, &argument) in plan.parameters.iter().zip(args) {
+        *registers.get_mut(usize::from(register))? = argument;
+    }
+    let mut pc = 0;
+    match execute(&plan.ops, &mut pc, registers.get_mut(..plan.registers)?)? {
+        Exit::Return(value) => Some(value),
+        Exit::Call { .. } => None,
+    }
 }
 
 fn run_with(
@@ -286,126 +323,21 @@ fn run_with(
     let mut body = 0_usize;
     let mut pc = 0_usize;
     let mut base = 0_usize;
-    let int32 = crate::conversion::to_int32_number;
-    let uint32 = crate::conversion::to_uint32_number;
     loop {
         // One pass of this loop per frame switch: the running body's
         // operations are borrowed for the whole inner loop.
         let current = Rc::clone(&bodies.get(body)?.plan);
         let ops = &current.ops[..];
         let window = registers.get_mut(base..)?;
-        macro_rules! get {
-            ($register:expr) => {
-                *window.get(usize::from($register))?
-            };
-        }
-        macro_rules! set {
-            ($register:expr, $value:expr) => {{
-                let value = $value;
-                *window.get_mut(usize::from($register))? = value;
-            }};
-        }
         // What left the inner loop: a call to set up, or a returned value.
-        let (call, returned) = loop {
-            let op = *ops.get(pc)?;
-            pc += 1;
-            match op {
-                NumOp::Const { dst, value } => set!(dst, value),
-                NumOp::Move { dst, src } => set!(dst, get!(src)),
-                NumOp::Add { dst, left, right } => set!(dst, get!(left) + get!(right)),
-                NumOp::Sub { dst, left, right } => set!(dst, get!(left) - get!(right)),
-                NumOp::Mul { dst, left, right } => set!(dst, get!(left) * get!(right)),
-                NumOp::Div { dst, left, right } => set!(dst, get!(left) / get!(right)),
-                NumOp::BitAnd { dst, left, right } => {
-                    set!(dst, f64::from(int32(get!(left)) & int32(get!(right))));
-                }
-                NumOp::BitOr { dst, left, right } => {
-                    set!(dst, f64::from(int32(get!(left)) | int32(get!(right))));
-                }
-                NumOp::BitXor { dst, left, right } => {
-                    set!(dst, f64::from(int32(get!(left)) ^ int32(get!(right))));
-                }
-                NumOp::Shl { dst, left, right } => {
-                    set!(
-                        dst,
-                        f64::from(int32(get!(left)) << (uint32(get!(right)) & 0x1f))
-                    );
-                }
-                NumOp::Shr { dst, left, right } => {
-                    set!(
-                        dst,
-                        f64::from(int32(get!(left)) >> (uint32(get!(right)) & 0x1f))
-                    );
-                }
-                NumOp::UShr { dst, left, right } => {
-                    set!(
-                        dst,
-                        f64::from(uint32(get!(left)) >> (uint32(get!(right)) & 0x1f))
-                    );
-                }
-                NumOp::Lt { dst, left, right } => set!(dst, flag(get!(left) < get!(right))),
-                NumOp::Le { dst, left, right } => set!(dst, flag(get!(left) <= get!(right))),
-                NumOp::Gt { dst, left, right } => set!(dst, flag(get!(left) > get!(right))),
-                NumOp::Ge { dst, left, right } => set!(dst, flag(get!(left) >= get!(right))),
-                NumOp::Eq { dst, left, right } => set!(dst, flag(get!(left) == get!(right))),
-                NumOp::Ne { dst, left, right } => set!(dst, flag(get!(left) != get!(right))),
-                NumOp::Other {
-                    dst,
-                    op,
-                    left,
-                    right,
-                } => set!(dst, binary(op, get!(left), get!(right))?),
-                NumOp::Neg { dst, src } => set!(dst, -get!(src)),
-                NumOp::BitNot { dst, src } => set!(dst, f64::from(!int32(get!(src)))),
-                NumOp::Not { dst, src } => {
-                    let value = get!(src);
-                    set!(dst, flag(value == 0.0 || value.is_nan()));
-                }
-                NumOp::Native { .. } | NumOp::Bail => return None,
-                NumOp::JumpIfFalsy { cond, target } => {
-                    let value = get!(cond);
-                    if value == 0.0 || value.is_nan() {
-                        pc = target as usize;
-                    }
-                }
-                NumOp::JumpUnless {
-                    cmp,
-                    left,
-                    right,
-                    target,
-                } => {
-                    let (left, right) = (get!(left), get!(right));
-                    let holds = match cmp {
-                        Cmp::Lt => left < right,
-                        Cmp::Le => left <= right,
-                        Cmp::Gt => left > right,
-                        Cmp::Ge => left >= right,
-                        Cmp::Eq => left == right,
-                        Cmp::Ne => left != right,
-                    };
-                    if !holds {
-                        pc = target as usize;
-                    }
-                }
-                NumOp::JumpIfAndZero {
-                    left,
-                    right,
-                    target,
-                } => {
-                    if int32(get!(left)) & int32(get!(right)) == 0 {
-                        pc = target as usize;
-                    }
-                }
-                NumOp::Nop => {}
-                NumOp::Jump { target } => pc = target as usize,
-                NumOp::Call {
-                    dst,
-                    callee,
-                    args,
-                    argc,
-                } => break (Some((dst, callee, args, argc)), 0.0),
-                NumOp::Return { src } => break (None, get!(src)),
-            }
+        let (call, returned) = match execute(ops, &mut pc, window)? {
+            Exit::Call {
+                dst,
+                callee,
+                args,
+                argc,
+            } => (Some((dst, callee, args, argc)), 0.0),
+            Exit::Return(value) => (None, value),
         };
         match call {
             Some((dst, slot, args, argc)) => {
@@ -450,6 +382,146 @@ fn run_with(
                 base = frame.base;
                 *registers.get_mut(frame.dst)? = returned;
             }
+        }
+    }
+}
+
+/// Why [`execute`] stopped.
+enum Exit {
+    Call {
+        dst: u16,
+        callee: u16,
+        args: u16,
+        argc: u8,
+    },
+    Return(f64),
+}
+
+/// Runs one body's `ops` from `*pc` over its register `window` until it
+/// calls or returns; `None` hands the call back.
+#[inline(always)]
+fn execute(ops: &[NumOp], resume: &mut usize, window: &mut [f64]) -> Option<Exit> {
+    let int32 = crate::conversion::to_int32_number;
+    let uint32 = crate::conversion::to_uint32_number;
+    let mut pc = *resume;
+    macro_rules! get {
+        ($register:expr) => {
+            *window.get(usize::from($register))?
+        };
+    }
+    macro_rules! set {
+        ($register:expr, $value:expr) => {{
+            let value = $value;
+            *window.get_mut(usize::from($register))? = value;
+        }};
+    }
+    loop {
+        let op = *ops.get(pc)?;
+        pc += 1;
+        match op {
+            NumOp::Const { dst, value } => set!(dst, value),
+            NumOp::Move { dst, src } => set!(dst, get!(src)),
+            NumOp::Add { dst, left, right } => set!(dst, get!(left) + get!(right)),
+            NumOp::Sub { dst, left, right } => set!(dst, get!(left) - get!(right)),
+            NumOp::Mul { dst, left, right } => set!(dst, get!(left) * get!(right)),
+            NumOp::Div { dst, left, right } => set!(dst, get!(left) / get!(right)),
+            NumOp::BitAnd { dst, left, right } => {
+                set!(dst, f64::from(int32(get!(left)) & int32(get!(right))));
+            }
+            NumOp::BitOr { dst, left, right } => {
+                set!(dst, f64::from(int32(get!(left)) | int32(get!(right))));
+            }
+            NumOp::BitXor { dst, left, right } => {
+                set!(dst, f64::from(int32(get!(left)) ^ int32(get!(right))));
+            }
+            NumOp::Shl { dst, left, right } => {
+                set!(
+                    dst,
+                    f64::from(int32(get!(left)) << (uint32(get!(right)) & 0x1f))
+                );
+            }
+            NumOp::Shr { dst, left, right } => {
+                set!(
+                    dst,
+                    f64::from(int32(get!(left)) >> (uint32(get!(right)) & 0x1f))
+                );
+            }
+            NumOp::UShr { dst, left, right } => {
+                set!(
+                    dst,
+                    f64::from(uint32(get!(left)) >> (uint32(get!(right)) & 0x1f))
+                );
+            }
+            NumOp::Lt { dst, left, right } => set!(dst, flag(get!(left) < get!(right))),
+            NumOp::Le { dst, left, right } => set!(dst, flag(get!(left) <= get!(right))),
+            NumOp::Gt { dst, left, right } => set!(dst, flag(get!(left) > get!(right))),
+            NumOp::Ge { dst, left, right } => set!(dst, flag(get!(left) >= get!(right))),
+            NumOp::Eq { dst, left, right } => set!(dst, flag(get!(left) == get!(right))),
+            NumOp::Ne { dst, left, right } => set!(dst, flag(get!(left) != get!(right))),
+            NumOp::Other {
+                dst,
+                op,
+                left,
+                right,
+            } => set!(dst, binary(op, get!(left), get!(right))?),
+            NumOp::Neg { dst, src } => set!(dst, -get!(src)),
+            NumOp::BitNot { dst, src } => set!(dst, f64::from(!int32(get!(src)))),
+            NumOp::Not { dst, src } => {
+                let value = get!(src);
+                set!(dst, flag(value == 0.0 || value.is_nan()));
+            }
+            NumOp::Native { .. } | NumOp::Bail => return None,
+            NumOp::JumpIfFalsy { cond, target } => {
+                let value = get!(cond);
+                if value == 0.0 || value.is_nan() {
+                    pc = target as usize;
+                }
+            }
+            NumOp::JumpUnless {
+                cmp,
+                left,
+                right,
+                target,
+            } => {
+                let (left, right) = (get!(left), get!(right));
+                let holds = match cmp {
+                    Cmp::Lt => left < right,
+                    Cmp::Le => left <= right,
+                    Cmp::Gt => left > right,
+                    Cmp::Ge => left >= right,
+                    Cmp::Eq => left == right,
+                    Cmp::Ne => left != right,
+                };
+                if !holds {
+                    pc = target as usize;
+                }
+            }
+            NumOp::JumpIfAndZero {
+                left,
+                right,
+                target,
+            } => {
+                if int32(get!(left)) & int32(get!(right)) == 0 {
+                    pc = target as usize;
+                }
+            }
+            NumOp::Nop => {}
+            NumOp::Jump { target } => pc = target as usize,
+            NumOp::Call {
+                dst,
+                callee,
+                args,
+                argc,
+            } => {
+                *resume = pc;
+                return Some(Exit::Call {
+                    dst,
+                    callee,
+                    args,
+                    argc,
+                });
+            }
+            NumOp::Return { src } => return Some(Exit::Return(get!(src))),
         }
     }
 }
