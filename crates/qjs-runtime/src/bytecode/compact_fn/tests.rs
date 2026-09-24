@@ -475,3 +475,20 @@ fn a_seven_argument_call_is_admitted_and_answers_like_the_interpreter() {
     assert!(compile::compile(&nested_function(wide, "caller")).is_none());
     assert_eq!(eval(&format!("{wide} caller();")), Ok(Value::Number(10.0)));
 }
+
+#[test]
+fn numeric_call_trees_run_on_f64_registers_and_hand_back_exactly() {
+    // fib/ack/tak recurse through a numeric plan; the rest must hand back.
+    assert_eq!(
+        eval(
+            "function fib(n) { if (n < 2) { return 1; } return fib(n - 2) + fib(n - 1); }
+             function ack(m, n) { if (m == 0) { return n + 1; } if (n == 0) { return ack(m - 1, 1); } return ack(m - 1, ack(m, n - 1)); }
+             function tak(x, y, z) { if (y >= x) return z; return tak(tak(x - 1, y, z), tak(y - 1, z, x), tak(z - 1, x, y)); }
+             function deep(n) { if (n == 0) { return 0; } return deep(n - 1) + 1; }
+             function strange(n) { if (n < 1) { return 'x'; } return strange(n - 1); }
+             function viaText(n) { if (n < 1) { return 0; } return viaText(n - 1) + 1; }
+             [fib(20), ack(2, 3), tak(18, 12, 6), deep(20000), strange(3), viaText('3'), fib(true)].join();"
+        ),
+        Ok(Value::String("10946,9,7,20000,x,3,1".into()))
+    );
+}

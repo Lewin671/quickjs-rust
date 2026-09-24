@@ -349,6 +349,17 @@ fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
     })
 }
 
+/// Whether a numeric plan may call `function` (`numeric_plan`): the facts
+/// that let this tier inline it, less the caller-environment agreement a
+/// plan does not need -- its body reads nothing but its cells.
+pub(super) fn admits_numeric_callee(function: &Function, bytecode: &Bytecode) -> bool {
+    let _ = bytecode;
+    let callee = Value::Function(function.clone());
+    fixed_inline_facts(&callee, function) & FACTS_ELIGIBLE != 0
+        && !function.has_dynamic_function_realm_override.get()
+        && !function.has_cold_lexical_state()
+}
+
 /// `Function::compact_inline_facts`: computed, and admitted as far as the
 /// function's fixed facts decide -- direct-leaf shape, no lexical `this`, no
 /// dynamic realm, no module imports, a program whose received cells this
@@ -757,6 +768,9 @@ pub(in crate::bytecode) fn try_run_standalone(
     let Some(entry) = admit(bytecode, slots.as_ref()?.upvalues) else {
         return super::wide::try_run_standalone(bytecode, env, slots);
     };
+    if let Some(value) = run_numeric_plan(bytecode, slots.as_ref()?) {
+        return Some(Ok(Value::Number(value)));
+    }
     // Admitted. From here on the caller's `env` and `slots` are ours.
     let call_env = env.take()?;
     let call_slots = slots.take()?;
@@ -767,6 +781,29 @@ pub(in crate::bytecode) fn try_run_standalone(
         call_slots.parameter_slots,
         call_slots.arguments,
     ))
+}
+
+/// Runs an admitted body's numeric plan (`numeric_plan`), when it has one
+/// and every argument is a number; `None` leaves the call to the tier.
+#[inline(never)]
+fn run_numeric_plan(bytecode: &Bytecode, slots: &DirectCallSlots<'_>) -> Option<f64> {
+    let plan = super::numeric_plan::plan_for(bytecode)?;
+    let mut numbers = [0.0; super::compile::MAX_CALL_ARITY];
+    if slots.arguments.len() > numbers.len() {
+        return None;
+    }
+    for (number, argument) in numbers.iter_mut().zip(slots.arguments) {
+        let Value::Number(value) = argument else {
+            return None;
+        };
+        *number = *value;
+    }
+    super::numeric_plan::run(
+        plan,
+        bytecode,
+        slots.upvalues.as_slice(),
+        &numbers[..slots.arguments.len()],
+    )
 }
 
 /// Runs a direct-leaf callee on a compact tier in the caller's own

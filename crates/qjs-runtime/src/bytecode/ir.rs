@@ -720,6 +720,9 @@ pub struct Bytecode {
     pub(super) compact_wide_program: OnceCell<Option<super::compact_fn::wide::WideProgram>>,
     pub(super) compact_function_program:
         OnceCell<Option<super::compact_fn::CompactFunctionProgram>>,
+    /// The compact program lowered to `f64` registers, when every value it
+    /// holds is a number, boolean or `undefined` (`compact_fn::numeric_plan`).
+    pub(super) compact_numeric_plan: OnceCell<Option<std::rc::Rc<super::compact_fn::NumericPlan>>>,
     pub(super) numeric_loop_plans: OnceCell<Vec<super::vm_numeric_loop::NumericLoopPlan>>,
     /// Shape-independent register programs for this body's numeric loop
     /// regions, compiled on first entry to any loop.
@@ -907,6 +910,7 @@ impl Bytecode {
             numeric_leaf_plan: OnceCell::new(),
             this_property_leaf_plan,
             compact_function_program: OnceCell::new(),
+            compact_numeric_plan: OnceCell::new(),
             compact_wide_program: OnceCell::new(),
             numeric_loop_plans: OnceCell::new(),
             typed_loop_programs: OnceCell::new(),

@@ -43,7 +43,7 @@ use super::frame::LoopFrame;
 use crate::Value;
 use crate::function::{Function, NativeFunction};
 
-mod numeric;
+pub(in crate::bytecode) mod numeric;
 
 /// How many helper bodies one loop entry may flatten. A graph deeper or wider
 /// than this is not a leaf computation any more, and preparation is per entry,
@@ -65,7 +65,7 @@ const MAX_NATIVE_RECURSION: usize = 96;
 /// Registers a single helper body may use, arguments included. The runtime
 /// register file is a fixed array of this size on the Rust stack, which is what
 /// keeps a helper call free of allocation.
-pub(super) const MAX_HELPER_REGISTERS: usize = 24;
+pub(in crate::bytecode) const MAX_HELPER_REGISTERS: usize = 24;
 /// Widest helper call a region admits. sha1's round function takes four
 /// (`sha1_ft(t, b, c, d)`); a wider call keeps the interpreter.
 pub(super) const MAX_HELPER_ARITY: usize = 4;

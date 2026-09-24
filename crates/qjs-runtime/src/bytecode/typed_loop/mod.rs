@@ -45,7 +45,7 @@ mod branchy_nested_tests;
 mod compile;
 mod execute;
 mod frame;
-mod helper_graph;
+pub(in crate::bytecode) mod helper_graph;
 mod hoist;
 mod register_packing;
 
