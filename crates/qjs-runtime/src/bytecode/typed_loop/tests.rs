@@ -1666,3 +1666,33 @@ fn typed_loops_branch_on_boxed_truthiness() {
         Ok(Value::Number(30.0))
     );
 }
+
+/// Helpers flattened into a typed loop may loop themselves, and those whose
+/// values are only numbers, booleans and `undefined` run over `f64`
+/// registers; every case here must agree with the interpreter.
+#[test]
+fn typed_loops_call_looping_and_boolean_helpers_exactly() {
+    let source = "
+        function bits(b) { var m = 1, c = 0; while (m < 0x100) { if (b & m) c++; m <<= 1; } return c; }
+        function down(n) { var k = n, s = 0; while (k > 0) { s += k; k--; } return s; }
+        function big(x) { return x > 3; }
+        function hole(x) { var u; return (u + x) > 0 ? 1 : 2; }
+        function loose(x) { return (x > 1) == 1 ? 7 : 8; }
+        function strictUndefined(x) { var u; if (x > 2) u = x; return u === undefined ? 0 : u; }
+        function run(n) {
+            var a = 0, b = 0, c = 0, d = 0, e = 0, f = 0;
+            for (var i = 0; i < n; i++) {
+                a += bits(i & 255);
+                b += down(i & 7);
+                if (big(i & 7) === true) c++;
+                d += hole(i);
+                e += loose(i & 3);
+                f += strictUndefined(i & 7);
+            }
+            return [a, b, c, d, e, f].join();
+        }";
+    assert_eq!(
+        eval(&format!("{source} run(512);")),
+        Ok(Value::String("2048,5376,256,1024,3840,1600".into()))
+    );
+}
