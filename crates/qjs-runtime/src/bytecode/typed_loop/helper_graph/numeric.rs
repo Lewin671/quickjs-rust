@@ -35,7 +35,7 @@ type Kinds = [u8; MAX_HELPER_REGISTERS];
 const FILE: usize = MAX_HELPER_REGISTERS.next_power_of_two();
 
 #[derive(Clone, Copy, Debug)]
-enum NumOp {
+pub(in crate::bytecode) enum NumOp {
     Const {
         dst: u16,
         value: f64,
@@ -173,12 +173,21 @@ enum NumOp {
     Return {
         src: u16,
     },
+    /// Calls body `callee` (its meaning is the caller's: a compact plan's
+    /// received-upvalue slot) with the `argc` registers from `args`, which
+    /// stay contiguous -- no pass rewrites them.
+    Call {
+        dst: u16,
+        callee: u16,
+        args: u16,
+        argc: u8,
+    },
     /// Removed by optimization; dropped before the program runs.
     Nop,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum Cmp {
+pub(in crate::bytecode) enum Cmp {
     Lt,
     Le,
     Gt,
@@ -418,6 +427,8 @@ impl NumProgram {
                     }
                 }
                 NumOp::Nop => {}
+                // A helper body never calls (`lower` rejects `HelperOp::Call`).
+                NumOp::Call { .. } => return None,
                 NumOp::Jump { target } => pc = target as usize,
                 NumOp::Return { src } => {
                     let value = get!(src);
@@ -486,7 +497,7 @@ fn infer(ops: &[HelperOp], arity: u8) -> Option<Vec<Option<Kinds>>> {
     Some(before)
 }
 
-fn binary(dst: u16, op: BinaryOp, left: u16, right: u16) -> NumOp {
+pub(in crate::bytecode) fn binary(dst: u16, op: BinaryOp, left: u16, right: u16) -> NumOp {
     match op {
         BinaryOp::Add => NumOp::Add { dst, left, right },
         BinaryOp::Sub => NumOp::Sub { dst, left, right },
@@ -568,7 +579,7 @@ fn uint32(number: f64) -> u32 {
 /// destination, and a comparison or bitwise and feeding only a branch is
 /// fused with it. `bitsinbyte`'s loop goes from 22 operations an iteration
 /// to 6.
-fn optimize(mut ops: Vec<NumOp>) -> (Vec<NumOp>, Vec<(u16, f64)>) {
+pub(in crate::bytecode) fn optimize(mut ops: Vec<NumOp>) -> (Vec<NumOp>, Vec<(u16, f64)>) {
     let constants = hoist_constants(&mut ops);
     for _ in 0..3 {
         propagate_copies(&mut ops);
@@ -581,13 +592,21 @@ fn optimize(mut ops: Vec<NumOp>) -> (Vec<NumOp>, Vec<(u16, f64)>) {
 }
 
 /// The highest register a lowered body names, plus one.
-fn first_free_register(ops: &[NumOp]) -> usize {
+pub(in crate::bytecode) fn first_free_register(ops: &[NumOp]) -> usize {
     ops.iter()
         .flat_map(|op| {
             let (reads, write) = operands(op);
-            reads.into_iter().chain([write]).flatten()
+            let call_end = match *op {
+                NumOp::Call { args, argc, .. } => Some(usize::from(args) + usize::from(argc)),
+                _ => None,
+            };
+            reads
+                .into_iter()
+                .chain([write])
+                .flatten()
+                .map(|register| usize::from(register) + 1)
+                .chain(call_end)
         })
-        .map(|register| usize::from(register) + 1)
         .max()
         .unwrap_or(0)
         .max(MAX_HELPER_REGISTERS)
@@ -659,6 +678,8 @@ fn operands(op: &NumOp) -> ([Option<u16>; 2], Option<u16>) {
             ([Some(left), Some(right)], None)
         }
         NumOp::Return { src } => ([Some(src), None], None),
+        // Its argument registers are read too; `live_after` adds them.
+        NumOp::Call { dst, .. } => ([None, None], Some(dst)),
         NumOp::Jump { .. } | NumOp::Nop => ([None, None], None),
     }
 }
@@ -698,7 +719,7 @@ fn map_reads(op: &mut NumOp, map: impl Fn(u16) -> u16) {
             *second = map(*second);
         }
         NumOp::JumpIfFalsy { cond, .. } => *cond = map(*cond),
-        NumOp::Const { .. } | NumOp::Jump { .. } | NumOp::Nop => {}
+        NumOp::Const { .. } | NumOp::Jump { .. } | NumOp::Nop | NumOp::Call { .. } => {}
     }
 }
 
@@ -726,7 +747,8 @@ fn set_write(op: &mut NumOp, register: u16) {
         | NumOp::Eq { dst, .. }
         | NumOp::Ne { dst, .. }
         | NumOp::Other { dst, .. }
-        | NumOp::Native { dst, .. } => *dst = register,
+        | NumOp::Native { dst, .. }
+        | NumOp::Call { dst, .. } => *dst = register,
         _ => {}
     }
 }
@@ -824,6 +846,11 @@ fn live_after(ops: &[NumOp]) -> Vec<u32> {
             }
             for register in reads.into_iter().flatten() {
                 live |= 1_u32 << (usize::from(register) & (FILE - 1));
+            }
+            if let NumOp::Call { args, argc, .. } = ops[pc] {
+                for register in args..args + u16::from(argc) {
+                    live |= 1_u32 << (usize::from(register) & (FILE - 1));
+                }
             }
             if live != live_in[pc] {
                 live_in[pc] = live;

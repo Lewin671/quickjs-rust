@@ -35,6 +35,7 @@ mod activation;
 mod compile;
 mod creation_cache;
 mod execute;
+mod numeric_plan;
 mod property;
 pub(in crate::bytecode) mod wide;
 pub(in crate::bytecode) use property::field_initializer_member_read;
@@ -42,6 +43,7 @@ pub(in crate::bytecode) use wide::{hands_back_at, resumes_at};
 
 pub(crate) use activation::try_run_in_caller_env;
 pub(super) use activation::try_run_standalone;
+pub(in crate::bytecode) use numeric_plan::NumericPlan;
 
 /// Bodies wider than this are not worth a register file; the limit also keeps
 /// register indices in `u16`.
