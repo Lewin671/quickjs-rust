@@ -286,8 +286,13 @@ fn callee_parameter_slots(callee: &Value) -> &[usize] {
 /// Returns a frame's window to `undefined`, releasing whatever it still holds.
 #[inline]
 fn clear_window(window: &mut [Value]) {
+    // Most of a returning window is already empty -- the operations that
+    // consumed its operands moved them out -- and an empty register needs no
+    // write at all.
     for slot in window {
-        execute::store(slot, Value::Undefined);
+        if !matches!(slot, Value::Undefined) {
+            execute::store(slot, Value::Undefined);
+        }
     }
 }
 
@@ -307,25 +312,92 @@ struct InlineCallee {
 /// parameter prologues and `arguments` objects are among the shapes it
 /// rejects, and the compact program's own admission does not subsume it.
 fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
-    if !crate::function::is_direct_leaf_function(callee) {
-        return None;
-    }
     let Value::Function(function) = callee else {
         return None;
     };
-    let bytecode = function.bytecode.as_ref()?;
-    if !shares_caller_environment(function, bytecode, env) {
+    let facts = fixed_inline_facts(callee, function);
+    if facts & FACTS_ELIGIBLE == 0 {
         return None;
     }
-    let entry = admit(
+    // The parts of `shares_caller_environment` that can change after the
+    // function is created, or depend on the caller.
+    let host_agrees = match (&function.module_host, env.module_host_ref()) {
+        (None, _) => true,
+        (Some(callee), Some(caller)) => std::rc::Rc::ptr_eq(callee, caller),
+        (Some(_), None) => false,
+    };
+    if !host_agrees
+        || function.has_dynamic_function_realm_override.get()
+        || function.has_cold_lexical_state()
+    {
+        return None;
+    }
+    // Admission proved the body's received cells are this function's own.
+    let (upvalue_owner, upvalue_slots) = if facts & FACTS_OWNS_UPVALUES == 0 {
+        (None, 0)
+    } else {
+        let slots = function
+            .bytecode
+            .as_ref()?
+            .direct_readonly_received_upvalue_slots()?;
+        (Some(function.clone()), slots)
+    };
+    Some(InlineCallee {
+        register_count: (facts >> FACTS_REGISTER_SHIFT) as usize,
+        upvalue_owner,
+        upvalue_slots,
+    })
+}
+
+/// `Function::compact_inline_facts`: computed, and admitted as far as the
+/// function's fixed facts decide -- direct-leaf shape, no lexical `this`, no
+/// dynamic realm, no module imports, a program whose received cells this
+/// function owns -- then whether it has received cells, and the register
+/// count in the high half. A call reads one word instead of re-deriving each.
+const FACTS_KNOWN: u32 = 1;
+const FACTS_ELIGIBLE: u32 = 1 << 1;
+const FACTS_OWNS_UPVALUES: u32 = 1 << 2;
+const FACTS_REGISTER_SHIFT: u32 = 16;
+
+#[inline]
+fn fixed_inline_facts(callee: &Value, function: &Function) -> u32 {
+    let facts = function.compact_inline_facts.get();
+    if facts & FACTS_KNOWN != 0 {
+        return facts;
+    }
+    let facts = compute_fixed_inline_facts(callee, function);
+    function.compact_inline_facts.set(facts);
+    facts
+}
+
+#[cold]
+#[inline(never)]
+fn compute_fixed_inline_facts(callee: &Value, function: &Function) -> u32 {
+    let Some(bytecode) = function.bytecode.as_ref() else {
+        return FACTS_KNOWN;
+    };
+    if !crate::function::is_direct_leaf_function(callee)
+        || bytecode.uses_lexical_this()
+        || function.has_dynamic_function_realm
+        || !function.module_imports.is_empty()
+    {
+        return FACTS_KNOWN;
+    }
+    let Some(entry) = admit(
         bytecode,
         crate::bytecode::DirectCallUpvalues::Function(function),
-    )?;
-    Some(InlineCallee {
-        register_count: entry.program.register_count,
-        upvalue_owner: entry.upvalue_owner,
-        upvalue_slots: entry.upvalue_slots,
-    })
+    ) else {
+        return FACTS_KNOWN;
+    };
+    let Ok(register_count) = u16::try_from(entry.program.register_count) else {
+        return FACTS_KNOWN;
+    };
+    let owns = if entry.upvalue_owner.is_some() {
+        FACTS_OWNS_UPVALUES
+    } else {
+        0
+    };
+    FACTS_KNOWN | FACTS_ELIGIBLE | owns | (u32::from(register_count) << FACTS_REGISTER_SHIFT)
 }
 
 /// Runs an admitted body in `env`, together with every admitted body it calls.
