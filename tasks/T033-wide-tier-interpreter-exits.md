@@ -270,6 +270,17 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   **0.860 against QuickJS-NG**; crypto-md5 0.785, ai-astar 0.840 and the
   call sentinels 0.84-0.93 (the layout of perf10 rolled back, identical
   instructions). Worst against main: string-unpack-code 1.047.
+- Numeric plans lowered from bytecode (perf13, 2026-09-24,
+  `compact_fn/numeric_plan/from_bytecode.rs`): bodies outside the compact
+  tier are interpreted abstractly under number arguments -- `typeof`
+  folds, string comparisons fold, unreachable cases are never lowered, and
+  a reachable path the encoding cannot hold ends in `NumOp::Bail` (hand
+  back). hash-map's `computeHashCode`/`equals` run on plans: hash-map
+  0.913, corpus 0.9964 single-run, canaries flat. Plans may now return
+  booleans (only to a root caller, never inside a call chain). Found on the
+  way (fixed in e2c08594): a plan or numeric helper called with fewer
+  arguments than parameters read `undefined` as a number (`f()` with
+  `a === b` returned 2, QuickJS-NG 1).
 - Rejected (2026-09-24): the boxed typed-loop registers as a fixed array
   like the scalar file (d21a068c): 1-3% fewer instructions but +20% cycles
   on the sentinels, ai-astar and imaging-gaussian-blur, whether the file

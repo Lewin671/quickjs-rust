@@ -326,8 +326,12 @@ fn compute_fixed_inline_facts(callee: &Value, function: &Function, bytecode: &By
     }
     if !class
         && !program.requires_this
-        && super::super::numeric_plan::plan_for(bytecode).is_some()
-        && super::super::activation::admits_numeric_callee(callee, function)
+        && super::super::numeric_plan::plan_for(bytecode).is_some_and(|plan| {
+            // A plan that calls out resolves its callees through cells the
+            // compact tier's admission vouches for; one that does not reads
+            // nothing but its arguments.
+            !plan.calls_out() || super::super::activation::admits_numeric_callee(callee, function)
+        })
     {
         facts |= FACTS_NUMERIC_PLAN;
     }
@@ -415,7 +419,7 @@ fn clear_window(window: &mut [Value]) {
 /// Runs `callee`'s numeric plan on `arguments` when every one is a number;
 /// `None` leaves the call to this driver.
 #[inline(never)]
-fn try_numeric_call(callee: &Value, arguments: &[Value]) -> Option<f64> {
+fn try_numeric_call(callee: &Value, arguments: &[Value]) -> Option<Value> {
     let Value::Function(function) = callee else {
         return None;
     };
@@ -1590,10 +1594,7 @@ fn run_frames(
                 if let Some(receiver) = receiver {
                     release(receiver);
                 }
-                execute::store(
-                    &mut registers[current_base + dst as usize],
-                    Value::Number(value),
-                );
+                execute::store(&mut registers[current_base + dst as usize], value);
                 pc = resume_pc;
                 continue;
             }

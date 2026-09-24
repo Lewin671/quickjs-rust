@@ -182,6 +182,10 @@ pub(in crate::bytecode) enum NumOp {
         args: u16,
         argc: u8,
     },
+    /// Hands the call back: a path the plan does not model but may reach.
+    /// Everything before it was pure, so running the call again is not
+    /// observable.
+    Bail,
     /// Removed by optimization; dropped before the program runs.
     Nop,
 }
@@ -427,8 +431,9 @@ impl NumProgram {
                     }
                 }
                 NumOp::Nop => {}
-                // A helper body never calls (`lower` rejects `HelperOp::Call`).
-                NumOp::Call { .. } => return None,
+                // A helper body never calls (`lower` rejects `HelperOp::Call`)
+                // and never bails.
+                NumOp::Call { .. } | NumOp::Bail => return None,
                 NumOp::Jump { target } => pc = target as usize,
                 NumOp::Return { src } => {
                     let value = get!(src);
@@ -680,7 +685,7 @@ fn operands(op: &NumOp) -> ([Option<u16>; 2], Option<u16>) {
         NumOp::Return { src } => ([Some(src), None], None),
         // Its argument registers are read too; `live_after` adds them.
         NumOp::Call { dst, .. } => ([None, None], Some(dst)),
-        NumOp::Jump { .. } | NumOp::Nop => ([None, None], None),
+        NumOp::Jump { .. } | NumOp::Nop | NumOp::Bail => ([None, None], None),
     }
 }
 
@@ -719,7 +724,11 @@ fn map_reads(op: &mut NumOp, map: impl Fn(u16) -> u16) {
             *second = map(*second);
         }
         NumOp::JumpIfFalsy { cond, .. } => *cond = map(*cond),
-        NumOp::Const { .. } | NumOp::Jump { .. } | NumOp::Nop | NumOp::Call { .. } => {}
+        NumOp::Const { .. }
+        | NumOp::Jump { .. }
+        | NumOp::Nop
+        | NumOp::Call { .. }
+        | NumOp::Bail => {}
     }
 }
 
@@ -761,7 +770,7 @@ fn successors(ops: &[NumOp], pc: usize) -> [Option<usize>; 2] {
         NumOp::JumpIfFalsy { target, .. }
         | NumOp::JumpUnless { target, .. }
         | NumOp::JumpIfAndZero { target, .. } => [next, Some(target as usize)],
-        NumOp::Return { .. } => [None, None],
+        NumOp::Return { .. } | NumOp::Bail => [None, None],
         _ => [next, None],
     }
 }
@@ -821,6 +830,7 @@ fn propagate_copies(ops: &mut [NumOp]) {
                 | NumOp::JumpUnless { .. }
                 | NumOp::JumpIfAndZero { .. }
                 | NumOp::Return { .. }
+                | NumOp::Bail
         ) {
             copy_of = [u16::MAX; FILE];
         }

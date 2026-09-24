@@ -26,6 +26,8 @@ use crate::bytecode::typed_loop::helper_graph::numeric::{
 };
 use crate::function::Upvalue;
 
+mod from_bytecode;
+
 /// Widest body the shared optimizer handles (`helper_graph::numeric`).
 const MAX_OPTIMIZED_REGISTERS: usize =
     crate::bytecode::typed_loop::helper_graph::MAX_HELPER_REGISTERS;
@@ -48,6 +50,8 @@ pub(in crate::bytecode) struct NumericPlan {
     parameters: Box<[u16]>,
     /// Constants the optimizer moved into registers, written per frame.
     constants: Box<[(u16, f64)]>,
+    /// What every return returns: `NUMBER`, or `BOOLEAN` encoded as 0 or 1.
+    returns: u8,
 }
 
 impl NumericPlan {
@@ -161,7 +165,14 @@ impl NumericPlan {
             registers,
             parameters: parameters.into_boxed_slice(),
             constants: constants.into_boxed_slice(),
+            returns: NUMBER,
         })
+    }
+
+    /// Whether the plan calls other bodies, which it resolves through its
+    /// function's received cells.
+    pub(in crate::bytecode) fn calls_out(&self) -> bool {
+        self.ops.iter().any(|op| matches!(op, NumOp::Call { .. }))
     }
 }
 
@@ -170,8 +181,10 @@ pub(in crate::bytecode) fn plan_for(bytecode: &Bytecode) -> Option<&Rc<NumericPl
     bytecode
         .compact_numeric_plan
         .get_or_init(|| {
-            let program = super::program_for(bytecode)?;
-            NumericPlan::lower(bytecode, program).map(Rc::new)
+            super::program_for(bytecode)
+                .and_then(|program| NumericPlan::lower(bytecode, program))
+                .or_else(|| from_bytecode::lower(bytecode))
+                .map(Rc::new)
         })
         .as_ref()
 }
@@ -224,14 +237,19 @@ pub(in crate::bytecode) fn run(
     root_bytecode: &Bytecode,
     cells: &[Upvalue],
     args: &[f64],
-) -> Option<f64> {
+) -> Option<Value> {
     let mut scratch = SCRATCH.with(|slot| slot.take());
     let result = run_with(plan, root_bytecode, cells, args, &mut scratch);
     scratch.registers.clear();
     scratch.frames.clear();
     scratch.bodies.clear();
     SCRATCH.with(|slot| slot.replace(scratch));
-    result
+    let result = result?;
+    Some(if plan.returns == BOOLEAN {
+        Value::Boolean(result != 0.0)
+    } else {
+        Value::Number(result)
+    })
 }
 
 fn run_with(
@@ -343,7 +361,7 @@ fn run_with(
                     let value = get!(src);
                     set!(dst, flag(value == 0.0 || value.is_nan()));
                 }
-                NumOp::Native { .. } => return None,
+                NumOp::Native { .. } | NumOp::Bail => return None,
                 NumOp::JumpIfFalsy { cond, target } => {
                     let value = get!(cond);
                     if value == 0.0 || value.is_nan() {
@@ -502,6 +520,10 @@ fn link(
     let callee = callee.clone();
     let callee_bytecode = Rc::clone(callee.bytecode.as_ref()?);
     let plan = Rc::clone(plan_for(&callee_bytecode)?);
+    // A caller treats what a call returns as a number.
+    if plan.returns != NUMBER {
+        return None;
+    }
     bodies.push(Body {
         plan,
         function: Some(callee),
@@ -654,3 +676,6 @@ fn encode(value: &Value) -> Option<f64> {
         _ => return None,
     })
 }
+
+#[cfg(test)]
+mod tests;
