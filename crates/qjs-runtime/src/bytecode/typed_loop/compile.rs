@@ -205,6 +205,10 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         code.get(backedge.min(code.len() - 1)),
         Some(Op::Jump(_) | Op::IncrementLocal { .. } | Op::Pop | Op::LoadConst(_))
     ));
+    // The executor's register file is fixed-size (`REGISTER_FILE`).
+    if register_count > super::REGISTER_FILE {
+        return None;
+    }
     Some(TypedLoopProgram {
         shape_caches: std::cell::RefCell::new(Vec::new()),
         helper_sites,

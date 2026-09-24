@@ -92,6 +92,13 @@ The procedure (queue, plan, decision) is in
   an out-of-lined helper) and treat a control regression inside it, with
   every other hot function byte-identical, as codegen noise to be judged on
   the aggregate.
+- **Hand a dispatch loop the storage, not its owner.** Reaching a register
+  file through `&mut Owner { file: Box<[T; N]> }` instead of `&mut [T; N]`
+  added a pointer load the loop could not keep in a register: the typed
+  loop's fixed register file ran 3-5% fewer instructions and 6-18% more
+  cycles (ai-astar, the sentinels) until `execute` borrowed the array
+  itself. When instructions fall and cycles rise, suspect an extra
+  indirection before alignment.
 - **Keep hot dispatch arms tiny.** Growing an arm of a hot interpreter
   `match` can degrade register allocation and layout for the whole loop, and
   slow workloads that never reach the new arm. Put new work behind a single

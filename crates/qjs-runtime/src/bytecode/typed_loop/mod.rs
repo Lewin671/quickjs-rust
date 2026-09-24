@@ -373,12 +373,68 @@ enum Class {
     Boxed,
 }
 
+/// Scalar registers a program may name: compilation declines a program that
+/// needs more, which no corpus loop comes near (the widest uses 61).
+const REGISTER_FILE: usize = 256;
+
+/// The scalar register file. Its fixed power-of-two size lets an index be
+/// masked into range instead of bounds-checked: every access in the
+/// executor's dispatch arms is then a plain load or store, where a checked
+/// `Vec` index cost each arm a compare and a branch. Compilation guarantees
+/// every register is below `REGISTER_FILE`, so the mask never changes one.
+struct RegisterFile(Box<[Typed; REGISTER_FILE]>);
+
+impl Default for RegisterFile {
+    fn default() -> Self {
+        Self(Box::new([Typed::Undefined; REGISTER_FILE]))
+    }
+}
+
+impl RegisterFile {
+    /// Starts an entry: the program's `count` registers read `undefined`.
+    fn reset(&mut self, count: usize) {
+        self.0[..count.min(REGISTER_FILE)].fill(Typed::Undefined);
+    }
+}
+
+impl std::ops::Index<usize> for RegisterFile {
+    type Output = Typed;
+
+    #[inline(always)]
+    fn index(&self, index: usize) -> &Typed {
+        debug_assert!(index < REGISTER_FILE);
+        &self.0[index & (REGISTER_FILE - 1)]
+    }
+}
+
+impl std::ops::IndexMut<usize> for RegisterFile {
+    #[inline(always)]
+    fn index_mut(&mut self, index: usize) -> &mut Typed {
+        debug_assert!(index < REGISTER_FILE);
+        &mut self.0[index & (REGISTER_FILE - 1)]
+    }
+}
+
+impl std::ops::Deref for RegisterFile {
+    type Target = [Typed];
+
+    fn deref(&self) -> &[Typed] {
+        &self.0[..]
+    }
+}
+
+impl std::ops::DerefMut for RegisterFile {
+    fn deref_mut(&mut self) -> &mut [Typed] {
+        &mut self.0[..]
+    }
+}
+
 /// Per-entry storage for one native loop run. The executor owns this while a
 /// program is active, then clears and returns it to that program's tiny pool.
 /// Keeping it program-local means no temporary state crosses bytecode bodies.
 #[derive(Default)]
 struct TypedLoopScratch {
-    registers: Vec<Typed>,
+    registers: RegisterFile,
     receivers: Vec<crate::ArrayRef>,
     boxed: Vec<Value>,
     sloppy_global_writes: Vec<super::vm_bindings::TypedLoopSloppyGlobalWrite>,
@@ -386,7 +442,6 @@ struct TypedLoopScratch {
 
 impl TypedLoopScratch {
     fn clear(&mut self) {
-        self.registers.clear();
         self.receivers.clear();
         self.boxed.clear();
         self.sloppy_global_writes.clear();
@@ -397,7 +452,7 @@ impl fmt::Debug for TypedLoopScratch {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("TypedLoopScratch")
-            .field("register_count", &self.registers.len())
+            .field("register_file", &REGISTER_FILE)
             .field("receiver_count", &self.receivers.len())
             .field("boxed_count", &self.boxed.len())
             .field(
