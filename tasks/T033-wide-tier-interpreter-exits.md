@@ -253,6 +253,17 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   Sentinels 0.994-0.999 except recursive_call_tree 1.040 (identical
   instructions; the grown helper interpreter's placement -- every other
   placement tried moved ai-astar or the call sentinels 18-25%).
+- Stack run 59890450 vs main fb08d251 (30 blocks, cycles, quiet host;
+  `target/comparison/perf10-59890450`): numeric call trees on f64
+  registers. External geomean 0.993 against main and **0.866 against
+  QuickJS-NG**; controlflow-recursive 0.563 (0.984 against NG, from 1.89).
+  ai-astar 1.193 and the call sentinels 1.15-1.22 (recursive_call_tree
+  0.966) with identical instruction counts: main fb08d251 sits in a lucky
+  layout of the typed-loop executor's callees that every edit tried lost --
+  only typed_loop's helper changes, the order file regenerated, one
+  codegen unit (main itself: ai-astar 9270 vs 8276 M cycles), 64-byte
+  function alignment (both worse). Merged on the external aggregate; the
+  layout sensitivity is the open item below.
 - Rejected (2026-09-24): the boxed typed-loop registers as a fixed array
   like the scalar file (d21a068c): 1-3% fewer instructions but +20% cycles
   on the sentinels, ai-astar and imaging-gaussian-blur, whether the file
@@ -297,6 +308,13 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   function's later assignments (they wrote the global before).
 
 ## Next
+
+- Layout sensitivity: ai-astar and the call sentinels swing 15-25% in
+  cycles with identical instructions depending on where the typed-loop
+  executor's callees (Value clone/drop, get_named, boxed_equality) land;
+  a 48-byte shift of an unrelated function upstream is enough. Without
+  PMU access on this host the mechanism is unconfirmed; a way to pin
+  those callees' relative placement would make every later A/B honest.
 
 - Enter a typed loop before its first iteration: the probe is at the
   backedge, so every entry runs one full iteration on the wide tier first
