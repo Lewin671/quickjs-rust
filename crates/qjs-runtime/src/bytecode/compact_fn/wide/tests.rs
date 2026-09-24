@@ -1478,3 +1478,16 @@ fn a_loop_judged_short_keeps_running_correctly_when_it_grows() {
         Value::String("200,999000".into())
     );
 }
+
+#[test]
+fn loose_equality_between_strings_compares_their_text() {
+    assert_eq!(
+        value_of(
+            "function same(a, b) { return [a == b, a != b, typeof a != typeof b].join(); }
+             var out = [];
+             for (var i = 0; i < 50; i++) out = [same('ab', 'a' + 'b'), same('x', 'y'), same('1', 1)];
+             out.join('|');"
+        ),
+        Value::String("true,false,false|false,true,false|true,false,true".into())
+    );
+}

@@ -81,6 +81,14 @@ impl WideActivation<'_> {
         {
             return Ok(equal == (op == BinaryOp::StrictEq));
         }
+        // Loose equality between two strings is string equality -- the
+        // `typeof a != typeof b` of every hand-written `equals` -- with no
+        // operand clone or general operator dispatch.
+        if matches!(op, BinaryOp::Eq | BinaryOp::Ne)
+            && let (Value::String(left), Value::String(right)) = (left, right)
+        {
+            return Ok(crate::string::js_string_eq(left, right) == (op == BinaryOp::Eq));
+        }
         let value = self.eval_binary(left.clone(), op, right.clone())?;
         Ok(crate::is_truthy(&value))
     }
