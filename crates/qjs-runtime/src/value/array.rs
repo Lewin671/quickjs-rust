@@ -47,6 +47,38 @@ struct ArrayData {
     cold: OnceCell<Box<ArrayColdData>>,
 }
 
+// An array's side of `value::teardown`: its elements are the children a
+// nested chain runs through.
+impl ArrayRef {
+    pub(super) fn is_last_reference(&self) -> bool {
+        Rc::strong_count(&self.0) == 1
+    }
+
+    /// Drops this reference; when it was the last, the array's own
+    /// children go onto `pending` first.
+    pub(super) fn release_into(self, pending: &mut Vec<Value>) {
+        if let Some(mut data) = Rc::into_inner(self.0) {
+            defer_children(data.elements.get_mut(), pending);
+        }
+    }
+}
+
+fn defer_children(elements: &mut [Value], pending: &mut Vec<Value>) {
+    for element in elements {
+        super::teardown::defer_if_last(element, pending);
+    }
+}
+
+impl Drop for ArrayData {
+    fn drop(&mut self) {
+        let mut pending = Vec::new();
+        defer_children(self.elements.get_mut(), &mut pending);
+        if !pending.is_empty() {
+            super::teardown::release(pending);
+        }
+    }
+}
+
 #[derive(Default)]
 struct ArrayColdData {
     holes: RefCell<BTreeSet<usize>>,

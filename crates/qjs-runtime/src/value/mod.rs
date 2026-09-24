@@ -11,6 +11,7 @@ pub(crate) mod name_hash;
 mod object;
 mod property;
 mod set;
+mod teardown;
 
 pub use array::ArrayRef;
 pub(crate) use array::{ArrayWeakRef, MAX_DENSE_STORAGE_LENGTH, array_index_property_key};

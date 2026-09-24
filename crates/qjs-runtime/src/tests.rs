@@ -44,6 +44,7 @@ mod sets;
 mod statements;
 mod strings;
 mod symbols;
+mod teardown;
 mod weak_maps;
 mod weak_refs;
 mod weak_sets;
