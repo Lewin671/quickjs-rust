@@ -246,6 +246,17 @@ pub(super) struct ColdFrame {
     /// `Some(None)` while it may hand a loop back to the tier, and
     /// `Some(Some(backedge))` once it has (`vm/wide_resume.rs`).
     pub(super) wide_handback: Option<Option<usize>>,
+    /// What this frame last overlaid onto its dynamic environment
+    /// (`Vm::frame_deopt_bindings_memoized`).
+    pub(super) deopt_overlay_memo: Option<DeoptOverlayMemo>,
+}
+
+/// The environment, its generation after the overlay, and the (slot, cell)
+/// pairs overlaid, in order.
+pub(super) struct DeoptOverlayMemo {
+    pub(super) bindings: usize,
+    pub(super) generation: u64,
+    pub(super) cells: Vec<(usize, usize)>,
 }
 
 /// A per-body pool of cleared [`ColdFrame`] boxes, shared like the operand
@@ -294,6 +305,7 @@ impl ColdFrame {
         self.with_stack.clear();
         self.disposable_scopes.clear();
         self.wide_handback = None;
+        self.deopt_overlay_memo = None;
     }
 }
 

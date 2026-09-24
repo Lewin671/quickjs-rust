@@ -490,24 +490,59 @@ impl FrameBindings {
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct DynamicBindings(Rc<RefCell<crate::value::name_hash::NameMap<String, Upvalue>>>);
+pub(crate) struct DynamicBindings(Rc<DynamicBindingsInner>);
+
+#[derive(Default)]
+pub(crate) struct DynamicBindingsInner {
+    map: RefCell<crate::value::name_hash::NameMap<String, Upvalue>>,
+    /// Advanced by every change to which cell a name maps to -- a new name,
+    /// a replaced or removed cell -- but not by writes through a cell. Equal
+    /// generations mean every name still maps to the cell it did.
+    generation: std::cell::Cell<u64>,
+}
 
 impl DynamicBindings {
     pub(crate) fn new() -> Self {
         Self::default()
     }
 
+    /// The map for a change that may alter which cell a name maps to.
+    fn mapping_mut(
+        &self,
+    ) -> std::cell::RefMut<'_, crate::value::name_hash::NameMap<String, Upvalue>> {
+        self.0
+            .generation
+            .set(self.0.generation.get().wrapping_add(1));
+        self.0.map.borrow_mut()
+    }
+
+    /// This environment's identity, for a memo keyed on it.
+    pub(crate) fn identity(&self) -> usize {
+        Rc::as_ptr(&self.0) as usize
+    }
+
+    /// See `DynamicBindingsInner::generation`.
+    pub(crate) fn generation(&self) -> u64 {
+        self.0.generation.get()
+    }
+
     pub(crate) fn from_values(values: HashMap<String, Value>) -> Self {
-        Self(Rc::new(RefCell::new(
-            values
-                .into_iter()
-                .map(|(name, value)| (name, Upvalue::new(value)))
-                .collect(),
-        )))
+        Self(Rc::new(DynamicBindingsInner {
+            map: RefCell::new(
+                values
+                    .into_iter()
+                    .map(|(name, value)| (name, Upvalue::new(value)))
+                    .collect(),
+            ),
+            generation: std::cell::Cell::new(0),
+        }))
     }
 
     pub(crate) fn fork_cells(&self) -> Self {
-        Self(Rc::new(RefCell::new(self.0.borrow().clone())))
+        Self(Rc::new(DynamicBindingsInner {
+            map: RefCell::new(self.0.map.borrow().clone()),
+            generation: std::cell::Cell::new(0),
+        }))
     }
 
     pub(crate) fn borrow(&self) -> BindingSnapshot {
@@ -522,26 +557,25 @@ impl DynamicBindings {
     }
 
     pub(crate) fn get(&self, name: &str) -> Option<Value> {
-        self.0.borrow().get(name).map(Upvalue::get)
+        self.0.map.borrow().get(name).map(Upvalue::get)
     }
 
     pub(crate) fn cell(&self, name: &str) -> Option<Upvalue> {
-        self.0.borrow().get(name).cloned()
+        self.0.map.borrow().get(name).cloned()
     }
 
     pub(crate) fn insert(&self, name: String, value: Value) -> Option<Value> {
-        let mut bindings = self.0.borrow_mut();
-        if let Some(binding) = bindings.get(&name) {
+        if let Some(binding) = self.0.map.borrow().get(&name) {
             let previous = binding.get();
             binding.set(value);
             return Some(previous);
         }
-        bindings.insert(name, Upvalue::new(value));
+        self.mapping_mut().insert(name, Upvalue::new(value));
         None
     }
 
     pub(crate) fn insert_cell(&self, name: String, upvalue: Upvalue) {
-        self.0.borrow_mut().insert(name, upvalue);
+        self.mapping_mut().insert(name, upvalue);
     }
 
     /// Overlays a live frame cell unless this shared dynamic environment
@@ -553,14 +587,16 @@ impl DynamicBindings {
     /// leaving binding identity unchanged. A different cell must still win:
     /// it can represent a newly active lexical shadow with the same name.
     pub(crate) fn overlay_cell(&self, name: &str, upvalue: &Upvalue) -> bool {
-        let mut bindings = self.0.borrow_mut();
-        if bindings
+        if self
+            .0
+            .map
+            .borrow()
             .get(name)
             .is_some_and(|binding| binding.ptr_eq(upvalue))
         {
             return false;
         }
-        bindings.insert(name.to_owned(), upvalue.clone());
+        self.mapping_mut().insert(name.to_owned(), upvalue.clone());
         true
     }
 
@@ -573,29 +609,29 @@ impl DynamicBindings {
     }
 
     pub(crate) fn remove(&self, name: &str) -> Option<Value> {
-        self.0
-            .borrow_mut()
-            .remove(name)
-            .map(|binding| binding.get())
+        self.mapping_mut().remove(name).map(|binding| binding.get())
     }
 
     pub(crate) fn remove_cell_if(&self, name: &str, expected: &Upvalue) -> bool {
-        let mut bindings = self.0.borrow_mut();
-        let matches = bindings
+        let matches = self
+            .0
+            .map
+            .borrow()
             .get(name)
             .is_some_and(|binding| binding.ptr_eq(expected));
         if matches {
-            bindings.remove(name);
+            self.mapping_mut().remove(name);
         }
         matches
     }
 
     pub(crate) fn contains_key(&self, name: &str) -> bool {
-        self.0.borrow().contains_key(name)
+        self.0.map.borrow().contains_key(name)
     }
 
     pub(crate) fn snapshot(&self) -> HashMap<String, Value> {
         self.0
+            .map
             .borrow()
             .iter()
             .map(|(name, binding)| (name.clone(), binding.get()))
@@ -603,7 +639,7 @@ impl DynamicBindings {
     }
 
     pub(crate) fn names(&self) -> Vec<String> {
-        self.0.borrow().keys().cloned().collect()
+        self.0.map.borrow().keys().cloned().collect()
     }
 
     /// Calls `visit` with every binding name that carries `prefix`, stripped.
@@ -614,7 +650,7 @@ impl DynamicBindings {
     /// smaller side: a frame has one binding per split parameter and many
     /// locals.
     pub(crate) fn for_each_prefixed_name(&self, prefix: &str, mut visit: impl FnMut(&str)) {
-        for (name, _) in self.0.borrow().iter() {
+        for (name, _) in self.0.map.borrow().iter() {
             if let Some(rest) = name.strip_prefix(prefix) {
                 visit(rest);
             }
@@ -623,6 +659,7 @@ impl DynamicBindings {
 
     pub(crate) fn cells(&self) -> Vec<(String, Upvalue)> {
         self.0
+            .map
             .borrow()
             .iter()
             .map(|(name, binding)| (name.clone(), binding.clone()))
@@ -1199,7 +1236,7 @@ impl CallEnv {
             }
         }
         if let Some(deopt_bindings) = &self.deopt_bindings {
-            for (name, value) in deopt_bindings.0.borrow().iter() {
+            for (name, value) in deopt_bindings.0.map.borrow().iter() {
                 if !visible_frame_names.contains(name.as_str()) {
                     value.with_value(|value| visit(name, value));
                 }

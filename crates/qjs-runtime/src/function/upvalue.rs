@@ -67,6 +67,11 @@ impl Upvalue {
 
     /// Whether `self` and `other` are handles to the *same* cell (binding
     /// identity), independent of the values they currently hold.
+    /// This cell's identity, for a memo that must notice a replaced cell.
+    pub(crate) fn identity(&self) -> usize {
+        Rc::as_ptr(&self.0) as *const () as usize
+    }
+
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
     }

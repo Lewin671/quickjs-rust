@@ -357,6 +357,15 @@ impl<'a> Vm<'a> {
 
     pub(super) fn frame_deopt_bindings(&self) -> Option<DynamicBindings> {
         let bindings = self.env.deopt_bindings()?.clone();
+        self.for_each_deopt_overlay_cell(|slot, upvalue| {
+            bindings.overlay_cell(&self.bytecode.locals[slot].name, upvalue);
+        });
+        Some(bindings)
+    }
+
+    /// Each live frame cell `frame_deopt_bindings` overlays, with its slot,
+    /// in overlay order.
+    fn for_each_deopt_overlay_cell(&self, mut visit: impl FnMut(usize, &Upvalue)) {
         for (slot, local) in self.bytecode.locals.iter().enumerate() {
             if self.bytecode.local_is_compiler_temporary(slot)
                 || local.sloppy_global_fallback
@@ -372,9 +381,46 @@ impl<'a> Vm<'a> {
                 continue;
             }
             if let Some(upvalue) = self.local_upvalue_cell(slot) {
-                bindings.overlay_cell(&local.name, upvalue);
+                visit(slot, upvalue);
             }
         }
+    }
+
+    /// `frame_deopt_bindings` for a frame that asks repeatedly -- every
+    /// closure a body with a direct `eval` creates. The overlay is skipped
+    /// when it would change nothing: the environment is the one last
+    /// overlaid, no name has been remapped since (its generation), and the
+    /// frame would overlay exactly the same cells in the same order. The
+    /// check walks the frame's locals but hashes no name, where the overlay
+    /// hashed every one (date-format-tofte spent 15% there).
+    pub(super) fn frame_deopt_bindings_memoized(&mut self) -> Option<DynamicBindings> {
+        let bindings = self.env.deopt_bindings()?.clone();
+        if let Some(memo) = self
+            .current
+            .cold()
+            .and_then(|cold| cold.deopt_overlay_memo.as_ref())
+            && memo.bindings == bindings.identity()
+            && memo.generation == bindings.generation()
+        {
+            let mut expected = memo.cells.iter();
+            let mut same = true;
+            self.for_each_deopt_overlay_cell(|slot, upvalue| {
+                same &= expected.next() == Some(&(slot, upvalue.identity()));
+            });
+            if same && expected.next().is_none() {
+                return Some(bindings);
+            }
+        }
+        let mut cells = Vec::new();
+        self.for_each_deopt_overlay_cell(|slot, upvalue| {
+            bindings.overlay_cell(&self.bytecode.locals[slot].name, upvalue);
+            cells.push((slot, upvalue.identity()));
+        });
+        self.current.cold_mut().deopt_overlay_memo = Some(super::vm::DeoptOverlayMemo {
+            bindings: bindings.identity(),
+            generation: bindings.generation(),
+            cells,
+        });
         Some(bindings)
     }
 }

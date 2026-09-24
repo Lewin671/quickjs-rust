@@ -82,6 +82,16 @@ The procedure (queue, plan, decision) is in
   profile's hottest set differ, regenerates the list in the same commit;
   until then the new functions sit outside the pinned region and their
   measurements carry layout noise.
+- **A stale order file hides as a regression several commits later.** New
+  hot helpers (an out-of-line read path, a memo check) land after the
+  pinned region, and any later edit anywhere in the crate shifts them: on
+  2026-09-24 a 32-byte size change in an unrelated string function moved
+  them and cost the call sentinels 15-22% and ai-astar 18% with identical
+  instruction counts, invisible to per-commit A/B runs whose base had the
+  same stale file. Canaries: `capturing_closure_call` and ai-astar cycles
+  against the last formal base. Regenerating the file restored both
+  exactly; do it in the commit that adds a hot function, and before any
+  formal run.
 - **Know each case's codegen noise band before blaming a change.** The
   functions that hold a dispatch loop are re-compiled differently by edits
   anywhere in the crate (an inlined thread-local access, a helper's inline

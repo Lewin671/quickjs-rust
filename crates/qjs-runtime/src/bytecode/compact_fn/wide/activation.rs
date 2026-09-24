@@ -81,6 +81,14 @@ impl WideActivation<'_> {
         {
             return Ok(equal == (op == BinaryOp::StrictEq));
         }
+        // Loose equality between two strings is string equality -- the
+        // `typeof a != typeof b` of every hand-written `equals` -- with no
+        // operand clone or general operator dispatch.
+        if matches!(op, BinaryOp::Eq | BinaryOp::Ne)
+            && let (Value::String(left), Value::String(right)) = (left, right)
+        {
+            return Ok(crate::string::js_string_eq(left, right) == (op == BinaryOp::Eq));
+        }
         let value = self.eval_binary(left.clone(), op, right.clone())?;
         Ok(crate::is_truthy(&value))
     }
@@ -910,6 +918,7 @@ fn run_typed_loop_here(
         upvalues,
         bytecode.readonly_received_upvalue_slots().unwrap_or(0),
         this_value,
+        stack.get_mut(base_depth..).unwrap_or_default(),
     );
     if !crate::bytecode::typed_loop::try_run_typed_loop(&mut frame, plans, header, backedge) {
         return LoopHere::Declined;
@@ -926,18 +935,15 @@ fn run_typed_loop_here(
         program.record_typed_entry(index, iterations);
     }
     let declined_typed_loop_programs = frame.declined_typed_loop_programs();
-    let values = std::mem::take(&mut frame.stack);
+    let (pushed, overflowed) = (frame.pushed, frame.stack_overflowed);
     let Some(resume) = resume else {
         return LoopHere::Declined;
     };
-    // The program rebuilt the stack above the loop's own base; what lay
-    // below it when the loop began is still in its registers.
-    let depth = base_depth + values.len();
-    if depth > stack.len() {
+    // The program rebuilt the stack above the loop's own base, in place;
+    // what lay below it when the loop began is still in its registers.
+    let depth = base_depth + pushed;
+    if overflowed {
         return LoopHere::Declined;
-    }
-    for (register, value) in stack[base_depth..].iter_mut().zip(values) {
-        execute::store(register, value);
     }
     // `QJS_CF_TRACE=1` names each loop program run from an exit.
     #[cfg(feature = "perf-counters")]
@@ -1298,24 +1304,14 @@ fn run_frames(
                         }
                     }
                     WideOp::GetProp { dst, obj, key } => {
-                        let object = std::mem::replace(&mut window[obj as usize], Value::Undefined);
                         let key = std::mem::replace(&mut window[key as usize], Value::Undefined);
-                        match property::get_prop_computed(object, key, env) {
+                        match property::get_prop_element(&mut window[obj as usize], key, env) {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
                         }
                     }
                     WideOp::GetPropIndex { dst, obj, index } => {
-                        let object = if dst == obj {
-                            std::mem::replace(&mut window[obj as usize], Value::Undefined)
-                        } else {
-                            crate::bytecode::vm_bindings::clone_local_value(&window[obj as usize])
-                        };
-                        match property::get_prop_computed(
-                            object,
-                            Value::Number(f64::from(index)),
-                            env,
-                        ) {
+                        match property::get_prop_index(&window[obj as usize], index, env) {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
                         }
