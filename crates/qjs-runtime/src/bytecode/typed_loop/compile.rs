@@ -196,6 +196,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
         .collect();
     let hoisted_reads = super::hoist::hoist_invariant_reads(
         &mut ops,
+        &names,
         invariant,
         &mut register_count,
         &mut boxed_count,

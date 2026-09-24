@@ -1606,3 +1606,30 @@ fn an_invariant_read_is_taken_once_per_entry_and_never_across_a_write() {
         Ok(Value::String("1,2,2,3,6,15".to_owned().into()))
     );
 }
+
+#[test]
+fn a_read_of_a_name_the_region_never_writes_survives_writes_of_other_names() {
+    // The inner loop writes `vx` (and rewrites `x` in place) while reading
+    // `x` and `mass`: only names nothing writes may be read once per entry.
+    assert_eq!(
+        eval(
+            "function advance(bodies) { \
+               for (var i = 0; i < bodies.length; i++) { \
+                 var bi = bodies[i]; \
+                 for (var j = i + 1; j < bodies.length; j++) { \
+                   var bj = bodies[j]; \
+                   var dx = bi.x - bj.x; \
+                   bi.vx -= dx * bj.mass; \
+                   bj.vx += dx * bi.mass; \
+                   bi.x = bi.x; \
+                 } \
+               } \
+             } \
+             function step(bodies) { for (var i = 0; i < bodies.length; i++) { var b = bodies[i]; b.w = b.w + b.vx; } } \
+             var bodies = [{x: 1, vx: 0, mass: 2, w: 0}, {x: 4, vx: 1, mass: 3, w: 0}, {x: 9, vx: -1, mass: 1, w: 0}]; \
+             for (var k = 0; k < 3; k++) { advance(bodies); step(bodies); } \
+             bodies.map(function (b) { return b.vx + \":\" + b.w; }).join(\",\");"
+        ),
+        Ok(Value::String("51:102,-2:-3,-94:-189".to_owned().into()))
+    );
+}
