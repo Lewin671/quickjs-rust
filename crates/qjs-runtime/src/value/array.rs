@@ -524,6 +524,15 @@ impl ArrayRef {
         elements.get(index).cloned()
     }
 
+    /// Whether the array has no own element or indexed descriptor at `index`:
+    /// a hole in its element storage, a position past that storage -- which
+    /// `new Array(n)` leaves for all of `0..n` -- or one at or past the
+    /// length. A read there is answered by the prototype chain.
+    pub(crate) fn index_is_absent(&self, index: usize) -> bool {
+        (index >= self.0.elements.borrow().len() || self.0.has_hole(index))
+            && !self.0.has_property_at_index(index)
+    }
+
     /// Reads a present dense element when ordinary `array[index]` lookup cannot
     /// observe a different value. Unlike absent-element reads, a present own
     /// dense element always wins over the prototype chain, so unrelated holes,
@@ -532,14 +541,6 @@ impl ArrayRef {
     /// property path; the usual descriptor representation marks a dense hole,
     /// while the explicit target-key check also protects transitional storage
     /// states without making unrelated descriptors reject the read.
-    /// Whether the array has no own element or indexed descriptor at `index`:
-    /// a hole below the length, or a position at or past it. A read there is
-    /// answered by the prototype chain.
-    pub(crate) fn index_is_absent(&self, index: usize) -> bool {
-        (index >= self.0.length.get() || self.0.has_hole(index))
-            && !self.0.has_property_at_index(index)
-    }
-
     pub(crate) fn direct_dense_index_value(&self, index: usize) -> Option<Value> {
         if index >= self.0.length.get()
             || self.0.has_hole(index)
