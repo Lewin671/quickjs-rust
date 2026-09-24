@@ -232,6 +232,12 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   0.952, access-nsieve 0.953, controlflow-recursive 0.956. Worst against
   main: 3d-raytrace 1.011, tofte 1.010. Sentinels 0.911-0.999
   (heterogeneous_property_read 0.911).
+- Stack run 3214fdce vs main 5bcca07f (`target/comparison/perf8-3214fdce`)
+  measured 0.988 against main and 0.879 against QuickJS-NG, but with the
+  call sentinels +15-22% and ai-astar +18% at equal instructions: a stale
+  `hot-functions.order` (see docs/performance-knowledge.md). Regenerated in
+  the next commit; single-run then corpus 0.982, sentinels 0.999, ai-astar
+  1.006 against the same base.
 - Rejected (2026-09-24): the boxed typed-loop registers as a fixed array
   like the scalar file (d21a068c): 1-3% fewer instructions but +20% cycles
   on the sentinels, ai-astar and imaging-gaussian-blur, whether the file
@@ -276,6 +282,17 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   function's later assignments (they wrote the global before).
 
 ## Next
+
+- Enter a typed loop before its first iteration: the probe is at the
+  backedge, so every entry runs one full iteration on the wide tier first
+  (about 1,300 instructions for `o.x += o.y * i`) before the program takes
+  over. A pre-header exit, taken only once a backedge's program has run,
+  would save that iteration for the short per-call loops of bits-in-byte
+  and nbody. Measured entry cost after 3214fdce: about 900 instructions
+  (seed ~400, scratch pool 120, plan scans 60, exit and resume the rest).
+- tofte: after 7a89ea81 the remaining direct-eval cost is building the
+  eval's environment (`apply_call_env`, `visible_local_entries`) and
+  closure creation, not the overlay.
 
 - Math.random from interpreted code costs 840 cycles per call (5.7x NG):
   the call runs through the generic path because the typed loop cannot
