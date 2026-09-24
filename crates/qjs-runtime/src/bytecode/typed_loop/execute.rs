@@ -302,6 +302,9 @@ fn execute<F: LoopFrame>(
                 };
                 registers[dst as usize] = value;
             }
+            TypedOp::Truthy { dst, src } => {
+                registers[dst as usize] = boxed_truthiness(&boxed[src as usize]);
+            }
             TypedOp::Box { dst, src } => {
                 boxed[dst as usize] = registers[src as usize].to_value();
             }
@@ -919,6 +922,13 @@ fn draw_random(native: crate::function::NativeFunction) -> Option<Typed> {
 /// it is one load, which is not a price worth trading for an unverifiable
 /// assumption that the plans are independently total.
 /// The arguments as numbers, when every one is a number.
+// Out of line: a branch on a boxed value is rare next to the dispatch
+// loop's other arms, and ToBoolean never runs user code.
+#[inline(never)]
+fn boxed_truthiness(value: &Value) -> Typed {
+    Typed::Boolean(crate::conversion::is_truthy(value))
+}
+
 fn typed_numbers(args: &[Typed]) -> Option<[f64; super::helper_graph::MAX_HELPER_ARITY]> {
     let mut numbers = [0.0; super::helper_graph::MAX_HELPER_ARITY];
     for (number, arg) in numbers.iter_mut().zip(args) {

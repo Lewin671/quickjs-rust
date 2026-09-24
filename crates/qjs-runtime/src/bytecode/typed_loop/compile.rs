@@ -1182,7 +1182,7 @@ impl<'a> Builder<'a> {
             cond
         } else {
             let dst = self.fresh()?;
-            self.emit(TypedOp::Unbox { dst, src: cond });
+            self.emit(TypedOp::Truthy { dst, src: cond });
             dst
         };
         let branch_cond = if jump_when_truthy {

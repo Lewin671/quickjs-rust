@@ -184,6 +184,12 @@ enum TypedOp {
         dst: u16,
         src: u16,
     },
+    /// A boxed register's ToBoolean, as a scalar boolean: a branch on an
+    /// object or string -- `while (entry && ...)` -- needs no unboxing.
+    Truthy {
+        dst: u16,
+        src: u16,
+    },
     /// Widens a scalar register into a boxed one.
     Box {
         dst: u16,

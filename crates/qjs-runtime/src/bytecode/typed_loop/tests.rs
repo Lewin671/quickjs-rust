@@ -1633,3 +1633,29 @@ fn a_read_of_a_name_the_region_never_writes_survives_writes_of_other_names() {
         Ok(Value::String("51:102,-2:-3,-94:-189".to_owned().into()))
     );
 }
+
+/// A branch on a boxed value -- an object, a string, `undefined` -- tests
+/// its ToBoolean in place instead of unboxing it, which deoptimized on
+/// anything but a number or boolean.
+#[test]
+fn typed_loops_branch_on_boxed_truthiness() {
+    let source = "function run(m, n) { var c = 0; for (var j = 0; j < n; j++) { if (m.d[j & 7]) c++; } return c; }";
+    let programs = super::compile_all(&nested_function(source));
+    assert!(
+        programs.iter().any(|program| program
+            .ops
+            .iter()
+            .any(|op| matches!(op, super::TypedOp::Truthy { .. }))),
+        "{:#?}",
+        programs
+            .iter()
+            .map(|program| &program.ops)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        eval(&format!(
+            "{source} var d = new Array(8); d[0] = {{}}; d[2] = 'x'; d[3] = ''; d[4] = 0; d[5] = 7; d[6] = null; run({{ d: d }}, 80);"
+        )),
+        Ok(Value::Number(30.0))
+    );
+}
