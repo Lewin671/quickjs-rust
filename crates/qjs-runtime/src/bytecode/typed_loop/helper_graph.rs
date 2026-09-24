@@ -179,12 +179,17 @@ impl HelperGraph {
         }
         let program = self.programs.get(index as usize)?;
         // A numeric body calls no other helper, so only the loop's own call
-        // (depth zero) can reach one; recursion skips the check.
+        // (depth zero) can reach one; recursion skips the check. It is
+        // lowered with every parameter a number, so a call that leaves one
+        // `undefined` -- or passes one past the parameters, which would land
+        // in a local -- runs on the general path.
+        let arity = usize::from(program.arity);
         if depth == 0
+            && args.len() >= arity
             && let Some(Some(numeric)) = self.numeric.get(index as usize)
             && let Some(numbers) = numbers(args)
         {
-            return numeric.run(&numbers[..args.len()]);
+            return numeric.run(&numbers[..arity]);
         }
         // `Typed` is `Copy`, so the whole file is a stack array: a helper call
         // allocates nothing and its registers stay in the frame the compiler

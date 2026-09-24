@@ -1531,3 +1531,15 @@ fn wide_calls_run_numeric_call_chains_and_see_rebound_callees() {
         Value::String("1178343728,2946,32".into())
     );
 }
+
+#[test]
+fn numeric_plans_see_missing_arguments_as_undefined() {
+    assert_eq!(
+        value_of(
+            "function same(a, b) { if (a === b) return 1; return 2; }
+             function run(n) { var t = 0; for (var i = 0; i < n; i++) { t += same(); t += same(i); } return t; }
+             run(50);"
+        ),
+        Value::Number(150.0)
+    );
+}

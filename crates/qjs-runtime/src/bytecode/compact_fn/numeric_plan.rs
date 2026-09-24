@@ -253,6 +253,11 @@ fn run_with(
         links: [(0, 0); MAX_LINKS],
         link_count: 0,
     });
+    // The plan was lowered with every parameter a number: a missing
+    // argument is `undefined`, which the encoding cannot tell from `NaN`.
+    if args.len() < plan.parameters.len() {
+        return None;
+    }
     registers.resize(plan.registers, f64::NAN);
     for &(register, value) in &*plan.constants {
         *registers.get_mut(usize::from(register))? = value;

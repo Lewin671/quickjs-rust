@@ -1696,3 +1696,23 @@ fn typed_loops_call_looping_and_boolean_helpers_exactly() {
         Ok(Value::String("2048,5376,256,1024,3840,1600".into()))
     );
 }
+
+/// A numeric helper is lowered with every parameter a number, and the
+/// encoding cannot tell a missing argument (`undefined`) from `NaN`, nor may
+/// an argument past the parameters land in a local.
+#[test]
+fn numeric_helpers_see_missing_and_extra_arguments_exactly() {
+    let source = "
+        function same(a, b) { if (a === b) return 1; return 2; }
+        function twice(a, b) { var r = 0; for (var k = 0; k < 2; k++) { if (a === b) r++; } return r; }
+        function local(a) { var u; return u === undefined ? 1 : 2; }
+        function run(n) {
+            var t = 0;
+            for (var i = 0; i < n; i++) { t += same(); t += same(i); t += twice(); t += twice(i); t += local(i, 5); }
+            return t;
+        }";
+    assert_eq!(
+        eval(&format!("{source} run(100);")),
+        Ok(Value::Number(600.0))
+    );
+}
