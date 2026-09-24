@@ -92,6 +92,22 @@ The procedure (queue, plan, decision) is in
   against the last formal base. Regenerating the file restored both
   exactly; do it in the commit that adds a hot function, and before any
   formal run.
+- **The typed-loop executor's own address is the big layout lever, so it
+  is pinned by address.** Measured 2026-09-24 with byte-identical code:
+  `capturing_closure_call` and ai-astar run 18-25% more cycles unless
+  `try_run_typed_loop<WideLoopFrame>` starts at 0xf80..0xfe0 modulo 4 KiB
+  (with its callees in a fixed order right after it). Stack placement (env
+  size), heap placement (JS-level allocations, malloc settings), jump-table
+  offsets and loop alignment all measured flat; shifting only the executor
+  flipped the state every time. An order file alone could not hold it: the
+  functions listed before the executor (VM, wide driver) change size with
+  most edits, and codegen-unit changes resize even untouched ones.
+  `python3 -m tools.benchmark.layout_pin --binary <qjs>` puts standard-library
+  functions of fixed size first, sized so the executor lands at the pinned
+  offset, then the executor and its callees; `order_file` applies it after
+  every regeneration. After editing the executor itself, re-scan the offset
+  (`--offset`, one relink and the two canaries per probe, ~15 s each) and
+  keep the centre of the fast window.
 - **Know each case's codegen noise band before blaming a change.** The
   functions that hold a dispatch loop are re-compiled differently by edits
   anywhere in the crate (an inlined thread-local access, a helper's inline

@@ -270,6 +270,29 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   **0.860 against QuickJS-NG**; crypto-md5 0.785, ai-astar 0.840 and the
   call sentinels 0.84-0.93 (the layout of perf10 rolled back, identical
   instructions). Worst against main: string-unpack-code 1.047.
+- Numeric plans lowered from bytecode (perf13, 2026-09-24,
+  `compact_fn/numeric_plan/from_bytecode.rs`): bodies outside the compact
+  tier are interpreted abstractly under number arguments -- `typeof`
+  folds, string comparisons fold, unreachable cases are never lowered, and
+  a reachable path the encoding cannot hold ends in `NumOp::Bail` (hand
+  back). hash-map's `computeHashCode`/`equals` run on plans: hash-map
+  0.913, corpus 0.9964 single-run, canaries flat. Plans may now return
+  booleans (only to a root caller, never inside a call chain). Found on the
+  way (fixed in e2c08594): a plan or numeric helper called with fewer
+  arguments than parameters read `undefined` as a number (`f()` with
+  `a === b` returned 2, QuickJS-NG 1).
+- Stack run 4a8b31f3 vs main 49d8c58d (30 blocks, cycles, quiet host;
+  `target/comparison/perf13-4a8b31f3`): numeric plans from bytecode, leaf
+  plans on a stack array, the pinned executor address. External geomean
+  0.995 against main and **0.853 against QuickJS-NG**; hash-map 0.859,
+  math-cordic 0.937, controlflow-recursive 0.971. Worst against main:
+  string-unpack-code 1.024; sentinels 0.94-1.04.
+- Layout sensitivity, found (15a38453): with byte-identical code the
+  typed executor's own start address decides capturing_closure_call and
+  ai-astar (+18-25% outside 0xf80..0xfe0 mod 4 KiB); stack, heap,
+  jump-table offsets and loop alignment measured flat. Pinned by
+  `tools/benchmark/layout_pin.py` (fixed-size std filler ahead of it);
+  see docs/performance-knowledge.md, "Codegen".
 - Rejected (2026-09-24): the boxed typed-loop registers as a fixed array
   like the scalar file (d21a068c): 1-3% fewer instructions but +20% cycles
   on the sentinels, ai-astar and imaging-gaussian-blur, whether the file
@@ -314,13 +337,6 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   function's later assignments (they wrote the global before).
 
 ## Next
-
-- Layout sensitivity: ai-astar and the call sentinels swing 15-25% in
-  cycles with identical instructions depending on where the typed-loop
-  executor's callees (Value clone/drop, get_named, boxed_equality) land;
-  a 48-byte shift of an unrelated function upstream is enough. Without
-  PMU access on this host the mechanism is unconfirmed; a way to pin
-  those callees' relative placement would make every later A/B honest.
 
 - Enter a typed loop before its first iteration: the probe is at the
   backedge, so every entry runs one full iteration on the wide tier first

@@ -767,7 +767,7 @@ pub(in crate::bytecode) fn try_run_standalone(
         return super::wide::try_run_standalone(bytecode, env, slots);
     };
     if let Some(value) = run_numeric_plan(bytecode, slots.as_ref()?) {
-        return Some(Ok(Value::Number(value)));
+        return Some(Ok(value));
     }
     // Admitted. From here on the caller's `env` and `slots` are ours.
     let call_env = env.take()?;
@@ -784,7 +784,7 @@ pub(in crate::bytecode) fn try_run_standalone(
 /// Runs an admitted body's numeric plan (`numeric_plan`), when it has one
 /// and every argument is a number; `None` leaves the call to the tier.
 #[inline(never)]
-fn run_numeric_plan(bytecode: &Bytecode, slots: &DirectCallSlots<'_>) -> Option<f64> {
+fn run_numeric_plan(bytecode: &Bytecode, slots: &DirectCallSlots<'_>) -> Option<Value> {
     let plan = super::numeric_plan::plan_for(bytecode)?;
     let mut numbers = [0.0; super::compile::MAX_CALL_ARITY];
     if slots.arguments.len() > numbers.len() {
