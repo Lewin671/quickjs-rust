@@ -238,6 +238,13 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   `hot-functions.order` (see docs/performance-knowledge.md). Regenerated in
   the next commit; single-run then corpus 0.982, sentinels 0.999, ai-astar
   1.006 against the same base.
+- Stack run c14c22b1 vs main 5bcca07f (30 blocks, cycles, quiet host;
+  `target/comparison/perf8b-c14c22b1`): element reads without cloning the
+  array, the eval overlay memo, the typed-loop operand stack rebuilt in
+  place, loose string equality, and the regenerated order file. External
+  geomean 0.984 against main and **0.876 against QuickJS-NG**; tofte 0.883,
+  3d-raytrace 0.896, crypto-aes 0.914, bits-in-byte 0.924. Worst against
+  main: string-unpack-code 1.009. Sentinels 0.995-1.005.
 - Rejected (2026-09-24): the boxed typed-loop registers as a fixed array
   like the scalar file (d21a068c): 1-3% fewer instructions but +20% cycles
   on the sentinels, ai-astar and imaging-gaussian-blur, whether the file
