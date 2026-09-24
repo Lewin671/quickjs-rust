@@ -967,26 +967,36 @@ impl FastValue {
 /// numeric operations. Received upvalue writes are delayed until a supported
 /// `Return`, so an unsupported value or opcode can fall back to the full VM
 /// without duplicating observable work.
-/// The number-only program of a direct-leaf function, when its body has
-/// one and its parameter and upvalue layout match the plan's.
-pub(super) fn number_only_leaf<'a>(
-    bytecode: &'a Bytecode,
+/// Whether a direct-leaf body already compiled to a number-only plan. Only a
+/// discriminant read, so a caller can test it before paying for a call; a
+/// body whose plan is not built yet answers `false` and builds it on the
+/// general evaluator's first visit.
+#[inline(always)]
+pub(super) fn has_number_only_leaf(bytecode: &Bytecode) -> bool {
+    matches!(
+        bytecode.numeric_leaf_plan.get(),
+        Some(Some(NumericLeafPlan::NumberOnly(_)))
+    )
+}
+
+/// The number-only program's result for number arguments, when its
+/// parameter and upvalue layout match the function's.
+#[inline(never)]
+pub(super) fn eval_number_only_leaf(
+    bytecode: &Bytecode,
     params: &FunctionParams,
     upvalues: &[Upvalue],
-) -> Option<&'a NumberOnlyProgram> {
-    let plan = bytecode
-        .numeric_leaf_plan
-        .get_or_init(|| NumericLeafPlan::compile(bytecode))
-        .as_ref()?;
-    match plan {
-        NumericLeafPlan::NumberOnly(program)
-            if bytecode.parameter_slots().len() == params.positional.len()
-                && bytecode.received_upvalue_slots().len() == upvalues.len() =>
-        {
-            Some(program)
-        }
-        _ => None,
+    arguments: &[f64],
+) -> Option<f64> {
+    let Some(Some(NumericLeafPlan::NumberOnly(program))) = bytecode.numeric_leaf_plan.get() else {
+        return None;
+    };
+    if bytecode.parameter_slots().len() != params.positional.len()
+        || bytecode.received_upvalue_slots().len() != upvalues.len()
+    {
+        return None;
     }
+    program.eval_numbers(arguments)
 }
 
 pub(crate) fn try_eval_numeric_leaf(

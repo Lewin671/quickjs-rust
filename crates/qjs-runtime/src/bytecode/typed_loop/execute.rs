@@ -930,6 +930,26 @@ fn typed_numbers(args: &[Typed]) -> Option<[f64; super::helper_graph::MAX_HELPER
     Some(numbers)
 }
 
+// Out of line: `call_closed_form_leaf` is inlined into the typed loop's
+// dispatch, and growing that body costs every other call arm.
+#[inline(never)]
+fn call_number_only_leaf(
+    function: &crate::function::Function,
+    bytecode: &crate::bytecode::Bytecode,
+    args: &[Typed],
+) -> Option<Value> {
+    let numbers = typed_numbers(args)?;
+    let value = super::super::vm_numeric_leaf::eval_number_only_leaf(
+        bytecode,
+        &function.params,
+        &function.upvalues,
+        numbers.get(..args.len())?,
+    )?;
+    crate::diagnostics::count!(ordinary_call_attempts);
+    crate::diagnostics::count!(closed_form_leaf_evaluations);
+    Some(Value::Number(value))
+}
+
 fn call_closed_form_leaf(
     program: &TypedLoopProgram,
     env: &crate::function::CallEnv,
@@ -937,26 +957,6 @@ fn call_closed_form_leaf(
     receiver: &Value,
     args: &[Typed],
 ) -> Option<Value> {
-    // A user function whose whole body is number-only arithmetic -- a
-    // hash's `safe_add` or `rol` -- evaluated on the argument numbers
-    // directly, without building boxed arguments or consulting the native
-    // tables and helper graphs first (none of them answers such a body).
-    if let Value::Function(function) = callee
-        && function.native.is_none()
-        && let Some(numbers) = typed_numbers(args)
-        && crate::function::is_direct_leaf_function(callee)
-        && let Some(bytecode) = function.bytecode.as_ref()
-        && let Some(program) = super::super::vm_numeric_leaf::number_only_leaf(
-            bytecode,
-            &function.params,
-            &function.upvalues,
-        )
-        && let Some(value) = program.eval_numbers(&numbers[..args.len()])
-    {
-        crate::diagnostics::count!(ordinary_call_attempts);
-        crate::diagnostics::count!(closed_form_leaf_evaluations);
-        return Some(Value::Number(value));
-    }
     let arity = u8::try_from(args.len()).ok()?;
     let first = args.first().copied().unwrap_or(Typed::Undefined);
     let second = args.get(1).copied().unwrap_or(Typed::Undefined);
@@ -1007,12 +1007,23 @@ fn call_closed_form_leaf(
         return None;
     };
     let bytecode = function.bytecode.as_ref()?;
-    let arguments: [Value; super::helper_graph::MAX_HELPER_ARITY] = std::array::from_fn(|index| {
-        args.get(index)
-            .copied()
-            .unwrap_or(Typed::Undefined)
-            .to_value()
-    });
+    // A body that is number-only arithmetic -- a hash's `safe_add` or `rol`,
+    // spectral-norm's `A(i, j)` -- is evaluated on the argument numbers
+    // directly, without boxing them for the general leaf evaluators.
+    if super::super::vm_numeric_leaf::has_number_only_leaf(bytecode)
+        && let Some(value) = call_number_only_leaf(function, bytecode, args)
+    {
+        return Some(value);
+    }
+    // Every element comes from a `Typed`, so none owns anything to release;
+    // skipping the array's drop keeps it from becoming an out-of-line call.
+    let arguments: std::mem::ManuallyDrop<[Value; super::helper_graph::MAX_HELPER_ARITY]> =
+        std::mem::ManuallyDrop::new(std::array::from_fn(|index| {
+            args.get(index)
+                .copied()
+                .unwrap_or(Typed::Undefined)
+                .to_value()
+        }));
     let arguments = arguments.get(..usize::from(arity))?;
     let value = super::super::vm_numeric_leaf::try_eval_numeric_leaf(
         bytecode,
