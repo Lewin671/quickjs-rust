@@ -578,12 +578,15 @@ fn a_guarded_math_call_runs_as_a_method_call_without_an_exit() {
         "{:#?}",
         program.ops
     );
+    // Only the loop's probes exit: its backedge, and its header entry.
     assert!(
         !program
             .ops
             .iter()
-            .any(|op| matches!(op, WideOp::Exit { ip, .. }
-            if !matches!(nested_function(source, "pick").code[*ip as usize], Op::Jump(_)))),
+            .enumerate()
+            .any(|(pc, op)| matches!(op, WideOp::Exit { ip, .. }
+            if !matches!(nested_function(source, "pick").code[*ip as usize], Op::Jump(_))
+                && program.probed_header(pc + 1).is_none())),
         "{:#?}",
         program.ops
     );
@@ -1541,5 +1544,52 @@ fn numeric_plans_see_missing_arguments_as_undefined() {
              run(50);"
         ),
         Value::Number(150.0)
+    );
+}
+
+/// Once a loop's typed program has run from its backedge, a later entry runs
+/// it from the header, before the first iteration: with the loop's locals
+/// still `undefined`, around nested loops, `continue`, a header reached by a
+/// jump from above, and a program that deoptimizes on its data.
+#[test]
+fn loops_entered_from_above_run_their_typed_program_from_the_header() {
+    assert_eq!(
+        value_of(
+            "function Body(x, v, m) { this.x = x; this.v = v; this.m = m; }
+             function advance(bodies, dt) {
+                 var dx, mag;
+                 var size = bodies.length;
+                 for (var i = 0; i < size; i++) {
+                     var bi = bodies[i];
+                     for (var j = i + 1; j < size; j++) {
+                         var bj = bodies[j];
+                         dx = bi.x - bj.x;
+                         mag = dt / (dx * dx + 1);
+                         bi.v -= dx * bj.m * mag;
+                         bj.v += dx * bi.m * mag;
+                     }
+                 }
+                 for (var k = 0; k < size; k++) bodies[k].x += dt * bodies[k].v;
+             }
+             function skip(n) { var s = 0, k = 0; while (k < n) { k++; if (k & 1) continue; s += k; } return s; }
+             function forward(n, flag) { var s = 0, k = 0; if (flag) { s = 100; } else { s = 1; } while (k < n) { s += k; k++; } return s; }
+             function mixed(a) { var t = 0; for (var q = 0; q < a.length; q++) t += a[q]; return t; }
+             function run() {
+                 var bodies = [new Body(0, 0, 1), new Body(1, 0, 2), new Body(3, 1, 3), new Body(7, 2, 1), new Body(12, 0, 5)];
+                 for (var r = 0; r < 300; r++) advance(bodies, 0.01);
+                 var out = [];
+                 for (var b = 0; b < bodies.length; b++) out.push(bodies[b].x.toFixed(6), bodies[b].v.toFixed(6));
+                 var s = 0, f = 0, m = 0;
+                 for (var r = 0; r < 200; r++) { s += skip(r & 15); f += forward(r & 7, r & 1); }
+                 for (var r = 0; r < 200; r++) m += mixed(r < 150 ? [1, 2, 3] : [1, 'x', 3]) === 6 ? 1 : 0;
+                 out.push(s, f, m);
+                 return out.join();
+             }
+             run();"
+        ),
+        Value::String(
+            "8.228696,3.479297,7.939108,4.596806,5.797929,2.684094,12.254605,-0.456076,7.848939,-3.053823,4072,11500,150"
+                .into()
+        )
     );
 }

@@ -12,7 +12,7 @@ use std::rc::Rc;
 use qjs_ast::BinaryOp;
 
 use super::peephole::{fuse_compare_jump, retarget, sole_op_of_previous};
-use super::{NamedReadSite, NamedWriteSite, ProbedBackedge, WideOp, WideProgram};
+use super::{NamedReadSite, NamedWriteSite, ProbedBackedge, ProbedHeader, WideOp, WideProgram};
 use crate::bytecode::compact_fn::MAX_REGISTERS;
 use crate::bytecode::compact_fn::compile::MAX_CALL_ARITY;
 use crate::bytecode::ir::{Bytecode, Op};
@@ -280,6 +280,21 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
     // claims the loop, the loop stays here instead of running generically.
     let probe_backedges = exit_backedges;
     let mut probed_backedges: Vec<ProbedBackedge> = Vec::new();
+    // Each probed loop's header, with the last backedge that closes it: the
+    // typed program for that region is entered before its first iteration
+    // once it has run (`ProbedHeader`).
+    let mut loop_headers = std::collections::BTreeMap::new();
+    if probe_backedges {
+        for (ip, op) in code.iter().enumerate() {
+            if let Op::Jump(target) = op
+                && *target <= ip
+            {
+                let backedge = loop_headers.entry(*target).or_insert(ip);
+                *backedge = (*backedge).max(ip);
+            }
+        }
+    }
+    let mut probed_headers: Vec<ProbedHeader> = Vec::new();
 
     let Some(entry_depth) = propagate_depths(code) else {
         return decline(trace, None, "inconsistent operand-stack depth");
@@ -397,6 +412,21 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         let Some(depth) = entry_depth[ip] else {
             continue;
         };
+        if let Some(&backedge) = loop_headers.get(&ip) {
+            // Placed before the header's own instructions, where only a
+            // fall-through into the loop reaches it: every jump to the header
+            // targets `compact_index[ip]`, after it.
+            ops.push(WideOp::Exit {
+                ip: u32::try_from(ip).ok()?,
+                depth,
+            });
+            probed_headers.push(ProbedHeader {
+                resume_pc: u32::try_from(ops.len()).ok()?,
+                header: u32::try_from(ip).ok()?,
+                backedge: u32::try_from(backedge).ok()?,
+            });
+            compact_index[ip] = u32::try_from(ops.len()).ok()?;
+        }
         if fused_pops[ip] {
             continue;
         }
@@ -940,6 +970,8 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         probed_backedges: probed_backedges.into_boxed_slice(),
         native_backedges: std::cell::Cell::new(0),
         typed_entry_counts,
+        probed_headers: probed_headers.into_boxed_slice(),
+        typed_ready: std::cell::Cell::new(0),
         ip_to_pc: compact_index.into_boxed_slice(),
         ip_depth: entry_depth
             .iter()

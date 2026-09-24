@@ -287,6 +287,11 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   0.995 against main and **0.853 against QuickJS-NG**; hash-map 0.859,
   math-cordic 0.937, controlflow-recursive 0.971. Worst against main:
   string-unpack-code 1.024; sentinels 0.94-1.04.
+- Typed loops entered before their first iteration (perf14): an exit before
+  each probed loop's header, reached only by falling into the loop, runs
+  the loop's typed program from the header once that program has run a
+  loop to its end from the backedge. nbody 0.910 (instructions 0.892),
+  sentinels and ai-astar flat, corpus 0.985 single-run.
 - Layout sensitivity, found (15a38453): with byte-identical code the
   typed executor's own start address decides capturing_closure_call and
   ai-astar (+18-25% outside 0xf80..0xfe0 mod 4 KiB); stack, heap,
@@ -338,13 +343,6 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
 
 ## Next
 
-- Enter a typed loop before its first iteration: the probe is at the
-  backedge, so every entry runs one full iteration on the wide tier first
-  (about 1,300 instructions for `o.x += o.y * i`) before the program takes
-  over. A pre-header exit, taken only once a backedge's program has run,
-  would save that iteration for the short per-call loops of bits-in-byte
-  and nbody. Measured entry cost after 3214fdce: about 900 instructions
-  (seed ~400, scratch pool 120, plan scans 60, exit and resume the rest).
 - tofte: after 7a89ea81 the remaining direct-eval cost is building the
   eval's environment (`apply_call_env`, `visible_local_entries`) and
   closure creation, not the overlay.
