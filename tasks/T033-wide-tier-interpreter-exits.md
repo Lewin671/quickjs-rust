@@ -207,6 +207,22 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   array drop out of line. Fixed in 1d7564cd (evaluation out of line,
   argument array `ManuallyDrop`): sentinels 0.963 against main
   (`polymorphic_call_site` 0.915), corpus 0.999 single-run.
+- Stack run 4d6c5686 vs main e3cf0b51 (30 blocks, cycles, quiet host;
+  `target/comparison/perf6-4d6c5686`): prototype reads cached by slot in
+  dynamic prototype storage (a prototype past a dozen methods installed no
+  entry: 6,478 -> 2,425 instructions per method call through one), a write
+  cache on plain named assignments, a non-cloning global-object check per
+  named write, and bodies admitted whose globally-writing loop calls user
+  methods (3d-raytrace's `blocked` ran 1,320 times on the general path).
+  External geomean 0.994 against main and **0.900 against QuickJS-NG**;
+  3d-raytrace 0.916, string-fasta 0.947, math-cordic 0.964, xparb 0.971,
+  raytrace-public-class-fields 0.979. Worst against main: access-nsieve
+  1.023. Sentinels 0.992-1.000.
+- Measured (instructions per call, micro, ours vs QuickJS-NG): plain call
+  677/273, method call 1080/441, own read ~185/80, prototype read 323/103,
+  own write ~300/71 (two plain op dispatches alone ~140); entering a typed
+  loop from a wide exit ~3,900; a typed iteration of `o.x += o.y * i`
+  722/305. nbody enters three typed programs per `advance` call.
 - Rejected: a proven-receiver prototype read ahead of the own-entry probe
   (method read 333 -> 268 instructions on a micro) -- hash-map 1.052,
   raytrace-class-fields 1.045, cdjs 1.041 in cycles with slightly more
