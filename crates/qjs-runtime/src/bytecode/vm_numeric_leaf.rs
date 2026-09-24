@@ -70,7 +70,7 @@ enum NumberOnlyOp {
 /// attaching its vectors to ordinary plans or extending shortcut dispatch.
 #[derive(Clone, Debug)]
 pub(super) struct NumberOnlyProgram {
-    ops: Vec<NumberOnlyOp>,
+    ops: Vec<registers::RegisterOp>,
     parameter_slots: Vec<usize>,
 }
 
@@ -514,7 +514,7 @@ impl NumberOnlyProgram {
     fn compile(ops: &[FastOp], bytecode: &Bytecode) -> Option<Self> {
         let (ops, parameter_slots) = compile_number_only_program(ops, bytecode)?;
         Some(Self {
-            ops,
+            ops: registers::lower(&ops)?,
             parameter_slots,
         })
     }
@@ -538,42 +538,7 @@ impl NumberOnlyProgram {
     /// The program's result for number arguments, one per parameter; `None`
     /// for too few arguments or anything the plan does not model.
     pub(super) fn eval_numbers(&self, arguments: &[f64]) -> Option<f64> {
-        let mut locals = [0.0; MAX_FAST_LOCALS];
-        for (index, &slot) in self.parameter_slots.iter().enumerate() {
-            *locals.get_mut(slot)? = *arguments.get(index)?;
-        }
-        let mut stack = [0.0; MAX_FAST_STACK];
-        let mut stack_len = 0;
-        for op in &self.ops {
-            match op {
-                NumberOnlyOp::LoadConst(value) => {
-                    push_number(&mut stack, &mut stack_len, *value)?;
-                }
-                NumberOnlyOp::LoadLocal(slot) => {
-                    push_number(&mut stack, &mut stack_len, *locals.get(*slot)?)?;
-                }
-                NumberOnlyOp::StoreLocal(slot) => {
-                    *locals.get_mut(*slot)? = pop_number(&stack, &mut stack_len)?;
-                }
-                NumberOnlyOp::Binary(op) => {
-                    let right = pop_number(&stack, &mut stack_len)?;
-                    let left = pop_number(&stack, &mut stack_len)?;
-                    push_number(&mut stack, &mut stack_len, number_binary(left, *op, right)?)?;
-                }
-                NumberOnlyOp::BinaryConstRight(op, right) => {
-                    let left = pop_number(&stack, &mut stack_len)?;
-                    push_number(
-                        &mut stack,
-                        &mut stack_len,
-                        number_binary(left, *op, *right)?,
-                    )?;
-                }
-                NumberOnlyOp::Return => {
-                    return pop_number(&stack, &mut stack_len);
-                }
-            }
-        }
-        None
+        registers::eval(&self.ops, &self.parameter_slots, arguments)
     }
 }
 
@@ -1453,6 +1418,9 @@ pub(super) fn number_binary(left: f64, op: BinaryOp, right: f64) -> Option<f64> 
         _ => return None,
     })
 }
+
+#[path = "vm_numeric_leaf_registers.rs"]
+mod registers;
 
 #[cfg(test)]
 #[path = "vm_numeric_leaf_number_tests.rs"]
