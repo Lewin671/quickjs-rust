@@ -1,0 +1,153 @@
+"""Pin the typed-loop executor's address in the hot-code layout.
+
+The order file (`order_file.py`) keeps hot functions in a fixed order, but
+their addresses still move whenever a function listed before them changes
+size, and one listed near the top -- the VM, the wide driver -- changes with
+almost every edit. The typed-loop executor
+(`try_run_typed_loop<WideLoopFrame>`) and its callees are the part of the
+layout that swings most: with byte-identical code, `capturing_closure_call`
+and `ai-astar` run 18-25% more cycles in one placement than in another.
+Measured 2026-09-24 by moving only the executor: the fast placements are its
+start address in 0xf80..0xfe0 modulo 4 KiB, with its callees in the order
+`CALLEES` lists right after it; the slow ones are everywhere else.
+
+This rewrites the head of an order file to: standard-library functions whose
+total size moves the executor to the chosen offset, the executor, its
+callees, then the rest of the list unchanged. The filler functions are
+precompiled into the standard library, so their sizes do not change with
+this repository's code, and nothing listed before the executor does either:
+its address is then fixed until the toolchain or the executor itself
+changes. Re-scan the offset (`--offset`, with the canaries in
+docs/performance-workflow.md) after editing the executor.
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import subprocess
+import sys
+from pathlib import Path
+from typing import Sequence
+
+ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_ORDER = ROOT / "crates/qjs-cli/hot-functions.order"
+DEFAULT_OFFSET = 0xFB0
+PAGE = 0x1000
+ALIGN = 16
+EXECUTOR = re.compile(r"typed_loop7execute18try_run_typed_loop.*WideLoopFrame")
+# Suffix patterns of the executor's hot callees, in their pinned order.
+CALLEES = (
+    "ArrayRef24direct_dense_index_value",
+    "typed_loop7execute9call_leaf",
+    "vm_numeric_leaf21try_eval_numeric_leaf",
+    "5valueNtB5_5ValueNtNtCsl8K0bEFm1U0_4core5clone5Clone5clone",
+    "core3ptr13drop_in_placeNtNtCs9nYd1Hk1rek_11qjs_runtime5value5ValueEBK_",
+    "ArrayData21has_property_at_index",
+    "vm_numeric_leaf20direct_number_binary",
+)
+_STD = "Csg55jX0GwzBC_3std"
+_OWN = "Cs9nYd1Hk1rek"
+
+
+def text_symbols(binary: Path) -> tuple[int, dict[str, int], dict[str, int]]:
+    """The `__text` start, and each text symbol's size and definition count."""
+    sections = subprocess.run(["otool", "-l", str(binary)], capture_output=True, text=True,
+                              check=True).stdout
+    match = re.search(r"sectname __text\s+segname __TEXT\s+addr (0x[0-9a-f]+)", sections)
+    if not match:
+        raise ValueError(f"{binary}: no __TEXT,__text section")
+    start = int(match.group(1), 16)
+    listing = subprocess.run(["nm", "-n", str(binary)], capture_output=True, text=True,
+                             check=True).stdout
+    rows = []
+    for line in listing.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[1] in {"t", "T"}:
+            rows.append((int(parts[0], 16), parts[2]))
+    sizes: dict[str, int] = {}
+    counts: dict[str, int] = {}
+    for (address, name), (following, _) in zip(rows, rows[1:]):
+        counts[name] = counts.get(name, 0) + 1
+        sizes.setdefault(name, following - address)
+    return start, sizes, counts
+
+
+def filler(sizes: dict[str, int], counts: dict[str, int], length: int,
+           exclude: set[str]) -> list[str]:
+    """Concrete standard-library functions whose sizes sum to `length`."""
+    candidates = sorted(
+        ((size, name) for name, size in sizes.items()
+         if counts.get(name) == 1 and name.startswith("__RNv") and _STD in name
+         and _OWN not in name and size > 0 and size % ALIGN == 0 and name not in exclude),
+        reverse=True,
+    )
+    units = length // ALIGN
+    reachable: dict[int, list[str]] = {0: []}
+    for size, name in candidates:
+        step = size // ALIGN
+        for total, picked in list(reachable.items()):
+            if total + step <= units and total + step not in reachable:
+                reachable[total + step] = picked + [name]
+        if units in reachable:
+            return reachable[units]
+    raise ValueError(f"no standard-library filler sums to {length:#x} bytes")
+
+
+def pin(lines: list[str], start: int, sizes: dict[str, int], counts: dict[str, int],
+        offset: int) -> list[str]:
+    """`lines` (symbols, no comments) with the executor pinned at `offset`."""
+    executor = next((line for line in lines if EXECUTOR.search(line)), None)
+    if executor is None:
+        raise ValueError("the order file does not list the typed-loop executor")
+    callees = []
+    for suffix in CALLEES:
+        callees += [line for line in lines if line.endswith(suffix) and line not in callees]
+    listed = set(lines)
+    length = (offset - start) % PAGE
+    padding = filler(sizes, counts, length, listed)
+    head = padding + [executor] + callees
+    return head + [line for line in lines if line not in head]
+
+
+_PIN_HEADER = re.compile(r"^# pinned: .* filler (\d+)")
+
+
+def pin_order_file(order: Path, binary: Path, offset: int = DEFAULT_OFFSET) -> None:
+    """Rewrites `order` with the executor pinned at `offset`, replacing the
+    filler of any previous pin (its count is recorded in the header)."""
+    text = order.read_text(encoding="utf-8").splitlines()
+    previous = 0
+    for line in text:
+        if match := _PIN_HEADER.match(line):
+            previous = int(match.group(1))
+    header = [line for line in text if line.startswith("#") and not _PIN_HEADER.match(line)]
+    symbols = [line for line in text if line and not line.startswith("#")][previous:]
+    start, sizes, counts = text_symbols(binary)
+    pinned = pin(symbols, start, sizes, counts, offset)
+    added = len(pinned) - len(symbols)
+    header.append(f"# pinned: typed-loop executor at {offset:#x} mod 4 KiB "
+                  f"(python3 -m tools.benchmark.layout_pin), filler {added}")
+    order.write_text("\n".join(header + pinned) + "\n", encoding="utf-8")
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="python3 -m tools.benchmark.layout_pin",
+                                     description=__doc__.split("\n\n")[0])
+    parser.add_argument("--binary", type=Path, required=True,
+                        help="a release qjs built with the current toolchain")
+    parser.add_argument("--order", type=Path, default=DEFAULT_ORDER)
+    parser.add_argument("--offset", type=lambda text: int(text, 0), default=DEFAULT_OFFSET,
+                        help="executor start modulo 4 KiB (default %(default)#x)")
+    args = parser.parse_args(argv)
+    try:
+        pin_order_file(args.order, args.binary.resolve(), args.offset)
+    except (ValueError, subprocess.CalledProcessError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    print(f"executor pinned at {args.offset:#x} -> {args.order}", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

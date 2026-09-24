@@ -25,6 +25,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Sequence
 
+from .layout_pin import DEFAULT_OFFSET, pin_order_file
 from .screen import (
     DEFAULT_CACHE, ScreenError, _argv, calibrate, counter_tool, resolve_cases, sample,
 )
@@ -125,6 +126,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--coverage", type=float, default=1.0)
     parser.add_argument("--cache-root", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--pin-offset", type=lambda text: int(text, 0), default=DEFAULT_OFFSET,
+                        help="typed-loop executor start modulo 4 KiB (layout_pin.py)")
+    parser.add_argument("--no-pin", action="store_true", help="write the ranking unpinned")
     args = parser.parse_args(argv)
     binary = args.binary.resolve()
     try:
@@ -153,6 +157,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         + "".join(f"{symbol}\n" for symbol in ordered),
         encoding="utf-8",
     )
+    if not args.no_pin:
+        try:
+            pin_order_file(args.output, binary, args.pin_offset)
+        except (ValueError, subprocess.CalledProcessError) as error:
+            print(f"error: pinning the executor: {error}", file=sys.stderr)
+            return 1
     print(f"{len(ordered)} symbols -> {args.output}", file=sys.stderr)
     return 0
 
