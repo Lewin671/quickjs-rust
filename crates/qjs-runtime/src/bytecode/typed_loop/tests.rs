@@ -1563,3 +1563,22 @@ fn a_loop_writes_its_implicit_globals_by_slot_and_falls_back_after_a_layout_chan
         ))
     );
 }
+
+#[test]
+fn a_number_only_callee_is_evaluated_on_its_argument_numbers() {
+    // Numbers take the direct evaluation; a boolean argument and a missing
+    // one fall back to the ordinary leaf path with the same answers.
+    assert_eq!(
+        eval(
+            "function add(a, b) { return (a + b) | 0; } \
+             function rol(num, cnt) { return (num << cnt) | (num >>> (32 - cnt)); } \
+             function sum3(a, b, c) { return a + b + c; } \
+             function f(n) { var s = 0; for (var i = 0; i < n; i++) { s = add(s, i); } return s; } \
+             function g(n) { var s = 1; for (var i = 0; i < n; i++) { s = rol(s, 3) ^ i; } return s; } \
+             function h(n) { var s = 0, t = true; for (var i = 0; i < n; i++) { s = add(s, t); } return s; } \
+             function k(n) { var r = 0; for (var i = 0; i < n; i++) { r = sum3(i, 1); } return r; } \
+             [f(1000), g(1000), h(1000), k(10)].join(\",\");"
+        ),
+        Ok(Value::String("499500,536448733,1000,NaN".to_owned().into()))
+    );
+}

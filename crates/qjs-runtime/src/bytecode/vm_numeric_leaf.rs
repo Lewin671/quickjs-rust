@@ -524,12 +524,23 @@ impl NumberOnlyProgram {
     // locality for object and control-flow leaves that cannot use it.
     #[inline(never)]
     fn eval(&self, arguments: &[Value]) -> Option<Value> {
-        let mut locals = [0.0; MAX_FAST_LOCALS];
-        for (index, &slot) in self.parameter_slots.iter().enumerate() {
+        let mut numbers = [0.0; MAX_FAST_LOCALS];
+        let count = self.parameter_slots.len();
+        for (index, number) in numbers.iter_mut().enumerate().take(count) {
             let Value::Number(value) = arguments.get(index)? else {
                 return None;
             };
-            *locals.get_mut(slot)? = *value;
+            *number = *value;
+        }
+        self.eval_numbers(numbers.get(..count)?).map(Value::Number)
+    }
+
+    /// The program's result for number arguments, one per parameter; `None`
+    /// for too few arguments or anything the plan does not model.
+    pub(super) fn eval_numbers(&self, arguments: &[f64]) -> Option<f64> {
+        let mut locals = [0.0; MAX_FAST_LOCALS];
+        for (index, &slot) in self.parameter_slots.iter().enumerate() {
+            *locals.get_mut(slot)? = *arguments.get(index)?;
         }
         let mut stack = [0.0; MAX_FAST_STACK];
         let mut stack_len = 0;
@@ -558,7 +569,7 @@ impl NumberOnlyProgram {
                     )?;
                 }
                 NumberOnlyOp::Return => {
-                    return Some(Value::Number(pop_number(&stack, &mut stack_len)?));
+                    return pop_number(&stack, &mut stack_len);
                 }
             }
         }
@@ -991,6 +1002,28 @@ impl FastValue {
 /// numeric operations. Received upvalue writes are delayed until a supported
 /// `Return`, so an unsupported value or opcode can fall back to the full VM
 /// without duplicating observable work.
+/// The number-only program of a direct-leaf function, when its body has
+/// one and its parameter and upvalue layout match the plan's.
+pub(super) fn number_only_leaf<'a>(
+    bytecode: &'a Bytecode,
+    params: &FunctionParams,
+    upvalues: &[Upvalue],
+) -> Option<&'a NumberOnlyProgram> {
+    let plan = bytecode
+        .numeric_leaf_plan
+        .get_or_init(|| NumericLeafPlan::compile(bytecode))
+        .as_ref()?;
+    match plan {
+        NumericLeafPlan::NumberOnly(program)
+            if bytecode.parameter_slots().len() == params.positional.len()
+                && bytecode.received_upvalue_slots().len() == upvalues.len() =>
+        {
+            Some(program)
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn try_eval_numeric_leaf(
     bytecode: &Bytecode,
     params: &FunctionParams,
