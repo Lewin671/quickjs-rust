@@ -337,7 +337,11 @@ struct Builder<'a> {
     pending_jumps: Vec<(usize, usize)>,
 }
 
+mod admission;
 mod element;
+
+pub(super) use admission::{admitted_binary, admitted_unary};
+use admission::{expression_has_control_flow, scalar_expression_may_write_or_branch};
 
 impl<'a> Builder<'a> {
     fn new(
@@ -1236,6 +1240,20 @@ impl<'a> Builder<'a> {
                     }
                 }
             }
+            // A function body's statement completion values are never
+            // observable, so the temporaries that carry them hold nothing a
+            // region must keep: reading one as `undefined` lets the joins of
+            // an `if`/`else` chain -- each arm leaving a different completion
+            // temporary on the stack, one boxed, one not -- agree.
+            Op::LoadLocal(slot) if self.bytecode.dead_completion_slots.contains(slot) => {
+                let register = self.constant_register(Typed::Undefined)?;
+                self.push(register, Origin::Computed);
+            }
+            Op::StoreLocal(slot) | Op::AssignLocal(slot)
+                if self.bytecode.dead_completion_slots.contains(slot) =>
+            {
+                self.stack.pop()?;
+            }
             Op::LoadLocal(slot) => {
                 let origin = Origin::Local(u32::try_from(*slot).ok()?);
                 if self.slot_is_boxed(*slot) {
@@ -1917,82 +1935,4 @@ fn is_target(bytecode: &Bytecode, header: usize, backedge: usize) -> Vec<bool> {
         }
     }
     targets
-}
-
-/// Index expressions are replayed from the surrounding assignment's entry if
-/// a later typed operation declines. They therefore cannot contain a write or
-/// branch that would become observable twice. The admitted scalar operations
-/// themselves either operate on Numbers/booleans or decline before invoking
-/// any user code.
-fn scalar_expression_may_write_or_branch(op: &Op) -> bool {
-    expression_has_control_flow(op)
-        || matches!(
-            op,
-            Op::AppendStringLiteralLocal { .. }
-                | Op::AppendStringLiteralGlobal { .. }
-                | Op::StoreLocal(_)
-                | Op::AssignLocal(_)
-                | Op::ClearLocal(_)
-                | Op::DefineGlobalVar(_)
-                | Op::StoreGlobalStrict(_)
-                | Op::StoreGlobalSloppy { .. }
-                | Op::StoreLocalOrGlobalSloppy { .. }
-                | Op::StoreIdentWith { .. }
-                | Op::StoreResolvedIdentWith { .. }
-                | Op::SetProp { .. }
-                | Op::SetPropNamed { .. }
-                | Op::SetPropIndex { .. }
-                | Op::SetPrivate(_)
-                | Op::DeleteProp { .. }
-                | Op::DeleteIdent(_)
-                | Op::DeleteIdentWith { .. }
-                | Op::IncrementLocal { .. }
-                | Op::CopyLocal { .. }
-                | Op::BinaryAssignLocals { .. }
-        )
-}
-
-fn expression_has_control_flow(op: &Op) -> bool {
-    matches!(
-        op,
-        Op::Jump(_)
-            | Op::JumpIfFalse(_)
-            | Op::JumpIfTrue(_)
-            | Op::JumpIfNotNullish(_)
-            | Op::AbruptJump(_)
-            | Op::CompareLocalsJumpFalse { .. }
-    )
-}
-
-pub(super) fn admitted_binary(op: BinaryOp) -> bool {
-    matches!(
-        op,
-        BinaryOp::Add
-            | BinaryOp::Sub
-            | BinaryOp::Mul
-            | BinaryOp::Div
-            | BinaryOp::Rem
-            | BinaryOp::Pow
-            | BinaryOp::Shl
-            | BinaryOp::Shr
-            | BinaryOp::UShr
-            | BinaryOp::BitwiseAnd
-            | BinaryOp::BitwiseOr
-            | BinaryOp::BitwiseXor
-            | BinaryOp::Lt
-            | BinaryOp::Le
-            | BinaryOp::Gt
-            | BinaryOp::Ge
-            | BinaryOp::Eq
-            | BinaryOp::Ne
-            | BinaryOp::StrictEq
-            | BinaryOp::StrictNe
-    )
-}
-
-pub(super) fn admitted_unary(op: UnaryOp) -> bool {
-    matches!(
-        op,
-        UnaryOp::Minus | UnaryOp::Plus | UnaryOp::BitwiseNot | UnaryOp::Not
-    )
 }
