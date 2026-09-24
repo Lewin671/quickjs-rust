@@ -239,6 +239,8 @@ const FACTS_ELIGIBLE: u64 = 1 << 1;
 const FACTS_REQUIRES_THIS: u64 = 1 << 2;
 const FACTS_STRICT: u64 = 1 << 3;
 const FACTS_LEXICAL_SLOTS: u64 = 1 << 4;
+/// A base class constructor: entered only by `new`, after its fields.
+const FACTS_CLASS: u64 = 1 << 5;
 const FACTS_REGISTER_SHIFT: u32 = 32;
 
 /// The part of the inlining proof that depends only on the function, fixed
@@ -265,7 +267,16 @@ fn compute_fixed_inline_facts(callee: &Value, function: &Function, bytecode: &By
     // A method's home object and a class's private environment are not
     // checked: only `super` and private-name operations observe them, and
     // this tier compiles no body that contains either.
-    if !crate::function::is_direct_leaf_function(callee)
+    // A base class constructor with plain public fields is entered like
+    // an ordinary constructor once its fields are installed; a direct call
+    // of it must still throw, which `FACTS_CLASS` keeps off this driver.
+    let class = function.is_class_constructor;
+    let shape_admitted = if class {
+        crate::function::is_direct_construct_class(function)
+    } else {
+        crate::function::is_direct_leaf_function(callee)
+    };
+    if !shape_admitted
         || inherits_lexical_this
         || function.has_dynamic_function_realm
         || !function.module_imports.is_empty()
@@ -299,6 +310,9 @@ fn compute_fixed_inline_facts(callee: &Value, function: &Function, bytecode: &By
     }
     if !program.lexical_slots.is_empty() {
         facts |= FACTS_LEXICAL_SLOTS;
+    }
+    if class {
+        facts |= FACTS_CLASS;
     }
     facts
 }
@@ -392,6 +406,13 @@ struct InlineCallee {
 
 /// Proves a callee may run on this driver, in a window of its register stack.
 fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
+    let (inline, class) = inline_entry(callee, env)?;
+    (!class).then_some(inline)
+}
+
+/// `inline_callee` for any admitted body, with whether it is a class
+/// constructor, which only `new` may enter.
+fn inline_entry(callee: &Value, env: &CallEnv) -> Option<(InlineCallee, bool)> {
     let Value::Function(function) = callee else {
         return None;
     };
@@ -403,30 +424,32 @@ fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
     if !super::program_for(bytecode)?.admit_activation() {
         return None;
     }
-    Some(InlineCallee {
-        register_count: (facts >> FACTS_REGISTER_SHIFT) as usize,
-        requires_this: facts & FACTS_REQUIRES_THIS != 0,
-        is_strict: facts & FACTS_STRICT != 0,
-        has_lexical_slots: facts & FACTS_LEXICAL_SLOTS != 0,
-    })
+    Some((
+        InlineCallee {
+            register_count: (facts >> FACTS_REGISTER_SHIFT) as usize,
+            requires_this: facts & FACTS_REQUIRES_THIS != 0,
+            is_strict: facts & FACTS_STRICT != 0,
+            has_lexical_slots: facts & FACTS_LEXICAL_SLOTS != 0,
+        },
+        facts & FACTS_CLASS != 0,
+    ))
 }
 
 /// Proves `new callee(...)` may run on this driver: an ordinary (not class,
 /// bound or native) constructor the driver would inline as a call, whose
 /// `prototype` is an ordinary object. Returns the fresh receiver.
 #[inline(never)]
-fn inline_constructor(callee: &Value, env: &CallEnv) -> Option<(InlineCallee, crate::ObjectRef)> {
+fn inline_constructor(
+    callee: &Value,
+    env: &CallEnv,
+) -> Option<(InlineCallee, crate::ObjectRef, bool)> {
     let Value::Function(function) = callee else {
         return None;
     };
-    if function.native.is_some()
-        || function.bound.is_some()
-        || !function.constructable
-        || function.is_class_constructor
-    {
+    if function.native.is_some() || function.bound.is_some() || !function.constructable {
         return None;
     }
-    let inline = inline_callee(callee, env)?;
+    let (inline, class) = inline_entry(callee, env)?;
     let prototype = match function.own_property("prototype") {
         Some(property) if !property.is_accessor() => match property.value {
             Value::Object(prototype) if !crate::symbol::is_symbol_primitive(&prototype) => {
@@ -440,7 +463,7 @@ fn inline_constructor(callee: &Value, env: &CallEnv) -> Option<(InlineCallee, cr
         std::collections::HashMap::new(),
         Some(crate::Prototype::Object(prototype)),
     );
-    Some((inline, receiver))
+    Some((inline, receiver, class))
 }
 
 /// Enters `new callee(...)` as a frame of this driver when
@@ -464,11 +487,22 @@ fn enter_constructor(
     dst: u16,
     resume_pc: usize,
 ) -> Result<Option<Value>, RuntimeError> {
-    let Some((inline, receiver)) = inline_constructor(&callee, env) else {
+    let Some((inline, receiver, class)) = inline_constructor(&callee, env) else {
         return Ok(Some(callee));
     };
     if frames.len() >= MAX_FRAMES {
         return Err(call_stack_exhausted());
+    }
+    // A base class installs its instance fields before its body runs.
+    if class && let Value::Function(function) = &callee {
+        crate::function::initialize_direct_instance_fields(
+            &function.instance_elements(),
+            &receiver,
+            env,
+            env.module_host().as_ref(),
+            #[cfg(feature = "agents")]
+            env.agent_context().as_ref(),
+        )?;
     }
     crate::diagnostics::count!(ordinary_call_attempts);
     crate::diagnostics::count!(compact_direct_calls);

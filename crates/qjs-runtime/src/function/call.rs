@@ -465,7 +465,7 @@ pub(crate) fn try_construct_direct_leaf_function(
 /// instance elements are all public string-keyed fields with initializers
 /// the direct-leaf call can run. Memoized on first construction, which is
 /// after class definition recorded every element.
-fn is_direct_construct_class(function: &Function) -> bool {
+pub(crate) fn is_direct_construct_class(function: &Function) -> bool {
     if let Some(eligible) = function.direct_construct_eligible.get() {
         return eligible;
     }
@@ -502,7 +502,7 @@ fn is_direct_construct_class(function: &Function) -> bool {
 /// is fresh, so it is never the realm's global object; a previous
 /// initializer may still have made it non-extensible or defined the key, in
 /// which case the general define path (and its TypeError) is used.
-fn initialize_direct_instance_fields(
+pub(crate) fn initialize_direct_instance_fields(
     elements: &[InstanceElementInitializer],
     receiver: &ObjectRef,
     env: &CallEnv,
