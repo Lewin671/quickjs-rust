@@ -176,27 +176,45 @@ pub(in crate::bytecode) fn plan_for(bytecode: &Bytecode) -> Option<&Rc<NumericPl
         .as_ref()
 }
 
+/// Calls one body may have resolved per run before it hands the call back.
+const MAX_LINKS: usize = 8;
+
 /// One body a run has reached, and the calls of it already resolved.
-struct Body<'a> {
+struct Body {
     plan: Rc<NumericPlan>,
     /// The function whose cells the body's calls read; `None` for the root,
     /// whose cells and bytecode the caller lends.
     function: Option<crate::Function>,
     bytecode: Option<Rc<Bytecode>>,
-    root_cells: &'a [Upvalue],
     /// (received-upvalue slot, body index) for each call resolved so far.
     /// The cells cannot change while a plan runs -- it writes nothing but
     /// its registers -- so a call resolves once per run.
-    links: Vec<(u16, usize)>,
+    links: [(u16, u16); MAX_LINKS],
+    link_count: u8,
 }
 
 #[derive(Clone, Copy)]
 struct Frame {
-    body: usize,
-    pc: usize,
+    body: u16,
+    pc: u32,
     base: usize,
     /// The caller's register receiving this frame's result.
     dst: usize,
+}
+
+/// Storage a run reuses: the register stack, the frames and the bodies.
+#[derive(Default)]
+struct Scratch {
+    registers: Vec<f64>,
+    frames: Vec<Frame>,
+    bodies: Vec<Body>,
+}
+
+thread_local! {
+    /// Taken for the length of a run and put back after, so a run allocates
+    /// nothing once warm; a run nested inside another (a plan never calls
+    /// out, but a caller may re-enter) finds it taken and uses fresh storage.
+    static SCRATCH: std::cell::RefCell<Scratch> = std::cell::RefCell::new(Scratch::default());
 }
 
 /// Runs `plan` -- the root body, whose received cells are `cells` -- on
@@ -207,14 +225,34 @@ pub(in crate::bytecode) fn run(
     cells: &[Upvalue],
     args: &[f64],
 ) -> Option<f64> {
-    let mut bodies = vec![Body {
+    let mut scratch = SCRATCH.with(|slot| slot.take());
+    let result = run_with(plan, root_bytecode, cells, args, &mut scratch);
+    scratch.registers.clear();
+    scratch.frames.clear();
+    scratch.bodies.clear();
+    SCRATCH.with(|slot| slot.replace(scratch));
+    result
+}
+
+fn run_with(
+    plan: &Rc<NumericPlan>,
+    root_bytecode: &Bytecode,
+    cells: &[Upvalue],
+    args: &[f64],
+    scratch: &mut Scratch,
+) -> Option<f64> {
+    let Scratch {
+        registers,
+        frames,
+        bodies,
+    } = scratch;
+    bodies.push(Body {
         plan: Rc::clone(plan),
         function: None,
         bytecode: None,
-        root_cells: cells,
-        links: Vec::new(),
-    }];
-    let mut registers: Vec<f64> = Vec::with_capacity(plan.registers * 16);
+        links: [(0, 0); MAX_LINKS],
+        link_count: 0,
+    });
     registers.resize(plan.registers, f64::NAN);
     for &(register, value) in &*plan.constants {
         *registers.get_mut(usize::from(register))? = value;
@@ -222,143 +260,141 @@ pub(in crate::bytecode) fn run(
     for (&register, &argument) in plan.parameters.iter().zip(args) {
         *registers.get_mut(usize::from(register))? = argument;
     }
-    let mut frames: Vec<Frame> = Vec::new();
     let mut body = 0_usize;
     let mut pc = 0_usize;
     let mut base = 0_usize;
+    let int32 = crate::conversion::to_int32_number;
+    let uint32 = crate::conversion::to_uint32_number;
     loop {
-        let op = *bodies.get(body)?.plan.ops.get(pc)?;
-        pc += 1;
+        // One pass of this loop per frame switch: the running body's
+        // operations are borrowed for the whole inner loop.
+        let current = Rc::clone(&bodies.get(body)?.plan);
+        let ops = &current.ops[..];
+        let window = registers.get_mut(base..)?;
         macro_rules! get {
             ($register:expr) => {
-                *registers.get(base + usize::from($register))?
+                *window.get(usize::from($register))?
             };
         }
         macro_rules! set {
             ($register:expr, $value:expr) => {{
                 let value = $value;
-                *registers.get_mut(base + usize::from($register))? = value;
+                *window.get_mut(usize::from($register))? = value;
             }};
         }
-        let int32 = crate::conversion::to_int32_number;
-        let uint32 = crate::conversion::to_uint32_number;
-        match op {
-            NumOp::Const { dst, value } => set!(dst, value),
-            NumOp::Move { dst, src } => set!(dst, get!(src)),
-            NumOp::Add { dst, left, right } => set!(dst, get!(left) + get!(right)),
-            NumOp::Sub { dst, left, right } => set!(dst, get!(left) - get!(right)),
-            NumOp::Mul { dst, left, right } => set!(dst, get!(left) * get!(right)),
-            NumOp::Div { dst, left, right } => set!(dst, get!(left) / get!(right)),
-            NumOp::BitAnd { dst, left, right } => {
-                set!(dst, f64::from(int32(get!(left)) & int32(get!(right))));
-            }
-            NumOp::BitOr { dst, left, right } => {
-                set!(dst, f64::from(int32(get!(left)) | int32(get!(right))));
-            }
-            NumOp::BitXor { dst, left, right } => {
-                set!(dst, f64::from(int32(get!(left)) ^ int32(get!(right))));
-            }
-            NumOp::Shl { dst, left, right } => {
-                set!(
-                    dst,
-                    f64::from(int32(get!(left)) << (uint32(get!(right)) & 0x1f))
-                );
-            }
-            NumOp::Shr { dst, left, right } => {
-                set!(
-                    dst,
-                    f64::from(int32(get!(left)) >> (uint32(get!(right)) & 0x1f))
-                );
-            }
-            NumOp::UShr { dst, left, right } => {
-                set!(
-                    dst,
-                    f64::from(uint32(get!(left)) >> (uint32(get!(right)) & 0x1f))
-                );
-            }
-            NumOp::Lt { dst, left, right } => set!(dst, flag(get!(left) < get!(right))),
-            NumOp::Le { dst, left, right } => set!(dst, flag(get!(left) <= get!(right))),
-            NumOp::Gt { dst, left, right } => set!(dst, flag(get!(left) > get!(right))),
-            NumOp::Ge { dst, left, right } => set!(dst, flag(get!(left) >= get!(right))),
-            NumOp::Eq { dst, left, right } => set!(dst, flag(get!(left) == get!(right))),
-            NumOp::Ne { dst, left, right } => set!(dst, flag(get!(left) != get!(right))),
-            NumOp::Other {
-                dst,
-                op,
-                left,
-                right,
-            } => set!(dst, binary(op, get!(left), get!(right))?),
-            NumOp::Neg { dst, src } => set!(dst, -get!(src)),
-            NumOp::BitNot { dst, src } => set!(dst, f64::from(!int32(get!(src)))),
-            NumOp::Not { dst, src } => {
-                let value = get!(src);
-                set!(dst, flag(value == 0.0 || value.is_nan()));
-            }
-            NumOp::Native { .. } => return None,
-            NumOp::JumpIfFalsy { cond, target } => {
-                let value = get!(cond);
-                if value == 0.0 || value.is_nan() {
-                    pc = target as usize;
+        // What left the inner loop: a call to set up, or a returned value.
+        let (call, returned) = loop {
+            let op = *ops.get(pc)?;
+            pc += 1;
+            match op {
+                NumOp::Const { dst, value } => set!(dst, value),
+                NumOp::Move { dst, src } => set!(dst, get!(src)),
+                NumOp::Add { dst, left, right } => set!(dst, get!(left) + get!(right)),
+                NumOp::Sub { dst, left, right } => set!(dst, get!(left) - get!(right)),
+                NumOp::Mul { dst, left, right } => set!(dst, get!(left) * get!(right)),
+                NumOp::Div { dst, left, right } => set!(dst, get!(left) / get!(right)),
+                NumOp::BitAnd { dst, left, right } => {
+                    set!(dst, f64::from(int32(get!(left)) & int32(get!(right))));
                 }
-            }
-            NumOp::JumpUnless {
-                cmp,
-                left,
-                right,
-                target,
-            } => {
-                let (left, right) = (get!(left), get!(right));
-                let holds = match cmp {
-                    Cmp::Lt => left < right,
-                    Cmp::Le => left <= right,
-                    Cmp::Gt => left > right,
-                    Cmp::Ge => left >= right,
-                    Cmp::Eq => left == right,
-                    Cmp::Ne => left != right,
-                };
-                if !holds {
-                    pc = target as usize;
+                NumOp::BitOr { dst, left, right } => {
+                    set!(dst, f64::from(int32(get!(left)) | int32(get!(right))));
                 }
-            }
-            NumOp::JumpIfAndZero {
-                left,
-                right,
-                target,
-            } => {
-                if int32(get!(left)) & int32(get!(right)) == 0 {
-                    pc = target as usize;
+                NumOp::BitXor { dst, left, right } => {
+                    set!(dst, f64::from(int32(get!(left)) ^ int32(get!(right))));
                 }
+                NumOp::Shl { dst, left, right } => {
+                    set!(
+                        dst,
+                        f64::from(int32(get!(left)) << (uint32(get!(right)) & 0x1f))
+                    );
+                }
+                NumOp::Shr { dst, left, right } => {
+                    set!(
+                        dst,
+                        f64::from(int32(get!(left)) >> (uint32(get!(right)) & 0x1f))
+                    );
+                }
+                NumOp::UShr { dst, left, right } => {
+                    set!(
+                        dst,
+                        f64::from(uint32(get!(left)) >> (uint32(get!(right)) & 0x1f))
+                    );
+                }
+                NumOp::Lt { dst, left, right } => set!(dst, flag(get!(left) < get!(right))),
+                NumOp::Le { dst, left, right } => set!(dst, flag(get!(left) <= get!(right))),
+                NumOp::Gt { dst, left, right } => set!(dst, flag(get!(left) > get!(right))),
+                NumOp::Ge { dst, left, right } => set!(dst, flag(get!(left) >= get!(right))),
+                NumOp::Eq { dst, left, right } => set!(dst, flag(get!(left) == get!(right))),
+                NumOp::Ne { dst, left, right } => set!(dst, flag(get!(left) != get!(right))),
+                NumOp::Other {
+                    dst,
+                    op,
+                    left,
+                    right,
+                } => set!(dst, binary(op, get!(left), get!(right))?),
+                NumOp::Neg { dst, src } => set!(dst, -get!(src)),
+                NumOp::BitNot { dst, src } => set!(dst, f64::from(!int32(get!(src)))),
+                NumOp::Not { dst, src } => {
+                    let value = get!(src);
+                    set!(dst, flag(value == 0.0 || value.is_nan()));
+                }
+                NumOp::Native { .. } => return None,
+                NumOp::JumpIfFalsy { cond, target } => {
+                    let value = get!(cond);
+                    if value == 0.0 || value.is_nan() {
+                        pc = target as usize;
+                    }
+                }
+                NumOp::JumpUnless {
+                    cmp,
+                    left,
+                    right,
+                    target,
+                } => {
+                    let (left, right) = (get!(left), get!(right));
+                    let holds = match cmp {
+                        Cmp::Lt => left < right,
+                        Cmp::Le => left <= right,
+                        Cmp::Gt => left > right,
+                        Cmp::Ge => left >= right,
+                        Cmp::Eq => left == right,
+                        Cmp::Ne => left != right,
+                    };
+                    if !holds {
+                        pc = target as usize;
+                    }
+                }
+                NumOp::JumpIfAndZero {
+                    left,
+                    right,
+                    target,
+                } => {
+                    if int32(get!(left)) & int32(get!(right)) == 0 {
+                        pc = target as usize;
+                    }
+                }
+                NumOp::Nop => {}
+                NumOp::Jump { target } => pc = target as usize,
+                NumOp::Call {
+                    dst,
+                    callee,
+                    args,
+                    argc,
+                } => break (Some((dst, callee, args, argc)), 0.0),
+                NumOp::Return { src } => break (None, get!(src)),
             }
-            NumOp::Nop => {}
-            NumOp::Jump { target } => pc = target as usize,
-            NumOp::Call {
-                dst,
-                callee: slot,
-                args,
-                argc,
-            } => {
+        };
+        match call {
+            Some((dst, slot, args, argc)) => {
                 if frames.len() >= MAX_DEPTH {
                     return None;
                 }
-                let callee = match bodies
-                    .get(body)?
-                    .links
-                    .iter()
-                    .find(|(linked, _)| *linked == slot)
-                {
-                    Some(&(_, callee)) => callee,
-                    None => {
-                        let callee = link(&mut bodies, body, slot, root_bytecode)?;
-                        bodies.get_mut(body)?.links.push((slot, callee));
-                        callee
-                    }
-                };
-                let caller_registers = bodies.get(body)?.plan.registers;
+                let callee = resolve(bodies, body, slot, root_bytecode, cells)?;
                 let callee_plan = &bodies.get(callee)?.plan;
                 if usize::from(argc) != callee_plan.parameters.len() {
                     return None;
                 }
-                let callee_base = base + caller_registers;
+                let callee_base = base + current.registers;
                 let end = callee_base + callee_plan.registers;
                 if registers.len() < end {
                     registers.resize(end, f64::NAN);
@@ -373,8 +409,8 @@ pub(in crate::bytecode) fn run(
                     *registers.get_mut(callee_base + usize::from(parameter))? = value;
                 }
                 frames.push(Frame {
-                    body,
-                    pc,
+                    body: u16::try_from(body).ok()?,
+                    pc: u32::try_from(pc).ok()?,
                     base,
                     dst: base + usize::from(dst),
                 });
@@ -382,57 +418,91 @@ pub(in crate::bytecode) fn run(
                 pc = 0;
                 base = callee_base;
             }
-            NumOp::Return { src } => {
-                let value = *registers.get(base + usize::from(src))?;
+            None => {
                 let Some(frame) = frames.pop() else {
-                    return Some(value);
+                    return Some(returned);
                 };
-                body = frame.body;
-                pc = frame.pc;
+                body = usize::from(frame.body);
+                pc = frame.pc as usize;
                 base = frame.base;
-                *registers.get_mut(frame.dst)? = value;
+                *registers.get_mut(frame.dst)? = returned;
             }
         }
     }
 }
 
-/// Resolves the call of received-upvalue slot `slot` in body `caller` to a
-/// body of this run, adding one for a function it has not reached yet.
-fn link<'a>(
-    bodies: &mut Vec<Body<'a>>,
+/// The body index a call of received-upvalue slot `slot` from body `caller`
+/// reaches, resolving and adding it on first use.
+fn resolve(
+    bodies: &mut Vec<Body>,
     caller: usize,
     slot: u16,
     root_bytecode: &Bytecode,
+    root_cells: &[Upvalue],
+) -> Option<usize> {
+    let caller_body = bodies.get(caller)?;
+    if let Some(&(_, callee)) = caller_body
+        .links
+        .get(..usize::from(caller_body.link_count))?
+        .iter()
+        .find(|(linked, _)| *linked == slot)
+    {
+        return Some(usize::from(callee));
+    }
+    let callee = link(bodies, caller, slot, root_bytecode, root_cells)?;
+    let caller_body = bodies.get_mut(caller)?;
+    let count = usize::from(caller_body.link_count);
+    *caller_body.links.get_mut(count)? = (slot, u16::try_from(callee).ok()?);
+    caller_body.link_count += 1;
+    Some(callee)
+}
+
+/// Resolves the call of received-upvalue slot `slot` in body `caller` to a
+/// body of this run, adding one for a function it has not reached yet.
+fn link(
+    bodies: &mut Vec<Body>,
+    caller: usize,
+    slot: u16,
+    root_bytecode: &Bytecode,
+    root_cells: &[Upvalue],
 ) -> Option<usize> {
     let caller_body = bodies.get(caller)?;
     let bytecode: &Bytecode = caller_body.bytecode.as_deref().unwrap_or(root_bytecode);
     let index = bytecode.direct_readonly_received_upvalue_index(usize::from(slot))?;
     let cell = match &caller_body.function {
         Some(function) => function.upvalues.get(index)?,
-        None => caller_body.root_cells.get(index)?,
+        None => root_cells.get(index)?,
     };
-    let Value::Function(callee) = cell.get() else {
-        return None;
-    };
-    if let Some(existing) = bodies.iter().position(|body| {
-        body.function
-            .as_ref()
-            .is_some_and(|function| *function == callee)
-    }) {
+    // Compared in place: a body this run already reached costs no clone.
+    let existing = cell.with_value(|value| {
+        let Value::Function(callee) = value else {
+            return None;
+        };
+        Some(bodies.iter().position(|body| {
+            body.function
+                .as_ref()
+                .is_some_and(|function| function == callee)
+        }))
+    })?;
+    if let Some(existing) = existing {
         return Some(existing);
     }
-    let callee_bytecode = Rc::clone(callee.bytecode.as_ref()?);
-    if !super::activation::admits_numeric_callee(&callee, &callee_bytecode) {
+    let callee_value = cell.get();
+    let Value::Function(callee) = &callee_value else {
+        return None;
+    };
+    if !super::activation::admits_numeric_callee(&callee_value, callee) {
         return None;
     }
+    let callee = callee.clone();
+    let callee_bytecode = Rc::clone(callee.bytecode.as_ref()?);
     let plan = Rc::clone(plan_for(&callee_bytecode)?);
-    let root_cells = bodies.first()?.root_cells;
     bodies.push(Body {
         plan,
         function: Some(callee),
         bytecode: Some(callee_bytecode),
-        root_cells,
-        links: Vec::new(),
+        links: [(0, 0); MAX_LINKS],
+        link_count: 0,
     });
     Some(bodies.len() - 1)
 }
