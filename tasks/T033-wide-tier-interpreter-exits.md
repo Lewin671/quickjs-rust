@@ -264,6 +264,12 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   codegen unit (main itself: ai-astar 9270 vs 8276 M cycles), 64-byte
   function alignment (both worse). Merged on the external aggregate; the
   layout sensitivity is the open item below.
+- Stack run d8a98ca3 vs main 6968f738 (30 blocks, cycles, quiet host;
+  `target/comparison/perf11-d8a98ca3`): numeric call chains from wide
+  calls, allocation-free plan runs. External geomean 0.993 against main and
+  **0.860 against QuickJS-NG**; crypto-md5 0.785, ai-astar 0.840 and the
+  call sentinels 0.84-0.93 (the layout of perf10 rolled back, identical
+  instructions). Worst against main: string-unpack-code 1.047.
 - Rejected (2026-09-24): the boxed typed-loop registers as a fixed array
   like the scalar file (d21a068c): 1-3% fewer instructions but +20% cycles
   on the sentinels, ai-astar and imaging-gaussian-blur, whether the file
