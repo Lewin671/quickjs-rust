@@ -867,6 +867,14 @@ fn regexp_set_last_index_object(
     index: usize,
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
+    // A RegExp's own writable data property -- the case for every instance --
+    // is written in place; anything else takes the full [[Set]].
+    if matches!(
+        object.write_existing_own_data_property("lastIndex", &Value::Number(index as f64)),
+        crate::value::OwnDataPropertyWrite::Written
+    ) {
+        return Ok(());
+    }
     let receiver = Value::Object(object.clone());
     let key = PropertyKey::String("lastIndex".to_owned());
     if !ordinary_set(

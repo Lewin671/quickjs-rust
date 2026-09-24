@@ -34,6 +34,12 @@ fn to_js_exponential_string(number: f64) -> String {
 /// shortest-round-trip float formatter, which is exact for these values but
 /// several times slower.
 fn integer_to_string(value: i64) -> String {
+    let mut text = String::with_capacity(21);
+    push_integer(&mut text, value);
+    text
+}
+
+fn push_integer(out: &mut String, value: i64) {
     let mut digits = [0_u8; 20];
     let mut position = digits.len();
     let mut rest = value.unsigned_abs();
@@ -45,12 +51,29 @@ fn integer_to_string(value: i64) -> String {
             break;
         }
     }
-    let mut text = String::with_capacity(digits.len() - position + 1);
     if value < 0 {
-        text.push('-');
+        out.push('-');
     }
     for &digit in &digits[position..] {
-        text.push(char::from(digit));
+        out.push(char::from(digit));
     }
-    text
+}
+
+/// Appends `number`'s ToString to `out`: an integer's digits and an ordinary
+/// fraction are written in place, with no string of their own -- string
+/// building and `JSON.stringify` format a number per value.
+pub(crate) fn push_number_js_string(out: &mut String, number: f64) {
+    if number.is_finite() && number != 0.0 {
+        let magnitude = number.abs();
+        if number.fract() == 0.0 && magnitude < 1e15 {
+            push_integer(out, number as i64);
+            return;
+        }
+        if (1e-6..1e21).contains(&magnitude) {
+            use std::fmt::Write;
+            let _ = write!(out, "{number}");
+            return;
+        }
+    }
+    out.push_str(&number_to_js_string(number));
 }

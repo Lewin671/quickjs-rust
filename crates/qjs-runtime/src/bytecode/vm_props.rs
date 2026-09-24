@@ -1497,7 +1497,17 @@ pub(super) fn enumerable_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Val
     // per property of every layer. A linear scan made enumerating an object
     // quadratic in its property count.
     let mut seen: crate::value::name_hash::NameSet<Rc<str>> = <_>::default();
-    let mut current = value;
+    // ForIn/OfHeadEvaluation applies ToObject to anything but null and
+    // undefined: `for (i in "ab")` visits the wrapper's index keys.
+    let mut current = match value {
+        Value::String(_) | Value::Number(_) | Value::Boolean(_) | Value::BigInt(_) => {
+            crate::object::boxed_primitive(value, env).unwrap_or(Value::Null)
+        }
+        Value::Object(object) if crate::symbol::is_symbol_primitive(&object) => {
+            crate::object::boxed_primitive(Value::Object(object), env).unwrap_or(Value::Null)
+        }
+        value => value,
+    };
     loop {
         let prototype = match &current {
             Value::Proxy(proxy) => {

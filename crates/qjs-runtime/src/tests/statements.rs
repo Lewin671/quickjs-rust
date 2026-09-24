@@ -1573,3 +1573,17 @@ fn for_in_enumerates_each_prototype_layer_in_key_order_with_shadowing() {
         ))
     );
 }
+
+#[test]
+fn for_in_over_a_primitive_enumerates_its_wrapper() {
+    assert_eq!(
+        eval(
+            "function keys(o) { var r = []; for (var k in o) { r.push(k); } return r.join(','); } \
+             String.prototype.extra = 1; Number.prototype.n = 2; \
+             var s = keys('ab') + '|' + keys(null) + '|' + keys(5) + '|' + keys(true) + '|' + keys(undefined); \
+             delete String.prototype.extra; delete Number.prototype.n; \
+             var t = []; for (var k in 'xy') t.push(k); s + '|' + t.join(',');"
+        ),
+        Ok(Value::String("0,1,extra||n|||0,1".to_owned().into()))
+    );
+}

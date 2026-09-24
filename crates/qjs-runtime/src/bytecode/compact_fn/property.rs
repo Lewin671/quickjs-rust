@@ -614,7 +614,8 @@ pub(super) fn try_store_global_var(name: &str, value: &Value, env: &CallEnv) -> 
 }
 
 /// `name = name + right` for the global variable `name`, whose value `left`
-/// was read into a register: the concatenation extends the string in place,
+/// was read into a register: two numbers are summed and stored; otherwise the
+/// concatenation extends the string in place,
 /// as the interpreter's compound assignment does, instead of copying the
 /// whole accumulator. The binding's two mirrors -- the realm cell and the
 /// `globalThis` property -- are released first, so the register holds the
@@ -628,6 +629,17 @@ pub(super) fn try_append_global_var(
     right: &mut Value,
     env: &CallEnv,
 ) -> bool {
+    // A numeric accumulator (`total += n`) takes the same exit; its sum is
+    // stored like any other plain global assignment.
+    if let (Value::Number(sum), Value::Number(addend)) = (&*left, &*right) {
+        let value = Value::Number(sum + addend);
+        if !try_store_global_var(name, &value, env) {
+            return false;
+        }
+        *left = Value::Undefined;
+        *right = Value::Undefined;
+        return true;
+    }
     let Value::String(current) = &*left else {
         return false;
     };

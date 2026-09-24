@@ -1312,6 +1312,8 @@ fn is_exit_safe(op: &Op) -> bool {
             | Op::NewObjectDataLiteral { .. }
             | Op::AppendStringLiteralLocal { .. }
             | Op::StoreLocalOrGlobalSloppy { .. }
+            | Op::EnumerateKeys { .. }
+            | Op::ForInKeyIsEnumerable
     )
 }
 
@@ -1355,6 +1357,10 @@ fn effect_of(op: &Op) -> Option<Effect> {
         // A compound member assignment checks its object and converts its
         // key in place.
         Op::RequireObjectCoercible => simple(0, 0),
+        // A `for-in`'s key list and its per-key recheck exit; the exit
+        // answers both in place (`activation::exit_to_interpreter`).
+        Op::EnumerateKeys { .. } => simple(1, 1),
+        Op::ForInKeyIsEnumerable => simple(2, 1),
         Op::ToPropertyKeyForAccess => simple(1, 1),
         // An object literal is built at its exit, which always continues.
         Op::NewObjectDataLiteral { shape } => simple(u16::try_from(shape.input_len()).ok()?, 1),

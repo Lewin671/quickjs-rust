@@ -382,3 +382,47 @@ fn stringify_escapes_only_what_needs_escaping_between_plain_runs() {
         ))
     );
 }
+
+#[test]
+fn stringify_reads_array_elements_by_index_and_writes_numbers_in_place() {
+    assert_eq!(
+        eval(
+            "var out = []; \
+             var a = [1, , 3]; out.push(JSON.stringify(a)); \
+             Object.defineProperty(Array.prototype, 1, { get: function () { return \"proto\"; }, configurable: true }); \
+             var holey = JSON.stringify([0, , 2]); delete Array.prototype[1]; out.push(holey); \
+             out.push(JSON.stringify([{ toJSON: function (k) { return \"k\" + k; } }, 5])); \
+             out.push(JSON.stringify([7, 8], function (k, v) { return typeof v === \"number\" ? k + \":\" + v : v; })); \
+             out.push(JSON.stringify([-0, 1e21, 1e-7, 0.000001, 1.5, NaN, -Infinity, 123456789012345680000, 2 ** 53])); \
+             out.push(JSON.stringify([[1, [2, [3]]], { a: [4] }])); \
+             out.push(\"a\" + 1.5, 1e21 + \"\", -0 + \"\", \"x\" + null + undefined + true, 0.000001 + \"s\", 1e-7 + \"s\", 123 + \"px\"); \
+             out.join(\"|\");"
+        ),
+        Ok(Value::String(
+            "[1,null,3]|[0,\"proto\",2]|[\"k0\",5]|[\"0:7\",\"1:8\"]|[0,1e+21,1e-7,0.000001,1.5,null,null,123456789012345680000,9007199254740992]|[[1,[2,[3]]],{\"a\":[4]}]|a1.5|1e+21|0|xnullundefinedtrue|0.000001s|1e-7s|123px"
+                .to_owned()
+                .into()
+        ))
+    );
+}
+
+#[test]
+fn parse_shares_repeated_keys_without_sharing_objects() {
+    assert_eq!(
+        eval(
+            "var out = []; \
+             var rows = JSON.parse('[{\"a\":1,\"b\":2},{\"a\":3,\"b\":4,\"a\":5},{\"__proto__\":7,\"b\\\\u0041\":8}]'); \
+             out.push(rows.map(function (r) { return Object.keys(r).join(\"+\") + \"=\" + Object.keys(r).map(function (k) { return r[k]; }).join(\"+\"); }).join(\";\")); \
+             out.push(Object.getPrototypeOf(rows[2]) === Object.prototype, rows[2].__proto__); \
+             var big = \"{\"; for (var i = 0; i < 300; i++) big += (i ? \",\" : \"\") + '\"k' + i + '\":' + i; big += \"}\"; \
+             var o = JSON.parse(big); out.push(Object.keys(o).length, o.k299, o.k0); \
+             var rs = JSON.parse('[{\"x\":1},{\"x\":2}]'); rs[0].x = 9; rs[0].y = 1; out.push(rs[1].x, Object.keys(rs[1]).join()); \
+             out.join(\"|\");"
+        ),
+        Ok(Value::String(
+            "a+b=1+2;a+b=5+4;__proto__+bA=7+8|true|7|300|299|0|2|x"
+                .to_owned()
+                .into()
+        ))
+    );
+}

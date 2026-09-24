@@ -26,7 +26,7 @@ struct WideActivation<'a> {
     /// The environment this body runs in, borrowed: `shares_caller_environment`
     /// proves it equals what `direct_leaf_function_env` would build.
     env: &'a CallEnv,
-    upvalue_owner: &'a Option<Function>,
+    upvalue_owner: Option<&'a Function>,
     upvalue_slots: u128,
     /// The seeded `this`, mirroring `Vm.direct_this`. A body that reads `this`
     /// is admitted only when this is present.
@@ -35,7 +35,7 @@ struct WideActivation<'a> {
 
 impl WideActivation<'_> {
     fn upvalue_cell(&self, slot: usize) -> Option<&Upvalue> {
-        let owner = self.upvalue_owner.as_ref()?;
+        let owner = self.upvalue_owner?;
         let bit = (slot < u128::BITS as usize).then(|| 1_u128 << slot)?;
         (self.upvalue_slots & bit != 0).then_some(())?;
         let index = self.bytecode.readonly_received_upvalue_index(slot)?;
@@ -213,46 +213,97 @@ fn environment_is_slot_only(env: &CallEnv) -> bool {
 }
 
 /// Whether `direct_leaf_function_env` would build, for this callee, an
-/// environment equal field for field to the one its caller holds.
+/// environment equal field for field to the one its caller holds, as far as
+/// the caller decides: the module host. The function's own part is in its
+/// fixed facts.
 ///
 /// A body that reads `this` does not break the proof here: the driver seeds
 /// `this` from the call site's receiver instead of a frame binding, exactly
 /// as the slot-seeded frame does, so it never touches the shared environment.
 /// Only a lexical-`this` arrow inherits `this` from its enclosing environment
 /// and cannot be seeded from a receiver.
-fn shares_caller_environment(function: &Function, bytecode: &Bytecode, env: &CallEnv) -> bool {
+fn shares_caller_environment(function: &Function, env: &CallEnv) -> bool {
     let host_agrees = match (&function.module_host, env.module_host_ref()) {
         (None, _) => true,
         (Some(callee), Some(caller)) => std::rc::Rc::ptr_eq(callee, caller),
         (Some(_), None) => false,
     };
-    host_agrees
-        && !function.has_dynamic_function_realm_override.get()
-        && fixed_inline_facts_hold(function, bytecode)
+    host_agrees && !function.has_dynamic_function_realm_override.get()
 }
 
+/// `Function::wide_inline_facts`: computed, and eligible to run on this
+/// driver as far as the function's fixed facts decide; then the facts it is
+/// entered with, the register count in the high half.
+const FACTS_KNOWN: u64 = 1;
+const FACTS_ELIGIBLE: u64 = 1 << 1;
+const FACTS_REQUIRES_THIS: u64 = 1 << 2;
+const FACTS_STRICT: u64 = 1 << 3;
+const FACTS_LEXICAL_SLOTS: u64 = 1 << 4;
+const FACTS_REGISTER_SHIFT: u32 = 32;
+
 /// The part of the inlining proof that depends only on the function, fixed
-/// once it is created -- its lexical `this`, its dynamic-realm origin, its
-/// module imports, its private environment and home object -- memoized on
-/// the function object. Direct-leaf eligibility is itself memoized.
-fn fixed_inline_facts_hold(function: &Function, bytecode: &Bytecode) -> bool {
-    if let Some(eligible) = function.wide_inline_eligible.get() {
-        return eligible;
+/// once it is created -- direct-leaf eligibility, its lexical `this`, its
+/// dynamic-realm origin, its module imports, its private environment and
+/// home object, its upvalue layout, its program's slot requirements --
+/// memoized on the function object with the facts the driver enters it
+/// with, so a call reads one word instead of re-deriving each.
+#[inline]
+fn fixed_inline_facts(callee: &Value, function: &Function, bytecode: &Bytecode) -> u64 {
+    let facts = function.wide_inline_facts.get();
+    if facts & FACTS_KNOWN != 0 {
+        return facts;
     }
+    let facts = compute_fixed_inline_facts(callee, function, bytecode);
+    function.wide_inline_facts.set(facts);
+    facts
+}
+
+#[cold]
+#[inline(never)]
+fn compute_fixed_inline_facts(callee: &Value, function: &Function, bytecode: &Bytecode) -> u64 {
     let inherits_lexical_this = function.lexical_this && bytecode.uses_lexical_this();
-    let eligible = !inherits_lexical_this
-        && !function.has_dynamic_function_realm
-        && function.module_imports.is_empty()
-        && !function.has_cold_lexical_state();
-    function.wide_inline_eligible.set(Some(eligible));
-    eligible
+    if !crate::function::is_direct_leaf_function(callee)
+        || inherits_lexical_this
+        || function.has_dynamic_function_realm
+        || !function.module_imports.is_empty()
+        || function.has_cold_lexical_state()
+    {
+        return FACTS_KNOWN;
+    }
+    // `admit`'s checks that do not change once the function exists; its
+    // activation count is the caller's to check.
+    let Some(program) = super::program_for(bytecode) else {
+        return FACTS_KNOWN;
+    };
+    let upvalue_slots = bytecode.readonly_received_upvalue_slots().unwrap_or(0);
+    if upvalue_slots != 0 && function.upvalues.len() != bytecode.received_upvalue_slots().len() {
+        return FACTS_KNOWN;
+    }
+    if bytecode.authoritative_mask_clean() & !upvalue_slots & program.required_authoritative_slots
+        != program.required_authoritative_slots
+    {
+        return FACTS_KNOWN;
+    }
+    let Ok(register_count) = u32::try_from(program.register_count) else {
+        return FACTS_KNOWN;
+    };
+    let mut facts =
+        FACTS_KNOWN | FACTS_ELIGIBLE | (u64::from(register_count) << FACTS_REGISTER_SHIFT);
+    if program.requires_this {
+        facts |= FACTS_REQUIRES_THIS;
+    }
+    if function.is_strict {
+        facts |= FACTS_STRICT;
+    }
+    if !program.lexical_slots.is_empty() {
+        facts |= FACTS_LEXICAL_SLOTS;
+    }
+    facts
 }
 
 /// One suspended wide activation.
 struct WideFrame {
     callee: Value,
-    upvalue_owner: Option<Function>,
-    upvalue_slots: u128,
     this_value: Option<Value>,
     base: usize,
     len: usize,
@@ -318,15 +369,18 @@ fn callee_parameter_slots(callee: &Value) -> &[usize] {
 
 #[inline]
 fn clear_window(window: &mut [Value]) {
+    // Most of a returning window is already empty -- the operations that
+    // consumed its operands moved them out -- and an empty register needs no
+    // write at all.
     for slot in window {
-        execute::store(slot, Value::Undefined);
+        if !matches!(slot, Value::Undefined) {
+            execute::store(slot, Value::Undefined);
+        }
     }
 }
 
 /// What the driver needs to enter an admitted callee in its own window.
 struct InlineCallee {
-    upvalue_owner: Option<Function>,
-    upvalue_slots: u128,
     register_count: usize,
     requires_this: bool,
     is_strict: bool,
@@ -336,27 +390,22 @@ struct InlineCallee {
 
 /// Proves a callee may run on this driver, in a window of its register stack.
 fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
-    if !crate::function::is_direct_leaf_function(callee) {
-        return None;
-    }
     let Value::Function(function) = callee else {
         return None;
     };
     let bytecode = function.bytecode.as_ref()?;
-    if !shares_caller_environment(function, bytecode, env) {
+    let facts = fixed_inline_facts(callee, function, bytecode);
+    if facts & FACTS_ELIGIBLE == 0 || !shares_caller_environment(function, env) {
         return None;
     }
-    let entry = admit(
-        bytecode,
-        crate::bytecode::DirectCallUpvalues::Function(function),
-    )?;
+    if !super::program_for(bytecode)?.admit_activation() {
+        return None;
+    }
     Some(InlineCallee {
-        register_count: entry.program.register_count,
-        upvalue_owner: entry.upvalue_owner,
-        upvalue_slots: entry.upvalue_slots,
-        requires_this: entry.program.requires_this,
-        is_strict: function.is_strict,
-        has_lexical_slots: !entry.program.lexical_slots.is_empty(),
+        register_count: (facts >> FACTS_REGISTER_SHIFT) as usize,
+        requires_this: facts & FACTS_REQUIRES_THIS != 0,
+        is_strict: facts & FACTS_STRICT != 0,
+        has_lexical_slots: facts & FACTS_LEXICAL_SLOTS != 0,
     })
 }
 
@@ -405,8 +454,6 @@ fn enter_constructor(
     registers: &mut Vec<Value>,
     frames: &mut Vec<WideFrame>,
     current_callee: &mut Value,
-    current_owner: &mut Option<Function>,
-    current_slots: &mut u128,
     current_this: &mut Option<Value>,
     current_base: &mut usize,
     current_len: &mut usize,
@@ -448,8 +495,6 @@ fn enter_constructor(
     }
     frames.push(WideFrame {
         callee: std::mem::replace(current_callee, callee),
-        upvalue_owner: std::mem::replace(current_owner, inline.upvalue_owner),
-        upvalue_slots: std::mem::replace(current_slots, inline.upvalue_slots),
         this_value: current_this.replace(Value::Object(receiver)),
         base: std::mem::replace(current_base, callee_base),
         len: std::mem::replace(current_len, callee_len),
@@ -567,6 +612,51 @@ fn exit_to_interpreter(
         if property::try_plain_set_index(window, top - 2, top - 1, *index, env) {
             return ExitOutcome::Continue { pc: resume_pc };
         }
+    }
+    // A `for-in`'s key list and its per-key recheck, answered in place so
+    // the loop stays on this tier (`compile::is_exit_safe`).
+    match bytecode.code.get(ip as usize) {
+        Some(crate::bytecode::ir::Op::EnumerateKeys { cache }) => {
+            if let Some(pc) = program.resume_pc(ip as usize + 1, usize::from(depth)) {
+                let top = usize::from(program.local_registers) + usize::from(depth);
+                let target = std::mem::replace(&mut window[top - 1], Value::Undefined);
+                let mut call_env = env.empty_frame();
+                return match crate::bytecode::vm_ops::enumerate_keys_cached(
+                    &target,
+                    cache,
+                    &mut call_env,
+                ) {
+                    Ok(keys) => {
+                        window[top - 1] = Value::Array(keys);
+                        ExitOutcome::Continue { pc }
+                    }
+                    Err(error) => ExitOutcome::Finished(Err(error)),
+                };
+            }
+        }
+        Some(crate::bytecode::ir::Op::ForInKeyIsEnumerable) => {
+            let top = usize::from(program.local_registers) + usize::from(depth);
+            if let Some(pc) = program.resume_pc(ip as usize + 1, usize::from(depth) - 1)
+                && let Value::String(key) = &window[top - 1]
+            {
+                let key = key.clone();
+                let target = std::mem::replace(&mut window[top - 2], Value::Undefined);
+                execute::store(&mut window[top - 1], Value::Undefined);
+                let mut call_env = env.empty_frame();
+                return match crate::bytecode::vm_ops::for_in_property_is_enumerable(
+                    target,
+                    &key,
+                    &mut call_env,
+                ) {
+                    Ok(enumerable) => {
+                        window[top - 2] = Value::Boolean(enumerable);
+                        ExitOutcome::Continue { pc }
+                    }
+                    Err(error) => ExitOutcome::Finished(Err(error)),
+                };
+            }
+        }
+        _ => {}
     }
     // `g = g + value` on a global string: appended in place, then the store
     // is skipped (see `compile::appends_to_global`).
@@ -882,8 +972,10 @@ fn run_frames(
     debug_assert!(frames.is_empty(), "a root activation starts its own stack");
 
     let mut current_callee = Value::Undefined;
-    let mut current_owner = entry.upvalue_owner;
-    let mut current_slots = entry.upvalue_slots;
+    // The root body's upvalue owner; a callee entered on this driver owns
+    // its own upvalues, and its read-only slots are its bytecode's.
+    let root_owner = entry.upvalue_owner;
+    let root_slots = entry.upvalue_slots;
     let mut current_this = root_this;
     let mut current_base = 0_usize;
     let mut current_len = entry.program.register_count;
@@ -908,11 +1000,18 @@ fn run_frames(
                 unwind(registers, frames, current_base + current_len);
                 return Err(missing_program());
             };
+            let (upvalue_owner, upvalue_slots) = match &current_callee {
+                Value::Function(function) => (
+                    Some(function),
+                    bytecode.readonly_received_upvalue_slots().unwrap_or(0),
+                ),
+                _ => (root_owner.as_ref(), root_slots),
+            };
             let activation = WideActivation {
                 bytecode,
                 env,
-                upvalue_owner: &current_owner,
-                upvalue_slots: current_slots,
+                upvalue_owner,
+                upvalue_slots,
                 this_value: current_this.as_ref(),
             };
             let ops = &program.ops[..];
@@ -1321,8 +1420,6 @@ fn run_frames(
                 registers,
                 frames,
                 &mut current_callee,
-                &mut current_owner,
-                &mut current_slots,
                 &mut current_this,
                 &mut current_base,
                 &mut current_len,
@@ -1366,8 +1463,6 @@ fn run_frames(
                     value
                 };
                 current_callee = caller.callee;
-                current_owner = caller.upvalue_owner;
-                current_slots = caller.upvalue_slots;
                 current_this = caller.this_value;
                 current_base = caller.base;
                 current_len = caller.len;
@@ -1424,7 +1519,11 @@ fn run_frames(
                         Value::Undefined,
                     );
                     match parameter_slots.get(index) {
-                        Some(&slot) if slot < callee_len => callee_side[slot] = value,
+                        // The window was cleared when it was last returned
+                        // from, so the register holds a primitive to forget.
+                        Some(&slot) if slot < callee_len => {
+                            release(std::mem::replace(&mut callee_side[slot], value));
+                        }
                         _ => release(value),
                     }
                 }
@@ -1433,11 +1532,18 @@ fn run_frames(
             // general path applies: the resolved receiver, or `undefined`
             // for a plain call.
             let callee_this = if inline.requires_this {
-                Some(crate::function::function_call_this(
-                    receiver,
-                    env,
-                    inline.is_strict,
-                ))
+                // An object receiver is `this` unchanged, strict or not;
+                // only a primitive (a symbol is an object here) or a missing
+                // receiver takes the coercion.
+                Some(match receiver {
+                    Some(this @ (Value::Array(_) | Value::Function(_))) => this,
+                    Some(Value::Object(object)) if !crate::symbol::is_symbol_primitive(&object) => {
+                        Value::Object(object)
+                    }
+                    receiver => {
+                        crate::function::function_call_this(receiver, env, inline.is_strict)
+                    }
+                })
             } else {
                 if let Some(receiver) = receiver {
                     release(receiver);
@@ -1454,8 +1560,6 @@ fn run_frames(
             }
             frames.push(WideFrame {
                 callee: std::mem::replace(&mut current_callee, callee),
-                upvalue_owner: current_owner,
-                upvalue_slots: current_slots,
                 this_value: std::mem::replace(&mut current_this, callee_this),
                 base: current_base,
                 len: current_len,
@@ -1463,8 +1567,6 @@ fn run_frames(
                 dst,
                 constructs: false,
             });
-            current_owner = inline.upvalue_owner;
-            current_slots = inline.upvalue_slots;
             current_base = callee_base;
             current_len = callee_len;
             pc = 0;
@@ -1472,11 +1574,19 @@ fn run_frames(
         }
 
         let outcome = {
+            let bytecode = running_bytecode(&current_callee, root_bytecode);
+            let (upvalue_owner, upvalue_slots) = match &current_callee {
+                Value::Function(function) => (
+                    Some(function),
+                    bytecode.readonly_received_upvalue_slots().unwrap_or(0),
+                ),
+                _ => (root_owner.as_ref(), root_slots),
+            };
             let activation = WideActivation {
-                bytecode: running_bytecode(&current_callee, root_bytecode),
+                bytecode,
                 env,
-                upvalue_owner: &current_owner,
-                upvalue_slots: current_slots,
+                upvalue_owner,
+                upvalue_slots,
                 this_value: current_this.as_ref(),
             };
             let arguments = &registers[argument_index..argument_index + argument_count];

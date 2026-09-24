@@ -330,7 +330,16 @@ struct JsonParser<'a> {
     cursor: usize,
     env: &'a CallEnv,
     source_mode: JsonSourceMode,
+    /// Object keys seen so far, shared: records in a JSON array repeat the
+    /// same keys, and one `Rc<str>` per distinct key saves an allocation per
+    /// member -- and lets a read cache keyed by interned name serve every
+    /// record. Bounded by `MAX_INTERNED_KEYS`.
+    keys: crate::value::name_hash::NameSet<Rc<str>>,
 }
+
+/// Distinct keys a parse shares; a dictionary with more unique keys stops
+/// growing the set rather than holding every key twice.
+const MAX_INTERNED_KEYS: usize = 256;
 
 impl<'a> JsonParser<'a> {
     fn new(source: &'a str, env: &'a CallEnv, source_mode: JsonSourceMode) -> Self {
@@ -339,6 +348,7 @@ impl<'a> JsonParser<'a> {
             cursor: 0,
             env,
             source_mode,
+            keys: Default::default(),
         }
     }
 
@@ -463,7 +473,17 @@ impl<'a> JsonParser<'a> {
     fn string_rc(&mut self) -> Result<Rc<str>, RuntimeError> {
         match self.scan_string()? {
             JsonStringScan::Direct { start, end } => {
-                let value = Rc::from(&self.source[start..end]);
+                let text = &self.source[start..end];
+                let value = match self.keys.get(text) {
+                    Some(key) => Rc::clone(key),
+                    None => {
+                        let key: Rc<str> = Rc::from(text);
+                        if self.keys.len() < MAX_INTERNED_KEYS {
+                            self.keys.insert(Rc::clone(&key));
+                        }
+                        key
+                    }
+                };
                 self.cursor = end + 1;
                 Ok(value)
             }
