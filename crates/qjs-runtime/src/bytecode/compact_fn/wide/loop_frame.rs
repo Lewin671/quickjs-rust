@@ -30,7 +30,12 @@ pub(super) struct WideLoopFrame<'a> {
     /// Where the program left the loop and the operand stack it left.
     pub(super) resume_ip: Option<usize>,
     pub(super) deoptimized: bool,
-    pub(super) stack: Vec<Value>,
+    /// The activation's operand-stack registers above the loop's base, which
+    /// a leaving program rebuilds in place (`push_stack`), and how many it
+    /// has pushed; `stack_overflowed` if more than fit.
+    stack: &'a mut [Value],
+    pub(super) pushed: usize,
+    pub(super) stack_overflowed: bool,
     /// Backedges the program took before its loop exited normally.
     pub(super) iterations: Option<u64>,
     declined: u128,
@@ -50,6 +55,7 @@ impl<'a> WideLoopFrame<'a> {
         upvalues: &'a [Upvalue],
         upvalue_slots: u128,
         this_value: Option<&'a Value>,
+        stack: &'a mut [Value],
     ) -> Self {
         Self {
             bytecode,
@@ -61,7 +67,9 @@ impl<'a> WideLoopFrame<'a> {
             this_value,
             resume_ip: None,
             deoptimized: false,
-            stack: Vec::new(),
+            stack,
+            pushed: 0,
+            stack_overflowed: false,
             iterations: None,
             declined: 0,
             array_prototype: None,
@@ -192,7 +200,11 @@ impl LoopFrame for WideLoopFrame<'_> {
     fn record_sloppy_global_name(&mut self, _name: &str) {}
 
     fn push_stack(&mut self, value: Value) {
-        self.stack.push(value);
+        match self.stack.get_mut(self.pushed) {
+            Some(register) => crate::bytecode::compact_fn::execute::store(register, value),
+            None => self.stack_overflowed = true,
+        }
+        self.pushed += 1;
     }
 
     fn ran_iterations(&mut self, iterations: u64) {

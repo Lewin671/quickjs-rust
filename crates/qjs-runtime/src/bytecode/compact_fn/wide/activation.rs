@@ -918,6 +918,7 @@ fn run_typed_loop_here(
         upvalues,
         bytecode.readonly_received_upvalue_slots().unwrap_or(0),
         this_value,
+        stack.get_mut(base_depth..).unwrap_or_default(),
     );
     if !crate::bytecode::typed_loop::try_run_typed_loop(&mut frame, plans, header, backedge) {
         return LoopHere::Declined;
@@ -934,18 +935,15 @@ fn run_typed_loop_here(
         program.record_typed_entry(index, iterations);
     }
     let declined_typed_loop_programs = frame.declined_typed_loop_programs();
-    let values = std::mem::take(&mut frame.stack);
+    let (pushed, overflowed) = (frame.pushed, frame.stack_overflowed);
     let Some(resume) = resume else {
         return LoopHere::Declined;
     };
-    // The program rebuilt the stack above the loop's own base; what lay
-    // below it when the loop began is still in its registers.
-    let depth = base_depth + values.len();
-    if depth > stack.len() {
+    // The program rebuilt the stack above the loop's own base, in place;
+    // what lay below it when the loop began is still in its registers.
+    let depth = base_depth + pushed;
+    if overflowed {
         return LoopHere::Declined;
-    }
-    for (register, value) in stack[base_depth..].iter_mut().zip(values) {
-        execute::store(register, value);
     }
     // `QJS_CF_TRACE=1` names each loop program run from an exit.
     #[cfg(feature = "perf-counters")]
