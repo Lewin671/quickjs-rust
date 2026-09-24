@@ -1393,3 +1393,25 @@ fn a_for_in_loop_stays_on_the_tier_with_the_interpreter_s_semantics() {
         )
     );
 }
+
+#[test]
+fn methods_with_a_home_object_run_inline_and_super_or_private_bodies_keep_their_path() {
+    // Class and object-literal methods carry a home object, which only
+    // `super` observes; a body using `super` or a private name is not
+    // compiled for this tier and keeps the general call.
+    assert_eq!(
+        value_of(
+            "class Base { value() { return 1; } twice() { return this.value() * 2; } } \
+         class Derived extends Base { value() { return super.value() + 10; } plus(n) { return this.twice() + n; } } \
+         class Secret { #k = 5; get() { return this.#k; } add(n) { return this.get() + n; } } \
+         var lit = { base: 3, m() { return this.base + 1; }, n() { return this.m() * 2; } }; \
+         var out = []; \
+         var d = new Derived(), s = new Secret(), b = new Base(); \
+         var total = 0; \
+         for (var i = 0; i < 1000; i++) { total += d.plus(i) + s.add(i) + lit.n() + b.twice(); } \
+         out.push(total, d.twice(), s.add(1), lit.n()); \
+         out.join(\",\");"
+        ),
+        Value::String("1036000,22,6,8".to_owned().into())
+    );
+}

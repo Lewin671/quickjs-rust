@@ -243,8 +243,8 @@ const FACTS_REGISTER_SHIFT: u32 = 32;
 
 /// The part of the inlining proof that depends only on the function, fixed
 /// once it is created -- direct-leaf eligibility, its lexical `this`, its
-/// dynamic-realm origin, its module imports, its private environment and
-/// home object, its upvalue layout, its program's slot requirements --
+/// dynamic-realm origin, its module imports, its upvalue layout, its
+/// program's slot requirements --
 /// memoized on the function object with the facts the driver enters it
 /// with, so a call reads one word instead of re-deriving each.
 #[inline]
@@ -262,11 +262,13 @@ fn fixed_inline_facts(callee: &Value, function: &Function, bytecode: &Bytecode) 
 #[inline(never)]
 fn compute_fixed_inline_facts(callee: &Value, function: &Function, bytecode: &Bytecode) -> u64 {
     let inherits_lexical_this = function.lexical_this && bytecode.uses_lexical_this();
+    // A method's home object and a class's private environment are not
+    // checked: only `super` and private-name operations observe them, and
+    // this tier compiles no body that contains either.
     if !crate::function::is_direct_leaf_function(callee)
         || inherits_lexical_this
         || function.has_dynamic_function_realm
         || !function.module_imports.is_empty()
-        || function.has_cold_lexical_state()
     {
         return FACTS_KNOWN;
     }
