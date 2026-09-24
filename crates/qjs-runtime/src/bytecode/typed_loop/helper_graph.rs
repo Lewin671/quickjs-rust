@@ -43,6 +43,8 @@ use super::frame::LoopFrame;
 use crate::Value;
 use crate::function::{Function, NativeFunction};
 
+mod numeric;
+
 /// How many helper bodies one loop entry may flatten. A graph deeper or wider
 /// than this is not a leaf computation any more, and preparation is per entry,
 /// so the bound is what keeps that cost bounded too.
@@ -140,6 +142,13 @@ struct HelperProgram {
 #[derive(Clone, Debug, Default)]
 pub(super) struct HelperGraph {
     programs: Vec<HelperProgram>,
+    /// Each program's body over `f64` registers, when it holds only values
+    /// that encoding represents (`numeric`). Kept beside `programs` rather
+    /// than in them: `call` is inlined into the typed loop's dispatch, and
+    /// changing the layout it walks re-rolled that loop's register
+    /// allocation -- ai-astar and the call sentinels moved 18-25% with
+    /// identical instructions.
+    numeric: Vec<Option<numeric::NumProgram>>,
 }
 
 impl HelperGraph {
@@ -169,6 +178,14 @@ impl HelperGraph {
             return None;
         }
         let program = self.programs.get(index as usize)?;
+        // A numeric body calls no other helper, so only the loop's own call
+        // (depth zero) can reach one; recursion skips the check.
+        if depth == 0
+            && let Some(Some(numeric)) = self.numeric.get(index as usize)
+            && let Some(numbers) = numbers(args)
+        {
+            return numeric.run(&numbers[..args.len()]);
+        }
         // `Typed` is `Copy`, so the whole file is a stack array: a helper call
         // allocates nothing and its registers stay in the frame the compiler
         // chose for this function.
@@ -247,6 +264,18 @@ impl HelperGraph {
             }
         }
     }
+}
+
+/// The arguments as numbers, when every one is a number.
+fn numbers(args: &[Typed]) -> Option<[f64; MAX_HELPER_ARITY]> {
+    let mut numbers = [0.0; MAX_HELPER_ARITY];
+    for (number, arg) in numbers.iter_mut().zip(args) {
+        let Typed::Number(value) = arg else {
+            return None;
+        };
+        *number = *value;
+    }
+    (args.len() <= MAX_HELPER_ARITY).then_some(numbers)
 }
 
 /// What one abstract stack entry of a helper body holds while it is flattened.
@@ -376,11 +405,14 @@ impl Preparation {
             callee: function.clone(),
             locals: 0,
         });
+        self.graph.numeric.push(None);
         let Some((ops, locals)) = self.flatten(vm, function, bytecode, arity, depth) else {
             self.graph.programs.truncate(reserved);
+            self.graph.numeric.truncate(reserved);
             return None;
         };
         let program = self.graph.programs.get_mut(reserved)?;
+        *self.graph.numeric.get_mut(reserved)? = numeric::NumProgram::lower(&ops, arity);
         program.ops = ops;
         program.locals = locals;
         Some(index)
@@ -448,6 +480,11 @@ impl Preparation {
                 {
                     return None;
                 }
+            }
+            // A backward jump (a loop in the helper) is validated against
+            // the state the body reached its target with, so record it.
+            if walk.states[ip].is_none() {
+                walk.states[ip] = Some(walk.stack.clone());
             }
             walk.program_index[ip] = u16::try_from(walk.ops.len()).ok();
             self.step(vm, &mut walk, function, bytecode, code.get(ip)?, depth)?;
@@ -549,6 +586,38 @@ impl Preparation {
                 let src = walk.pop_register()?;
                 let dst = walk.push_register()?;
                 walk.ops.push(HelperOp::Unary { dst, op: *op, src });
+            }
+            // Expressed with the operations the tagged interpreter already
+            // has, so its code -- which the typed loop's layout is sensitive
+            // to -- does not change: `ToNumeric` is unary plus on these
+            // values, and an update adds or subtracts a constant one.
+            Op::ToNumeric => {
+                let src = walk.pop_register()?;
+                let dst = walk.push_register()?;
+                walk.ops.push(HelperOp::Unary {
+                    dst,
+                    op: UnaryOp::Plus,
+                    src,
+                });
+            }
+            Op::Update(op) => {
+                let src = walk.pop_register()?;
+                let dst = walk.push_register()?;
+                let one = walk.push_register()?;
+                walk.ops.push(HelperOp::Const {
+                    dst: one,
+                    value: Typed::Number(1.0),
+                });
+                walk.ops.push(HelperOp::Binary {
+                    dst,
+                    op: match op {
+                        qjs_ast::UpdateOp::Increment => BinaryOp::Add,
+                        qjs_ast::UpdateOp::Decrement => BinaryOp::Sub,
+                    },
+                    left: src,
+                    right: one,
+                });
+                walk.stack.pop()?;
             }
             Op::JumpIfFalse(target) => {
                 // The branch peeks, so both edges carry the same stack.
@@ -732,11 +801,29 @@ impl Walk {
         Some(())
     }
 
-    /// Records the abstract stack a forward branch delivers to `target`.
+    /// Records the abstract stack a branch delivers to `target`, or checks it
+    /// against the one already recorded there. A backward branch -- a loop
+    /// in the helper -- meets a state recorded when the body first reached
+    /// its target, and every entry of both has to be a register, which is
+    /// named by its depth, so equal depths are then equal states.
     fn record_target(&mut self, target: usize) -> Option<()> {
+        let backward = self.program_index.get(target).copied().flatten().is_some();
+        if backward
+            && !self
+                .stack
+                .iter()
+                .all(|slot| matches!(slot, Slot::Register(_)))
+        {
+            return None;
+        }
         let state = self.states.get_mut(target)?;
         match state {
-            Some(existing) => (existing.len() == self.stack.len()).then_some(()),
+            Some(existing) => (existing.len() == self.stack.len()
+                && (!backward
+                    || existing
+                        .iter()
+                        .all(|slot| matches!(slot, Slot::Register(_)))))
+            .then_some(()),
             None => {
                 *state = Some(self.stack.clone());
                 Some(())

@@ -245,6 +245,14 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   geomean 0.984 against main and **0.876 against QuickJS-NG**; tofte 0.883,
   3d-raytrace 0.896, crypto-aes 0.914, bits-in-byte 0.924. Worst against
   main: string-unpack-code 1.009. Sentinels 0.995-1.005.
+- Stack run 357d81c3 vs main e7c34545 (30 blocks, cycles, quiet host;
+  `target/comparison/perf9-357d81c3`): helpers with loops, and numeric
+  helpers on f64 registers. External geomean 0.992 against main and
+  **0.869 against QuickJS-NG**; bits-in-byte 0.656 (0.997 against NG,
+  from 1.52). Worst against main: imaging-gaussian-blur 1.032.
+  Sentinels 0.994-0.999 except recursive_call_tree 1.040 (identical
+  instructions; the grown helper interpreter's placement -- every other
+  placement tried moved ai-astar or the call sentinels 18-25%).
 - Rejected (2026-09-24): the boxed typed-loop registers as a fixed array
   like the scalar file (d21a068c): 1-3% fewer instructions but +20% cycles
   on the sentinels, ai-astar and imaging-gaussian-blur, whether the file
