@@ -918,6 +918,9 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         .iter()
         .any(|op| matches!(op, Op::LoadGlobal(name) if is_this_read(name)));
 
+    let typed_entry_counts = (0..probed_backedges.len())
+        .map(|_| std::cell::Cell::new((0, 0)))
+        .collect();
     Some(WideProgram {
         ops,
         named_reads,
@@ -936,6 +939,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         exit_heavy: std::cell::Cell::new(false),
         probed_backedges: probed_backedges.into_boxed_slice(),
         native_backedges: std::cell::Cell::new(0),
+        typed_entry_counts,
         ip_to_pc: compact_index.into_boxed_slice(),
         ip_depth: entry_depth
             .iter()

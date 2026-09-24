@@ -223,6 +223,23 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   own write ~300/71 (two plain op dispatches alone ~140); entering a typed
   loop from a wide exit ~3,900; a typed iteration of `o.x += o.y * i`
   722/305. nbody enters three typed programs per `advance` call.
+- Stack run 72c84fa8 vs main 1d9a5ec3 (30 blocks, cycles, quiet host;
+  `target/comparison/perf7-72c84fa8`): short loops kept on the wide tier
+  instead of entering their typed program, the compact tier's inlining
+  proof memoized on the function, and a fixed typed-loop scalar register
+  file indexed without bounds checks. External geomean 0.988 against main
+  and **0.889 against QuickJS-NG**; imaging-gaussian-blur 0.944, 3d-morph
+  0.952, access-nsieve 0.953, controlflow-recursive 0.956. Worst against
+  main: 3d-raytrace 1.011, tofte 1.010. Sentinels 0.911-0.999
+  (heterogeneous_property_read 0.911).
+- Rejected (2026-09-24): the boxed typed-loop registers as a fixed array
+  like the scalar file (d21a068c): 1-3% fewer instructions but +20% cycles
+  on the sentinels, ai-astar and imaging-gaussian-blur, whether the file
+  was its own 2 KiB box, shared one allocation with the scalar file, or
+  was padded -- not 4K aliasing, not scratch allocation (1-7 fresh scratch
+  per run); treated as dispatch-loop codegen. Patch /tmp/boxed-file.patch.
+- Rejected (2026-09-24): regenerating `hot-functions.order` did not remove
+  the layout swings (bits-in-byte +4% with identical instructions).
 - Rejected: a proven-receiver prototype read ahead of the own-entry probe
   (method read 333 -> 268 instructions on a micro) -- hash-map 1.052,
   raytrace-class-fields 1.045, cdjs 1.041 in cycles with slightly more

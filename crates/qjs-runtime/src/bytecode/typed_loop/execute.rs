@@ -13,7 +13,8 @@ use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
 use super::frame::LoopFrame;
 use super::{
-    Class, DeoptSite, MAX_NATIVE_ITERATIONS, Typed, TypedLoopProgram, TypedLoopScratch, TypedOp,
+    Class, DeoptSite, MAX_NATIVE_ITERATIONS, REGISTER_FILE, Typed, TypedLoopProgram,
+    TypedLoopScratch, TypedOp,
 };
 use crate::Value;
 
@@ -159,12 +160,20 @@ fn run<F: LoopFrame>(vm: &mut F, program: &TypedLoopProgram) -> Outcome {
     outcome
 }
 
+/// A register operand as an index into the fixed register file: masked into
+/// range, which compilation guarantees it already is, so the access needs no
+/// bounds check.
+#[inline(always)]
+fn reg(register: u16) -> usize {
+    usize::from(register) & (REGISTER_FILE - 1)
+}
+
 fn execute<F: LoopFrame>(
     vm: &mut F,
     program: &TypedLoopProgram,
     scratch: &mut TypedLoopScratch,
 ) -> Outcome {
-    let registers = &mut scratch.registers;
+    let registers: &mut [Typed; REGISTER_FILE] = &mut scratch.registers.0;
     let receivers = &scratch.receivers;
     let boxed = &mut scratch.boxed;
     let sloppy_global_writes = &scratch.sloppy_global_writes;
@@ -198,7 +207,7 @@ fn execute<F: LoopFrame>(
                     vm.bytecode_op(site.ip as usize)
                 );
             }
-            return deopt(vm, program, registers, boxed, site);
+            return deopt(vm, program, &registers[..], boxed, site);
         }};
     }
     loop {
@@ -208,15 +217,15 @@ fn execute<F: LoopFrame>(
             iterations += 1;
             if iterations >= MAX_NATIVE_ITERATIONS {
                 let site = program.sites[0];
-                return deopt(vm, program, registers, boxed, site);
+                return deopt(vm, program, &registers[..], boxed, site);
             }
             continue;
         };
         pc += 1;
         match *op {
-            TypedOp::Move { dst, src } => registers[dst as usize] = registers[src as usize],
+            TypedOp::Move { dst, src } => registers[reg(dst)] = registers[reg(src)],
             TypedOp::ToNumeric { dst, src } => {
-                registers[dst as usize] = registers[src as usize].to_numeric();
+                registers[reg(dst)] = registers[reg(src)].to_numeric();
             }
             TypedOp::Binary {
                 dst,
@@ -224,26 +233,25 @@ fn execute<F: LoopFrame>(
                 left,
                 right,
             } => {
-                let Some(value) =
-                    typed_binary(registers[left as usize], op, registers[right as usize])
+                let Some(value) = typed_binary(registers[reg(left)], op, registers[reg(right)])
                 else {
                     deopt_here!(op);
                 };
-                registers[dst as usize] = value;
+                registers[reg(dst)] = value;
             }
             TypedOp::Unary { dst, op, src } => {
-                let Some(value) = typed_unary(op, registers[src as usize]) else {
+                let Some(value) = typed_unary(op, registers[reg(src)]) else {
                     deopt_here!(op);
                 };
-                registers[dst as usize] = value;
+                registers[reg(dst)] = value;
             }
             TypedOp::Update { dst, op, src } => {
                 // The unfused shape is `ToNumeric; Update`, so the coercion
                 // belongs here and this operation cannot fail.
-                let Some(number) = registers[src as usize].to_numeric().number() else {
+                let Some(number) = registers[reg(src)].to_numeric().number() else {
                     deopt_here!(op);
                 };
-                registers[dst as usize] = Typed::Number(match op {
+                registers[reg(dst)] = Typed::Number(match op {
                     UpdateOp::Increment => number + 1.0,
                     UpdateOp::Decrement => number - 1.0,
                 });
@@ -255,19 +263,19 @@ fn execute<F: LoopFrame>(
             } => {
                 let Some(value) = dense_read(
                     &receivers[receiver as usize],
-                    registers[index_register as usize],
+                    registers[reg(index_register)],
                 )
                 .or_else(|| {
                     missing_element_is_undefined(
                         vm,
                         &receivers[receiver as usize],
-                        registers[index_register as usize],
+                        registers[reg(index_register)],
                     )
                     .then_some(Typed::Undefined)
                 }) else {
                     deopt_here!(op);
                 };
-                registers[dst as usize] = value;
+                registers[reg(dst)] = value;
             }
             TypedOp::DenseWrite {
                 receiver,
@@ -275,8 +283,8 @@ fn execute<F: LoopFrame>(
                 value,
             } => {
                 let array = &receivers[receiver as usize];
-                let index = registers[index as usize];
-                let value = registers[value as usize];
+                let index = registers[reg(index)];
+                let value = registers[reg(value)];
                 // The overwrite is the hot form and takes no `Vm`. Everything
                 // else -- a hole below the length, a store past it -- is cold
                 // and needs the realm's prototype facts, so it is reached only
@@ -290,8 +298,7 @@ fn execute<F: LoopFrame>(
                 let Some(target) = sloppy_global_writes.get(target as usize) else {
                     deopt_here!(op);
                 };
-                if !vm.write_typed_loop_sloppy_global(target, registers[value as usize].to_value())
-                {
+                if !vm.write_typed_loop_sloppy_global(target, registers[reg(value)].to_value()) {
                     deopt_here!(op);
                 }
             }
@@ -300,13 +307,13 @@ fn execute<F: LoopFrame>(
                 let Some(value) = Typed::from_value(&boxed[src as usize]) else {
                     deopt_here!(op);
                 };
-                registers[dst as usize] = value;
+                registers[reg(dst)] = value;
             }
             TypedOp::Truthy { dst, src } => {
-                registers[dst as usize] = boxed_truthiness(&boxed[src as usize]);
+                registers[reg(dst)] = boxed_truthiness(&boxed[src as usize]);
             }
             TypedOp::Box { dst, src } => {
-                boxed[dst as usize] = registers[src as usize].to_value();
+                boxed[dst as usize] = registers[reg(src)].to_value();
             }
             TypedOp::GetNamed {
                 dst,
@@ -357,7 +364,7 @@ fn execute<F: LoopFrame>(
                 .and_then(Typed::from_value) else {
                     deopt_here!(op);
                 };
-                registers[dst as usize] = value;
+                registers[reg(dst)] = value;
             }
             TypedOp::SetNamedTyped {
                 object,
@@ -368,7 +375,7 @@ fn execute<F: LoopFrame>(
                 if !set_named(
                     &boxed[object as usize],
                     &program.names[name as usize],
-                    &registers[value as usize].to_value(),
+                    &registers[reg(value)].to_value(),
                     &mut shape_caches[cache as usize],
                 ) {
                     deopt_here!(op);
@@ -379,18 +386,16 @@ fn execute<F: LoopFrame>(
                 receiver,
                 index,
             } => {
-                let Some(value) = element_read(
-                    &boxed[receiver as usize],
-                    registers[index as usize],
-                )
-                .or_else(|| match &boxed[receiver as usize] {
-                    Value::Array(array)
-                        if missing_element_is_undefined(vm, array, registers[index as usize]) =>
-                    {
-                        Some(Value::Undefined)
-                    }
-                    _ => None,
-                }) else {
+                let Some(value) = element_read(&boxed[receiver as usize], registers[reg(index)])
+                    .or_else(|| match &boxed[receiver as usize] {
+                        Value::Array(array)
+                            if missing_element_is_undefined(vm, array, registers[reg(index)]) =>
+                        {
+                            Some(Value::Undefined)
+                        }
+                        _ => None,
+                    })
+                else {
                     deopt_here!(op);
                 };
                 boxed[dst as usize] = value;
@@ -469,7 +474,7 @@ fn execute<F: LoopFrame>(
                 } else {
                     match kind {
                         super::GuardKind::Coercible => {
-                            !matches!(registers[src as usize], Typed::Undefined)
+                            !matches!(registers[reg(src)], Typed::Undefined)
                         }
                         super::GuardKind::PropertyKey => true,
                     }
@@ -502,7 +507,7 @@ fn execute<F: LoopFrame>(
                 let Some(length) = pushed else {
                     deopt_here!(op);
                 };
-                registers[dst as usize] = Typed::Number(length as f64);
+                registers[reg(dst)] = Typed::Number(length as f64);
             }
             TypedOp::CallNumericNative {
                 dst,
@@ -513,22 +518,23 @@ fn execute<F: LoopFrame>(
             } => {
                 let Some(value) = call_numeric_native(
                     &boxed[callee as usize],
-                    registers[first as usize],
-                    registers[second as usize],
+                    registers[reg(first)],
+                    registers[reg(second)],
                     arity,
                 ) else {
                     deopt_here!(op);
                 };
-                registers[dst as usize] = value;
+                registers[reg(dst)] = value;
             }
             TypedOp::CallClosedFormLeaf { dst, .. } => {
-                let Some(value) = call_leaf(program, vm.loop_env(), registers, boxed, op) else {
+                let Some(value) = call_leaf(program, vm.loop_env(), &registers[..], boxed, op)
+                else {
                     deopt_here!(op);
                 };
                 boxed[dst as usize] = value;
             }
             TypedOp::JumpIfFalsy { cond, target } => {
-                if !registers[cond as usize].is_truthy() {
+                if !registers[reg(cond)].is_truthy() {
                     pc = target as usize;
                 }
             }
@@ -539,19 +545,20 @@ fn execute<F: LoopFrame>(
                     iterations += 1;
                     if iterations >= MAX_NATIVE_ITERATIONS {
                         let site = program.sites[target as usize];
-                        return deopt(vm, program, registers, boxed, site);
+                        return deopt(vm, program, &registers[..], boxed, site);
                     }
                 }
                 pc = target as usize;
             }
             TypedOp::Exit { cond, exit_ip } => {
-                if registers[cond as usize].is_truthy() {
+                if registers[reg(cond)].is_truthy() {
                     continue;
                 }
-                write_back(vm, program, registers, boxed);
+                write_back(vm, program, &registers[..], boxed);
                 // The exit target is reached with the same operand stack the
                 // branch instruction started from, condition included.
-                materialize_stack(vm, program, registers, boxed, program.sites[pc - 1]);
+                materialize_stack(vm, program, &registers[..], boxed, program.sites[pc - 1]);
+                vm.ran_iterations(iterations);
                 vm.resume_at(exit_ip as usize, false);
                 return Outcome::Ran;
             }
@@ -565,14 +572,14 @@ fn execute<F: LoopFrame>(
                 else {
                     deopt_here!(op);
                 };
-                registers[dst as usize] = value;
+                registers[reg(dst)] = value;
             }
             TypedOp::Leave { exit_ip } => {
-                write_back(vm, program, registers, boxed);
+                write_back(vm, program, &registers[..], boxed);
                 // `exit_ip` is this operation's own instruction, so the site
                 // holds exactly the stack that instruction expects and the
                 // interpreter executes it as if the region had never run.
-                materialize_stack(vm, program, registers, boxed, program.sites[pc - 1]);
+                materialize_stack(vm, program, &registers[..], boxed, program.sites[pc - 1]);
                 vm.resume_at(exit_ip as usize, false);
                 return Outcome::Ran;
             }
@@ -611,7 +618,7 @@ fn seed_registers<F: LoopFrame>(
             return None;
         }
     }
-    registers.resize(program.register_count, Typed::Undefined);
+    registers.reset(program.register_count);
     for &(register, value) in &program.constant_registers {
         registers[register as usize] = value;
     }

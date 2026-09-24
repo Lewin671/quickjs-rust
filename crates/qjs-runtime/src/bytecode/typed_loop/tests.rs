@@ -26,29 +26,36 @@ fn typed_loop_scratch_pool_reuses_only_cleared_storage() {
     assert!(program.scratch_pool.get().is_none());
 
     let mut first = program.take_scratch();
-    first.registers.push(super::Typed::Number(1.0));
+    first.registers[0] = super::Typed::Number(1.0);
     first.boxed.push(Value::Number(2.0));
-    let register_capacity = first.registers.capacity();
     let boxed_capacity = first.boxed.capacity();
     program.recycle_scratch(first);
 
-    let reused = program.take_scratch();
-    assert!(reused.registers.is_empty());
+    // The fixed register file is reset per entry (`RegisterFile::reset`);
+    // the growable storage comes back empty with its capacity.
+    let mut reused = program.take_scratch();
     assert!(reused.receivers.is_empty());
     assert!(reused.boxed.is_empty());
     assert!(reused.sloppy_global_writes.is_empty());
-    assert!(reused.registers.capacity() >= register_capacity);
     assert!(reused.boxed.capacity() >= boxed_capacity);
+    reused.registers.reset(4);
+    assert!(
+        reused
+            .registers
+            .iter()
+            .take(4)
+            .all(|register| matches!(register, super::Typed::Undefined))
+    );
     program.recycle_scratch(reused);
 
     // A nested call receives fresh storage when the one sequential-entry
     // slot is occupied, and its later return cannot grow the pool.
     let mut active = program.take_scratch();
-    active.registers.push(super::Typed::Number(4.0));
+    active.registers[0] = super::Typed::Number(4.0);
     let nested = program.take_scratch();
-    assert!(nested.registers.is_empty());
+    assert!(matches!(nested.registers[0], super::Typed::Undefined));
     program.recycle_scratch(nested);
-    assert_eq!(active.registers, vec![super::Typed::Number(4.0)]);
+    assert!(matches!(active.registers[0], super::Typed::Number(n) if n == 4.0));
     program.recycle_scratch(active);
     assert_eq!(
         program

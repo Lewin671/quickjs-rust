@@ -193,6 +193,9 @@ pub struct FunctionData {
     /// (`compact_fn::wide`); zero until the first call. The caller-dependent
     /// checks still run on every call.
     pub(crate) wide_inline_facts: Cell<u64>,
+    /// The compact tier's counterpart: whether its admission proof, as far as
+    /// it depends on the function alone, holds, and the register count.
+    pub(crate) compact_inline_facts: Cell<u32>,
     pub(crate) deopt_bindings: Option<DynamicBindings>,
     pub(crate) module_host: Option<ModuleHostRef>,
     pub(crate) module_imports: ModuleImports,
@@ -597,6 +600,7 @@ impl Function {
             direct_construct_eligible: Cell::new(None),
             native_family: Cell::new(0),
             wide_inline_facts: Cell::new(0),
+            compact_inline_facts: Cell::new(0),
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),
@@ -696,6 +700,7 @@ impl Function {
             direct_construct_eligible: Cell::new(None),
             native_family: Cell::new(0),
             wide_inline_facts: Cell::new(0),
+            compact_inline_facts: Cell::new(0),
             deopt_bindings,
             module_host,
             module_imports,
@@ -816,6 +821,7 @@ impl Function {
             direct_construct_eligible: Cell::new(None),
             native_family: Cell::new(0),
             wide_inline_facts: Cell::new(0),
+            compact_inline_facts: Cell::new(0),
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),
@@ -873,6 +879,7 @@ impl Function {
             direct_construct_eligible: Cell::new(None),
             native_family: Cell::new(0),
             wide_inline_facts: Cell::new(0),
+            compact_inline_facts: Cell::new(0),
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),

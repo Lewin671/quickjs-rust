@@ -60,6 +60,9 @@ pub(in crate::bytecode) trait LoopFrame {
     /// value by value from the bottom, then the instruction to resume at.
     fn push_stack(&mut self, value: Value);
     fn resume_at(&mut self, ip: usize, deoptimized: bool);
+    /// How many times the program went round its backedge before leaving the
+    /// loop normally; a frame that chooses between tiers per loop keeps it.
+    fn ran_iterations(&mut self, _iterations: u64) {}
     /// The bytecode instruction at `ip`, for diagnostics.
     #[cfg(feature = "perf-counters")]
     fn bytecode_op(&self, ip: usize) -> Option<&super::super::ir::Op>;

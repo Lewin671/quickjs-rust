@@ -918,6 +918,13 @@ fn run_typed_loop_here(
     crate::diagnostics::count!(loop_backedges);
     crate::diagnostics::count!(loop_plan_entries);
     let (resume, deoptimized) = (frame.resume_ip, frame.deoptimized);
+    if let Some(iterations) = frame.iterations
+        && let Some(index) = u32::try_from(backedge)
+            .ok()
+            .and_then(|backedge| program.probed_backedge(backedge))
+    {
+        program.record_typed_entry(index, iterations);
+    }
     let declined_typed_loop_programs = frame.declined_typed_loop_programs();
     let values = std::mem::take(&mut frame.stack);
     let Some(resume) = resume else {

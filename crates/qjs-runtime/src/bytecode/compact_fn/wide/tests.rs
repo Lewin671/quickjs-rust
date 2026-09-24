@@ -1459,3 +1459,22 @@ fn a_base_class_constructor_runs_inline_after_its_fields() {
         )
     );
 }
+
+#[test]
+fn a_loop_judged_short_keeps_running_correctly_when_it_grows() {
+    // Entered a hundred times for one or two iterations, the loop is judged
+    // short and runs on this tier; later long runs must still be exact.
+    assert_eq!(
+        value_of(
+            "function B() { this.x = 0; this.y = 2; }
+             function f(o, n) { for (var i = 0; i < n; i++) { o.x += o.y * i; } return o.x; }
+             var o = new B(), short = 0;
+             for (var k = 0; k < 200; k++) short = f(o, 1 + (k & 1));
+             var shortTotal = o.x;
+             o.x = 0;
+             var long = f(o, 1000);
+             [shortTotal, long].join();"
+        ),
+        Value::String("200,999000".into())
+    );
+}
