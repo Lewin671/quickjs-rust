@@ -123,6 +123,7 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
                 visit(index);
                 visit(value);
             }
+            TypedOp::DenseWriteBoxed { index, .. } => visit(index),
             TypedOp::StoreSloppyGlobal { value, .. } => visit(value),
             TypedOp::JumpIfFalsy { cond, .. } | TypedOp::Exit { cond, .. } => visit(cond),
             TypedOp::Unbox { dst, .. } | TypedOp::Truthy { dst, .. } => visit(dst),
@@ -169,6 +170,7 @@ fn visit_registers(op: &mut TypedOp, class: Class, mut visit: impl FnMut(&mut u1
             }
             TypedOp::Unbox { src, .. } | TypedOp::Truthy { src, .. } => visit(src),
             TypedOp::Box { dst, .. } => visit(dst),
+            TypedOp::DenseWriteBoxed { value, .. } => visit(value),
             TypedOp::GetNamed { dst, object, .. } => {
                 visit(dst);
                 visit(object);

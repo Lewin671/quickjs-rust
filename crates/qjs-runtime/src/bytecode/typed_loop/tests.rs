@@ -1716,3 +1716,50 @@ fn numeric_helpers_see_missing_and_extra_arguments_exactly() {
         Ok(Value::Number(600.0))
     );
 }
+
+/// An object stored into an array element (`out[index] = entry`) is written
+/// from the boxed file; unboxing it for the scalar write deoptimized the
+/// region on every entry -- 98k interpreter frames in hash-map's rehash.
+#[test]
+fn typed_loops_write_boxed_locals_into_dense_elements() {
+    let rehash = "function rehash(old, length) {
+        var out = new Array(length);
+        for (var i = 0; i < old.length; ++i) {
+            var entry = old[i];
+            old[i] = null;
+            while (entry) {
+                var index = entry.h & (length - 1);
+                var next = entry.next;
+                entry.next = out[index];
+                out[index] = entry;
+                entry = next;
+            }
+        }
+        return out;
+    }";
+    let bytecode = nested_function(rehash);
+    let programs = super::compile_all(&bytecode);
+    assert!(
+        programs.iter().any(|program| program
+            .ops
+            .iter()
+            .any(|op| matches!(op, super::TypedOp::DenseWriteBoxed { .. }))),
+        "{programs:#?}"
+    );
+    let source = format!(
+        "{rehash}
+        function run() {{
+            var table = new Array(4);
+            for (var k = 0; k < 64; k++) {{ var slot = k & 3; table[slot] = {{ h: k, next: table[slot] }}; }}
+            for (var size = 8; size <= 64; size *= 2) table = rehash(table, size);
+            var sums = [];
+            for (var s = 0; s < table.length; s++) {{ var t = 0; for (var e = table[s]; e; e = e.next) t += e.h; sums.push(t); }}
+            var grown = [];
+            for (var g = 0; g < 5; g++) {{ var o = {{ v: g }}; grown[g] = o; }}
+            return sums.join() + '|' + grown.map(function (o) {{ return o.v; }}).join();
+        }}
+        run();"
+    );
+    let expected = (0..64).map(|n| n.to_string()).collect::<Vec<_>>().join(",") + "|0,1,2,3,4";
+    assert_eq!(eval(&source), Ok(Value::String(expected.into())));
+}

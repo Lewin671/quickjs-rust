@@ -7,7 +7,8 @@
 //! builder, so it lives in its own file next to the builder it extends.
 
 use super::{
-    Builder, Origin, TypedOp, expression_has_control_flow, scalar_expression_may_write_or_branch,
+    Builder, Class, Origin, TypedOp, expression_has_control_flow,
+    scalar_expression_may_write_or_branch,
 };
 use crate::bytecode::ir::Op;
 
@@ -136,6 +137,23 @@ impl Builder<'_> {
         }
         if inner != value_store {
             return None;
+        }
+        // A boxed local -- an object, as in a hash table's rehash
+        // `newData[index] = entry` -- is written from the boxed file:
+        // unboxing it for the scalar write deoptimized such a region on every
+        // entry. A computed value (a call's or an element read's result) is
+        // almost always a number here, and keeping it scalar keeps whatever
+        // the assignment's result feeds scalar too.
+        if matches!(self.stack.last(), Some((_, Class::Boxed, Origin::Local(_)))) {
+            let (value, _) = self.pop_boxed()?;
+            let receiver = self.receiver_index(receiver_slot)?;
+            self.emit(TypedOp::DenseWriteBoxed {
+                receiver,
+                index: index_copy,
+                value,
+            });
+            self.push_boxed(value, Origin::Computed);
+            return Some(Some(value_store + 5));
         }
         let (value, _) = self.pop()?;
         let receiver = self.receiver_index(receiver_slot)?;

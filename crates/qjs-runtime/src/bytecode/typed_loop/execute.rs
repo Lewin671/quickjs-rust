@@ -294,6 +294,20 @@ fn execute<F: LoopFrame>(
                     deopt_here!(op);
                 }
             }
+            TypedOp::DenseWriteBoxed {
+                receiver,
+                index,
+                value,
+            } => {
+                if !dense_write_boxed(
+                    vm,
+                    &receivers[receiver as usize],
+                    registers[reg(index)],
+                    &boxed[value as usize],
+                ) {
+                    deopt_here!(op);
+                }
+            }
             TypedOp::StoreSloppyGlobal { target, value } => {
                 let Some(target) = sloppy_global_writes.get(target as usize) else {
                     deopt_here!(op);
@@ -1392,6 +1406,18 @@ fn dense_write_value(array: &crate::ArrayRef, index: Typed, value: &Value) -> bo
             None => false,
         })
         .unwrap_or(false)
+}
+
+/// `DenseWriteBoxed`: an overwrite in place, else a hole fill or an append.
+/// Out of line, so the executor's own code only grows by the call.
+#[inline(never)]
+fn dense_write_boxed<F: LoopFrame>(
+    vm: &mut F,
+    array: &crate::ArrayRef,
+    index: Typed,
+    value: &Value,
+) -> bool {
+    dense_write_value(array, index, value) || fill_hole_or_grow_value(vm, array, index, value)
 }
 
 /// `fill_hole_or_grow` for a value already boxed.

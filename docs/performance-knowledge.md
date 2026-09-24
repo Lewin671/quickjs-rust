@@ -95,8 +95,9 @@ The procedure (queue, plan, decision) is in
 - **The typed-loop executor's own address is the big layout lever, so it
   is pinned by address.** Measured 2026-09-24 with byte-identical code:
   `capturing_closure_call` and ai-astar run 18-25% more cycles unless
-  `try_run_typed_loop<WideLoopFrame>` starts at 0xf80..0xfe0 modulo 4 KiB
-  (with its callees in a fixed order right after it). Stack placement (env
+  `try_run_typed_loop<WideLoopFrame>` starts in a narrow window modulo
+  4 KiB (0xf80..0xfe0; 0xd90..0xdc0 after one added operation), with its
+  callees in a fixed order right after it. Stack placement (env
   size), heap placement (JS-level allocations, malloc settings), jump-table
   offsets and loop alignment all measured flat; shifting only the executor
   flipped the state every time. An order file alone could not hold it: the

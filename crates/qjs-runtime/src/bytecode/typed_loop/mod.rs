@@ -161,6 +161,13 @@ enum TypedOp {
         index: u16,
         value: u16,
     },
+    /// Writes a boxed value -- an object, or a number an element read left
+    /// boxed -- to one element of a dense array held in a frame slot.
+    DenseWriteBoxed {
+        receiver: u16,
+        index: u16,
+        value: u16,
+    },
     /// Publishes one scalar value to a prevalidated sloppy fallback global.
     StoreSloppyGlobal {
         target: u16,
