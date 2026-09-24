@@ -352,10 +352,8 @@ fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
 /// Whether a numeric plan may call `function` (`numeric_plan`): the facts
 /// that let this tier inline it, less the caller-environment agreement a
 /// plan does not need -- its body reads nothing but its cells.
-pub(super) fn admits_numeric_callee(function: &Function, bytecode: &Bytecode) -> bool {
-    let _ = bytecode;
-    let callee = Value::Function(function.clone());
-    fixed_inline_facts(&callee, function) & FACTS_ELIGIBLE != 0
+pub(super) fn admits_numeric_callee(callee: &Value, function: &Function) -> bool {
+    fixed_inline_facts(callee, function) & FACTS_ELIGIBLE != 0
         && !function.has_dynamic_function_realm_override.get()
         && !function.has_cold_lexical_state()
 }

@@ -1512,3 +1512,22 @@ fn element_reads_answer_dense_arrays_in_place_and_everything_else_generally() {
         Value::String("2,,,,,c,o,1:3,a:c,o:p,inherited,2".into())
     );
 }
+
+#[test]
+fn wide_calls_run_numeric_call_chains_and_see_rebound_callees() {
+    assert_eq!(
+        value_of(
+            "function add(x, y) { var lsw = (x & 0xFFFF) + (y & 0xFFFF); var msw = (x >> 16) + (y >> 16) + (lsw >> 16); return (msw << 16) | (lsw & 0xFFFF); }
+             function rol(num, cnt) { return (num << cnt) | (num >>> (32 - cnt)); }
+             function cmn(q, a, b, x, s, t) { return add(rol(add(add(a, q), add(x, t)), s), b); }
+             function ff(a, b, c, d, x, s, t) { return cmn((b & c) | ((~b) & d), a, b, x, s, t); }
+             function run(n) { var h = 1732584193, out = []; for (var i = 0; i < n; i++) { h = ff(h, i, i * 3, i ^ 5, i * 7, 7, -680876936); } out.push(h);
+                 out.push(ff(1, 2, 3, 4, '5', 7, 11));
+                 rol = function (num, cnt) { return num + cnt; };
+                 out.push(ff(1, 2, 3, 4, 5, 7, 11));
+                 return out.join(); }
+             run(200);"
+        ),
+        Value::String("1178343728,2946,32".into())
+    );
+}

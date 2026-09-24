@@ -249,6 +249,8 @@ const FACTS_STRICT: u64 = 1 << 3;
 const FACTS_LEXICAL_SLOTS: u64 = 1 << 4;
 /// A base class constructor: entered only by `new`, after its fields.
 const FACTS_CLASS: u64 = 1 << 5;
+/// A body the compact tier lowered to an `f64` plan (`numeric_plan`).
+const FACTS_NUMERIC_PLAN: u64 = 1 << 6;
 const FACTS_REGISTER_SHIFT: u32 = 32;
 
 /// The part of the inlining proof that depends only on the function, fixed
@@ -321,6 +323,13 @@ fn compute_fixed_inline_facts(callee: &Value, function: &Function, bytecode: &By
     }
     if class {
         facts |= FACTS_CLASS;
+    }
+    if !class
+        && !program.requires_this
+        && super::super::numeric_plan::plan_for(bytecode).is_some()
+        && super::super::activation::admits_numeric_callee(callee, function)
+    {
+        facts |= FACTS_NUMERIC_PLAN;
     }
     facts
 }
@@ -403,6 +412,33 @@ fn clear_window(window: &mut [Value]) {
     }
 }
 
+/// Runs `callee`'s numeric plan on `arguments` when every one is a number;
+/// `None` leaves the call to this driver.
+#[inline(never)]
+fn try_numeric_call(callee: &Value, arguments: &[Value]) -> Option<f64> {
+    let Value::Function(function) = callee else {
+        return None;
+    };
+    let bytecode = function.bytecode.as_ref()?;
+    let plan = super::super::numeric_plan::plan_for(bytecode)?;
+    let mut numbers = [0.0; super::super::compile::MAX_CALL_ARITY];
+    if arguments.len() > numbers.len() {
+        return None;
+    }
+    for (number, argument) in numbers.iter_mut().zip(arguments) {
+        let Value::Number(value) = argument else {
+            return None;
+        };
+        *number = *value;
+    }
+    super::super::numeric_plan::run(
+        plan,
+        bytecode,
+        &function.upvalues,
+        &numbers[..arguments.len()],
+    )
+}
+
 /// What the driver needs to enter an admitted callee in its own window.
 struct InlineCallee {
     register_count: usize,
@@ -410,6 +446,8 @@ struct InlineCallee {
     is_strict: bool,
     /// Whether the callee's window starts with dead-zone markers to seed.
     has_lexical_slots: bool,
+    /// Whether the callee has a numeric plan to try first.
+    numeric: bool,
 }
 
 /// Proves a callee may run on this driver, in a window of its register stack.
@@ -438,6 +476,7 @@ fn inline_entry(callee: &Value, env: &CallEnv) -> Option<(InlineCallee, bool)> {
             requires_this: facts & FACTS_REQUIRES_THIS != 0,
             is_strict: facts & FACTS_STRICT != 0,
             has_lexical_slots: facts & FACTS_LEXICAL_SLOTS != 0,
+            numeric: facts & FACTS_NUMERIC_PLAN != 0,
         },
         facts & FACTS_CLASS != 0,
     ))
@@ -1540,6 +1579,24 @@ fn run_frames(
         let argument_count = argc as usize;
 
         if let Some(inline) = inline_callee(&callee, env) {
+            // A numeric body runs its whole call tree on `f64` registers,
+            // leaving the arguments where they are: they are numbers.
+            if inline.numeric
+                && let Some(value) = try_numeric_call(
+                    &callee,
+                    &registers[argument_index..argument_index + argument_count],
+                )
+            {
+                if let Some(receiver) = receiver {
+                    release(receiver);
+                }
+                execute::store(
+                    &mut registers[current_base + dst as usize],
+                    Value::Number(value),
+                );
+                pc = resume_pc;
+                continue;
+            }
             if frames.len() >= MAX_FRAMES {
                 unwind(registers, frames, current_base + current_len);
                 return Err(call_stack_exhausted());
