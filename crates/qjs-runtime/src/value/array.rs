@@ -541,6 +541,23 @@ impl ArrayRef {
     /// property path; the usual descriptor representation marks a dense hole,
     /// while the explicit target-key check also protects transitional storage
     /// states without making unrelated descriptors reject the read.
+    /// `direct_dense_index_value` for the common array with no cold state
+    /// -- no holes and no indexed descriptors -- where an element below the
+    /// storage length is present by construction: one bounds check and an
+    /// inlined primitive clone. Anything else takes the full check.
+    #[inline]
+    pub(crate) fn plain_dense_index_value(&self, index: usize) -> Option<Value> {
+        if self.0.cold.get().is_some() {
+            return self.direct_dense_index_value(index);
+        }
+        let elements = self.0.elements.borrow();
+        Some(match elements.get(index)? {
+            Value::Number(number) => Value::Number(*number),
+            Value::Boolean(boolean) => Value::Boolean(*boolean),
+            value => value.clone(),
+        })
+    }
+
     pub(crate) fn direct_dense_index_value(&self, index: usize) -> Option<Value> {
         if index >= self.0.length.get()
             || self.0.has_hole(index)

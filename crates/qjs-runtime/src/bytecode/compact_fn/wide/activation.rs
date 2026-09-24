@@ -1306,24 +1306,14 @@ fn run_frames(
                         }
                     }
                     WideOp::GetProp { dst, obj, key } => {
-                        let object = std::mem::replace(&mut window[obj as usize], Value::Undefined);
                         let key = std::mem::replace(&mut window[key as usize], Value::Undefined);
-                        match property::get_prop_computed(object, key, env) {
+                        match property::get_prop_element(&mut window[obj as usize], key, env) {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
                         }
                     }
                     WideOp::GetPropIndex { dst, obj, index } => {
-                        let object = if dst == obj {
-                            std::mem::replace(&mut window[obj as usize], Value::Undefined)
-                        } else {
-                            crate::bytecode::vm_bindings::clone_local_value(&window[obj as usize])
-                        };
-                        match property::get_prop_computed(
-                            object,
-                            Value::Number(f64::from(index)),
-                            env,
-                        ) {
+                        match property::get_prop_index(&window[obj as usize], index, env) {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
                         }

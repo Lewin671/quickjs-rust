@@ -1491,3 +1491,24 @@ fn loose_equality_between_strings_compares_their_text() {
         Value::String("true,false,false|false,true,false|true,false,true".into())
     );
 }
+
+#[test]
+fn element_reads_answer_dense_arrays_in_place_and_everything_else_generally() {
+    assert_eq!(
+        value_of(
+            "function at(a, i) { return a[i]; }
+             function first(a) { return a[0] + ':' + a[2]; }
+             var dense = [1, 2, 3], holes = [1, , 3], text = 'abc', obj = { 0: 'o', 2: 'p' };
+             var out;
+             for (var k = 0; k < 50; k++) {
+                 out = [at(dense, 1), at(dense, 1.5), at(dense, -1), at(dense, 7), at(holes, 1),
+                        at(text, 2), at(obj, 0), first(dense), first(text), first(obj)];
+             }
+             Array.prototype[1] = 'inherited';
+             out.push(at(holes, 1), at(dense, 1));
+             delete Array.prototype[1];
+             out.join();"
+        ),
+        Value::String("2,,,,,c,o,1:3,a:c,o:p,inherited,2".into())
+    );
+}

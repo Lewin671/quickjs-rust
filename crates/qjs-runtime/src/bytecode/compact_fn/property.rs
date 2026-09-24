@@ -457,6 +457,47 @@ fn read_only_set_error() -> RuntimeError {
     }
 }
 
+/// `object[key]` for a receiver in a register the read consumes: an array
+/// element at a number key answers in place, where moving the array into
+/// the general computed read cost it a full round of checks; any other
+/// receiver is moved out, exactly as before.
+#[inline(never)]
+pub(super) fn get_prop_element(
+    object: &mut Value,
+    key: Value,
+    env: &CallEnv,
+) -> Result<Value, RuntimeError> {
+    if let (Value::Array(elements), Value::Number(number)) = (&*object, &key)
+        && let Some(index) = crate::bytecode::vm_props::array_index_from_number(*number)
+        && let Some(value) = elements.plain_dense_index_value(index)
+    {
+        return Ok(value);
+    }
+    get_prop_computed(std::mem::replace(object, Value::Undefined), key, env)
+}
+
+/// `object[index]` for a constant array index, reading the receiver where
+/// it is: a present element of a dense array answers without the receiver
+/// being cloned into the general computed read and dropped again, which was
+/// half the cost of `v[0]` in vector arithmetic.
+#[inline(never)]
+pub(super) fn get_prop_index(
+    object: &Value,
+    index: u16,
+    env: &CallEnv,
+) -> Result<Value, RuntimeError> {
+    if let Value::Array(elements) = object
+        && let Some(value) = elements.plain_dense_index_value(usize::from(index))
+    {
+        return Ok(value);
+    }
+    get_prop_computed(
+        crate::bytecode::vm_bindings::clone_local_value(object),
+        Value::Number(f64::from(index)),
+        env,
+    )
+}
+
 /// Reads `object[key]` with a computed key, exactly as `Vm::get_prop` does:
 /// the `null`/`undefined` diagnostics, the dense-array and typed-array index
 /// fast paths, then the general [[Get]] after `ToPropertyKey` in an empty
