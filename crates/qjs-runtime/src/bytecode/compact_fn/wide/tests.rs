@@ -1356,3 +1356,40 @@ fn an_inlined_method_receives_object_receivers_unchanged_and_coerces_the_rest() 
         )
     );
 }
+
+#[test]
+fn a_for_in_loop_stays_on_the_tier_with_the_interpreter_s_semantics() {
+    let source =
+        "function keys(o) { var r = []; for (var k in o) { r.push(k); } return r.join(','); }";
+    let program =
+        compile::compile(&nested_function(source, "keys")).expect("a for-in body is admitted");
+    assert!(
+        program
+            .ops
+            .iter()
+            .filter(|op| matches!(op, WideOp::Exit { .. }))
+            .count()
+            >= 2,
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(
+            "function keys(o) { var r = []; for (var k in o) { r.push(k); } return r.join(\",\"); } \
+         function firstBig(table, limit) { for (var c in table) { if (table[c] > limit) return c; } return \"none\"; } \
+         function pairs(a, b) { var n = 0; for (var x in a) { for (var y in b) { n++; } } return n; } \
+         function deleting(o) { var seen = []; for (var k in o) { seen.push(k); delete o.b; } return seen.join(\"\"); } \
+         var proto = { inherited: 1 }; var child = Object.create(proto); child.own = 2; child[1] = 3; \
+         var log = []; \
+         var proxy = new Proxy({ p: 1, q: 2 }, { ownKeys: function (t) { log.push(\"ownKeys\"); return Reflect.ownKeys(t); } }); \
+         var out = [keys(child), firstBig({ a: 1, b: 5, c: 9 }, 4), pairs({ x: 1, y: 2 }, [1, 2, 3]), deleting({ a: 1, b: 2, c: 3 }), keys(proxy), log.length > 0, keys(null), keys(\"ab\")]; \
+         for (var i = 0; i < 3; i++) out.push(firstBig({ z: i, w: 10 }, i)); \
+         out.join(\"|\");"
+        ),
+        Value::String(
+            "1,own,inherited|b|6|ac|p,q|true||0,1|w|w|w"
+                .to_owned()
+                .into()
+        )
+    );
+}

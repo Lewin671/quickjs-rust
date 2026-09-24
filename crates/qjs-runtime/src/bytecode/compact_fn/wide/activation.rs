@@ -613,6 +613,51 @@ fn exit_to_interpreter(
             return ExitOutcome::Continue { pc: resume_pc };
         }
     }
+    // A `for-in`'s key list and its per-key recheck, answered in place so
+    // the loop stays on this tier (`compile::is_exit_safe`).
+    match bytecode.code.get(ip as usize) {
+        Some(crate::bytecode::ir::Op::EnumerateKeys { cache }) => {
+            if let Some(pc) = program.resume_pc(ip as usize + 1, usize::from(depth)) {
+                let top = usize::from(program.local_registers) + usize::from(depth);
+                let target = std::mem::replace(&mut window[top - 1], Value::Undefined);
+                let mut call_env = env.empty_frame();
+                return match crate::bytecode::vm_ops::enumerate_keys_cached(
+                    &target,
+                    cache,
+                    &mut call_env,
+                ) {
+                    Ok(keys) => {
+                        window[top - 1] = Value::Array(keys);
+                        ExitOutcome::Continue { pc }
+                    }
+                    Err(error) => ExitOutcome::Finished(Err(error)),
+                };
+            }
+        }
+        Some(crate::bytecode::ir::Op::ForInKeyIsEnumerable) => {
+            let top = usize::from(program.local_registers) + usize::from(depth);
+            if let Some(pc) = program.resume_pc(ip as usize + 1, usize::from(depth) - 1)
+                && let Value::String(key) = &window[top - 1]
+            {
+                let key = key.clone();
+                let target = std::mem::replace(&mut window[top - 2], Value::Undefined);
+                execute::store(&mut window[top - 1], Value::Undefined);
+                let mut call_env = env.empty_frame();
+                return match crate::bytecode::vm_ops::for_in_property_is_enumerable(
+                    target,
+                    &key,
+                    &mut call_env,
+                ) {
+                    Ok(enumerable) => {
+                        window[top - 2] = Value::Boolean(enumerable);
+                        ExitOutcome::Continue { pc }
+                    }
+                    Err(error) => ExitOutcome::Finished(Err(error)),
+                };
+            }
+        }
+        _ => {}
+    }
     // `g = g + value` on a global string: appended in place, then the store
     // is skipped (see `compile::appends_to_global`).
     if let (
