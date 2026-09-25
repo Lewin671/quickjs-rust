@@ -1006,6 +1006,17 @@ fn run_frames(
                         }
                     }
                     WideOp::GetProp { dst, obj, key } => {
+                        // `v[i]` on a dense array: answered in place, the
+                        // number key left in its register.
+                        if let (Value::Array(elements), Value::Number(number)) =
+                            (&window[obj as usize], &window[key as usize])
+                            && let Some(index) =
+                                crate::bytecode::vm_props::array_index_from_number(*number)
+                            && let Some(value) = elements.plain_dense_index_value(index)
+                        {
+                            execute::store(&mut window[dst as usize], value);
+                            continue;
+                        }
                         let key = take_operand(window, key, dst, program.local_registers);
                         // A forwarded local receiver is read, not consumed.
                         let result = if obj != dst && obj < program.local_registers {
@@ -1019,6 +1030,13 @@ fn run_frames(
                         }
                     }
                     WideOp::GetPropIndex { dst, obj, index } => {
+                        if let Value::Array(elements) = &window[obj as usize]
+                            && let Some(value) =
+                                elements.plain_dense_index_value(usize::from(index))
+                        {
+                            execute::store(&mut window[dst as usize], value);
+                            continue;
+                        }
                         match property::get_prop_index(&window[obj as usize], index, env) {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
