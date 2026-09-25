@@ -91,6 +91,19 @@ enum NamedPropertyCacheEntry {
         holder_layout_revision: u64,
         slot: usize,
     },
+    /// A read that resolved one prototype further, on the receiver's
+    /// prototype's prototype: `Sub.prototype.__proto__ = Base.prototype`, or
+    /// a class hierarchy, puts every inherited method there. Beyond the
+    /// three facts `PrototypeSlot` re-establishes, the parent must still
+    /// have no own `key` -- unchanged since that was proven, by its layout
+    /// revision -- and still inherit from this holder.
+    GrandprototypeSlot {
+        parent: ObjectWeakRef,
+        parent_layout_revision: u64,
+        holder: ObjectWeakRef,
+        holder_layout_revision: u64,
+        slot: usize,
+    },
 }
 
 /// What one pass over a site found.
@@ -150,18 +163,56 @@ impl NamedPropertyCache {
     /// prototype answer is returned as an unverified candidate, because using
     /// it still requires the caller to establish that the receiver has no own
     /// property of that name.
-    /// The last hit's entry, when it is a slot shared by every instance of
-    /// a constructor: one check instead of the full walk, whose many-entry
-    /// dispatch costs a read like `n.left` over a hundred instructions.
+    /// The last hit's entry alone, instead of the full walk, whose
+    /// many-entry dispatch costs a read like `n.left` over a hundred
+    /// instructions: a slot shared by every instance of a constructor, or a
+    /// method on the receiver's prototype once this receiver is proven to
+    /// have no own property of the name (`remember_receiver_miss`) -- the
+    /// same proof `get_prop_named` requires of a probe's candidate.
     #[inline(always)]
     pub(super) fn probe_hot(&self, object: &ObjectRef) -> Option<Value> {
         let state = self.0.borrow();
-        let Some(Some(NamedPropertyCacheEntry::SharedSlot { key, slot })) =
-            state.entries.get(usize::from(state.hot.get()))
-        else {
-            return None;
-        };
-        object.shared_data_slot_value(key, *slot)
+        match state.entries.get(usize::from(state.hot.get()))? {
+            Some(NamedPropertyCacheEntry::SharedSlot { key, slot }) => {
+                object.shared_data_slot_value(key, *slot)
+            }
+            Some(NamedPropertyCacheEntry::PrototypeSlot {
+                holder,
+                holder_layout_revision,
+                slot,
+            }) => {
+                let (receiver, revision) = state.receiver_miss.as_ref()?;
+                if !receiver.ptr_eq(object)
+                    || *revision != object.layout_revision()
+                    || !object.prototype_is_weak(holder)
+                {
+                    return None;
+                }
+                let holder = holder.upgrade()?;
+                if *holder_layout_revision != holder.layout_revision() {
+                    return None;
+                }
+                holder.prototype_data_slot_value(*slot)
+            }
+            Some(NamedPropertyCacheEntry::GrandprototypeSlot {
+                parent,
+                parent_layout_revision,
+                holder,
+                holder_layout_revision,
+                slot,
+            }) => {
+                let (receiver, revision) = state.receiver_miss.as_ref()?;
+                if !receiver.ptr_eq(object) || *revision != object.layout_revision() {
+                    return None;
+                }
+                let holder = grandprototype(object, parent, *parent_layout_revision, holder)?;
+                if *holder_layout_revision != holder.layout_revision() {
+                    return None;
+                }
+                holder.prototype_data_slot_value(*slot)
+            }
+            _ => None,
+        }
     }
 
     pub(super) fn probe(&self, object: &ObjectRef) -> CacheProbe {
@@ -171,6 +222,24 @@ impl NamedPropertyCache {
             let Some(entry) = entry else {
                 continue;
             };
+            if let NamedPropertyCacheEntry::GrandprototypeSlot {
+                parent,
+                parent_layout_revision,
+                holder,
+                holder_layout_revision,
+                slot,
+            } = entry
+            {
+                if candidate.is_none()
+                    && let Some(holder) =
+                        grandprototype(object, parent, *parent_layout_revision, holder)
+                    && *holder_layout_revision == holder.layout_revision()
+                {
+                    candidate = Some((holder, *slot));
+                    state.hot.set(index as u8);
+                }
+                continue;
+            }
             if let NamedPropertyCacheEntry::PrototypeSlot {
                 holder,
                 holder_layout_revision,
@@ -187,6 +256,7 @@ impl NamedPropertyCache {
                     && *holder_layout_revision == holder.layout_revision()
                 {
                     candidate = Some((holder, *slot));
+                    state.hot.set(index as u8);
                 }
                 continue;
             }
@@ -236,7 +306,8 @@ impl NamedPropertyCache {
             }
             // Only valid once the receiver is known to have no own `key`, so
             // it is served by `get_from_prototype` rather than from here.
-            NamedPropertyCacheEntry::PrototypeSlot { .. } => return None,
+            NamedPropertyCacheEntry::PrototypeSlot { .. }
+            | NamedPropertyCacheEntry::GrandprototypeSlot { .. } => return None,
         };
         Some(match value {
             CachedValue::Undefined => Value::Undefined,
@@ -255,16 +326,45 @@ impl NamedPropertyCache {
     /// non-ordinary prototype, or storage without stable slots -- installs
     /// nothing, so the read stays on the general path.
     pub(super) fn update_from_prototype(&self, receiver: &ObjectRef, key: &str) {
-        let Some(holder) = receiver.ordinary_prototype() else {
+        let Some(parent) = receiver.ordinary_prototype() else {
             return;
         };
-        let Some(slot) = holder.prototype_data_slot(key) else {
-            return;
-        };
-        let entry = NamedPropertyCacheEntry::PrototypeSlot {
-            holder: holder.downgrade(),
-            holder_layout_revision: holder.layout_revision(),
-            slot,
+        let (holder, entry) = match parent.prototype_data_slot(key) {
+            Some(slot) => (
+                parent.clone(),
+                NamedPropertyCacheEntry::PrototypeSlot {
+                    holder: parent.downgrade(),
+                    holder_layout_revision: parent.layout_revision(),
+                    slot,
+                },
+            ),
+            // One level further only when the parent has no own `key` at
+            // all: an own accessor or a non-slot property there answers
+            // the read itself.
+            None => {
+                if !matches!(
+                    parent.own_data_property_read(key),
+                    crate::value::OwnDataPropertyRead::Missing
+                ) {
+                    return;
+                }
+                let Some(holder) = parent.ordinary_prototype() else {
+                    return;
+                };
+                let Some(slot) = holder.prototype_data_slot(key) else {
+                    return;
+                };
+                (
+                    holder.clone(),
+                    NamedPropertyCacheEntry::GrandprototypeSlot {
+                        parent: parent.downgrade(),
+                        parent_layout_revision: parent.layout_revision(),
+                        holder: holder.downgrade(),
+                        holder_layout_revision: holder.layout_revision(),
+                        slot,
+                    },
+                )
+            }
         };
         let mut state = self.0.borrow_mut();
         // A site that already holds this exact holder is re-reading it, not
@@ -274,6 +374,7 @@ impl NamedPropertyCache {
             matches!(
                 existing,
                 NamedPropertyCacheEntry::PrototypeSlot { holder: cached, .. }
+                | NamedPropertyCacheEntry::GrandprototypeSlot { holder: cached, .. }
                     if cached.ptr_eq(&holder)
             )
         }) {
@@ -311,7 +412,8 @@ impl NamedPropertyCache {
                 | NamedPropertyCacheEntry::OwnSlot { object: cached, .. } => !cached.ptr_eq(object),
                 NamedPropertyCacheEntry::LiteralShape { .. }
                 | NamedPropertyCacheEntry::SharedSlot { .. }
-                | NamedPropertyCacheEntry::PrototypeSlot { .. } => false,
+                | NamedPropertyCacheEntry::PrototypeSlot { .. }
+                | NamedPropertyCacheEntry::GrandprototypeSlot { .. } => false,
             });
         let entry = if let Some((shape, slot)) = object.literal_data_slot(key) {
             NamedPropertyCacheEntry::LiteralShape { shape, slot }
@@ -416,7 +518,8 @@ impl NamedPropertyCache {
                 NamedPropertyCacheEntry::Exact { .. }
                 | NamedPropertyCacheEntry::LiteralShape { .. }
                 | NamedPropertyCacheEntry::OwnSlot { .. }
-                | NamedPropertyCacheEntry::PrototypeSlot { .. } => {}
+                | NamedPropertyCacheEntry::PrototypeSlot { .. }
+                | NamedPropertyCacheEntry::GrandprototypeSlot { .. } => {}
             }
         }
         None
@@ -476,4 +579,24 @@ impl NamedPropertyCache {
         self.0.borrow_mut().receiver_miss =
             Some((receiver.downgrade(), receiver.layout_revision()));
     }
+}
+
+/// The receiver's grandprototype, when its prototype is still `parent`,
+/// unchanged in layout since it was proven to have no own property of the
+/// site's name, and still inherits from `holder`.
+#[inline]
+fn grandprototype(
+    object: &ObjectRef,
+    parent: &ObjectWeakRef,
+    parent_layout_revision: u64,
+    holder: &ObjectWeakRef,
+) -> Option<ObjectRef> {
+    if !object.prototype_is_weak(parent) {
+        return None;
+    }
+    let parent = parent.upgrade()?;
+    if parent.layout_revision() != parent_layout_revision || !parent.prototype_is_weak(holder) {
+        return None;
+    }
+    holder.upgrade()
 }
