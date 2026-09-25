@@ -1618,3 +1618,35 @@ fn named_reads_answer_constructor_instances_from_the_hot_entry_only() {
         Value::Number(12500.0)
     );
 }
+
+/// Operands loaded from locals are read where they are until something
+/// else needs the stack register; a store to the local in between, a
+/// reassignment inside the expression, or an in-place string append must
+/// all still see the value the bytecode loaded.
+#[test]
+fn forwarded_local_operands_see_the_value_loaded() {
+    assert_eq!(
+        value_of(
+            "function f1(a) { return a + (a = 5); }
+             function f2(a, b) { var t = a; a = b; return t + a; }
+             function f3(o, i) { return o[i] + (i = 0, o[i]); }
+             function f4(o) { var x = o; return x.p + (x = { p: 100 }).p + x.p; }
+             function f5(s, t) { s = s + t; s = s + s; return s; }
+             function f6(a, b) { var c = a * b - a; return c < a ? c : a; }
+             function f7(arr, i) { var v = arr[i]; arr[i] = 9; return v + arr[i]; }
+             function f8(a) { var b = a; a++; return b * 10 + a; }
+             function f9(o) { var k = 'x'; return o[k] + (k = 'y', o[k]); }
+             function f10(a, b) { return (a = b) + a + b; }
+             function run() {
+                 var out = [];
+                 for (var i = 0; i < 50; i++) {
+                     out = [f1(2), f2(3, 4), f3([7, 8], 1), f4({ p: 1 }), f5('ab', 'c'), f6(3, 4),
+                            f7([1, 2], 0), f8(4), f9({ x: 1, y: 2 }), f10(1, 2)];
+                 }
+                 return out.join();
+             }
+             run();"
+        ),
+        Value::String("7,7,15,201,abcabc,3,10,45,3,6".into())
+    );
+}

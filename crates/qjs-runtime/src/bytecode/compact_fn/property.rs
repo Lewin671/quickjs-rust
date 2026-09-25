@@ -479,6 +479,26 @@ pub(super) fn get_prop_element(
     get_prop_computed(std::mem::replace(object, Value::Undefined), key, env)
 }
 
+/// `get_prop_element` of a receiver that stays where it is.
+#[inline(never)]
+pub(super) fn get_prop_element_of(
+    object: &Value,
+    key: Value,
+    env: &CallEnv,
+) -> Result<Value, RuntimeError> {
+    if let (Value::Array(elements), Value::Number(number)) = (object, &key)
+        && let Some(index) = crate::bytecode::vm_props::array_index_from_number(*number)
+        && let Some(value) = elements.plain_dense_index_value(index)
+    {
+        return Ok(value);
+    }
+    get_prop_computed(
+        crate::bytecode::vm_bindings::clone_local_value(object),
+        key,
+        env,
+    )
+}
+
 /// `object[index]` for a constant array index, reading the receiver where
 /// it is: a present element of a dense array answers without the receiver
 /// being cloned into the general computed read and dropped again, which was

@@ -406,12 +406,28 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
     // Instructions whose effect an earlier operation took over: the tier
     // cannot resume at them with their operands on the stack.
     let mut no_resume = vec![false; code.len()];
+    // Operand forwarding: `aliases[d]` names the local register an operand at
+    // stack depth `d` is a copy of, for a `LoadLocal` whose `Move` has not
+    // been emitted. The operations below that read their operands where
+    // they are take the local directly; every other operation, and every
+    // join, first materializes the pending copies (`materialize`), so the
+    // stack registers hold what the bytecode's operand stack holds wherever
+    // anything else can observe them. `Move` was the most executed wide
+    // operation on the corpus -- a third of cdjs's -- mostly such copies.
+    let mut aliases: Vec<Option<u16>> = vec![None; stack_registers];
 
     for (ip, op) in code.iter().enumerate() {
+        if jump_targets[ip] {
+            materialize(&mut ops, &mut aliases, &register);
+        }
         compact_index[ip] = u32::try_from(ops.len()).ok()?;
         let Some(depth) = entry_depth[ip] else {
             continue;
         };
+        if aliases.iter().any(Option::is_some) {
+            // The stack registers are not what the operand stack holds here.
+            no_resume[ip] = true;
+        }
         if let Some(&backedge) = loop_headers.get(&ip) {
             // Placed before the header's own instructions, where only a
             // fall-through into the loop reaches it: every jump to the header
@@ -435,6 +451,122 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 required_authoritative_slots |= 1_u128 << *slot;
             }
             continue;
+        }
+        let plain_local = |slot: usize| {
+            slot < local_registers
+                && slot < u128::BITS as usize
+                && upvalue_slots & (1_u128 << slot) == 0
+                && !slot_is_lexical(slot)
+        };
+        let operand = |aliases: &[Option<u16>], at: u16| -> Option<u16> {
+            Some(aliases.get(usize::from(at))?.unwrap_or(register(at)))
+        };
+        let top = depth.checked_sub(1);
+        match op {
+            Op::LoadLocal(slot)
+                if plain_local(*slot)
+                    && folds[ip] == LocalFold::None
+                    && !(sole_op_of_previous(ip, &jump_targets, &compact_index, &ops)
+                        && matches!(code[ip - 1], Op::StoreLocal(stored) if stored == *slot)) =>
+            {
+                required_authoritative_slots |= 1_u128 << *slot;
+                *aliases.get_mut(usize::from(depth))? = Some(u16::try_from(*slot).ok()?);
+                continue;
+            }
+            Op::Pop if top.is_some_and(|top| aliases[usize::from(top)].is_some()) => {
+                aliases[usize::from(top?)] = None;
+                continue;
+            }
+            Op::Dup if let Some(src) = aliases[usize::from(top?)] => {
+                *aliases.get_mut(usize::from(depth))? = Some(src);
+                continue;
+            }
+            Op::StoreLocal(slot) | Op::AssignLocal(slot)
+                if plain_local(*slot)
+                    && !completion_is_dead(*slot)
+                    && folds[ip] == LocalFold::None
+                    && bytecode
+                        .locals
+                        .get(*slot)
+                        .is_some_and(|local| local.mutable)
+                    && let Some(src) = aliases[usize::from(top?)] =>
+            {
+                aliases[usize::from(top?)] = None;
+                let dst = u16::try_from(*slot).ok()?;
+                materialize_local(&mut ops, &mut aliases, dst, &register);
+                required_authoritative_slots |= 1_u128 << *slot;
+                if src != dst {
+                    ops.push(WideOp::Move { dst, src });
+                }
+                continue;
+            }
+            Op::Binary(binary_op)
+                if folds[ip] == LocalFold::None
+                    && !appends_to_global(code, ip)
+                    && depth >= 2
+                    && (aliases[usize::from(depth - 2)].is_some()
+                        || aliases[usize::from(depth - 1)].is_some()) =>
+            {
+                let left = operand(&aliases, depth - 2)?;
+                let right = operand(&aliases, depth - 1)?;
+                aliases[usize::from(depth - 2)] = None;
+                aliases[usize::from(depth - 1)] = None;
+                ops.push(WideOp::Binary {
+                    dst: register(depth - 2),
+                    op: *binary_op,
+                    left,
+                    right,
+                });
+                continue;
+            }
+            Op::GetProp
+                if depth >= 2
+                    && (aliases[usize::from(depth - 2)].is_some()
+                        || aliases[usize::from(depth - 1)].is_some()) =>
+            {
+                let obj = operand(&aliases, depth - 2)?;
+                let key = operand(&aliases, depth - 1)?;
+                aliases[usize::from(depth - 2)] = None;
+                aliases[usize::from(depth - 1)] = None;
+                ops.push(WideOp::GetProp {
+                    dst: register(depth - 2),
+                    obj,
+                    key,
+                });
+                continue;
+            }
+            Op::GetPropNamed { key, cache }
+                if cache.local_slot().is_none()
+                    && let Some(obj) = aliases[usize::from(top?)] =>
+            {
+                let index = u16::try_from(named_reads.len()).ok()?;
+                named_reads.push(NamedReadSite {
+                    key: Rc::clone(key),
+                    cache: cache.clone(),
+                });
+                aliases[usize::from(top?)] = None;
+                ops.push(WideOp::GetPropNamed {
+                    dst: register(top?),
+                    obj,
+                    index,
+                });
+                continue;
+            }
+            Op::Return if let Some(src) = aliases[usize::from(top?)] => {
+                // Whatever else is pending is dead past the return.
+                aliases.fill(None);
+                ops.push(WideOp::Return { src });
+                continue;
+            }
+            // Operations that only push, reading no operand register, leave
+            // the pending copies pending.
+            Op::LoadConst(_) | Op::LoadGlobal(_) | Op::LoadLocal(_) => {}
+            Op::GetPropNamed { cache, .. } if cache.local_slot().is_some() => {}
+            Op::GetPropIndex(encoded)
+                if crate::bytecode::ir::decode_index_receiver(*encoded)
+                    .1
+                    .is_some() => {}
+            _ => materialize(&mut ops, &mut aliases, &register),
         }
         match op {
             Op::FunctionPrologueEnd | Op::FreshIterationScope(_) => {}
@@ -1453,4 +1585,35 @@ fn body_has_loop_accelerator(bytecode: &Bytecode) -> bool {
         crate::bytecode::vm_numeric_mutation_loop::NumericMutationLoopPlan::compile_all(bytecode)
     });
     !typed.is_empty() || !control.is_empty() || !numeric.is_empty() || !mutation.is_empty()
+}
+
+/// Emits the copies operand forwarding deferred (see `aliases` in
+/// `compile`), leaving every stack register holding its operand.
+fn materialize(ops: &mut Vec<WideOp>, aliases: &mut [Option<u16>], register: &impl Fn(u16) -> u16) {
+    for (depth, alias) in aliases.iter_mut().enumerate() {
+        if let Some(src) = alias.take() {
+            ops.push(WideOp::Move {
+                dst: register(depth as u16),
+                src,
+            });
+        }
+    }
+}
+
+/// Emits the deferred copies of local `slot` alone, before it is written.
+fn materialize_local(
+    ops: &mut Vec<WideOp>,
+    aliases: &mut [Option<u16>],
+    slot: u16,
+    register: &impl Fn(u16) -> u16,
+) {
+    for (depth, alias) in aliases.iter_mut().enumerate() {
+        if *alias == Some(slot) {
+            *alias = None;
+            ops.push(WideOp::Move {
+                dst: register(depth as u16),
+                src: slot,
+            });
+        }
+    }
 }
