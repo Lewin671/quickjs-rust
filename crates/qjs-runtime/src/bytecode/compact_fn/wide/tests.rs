@@ -1719,3 +1719,33 @@ fn named_writes_answer_constructor_instances_from_the_hot_entry_only() {
         Value::String("79800,6,5,6,7,396/397/398/399".into())
     );
 }
+
+/// An operand forwarded from a local stays pending across a read that only
+/// uses the top of the stack, so `x * this.y` keeps its fused `this` read.
+#[test]
+fn a_pending_local_operand_keeps_the_fused_this_read() {
+    let source = "function m(x) { return x * this.y + this.z; }";
+    let program = compile::compile(&nested_function(source, "m")).expect("admitted");
+    assert!(
+        program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::GetPropThis { .. })),
+        "{:#?}",
+        program.ops
+    );
+    assert!(
+        !program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::LoadThis { .. })),
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(&format!(
+            "{source} var o = {{ y: 3, z: 4, m: m }}; var s = 0; for (var i = 0; i < 20; i++) s += o.m(i); s;"
+        )),
+        Value::Number(650.0)
+    );
+}

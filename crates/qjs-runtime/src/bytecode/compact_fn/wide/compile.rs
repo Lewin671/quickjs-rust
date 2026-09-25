@@ -566,6 +566,21 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 if crate::bytecode::ir::decode_index_receiver(*encoded)
                     .1
                     .is_some() => {}
+            // Operations that read only their own operands at the top of the
+            // stack -- and neither branch, exit, call nor write a local --
+            // need only those in their registers: `x * this.y` keeps `x`
+            // pending across the `this.y` read, which stays one GetPropThis.
+            Op::GetPropNamed { .. }
+            | Op::GetPropIndex(_)
+            | Op::Unary(_)
+            | Op::Typeof
+            | Op::ToNumeric => materialize_top(&mut ops, &mut aliases, depth, 1, &register),
+            Op::Update(_) if folds[ip] == LocalFold::None => {
+                materialize_top(&mut ops, &mut aliases, depth, 1, &register);
+            }
+            Op::SetPropNamed { .. } => {
+                materialize_top(&mut ops, &mut aliases, depth, 2, &register);
+            }
             _ => materialize(&mut ops, &mut aliases, &register),
         }
         match op {
@@ -1594,6 +1609,25 @@ fn materialize(ops: &mut Vec<WideOp>, aliases: &mut [Option<u16>], register: &im
         if let Some(src) = alias.take() {
             ops.push(WideOp::Move {
                 dst: register(depth as u16),
+                src,
+            });
+        }
+    }
+}
+
+/// Emits the deferred copies of the top `count` operands of a stack `depth`
+/// deep, the only ones the next operation reads.
+fn materialize_top(
+    ops: &mut Vec<WideOp>,
+    aliases: &mut [Option<u16>],
+    depth: u16,
+    count: u16,
+    register: &impl Fn(u16) -> u16,
+) {
+    for at in depth.saturating_sub(count)..depth {
+        if let Some(src) = aliases.get_mut(usize::from(at)).and_then(Option::take) {
+            ops.push(WideOp::Move {
+                dst: register(at),
                 src,
             });
         }
