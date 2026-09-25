@@ -12,7 +12,31 @@ use std::rc::Rc;
 use super::{
     ObjectLiteralShape, ObjectRef, OwnDataPropertyRead, OwnDataPropertyWrite, PropertyStorage,
 };
-use crate::Value;
+use crate::{Property, Value};
+
+/// The insertion-ordered entries of a small or dynamic storage, where a slot
+/// is an index and each entry carries its interned name -- what a shared
+/// slot is validated against. A constructor that adds its twelfth property
+/// moves its objects to dynamic storage (3d-raytrace's triangles); reading
+/// only small storage by shared slot sent every such read to a per-object
+/// cache entry, which a dozen triangles thrashed.
+#[inline(always)]
+fn named_entries(storage: &PropertyStorage) -> Option<&[(Rc<str>, Property)]> {
+    match storage {
+        PropertyStorage::Small { entries } => Some(entries),
+        PropertyStorage::Dynamic(dynamic) => Some(&dynamic.entries),
+        PropertyStorage::Shaped { .. } | PropertyStorage::ShapedPair { .. } => None,
+    }
+}
+
+#[inline(always)]
+fn named_entries_mut(storage: &mut PropertyStorage) -> Option<&mut [(Rc<str>, Property)]> {
+    match storage {
+        PropertyStorage::Small { entries } => Some(entries),
+        PropertyStorage::Dynamic(dynamic) => Some(&mut dynamic.entries),
+        PropertyStorage::Shaped { .. } | PropertyStorage::ShapedPair { .. } => None,
+    }
+}
 
 impl ObjectRef {
     pub(crate) fn own_data_property_read(&self, key: &str) -> OwnDataPropertyRead {
@@ -125,9 +149,12 @@ impl ObjectRef {
                             .then(|| (Rc::clone(name), slot))
                     })
             }
-            PropertyStorage::Dynamic(_)
-            | PropertyStorage::Shaped { .. }
-            | PropertyStorage::ShapedPair { .. } => None,
+            PropertyStorage::Dynamic(dynamic) => {
+                let slot = dynamic.slot(key)?;
+                let (name, property) = dynamic.entries.get(slot)?;
+                (!property.is_accessor()).then(|| (Rc::clone(name), slot))
+            }
+            PropertyStorage::Shaped { .. } | PropertyStorage::ShapedPair { .. } => None,
         }
     }
 
@@ -139,6 +166,10 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return None;
         }
+        // Small storage only: this read is inlined into the typed-loop
+        // executor, whose hot arm grew and re-rolled its register allocation
+        // with a dynamic-storage case (access-nbody +7% instructions). A
+        // dynamic object takes the executor's general read instead.
         match &*self.0.properties.borrow() {
             PropertyStorage::Small { entries } => {
                 let (name, property) = entries.get(slot)?;
@@ -168,6 +199,7 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return false;
         }
+        // Small storage only, like `shared_data_slot_number`.
         let written = match &mut *self.0.properties.borrow_mut() {
             PropertyStorage::Small { entries } => match entries.get_mut(slot) {
                 Some((name, property))
@@ -194,15 +226,9 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return None;
         }
-        match &*self.0.properties.borrow() {
-            PropertyStorage::Small { entries } => {
-                let (name, property) = entries.get(slot)?;
-                (Rc::ptr_eq(name, key) && !property.is_accessor()).then(|| property.value.clone())
-            }
-            PropertyStorage::Dynamic(_)
-            | PropertyStorage::Shaped { .. }
-            | PropertyStorage::ShapedPair { .. } => None,
-        }
+        let storage = self.0.properties.borrow();
+        let (name, property) = named_entries(&storage)?.get(slot)?;
+        (Rc::ptr_eq(name, key) && !property.is_accessor()).then(|| property.value.clone())
     }
 
     /// Reads a slot previously resolved by [`Self::own_data_slot`]. The storage
@@ -281,17 +307,13 @@ impl ObjectRef {
         if self.0.module_namespace_exotic.get() {
             return None;
         }
-        let result = match &mut *self.0.properties.borrow_mut() {
-            PropertyStorage::Small { entries } => {
-                let (name, property) = entries.get_mut(slot)?;
-                if !Rc::ptr_eq(name, key) {
-                    return None;
-                }
-                super::write_existing_property(Some(property), value, |_| true)
+        let result = {
+            let mut storage = self.0.properties.borrow_mut();
+            let (name, property) = named_entries_mut(&mut storage)?.get_mut(slot)?;
+            if !Rc::ptr_eq(name, key) {
+                return None;
             }
-            PropertyStorage::Dynamic(_)
-            | PropertyStorage::Shaped { .. }
-            | PropertyStorage::ShapedPair { .. } => return None,
+            super::write_existing_property(Some(property), value, |_| true)
         };
         if matches!(result, OwnDataPropertyWrite::Written) {
             self.bump_value_revision();

@@ -341,6 +341,35 @@ fn a_dead_zone_read_and_a_const_assignment_keep_their_errors() {
     );
 }
 
+/// Objects past the small-storage limit (a constructor's twelfth property)
+/// are read and written by shared slot like smaller ones; a deletion that
+/// moves a later property into the freed slot, an accessor and a read-only
+/// redefinition all miss the slot and keep their semantics.
+#[test]
+fn dynamic_storage_objects_share_slots_across_instances() {
+    assert_eq!(
+        value_of(
+            "function T(i) { this.a=i; this.b=1; this.c=2; this.d=3; this.e=4; this.f=5;
+                 this.g=6; this.h=7; this.i=8; this.j=9; this.k=10; this.l=11; this.m=12; }
+             function read(o) { return o.a + o.l + o.m; }
+             function bump(o) { o.m = o.m + 1; }
+             var ts = []; for (var i = 0; i < 20; i++) ts.push(new T(i));
+             var out = [], s = 0;
+             for (var r = 0; r < 50; r++) for (var i = 0; i < ts.length; i++) {
+                 bump(ts[i]); s += read(ts[i]); }
+             out.push(s);
+             delete ts[3].b; out.push(read(ts[3]), ts[3].l, ts[3].m);
+             Object.defineProperty(ts[4], 'l', { get: function () { return 100; } });
+             out.push(read(ts[4]));
+             Object.defineProperty(ts[5], 'm', { value: 0, writable: false });
+             bump(ts[5]); out.push(read(ts[5]));
+             out.push(Object.keys(ts[3]).join(''));
+             out.join(',');"
+        ),
+        Value::String("58000,76,11,62,166,16,acdefghijklm".to_owned().into())
+    );
+}
+
 /// A `LoadGlobal` site remembers the realm cell its name resolved to; a
 /// remapped name -- deleted, re-created, shadowed by a frame that binds it --
 /// reads what the interpreter reads.
