@@ -71,7 +71,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
     if local_count >= MAX_REGISTERS {
         return decline(trace, None, "too many locals");
     }
-    let upvalue_slots = bytecode.readonly_received_upvalue_slots().unwrap_or(0);
+    let upvalue_slots = bytecode.cell_received_upvalue_slots().unwrap_or(0);
     // Slots a fresh activation is guaranteed to have a value in; requiring
     // every read to land in this set is what lets the tier skip
     // temporal-dead-zone checking rather than reproduce its diagnostics.
@@ -210,8 +210,10 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 if *slot >= local_count || *slot >= u128::BITS as usize {
                     return decline(trace, Some(ip), "assign slot out of range");
                 }
+                // A received cell is assigned through the cell; its
+                // mutability is part of `cell_received_upvalue_slots`.
                 if upvalue_slots & (1_u128 << *slot) != 0 {
-                    return decline(trace, Some(ip), "assign to a received upvalue");
+                    continue;
                 }
                 if !bytecode.locals.get(*slot).is_some_and(|local| {
                     local.mutable && (slot_is_own_binding(*slot) || slot_is_lexical(*slot))
@@ -254,6 +256,12 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
             Op::Jump(target) | Op::JumpIfFalse(target) | Op::JumpIfTrue(target) if *target <= ip
         )
     });
+    // A loop's accelerators keep a received slot in a register and write it
+    // back to the frame, not to the cell; a body that assigns one runs here
+    // only without loops -- a callback, typically.
+    if has_backward_edge && bytecode.writes_received_cells() {
+        return decline(trace, None, "assigns a received cell inside a loop body");
+    }
     // Such a body still runs here up to the loop: each backward edge exits
     // to the interpreter, whose edge dispatch gives the accelerators the loop
     // exactly as a frame that ran from entry would.
@@ -566,6 +574,21 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 if crate::bytecode::ir::decode_index_receiver(*encoded)
                     .1
                     .is_some() => {}
+            // Operations that read only their own operands at the top of the
+            // stack -- and neither branch, exit, call nor write a local --
+            // need only those in their registers: `x * this.y` keeps `x`
+            // pending across the `this.y` read, which stays one GetPropThis.
+            Op::GetPropNamed { .. }
+            | Op::GetPropIndex(_)
+            | Op::Unary(_)
+            | Op::Typeof
+            | Op::ToNumeric => materialize_top(&mut ops, &mut aliases, depth, 1, &register),
+            Op::Update(_) if folds[ip] == LocalFold::None => {
+                materialize_top(&mut ops, &mut aliases, depth, 1, &register);
+            }
+            Op::SetPropNamed { .. } => {
+                materialize_top(&mut ops, &mut aliases, depth, 2, &register);
+            }
             _ => materialize(&mut ops, &mut aliases, &register),
         }
         match op {
@@ -855,6 +878,14 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 } else {
                     ops.push(WideOp::Drop { src });
                 }
+            }
+            Op::AssignLocal(slot)
+                if *slot < u128::BITS as usize && upvalue_slots & (1_u128 << *slot) != 0 =>
+            {
+                ops.push(WideOp::StoreUpvalueLocal {
+                    slot: u16::try_from(*slot).ok()?,
+                    src: register(depth.checked_sub(1)?),
+                });
             }
             Op::StoreLocal(slot) | Op::AssignLocal(slot) => {
                 required_authoritative_slots |= 1_u128 << *slot;
@@ -1594,6 +1625,25 @@ fn materialize(ops: &mut Vec<WideOp>, aliases: &mut [Option<u16>], register: &im
         if let Some(src) = alias.take() {
             ops.push(WideOp::Move {
                 dst: register(depth as u16),
+                src,
+            });
+        }
+    }
+}
+
+/// Emits the deferred copies of the top `count` operands of a stack `depth`
+/// deep, the only ones the next operation reads.
+fn materialize_top(
+    ops: &mut Vec<WideOp>,
+    aliases: &mut [Option<u16>],
+    depth: u16,
+    count: u16,
+    register: &impl Fn(u16) -> u16,
+) {
+    for at in depth.saturating_sub(count)..depth {
+        if let Some(src) = aliases.get_mut(usize::from(at)).and_then(Option::take) {
+            ops.push(WideOp::Move {
+                dst: register(at),
                 src,
             });
         }

@@ -10,10 +10,12 @@ and `ai-astar` run 18-25% more cycles in one placement than in another.
 Measured 2026-09-24 by moving only the executor: the fast placements are a
 narrow window of its start address modulo 4 KiB, with its callees in the
 order `CALLEES` lists right after it; the slow ones are everywhere else. The
-window moves when the executor's own code changes (0xf80..0xfe0, then
-0xd90..0xdc0 once `DenseWriteBoxed` was added; with the inline numeric field
-read nearly every offset is fast except 0xda0 and 0xfe0), so
-`DEFAULT_OFFSET` is re-scanned with it.
+window moves when the executor's own code changes, so `DEFAULT_OFFSET` is
+re-scanned with it. Some versions of the executor are sensitive at 16-byte
+granularity (one in eight offsets fast); others -- the one pinned now -- are
+within 2% at every offset. Scan with several typed-loop cases, not two: a
+position fast for the call sentinels and ai-astar was 5% slow for
+imaging-desaturate.
 
 This rewrites the head of an order file to: standard-library functions whose
 total size moves the executor to the chosen offset, the executor, its
@@ -36,12 +38,21 @@ from typing import Sequence
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ORDER = ROOT / "crates/qjs-cli/hot-functions.order"
-DEFAULT_OFFSET = 0xE60
+DEFAULT_OFFSET = 0x0
 PAGE = 0x1000
 ALIGN = 16
-EXECUTOR = re.compile(r"typed_loop7execute18try_run_typed_loop.*WideLoopFrame")
+# The executor's dispatch loop: `run<WideLoopFrame>` when the compiler keeps
+# it out of line (it has since 2026-09-25; the order file's ranking predates
+# that and never listed it), otherwise `try_run_typed_loop<WideLoopFrame>`,
+# into which it is then inlined. Searched in the binary, first match wins.
+EXECUTORS = (
+    re.compile(r"typed_loop7execute3run.*WideLoopFrame"),
+    re.compile(r"typed_loop7execute18try_run_typed_loop.*WideLoopFrame"),
+)
 # Suffix patterns of the executor's hot callees, in their pinned order.
 CALLEES = (
+    "typed_loop7execute18try_run_typed_loopNtNtNtNtB6_10compact_fn4wide10loop_frame13WideLoopFrameEB8_",
+    "typed_loop7execute16get_named_object",
     "ArrayRef24direct_dense_index_value",
     "typed_loop7execute9call_leaf",
     "vm_numeric_leaf21try_eval_numeric_leaf",
@@ -101,12 +112,18 @@ def filler(sizes: dict[str, int], counts: dict[str, int], length: int,
 def pin(lines: list[str], start: int, sizes: dict[str, int], counts: dict[str, int],
         offset: int) -> list[str]:
     """`lines` (symbols, no comments) with the executor pinned at `offset`."""
-    executor = next((line for line in lines if EXECUTOR.search(line)), None)
+    executor = None
+    for pattern in EXECUTORS:
+        executor = next((name for name in sorted(sizes) if pattern.search(name)), None)
+        if executor is not None:
+            break
     if executor is None:
-        raise ValueError("the order file does not list the typed-loop executor")
+        raise ValueError("the binary has no typed-loop executor symbol")
     callees = []
+    known = sorted(set(lines) | set(sizes))
     for suffix in CALLEES:
-        callees += [line for line in lines if line.endswith(suffix) and line not in callees]
+        callees += [name for name in known
+                    if name.endswith(suffix) and name not in callees and name != executor]
     listed = set(lines)
     length = (offset - start) % PAGE
     padding = filler(sizes, counts, length, listed)

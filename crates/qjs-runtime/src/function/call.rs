@@ -195,6 +195,23 @@ pub(crate) fn call_function(
         if function.is_class_constructor && !function.is_derived_constructor && is_construct {
             initialize_instance_fields(function, &this_value, env)?;
         }
+        // A native's callback -- `forEach`, `map`, `replace` -- calling an
+        // ordinary function takes the path the interpreter's own calls take:
+        // the compact tiers run it in the caller's environment, and only a
+        // body they decline builds its slot-seeded frame. The general path
+        // below built a compatibility frame for every such call, which was
+        // most of a small callback's cost.
+        if !is_construct && is_direct_leaf_function(&callee) {
+            return call_direct_leaf_function(
+                callee.clone(),
+                this_value,
+                &argument_values,
+                env,
+                env.module_host(),
+                #[cfg(feature = "agents")]
+                env.agent_context(),
+            );
+        }
         crate::diagnostics::count!(generic_call_frames);
         let prepared = prepare_bytecode_call(
             function,

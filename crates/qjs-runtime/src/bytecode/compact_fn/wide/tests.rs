@@ -1719,3 +1719,87 @@ fn named_writes_answer_constructor_instances_from_the_hot_entry_only() {
         Value::String("79800,6,5,6,7,396/397/398/399".into())
     );
 }
+
+/// An operand forwarded from a local stays pending across a read that only
+/// uses the top of the stack, so `x * this.y` keeps its fused `this` read.
+#[test]
+fn a_pending_local_operand_keeps_the_fused_this_read() {
+    let source = "function m(x) { return x * this.y + this.z; }";
+    let program = compile::compile(&nested_function(source, "m")).expect("admitted");
+    assert!(
+        program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::GetPropThis { .. })),
+        "{:#?}",
+        program.ops
+    );
+    assert!(
+        !program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::LoadThis { .. })),
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(&format!(
+            "{source} var o = {{ y: 3, z: 4, m: m }}; var s = 0; for (var i = 0; i < 20; i++) s += o.m(i); s;"
+        )),
+        Value::Number(650.0)
+    );
+}
+
+/// A callback that assigns a captured variable (`total += x`) runs here,
+/// writing through the shared cell: an assignment in the dead zone, to a
+/// `const`, from a loop body, and every `this` a native passes behave as in
+/// the interpreter.
+#[test]
+fn callbacks_assign_captured_variables_through_their_cells() {
+    let source =
+        "function outer() { var total = 0; var f = function cb(x) { total += x; }; return f; }";
+    let outer = nested_function(source, "outer");
+    let callback = outer
+        .code
+        .iter()
+        .find_map(|op| match op {
+            Op::NewFunction { bytecode, .. } => Some(bytecode.as_ref().clone()),
+            _ => None,
+        })
+        .expect("the callback is nested in outer");
+    let program =
+        compile::compile(&callback).expect("a callback assigning a captured cell is admitted");
+    assert!(
+        program
+            .ops
+            .iter()
+            .any(|op| matches!(op, WideOp::StoreUpvalueLocal { .. })),
+        "{:#?}",
+        program.ops
+    );
+    assert_eq!(
+        value_of(
+            "var out = [];
+             function sum(list) { var total = 0; list.forEach(function (x) { total += x; }); return total; }
+             out.push(sum([1, 2, 3, 4]));
+             function early() { var f = function () { x = 5; }; var r; try { f(); r = 'no'; } catch (e) { r = e.name; } let x = 1; f(); return r + x; }
+             out.push(early());
+             function constant() { const k = 1; var f = function () { k = 2; }; try { f(); return 'no'; } catch (e) { return e.name + k; } }
+             out.push(constant());
+             function looped() { var n = 0; [1, 2, 3].forEach(function (x) { for (var i = 0; i < x; i++) n += i; }); return n; }
+             out.push(looped());
+             function sloppyThis() { var seen; [1].forEach(function () { seen = this === globalThis; }); return seen; }
+             out.push(sloppyThis());
+             function strictThis() { 'use strict'; var seen; [1].forEach(function () { seen = this; }); return seen === undefined; }
+             out.push(strictThis());
+             function withThis() { var seen; var o = { k: 7 }; [1].forEach(function () { seen = this.k; }, o); return seen; }
+             out.push(withThis());
+             function throwing() { try { [1, 2].forEach(function (x) { if (x == 2) throw new Error('b' + x); }); } catch (e) { return e.message; } }
+             out.push(throwing());
+             function counter() { var c = 0; function inc() { c += 1; return c; } [1, 2, 3].map(inc); return c + ':' + inc(); }
+             out.push(counter());
+             out.join();"
+        ),
+        Value::String("10,ReferenceError5,TypeError1,4,true,true,7,b2,3:4".into())
+    );
+}
