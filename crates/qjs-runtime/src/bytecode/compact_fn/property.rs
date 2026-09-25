@@ -17,6 +17,23 @@ use crate::function::CallEnv;
 use crate::value::{OwnDataPropertyRead, OwnDataPropertyWrite};
 use crate::{PropertyKey, RuntimeError, Value};
 
+/// The hit path of `get_prop_named`, inlined into the driver's arms: an
+/// ordinary object the site's hot cache entry answers (`probe_hot`). Paying
+/// `get_prop_named`'s whole frame for that was a third of a read's cost.
+#[inline(always)]
+pub(super) fn get_prop_named_hot(object: &Value, cache: &NamedPropertyCache) -> Option<Value> {
+    let Value::Object(object_ref) = object else {
+        return None;
+    };
+    if crate::symbol::is_symbol_primitive(object_ref)
+        || crate::typed_array::is_typed_array_object(object_ref)
+        || object_ref.is_module_namespace_exotic()
+    {
+        return None;
+    }
+    cache.probe_hot(object_ref)
+}
+
 /// Reads the statically named property `key` of `object`, consulting `cache`
 /// before the general path, exactly as `Op::GetPropNamed` does.
 #[cold]
@@ -163,6 +180,28 @@ fn prototype_receiver_named_value(
         },
         OwnDataPropertyRead::NeedsSlowPath => None,
     }
+}
+
+/// The hit path of `set_prop_named`, inlined into the driver's arms: an
+/// existing property in a slot a constructor's instances share, on an
+/// ordinary object that is not the realm's global object (whose writes also
+/// update the realm binding).
+#[inline(always)]
+pub(super) fn set_prop_named_hot(
+    object: &Value,
+    cache: Option<&NamedPropertyCache>,
+    value: &Value,
+    env: &CallEnv,
+) -> bool {
+    let (Value::Object(object_ref), Some(cache)) = (object, cache) else {
+        return false;
+    };
+    !crate::symbol::is_symbol_primitive(object_ref)
+        && !env.is_realm_global_object(object_ref)
+        && matches!(
+            cache.write_hot(object_ref, value),
+            Some(OwnDataPropertyWrite::Written)
+        )
 }
 
 /// Writes `value` to the statically named property `key` of `object`, honoring

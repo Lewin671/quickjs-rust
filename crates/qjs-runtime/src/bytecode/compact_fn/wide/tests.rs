@@ -1687,3 +1687,35 @@ fn inherited_methods_two_prototypes_up_see_every_change() {
         Value::String("base1,base2,shadow2,base2,other9,other9,other9,own9".into())
     );
 }
+
+/// A named write answers first from the entry that last hit, a slot shared
+/// by a constructor's instances; another property order, a frozen object, a
+/// read-only property and an inherited setter take the full path.
+#[test]
+fn named_writes_answer_constructor_instances_from_the_hot_entry_only() {
+    assert_eq!(
+        value_of(
+            "'use strict';
+             function P(a) { this.a = a; this.b = 0; }
+             function Q(a) { this.b = 0; this.a = a; }
+             function put(o, v) { o.a = v; return o.a; }
+             function run() {
+                 var objs = [new P(1), new P(2), new Q(3), new P(4)];
+                 var frozen = Object.freeze(new P(5));
+                 var ro = new P(6); Object.defineProperty(ro, 'a', { value: 6, writable: false });
+                 var out = 0, errors = 0;
+                 for (var i = 0; i < 400; i++) out += put(objs[i % 4], i);
+                 for (var j = 0; j < 3; j++) {
+                     try { put(frozen, 9); } catch (e) { errors++; }
+                     try { put(ro, 9); } catch (e) { errors++; }
+                 }
+                 function S() {}
+                 S.prototype = { set a(v) { this.seen = v; }, get a() { return 'got'; } };
+                 var s = new S(); put(s, 7);
+                 return [out, errors, frozen.a, ro.a, s.seen, objs.map(function (o) { return o.a; }).join('/')].join();
+             }
+             run();"
+        ),
+        Value::String("79800,6,5,6,7,396/397/398/399".into())
+    );
+}

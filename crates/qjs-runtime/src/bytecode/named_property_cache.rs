@@ -484,7 +484,11 @@ impl NamedPropertyCache {
         value: &Value,
     ) -> Option<OwnDataPropertyWrite> {
         let mut state = self.0.borrow_mut();
-        for entry in state.entries.iter_mut().flatten() {
+        let NamedPropertyCacheState { entries, hot, .. } = &mut *state;
+        for (index, entry) in entries.iter_mut().enumerate() {
+            let Some(entry) = entry else {
+                continue;
+            };
             match entry {
                 NamedPropertyCacheEntry::Exact {
                     object: cached,
@@ -509,6 +513,7 @@ impl NamedPropertyCache {
                 }
                 NamedPropertyCacheEntry::SharedSlot { key, slot } => {
                     if let Some(result) = object.shared_data_slot_write(key, *slot, value) {
+                        hot.set(index as u8);
                         return Some(result);
                     }
                 }
@@ -523,6 +528,23 @@ impl NamedPropertyCache {
             }
         }
         None
+    }
+
+    /// `write`'s hot entry alone, as `probe_hot` for reads: a slot shared by
+    /// a constructor's instances.
+    #[inline(always)]
+    pub(super) fn write_hot(
+        &self,
+        object: &ObjectRef,
+        value: &Value,
+    ) -> Option<OwnDataPropertyWrite> {
+        let state = self.0.borrow();
+        let Some(Some(NamedPropertyCacheEntry::SharedSlot { key, slot })) =
+            state.entries.get(usize::from(state.hot.get()))
+        else {
+            return None;
+        };
+        object.shared_data_slot_write(key, *slot, value)
     }
 
     pub(super) fn record_write(&self, object: &ObjectRef, key: &str) {
