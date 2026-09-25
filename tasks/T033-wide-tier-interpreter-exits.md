@@ -287,6 +287,22 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   0.995 against main and **0.853 against QuickJS-NG**; hash-map 0.859,
   math-cordic 0.937, controlflow-recursive 0.971. Worst against main:
   string-unpack-code 1.024; sentinels 0.94-1.04.
+- Stack run 895b06dd vs main 1bad7c18 (30 blocks, cycles, quiet host;
+  `target/comparison/perf15-895b06dd`): hot named-read entry, operand
+  forwarding. External geomean 0.997 against main and **0.834 against
+  QuickJS-NG**; 3d-raytrace 0.952, cdjs 0.963, raytrace-class-fields
+  0.966, tofte 0.969; worst sha256 1.033, regexp-dna 1.031.
+- Hot named-read entry (b8ff0735): a hit walked all four cache entries
+  (~150 instructions for `n.left`); the cache now remembers the entry that
+  answered and checks it alone first when it is a constructor-shared slot.
+  Tree-walk call 1,324 -> 1,210 instructions (QuickJS-NG 459).
+- Operand forwarding (895b06dd): `Move` was the most executed wide op
+  (a third of cdjs's). LoadLocal defers its copy; Binary, GetProp, plain
+  GetPropNamed, Return and local-to-local stores read the local in place;
+  anything else, joins and writes to the local materialize first. 3d-raytrace
+  0.94, tofte 0.97. Remaining Moves are mostly call arguments. Diagnostic:
+  an op histogram (`Move->next` pairs) in the perf-counters build found it;
+  the patch is not kept (a format! per op).
 - Stack run 8bbe675b vs main 4c378077 (30 blocks, cycles, quiet host;
   `target/comparison/perf14-8bbe675b`): pre-header typed entry, boxed
   element writes, dead completion temporaries. External geomean 0.982

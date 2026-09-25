@@ -408,6 +408,18 @@ fn callee_parameter_slots(callee: &Value) -> &[usize] {
     }
 }
 
+/// An operand of an operation that consumes it: a stack register's value is
+/// moved out, but a local's -- a forwarded operand (`compile`'s `aliases`)
+/// -- is copied, unless the operation writes its result back there.
+#[inline(always)]
+fn take_operand(window: &mut [Value], register: u16, dst: u16, locals: u16) -> Value {
+    if register == dst || register >= locals {
+        std::mem::replace(&mut window[register as usize], Value::Undefined)
+    } else {
+        crate::bytecode::vm_bindings::clone_local_value(&window[register as usize])
+    }
+}
+
 #[inline]
 fn clear_window(window: &mut [Value]) {
     // Most of a returning window is already empty -- the operations that
@@ -859,9 +871,9 @@ fn run_frames(
                             execute::store(&mut window[dst as usize], value);
                             continue;
                         }
-                        let left = std::mem::replace(&mut window[left as usize], Value::Undefined);
-                        let right =
-                            std::mem::replace(&mut window[right as usize], Value::Undefined);
+                        let locals = program.local_registers;
+                        let left = take_operand(window, left, dst, locals);
+                        let right = take_operand(window, right, dst, locals);
                         match activation.eval_binary(left, op, right) {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
@@ -966,8 +978,14 @@ fn run_frames(
                         }
                     }
                     WideOp::GetProp { dst, obj, key } => {
-                        let key = std::mem::replace(&mut window[key as usize], Value::Undefined);
-                        match property::get_prop_element(&mut window[obj as usize], key, env) {
+                        let key = take_operand(window, key, dst, program.local_registers);
+                        // A forwarded local receiver is read, not consumed.
+                        let result = if obj != dst && obj < program.local_registers {
+                            property::get_prop_element_of(&window[obj as usize], key, env)
+                        } else {
+                            property::get_prop_element(&mut window[obj as usize], key, env)
+                        };
+                        match result {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
                         }

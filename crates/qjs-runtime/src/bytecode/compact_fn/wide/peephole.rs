@@ -118,7 +118,9 @@ pub(super) fn fuse_compare_jump(
     else {
         return None;
     };
-    if emitted != *op || dst != cond || left != cond || compact_index[ip - 1] as usize != binary {
+    // A forwarded operand (`compile`'s `aliases`) is read where it is, so
+    // only the result register is fixed.
+    if emitted != *op || dst != cond || compact_index[ip - 1] as usize != binary {
         return None;
     }
     // The operation emitted for bytecode instruction `at`, when it is the
