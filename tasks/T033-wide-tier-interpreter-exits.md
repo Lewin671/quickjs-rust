@@ -287,6 +287,25 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   0.995 against main and **0.853 against QuickJS-NG**; hash-map 0.859,
   math-cordic 0.937, controlflow-recursive 0.971. Worst against main:
   string-unpack-code 1.024; sentinels 0.94-1.04.
+- Callbacks (980c95fe, 6f5388fa): `arr.forEach(function (x) { total += x;
+  })` ran 9.5x slower than QuickJS-NG -- the callback assigns a captured
+  variable, so the wide tier declined it (the received-cell proof was
+  read-only) and every call built an interpreter `Vm`; and `call_function`
+  (every native's callback path) built a compatibility frame environment
+  per call. Received cells a body only reads or plainly assigns are now
+  written through the cell (`cell_received_upvalue_slots`,
+  `StoreUpvalueLocal`; loops keep the interpreter), and natives call direct
+  leaves the interpreter's way (`call_direct_leaf_function`). forEach
+  1,350M -> 595M cycles (NG 133M); string-unpack-code 0.84 single-run.
+  Remaining: the per-call argument `Vec` in array iteration, the closed-form
+  probes before the tiers, and the wide entry's storage swap.
+- Stack run 6f5388fa vs main 422ac19a (30 blocks, cycles, quiet host;
+  `target/comparison/perf19-6f5388fa`): perf18's stack plus the callback
+  units. External geomean 0.991 against main and **0.801 against
+  QuickJS-NG**; string-unpack-code 0.872, 3d-raytrace 0.927, crypto-md5
+  0.965. Worst against main: regexp-dna 1.015; sentinels 0.986-1.004.
+  Slowest against QuickJS-NG: tofte 1.55, xparb 1.54, 3d-raytrace 1.50,
+  ai-astar 1.47, validate-input 1.42, tagcloud 1.35, binary-trees 1.34.
 - Stack run 30413402 vs main 422ac19a (30 blocks, cycles, quiet host;
   `target/comparison/perf18-30413402`): the pin now names the executor's
   out-of-line dispatch loop `run<WideLoopFrame>` (it had been pinning a
