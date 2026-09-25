@@ -106,7 +106,10 @@ The procedure (queue, plan, decision) is in
   `python3 -m tools.benchmark.layout_pin --binary <qjs>` puts standard-library
   functions of fixed size first, sized so the executor lands at the pinned
   offset, then the executor and its callees; `order_file` applies it after
-  every regeneration. After editing the executor itself, re-scan the offset
+  every regeneration. The executor is the dispatch loop, `run<WideLoopFrame>`,
+  which the compiler has kept out of line since 2026-09-25 -- the tool had
+  been pinning its 132-instruction caller while the loop itself floated in
+  the unordered tail; it now looks the loop up in the binary first. After editing the executor itself, re-scan the offset
   (`--offset`, one relink and the two canaries per probe, ~15 s each) and
   keep the centre of the fast window. The executor is generic and is
   instantiated in its caller's codegen unit: moving `run_typed_loop_here`

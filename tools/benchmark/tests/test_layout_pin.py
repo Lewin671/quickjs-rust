@@ -32,8 +32,17 @@ class LayoutPinTests(unittest.TestCase):
         self.assertEqual(pinned[2:], [EXECUTOR, CALL_LEAF, VM])
 
     def test_pin_requires_the_executor(self):
+        sizes = {name: size for name, size in self.sizes.items() if name != EXECUTOR}
         with self.assertRaises(ValueError):
-            layout_pin.pin([VM], 0x100000f40, self.sizes, self.counts, 0xfb0)
+            layout_pin.pin([VM], 0x100000f40, sizes, self.counts, 0xfb0)
+
+    def test_pin_prefers_an_out_of_line_run_the_order_file_never_listed(self):
+        run = ("__RINvNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10typed_loop7execute3run"
+               "NtNtNtNtB6_10compact_fn4wide10loop_frame13WideLoopFrameEB8_")
+        sizes = dict(self.sizes, **{run: 0x3000})
+        counts = dict(self.counts, **{run: 1})
+        pinned = layout_pin.pin([VM, EXECUTOR], 0x100000f40, sizes, counts, 0xfb0)
+        self.assertEqual(pinned[2:6], [run, EXECUTOR, CALL_LEAF, VM])
 
 
 if __name__ == "__main__":
