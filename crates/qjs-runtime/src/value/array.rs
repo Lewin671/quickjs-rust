@@ -498,32 +498,6 @@ impl ArrayRef {
         Some(result)
     }
 
-    /// Reads one element directly when ordinary property lookup cannot observe a
-    /// different value. Callers should re-check this per access because arrays
-    /// can become sparse or gain intercepting descriptors while iteration is in
-    /// progress.
-    pub(crate) fn dense_index_value(&self, index: usize, env: &CallEnv) -> Option<Value> {
-        let elements = self.0.elements.borrow();
-        if self.0.length.get() != elements.len() || !self.0.holes_are_empty() {
-            return None;
-        }
-        if !self.0.properties_are_empty() {
-            return None;
-        }
-        match self.0.prototype_override() {
-            Some(Some(_)) => return None,
-            Some(None) => {}
-            None => {
-                if crate::array_prototype(env)
-                    .is_some_and(|prototype| prototype.has_own_index_property())
-                {
-                    return None;
-                }
-            }
-        }
-        elements.get(index).cloned()
-    }
-
     /// Whether the array has no own element or indexed descriptor at `index`:
     /// a hole in its element storage, a position past that storage -- which
     /// `new Array(n)` leaves for all of `0..n` -- or one at or past the

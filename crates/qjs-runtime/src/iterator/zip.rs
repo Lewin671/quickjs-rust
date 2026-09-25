@@ -599,7 +599,7 @@ fn zip_record_step_value(
             }
             let index = *next_index;
             *next_index += 1;
-            let value = elements.dense_index_value(index, env).map_or_else(
+            let value = elements.plain_dense_index_value(index).map_or_else(
                 || property_value(Value::Array(elements.clone()), &index.to_string(), env),
                 Ok,
             )?;

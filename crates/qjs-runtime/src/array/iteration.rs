@@ -129,7 +129,7 @@ fn iteration_element(
     env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     if let Value::Array(array) = receiver
-        && let Some(value) = array.dense_index_value(index, env)
+        && let Some(value) = array.plain_dense_index_value(index)
     {
         return Ok(Some(value));
     }
