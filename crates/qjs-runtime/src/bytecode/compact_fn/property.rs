@@ -32,6 +32,9 @@ pub(super) fn get_prop_named(
         && !crate::typed_array::is_typed_array_object(object_ref)
         && !object_ref.is_module_namespace_exotic()
     {
+        if let Some(value) = cache.probe_hot(object_ref) {
+            return Ok(value);
+        }
         let probe = cache.probe(object_ref);
         if let CacheProbe::Own(value) = probe {
             return Ok(value);

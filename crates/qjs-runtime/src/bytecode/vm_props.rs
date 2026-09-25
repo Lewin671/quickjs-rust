@@ -626,6 +626,9 @@ impl Vm<'_> {
             cache.clear();
             return self.try_direct_get_string(object, key);
         }
+        if let Some(value) = cache.probe_hot(object_ref) {
+            return Some(value);
+        }
         let probe = cache.probe(object_ref);
         if let CacheProbe::Own(value) = probe {
             return Some(value);

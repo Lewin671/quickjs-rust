@@ -1593,3 +1593,28 @@ fn loops_entered_from_above_run_their_typed_program_from_the_header() {
         )
     );
 }
+
+/// A named read answers first from the entry that last hit; instances of one
+/// constructor share it, while an object with its properties in another
+/// order, an accessor under the same name, or a literal falls through to the
+/// full cache walk.
+#[test]
+fn named_reads_answer_constructor_instances_from_the_hot_entry_only() {
+    assert_eq!(
+        value_of(
+            "function P(a, b) { this.a = a; this.b = b; }
+             function Q(a, b) { this.b = b; this.a = a; }
+             function readA(o) { return o.a; }
+             function run() {
+                 var out = 0, objs = [new P(1, 2), new P(3, 4), new Q(5, 6), new P(7, 8)];
+                 var acc = new P(0, 0);
+                 Object.defineProperty(acc, 'a', { get: function () { return 100; } });
+                 objs.push(acc, { b: 1, a: 9 });
+                 for (var i = 0; i < 600; i++) out += readA(objs[i % objs.length]);
+                 return out;
+             }
+             run();"
+        ),
+        Value::Number(12500.0)
+    );
+}

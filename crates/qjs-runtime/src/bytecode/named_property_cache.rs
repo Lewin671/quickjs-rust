@@ -38,6 +38,9 @@ struct NamedPropertyCacheState {
     /// receiver (`this.m()` in a loop) skips re-proving the miss until an own
     /// property is added, removed or reconfigured.
     receiver_miss: Option<(ObjectWeakRef, u64)>,
+    /// The entry that answered the last own-property probe, which
+    /// `probe_hot` checks alone before the full walk.
+    hot: std::cell::Cell<u8>,
 }
 
 #[derive(Clone, Debug)]
@@ -122,6 +125,7 @@ impl NamedPropertyCache {
             next_slot: 0,
             local_slot: Some(slot),
             receiver_miss: None,
+            hot: std::cell::Cell::new(0),
         })))
     }
 
@@ -146,10 +150,27 @@ impl NamedPropertyCache {
     /// prototype answer is returned as an unverified candidate, because using
     /// it still requires the caller to establish that the receiver has no own
     /// property of that name.
+    /// The last hit's entry, when it is a slot shared by every instance of
+    /// a constructor: one check instead of the full walk, whose many-entry
+    /// dispatch costs a read like `n.left` over a hundred instructions.
+    #[inline(always)]
+    pub(super) fn probe_hot(&self, object: &ObjectRef) -> Option<Value> {
+        let state = self.0.borrow();
+        let Some(Some(NamedPropertyCacheEntry::SharedSlot { key, slot })) =
+            state.entries.get(usize::from(state.hot.get()))
+        else {
+            return None;
+        };
+        object.shared_data_slot_value(key, *slot)
+    }
+
     pub(super) fn probe(&self, object: &ObjectRef) -> CacheProbe {
         let state = self.0.borrow();
         let mut candidate = None;
-        for entry in state.entries.iter().flatten() {
+        for (index, entry) in state.entries.iter().enumerate() {
+            let Some(entry) = entry else {
+                continue;
+            };
             if let NamedPropertyCacheEntry::PrototypeSlot {
                 holder,
                 holder_layout_revision,
@@ -170,6 +191,7 @@ impl NamedPropertyCache {
                 continue;
             }
             if let Some(value) = Self::read_entry(entry, object) {
+                state.hot.set(index as u8);
                 return CacheProbe::Own(value);
             }
         }
