@@ -7,9 +7,12 @@ almost every edit. The typed-loop executor
 (`try_run_typed_loop<WideLoopFrame>`) and its callees are the part of the
 layout that swings most: with byte-identical code, `capturing_closure_call`
 and `ai-astar` run 18-25% more cycles in one placement than in another.
-Measured 2026-09-24 by moving only the executor: the fast placements are its
-start address in 0xf80..0xfe0 modulo 4 KiB, with its callees in the order
-`CALLEES` lists right after it; the slow ones are everywhere else.
+Measured 2026-09-24 by moving only the executor: the fast placements are a
+narrow window of its start address modulo 4 KiB, with its callees in the
+order `CALLEES` lists right after it; the slow ones are everywhere else. The
+window moves when the executor's own code changes (0xf80..0xfe0, then
+0xd90..0xdc0 once `DenseWriteBoxed` was added), so `DEFAULT_OFFSET` is
+re-scanned with it.
 
 This rewrites the head of an order file to: standard-library functions whose
 total size moves the executor to the chosen offset, the executor, its
@@ -32,7 +35,7 @@ from typing import Sequence
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ORDER = ROOT / "crates/qjs-cli/hot-functions.order"
-DEFAULT_OFFSET = 0xFB0
+DEFAULT_OFFSET = 0xDA0
 PAGE = 0x1000
 ALIGN = 16
 EXECUTOR = re.compile(r"typed_loop7execute18try_run_typed_loop.*WideLoopFrame")
@@ -47,7 +50,6 @@ CALLEES = (
     "vm_numeric_leaf20direct_number_binary",
 )
 _STD = "Csg55jX0GwzBC_3std"
-_OWN = "Cs9nYd1Hk1rek"
 
 
 def text_symbols(binary: Path) -> tuple[int, dict[str, int], dict[str, int]]:
@@ -75,11 +77,12 @@ def text_symbols(binary: Path) -> tuple[int, dict[str, int], dict[str, int]]:
 
 def filler(sizes: dict[str, int], counts: dict[str, int], length: int,
            exclude: set[str]) -> list[str]:
-    """Concrete standard-library functions whose sizes sum to `length`."""
+    """Concrete standard-library functions whose sizes sum to `length`: no
+    symbol naming this workspace, whose instantiation could change size."""
     candidates = sorted(
         ((size, name) for name, size in sizes.items()
          if counts.get(name) == 1 and name.startswith("__RNv") and _STD in name
-         and _OWN not in name and size > 0 and size % ALIGN == 0 and name not in exclude),
+         and "qjs" not in name and size > 0 and size % ALIGN == 0 and name not in exclude),
         reverse=True,
     )
     units = length // ALIGN

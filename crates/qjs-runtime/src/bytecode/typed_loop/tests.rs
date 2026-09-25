@@ -1716,3 +1716,99 @@ fn numeric_helpers_see_missing_and_extra_arguments_exactly() {
         Ok(Value::Number(600.0))
     );
 }
+
+/// An object stored into an array element (`out[index] = entry`) is written
+/// from the boxed file; unboxing it for the scalar write deoptimized the
+/// region on every entry -- 98k interpreter frames in hash-map's rehash.
+#[test]
+fn typed_loops_write_boxed_locals_into_dense_elements() {
+    let rehash = "function rehash(old, length) {
+        var out = new Array(length);
+        for (var i = 0; i < old.length; ++i) {
+            var entry = old[i];
+            old[i] = null;
+            while (entry) {
+                var index = entry.h & (length - 1);
+                var next = entry.next;
+                entry.next = out[index];
+                out[index] = entry;
+                entry = next;
+            }
+        }
+        return out;
+    }";
+    let bytecode = nested_function(rehash);
+    let programs = super::compile_all(&bytecode);
+    assert!(
+        programs.iter().any(|program| program
+            .ops
+            .iter()
+            .any(|op| matches!(op, super::TypedOp::DenseWriteBoxed { .. }))),
+        "{programs:#?}"
+    );
+    let source = format!(
+        "{rehash}
+        function run() {{
+            var table = new Array(4);
+            for (var k = 0; k < 64; k++) {{ var slot = k & 3; table[slot] = {{ h: k, next: table[slot] }}; }}
+            for (var size = 8; size <= 64; size *= 2) table = rehash(table, size);
+            var sums = [];
+            for (var s = 0; s < table.length; s++) {{ var t = 0; for (var e = table[s]; e; e = e.next) t += e.h; sums.push(t); }}
+            var grown = [];
+            for (var g = 0; g < 5; g++) {{ var o = {{ v: g }}; grown[g] = o; }}
+            return sums.join() + '|' + grown.map(function (o) {{ return o.v; }}).join();
+        }}
+        run();"
+    );
+    let expected = (0..64).map(|n| n.to_string()).collect::<Vec<_>>().join(",") + "|0,1,2,3,4";
+    assert_eq!(eval(&source), Ok(Value::String(expected.into())));
+}
+
+/// A function body's statement completion values are unobservable, so the
+/// temporaries carrying them are read as `undefined` and never written: the
+/// arms of an `if`/`else if` chain leave different completion temporaries on
+/// the stack -- one boxed, one scalar -- and their join used to decline the
+/// whole region (ai-astar's neighbor loop).
+#[test]
+fn typed_loops_join_arms_that_leave_different_completion_values() {
+    let source = "function run(items, heuristic) {
+        var open = [], best = 0, seen = 0;
+        for (var j = 0; j < items.length; j++) {
+            var item = items[j];
+            if (item.skip) continue;
+            var score = item.g + 1;
+            var better = false;
+            if (!item.known) {
+                better = true;
+                item.h = heuristic(item.g, score);
+                open.push(item);
+            } else if (score < item.g) {
+                better = true;
+            }
+            if (better) {
+                item.g = score;
+                item.f = item.g + item.h;
+                best += item.f;
+            }
+            seen++;
+        }
+        return best + ':' + seen + ':' + open.length;
+    }";
+    let bytecode = nested_function(source);
+    assert_eq!(
+        super::compile_all(&bytecode).len(),
+        1,
+        "{:#?}",
+        bytecode.code
+    );
+    assert_eq!(
+        eval(&format!(
+            "{source}
+            var items = [];
+            for (var k = 0; k < 40; k++) items.push({{ g: k % 5, h: 1, known: k % 3 == 0, skip: k % 7 == 0 }});
+            function heuristic(a, b) {{ return Math.abs(a - b) + b; }}
+            var r = 0; for (var t = 0; t < 3; t++) r = run(items, heuristic); r;"
+        )),
+        Ok(Value::String("240:34:22".to_owned().into()))
+    );
+}

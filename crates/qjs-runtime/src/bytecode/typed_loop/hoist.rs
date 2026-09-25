@@ -129,6 +129,7 @@ fn writes_or_calls(op: &TypedOp) -> bool {
     matches!(
         op,
         TypedOp::DenseWrite { .. }
+            | TypedOp::DenseWriteBoxed { .. }
             | TypedOp::StoreSloppyGlobal { .. }
             | TypedOp::ComputedWrite { .. }
             | TypedOp::ArrayPush { .. }

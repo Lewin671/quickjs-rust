@@ -298,6 +298,13 @@ pub(in crate::bytecode) struct WideProgram {
     /// Per probed backedge, the typed-program entries that exited normally
     /// and the backedges they took between them, counted until judged.
     typed_entry_counts: Box<[std::cell::Cell<(u16, u32)>]>,
+    /// The exits placed where control falls into a probed loop's header,
+    /// by ascending resume instruction (see `ProbedHeader`).
+    probed_headers: Box<[ProbedHeader]>,
+    /// One bit per probed backedge, set once its typed program has run a
+    /// loop to its end from the backedge: from then on the loop's header
+    /// exit enters the program before the first iteration.
+    typed_ready: std::cell::Cell<u64>,
     /// The wide instruction each bytecode instruction begins at, and the
     /// operand-stack depth there (`u16::MAX` where unreachable): where a
     /// typed loop program run from an exit hands the activation back.
@@ -314,6 +321,20 @@ struct ProbedBackedge {
     jump_pc: u32,
     /// The operand-stack depth at the jump.
     depth: u16,
+}
+
+/// An exit placed before a probed loop's header, reached only by falling
+/// into the loop from above: its backedges and forward jumps target the
+/// header's own instructions, after the exit. Once the loop's typed program
+/// has run from the backedge, the exit runs it from here instead, saving the
+/// first iteration this tier would otherwise run before the backedge.
+#[derive(Clone, Copy, Debug)]
+struct ProbedHeader {
+    /// The wide instruction after the exit, which identifies it.
+    resume_pc: u32,
+    /// The bytecode indices of the header and of the loop's last backedge.
+    header: u32,
+    backedge: u32,
 }
 
 /// Typed-program entries observed before a loop is judged short.
@@ -363,6 +384,28 @@ impl WideProgram {
     /// the probed backedge `index`: at the jump that follows its exit.
     pub(super) fn backedge_jump_pc(&self, index: usize) -> usize {
         self.probed_backedges[index].jump_pc as usize
+    }
+
+    /// The header and backedge of the probed loop whose header exit resumes
+    /// at `resume_pc`, if that exit is one.
+    pub(super) fn probed_header(&self, resume_pc: usize) -> Option<(usize, usize)> {
+        let resume_pc = u32::try_from(resume_pc).ok()?;
+        let index = self
+            .probed_headers
+            .binary_search_by_key(&resume_pc, |site| site.resume_pc)
+            .ok()?;
+        let site = self.probed_headers[index];
+        Some((site.header as usize, site.backedge as usize))
+    }
+
+    /// Whether the typed program of probed backedge `index` has run a loop
+    /// to its end.
+    pub(super) fn typed_ready(&self, index: usize) -> bool {
+        self.typed_ready.get() & (1 << index) != 0
+    }
+
+    pub(super) fn mark_typed_ready(&self, index: usize) {
+        self.typed_ready.set(self.typed_ready.get() | (1 << index));
     }
 
     pub(super) fn backedge_is_native(&self, index: usize) -> bool {

@@ -287,6 +287,28 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   0.995 against main and **0.853 against QuickJS-NG**; hash-map 0.859,
   math-cordic 0.937, controlflow-recursive 0.971. Worst against main:
   string-unpack-code 1.024; sentinels 0.94-1.04.
+- Stack run 8bbe675b vs main 4c378077 (30 blocks, cycles, quiet host;
+  `target/comparison/perf14-8bbe675b`): pre-header typed entry, boxed
+  element writes, dead completion temporaries. External geomean 0.982
+  against main and **0.837 against QuickJS-NG**; hash-map 0.876, nbody
+  0.899, crypto-aes 0.899; worst tofte 1.016; sentinels 0.92-1.00.
+- Typed loops entered before their first iteration (perf14): an exit before
+  each probed loop's header, reached only by falling into the loop, runs
+  the loop's typed program from the header once that program has run a
+  loop to its end from the backedge. nbody 0.910 (instructions 0.892),
+  sentinels and ai-astar flat, corpus 0.985 single-run.
+- Boxed element writes (0e8f1db9): hash-map's rehash stored objects with
+  `newData[index] = entry`; the scalar dense write unboxed them and
+  deoptimized the region on every outer iteration (98k interpreter frames
+  per run). A boxed local is now written by `DenseWriteBoxed`; hash-map
+  0.88. Adding the operation moved the executor's fast window to
+  0xd90..0xdc0 (re-pinned at 0xda0).
+- Dead completion temporaries (8bbe675b): typed regions read a function
+  body's completion temporaries as `undefined` and drop their writes; the
+  arms of an if/else-if chain leaving different ones no longer fail to
+  join. Corpus 0.984, sentinels 0.970 single-run. ai-astar's neighbor loop
+  now compiles but still deoptimizes on its first `findGraphNode` call:
+  the typed tier cannot call a function that is not a closed-form leaf.
 - Layout sensitivity, found (15a38453): with byte-identical code the
   typed executor's own start address decides capturing_closure_call and
   ai-astar (+18-25% outside 0xf80..0xfe0 mod 4 KiB); stack, heap,
@@ -338,13 +360,6 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
 
 ## Next
 
-- Enter a typed loop before its first iteration: the probe is at the
-  backedge, so every entry runs one full iteration on the wide tier first
-  (about 1,300 instructions for `o.x += o.y * i`) before the program takes
-  over. A pre-header exit, taken only once a backedge's program has run,
-  would save that iteration for the short per-call loops of bits-in-byte
-  and nbody. Measured entry cost after 3214fdce: about 900 instructions
-  (seed ~400, scratch pool 120, plan scans 60, exit and resume the rest).
 - tofte: after 7a89ea81 the remaining direct-eval cost is building the
   eval's environment (`apply_call_env`, `visible_local_entries`) and
   closure creation, not the overlay.
