@@ -408,6 +408,15 @@ fn execute<F: LoopFrame>(
                 value,
                 cache,
             } => {
+                // A number into a field the site already shares, as the
+                // inline numeric read.
+                if let (Value::Object(receiver), Typed::Number(number)) =
+                    (&boxed[object as usize], registers[reg(value)])
+                    && let Some((key, slot)) = shape_caches[cache as usize].slot.as_ref()
+                    && receiver.shared_data_slot_write_number(key, *slot, number)
+                {
+                    continue;
+                }
                 if !set_named(
                     &boxed[object as usize],
                     &program.names[name as usize],

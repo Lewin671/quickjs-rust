@@ -1839,3 +1839,33 @@ fn typed_loops_read_numeric_fields_inline_and_everything_else_exactly() {
         Ok(Value::String("7000,10323,95,35,NaN,1025".to_owned().into()))
     );
 }
+
+/// A number written to a field the site shares is stored inline; another
+/// property order, a read-only or frozen field, a string being built in the
+/// field and an inherited setter all take the ordinary write (or deoptimize).
+#[test]
+fn typed_loops_write_numeric_fields_inline_and_everything_else_exactly() {
+    let source = "
+        function B(x) { this.x = x; this.y = 0; }
+        function C(x) { this.y = 0; this.x = x; }
+        function bump(list, n) { for (var i = 0; i < n; i++) { var o = list[i % list.length]; o.x = o.x + 1; } return list.map(function (o) { return o.x; }).join('/'); }
+        function S() { this.y = 0; }
+        Object.defineProperty(S.prototype, 'x', { get: function () { return this.y; }, set: function (v) { this.y = v * 10; } });
+        function run() {
+            var out = [];
+            out.push(bump([new B(1), new B(2)], 100));
+            out.push(bump([new B(1), new C(2), new B(3)], 99));
+            var ro = new B(5); Object.defineProperty(ro, 'x', { value: 5, writable: false });
+            out.push(bump([new B(1), ro], 10));
+            out.push(bump([new B(1), Object.freeze(new B(7))], 10));
+            out.push(bump([new B(1), new B('a')], 10));
+            out.push(bump([new B(1), new S()], 4));
+            return out.join();
+        }";
+    assert_eq!(
+        eval(&format!("{source} run();")),
+        Ok(Value::String(
+            "51/52,34/35/36,6/5,6/7,6/a11111,3/110".to_owned().into()
+        ))
+    );
+}
