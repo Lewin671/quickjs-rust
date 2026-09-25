@@ -311,6 +311,22 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   validate-input 0.977). Also pinned `run<Vm>` (see
   docs/performance-knowledge.md): unpinned, an unrelated edit cost
   math-partial-sums 4.7%. Corpus screen 0.993 single-run.
+- perf21 units (c096993c..e73471e6): a cached direct eval that writes and
+  deletes no binding skips the caller's frame write-back (apply_env, 8% of
+  date-format-tofte; tofte 0.917); run<Vm> pinned ahead of the wide
+  executor (behind the callees it drifted with every change to the number
+  of per-CGU `Value::clone` copies); dynamic-storage objects (a
+  constructor's twelfth property on) read and written by shared slot
+  (3d-raytrace's triangles thrashed per-object entries: 0.899), except in
+  the typed executor's inlined number arms (access-nbody +7% instructions).
+- Rejected (2026-09-25): incremental deopt-bindings overlay (only overlay
+  cells from the first difference): tofte 1.019 -- the cost is the walk
+  over the frame's locals per closure, not the hashing. `Value::clone_inline`
+  (object/function/array/string arms expanded at register moves, upvalue and
+  slot reads): tree walk 0.967 but 3d-raytrace 1.029, md5 1.056, instructions
+  up 1-2%. Call path attribution (helpers forced out of line, wcall_e): run
+  58%, Value::clone 20%, clear_window 6%, entry helpers 8% -- a trivial wide
+  call+return is ~790 instructions against QuickJS-NG's ~340.
 - Stack run 0f6349a2 vs main 553d0ba4 (30 blocks, cycles, quiet host;
   `target/comparison/perf20-0f6349a2`): the units above. External geomean
   0.995 against main and **0.797 against QuickJS-NG**; validate-input
