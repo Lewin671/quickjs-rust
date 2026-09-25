@@ -42,7 +42,7 @@ impl WideActivation<'_> {
         let owner = self.upvalue_owner?;
         let bit = (slot < u128::BITS as usize).then(|| 1_u128 << slot)?;
         (self.upvalue_slots & bit != 0).then_some(())?;
-        let index = self.bytecode.readonly_received_upvalue_index(slot)?;
+        let index = self.bytecode.cell_received_upvalue_index(slot)?;
         owner.upvalues.get(index)
     }
 
@@ -194,7 +194,7 @@ fn admit<'a>(
     if !program.admit_activation() {
         return None;
     }
-    let upvalue_slots = bytecode.readonly_received_upvalue_slots().unwrap_or(0);
+    let upvalue_slots = bytecode.cell_received_upvalue_slots().unwrap_or(0);
     let upvalue_owner = if upvalue_slots == 0 {
         None
     } else {
@@ -302,7 +302,7 @@ fn compute_fixed_inline_facts(callee: &Value, function: &Function, bytecode: &By
     let Some(program) = super::program_for(bytecode) else {
         return FACTS_KNOWN;
     };
-    let upvalue_slots = bytecode.readonly_received_upvalue_slots().unwrap_or(0);
+    let upvalue_slots = bytecode.cell_received_upvalue_slots().unwrap_or(0);
     if upvalue_slots != 0 && function.upvalues.len() != bytecode.received_upvalue_slots().len() {
         return FACTS_KNOWN;
     }
@@ -726,7 +726,7 @@ fn run_frames(
             let (upvalue_owner, upvalue_slots) = match &current_callee {
                 Value::Function(function) => (
                     Some(function),
-                    bytecode.readonly_received_upvalue_slots().unwrap_or(0),
+                    bytecode.cell_received_upvalue_slots().unwrap_or(0),
                 ),
                 _ => (root_owner.as_ref(), root_slots),
             };
@@ -775,6 +775,21 @@ fn run_frames(
                             value
                         };
                         execute::store(&mut window[dst as usize], value);
+                    }
+                    WideOp::StoreUpvalueLocal { slot, src } => {
+                        let Some(cell) = activation.upvalue_cell(slot as usize) else {
+                            break Err(execute::uninitialized_local());
+                        };
+                        if cell.with_value(Value::is_uninitialized_lexical_marker) {
+                            match activation.uninitialized_upvalue(slot as usize) {
+                                Ok(_) => {}
+                                Err(error) => break Err(error),
+                            }
+                        }
+                        cell.set(std::mem::replace(
+                            &mut window[src as usize],
+                            Value::Undefined,
+                        ));
                     }
                     WideOp::LoadThis { dst } => {
                         // Admission required a seeded receiver, so this never
@@ -1358,7 +1373,7 @@ fn run_frames(
             let (upvalue_owner, upvalue_slots) = match &current_callee {
                 Value::Function(function) => (
                     Some(function),
-                    bytecode.readonly_received_upvalue_slots().unwrap_or(0),
+                    bytecode.cell_received_upvalue_slots().unwrap_or(0),
                 ),
                 _ => (root_owner.as_ref(), root_slots),
             };
@@ -1724,7 +1739,7 @@ pub(super) fn run_typed_loop_here(
         locals,
         program.own_locals,
         upvalues,
-        bytecode.readonly_received_upvalue_slots().unwrap_or(0),
+        bytecode.cell_received_upvalue_slots().unwrap_or(0),
         this_value,
         stack.get_mut(base_depth..).unwrap_or_default(),
     );

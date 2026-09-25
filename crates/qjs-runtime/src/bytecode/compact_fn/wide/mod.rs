@@ -49,6 +49,13 @@ enum WideOp {
         dst: u16,
         src: u16,
     },
+    /// Assigns a received cell (`total += x` in a callback), after the
+    /// dead-zone check `AssignLocal` makes: the binding lives in the cell,
+    /// shared with the frame that declared it.
+    StoreUpvalueLocal {
+        slot: u16,
+        src: u16,
+    },
     LoadUpvalueLocal {
         dst: u16,
         slot: u16,

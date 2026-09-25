@@ -85,7 +85,7 @@ impl<'a> WideLoopFrame<'a> {
     fn cell(&self, slot: usize) -> Option<&Upvalue> {
         let bit = (slot < u128::BITS as usize).then(|| 1_u128 << slot)?;
         (self.upvalue_slots & bit != 0).then_some(())?;
-        let index = self.bytecode.readonly_received_upvalue_index(slot)?;
+        let index = self.bytecode.cell_received_upvalue_index(slot)?;
         self.upvalues.get(index)
     }
 }
