@@ -1061,7 +1061,8 @@ fn run_frames(
                         let Some(name) = program.global_names.get(index as usize) else {
                             break Err(execute::constant_out_of_bounds());
                         };
-                        match property::load_global(name, env) {
+                        let site = &program.global_reads[index as usize];
+                        match property::load_global_cached(name, site, env) {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
                         }

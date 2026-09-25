@@ -1,6 +1,5 @@
 use crate::{
-    RuntimeError, Value, call_function, has_property, property_value, to_length_with_env,
-    to_number_with_env,
+    RuntimeError, Value, has_property, property_value, to_length_with_env, to_number_with_env,
 };
 
 use super::{
@@ -56,12 +55,11 @@ pub(crate) fn native_array_prototype_flat_map(
             continue;
         }
         let value = property_value(source.receiver.clone(), &key, env)?;
-        let mapped = call_function(
-            callback.clone(),
+        let mapped = crate::function::call_function_slice(
+            &callback,
             callback_this.clone(),
-            vec![value, Value::Number(index as f64), source.receiver.clone()],
+            &[value, Value::Number(index as f64), source.receiver.clone()],
             env,
-            false,
         )?;
         target_index = flatten_value_into_result(result.clone(), target_index, mapped, 1, env)?;
     }

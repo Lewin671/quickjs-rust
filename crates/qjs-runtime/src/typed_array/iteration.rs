@@ -56,16 +56,15 @@ fn call_callback(
     index: usize,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    call_function(
-        iteration.callback.clone(),
+    crate::function::call_function_slice(
+        &iteration.callback,
         iteration.callback_this.clone(),
-        vec![
+        &[
             value,
             Value::Number(index as f64),
             iteration.receiver.clone(),
         ],
         env,
-        false,
     )
 }
 
@@ -497,17 +496,16 @@ pub(crate) fn native_typed_array_prototype_reduce(
     };
     while index < length {
         let value = get_view_element(&object, index);
-        accumulator = call_function(
-            callback.clone(),
+        accumulator = crate::function::call_function_slice(
+            &callback,
             Value::Undefined,
-            vec![
+            &[
                 accumulator,
                 value,
                 Value::Number(index as f64),
                 this_value.clone(),
             ],
             env,
-            false,
         )?;
         index += 1;
     }
@@ -532,17 +530,16 @@ pub(crate) fn native_typed_array_prototype_reduce_right(
     while next > 0 {
         next -= 1;
         let value = get_view_element(&object, next);
-        accumulator = call_function(
-            callback.clone(),
+        accumulator = crate::function::call_function_slice(
+            &callback,
             Value::Undefined,
-            vec![
+            &[
                 accumulator,
                 value,
                 Value::Number(next as f64),
                 this_value.clone(),
             ],
             env,
-            false,
         )?;
     }
     Ok(accumulator)

@@ -299,6 +299,24 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   1,350M -> 595M cycles (NG 133M); string-unpack-code 0.84 single-run.
   Remaining: the per-call argument `Vec` in array iteration, the closed-form
   probes before the tiers, and the wide entry's storage swap.
+- Callback and global-variable costs (perf20, cb708c9c..0f6349a2): the
+  forEach-with-a-global-accumulator micro was 3.3x QuickJS-NG after the
+  callback units; sampling split it into the argument Vec per call
+  (`call_function_slice` passes a direct leaf a slice, 0.770), the element
+  read resolving Array.prototype by name per element
+  (`plain_dense_index_value`, 0.905), `LoadGlobal` hashing its name per
+  read (a per-site realm-cell memo keyed on the realm table's generation,
+  0.936; validate-input 0.959) and the global store cloning then re-finding
+  the globalThis property (`write_existing_own_data_property_if`, 0.859;
+  validate-input 0.977). Also pinned `run<Vm>` (see
+  docs/performance-knowledge.md): unpinned, an unrelated edit cost
+  math-partial-sums 4.7%. Corpus screen 0.993 single-run.
+- Stack run 0f6349a2 vs main 553d0ba4 (30 blocks, cycles, quiet host;
+  `target/comparison/perf20-0f6349a2`): the units above. External geomean
+  0.995 against main and **0.797 against QuickJS-NG**; validate-input
+  0.944, fasta 0.952, cordic 0.971, 3d-raytrace 0.975. Worst against main:
+  imaging-gaussian-blur 1.013; sentinels 0.996-1.003. Slowest against
+  QuickJS-NG: tofte 1.55, xparb 1.52, ai-astar 1.47, 3d-raytrace 1.46.
 - Stack run 6f5388fa vs main 422ac19a (30 blocks, cycles, quiet host;
   `target/comparison/perf19-6f5388fa`): perf18's stack plus the callback
   units. External geomean 0.991 against main and **0.801 against

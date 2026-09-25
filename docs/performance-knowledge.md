@@ -115,6 +115,13 @@ The procedure (queue, plan, decision) is in
   instantiated in its caller's codegen unit: moving `run_typed_loop_here`
   into another module recompiled it (48 more instructions) and lost the fast
   state at the same address, so keep that caller in `wide/activation.rs`.
+  The interpreter's instantiation, `run<Vm>` (a script's top-level loops:
+  74% of access-fannkuch, 48% of math-partial-sums), is pinned too, after
+  its own filler (`--vm-offset`, 0xc40): unpinned it moved 0xc40 -> 0x870
+  with an unrelated edit and partial-sums ran 4.7% more cycles on fewer
+  instructions. Its page scan at 0x100 steps was flat within 2%. A name
+  defined once per codegen unit (`Value::clone`, `drop_in_place<Value>`)
+  is placed once per copy -- count every copy when sizing a gap.
 - **Know each case's codegen noise band before blaming a change.** The
   functions that hold a dispatch loop are re-compiled differently by edits
   anywhere in the crate (an inlined thread-local access, a helper's inline

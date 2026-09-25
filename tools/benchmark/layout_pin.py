@@ -19,7 +19,8 @@ imaging-desaturate.
 
 This rewrites the head of an order file to: standard-library functions whose
 total size moves the executor to the chosen offset, the executor, its
-callees, then the rest of the list unchanged. The filler functions are
+callees, more filler and the interpreter's instantiation of the executor
+(`run<Vm>`) at its own offset, then the rest of the list unchanged. The filler functions are
 precompiled into the standard library, so their sizes do not change with
 this repository's code, and nothing listed before the executor does either:
 its address is then fixed until the toolchain or the executor itself
@@ -39,6 +40,12 @@ from typing import Sequence
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ORDER = ROOT / "crates/qjs-cli/hot-functions.order"
 DEFAULT_OFFSET = 0x0
+# The same executor instantiated for the interpreter's own loops -- a
+# script's top-level `for` -- is pinned too, after its wide twin's group:
+# it is most of access-fannkuch and math-partial-sums, and floating in the
+# unordered tail it moved with every edit (partial-sums +4.7% from one).
+VM_EXECUTOR = re.compile(r"typed_loop7execute3runNtNtB6_2vm2Vm")
+DEFAULT_VM_OFFSET = 0xc40
 PAGE = 0x1000
 ALIGN = 16
 # The executor's dispatch loop: `run<WideLoopFrame>` when the compiler keeps
@@ -110,8 +117,16 @@ def filler(sizes: dict[str, int], counts: dict[str, int], length: int,
 
 
 def pin(lines: list[str], start: int, sizes: dict[str, int], counts: dict[str, int],
-        offset: int) -> list[str]:
-    """`lines` (symbols, no comments) with the executor pinned at `offset`."""
+        offset: int, vm_offset: int | None = None) -> list[str]:
+    """`lines` (symbols, no comments) with the executor pinned at `offset`
+    and, given `vm_offset`, its interpreter instantiation at that one."""
+    head = pin_head(lines, start, sizes, counts, offset, vm_offset)
+    return head + [line for line in lines if line not in head]
+
+
+def pin_head(lines: list[str], start: int, sizes: dict[str, int], counts: dict[str, int],
+             offset: int, vm_offset: int | None = None) -> list[str]:
+    """The symbols [`pin`] puts ahead of the rest of `lines`."""
     executor = None
     for pattern in EXECUTORS:
         executor = next((name for name in sorted(sizes) if pattern.search(name)), None)
@@ -128,15 +143,27 @@ def pin(lines: list[str], start: int, sizes: dict[str, int], counts: dict[str, i
     length = (offset - start) % PAGE
     padding = filler(sizes, counts, length, listed)
     head = padding + [executor] + callees
-    return head + [line for line in lines if line not in head]
+    vm_executor = next((name for name in sorted(sizes) if VM_EXECUTOR.search(name)), None)
+    if vm_offset is not None and vm_executor is not None and vm_executor not in head:
+        # Sizes are distances to the next symbol, all 16-byte aligned, so the
+        # group's end does not depend on where the current binary put it. A
+        # name defined once per codegen unit (`Value::clone`) places every
+        # copy; they are the same instantiation, so the same size.
+        end = start + length + sum(sizes.get(name, 0) * counts.get(name, 1)
+                                   for name in [executor] + callees)
+        head += filler(sizes, counts, (vm_offset - end) % PAGE, listed | set(head))
+        head.append(vm_executor)
+    return head
 
 
-_PIN_HEADER = re.compile(r"^# pinned: .* filler (\d+)")
+_PIN_HEADER = re.compile(r"^# pinned: .* (?:filler|head) (\d+)")
 
 
-def pin_order_file(order: Path, binary: Path, offset: int = DEFAULT_OFFSET) -> None:
-    """Rewrites `order` with the executor pinned at `offset`, replacing the
-    filler of any previous pin (its count is recorded in the header)."""
+def pin_order_file(order: Path, binary: Path, offset: int = DEFAULT_OFFSET,
+                   vm_offset: int | None = DEFAULT_VM_OFFSET) -> None:
+    """Rewrites `order` with the executors pinned, replacing the head of any
+    previous pin (its length is recorded in the header; everything in it is
+    re-derived from the binary)."""
     text = order.read_text(encoding="utf-8").splitlines()
     previous = 0
     for line in text:
@@ -145,10 +172,11 @@ def pin_order_file(order: Path, binary: Path, offset: int = DEFAULT_OFFSET) -> N
     header = [line for line in text if line.startswith("#") and not _PIN_HEADER.match(line)]
     symbols = [line for line in text if line and not line.startswith("#")][previous:]
     start, sizes, counts = text_symbols(binary)
-    pinned = pin(symbols, start, sizes, counts, offset)
-    added = len(pinned) - len(symbols)
-    header.append(f"# pinned: typed-loop executor at {offset:#x} mod 4 KiB "
-                  f"(python3 -m tools.benchmark.layout_pin), filler {added}")
+    head = pin_head(symbols, start, sizes, counts, offset, vm_offset)
+    pinned = head + [line for line in symbols if line not in head]
+    vm = f", interpreter's at {vm_offset:#x}" if vm_offset is not None else ""
+    header.append(f"# pinned: typed-loop executor at {offset:#x}{vm} mod 4 KiB "
+                  f"(python3 -m tools.benchmark.layout_pin), head {len(head)}")
     order.write_text("\n".join(header + pinned) + "\n", encoding="utf-8")
 
 
@@ -160,9 +188,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--order", type=Path, default=DEFAULT_ORDER)
     parser.add_argument("--offset", type=lambda text: int(text, 0), default=DEFAULT_OFFSET,
                         help="executor start modulo 4 KiB (default %(default)#x)")
+    parser.add_argument("--vm-offset", type=lambda text: int(text, 0), default=DEFAULT_VM_OFFSET,
+                        help="interpreter executor start modulo 4 KiB (default %(default)#x)")
     args = parser.parse_args(argv)
     try:
-        pin_order_file(args.order, args.binary.resolve(), args.offset)
+        pin_order_file(args.order, args.binary.resolve(), args.offset, args.vm_offset)
     except (ValueError, subprocess.CalledProcessError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

@@ -341,6 +341,29 @@ fn a_dead_zone_read_and_a_const_assignment_keep_their_errors() {
     );
 }
 
+/// A `LoadGlobal` site remembers the realm cell its name resolved to; a
+/// remapped name -- deleted, re-created, shadowed by a frame that binds it --
+/// reads what the interpreter reads.
+#[test]
+fn a_remembered_global_read_follows_the_binding() {
+    assert_eq!(
+        value_of(
+            "g = 1; var out = [];
+             function read() { return g; }
+             function probe() { try { return read(); } catch (e) { return e.constructor.name; } }
+             for (var i = 0; i < 3; i++) out.push(read());
+             globalThis.g = 2; out.push(read());
+             delete globalThis.g; out.push(probe());
+             g = 3; out.push(read());
+             Object.defineProperty(globalThis, 'g', { get: function () { return 4; }, configurable: true });
+             out.push(read());
+             [1, 2].forEach(function () { out.push(read()); });
+             out.join(',');"
+        ),
+        Value::String("1,1,1,2,ReferenceError,3,4,4,4".to_owned().into())
+    );
+}
+
 #[test]
 fn global_reads_resolve_like_the_interpreter() {
     assert_eq!(
@@ -1001,6 +1024,31 @@ fn a_function_assigning_an_existing_global_variable_runs_here() {
              }
              [Math.round(sum), last, globalThis.last].join(',');"
         )
+    );
+}
+
+/// A global store checks the `globalThis` property in the same lookup that
+/// writes it: a property made read-only or an accessor after the binding
+/// was stored to refuses the plain store, and a deleted one is re-created.
+#[test]
+fn a_global_store_refuses_a_property_changed_under_its_binding() {
+    assert_eq!(
+        value_of(
+            "var out = [];
+             var a = 0; function inc(x) { a = a + x; }
+             for (var i = 0; i < 5; i++) inc(i); out.push(a, globalThis.a);
+             Object.defineProperty(globalThis, 'a', { writable: false });
+             inc(1); out.push(a);
+             b = 's'; function app(x) { b = b + x; } for (var j = 0; j < 4; j++) app(j);
+             out.push(b, globalThis.b);
+             Object.defineProperty(globalThis, 'b', { get: function () { return 'G'; },
+                 set: function (v) { out.push('set:' + v); }, configurable: true });
+             app('z'); out.push(b);
+             c = 1; function setc(v) { c = v; } setc(2); delete globalThis.c; setc(3);
+             out.push(c, Object.getOwnPropertyDescriptor(globalThis, 'c').configurable);
+             out.join(',');"
+        ),
+        Value::String("10,10,10,s0123,s0123,set:Gz,G,3,true".to_owned().into())
     );
 }
 

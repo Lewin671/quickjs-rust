@@ -4,7 +4,7 @@ use crate::CallEnv;
 use crate::{
     ArrayRef, Function, MapRef, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     array::{for_each_iterable_value_with_env, iterable_values_with_env},
-    call_function, property_value, symbol,
+    property_value, symbol,
 };
 
 const MAP_ITERATOR: &str = "\0map_iterator";
@@ -125,13 +125,7 @@ pub(crate) fn native_map(
         }
         for_each_iterable_value_with_env(iterable, "Map constructor", env, |entry, env| {
             let (key, value) = map_entry(entry, env)?;
-            call_function(
-                adder.clone(),
-                map_value.clone(),
-                vec![key, value],
-                env,
-                false,
-            )?;
+            crate::function::call_function_slice(&adder, map_value.clone(), &[key, value], env)?;
             Ok(())
         })?;
     }
@@ -156,12 +150,11 @@ pub(crate) fn native_map_group_by(
         .into_iter()
         .enumerate()
     {
-        let key = crate::call_function(
-            callback.clone(),
+        let key = crate::function::call_function_slice(
+            &callback,
             Value::Undefined,
-            vec![value.clone(), Value::Number(index as f64)],
+            &[value.clone(), Value::Number(index as f64)],
             env,
-            false,
         )?;
         append_map_group(&map, key, value);
     }
@@ -301,12 +294,11 @@ pub(crate) fn native_map_prototype_for_each(
         let entry = map.entry_at(position);
         position += 1;
         let Some((key, value)) = entry else { continue };
-        crate::call_function(
-            callback.clone(),
+        crate::function::call_function_slice(
+            &callback,
             this_arg.clone(),
-            vec![value, key, this_value.clone()],
+            &[value, key, this_value.clone()],
             env,
-            false,
         )?;
     }
     Ok(Value::Undefined)

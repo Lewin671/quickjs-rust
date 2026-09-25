@@ -77,11 +77,11 @@ impl ObjectRef {
         let result = match &mut *self.0.properties.borrow_mut() {
             PropertyStorage::Small { entries } => {
                 let (_, property) = entries.get_mut(slot)?;
-                super::write_existing_property(Some(property), value)
+                super::write_existing_property(Some(property), value, |_| true)
             }
             PropertyStorage::Dynamic(dynamic) => {
                 let (_, property) = dynamic.entries.get_mut(slot)?;
-                super::write_existing_property(Some(property), value)
+                super::write_existing_property(Some(property), value, |_| true)
             }
             PropertyStorage::Shaped { .. } | PropertyStorage::ShapedPair { .. } => return None,
         };
@@ -258,7 +258,7 @@ impl ObjectRef {
         let result = match &mut *self.0.properties.borrow_mut() {
             PropertyStorage::Small { entries } => {
                 let (_, property) = entries.get_mut(slot)?;
-                super::write_existing_property(Some(property), value)
+                super::write_existing_property(Some(property), value, |_| true)
             }
             PropertyStorage::Dynamic(_)
             | PropertyStorage::Shaped { .. }
@@ -287,7 +287,7 @@ impl ObjectRef {
                 if !Rc::ptr_eq(name, key) {
                     return None;
                 }
-                super::write_existing_property(Some(property), value)
+                super::write_existing_property(Some(property), value, |_| true)
             }
             PropertyStorage::Dynamic(_)
             | PropertyStorage::Shaped { .. }

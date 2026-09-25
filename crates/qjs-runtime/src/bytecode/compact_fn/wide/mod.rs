@@ -274,6 +274,8 @@ pub(in crate::bytecode) struct WideProgram {
     requires_this: bool,
     /// Global names read by `LoadGlobal`, by side-table index.
     global_names: Vec<String>,
+    /// Each `global_names` entry's realm-cell memo.
+    global_reads: Box<[super::property::GlobalReadSite]>,
     /// The frame's own `let`/`const` slots. An activation seeds each with the
     /// temporal-dead-zone marker, exactly as the interpreter starts such a
     /// slot uninitialized, so a read that precedes the declaration's
