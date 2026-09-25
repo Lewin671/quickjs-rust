@@ -1040,6 +1040,16 @@ impl Bytecode {
         self.cached_written_binding_names.clone()
     }
 
+    /// Whether the code writes or deletes a binding by name -- anything a
+    /// direct eval's caller would need written back to its frame.
+    pub(crate) fn writes_bindings(&self) -> bool {
+        !self.cached_written_binding_names.is_empty()
+            || self
+                .code
+                .iter()
+                .any(|op| matches!(op, Op::DeleteIdent(_) | Op::DeleteIdentWith { .. }))
+    }
+
     fn compute_written_binding_names(&self) -> Vec<String> {
         let mut names = BTreeSet::new();
         collect_written_binding_names_from_ops(self, &self.code, &mut names);
