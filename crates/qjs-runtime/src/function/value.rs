@@ -336,10 +336,16 @@ impl NativeContext {
 // The indirection is deliberate: it removes the 56-byte empty map header from
 // every short-lived closure and is allocated only on explicit property access.
 #[allow(clippy::box_collection)]
-pub(crate) struct LazyFunctionProperties(RefCell<Option<Box<HashMap<String, Property>>>>);
+/// A function's string-keyed own properties, allocated on first use. Keyed
+/// with the object tables' fast name hasher: `Date.prototype`,
+/// `String.fromCharCode` and every other read of a constructor's property
+/// hashes the name here.
+pub(crate) struct LazyFunctionProperties(
+    RefCell<Option<Box<crate::value::name_hash::NameMap<String, Property>>>>,
+);
 
 impl LazyFunctionProperties {
-    pub(crate) fn borrow(&self) -> Ref<'_, HashMap<String, Property>> {
+    pub(crate) fn borrow(&self) -> Ref<'_, crate::value::name_hash::NameMap<String, Property>> {
         self.ensure_allocated();
         Ref::map(self.0.borrow(), |properties| {
             properties
@@ -348,7 +354,9 @@ impl LazyFunctionProperties {
         })
     }
 
-    pub(crate) fn borrow_mut(&self) -> RefMut<'_, HashMap<String, Property>> {
+    pub(crate) fn borrow_mut(
+        &self,
+    ) -> RefMut<'_, crate::value::name_hash::NameMap<String, Property>> {
         self.ensure_allocated();
         RefMut::map(self.0.borrow_mut(), |properties| {
             properties
