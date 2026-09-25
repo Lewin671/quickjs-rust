@@ -367,6 +367,28 @@ fn execute<F: LoopFrame>(
                 name,
                 cache,
             } => {
+                // A numeric field of an instance whose slot the site already
+                // shares: `get_named`'s whole frame and a `Value` round trip
+                // were most of a field read's cost. Any other object goes
+                // straight to the rest of `get_named`, whose first step this is.
+                if let Value::Object(receiver) = &boxed[object as usize] {
+                    let shapes = &mut shape_caches[cache as usize];
+                    if let Some((key, slot)) = shapes.slot.as_ref()
+                        && let Some(number) = receiver.shared_data_slot_number(key, *slot)
+                    {
+                        registers[reg(dst)] = Typed::Number(number);
+                        continue;
+                    }
+                    let Some(value) =
+                        get_named_object(receiver, &program.names[name as usize], shapes)
+                            .as_ref()
+                            .and_then(Typed::from_value)
+                    else {
+                        deopt_here!(op);
+                    };
+                    registers[reg(dst)] = value;
+                    continue;
+                }
                 let Some(value) = get_named(
                     &boxed[object as usize],
                     &program.names[name as usize],
@@ -1173,6 +1195,17 @@ fn get_named(
     {
         return Some(value);
     }
+    get_named_object(object, name, shapes)
+}
+
+/// `get_named` of an ordinary object once the site's shared slot has
+/// missed: the executor's numeric field read checks that slot itself.
+#[inline(never)]
+fn get_named_object(
+    object: &crate::ObjectRef,
+    name: &Rc<str>,
+    shapes: &mut super::ShapeWays,
+) -> Option<Value> {
     // Shape identity is an `Rc` pointer comparison, so scanning the remembered
     // shapes is cheaper than resolving the name even when the site is
     // polymorphic. `literal_data_slot_value` re-checks the revision, so a
