@@ -287,6 +287,13 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   0.995 against main and **0.853 against QuickJS-NG**; hash-map 0.859,
   math-cordic 0.937, controlflow-recursive 0.971. Worst against main:
   string-unpack-code 1.024; sentinels 0.94-1.04.
+- Stack run 30413402 vs main 422ac19a (30 blocks, cycles, quiet host;
+  `target/comparison/perf18-30413402`): the pin now names the executor's
+  out-of-line dispatch loop `run<WideLoopFrame>` (it had been pinning a
+  132-instruction caller), top-of-stack-only materialization for operand
+  forwarding (kept `x * this.y` fused), dense element reads inline in the
+  wide driver. External geomean 0.995 against main and **0.820 against
+  QuickJS-NG**; 3d-raytrace 0.929, md5 0.966; worst ai-astar 1.018.
 - Stack run 922e3f86 vs main e9529e66 (30 blocks, cycles, quiet host;
   `target/comparison/perf17-922e3f86`): hot named reads/writes inline in
   the wide driver, typed numeric field reads/writes inline (executor
