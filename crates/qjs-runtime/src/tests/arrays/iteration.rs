@@ -580,3 +580,30 @@ fn dense_iteration_reads_still_observe_holes_and_mutation() {
         Ok(Value::String("4:true:true:3:2".to_owned().into()))
     );
 }
+
+/// Natives pass a direct-leaf callback its arguments by slice; every position
+/// -- value, index, receiver, `thisArg`, a reduction's accumulator -- still
+/// arrives, for arrays, typed arrays, and maps.
+#[test]
+fn passes_every_callback_argument_by_slice() {
+    assert_eq!(
+        eval(
+            "var a = [4, 5], t = {k: 1}, out = [];\
+             a.forEach(function (v, i, r) { out.push(v + i + (r === a) + this.k); }, t);\
+             out.push(a.reduce(function (acc, v, i, r) { return acc + v * i + (r === a); }, 10));\
+             out.push(a.reduceRight(function (acc, v, i, r) { return acc + v * i + (r === a); }, 10));\
+             out.push(a.flatMap(function (v, i, r) { return [v, i, r === a]; }).join('/'));\
+             var u = new Int8Array([2, 3]);\
+             u.forEach(function (v, i, r) { out.push(v * 10 + i + (r === u)); });\
+             out.push(u.reduce(function (acc, v, i, r) { return acc + v + i + (r === u); }, 0));\
+             var m = new Map([['x', 7]]);\
+             m.forEach(function (v, k, r) { out.push(v + k + (r === m) + this.k); }, t);\
+             out.join(':');"
+        ),
+        Ok(Value::String(
+            "6:8:17:17:4/0/true/5/1/true:21:32:8:7xtrue1"
+                .to_owned()
+                .into()
+        ))
+    );
+}

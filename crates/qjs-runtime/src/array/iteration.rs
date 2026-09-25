@@ -6,7 +6,8 @@ use super::{
 };
 use crate::CallEnv;
 use crate::{
-    RuntimeError, Value, array_prototype, call_function, has_property, is_truthy, property_value,
+    RuntimeError, Value, array_prototype, function::call_function_slice, has_property, is_truthy,
+    property_value,
 };
 
 const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
@@ -83,16 +84,15 @@ fn call_iteration_callback(
     index: usize,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    call_function(
-        iteration.callback.clone(),
+    call_function_slice(
+        &iteration.callback,
         iteration.callback_this.clone(),
-        vec![
+        &[
             value,
             Value::Number(index as f64),
             iteration.receiver.clone(),
         ],
         env,
-        false,
     )
 }
 
@@ -103,17 +103,16 @@ fn call_reduction_callback(
     index: usize,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    call_function(
-        reduction.callback.clone(),
+    call_function_slice(
+        &reduction.callback,
         Value::Undefined,
-        vec![
+        &[
             accumulator,
             value,
             Value::Number(index as f64),
             reduction.receiver.clone(),
         ],
         env,
-        false,
     )
 }
 

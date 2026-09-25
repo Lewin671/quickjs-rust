@@ -36,7 +36,7 @@ pub(crate) const CROSS_REALM_THROW_TYPE_ERROR_INTRINSIC: &str = "__quickjsRustRe
 pub(crate) use arguments::{native_mapped_argument_get, native_mapped_argument_set};
 pub(crate) use call::{
     call_direct_function_literal, call_direct_leaf_function, call_field_initializer, call_function,
-    construct_function, ensure_constructor, initialize_direct_instance_fields,
+    call_function_slice, construct_function, ensure_constructor, initialize_direct_instance_fields,
     initialize_instance_fields, is_direct_construct_class, is_direct_leaf_function,
     try_construct_direct_leaf_function,
 };

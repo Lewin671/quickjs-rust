@@ -228,6 +228,36 @@ pub(crate) fn call_function(
     Err(missing_bytecode_body())
 }
 
+/// [`call_function`] for a native passing a callback its arguments by slice:
+/// a body the direct-leaf path takes reads them in place, and only a callee
+/// that needs an owned argument list gets one. `Array.prototype.forEach` and
+/// its family allocated that list on every element.
+pub(crate) fn call_function_slice(
+    callee: &Value,
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    if is_direct_leaf_function(callee) {
+        return call_direct_leaf_function(
+            callee.clone(),
+            this_value,
+            argument_values,
+            env,
+            env.module_host(),
+            #[cfg(feature = "agents")]
+            env.agent_context(),
+        );
+    }
+    call_function(
+        callee.clone(),
+        this_value,
+        argument_values.to_vec(),
+        env,
+        false,
+    )
+}
+
 /// Builds everything an ordinary synchronous call needs, without running it.
 ///
 /// Every callable-kind decision -- proxy, bound, native, generator, async,
