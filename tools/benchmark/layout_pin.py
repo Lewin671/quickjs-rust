@@ -18,9 +18,9 @@ position fast for the call sentinels and ai-astar was 5% slow for
 imaging-desaturate.
 
 This rewrites the head of an order file to: standard-library functions whose
-total size moves the executor to the chosen offset, the executor, its
-callees, more filler and the interpreter's instantiation of the executor
-(`run<Vm>`) at its own offset, then the rest of the list unchanged. The filler functions are
+total size moves the interpreter's instantiation of the executor
+(`run<Vm>`) to its offset, more filler, the wide executor at its offset
+and its callees, then the rest of the list unchanged. The filler functions are
 precompiled into the standard library, so their sizes do not change with
 this repository's code, and nothing listed before the executor does either:
 its address is then fixed until the toolchain or the executor itself
@@ -41,7 +41,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ORDER = ROOT / "crates/qjs-cli/hot-functions.order"
 DEFAULT_OFFSET = 0x0
 # The same executor instantiated for the interpreter's own loops -- a
-# script's top-level `for` -- is pinned too, after its wide twin's group:
+# script's top-level `for` -- is pinned too, ahead of its wide twin:
 # it is most of access-fannkuch and math-partial-sums, and floating in the
 # unordered tail it moved with every edit (partial-sums +4.7% from one).
 VM_EXECUTOR = re.compile(r"typed_loop7execute3runNtNtB6_2vm2Vm")
@@ -140,19 +140,22 @@ def pin_head(lines: list[str], start: int, sizes: dict[str, int], counts: dict[s
         callees += [name for name in known
                     if name.endswith(suffix) and name not in callees and name != executor]
     listed = set(lines)
-    length = (offset - start) % PAGE
-    padding = filler(sizes, counts, length, listed)
-    head = padding + [executor] + callees
+    head: list[str] = []
+    position = start
     vm_executor = next((name for name in sorted(sizes) if VM_EXECUTOR.search(name)), None)
-    if vm_offset is not None and vm_executor is not None and vm_executor not in head:
-        # Sizes are distances to the next symbol, all 16-byte aligned, so the
-        # group's end does not depend on where the current binary put it. A
-        # name defined once per codegen unit (`Value::clone`) places every
-        # copy; they are the same instantiation, so the same size.
-        end = start + length + sum(sizes.get(name, 0) * counts.get(name, 1)
-                                   for name in [executor] + callees)
-        head += filler(sizes, counts, (vm_offset - end) % PAGE, listed | set(head))
+    if vm_offset is not None and vm_executor is not None and vm_executor != executor:
+        # The interpreter's twin goes first, so nothing whose size moves with
+        # ordinary edits -- the callees below, some defined once per codegen
+        # unit (`Value::clone`) in a number of copies that changes with
+        # unrelated code -- is ahead of either executor. Sizes are distances
+        # to the next symbol, all 16-byte aligned, so they do not depend on
+        # where the current binary put each function.
+        head += filler(sizes, counts, (vm_offset - position) % PAGE, listed | set(head))
+        position += (vm_offset - position) % PAGE
         head.append(vm_executor)
+        position += sizes.get(vm_executor, 0)
+    head += filler(sizes, counts, (offset - position) % PAGE, listed | set(head))
+    head += [executor] + callees
     return head
 
 
