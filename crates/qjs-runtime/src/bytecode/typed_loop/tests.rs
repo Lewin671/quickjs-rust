@@ -1812,3 +1812,60 @@ fn typed_loops_join_arms_that_leave_different_completion_values() {
         Ok(Value::String("240:34:22".to_owned().into()))
     );
 }
+
+/// A numeric field read answers from the site's shared slot inline; another
+/// property order, a string or boolean in the field, a missing field and an
+/// inherited getter all take the rest of the read (or deoptimize).
+#[test]
+fn typed_loops_read_numeric_fields_inline_and_everything_else_exactly() {
+    let source = "
+        function B(x, y) { this.x = x; this.y = y; }
+        function C(y, x) { this.y = y; this.x = x; }
+        function sum(list, n) { var s = 0; for (var i = 0; i < n; i++) { var o = list[i % list.length]; s += o.x * 2 + o.y; } return s; }
+        function G() { this.y = 1; }
+        Object.defineProperty(G.prototype, 'x', { get: function () { return 100; } });
+        function run() {
+            var out = [];
+            out.push(sum([new B(1, 2), new B(3, 4)], 1000));
+            out.push(sum([new B(1, 2), new C(5, 6), new B(3, 4)], 999));
+            out.push(sum([new B(1, 2), new B('7', 1)], 10));
+            out.push(sum([new B(1, 2), new B(true, 1)], 10));
+            out.push(sum([new B(1, 2), { y: 3 }], 10));
+            out.push(sum([new B(1, 2), new G()], 10));
+            return out.join();
+        }";
+    assert_eq!(
+        eval(&format!("{source} run();")),
+        Ok(Value::String("7000,10323,95,35,NaN,1025".to_owned().into()))
+    );
+}
+
+/// A number written to a field the site shares is stored inline; another
+/// property order, a read-only or frozen field, a string being built in the
+/// field and an inherited setter all take the ordinary write (or deoptimize).
+#[test]
+fn typed_loops_write_numeric_fields_inline_and_everything_else_exactly() {
+    let source = "
+        function B(x) { this.x = x; this.y = 0; }
+        function C(x) { this.y = 0; this.x = x; }
+        function bump(list, n) { for (var i = 0; i < n; i++) { var o = list[i % list.length]; o.x = o.x + 1; } return list.map(function (o) { return o.x; }).join('/'); }
+        function S() { this.y = 0; }
+        Object.defineProperty(S.prototype, 'x', { get: function () { return this.y; }, set: function (v) { this.y = v * 10; } });
+        function run() {
+            var out = [];
+            out.push(bump([new B(1), new B(2)], 100));
+            out.push(bump([new B(1), new C(2), new B(3)], 99));
+            var ro = new B(5); Object.defineProperty(ro, 'x', { value: 5, writable: false });
+            out.push(bump([new B(1), ro], 10));
+            out.push(bump([new B(1), Object.freeze(new B(7))], 10));
+            out.push(bump([new B(1), new B('a')], 10));
+            out.push(bump([new B(1), new S()], 4));
+            return out.join();
+        }";
+    assert_eq!(
+        eval(&format!("{source} run();")),
+        Ok(Value::String(
+            "51/52,34/35/36,6/5,6/7,6/a11111,3/110".to_owned().into()
+        ))
+    );
+}

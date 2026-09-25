@@ -11,8 +11,9 @@ Measured 2026-09-24 by moving only the executor: the fast placements are a
 narrow window of its start address modulo 4 KiB, with its callees in the
 order `CALLEES` lists right after it; the slow ones are everywhere else. The
 window moves when the executor's own code changes (0xf80..0xfe0, then
-0xd90..0xdc0 once `DenseWriteBoxed` was added), so `DEFAULT_OFFSET` is
-re-scanned with it.
+0xd90..0xdc0 once `DenseWriteBoxed` was added; with the inline numeric field
+read nearly every offset is fast except 0xda0 and 0xfe0), so
+`DEFAULT_OFFSET` is re-scanned with it.
 
 This rewrites the head of an order file to: standard-library functions whose
 total size moves the executor to the chosen offset, the executor, its
@@ -35,7 +36,7 @@ from typing import Sequence
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ORDER = ROOT / "crates/qjs-cli/hot-functions.order"
-DEFAULT_OFFSET = 0xDA0
+DEFAULT_OFFSET = 0xE60
 PAGE = 0x1000
 ALIGN = 16
 EXECUTOR = re.compile(r"typed_loop7execute18try_run_typed_loop.*WideLoopFrame")

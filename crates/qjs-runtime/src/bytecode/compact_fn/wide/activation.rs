@@ -791,6 +791,10 @@ fn run_frames(
                         ) else {
                             break Err(execute::uninitialized_local());
                         };
+                        if let Some(value) = property::get_prop_named_hot(receiver, &site.cache) {
+                            execute::store(&mut window[dst as usize], value);
+                            continue;
+                        }
                         match property::get_prop_named(receiver, &site.key, &site.cache, env) {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
@@ -802,6 +806,12 @@ fn run_frames(
                         };
                         // The receiver is borrowed: a fused site peeks its
                         // local, and the plain form's result replaces it.
+                        if let Some(value) =
+                            property::get_prop_named_hot(&window[obj as usize], &site.cache)
+                        {
+                            execute::store(&mut window[dst as usize], value);
+                            continue;
+                        }
                         match property::get_prop_named(
                             &window[obj as usize],
                             &site.key,
@@ -818,6 +828,15 @@ fn run_frames(
                         };
                         let assigned =
                             std::mem::replace(&mut window[value as usize], Value::Undefined);
+                        if property::set_prop_named_hot(
+                            &window[obj as usize],
+                            site.cache.as_ref(),
+                            &assigned,
+                            env,
+                        ) {
+                            execute::store(&mut window[obj as usize], assigned);
+                            continue;
+                        }
                         match property::set_prop_named(
                             &window[obj as usize],
                             &site.key,
@@ -842,6 +861,15 @@ fn run_frames(
                         };
                         let assigned =
                             std::mem::replace(&mut window[value as usize], Value::Undefined);
+                        if property::set_prop_named_hot(
+                            receiver,
+                            site.cache.as_ref(),
+                            &assigned,
+                            env,
+                        ) {
+                            execute::store(&mut window[dst as usize], assigned);
+                            continue;
+                        }
                         match property::set_prop_named(
                             receiver,
                             &site.key,

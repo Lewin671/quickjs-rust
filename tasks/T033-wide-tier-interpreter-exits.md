@@ -287,6 +287,12 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   0.995 against main and **0.853 against QuickJS-NG**; hash-map 0.859,
   math-cordic 0.937, controlflow-recursive 0.971. Worst against main:
   string-unpack-code 1.024; sentinels 0.94-1.04.
+- Stack run 922e3f86 vs main e9529e66 (30 blocks, cycles, quiet host;
+  `target/comparison/perf17-922e3f86`): hot named reads/writes inline in
+  the wide driver, typed numeric field reads/writes inline (executor
+  re-pinned at 0xe60). External geomean 0.992 against main and **0.823
+  against QuickJS-NG**; access-nbody 0.825, raytrace-class-fields 0.954,
+  cdjs 0.983; worst crypto-md5 1.031.
 - Stack run 68edddc5 vs main c0097ea5 (30 blocks, cycles, quiet host;
   `target/comparison/perf16-68edddc5`): function properties on the name
   hasher, grandprototype cache entries, prototype hits from the hot entry.

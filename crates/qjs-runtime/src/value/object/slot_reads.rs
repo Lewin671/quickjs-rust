@@ -131,6 +131,63 @@ impl ObjectRef {
         }
     }
 
+    /// [`Self::shared_data_slot_value`] of a number: the typed loop tier's
+    /// read of a numeric field (`body.x`), without cloning a `Value` to
+    /// unpack it again.
+    #[inline]
+    pub(crate) fn shared_data_slot_number(&self, key: &Rc<str>, slot: usize) -> Option<f64> {
+        if self.0.module_namespace_exotic.get() {
+            return None;
+        }
+        match &*self.0.properties.borrow() {
+            PropertyStorage::Small { entries } => {
+                let (name, property) = entries.get(slot)?;
+                match &property.value {
+                    Value::Number(number) if Rc::ptr_eq(name, key) && !property.is_accessor() => {
+                        Some(*number)
+                    }
+                    _ => None,
+                }
+            }
+            PropertyStorage::Dynamic(_)
+            | PropertyStorage::Shaped { .. }
+            | PropertyStorage::ShapedPair { .. } => None,
+        }
+    }
+
+    /// [`Self::shared_data_slot_write`] of a number over a writable data
+    /// property: the typed loop tier's field update (`body.vx -= ...`).
+    /// `false`, having written nothing, for anything else.
+    #[inline]
+    pub(crate) fn shared_data_slot_write_number(
+        &self,
+        key: &Rc<str>,
+        slot: usize,
+        number: f64,
+    ) -> bool {
+        if self.0.module_namespace_exotic.get() {
+            return false;
+        }
+        let written = match &mut *self.0.properties.borrow_mut() {
+            PropertyStorage::Small { entries } => match entries.get_mut(slot) {
+                Some((name, property))
+                    if Rc::ptr_eq(name, key) && property.writable && !property.is_accessor() =>
+                {
+                    property.value = Value::Number(number);
+                    true
+                }
+                _ => false,
+            },
+            PropertyStorage::Dynamic(_)
+            | PropertyStorage::Shaped { .. }
+            | PropertyStorage::ShapedPair { .. } => false,
+        };
+        if written {
+            self.bump_value_revision();
+        }
+        written
+    }
+
     /// Reads a slot recorded by [`Self::shared_data_slot`], confirming that
     /// this object holds the same interned name in that slot.
     pub(crate) fn shared_data_slot_value(&self, key: &Rc<str>, slot: usize) -> Option<Value> {
