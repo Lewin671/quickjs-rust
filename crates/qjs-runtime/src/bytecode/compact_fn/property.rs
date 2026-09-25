@@ -669,6 +669,50 @@ pub(in crate::bytecode) fn load_global(name: &str, env: &CallEnv) -> Result<Valu
     Err(undefined_identifier(name))
 }
 
+/// A `LoadGlobal` site's memo of the realm cell its name resolved to: valid
+/// while the frame reads the realm directly and the table still maps every
+/// name to the cell it did (its generation). The table is held, not its
+/// address, so a freed table's address cannot be mistaken for it.
+#[derive(Clone, Default)]
+pub(in crate::bytecode) struct GlobalReadSite(
+    std::cell::RefCell<
+        Option<(
+            crate::function::DynamicBindings,
+            u64,
+            crate::function::Upvalue,
+        )>,
+    >,
+);
+
+/// [`load_global`] through a site's memo. Hashes `name` only on a miss: a
+/// first read, a remapped realm table, or a frame with its own bindings.
+#[inline]
+pub(in crate::bytecode) fn load_global_cached(
+    name: &str,
+    site: &GlobalReadSite,
+    env: &CallEnv,
+) -> Result<Value, RuntimeError> {
+    let Some(realm) = env.realm_read_layer() else {
+        return load_global(name, env);
+    };
+    if let Some((bindings, generation, cell)) = &*site.0.borrow()
+        && bindings.ptr_eq(realm)
+        && *generation == realm.generation()
+    {
+        let value = cell.get();
+        if !value.is_uninitialized_lexical_marker() {
+            return Ok(value);
+        }
+    }
+    let value = load_global(name, env)?;
+    if name != crate::NEW_TARGET_BINDING
+        && let Some(cell) = realm.cell(name)
+    {
+        *site.0.borrow_mut() = Some((realm.clone(), realm.generation(), cell));
+    }
+    Ok(value)
+}
+
 #[cold]
 fn undefined_identifier(name: &str) -> RuntimeError {
     RuntimeError {

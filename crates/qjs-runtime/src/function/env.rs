@@ -526,6 +526,11 @@ impl DynamicBindings {
         self.0.generation.get()
     }
 
+    /// Whether `other` is this same environment.
+    pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+
     pub(crate) fn from_values(values: HashMap<String, Value>) -> Self {
         Self(Rc::new(DynamicBindingsInner {
             map: RefCell::new(
@@ -1355,6 +1360,16 @@ impl CallEnv {
             return self.scope.global_lexical_values.borrow().get(name).cloned();
         }
         None
+    }
+
+    /// The realm table a read of a name from this frame reaches first, when
+    /// no frame or deoptimized layer sits above it -- then [`Self::get`] of any
+    /// name the table binds, other than `new.target`, is that binding's cell.
+    pub(crate) fn realm_read_layer(&self) -> Option<&DynamicBindings> {
+        if !self.frame_bindings.is_empty() || self.deopt_bindings.is_some() {
+            return None;
+        }
+        Some(&self.scope.realm.bindings)
     }
 
     /// Looks up `name` in the shared realm layer only.

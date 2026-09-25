@@ -341,6 +341,29 @@ fn a_dead_zone_read_and_a_const_assignment_keep_their_errors() {
     );
 }
 
+/// A `LoadGlobal` site remembers the realm cell its name resolved to; a
+/// remapped name -- deleted, re-created, shadowed by a frame that binds it --
+/// reads what the interpreter reads.
+#[test]
+fn a_remembered_global_read_follows_the_binding() {
+    assert_eq!(
+        value_of(
+            "g = 1; var out = [];
+             function read() { return g; }
+             function probe() { try { return read(); } catch (e) { return e.constructor.name; } }
+             for (var i = 0; i < 3; i++) out.push(read());
+             globalThis.g = 2; out.push(read());
+             delete globalThis.g; out.push(probe());
+             g = 3; out.push(read());
+             Object.defineProperty(globalThis, 'g', { get: function () { return 4; }, configurable: true });
+             out.push(read());
+             [1, 2].forEach(function () { out.push(read()); });
+             out.join(',');"
+        ),
+        Value::String("1,1,1,2,ReferenceError,3,4,4,4".to_owned().into())
+    );
+}
+
 #[test]
 fn global_reads_resolve_like_the_interpreter() {
     assert_eq!(
