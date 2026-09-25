@@ -723,7 +723,14 @@ impl PropertyStorage {
         }
     }
 
-    fn write_existing_data(&mut self, key: &str, value: &Value) -> OwnDataPropertyWrite {
+    /// Writes an existing writable data property whose current value
+    /// `guard` accepts; a rejected one is `NeedsSlowPath`, unchanged.
+    fn write_existing_data(
+        &mut self,
+        key: &str,
+        value: &Value,
+        guard: impl FnOnce(&Value) -> bool,
+    ) -> OwnDataPropertyWrite {
         match self {
             Self::Small { entries } => write_existing_property(
                 entries
@@ -731,21 +738,27 @@ impl PropertyStorage {
                     .find(|(candidate, _)| candidate.as_ref() == key)
                     .map(|(_, property)| property),
                 value,
+                guard,
             ),
             Self::ShapedPair { shape, values } => {
                 let Some(slot) = shape.lookup.get(key) else {
                     return OwnDataPropertyWrite::NeedsSlowPath;
                 };
+                if !guard(&values[*slot]) {
+                    return OwnDataPropertyWrite::NeedsSlowPath;
+                }
                 values[*slot] = value.clone();
                 OwnDataPropertyWrite::Written
             }
-            Self::Dynamic(dynamic) => write_existing_property(dynamic.property_mut(key), value),
+            Self::Dynamic(dynamic) => {
+                write_existing_property(dynamic.property_mut(key), value, guard)
+            }
             Self::Shaped { shape, properties } => {
                 let property = shape
                     .lookup
                     .get(key)
                     .and_then(|slot| properties.get_mut(*slot));
-                write_existing_property(property, value)
+                write_existing_property(property, value, guard)
             }
         }
     }
@@ -897,11 +910,15 @@ fn writable_property_number(property: &Property) -> Option<f64> {
     }
 }
 
-fn write_existing_property(property: Option<&mut Property>, value: &Value) -> OwnDataPropertyWrite {
+fn write_existing_property(
+    property: Option<&mut Property>,
+    value: &Value,
+    guard: impl FnOnce(&Value) -> bool,
+) -> OwnDataPropertyWrite {
     let Some(property) = property else {
         return OwnDataPropertyWrite::NeedsSlowPath;
     };
-    if property.is_accessor() {
+    if property.is_accessor() || !guard(&property.value) {
         return OwnDataPropertyWrite::NeedsSlowPath;
     }
     if !property.writable {
@@ -1662,6 +1679,18 @@ impl ObjectRef {
         key: &str,
         value: &Value,
     ) -> OwnDataPropertyWrite {
+        self.write_existing_own_data_property_if(key, value, |_| true)
+    }
+
+    /// [`Self::write_existing_own_data_property`] of a property whose current
+    /// value `guard` accepts, in the same lookup; a rejected one is
+    /// `NeedsSlowPath`, unchanged.
+    pub(crate) fn write_existing_own_data_property_if(
+        &self,
+        key: &str,
+        value: &Value,
+        guard: impl FnOnce(&Value) -> bool,
+    ) -> OwnDataPropertyWrite {
         if self.0.module_namespace_exotic.get() {
             return OwnDataPropertyWrite::NeedsSlowPath;
         }
@@ -1670,7 +1699,7 @@ impl ObjectRef {
         let result = self
             .properties_for(key)
             .borrow_mut()
-            .write_existing_data(key, value);
+            .write_existing_data(key, value, guard);
         if matches!(result, OwnDataPropertyWrite::Written) {
             self.bump_value_revision();
             if establishes_realm_identity {

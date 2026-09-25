@@ -1027,6 +1027,31 @@ fn a_function_assigning_an_existing_global_variable_runs_here() {
     );
 }
 
+/// A global store checks the `globalThis` property in the same lookup that
+/// writes it: a property made read-only or an accessor after the binding
+/// was stored to refuses the plain store, and a deleted one is re-created.
+#[test]
+fn a_global_store_refuses_a_property_changed_under_its_binding() {
+    assert_eq!(
+        value_of(
+            "var out = [];
+             var a = 0; function inc(x) { a = a + x; }
+             for (var i = 0; i < 5; i++) inc(i); out.push(a, globalThis.a);
+             Object.defineProperty(globalThis, 'a', { writable: false });
+             inc(1); out.push(a);
+             b = 's'; function app(x) { b = b + x; } for (var j = 0; j < 4; j++) app(j);
+             out.push(b, globalThis.b);
+             Object.defineProperty(globalThis, 'b', { get: function () { return 'G'; },
+                 set: function (v) { out.push('set:' + v); }, configurable: true });
+             app('z'); out.push(b);
+             c = 1; function setc(v) { c = v; } setc(2); delete globalThis.c; setc(3);
+             out.push(c, Object.getOwnPropertyDescriptor(globalThis, 'c').configurable);
+             out.join(',');"
+        ),
+        Value::String("10,10,10,s0123,s0123,set:Gz,G,3,true".to_owned().into())
+    );
+}
+
 #[test]
 fn global_stores_the_fast_path_cannot_prove_keep_their_semantics() {
     let source = "function set(v) { g = v; return v; }

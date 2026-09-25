@@ -1146,7 +1146,10 @@ impl CallEnv {
     }
 
     pub(crate) fn is_global_lexical_binding(&self, name: &str) -> bool {
-        self.scope.global_lexical_bindings.borrow().contains(name)
+        // A script without top-level `let`/`const`/`class` has none; skip the
+        // hash, as `is_immutable_lexical_binding` does.
+        let bindings = self.scope.global_lexical_bindings.borrow();
+        !bindings.is_empty() && bindings.contains(name)
     }
 
     pub(crate) fn set_global_lexical_value(&self, name: String, value: Value) {

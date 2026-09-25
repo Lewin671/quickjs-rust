@@ -742,10 +742,12 @@ pub(super) fn try_store_global_var(name: &str, value: &Value, env: &CallEnv) -> 
             true
         }
         Some(GlobalVar::Bound(global_this, cell)) => {
-            if !matches!(
-                global_this.write_existing_own_data_property(name, value),
-                OwnDataPropertyWrite::Written
-            ) {
+            let written = cell.with_value(|current| {
+                global_this.write_existing_own_data_property_if(name, value, |property| {
+                    mirrors(property, current)
+                })
+            });
+            if !matches!(written, OwnDataPropertyWrite::Written) {
                 return false;
             }
             env.replace_existing_realm_with_cell(name, value.clone(), &cell)
@@ -797,7 +799,9 @@ pub(super) fn try_append_global_var(
     }
     cell.set(Value::Undefined);
     if !matches!(
-        global_this.write_existing_own_data_property(name, &Value::Undefined),
+        global_this.write_existing_own_data_property_if(name, &Value::Undefined, |property| {
+            matches!(property, Value::String(bound) if crate::JsString::ptr_eq(bound, current))
+        }),
         OwnDataPropertyWrite::Written
     ) {
         cell.set(left.clone());
@@ -816,16 +820,28 @@ pub(super) fn try_append_global_var(
 enum GlobalVar {
     /// Not bound yet, on an extensible global object: an assignment creates it.
     Absent(crate::ObjectRef),
-    /// A writable global data property with the realm binding that mirrors
-    /// it, the two in sync.
+    /// A realm binding; a store through it must still find the `globalThis`
+    /// property a writable data property that [`mirrors`] the binding, and
+    /// writes it in the same lookup.
     Bound(crate::ObjectRef, crate::function::Upvalue),
 }
 
+/// Whether a `globalThis` property value mirrors its realm binding's.
+/// Identity is enough to prove the mirror in sync, and a string accumulator
+/// compared by content would cost its whole length per store.
+fn mirrors(property: &Value, binding: &Value) -> bool {
+    match (property, binding) {
+        (Value::String(left), Value::String(right)) => crate::JsString::ptr_eq(left, right),
+        (left, right) => left.same_value(right),
+    }
+}
+
 /// The global variable `name` resolves to from a function that neither
-/// declares nor receives it, when a store to it is the plain one; `None` for
-/// a lexical or immutable binding, a module binding, an accessor or
-/// read-only property, a global property without a realm binding, or a
-/// mirror that disagrees with its binding -- which the interpreter handles.
+/// declares nor receives it, when a store to it may be the plain one; `None`
+/// for a lexical or immutable binding, a module binding, or a global
+/// property without a realm binding -- which the interpreter handles. An
+/// accessor, read-only or out-of-sync property behind a realm binding is
+/// refused by the store itself (`GlobalVar::Bound`).
 fn plain_global_var(name: &str, env: &CallEnv) -> Option<GlobalVar> {
     if env.is_global_lexical_binding(name)
         || env.is_immutable_lexical_binding(name)
@@ -844,17 +860,6 @@ fn plain_global_var(name: &str, env: &CallEnv) -> Option<GlobalVar> {
         }
         return Some(GlobalVar::Absent(global_this));
     };
-    let property = global_this.own_property(name)?;
-    let current = cell.get();
-    // Identity is enough to prove the mirror in sync, and a string
-    // accumulator compared by content would cost its whole length per store.
-    let in_sync = match (&property.value, &current) {
-        (Value::String(left), Value::String(right)) => crate::JsString::ptr_eq(left, right),
-        (left, right) => left.same_value(right),
-    };
-    if property.is_accessor() || !property.writable || !in_sync {
-        return None;
-    }
     Some(GlobalVar::Bound(global_this, cell))
 }
 
