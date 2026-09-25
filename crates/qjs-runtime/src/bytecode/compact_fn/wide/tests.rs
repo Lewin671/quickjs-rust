@@ -1650,3 +1650,40 @@ fn forwarded_local_operands_see_the_value_loaded() {
         Value::String("7,7,15,201,abcabc,3,10,45,3,6".into())
     );
 }
+
+/// A method one prototype further up (`Sub.prototype.__proto__ =
+/// Base.prototype`) is cached by both prototypes; shadowing it on the
+/// parent, deleting that again, replacing the parent's prototype, an own
+/// property on the receiver, and a new value on the holder are all seen.
+#[test]
+fn inherited_methods_two_prototypes_up_see_every_change() {
+    assert_eq!(
+        value_of(
+            "function Base() {}
+             Base.prototype = { who: function () { return 'base'; }, n: 1 };
+             function Sub() { this.x = 0; }
+             Sub.prototype = { own: function () { return 'sub'; } };
+             Sub.prototype.__proto__ = Base.prototype;
+             function call(o) { return o.who() + o.n; }
+             function run() {
+                 var objs = [new Sub(), new Sub(), new Sub()];
+                 var out = [];
+                 for (var round = 0; round < 7; round++) {
+                     var r = '';
+                     for (var i = 0; i < 30; i++) r = call(objs[i % 3]);
+                     out.push(r);
+                     if (round == 0) Base.prototype.n = 2;
+                     if (round == 1) Sub.prototype.who = function () { return 'shadow'; };
+                     if (round == 2) delete Sub.prototype.who;
+                     if (round == 3) Object.setPrototypeOf(Sub.prototype, { who: function () { return 'other'; }, n: 9 });
+                     if (round == 4) objs[1].who = function () { return 'own'; };
+                     if (round == 5) Base.prototype.who = function () { return 'late'; };
+                 }
+                 out.push(call(objs[1]));
+                 return out.join();
+             }
+             run();"
+        ),
+        Value::String("base1,base2,shadow2,base2,other9,other9,other9,own9".into())
+    );
+}
