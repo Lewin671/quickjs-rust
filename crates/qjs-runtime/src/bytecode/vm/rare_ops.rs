@@ -193,7 +193,13 @@ impl Vm<'_> {
                 } else {
                     None
                 };
-                let deopt_bindings = self.frame_deopt_bindings_memoized();
+                let deopt_bindings = self.frame_deopt_bindings_memoized().filter(|bindings| {
+                    self.closure_needs_dynamic_scope(
+                        bytecode,
+                        *lexical_this || *lexical_arguments,
+                        bindings,
+                    )
+                });
                 let function = Function::new_user_compiled(CompiledUserFunction {
                     name: name.clone(),
                     has_name_binding: *has_name_binding,

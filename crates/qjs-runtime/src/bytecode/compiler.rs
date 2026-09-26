@@ -166,7 +166,9 @@ pub(super) fn compile_direct_eval_script(
         direct_eval_source: true,
         ..Compiler::default()
     };
-    compiler.compile_eval_into(script)
+    let mut bytecode = compiler.compile_eval_into(script)?;
+    bytecode.mark_direct_eval_code();
+    Ok(bytecode)
 }
 
 /// Compiles a module body. Module code is always strict mode, regardless of a

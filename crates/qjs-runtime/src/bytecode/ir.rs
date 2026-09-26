@@ -772,6 +772,8 @@ pub struct Bytecode {
     /// name-keyed binding. Deciding this per local used to ask the environment
     /// about every name on every call.
     cached_authoritative_mask_clean: u128,
+    /// The top level of a direct eval's code (not a function inside it).
+    direct_eval_code: bool,
 }
 
 impl Bytecode {
@@ -940,6 +942,7 @@ impl Bytecode {
             cached_uses_lexical_this: false,
             cached_hoisted_slots: Vec::new(),
             cached_authoritative_mask_clean: 0,
+            direct_eval_code: false,
         };
         // Order matters: closure/arguments metadata reads the simpler caches
         // (written-binding names, creates-closures) computed just above. Nested
@@ -1419,6 +1422,29 @@ impl Bytecode {
 
     pub(crate) fn contains_direct_eval(&self) -> bool {
         self.cached_contains_direct_eval
+    }
+
+    pub(super) fn mark_direct_eval_code(&mut self) {
+        self.direct_eval_code = true;
+    }
+
+    /// Whether this is the top level of a direct eval's code.
+    pub(super) fn is_direct_eval_code(&self) -> bool {
+        self.direct_eval_code
+    }
+
+    /// Every name the body resolves through its environment at run time
+    /// rather than through a slot: its free-name reads, writes and `typeof`s,
+    /// and its `delete`s by name. Nested function bodies' names are included
+    /// only through `global_names`.
+    pub(super) fn names_resolved_by_name(&self) -> impl Iterator<Item = &str> {
+        self.global_names
+            .iter()
+            .map(String::as_str)
+            .chain(self.code.iter().filter_map(|op| match op {
+                Op::DeleteIdent(name) | Op::DeleteIdentWith { name, .. } => Some(name.as_str()),
+                _ => None,
+            }))
     }
 
     pub(crate) fn contains_with(&self) -> bool {
