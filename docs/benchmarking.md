@@ -452,7 +452,11 @@ claimed (`TLCLAIM`, naming the numeric-mutation, numeric, control or typed
 accelerator), and per backward edge every loop accelerator declined
 (`TLEDGE`). `QJS_TL_TRACE=2` also lists a failed region's
 bytecode, and `QJS_TL_TRACE=3` lists each compiled program's operations
-(`TLOP`).
+as the builder emitted them (`TLOP`). `QJS_TL_TRACE=4` lists the program
+that actually runs (`TLFINAL`, `TLHOIST`, `TLFOP`): registers packed,
+invariant reads hoisted and copies forwarded (`typed_loop/forward.rs`).
+`QJS_TL_NO_FORWARD=1` turns the copy forwarding off, so one diagnostic
+binary can A/B it by instruction count.
 
 Two histograms answer most questions. `TLDEOPT` names the shapes that
 deoptimize a region on every entry, which is how the array element write,

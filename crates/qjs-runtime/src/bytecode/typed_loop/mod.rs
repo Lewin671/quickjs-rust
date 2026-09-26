@@ -44,6 +44,9 @@ use crate::Value;
 mod branchy_nested_tests;
 mod compile;
 mod execute;
+mod forward;
+#[cfg(test)]
+mod forward_tests;
 mod frame;
 pub(in crate::bytecode) mod helper_graph;
 mod hoist;

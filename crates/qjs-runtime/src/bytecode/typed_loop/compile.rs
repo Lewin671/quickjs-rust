@@ -209,6 +209,58 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
     if register_count > super::REGISTER_FILE {
         return None;
     }
+    // Every register but the operand-stack ones outlives an operation:
+    // seeded on entry, written back on exit, or read by the hoisted reads.
+    let pinned: std::collections::BTreeSet<(bool, u16)> = local_slots
+        .iter()
+        .chain(&written_locals)
+        .map(|&(register, _)| (false, register))
+        .chain(global_reads.iter().map(|(register, _)| (false, *register)))
+        .chain(constants.iter().map(|(register, _)| (false, *register)))
+        .chain(boxed_locals.iter().map(|&(register, _)| (true, register)))
+        .chain(
+            written_boxed_locals
+                .iter()
+                .map(|&register| (true, register)),
+        )
+        .chain(
+            boxed_global_reads
+                .iter()
+                .map(|(register, _)| (true, *register)),
+        )
+        .chain(
+            boxed_constants
+                .iter()
+                .map(|(register, _)| (true, *register)),
+        )
+        .chain(
+            numeric_native_callee_registers
+                .iter()
+                .map(|&register| (true, register)),
+        )
+        .chain(hoisted_reads.iter().filter_map(|op| match *op {
+            TypedOp::GetNamed { dst, .. } => Some((true, dst)),
+            TypedOp::GetNamedTyped { dst, .. } => Some((false, dst)),
+            _ => None,
+        }))
+        .collect();
+    let mut sites = sites;
+    super::forward::forward_copies(&mut ops, &mut sites, &mut site_entries, &pinned);
+    // `QJS_TL_TRACE=4` lists the program as it runs: registers packed,
+    // invariant reads hoisted and copies forwarded (`TLOP` under `=3` is the
+    // builder's output).
+    #[cfg(feature = "perf-counters")]
+    if std::env::var_os("QJS_TL_TRACE").is_some_and(|value| value == "4") {
+        eprintln!(
+            "TLFINAL region {header}..{backedge} registers {register_count} boxed {boxed_count}"
+        );
+        for op in &hoisted_reads {
+            eprintln!("TLHOIST {op:?}");
+        }
+        for (index, op) in ops.iter().enumerate() {
+            eprintln!("TLFOP {index:3} {op:?}");
+        }
+    }
     Some(TypedLoopProgram {
         shape_caches: std::cell::RefCell::new(Vec::new()),
         helper_sites,
