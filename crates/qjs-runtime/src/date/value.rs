@@ -26,8 +26,14 @@ pub(super) fn parse_date_string(source: &str) -> f64 {
 }
 
 pub(super) fn date_value(this_value: Value) -> Result<f64, RuntimeError> {
-    let object = date_object(this_value)?;
-    date_value_from_object(&object)
+    // One lookup of the time value, which is also the Date check.
+    let Value::Object(object) = &this_value else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "Date method receiver is not an object".to_owned(),
+        });
+    };
+    date_value_from_object(object)
 }
 
 pub(super) fn date_value_from_object(object: &ObjectRef) -> Result<f64, RuntimeError> {
