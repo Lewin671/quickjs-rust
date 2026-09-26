@@ -100,6 +100,11 @@ impl WideActivation<'_> {
         {
             return Ok(result);
         }
+        if matches!(op, BinaryOp::Eq | BinaryOp::Ne)
+            && let Some(equal) = loose_equality_without_conversion(left, right)
+        {
+            return Ok(equal == (op == BinaryOp::Eq));
+        }
         let value = self.eval_binary(left.clone(), op, right.clone())?;
         Ok(crate::is_truthy(&value))
     }
@@ -1410,6 +1415,22 @@ fn run_frames(
                 return Err(error);
             }
         }
+    }
+}
+
+/// `left == right` where no conversion can run: `null` or `undefined`
+/// against anything -- nothing else equals them but the IsHTMLDDA host
+/// object -- and two numbers. Kept out of the shared operator helpers, whose
+/// growth re-rolled this tier's dispatch codegen (crypto-md5 +2.5% cycles at
+/// identical instructions).
+#[inline(never)]
+fn loose_equality_without_conversion(left: &Value, right: &Value) -> Option<bool> {
+    match (left, right) {
+        (Value::Null | Value::Undefined, other) | (other, Value::Null | Value::Undefined) => Some(
+            matches!(other, Value::Null | Value::Undefined) || crate::html_dda::is_html_dda(other),
+        ),
+        (Value::Number(left), Value::Number(right)) => Some(left == right),
+        _ => None,
     }
 }
 
