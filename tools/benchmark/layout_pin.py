@@ -75,6 +75,10 @@ CALLEES = (
     # executor, most of crypto-md5. Unpinned it floated with every edit, and
     # md5 ran 1-5% more cycles at identical instructions (2026-09-26).
     "compact_fn12numeric_plan3run",
+    # The typed loop's f64 helper-graph executor: nearly all of
+    # recursive_call_tree, which ran 10% more cycles when an unrelated
+    # change moved it (2026-09-26).
+    "helper_graph7numericNtB2_10NumProgram3run",
 )
 # After the budgeted callees: defined once per codegen unit, in a number of
 # copies that changes with unrelated code, so nothing pinned may follow them.

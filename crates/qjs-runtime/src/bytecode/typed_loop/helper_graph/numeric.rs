@@ -230,6 +230,14 @@ pub(super) struct NumProgram {
     constants: Box<[(u16, f64)]>,
 }
 
+/// A call's registers, on a cache line of their own: filled on every call,
+/// so where the caller's frames left the stack decided how many lines the
+/// fill and each access touched -- recursive_call_tree swung 10% in cycles
+/// with identical helper code when an unrelated change resized a frame
+/// above it (2026-09-26).
+#[repr(align(64))]
+struct RegisterFile([f64; FILE]);
+
 impl NumProgram {
     /// Lowers `ops`, whose first `arity` registers are the arguments, or
     /// `None` when the encoding could be observed.
@@ -390,7 +398,8 @@ impl NumProgram {
         // Every register that is not an argument starts `undefined`. The file
         // is a power of two wider than any register the helper names, so an
         // operand is masked into range rather than bounds-checked.
-        let mut r = [f64::NAN; FILE];
+        let mut file = RegisterFile([f64::NAN; FILE]);
+        let r = &mut file.0;
         for (register, argument) in r.iter_mut().zip(args) {
             *register = *argument;
         }
