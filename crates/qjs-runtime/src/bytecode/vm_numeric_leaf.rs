@@ -669,6 +669,12 @@ pub(super) fn math_unary(native: NativeFunction, argument: f64) -> Option<f64> {
 /// A `Math` function of two arguments whose entire effect is a floating-point
 /// computation. `max`/`min` follow the spec's NaN and signed-zero rules rather
 /// than Rust's, which disagree on both.
+///
+/// Out of line: whether LLVM inlined it into the typed-loop executor flipped
+/// with unrelated edits elsewhere in the crate, and the inlined copy grew
+/// the executor by 176 bytes and re-rolled its code (access-nsieve +4%,
+/// heterogeneous_property_read +5% cycles at equal instructions).
+#[inline(never)]
 pub(super) fn math_binary(native: NativeFunction, left: f64, right: f64) -> Option<f64> {
     let value = match native {
         NativeFunction::MathPow => crate::operations::number_exponentiate(left, right),
