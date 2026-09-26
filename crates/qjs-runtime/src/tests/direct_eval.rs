@@ -95,3 +95,30 @@ fn closures_see_names_a_later_eval_adds_to_their_function() {
         ))
     );
 }
+
+/// A bypass ends only for the closures that resolve the name a later `eval`
+/// binds: an unrelated `var` leaves a closure on its path, and the name it
+/// does read is still seen once declared.
+#[test]
+fn a_later_eval_revokes_only_the_closures_reading_its_name() {
+    assert_eq!(
+        eval(
+            "function f() {
+                 var reads = function () { return typeof String; };
+                 var other = function () { return typeof Math; };
+                 var out = [reads(), other()];
+                 eval('var unrelated = 1');
+                 out.push(reads(), other());
+                 eval('var String = 5');
+                 out.push(reads(), other(), unrelated);
+                 return out.join(',');
+             }
+             f() + '|' + f();"
+        ),
+        Ok(Value::String(
+            "function,object,function,object,number,object,1|function,object,function,object,number,object,1"
+                .to_owned()
+                .into()
+        ))
+    );
+}

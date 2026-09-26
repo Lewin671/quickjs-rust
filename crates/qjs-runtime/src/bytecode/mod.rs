@@ -86,6 +86,15 @@ pub(crate) use vm_numeric_leaf::try_eval_numeric_leaf;
 pub(crate) use vm_private::apply_instance_private_element;
 pub(crate) use vm_result::FunctionBytecodeResult;
 pub(crate) use vm_set::set_property as set_object_property;
+
+/// Whether `bytecode` resolves `name` through its environment at run time
+/// (`Bytecode::names_resolved_by_name`); `this` is always its own.
+pub(crate) fn resolves_by_name(bytecode: &Bytecode, name: &str) -> bool {
+    name != "this"
+        && bytecode
+            .names_resolved_by_name()
+            .any(|candidate| candidate == name)
+}
 pub(crate) use vm_string_append::{concat_primitives, concat_string_with_primitives};
 pub(crate) use vm_this_property_leaf::try_eval_this_property_leaf;
 

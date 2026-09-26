@@ -509,8 +509,8 @@ pub(crate) struct DynamicBindingsInner {
 const MAX_SCOPE_BYPASSES: usize = 64;
 
 impl DynamicBindings {
-    /// Lets `function` run without this scope until a name is added,
-    /// removed or remapped here. The caller has proved that nothing the
+    /// Lets `function` run without this scope until a name it resolves by
+    /// name is added, removed or remapped here. The caller has proved that nothing the
     /// function resolves by name is in the scope now. `false` when the
     /// scope already has its fill of bypassing closures.
     pub(crate) fn bypass(&self, function: &super::Function) -> bool {
@@ -526,15 +526,25 @@ impl DynamicBindings {
         true
     }
 
+    /// Ends the bypass of every closure that resolves `name` by name, now
+    /// that the scope binds it differently; the others resolve nothing the
+    /// change touches.
     #[cold]
     #[inline(never)]
-    fn revoke_bypasses(&self) {
-        let bypasses = std::mem::take(&mut *self.0.bypasses.borrow_mut());
-        for function in bypasses {
-            if let Some(function) = function.upgrade() {
+    fn revoke_bypasses(&self, name: &str) {
+        self.0.bypasses.borrow_mut().retain(|function| {
+            let Some(function) = function.upgrade() else {
+                return false;
+            };
+            let resolves = function
+                .bytecode
+                .as_ref()
+                .is_none_or(|bytecode| crate::bytecode::resolves_by_name(bytecode, name));
+            if resolves {
                 function.revoke_scope_bypass();
             }
-        }
+            !resolves
+        });
     }
 
     pub(crate) fn new() -> Self {
@@ -544,12 +554,13 @@ impl DynamicBindings {
     /// The map for a change that may alter which cell a name maps to.
     fn mapping_mut(
         &self,
+        name: &str,
     ) -> std::cell::RefMut<'_, crate::value::name_hash::NameMap<String, Upvalue>> {
         self.0
             .generation
             .set(self.0.generation.get().wrapping_add(1));
         if !self.0.bypasses.borrow().is_empty() {
-            self.revoke_bypasses();
+            self.revoke_bypasses(name);
         }
         self.0.map.borrow_mut()
     }
@@ -615,12 +626,12 @@ impl DynamicBindings {
             binding.set(value);
             return Some(previous);
         }
-        self.mapping_mut().insert(name, Upvalue::new(value));
+        self.mapping_mut(&name).insert(name, Upvalue::new(value));
         None
     }
 
     pub(crate) fn insert_cell(&self, name: String, upvalue: Upvalue) {
-        self.mapping_mut().insert(name, upvalue);
+        self.mapping_mut(&name).insert(name, upvalue);
     }
 
     /// Overlays a live frame cell unless this shared dynamic environment
@@ -641,7 +652,8 @@ impl DynamicBindings {
         {
             return false;
         }
-        self.mapping_mut().insert(name.to_owned(), upvalue.clone());
+        self.mapping_mut(name)
+            .insert(name.to_owned(), upvalue.clone());
         true
     }
 
@@ -654,7 +666,9 @@ impl DynamicBindings {
     }
 
     pub(crate) fn remove(&self, name: &str) -> Option<Value> {
-        self.mapping_mut().remove(name).map(|binding| binding.get())
+        self.mapping_mut(name)
+            .remove(name)
+            .map(|binding| binding.get())
     }
 
     pub(crate) fn remove_cell_if(&self, name: &str, expected: &Upvalue) -> bool {
@@ -665,7 +679,7 @@ impl DynamicBindings {
             .get(name)
             .is_some_and(|binding| binding.ptr_eq(expected));
         if matches {
-            self.mapping_mut().remove(name);
+            self.mapping_mut(name).remove(name);
         }
         matches
     }

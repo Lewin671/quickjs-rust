@@ -193,13 +193,22 @@ impl Vm<'_> {
                 } else {
                     None
                 };
-                let deopt_bindings = self.frame_deopt_bindings_memoized();
-                let scope_use = deopt_bindings.as_ref().map(|bindings| {
+                // Only a closure that keeps the frame's dynamic scope needs
+                // the frame's cells overlaid onto it now: one that drops or
+                // bypasses it resolves the frame's locals through its own
+                // captures, never by name, and a direct eval overlays the
+                // cells itself when it builds its environment.
+                let scope_use = self.env.deopt_bindings().map(|bindings| {
                     self.closure_scope_use(bytecode, *lexical_this || *lexical_arguments, bindings)
                 });
                 let deopt_bindings = match scope_use {
-                    Some(crate::bytecode::vm_frame_init::ClosureScopeUse::Drop) => None,
-                    _ => deopt_bindings,
+                    None | Some(crate::bytecode::vm_frame_init::ClosureScopeUse::Drop) => None,
+                    Some(crate::bytecode::vm_frame_init::ClosureScopeUse::Bypass) => {
+                        self.env.deopt_bindings().cloned()
+                    }
+                    Some(crate::bytecode::vm_frame_init::ClosureScopeUse::Keep) => {
+                        self.frame_deopt_bindings_memoized()
+                    }
                 };
                 let bypass_scope = deopt_bindings.clone().filter(|_| {
                     matches!(
