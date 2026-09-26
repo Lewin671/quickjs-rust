@@ -42,6 +42,10 @@ performance loop below is the contract.
 - Burndown recorder: `./scripts/test262-burndown.sh --report <dir> | --entry <file>`
 - Performance inner loop (counter screen, symbol sizes, optional trace):
   `./scripts/perf-loop.sh --plan tasks/performance-units/<unit>.json`
+- Diagnostic A/B, front-end cost, executor placement:
+  `python3 -m tools.benchmark.screen --candidate B --base A --case external`,
+  `python3 -m tools.benchmark.front_end --binary B --reference <ng>`,
+  `./scripts/layout-scan.sh --offsets 0x0,0x200` (see docs/performance-workflow.md)
 - Formal local comparison (feeds queue/decide):
   `./scripts/perf-compare.sh --base <sha> --output-dir target/comparison/<run>`
 - Source size report: `./scripts/source-size-report.sh [limit] [--vendor]`
