@@ -93,6 +93,18 @@ impl WideActivation<'_> {
         {
             return Ok(crate::string::js_string_eq(left, right) == (op == BinaryOp::Eq));
         }
+        // The rest that runs no user code -- `node.left == null` -- without
+        // cloning the operands into the general path.
+        if let Some(Value::Boolean(result)) =
+            crate::operations::eval_binary_without_env(left, op, right)
+        {
+            return Ok(result);
+        }
+        if matches!(op, BinaryOp::Eq | BinaryOp::Ne)
+            && let Some(equal) = loose_equality_without_conversion(left, right)
+        {
+            return Ok(equal == (op == BinaryOp::Eq));
+        }
         let value = self.eval_binary(left.clone(), op, right.clone())?;
         Ok(crate::is_truthy(&value))
     }
@@ -1406,6 +1418,22 @@ fn run_frames(
     }
 }
 
+/// `left == right` where no conversion can run: `null` or `undefined`
+/// against anything -- nothing else equals them but the IsHTMLDDA host
+/// object -- and two numbers. Kept out of the shared operator helpers, whose
+/// growth re-rolled this tier's dispatch codegen (crypto-md5 +2.5% cycles at
+/// identical instructions).
+#[inline(never)]
+fn loose_equality_without_conversion(left: &Value, right: &Value) -> Option<bool> {
+    match (left, right) {
+        (Value::Null | Value::Undefined, other) | (other, Value::Null | Value::Undefined) => Some(
+            matches!(other, Value::Null | Value::Undefined) || crate::html_dda::is_html_dda(other),
+        ),
+        (Value::Number(left), Value::Number(right)) => Some(left == right),
+        _ => None,
+    }
+}
+
 /// A unary operator, with the interpreter's own fast paths: `!` and `void`
 /// coerce nothing, a number answers inline, everything else runs the general
 /// operator in an empty realm frame like the tier's binary path.
@@ -1498,6 +1526,13 @@ fn construct_from_activation(
     }
     if let Some(array) = construct_plain_array(env, &callee, arguments) {
         return Ok(array);
+    }
+    if let Value::Function(function) = &callee
+        && function.native.is_some()
+        && let Some(result) =
+            crate::function::construct_intrinsic_directly(function, arguments, env)
+    {
+        return result;
     }
     let mut env = env.empty_frame();
     crate::function::construct_function(callee.clone(), callee, arguments.to_vec(), &mut env)

@@ -391,6 +391,7 @@ struct Builder<'a> {
 
 mod admission;
 mod element;
+mod globals;
 
 pub(super) use admission::{admitted_binary, admitted_unary};
 use admission::{expression_has_control_flow, scalar_expression_may_write_or_branch};
@@ -661,6 +662,19 @@ impl<'a> Builder<'a> {
     ///
     /// Two scalars stay on the scalar comparison: widening them would trade a
     /// register compare for two `Box` operations and a value comparison.
+    fn top_operands_include_string_constant(&self) -> bool {
+        self.stack
+            .iter()
+            .rev()
+            .take(2)
+            .any(|&(register, class, _)| {
+                class == Class::Boxed
+                    && self.boxed_constants.iter().any(|(candidate, value)| {
+                        *candidate == register && matches!(value, Value::String(_))
+                    })
+            })
+    }
+
     fn top_operands_include_boxed(&self) -> bool {
         self.stack
             .iter()
@@ -1022,83 +1036,6 @@ impl<'a> Builder<'a> {
         Some(())
     }
 
-    /// Boxed register seeded from the global binding `name`, allocating one if
-    /// new.
-    fn global_register(&mut self, name: &str) -> Option<u16> {
-        if let Some((register, _)) = self
-            .boxed_global_reads
-            .iter()
-            .find(|(_, candidate)| candidate == name)
-        {
-            return Some(*register);
-        }
-        let register = self.fresh_boxed()?;
-        self.boxed_global_reads.push((register, name.to_owned()));
-        Some(register)
-    }
-
-    /// Whether the region contains an instruction that could write `name`,
-    /// which would make a hoisted read of that same binding observably stale.
-    fn region_writes_global_named(&self, name: &str) -> bool {
-        self.bytecode.code[self.header..=self.backedge]
-            .iter()
-            .any(|op| match op {
-                Op::StoreGlobalStrict(candidate) | Op::DefineGlobalVar(candidate) => {
-                    candidate == name
-                }
-                Op::StoreGlobalSloppy {
-                    name: candidate, ..
-                }
-                | Op::StoreLocalOrGlobalSloppy {
-                    name: candidate, ..
-                }
-                | Op::AppendStringLiteralGlobal {
-                    name: candidate, ..
-                } => candidate == name,
-                _ => false,
-            })
-    }
-
-    /// A named-property write could target `globalThis` and mutate a hoisted
-    /// global binding. A region with a sloppy fallback sink therefore keeps
-    /// those writes out of this tier; dense array writes remain separately
-    /// guarded and cannot alter a global object's binding descriptors.
-    fn region_writes_a_sloppy_global(&self) -> bool {
-        self.bytecode.code[self.header..=self.backedge]
-            .iter()
-            .any(|op| matches!(op, Op::StoreLocalOrGlobalSloppy { .. }))
-    }
-
-    /// Returns the frame slot for an unresolved sloppy binding only when this
-    /// bytecode owns the compiler-emitted fallback slot for the same name.
-    fn sloppy_global_fallback_slot(&self, name: &str) -> Option<usize> {
-        let slot = self.bytecode.local_slot(name)?;
-        let local = self.bytecode.locals.get(slot)?;
-        (local.name == name && local.sloppy_global_fallback && !local.compiler_temporary)
-            .then_some(slot)
-    }
-
-    /// Index of the prepared sink for a sloppy fallback write, adding it once
-    /// per slot/name pair. The runtime validates the dynamic binding and
-    /// property identities before entering the program.
-    fn sloppy_global_write_index(&mut self, slot: usize, name: &str) -> Option<u16> {
-        if self.sloppy_global_fallback_slot(name) != Some(slot) {
-            return None;
-        }
-        let slot = u32::try_from(slot).ok()?;
-        if let Some(index) =
-            self.sloppy_global_writes
-                .iter()
-                .position(|(candidate_slot, candidate_name)| {
-                    *candidate_slot == slot && candidate_name == name
-                })
-        {
-            return u16::try_from(index).ok();
-        }
-        self.sloppy_global_writes.push((slot, name.to_owned()));
-        u16::try_from(self.sloppy_global_writes.len() - 1).ok()
-    }
-
     /// Diagnostic builds name the instruction a pass gave up on:
     /// `QJS_TL_TRACE=1` on a `perf-counters` binary prints the region, the
     /// site, the operation and what this pass discovered. Paired with the
@@ -1407,11 +1344,20 @@ impl<'a> Builder<'a> {
             // deoptimized on its first iteration instead. This arm must come
             // first, and must require a genuinely boxed operand, so ordinary
             // numeric comparisons keep the scalar file.
+            // Relational operators likewise when one side is a string
+            // literal: `ch < "0"` over a `charAt` result compares strings,
+            // which unboxing deoptimized. Only then -- a boxed `i <
+            // list.length` must keep the pass that reads the length as a
+            // scalar.
             Op::Binary(binary)
-                if matches!(
+                if (matches!(
                     *binary,
                     BinaryOp::Eq | BinaryOp::Ne | BinaryOp::StrictEq | BinaryOp::StrictNe
-                ) && self.top_operands_include_boxed() =>
+                ) && self.top_operands_include_boxed())
+                    || (matches!(
+                        *binary,
+                        BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+                    ) && self.top_operands_include_string_constant()) =>
             {
                 let (right, _) = self.pop_boxed()?;
                 let (left, _) = self.pop_boxed()?;

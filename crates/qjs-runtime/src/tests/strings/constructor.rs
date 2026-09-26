@@ -117,3 +117,27 @@ fn new_string_with_symbol_throws() {
     );
     assert!(eval("new String(Symbol('x'));").is_err());
 }
+
+#[test]
+fn new_string_of_a_string_or_number_builds_an_ordinary_wrapper() {
+    assert_eq!(
+        eval(
+            "function wrap() {
+                 var out = [];
+                 for (var i = 0; i < 3; i++) {
+                     var s = new String('ab'), n = new String(12.5), z = new String(-0);
+                     out.push(s.length, s[1], typeof s, Object.getPrototypeOf(s) === String.prototype,
+                              Object.getOwnPropertyNames(s).join('|'), n + '!', n.length, z + '',
+                              Object.getOwnPropertyDescriptor(s, 'length').writable);
+                 }
+                 class S extends String {}
+                 out.push(new S('q') instanceof S, new (String.bind(null, 'b'))() + '');
+                 return out.join();
+             }
+             wrap();"
+        ),
+        Ok(Value::String(
+            ("2,b,object,true,0|1|length,12.5!,4,0,false,".repeat(3) + "true,b").into()
+        ))
+    );
+}

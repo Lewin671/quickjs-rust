@@ -83,3 +83,32 @@ fn replace_shares_the_program_with_exec() {
         Ok(string("a[1]b[22]c[333]|44|q<5>"))
     );
 }
+
+#[test]
+fn string_argument_construction_matches_the_general_path() {
+    assert_eq!(
+        eval(
+            "function build() {
+                 var out = [];
+                 for (var i = 0; i < 3; i++) {
+                     var literal = /x+/g, direct = new RegExp('x+', 'g');
+                     var noFlags = new RegExp('y'), bound = new (RegExp.bind(null, 'z'))('i');
+                     out.push(literal.source + literal.flags + literal.lastIndex,
+                              direct.source + direct.flags,
+                              noFlags.flags === '' && Object.getPrototypeOf(noFlags) === RegExp.prototype,
+                              bound.source + bound.flags,
+                              Object.getOwnPropertyNames(direct).join('|'),
+                              literal !== /x+/g);
+                     try { new RegExp('(', ''); } catch (e) { out.push(e.name); }
+                 }
+                 return out.join();
+             }
+             build();"
+        ),
+        Ok(string(
+            "x+g0,x+g,true,zi,lastIndex,true,SyntaxError,"
+                .repeat(3)
+                .trim_end_matches(',')
+        ))
+    );
+}

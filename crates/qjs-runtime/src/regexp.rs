@@ -238,6 +238,62 @@ pub(crate) fn native_regexp(
     Ok(Value::Object(object))
 }
 
+thread_local! {
+    /// The keys every RegExp object carries, shared so building one costs no
+    /// key allocations. Read-only after first use.
+    static REGEXP_OBJECT_KEYS: [std::rc::Rc<str>; 3] = [
+        REGEXP_SOURCE_PROPERTY.into(),
+        REGEXP_FLAGS_PROPERTY.into(),
+        "lastIndex".into(),
+    ];
+}
+
+/// `new RegExp(pattern, flags)` with `new.target` the constructor itself and
+/// string (or absent) arguments -- every regular-expression literal takes
+/// this shape. Neither argument can be a RegExp or run user code, and
+/// `RegExp.prototype` is non-writable and non-configurable, so the object is
+/// built directly from the argument strings. `None` for any other shape.
+pub(crate) fn construct_regexp_from_strings(
+    function: &Function,
+    argument_values: &[Value],
+    env: &CallEnv,
+) -> Option<Result<Value, RuntimeError>> {
+    let Some(Value::String(source)) = argument_values.first() else {
+        return None;
+    };
+    let flags = match argument_values.get(1) {
+        Some(Value::String(flags)) => flags.clone(),
+        None | Some(Value::Undefined) => JsString::default(),
+        Some(_) => return None,
+    };
+    let validated = env
+        .realm()
+        .regexp_programs()
+        .borrow_mut()
+        .is_validated_strings(source, &flags);
+    if !validated && let Err(error) = validate_regexp_init_cached(source, &flags, env) {
+        return Some(Err(error));
+    }
+    let mut builder = crate::value::OrderedDataPropertyBuilder::with_capacity(3);
+    REGEXP_OBJECT_KEYS.with(|[source_key, flags_key, last_index_key]| {
+        builder.insert_property(
+            source_key.clone(),
+            Property::non_enumerable(Value::String(source.clone())),
+        );
+        builder.insert_property(
+            flags_key.clone(),
+            Property::non_enumerable(Value::String(flags)),
+        );
+        builder.insert_property(
+            last_index_key.clone(),
+            Property::data(Value::Number(0.0), false, true, false),
+        );
+    });
+    Some(Ok(Value::Object(
+        builder.finish(function_prototype(function)),
+    )))
+}
+
 pub(crate) fn regexp_literal_value(
     source: &str,
     flags: &str,

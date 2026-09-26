@@ -10,7 +10,7 @@ mod prototype;
 
 pub(crate) use object_keys::StringObjectKeys;
 
-pub(crate) use constructor::define_string_data;
+pub(crate) use constructor::{construct_string_wrapper, define_string_data};
 pub(super) use constructor::{
     is_string_object, native_string, native_string_from_char_code, native_string_from_code_point,
     native_string_raw, string_from_code_point_numbers, string_object_value,

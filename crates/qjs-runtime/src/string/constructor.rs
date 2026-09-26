@@ -36,6 +36,32 @@ pub(crate) fn native_string(
     Ok(Value::Object(object))
 }
 
+/// `new String(value)` for a string or number `value`, whose conversion
+/// runs no user code, built directly (see
+/// `function::construct_intrinsic_directly`).
+pub(crate) fn construct_string_wrapper(
+    function: &Function,
+    argument_values: &[Value],
+    env: &CallEnv,
+) -> Option<Value> {
+    let text = match argument_values.first()? {
+        Value::String(text) => text.clone(),
+        Value::Number(number) => crate::JsString::from(crate::number::number_to_js_string(*number)),
+        _ => return None,
+    };
+    let keys = env.realm().string_object_keys();
+    let mut builder = crate::value::OrderedDataPropertyBuilder::with_capacity(2);
+    let length = crate::string::js_string_code_unit_len(&text) as f64;
+    builder.insert_property(keys.data(), Property::non_enumerable(Value::String(text)));
+    builder.insert_property(
+        keys.length(),
+        Property::data(Value::Number(length), false, false, false),
+    );
+    let object = builder.finish(function_prototype(function));
+    object.defer_string_indices();
+    Some(Value::Object(object))
+}
+
 pub(crate) fn native_string_from_char_code(
     argument_values: &[Value],
     env: &mut CallEnv,

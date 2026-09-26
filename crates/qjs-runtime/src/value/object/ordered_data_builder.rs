@@ -25,6 +25,25 @@ impl OrderedDataPropertyBuilder {
         }
     }
 
+    /// A builder whose storage has room for `capacity` properties.
+    pub(crate) fn with_capacity(capacity: usize) -> Self {
+        Self {
+            properties: PropertyStorage::Small {
+                entries: Vec::with_capacity(capacity),
+            },
+            index_property_count: 0,
+        }
+    }
+
+    /// Defines `key` with an arbitrary descriptor, as `insert` does for an
+    /// enumerable data property.
+    pub(crate) fn insert_property(&mut self, key: Rc<str>, property: Property) {
+        let classify_key = Rc::clone(&key);
+        if self.properties.insert(key, property).is_none() && is_array_index_key(&classify_key) {
+            self.index_property_count += 1;
+        }
+    }
+
     /// Applies one CreateDataProperty-style update. The generic storage insert
     /// path overwrites duplicates in place and promotes only when a unique key
     /// exceeds the compact-storage limit. Array-index classification happens

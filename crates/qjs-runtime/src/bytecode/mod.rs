@@ -86,6 +86,7 @@ pub(crate) use vm_numeric_leaf::try_eval_numeric_leaf;
 pub(crate) use vm_private::apply_instance_private_element;
 pub(crate) use vm_result::FunctionBytecodeResult;
 pub(crate) use vm_set::set_property as set_object_property;
+pub(crate) use vm_string_append::concat_primitives;
 pub(crate) use vm_this_property_leaf::try_eval_this_property_leaf;
 
 pub(crate) fn delete_object_property(

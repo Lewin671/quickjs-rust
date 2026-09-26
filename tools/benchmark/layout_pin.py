@@ -71,6 +71,10 @@ CALLEES = (
     "typed_loop7execute16boxed_truthiness",
     "typed_loop7execute14boxed_equality",
     "typed_loop7execute9get_named",
+    # Not the typed executor's callee: the wide tier's f64 call-tree
+    # executor, most of crypto-md5. Unpinned it floated with every edit, and
+    # md5 ran 1-5% more cycles at identical instructions (2026-09-26).
+    "compact_fn12numeric_plan3run",
 )
 # After the budgeted callees: defined once per codegen unit, in a number of
 # copies that changes with unrelated code, so nothing pinned may follow them.

@@ -419,10 +419,7 @@ fn is_plain_primitive(value: &Value) -> bool {
 /// when nothing else holds it -- the intermediate of `a + b + c` is such a
 /// buffer -- and borrowing the right operand. Hands both operands back
 /// otherwise.
-pub(in crate::bytecode) fn concat_primitives(
-    left: Value,
-    right: Value,
-) -> Result<Value, (Value, Value)> {
+pub(crate) fn concat_primitives(left: Value, right: Value) -> Result<Value, (Value, Value)> {
     if !(matches!(left, Value::String(_)) || matches!(right, Value::String(_)))
         || !is_plain_primitive(&left)
         || !is_plain_primitive(&right)

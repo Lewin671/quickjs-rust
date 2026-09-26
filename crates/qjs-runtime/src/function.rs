@@ -4,6 +4,7 @@ mod call_frame;
 mod env;
 mod eval_cache;
 mod install;
+mod intrinsic_construct;
 mod local_names;
 mod native_kind;
 mod prototype;
@@ -40,6 +41,7 @@ pub(crate) use call::{
     initialize_instance_fields, is_direct_construct_class, is_direct_leaf_function,
     try_construct_direct_leaf_function,
 };
+pub(crate) use intrinsic_construct::construct_intrinsic_directly;
 pub(crate) fn is_call_frame_binding(name: &str) -> bool {
     matches!(
         name,

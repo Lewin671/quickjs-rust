@@ -222,7 +222,9 @@ pub(crate) fn to_primitive_with_hint(
     if !is_object_like(&value) {
         return Ok(value);
     }
-    if let Some(symbol) = symbol::to_primitive_symbol(env) {
+    if let Some(symbol) = symbol::to_primitive_symbol(env)
+        && !ordinary_chain_lacks_symbol(&value, &symbol)
+    {
         let method = property_value_key(value.clone(), &PropertyKey::Symbol(symbol), env)?;
         if !matches!(method, Value::Undefined | Value::Null) {
             if !is_callable(&method) {
@@ -248,6 +250,26 @@ pub(crate) fn to_primitive_with_hint(
         }
     }
     ordinary_to_primitive(value, hint, env)
+}
+
+/// Whether an ordinary object and every object on its prototype chain lack
+/// an own `symbol` property, so reading it is `undefined` without running
+/// code. `false` as soon as the chain leaves ordinary objects.
+fn ordinary_chain_lacks_symbol(value: &Value, symbol: &crate::ObjectRef) -> bool {
+    let Value::Object(object) = value else {
+        return false;
+    };
+    let mut current = object.clone();
+    loop {
+        if current.own_symbol_property(symbol).is_some() {
+            return false;
+        }
+        match current.prototype_slot() {
+            None => return true,
+            Some(crate::Prototype::Object(next)) => current = next,
+            Some(_) => return false,
+        }
+    }
 }
 
 pub(crate) fn ordinary_to_primitive(
@@ -307,7 +329,7 @@ fn intrinsic_string_wrapper_primitive(
         PreferredType::String => "toString",
         PreferredType::Number | PreferredType::Default => "valueOf",
     };
-    if object.own_property(first).is_some() {
+    if object.has_own_property(first) {
         return None;
     }
     let method = object.ordinary_prototype()?.own_property(first)?;

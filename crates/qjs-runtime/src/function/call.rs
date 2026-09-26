@@ -843,6 +843,13 @@ pub(crate) fn construct_function(
         };
         return construct_function(real_target, forwarded_new_target, combined_arguments, env);
     }
+    if let Value::Function(function) = &target
+        && function.native.is_some()
+        && target.same_value(&new_target)
+        && let Some(result) = super::construct_intrinsic_directly(function, &argument_values, env)
+    {
+        return result;
+    }
     ensure_constructor(&target)?;
     ensure_constructor(&new_target)?;
 

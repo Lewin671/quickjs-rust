@@ -342,6 +342,45 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   0.88, fannkuch 0.92. Liveness counts a site's entries only where an
   operation can stop. Differential fuzz (600 random loops with type
   changes mid-loop) matches the pass-off build and V8.
+- perf25 units (4d19c880..130c27c6, branch agent/perf-23): found by
+  splitting each slow case into micro pieces and comparing each against
+  QuickJS-NG by the N-versus-2N instruction and cycle delta. A regex literal
+  builds its object directly (`new RegExp(string, string)` with `new.target`
+  the constructor: 9455 -> 3301 instructions per literal, NG 1723); `new
+  String(x)` likewise (`function::construct_intrinsic_directly`); ToPrimitive
+  skips the `@@toPrimitive` walk on an ordinary chain that lacks it, and the
+  generic `+` joins primitives in place; a Date method reads its time value
+  once; a closure created by direct-eval code that resolves none of the
+  eval scope's names by name drops that scope (`closure_needs_dynamic_scope`
+  -- the fork only that code writes, so nothing can appear later), which
+  puts xparb's format functions on the direct path; `x == null` in the wide
+  tier's conditional jump without the general operator (binary-trees
+  0.968). Typed loops compare against string literals without unboxing.
+- Stack run e34c35b4 vs main 5110c210 (30 blocks, cycles, same host with
+  a transient foreign `qjs` process; `target/comparison/perf23-e34c35b4-30b`):
+  external geomean **0.990** against main and **0.756 against
+  QuickJS-NG**; xparb **0.677** (1.46 -> 1.016 against NG), validate-input
+  0.928, binary-trees 0.968, ai-astar 0.974. Worst: crypto-md5 1.042 at
+  identical instructions -- the null case added to
+  `operations::eval_binary_without_env` re-partitioned codegen units and
+  re-rolled the wide dispatch loop (176 bytes smaller). Moved into a
+  wide-only out-of-line helper in 130c27c6: md5 1.005 against main by
+  min-of-15 alternation, sentinels and canaries flat (screen, not a
+  formal run). `compact_fn::numeric_plan::run` pinned as well.
+- Rejected (2026-09-26): typed-loop inherited reads remembered by value for
+  a dynamic-storage prototype (`Date.prototype`): prototype_method_call
+  +1.25% instructions, ai-astar +3% cycles, xparb gained the same without
+  it. Patch /tmp/tl-inherited.patch. Re-tried the incremental deopt overlay
+  (already rejected 2026-09-25): the memo already hits; the per-closure walk
+  is the cost. A discarded-value `x++` statement form in the compiler: the
+  loop-plan matchers (control, numeric, mutation, predicate scan, virtual
+  object) key on the six-op postfix statement shape, and the wide lowering
+  already folds it where a `Pop` follows.
+- Measured (2026-09-26, instructions per operation against QuickJS-NG,
+  wide tier): method call `l.g()` 728 vs 343, own read `l.item` ~180 vs 22,
+  `if (l === l) n++` 309 vs 132 (the `if` join keeps the postfix copy);
+  calls to constant-return functions look at parity only because they are
+  closed-form leaves. Date getters run 2x faster than NG's.
 - perf24 units (30a93030..7d18c3ff): a numeric helper may call another
   helper of its graph (itself included) when its arguments are proven
   numbers -- arguments copied to contiguous registers above the body's, the
@@ -522,9 +561,12 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   eval's environment (`apply_call_env`, `visible_local_entries`) and
   closure creation, not the overlay.
 
-- Math.random from interpreted code costs 840 cycles per call (5.7x NG):
-  the call runs through the generic path because the typed loop cannot
-  call a stateful native.
+- tofte (1.43 against NG): a formatDate call's fixed cost is 55k cycles
+  against 30k -- 26% is the deopt-overlay walk over the frame's 45 locals
+  for each of its 28 closures, 20% frame setup, 12% creating the closures.
+- The wide tier's per-operation cost (2-3x QuickJS-NG: method call, own
+  and prototype reads) is now the common factor of hash-map, cdjs,
+  3d-raytrace, binary-trees and raytrace-class-fields.
 
 - Admit bodies with a parameter prologue (default values) once their dead-zone
   behaviour is covered; CF traces count 179k general frames for them.

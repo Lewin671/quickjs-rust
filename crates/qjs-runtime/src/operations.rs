@@ -62,6 +62,10 @@ pub(crate) fn eval_binary(
         BinaryOp::Add => {
             let left = to_primitive_with_env(left, env)?;
             let right = to_primitive_with_env(right, env)?;
+            let (left, right) = match crate::bytecode::concat_primitives(left, right) {
+                Ok(concatenated) => return Ok(concatenated),
+                Err(operands) => operands,
+            };
             if matches!(left, Value::String(_)) || matches!(right, Value::String(_)) {
                 // Reuse the left operand's allocation rather than building a
                 // fresh `len(left) + len(right)` buffer each time. This turns a
