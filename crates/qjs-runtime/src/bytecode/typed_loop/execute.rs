@@ -1224,6 +1224,27 @@ fn get_named_object(
             return Some(value);
         }
     }
+    // The executor's inline read only takes a number from small storage: a
+    // dynamic-storage receiver (a constructor's twelfth property on) arrives
+    // here with the site's slot still valid, and re-resolving the name each
+    // time was a hash lookup per read (audio-dft +3% instructions). After
+    // the shapes: checked first, a polymorphic site's small-storage misses
+    // paid for it (heterogeneous_property_read +6% cycles).
+    if let Some((key, slot)) = shapes.slot.as_ref()
+        && let Some(value) = object.shared_dynamic_slot_value(key, *slot)
+    {
+        return Some(value);
+    }
+    // A method call site that resolved on the prototype before: one own
+    // lookup proves the receiver still does not shadow it, where the
+    // resolutions below scanned its properties three times for the same
+    // miss (prototype_method_call).
+    if let Some(inherited) = shapes.inherited()
+        && let crate::value::OwnDataPropertyRead::Missing = object.own_data_property_read(name)
+        && let Some(value) = inherited.read(object)
+    {
+        return Some(value);
+    }
     if let Some((key, slot)) = object.shared_data_slot(name)
         && let Some(value) = object.shared_data_slot_value(&key, slot)
     {
@@ -1243,9 +1264,15 @@ fn get_named_object(
     }
     // Dynamic own storage has no slot to remember, so remember the value
     // against this exact receiver and its revision instead.
-    if let crate::value::OwnDataPropertyRead::Data(value) = object.own_data_property_read(name) {
-        shapes.record_exact(object, value.clone());
-        return Some(value);
+    match object.own_data_property_read(name) {
+        crate::value::OwnDataPropertyRead::Data(value) => {
+            shapes.record_exact(object, value.clone());
+            return Some(value);
+        }
+        // An own accessor (or exotic storage) shadows whatever the prototype
+        // holds; reading the remembered inherited value past it was wrong.
+        crate::value::OwnDataPropertyRead::NeedsSlowPath => return None,
+        crate::value::OwnDataPropertyRead::Missing => {}
     }
     // The name is not an own property. A method call site reads its callee
     // from the prototype every iteration, so remember where it resolved:

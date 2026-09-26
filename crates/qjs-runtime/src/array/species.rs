@@ -54,7 +54,7 @@ pub(super) fn array_species_create(
 /// whose own `@@species` is the intrinsic getter returning Array itself.
 /// Constructing the intrinsic with a length makes the same fresh array the
 /// default creation does. Anything else takes the observable lookups.
-fn species_is_intrinsic_array(array: &ArrayRef, env: &CallEnv) -> bool {
+pub(super) fn species_is_intrinsic_array(array: &ArrayRef, env: &CallEnv) -> bool {
     if !array.has_no_own_named_properties()
         || env.array_prototype_intrinsic_override().is_some()
         || env.has_dynamic_function_realm_global()

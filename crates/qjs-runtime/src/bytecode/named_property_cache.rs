@@ -218,9 +218,39 @@ impl NamedPropertyCache {
     pub(super) fn probe(&self, object: &ObjectRef) -> CacheProbe {
         let state = self.0.borrow();
         let mut candidate = None;
-        for (index, entry) in state.entries.iter().enumerate() {
-            let Some(entry) = entry else {
-                continue;
+        // Unrolled by hand: whether LLVM unrolled the walk varied from build
+        // to build with unrelated code (1792 or 1392 bytes), and the rolled
+        // loop cost call-heavy property workloads 2-4% (crypto-md5, cdjs).
+        const _: () = assert!(POLYMORPHIC_CACHE_SLOTS == 4);
+        macro_rules! probe_entry {
+            ($index:expr) => {
+                if let Some(found) = Self::probe_entry(&state, $index, object, &mut candidate) {
+                    return found;
+                }
+            };
+        }
+        probe_entry!(0);
+        probe_entry!(1);
+        probe_entry!(2);
+        probe_entry!(3);
+        match candidate {
+            Some((holder, slot)) => CacheProbe::PrototypeCandidate { holder, slot },
+            None => CacheProbe::Miss,
+        }
+    }
+
+    /// One entry of `probe`'s walk: an own hit answers the probe, a
+    /// prototype entry that matches becomes the candidate.
+    #[inline(always)]
+    fn probe_entry(
+        state: &NamedPropertyCacheState,
+        index: usize,
+        object: &ObjectRef,
+        candidate: &mut Option<(ObjectRef, usize)>,
+    ) -> Option<CacheProbe> {
+        {
+            let Some(entry) = &state.entries[index] else {
+                return None;
             };
             if let NamedPropertyCacheEntry::GrandprototypeSlot {
                 parent,
@@ -235,10 +265,10 @@ impl NamedPropertyCache {
                         grandprototype(object, parent, *parent_layout_revision, holder)
                     && *holder_layout_revision == holder.layout_revision()
                 {
-                    candidate = Some((holder, *slot));
+                    *candidate = Some((holder, *slot));
                     state.hot.set(index as u8);
                 }
-                continue;
+                return None;
             }
             if let NamedPropertyCacheEntry::PrototypeSlot {
                 holder,
@@ -255,19 +285,14 @@ impl NamedPropertyCache {
                     && let Some(holder) = holder.upgrade()
                     && *holder_layout_revision == holder.layout_revision()
                 {
-                    candidate = Some((holder, *slot));
+                    *candidate = Some((holder, *slot));
                     state.hot.set(index as u8);
                 }
-                continue;
+                return None;
             }
-            if let Some(value) = Self::read_entry(entry, object) {
-                state.hot.set(index as u8);
-                return CacheProbe::Own(value);
-            }
-        }
-        match candidate {
-            Some((holder, slot)) => CacheProbe::PrototypeCandidate { holder, slot },
-            None => CacheProbe::Miss,
+            let value = Self::read_entry(entry, object)?;
+            state.hot.set(index as u8);
+            Some(CacheProbe::Own(value))
         }
     }
 

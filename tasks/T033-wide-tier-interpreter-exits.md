@@ -311,6 +311,49 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   validate-input 0.977). Also pinned `run<Vm>` (see
   docs/performance-knowledge.md): unpinned, an unrelated edit cost
   math-partial-sums 4.7%. Corpus screen 0.993 single-run.
+- perf21 units (c096993c..e73471e6): a cached direct eval that writes and
+  deletes no binding skips the caller's frame write-back (apply_env, 8% of
+  date-format-tofte; tofte 0.917); run<Vm> pinned ahead of the wide
+  executor (behind the callees it drifted with every change to the number
+  of per-CGU `Value::clone` copies); dynamic-storage objects (a
+  constructor's twelfth property on) read and written by shared slot
+  (3d-raytrace's triangles thrashed per-object entries: 0.899), except in
+  the typed executor's inlined number arms (access-nbody +7% instructions).
+- Rejected (2026-09-25): incremental deopt-bindings overlay (only overlay
+  cells from the first difference): tofte 1.019 -- the cost is the walk
+  over the frame's locals per closure, not the hashing. `Value::clone_inline`
+  (object/function/array/string arms expanded at register moves, upvalue and
+  slot reads): tree walk 0.967 but 3d-raytrace 1.029, md5 1.056, instructions
+  up 1-2%. Call path attribution (helpers forced out of line, wcall_e): run
+  58%, Value::clone 20%, clear_window 6%, entry helpers 8% -- a trivial wide
+  call+return is ~790 instructions against QuickJS-NG's ~340.
+- perf22 units (76cc36cf..88e90f89): layout slots -- the executor and
+  each pinned callee own a fixed-size slot padded with std filler, so a
+  callee growing inside it moves nothing (identical-instruction swings had
+  been churn 22%, hetero 4%); typed `get_named_object` reads a
+  dynamic-storage receiver through the site's shared slot (audio-dft -8%
+  instructions); a repeated prototype read proves the own miss with one
+  lookup (prototype_method_call 0.93); dense `splice` in place
+  (stanford-crypto-sha256 -26%, pbkdf2 -15%); and `typed_loop/forward.rs`,
+  copy forwarding over the final typed program -- a copy's reader takes
+  the source (site entries rewritten with it), a stored result is computed
+  into the local, `ToNumeric` ahead of `Update` goes: findGraphNode 13 -> 7
+  operations per iteration, ai-astar 0.78 then 0.82 again on top, nsieve
+  0.88, fannkuch 0.92. Liveness counts a site's entries only where an
+  operation can stop. Differential fuzz (600 random loops with type
+  changes mid-loop) matches the pass-off build and V8.
+- Stack run 88e90f89 vs main 8d7c580e (30 blocks, cycles, quiet host;
+  `target/comparison/perf22-88e90f89`): perf21's and perf22's units.
+  External geomean **0.962** against main and **0.782 against
+  QuickJS-NG**; ai-astar 0.648, stanford-crypto-sha256 0.716, pbkdf2 0.863,
+  audio-dft 0.864, nsieve 0.873. Sentinels 0.947 against main, 0.938
+  against QuickJS-NG (recursive_call_tree 1.21 the one clearly behind).
+  Worst against main: crypto-md5 1.038, raytrace-class-fields 1.026, cdjs
+  1.022, binary-trees 1.019 at equal instructions -- `NamedPropertyCache::
+  probe` had come out rolled (1392 bytes, 1792 unrolled); unrolled by hand
+  in 4e77b832, those read 0.996-1.001 against main. Slowest against
+  QuickJS-NG: xparb 1.49, tofte 1.42, binary-trees 1.34, cdjs 1.34,
+  3d-raytrace 1.33, tagcloud 1.32, validate-input 1.31, hash-map 1.31.
 - Stack run 0f6349a2 vs main 553d0ba4 (30 blocks, cycles, quiet host;
   `target/comparison/perf20-0f6349a2`): the units above. External geomean
   0.995 against main and **0.797 against QuickJS-NG**; validate-input
@@ -428,6 +471,10 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   and `Object.assign` on the global object update it; and a `var` declared
   by a direct eval in a sloppy function shadows the global for the
   function's later assignments (they wrote the global before).
+
+- Fixed in de8accb1 (predated this task): a typed-loop named read took an
+  own accessor for a miss and returned the prototype's remembered value, so
+  `ps[5].get()` called the prototype method past an own getter.
 
 ## Next
 

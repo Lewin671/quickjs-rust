@@ -18,9 +18,9 @@ position fast for the call sentinels and ai-astar was 5% slow for
 imaging-desaturate.
 
 This rewrites the head of an order file to: standard-library functions whose
-total size moves the executor to the chosen offset, the executor, its
-callees, more filler and the interpreter's instantiation of the executor
-(`run<Vm>`) at its own offset, then the rest of the list unchanged. The filler functions are
+total size moves the interpreter's instantiation of the executor
+(`run<Vm>`) to its offset, more filler, the wide executor at its offset
+and its callees, then the rest of the list unchanged. The filler functions are
 precompiled into the standard library, so their sizes do not change with
 this repository's code, and nothing listed before the executor does either:
 its address is then fixed until the toolchain or the executor itself
@@ -41,7 +41,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ORDER = ROOT / "crates/qjs-cli/hot-functions.order"
 DEFAULT_OFFSET = 0x0
 # The same executor instantiated for the interpreter's own loops -- a
-# script's top-level `for` -- is pinned too, after its wide twin's group:
+# script's top-level `for` -- is pinned too, ahead of its wide twin:
 # it is most of access-fannkuch and math-partial-sums, and floating in the
 # unordered tail it moved with every edit (partial-sums +4.7% from one).
 VM_EXECUTOR = re.compile(r"typed_loop7execute3runNtNtB6_2vm2Vm")
@@ -63,11 +63,30 @@ CALLEES = (
     "ArrayRef24direct_dense_index_value",
     "typed_loop7execute9call_leaf",
     "vm_numeric_leaf21try_eval_numeric_leaf",
-    "5valueNtB5_5ValueNtNtCsl8K0bEFm1U0_4core5clone5Clone5clone",
-    "core3ptr13drop_in_placeNtNtCs9nYd1Hk1rek_11qjs_runtime5value5ValueEBK_",
     "ArrayData21has_property_at_index",
     "vm_numeric_leaf20direct_number_binary",
+    "typed_loop7execute22ordinary_data_property",
+    "slot_readsNtB4_9ObjectRef22own_data_property_read",
+    "ObjectRef32write_existing_own_data_property",
+    "typed_loop7execute16boxed_truthiness",
 )
+# After the budgeted callees: defined once per codegen unit, in a number of
+# copies that changes with unrelated code, so nothing pinned may follow them.
+TAIL_CALLEES = (
+    "5valueNtB5_5ValueNtNtCsl8K0bEFm1U0_4core5clone5Clone5clone",
+    "core3ptr13drop_in_placeNtNtCs9nYd1Hk1rek_11qjs_runtime5value5ValueEBK_",
+)
+# The executor and each callee above own a fixed-size slot, the rest of it
+# standard-library filler, so a function that grows inside its slot moves
+# nothing after it. Without slots, get_named_object growing 176 bytes cost
+# heterogeneous_property_read 4% and an unpinned property helper moving cost
+# string_key_map_churn 22%, both at identical instruction counts. Slot sizes
+# persist in the order file (`# budget`) and are only re-derived, with
+# SLOT_HEADROOM to spare, for a function that outgrew its slot -- which moves
+# everything after it: re-scan then.
+SLOT_GRANULE = 0x100
+SLOT_HEADROOM = 0x100
+_BUDGET = re.compile(r"^# budget (0x[0-9a-f]+) (\S+)$")
 _STD = "Csg55jX0GwzBC_3std"
 
 
@@ -117,16 +136,27 @@ def filler(sizes: dict[str, int], counts: dict[str, int], length: int,
 
 
 def pin(lines: list[str], start: int, sizes: dict[str, int], counts: dict[str, int],
-        offset: int, vm_offset: int | None = None) -> list[str]:
+        offset: int, vm_offset: int | None = None,
+        budgets: dict[str, int] | None = None) -> list[str]:
     """`lines` (symbols, no comments) with the executor pinned at `offset`
     and, given `vm_offset`, its interpreter instantiation at that one."""
-    head = pin_head(lines, start, sizes, counts, offset, vm_offset)
+    head = pin_head(lines, start, sizes, counts, offset, vm_offset, budgets)
     return head + [line for line in lines if line not in head]
 
 
+def slot_budget(size: int, previous: int | None) -> int:
+    """A pinned function's slot: the recorded one while the function fits."""
+    if previous is not None and size <= previous:
+        return previous
+    return -(-size // SLOT_GRANULE) * SLOT_GRANULE + SLOT_HEADROOM
+
+
 def pin_head(lines: list[str], start: int, sizes: dict[str, int], counts: dict[str, int],
-             offset: int, vm_offset: int | None = None) -> list[str]:
-    """The symbols [`pin`] puts ahead of the rest of `lines`."""
+             offset: int, vm_offset: int | None = None,
+             budgets: dict[str, int] | None = None) -> list[str]:
+    """The symbols [`pin`] puts ahead of the rest of `lines`. Given
+    `budgets` (updated in place), the executor and each budgeted callee are
+    followed by filler up to their slot size."""
     executor = None
     for pattern in EXECUTORS:
         executor = next((name for name in sorted(sizes) if pattern.search(name)), None)
@@ -139,21 +169,33 @@ def pin_head(lines: list[str], start: int, sizes: dict[str, int], counts: dict[s
     for suffix in CALLEES:
         callees += [name for name in known
                     if name.endswith(suffix) and name not in callees and name != executor]
+    tail = []
+    for suffix in TAIL_CALLEES:
+        tail += [name for name in known
+                 if name.endswith(suffix) and name not in callees + tail and name != executor]
     listed = set(lines)
-    length = (offset - start) % PAGE
-    padding = filler(sizes, counts, length, listed)
-    head = padding + [executor] + callees
+    head: list[str] = []
+    position = start
     vm_executor = next((name for name in sorted(sizes) if VM_EXECUTOR.search(name)), None)
-    if vm_offset is not None and vm_executor is not None and vm_executor not in head:
-        # Sizes are distances to the next symbol, all 16-byte aligned, so the
-        # group's end does not depend on where the current binary put it. A
-        # name defined once per codegen unit (`Value::clone`) places every
-        # copy; they are the same instantiation, so the same size.
-        end = start + length + sum(sizes.get(name, 0) * counts.get(name, 1)
-                                   for name in [executor] + callees)
-        head += filler(sizes, counts, (vm_offset - end) % PAGE, listed | set(head))
+    if vm_offset is not None and vm_executor is not None and vm_executor != executor:
+        # The interpreter's twin goes first, so nothing whose size moves with
+        # ordinary edits -- the callees below, some defined once per codegen
+        # unit (`Value::clone`) in a number of copies that changes with
+        # unrelated code -- is ahead of either executor. Sizes are distances
+        # to the next symbol, all 16-byte aligned, so they do not depend on
+        # where the current binary put each function.
+        head += filler(sizes, counts, (vm_offset - position) % PAGE, listed | set(head))
+        position += (vm_offset - position) % PAGE
         head.append(vm_executor)
-    return head
+        position += sizes.get(vm_executor, 0)
+    head += filler(sizes, counts, (offset - position) % PAGE, listed | set(head))
+    for name in [executor] + callees:
+        head.append(name)
+        if budgets is None or name not in sizes:
+            continue
+        budgets[name] = slot_budget(sizes[name], budgets.get(name))
+        head += filler(sizes, counts, budgets[name] - sizes[name], listed | set(head))
+    return head + tail
 
 
 _PIN_HEADER = re.compile(r"^# pinned: .* (?:filler|head) (\d+)")
@@ -169,11 +211,16 @@ def pin_order_file(order: Path, binary: Path, offset: int = DEFAULT_OFFSET,
     for line in text:
         if match := _PIN_HEADER.match(line):
             previous = int(match.group(1))
-    header = [line for line in text if line.startswith("#") and not _PIN_HEADER.match(line)]
+    budgets = {match.group(2): int(match.group(1), 16)
+               for line in text if (match := _BUDGET.match(line))}
+    header = [line for line in text if line.startswith("#")
+              and not _PIN_HEADER.match(line) and not _BUDGET.match(line)]
     symbols = [line for line in text if line and not line.startswith("#")][previous:]
     start, sizes, counts = text_symbols(binary)
-    head = pin_head(symbols, start, sizes, counts, offset, vm_offset)
+    head = pin_head(symbols, start, sizes, counts, offset, vm_offset, budgets)
     pinned = head + [line for line in symbols if line not in head]
+    header += [f"# budget {size:#x} {name}" for name, size in budgets.items()
+               if name in head]
     vm = f", interpreter's at {vm_offset:#x}" if vm_offset is not None else ""
     header.append(f"# pinned: typed-loop executor at {offset:#x}{vm} mod 4 KiB "
                   f"(python3 -m tools.benchmark.layout_pin), head {len(head)}")

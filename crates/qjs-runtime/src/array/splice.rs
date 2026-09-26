@@ -16,6 +16,11 @@ pub(crate) fn native_array_prototype_splice(
     if matches!(this_value, Value::String(_)) {
         return Err(splice_length_error());
     }
+    if let Value::Array(array) = &this_value
+        && let Some(removed) = splice_plain_dense(array, argument_values, env)
+    {
+        return Ok(removed);
+    }
 
     let source = array_like_length(this_value, "Array.prototype.splice", env)?;
     let receiver = source.receiver;
@@ -55,6 +60,49 @@ pub(crate) fn native_array_prototype_splice(
         env,
     )?;
     Ok(removed)
+}
+
+/// `splice` as one `Vec::splice` on an array nothing can observe being
+/// edited in place (`with_plain_dense_mutation`), whose species is the
+/// intrinsic Array and whose position arguments are already numbers, so no
+/// coercion runs user code between reading the length and moving elements.
+/// The specified algorithm formats every moved index into a string key:
+/// SJCL's `b.splice(0, 16)` per hashed block made stanford-crypto-sha256
+/// spend a third of its time there.
+fn splice_plain_dense(
+    array: &crate::ArrayRef,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Option<Value> {
+    if !argument_values
+        .iter()
+        .take(2)
+        .all(|value| matches!(value, Value::Number(_) | Value::Undefined))
+        || !super::species::species_is_intrinsic_array(array, env)
+    {
+        return None;
+    }
+    let length = array.len();
+    let start = splice_start_with_env(
+        length,
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )
+    .ok()?;
+    let delete_count = splice_delete_count(length, start, argument_values, env).ok()?;
+    let items = argument_values.get(2..).unwrap_or(&[]);
+    let removed = array.with_plain_dense_mutation(
+        env,
+        items.len().saturating_sub(delete_count),
+        |elements| {
+            (elements.len() == length).then(|| {
+                elements
+                    .splice(start..start + delete_count, items.iter().cloned())
+                    .collect::<Vec<_>>()
+            })
+        },
+    )??;
+    Some(Value::Array(crate::ArrayRef::new(removed)))
 }
 
 pub(super) fn splice_start_with_env(

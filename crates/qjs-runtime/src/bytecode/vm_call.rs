@@ -129,11 +129,15 @@ impl Vm<'_> {
     /// while nested eval and `with` can discover names after this outer
     /// bytecode was compiled.  Parameter initializers are kept conservative
     /// for their distinct eval environment as well.
+    ///
+    /// The flag is true when the eval writes and deletes no binding: nothing
+    /// in the returned environment then differs from the caller's frame after
+    /// it runs, and the write-back can be skipped.
     fn cached_direct_eval_call_env(
         &self,
         source: &crate::JsString,
         direct_eval_strict: bool,
-    ) -> Option<CallEnv> {
+    ) -> Option<(CallEnv, bool)> {
         if self.bytecode.contains_with()
             || self.in_parameter_prologue()
             || !self.with_stack().is_empty()
@@ -163,7 +167,10 @@ impl Vm<'_> {
             return None;
         }
 
-        Some(self.selected_direct_eval_call_env(&bytecode))
+        Some((
+            self.selected_direct_eval_call_env(&bytecode),
+            !bytecode.writes_bindings(),
+        ))
     }
 
     /// Builds the ordinary direct-eval base context, then overlays only
@@ -317,13 +324,17 @@ impl Vm<'_> {
         // eval call needs the active frame's dynamic-name view.
         let frame_independent_native = !effective_direct_eval
             && matches!(&callee, Value::Function(function) if function.native.is_some());
+        let mut read_only_eval = false;
         let mut env = if effective_direct_eval {
             let mut env = match arguments.first() {
                 Some(Value::String(source)) => self
                     .cached_direct_eval_call_env(source, direct_eval_strict)
-                    .map(|env| VmCallEnv {
-                        env,
-                        origin: VmCallEnvOrigin::DirectEval,
+                    .map(|(env, read_only)| {
+                        read_only_eval = read_only;
+                        VmCallEnv {
+                            env,
+                            origin: VmCallEnvOrigin::DirectEval,
+                        }
                     })
                     .unwrap_or_else(|| self.call_env(&callee)),
                 _ => self.call_env(&callee),
@@ -375,7 +386,15 @@ impl Vm<'_> {
         env.env
             .remove(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING);
         env.env.set_direct_eval_with_stack(Vec::new());
-        self.apply_call_env(env);
+        if read_only_eval {
+            // The environment holds the caller's own values and cells, none
+            // written: writing it back would store each value where it came
+            // from. A realm write the eval made (through a function it
+            // called) still reaches the realm-backed slots.
+            self.refresh_realm_backed_locals_from_realm();
+        } else {
+            self.apply_call_env(env);
+        }
         if let Some(snapshot) = dynamic_realm_snapshot {
             self.restore_marked_dynamic_realm(snapshot);
         }

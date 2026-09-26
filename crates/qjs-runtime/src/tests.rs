@@ -16,6 +16,7 @@ mod date_format;
 mod date_setters;
 mod diagnostics;
 mod direct_construct;
+mod direct_eval;
 mod disposable_stacks;
 mod errors;
 mod expressions;
