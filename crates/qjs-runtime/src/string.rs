@@ -224,6 +224,13 @@ pub(crate) fn string_from_code_units(code_units: &[u16]) -> String {
 }
 
 pub(crate) fn string_from_utf8_scalars(value: &str) -> String {
+    // Only a scalar at or above U+10000 -- four UTF-8 bytes, led by 0xF0 or
+    // above -- can fall in the surrogate-escape sentinel range; text without
+    // one is already canonical. Function source text is converted this way
+    // for every function a script declares, nested ones included.
+    if value.bytes().all(|byte| byte < 0xF0) {
+        return value.to_owned();
+    }
     let mut result = String::with_capacity(value.len());
     for character in value.chars() {
         push_code_point(&mut result, character as u32);
