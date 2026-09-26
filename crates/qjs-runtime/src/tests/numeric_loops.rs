@@ -443,3 +443,38 @@ out.join(',');"#;
         ))
     );
 }
+
+/// A number-only helper takes a boolean or `undefined` argument by
+/// `ToNumber` when every parameter reaches its result through an operator
+/// (`safe_add(s, w[j])` past the end of `w`), and never when one is
+/// returned as passed (`id`, `keep`). Expected values from V8.
+#[test]
+fn number_only_helpers_convert_arguments_only_through_operators() {
+    let source = r#"function safe_add(x, y) { var lsw = (x & 0xFFFF) + (y & 0xFFFF); var msw = (x >> 16) + (y >> 16) + (lsw >> 16); return (msw << 16) | (lsw & 0xFFFF); }
+function id(x) { return x; }
+function keep(x) { var y = x; return y; }
+function plus(x, y) { return x + y; }
+function run(n) {
+  var w = [1, 2, 3], out = [], s = 0;
+  for (var j = 0; j < n; j++) { s = safe_add(s, w[j]); }
+  out.push(s);
+  var r = []; for (var j = 0; j < 4; j++) r.push(String(id(w[j])));
+  out.push(r.join('/'));
+  r = []; for (var j = 0; j < 4; j++) r.push(String(keep(w[j])));
+  out.push(r.join('/'));
+  r = []; for (var j = 0; j < 4; j++) r.push(String(plus(w[j], 1)));
+  out.push(r.join('/'));
+  var b = [true, false, undefined, 2]; s = 0;
+  for (var j = 0; j < 4; j++) s = safe_add(s, b[j]); out.push(s);
+  return out.join(',');
+}
+run(6);"#;
+    assert_eq!(
+        eval(source),
+        Ok(Value::String(
+            "6,1/2/3/undefined,1/2/3/undefined,2/3/4/NaN,3"
+                .to_owned()
+                .into()
+        ))
+    );
+}
