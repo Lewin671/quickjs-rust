@@ -7,8 +7,13 @@
 //! overwritten, a decrement. This pass lets the consumer read the source
 //! register itself and deletes copies whose destination is then dead.
 //!
-//! A copy's destination is a stack register only (locals, globals,
-//! constants and hoisted reads are `pinned`). What makes forwarding sound is
+//! The same holds the other way round -- `s = s + i` computes into a stack
+//! register and copies it into the local, so the producing operation writes
+//! the local itself -- and for the `ToNumeric` that every `i++` puts ahead of
+//! its `Update`, which converts its operand again.
+//!
+//! A forwarded copy's destination is a stack register only (locals,
+//! globals, constants and hoisted reads are `pinned`). What makes forwarding sound is
 //! the deoptimization protocol: a stopped operation rebuilds the operand
 //! stack from the registers its site names, so the consumer's site entries
 //! are rewritten with its operands, and a copy is deleted only when a
@@ -93,28 +98,43 @@ pub(super) fn forward_copies(
     if std::env::var_os("QJS_TL_NO_FORWARD").is_some() {
         return;
     }
-    while let Some((index, rewrite)) = next_removable_copy(ops, sites, site_entries, pinned) {
-        if let Some(rewrite) = rewrite {
-            rewrite.apply(ops, site_entries);
+    while let Some((index, edit)) = next_removable_copy(ops, sites, site_entries, pinned) {
+        match edit {
+            Edit::Delete => {}
+            Edit::Forward(rewrite) => rewrite.apply(ops, site_entries),
+            Edit::Retarget { producer, to } => rewrite_def(&mut ops[producer], to),
         }
         remove(ops, sites, index);
     }
 }
 
-/// A consumer that reads `from` instead of `to`, and its site's entries.
+/// What deleting a copy takes besides the deletion.
+enum Edit {
+    /// Nothing: its destination is dead.
+    Delete,
+    /// Its reader reads the source.
+    Forward(Rewrite),
+    /// The operation producing its source writes the destination instead.
+    Retarget { producer: usize, to: u16 },
+}
+
+/// A consumer that reads `to` instead of `from`, and the site entries of
+/// every instruction from the copy to the consumer's.
 struct Rewrite {
     consumer: usize,
     from: Register,
     to: u16,
-    entries: std::ops::Range<usize>,
+    entries: Vec<std::ops::Range<usize>>,
 }
 
 impl Rewrite {
     fn apply(&self, ops: &mut [TypedOp], site_entries: &mut [(Class, u16)]) {
         rewrite_uses(&mut ops[self.consumer], self.from, self.to);
-        for entry in &mut site_entries[self.entries.clone()] {
-            if register(entry.0, entry.1) == self.from {
-                entry.1 = self.to;
+        for range in &self.entries {
+            for entry in &mut site_entries[range.clone()] {
+                if register(entry.0, entry.1) == self.from {
+                    entry.1 = self.to;
+                }
             }
         }
     }
@@ -125,20 +145,48 @@ fn next_removable_copy(
     sites: &[DeoptSite],
     site_entries: &[(Class, u16)],
     pinned: &BTreeSet<Register>,
-) -> Option<(usize, Option<Rewrite>)> {
+) -> Option<(usize, Edit)> {
     let live_out = liveness(ops, sites, site_entries);
     let targets = jump_targets(ops);
     for (index, op) in ops.iter().enumerate() {
-        let (destination, source) = match *op {
-            TypedOp::Move { dst, src } => ((false, dst), src),
-            TypedOp::MoveBoxed { dst, src } => ((true, dst), src),
+        let (destination, source, numeric) = match *op {
+            TypedOp::Move { dst, src } => ((false, dst), src, false),
+            TypedOp::MoveBoxed { dst, src } => ((true, dst), src, false),
+            // `to_numeric` of a register value has no effect but its
+            // result, and an `Update` applies it again itself: the
+            // `ToNumeric; Update` pair every `i++` compiles to needs only
+            // the second.
+            TypedOp::ToNumeric { dst, src } => ((false, dst), src, true),
             _ => continue,
         };
-        if pinned.contains(&destination) || destination.1 == source {
+        if destination.1 == source {
+            continue;
+        }
+        if !numeric
+            && let Some(producer) = retarget(
+                ops,
+                sites,
+                &targets,
+                &live_out,
+                pinned,
+                index,
+                destination,
+                source,
+            )
+        {
+            return Some((
+                index,
+                Edit::Retarget {
+                    producer,
+                    to: destination.1,
+                },
+            ));
+        }
+        if pinned.contains(&destination) {
             continue;
         }
         if !live_out[index].contains(destination) {
-            return Some((index, None));
+            return Some((index, Edit::Delete));
         }
         let Some((rewrite, group_end)) = forwarding(
             ops,
@@ -151,11 +199,66 @@ fn next_removable_copy(
         ) else {
             continue;
         };
+        // A converted value differs from its source, so only a consumer
+        // that converts it again, and no site entry, may read the source.
+        if numeric
+            && (!matches!(ops[rewrite.consumer], TypedOp::Update { src, .. } if src == destination.1)
+                || (ops[index + 1..=group_end].iter().any(may_stop)
+                    && rewrite.entries.iter().any(|range| {
+                        site_entries[range.clone()]
+                            .iter()
+                            .any(|&(class, index)| register(class, index) == destination)
+                    })))
+        {
+            continue;
+        }
         if dead_after_rewrite(ops, &rewrite, group_end, &live_out) {
-            return Some((index, Some(rewrite)));
+            return Some((index, Edit::Forward(rewrite)));
         }
     }
     None
+}
+
+/// The operation right before the copy at `index` whose result is the
+/// copy's source, when it can write the copy's destination itself: the
+/// source is a stack register nothing reads after the copy, the copy is its
+/// instruction's only operation (`x = expr` in a loop: the store), and
+/// control reaches the copy only from the producer. The producer writes its
+/// destination only once it has succeeded, so a deoptimizing producer still
+/// leaves the old value to be written back.
+#[allow(clippy::too_many_arguments)]
+fn retarget(
+    ops: &[TypedOp],
+    sites: &[DeoptSite],
+    targets: &BTreeSet<usize>,
+    live_out: &[Bits],
+    pinned: &BTreeSet<Register>,
+    index: usize,
+    destination: Register,
+    source: u16,
+) -> Option<usize> {
+    let source = (destination.0, source);
+    let producer = index.checked_sub(1)?;
+    if pinned.contains(&source)
+        || targets.contains(&index)
+        || live_out[index].contains(source)
+        || same_site(sites[producer], sites[index])
+        || sites
+            .iter()
+            .enumerate()
+            .any(|(at, site)| at != index && same_site(*site, sites[index]))
+    {
+        return None;
+    }
+    let (_, defs) = operands(&ops[producer]);
+    (defs == [source] && writes_last(&ops[producer])).then_some(producer)
+}
+
+/// Whether `op` writes its destination only after everything else it does
+/// has succeeded -- true of every operation with a destination except the
+/// copies themselves, whose retargeting would be pointless.
+fn writes_last(op: &TypedOp) -> bool {
+    !matches!(op, TypedOp::Move { .. } | TypedOp::MoveBoxed { .. })
 }
 
 /// Whether the copy's destination is dead once `rewrite` is applied,
@@ -192,9 +295,12 @@ fn dead_after_rewrite(
     !live_out[group_end].contains(destination)
 }
 
-/// The rewrite that lets the operation after the copy at `index` read
-/// `source` itself, when control reaches it only from the copy and nothing
-/// between the copy and each rewritten read changes `source`.
+/// The rewrite that lets the first operation after the copy at `index`
+/// that reads its destination read `source` instead, when control runs
+/// straight from the copy to that operation's instruction and nothing on
+/// the way changes `source` or the destination. The instructions passed on
+/// the way hold the copy on their operand stack as well, so their site
+/// entries are rewritten with the consumer's.
 fn forwarding(
     ops: &[TypedOp],
     sites: &[DeoptSite],
@@ -204,32 +310,41 @@ fn forwarding(
     destination: Register,
     source: u16,
 ) -> Option<(Rewrite, usize)> {
-    let consumer = index + 1;
-    if consumer >= ops.len() || targets.contains(&consumer) {
-        return None;
-    }
-    let site = sites[consumer];
-    if same_site(site, sites[index]) {
-        return None;
+    let source = (destination.0, source);
+    let mut consumer = index + 1;
+    loop {
+        let op = ops.get(consumer)?;
+        if targets.contains(&consumer) {
+            return None;
+        }
+        let (uses, defs) = operands(op);
+        if uses.contains(&destination) {
+            break;
+        }
+        if defs.contains(&destination)
+            || defs.contains(&source)
+            || matches!(
+                op,
+                TypedOp::Jump { .. }
+                    | TypedOp::JumpIfFalsy { .. }
+                    | TypedOp::Exit { .. }
+                    | TypedOp::Leave { .. }
+            )
+        {
+            return None;
+        }
+        consumer += 1;
     }
     // The consumer's instruction: the operations sharing its site, which
     // must be contiguous and reachable only through the consumer.
     let group_end = (consumer..ops.len())
-        .take_while(|&at| same_site(sites[at], site))
+        .take_while(|&at| same_site(sites[at], sites[consumer]))
         .last()?;
-    let entries = site.start as usize..site.start as usize + usize::from(site.len);
-    // Sites take consecutive entry ranges, so two share entries only when
-    // they start at the same one and neither is empty.
-    let entries_shared = sites.iter().enumerate().any(|(at, other)| {
-        !(consumer..=group_end).contains(&at) && other.start == site.start && other.len > 0
-    });
-    if !entries.is_empty() && entries_shared {
-        return None;
-    }
-    let source = (destination.0, source);
     for (at, op) in ops.iter().enumerate().take(group_end + 1).skip(consumer) {
         let (_, defs) = operands(op);
-        if defs.contains(&source) {
+        // The consumer reads before it writes; an operation after it that
+        // stopped would materialize the rewritten entries after the write.
+        if defs.contains(&source) && (at != consumer || group_end != consumer) {
             return None;
         }
         // A jump into the instruction's middle would reach its site entries
@@ -240,7 +355,42 @@ fn forwarding(
             return None;
         }
     }
-    site_entries.get(entries.clone())?;
+    // Every site from the copy to the consumer's instruction, each of whose
+    // entries must belong to operations in that stretch alone. Sites take
+    // consecutive entry ranges, so two share entries only when they start at
+    // the same one and neither is empty.
+    let window = index + 1..=group_end;
+    let mut entries: Vec<std::ops::Range<usize>> = Vec::new();
+    for at in window.clone() {
+        let site = sites[at];
+        if site.len == 0 {
+            continue;
+        }
+        let range = site.start as usize..site.start as usize + usize::from(site.len);
+        let site_registers = site_entries.get(range.clone())?;
+        // The copy's own instruction started before the copy: its entries
+        // describe the stack without it, so they are left alone -- which
+        // is only right if they do not name the destination at all.
+        if same_site(site, sites[index]) {
+            if site_registers
+                .iter()
+                .any(|&(class, register_index)| register(class, register_index) == destination)
+            {
+                return None;
+            }
+            continue;
+        }
+        if entries.contains(&range) {
+            continue;
+        }
+        let shared = sites.iter().enumerate().any(|(other, candidate)| {
+            !window.contains(&other) && candidate.start == site.start && candidate.len > 0
+        });
+        if shared {
+            return None;
+        }
+        entries.push(range);
+    }
     Some((
         Rewrite {
             consumer,
@@ -268,23 +418,41 @@ fn jump_targets(ops: &[TypedOp]) -> BTreeSet<usize> {
 }
 
 /// The registers live after each operation. A site's entries are read by
-/// the operation (a deoptimization or an exit materializes them), falling
-/// off the end continues at the first operation, and leaving reads nothing
-/// else: the frame's slots are written back from pinned registers only.
+/// an operation that can stop there (a deoptimization or an exit
+/// materializes them) and by a backward edge at its target's site (the
+/// residency bound), falling off the end continues at the first operation,
+/// and leaving reads nothing else: the frame's slots are written back from
+/// pinned registers only.
 fn liveness(ops: &[TypedOp], sites: &[DeoptSite], site_entries: &[(Class, u16)]) -> Vec<Bits> {
     let count = ops.len();
+    let entries_of = |site: DeoptSite| {
+        let start = site.start as usize;
+        let end = (start + usize::from(site.len)).min(site_entries.len());
+        site_entries[start.min(end)..end]
+            .iter()
+            .map(|&(class, index)| register(class, index))
+    };
     let reads: Vec<(Vec<Register>, Vec<Register>)> = ops
         .iter()
-        .zip(sites)
-        .map(|(op, site)| {
+        .enumerate()
+        .map(|(at, op)| {
             let (mut uses, defs) = operands(op);
-            let start = site.start as usize;
-            let end = (start + usize::from(site.len)).min(site_entries.len());
-            uses.extend(
-                site_entries[start.min(end)..end]
-                    .iter()
-                    .map(|&(class, index)| register(class, index)),
-            );
+            if may_stop(op) {
+                uses.extend(entries_of(sites[at]));
+            }
+            // A backward jump, and falling off the end, count toward the
+            // residency bound and stop at the target's site.
+            match *op {
+                TypedOp::Jump { target } if (target as usize) <= at => {
+                    uses.extend(entries_of(sites[target as usize % count]));
+                }
+                _ if at + 1 == count
+                    && !matches!(op, TypedOp::Jump { .. } | TypedOp::Leave { .. }) =>
+                {
+                    uses.extend(entries_of(sites[0]));
+                }
+                _ => {}
+            }
             (uses, defs)
         })
         .collect();
@@ -336,6 +504,22 @@ fn liveness(ops: &[TypedOp], sites: &[DeoptSite], site_entries: &[(Class, u16)])
     live_out
 }
 
+/// Whether `op` can deoptimize or leave the program, materializing its
+/// site's operand stack. A copy, a conversion of a register value and a
+/// branch cannot; nor can `Update`, whose operand converts to a number
+/// whatever it holds.
+fn may_stop(op: &TypedOp) -> bool {
+    !matches!(
+        op,
+        TypedOp::Move { .. }
+            | TypedOp::MoveBoxed { .. }
+            | TypedOp::ToNumeric { .. }
+            | TypedOp::Update { .. }
+            | TypedOp::Jump { .. }
+            | TypedOp::JumpIfFalsy { .. }
+    )
+}
+
 /// Deletes the operation at `index`, retargeting jumps past it.
 fn remove(ops: &mut Vec<TypedOp>, sites: &mut Vec<DeoptSite>, index: usize) {
     ops.remove(index);
@@ -346,6 +530,41 @@ fn remove(ops: &mut Vec<TypedOp>, sites: &mut Vec<DeoptSite>, index: usize) {
         {
             *target -= 1;
         }
+    }
+}
+
+/// Points the destination of `op` (which has exactly one) at `to`.
+fn rewrite_def(op: &mut TypedOp, to: u16) {
+    match op {
+        TypedOp::Move { dst, .. }
+        | TypedOp::ToNumeric { dst, .. }
+        | TypedOp::Binary { dst, .. }
+        | TypedOp::Unary { dst, .. }
+        | TypedOp::Update { dst, .. }
+        | TypedOp::DenseRead { dst, .. }
+        | TypedOp::MoveBoxed { dst, .. }
+        | TypedOp::Unbox { dst, .. }
+        | TypedOp::Truthy { dst, .. }
+        | TypedOp::Box { dst, .. }
+        | TypedOp::GetNamed { dst, .. }
+        | TypedOp::GetNamedTyped { dst, .. }
+        | TypedOp::ElementRead { dst, .. }
+        | TypedOp::ComputedRead { dst, .. }
+        | TypedOp::CallNumericNative { dst, .. }
+        | TypedOp::CallClosedFormLeaf { dst, .. }
+        | TypedOp::ArrayPush { dst, .. }
+        | TypedOp::BoxedEquality { dst, .. } => *dst = to,
+        TypedOp::DenseWrite { .. }
+        | TypedOp::DenseWriteBoxed { .. }
+        | TypedOp::StoreSloppyGlobal { .. }
+        | TypedOp::JumpIfFalsy { .. }
+        | TypedOp::Jump { .. }
+        | TypedOp::SetNamed { .. }
+        | TypedOp::SetNamedTyped { .. }
+        | TypedOp::ComputedWrite { .. }
+        | TypedOp::Guard { .. }
+        | TypedOp::Exit { .. }
+        | TypedOp::Leave { .. } => {}
     }
 }
 
@@ -506,11 +725,17 @@ fn operands(op: &TypedOp) -> (Vec<Register>, Vec<Register>) {
             callee,
             first,
             second,
-            ..
-        } => (
-            vec![boxed(callee), scalar(first), scalar(second)],
-            vec![scalar(dst)],
-        ),
+            arity,
+        } => {
+            let mut uses = vec![boxed(callee)];
+            uses.extend(
+                [first, second]
+                    .iter()
+                    .take(usize::from(arity))
+                    .map(|&arg| scalar(arg)),
+            );
+            (uses, vec![scalar(dst)])
+        }
         TypedOp::CallClosedFormLeaf {
             dst,
             receiver,
@@ -519,8 +744,13 @@ fn operands(op: &TypedOp) -> (Vec<Register>, Vec<Register>) {
             arity,
         } => {
             let boxed_arguments = arity & super::BOXED_ARGUMENTS != 0;
+            let count = usize::from(arity & !super::BOXED_ARGUMENTS);
             let mut uses = vec![boxed(receiver), boxed(callee)];
-            uses.extend(args.iter().map(|&argument| (boxed_arguments, argument)));
+            uses.extend(
+                args.iter()
+                    .take(count)
+                    .map(|&argument| (boxed_arguments, argument)),
+            );
             (uses, vec![boxed(dst)])
         }
         TypedOp::Guard {

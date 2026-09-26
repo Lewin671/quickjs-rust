@@ -136,6 +136,87 @@ fn a_dead_copy_is_deleted_and_jumps_retargeted() {
     assert!(matches!(ops[2], TypedOp::Jump { target: 0 }));
 }
 
+/// `s = s + i`: the sum is computed into the local itself, and the
+/// `ToNumeric` ahead of `i++`'s `Update` goes, the `Update` converting its
+/// operand anyway -- while its site, holding the converted old value, is
+/// never materialized because an `Update` cannot stop.
+#[test]
+fn a_stored_result_is_computed_in_place_and_increments_convert_once() {
+    use qjs_ast::{BinaryOp, UpdateOp};
+    let mut ops = vec![
+        TypedOp::Binary {
+            dst: 0,
+            op: BinaryOp::Lt,
+            left: 2,
+            right: 3,
+        },
+        TypedOp::Exit {
+            cond: 0,
+            exit_ip: 25,
+        },
+        TypedOp::Binary {
+            dst: 0,
+            op: BinaryOp::Add,
+            left: 4,
+            right: 2,
+        },
+        TypedOp::Move { dst: 4, src: 0 },
+        TypedOp::ToNumeric { dst: 0, src: 2 },
+        TypedOp::Update {
+            dst: 2,
+            op: UpdateOp::Increment,
+            src: 0,
+        },
+    ];
+    let mut sites = vec![
+        site(9, 0, 0),
+        site(10, 0, 1),
+        site(12, 1, 2),
+        site(13, 3, 1),
+        site(19, 4, 0),
+        site(21, 4, 2),
+    ];
+    let mut entries = vec![
+        (Class::Scalar, 0),
+        (Class::Scalar, 4),
+        (Class::Scalar, 2),
+        (Class::Scalar, 0),
+        (Class::Scalar, 0),
+        (Class::Scalar, 0),
+    ];
+    let pinned = BTreeSet::from([(false, 2), (false, 3), (false, 4)]);
+    forward_copies(&mut ops, &mut sites, &mut entries, &pinned);
+    assert_eq!(
+        format!("{ops:?}"),
+        format!(
+            "{:?}",
+            [
+                TypedOp::Binary {
+                    dst: 0,
+                    op: BinaryOp::Lt,
+                    left: 2,
+                    right: 3
+                },
+                TypedOp::Exit {
+                    cond: 0,
+                    exit_ip: 25
+                },
+                TypedOp::Binary {
+                    dst: 4,
+                    op: BinaryOp::Add,
+                    left: 4,
+                    right: 2
+                },
+                TypedOp::Update {
+                    dst: 2,
+                    op: UpdateOp::Increment,
+                    src: 2
+                },
+            ]
+        )
+    );
+}
+
 /// Loops whose element, field and equality operands are forwarded, run
 /// through deoptimizations at the rewritten operation (an equality that
 /// must call `valueOf`) and after it (a hole, an accessor, a string field
