@@ -348,3 +348,24 @@ fn slice_and_substring_keep_code_unit_boundaries() {
         Ok(Value::String("ab:abcd".to_owned().into()))
     );
 }
+
+#[test]
+fn concat_formats_primitive_arguments_and_converts_objects() {
+    assert_eq!(
+        eval(
+            "var out = [];
+             for (var i = 0; i < 3; i++) {
+                 out.push('ab'.concat(i, 2.5, true, null, undefined, 'x', 1e21, -0),
+                          ''.concat(), 'a'.concat({ toString() { return 'T'; } }), 'q'.concat([1, 2]),
+                          String.prototype.concat.call(5, 6));
+             }
+             try { 'a'.concat(Symbol()); } catch (e) { out.push(e.name); }
+             out.join('|');"
+        ),
+        Ok(Value::String(
+            "ab02.5truenullundefinedx1e+210||aT|q1,2|56|ab12.5truenullundefinedx1e+210||aT|q1,2|56|ab22.5truenullundefinedx1e+210||aT|q1,2|56|TypeError"
+                .to_owned()
+                .into()
+        ))
+    );
+}

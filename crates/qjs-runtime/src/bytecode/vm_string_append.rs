@@ -414,6 +414,31 @@ fn is_plain_primitive(value: &Value) -> bool {
     )
 }
 
+/// `receiver.concat(...arguments)` on a string receiver when every argument
+/// is a primitive whose ToString runs no user code: the result built in one
+/// buffer, numbers formatted straight into it. `None` otherwise.
+pub(crate) fn concat_string_with_primitives(
+    receiver: &crate::JsString,
+    arguments: &[Value],
+) -> Option<Value> {
+    if !arguments.iter().all(is_plain_primitive) {
+        return None;
+    }
+    let extra: usize = arguments
+        .iter()
+        .map(|value| match value {
+            Value::String(text) => text.len(),
+            _ => 24,
+        })
+        .sum();
+    let mut text = String::with_capacity(receiver.len() + extra);
+    text.push_str(receiver);
+    for value in arguments {
+        push_primitive(&mut text, value);
+    }
+    Some(Value::String(text.into()))
+}
+
 /// `left + right` when one side is a string and neither needs
 /// `ToPrimitive`: the concatenation, extending the left string's own buffer
 /// when nothing else holds it -- the intermediate of `a + b + c` is such a

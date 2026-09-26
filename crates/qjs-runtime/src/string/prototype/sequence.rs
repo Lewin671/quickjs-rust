@@ -17,6 +17,12 @@ pub(crate) fn native_string_prototype_concat(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    if let Value::String(receiver) = &this_value
+        && let Some(result) =
+            crate::bytecode::concat_string_with_primitives(receiver, argument_values)
+    {
+        return Ok(result);
+    }
     let mut result = this_string_value(this_value, env)?;
     for value in argument_values.iter().cloned() {
         result.push_str(&to_js_string_with_env(value, env)?);
