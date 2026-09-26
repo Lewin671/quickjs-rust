@@ -142,6 +142,13 @@ fn run<F: LoopFrame>(vm: &mut F, program: &TypedLoopProgram) -> Outcome {
     // deoptimizing on every iteration.
     if !program.helper_sites.is_empty() {
         let Some(graphs) = super::helper_graph::Preparation::prepare(vm, program) else {
+            #[cfg(feature = "perf-counters")]
+            if std::env::var_os("QJS_TL_TRACE").is_some() {
+                eprintln!(
+                    "TLDECLINE region {}..{} helper call sites could not be prepared",
+                    program.header, program.backedge
+                );
+            }
             return Outcome::Declined;
         };
         *program.helper_graphs.borrow_mut() = graphs;
@@ -634,6 +641,22 @@ fn execute<F: LoopFrame>(
 
 /// Loads the frame slots the program uses, declining when any slot holds a type
 /// the register file cannot represent or a receiver is not a dense array.
+/// `return None` from a program's entry; diagnostic builds with
+/// `QJS_TL_TRACE` set name the reason (`TLDECLINE`). Release builds expand
+/// to the bare `return None`, leaving the executor's code as it was.
+macro_rules! decline {
+    ($program:expr, $reason:expr) => {{
+        #[cfg(feature = "perf-counters")]
+        if std::env::var_os("QJS_TL_TRACE").is_some() {
+            eprintln!(
+                "TLDECLINE region {}..{} {}",
+                $program.header, $program.backedge, $reason
+            );
+        }
+        return None;
+    }};
+}
+
 fn seed_registers<F: LoopFrame>(
     vm: &mut F,
     program: &TypedLoopProgram,
@@ -652,7 +675,7 @@ fn seed_registers<F: LoopFrame>(
         // The receiver must be a dense array for the whole loop, so a region
         // that also writes that slot declines.
         let Some(Value::Array(array)) = vm.local_slot_value(slot as usize) else {
-            return None;
+            decline!(program, "receiver slot is not an array");
         };
         receivers.push(array);
         if program
@@ -660,7 +683,7 @@ fn seed_registers<F: LoopFrame>(
             .iter()
             .any(|(_, written)| *written == slot)
         {
-            return None;
+            decline!(program, "region writes a receiver slot");
         }
     }
     registers.reset(program.register_count);
@@ -669,17 +692,20 @@ fn seed_registers<F: LoopFrame>(
     }
     for &(register, slot) in &program.local_slots {
         if !vm.can_seed_slot(slot as usize) {
-            return None;
+            decline!(program, "local slot cannot be seeded");
         }
         let value = match vm.local_slot_value(slot as usize) {
-            Some(value) => Typed::from_value(&value)?,
+            Some(value) => match Typed::from_value(&value) {
+                Some(typed) => typed,
+                None => decline!(program, "typed local holds a non-scalar"),
+            },
             None => Typed::Undefined,
         };
         registers[register as usize] = value;
     }
     for &(_, slot) in &program.written_locals {
         if !vm.slot_accepts_typed_loop_write(slot as usize) {
-            return None;
+            decline!(program, "written local does not accept a typed write");
         }
     }
     for (register, name) in &program.global_reads {
@@ -694,7 +720,10 @@ fn seed_registers<F: LoopFrame>(
         // Resolving through the interpreter's own path keeps `this`, global
         // lexicals, and shadowing exactly as the loop would have seen them.
         let value = vm.load_global(name).ok()?;
-        registers[*register as usize] = Typed::from_value(&value)?;
+        registers[*register as usize] = match Typed::from_value(&value) {
+            Some(typed) => typed,
+            None => decline!(program, "typed global holds a non-scalar"),
+        };
     }
     boxed.resize(program.boxed_count, Value::Undefined);
     for (register, value) in &program.boxed_constant_registers {
@@ -728,12 +757,15 @@ fn seed_registers<F: LoopFrame>(
         }
         let value = vm.load_global(name).ok()?;
         if !value_is_ordinary_object(&value) {
-            return None;
+            decline!(program, "boxed global is not an object");
         }
         boxed[*register as usize] = value;
     }
     for (slot, name) in &program.sloppy_global_writes {
-        sloppy_global_writes.push(vm.prepare_typed_loop_sloppy_global_write(*slot as usize, name)?);
+        match vm.prepare_typed_loop_sloppy_global_write(*slot as usize, name) {
+            Some(write) => sloppy_global_writes.push(write),
+            None => decline!(program, "sloppy global write cannot be prepared"),
+        }
     }
     // A later generic native call may refresh a fallback slot from the realm
     // after user code runs. Register every sink once on entry so that slow-path

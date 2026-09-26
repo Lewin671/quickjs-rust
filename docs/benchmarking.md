@@ -444,9 +444,9 @@ The same build also carries the typed-loop trace. With `QJS_TL_TRACE=1` in
 the environment it prints one line per region the compiler gave up on
 (`TLGIVEUP`, with the instruction and what the pass discovered), per region
 that failed or compiled (`TLFAIL`, `TLOK`), per entry outcome (`TLRUN`),
-per entry that declined with the reason (`TLDECLINE`: a helper that could
-not be flattened, a scalar slot holding a string, a global that is an
-accessor), per deoptimization at run time (`TLDEOPT`, with the site and the
+per entry that declined with the reason (`TLDECLINE`: helper call sites
+that could not be prepared, a typed local holding a string or object, a
+global that is an accessor, a sloppy global write the frame cannot take), per deoptimization at run time (`TLDEOPT`, with the site and the
 bytecode it resumes at), per interpreter backward edge an accelerator
 claimed (`TLCLAIM`, naming the numeric-mutation, numeric, control or typed
 accelerator), and per backward edge every loop accelerator declined
