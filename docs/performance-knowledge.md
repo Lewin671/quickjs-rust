@@ -37,6 +37,10 @@ The procedure (queue, plan, decision) is in
   harness, from the same directory, with the same build recipe, interleaved
   on one host. The same script has measured differently from different
   filesystem locations; never compare numbers taken along different paths.
+  The same holds for binaries: two byte-identical `qjs` copies at different
+  paths measured ai-astar 1-2% apart, consistently (2026-09-26). Warm each
+  binary once before an A/B too -- a freshly built one runs its first
+  process slower.
 - **Keep samples long enough.** Short runs are dominated by startup, timer
   resolution and scheduling. Raise iterations until each sample clears the
   harness minimum instead of adding repetitions of a too-short sample.
@@ -133,7 +137,11 @@ The procedure (queue, plan, decision) is in
   (`# budget` lines) and change only when a function outgrows its slot.
   The per-codegen-unit copies go last. Re-run `layout_pin` after every
   code change (fillers are sized from the binary it reads), and add a hot
-  executor callee to `CALLEES` instead of letting it float.
+  executor callee to `CALLEES` instead of letting it float. With the
+  callees fixed, the executor's offset was re-scanned to 0x200. Check the
+  executor's own size in `nm` between builds as well: a codegen-unit shift
+  inlined `math_binary` into it (+176 bytes, access-nsieve +4% at equal
+  instructions), now kept out of line.
 - **Know each case's codegen noise band before blaming a change.** The
   functions that hold a dispatch loop are re-compiled differently by edits
   anywhere in the crate (an inlined thread-local access, a helper's inline
