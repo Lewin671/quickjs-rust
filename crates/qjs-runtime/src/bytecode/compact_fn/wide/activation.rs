@@ -1499,6 +1499,13 @@ fn construct_from_activation(
     if let Some(array) = construct_plain_array(env, &callee, arguments) {
         return Ok(array);
     }
+    if let Value::Function(function) = &callee
+        && function.native == Some(crate::NativeFunction::RegExp)
+        && function.bound.is_none()
+        && let Some(result) = crate::regexp::construct_regexp_from_strings(function, arguments, env)
+    {
+        return result;
+    }
     let mut env = env.empty_frame();
     crate::function::construct_function(callee.clone(), callee, arguments.to_vec(), &mut env)
 }

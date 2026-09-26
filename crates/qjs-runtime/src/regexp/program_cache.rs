@@ -12,6 +12,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use super::matcher::PreparedRegexp;
+use crate::JsString;
 
 /// Distinct patterns kept per table before the table is cleared.
 const MAX_ENTRIES: usize = 64;
@@ -23,6 +24,10 @@ pub(crate) struct ProgramCache {
     programs: [HashMap<Box<str>, Rc<PreparedRegexp>>; 16],
     /// Sources that passed pattern validation, by their complete flags text.
     validated: HashMap<Box<str>, HashSet<Box<str>>>,
+    /// The last pair validated through `is_validated_strings`: a literal in a
+    /// loop passes the same constant strings every time, so this answers it
+    /// with a pointer comparison instead of hashing the whole pattern.
+    last_validated: Option<(JsString, JsString)>,
 }
 
 impl ProgramCache {
@@ -59,6 +64,20 @@ impl ProgramCache {
         self.validated
             .get(flags)
             .is_some_and(|sources| sources.contains(source))
+    }
+
+    pub(super) fn is_validated_strings(&mut self, source: &JsString, flags: &JsString) -> bool {
+        if let Some((last_source, last_flags)) = &self.last_validated
+            && (JsString::ptr_eq(last_source, source) || last_source.as_str() == source.as_str())
+            && last_flags.as_str() == flags.as_str()
+        {
+            return true;
+        }
+        if !self.is_validated(source, flags) {
+            return false;
+        }
+        self.last_validated = Some((source.clone(), flags.clone()));
+        true
     }
 
     pub(super) fn mark_validated(&mut self, source: &str, flags: &str) {
