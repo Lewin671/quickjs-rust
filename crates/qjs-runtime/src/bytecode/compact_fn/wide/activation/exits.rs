@@ -88,6 +88,12 @@ pub(super) fn exit_to_interpreter(
         Some(crate::bytecode::ir::Op::EnumerateKeys { cache }) => {
             if let Some(pc) = program.resume_pc(ip as usize + 1, usize::from(depth)) {
                 let top = usize::from(program.local_registers) + usize::from(depth);
+                if let Some(keys) =
+                    crate::bytecode::vm_ops::enumerate_keys_from_cache(&window[top - 1], cache)
+                {
+                    execute::store(&mut window[top - 1], Value::Array(keys));
+                    return ExitOutcome::Continue { pc };
+                }
                 let target = std::mem::replace(&mut window[top - 1], Value::Undefined);
                 let mut call_env = env.empty_frame();
                 return match crate::bytecode::vm_ops::enumerate_keys_cached(
@@ -108,6 +114,16 @@ pub(super) fn exit_to_interpreter(
             if let Some(pc) = program.resume_pc(ip as usize + 1, usize::from(depth) - 1)
                 && let Value::String(key) = &window[top - 1]
             {
+                if let Some(enumerable) =
+                    crate::bytecode::vm_ops::for_in_ordinary_property_is_enumerable(
+                        &window[top - 2],
+                        key,
+                    )
+                {
+                    execute::store(&mut window[top - 1], Value::Undefined);
+                    execute::store(&mut window[top - 2], Value::Boolean(enumerable));
+                    return ExitOutcome::Continue { pc };
+                }
                 let key = key.clone();
                 let target = std::mem::replace(&mut window[top - 2], Value::Undefined);
                 execute::store(&mut window[top - 1], Value::Undefined);
