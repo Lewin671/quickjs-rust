@@ -231,6 +231,22 @@ impl ObjectRef {
         (Rc::ptr_eq(name, key) && !property.is_accessor()).then(|| property.value.clone())
     }
 
+    /// [`Self::shared_data_slot_value`] of a dynamic-storage object only: the
+    /// typed loop tier's inline read already tried small storage, and a
+    /// repeated miss there costs a polymorphic site a second mispredicted
+    /// check.
+    pub(crate) fn shared_dynamic_slot_value(&self, key: &Rc<str>, slot: usize) -> Option<Value> {
+        let storage = self.0.properties.borrow();
+        let PropertyStorage::Dynamic(dynamic) = &*storage else {
+            return None;
+        };
+        if self.0.module_namespace_exotic.get() {
+            return None;
+        }
+        let (name, property) = dynamic.entries.get(slot)?;
+        (Rc::ptr_eq(name, key) && !property.is_accessor()).then(|| property.value.clone())
+    }
+
     /// Reads a slot previously resolved by [`Self::own_data_slot`]. The storage
     /// kind is re-checked so a layout the revision counter cannot describe
     /// simply misses the cache instead of reading the wrong property.

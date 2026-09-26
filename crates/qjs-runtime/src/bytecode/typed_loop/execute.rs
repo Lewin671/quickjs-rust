@@ -1224,6 +1224,17 @@ fn get_named_object(
             return Some(value);
         }
     }
+    // The executor's inline read only takes a number from small storage: a
+    // dynamic-storage receiver (a constructor's twelfth property on) arrives
+    // here with the site's slot still valid, and re-resolving the name each
+    // time was a hash lookup per read (audio-dft +3% instructions). After
+    // the shapes: checked first, a polymorphic site's small-storage misses
+    // paid for it (heterogeneous_property_read +6% cycles).
+    if let Some((key, slot)) = shapes.slot.as_ref()
+        && let Some(value) = object.shared_dynamic_slot_value(key, *slot)
+    {
+        return Some(value);
+    }
     if let Some((key, slot)) = object.shared_data_slot(name)
         && let Some(value) = object.shared_data_slot_value(&key, slot)
     {

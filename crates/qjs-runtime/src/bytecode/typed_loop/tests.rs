@@ -1869,3 +1869,28 @@ fn typed_loops_write_numeric_fields_inline_and_everything_else_exactly() {
         ))
     );
 }
+
+/// A site that shares a slot on dynamic-storage objects (a constructor's
+/// twelfth property on) reads through it past the executor's small-only
+/// inline read; non-number fields, a deletion that refills the slot and an
+/// accessor still read exactly.
+#[test]
+fn typed_loops_read_dynamic_storage_fields_through_the_shared_slot() {
+    let source = "
+        function T(i) { this.a=i; this.b=1; this.c=2; this.d=3; this.e=4; this.f=5;
+            this.g=6; this.h=7; this.i=8; this.j=9; this.k=10; this.l='s'; this.m=12; }
+        function sum(list, n) { var s = 0, t = ''; for (var i = 0; i < n; i++) {
+            var o = list[i % list.length]; s += o.a + o.m; t = o.l; } return s + t; }
+        function run() {
+            var ts = []; for (var i = 0; i < 6; i++) ts.push(new T(i));
+            var out = [sum(ts, 60)];
+            delete ts[2].b; out.push(sum(ts, 60));
+            Object.defineProperty(ts[3], 'm', { get: function () { return 100; } });
+            out.push(sum(ts, 60));
+            return out.join();
+        }";
+    assert_eq!(
+        eval(&format!("{source} run();")),
+        Ok(Value::String("870s,870s,1750s".to_owned().into()))
+    );
+}
