@@ -5,6 +5,7 @@ use crate::{ParseError, Parser};
 impl Parser {
     pub(crate) fn new(tokens: Vec<Token>, source: String, source_is_wtf16: bool) -> Self {
         let closers = matching_closers(&tokens);
+        let bracket_depths = bracket_depths(&tokens);
         Self {
             source,
             source_is_wtf16,
@@ -14,6 +15,8 @@ impl Parser {
             goal: crate::Goal::Script,
             strict: false,
             allow_in: true,
+            no_in_depth: 0,
+            bracket_depths,
             in_method: false,
             in_derived_constructor: false,
             in_field_initializer: false,
@@ -28,6 +31,19 @@ impl Parser {
             next_private_scope_id: 0,
             pending_private_refs: Vec::new(),
         }
+    }
+
+    /// Whether `in` is a relational operator at the cursor (`no_in_depth`).
+    pub(crate) fn in_allowed(&self) -> bool {
+        self.allow_in
+            || self
+                .bracket_depths
+                .get(self.cursor)
+                .is_some_and(|&depth| depth > self.no_in_depth)
+    }
+
+    pub(crate) fn bracket_depth(&self) -> u32 {
+        self.bracket_depths.get(self.cursor).copied().unwrap_or(0)
     }
 
     pub(crate) fn at(&self, kind: &TokenKind) -> bool {
@@ -97,6 +113,32 @@ impl Parser {
 pub(crate) const NO_CLOSER: u32 = u32::MAX;
 
 /// The index of the token closing each bracket token, found in one pass.
+/// The number of brackets (and template substitutions) open at each token;
+/// a closing token counts at the depth it returns to.
+fn bracket_depths(tokens: &[Token]) -> Vec<u32> {
+    let mut depth = 0_u32;
+    tokens
+        .iter()
+        .map(|token| match token.kind {
+            TokenKind::LeftParen
+            | TokenKind::LeftBracket
+            | TokenKind::LeftBrace
+            | TokenKind::TemplateHead(_) => {
+                depth += 1;
+                depth - 1
+            }
+            TokenKind::RightParen
+            | TokenKind::RightBracket
+            | TokenKind::RightBrace
+            | TokenKind::TemplateTail(_) => {
+                depth = depth.saturating_sub(1);
+                depth
+            }
+            _ => depth,
+        })
+        .collect()
+}
+
 fn matching_closers(tokens: &[Token]) -> Vec<u32> {
     let mut closers = vec![NO_CLOSER; tokens.len()];
     let mut open: Vec<usize> = Vec::new();

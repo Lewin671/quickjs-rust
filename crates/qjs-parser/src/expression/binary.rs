@@ -89,7 +89,7 @@ impl Parser {
     }
 
     fn comparison(&mut self) -> Result<Expr, ParseError> {
-        if !self.allow_in {
+        if !self.in_allowed() {
             return self.binary_left_assoc(
                 Self::shift,
                 &[

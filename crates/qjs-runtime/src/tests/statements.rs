@@ -1587,3 +1587,29 @@ fn for_in_over_a_primitive_enumerates_its_wrapper() {
         Ok(Value::String("0,1,extra||n|||0,1".to_owned().into()))
     );
 }
+
+/// A `for` head's initializer withholds `in` (it would start a for-in) only
+/// at its own nesting level: inside parentheses, brackets, braces, call
+/// arguments, template substitutions and function bodies `in` is the
+/// operator again, while an unbracketed arrow body inherits the restriction.
+#[test]
+fn for_initializers_allow_in_inside_brackets() {
+    assert_eq!(
+        eval(
+            "var o = { k: 1 }; var r = [];
+             function f(x) { return x; }
+             for (var a = ('k' in o), b = ['k' in o], c = f('k' in o),
+                  d = function () { return 'k' in o; }, e = `${'k' in o}`,
+                  g = { v: 'k' in o }, j = 0; j < 1; j++) {
+                 r.push(a, b[0], c, d(), e, g.v);
+             }
+             for (var x = 0 in o) r.push(x);
+             r.join();"
+        ),
+        Ok(Value::String(
+            "true,true,true,true,true,true,k".to_owned().into()
+        ))
+    );
+    assert!(eval("var o = {}; for (var f = x => 'k' in o; false;) {}").is_err());
+    assert!(eval("var o = {}; for (var i = 'k' in o; false;) {}").is_err());
+}
