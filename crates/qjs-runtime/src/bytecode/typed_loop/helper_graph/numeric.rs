@@ -14,8 +14,12 @@
 //! loses is the type, which only equality and the returned value observe. A
 //! dataflow pass proves, per register and per operation, which of the three
 //! a register may hold; a body whose equality operands are not both proven
-//! numbers, whose returned register is not proven to hold one kind, or that
-//! calls another helper keeps the tagged interpreter.
+//! numbers, or whose returned register is not proven to hold one kind, keeps
+//! the tagged interpreter. A body may call another helper -- itself, in a
+//! recursion -- when its arguments are proven numbers and the callee is
+//! itself numeric and returns a number (`settle`), so a whole numeric call
+//! tree runs on `f64` registers (`recursive_call_tree`: 716 instructions a
+//! call through the tagged interpreter).
 
 use qjs_ast::{BinaryOp, UnaryOp};
 
@@ -33,6 +37,11 @@ type Kinds = [u8; MAX_HELPER_REGISTERS];
 /// The run-time register file: the next power of two above every register a
 /// helper may name.
 const FILE: usize = MAX_HELPER_REGISTERS.next_power_of_two();
+
+/// Where a call's arguments are copied, contiguous and above every register
+/// the helper names; constants are hoisted above them.
+const CALL_ARGUMENTS: usize = MAX_HELPER_REGISTERS;
+const _: () = assert!(CALL_ARGUMENTS + super::MAX_HELPER_ARITY <= FILE);
 
 #[derive(Clone, Copy, Debug)]
 pub(in crate::bytecode) enum NumOp {
@@ -213,6 +222,9 @@ enum ReturnKind {
 pub(super) struct NumProgram {
     ops: Box<[NumOp]>,
     returns: ReturnKind,
+    /// The helpers the body calls, by graph index; `settle` keeps the body
+    /// only while every one of them is numeric and returns a number.
+    calls: Box<[u16]>,
     /// Constants kept in the registers above every register the helper
     /// names, loaded once per call rather than by an operation each time.
     constants: Box<[(u16, f64)]>,
@@ -225,12 +237,17 @@ impl NumProgram {
         let before = infer(ops, arity)?;
         let mut returns: Option<u8> = None;
         let mut lowered = Vec::with_capacity(ops.len());
+        let mut calls: Vec<u16> = Vec::new();
+        // Where each helper operation's lowering starts: a call lowers to
+        // several operations, so branch targets are remapped afterwards.
+        let mut starts: Vec<u32> = Vec::with_capacity(ops.len() + 1);
         for (op, kinds) in ops.iter().zip(&before) {
+            starts.push(u32::try_from(lowered.len()).ok()?);
             // An operation the body never reaches has no proven state; it
             // cannot run, so any encoding of it will do.
             let kinds = kinds.unwrap_or([NUMBER; MAX_HELPER_REGISTERS]);
             let kind = |register: u16| kinds.get(usize::from(register)).copied().unwrap_or(0);
-            lowered.push(match *op {
+            let next = match *op {
                 HelperOp::Const { dst, value } => NumOp::Const {
                     dst,
                     value: encode(value),
@@ -279,8 +296,40 @@ impl NumProgram {
                     returns = Some(returned);
                     NumOp::Return { src }
                 }
-                HelperOp::Call { .. } => return None,
-            });
+                HelperOp::Call {
+                    dst,
+                    graph,
+                    args,
+                    arity,
+                } => {
+                    // The callee was lowered for number arguments, and an
+                    // argument's type is all the encoding would lose.
+                    let args = args.get(..usize::from(arity))?;
+                    if args.iter().any(|&register| kind(register) != NUMBER) {
+                        return None;
+                    }
+                    for (offset, &src) in args.iter().enumerate() {
+                        lowered.push(NumOp::Move {
+                            dst: u16::try_from(CALL_ARGUMENTS + offset).ok()?,
+                            src,
+                        });
+                    }
+                    calls.push(graph);
+                    NumOp::Call {
+                        dst,
+                        callee: graph,
+                        args: u16::try_from(CALL_ARGUMENTS).ok()?,
+                        argc: arity,
+                    }
+                }
+            };
+            lowered.push(next);
+        }
+        starts.push(u32::try_from(lowered.len()).ok()?);
+        for op in &mut lowered {
+            if let NumOp::JumpIfFalsy { target, .. } | NumOp::Jump { target } = op {
+                *target = *starts.get(*target as usize)?;
+            }
         }
         let returns = match returns? {
             NUMBER => ReturnKind::Number,
@@ -288,16 +337,56 @@ impl NumProgram {
             _ => ReturnKind::Undefined,
         };
         let (ops, constants) = optimize(lowered);
+        calls.sort_unstable();
+        calls.dedup();
         Some(Self {
             ops: ops.into_boxed_slice(),
             returns,
+            calls: calls.into_boxed_slice(),
             constants: constants.into_boxed_slice(),
         })
     }
 
-    /// Runs the body on number arguments.
+    /// Drops every body whose calls reach one that is not numeric or does
+    /// not return a number, until none does: `lower` assumed each call
+    /// returns a number, and a body is only lowered once its callees are
+    /// known.
+    pub(super) fn settle(programs: &mut [Option<Self>]) {
+        loop {
+            let doomed: Vec<usize> = programs
+                .iter()
+                .enumerate()
+                .filter_map(|(index, program)| {
+                    let program = program.as_ref()?;
+                    program
+                        .calls
+                        .iter()
+                        .any(|&callee| {
+                            !matches!(
+                                programs.get(usize::from(callee)),
+                                Some(Some(Self {
+                                    returns: ReturnKind::Number,
+                                    ..
+                                }))
+                            )
+                        })
+                        .then_some(index)
+                })
+                .collect();
+            if doomed.is_empty() {
+                return;
+            }
+            for index in doomed {
+                programs[index] = None;
+            }
+        }
+    }
+
+    /// Runs the body on number arguments; `graph` holds the bodies its
+    /// calls reach, and `depth` bounds their recursion as the tagged
+    /// interpreter's does.
     #[inline(never)]
-    pub(super) fn run(&self, args: &[f64]) -> Option<Typed> {
+    pub(super) fn run(&self, graph: &[Option<Self>], args: &[f64], depth: usize) -> Option<Typed> {
         // Every register that is not an argument starts `undefined`. The file
         // is a power of two wider than any register the helper names, so an
         // operand is masked into range rather than bounds-checked.
@@ -431,9 +520,25 @@ impl NumProgram {
                     }
                 }
                 NumOp::Nop => {}
-                // A helper body never calls (`lower` rejects `HelperOp::Call`)
-                // and never bails.
-                NumOp::Call { .. } | NumOp::Bail => return None,
+                NumOp::Call {
+                    dst,
+                    callee,
+                    args,
+                    argc,
+                } => {
+                    if depth + 1 >= super::MAX_NATIVE_RECURSION {
+                        return None;
+                    }
+                    let body = graph.get(usize::from(callee))?.as_ref()?;
+                    let mut values = [0.0; super::MAX_HELPER_ARITY];
+                    for (offset, value) in values.iter_mut().take(usize::from(argc)).enumerate() {
+                        *value = get!(usize::from(args) + offset);
+                    }
+                    let value = body.run(graph, &values[..usize::from(argc)], depth + 1)?;
+                    set!(dst, encode(value));
+                }
+                // A helper body never bails.
+                NumOp::Bail => return None,
                 NumOp::Jump { target } => pc = target as usize,
                 NumOp::Return { src } => {
                     let value = get!(src);
@@ -479,7 +584,9 @@ fn infer(ops: &[HelperOp], arity: u8) -> Option<Vec<Option<Kinds>>> {
             HelperOp::JumpIfFalsy { target, .. } => successors[1] = Some(target as usize),
             HelperOp::Jump { target } => successors = [Some(target as usize), None],
             HelperOp::Return { .. } => successors = [None, None],
-            HelperOp::Call { .. } => return None,
+            // Assumed; `NumProgram::settle` drops the body unless the callee
+            // does return a number.
+            HelperOp::Call { dst, .. } => *kinds.get_mut(usize::from(dst))? = NUMBER,
         }
         for next in successors.into_iter().flatten() {
             let slot = before.get_mut(next)?;
@@ -1060,8 +1167,135 @@ mod tests {
         let ops = sum_down();
         let program = NumProgram::lower(&ops, 1).expect("the body is numeric");
         assert!(program.ops.len() < ops.len(), "{:?}", program.ops);
-        assert!(matches!(program.run(&[10.0]), Some(Typed::Number(n)) if n == 55.0));
-        assert!(matches!(program.run(&[0.0]), Some(Typed::Number(n)) if n == 0.0));
+        assert!(matches!(program.run(&[], &[10.0], 0), Some(Typed::Number(n)) if n == 55.0));
+        assert!(matches!(program.run(&[], &[0.0], 0), Some(Typed::Number(n)) if n == 0.0));
+    }
+
+    fn constant(dst: u16, value: f64) -> HelperOp {
+        HelperOp::Const {
+            dst,
+            value: Typed::Number(value),
+        }
+    }
+
+    fn call(dst: u16, graph: u16, argument: u16) -> HelperOp {
+        HelperOp::Call {
+            dst,
+            graph,
+            args: [argument, 0, 0, 0],
+            arity: 1,
+        }
+    }
+
+    /// `function fib(n) { return n < 2 ? n : fib(n - 1) + fib(n - 2); }`
+    /// as graph body 0.
+    fn fib() -> Vec<HelperOp> {
+        vec![
+            constant(1, 2.0),
+            HelperOp::Binary {
+                dst: 2,
+                op: BinaryOp::Lt,
+                left: 0,
+                right: 1,
+            },
+            HelperOp::JumpIfFalsy { cond: 2, target: 4 },
+            HelperOp::Return { src: 0 },
+            constant(3, 1.0),
+            HelperOp::Binary {
+                dst: 4,
+                op: BinaryOp::Sub,
+                left: 0,
+                right: 3,
+            },
+            call(5, 0, 4),
+            constant(6, 2.0),
+            HelperOp::Binary {
+                dst: 7,
+                op: BinaryOp::Sub,
+                left: 0,
+                right: 6,
+            },
+            call(8, 0, 7),
+            HelperOp::Binary {
+                dst: 9,
+                op: BinaryOp::Add,
+                left: 5,
+                right: 8,
+            },
+            HelperOp::Return { src: 9 },
+        ]
+    }
+
+    #[test]
+    fn a_recursive_body_runs_its_calls_over_numbers() {
+        let mut graph = vec![NumProgram::lower(&fib(), 1)];
+        NumProgram::settle(&mut graph);
+        let program = graph[0]
+            .as_ref()
+            .expect("fib calls only itself, which returns a number");
+        assert!(matches!(program.run(&graph, &[10.0], 0), Some(Typed::Number(n)) if n == 55.0));
+        // Recursion past the native bound hands the call back.
+        let deep = vec![
+            constant(1, 0.0),
+            HelperOp::Binary {
+                dst: 2,
+                op: BinaryOp::Le,
+                left: 0,
+                right: 1,
+            },
+            HelperOp::JumpIfFalsy { cond: 2, target: 4 },
+            HelperOp::Return { src: 1 },
+            constant(3, 1.0),
+            HelperOp::Binary {
+                dst: 4,
+                op: BinaryOp::Sub,
+                left: 0,
+                right: 3,
+            },
+            call(5, 0, 4),
+            HelperOp::Binary {
+                dst: 6,
+                op: BinaryOp::Add,
+                left: 5,
+                right: 3,
+            },
+            HelperOp::Return { src: 6 },
+        ];
+        let mut graph = vec![NumProgram::lower(&deep, 1)];
+        NumProgram::settle(&mut graph);
+        let program = graph[0].as_ref().expect("the body is numeric");
+        assert!(matches!(program.run(&graph, &[50.0], 0), Some(Typed::Number(n)) if n == 50.0));
+        assert!(program.run(&graph, &[500.0], 0).is_none());
+    }
+
+    #[test]
+    fn a_body_calling_one_that_returns_a_boolean_keeps_the_tagged_body() {
+        let caller = vec![call(1, 1, 0), HelperOp::Return { src: 1 }];
+        let callee = vec![
+            constant(1, 0.0),
+            HelperOp::Binary {
+                dst: 2,
+                op: BinaryOp::Gt,
+                left: 0,
+                right: 1,
+            },
+            HelperOp::Return { src: 2 },
+        ];
+        let mut graph = vec![NumProgram::lower(&caller, 1), NumProgram::lower(&callee, 1)];
+        assert!(graph[0].is_some() && graph[1].is_some());
+        NumProgram::settle(&mut graph);
+        assert!(graph[0].is_none());
+        assert!(graph[1].is_some());
+        // A call whose argument may not be a number is not lowered at all.
+        let untyped = vec![
+            HelperOp::Const {
+                dst: 1,
+                value: Typed::Boolean(true),
+            },
+            call(2, 0, 1),
+            HelperOp::Return { src: 2 },
+        ];
+        assert!(NumProgram::lower(&untyped, 1).is_none());
     }
 
     #[test]

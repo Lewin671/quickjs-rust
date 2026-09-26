@@ -72,6 +72,11 @@ enum NumberOnlyOp {
 pub(super) struct NumberOnlyProgram {
     ops: Vec<registers::RegisterOp>,
     parameter_slots: Vec<usize>,
+    /// Whether every parameter reaches the result only through an
+    /// arithmetic or bitwise operator, which applies `ToNumber` first -- so
+    /// a boolean or `undefined` argument gives the same result as its
+    /// number. `function id(x) { return x; }` does not qualify.
+    converts_arguments: bool,
 }
 
 /// Compact, prevalidated form of the straight-line numeric bytecode subset.
@@ -512,10 +517,12 @@ impl NumericLeafShortcut {
 
 impl NumberOnlyProgram {
     fn compile(ops: &[FastOp], bytecode: &Bytecode) -> Option<Self> {
-        let (ops, parameter_slots) = compile_number_only_program(ops, bytecode)?;
+        let (ops, parameter_slots, converts_arguments) =
+            compile_number_only_program(ops, bytecode)?;
         Some(Self {
             ops: registers::lower(&ops)?,
             parameter_slots,
+            converts_arguments,
         })
     }
 
@@ -545,10 +552,12 @@ impl NumberOnlyProgram {
 fn compile_number_only_program(
     ops: &[FastOp],
     bytecode: &Bytecode,
-) -> Option<(Vec<NumberOnlyOp>, Vec<usize>)> {
+) -> Option<(Vec<NumberOnlyOp>, Vec<usize>, bool)> {
     #[derive(Clone, Copy, PartialEq)]
     enum StackValue {
         Number,
+        /// A parameter's value as passed, not yet through an operator.
+        Raw,
         Dead,
     }
 
@@ -556,9 +565,13 @@ fn compile_number_only_program(
         return None;
     }
     let mut initialized_slots = 0_u32;
+    let mut raw_slots = 0_u32;
     for &slot in bytecode.parameter_slots() {
         initialized_slots |= 1_u32.checked_shl(slot as u32)?;
+        raw_slots |= 1_u32.checked_shl(slot as u32)?;
     }
+    let is_value =
+        |value: Option<StackValue>| matches!(value, Some(StackValue::Number | StackValue::Raw));
     let mut stack = Vec::with_capacity(MAX_FAST_STACK);
     let mut program = Vec::with_capacity(ops.len());
     for (index, op) in ops.iter().enumerate() {
@@ -574,39 +587,51 @@ fn compile_number_only_program(
             FastOp::LoadLocal(slot)
                 if initialized_slots & (1_u32.checked_shl(*slot as u32)?) != 0 =>
             {
-                stack.push(StackValue::Number);
+                let raw = raw_slots & (1_u32.checked_shl(*slot as u32)?) != 0;
+                stack.push(if raw {
+                    StackValue::Raw
+                } else {
+                    StackValue::Number
+                });
                 program.push(NumberOnlyOp::LoadLocal(*slot));
             }
             FastOp::StoreLocal {
                 slot,
                 upvalue_index: None,
-            } if stack.pop() == Some(StackValue::Number) => {
-                initialized_slots |= 1_u32.checked_shl(*slot as u32)?;
+            } if is_value(stack.last().copied()) => {
+                let bit = 1_u32.checked_shl(*slot as u32)?;
+                initialized_slots |= bit;
+                if stack.pop() == Some(StackValue::Raw) {
+                    raw_slots |= bit;
+                } else {
+                    raw_slots &= !bit;
+                }
                 program.push(NumberOnlyOp::StoreLocal(*slot));
             }
             FastOp::Binary(op)
-                if matches!(
-                    (stack.pop(), stack.pop()),
-                    (Some(StackValue::Number), Some(StackValue::Number))
-                ) && number_binary(0.0, *op, 0.0).is_some() =>
+                if is_value(stack.pop())
+                    && is_value(stack.pop())
+                    && number_binary(0.0, *op, 0.0).is_some() =>
             {
                 stack.push(StackValue::Number);
                 program.push(NumberOnlyOp::Binary(*op));
             }
             FastOp::BinaryConstRight(op, right)
-                if stack.pop() == Some(StackValue::Number)
-                    && number_binary(0.0, *op, *right).is_some() =>
+                if is_value(stack.pop()) && number_binary(0.0, *op, *right).is_some() =>
             {
                 stack.push(StackValue::Number);
                 program.push(NumberOnlyOp::BinaryConstRight(*op, *right));
             }
             FastOp::Return
-                if stack.pop() == Some(StackValue::Number)
-                    && stack.iter().all(|value| *value == StackValue::Dead)
+                if is_value(stack.last().copied())
+                    && stack[..stack.len() - 1]
+                        .iter()
+                        .all(|value| *value == StackValue::Dead)
                     && index + 1 == ops.len() =>
             {
+                let converts = stack.pop() == Some(StackValue::Number);
                 program.push(NumberOnlyOp::Return);
-                return Some((program, bytecode.parameter_slots().to_vec()));
+                return Some((program, bytecode.parameter_slots().to_vec(), converts));
             }
             _ => return None,
         }
@@ -978,6 +1003,15 @@ impl FastValue {
 /// body whose plan is not built yet answers `false` and builds it on the
 /// general evaluator's first visit.
 #[inline(always)]
+/// Whether the number-only program takes any argument by `ToNumber`
+/// (`NumberOnlyProgram::converts_arguments`).
+pub(super) fn number_only_leaf_converts_arguments(bytecode: &Bytecode) -> bool {
+    matches!(
+        bytecode.numeric_leaf_plan.get(),
+        Some(Some(NumericLeafPlan::NumberOnly(program))) if program.converts_arguments
+    )
+}
+
 pub(super) fn has_number_only_leaf(bytecode: &Bytecode) -> bool {
     matches!(
         bytecode.numeric_leaf_plan.get(),

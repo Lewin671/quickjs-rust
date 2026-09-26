@@ -981,13 +981,19 @@ fn boxed_truthiness(value: &Value) -> Typed {
     Typed::Boolean(crate::conversion::is_truthy(value))
 }
 
-fn typed_numbers(args: &[Typed]) -> Option<[f64; super::helper_graph::MAX_HELPER_ARITY]> {
+/// The arguments as numbers: each must be one unless `convert`, when a
+/// boolean or `undefined` takes its `ToNumber` value.
+fn typed_numbers(
+    args: &[Typed],
+    convert: bool,
+) -> Option<[f64; super::helper_graph::MAX_HELPER_ARITY]> {
     let mut numbers = [0.0; super::helper_graph::MAX_HELPER_ARITY];
     for (number, arg) in numbers.iter_mut().zip(args) {
-        let Typed::Number(value) = arg else {
-            return None;
+        *number = match arg {
+            Typed::Number(value) => *value,
+            other if convert => other.to_numeric().number()?,
+            _ => return None,
         };
-        *number = *value;
     }
     Some(numbers)
 }
@@ -1000,7 +1006,13 @@ fn call_number_only_leaf(
     bytecode: &crate::bytecode::Bytecode,
     args: &[Typed],
 ) -> Option<Value> {
-    let numbers = typed_numbers(args)?;
+    // `x[i + j]` past the end of a hash's input is `undefined`, which
+    // `safe_add` turns to NaN and then 0 like any number operator would;
+    // declining it deoptimized crypto-sha1's whole block loop.
+    let numbers = typed_numbers(
+        args,
+        super::super::vm_numeric_leaf::number_only_leaf_converts_arguments(bytecode),
+    )?;
     let value = super::super::vm_numeric_leaf::eval_number_only_leaf(
         bytecode,
         &function.params,

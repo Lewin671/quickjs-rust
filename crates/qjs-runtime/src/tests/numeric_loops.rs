@@ -409,3 +409,72 @@ fn brace_less_loop_bodies_match_braced_ones() {
         Ok(Value::String("00101120212230313233".to_owned().into()))
     );
 }
+
+/// Numeric helpers that call helpers -- self and mutual recursion, a
+/// callee returning a boolean or sometimes `undefined`, recursion past the
+/// native bound, a boolean argument -- give the interpreter's answers from
+/// a typed loop. Expected values from V8.
+#[test]
+fn recursive_numeric_helpers_called_from_typed_loops() {
+    let source = r#"function tree(d, v) { if (d <= 0) return v + 1; return tree(d - 1, v) + tree(d - 1, v) - (v + 1); }
+function fib(n) { return n < 2 ? n : fib(n - 1) + fib(n - 2); }
+function isEven(n) { return n === 0 ? 1 : isOdd(n - 1); }
+function isOdd(n) { return n === 0 ? 0 : isEven(n - 1); }
+function deep(n) { return n <= 0 ? 0 : 1 + deep(n - 1); }
+function pos(x) { return x > 0; }
+function countPos(n) { return n <= 0 ? 0 : (pos(n) ? 1 : 0) + countPos(n - 1); }
+function maybe(n) { if (n > 3) return n; }
+function sumMaybe(n) { var m = maybe(n); return m === undefined ? -1 : m; }
+function half(n) { return n <= 1 ? n : half(n / 2); }
+var out = [];
+var s = 0; for (var i = 0; i < 50; i++) s += tree(5, i); out.push(s);
+s = 0; for (var i = 0; i < 20; i++) s += fib(i); out.push(s);
+s = 0; for (var i = 0; i < 30; i++) s += isEven(i); out.push(s);
+s = 0; for (var i = 0; i < 5; i++) s += deep(200 + i); out.push(s);
+s = 0; for (var i = 0; i < 10; i++) s += countPos(i); out.push(s);
+s = 0; for (var i = 0; i < 8; i++) s += sumMaybe(i); out.push(s);
+s = 0; for (var i = 0; i < 8; i++) s += half(i * 3); out.push(s);
+s = 0; for (var i = 0; i < 5; i++) s += fib(i % 2 ? true : 3); out.push(s);
+out.join(',');"#;
+    assert_eq!(
+        eval(source),
+        Ok(Value::String(
+            "1275,10945,15,1010,45,18,4.96875,8".to_owned().into()
+        ))
+    );
+}
+
+/// A number-only helper takes a boolean or `undefined` argument by
+/// `ToNumber` when every parameter reaches its result through an operator
+/// (`safe_add(s, w[j])` past the end of `w`), and never when one is
+/// returned as passed (`id`, `keep`). Expected values from V8.
+#[test]
+fn number_only_helpers_convert_arguments_only_through_operators() {
+    let source = r#"function safe_add(x, y) { var lsw = (x & 0xFFFF) + (y & 0xFFFF); var msw = (x >> 16) + (y >> 16) + (lsw >> 16); return (msw << 16) | (lsw & 0xFFFF); }
+function id(x) { return x; }
+function keep(x) { var y = x; return y; }
+function plus(x, y) { return x + y; }
+function run(n) {
+  var w = [1, 2, 3], out = [], s = 0;
+  for (var j = 0; j < n; j++) { s = safe_add(s, w[j]); }
+  out.push(s);
+  var r = []; for (var j = 0; j < 4; j++) r.push(String(id(w[j])));
+  out.push(r.join('/'));
+  r = []; for (var j = 0; j < 4; j++) r.push(String(keep(w[j])));
+  out.push(r.join('/'));
+  r = []; for (var j = 0; j < 4; j++) r.push(String(plus(w[j], 1)));
+  out.push(r.join('/'));
+  var b = [true, false, undefined, 2]; s = 0;
+  for (var j = 0; j < 4; j++) s = safe_add(s, b[j]); out.push(s);
+  return out.join(',');
+}
+run(6);"#;
+    assert_eq!(
+        eval(source),
+        Ok(Value::String(
+            "6,1/2/3/undefined,1/2/3/undefined,2/3/4/NaN,3"
+                .to_owned()
+                .into()
+        ))
+    );
+}
