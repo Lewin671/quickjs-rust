@@ -1266,7 +1266,9 @@ fn function_env<'a>(
         frame_env.set_module_imports(function.module_imports.clone());
     }
     frame_env.set_private_environment(function_private_environment(function));
-    if let Some(bindings) = &function.deopt_bindings {
+    if let Some(bindings) = &function.deopt_bindings
+        && !function.scope_bypassed.get()
+    {
         frame_env.set_deopt_bindings(bindings.clone());
     }
     let direct_call_slots = use_direct_call_slots.then(|| DirectCallSlots {
@@ -1349,7 +1351,7 @@ fn can_seed_slot_backed_call(function: &Function, bytecode: &Bytecode) -> bool {
         && (function.immutable_env_binding.as_deref().is_none_or(|name| {
             function.is_field_initializer || bytecode.reads_immutable_env_binding_through_cell(name)
         }))
-        && function.deopt_bindings.is_none()
+        && function.dynamic_scope_bypassed()
         && function.with_stack.is_empty()
         && direct_seedable_parameter_list(&function.params)
         && !bytecode.needs_arguments_object()

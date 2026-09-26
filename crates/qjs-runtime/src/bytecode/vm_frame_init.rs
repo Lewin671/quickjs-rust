@@ -386,39 +386,58 @@ impl<'a> Vm<'a> {
         }
     }
 
-    /// Whether a function literal this frame evaluates must resolve names
-    /// through the frame's dynamic scope `bindings`, or can be created
-    /// without it -- and so be called through the slot-seeded direct path
-    /// and the compact tiers, which host no dynamic scope.
+    /// How a function literal this frame evaluates may treat the frame's
+    /// dynamic scope `bindings`. Without it, the closure is called through
+    /// the slot-seeded direct path and the compact tiers, which host no
+    /// dynamic scope.
     ///
-    /// It can when nothing it resolves by name is in that scope now and
-    /// nothing can put it there later. The frame is a direct eval's top-level
-    /// code, whose scope is a fork only that code writes; without an `eval`
-    /// or `with` of its own, that code adds no name after the closure exists
-    /// (its `var`s are in the scope from the start). The closure itself must
-    /// not reach the scope another way: no `eval` or `with`, no nested
-    /// function to hand it on, and its own `this` and `arguments`.
-    /// `format0 = function () { return this.getFullYear() + ... }` in
-    /// date-format-xparb is the case: every call built a full interpreter
-    /// frame to find `String` in the global object.
-    pub(super) fn closure_needs_dynamic_scope(
+    /// The closure must not reach the scope another way -- no `eval` or
+    /// `with`, no nested function to hand it on, its own `this` and
+    /// `arguments` -- and nothing it resolves by name may be in the scope
+    /// now. Then:
+    ///
+    /// - In a direct eval's top-level code with no `eval` or `with` of its
+    ///   own, the scope is a fork only that code writes, and its `var`s are
+    ///   in it from the start: no name can appear later, so the closure drops
+    ///   it (`Drop`). `format0 = function () { return this.getFullYear() +
+    ///   ... }` in date-format-xparb is the case.
+    /// - In a function body that has a direct `eval`, a later `eval` there
+    ///   can add a `var` the closure would then have to see, so the closure
+    ///   keeps the scope but bypasses it until the scope next changes which
+    ///   names it binds (`Bypass`; `DynamicBindings::bypass`). A frame that
+    ///   can suspend is left alone: its `eval` could run while one of these
+    ///   closures is mid-call. date-format-tofte's formatters and
+    ///   string-tagcloud's `walk` are the case.
+    pub(super) fn closure_scope_use(
         &self,
         closure: &Bytecode,
         inherits_frame: bool,
         bindings: &DynamicBindings,
-    ) -> bool {
+    ) -> ClosureScopeUse {
         let frame: &Bytecode = &self.bytecode;
-        !frame.is_direct_eval_code()
-            || frame.contains_direct_eval()
-            || frame.contains_with()
+        if inherits_frame
             || !self.with_stack().is_empty()
-            || inherits_frame
+            || frame.contains_with()
             || closure.contains_direct_eval()
             || closure.contains_with()
             || closure.creates_closures()
             || closure
                 .names_resolved_by_name()
                 .any(|name| name != "this" && bindings.contains_key(name))
+        {
+            return ClosureScopeUse::Keep;
+        }
+        if frame.is_direct_eval_code() {
+            return if frame.contains_direct_eval() {
+                ClosureScopeUse::Keep
+            } else {
+                ClosureScopeUse::Drop
+            };
+        }
+        if frame.is_global_scope() || frame.suspends() {
+            return ClosureScopeUse::Keep;
+        }
+        ClosureScopeUse::Bypass
     }
 
     /// `frame_deopt_bindings` for a frame that asks repeatedly -- every
@@ -458,6 +477,14 @@ impl<'a> Vm<'a> {
         });
         Some(bindings)
     }
+}
+
+/// What a new closure does with its creating frame's dynamic scope
+/// (`Vm::closure_scope_use`).
+pub(super) enum ClosureScopeUse {
+    Keep,
+    Drop,
+    Bypass,
 }
 
 #[cfg(test)]

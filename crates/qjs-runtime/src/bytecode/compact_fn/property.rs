@@ -592,6 +592,14 @@ pub(super) fn get_prop_computed(
             message,
         });
     }
+    // An array's `length` is its own non-configurable data property, so a
+    // computed read of it -- a `for-in` loop's `keys["length"]` -- needs no
+    // key conversion.
+    if let (Value::Array(elements), Value::String(key)) = (&object, &key_value)
+        && key.as_str() == "length"
+    {
+        return Ok(Value::Number(elements.len() as f64));
+    }
     if let Value::Number(number) = &key_value
         && let Some(index) = crate::bytecode::vm_props::array_index_from_number(*number)
     {

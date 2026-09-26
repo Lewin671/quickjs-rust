@@ -197,6 +197,11 @@ pub struct FunctionData {
     /// it depends on the function alone, holds, and the register count.
     pub(crate) compact_inline_facts: Cell<u32>,
     pub(crate) deopt_bindings: Option<DynamicBindings>,
+    /// Whether calls may ignore `deopt_bindings`: set when the closure was
+    /// created resolving none of that scope's names, and revoked by the scope
+    /// itself as soon as a name is added, removed or remapped there
+    /// (`DynamicBindings::bypass`).
+    pub(crate) scope_bypassed: Cell<bool>,
     pub(crate) module_host: Option<ModuleHostRef>,
     pub(crate) module_imports: ModuleImports,
     pub(crate) with_stack: Vec<Value>,
@@ -609,6 +614,7 @@ impl Function {
             native_family: Cell::new(0),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
+            scope_bypassed: Cell::new(false),
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),
@@ -709,6 +715,7 @@ impl Function {
             native_family: Cell::new(0),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
+            scope_bypassed: Cell::new(false),
             deopt_bindings,
             module_host,
             module_imports,
@@ -788,6 +795,22 @@ impl Function {
         FunctionWeakRef(Rc::downgrade(&self.0))
     }
 
+    /// Whether this function's calls may run without its dynamic scope.
+    pub(crate) fn dynamic_scope_bypassed(&self) -> bool {
+        self.deopt_bindings.is_none() || self.scope_bypassed.get()
+    }
+
+    /// Ends a bypass of the dynamic scope, forgetting every call-path fact
+    /// derived while it held.
+    pub(crate) fn revoke_scope_bypass(&self) {
+        if self.scope_bypassed.replace(false) {
+            self.direct_leaf_call_eligible.set(None);
+            self.direct_construct_eligible.set(None);
+            self.wide_inline_facts.set(0);
+            self.compact_inline_facts.set(0);
+        }
+    }
+
     pub(crate) fn is_uninitialized_lexical_marker(&self) -> bool {
         matches!(self.native, Some(NativeFunction::UninitializedLexical))
     }
@@ -830,6 +853,7 @@ impl Function {
             native_family: Cell::new(0),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
+            scope_bypassed: Cell::new(false),
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),
@@ -888,6 +912,7 @@ impl Function {
             native_family: Cell::new(0),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
+            scope_bypassed: Cell::new(false),
             deopt_bindings: None,
             module_host: None,
             module_imports: Default::default(),

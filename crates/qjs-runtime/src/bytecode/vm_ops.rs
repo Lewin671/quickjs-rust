@@ -191,12 +191,47 @@ pub(in crate::bytecode) fn enumerate_keys_cached(
     cache: &EnumerateKeysCache,
     env: &mut CallEnv,
 ) -> Result<ArrayRef, RuntimeError> {
-    if let Some(keys) = cache.get(value) {
+    if let Some(keys) = enumerate_keys_from_cache(value, cache) {
         return Ok(keys);
     }
     let keys = ArrayRef::new(enumerable_keys(value.clone(), env)?);
     cache.record(value, keys.clone());
     Ok(keys)
+}
+
+/// `enumerate_keys_cached` where the site's cache answers, which needs no
+/// environment.
+pub(in crate::bytecode) fn enumerate_keys_from_cache(
+    value: &Value,
+    cache: &EnumerateKeysCache,
+) -> Option<ArrayRef> {
+    cache.get(value).or_else(|| cache.get_by_prototypes(value))
+}
+
+/// `for_in_property_is_enumerable` for an object whose chain, up to the
+/// holder of `key` or its end, is ordinary: answered from storage without an
+/// environment. `None` at the first exotic layer.
+pub(in crate::bytecode) fn for_in_ordinary_property_is_enumerable(
+    target: &Value,
+    key: &str,
+) -> Option<bool> {
+    let Value::Object(object) = target else {
+        return None;
+    };
+    let mut current = object.clone();
+    loop {
+        if current.is_module_namespace_exotic() || current.is_typed_array_exotic() {
+            return None;
+        }
+        if let Some(enumerable) = current.own_property_enumerable(key) {
+            return Some(enumerable);
+        }
+        match current.prototype_slot() {
+            None => return Some(false),
+            Some(crate::value::Prototype::Object(prototype)) => current = prototype,
+            Some(_) => return None,
+        }
+    }
 }
 
 /// Walks `target`'s live `[[Prototype]]` chain looking for an own descriptor

@@ -1488,6 +1488,29 @@ fn a_for_in_loop_stays_on_the_tier_with_the_interpreter_s_semantics() {
     );
 }
 
+/// A `for-in` site that enumerated one object whose prototypes had no
+/// enumerable key reads only the own keys of the next object with those
+/// prototypes -- until a prototype gains an enumerable key.
+#[test]
+fn a_for_in_site_sees_prototype_keys_appear_and_disappear() {
+    assert_eq!(
+        value_of(
+            "function keys(o) { var r = []; for (var k in o) { if (o[k] !== 0) r.push(k); } return r.join(','); } \
+             function P() {} var out = []; \
+             for (var i = 0; i < 3; i++) out.push(keys({ a: 1, b: 2 }), keys(new P())); \
+             Object.prototype.late = 9; out.push(keys({ a: 1 })); delete Object.prototype.late; \
+             out.push(keys({ a: 1 })); \
+             P.prototype.shared = 5; out.push(keys(new P())); \
+             Object.defineProperty(P.prototype, 'shared', { enumerable: false }); out.push(keys(new P())); \
+             var q = { x: 1 }; Object.setPrototypeOf(q, { y: 2 }); out.push(keys(q)); \
+             var shadow = Object.create({ a: 1 }); Object.defineProperty(shadow, 'a', { value: 2, enumerable: false }); \
+             out.push(keys(shadow), keys({ b: 0, c: 3 })); \
+             out.join('|');"
+        ),
+        Value::String("a,b||a,b||a,b||a,late|a|shared||x,y||c".to_owned().into())
+    );
+}
+
 #[test]
 fn methods_with_a_home_object_run_inline_and_super_or_private_bodies_keep_their_path() {
     // Class and object-literal methods carry a home object, which only

@@ -499,9 +499,44 @@ pub(crate) struct DynamicBindingsInner {
     /// a replaced or removed cell -- but not by writes through a cell. Equal
     /// generations mean every name still maps to the cell it did.
     generation: std::cell::Cell<u64>,
+    /// Closures created bypassing this scope (`bypass`), revoked on the next
+    /// generation change.
+    bypasses: RefCell<Vec<super::FunctionWeakRef>>,
 }
 
+/// Closures one scope lets bypass it at a time; past this, closures keep the
+/// scope, so a frame creating closures in a loop does not grow the list.
+const MAX_SCOPE_BYPASSES: usize = 64;
+
 impl DynamicBindings {
+    /// Lets `function` run without this scope until a name is added,
+    /// removed or remapped here. The caller has proved that nothing the
+    /// function resolves by name is in the scope now. `false` when the
+    /// scope already has its fill of bypassing closures.
+    pub(crate) fn bypass(&self, function: &super::Function) -> bool {
+        let mut bypasses = self.0.bypasses.borrow_mut();
+        if bypasses.len() >= MAX_SCOPE_BYPASSES {
+            bypasses.retain(|weak| weak.upgrade().is_some());
+            if bypasses.len() >= MAX_SCOPE_BYPASSES {
+                return false;
+            }
+        }
+        bypasses.push(function.downgrade());
+        function.scope_bypassed.set(true);
+        true
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn revoke_bypasses(&self) {
+        let bypasses = std::mem::take(&mut *self.0.bypasses.borrow_mut());
+        for function in bypasses {
+            if let Some(function) = function.upgrade() {
+                function.revoke_scope_bypass();
+            }
+        }
+    }
+
     pub(crate) fn new() -> Self {
         Self::default()
     }
@@ -513,6 +548,9 @@ impl DynamicBindings {
         self.0
             .generation
             .set(self.0.generation.get().wrapping_add(1));
+        if !self.0.bypasses.borrow().is_empty() {
+            self.revoke_bypasses();
+        }
         self.0.map.borrow_mut()
     }
 
@@ -540,6 +578,7 @@ impl DynamicBindings {
                     .collect(),
             ),
             generation: std::cell::Cell::new(0),
+            bypasses: RefCell::default(),
         }))
     }
 
@@ -547,6 +586,7 @@ impl DynamicBindings {
         Self(Rc::new(DynamicBindingsInner {
             map: RefCell::new(self.0.map.borrow().clone()),
             generation: std::cell::Cell::new(0),
+            bypasses: RefCell::default(),
         }))
     }
 

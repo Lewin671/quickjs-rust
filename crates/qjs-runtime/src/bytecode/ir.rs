@@ -774,6 +774,8 @@ pub struct Bytecode {
     cached_authoritative_mask_clean: u128,
     /// The top level of a direct eval's code (not a function inside it).
     direct_eval_code: bool,
+    /// Whether the body can suspend mid-way: a `yield`, `yield*` or `await`.
+    cached_suspends: bool,
 }
 
 impl Bytecode {
@@ -943,6 +945,7 @@ impl Bytecode {
             cached_hoisted_slots: Vec::new(),
             cached_authoritative_mask_clean: 0,
             direct_eval_code: false,
+            cached_suspends: false,
         };
         // Order matters: closure/arguments metadata reads the simpler caches
         // (written-binding names, creates-closures) computed just above. Nested
@@ -990,6 +993,10 @@ impl Bytecode {
             )
         });
         bytecode.cached_uses_lexical_this = bytecode.compute_uses_lexical_this();
+        bytecode.cached_suspends = bytecode
+            .code
+            .iter()
+            .any(|op| matches!(op, Op::Yield | Op::Await | Op::YieldDelegate { .. }));
         bytecode.readonly_received_upvalue_slots =
             bytecode.compute_readonly_received_upvalue_slots();
         bytecode.cell_received_upvalue_slots = bytecode.compute_cell_received_upvalue_slots();
@@ -1426,6 +1433,11 @@ impl Bytecode {
 
     pub(super) fn mark_direct_eval_code(&mut self) {
         self.direct_eval_code = true;
+    }
+
+    /// Whether the body can suspend mid-way (`yield`, `yield*`, `await`).
+    pub(super) fn suspends(&self) -> bool {
+        self.cached_suspends
     }
 
     /// Whether this is the top level of a direct eval's code.
