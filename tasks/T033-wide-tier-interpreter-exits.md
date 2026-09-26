@@ -342,6 +342,29 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   0.88, fannkuch 0.92. Liveness counts a site's entries only where an
   operation can stop. Differential fuzz (600 random loops with type
   changes mid-loop) matches the pass-off build and V8.
+- perf24 units (30a93030..7d18c3ff): a numeric helper may call another
+  helper of its graph (itself included) when its arguments are proven
+  numbers -- arguments copied to contiguous registers above the body's, the
+  callee's numeric body run under the same recursion bound, and `settle`
+  dropping, to a fixed point, any body whose callee is not numeric or does
+  not return a number: recursive_call_tree 716 -> 370 instructions a call,
+  0.566 cycles against main. A number-only closed-form leaf whose
+  parameters reach the result only through operators takes boolean and
+  undefined arguments by ToNumber (sha1's `safe_add(e, w[j])` past the end
+  of `w` deoptimized its block loops; neutral on time).
+- Stack run 7d18c3ff vs main 83108837 (30 blocks, cycles, quiet host;
+  `target/comparison/perf24-7d18c3ff`): external geomean 0.998 against
+  main (0.772 against QuickJS-NG); sentinels **0.901** against main and
+  **0.847 against QuickJS-NG** -- every sentinel now at or below
+  QuickJS-NG (recursive_call_tree 0.682, heterogeneous_property_read
+  0.998, prototype_method_call 0.996).
+- Rejected (2026-09-26): global-function helper sites (flattening a global
+  callee at every entry of an inner loop cost sha1 2.4% instructions, and
+  its deopting call was a local closed-form one); a hand-written
+  `Value::clone` (bit-test plus bit copy; churn +15% cycles at +1.5%
+  instructions); borrowing the prototype chain in the creation proof
+  (binary-trees +0.3% instructions: a RefCell borrow per level costs what
+  the Rc upgrade did).
 - perf23 units (c88cbb06..04e0e7aa): the front end measured 2-3x
   QuickJS-NG (`tools.benchmark.front_end`; 1-8% of many cases' totals):
   binary operators by precedence climbing (imaging-darkroom's parse -21%
