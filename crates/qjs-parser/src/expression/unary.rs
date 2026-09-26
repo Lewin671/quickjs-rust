@@ -167,7 +167,7 @@ impl Parser {
     /// name in any other expression position is a syntax error.
     fn private_in_expression(&mut self, name: String, span: Span) -> Result<Expr, ParseError> {
         self.advance();
-        if !self.allow_in || !self.at(&TokenKind::In) {
+        if !self.in_allowed() || !self.at(&TokenKind::In) {
             return Err(ParseError {
                 message: format!(
                     "private name `#{name}` is only valid on the left of `in` or as a member \

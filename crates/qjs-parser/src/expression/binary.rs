@@ -3,6 +3,13 @@ use qjs_lexer::TokenKind;
 
 use crate::{ParseError, Parser};
 
+/// Binary precedence levels, loosest first; the levels between these are
+/// `&&`, `|`, `^`, `&` after `||`, and `+ -`, `* / %` after the shifts.
+const LOGICAL_OR: u8 = 1;
+const EQUALITY: u8 = 6;
+const RELATIONAL: u8 = 7;
+const SHIFT: u8 = 8;
+
 impl Parser {
     pub(crate) fn nullish_coalescing(&mut self) -> Result<Expr, ParseError> {
         let mut left_start = self.cursor;
@@ -45,111 +52,69 @@ impl Parser {
     }
 
     fn logical_or(&mut self) -> Result<Expr, ParseError> {
-        self.binary_left_assoc(
-            Self::logical_and,
-            &[(TokenKind::PipePipe, BinaryOp::LogicalOr)],
-        )
-    }
-
-    fn logical_and(&mut self) -> Result<Expr, ParseError> {
-        self.binary_left_assoc(
-            Self::bitwise_or,
-            &[(TokenKind::AmpersandAmpersand, BinaryOp::LogicalAnd)],
-        )
-    }
-
-    fn bitwise_or(&mut self) -> Result<Expr, ParseError> {
-        self.binary_left_assoc(Self::bitwise_xor, &[(TokenKind::Pipe, BinaryOp::BitwiseOr)])
-    }
-
-    fn bitwise_xor(&mut self) -> Result<Expr, ParseError> {
-        self.binary_left_assoc(
-            Self::bitwise_and,
-            &[(TokenKind::Caret, BinaryOp::BitwiseXor)],
-        )
-    }
-
-    fn bitwise_and(&mut self) -> Result<Expr, ParseError> {
-        self.binary_left_assoc(
-            Self::equality,
-            &[(TokenKind::Ampersand, BinaryOp::BitwiseAnd)],
-        )
-    }
-
-    fn equality(&mut self) -> Result<Expr, ParseError> {
-        self.binary_left_assoc(
-            Self::comparison,
-            &[
-                (TokenKind::EqualEqual, BinaryOp::Eq),
-                (TokenKind::EqualEqualEqual, BinaryOp::StrictEq),
-                (TokenKind::BangEqual, BinaryOp::Ne),
-                (TokenKind::BangEqualEqual, BinaryOp::StrictNe),
-            ],
-        )
-    }
-
-    fn comparison(&mut self) -> Result<Expr, ParseError> {
-        if !self.allow_in {
-            return self.binary_left_assoc(
-                Self::shift,
-                &[
-                    (TokenKind::Less, BinaryOp::Lt),
-                    (TokenKind::LessEqual, BinaryOp::Le),
-                    (TokenKind::Greater, BinaryOp::Gt),
-                    (TokenKind::GreaterEqual, BinaryOp::Ge),
-                    (TokenKind::Instanceof, BinaryOp::Instanceof),
-                ],
-            );
-        }
-        self.binary_left_assoc(
-            Self::shift,
-            &[
-                (TokenKind::Less, BinaryOp::Lt),
-                (TokenKind::LessEqual, BinaryOp::Le),
-                (TokenKind::Greater, BinaryOp::Gt),
-                (TokenKind::GreaterEqual, BinaryOp::Ge),
-                (TokenKind::In, BinaryOp::In),
-                (TokenKind::Instanceof, BinaryOp::Instanceof),
-            ],
-        )
+        self.binary_at_least(LOGICAL_OR)
     }
 
     /// Parses a `ShiftExpression`, used as the right operand of a `#x in obj`
     /// ergonomic brand check.
     pub(crate) fn shift_expression(&mut self) -> Result<Expr, ParseError> {
-        self.shift()
+        self.binary_at_least(SHIFT)
     }
 
-    fn shift(&mut self) -> Result<Expr, ParseError> {
-        self.binary_left_assoc(
-            Self::additive,
-            &[
-                (TokenKind::LessLess, BinaryOp::Shl),
-                (TokenKind::GreaterGreater, BinaryOp::Shr),
-                (TokenKind::GreaterGreaterGreater, BinaryOp::UShr),
-            ],
-        )
+    /// The left-associative binary levels from `||` down to `*`, by
+    /// precedence climbing: an operand is parsed once and each operator
+    /// binds by its level. The grammar's one-function-per-level descent
+    /// built the same trees but passed every operand up through all ten
+    /// levels, each returning the expression by value and testing its own
+    /// operator list -- most of parsing a large script.
+    fn binary_at_least(&mut self, minimum: u8) -> Result<Expr, ParseError> {
+        let mut expr = self.exponentiation()?;
+        while let Some((op, precedence)) = self.binary_operator()
+            && precedence >= minimum
+        {
+            self.cursor += 1;
+            let right = self.binary_at_least(precedence + 1)?;
+            let span = Span::new(expr.span().start, right.span().end);
+            expr = Expr::Binary {
+                left: Box::new(expr),
+                op,
+                right: Box::new(right),
+                span,
+            };
+        }
+        Ok(expr)
     }
 
-    fn additive(&mut self) -> Result<Expr, ParseError> {
-        self.binary_left_assoc(
-            Self::multiplicative,
-            &[
-                (TokenKind::Plus, BinaryOp::Add),
-                (TokenKind::Minus, BinaryOp::Sub),
-            ],
-        )
-    }
-
-    fn multiplicative(&mut self) -> Result<Expr, ParseError> {
-        self.binary_left_assoc(
-            Self::exponentiation,
-            &[
-                (TokenKind::Star, BinaryOp::Mul),
-                (TokenKind::Slash, BinaryOp::Div),
-                (TokenKind::Percent, BinaryOp::Rem),
-            ],
-        )
+    /// The binary operator at the cursor and its precedence; `in` only
+    /// where the grammar's `[In]` parameter allows it.
+    fn binary_operator(&self) -> Option<(BinaryOp, u8)> {
+        let operator = match self.peek()?.kind {
+            TokenKind::PipePipe => (BinaryOp::LogicalOr, LOGICAL_OR),
+            TokenKind::AmpersandAmpersand => (BinaryOp::LogicalAnd, LOGICAL_OR + 1),
+            TokenKind::Pipe => (BinaryOp::BitwiseOr, LOGICAL_OR + 2),
+            TokenKind::Caret => (BinaryOp::BitwiseXor, LOGICAL_OR + 3),
+            TokenKind::Ampersand => (BinaryOp::BitwiseAnd, LOGICAL_OR + 4),
+            TokenKind::EqualEqual => (BinaryOp::Eq, EQUALITY),
+            TokenKind::EqualEqualEqual => (BinaryOp::StrictEq, EQUALITY),
+            TokenKind::BangEqual => (BinaryOp::Ne, EQUALITY),
+            TokenKind::BangEqualEqual => (BinaryOp::StrictNe, EQUALITY),
+            TokenKind::Less => (BinaryOp::Lt, RELATIONAL),
+            TokenKind::LessEqual => (BinaryOp::Le, RELATIONAL),
+            TokenKind::Greater => (BinaryOp::Gt, RELATIONAL),
+            TokenKind::GreaterEqual => (BinaryOp::Ge, RELATIONAL),
+            TokenKind::Instanceof => (BinaryOp::Instanceof, RELATIONAL),
+            TokenKind::In if self.in_allowed() => (BinaryOp::In, RELATIONAL),
+            TokenKind::LessLess => (BinaryOp::Shl, SHIFT),
+            TokenKind::GreaterGreater => (BinaryOp::Shr, SHIFT),
+            TokenKind::GreaterGreaterGreater => (BinaryOp::UShr, SHIFT),
+            TokenKind::Plus => (BinaryOp::Add, SHIFT + 1),
+            TokenKind::Minus => (BinaryOp::Sub, SHIFT + 1),
+            TokenKind::Star => (BinaryOp::Mul, SHIFT + 2),
+            TokenKind::Slash => (BinaryOp::Div, SHIFT + 2),
+            TokenKind::Percent => (BinaryOp::Rem, SHIFT + 2),
+            _ => return None,
+        };
+        Some(operator)
     }
 
     fn exponentiation(&mut self) -> Result<Expr, ParseError> {
@@ -195,26 +160,6 @@ impl Parser {
             right: Box::new(right),
             span,
         })
-    }
-
-    fn binary_left_assoc(
-        &mut self,
-        next: fn(&mut Self) -> Result<Expr, ParseError>,
-        operators: &[(TokenKind, BinaryOp)],
-    ) -> Result<Expr, ParseError> {
-        let mut expr = next(self)?;
-        while let Some((kind, op)) = operators.iter().find(|(kind, _)| self.at(kind)) {
-            self.expect(kind)?;
-            let right = next(self)?;
-            let span = Span::new(expr.span().start, right.span().end);
-            expr = Expr::Binary {
-                left: Box::new(expr),
-                op: *op,
-                right: Box::new(right),
-                span,
-            };
-        }
-        Ok(expr)
     }
 
     fn expression_range_is_parenthesized(&self, start: usize, end: usize) -> bool {

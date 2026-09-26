@@ -211,6 +211,34 @@ For multiple receipts, place their directories under one profile root and use
 relative paths such as `case-a/receipt.json` in the plan. `check-unit` checks
 only plan structure; `validate-unit` checks actual profile artifacts too.
 
+## Diagnostic helpers
+
+Tools for finding and checking work between formal runs; none of them
+produces decision evidence.
+
+- **Whole-corpus A/B.** `python3 -m tools.benchmark.screen --candidate B
+  --base A --case external --pairs 3` alternates the two executables over
+  every external bundle and reports instruction and cycle ratios. Prefer it
+  to ad-hoc loops: it validates output, holds the measurement lock, and
+  waits for builds. An instruction ratio near 1.0 with a cycles ratio that
+  moves is layout, not the change (see performance-knowledge.md).
+- **Bundles on disk.** `python3 -m tools.benchmark.bundles` writes each
+  case to `target/bundles/<suite>--<case>.js` exactly as a run executes it,
+  for `sample` profiles and trace runs.
+- **Front-end cost.** `python3 -m tools.benchmark.front_end --binary B
+  --reference third_party/quickjs-ng/build/qjs` measures lexing, parsing and
+  compiling alone (each bundle wrapped in a function never called, process
+  start subtracted) against QuickJS-NG, with each case's share of its whole
+  run; `--base A` compares two builds instead.
+- **Executor placement.** `scripts/layout-scan.sh --offsets 0x0,0x200,0x400`
+  pins the typed-loop executor at each offset, relinks to a fixed point and
+  screens the layout canaries; run it after editing the executor or a
+  pinned callee (`tools/benchmark/layout_pin.py`).
+- **Typed-loop programs.** On a `perf-counters` build, `QJS_TL_TRACE=4`
+  prints each program as it runs (after register packing, hoisting and
+  copy forwarding) and `QJS_TL_NO_FORWARD=1` disables forwarding, so one
+  binary can A/B it (docs/benchmarking.md).
+
 ## Acceptance after implementation
 
 Measure the candidate against the same base executable represented by the

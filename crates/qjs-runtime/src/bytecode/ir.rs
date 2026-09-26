@@ -1010,30 +1010,19 @@ impl Bytecode {
         &self.global_names
     }
 
-    pub(crate) fn referenced_global_names(&self) -> Vec<String> {
-        let mut names = BTreeSet::new();
-        for name in &self.global_names {
-            names.insert(name.clone());
-        }
-        for local in &self.locals {
-            if !local.sloppy_global_fallback && !local.from_env {
-                names.remove(&local.name);
-            }
-        }
-        names.into_iter().collect()
-    }
-
-    pub(crate) fn closure_referenced_global_names(&self) -> Vec<String> {
-        self.cached_closure_referenced_global_names.clone()
+    pub(super) fn closure_referenced_global_names_ref(&self) -> &[String] {
+        &self.cached_closure_referenced_global_names
     }
 
     fn compute_closure_referenced_global_names(&self) -> Vec<String> {
-        let mut names = BTreeSet::new();
-        for name in self.referenced_global_names() {
-            names.insert(name);
+        let mut names: BTreeSet<&str> = self.global_names.iter().map(String::as_str).collect();
+        for local in &self.locals {
+            if !local.sloppy_global_fallback && !local.from_env {
+                names.remove(local.name.as_str());
+            }
         }
         super::ir_names::collect_nested_global_names_from_ops(&self.code, &mut names);
-        names.into_iter().collect()
+        names.into_iter().map(str::to_owned).collect()
     }
 
     pub(crate) fn written_binding_names(&self) -> Vec<String> {
@@ -1055,23 +1044,24 @@ impl Bytecode {
         collect_written_binding_names_from_ops(self, &self.code, &mut names);
         for local in &self.locals {
             if !local.sloppy_global_fallback && !local.from_env {
-                names.remove(&local.name);
+                names.remove(local.name.as_str());
             }
         }
-        names.into_iter().collect()
+        names.into_iter().map(str::to_owned).collect()
     }
 
-    pub(crate) fn closure_written_binding_names(&self) -> Vec<String> {
-        self.cached_closure_written_binding_names.clone()
+    pub(super) fn closure_written_binding_names_ref(&self) -> &[String] {
+        &self.cached_closure_written_binding_names
     }
 
     fn compute_closure_written_binding_names(&self) -> Vec<String> {
-        let mut names = BTreeSet::new();
-        for name in self.written_binding_names() {
-            names.insert(name);
-        }
+        let mut names: BTreeSet<&str> = self
+            .cached_written_binding_names
+            .iter()
+            .map(String::as_str)
+            .collect();
         super::ir_names::collect_nested_written_binding_names_from_ops(&self.code, &mut names);
-        names.into_iter().collect()
+        names.into_iter().map(str::to_owned).collect()
     }
 
     pub(crate) fn global_lexical_names(&self) -> &[String] {
@@ -1503,7 +1493,8 @@ impl Bytecode {
     fn compute_writes_binding_set(&self) -> crate::value::name_hash::NameSet<String> {
         let mut direct = BTreeSet::new();
         collect_written_binding_names_from_ops(self, &self.code, &mut direct);
-        let mut set: crate::value::name_hash::NameSet<String> = direct.into_iter().collect();
+        let mut set: crate::value::name_hash::NameSet<String> =
+            direct.into_iter().map(str::to_owned).collect();
         for op in &self.code {
             match op {
                 Op::NewFunction { bytecode, .. } => {
@@ -1610,10 +1601,10 @@ fn op_touches_local_slot(op: &Op, slot: usize) -> bool {
     }
 }
 
-fn collect_written_binding_names_from_ops(
-    bytecode: &Bytecode,
-    code: &[Op],
-    names: &mut BTreeSet<String>,
+fn collect_written_binding_names_from_ops<'a>(
+    bytecode: &'a Bytecode,
+    code: &'a [Op],
+    names: &mut BTreeSet<&'a str>,
 ) {
     for op in code {
         match op {
@@ -1627,7 +1618,7 @@ fn collect_written_binding_names_from_ops(
             | Op::StoreResolvedIdentWith {
                 name, slot: None, ..
             } => {
-                names.insert(name.clone());
+                names.insert(name.as_str());
             }
             Op::StoreLocal(slot)
             | Op::AssignLocal(slot)
@@ -1643,7 +1634,7 @@ fn collect_written_binding_names_from_ops(
                     .get(*slot)
                     .filter(|local| !local.compiler_temporary)
                 {
-                    names.insert(local.name.clone());
+                    names.insert(local.name.as_str());
                 }
             }
             _ => {}
@@ -1654,10 +1645,10 @@ fn collect_written_binding_names_from_ops(
 fn collect_global_names(code: &[Op]) -> Vec<String> {
     let mut names = BTreeSet::new();
     collect_global_names_from_ops(code, &mut names);
-    names.into_iter().collect()
+    names.into_iter().map(str::to_owned).collect()
 }
 
-fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
+fn collect_global_names_from_ops<'a>(code: &'a [Op], names: &mut BTreeSet<&'a str>) {
     for op in code {
         match op {
             Op::LoadGlobal(name)
@@ -1665,10 +1656,10 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
             | Op::StoreGlobalSloppy { name, .. }
             | Op::AppendStringLiteralGlobal { name, .. }
             | Op::TypeofGlobal(name) => {
-                names.insert(name.clone());
+                names.insert(name.as_str());
             }
             Op::StoreLocalOrGlobalSloppy { name, .. } => {
-                names.insert(name.clone());
+                names.insert(name.as_str());
             }
             Op::LoadIdentWith {
                 name, slot: None, ..
@@ -1686,10 +1677,10 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
                 name, slot: None, ..
             }
             | Op::TypeofIdentWith { name, slot: None } => {
-                names.insert(name.clone());
+                names.insert(name.as_str());
             }
             Op::NewFunction { bytecode, .. } => {
-                names.extend(bytecode.global_names().iter().cloned());
+                names.extend(bytecode.global_names().iter().map(String::as_str));
             }
             Op::NewClass { definition } => {
                 names.extend(
@@ -1698,39 +1689,50 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
                         .bytecode
                         .global_names()
                         .iter()
-                        .cloned(),
+                        .map(String::as_str),
                 );
                 for key in &definition.computed_keys {
                     if let ClassComputedKeyDef::Deferred { bytecode, .. } = key {
-                        names.extend(bytecode.global_names().iter().cloned());
+                        names.extend(bytecode.global_names().iter().map(String::as_str));
                     }
                 }
                 for element in &definition.elements {
                     match element {
                         ClassElementDef::Method(method) => {
-                            names.extend(method.bytecode.global_names().iter().cloned());
+                            names.extend(method.bytecode.global_names().iter().map(String::as_str));
                         }
                         ClassElementDef::Field(field) => {
                             if let Some(initializer) = &field.initializer {
-                                names.extend(initializer.bytecode.global_names().iter().cloned());
+                                names.extend(
+                                    initializer
+                                        .bytecode
+                                        .global_names()
+                                        .iter()
+                                        .map(String::as_str),
+                                );
                             }
                         }
                         ClassElementDef::Private(element) => match element {
                             ClassPrivateElementDef::Field { initializer, .. } => {
                                 if let Some(initializer) = initializer {
                                     names.extend(
-                                        initializer.bytecode.global_names().iter().cloned(),
+                                        initializer
+                                            .bytecode
+                                            .global_names()
+                                            .iter()
+                                            .map(String::as_str),
                                     );
                                 }
                             }
                             ClassPrivateElementDef::Method { def, .. }
                             | ClassPrivateElementDef::Getter { def, .. }
                             | ClassPrivateElementDef::Setter { def, .. } => {
-                                names.extend(def.bytecode.global_names().iter().cloned());
+                                names
+                                    .extend(def.bytecode.global_names().iter().map(String::as_str));
                             }
                         },
                         ClassElementDef::StaticBlock(block) => {
-                            names.extend(block.bytecode.global_names().iter().cloned());
+                            names.extend(block.bytecode.global_names().iter().map(String::as_str));
                         }
                     }
                 }
@@ -1738,13 +1740,19 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
                     match element {
                         ClassPrivateElementDef::Field { initializer, .. } => {
                             if let Some(initializer) = initializer {
-                                names.extend(initializer.bytecode.global_names().iter().cloned());
+                                names.extend(
+                                    initializer
+                                        .bytecode
+                                        .global_names()
+                                        .iter()
+                                        .map(String::as_str),
+                                );
                             }
                         }
                         ClassPrivateElementDef::Method { def, .. }
                         | ClassPrivateElementDef::Getter { def, .. }
                         | ClassPrivateElementDef::Setter { def, .. } => {
-                            names.extend(def.bytecode.global_names().iter().cloned());
+                            names.extend(def.bytecode.global_names().iter().map(String::as_str));
                         }
                     }
                 }

@@ -227,7 +227,16 @@ struct Parser {
     /// top-level `import`/`export` declarations.
     goal: Goal,
     strict: bool,
+    /// The grammar's `[In]` parameter: cleared for a `for` head's
+    /// initializer (`expression_no_in`), where `in` would start a for-in.
     allow_in: bool,
+    /// The bracket depth `allow_in` was cleared at. Every bracketed
+    /// production inside it -- parentheses, array and object literals,
+    /// arguments, member brackets, template substitutions, function bodies --
+    /// takes `[+In]` again, so `in` is only withheld at this depth.
+    no_in_depth: u32,
+    /// Each token's bracket nesting depth (`bracket_depths`).
+    bracket_depths: Vec<u32>,
     /// Whether `super.prop`/`super[expr]` member access is currently allowed,
     /// i.e. the parser is inside a method or accessor body (or an arrow nested
     /// in one).

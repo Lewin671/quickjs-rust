@@ -40,10 +40,11 @@ impl Parser {
     }
 
     pub(crate) fn expression_no_in(&mut self) -> Result<Expr, ParseError> {
-        let previous = self.allow_in;
+        let previous = (self.allow_in, self.no_in_depth);
         self.allow_in = false;
+        self.no_in_depth = self.bracket_depth();
         let result = self.expression();
-        self.allow_in = previous;
+        (self.allow_in, self.no_in_depth) = previous;
         result
     }
 

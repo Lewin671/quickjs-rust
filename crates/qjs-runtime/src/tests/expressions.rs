@@ -1534,3 +1534,41 @@ fn instanceof_respects_a_custom_has_instance() {
         Ok(Value::String("true:true".to_owned().into()))
     );
 }
+
+/// Every binary precedence level against its neighbours and left
+/// associativity within a level, parsed by precedence climbing. Expected
+/// values from V8.
+#[test]
+fn binary_operators_bind_by_precedence_and_associate_left() {
+    let source = r#"var a = 5, b = 3, c = 12, d = 1, e = 2;
+var o = { k: 1 };
+var r = [];
+r.push(a + b * c - d / e % 3);
+r.push(a - b - c - d);
+r.push(c / b / e);
+r.push(a << d + e >> 1 >>> 0);
+r.push(a < b == c > d);
+r.push(a | b ^ c & d);
+r.push(a & b | c ^ d);
+r.push(a || b && 0 || c);
+r.push(0 && a || b);
+r.push(a == 5 === true != false);
+r.push('k' in o && !('z' in o));
+r.push(o instanceof Object == true);
+r.push(2 ** 3 ** 2);
+r.push(-(2 ** 2) + 3 * 2 ** 2);
+r.push(a + b + '' + a + b);
+r.push(null ?? (0 || 7));
+for (var i = ('k' in o) ? 1 : 0, j = 0; j < 1; j++) r.push(i);
+for (var q in { x: 1 }) r.push(q);
+r.push(a > b ? c < d ? 1 : 2 : 3);
+r.join(',');"#;
+    assert_eq!(
+        eval(source),
+        Ok(Value::String(
+            "40.5,-11,2,20,false,7,13,5,3,true,true,true,512,8,853,7,1,x,2"
+                .to_owned()
+                .into()
+        ))
+    );
+}
