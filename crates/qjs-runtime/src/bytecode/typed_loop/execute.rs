@@ -1235,6 +1235,16 @@ fn get_named_object(
     {
         return Some(value);
     }
+    // A method call site that resolved on the prototype before: one own
+    // lookup proves the receiver still does not shadow it, where the
+    // resolutions below scanned its properties three times for the same
+    // miss (prototype_method_call).
+    if let Some(inherited) = shapes.inherited()
+        && let crate::value::OwnDataPropertyRead::Missing = object.own_data_property_read(name)
+        && let Some(value) = inherited.read(object)
+    {
+        return Some(value);
+    }
     if let Some((key, slot)) = object.shared_data_slot(name)
         && let Some(value) = object.shared_data_slot_value(&key, slot)
     {
