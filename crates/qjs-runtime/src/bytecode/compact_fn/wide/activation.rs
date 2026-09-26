@@ -1500,9 +1500,9 @@ fn construct_from_activation(
         return Ok(array);
     }
     if let Value::Function(function) = &callee
-        && function.native == Some(crate::NativeFunction::RegExp)
-        && function.bound.is_none()
-        && let Some(result) = crate::regexp::construct_regexp_from_strings(function, arguments, env)
+        && function.native.is_some()
+        && let Some(result) =
+            crate::function::construct_intrinsic_directly(function, arguments, env)
     {
         return result;
     }

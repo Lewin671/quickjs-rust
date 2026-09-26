@@ -844,10 +844,9 @@ pub(crate) fn construct_function(
         return construct_function(real_target, forwarded_new_target, combined_arguments, env);
     }
     if let Value::Function(function) = &target
-        && function.native == Some(NativeFunction::RegExp)
+        && function.native.is_some()
         && target.same_value(&new_target)
-        && let Some(result) =
-            crate::regexp::construct_regexp_from_strings(function, &argument_values, env)
+        && let Some(result) = super::construct_intrinsic_directly(function, &argument_values, env)
     {
         return result;
     }
