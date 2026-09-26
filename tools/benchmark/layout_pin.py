@@ -39,7 +39,7 @@ from typing import Sequence
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ORDER = ROOT / "crates/qjs-cli/hot-functions.order"
-DEFAULT_OFFSET = 0x0
+DEFAULT_OFFSET = 0x200
 # The same executor instantiated for the interpreter's own loops -- a
 # script's top-level `for` -- is pinned too, ahead of its wide twin:
 # it is most of access-fannkuch and math-partial-sums, and floating in the
@@ -69,6 +69,8 @@ CALLEES = (
     "slot_readsNtB4_9ObjectRef22own_data_property_read",
     "ObjectRef32write_existing_own_data_property",
     "typed_loop7execute16boxed_truthiness",
+    "typed_loop7execute14boxed_equality",
+    "typed_loop7execute9get_named",
 )
 # After the budgeted callees: defined once per codegen unit, in a number of
 # copies that changes with unrelated code, so nothing pinned may follow them.
