@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import math
-import statistics
 import sys
 import tempfile
 from pathlib import Path
@@ -51,10 +50,14 @@ def _flags(binary: Path, reference: Path | None) -> list[str]:
 
 def _cost(tool: CounterTool, binary: Path, flags: list[str], script: Path, pairs: int,
           timeout: float) -> tuple[float, float]:
-    """Median instructions and cycles of running `script`."""
-    taken = [sample(tool, [str(binary), *flags, str(script)], timeout) for _ in range(pairs)]
-    return (statistics.median(s.instructions for s in taken),
-            statistics.median(s.cycles for s in taken))
+    """Least instructions and cycles of running `script`, after one
+    discarded run: a binary's first process after a build or a pause runs
+    slower, which inflated the empty-script baseline past small front ends.
+    Noise only adds to a cost, so the minimum estimates it best."""
+    argv = [str(binary), *flags, str(script)]
+    sample(tool, argv, timeout)
+    taken = [sample(tool, argv, timeout) for _ in range(pairs)]
+    return (min(s.instructions for s in taken), min(s.cycles for s in taken))
 
 
 def _wrap(bundle: Path, work: Path) -> Path:

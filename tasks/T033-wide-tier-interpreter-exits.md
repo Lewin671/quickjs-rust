@@ -342,6 +342,23 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   0.88, fannkuch 0.92. Liveness counts a site's entries only where an
   operation can stop. Differential fuzz (600 random loops with type
   changes mid-loop) matches the pass-off build and V8.
+- perf23 units (c88cbb06..04e0e7aa): the front end measured 2-3x
+  QuickJS-NG (`tools.benchmark.front_end`; 1-8% of many cases' totals):
+  binary operators by precedence climbing (imaging-darkroom's parse -21%
+  cycles), the compiler's scope tables on the name hasher (cdjs parse
+  -10%), canonical UTF-8 copied straight through (cdjs -9% instructions),
+  borrowed name sets in bytecode finalization. A parser bug found on the
+  way: `in` inside brackets of a for initializer was rejected. Layout:
+  math_binary kept out of the typed executor (a codegen-unit shift had
+  inlined it: nsieve +4% at equal instructions), boxed_equality and
+  get_named pinned, executor re-scanned to 0x200.
+- Stack run 3babb930 vs main f2b21ab6 (30 blocks, cycles, quiet host;
+  `target/comparison/perf23-3babb930`): external geomean **0.994** against
+  main and **0.772 against QuickJS-NG**; gaussian-blur (JetStream) 0.952,
+  imaging-darkroom 0.963, tinderbox 0.965, desaturate 0.971. Worst:
+  ai-astar 1.023 (byte-identical binaries at two paths differ by 1-2%
+  there), regexp-dna 1.015; sentinels 1.003. Slowest against QuickJS-NG:
+  xparb 1.46, tofte 1.41, validate-input 1.31, binary-trees 1.31.
 - Stack run 88e90f89 vs main 8d7c580e (30 blocks, cycles, quiet host;
   `target/comparison/perf22-88e90f89`): perf21's and perf22's units.
   External geomean **0.962** against main and **0.782 against
