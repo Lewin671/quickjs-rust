@@ -124,6 +124,16 @@ The procedure (queue, plan, decision) is in
   unit (`Value::clone`, `drop_in_place<Value>`) is placed once per copy, and
   the number of copies changes with unrelated edits, so anything pinned
   after the callees drifted (0xc40 -> 0xe60 from a `vm_call.rs` change).
+  **The callees' own addresses matter as much** (2026-09-25, identical
+  instructions and identical executor code): an unpinned property helper
+  moving cost `string_key_map_churn` 22%, and a pinned callee growing
+  176 bytes shifted the rest and cost `heterogeneous_property_read` 4%. So
+  the executor and every listed callee now own a fixed-size slot padded
+  with standard-library filler; slot sizes persist in the order file
+  (`# budget` lines) and change only when a function outgrows its slot.
+  The per-codegen-unit copies go last. Re-run `layout_pin` after every
+  code change (fillers are sized from the binary it reads), and add a hot
+  executor callee to `CALLEES` instead of letting it float.
 - **Know each case's codegen noise band before blaming a change.** The
   functions that hold a dispatch loop are re-compiled differently by edits
   anywhere in the crate (an inlined thread-local access, a helper's inline

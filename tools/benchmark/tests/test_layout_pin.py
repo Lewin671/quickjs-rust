@@ -59,5 +59,28 @@ class LayoutPinTests(unittest.TestCase):
         pinned = layout_pin.pin([VM, EXECUTOR], 0x100000f40, sizes, counts, 0xfb0, 0x040)
         self.assertEqual(pinned, head + [VM])
 
+    def test_budgeted_callees_keep_their_addresses_when_one_shrinks(self):
+        sizes = dict(self.sizes, **{f"__RNvNtCsg55jX0GwzBC_3std2io{n}": 0x10 * (n + 1)
+                                    for n in range(24)})
+        counts = {name: 1 for name in sizes}
+        budgets: dict[str, int] = {}
+        head = layout_pin.pin_head([VM, CALL_LEAF, EXECUTOR], 0x100000000, sizes, counts,
+                                   0x0, None, budgets)
+        self.assertEqual(budgets[CALL_LEAF], 0x300)
+        self.assertEqual(budgets[EXECUTOR], 0x3100)
+        position = 0
+        for name in head:
+            if name == CALL_LEAF:
+                break
+            position += sizes[name]
+        self.assertEqual(position, 0x3100)
+        # A smaller call_leaf keeps its slot, so whatever follows stays put.
+        smaller = dict(sizes, **{CALL_LEAF: 0x180})
+        layout_pin.pin_head([VM, CALL_LEAF, EXECUTOR], 0x100000000, smaller, counts,
+                            0x0, None, budgets)
+        self.assertEqual(budgets[CALL_LEAF], 0x300)
+        # One that outgrows it gets a new slot with headroom.
+        self.assertEqual(layout_pin.slot_budget(0x310, 0x300), 0x500)
+
 if __name__ == "__main__":
     unittest.main()
