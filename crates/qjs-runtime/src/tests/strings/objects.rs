@@ -229,3 +229,32 @@ fn string_wrapper_to_primitive_follows_overridden_methods() {
         ))
     );
 }
+
+#[test]
+fn addition_honours_to_primitive_anywhere_on_the_chain() {
+    assert_eq!(
+        eval(
+            "function run() {
+                 var out = [], w = new String('w');
+                 out.push('0' + w, w + 1, 1 + w);
+                 var o = {}; o[Symbol.toPrimitive] = function (hint) { return 'P' + hint; };
+                 out.push(o + '', Object.create(o) + '!');
+                 String.prototype[Symbol.toPrimitive] = function () { return 'SP'; };
+                 out.push(w + '');
+                 delete String.prototype[Symbol.toPrimitive];
+                 Object.prototype[Symbol.toPrimitive] = function () { return 'OP'; };
+                 out.push(w + '', {} + '');
+                 delete Object.prototype[Symbol.toPrimitive];
+                 w.valueOf = function () { return 'own'; };
+                 out.push(w + '', ({ valueOf() { return 2; } }) + 1);
+                 return out.join();
+             }
+             run();"
+        ),
+        Ok(Value::String(
+            "0w,w1,1w,Pdefault,Pdefault!,SP,OP,OP,own,3"
+                .to_owned()
+                .into()
+        ))
+    );
+}
