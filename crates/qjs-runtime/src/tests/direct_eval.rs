@@ -60,3 +60,38 @@ fn eval_created_closures_resolve_the_same_names_with_or_without_the_eval_scope()
         ))
     );
 }
+
+/// A closure created in a function that has a direct `eval` bypasses that
+/// function's dynamic scope only until the scope binds a new name: a later
+/// `eval('var String = 5')` must then be visible to it. A generator's frame
+/// keeps the scope throughout, and a frame creating many closures stops
+/// bypassing past its limit.
+#[test]
+fn closures_see_names_a_later_eval_adds_to_their_function() {
+    assert_eq!(
+        eval(
+            "var out = [];
+             function later() { var g = function () { return typeof String; }; var r = g(); eval('var String = 5'); return r + ' ' + g(); }
+             function hoisted() { function g() { return typeof zz; } var r = g(); eval('var zz = 1'); return r + ' ' + g(); }
+             function captured() { var self = 3; function d() { return self + 1; } return eval('d()') + eval('d()'); }
+             function* suspended() { var g = function () { return typeof yy; }; yield g(); eval('var yy = 1'); yield g(); }
+             function many() { var fns = []; for (var i = 0; i < 70; i++) fns.push(function () { return typeof Math; }); eval('var Math = 1'); return fns[0]() + ' ' + fns[69](); }
+             function walkTree(filter) {
+                 function walk(k, v) { var i; if (v && typeof v === 'object') { for (i in v) { var n = walk(i, v[i]); if (n !== undefined) v[i] = n; } } return filter(k, v); }
+                 return JSON.stringify(walk('', eval('({a: [1, 2, {b: 3}], c: 4})')));
+             }
+             for (var i = 0; i < 2; i++) {
+                 var it = suspended();
+                 out.push(later(), hoisted(), captured(), it.next().value + ' ' + it.next().value, many(),
+                          walkTree(function (k, v) { return typeof v === 'number' ? v * 10 : v; }));
+             }
+             out.join('|');"
+        ),
+        Ok(Value::String(
+            "function number|undefined number|8|undefined number|number number|{\"a\":[10,20,{\"b\":30}],\"c\":40}|"
+                .repeat(2)
+                .trim_end_matches('|')
+                .into()
+        ))
+    );
+}

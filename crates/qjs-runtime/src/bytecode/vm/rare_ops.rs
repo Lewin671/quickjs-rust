@@ -193,11 +193,18 @@ impl Vm<'_> {
                 } else {
                     None
                 };
-                let deopt_bindings = self.frame_deopt_bindings_memoized().filter(|bindings| {
-                    self.closure_needs_dynamic_scope(
-                        bytecode,
-                        *lexical_this || *lexical_arguments,
-                        bindings,
+                let deopt_bindings = self.frame_deopt_bindings_memoized();
+                let scope_use = deopt_bindings.as_ref().map(|bindings| {
+                    self.closure_scope_use(bytecode, *lexical_this || *lexical_arguments, bindings)
+                });
+                let deopt_bindings = match scope_use {
+                    Some(crate::bytecode::vm_frame_init::ClosureScopeUse::Drop) => None,
+                    _ => deopt_bindings,
+                };
+                let bypass_scope = deopt_bindings.clone().filter(|_| {
+                    matches!(
+                        scope_use,
+                        Some(crate::bytecode::vm_frame_init::ClosureScopeUse::Bypass)
                     )
                 });
                 let function = Function::new_user_compiled(CompiledUserFunction {
@@ -233,6 +240,9 @@ impl Vm<'_> {
                     with_stack: self.with_stack().to_vec(),
                     upvalues,
                 });
+                if let Some(bindings) = bypass_scope {
+                    bindings.bypass(&function);
+                }
                 self.capture_private_environment(&function);
                 if *is_generator && *is_async {
                     crate::async_generator::wire_async_generator_function_intrinsics(
