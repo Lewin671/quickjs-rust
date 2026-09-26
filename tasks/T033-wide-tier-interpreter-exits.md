@@ -342,6 +342,45 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   0.88, fannkuch 0.92. Liveness counts a site's entries only where an
   operation can stop. Differential fuzz (600 random loops with type
   changes mid-loop) matches the pass-off build and V8.
+- perf26 units (6f500ce6..fe533cc7, branch agent/perf-25): a `for-in`
+  site remembers the prototype chain of its last ordinary target with the
+  keys that chain contributes, so a loop over many objects of one shape
+  enumerates own keys plus the unshadowed inherited ones without the
+  shadowing hash set (a two-key `for-in` 3599 -> 1346 cycles, NG 1082); the
+  wide tier's `for-in` exits answer ordinary objects without an environment.
+  Closures created by a function with a direct `eval` bypass its dynamic
+  scope while the scope binds none of their by-name names; the scope keeps
+  the list and revokes every bypass (with the memoized call-path facts) on
+  its next generation change, frames that can suspend are excluded, and at
+  most 64 closures bypass one scope (`Vm::closure_scope_use`,
+  `DynamicBindings::bypass`): string-tagcloud 0.784 (its JSON `walk`),
+  tofte 0.979. The numeric helper's register file is 64-byte aligned
+  (instruction count no longer depends on caller frame sizes) and
+  `NumProgram::run` is pinned.
+- Stack run fe533cc7 vs main cebad5e9 (30 blocks, cycles, loaded host;
+  `target/comparison/perf26-fe533cc7-30b`): external geomean **0.995**
+  against main and **0.749 against QuickJS-NG**; string-tagcloud **0.759**
+  (1.31 -> 1.000 against NG), tofte 0.975, regexp-dna 0.992. Worst:
+  JetStream gaussian-blur 1.057 -- the same two binaries measure 1.001 by
+  min-of-5 alternation from /tmp, so this is the harness-path sensitivity
+  already recorded, not code; access-nsieve 1.018. Sentinels 0.993-1.002
+  (recursive_call_tree 0.993: the 10% below did not reproduce here).
+- Layout (2026-09-26): recursive_call_tree ran 10% more cycles with the
+  `for-in` unit at identical helper code and identical helper offset
+  (`NumProgram::run` pinned where main has it): its jump tables in
+  read-only data moved with other code's constants, which the order file
+  cannot place. With `MallocNanoZone=0` the gap was 2%. Other sentinels
+  flat. Min-of-N alternation (`/tmp/minab.sh`, `/tmp/minsent.sh`) resolved
+  these while the host was loaded; the screen tool's intervals did not.
+- Found (2026-09-26): 3d-raytrace's `Scene.blocked`/`intersect` loops
+  compile to typed programs that decline at entry every time (`TLRUN ...
+  Declined`): they write the implicit global `i`, and
+  `WideLoopFrame::prepare_typed_loop_sloppy_global_write` always declines.
+  Supporting it would not help this case: the loop calls
+  `triangle.intersect`, not a closed-form leaf, so the program would
+  deoptimize at the call (`global_store_stays_interpreted` admits the body to
+  the wide tier for that reason). The loop's cost is the wide tier's own
+  (1.25x NG per triangle).
 - perf25 units (4d19c880..130c27c6, branch agent/perf-23): found by
   splitting each slow case into micro pieces and comparing each against
   QuickJS-NG by the N-versus-2N instruction and cycle delta. A regex literal
