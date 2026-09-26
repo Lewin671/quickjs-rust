@@ -353,9 +353,10 @@ fn strict_eq(left: &Value, right: &Value) -> bool {
 
 /// `left op right` for the operand pairs whose evaluation runs no user code
 /// and needs no environment: strict equality always, and loose equality
-/// between two strings, two booleans, or `null`/`undefined`. `None` sends
-/// the caller down `eval_binary`. Executors that would otherwise build a
-/// throwaway frame just to compare two strings use this first.
+/// between two strings, two booleans, two numbers, or `null`/`undefined`
+/// and anything. `None` sends the caller down `eval_binary`. Executors that
+/// would otherwise build a throwaway frame just to compare two strings use
+/// this first.
 pub(crate) fn eval_binary_without_env(left: &Value, op: BinaryOp, right: &Value) -> Option<Value> {
     if let (
         BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge,
@@ -379,6 +380,12 @@ pub(crate) fn eval_binary_without_env(left: &Value, op: BinaryOp, right: &Value)
             (Value::String(left), Value::String(right)) => string::js_string_eq(left, right),
             (Value::Boolean(left), Value::Boolean(right)) => left == right,
             (Value::Null | Value::Undefined, Value::Null | Value::Undefined) => true,
+            // `x == null`: nothing else equals `null` or `undefined` except
+            // the IsHTMLDDA host object, and no conversion runs.
+            (Value::Null | Value::Undefined, other) | (other, Value::Null | Value::Undefined) => {
+                crate::html_dda::is_html_dda(other)
+            }
+            (Value::Number(left), Value::Number(right)) => left == right,
             _ => return None,
         },
         _ => return None,

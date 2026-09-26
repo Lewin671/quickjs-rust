@@ -93,6 +93,13 @@ impl WideActivation<'_> {
         {
             return Ok(crate::string::js_string_eq(left, right) == (op == BinaryOp::Eq));
         }
+        // The rest that runs no user code -- `node.left == null` -- without
+        // cloning the operands into the general path.
+        if let Some(Value::Boolean(result)) =
+            crate::operations::eval_binary_without_env(left, op, right)
+        {
+            return Ok(result);
+        }
         let value = self.eval_binary(left.clone(), op, right.clone())?;
         Ok(crate::is_truthy(&value))
     }
