@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use qjs_ast::{BindingPattern, ForInLeft, ForInit, FunctionParams, Stmt, SwitchCase, VarKind};
 
 use crate::RuntimeError;
@@ -139,7 +137,8 @@ impl Compiler {
         &mut self,
         compile: impl FnOnce(&mut Self) -> Result<T, RuntimeError>,
     ) -> Result<T, RuntimeError> {
-        self.lexical_scopes.push(HashMap::new());
+        self.lexical_scopes
+            .push(crate::value::name_hash::NameMap::default());
         let result = compile(self);
         self.lexical_scopes
             .pop()
@@ -238,13 +237,15 @@ impl Compiler {
         }
     }
 
-    fn current_lexical_scope(&self) -> &HashMap<String, usize> {
+    fn current_lexical_scope(&self) -> &crate::value::name_hash::NameMap<String, usize> {
         self.lexical_scopes
             .last()
             .expect("compiler should always have a lexical scope")
     }
 
-    fn current_lexical_scope_mut(&mut self) -> &mut HashMap<String, usize> {
+    fn current_lexical_scope_mut(
+        &mut self,
+    ) -> &mut crate::value::name_hash::NameMap<String, usize> {
         self.lexical_scopes
             .last_mut()
             .expect("compiler should always have a lexical scope")

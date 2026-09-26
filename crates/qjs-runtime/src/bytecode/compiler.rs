@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use crate::value::name_hash::{NameMap, NameSet};
 
 use qjs_ast::{ForInLeft, ForInit, FunctionParams, Script, Stmt, VarKind};
 
@@ -24,8 +24,8 @@ pub(super) struct Compiler {
     pub(super) highest_jump_target: usize,
     pub(super) constants: Vec<Value>,
     pub(super) locals: Vec<Local>,
-    pub(super) local_slots: HashMap<String, usize>,
-    pub(super) lexical_scopes: Vec<HashMap<String, usize>>,
+    pub(super) local_slots: NameMap<String, usize>,
+    pub(super) lexical_scopes: Vec<NameMap<String, usize>>,
     pub(super) code: Vec<Op>,
     loop_stack: Vec<LoopContext>,
     pending_labels: Vec<String>,
@@ -40,7 +40,7 @@ pub(super) struct Compiler {
     /// Names of `var`/function declarations hoisted at global script scope.
     /// They live in the realm (and on `globalThis`), not frame slots, so
     /// closures, direct eval, and promise jobs all observe one binding.
-    pub(super) global_hoisted: std::collections::HashSet<String>,
+    pub(super) global_hoisted: NameSet<String>,
     annex_b_blocked_function_names: Vec<Vec<String>>,
     /// Count of `with` scopes currently open around the code being compiled.
     /// Break/continue/return that leave one or more of them emit `Op::ExitWith`
@@ -124,8 +124,8 @@ impl Default for Compiler {
             highest_jump_target: 0,
             constants: Vec::new(),
             locals: Vec::new(),
-            local_slots: HashMap::new(),
-            lexical_scopes: vec![HashMap::new()],
+            local_slots: NameMap::default(),
+            lexical_scopes: vec![NameMap::default()],
             code: Vec::new(),
             loop_stack: Vec::new(),
             pending_labels: Vec::new(),
@@ -134,7 +134,7 @@ impl Default for Compiler {
             strict: false,
             global_scope: true,
             direct_eval_source: false,
-            global_hoisted: std::collections::HashSet::new(),
+            global_hoisted: NameSet::default(),
             annex_b_blocked_function_names: Vec::new(),
             with_depth: 0,
             with_base_depth: 0,
