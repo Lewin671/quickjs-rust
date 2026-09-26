@@ -1894,3 +1894,30 @@ fn typed_loops_read_dynamic_storage_fields_through_the_shared_slot() {
         Ok(Value::String("870s,870s,1750s".to_owned().into()))
     );
 }
+
+/// A prototype method read in a typed loop honours everything the receiver
+/// can do to shadow it: an own data property, its deletion, a replaced
+/// prototype method and an own accessor (read through the prototype's
+/// remembered value before).
+#[test]
+fn typed_loop_prototype_reads_respect_own_shadowing() {
+    let source = "
+        function S(v) { this.v = v; }
+        S.prototype.get = function () { return this.v; };
+        function run() {
+            var ps = []; for (var i = 0; i < 8; i++) ps.push(new S(i));
+            var out = [];
+            function sum(n) { var s = 0; for (var i = 0; i < n; i++) s += ps[i & 7].get(); return s; }
+            out.push(sum(80));
+            ps[3].get = function () { return 100; }; out.push(sum(80));
+            delete ps[3].get; out.push(sum(80));
+            S.prototype.get = function () { return 1; }; out.push(sum(80));
+            Object.defineProperty(ps[5], 'get', { get: function () { return function () { return 7; }; } });
+            out.push(sum(80));
+            return out.join();
+        }";
+    assert_eq!(
+        eval(&format!("{source} run();")),
+        Ok(Value::String("280,1250,280,80,140".to_owned().into()))
+    );
+}

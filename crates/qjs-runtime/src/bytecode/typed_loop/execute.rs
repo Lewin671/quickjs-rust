@@ -1254,9 +1254,15 @@ fn get_named_object(
     }
     // Dynamic own storage has no slot to remember, so remember the value
     // against this exact receiver and its revision instead.
-    if let crate::value::OwnDataPropertyRead::Data(value) = object.own_data_property_read(name) {
-        shapes.record_exact(object, value.clone());
-        return Some(value);
+    match object.own_data_property_read(name) {
+        crate::value::OwnDataPropertyRead::Data(value) => {
+            shapes.record_exact(object, value.clone());
+            return Some(value);
+        }
+        // An own accessor (or exotic storage) shadows whatever the prototype
+        // holds; reading the remembered inherited value past it was wrong.
+        crate::value::OwnDataPropertyRead::NeedsSlowPath => return None,
+        crate::value::OwnDataPropertyRead::Missing => {}
     }
     // The name is not an own property. A method call site reads its callee
     // from the prototype every iteration, so remember where it resolved:
