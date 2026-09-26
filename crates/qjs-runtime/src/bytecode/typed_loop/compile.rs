@@ -662,6 +662,19 @@ impl<'a> Builder<'a> {
     ///
     /// Two scalars stay on the scalar comparison: widening them would trade a
     /// register compare for two `Box` operations and a value comparison.
+    fn top_operands_include_string_constant(&self) -> bool {
+        self.stack
+            .iter()
+            .rev()
+            .take(2)
+            .any(|&(register, class, _)| {
+                class == Class::Boxed
+                    && self.boxed_constants.iter().any(|(candidate, value)| {
+                        *candidate == register && matches!(value, Value::String(_))
+                    })
+            })
+    }
+
     fn top_operands_include_boxed(&self) -> bool {
         self.stack
             .iter()
@@ -1331,11 +1344,20 @@ impl<'a> Builder<'a> {
             // deoptimized on its first iteration instead. This arm must come
             // first, and must require a genuinely boxed operand, so ordinary
             // numeric comparisons keep the scalar file.
+            // Relational operators likewise when one side is a string
+            // literal: `ch < "0"` over a `charAt` result compares strings,
+            // which unboxing deoptimized. Only then -- a boxed `i <
+            // list.length` must keep the pass that reads the length as a
+            // scalar.
             Op::Binary(binary)
-                if matches!(
+                if (matches!(
                     *binary,
                     BinaryOp::Eq | BinaryOp::Ne | BinaryOp::StrictEq | BinaryOp::StrictNe
-                ) && self.top_operands_include_boxed() =>
+                ) && self.top_operands_include_boxed())
+                    || (matches!(
+                        *binary,
+                        BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+                    ) && self.top_operands_include_string_constant()) =>
             {
                 let (right, _) = self.pop_boxed()?;
                 let (left, _) = self.pop_boxed()?;

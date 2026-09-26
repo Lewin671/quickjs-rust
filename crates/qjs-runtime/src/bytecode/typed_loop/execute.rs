@@ -1615,10 +1615,43 @@ fn boxed_equality(op: BinaryOp, left: &Value, right: &Value) -> Option<Typed> {
             (is_object_like(left) && is_object_like(right)).then(|| fast_reference_eq(left, right))
         }
         BinaryOp::StrictEq | BinaryOp::StrictNe => fast_strict_eq(left, right),
+        BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
+            return boxed_relation(op, left, right);
+        }
         _ => None,
     }?;
     let negated = matches!(op, BinaryOp::Ne | BinaryOp::StrictNe);
     Some(Typed::Boolean(equal != negated))
+}
+
+/// A relational comparison of two strings (by code unit) or two numbers;
+/// anything else -- an object's `valueOf` could run -- deoptimizes.
+/// `ch < "0"` over a `charAt` result had unboxed the string and
+/// deoptimized every entry of string-validate-input's scanning loops.
+#[inline(never)]
+fn boxed_relation(op: BinaryOp, left: &Value, right: &Value) -> Option<Typed> {
+    use std::cmp::Ordering;
+    let holds = match (left, right) {
+        (Value::String(left), Value::String(right)) => {
+            let ordering = crate::string::js_string_cmp(left, right);
+            match op {
+                BinaryOp::Lt => ordering == Ordering::Less,
+                BinaryOp::Le => ordering != Ordering::Greater,
+                BinaryOp::Gt => ordering == Ordering::Greater,
+                BinaryOp::Ge => ordering != Ordering::Less,
+                _ => return None,
+            }
+        }
+        (Value::Number(left), Value::Number(right)) => match op {
+            BinaryOp::Lt => left < right,
+            BinaryOp::Le => left <= right,
+            BinaryOp::Gt => left > right,
+            BinaryOp::Ge => left >= right,
+            _ => return None,
+        },
+        _ => return None,
+    };
+    Some(Typed::Boolean(holds))
 }
 
 #[inline(always)]

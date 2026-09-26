@@ -413,3 +413,21 @@ fn an_inherited_accessor_is_not_answered_from_the_slot_cache() {
         run(o, 5) + ':' + calls;";
     assert_eq!(eval(source), Ok(Value::String("10:5".into())));
 }
+
+/// A relational comparison against a string literal in a typed loop
+/// compares strings by code unit (and numbers as numbers) instead of
+/// unboxing; a mixed or object operand leaves the loop exactly, `valueOf`
+/// included. Expected values from V8.
+#[test]
+fn typed_loops_compare_against_string_literals() {
+    let source = r#"function scan(s) { var bad = 0, le = 0; for (var i = 0; i < s.length; i++) { var ch = s.charAt(i); if (ch < "0" || ch > "9") bad++; if (ch <= "5") le++; if (ch >= "x") le += 10; } return bad + ":" + le; }
+function mixed(a) { var n = 0; for (var i = 0; i < a.length; i++) { if (a[i] < "5") n++; if (a[i] > 3) n += 100; } return n; }
+var calls = 0; var o = { valueOf: function () { calls++; return 4; } };
+function objs(a) { var n = 0; for (var i = 0; i < a.length; i++) { if (a[i] < "5") n++; } return n; }
+var out = [scan("1234xyz"), scan("12éz9"), scan(""), mixed(["1", "9", 2, 7, "10", undefined, null]), objs(["1", o, "7", o]), calls];
+out.join(',');"#;
+    assert_eq!(
+        eval(source),
+        Ok(Value::String("3:34,2:22,0:0,304,3,2".to_owned().into()))
+    );
+}
