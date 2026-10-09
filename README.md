@@ -74,9 +74,9 @@ qjs-rust
 For source builds, install Rust with [`rustup`](https://rustup.rs), then:
 
 ```sh
-git clone --recurse-submodules https://github.com/Lewin671/quickjs-rust.git
+git clone https://github.com/Lewin671/quickjs-rust.git
 cd quickjs-rust
-./scripts/bootstrap.sh   # initializes submodules if you forgot --recurse-submodules
+./scripts/bootstrap.sh   # fetches the pinned Test262 and QuickJS-NG submodules
 ```
 
 Use the CLI for scripts, modules, or direct evaluation:
