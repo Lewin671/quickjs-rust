@@ -65,7 +65,7 @@ fn accumulates_stable_global_reads_but_preserves_global_accessors() {
 }
 
 #[test]
-fn runs_empty_and_bitwise_branch_control_loops() {
+fn empty_and_bitwise_branch_counted_loops_keep_their_results() {
     assert_eq!(
         eval(
             "function empty(n) { var i; for (i = 0; i < n; i++) {} return i; } \
@@ -83,7 +83,7 @@ fn runs_empty_and_bitwise_branch_control_loops() {
 }
 
 #[test]
-fn falls_back_for_observable_or_non_numeric_reads() {
+fn accumulation_loops_observe_accessors_and_concatenate_string_reads() {
     assert_eq!(
         eval(
             "var reads = 0; \
@@ -104,7 +104,7 @@ fn falls_back_for_observable_or_non_numeric_reads() {
 }
 
 #[test]
-fn falls_back_for_coerced_limits_and_sparse_arrays() {
+fn accumulation_loops_coerce_string_limits_and_read_holes_as_undefined() {
     assert_eq!(
         eval(
             "function stringLimit(n) { \
@@ -155,7 +155,7 @@ fn accumulates_two_argument_numeric_global_local_and_method_calls() {
 }
 
 #[test]
-fn two_argument_call_loop_trace_falls_back_for_non_numeric_constants() {
+fn two_argument_call_loops_concatenate_string_arguments() {
     assert_eq!(
         eval(
             "function append(left, right) { return left + right; } \
@@ -167,7 +167,7 @@ fn two_argument_call_loop_trace_falls_back_for_non_numeric_constants() {
 }
 
 #[test]
-fn call_loop_trace_falls_back_for_observable_and_non_numeric_callees() {
+fn call_loops_observe_accessor_callees_and_add_boolean_results() {
     assert_eq!(
         eval(
             "var gets = 0; \
@@ -186,7 +186,7 @@ fn call_loop_trace_falls_back_for_observable_and_non_numeric_callees() {
 }
 
 #[test]
-fn call_loop_trace_rejects_captured_writes_into_the_caller_frame() {
+fn call_loops_see_callee_writes_to_a_captured_loop_limit() {
     assert_eq!(
         eval(
             "function shrinkingLimit(n) { \
@@ -203,7 +203,7 @@ fn call_loop_trace_rejects_captured_writes_into_the_caller_frame() {
 }
 
 #[test]
-fn loop_plan_deoptimization_stays_local_to_one_invocation() {
+fn dense_array_loops_keep_results_when_calls_alternate_numeric_and_mixed_inputs() {
     // Loop plans live in the shared bytecode and are only copied into a frame
     // when a deoptimization rewrites or suppresses one. A suppression in one
     // call must not leak into later calls of the same function, and repeated
@@ -242,7 +242,7 @@ fn loop_plan_deoptimization_stays_local_to_one_invocation() {
 }
 
 #[test]
-fn counted_loop_headers_fuse_without_changing_semantics() {
+fn counted_loop_headers_preserve_coercion_break_continue_and_capture_semantics() {
     // The compare-and-branch superinstruction now applies to functions with no
     // virtualizable object literal. It must preserve the loop's observable
     // behavior for zero, one, and many iterations, for a non-numeric operand
@@ -288,7 +288,7 @@ fn counted_loop_headers_fuse_without_changing_semantics() {
 }
 
 #[test]
-fn loops_stay_correct_when_a_plan_is_retired_after_repeated_declines() {
+fn loops_with_allocating_type_changing_or_mixed_store_bodies_keep_their_results() {
     // A loop plan that keeps declining is retired for the rest of the
     // frame, so the loop simply runs on the ordinary interpreter. That is a
     // speed decision with no semantic content, and these loops must produce
@@ -382,8 +382,8 @@ fn counted_loops_with_literal_bounds_match_local_bound_results() {
 #[test]
 fn brace_less_loop_bodies_match_braced_ones() {
     // A brace-less body is one statement, not a statement list, and used to
-    // keep its value in the loop's completion temporary — which made a string
-    // append quadratic and hid the body from the specialized loop tiers.
+    // keep its value in the loop's completion temporary, which made a string
+    // append quadratic.
     assert_eq!(
         eval("function m(){ var s = ''; for (var i = 0; i < 4; i++) s += 'ab'; return s; } m();"),
         Ok(Value::String("abababab".to_owned().into()))
@@ -513,7 +513,7 @@ function computed(n) {
 /// (`value = value <op> operand`): every operator, the ToInt32 / shift-count
 /// boundaries, counter wrap past 2^32, and the final counter value.
 #[test]
-fn scalar_bitwise_recurrence_loops() {
+fn counted_loops_updating_one_scalar_with_a_bitwise_operator_match_int32_semantics() {
     for (source, expected) in [
         (
             "function run(value) { for (var i = 1; i < 5; i++) value = value & i; return value + ':' + i; } run(-1);",
@@ -593,7 +593,7 @@ fn scalar_bitwise_recurrence_loops() {
 }
 
 #[test]
-fn scalar_bitwise_recurrence_on_an_undeclared_sloppy_global() {
+fn bitwise_update_loop_on_an_undeclared_sloppy_global_updates_the_global() {
     assert_eq!(
         eval(
             "bitwiseValue = 4294967296; \
@@ -606,7 +606,7 @@ fn scalar_bitwise_recurrence_on_an_undeclared_sloppy_global() {
 }
 
 #[test]
-fn scalar_bitwise_recurrence_with_object_coercion_and_bigint_operands() {
+fn bitwise_update_loops_coerce_objects_each_iteration_and_keep_bigint_rules() {
     assert_eq!(
         eval(
             "var coercions = 0; var operand = { valueOf: function () { coercions++; return 3; } }; \
@@ -632,7 +632,7 @@ fn scalar_bitwise_recurrence_with_object_coercion_and_bigint_operands() {
 }
 
 #[test]
-fn scalar_bitwise_recurrence_with_accessor_eval_and_captured_bindings() {
+fn bitwise_update_loops_respect_accessors_readonly_globals_eval_and_captures() {
     assert_eq!(
         eval(
             "guardedValue = 7; var gets = 0; \
@@ -666,7 +666,7 @@ fn scalar_bitwise_recurrence_with_accessor_eval_and_captured_bindings() {
 }
 
 #[test]
-fn scalar_bitwise_recurrence_with_fractional_limit_and_single_iteration() {
+fn bitwise_update_loops_handle_fractional_limits_and_single_iterations() {
     assert_eq!(
         eval(
             "function run(limit, value) { for (var i = 0; i < limit; i++) value = value ^ i; return value + ':' + i; } run(3.5, 0);"
