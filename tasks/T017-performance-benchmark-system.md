@@ -5,8 +5,9 @@
 - Implementation: partial. M0-M5 and the hosted preview infrastructure are
   present (`benchmarks/`, `tools/benchmark/`, `scripts/benchmark*.sh`,
   `scripts/performance-*.sh`). M6 and M7 are not started.
-- Verified at: not recorded per milestone. This file was last edited at
-  `57c43051`, 2026-07-16. At `d1313d52`, `benchmarks/performance-policy.json`
+- Verified at: not recorded per milestone. The hosted preview's staged
+  workflow was verified at `35121b6a`, 2026-10-09 (see "Hosted preview
+  record"). At `d1313d52`, `benchmarks/performance-policy.json`
   still has `fixed_hardware.configured` false, an empty `evidence_entries`
   list and every gate disabled.
 - Evidence: `benchmarks/performance-policy.json`; `docs/benchmarking.md`.
@@ -66,3 +67,41 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/benchmark/tests 
 ```
 
 Running the benchmark lanes and reports: `docs/benchmarking.md`, "Running".
+
+## Hosted preview record
+
+What was measured about the hosted preview itself, so it is not re-derived.
+
+**2026-10-09, lanes in parallel jobs (`35121b6a`).** Run 37933477498 at
+`3fbd4e53`, one job: 1385 s, of which broad 815 s, external 361 s, sentinel
+121 s, candidate build 40 s. Run 37950725509 at `35121b6a`, staged: 891 s
+from creation to conclusion; build job 37 s, then broad 828 s, external
+396 s and sentinel 130 s side by side, publish 5 s. The run is now the build
+plus the broad lane.
+
+**Where the broad lane's time goes (run 37933477498, sample durations).** Of
+814 s: linearity diagnostics 475 s (600 samples), calibration 183 s, warmup
+40 s, the three measurement blocks 116 s. The sentinel lane has the same
+shape (69 of 119 s in linearity). Every phase scales with the calibrated
+window, and the eight linearity probes are part of measurement protocol v9.
+
+**2026-10-09, rejected: a shorter hosted measurement window.** Capping
+`min_window_ms` at 250 and raising `startup_max_fraction` to 0.04 in the
+derived hosted manifest (14 broad cases ask for 500 ms and 1% startup, which
+at about 4 ms of hosted startup forces a window above 400 ms). Qualified
+before landing with the same three executables on one macOS arm64 host, broad
+lane, three blocks, against criteria written down first: at least 23 of 25
+cases within 5% of the template-window candidate/QuickJS-NG ratio and the
+geometric mean of the shift within 2%. Template windows: 851 s,
+candidate/base 1.0008 [0.9991, 1.0028], candidate/QuickJS-NG 0.9744. Short
+windows: 490 s, candidate/base 1.0033 [0.986, 1.069], candidate/QuickJS-NG
+1.0114; only 19 of 25 cases within 5%, mean shift +3.8%, and the largest
+per-case candidate/base deviation went from 0.9% to 7.0%. It changes the
+reading, not only its noise, so it was not landed. The code was never
+committed.
+
+The remaining levers on the broad lane both change what it measures and
+need their own qualification: fewer or shorter linearity probes (a
+measurement-protocol change, also binding the formal lanes), or sharding the
+25 cases across runners (the lane's overall ratio would no longer come from
+one host).
