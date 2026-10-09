@@ -1,4 +1,4 @@
-//! [[Call]] and [[Construct]]: `call_function`, `construct_function`, and
+//! `[[Call]]` and `[[Construct]]`: `call_function`, `construct_function`, and
 //! the direct-leaf entry the VM and the accelerator tiers use.
 //!
 //! `call_function` first settles the callable kind (Proxy, bound, native,

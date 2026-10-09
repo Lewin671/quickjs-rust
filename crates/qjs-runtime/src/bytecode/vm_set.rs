@@ -1,4 +1,4 @@
-//! The full [[Set]]: `set_property` and `set_property_key` for every
+//! The full `[[Set]]`: `set_property` and `set_property_key` for every
 //! receiver kind, including primitives, functions, arrays, Proxies and
 //! setters found on the prototype chain.
 
