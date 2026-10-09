@@ -6,7 +6,11 @@ Prose rules go stale; these do not. The checks are deliberately few:
 * `CLAUDE.md` is a symlink to `AGENTS.md`.
 * Each entry document stays within its line budget, so current guidance
   cannot quietly turn back into a log.
-* Relative Markdown links (and `#anchors`) in current documents resolve.
+* Relative Markdown links, images and `#anchors` in current documents
+  resolve. Inline links and reference definitions are read the way
+  CommonMark reads them; fenced code blocks and code spans are skipped.
+  Not covered: indented code blocks (a link inside one is still checked),
+  raw HTML links, and a `[text][label]` whose label has no definition.
 * Every active task opens with the resume block from `tasks/TEMPLATE.md`.
 * `tasks/README.md` lists every task file, and
   `tasks/performance-units/README.md` lists every frozen plan.
@@ -61,21 +65,9 @@ STATUSES = (
 )
 RESUME_WINDOW = 30
 
-# Link destinations, following CommonMark. Either form may be written
-# <in angle brackets>, which is how a destination contains spaces. Group 1 is
-# the bracketed form, group 2 the bare one.
-# Inside `(...)` a bare destination ends at whitespace or at the closing
-# parenthesis; parentheses within it must be balanced.
-INLINE_DESTINATION = r"(?:<([^>\n]*)>|((?:[^()\s<]|\([^()\s]*\))+))"
-# In a reference definition a bare destination is any run without whitespace.
-DEFINITION_DESTINATION = r"(?:<([^>\n]*)>|([^\s<]\S*))"
-# An inline link or image, with or without a title: [text](target "title").
-LINK = re.compile(r"\]\(\s*" + INLINE_DESTINATION + r"(?:\s+[^\n]*?)?\)")
-# A reference definition: [label]: target "title". `[^note]:` is a footnote,
-# not a link.
-REFERENCE = re.compile(r"^ {0,3}\[(?!\^)[^\]\n]+\]:(.*)$")
-DEFINITION_TARGET = re.compile(r"^\s*" + DEFINITION_DESTINATION)
-CODE_SPAN = re.compile(r"(`+)(?:(?!\1).)+?\1")
+# A reference definition: [label]: target "title". Backticks in a label are
+# literal, and `[^note]:` is a footnote, not a link.
+REFERENCE = re.compile(r"^ {0,3}\[(?!\^)(?:[^\]\\\n]|\\.)+\]:(.*)$")
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 FENCE = re.compile(r"^\s*(```|~~~)")
 TASK_NAME = re.compile(r"^T\d{3}-.+\.md$")
@@ -107,13 +99,103 @@ def prose_lines(path: Path) -> list[str]:
     return lines
 
 
+def unescape(text: str) -> str:
+    return re.sub(r"\\(.)", r"\1", text)
+
+
+def inline_destination(line: str, start: int) -> tuple[str | None, int]:
+    """The destination of a link whose `(` ends just before `start`.
+
+    Follows CommonMark: `<...>` may hold spaces; a bare destination ends at
+    whitespace or at the parenthesis that closes the link, and parentheses
+    inside it nest. Returns the destination, or None when this is not a link,
+    and the index to continue scanning from.
+    """
+    pos = start
+    while pos < len(line) and line[pos] in " \t\n":
+        pos += 1
+    if pos < len(line) and line[pos] == "<":
+        end = line.find(">", pos + 1)
+        if end < 0 or "\n" in line[pos:end]:
+            return None, start
+        destination, pos = line[pos + 1 : end], end + 1
+    else:
+        begin, depth = pos, 0
+        while pos < len(line) and not line[pos].isspace():
+            if line[pos] == "\\" and pos + 1 < len(line):
+                pos += 2
+                continue
+            if line[pos] == "(":
+                depth += 1
+            elif line[pos] == ")":
+                if depth == 0:
+                    break
+                depth -= 1
+            pos += 1
+        if depth:
+            return None, start
+        destination = unescape(line[begin:pos])
+    # Anything between the destination and the closing parenthesis is a title.
+    close = line.find(")", pos)
+    if close < 0:
+        return None, start
+    return destination, close + 1
+
+
+def inline_targets(line: str) -> list[tuple[int, str]]:
+    """Inline link and image destinations in one paragraph, with offsets."""
+    found = []
+    pos = 0
+    while pos < len(line):
+        char = line[pos]
+        if char == "\\":
+            pos += 2
+        elif char == "`":
+            # A code span runs to the next backtick run of the same length.
+            # Without one the backticks are literal text.
+            end = pos
+            while end < len(line) and line[end] == "`":
+                end += 1
+            fence = line[pos:end]
+            close = re.search(rf"(?<!`){fence}(?!`)", line[end:])
+            pos = end + close.end() if close else end
+        elif line.startswith("](", pos):
+            destination, pos_after = inline_destination(line, pos + 2)
+            if destination is None:
+                pos += 1
+            else:
+                found.append((pos, destination))
+                pos = pos_after
+        else:
+            pos += 1
+    return found
+
+
+def definition_target(rest: str) -> str | None:
+    """The destination that follows a reference label, or None for none."""
+    rest = rest.strip()
+    if not rest:
+        return None
+    if rest.startswith("<"):
+        end = rest.find(">")
+        return rest[1:end] if end > 0 else None
+    return unescape(rest.split()[0])
+
+
 def link_targets(lines: list[str]) -> list[tuple[int, str]]:
     """Every link destination in `lines`, with its 1-based line number."""
     found = []
-    lines = [CODE_SPAN.sub("", line) for line in lines]
+    # Inline links are scanned a paragraph at a time, because a code span or
+    # a link's text may wrap across lines.
+    start = 0
+    for index in range(len(lines) + 1):
+        if index < len(lines) and lines[index].strip():
+            continue
+        paragraph = "\n".join(lines[start:index])
+        for offset, target in inline_targets(paragraph):
+            found.append((start + 1 + paragraph.count("\n", 0, offset), target))
+        start = index + 1
     for index, line in enumerate(lines):
-        for angled, bare in LINK.findall(line):
-            found.append((index + 1, angled or bare))
         definition = REFERENCE.match(line)
         if not definition:
             continue
@@ -121,10 +203,10 @@ def link_targets(lines: list[str]) -> list[tuple[int, str]]:
         if not rest.strip() and index + 1 < len(lines):
             # The destination may sit on the line after the label.
             rest = lines[index + 1]
-        target = DEFINITION_TARGET.match(rest)
-        if target:
-            found.append((index + 1, target.group(1) or target.group(2)))
-    return found
+        target = definition_target(rest)
+        if target is not None:
+            found.append((index + 1, target))
+    return sorted(found)
 
 
 def anchors(path: Path) -> set[str]:
@@ -184,7 +266,7 @@ def check_links(root: Path) -> list[str]:
     anchor_cache: dict[Path, set[str]] = {}
     for document in current_documents(root):
         for number, target in link_targets(prose_lines(document)):
-            if re.match(r"^[a-z][a-z0-9+.\-]*:", target):
+            if not target or re.match(r"^[a-z][a-z0-9+.\-]*:", target):
                 continue
             file_part, _, fragment = target.partition("#")
             destination = (

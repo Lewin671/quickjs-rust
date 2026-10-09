@@ -115,6 +115,40 @@ class ContextCheckTests(unittest.TestCase):
         self.write("README.md", "Write `[text](target.md)` or ``[a](`b`.md)``.\n")
         self.assertEqual(self.errors(), [])
 
+    def test_an_empty_destination_is_a_same_document_link(self):
+        self.write("README.md", "[self][self] and [top]()\n\n[self]: <>\n")
+        self.assertEqual(self.errors(), [])
+
+    def test_backticks_in_a_reference_label_are_literal(self):
+        self.write("README.md", "See [`guide`].\n\n[`guide`]: docs/missing.md\n")
+        self.assertTrue(any("docs/missing.md" in e for e in self.errors()))
+
+    def test_nested_parentheses_in_a_destination_are_followed(self):
+        self.write("README.md", "[guide](docs/missing(v(2)).md)\n")
+        self.assertTrue(any("docs/missing(v(2)).md" in e for e in self.errors()))
+        self.write("docs/kept(v(2)).md", "# Kept\n")
+        self.write("README.md", "[guide](docs/kept(v(2)).md) and (an aside)\n")
+        self.assertEqual(self.errors(), [])
+
+    def test_escaped_backticks_do_not_open_a_code_span(self):
+        self.write("README.md", "\\` [guide](docs/missing.md) \\`\n")
+        self.assertTrue(any("docs/missing.md" in e for e in self.errors()))
+
+    def test_an_unclosed_backtick_does_not_hide_a_link(self):
+        self.write("README.md", "A stray ` then [guide](docs/missing.md)\n")
+        self.assertTrue(any("docs/missing.md" in e for e in self.errors()))
+
+    def test_escaped_characters_in_a_destination_are_unescaped(self):
+        self.write("docs/a_b.md", "# A\n")
+        self.write("README.md", "[a](docs/a\\_b.md)\n")
+        self.assertEqual(self.errors(), [])
+
+    def test_a_code_span_may_wrap_across_lines(self):
+        self.write("README.md", "Write `[text]\n(target.md)` and `[a](b.md)\nmore`.\n")
+        self.assertEqual(self.errors(), [])
+        self.write("README.md", "`code`\n\nthen [a](gone.md)\nmore` text\n")
+        self.assertTrue(any("README.md:3" in e and "gone.md" in e for e in self.errors()))
+
     def test_footnotes_are_not_links(self):
         self.write("README.md", "Text.[^1]\n\n[^1]: This is explanatory text.\n")
         self.assertEqual(self.errors(), [])
