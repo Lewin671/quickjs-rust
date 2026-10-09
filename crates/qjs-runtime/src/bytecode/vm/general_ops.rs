@@ -17,8 +17,8 @@
 //!
 //! The split keeps the dispatch function small. Its measured effect on
 //! whole-program time was about one percent
-//! (`tasks/T024-general-register-core.md`), so do not expect further gains
-//! from rearranging it.
+//! (`tasks/archive/T024-general-register-core.md`), so do not expect further
+//! gains from rearranging it.
 //!
 //! `self.ip` is authoritative on entry and on exit, so an opcode that jumps,
 //! calls, throws or suspends behaves exactly as it did inline.
