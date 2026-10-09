@@ -1,6 +1,5 @@
 //! Typed dense-array mutation plans compiled from immutable bytecode.
 //!
-//! Fixed-index recurrences scalar-replace a small set of Number elements.
 //! Computed-index loops translate one straight-line body into a bounded Number
 //! register program spanning several dense-array receivers. Writable regions
 //! require distinct receivers and stage every store; pure-read reductions use
@@ -8,17 +7,14 @@
 //! can publish only completed scalar iterations before replaying the current
 //! iteration at the header.
 
-use std::{
-    cell::{Ref, RefMut},
-    collections::BTreeSet,
-};
+use std::cell::{Ref, RefMut};
 
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
 use crate::{Value, to_int32_number, to_uint32_number, value::ArrayRef};
 
 use super::super::{
-    ir::{Bytecode, Op, decode_index_receiver},
+    ir::{Bytecode, Op},
     vm::Vm,
     vm_props::array_index_from_number,
 };
@@ -46,7 +42,6 @@ const MAX_DENSE_LOCALS: usize = 64;
 const MAX_DENSE_WRITES: usize = 64;
 const MAX_DENSE_RECEIVERS: usize = 8;
 const MAX_DENSE_STORES: usize = 32;
-const MAX_FIXED_MUTATIONS: usize = 16;
 const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
 
 #[inline]
@@ -714,16 +709,6 @@ pub(super) enum DenseNumericMutationLoopRun {
     Suppress,
 }
 
-impl DenseNumericMutationLoopRun {
-    fn from_handled(handled: bool) -> Self {
-        if handled {
-            Self::Handled
-        } else {
-            Self::Declined
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub(super) struct DenseNumericMutationLoopPlan {
     exit: usize,
@@ -732,37 +717,9 @@ pub(super) struct DenseNumericMutationLoopPlan {
 
 #[derive(Clone, Debug)]
 enum DensePlanKind {
-    Fixed(FixedDensePlan),
     LegacyDynamic(legacy::LegacyDynamicDensePlan),
     LegacySuppressingDynamic(legacy::LegacyDynamicDensePlan),
     Dynamic(DynamicDensePlan),
-}
-
-#[derive(Clone, Copy, Debug)]
-enum FixedMutationOp {
-    Copy,
-    Add(f64),
-    Subtract(f64),
-}
-
-#[derive(Clone, Copy, Debug)]
-struct FixedMutation {
-    source: usize,
-    target: usize,
-    operation: FixedMutationOp,
-}
-
-#[derive(Clone, Debug)]
-struct FixedDensePlan {
-    counter_slot: usize,
-    limit_slot: usize,
-    accumulator_slot: usize,
-    block_result_slot: usize,
-    loop_result_slot: usize,
-    receiver_slot: usize,
-    indices: Vec<usize>,
-    mutations: Vec<FixedMutation>,
-    checksum_index: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -1092,14 +1049,6 @@ struct DynamicProgramRun {
 }
 
 impl DenseNumericMutationLoopPlan {
-    pub(super) fn compile_fixed_only(
-        bytecode: &Bytecode,
-        header: usize,
-        backedge: usize,
-    ) -> Option<Self> {
-        compile_fixed(bytecode, header, backedge)
-    }
-
     pub(super) fn compile_dynamic_only(
         bytecode: &Bytecode,
         header: usize,
@@ -1168,7 +1117,7 @@ impl DenseNumericMutationLoopPlan {
             DensePlanKind::LegacyDynamic(plan) | DensePlanKind::LegacySuppressingDynamic(plan) => {
                 plan.input_layout()
             }
-            DensePlanKind::Fixed(_) | DensePlanKind::Dynamic(_) => None,
+            DensePlanKind::Dynamic(_) => None,
         }
     }
 
@@ -1178,292 +1127,18 @@ impl DenseNumericMutationLoopPlan {
             DensePlanKind::LegacyDynamic(plan) | DensePlanKind::LegacySuppressingDynamic(plan) => {
                 Some(plan.binary_bundle_layouts())
             }
-            DensePlanKind::Fixed(_) | DensePlanKind::Dynamic(_) => None,
+            DensePlanKind::Dynamic(_) => None,
         }
     }
 
     pub(super) fn try_run(&self, vm: &mut Vm<'_>) -> DenseNumericMutationLoopRun {
         match &self.kind {
-            DensePlanKind::Fixed(plan) => {
-                DenseNumericMutationLoopRun::from_handled(plan.try_run(vm, self.exit))
-            }
             DensePlanKind::LegacyDynamic(plan) => plan.try_run(vm, self.exit),
             DensePlanKind::LegacySuppressingDynamic(plan) => {
                 plan.try_run_suppressing(vm, self.exit)
             }
             DensePlanKind::Dynamic(plan) => plan.try_run(vm, self.exit),
         }
-    }
-}
-
-fn compile_fixed(
-    bytecode: &Bytecode,
-    header: usize,
-    backedge: usize,
-) -> Option<DenseNumericMutationLoopPlan> {
-    let code = &bytecode.code;
-    let (
-        Op::LoadLocal(counter_slot),
-        Op::LoadLocal(limit_slot),
-        Op::Binary(BinaryOp::Lt),
-        Op::JumpIfFalse(exit),
-        Op::Pop,
-    ) = (
-        code.get(header)?,
-        code.get(header + 1)?,
-        code.get(header + 2)?,
-        code.get(header + 3)?,
-        code.get(header + 4)?,
-    )
-    else {
-        return None;
-    };
-    if *exit <= backedge || !matches!(code.get(*exit), Some(Op::Pop)) {
-        return None;
-    }
-
-    let tail = backedge.checked_sub(8)?;
-    let (
-        Op::LoadLocal(tail_block_result_slot),
-        Op::StoreLocal(loop_result_slot),
-        Op::LoadLocal(tail_counter_slot),
-        Op::ToNumeric,
-        Op::Dup,
-        Op::Update(qjs_ast::UpdateOp::Increment),
-        Op::AssignLocal(assigned_counter_slot),
-        Op::Pop,
-        Op::Jump(tail_header),
-    ) = (
-        code.get(tail)?,
-        code.get(tail + 1)?,
-        code.get(tail + 2)?,
-        code.get(tail + 3)?,
-        code.get(tail + 4)?,
-        code.get(tail + 5)?,
-        code.get(tail + 6)?,
-        code.get(tail + 7)?,
-        code.get(tail + 8)?,
-    )
-    else {
-        return None;
-    };
-    if tail_header != &header
-        || tail_counter_slot != counter_slot
-        || assigned_counter_slot != counter_slot
-    {
-        return None;
-    }
-
-    // The block-result seed prologue only exists where a statement completion
-    // value is observable; the loop tail always names the same slot.
-    let (body_start, seeded_block_result_slot) = match (code.get(header + 5), code.get(header + 6))
-    {
-        (Some(Op::LoadConst(_)), Some(Op::StoreLocal(slot))) => (header + 7, Some(*slot)),
-        _ => (header + 5, None),
-    };
-    if seeded_block_result_slot.is_some_and(|slot| slot != *tail_block_result_slot) {
-        return None;
-    }
-    let block_result_slot = tail_block_result_slot;
-
-    let mut cursor = body_start;
-    let mut receiver_slot = None;
-    let mut raw_mutations = Vec::new();
-    while let Some((mutation, slot, next)) =
-        compile_fixed_mutation(bytecode, cursor, *block_result_slot, *loop_result_slot)
-    {
-        if receiver_slot.is_some_and(|current| current != slot) {
-            return None;
-        }
-        receiver_slot = Some(slot);
-        raw_mutations.push(mutation);
-        cursor = next;
-    }
-    if raw_mutations.is_empty() || raw_mutations.len() > MAX_FIXED_MUTATIONS {
-        return None;
-    }
-
-    let (
-        Op::LoadLocal(accumulator_slot),
-        Op::GetPropIndex(encoded_checksum),
-        Op::Binary(BinaryOp::Add),
-    ) = (
-        code.get(cursor)?,
-        code.get(cursor + 1)?,
-        code.get(cursor + 2)?,
-    )
-    else {
-        return None;
-    };
-    let (assigned_accumulator_slot, accumulator_commit_end) =
-        super::match_accumulator_commit(code, cursor + 3, *block_result_slot, *loop_result_slot)?;
-    let assigned_accumulator_slot = &assigned_accumulator_slot;
-    let accumulator_end = accumulator_commit_end;
-    let (checksum_index, checksum_receiver) = decode_index_receiver(*encoded_checksum);
-    let receiver_slot = receiver_slot?;
-    let required_distinct_slots = [
-        *counter_slot,
-        *limit_slot,
-        *accumulator_slot,
-        *block_result_slot,
-        *loop_result_slot,
-        receiver_slot,
-    ];
-    if accumulator_end != tail
-        || checksum_receiver != Some(receiver_slot)
-        || assigned_accumulator_slot != accumulator_slot
-        || required_distinct_slots
-            .iter()
-            .enumerate()
-            .any(|(index, slot)| required_distinct_slots[..index].contains(slot))
-    {
-        return None;
-    }
-
-    let mut indices = BTreeSet::new();
-    indices.insert(checksum_index);
-    for (source, target, _) in &raw_mutations {
-        indices.insert(*source);
-        indices.insert(*target);
-    }
-    let indices: Vec<_> = indices.into_iter().collect();
-    let position = |index| indices.binary_search(&index).ok();
-    let mutations = raw_mutations
-        .into_iter()
-        .map(|(source, target, operation)| {
-            Some(FixedMutation {
-                source: position(source)?,
-                target: position(target)?,
-                operation,
-            })
-        })
-        .collect::<Option<Vec<_>>>()?;
-
-    Some(DenseNumericMutationLoopPlan {
-        exit: *exit,
-        kind: DensePlanKind::Fixed(FixedDensePlan {
-            counter_slot: *counter_slot,
-            limit_slot: *limit_slot,
-            accumulator_slot: *accumulator_slot,
-            block_result_slot: *block_result_slot,
-            loop_result_slot: *loop_result_slot,
-            receiver_slot,
-            checksum_index: position(checksum_index)?,
-            indices,
-            mutations,
-        }),
-    })
-}
-
-fn compile_fixed_mutation(
-    bytecode: &Bytecode,
-    cursor: usize,
-    block_result_slot: usize,
-    loop_result_slot: usize,
-) -> Option<((usize, usize, FixedMutationOp), usize, usize)> {
-    let code = &bytecode.code;
-    let Op::LoadLocal(receiver_slot) = code.get(cursor)? else {
-        return None;
-    };
-    let Op::GetPropIndex(encoded_source) = code.get(cursor + 1)? else {
-        return None;
-    };
-    let (source, cached_receiver) = decode_index_receiver(*encoded_source);
-    if cached_receiver != Some(*receiver_slot) {
-        return None;
-    }
-
-    let (operation, set_offset) = match (code.get(cursor + 2), code.get(cursor + 3)) {
-        (Some(Op::LoadConst(constant)), Some(Op::Binary(operation))) => {
-            let Value::Number(constant) = bytecode.constants.get(*constant)? else {
-                return None;
-            };
-            let operation = match operation {
-                BinaryOp::Add => FixedMutationOp::Add(*constant),
-                BinaryOp::Sub => FixedMutationOp::Subtract(*constant),
-                _ => return None,
-            };
-            (operation, 4)
-        }
-        (Some(Op::SetPropIndex { .. }), _) => (FixedMutationOp::Copy, 2),
-        _ => return None,
-    };
-    let Op::SetPropIndex { index: target, .. } = code.get(cursor + set_offset)? else {
-        return None;
-    };
-    let next = super::match_completion_suffix(
-        code,
-        cursor + set_offset + 1,
-        block_result_slot,
-        loop_result_slot,
-    )?;
-    Some(((source, *target, operation), *receiver_slot, next))
-}
-
-impl FixedDensePlan {
-    #[inline(never)]
-    fn try_run(&self, vm: &mut Vm<'_>, exit: usize) -> bool {
-        if vm.direct_eval_with_stack {
-            return false;
-        }
-        for slot in [
-            self.counter_slot,
-            self.limit_slot,
-            self.accumulator_slot,
-            self.block_result_slot,
-            self.loop_result_slot,
-            self.receiver_slot,
-        ] {
-            if !vm.slot_is_authoritative(slot) {
-                return false;
-            }
-        }
-        let (Some(mut counter), Some(limit), Some(mut accumulator)) = (
-            local_number(vm, self.counter_slot),
-            local_number(vm, self.limit_slot),
-            local_number(vm, self.accumulator_slot),
-        ) else {
-            return false;
-        };
-        let Some(Some(Value::Array(array))) = vm.locals.get(self.receiver_slot) else {
-            return false;
-        };
-        let array = array.clone();
-        let completed = array.with_dense_writable_elements(|elements| {
-            let mut values = self
-                .indices
-                .iter()
-                .map(|index| match elements.get(*index) {
-                    Some(Value::Number(value)) => Some(*value),
-                    _ => None,
-                })
-                .collect::<Option<Vec<_>>>()?;
-            while counter < limit {
-                for mutation in &self.mutations {
-                    values[mutation.target] = match mutation.operation {
-                        FixedMutationOp::Copy => values[mutation.source],
-                        FixedMutationOp::Add(constant) => values[mutation.source] + constant,
-                        FixedMutationOp::Subtract(constant) => values[mutation.source] - constant,
-                    };
-                }
-                accumulator += values[self.checksum_index];
-                counter += 1.0;
-                record_iteration();
-            }
-            for mutation in &self.mutations {
-                elements[self.indices[mutation.target]] = Value::Number(values[mutation.target]);
-            }
-            Some(())
-        });
-        if !matches!(completed, Some(Some(()))) {
-            return false;
-        }
-        set_local_number(vm, self.counter_slot, counter);
-        set_local_number(vm, self.accumulator_slot, accumulator);
-        set_local_number(vm, self.block_result_slot, accumulator);
-        set_local_number(vm, self.loop_result_slot, accumulator);
-        vm.ip = exit + 1;
-        true
     }
 }
 

@@ -725,35 +725,6 @@ fn nested_dense_probe_never_retranslates_an_enclosed_dynamic_edge() {
 }
 
 #[test]
-fn fixed_dense_precedence_skips_the_disjoint_dynamic_opcode_family() {
-    let bytecode = nested_function(
-        "function run(n){var a=[0,0,0,0],sum=0;for(var i=0;i<n;i++){a[0]=a[3]+1;a[1]=a[0]+1;a[2]=a[1]-1;a[3]=a[2];sum+=a[3];}return sum;}",
-        "run",
-    );
-    dense::reset_test_iterations();
-    let plans = NumericMutationLoopPlan::compile_all(&bytecode);
-    assert_eq!(plans.len(), 1, "{:#?}", bytecode.code);
-    assert!(matches!(plans[0].kind, NumericMutationLoopKind::Dense(_)));
-    // Fixed plans use GetPropIndex/SetPropIndex bytecode, which the dynamic
-    // translator intentionally does not accept, so no overlap is constructible.
-    assert_eq!(dense::test_dynamic_dense_compilations(), 0);
-}
-
-#[test]
-fn enclosing_fixed_dense_short_circuits_before_the_dynamic_probe() {
-    let bytecode = nested_function(
-        "function run(n,outerLimit){var a=[0,0,0,0],sum=0;for(var outer=0;outer<outerLimit;outer++){for(var i=0;i<n;i++){a[0]=a[3]+1;a[1]=a[0]+1;a[2]=a[1]-1;a[3]=a[2];sum+=a[3];}}return sum;}",
-        "run",
-    );
-    let (header, backedge, outer) = enclosed_edge(&bytecode);
-    dense::reset_test_iterations();
-    let plan = NumericMutationLoopPlan::compile(&bytecode, header, backedge, Some(outer))
-        .expect("enclosed fixed inner loop should compile as dense");
-    assert!(matches!(plan.kind, NumericMutationLoopKind::Dense(_)));
-    assert_eq!(dense::test_dynamic_dense_compilations(), 0);
-}
-
-#[test]
 fn nested_dense_region_counts_each_generic_two_level_stage() {
     dense::reset_test_iterations();
     let source = r#"
