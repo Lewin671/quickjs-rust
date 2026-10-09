@@ -165,9 +165,10 @@ refuses a stale one. The work may proceed only after its plan passes
 hardware-counter screen; only a passing screen spends a formal run, and
 screened units planned from the same queue may share one batched promotion
 run (gates and batching rules in
-[the performance workflow](../docs/performance-workflow.md#screen-gate)). Two
-failed screens close that mechanism and require a new profile; they do not
-justify a third variation of the same leaf specialization.
+[the performance workflow](../docs/performance-workflow.md#screen-gate)).
+Exhausting the plan's attempt budget (`max_attempts`, at most two failed
+screens) closes that mechanism and requires a new profile; it does not
+justify another variation of the same leaf specialization.
 
 A neutrality control must execute the path it is guarding. Broad portfolio
 cases do not: at 100,000 nominal iterations `plain_function_call` performs five
