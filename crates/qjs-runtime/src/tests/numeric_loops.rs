@@ -478,3 +478,175 @@ run(6);"#;
         ))
     );
 }
+
+/// Counted loops whose whole body is one bitwise recurrence on a scalar
+/// (`value = value <op> operand`): every operator, the ToInt32 / shift-count
+/// boundaries, counter wrap past 2^32, and the final counter value.
+#[test]
+fn scalar_bitwise_recurrence_loops() {
+    for (source, expected) in [
+        (
+            "function run(value) { for (var i = 1; i < 5; i++) value = value & i; return value + ':' + i; } run(-1);",
+            "0:5",
+        ),
+        (
+            "function run(value) { for (var i = 1; i < 5; i++) value = value | i; return value + ':' + i; } run(0);",
+            "7:5",
+        ),
+        (
+            "function run(value) { for (var i = 1; i < 5; i++) value = value ^ i; return value + ':' + i; } run(0);",
+            "4:5",
+        ),
+        (
+            "function run(value) { for (var i = 0; i < 3; i++) value = value << i; return value + ':' + i; } run(1);",
+            "8:3",
+        ),
+        (
+            "function run(value) { for (var i = 0; i < 3; i++) value = value >> 1; return value + ':' + i; } run(-16);",
+            "-2:3",
+        ),
+        (
+            "function run(value) { for (var i = 0; i < 2; i++) value = value >>> 1; return value + ':' + i; } run(-1);",
+            "1073741823:2",
+        ),
+        (
+            "function run(value) { for (var i = 4294967294; i < 4294967298; i++) value = value ^ i; return value + ':' + i; } run(0);",
+            "0:4294967298",
+        ),
+        (
+            "function run(limit, value) { for (var i = -2; i < limit; i++) value ^= i; return Object.is(i, -0) + ':' + value; } run(-0, 0);",
+            "false:1",
+        ),
+        (
+            "function scramble(rounds, state, mask) { for (var cursor = 0; cursor < rounds; cursor++) state ^= mask; return state + ':' + cursor; } scramble(17, 123, 42);",
+            "81:17",
+        ),
+    ] {
+        assert_eq!(
+            eval(source),
+            Ok(Value::String(expected.to_owned().into())),
+            "{source}"
+        );
+    }
+    for (source, expected) in [
+        (
+            "function run(value, rhs) { for (var i = 0; i < 3; i++) value = value | rhs; return value; } run(NaN, Infinity);",
+            Value::Number(0.0),
+        ),
+        (
+            "function run(value, rhs) { for (var i = 0; i < 3; i++) value = value ^ rhs; return Object.is(value, -0); } run(-0, -0);",
+            Value::Boolean(false),
+        ),
+        (
+            "function run(value) { for (var i = 0; i < 3; i++) value = value >>> 0; return value; } run(-1);",
+            Value::Number(4_294_967_295.0),
+        ),
+        (
+            "function run(value) { for (var i = 0; i < 3; i++) value = value << 33; return value; } run(1);",
+            Value::Number(8.0),
+        ),
+        (
+            "function run(value, rhs) { for (var i = 0; i < 2; i++) value = value << rhs; return value; } run(1, -1);",
+            Value::Number(0.0),
+        ),
+        (
+            "function run(value) { for (var i = 0; i < 3; i++) value = value << 32; return value; } run(1);",
+            Value::Number(1.0),
+        ),
+        (
+            "function run(value) { for (var i = 0; i < 3; i++) value = value >> 1.9; return value; } run(8);",
+            Value::Number(1.0),
+        ),
+    ] {
+        assert_eq!(eval(source), Ok(expected), "{source}");
+    }
+}
+
+#[test]
+fn scalar_bitwise_recurrence_on_an_undeclared_sloppy_global() {
+    assert_eq!(
+        eval(
+            "bitwiseValue = 4294967296; \
+             for (var arbitraryCounter = 0; arbitraryCounter < 600000; arbitraryCounter++) \
+               bitwiseValue = bitwiseValue & arbitraryCounter; \
+             bitwiseValue + ':' + arbitraryCounter + ':' + globalThis.bitwiseValue;"
+        ),
+        Ok(Value::String("0:600000:0".to_owned().into()))
+    );
+}
+
+#[test]
+fn scalar_bitwise_recurrence_with_object_coercion_and_bigint_operands() {
+    assert_eq!(
+        eval(
+            "var coercions = 0; var operand = { valueOf: function () { coercions++; return 3; } }; \
+             function run(value) { for (var i = 0; i < 4; i++) value = value & operand; return value + ':' + i; } \
+             run(7) + ':' + coercions;"
+        ),
+        Ok(Value::String("3:4:4".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function run(value, rhs) { for (var i = 0; i < 4; i++) value = value & rhs; return value === 1n; } run(5n, 3n);"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert!(eval(
+        "function run(value, rhs) { for (var i = 0; i < 4; i++) value = value & rhs; return value; } run(5, 3n);"
+    )
+    .is_err());
+    assert!(eval(
+        "function run(value, rhs) { for (var i = 0; i < 4; i++) value = value >>> rhs; return value; } run(5n, 1n);"
+    )
+    .is_err());
+}
+
+#[test]
+fn scalar_bitwise_recurrence_with_accessor_eval_and_captured_bindings() {
+    assert_eq!(
+        eval(
+            "guardedValue = 7; var gets = 0; \
+             Object.defineProperty(globalThis, 'guardedValue', { configurable: true, \
+               get: function () { gets++; return 7; } }); \
+             for (var i = 0; i < 4; i++) guardedValue = guardedValue & i; \
+             gets + ':' + i;"
+        ),
+        Ok(Value::String("4:4".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "readOnlyValue = 7; Object.defineProperty(globalThis, 'readOnlyValue', { writable: false }); \
+             for (var i = 0; i < 4; i++) readOnlyValue = readOnlyValue & i; \
+             readOnlyValue + ':' + i;"
+        ),
+        Ok(Value::String("7:4".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function run(value) { eval('value = value'); for (var i = 0; i < 4; i++) value = value ^ i; return value; } run(0);"
+        ),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval(
+            "function run(value) { function read() { return value; } for (var i = 0; i < 4; i++) value = value | i; return value + read(); } run(0);"
+        ),
+        Ok(Value::Number(6.0))
+    );
+}
+
+#[test]
+fn scalar_bitwise_recurrence_with_fractional_limit_and_single_iteration() {
+    assert_eq!(
+        eval(
+            "function run(limit, value) { for (var i = 0; i < limit; i++) value = value ^ i; return value + ':' + i; } run(3.5, 0);"
+        ),
+        Ok(Value::String("0:4".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function run(value) { for (var i = 0; i < 1; i++) value = value | i; return value + ':' + i; } run(3);"
+        ),
+        Ok(Value::String("3:1".to_owned().into()))
+    );
+}

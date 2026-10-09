@@ -63,7 +63,7 @@ pub(crate) fn try_run_typed_loop<F: LoopFrame>(
             && !(plan_header == header && plan_backedge == backedge)
     };
     // The converse holds for the special mutation plans: a region that
-    // *encloses* a loop a predicate scan or scalar bitwise plan claims would
+    // *encloses* a loop a predicate scan or nested dense plan claims would
     // run that loop itself and the plan would never be consulted, and those
     // executors run their shape far faster -- an FFT butterfly went
     // 0.58 s -> 1.30 s through this tier's element operations
