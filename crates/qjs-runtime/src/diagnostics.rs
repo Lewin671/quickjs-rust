@@ -1,10 +1,9 @@
 //! Feature-gated execution counters for performance diagnosis.
 //!
 //! A benchmark's wall time says how long a workload took; it does not say
-//! which of the engine's execution paths ran. That distinction is exactly what
-//! the broad micro portfolio lost: its `plain_function_call` case reported
-//! nanoseconds per nominal call while performing no calls at all, because the
-//! callee had been folded into the surrounding loop. Timing alone could not
+//! which of the engine's execution paths ran. A case can report nanoseconds
+//! per nominal call while performing no calls at all, because a closed-form
+//! tier folded the callee into the surrounding loop. Timing alone cannot
 //! detect that. A count of the calls the engine actually attempted can.
 //!
 //! These counters therefore answer "which path did this workload take", not
@@ -19,9 +18,8 @@
 //! they hold no engine state, and with the feature off they do not exist —
 //! every counting site expands to nothing and the storage is not compiled in.
 //! Threading a counter handle through every call, property, and loop path
-//! would be a large diff through code this campaign is about to restructure,
-//! for no diagnostic benefit. The exemption is deliberate and bounded to this
-//! module.
+//! would burden those paths for no diagnostic benefit. The exemption is
+//! deliberate and bounded to this module.
 
 /// Declares the counter set once, so the struct, its deterministic report
 /// order, and the thread-local storage cannot drift apart as fields are added.
@@ -64,11 +62,11 @@ declare_counters! {
     generic_call_frames,
     /// Calls dispatched to a native builtin.
     native_calls,
-    /// Nested `Vm` instances constructed to run a callee. The call-frame
-    /// migration exists to drive this toward zero for ordinary calls.
+    /// Nested `Vm` instances constructed to run a callee.
     nested_vm_constructions,
     /// Callee frames entered on the caller's own VM instead of a nested `Vm`.
-    /// Stays zero until the frame-stack driver routes ordinary calls.
+    /// Always zero: no counting site exists, because no call routes through
+    /// the frame-stack driver (`bytecode/frame_stack.rs`).
     same_vm_frame_entries,
     /// Generic calls whose environment could carry a direct-eval marker and
     /// therefore paid the pre-call scrub. An ordinary workload should report
@@ -82,12 +80,11 @@ declare_counters! {
     computed_property_writes,
     /// Ordinary bytecode backward edges taken.
     loop_backedges,
-    /// Backward edges where a loop-plan engine actually ran a region.
+    /// Backward edges where a loop accelerator -- a numeric-mutation plan or
+    /// a typed loop program -- ran the region.
     loop_plan_entries,
-    /// Backward edges where every loop engine was consulted and every one
-    /// declined. On such an edge the entire probe chain is overhead, so this
-    /// counter -- not a raw probe count -- is what a dispatch-table unit would
-    /// have to justify itself against.
+    /// Backward edges where both accelerators were consulted and both
+    /// declined. On such an edge the entire probe chain is overhead.
     declined_loop_plan_edges,
     /// Bytecode instructions actually dispatched by the interpreter loop.
     executed_ops,

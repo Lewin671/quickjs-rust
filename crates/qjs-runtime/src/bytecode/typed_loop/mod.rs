@@ -1,12 +1,11 @@
-//! A shape-independent executor for loop regions.
+//! A register executor for loop regions.
 //!
-//! The specialized loop tiers each match one exact opcode sequence, so a loop
-//! that computes the same thing in a different shape — an `if`/`else` in the
-//! body, an extra temporary, a different operator order — runs on the general
-//! interpreter at roughly 4.5ns per opcode. This module accepts *any* loop
-//! region built from a whitelist of opcodes, compiles it once into a register
-//! program, and runs that program with no operand stack, no `Value` boxing for
-//! arithmetic, and no per-opcode dispatch through the main match.
+//! A loop region is the bytecode from a loop header to its backward edge. This
+//! module accepts *any* region built from a whitelist of opcodes, whatever its
+//! source shape, compiles it once into a register program, and runs that
+//! program with no operand stack, no `Value` boxing for arithmetic, and no
+//! per-opcode dispatch through the interpreter's main match. A backward edge
+//! consults it after the numeric-mutation plans (`vm_loop_dispatch.rs`).
 //!
 //! Values live in two register files. The scalar one holds unboxed numbers,
 //! booleans, and `undefined` — the arithmetic this tier exists to accelerate.
@@ -290,9 +289,8 @@ enum TypedOp {
     /// `parseInt` -- answered through the interpreter's fast native table
     /// when the callee is a native it carries, and deoptimized otherwise. A
     /// flag rather than an operation of its own, and the arm's work kept in
-    /// one out-of-line call: the dispatch loop's register allocation re-rolls
-    /// on any growth of an arm, and cost ai-astar 15% twice while this was
-    /// being added.
+    /// one out-of-line call: growing a dispatch arm perturbs the executor's
+    /// register allocation and code layout for every other arm.
     CallClosedFormLeaf {
         dst: u16,
         receiver: u16,
@@ -475,12 +473,11 @@ impl fmt::Debug for TypedLoopScratch {
 
 /// The literal shapes one property-read site has resolved.
 ///
-/// The one-way `caches` entry is not enough on a polymorphic site:
-/// `heterogeneous_property_read` rotates three distinct object-literal shapes
-/// through one read, so it missed every iteration and fell back to resolving
-/// the name -- a hash lookup and a `memcmp` per access, which the profile
-/// charged 27% of that sentinel to. Shape identity is an `Rc` pointer
-/// comparison, so scanning a few is far cheaper than resolving the name.
+/// The one-way `caches` entry is not enough on a polymorphic site: a read
+/// that rotates several distinct object-literal shapes misses it on every
+/// iteration and falls back to resolving the name -- a hash lookup and a
+/// `memcmp` per access. Shape identity is an `Rc` pointer comparison, so
+/// scanning a few is far cheaper than resolving the name.
 /// One remembered shape and the slot the property occupies in it.
 type ShapeWay = (Rc<crate::value::ObjectLiteralShape>, usize);
 
@@ -504,16 +501,15 @@ pub(super) struct InheritedWay {
 pub(super) struct ShapeWays {
     /// The (interned name, slot) pair the site last resolved on a small
     /// object. Objects built by the same code site share the interned name,
-    /// so the pointer comparison serves all of them. This used to live in
-    /// the per-entry scratch and was cleared at every loop entry; an inner
-    /// loop that runs a few iterations per entry -- nbody's pair loop -- then
-    /// re-resolved every field access by name scan on each entry.
+    /// so the pointer comparison serves all of them. It is kept on the
+    /// program, not in the per-entry scratch that is cleared at every loop
+    /// entry: an inner loop that runs a few iterations per entry would
+    /// otherwise re-resolve every field access by name scan on each entry.
     pub(super) slot: Option<(Rc<str>, usize)>,
     /// Boxed deliberately, against `clippy::box_collection`. Most sites are
     /// answered by the one-way cache and never resolve a shape at all, so this
-    /// keeps their entry one pointer instead of three. Measured, not assumed:
-    /// unboxed costs `prototype_method_call` 3.9% against 2.6% boxed, and that
-    /// sentinel never reaches the shape path.
+    /// keeps their entry one pointer instead of three. The entry's size is
+    /// paid by every site, including those that never reach the shape path.
     #[allow(clippy::box_collection)]
     ways: Option<Box<Vec<ShapeWay>>>,
     /// The prototype resolution for this site, if it has one. Boxed for the
@@ -675,10 +671,9 @@ pub(super) struct TypedLoopProgram {
     /// Shape ways per property site, kept on the program rather than in the
     /// per-activation scratch.
     ///
-    /// Two reasons. Adding a sixth vector to the scratch cost
-    /// `prototype_method_call` 3.6%: that sentinel declines this tier on
-    /// essentially every backedge, and a declined backedge still moves the
-    /// scratch twice. And a site's shapes are a property of the site, not of
+    /// Two reasons. A declined backedge still moves the scratch twice, so
+    /// every vector added to the scratch is paid by loops this tier never
+    /// runs. And a site's shapes are a property of the site, not of
     /// one activation, so keeping them here lets a short loop that is entered
     /// repeatedly reuse what it learned. Shape identity and the property
     /// revision are re-checked on every read, so a stale entry misses rather
@@ -687,9 +682,9 @@ pub(super) struct TypedLoopProgram {
     /// The bodies `helper_sites` resolved to, rebuilt at every entry.
     ///
     /// Reached only from `call_closed_form_leaf`, which already has the
-    /// program. Threading it through `execute` instead measured 16% on
-    /// `heterogeneous_property_read`: one more loop-carried live value costs
-    /// this executor every opcode, whether or not the value is used.
+    /// program. Do not thread it through `execute` instead: one more
+    /// loop-carried live value costs this executor every opcode, whether or
+    /// not the value is used.
     helper_graphs: RefCell<helper_graph::HelperGraph>,
     /// One entry per helper call site, in site order, naming the frame
     /// slot its callee is read from. Entry resolves each one and flattens the

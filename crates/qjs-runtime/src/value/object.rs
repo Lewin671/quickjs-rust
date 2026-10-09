@@ -1,3 +1,17 @@
+//! Ordinary object storage: `ObjectRef`, its property tables, and the
+//! [[Prototype]] slot.
+//!
+//! String-keyed properties live in one of four `PropertyStorage` layouts
+//! (small vector, hashed, shared literal shape, two-value shape), and an
+//! object moves between them as it is mutated. Code outside this module must
+//! not depend on which layout an object is in.
+//!
+//! Two counters back the VM's caches. `property_revision` changes whenever
+//! an own string property's descriptor or value changes; `layout_revision`
+//! changes only when slot positions do (insert, delete, descriptor
+//! replacement). Every mutation path must bump the right one, or a
+//! per-site cache serves a stale read.
+
 use std::{
     cell::{Cell, OnceCell, RefCell},
     collections::HashMap,
@@ -1849,8 +1863,7 @@ fn is_internal_property_key(key: &str) -> bool {
 /// asks it, and `has_index`, the element read, and the element write each ask
 /// it again -- and it used to answer by formatting the parsed number back into
 /// a fresh `String` to compare against the key. That is a heap allocation per
-/// array access, and it showed up as such: 39 allocator samples on
-/// `string-tagcloud` alone.
+/// array access.
 ///
 /// The canonical form is exactly what the digits already say: no sign, no
 /// leading zero unless the key is `"0"`, and a value below `u32::MAX` (the

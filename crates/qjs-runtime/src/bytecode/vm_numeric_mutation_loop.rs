@@ -1,3 +1,22 @@
+//! Numeric-mutation loop plans: the first accelerator a backward edge tries.
+//!
+//! `compile_all` builds at most one plan per backward `Jump`, from the body's
+//! immutable source bytecode. A plan is one of:
+//!
+//! - `Dense` (`dense`): a counted loop whose straight-line body reads and
+//!   writes dense arrays or Number TypedArrays at computed indices, run as a
+//!   Number register program.
+//! - `NestedDense` (`dense/nested.rs`): a scalar counted loop around one
+//!   dense loop; it carries the plain dense plan to fall back on.
+//! - `PredicateScan` (`predicate_scan`): skips a run of iterations whose
+//!   leading predicate is false.
+//!
+//! Plans fail closed. A run publishes only completed iterations and leaves
+//! the frame where the interpreter can resume; otherwise it declines with
+//! nothing changed. The plans on `Bytecode` are shared by every invocation,
+//! so suppressing or replacing one edits a frame-local copy
+//! (`Vm::frame_numeric_mutation_loop_plans`), never the shared list.
+
 use std::rc::Rc;
 
 use super::{
@@ -101,10 +120,8 @@ impl NumericMutationLoopPlan {
             .collect()
     }
 
-    /// The bytecode range this plan owns, header through backedge.
-    /// Whether this is one of the special executors -- a predicate scan or a
-    /// nested dense plan -- which run their shape far faster than a
-    /// typed-loop region running the same loop through element operations.
+    /// Whether this is one of the special executors: a predicate scan or a
+    /// nested dense plan.
     pub(super) fn is_special(&self) -> bool {
         matches!(self.kind, NumericMutationLoopKind::Special(_))
     }
@@ -118,6 +135,7 @@ impl NumericMutationLoopPlan {
         }
     }
 
+    /// The bytecode range this plan owns, header through backedge.
     pub(super) fn region(&self) -> (usize, usize) {
         (self.header, self.backedge)
     }
@@ -223,9 +241,9 @@ pub(super) fn try_run_numeric_mutation_loop(
         NumericMutationLoopRun::Handled => true,
         NumericMutationLoopRun::Declined => false,
         NumericMutationLoopRun::SuppressPlan => {
-            // Plans are already cloned into each frame. Removing a zero-
-            // progress plan suppresses only this invocation and
-            // adds no state to the call-path-sensitive FrameState layout.
+            // Removing a zero-progress plan from the frame's own copy
+            // suppresses it for this invocation only, and the copy lives in
+            // `ColdFrame`, so `FrameState` carries no extra state for it.
             vm.frame_numeric_mutation_loop_plans(plans.shared_numeric_mutation)
                 .remove(index);
             false

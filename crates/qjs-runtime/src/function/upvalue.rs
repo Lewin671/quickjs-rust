@@ -1,13 +1,11 @@
-//! Shared upvalue cell for the environment-model rewrite (T016 / S1).
+//! Shared upvalue cell.
 //!
 //! An [`Upvalue`] is the single heap cell that backs one *captured* binding.
 //! The declaring frame and every closure that closes over the binding hold a
 //! clone of the same `Rc`, so a write through any handle is observed by all the
-//! others with no snapshot, no shared-`captured_env` HashMap, and no
-//! `CaptureWriteback` write-back pass. This is the vocabulary that the cell-slot
-//! migration in `docs/design/env-model-rewrite.md` builds on; it is introduced
-//! ahead of its first consumer (T016 S2), so the items are `dead_code`-allowed
-//! until then.
+//! others with no snapshot and no write-back pass. Frames and closures
+//! address cells by index, never by name (`bytecode/upvalue_resolver.rs`,
+//! `bytecode/vm_capture.rs`).
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -22,10 +20,10 @@ use crate::Value;
 /// is by cell, not by value — use [`Upvalue::ptr_eq`] to ask whether two handles
 /// name the same binding.
 #[derive(Clone)]
-#[allow(dead_code)] // Consumed starting at T016 S2 (cell slots); see module docs.
+#[allow(dead_code)] // Predates the cell's consumers; not re-checked as still needed.
 pub(crate) struct Upvalue(Rc<RefCell<Value>>);
 
-#[allow(dead_code)] // Consumed starting at T016 S2 (cell slots); see module docs.
+#[allow(dead_code)] // Predates the cell's consumers; not re-checked as still needed.
 impl Upvalue {
     /// Creates a cell initialized to `value`.
     pub(crate) fn new(value: Value) -> Self {

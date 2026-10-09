@@ -1,3 +1,12 @@
+//! Array storage: `ArrayRef`.
+//!
+//! Indexed elements live in a dense `Vec<Value>`, and `length` is stored
+//! separately and may exceed it. Holes, other own properties, symbol
+//! properties and a prototype override live in `ArrayColdData`, allocated on
+//! first need, so a plain packed array is one allocation plus its elements.
+//! A fast path may treat `elements[i]` as the value of index `i` only after
+//! checking that `i` is not a hole.
+
 use std::{
     cell::{Cell, OnceCell, Ref, RefCell, RefMut},
     collections::{BTreeSet, HashMap},

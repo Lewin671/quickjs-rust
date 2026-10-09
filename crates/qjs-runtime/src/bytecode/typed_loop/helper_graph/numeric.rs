@@ -1,10 +1,8 @@
 //! Helper bodies lowered to a program over `f64` registers.
 //!
 //! A flattened helper runs over [`Typed`] registers, so every operation
-//! re-checks its operands' tags and returns through an `Option`: about forty
-//! instructions an operation, where QuickJS-NG's bytecode spends about
-//! sixteen. `bits-in-byte`'s `bitsinbyte` -- a counting loop over a byte --
-//! cost 5,800 instructions a call that way against QuickJS-NG's 1,960.
+//! re-checks its operands' tags and returns through an `Option`, an overhead
+//! paid on every operation of a body such as a counting loop over a byte.
 //!
 //! Most helper bodies only ever hold numbers, booleans and `undefined`, and
 //! for those the three can share one `f64` encoding: a boolean as 0 or 1 and

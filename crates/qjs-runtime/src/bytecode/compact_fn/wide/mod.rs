@@ -3,11 +3,11 @@
 //!
 //! The numeric compact tier (`compact_fn`) admits only stack, local, binary
 //! and call operations, and its dispatch loop is small enough that every
-//! opcode added to it measurably slows the recursive bodies it exists for:
-//! carrying the named-property operations in that same `match` cost the
-//! recursive sentinel 20%, whether the extra arms were filtered before the
-//! match, kept out of line, or packed into the same eight-byte operation
-//! word. So this tier is a second executor with its own operation set, its
+//! opcode added to it measurably slows the recursive bodies it exists for.
+//! Carrying the named-property operations in that same `match` did so
+//! whether the extra arms were filtered before the match, kept out of line,
+//! or packed into the same eight-byte operation word. Do not merge the two
+//! executors. This tier is a second executor with its own operation set, its
 //! own compiler and its own frame driver, and the numeric tier's code is
 //! untouched.
 //!

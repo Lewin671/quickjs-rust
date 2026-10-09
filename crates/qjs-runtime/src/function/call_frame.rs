@@ -1,14 +1,13 @@
 //! An ordinary bytecode call, prepared but not yet run.
 //!
-//! [`call_function`](super::call::call_function) currently interleaves three
-//! separate jobs: deciding *what kind of callable* this is (proxy, bound,
-//! native, generator, async function, constructor, ordinary body), building
-//! *the environment* the callee will run in, and *executing* the bytecode.
-//! Interleaving them is why a callee cannot yet be entered on the caller's own
-//! VM: there is no point at which "everything the callee needs" exists as a
-//! value that some other executor could take.
+//! A call is three separate jobs: deciding *what kind of callable* this is
+//! (proxy, bound, native, generator, async function, constructor, ordinary
+//! body), building *the environment* the callee will run in, and *executing*
+//! the bytecode. [`PreparedBytecodeCall`] is the value that exists between
+//! the second and the third: everything an ordinary callee needs, in a form
+//! an executor can take without knowing how it was decided.
 //!
-//! [`PreparedBytecodeCall`] is that point. It is deliberately only the
+//! It is deliberately only the
 //! ordinary synchronous shape. Generators, async functions, proxies, bound and
 //! native callables, and construction all remain dispatch decisions made
 //! before preparation, because each of them needs something other than "run

@@ -1,3 +1,10 @@
+//! Assignment, compound assignment, update (`++`/`--`) and `typeof`
+//! lowering, for identifier, member, private and `super` targets.
+//!
+//! Assignment and compound assignment each have a value-producing and a
+//! discarding variant. The discarding one leaves nothing on the operand
+//! stack and may be used only where the expression's value is unobservable.
+
 use qjs_ast::{AssignmentOp, AssignmentTarget, Expr, Literal, UpdateOp};
 
 use crate::{RuntimeError, Value};

@@ -1,3 +1,18 @@
+//! The general interpreter: `Vm`, `FrameState`, and the dispatch loop.
+//!
+//! Entry points are `eval_bytecode` (scripts), `eval_function_bytecode`
+//! (general calls) and `eval_direct_call_bytecode` (slot-seeded calls, which
+//! try the compact tiers first). `Vm::run_current_activation` runs one frame
+//! until it returns or suspends. It answers inline only the opcodes that
+//! touch nothing but the operand stack, an authoritative local slot, or the
+//! program counter. Every other opcode is an out-of-line call -- a
+//! per-opcode `op_*` body for the hot ones, `run_general_op` and then
+//! `run_rare_op` for the rest (`vm/`) -- with `self.ip` authoritative on
+//! entry to and exit from that call.
+//!
+//! `FrameState` is built and dropped once per frame-building call, so state
+//! most activations never touch lives in `ColdFrame`, behind one pointer.
+
 use super::util::stack_underflow;
 use super::vm_props::{
     array_index_from_number, array_index_from_string, get_property, get_property_key,
@@ -96,7 +111,7 @@ pub(super) fn eval_direct_call_bytecode(
 ) -> Result<Value, RuntimeError> {
     // A body the compact tier admits runs without a `Vm` at all: it has no
     // handler, cannot suspend, runs no loop plans, and keeps its operands in
-    // registers, so none of `FrameState`'s 704 bytes would be read. Admission
+    // registers, so nothing in `FrameState` would be read. Admission
     // is decided before `env` or the slots are consumed, so a declined body
     // builds exactly the frame it always did.
     let mut pending_env = Some(env);
@@ -196,9 +211,10 @@ pub(super) struct FrameState<'a> {
 
 /// The part of a frame that an ordinary activation never reads or writes.
 ///
-/// `FrameState` is built and dropped once per general-path call, and measured
-/// per-call cost tracks its size: twelve extra empty fields cost an ordinary
-/// call about 18%. Everything here is reached only by `try`/`finally`,
+/// `FrameState` is built and dropped once per general-path call, and per-call
+/// cost tracks its size, empty fields included. Do not add a field to
+/// `FrameState` that an ordinary call never touches; put it here.
+/// Everything here is reached only by `try`/`finally`,
 /// `with`, generator suspension, `using`, sloppy-global recording, or a
 /// deoptimized loop plan, so it lives behind one pointer that stays `None`
 /// until the first such operation materializes it.
@@ -452,8 +468,7 @@ impl<'a> Vm<'a> {
     /// and the frame-stack driver re-enters it once per frame.
     ///
     /// Kept out of line so its register allocation is decided on its own terms
-    /// -- and stays measurable: the whole point of the split below is what this
-    /// function's disassembly does per dispatch.
+    /// and its disassembly stays inspectable.
     #[inline(never)]
     pub(super) fn run_current_activation(&mut self) -> Result<FrameExit, RuntimeError> {
         // One owner clone per activation, held on this stack frame. The view
@@ -471,10 +486,8 @@ impl<'a> Vm<'a> {
             self.current.authoritative_slots,
             self.current.virtual_function_context_safe,
         );
-        // The three hottest values in the engine -- the program counter, the
-        // code pointer and the code length -- lived in `FrameState` and in this
-        // function's spill slots, so every dispatch reloaded them before
-        // decoding anything. They are locals here, and `self.ip` is
+        // The program counter, the code pointer and the code length are
+        // locals here rather than fields read through `self`, and `self.ip` is
         // resynchronized around exactly the opcodes that can observe it: the
         // ones answered below cannot, because they touch nothing but the
         // operand stack, an authoritative local slot, or `pc` itself.

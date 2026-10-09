@@ -1,3 +1,10 @@
+//! Lowering for array and object literals, member reads, `delete`, calls,
+//! `new`, and function declarations.
+//!
+//! Call lowering selects among the plain, resolved, guarded-`Math` and
+//! direct-`eval` call opcodes from the callee's syntactic form alone, so a
+//! guarded opcode must re-check its guard at run time and fall back.
+
 use std::rc::Rc;
 
 use qjs_ast::{

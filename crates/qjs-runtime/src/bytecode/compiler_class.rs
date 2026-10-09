@@ -1,3 +1,7 @@
+//! Class lowering: `class` declarations and expressions become one
+//! `Op::NewClass` carrying the constructor, method, field-initializer and
+//! static-block bodies as nested `Bytecode`.
+
 use std::rc::Rc;
 
 use qjs_ast::{

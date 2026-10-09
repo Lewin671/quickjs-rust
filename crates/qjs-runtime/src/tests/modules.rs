@@ -1,8 +1,10 @@
-//! Runtime behavior for module items (T012 S1).
+//! Module items handed to the script compiler.
 //!
-//! The parser accepts `import`/`export` under the Module goal, but the runtime
-//! does not yet link or evaluate modules, so compiling a module body must fail
-//! with a structured "modules are not yet supported" error rather than panic.
+//! The parser accepts `import`/`export` under the Module goal. Compiling
+//! such a body as a script (`compile_script_classified`) must fail with a
+//! structured "modules are not yet supported" error rather than panic.
+//! Module linking and evaluation live in `crate::module`, with their own
+//! tests in `module/tests.rs`.
 
 use qjs_parser::parse_module;
 

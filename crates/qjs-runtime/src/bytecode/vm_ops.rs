@@ -1,3 +1,7 @@
+//! Operator evaluation for the interpreter: binary, unary, `ToNumeric` and
+//! update operators, the `for`-`in` key helpers, and the string and
+//! equality fast paths, which answer without running user code or decline.
+
 use num_bigint::BigInt;
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 

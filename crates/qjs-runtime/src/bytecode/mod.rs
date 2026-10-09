@@ -1,4 +1,43 @@
-//! Bytecode compiler and stack VM for the runtime's fast path.
+//! The bytecode subsystem: compiler, IR, interpreter, and accelerator tiers.
+//!
+//! - Compiler (`compiler*.rs`): AST to `Bytecode`. `upvalue_resolver.rs`
+//!   decides which locals a frame boxes into shared cells.
+//! - IR (`ir*.rs`): the `Op` set and `Bytecode`, which also caches every
+//!   tier's compiled program in a `OnceCell`.
+//! - Interpreter (`vm.rs`, `vm/`): `Vm`, `FrameState`, the dispatch loop.
+//!   The `vm_*.rs` files are its opcode-family handlers and frame plumbing,
+//!   except the tiers named below. `frame_program.rs` selects the stream an
+//!   activation runs. `frame_stack.rs` can drive several frames on one `Vm`
+//!   but is dormant: every call that needs a frame builds a nested `Vm`.
+//!
+//! The interpreter defines the semantics. A tier either declines before any
+//! observable work or hands the interpreter a state it resumes from exactly.
+//!
+//! Call time. A callee passing `function::is_direct_leaf_function` enters
+//! `function::call_direct_leaf_function`, which tries in order:
+//!
+//! 1. `vm_numeric_leaf.rs` (with `vm_numeric_leaf_registers.rs`): a
+//!    straight-line numeric body evaluated with no frame.
+//! 2. `vm_this_property_leaf.rs`: a body that only reads data properties of
+//!    its receiver or arguments, also with no frame.
+//! 3. `compact_fn::try_run_in_caller_env`: the compact tiers of step 4, run
+//!    in the caller's environment when that equals the callee's own frame.
+//! 4. `vm::eval_direct_call_bytecode`: `compact_fn::try_run_standalone` (a
+//!    numeric compact body, as an `f64` `numeric_plan` when it has one and
+//!    the arguments are numbers; otherwise `compact_fn::wide`, which
+//!    `vm/wide_resume.rs` continues after an exit), then a slot-seeded `Vm`.
+//!
+//! Every other callee takes `function::call_function`, which ends at step 4
+//! for a slot-seeded call and at `eval_function_bytecode` otherwise.
+//!
+//! Backward edges (`vm_loop_dispatch.rs`) try `vm_numeric_mutation_loop`
+//! (dense-array and TypedArray register programs, nested dense loops,
+//! predicate scans), then `typed_loop` (register programs for loop regions).
+//!
+//! `virtual_object/` scalar-replaces non-escaping literals in a lowered
+//! stream that `vm_virtual_object.rs` executes. Per-site caches live in
+//! `named_property_cache.rs` and `enumerate_keys_cache.rs`;
+//! `vm_string_append.rs` appends in place to a uniquely held string.
 
 use std::collections::HashMap;
 
