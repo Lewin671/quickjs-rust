@@ -38,10 +38,13 @@ ROOT = Path(__file__).resolve().parents[3]
 HARNESS_REVISION = "a" * 40
 
 
-def report(ratio_base: float = 1.25, ratio_qjs: float = 0.8) -> dict[str, object]:
+def report(
+    ratio_base: float = 1.25, ratio_qjs: float = 0.8,
+    case_ids: tuple[str, ...] = HOSTED_CASES,
+) -> dict[str, object]:
     def comparison(ratio: float) -> dict[str, object]:
         cases = {}
-        for index, case_id in enumerate(HOSTED_CASES, 1):
+        for index, case_id in enumerate(case_ids, 1):
             candidate = float(100 + index)
             cases[case_id] = {
                 "candidate_median_ns_per_op": candidate,
@@ -74,7 +77,7 @@ def report(ratio_base: float = 1.25, ratio_qjs: float = 0.8) -> dict[str, object
             "engines": engines,
         },
         "coverage": {
-            "roles": 3, "cases": len(HOSTED_CASES), "blocks": 3,
+            "roles": 3, "cases": len(case_ids), "blocks": 3,
             "comparison_input_complete": True,
         },
         "health": {
@@ -199,6 +202,38 @@ class PreviewSummaryTests(unittest.TestCase):
         self.assertNotIn("Overall ratio", markdown)
         self.assertNotIn("candidate vs", markdown)
         self.assertNotRegex(markdown, r"\d\.\d+×|[+-]\d+\.\d%")
+
+    def test_a_shard_is_validated_against_exactly_its_own_cases(self) -> None:
+        from tools.benchmark.hosted_preview import BROAD_SHARDS
+        from tools.benchmark.preview import shard_cases
+
+        dealt = [shard_cases(shard) for shard in range(1, BROAD_SHARDS + 1)]
+        self.assertEqual(sorted(sum(dealt, ())), sorted(HOSTED_CASES))
+        self.assertEqual(shard_cases(None), HOSTED_CASES)
+        self.assertLessEqual(max(map(len, dealt)) - min(map(len, dealt)), 1)
+        for invalid in (0, BROAD_SHARDS + 1):
+            with self.assertRaisesRegex(PreviewError, "broad shard must be between"):
+                shard_cases(invalid)
+        for shard, cases in enumerate(dealt, 1):
+            _, machine = summarize(
+                report(case_ids=cases), harness_mode=BASE_MODE,
+                harness_revision=HARNESS_REVISION, shard=shard,
+            )
+            self.assertEqual(machine["shard"], shard)
+            self.assertEqual(
+                [case["id"] for case in machine["comparisons"]["candidate vs base"]["cases"]],
+                list(cases),
+            )
+        # A shard's report cannot stand in for the lane, for another shard, or
+        # the lane for a shard.
+        for value, shard in (
+            (report(case_ids=dealt[0]), None), (report(case_ids=dealt[0]), 2), (report(), 1),
+        ):
+            with self.assertRaises(PreviewError):
+                summarize(
+                    value, harness_mode=BASE_MODE,
+                    harness_revision=HARNESS_REVISION, shard=shard,
+                )
 
     def test_profile_and_markdown_payloads_fail_or_escape(self) -> None:
         unsafe = report()
@@ -356,6 +391,7 @@ class PreviewPreparationTests(unittest.TestCase):
                     quickjs_toolchain="cc test; cmake test; make test",
                     quickjs_target="x86_64-linux-gnu", quickjs_cc="/usr/bin/cc",
                 )
+                args.shard = None
                 prepare(args)
                 dynamic = load_manifest(manifest_path)
                 self.assertEqual(dynamic.protocol_sha256, template.protocol_sha256)
@@ -664,6 +700,7 @@ class SentinelLaneTests(unittest.TestCase):
                         rust_target="x86_64-unknown-linux-gnu",
                         quickjs_toolchain="cc test; cmake test; make test",
                         quickjs_target="x86_64-linux-gnu", quickjs_cc="/usr/bin/cc",
+                        shard=None,
                     ))
 
                 run("benchmarks/manifest.json", manifests[0], "")

@@ -325,17 +325,28 @@ its own job:
 1. `build` validates both sources, builds or restores the three executables,
    and records their identity (`tools/benchmark/preview_identity.py`):
    revisions, toolchains, and each executable's SHA-256.
-2. `broad`, `external` and `sentinel` run in parallel, one runner each. A
-   lane job checks out only the harness revision, downloads the recorded
-   executables, refuses any that do not match the record or the event it was
-   started for, and measures all three engines on its own runner at three
-   blocks. Every ratio is therefore still a same-host comparison; ratios
-   from different lanes come from different hosts and are never combined.
+2. The measuring stages run in parallel, one runner each: `external`,
+   `sentinel`, and the broad portfolio as `broad-1` and `broad-2`. A lane job
+   checks out only the harness revision, downloads the recorded executables,
+   refuses any that do not match the record or the event it was started for,
+   and measures all three engines on its own runner at three blocks. Every
+   case ratio is therefore still a same-host comparison; ratios from
+   different lanes come from different hosts and are never combined.
+
+   The broad lane is sharded because nearly all of its time is per-case
+   setup. The cases are dealt between the shards in portfolio order
+   (`BROAD_SHARDS` in `tools/benchmark/hosted_preview.py`), each shard
+   measures its cases under the unchanged protocol, and the publisher joins
+   them only when every shard was admitted and together they cover the
+   frozen portfolio exactly once. The lane's overall ratio is the geometric
+   mean of the case ratios, as it is unsharded; it has no interval, because
+   that bootstrap resamples blocks shared by cases measured on one host.
 3. The publish job always runs. It reads each stage's `<stage>-status.json`,
-   admits a lane's evidence only when that stage succeeded, its evidence
-   parses and it measured the recorded executables, writes and publishes the
-   summary, and only then fails if the broad or external lane has no
-   admitted evidence. A sentinel lane that runs out of its 600-second
+   admits a stage's evidence only when that stage succeeded no earlier than
+   the build, its evidence parses and renders, and it measured the recorded
+   executables; writes the summary and a `status.json` that indexes every
+   evidence file by SHA-256; publishes; and only then fails if the broad or
+   external lane has no admitted evidence. A sentinel lane that runs out of its 600-second
    measurement deadline is recorded as incomplete and reported, not failed.
 
 It has read-only permissions, no threshold and no gate. A slower result

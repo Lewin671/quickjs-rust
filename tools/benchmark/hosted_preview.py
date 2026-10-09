@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import math
 import os
 import re
 import sys
@@ -174,14 +176,24 @@ def _json_bytes(value: Any) -> bytes:
     return (json.dumps(value, sort_keys=True, indent=2, allow_nan=False) + "\n").encode()
 
 
-STAGES = ("build", "broad", "external", "sentinel")
+# The broad lane is the longest by far, and nearly all of its time is
+# per-case setup (calibration, warmup and the linearity probes), so its cases
+# are divided between this many runners. Each shard measures its cases with
+# all three engines on its own runner under the unchanged protocol: every
+# case ratio is still a same-host comparison. What a shard cannot supply is
+# an interval for the lane's overall ratio, whose bootstrap resamples blocks
+# jointly across cases measured on one host.
+BROAD_SHARDS = 2
+BROAD_STAGES = tuple(f"broad-{shard}" for shard in range(1, BROAD_SHARDS + 1))
+STAGES = ("build", *BROAD_STAGES, "external", "sentinel")
 LANE_LABELS = {
+    **{stage: f"broad lane shard {stage[len('broad-'):]}" for stage in BROAD_STAGES},
     "broad": "broad lane", "external": "external lane", "sentinel": "sentinel lane",
 }
-# A lane's evidence the publisher renders, and the executable hashes it must
-# agree on with the build job's record.
-LANE_EVIDENCE = {
-    "broad": "summary.json",
+# The evidence each measuring stage leaves for the publisher, which must agree
+# with the build job's record on the executables it measured.
+STAGE_EVIDENCE = {
+    **{stage: f"{stage}-summary.json" for stage in BROAD_STAGES},
     "external": "external-report.json",
     "sentinel": "sentinel-summary.json",
 }
@@ -214,7 +226,7 @@ def _stage(output: Path, stage: str) -> dict[str, str]:
 
 def _lane_binaries(output: Path, lane: str, evidence: dict[str, Any]) -> dict[str, Any] | None:
     """The executable hashes a lane says it measured, by role."""
-    if lane == "broad":
+    if lane in BROAD_STAGES:
         engines = evidence.get("engines")
         if not isinstance(engines, dict):
             return None
@@ -229,6 +241,11 @@ def _lane_binaries(output: Path, lane: str, evidence: dict[str, Any]) -> dict[st
         for role in ("candidate", "base", "quickjs-ng")
     }
     return {role: (receipt or {}).get("binary_sha256") for role, receipt in receipts.items()}
+
+
+# What reading a field that is absent or of the wrong type raises. Evidence
+# that parses can still be malformed, and must cost only its own lane.
+MALFORMED = (KeyError, TypeError, ValueError, AttributeError, IndexError, ArithmeticError)
 
 
 def _predates(lane_attempt: str, build_attempt: str) -> bool:
@@ -255,9 +272,11 @@ def _renders(lane: str, evidence: dict[str, Any]) -> bool:
     """
     from .preview_summary import render_preview
 
+    lanes: dict[str, Any] = {"broad": None}
+    lanes["broad" if lane.startswith("broad") else lane] = evidence
     try:
-        render_preview(**{"broad": None, lane: evidence})
-    except (KeyError, TypeError, ValueError, AttributeError, IndexError, ArithmeticError):
+        render_preview(**lanes)
+    except MALFORMED:
         return False
     return True
 
@@ -284,7 +303,7 @@ def collect(
     built = identity.get("binaries") if stages["build"]["state"] == "success" else None
     evidence: dict[str, Any] = {}
     notes: dict[str, str] = {}
-    for lane, name in LANE_EVIDENCE.items():
+    for lane, name in STAGE_EVIDENCE.items():
         record = stages[lane]
         label = LANE_LABELS[lane]
         if not isinstance(built, dict):
@@ -319,7 +338,71 @@ def collect(
                 notes[lane] = f"the {label} reported success but its evidence is malformed."
             else:
                 evidence[lane] = loaded
+    # The broad lane exists only when every shard was admitted and they fit
+    # together; a partial portfolio is never published as the lane.
+    shards = [evidence.pop(stage) for stage in BROAD_STAGES if stage in evidence]
+    absent = [notes.pop(stage) for stage in BROAD_STAGES if stage in notes]
+    if absent:
+        notes["broad"] = " ".join(dict.fromkeys(absent))
+    else:
+        try:
+            merged = merge_broad_shards(shards)
+        except HostedPreviewError as error:
+            notes["broad"] = f"the broad lane's shards do not fit together: {error}."
+        except MALFORMED:
+            notes["broad"] = "the broad lane's shards reported success but are malformed."
+        else:
+            if _renders("broad", merged):
+                evidence["broad"] = merged
+            else:
+                notes["broad"] = "the broad lane's shards reported success but are malformed."
     return stages, evidence, notes
+
+
+def merge_broad_shards(shards: list[dict[str, Any]]) -> dict[str, Any]:
+    """Join the shards' machine summaries into the broad lane's.
+
+    Each shard validated its own cases; this checks only that the shards
+    belong together -- same harness, profile and executables, and exactly
+    the frozen portfolio between them, each case once. The overall ratio is
+    the geometric mean of the case ratios, which is what the analysis
+    computes for an unsharded lane; it carries no interval here.
+    """
+    from .preview import HOSTED_CASES
+
+    numbers = sorted(str(shard.get("shard")) for shard in shards)
+    if numbers != [str(number) for number in range(1, BROAD_SHARDS + 1)]:
+        raise HostedPreviewError("expected each shard exactly once")
+    first = shards[0]
+    shared = ("profile_id", "harness", "integrity_scope", "engines", "requested_blocks")
+    for shard in shards[1:]:
+        if any(shard.get(key) != first.get(key) for key in shared):
+            raise HostedPreviewError("the shards disagree about what they measured")
+    merged = {
+        key: value for key, value in first.items() if key not in {"shard", "comparisons"}
+    }
+    merged["shards"] = BROAD_SHARDS
+    merged["valid_blocks"] = min(shard["valid_blocks"] for shard in shards)
+    if any(shard["health"] == "invalid" or not shard["comparisons"] for shard in shards):
+        # One shard failing its linearity diagnostic leaves the lane without
+        # a direction, exactly as it would unsharded.
+        merged.update({"health": "invalid", "linearity": "fail", "comparisons": {}})
+        return merged
+    merged["comparisons"] = {}
+    for label in ("candidate vs base", "candidate vs QuickJS-NG"):
+        cases = {
+            case["id"]: case for shard in shards for case in shard["comparisons"][label]["cases"]
+        }
+        counted = sum(len(shard["comparisons"][label]["cases"]) for shard in shards)
+        if counted != len(HOSTED_CASES) or set(cases) != set(HOSTED_CASES):
+            raise HostedPreviewError("the shards do not cover the frozen portfolio exactly once")
+        ratios = [cases[case_id]["ratio"] for case_id in HOSTED_CASES]
+        merged["comparisons"][label] = {
+            "label": label,
+            "ratio": math.exp(sum(math.log(ratio) for ratio in ratios) / len(ratios)),
+            "cases": [cases[case_id] for case_id in HOSTED_CASES],
+        }
+    return merged
 
 
 def publish(output_dir: Path, step_summary: Path, build_succeeded: bool = True) -> bool:
@@ -360,16 +443,23 @@ def publish(output_dir: Path, step_summary: Path, build_succeeded: bool = True) 
         "stages": stages,
         "lanes_with_evidence": sorted(evidence),
     }
+    if "broad" in evidence:
+        # The composed lane, for readers of the evidence; the shards' own
+        # summaries stay beside it.
+        _write_replace(output / "summary.json", _json_bytes(evidence["broad"]))
+    # The run's evidence came from several jobs. This index binds what was
+    # published to the exact bytes it was published from.
+    payload["evidence_sha256"] = {
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(output.iterdir())
+        if path.is_file() and path.name not in {"status.json", "summary.md"}
+    }
     _write_replace(output / "status.json", _json_bytes(payload))
     _write_replace(output / "summary.md", markdown.encode())
     target = step_summary.expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("ab") as handle:
         handle.write(markdown.encode())
-    if "broad" in evidence and "bundle" not in evidence["broad"]:
-        from .bundle import seal
-
-        seal(output)
     return complete
 
 

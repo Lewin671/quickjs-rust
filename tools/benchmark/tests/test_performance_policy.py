@@ -529,7 +529,12 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
             ),
             1,
         )
-        self.assertIn("lane: [broad, external, sentinel]", workflow)
+        from tools.benchmark.hosted_preview import BROAD_STAGES
+
+        # The matrix and the publisher must name the same broad shards.
+        self.assertIn(
+            f"lane: [{', '.join(BROAD_STAGES)}, external, sentinel]", workflow
+        )
         self.assertIn("fail-fast: false", workflow)
         self.assertIn("$GITHUB_STEP_SUMMARY", workflow)
         self.assertIn("actions/upload-artifact@v6", workflow)

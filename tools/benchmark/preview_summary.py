@@ -345,10 +345,19 @@ def _broad_details(broad: dict[str, Any] | None) -> list[str]:
     ]
     for label in ("candidate vs base", "candidate vs QuickJS-NG"):
         result = comparisons[label]
-        lines.append(
-            f"| {label} | {result['ratio']:.4f}× | "
-            f"[{result['ci_lower']:.4f}×, {result['ci_upper']:.4f}×] |"
+        interval = (
+            f"[{result['ci_lower']:.4f}×, {result['ci_upper']:.4f}×]"
+            if "ci_lower" in result else "—"
         )
+        lines.append(f"| {label} | {result['ratio']:.4f}× | {interval} |")
+    if broad.get("shards"):
+        lines.extend([
+            "",
+            f"Measured in {broad['shards']} shards on separate runners. Every case "
+            "ratio is a same-host comparison; the overall ratio is the geometric "
+            "mean of the case ratios and has no interval, because cases from "
+            "different hosts share no blocks to resample.",
+        ])
     lines.extend([
         "",
         "Medians are wall ns per operation.",
