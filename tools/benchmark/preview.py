@@ -15,6 +15,8 @@ from typing import Any
 
 from .hosted_preview import (
     BASE_MODE,
+    BROAD_SHARDS,
+    STAGES,
     MANUAL_INTEGRITY_SCOPE,
     MANUAL_MODE,
     PR_INTEGRITY_SCOPE,
@@ -62,6 +64,22 @@ HOSTED_SENTINEL_CASES = (
     "recursive_call_tree", "prototype_method_call", "polymorphic_call_site",
     "capturing_closure_call", "heterogeneous_property_read", "string_key_map_churn",
 )
+
+
+def shard_cases(shard: int | None) -> tuple[str, ...]:
+    """The broad cases one shard measures; all of them when unsharded.
+
+    Cases are dealt in portfolio order, which spreads the long-window and
+    short-window cases evenly enough that the shards take about as long.
+    """
+    if shard is None:
+        return HOSTED_CASES
+    if not 1 <= shard <= BROAD_SHARDS:
+        raise PreviewError(f"broad shard must be between 1 and {BROAD_SHARDS}")
+    return tuple(
+        case_id for index, case_id in enumerate(HOSTED_CASES)
+        if index % BROAD_SHARDS == shard - 1
+    )
 
 
 def _integrity_scope(harness_mode: str) -> str:
@@ -257,6 +275,11 @@ def prepare(args: argparse.Namespace) -> None:
             "hosted preview requires the complete frozen broad portfolio or the "
             "complete frozen generic-path sentinels"
         )
+    if args.shard is not None:
+        if tuple(case.id for case in template.cases) != HOSTED_CASES:
+            raise PreviewError("only the broad portfolio is measured in shards")
+        selected = set(shard_cases(args.shard))
+        data["cases"] = [case for case in data["cases"] if case["id"] in selected]
     profile_id = _string(args.profile_id, "profile id")
     platform = _string(args.platform, "platform")
     rust_flags = list(RUST_BUILD_FLAGS)
@@ -363,7 +386,9 @@ def verify_source(args: argparse.Namespace) -> None:
         )
 
 
-def _comparison(report: dict[str, Any], key: str, label: str) -> dict[str, Any]:
+def _comparison(
+    report: dict[str, Any], key: str, label: str, expected: tuple[str, ...],
+) -> dict[str, Any]:
     comparisons = report.get("comparisons")
     if not isinstance(comparisons, dict) or not isinstance(comparisons.get(key), dict):
         raise PreviewError(f"report is missing required {label} comparison")
@@ -388,10 +413,10 @@ def _comparison(report: dict[str, Any], key: str, label: str) -> dict[str, Any]:
         direction = "equal ns/op"
         percent = 0.0
     case_map = comparisons[key].get("cases")
-    if not isinstance(case_map, dict) or set(case_map) != set(HOSTED_CASES):
+    if not isinstance(case_map, dict) or set(case_map) != set(expected):
         raise PreviewError(f"report is missing the exact {label} per-case results")
     cases = []
-    for case_id in HOSTED_CASES:
+    for case_id in expected:
         case = case_map.get(case_id)
         if not isinstance(case, dict):
             raise PreviewError(f"report is missing required {label} case {case_id}")
@@ -498,7 +523,10 @@ def _assert_lane_health(report: dict[str, Any], expected_cases: int) -> tuple[st
 
 def summarize(
     report: dict[str, Any], *, harness_mode: str, harness_revision: str,
+    shard: int | None = None,
 ) -> tuple[str, dict[str, Any]]:
+    """Validate a broad report -- the whole lane, or one shard of it."""
+    expected = shard_cases(shard)
     if report.get("schema_id") != "quickjs-benchmark-report" or report.get("schema_version") != 4:
         raise PreviewError("report has an unsupported schema identity")
     if report.get("claim_eligible") is not False:
@@ -508,7 +536,7 @@ def summarize(
     if not isinstance(bootstrap, dict) or bootstrap.get("confidence") != 0.95:
         raise PreviewError("hosted preview summary requires the frozen 95% confidence policy")
     run = report.get("run")
-    status, linearity_status, valid_blocks = _assert_lane_health(report, len(HOSTED_CASES))
+    status, linearity_status, valid_blocks = _assert_lane_health(report, len(expected))
     if not isinstance(run, dict):
         raise PreviewError("report is missing run, coverage, or health")
     profile = run.get("profile")
@@ -534,6 +562,7 @@ def summarize(
         "integrity_scope": _integrity_scope(harness_mode),
         "malicious_candidate_resistant": False,
         "engines": engines,
+        "shard": shard,
     }
     if status == "invalid":
         machine = {
@@ -543,12 +572,14 @@ def summarize(
         }
         return render_preview(machine), machine
     results = [
-        _comparison(report, "candidate_vs_base", "candidate vs base"),
-        _comparison(report, "candidate_vs_quickjs_ng", "candidate vs QuickJS-NG"),
+        _comparison(report, "candidate_vs_base", "candidate vs base", expected),
+        _comparison(
+            report, "candidate_vs_quickjs_ng", "candidate vs QuickJS-NG", expected
+        ),
     ]
     base_cases = {case["id"]: case for case in results[0]["cases"]}
     quickjs_cases = {case["id"]: case for case in results[1]["cases"]}
-    for case_id in HOSTED_CASES:
+    for case_id in expected:
         if not math.isclose(
             base_cases[case_id]["candidate_median_ns_per_op"],
             quickjs_cases[case_id]["candidate_median_ns_per_op"],
@@ -568,13 +599,11 @@ def summary(args: argparse.Namespace) -> None:
         _read_object(args.report, "benchmark report"),
         harness_mode=args.harness_mode,
         harness_revision=args.harness_revision,
+        shard=args.shard,
     )
     if args.markdown is not None:
         _write_replace(args.markdown, markdown.encode("utf-8"))
     _write_replace(args.json_output, _json_bytes(machine))
-
-
-STAGES = ("build", "broad", "external", "sentinel")
 
 
 def status(args: argparse.Namespace) -> None:
@@ -635,6 +664,7 @@ def _parser() -> argparse.ArgumentParser:
         "quickjs-toolchain", "quickjs-target", "quickjs-cc",
     ):
         build.add_argument(f"--{name}", required=True)
+    build.add_argument("--shard", type=int)
     build.set_defaults(function=prepare)
 
     render = commands.add_parser("summary")
@@ -643,6 +673,7 @@ def _parser() -> argparse.ArgumentParser:
     render.add_argument("--json-output", type=Path, required=True)
     render.add_argument("--harness-mode", choices=HARNESS_MODES, required=True)
     render.add_argument("--harness-revision", required=True)
+    render.add_argument("--shard", type=int)
     render.set_defaults(function=summary)
 
     state = commands.add_parser("status")

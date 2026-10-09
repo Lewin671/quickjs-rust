@@ -85,6 +85,17 @@ plus the broad lane.
 shape (69 of 119 s in linearity). Every phase scales with the calibrated
 window, and the eight linearity probes are part of measurement protocol v9.
 
+**What identical builds show on hosted runners.** Runs 37933477498 and
+37950725509 measured equivalent engine code unsharded (the second one's two
+executables were byte-identical). Within a run, every group's
+candidate/base ratio was within 0.5% of 1 and the furthest single test was
+6.4% (`empty_loop`). Between the two runs, per-test candidate/base ratios
+differed by up to 6.9% and 22 of 25 broad cases agreed within 5%; per-test
+candidate/QuickJS-NG ratios differed far more (13 of 25 within 5%, mean
+shift 3.7%), which is the runner hardware changing between runs. The
+summary's wording thresholds (`GROUP_NOISE` 2%, `TEST_NOISE` 7% in
+`tools/benchmark/preview_summary.py`) come from these numbers.
+
 **2026-10-09, rejected: a shorter hosted measurement window.** Capping
 `min_window_ms` at 250 and raising `startup_max_fraction` to 0.04 in the
 derived hosted manifest (14 broad cases ask for 500 ms and 1% startup, which

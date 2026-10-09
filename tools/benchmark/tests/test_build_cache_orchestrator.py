@@ -234,11 +234,11 @@ exec "$TEST_REAL_PYTHON" "$@"
 
             # A lane admits the recorded executables and reaches measurement
             # preparation, which the mock interpreter stops with status 42.
-            broad, broad_output = lane("broad", "first")
+            broad, broad_output = lane("broad-1", "first")
             self.assertEqual(broad.returncode, 42, broad.stderr)
             self.assertEqual(
-                (stage_status(broad_output, "broad")["state"],
-                 stage_status(broad_output, "broad")["phase"]),
+                (stage_status(broad_output, "broad-1")["state"],
+                 stage_status(broad_output, "broad-1")["phase"]),
                 ("failed", "measurement"),
             )
             # The sentinel lane records the same stop as incomplete and exits
@@ -264,17 +264,17 @@ exec "$TEST_REAL_PYTHON" "$@"
             # So is an executable that changed after the build stage recorded it.
             tampered = harness / "target/second/binaries/candidate-qjs"
             tampered.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
-            changed, changed_output = lane("broad", "second")
+            changed, changed_output = lane("broad-2", "second")
             self.assertNotEqual(changed.returncode, 0)
             self.assertIn("does not match the build job's record", changed.stderr)
             self.assertEqual(
-                stage_status(changed_output, "broad")["phase"], "executable_admission"
+                stage_status(changed_output, "broad-2")["phase"], "executable_admission"
             )
 
             # A lane takes no source tree: it cannot be pointed at one.
             sourced = subprocess.run(
                 [
-                    "bash", str(preview_script), "--stage", "broad",
+                    "bash", str(preview_script), "--stage", "broad-1",
                     "--binaries", str(harness / "target/first/binaries"),
                     "--candidate-source", str(harness),
                     "--harness-mode", "main_push_head_owned_harness",

@@ -516,7 +516,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        lane: [broad, external, sentinel]
+        lane: [broad-1, broad-2, external, sentinel]
     env:
       QJS_HARNESS_ROOT: ${{ github.workspace }}
       QJS_HARNESS_MODE: ${{ github.event_name == 'pull_request_target' && 'base_owned_harness' || (github.event_name == 'workflow_dispatch' && 'manual_main_head_owned_harness' || 'main_push_head_owned_harness') }}

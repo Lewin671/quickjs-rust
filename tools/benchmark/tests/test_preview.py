@@ -30,6 +30,7 @@ from tools.benchmark.hosted_preview import (
     MANUAL_MODE,
     PUSH_MODE,
 )
+from tools.benchmark.preview_summary import HOW_TO_READ
 from tools.benchmark.receipts import load_receipt
 from tools.benchmark.schema import load_manifest, sha256_file
 
@@ -38,10 +39,13 @@ ROOT = Path(__file__).resolve().parents[3]
 HARNESS_REVISION = "a" * 40
 
 
-def report(ratio_base: float = 1.25, ratio_qjs: float = 0.8) -> dict[str, object]:
+def report(
+    ratio_base: float = 1.25, ratio_qjs: float = 0.8,
+    case_ids: tuple[str, ...] = HOSTED_CASES,
+) -> dict[str, object]:
     def comparison(ratio: float) -> dict[str, object]:
         cases = {}
-        for index, case_id in enumerate(HOSTED_CASES, 1):
+        for index, case_id in enumerate(case_ids, 1):
             candidate = float(100 + index)
             cases[case_id] = {
                 "candidate_median_ns_per_op": candidate,
@@ -74,7 +78,7 @@ def report(ratio_base: float = 1.25, ratio_qjs: float = 0.8) -> dict[str, object
             "engines": engines,
         },
         "coverage": {
-            "roles": 3, "cases": len(HOSTED_CASES), "blocks": 3,
+            "roles": 3, "cases": len(case_ids), "blocks": 3,
             "comparison_input_complete": True,
         },
         "health": {
@@ -89,6 +93,11 @@ def report(ratio_base: float = 1.25, ratio_qjs: float = 0.8) -> dict[str, object
     }
 
 
+def without_legend(markdown: str) -> str:
+    """The summary without its constant reading guide, which quotes an example."""
+    return markdown.replace(HOW_TO_READ, "")
+
+
 def summarize_report(value: dict[str, object]) -> tuple[str, dict[str, object]]:
     return summarize(
         value,
@@ -101,16 +110,13 @@ class PreviewSummaryTests(unittest.TestCase):
     def test_ratio_uses_precise_ns_per_operation_language(self) -> None:
         markdown, machine = summarize_report(report())
         self.assertIn("informational only — non-gating — not a fixed-hardware claim", markdown)
-        self.assertIn("candidate vs base | 1.2500×", markdown)
-        self.assertIn("candidate vs QuickJS-NG | 0.8000×", markdown)
-        self.assertIn(
-            "| Broad microbenchmarks (specializer coverage) | 25/25 | +25.0% | 0.800× |",
-            markdown,
-        )
-        self.assertNotIn("faster", markdown.lower())
-        self.assertNotIn("slower", markdown.lower())
-        self.assertIn("Valid blocks: `3/3`", markdown)
-        self.assertIn("<summary>Broad microbenchmarks — all 25 cases</summary>", markdown)
+        # The exact ratios stay available to a reader who wants them ...
+        self.assertIn("Micro-operations, candidate vs base: 1.2500× [1.1250×, 1.3750×]", markdown)
+        self.assertIn("Micro-operations, candidate vs QuickJS-NG: 0.8000×", markdown)
+        # ... and the table says the same thing in words.
+        self.assertIn("| Micro-operations | 25 tests | 🔴 25.0% slower | 🟢 1.25× faster |", markdown)
+        self.assertIn("valid blocks `3/3`", markdown)
+        self.assertIn("<summary>Micro-operations — all 25 tests</summary>", markdown)
         self.assertIn("| `plain_function_call` |", markdown)
         self.assertIn("| `closure_allocation_call` |", markdown)
         self.assertEqual(len(machine["comparisons"]["candidate vs base"]["cases"]), 25)
@@ -198,7 +204,39 @@ class PreviewSummaryTests(unittest.TestCase):
         self.assertIn("linearity: fail", markdown)
         self.assertNotIn("Overall ratio", markdown)
         self.assertNotIn("candidate vs", markdown)
-        self.assertNotRegex(markdown, r"\d\.\d+×|[+-]\d+\.\d%")
+        self.assertNotRegex(without_legend(markdown), r"\d\.\d+×|\d+\.\d% (slower|faster)")
+
+    def test_a_shard_is_validated_against_exactly_its_own_cases(self) -> None:
+        from tools.benchmark.hosted_preview import BROAD_SHARDS
+        from tools.benchmark.preview import shard_cases
+
+        dealt = [shard_cases(shard) for shard in range(1, BROAD_SHARDS + 1)]
+        self.assertEqual(sorted(sum(dealt, ())), sorted(HOSTED_CASES))
+        self.assertEqual(shard_cases(None), HOSTED_CASES)
+        self.assertLessEqual(max(map(len, dealt)) - min(map(len, dealt)), 1)
+        for invalid in (0, BROAD_SHARDS + 1):
+            with self.assertRaisesRegex(PreviewError, "broad shard must be between"):
+                shard_cases(invalid)
+        for shard, cases in enumerate(dealt, 1):
+            _, machine = summarize(
+                report(case_ids=cases), harness_mode=BASE_MODE,
+                harness_revision=HARNESS_REVISION, shard=shard,
+            )
+            self.assertEqual(machine["shard"], shard)
+            self.assertEqual(
+                [case["id"] for case in machine["comparisons"]["candidate vs base"]["cases"]],
+                list(cases),
+            )
+        # A shard's report cannot stand in for the lane, for another shard, or
+        # the lane for a shard.
+        for value, shard in (
+            (report(case_ids=dealt[0]), None), (report(case_ids=dealt[0]), 2), (report(), 1),
+        ):
+            with self.assertRaises(PreviewError):
+                summarize(
+                    value, harness_mode=BASE_MODE,
+                    harness_revision=HARNESS_REVISION, shard=shard,
+                )
 
     def test_profile_and_markdown_payloads_fail_or_escape(self) -> None:
         unsafe = report()
@@ -356,6 +394,7 @@ class PreviewPreparationTests(unittest.TestCase):
                     quickjs_toolchain="cc test; cmake test; make test",
                     quickjs_target="x86_64-linux-gnu", quickjs_cc="/usr/bin/cc",
                 )
+                args.shard = None
                 prepare(args)
                 dynamic = load_manifest(manifest_path)
                 self.assertEqual(dynamic.protocol_sha256, template.protocol_sha256)
@@ -664,6 +703,7 @@ class SentinelLaneTests(unittest.TestCase):
                         rust_target="x86_64-unknown-linux-gnu",
                         quickjs_toolchain="cc test; cmake test; make test",
                         quickjs_target="x86_64-linux-gnu", quickjs_cc="/usr/bin/cc",
+                        shard=None,
                     ))
 
                 run("benchmarks/manifest.json", manifests[0], "")
@@ -733,7 +773,7 @@ class SentinelLaneTests(unittest.TestCase):
         ]
         rendered = self._render(report)
         # 64 ** (1/6) == 2
-        self.assertIn("| Interpreter sentinels | 6/6 | +100.0% | 2.000× |", rendered)
+        self.assertIn("| Interpreter basics | 6 tests | 🔴 100.0% slower | 🔴 2.00× slower |", rendered)
 
     def test_a_partial_comparison_map_publishes_nothing(self) -> None:
         from tools.benchmark.preview import PreviewError
@@ -788,7 +828,7 @@ class SentinelLaneTests(unittest.TestCase):
         rendered = self._render(degraded)
         self.assertIn("No performance direction is reported", rendered)
         self.assertIn(
-            "**Interpreter sentinels:** measured, but the linearity diagnostic failed",
+            "**Interpreter basics:** measured, but the linearity diagnostic failed",
             rendered,
         )
-        self.assertNotRegex(rendered, r"\d\.\d+×|[+-]\d+\.\d%")
+        self.assertNotRegex(without_legend(rendered), r"\d\.\d+×|\d+\.\d% (slower|faster)")

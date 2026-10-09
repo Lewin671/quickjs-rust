@@ -5,7 +5,7 @@ set -Eeuo pipefail
 #
 #   build      validate both sources, build or restore the three executables,
 #              and record their identity for the lanes
-#   broad      measure the broad portfolio
+#   broad-N    measure shard N of the broad portfolio
 #   external   measure the pinned external corpora
 #   sentinel   measure the generic-path sentinels
 #
@@ -21,7 +21,7 @@ export PYTHONDONTWRITEBYTECODE=1
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/performance-preview.sh --stage <build|broad|external|sentinel> \
+Usage: ./scripts/performance-preview.sh --stage <build|broad-N|external|sentinel> \
   --harness-mode <base_owned_harness|main_push_head_owned_harness|manual_main_head_owned_harness> \
   --candidate-sha <full-sha> --base-sha <full-sha> \
   --candidate-repo <https-github-clone-url> \
@@ -72,8 +72,8 @@ done
 
 case "$STAGE" in
   build) REQUIRED="HARNESS_MODE CANDIDATE_SOURCE BASE_SOURCE CANDIDATE_REVISION BASE_REVISION CANDIDATE_REPO BASE_REPO OUTPUT BINARIES" ;;
-  broad|external|sentinel) REQUIRED="HARNESS_MODE CANDIDATE_REVISION BASE_REVISION CANDIDATE_REPO BASE_REPO OUTPUT BINARIES" ;;
-  *) echo "error: --stage must be build, broad, external, or sentinel" >&2; exit 2 ;;
+  broad-[1-9]|external|sentinel) REQUIRED="HARNESS_MODE CANDIDATE_REVISION BASE_REVISION CANDIDATE_REPO BASE_REPO OUTPUT BINARIES" ;;
+  *) echo "error: --stage must be build, broad-N, external, or sentinel" >&2; exit 2 ;;
 esac
 for value_name in $REQUIRED; do
   if [ -z "${!value_name}" ]; then
@@ -416,11 +416,13 @@ QUICKJS_CC="${FACTS[6]}"
 
 # Measures one frozen portfolio with all three engines on this runner. $1 is
 # the manifest template and $2 prefixes the lane's evidence file names. A
-# nonzero $3 bounds the measurement itself, in seconds.
+# nonzero $3 bounds the measurement itself, in seconds, and a nonzero $4
+# selects that shard of the portfolio.
 measure_portfolio() {
-  local template="$1" prefix="$2" limit="${3:-0}"
-  local -a bounded=()
+  local template="$1" prefix="$2" limit="${3:-0}" shard="${4:-0}"
+  local -a bounded=() sharded=()
   [ "$limit" -eq 0 ] || bounded=(./scripts/run-with-timeout.sh "$limit")
+  [ "$shard" -eq 0 ] || sharded=(--shard "$shard")
   MANIFEST="$HARNESS_ROOT/benchmarks/.hosted-$STAGE-${CANDIDATE_REVISION:0:12}-${BASE_REVISION:0:12}-$$.json"
   (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview prepare \
     --template "$template" --manifest-output "$MANIFEST" \
@@ -434,7 +436,7 @@ measure_portfolio() {
     --profile-id "$PROFILE_ID" --platform "$PROFILE_PLATFORM" \
     --rust-toolchain "$RUST_TOOLCHAIN" --rust-target "$RUST_TARGET" \
     --quickjs-toolchain "$QUICKJS_TOOLCHAIN" --quickjs-target "$QUICKJS_TARGET" \
-    --quickjs-cc "$QUICKJS_CC") || return "$?"
+    --quickjs-cc "$QUICKJS_CC" ${sharded[@]+"${sharded[@]}"}) || return "$?"
   (cd "$HARNESS_ROOT" && ${bounded[@]+"${bounded[@]}"} \
     ./scripts/benchmark.sh --manifest "$MANIFEST" --blocks 3 \
     --candidate "$CANDIDATE_BINARY" --candidate-receipt "$OUTPUT/${prefix}candidate-receipt.json" \
@@ -450,16 +452,20 @@ measure_portfolio() {
 }
 
 case "$STAGE" in
-broad)
+broad-*)
+  # One shard of the broad portfolio. Its cases are measured exactly as they
+  # would be unsharded; the publisher joins the shards into the lane.
+  SHARD="${STAGE#broad-}"
   CURRENT_PHASE="measurement"
-  measure_portfolio benchmarks/manifest.json ""
+  measure_portfolio benchmarks/manifest.json "$STAGE-" 0 "$SHARD"
   CURRENT_PHASE="post_measure_validation"
   (cd "$HARNESS_ROOT" && ./scripts/performance-policy-audit.sh)
   (cd "$HARNESS_ROOT" && ./scripts/external-corpus-audit.sh)
   CURRENT_PHASE="summary"
   (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview summary \
-    --report "$OUTPUT/report.json" --json-output "$OUTPUT/summary.json" \
-    --harness-mode "$HARNESS_MODE" --harness-revision "$HARNESS_REVISION")
+    --report "$OUTPUT/$STAGE-report.json" --json-output "$OUTPUT/$STAGE-summary.json" \
+    --harness-mode "$HARNESS_MODE" --harness-revision "$HARNESS_REVISION" \
+    --shard "$SHARD")
   ;;
 external)
   # External corpora remain non-claim evidence in every admitted hosted mode.
