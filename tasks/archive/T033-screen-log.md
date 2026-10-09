@@ -3,8 +3,9 @@
 > Historical record. Describes the repository at the revisions named below; not current guidance.
 
 Experiment log of `tasks/T033-wide-tier-interpreter-exits.md`, moved here
-verbatim. It merges the earlier archive file `T033-screen-log-early.md` with
-the entries that had stayed in the task file. Entries are grouped under the
+verbatim. It merges the earlier archive file (this file under its former
+name, `T033-screen-log-early.md`) with the entries that had stayed in the
+task file. Entries are grouped under the
 date they were first recorded in the task file (from `git log -S` on each
 entry), oldest first; inside one commit they keep their original order. The
 only edits to an entry are the label "(local artifact, not retained)" after

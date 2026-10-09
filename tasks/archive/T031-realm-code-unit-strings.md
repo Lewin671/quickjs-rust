@@ -2,9 +2,12 @@
 
 > Historical record. Describes the repository at the revisions named below; not current guidance.
 
-- Status: closed-landed (formal promotion decision `retained`).
-- Implementation: present
-  (`crates/qjs-runtime/src/string/code_unit_strings.rs`).
+- Status: closed-landed (formal promotion decision `retained`); the mechanism
+  was later replaced.
+- Implementation: none at `d1313d52`. The realm code-unit string cache landed
+  in `5702c789` and was removed by `5efe8ca8`, 2026-09-23, which defines a
+  String wrapper's index properties only when they are observed and so no
+  longer needs it.
 - Verified at: `5702c789`, 2026-09-06, against base `a8e9d253`: 30-block
   promotion, 76 comparisons passed; CI and Test262 coverage passed with 42,672
   configured cases and zero gap.
@@ -12,7 +15,8 @@
   `tasks/performance-units/realm-single-code-unit-strings.json`; decision
   SHA-256 `443c853b...` recorded below. Paths under `target/` are local
   artifacts, not retained; regenerate before reuse.
-- Unresolved: none for this unit.
+- Unresolved: none for this unit. Its measured ratios describe `5702c789`, not
+  the current String boxing path.
 - Next action: none.
 
 ## Status
