@@ -183,7 +183,7 @@ fi
 
 # Cheap and independent of what changed: budgets, links, task resume blocks,
 # and the task and plan indexes.
-run_cmd python3 "$ROOT_DIR/scripts/check-context.py"
+run_cmd "$ROOT_DIR/scripts/check-context.py"
 
 if [ "$has_docs_only" -eq 1 ]; then
   echo "check-touched: docs-only change; skipping Rust and Test262 checks"

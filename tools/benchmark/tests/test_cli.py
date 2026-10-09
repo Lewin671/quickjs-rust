@@ -62,6 +62,7 @@ class CliTests(unittest.TestCase):
                     encoding="utf-8",
                 )
                 stub_names = (
+                    "check-context.py",
                     "check-file-size.sh",
                     "benchmark.sh",
                     "benchmark-report.sh",
