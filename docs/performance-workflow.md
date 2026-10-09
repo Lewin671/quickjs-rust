@@ -15,9 +15,9 @@ from a fresh formal run and is not stored in the repository (step 1).
 | Sentinel | 6 cases, `benchmarks/generic-sentinels-manifest.json` | ns per operation of calls and property access whose callee, receiver or key varies at run time |
 | External | 45 cases in 3 suites, `benchmarks/external-preview.json` | whole-process wall time of pinned SunSpider, Kraken and JetStream 3 subset scripts |
 
-The loop-template plans that answered many broad cases whole were removed on
-2026-10-09 and broad has not been formally measured since. Do not assume
-which tier a broad case runs on, or use one as a neutrality control, until
+Broad cases are answered by whichever tier admits each loop, and that
+changes with the engine. Do not assume which tier a broad case runs on, or
+use one as a neutrality control, until
 its [execution counters](benchmarking.md#execution-counters) show it runs
 the path under test. The six sentinels are mandatory controls for every
 unit. External times include startup, parsing and shutdown.

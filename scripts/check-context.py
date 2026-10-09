@@ -61,7 +61,10 @@ STATUSES = (
 )
 RESUME_WINDOW = 30
 
-LINK = re.compile(r"(?<!\!)\[[^\]\n]*\]\(([^)\s]+)\)")
+# An inline link, with or without a title: [text](target "title").
+LINK = re.compile(r"(?<!\!)\[[^\]\n]*\]\(\s*<?([^)\s>]+)>?(?:\s+[^)\n]*)?\)")
+# A reference definition: [label]: target "title".
+REFERENCE = re.compile(r"^ {0,3}\[[^\]\n]+\]:\s*<?([^\s>]+)>?")
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 FENCE = re.compile(r"^\s*(```|~~~)")
 TASK_NAME = re.compile(r"^T\d{3}-.+\.md$")
@@ -150,7 +153,8 @@ def check_links(root: Path) -> list[str]:
     anchor_cache: dict[Path, set[str]] = {}
     for document in current_documents(root):
         for number, line in enumerate(prose_lines(document), start=1):
-            for target in LINK.findall(line):
+            targets = LINK.findall(line) + REFERENCE.findall(line)
+            for target in targets:
                 if re.match(r"^[a-z][a-z0-9+.\-]*:", target):
                     continue
                 file_part, _, fragment = target.partition("#")
@@ -176,17 +180,34 @@ def check_task_resume_blocks(root: Path) -> list[str]:
         if not TASK_NAME.match(path.name):
             continue
         head = path.read_text(encoding="utf-8").splitlines()[:RESUME_WINDOW]
-        values = {}
+        values: dict[str, str] = {}
+        current = None
         for line in head:
             match = re.match(r"^[\s\-*|]*\**([A-Za-z ]+?)\**\s*[:|]\s*(.*)$", line)
             if match and match.group(1).strip() in RESUME_FIELDS:
-                values.setdefault(match.group(1).strip(), match.group(2))
+                current = match.group(1).strip()
+                if current in values:
+                    current = None
+                else:
+                    values[current] = match.group(2)
+            elif current and line.startswith((" ", "\t")) and line.strip():
+                # An indented continuation line belongs to the field above.
+                values[current] += " " + line.strip()
+            else:
+                current = None
         name = path.relative_to(root)
         missing = [field for field in RESUME_FIELDS if field not in values]
         if missing:
             errors.append(
                 f"{name}: resume block is missing {', '.join(missing)} "
                 f"in its first {RESUME_WINDOW} lines (see tasks/TEMPLATE.md)"
+            )
+            continue
+        empty = [f for f in RESUME_FIELDS if not values[f].strip("`* |.")]
+        if empty:
+            errors.append(
+                f"{name}: resume block leaves {', '.join(empty)} empty; "
+                'write the value or "not recorded"'
             )
             continue
         status = values["Status"].strip("`* |").split()[0:1]
@@ -197,6 +218,11 @@ def check_task_resume_blocks(root: Path) -> list[str]:
     return errors
 
 
+def names(text: str, name: str) -> bool:
+    """Whether `text` contains `name` as a whole file or plan name."""
+    return re.search(rf"(?<![\w.\-]){re.escape(name)}(?![\w\-])", text) is not None
+
+
 def check_indexes(root: Path) -> list[str]:
     errors = []
     index = root / "tasks/README.md"
@@ -205,14 +231,14 @@ def check_indexes(root: Path) -> list[str]:
         tasks = sorted((root / "tasks").glob("T*.md"))
         tasks += sorted((root / "tasks/archive").glob("T*.md"))
         for path in tasks:
-            if TASK_NAME.match(path.name) and path.name not in text:
+            if TASK_NAME.match(path.name) and not names(text, path.name):
                 errors.append(f"tasks/README.md does not list {path.relative_to(root)}")
     units = root / "tasks/performance-units"
     unit_index = units / "README.md"
     if unit_index.is_file():
         text = unit_index.read_text(encoding="utf-8")
         for path in sorted(units.glob("*.json")):
-            if path.stem not in text:
+            if not names(text, path.stem):
                 errors.append(
                     f"tasks/performance-units/README.md does not list {path.name}"
                 )

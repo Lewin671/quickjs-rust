@@ -8,8 +8,10 @@
 - Verified at: `10cef53c`, 2026-09-22, Test262 CI aggregate zero gap (recorded
   under Acceptance). This file records no check for any later revision.
 - Evidence: the frozen unit was formally **rejected** on batch `309a604e`
-  against `93f98a4a` (see "Evidence status"). Nothing has been formally
-  measured since the 2026-10-09 removal of the loop-template plans.
+  against `93f98a4a` (see "Evidence status"). The only formal run since the
+  2026-10-09 removal of the loop-template plans is the whole-tree comparison
+  at `d1313d52` recorded in `tasks/T018-broad-performance.md`; it is not a
+  decision on this unit.
 - Unresolved: see "Unresolved".
 - Next action: none decided. The candidates recorded 2026-09-22 to
   2026-09-26 are under "Next"; re-validate any of them against a comparison
@@ -46,10 +48,13 @@ the list below is what has and has not been measured.
   `main`. The last is `fe533cc7` against `cebad5e9` (2026-09-26, loaded
   host): external geomean 0.995 against main and 0.749 against QuickJS-NG.
   The log records no `decide` outcome for any stack run.
-- Not measured: everything after the 2026-10-09 removal (base `7a83b568`).
-  The removal entry says "not yet measured" and that every broad-lane number
-  in the log predates it. The numbers above are therefore not the standing
-  of the current tree.
+- After the 2026-10-09 removal (base `7a83b568`): one formal 30-block
+  comparison of `d1313d52` against `7a83b568`, recorded in
+  `tasks/T018-broad-performance.md` ("Standing at d1313d52"). It gives
+  sentinel and external ratios and no broad ratios (linearity failed). No
+  unit of this task has been screened or decided against the current tree,
+  and every broad-lane number in the log predates the removal, so the
+  numbers above are not the standing of the current tree.
 - Every `target/comparison/` directory the log cites is a local artifact, not
   retained; regenerate before reuse.
 

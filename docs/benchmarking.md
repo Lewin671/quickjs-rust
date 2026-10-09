@@ -29,9 +29,9 @@ a headline engine score.
 control, builtin, string, allocation). Each case is a small loop over one
 kind of operation. Each manifest entry declares the operations per
 iteration and a closed-form checksum. What broad measures depends on which
-tier answers each loop. The loop-template plans that answered many of these
-cases whole were removed on 2026-10-09, and broad has not been formally
-measured since, so no statement about its tier coverage is current. Read
+tier answers each loop, and that changes with the engine, so this document
+makes no statement about its tier coverage. The last formal standing is in
+[T018](../tasks/T018-broad-performance.md). Read
 the [execution counters](#execution-counters) for a case before using it
 as evidence about a specializer or as a control for the generic path.
 
@@ -334,6 +334,22 @@ implementation files, and the `nightly`, `release` and `pr_sentinel`
 gates, all disabled. `scripts/performance-policy-audit.sh` validates it;
 `--require-gate <name>` exits 2 while the gate is disabled. A change to a
 file listed under `hosted_implementation` requires updating that hash.
+
+### Gate activation
+
+No gate is enabled and no fixed hardware is configured. The prerequisites
+are the `activation_prerequisites` of each gate in the policy file, which
+`tools/benchmark/performance_policy.py` validates; enabling a gate takes, in
+this order:
+
+1. A qualified, content-hashed fixed-hardware fingerprint.
+2. Independent same-binary, randomized-order, content-hashed A/A shadow
+   reports: at least 20 for `nightly` and `release`, at least 30 for
+   `pr_sentinel`.
+3. A frozen noise envelope bound to the current protocol hashes.
+4. For `pr_sentinel`, a demonstrated and frozen false-positive budget.
+5. Review of the content-hashed evidence bundle. A policy field or a hosted
+   preview result does not substitute for that evidence.
 
 `benchmarks/external-corpora.json` is a deny-only governance registry: it
 admits no external corpus for claims. The external preview executes pinned

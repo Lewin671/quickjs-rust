@@ -67,6 +67,17 @@ class ContextCheckTests(unittest.TestCase):
         self.write("docs/architecture.md", "See [x](missing.md).\n")
         self.assertTrue(any("missing.md" in e for e in self.errors()))
 
+    def test_titled_and_reference_links_are_checked(self):
+        self.write("README.md", '[guide](missing.md "Guide")\n')
+        self.assertTrue(any("missing.md" in e for e in self.errors()))
+        self.write("README.md", "See [guide][g].\n\n[g]: gone.md 'Guide'\n")
+        self.assertTrue(any("gone.md" in e for e in self.errors()))
+        self.write(
+            "README.md",
+            '[a](docs/architecture.md "A") and [b][b].\n\n[b]: <scripts/README.md>\n',
+        )
+        self.assertEqual(self.errors(), [])
+
     def test_anchors_follow_heading_slugs(self):
         self.write("README.md", "[ok](docs/architecture.md#call-dispatch)\n")
         self.assertEqual(self.errors(), [])
@@ -83,6 +94,22 @@ class ContextCheckTests(unittest.TestCase):
     def test_an_active_task_needs_every_resume_field(self):
         self.write("tasks/T001-example.md", RESUME.replace("- Evidence:", "- Proof:"))
         self.assertTrue(any("missing Evidence" in e for e in self.errors()))
+
+    def test_resume_fields_must_not_be_empty(self):
+        self.write(
+            "tasks/T001-example.md",
+            RESUME.replace("- Unresolved: none", "- Unresolved:"),
+        )
+        self.assertTrue(any("leaves Unresolved empty" in e for e in self.errors()))
+
+    def test_a_resume_value_may_continue_on_indented_lines(self):
+        self.write(
+            "tasks/T001-example.md",
+            RESUME.replace(
+                "- Unresolved: none", "- Unresolved:\n  the wide tier still exits"
+            ),
+        )
+        self.assertEqual(self.errors(), [])
 
     def test_a_task_status_must_be_a_known_value(self):
         self.write(
@@ -101,6 +128,15 @@ class ContextCheckTests(unittest.TestCase):
         self.assertEqual(self.errors(), [])
         self.write("tasks/performance-units/unlisted.json", "{}\n")
         self.assertTrue(any("does not list unlisted.json" in e for e in self.errors()))
+
+    def test_a_longer_name_does_not_stand_in_for_a_plan_or_task(self):
+        self.write("tasks/performance-units/README.md", "# Plans\n\n- wide-followup\n")
+        self.write("tasks/performance-units/wide.json", "{}\n")
+        self.assertTrue(any("does not list wide.json" in e for e in self.errors()))
+        self.write("tasks/README.md", "# Tasks\n\n- archive/XT001-example.md\n")
+        self.assertTrue(
+            any("does not list tasks/T001-example.md" in e for e in self.errors())
+        )
 
 
 if __name__ == "__main__":

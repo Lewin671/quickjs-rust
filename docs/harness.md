@@ -28,18 +28,20 @@ and runs `cargo fetch`.
 for Rust, Cargo, script or workflow changes; the tests of each touched crate
 (the whole workspace for Cargo changes); the benchmark-tool tests and
 `check-unit` for benchmark files and performance plans; and Test262
-allowlist slices mapped from runtime, parser and lexer paths. A change that
-touches only Markdown or `docs/` exits early with no checks. When engine
-files changed and no slice matched, it says so; run `check.sh`.
+allowlist slices mapped from runtime, parser and lexer paths. It always runs
+`check-context.py` (document budgets, Markdown links, task resume blocks,
+the task and plan indexes); a change that touches only Markdown or `docs/`
+runs that check and nothing else. When engine files changed and no slice
+matched, it says so; run `check.sh`.
 
 `check.sh` runs `cargo fmt --check`; clippy for the workspace, then with the
 `agents` feature and with the `perf-counters` feature, each followed by that
 feature's tests; the workspace tests; the benchmark-tool Python tests
 (`tools/benchmark/tests`); `performance-decision.sh check-unit` over every
-`tasks/performance-units/*.json` (listed with `rg`); the Test262 aggregate
-tests (`scripts/tests`); `test-git-hooks.sh`; `bash -n` over the benchmark,
-hook and check scripts; `check-file-size.sh`; and the Test262 subset. It
-prints per-stage timings. Two switches change it:
+`tasks/performance-units/*.json` (listed with `rg`); `check-context.py`;
+the script tests (`scripts/tests`); `test-git-hooks.sh`; `bash -n` over the
+benchmark, hook and check scripts; `check-file-size.sh`; and the Test262
+subset. It prints per-stage timings. Two switches change it:
 
 - `QJS_CHECK_SKIP_TEST262=1` skips the subset stage.
 - `QJS_CHECK_SPLIT_RUNTIME_TESTS=1` runs the `qjs-runtime` tests in several

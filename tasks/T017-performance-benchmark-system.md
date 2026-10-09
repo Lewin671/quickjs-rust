@@ -13,7 +13,7 @@
 - Unresolved: no fixed-hardware fingerprint, no A/A shadow reports, no noise
   envelope, no false-positive budget.
 - Next action: none until fixed hardware exists. Then follow the activation
-  order in `docs/benchmarking.md`, "CI Layering and Gate Activation".
+  order in `docs/benchmarking.md`, "Gate activation".
 
 Record of the landed milestones, the original assignment and the notes:
 `tasks/archive/T017-performance-benchmark-system-log.md`.
@@ -44,7 +44,7 @@ only what is still owed.
 
 The activation prerequisites (fingerprint, the number of A/A reports per
 gate, noise envelope, false-positive budget) are stated once, in
-`docs/benchmarking.md`, "CI Layering and Gate Activation", and enforced by
+`docs/benchmarking.md`, "Gate activation", and enforced by
 `tools/benchmark/performance_policy.py` against
 `benchmarks/performance-policy.json`.
 
