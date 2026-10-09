@@ -228,6 +228,21 @@ def _lane_binaries(output: Path, lane: str, evidence: dict[str, Any]) -> dict[st
     return {role: (receipt or {}).get("binary_sha256") for role, receipt in receipts.items()}
 
 
+def _predates(lane_attempt: str, build_attempt: str) -> bool:
+    """Whether a lane's record was produced before the build it must follow.
+
+    Stage artifacts are named by stage so that "Re-run failed jobs" can reuse
+    the jobs it does not repeat. The price is that a lane which fails before
+    it can upload leaves its previous attempt's artifact in place. Rerunning
+    everything repeats the build, so a lane record older than the build
+    record is exactly that leftover; a partial rerun leaves the build's
+    attempt alone, and every lane record is then at least as new.
+    """
+    if lane_attempt.isdigit() and build_attempt.isdigit():
+        return int(lane_attempt) < int(build_attempt)
+    return lane_attempt != build_attempt
+
+
 def _renders(lane: str, evidence: dict[str, Any]) -> bool:
     """Whether a lane's evidence has the structure the summary reads.
 
@@ -251,9 +266,9 @@ def collect(
 
     Returns the stage records, the admitted evidence by lane, and for each
     lane without admitted evidence the reason a reader should be given. A
-    lane is admitted only when its stage reached `success`, its evidence
-    parses and has the structure the summary reads, and it measured exactly
-    the executables the build job recorded. `build_succeeded` is the build
+    lane is admitted only when its stage reached `success` no earlier than
+    the build did, its evidence parses and has the structure the summary
+    reads, and it measured exactly the executables the build job recorded. `build_succeeded` is the build
     job's own conclusion in this attempt; a build record cannot outvote it.
     """
     stages = {stage: _stage(output, stage) for stage in STAGES}
@@ -274,6 +289,11 @@ def collect(
             notes[lane] = (
                 f"the build stage did not produce the three executables "
                 f"(state {build['state']}, phase {build['phase']})."
+            )
+        elif _predates(record["run_attempt"], stages["build"]["run_attempt"]):
+            notes[lane] = (
+                f"the {label} left no record in this attempt: what it uploaded "
+                "predates this run's build."
             )
         elif record["state"] == "incomplete":
             notes[lane] = record["message"]

@@ -21,10 +21,10 @@ def write(path: Path, value: object) -> None:
 
 
 def stage(output: Path, name: str, state: str = "success", phase: str = "complete",
-          message: str = "done") -> None:
+          message: str = "done", attempt: str | None = "1") -> None:
     write(output / f"{name}-status.json", {
         "schema_version": 2, "stage": name, "state": state, "phase": phase,
-        "message": message,
+        "message": message, "run_attempt": attempt,
     })
 
 
@@ -171,6 +171,40 @@ class PublishTests(unittest.TestCase):
             cwd=ROOT, capture_output=True, text=True, timeout=20, check=False,
         )
         self.assertEqual(result.returncode, 2, result.stderr)
+
+    def test_a_lane_record_older_than_the_build_is_a_leftover_not_evidence(self) -> None:
+        # Everything was rerun: the build repeated as attempt 2, the broad
+        # lane failed before it could upload, and its attempt-1 artifact with
+        # identical executables is still there.
+        whole_run(self.output)
+        stage(self.output, "build", attempt="2")
+        stage(self.output, "external", attempt="2")
+        stage(self.output, "sentinel", attempt="2")
+        complete, markdown, status = self.run_publish()
+        self.assertFalse(complete)
+        self.assertEqual(status["state"], "failed")
+        self.assertEqual(status["lanes_with_evidence"], ["external", "sentinel"])
+        self.assertIn("predates this run's build", markdown)
+
+        # Only the failed lane was rerun: the build and the other lanes keep
+        # attempt 1, and the repeated lane's attempt 2 is newer than the build.
+        self.step_summary.unlink()
+        whole_run(self.output)
+        stage(self.output, "broad", attempt="2")
+        complete, _, status = self.run_publish()
+        self.assertTrue(complete)
+        self.assertEqual(status["lanes_with_evidence"], ["broad", "external", "sentinel"])
+
+        # Outside Actions no attempt is recorded anywhere, which is consistent.
+        self.step_summary.unlink()
+        whole_run(self.output)
+        for name in ("build", "broad", "external", "sentinel"):
+            stage(self.output, name, attempt=None)
+        self.assertTrue(self.run_publish()[0])
+        # A record without an attempt cannot follow a build that has one.
+        self.step_summary.unlink()
+        stage(self.output, "build", attempt="1")
+        self.assertFalse(self.run_publish()[0])
 
     def test_a_stage_record_names_the_attempt_that_produced_it(self) -> None:
         import os
