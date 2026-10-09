@@ -16,7 +16,7 @@ from tools.benchmark.hosted_preview import (
     publish,
 )
 from tools.benchmark.preview import HOSTED_CASES, shard_cases, summarize
-from tools.benchmark.tests.test_preview import report
+from tools.benchmark.tests.test_preview import report, without_legend
 from tools.benchmark.tests.test_preview_summary import external, external_case, sentinel
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -82,8 +82,8 @@ class PublishTests(unittest.TestCase):
         self.assertEqual(status["lanes_with_evidence"], ["broad", "external", "sentinel"])
         self.assertEqual(status["stages"]["build"]["state"], "success")
         for row in (
-            "| Interpreter sentinels | 1/1 |", "| Kraken 1\\.1 | 1/1 |",
-            "| Broad microbenchmarks (specializer coverage) | 25/25 | +2.0% | 1.400× |",
+            "| Interpreter basics | 1 tests |", "| Kraken 1\\.1 | 1 programs |",
+            "| Micro-operations | 25 tests | 🔴 2.0% slower | 🔴 1.40× slower |",
         ):
             self.assertIn(row, markdown)
         self.assertNotIn("No complete performance conclusion", markdown)
@@ -104,8 +104,8 @@ class PublishTests(unittest.TestCase):
         )
         for name, digest in index.items():
             self.assertEqual(hashlib.sha256((self.output / name).read_bytes()).hexdigest(), digest)
-        self.assertIn("Measured in 2 shards on separate runners", markdown)
-        self.assertIn("| candidate vs base | 1.0200× | — |", markdown)
+        self.assertIn("measured as 2 shards on separate runners", markdown)
+        self.assertIn("- Micro-operations, candidate vs base: 1.0200×\n", markdown)
 
     def test_a_failed_required_lane_fails_the_preview_but_keeps_the_others(self) -> None:
         whole_run(self.output)
@@ -127,8 +127,8 @@ class PublishTests(unittest.TestCase):
         )
         # One shard is not the lane: nothing of the broad portfolio is published.
         self.assertNotIn("plain_function_call", markdown)
-        self.assertIn("| Kraken 1\\.1 | 1/1 |", markdown)
-        self.assertIn("| Interpreter sentinels | 1/1 |", markdown)
+        self.assertIn("| Kraken 1\\.1 | 1 programs |", markdown)
+        self.assertIn("| Interpreter basics | 1 tests |", markdown)
 
     def test_an_incomplete_sentinel_lane_is_reported_without_failing(self) -> None:
         whole_run(self.output)
@@ -140,7 +140,7 @@ class PublishTests(unittest.TestCase):
         complete, markdown, status = self.run_publish()
         self.assertTrue(complete)
         self.assertEqual(status["lanes_with_evidence"], ["broad", "external"])
-        self.assertIn("| Interpreter sentinels | — | — | — |", markdown)
+        self.assertIn("| Interpreter basics | — | — | — |", markdown)
         self.assertIn("did not produce a valid reading within its deadline", markdown)
 
     def test_a_lane_that_measured_other_executables_is_not_admitted(self) -> None:
@@ -309,7 +309,7 @@ class PublishTests(unittest.TestCase):
             markdown.count("the build stage did not produce the three executables"), 3
         )
         self.assertIn("phase build\\_candidate", markdown)
-        self.assertNotRegex(markdown, r"\d\.\d+×|[+-]\d+\.\d%")
+        self.assertNotRegex(without_legend(markdown), r"\d\.\d+×|\d+\.\d% (slower|faster)")
 
     def test_an_empty_run_still_publishes_a_truthful_failure(self) -> None:
         complete, markdown, status = self.run_publish()
@@ -364,7 +364,7 @@ class PublishTests(unittest.TestCase):
         self.assertTrue(complete)
         self.assertIn("broad", status["lanes_with_evidence"])
         self.assertIn(
-            "**Broad microbenchmarks (specializer coverage):** measured, but the "
+            "**Micro-operations:** measured, but the "
             "linearity diagnostic failed",
             markdown,
         )

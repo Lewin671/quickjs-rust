@@ -30,6 +30,7 @@ from tools.benchmark.hosted_preview import (
     MANUAL_MODE,
     PUSH_MODE,
 )
+from tools.benchmark.preview_summary import HOW_TO_READ
 from tools.benchmark.receipts import load_receipt
 from tools.benchmark.schema import load_manifest, sha256_file
 
@@ -92,6 +93,11 @@ def report(
     }
 
 
+def without_legend(markdown: str) -> str:
+    """The summary without its constant reading guide, which quotes an example."""
+    return markdown.replace(HOW_TO_READ, "")
+
+
 def summarize_report(value: dict[str, object]) -> tuple[str, dict[str, object]]:
     return summarize(
         value,
@@ -104,16 +110,13 @@ class PreviewSummaryTests(unittest.TestCase):
     def test_ratio_uses_precise_ns_per_operation_language(self) -> None:
         markdown, machine = summarize_report(report())
         self.assertIn("informational only — non-gating — not a fixed-hardware claim", markdown)
-        self.assertIn("candidate vs base | 1.2500×", markdown)
-        self.assertIn("candidate vs QuickJS-NG | 0.8000×", markdown)
-        self.assertIn(
-            "| Broad microbenchmarks (specializer coverage) | 25/25 | +25.0% | 0.800× |",
-            markdown,
-        )
-        self.assertNotIn("faster", markdown.lower())
-        self.assertNotIn("slower", markdown.lower())
-        self.assertIn("Valid blocks: `3/3`", markdown)
-        self.assertIn("<summary>Broad microbenchmarks — all 25 cases</summary>", markdown)
+        # The exact ratios stay available to a reader who wants them ...
+        self.assertIn("Micro-operations, candidate vs base: 1.2500× [1.1250×, 1.3750×]", markdown)
+        self.assertIn("Micro-operations, candidate vs QuickJS-NG: 0.8000×", markdown)
+        # ... and the table says the same thing in words.
+        self.assertIn("| Micro-operations | 25 tests | 🔴 25.0% slower | 🟢 1.25× faster |", markdown)
+        self.assertIn("valid blocks `3/3`", markdown)
+        self.assertIn("<summary>Micro-operations — all 25 tests</summary>", markdown)
         self.assertIn("| `plain_function_call` |", markdown)
         self.assertIn("| `closure_allocation_call` |", markdown)
         self.assertEqual(len(machine["comparisons"]["candidate vs base"]["cases"]), 25)
@@ -201,7 +204,7 @@ class PreviewSummaryTests(unittest.TestCase):
         self.assertIn("linearity: fail", markdown)
         self.assertNotIn("Overall ratio", markdown)
         self.assertNotIn("candidate vs", markdown)
-        self.assertNotRegex(markdown, r"\d\.\d+×|[+-]\d+\.\d%")
+        self.assertNotRegex(without_legend(markdown), r"\d\.\d+×|\d+\.\d% (slower|faster)")
 
     def test_a_shard_is_validated_against_exactly_its_own_cases(self) -> None:
         from tools.benchmark.hosted_preview import BROAD_SHARDS
@@ -770,7 +773,7 @@ class SentinelLaneTests(unittest.TestCase):
         ]
         rendered = self._render(report)
         # 64 ** (1/6) == 2
-        self.assertIn("| Interpreter sentinels | 6/6 | +100.0% | 2.000× |", rendered)
+        self.assertIn("| Interpreter basics | 6 tests | 🔴 100.0% slower | 🔴 2.00× slower |", rendered)
 
     def test_a_partial_comparison_map_publishes_nothing(self) -> None:
         from tools.benchmark.preview import PreviewError
@@ -825,7 +828,7 @@ class SentinelLaneTests(unittest.TestCase):
         rendered = self._render(degraded)
         self.assertIn("No performance direction is reported", rendered)
         self.assertIn(
-            "**Interpreter sentinels:** measured, but the linearity diagnostic failed",
+            "**Interpreter basics:** measured, but the linearity diagnostic failed",
             rendered,
         )
-        self.assertNotRegex(rendered, r"\d\.\d+×|[+-]\d+\.\d%")
+        self.assertNotRegex(without_legend(rendered), r"\d\.\d+×|\d+\.\d% (slower|faster)")

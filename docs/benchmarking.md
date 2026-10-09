@@ -358,12 +358,25 @@ durations from separate hosted runs are not comparable.
 
 The published summary is one document rendered by
 `tools/benchmark/preview_summary.py` from the lanes' validated machine
-summaries: an overview row per workload group (sentinels, each external
-suite, then the broad lane), the five largest observed changes against the
-base across all lanes, any case without a complete comparison, and then the
-per-case tables and provenance folded away. A lane that produced no evidence
-is named with its reason. The largest-changes list is selected by magnitude,
-so it is never empty and never a finding by itself.
+summaries, written for a reader who wants to know whether the change made
+the engine faster or slower:
+
+- It opens with that answer as a sentence, naming the two builds by what the
+  run compared ("this commit" and "the commit before it", or "this pull
+  request" and "its base"). When the two executables are byte-identical it
+  says the engine did not change and that every difference is noise.
+- One row per workload group -- each external suite, then the sentinels
+  ("interpreter basics"), then the broad lane ("micro-operations") -- with
+  both comparisons in words: `1.5% slower`, `1.20× faster`. No cell needs a
+  sign convention or a ratio direction to be read.
+- A group is called out only beyond `GROUP_NOISE` (2%) and a single test is
+  listed only beyond `TEST_NOISE` (7%). Those are what identical builds show
+  on the hosted runners; the measurements behind them are in
+  [T017](../tasks/T017-performance-benchmark-system.md). They decide wording
+  only: nothing in the workflow gates on them.
+- A program without a complete comparison is explained, a lane without
+  evidence is named with its reason, and the per-test tables, the exact
+  ratios, health and provenance are folded away.
 
 `benchmarks/performance-policy.json` is the fail-closed policy for that
 path: protocol hashes, the reference pin, the hash of the hosted
