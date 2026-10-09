@@ -17,55 +17,23 @@ fn nested_function(source: &str) -> Bytecode {
         .expect("function bytecode should be nested in the script")
 }
 
-fn assert_reduction_selected(source: &str) {
+/// Every loop in this file is a pure-read multiply-accumulate; each one must
+/// still compile to exactly one dense plan and run in the general executor.
+fn assert_dense_plan_selected(source: &str) {
     let bytecode = nested_function(source);
     let plans = NumericMutationLoopPlan::compile_all(&bytecode);
     assert_eq!(plans.len(), 1, "{:#?}", bytecode.code);
-    let NumericMutationLoopKind::Dense(plan) = &plans[0].kind else {
-        panic!("expected dense plan: {:#?}", bytecode.code);
-    };
-    assert!(plan.is_legacy_reduction(), "{:#?}", bytecode.code);
-}
-
-fn assert_reduction_rejected(source: &str) {
-    let bytecode = nested_function(source);
-    let plans = NumericMutationLoopPlan::compile_all(&bytecode);
-    assert_eq!(plans.len(), 1, "{:#?}", bytecode.code);
-    let NumericMutationLoopKind::Dense(plan) = &plans[0].kind else {
-        panic!("expected dense plan: {:#?}", bytecode.code);
-    };
-    assert!(!plan.is_legacy_reduction(), "{:#?}", bytecode.code);
-}
-
-fn assert_strided_reduction_selected(source: &str) {
-    let bytecode = nested_function(source);
-    let plans = NumericMutationLoopPlan::compile_all(&bytecode);
-    assert_eq!(plans.len(), 1, "{:#?}", bytecode.code);
-    let NumericMutationLoopKind::Dense(plan) = &plans[0].kind else {
-        panic!("expected dense plan: {:#?}", bytecode.code);
-    };
-    assert!(plan.is_two_lane_strided_reduction(), "{:#?}", bytecode.code);
-}
-
-#[test]
-fn exact_index_reduction_checked_arithmetic_stays_in_the_array_index_range() {
-    let max = (u32::MAX - 1) as usize;
-    assert_eq!(dense::test_checked_array_index_product(1, max), Some(max));
-    assert_eq!(
-        dense::test_checked_array_index_product(2, max / 2),
-        Some(max)
+    assert!(
+        matches!(plans[0].kind, NumericMutationLoopKind::Dense(_)),
+        "{:#?}",
+        bytecode.code
     );
-    assert_eq!(dense::test_checked_array_index_product(2, max), None);
-    assert_eq!(dense::test_checked_array_index_product(max, max), None);
-    assert_eq!(dense::test_checked_next_array_index(max - 1, 1), Some(max));
-    assert_eq!(dense::test_checked_next_array_index(max, 1), None);
-    assert_eq!(dense::test_checked_next_array_index(max, 0), Some(max));
 }
 
 #[test]
-fn reduction_selects_dft_like_direct_this_and_local_two_lane_loop() {
+fn reduction_runs_dft_like_direct_this_and_local_two_lane_loop() {
     let source = "function transform(buffer, stride) { var real = 0, imag = 0; for (var index = 0; index < buffer.length; index++) { real += this.positive[stride * index] * buffer[index]; imag += this.negative[stride * index] * buffer[index]; } return real + ':' + imag; }";
-    assert_strided_reduction_selected(source);
+    assert_dense_plan_selected(source);
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -74,16 +42,14 @@ fn reduction_selects_dft_like_direct_this_and_local_two_lane_loop() {
         )),
         Ok(Value::String("385:220".to_owned().into()))
     );
-    assert_eq!(dense::test_reduction_path_hits(), 1);
-    assert_eq!(dense::test_reduction_iterations(), 9);
-    assert_eq!(dense::test_exact_index_reduction_path_hits(), 1);
-    assert_eq!(dense::test_shared_sample_stride_reduction_path_hits(), 1);
+    assert_eq!(dense::test_read_only_path_hits(), 1);
+    assert_eq!(dense::test_read_only_iterations(), 9);
 }
 
 #[test]
 fn strided_reduction_accepts_both_multiplier_orders_and_distinct_strides() {
     let source = "function transform(sample, firstStride, secondStride, bound) { var real = 0, imag = 0; for (var index = 0; index < bound; index++) { real += this.first[firstStride * index] * sample[index]; imag += this.second[index * secondStride] * sample[index]; } return index + ':' + real + ':' + imag; }";
-    assert_strided_reduction_selected(source);
+    assert_dense_plan_selected(source);
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -92,8 +58,6 @@ fn strided_reduction_accepts_both_multiplier_orders_and_distinct_strides() {
         )),
         Ok(Value::String("4:30:300".to_owned().into()))
     );
-    assert_eq!(dense::test_exact_index_reduction_path_hits(), 1);
-    assert_eq!(dense::test_shared_sample_stride_reduction_path_hits(), 1);
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -102,16 +66,14 @@ fn strided_reduction_accepts_both_multiplier_orders_and_distinct_strides() {
         )),
         Ok(Value::String("4:30:300".to_owned().into()))
     );
-    assert_eq!(dense::test_reduction_path_hits(), 1);
-    assert_eq!(dense::test_reduction_iterations(), 3);
-    assert_eq!(dense::test_exact_index_reduction_path_hits(), 1);
-    assert_eq!(dense::test_shared_sample_stride_reduction_path_hits(), 0);
+    assert_eq!(dense::test_read_only_path_hits(), 1);
+    assert_eq!(dense::test_read_only_iterations(), 3);
 }
 
 #[test]
 fn shared_sample_stride_requires_the_same_compiled_sample_receiver() {
     let source = "function transform(firstSample, secondSample, first, second, stride, bound) { var real = 0, imag = 0; for (var index = 0; index < bound; index++) { real += first[stride * index] * firstSample[index]; imag += second[index * stride] * secondSample[index]; } return index + ':' + real + ':' + imag; }";
-    assert_strided_reduction_selected(source);
+    assert_dense_plan_selected(source);
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -120,14 +82,12 @@ fn shared_sample_stride_requires_the_same_compiled_sample_receiver() {
         )),
         Ok(Value::String("4:30:300".to_owned().into()))
     );
-    assert_eq!(dense::test_exact_index_reduction_path_hits(), 1);
-    assert_eq!(dense::test_shared_sample_stride_reduction_path_hits(), 0);
 }
 
 #[test]
 fn strided_reduction_fractional_counter_deoptimizes_before_sample_load() {
     let source = "function transform(sample, first, second, firstStride, secondStride, start, bound) { var real = 0, imag = 0; for (var index = start; index < bound; index++) { real += first[firstStride * index] * sample[index]; imag += second[index * secondStride] * sample[index]; } return index + ':' + real + ':' + imag; }";
-    assert_strided_reduction_selected(source);
+    assert_dense_plan_selected(source);
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -136,16 +96,15 @@ fn strided_reduction_fractional_counter_deoptimizes_before_sample_load() {
         )),
         Ok(Value::String("2.5:80:140".to_owned().into()))
     );
-    assert_eq!(dense::test_reduction_path_hits(), 0);
-    assert_eq!(dense::test_reduction_iterations(), 0);
-    assert_eq!(dense::test_exact_index_reduction_path_hits(), 0);
+    assert_eq!(dense::test_read_only_path_hits(), 0);
+    assert_eq!(dense::test_read_only_iterations(), 0);
     assert!(dense::test_read_only_bailouts() > 0);
 }
 
 #[test]
 fn strided_reduction_preserves_negative_zero_stride_edges_and_mid_loop_oob_replay() {
     let source = "function transform(sample, first, second, firstStride, secondStride, start, bound) { var negativeZero = 1 / start === -Infinity, real = 0, imag = 0; for (var index = start; index < bound; index++) { real += first[firstStride * index] * sample[index]; imag += second[index * secondStride] * sample[index]; } return negativeZero + ':' + index + ':' + real + ':' + imag; }";
-    assert_strided_reduction_selected(source);
+    assert_dense_plan_selected(source);
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -154,9 +113,7 @@ fn strided_reduction_preserves_negative_zero_stride_edges_and_mid_loop_oob_repla
         )),
         Ok(Value::String("true:3:6:15".to_owned().into()))
     );
-    assert_eq!(dense::test_reduction_path_hits(), 1);
-    assert_eq!(dense::test_exact_index_reduction_path_hits(), 1);
-    assert_eq!(dense::test_shared_sample_stride_reduction_path_hits(), 1);
+    assert_eq!(dense::test_read_only_path_hits(), 1);
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -165,8 +122,6 @@ fn strided_reduction_preserves_negative_zero_stride_edges_and_mid_loop_oob_repla
         )),
         Ok(Value::String("true:3:12:18".to_owned().into()))
     );
-    assert_eq!(dense::test_exact_index_reduction_path_hits(), 1);
-    assert_eq!(dense::test_shared_sample_stride_reduction_path_hits(), 1);
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -175,8 +130,7 @@ fn strided_reduction_preserves_negative_zero_stride_edges_and_mid_loop_oob_repla
         )),
         Ok(Value::String("false:3:6:9|false:3:6:6".to_owned().into()))
     );
-    assert_eq!(dense::test_reduction_iterations(), 0);
-    assert_eq!(dense::test_exact_index_reduction_path_hits(), 0);
+    assert_eq!(dense::test_read_only_iterations(), 0);
     assert!(dense::test_read_only_bailouts() > 0);
 
     dense::reset_test_iterations();
@@ -186,7 +140,6 @@ fn strided_reduction_preserves_negative_zero_stride_edges_and_mid_loop_oob_repla
         )),
         Ok(Value::String("false:0:0:0".to_owned().into()))
     );
-    assert_eq!(dense::test_exact_index_reduction_path_hits(), 0);
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -195,9 +148,7 @@ fn strided_reduction_preserves_negative_zero_stride_edges_and_mid_loop_oob_repla
         )),
         Ok(Value::String("false:4:10:NaN".to_owned().into()))
     );
-    assert_eq!(dense::test_reduction_iterations(), 1);
-    assert_eq!(dense::test_exact_index_reduction_path_hits(), 1);
-    assert_eq!(dense::test_shared_sample_stride_reduction_path_hits(), 1);
+    assert_eq!(dense::test_read_only_iterations(), 1);
     assert!(dense::test_read_only_bailouts() > 0);
 
     dense::reset_test_iterations();
@@ -207,16 +158,14 @@ fn strided_reduction_preserves_negative_zero_stride_edges_and_mid_loop_oob_repla
         )),
         Ok(Value::String("false:4:10:100:1".to_owned().into()))
     );
-    assert_eq!(dense::test_reduction_iterations(), 2);
-    assert_eq!(dense::test_exact_index_reduction_path_hits(), 2);
-    assert_eq!(dense::test_shared_sample_stride_reduction_path_hits(), 2);
+    assert_eq!(dense::test_read_only_iterations(), 2);
     assert!(dense::test_read_only_bailouts() > 0);
 }
 
 #[test]
 fn shared_sample_stride_replays_a_replacing_sample_object_between_lane_reads() {
     let source = "function transform(sample, first, second, stride) { var real = 0, imag = 0; for (var index = 0; index < sample.length; index++) { real += first[stride * index] * sample[index]; imag += second[index * stride] * sample[index]; } return index + ':' + real + ':' + imag; }";
-    assert_strided_reduction_selected(source);
+    assert_dense_plan_selected(source);
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -225,25 +174,24 @@ fn shared_sample_stride_replays_a_replacing_sample_object_between_lane_reads() {
         )),
         Ok(Value::String("3:211:622:1".to_owned().into()))
     );
-    assert_eq!(dense::test_reduction_iterations(), 1);
-    assert_eq!(dense::test_shared_sample_stride_reduction_path_hits(), 1);
+    assert_eq!(dense::test_read_only_iterations(), 1);
     assert_eq!(dense::test_read_only_bailouts(), 1);
 }
 
 #[test]
-fn reduction_selects_one_and_three_lane_index_forms() {
+fn reduction_runs_one_and_three_lane_index_forms() {
     let one_lane = "function dot(left, right, bound) { var sum = 0; for (var index = 1; index < bound; index++) sum += left[index - 1] * right[index - 1]; return index + ':' + sum; }";
-    assert_reduction_selected(one_lane);
+    assert_dense_plan_selected(one_lane);
     dense::reset_test_iterations();
     assert_eq!(
         eval(&format!("{one_lane} dot([2,3,4,5], [10,20,30,40], 5);")),
         Ok(Value::String("5:400".to_owned().into()))
     );
-    assert_eq!(dense::test_reduction_path_hits(), 1);
-    assert_eq!(dense::test_reduction_iterations(), 3);
+    assert_eq!(dense::test_read_only_path_hits(), 1);
+    assert_eq!(dense::test_read_only_iterations(), 3);
 
     let three_lane = "function project(a, b, c, d, e, f, bound, offset) { var forward = 0, shifted = 0, reverse = 0; for (var index = 0; index < bound; index++) { forward += a[index] * b[index]; shifted += c[index + offset] * d[index]; reverse += e[offset - index] * f[index]; } return index + ':' + forward + ':' + shifted + ':' + reverse; }";
-    assert_reduction_selected(three_lane);
+    assert_dense_plan_selected(three_lane);
     dense::reset_test_iterations();
     assert_eq!(
         eval(&format!(
@@ -251,14 +199,14 @@ fn reduction_selects_one_and_three_lane_index_forms() {
         )),
         Ok(Value::String("4:10:20:10".to_owned().into()))
     );
-    assert_eq!(dense::test_reduction_path_hits(), 1);
-    assert_eq!(dense::test_reduction_iterations(), 3);
+    assert_eq!(dense::test_read_only_path_hits(), 1);
+    assert_eq!(dense::test_read_only_iterations(), 3);
 }
 
 #[test]
 fn reduction_keeps_aliased_reads_independent() {
     let source = "function squares(left, right) { var sum = 0; for (var index = 0; index < left.length; index++) sum += left[index] * right[index]; return sum; }";
-    assert_reduction_selected(source);
+    assert_dense_plan_selected(source);
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -267,14 +215,14 @@ fn reduction_keeps_aliased_reads_independent() {
         )),
         Ok(Value::Number(30.0))
     );
-    assert_eq!(dense::test_reduction_path_hits(), 1);
-    assert_eq!(dense::test_reduction_iterations(), 3);
+    assert_eq!(dense::test_read_only_path_hits(), 1);
+    assert_eq!(dense::test_read_only_iterations(), 3);
 }
 
 #[test]
 fn reduction_discards_first_lane_work_when_second_lane_deoptimizes() {
     let source = "function reduce(a, b, c, d, bound) { var first = 0, second = 0; for (var index = 0; index < bound; index++) { first += a[index] * b[index]; second += c[index] * d[index]; } return index + ':' + first + ':' + second; }";
-    assert_reduction_selected(source);
+    assert_dense_plan_selected(source);
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -283,14 +231,14 @@ fn reduction_discards_first_lane_work_when_second_lane_deoptimizes() {
         )),
         Ok(Value::String("4:1111:10:1".to_owned().into()))
     );
-    assert_eq!(dense::test_reduction_iterations(), 2);
+    assert_eq!(dense::test_read_only_iterations(), 2);
     assert_eq!(dense::test_read_only_bailouts(), 1);
 }
 
 #[test]
 fn strided_exact_index_reduction_uses_separate_multiply_then_add_rounding() {
     let source = "function transform(initial, sample, first, second, stride) { var real = initial, imag = 0; for (var index = 0; index < sample.length; index++) { real += first[stride * index] * sample[index]; imag += second[index * stride] * sample[index]; } return real === 0 && 1 / real === Infinity && imag === 1.0000000000000002; }";
-    assert_strided_reduction_selected(source);
+    assert_dense_plan_selected(source);
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -299,23 +247,21 @@ fn strided_exact_index_reduction_uses_separate_multiply_then_add_rounding() {
         )),
         Ok(Value::Boolean(true))
     );
-    assert_eq!(dense::test_reduction_path_hits(), 1);
-    assert_eq!(dense::test_reduction_iterations(), 1);
-    assert_eq!(dense::test_exact_index_reduction_path_hits(), 1);
-    assert_eq!(dense::test_shared_sample_stride_reduction_path_hits(), 1);
+    assert_eq!(dense::test_read_only_path_hits(), 1);
+    assert_eq!(dense::test_read_only_iterations(), 1);
 }
 
 #[test]
 fn reduction_preserves_iteration_order_and_special_numbers() {
     let source = "function dot(initial, left, right) { var sum = initial; for (var index = 0; index < left.length; index++) sum += left[index] * right[index]; return sum; }";
-    assert_reduction_selected(source);
+    assert_dense_plan_selected(source);
 
     dense::reset_test_iterations();
     assert_eq!(
         eval(&format!("{source} dot(0, [0,1e16,-1e16,1], [1,1,1,1]);")),
         Ok(Value::Number(1.0))
     );
-    assert_eq!(dense::test_reduction_iterations(), 3);
+    assert_eq!(dense::test_read_only_iterations(), 3);
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -324,14 +270,14 @@ fn reduction_preserves_iteration_order_and_special_numbers() {
         )),
         Ok(Value::Boolean(true))
     );
-    assert_eq!(dense::test_reduction_path_hits(), 4);
-    assert_eq!(dense::test_reduction_iterations(), 8);
+    assert_eq!(dense::test_read_only_path_hits(), 4);
+    assert_eq!(dense::test_read_only_iterations(), 8);
 }
 
 #[test]
 fn reduction_zero_progress_deopt_does_not_publish_partial_lane_work() {
     let source = "function reduce(a, b, c, d, bound) { var first = 0, second = 0; for (var index = 0; index < bound; index++) { first += a[index] * b[index]; second += c[index] * d[index]; } return index + ':' + first + ':' + second; }";
-    assert_reduction_selected(source);
+    assert_dense_plan_selected(source);
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -340,47 +286,47 @@ fn reduction_zero_progress_deopt_does_not_publish_partial_lane_work() {
         )),
         Ok(Value::String("2:11:3:1".to_owned().into()))
     );
-    assert_eq!(dense::test_reduction_path_hits(), 0);
-    assert_eq!(dense::test_reduction_iterations(), 0);
+    assert_eq!(dense::test_read_only_path_hits(), 0);
+    assert_eq!(dense::test_read_only_iterations(), 0);
     assert_eq!(dense::test_read_only_bailouts(), 1);
 }
 
 #[test]
 fn reduction_publishes_counter_accumulator_and_duplicate_result_shadows() {
     let source = "function dot(left, right, bound) { var sum = 0, last = -1; for (var index = 0; index < bound; index++) last = (sum += left[index] * right[index]); return index + ':' + sum + ':' + last; }";
-    assert_reduction_selected(source);
+    assert_dense_plan_selected(source);
 
     dense::reset_test_iterations();
     assert_eq!(
         eval(&format!("{source} dot([1,2,3,4], [1,2,3,4], 4);")),
         Ok(Value::String("4:30:30".to_owned().into()))
     );
-    assert_eq!(dense::test_reduction_path_hits(), 1);
-    assert_eq!(dense::test_reduction_iterations(), 3);
+    assert_eq!(dense::test_read_only_path_hits(), 1);
+    assert_eq!(dense::test_read_only_iterations(), 3);
 
     dense::reset_test_iterations();
     assert_eq!(
         eval(&format!("{source} dot([1], [1], 0);")),
         Ok(Value::String("0:0:-1".to_owned().into()))
     );
-    assert_eq!(dense::test_reduction_iterations(), 0);
+    assert_eq!(dense::test_read_only_iterations(), 0);
 }
 
 #[test]
-fn reduction_rejects_extra_arithmetic_shared_accumulators_cross_lane_writes_and_countdown() {
-    assert_reduction_rejected(
+fn reduction_variants_with_extra_arithmetic_shared_accumulators_and_countdown_compile_dense() {
+    assert_dense_plan_selected(
         "function extra(a, b, bound) { var sum = 0; for (var index = 0; index < bound; index++) sum += a[index] * b[index] + 1; return sum; }",
     );
-    assert_reduction_rejected(
+    assert_dense_plan_selected(
         "function shared(a, b, c, d, bound) { var sum = 0; for (var index = 0; index < bound; index++) { sum += a[index] * b[index]; sum += c[index] * d[index]; } return sum; }",
     );
-    assert_reduction_rejected(
+    assert_dense_plan_selected(
         "function crossed(a, b, c, d, bound) { var first = 0, second = 0; for (var index = 0; index < bound; index++) { first += a[index] * b[index]; second += c[index] * d[index]; first = second; } return first + second; }",
     );
-    assert_reduction_rejected(
+    assert_dense_plan_selected(
         "function countdown(a, b, bound) { var sum = 0; while (bound--) sum += a[bound] * b[bound]; return sum; }",
     );
-    assert_reduction_rejected(
+    assert_dense_plan_selected(
         "function descending(a, b, index) { var sum = 0; for (; index >= 0; index--) sum += a[index] * b[index]; return sum; }",
     );
 }
@@ -388,28 +334,28 @@ fn reduction_rejects_extra_arithmetic_shared_accumulators_cross_lane_writes_and_
 #[test]
 fn reduction_runtime_guards_reject_direct_eval_and_captured_slots() {
     let direct = "function direct(a, b, bound) { var sum = 0; eval(''); for (var index = 0; index < bound; index++) sum += a[index] * b[index]; return index + ':' + sum; }";
-    assert_reduction_selected(direct);
+    assert_dense_plan_selected(direct);
     dense::reset_test_iterations();
     assert_eq!(
         eval(&format!("{direct} direct([1,2,3], [1,2,3], 3);")),
         Ok(Value::String("3:14".to_owned().into()))
     );
-    assert_eq!(dense::test_reduction_path_hits(), 0);
+    assert_eq!(dense::test_read_only_path_hits(), 0);
 
     let captured = "function captured(a, b, bound) { var sum = 0; function read() { return index + sum + bound; } for (var index = 0; index < bound; index++) sum += a[index] * b[index]; return read() + ':' + sum; }";
-    assert_reduction_selected(captured);
+    assert_dense_plan_selected(captured);
     dense::reset_test_iterations();
     assert_eq!(
         eval(&format!("{captured} captured([1,2,3], [1,2,3], 3);")),
         Ok(Value::String("20:14".to_owned().into()))
     );
-    assert_eq!(dense::test_reduction_path_hits(), 0);
+    assert_eq!(dense::test_read_only_path_hits(), 0);
 }
 
 #[test]
 fn reduction_sparse_input_replays_prototype_getter_once() {
     let source = "function dot(left, right, bound) { var sum = 0; for (var index = 0; index < bound; index++) sum += left[index] * right[index]; return index + ':' + sum; }";
-    assert_reduction_selected(source);
+    assert_dense_plan_selected(source);
 
     dense::reset_test_iterations();
     assert_eq!(
@@ -419,13 +365,13 @@ fn reduction_sparse_input_replays_prototype_getter_once() {
         Ok(Value::String("3:9:1".to_owned().into()))
     );
     assert!(dense::test_read_only_bailouts() > 0);
-    assert_eq!(dense::test_reduction_iterations(), 0);
+    assert_eq!(dense::test_read_only_iterations(), 0);
 }
 
 #[test]
 fn reduction_direct_this_source_rejects_accessor_proxy_and_typed_array_owners() {
     let source = "function dot(right, bound) { var sum = 0; for (var index = 0; index < bound; index++) sum += this.left[index] * right[index]; return sum; }";
-    assert_reduction_selected(source);
+    assert_dense_plan_selected(source);
 
     for (setup, owner, expected_hits) in [
         (
@@ -452,7 +398,7 @@ fn reduction_direct_this_source_rejects_accessor_proxy_and_typed_array_owners() 
             Ok(Value::String(format!("6:{expected_hits}").into())),
             "setup: {setup}"
         );
-        assert_eq!(dense::test_reduction_path_hits(), 0, "setup: {setup}");
+        assert_eq!(dense::test_read_only_path_hits(), 0, "setup: {setup}");
     }
 }
 

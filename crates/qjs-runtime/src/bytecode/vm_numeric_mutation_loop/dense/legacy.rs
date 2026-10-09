@@ -29,8 +29,6 @@ use super::{
 };
 
 mod binary_bundle;
-mod packed_bitset;
-mod reduction;
 mod typed_array;
 
 #[cfg(test)]
@@ -131,16 +129,6 @@ fn resolve_direct_this_own_data(value: &Value, key: &Rc<str>) -> Option<ArrayRef
 #[cfg(test)]
 pub(super) fn test_direct_this_own_data_array_resolves(value: &Value, key: &str) -> bool {
     resolve_direct_this_own_data(value, &Rc::from(key)).is_some()
-}
-
-#[cfg(test)]
-pub(super) fn test_checked_array_index_product(left: usize, right: usize) -> Option<usize> {
-    reduction::test_checked_array_index_product(left, right)
-}
-
-#[cfg(test)]
-pub(super) fn test_checked_next_array_index(index: usize, step: usize) -> Option<usize> {
-    reduction::test_checked_next_array_index(index, step)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -591,8 +579,6 @@ pub(super) struct LegacyDynamicDensePlan {
     store_count: usize,
     sunk_store: Option<SunkDenseStore>,
     hole_tail_append: Option<HoleTailAppendPlan>,
-    packed_bitset: Option<packed_bitset::PackedBitsetMutationPlan>,
-    reduction: Option<reduction::LegacyReductionPlan>,
     header: usize,
 }
 
@@ -666,24 +652,7 @@ impl LegacyDynamicDensePlan {
             .collect::<Vec<_>>();
         let mut writes = writes;
         let mut sunk_store = sunk_store;
-        let reduction = reduction::LegacyReductionPlan::compile(
-            counter_local,
-            control,
-            &operations,
-            &writes,
-            store_count,
-            sunk_store,
-        );
         let input_prefix = compact_number_inputs(&mut operations, &mut writes, &mut sunk_store);
-        let packed_bitset = packed_bitset::PackedBitsetMutationPlan::compile(
-            counter_local,
-            control,
-            receiver_sources.len(),
-            &operations,
-            &writes,
-            store_count,
-            sunk_store,
-        );
         let binary_bundles = input_prefix
             .and_then(|prefix| prefix.validated_dynamic_start(operations.len()))
             .map_or_else(Vec::new, |dynamic_start| {
@@ -702,27 +671,8 @@ impl LegacyDynamicDensePlan {
             store_count,
             sunk_store,
             hole_tail_append,
-            packed_bitset,
-            reduction,
             header,
         }
-    }
-
-    #[cfg(test)]
-    pub(super) fn is_reduction(&self) -> bool {
-        self.reduction.is_some()
-    }
-
-    #[cfg(test)]
-    pub(super) fn is_two_lane_strided_reduction(&self) -> bool {
-        self.reduction
-            .as_ref()
-            .is_some_and(reduction::LegacyReductionPlan::is_two_lane_strided_counter)
-    }
-
-    #[cfg(test)]
-    pub(super) fn has_packed_bitset_mutation(&self) -> bool {
-        self.packed_bitset.is_some()
     }
 
     #[cfg(test)]
@@ -1009,65 +959,6 @@ impl LegacyDynamicDensePlan {
             LocalControl::AtLeastZero => None,
             LocalControl::Countdown => None,
         };
-        if let Some(reduction) = &self.reduction {
-            let Some(arrays) = self
-                .receiver_sources
-                .iter()
-                .map(|source| source.resolve_read_only(vm))
-                .collect::<Option<Vec<_>>>()
-            else {
-                record_read_only_bailout();
-                if let Some(run) = typed_array::try_run(self, vm, exit) {
-                    #[cfg(test)]
-                    match run {
-                        DenseNumericMutationLoopRun::Handled => run_guard.handled(),
-                        DenseNumericMutationLoopRun::Suppress => run_guard.suppressed(),
-                        DenseNumericMutationLoopRun::Declined => {}
-                    }
-                    return run;
-                }
-                return DenseNumericMutationLoopRun::Declined;
-            };
-            let ran = ArrayRef::with_dense_readable_element_sets(&arrays, |elements| {
-                let access = ReadAccess { elements };
-                reduction.run(
-                    &access,
-                    &mut locals,
-                    limit.expect("reduction plans use less-than control"),
-                )
-            });
-            match ran {
-                Some(run) => {
-                    if run.made_progress {
-                        record_read_only_path_hit();
-                        super::record_reduction_path_hit();
-                    }
-                    if run.deoptimized {
-                        record_read_only_bailout();
-                    }
-                }
-                None => record_read_only_bailout(),
-            }
-            let Some(run) = ran else {
-                return DenseNumericMutationLoopRun::Declined;
-            };
-            if run.deoptimized && !run.made_progress {
-                return DenseNumericMutationLoopRun::Declined;
-            }
-            if run.made_progress {
-                for (slot, value) in self.local_slots.iter().copied().zip(locals) {
-                    set_local_number(vm, slot, value);
-                }
-            }
-            vm.ip = if run.deoptimized {
-                self.header
-            } else {
-                exit + 1
-            };
-            #[cfg(test)]
-            run_guard.handled();
-            return DenseNumericMutationLoopRun::Handled;
-        }
         let mut inline_registers = [0.0; INLINE_DENSE_OPS];
         let mut large_registers =
             (self.operations.len() > INLINE_DENSE_OPS).then(|| vec![0.0; self.operations.len()]);
@@ -1128,21 +1019,13 @@ impl LegacyDynamicDensePlan {
                 return DenseNumericMutationLoopRun::Declined;
             };
             let array = array.clone();
-            let mut ran = self.packed_bitset.as_ref().and_then(|plan| {
-                let limit = limit.expect("packed bitset plans use less-than control");
-                array
-                    .with_dense_writable_elements(|elements| plan.run(elements, &mut locals, limit))
-                    .flatten()
+            let mut ran = array.with_dense_writable_elements(|elements| {
+                let mut access = SingleAccess {
+                    elements,
+                    pending: None,
+                };
+                self.run_program(&mut access, &mut locals, registers, limit)
             });
-            if ran.is_none() {
-                ran = array.with_dense_writable_elements(|elements| {
-                    let mut access = SingleAccess {
-                        elements,
-                        pending: None,
-                    };
-                    self.run_program(&mut access, &mut locals, registers, limit)
-                });
-            }
             if ran.is_none() {
                 ran = self.try_run_hole_tail_append(
                     vm,
