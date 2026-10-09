@@ -1753,12 +1753,10 @@ pub(super) fn run_typed_loop_here(
     let overlaps = |(plan_header, plan_backedge): (usize, usize)| {
         plan_backedge == backedge || (header..=backedge).contains(&plan_header)
     };
-    let consulted_first = plans.numeric.iter().any(|plan| overlaps(plan.region()))
-        || plans
-            .shared_numeric_mutation
-            .iter()
-            .any(|plan| overlaps(plan.region()))
-        || plans.control.iter().any(|plan| overlaps(plan.region()));
+    let consulted_first = plans
+        .shared_numeric_mutation
+        .iter()
+        .any(|plan| overlaps(plan.region()));
     if consulted_first
         || !plans
             .typed

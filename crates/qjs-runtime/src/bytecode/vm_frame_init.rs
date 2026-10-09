@@ -36,9 +36,7 @@ impl<'a> Vm<'a> {
         initialize_builtins(&mut env, &global_this);
         Self::initialize_script_global_bindings(bytecode, &realm)?;
         realm.refresh_dynamic_function_realm_global();
-        let mut vm = Self::new_with_globals(bytecode, env);
-        vm.transactional_realm_globals = true;
-        Ok(vm)
+        Ok(Self::new_with_globals(bytecode, env))
     }
 
     pub(super) fn new_with_globals(bytecode: &'a Bytecode, env: CallEnv) -> Self {
@@ -216,7 +214,6 @@ impl<'a> Vm<'a> {
             current: FrameState {
                 bytecode: handle,
                 ip: 0,
-                declined_numeric_loop_plans: 0,
                 declined_typed_loop_programs: 0,
                 virtual_function_context_safe,
                 virtual_values,
@@ -240,8 +237,6 @@ impl<'a> Vm<'a> {
                 cold,
                 direct_eval_with_stack: false,
                 persist_global_lexicals: true,
-                transactional_realm_globals: false,
-                dynamic_code_executed: false,
             },
             callers: Vec::new(),
             pending_frame_entry: None,
@@ -635,5 +630,30 @@ mod tests {
                 .zip(exports.cell("exported").as_ref())
                 .is_some_and(|(local, exported)| local.ptr_eq(exported))
         );
+    }
+
+    #[test]
+    fn top_level_loop_compiler_temporaries_stay_frame_private() {
+        let script = qjs_parser::parse_script(
+            "function addOne(value) { return value + 1; } var limit = 4, checksum = 0; for (var index = 0; index < limit; index++) checksum += addOne(index);",
+        )
+        .expect("source should parse");
+        let bytecode =
+            crate::bytecode::compiler::compile_script(&script).expect("source should compile");
+        assert!(bytecode.locals.iter().any(|local| local.compiler_temporary));
+        assert!(
+            bytecode
+                .hoisted_local_names()
+                .all(|name| !name.starts_with("\0\0"))
+        );
+        let vm = Vm::new(&bytecode).expect("top-level VM should initialize");
+        for (slot, local) in bytecode.locals.iter().enumerate() {
+            if !local.compiler_temporary {
+                continue;
+            }
+            assert!(vm.slot_is_authoritative(slot));
+            assert!(vm.local_upvalues.get(slot).is_none_or(Option::is_none));
+            assert_eq!(vm.locals[slot], Some(Value::Undefined));
+        }
     }
 }

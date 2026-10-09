@@ -332,6 +332,7 @@ impl NestedDensePlan {
         Some(plan)
     }
 
+    #[cfg(test)]
     pub(in super::super) fn exit(&self) -> usize {
         self.outer_exit
     }

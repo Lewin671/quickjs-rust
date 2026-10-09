@@ -149,6 +149,7 @@ justify a third variation of the same leaf specialization.
 A neutrality control must execute the path it is guarding. Broad portfolio
 cases do not: at 100,000 nominal iterations `plain_function_call` performs five
 real calls and `property_read` eleven real property operations, because the
-loop is folded whole. Use `benchmarks/generic-sentinels-manifest.json` and the
+loop is folded whole (measured before the loop-template plans were removed on
+2026-10-09; re-check each case with counters before relying on it). Use `benchmarks/generic-sentinels-manifest.json` and the
 `perf-counters` build to control generic-path work, and keep broad cases for
 what they actually measure — specializer coverage.

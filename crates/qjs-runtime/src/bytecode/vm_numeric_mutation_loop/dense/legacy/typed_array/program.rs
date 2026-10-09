@@ -429,8 +429,6 @@ mod tests {
             store_count: 0,
             sunk_store: None,
             hole_tail_append: None,
-            packed_bitset: None,
-            reduction: None,
             header: 0,
         };
         assert!(TypedProgram::lower(&plan, &[]).is_none());

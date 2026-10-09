@@ -93,9 +93,16 @@ Execution tiers inside `bytecode`, from most general to most specialized:
 
 - `vm`: the general interpreter over a `FrameState`; every body runs here
   unless a tier below admits it, and every tier below falls back to it.
-- `typed_loop`, `vm_numeric_loop`, `vm_control_loop`,
-  `vm_numeric_mutation_loop`: loop-region accelerators consulted at a
-  frame's backward edges; they run one region and return to the frame.
+- `vm_numeric_mutation_loop`, `typed_loop`: loop-region accelerators
+  consulted in that order at a frame's backward edges
+  (`vm_loop_dispatch`); they run one region and return to the frame. The
+  typed loop is the general one. The numeric-mutation family keeps its
+  dense-array register programs (plain arrays and TypedArrays, nested
+  loops, hole-tail append) and a dense predicate scan. The plans that
+  recognized one benchmark-shaped loop each (control loop, numeric
+  accumulator loop, named and fixed-index recurrences, scalar bitwise
+  recurrence, packed bitset, dot-product reduction) were removed on
+  2026-10-09; such loops run on the typed loop or the interpreter.
 - `compact_fn`: whole-body register execution without a `FrameState`. The
   numeric tier admits stack, local, binary and call operations only, and its
   dispatch loop is kept small on purpose. `compact_fn::wide` is a separate

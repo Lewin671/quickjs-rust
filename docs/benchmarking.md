@@ -87,6 +87,19 @@ right instrument for proving a recognizer did not regress, and it must not be
 used as a neutrality control set for units that change the ordinary
 interpreter, because its cases do not execute that path.
 
+That classification was established while the loop-template plans existed.
+They were removed on 2026-10-09 (control loop, numeric accumulator loop,
+named and fixed-index recurrences, scalar bitwise recurrence, packed bitset,
+dot-product reduction), so the broad cases those plans answered whole --
+`empty_loop`, `branch_arithmetic`, `property_write`, `array_write` and the
+call and read accumulation cases among them -- now run on the general tiers
+or the interpreter and are no longer folded by a loop plan. The 0.158 figure
+and the per-case counts in this document predate the removal (base
+`7a83b568`); broad has not been re-measured since. Other broad cases are
+still answered by the typed loop or the remaining dense plans, so confirm
+with the execution counters below what a given case executes before using it
+either as specializer coverage or as a control.
+
 The sentinels keep the same host contract — closed-form checksums, declared
 operation counts, no clock — but withhold the static facts a specializer needs,
 using ordinary dynamism rather than artificial barriers:
@@ -448,7 +461,7 @@ per entry that declined with the reason (`TLDECLINE`: a helper that could
 not be flattened, a scalar slot holding a string, a global that is an
 accessor), per deoptimization at run time (`TLDEOPT`, with the site and the
 bytecode it resumes at), per interpreter backward edge an accelerator
-claimed (`TLCLAIM`, naming the numeric-mutation, numeric, control or typed
+claimed (`TLCLAIM`, naming the numeric-mutation or typed
 accelerator), and per backward edge every loop accelerator declined
 (`TLEDGE`). `QJS_TL_TRACE=2` also lists a failed region's
 bytecode, and `QJS_TL_TRACE=3` lists each compiled program's operations
@@ -519,7 +532,9 @@ QJS_CF_TRACE=1 ./target/perf-counters/release/qjs case.js 2>&1 >/dev/null \
   | grep '^CFDECLINE'
 ```
 
-This is what the two suites report for a nominal 100,000 iterations:
+This is what the two suites reported for a nominal 100,000 iterations
+before the loop-template plans were removed (measured at or before base
+`7a83b568`, 2026-10-09; not re-measured since):
 
 | Case | Suite | Claims | Real calls | Real property ops | Declined plan edges |
 | --- | --- | ---: | ---: | ---: | ---: |
@@ -533,17 +548,23 @@ This is what the two suites report for a nominal 100,000 iterations:
 | `heterogeneous_property_read` | sentinel | 300,000 reads | 5 | 400,074 | 100,064 |
 | `string_key_map_churn` | sentinel | 200,000 ops | 5 | 304,107 | 102,047 |
 
-The broad portfolio performs five calls where it claims a hundred thousand:
-one loop-plan entry runs the whole loop and the callee never executes. That is
-the concrete form of the folding problem, and it is why a broad case cannot
-serve as a control for generic-path work.
+In that table the broad portfolio performs five calls where it claims a
+hundred thousand: one loop-plan entry runs the whole loop and the callee never
+executes. That is the concrete form of the folding problem, and it is why a
+broad case cannot serve as a control for generic-path work without checking
+its counters first. The loop plans that produced the broad rows (the numeric
+loop plan for calls and reads, the named recurrence for writes) no longer
+exist, so those rows are history, not current behaviour;
+re-run the command above for current counts.
 
 The last column is a second finding the counters make visible. Every case a
-loop engine cannot claim pays the full four-engine probe chain on *every*
-backward edge and enters none of them — about one declined chain per
-iteration across all four sentinel loops. That measurement, not a raw probe
-count, is what a loop-dispatch-table change would have to justify itself
-against.
+loop engine cannot claim pays the full probe chain on *every* backward edge
+and enters no engine — about one declined chain per iteration across all four
+sentinel loops. The chain was four engines long when the table was taken; it
+now consults two, numeric-mutation then typed, and
+`declined_loop_plan_edges` counts the edges both declined. That measurement,
+not a raw probe count, is what a loop-dispatch-table change would have to
+justify itself against.
 
 `executed_ops` counts the bytecode instructions the interpreter actually
 dispatched. It answers a question wall time and per-path counters cannot:

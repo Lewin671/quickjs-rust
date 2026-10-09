@@ -704,25 +704,6 @@ impl PropertyStorage {
         }
     }
 
-    fn writable_number(&self, key: &str) -> Option<f64> {
-        match self {
-            Self::Small { entries } => writable_property_number(
-                &entries
-                    .iter()
-                    .find(|(candidate, _)| candidate.as_ref() == key)?
-                    .1,
-            ),
-            Self::ShapedPair { shape, values } => match values.get(*shape.lookup.get(key)?)? {
-                Value::Number(value) => Some(*value),
-                _ => None,
-            },
-            Self::Dynamic(dynamic) => writable_property_number(dynamic.property(key)?),
-            Self::Shaped { shape, properties } => {
-                writable_property_number(properties.get(*shape.lookup.get(key)?)?)
-            }
-        }
-    }
-
     /// Writes an existing writable data property whose current value
     /// `guard` accepts; a rejected one is `NeedsSlowPath`, unchanged.
     fn write_existing_data(
@@ -897,16 +878,6 @@ fn data_property_read(property: Option<&Property>) -> OwnDataPropertyRead {
         None => OwnDataPropertyRead::Missing,
         Some(property) if property.is_accessor() => OwnDataPropertyRead::NeedsSlowPath,
         Some(property) => OwnDataPropertyRead::Data(property.value.clone()),
-    }
-}
-
-fn writable_property_number(property: &Property) -> Option<f64> {
-    if property.is_accessor() || !property.writable {
-        return None;
-    }
-    match property.value {
-        Value::Number(value) => Some(value),
-        _ => None,
     }
 }
 
@@ -1659,16 +1630,6 @@ impl ObjectRef {
             property.value = value.clone();
         }
         Some(property)
-    }
-
-    /// Reads a writable ordinary own numeric data property for scalar
-    /// replacement. Exotic namespaces, accessors, read-only descriptors, and
-    /// non-numeric values stay on the observable property path.
-    pub(crate) fn writable_own_data_number(&self, key: &str) -> Option<f64> {
-        if self.0.module_namespace_exotic.get() {
-            return None;
-        }
-        self.properties_for(key).borrow().writable_number(key)
     }
 
     /// Updates an existing ordinary own data property without cloning its
