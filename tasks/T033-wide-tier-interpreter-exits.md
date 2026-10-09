@@ -123,9 +123,11 @@ after the 2026-10-09 removal.
 
 ## Unresolved
 
-- No formal performance standing exists for the tree after the 2026-10-09
-  removal. Broad cases the removed plans answered whole now run on the
-  general tiers or the interpreter.
+- The only formal standing for the tree after the 2026-10-09 removal is the
+  comparison at `d1313d52` in `tasks/T018-broad-performance.md`; it has no
+  broad ratios because two broad cases failed linearity. Broad cases the
+  removed plans answered whole now run on the general tiers or the
+  interpreter.
 - The frozen unit's only formal decision is a rejection, and the code it
   measured stayed and was built upon. No later `decide` outcome is recorded
   for it.

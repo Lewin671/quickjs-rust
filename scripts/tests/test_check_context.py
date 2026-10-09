@@ -78,6 +78,26 @@ class ContextCheckTests(unittest.TestCase):
         )
         self.assertEqual(self.errors(), [])
 
+    def test_angle_bracket_destinations_keep_their_spaces(self):
+        self.write("docs/two words.md", "# Two\n")
+        self.write(
+            "README.md",
+            "[a](<docs/two words.md>) and [b][b].\n\n[b]: <docs/two words.md> 'B'\n",
+        )
+        self.assertEqual(self.errors(), [])
+        self.write("README.md", "[a](<docs/no such file.md>)\n")
+        self.assertTrue(any("docs/no such file.md" in e for e in self.errors()))
+
+    def test_a_reference_destination_may_sit_on_the_next_line(self):
+        self.write("README.md", "See [g][g].\n\n[g]:\n    gone.md\n")
+        self.assertTrue(any("gone.md" in e for e in self.errors()))
+        self.write("README.md", "See [g][g].\n\n[g]:\n    docs/architecture.md\n")
+        self.assertEqual(self.errors(), [])
+
+    def test_footnotes_are_not_links(self):
+        self.write("README.md", "Text.[^1]\n\n[^1]: This is explanatory text.\n")
+        self.assertEqual(self.errors(), [])
+
     def test_anchors_follow_heading_slugs(self):
         self.write("README.md", "[ok](docs/architecture.md#call-dispatch)\n")
         self.assertEqual(self.errors(), [])
@@ -133,10 +153,14 @@ class ContextCheckTests(unittest.TestCase):
         self.write("tasks/performance-units/README.md", "# Plans\n\n- wide-followup\n")
         self.write("tasks/performance-units/wide.json", "{}\n")
         self.assertTrue(any("does not list wide.json" in e for e in self.errors()))
-        self.write("tasks/README.md", "# Tasks\n\n- archive/XT001-example.md\n")
-        self.assertTrue(
-            any("does not list tasks/T001-example.md" in e for e in self.errors())
-        )
+        for stand_in in ("archive/XT001-example.md", "T001-example.md.old.md"):
+            self.write("tasks/README.md", f"# Tasks\n\n- {stand_in}\n")
+            self.assertTrue(
+                any("does not list tasks/T001-example.md" in e for e in self.errors())
+            )
+        self.write("tasks/README.md", "# Tasks\n\nSee T001-example.md.\n")
+        self.write("tasks/performance-units/README.md", "# Plans\n\n`wide`.\n")
+        self.assertEqual(self.errors(), [])
 
 
 if __name__ == "__main__":

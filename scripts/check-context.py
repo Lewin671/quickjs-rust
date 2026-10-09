@@ -61,10 +61,14 @@ STATUSES = (
 )
 RESUME_WINDOW = 30
 
+# A link destination: <anything up to the bracket>, or a run without spaces.
+DESTINATION = r"(?:<([^>\n]*)>|([^)\s<]+))"
 # An inline link, with or without a title: [text](target "title").
-LINK = re.compile(r"(?<!\!)\[[^\]\n]*\]\(\s*<?([^)\s>]+)>?(?:\s+[^)\n]*)?\)")
-# A reference definition: [label]: target "title".
-REFERENCE = re.compile(r"^ {0,3}\[[^\]\n]+\]:\s*<?([^\s>]+)>?")
+LINK = re.compile(r"(?<!\!)\[[^\]\n]*\]\(\s*" + DESTINATION + r"(?:\s+[^)\n]*)?\)")
+# A reference definition: [label]: target "title". The target may sit on the
+# next line. `[^note]:` is a footnote, not a link.
+REFERENCE = re.compile(r"^ {0,3}\[(?!\^)[^\]\n]+\]:\s*(?:" + DESTINATION + r")?")
+BARE_DESTINATION = re.compile(r"^\s*" + DESTINATION)
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 FENCE = re.compile(r"^\s*(```|~~~)")
 TASK_NAME = re.compile(r"^T\d{3}-.+\.md$")
@@ -94,6 +98,26 @@ def prose_lines(path: Path) -> list[str]:
             continue
         lines.append("" if fenced else line)
     return lines
+
+
+def link_targets(lines: list[str]) -> list[tuple[int, str]]:
+    """Every link destination in `lines`, with its 1-based line number."""
+    found = []
+    for index, line in enumerate(lines):
+        for angled, bare in LINK.findall(line):
+            found.append((index + 1, angled or bare))
+        definition = REFERENCE.match(line)
+        if not definition:
+            continue
+        target = definition.group(1) or definition.group(2)
+        if target is None and definition.end() == len(line.rstrip()):
+            following = lines[index + 1] if index + 1 < len(lines) else ""
+            continued = BARE_DESTINATION.match(following)
+            if continued:
+                target = continued.group(1) or continued.group(2)
+        if target:
+            found.append((index + 1, target))
+    return found
 
 
 def anchors(path: Path) -> set[str]:
@@ -152,25 +176,23 @@ def check_links(root: Path) -> list[str]:
     errors = []
     anchor_cache: dict[Path, set[str]] = {}
     for document in current_documents(root):
-        for number, line in enumerate(prose_lines(document), start=1):
-            targets = LINK.findall(line) + REFERENCE.findall(line)
-            for target in targets:
-                if re.match(r"^[a-z][a-z0-9+.\-]*:", target):
-                    continue
-                file_part, _, fragment = target.partition("#")
-                destination = (
-                    document if not file_part else (document.parent / file_part)
-                ).resolve()
-                where = f"{document.relative_to(root)}:{number}"
-                if not destination.exists():
-                    errors.append(f"{where}: link target does not exist: {target}")
-                    continue
-                if not fragment or destination.suffix != ".md":
-                    continue
-                if destination not in anchor_cache:
-                    anchor_cache[destination] = anchors(destination)
-                if fragment.lower() not in anchor_cache[destination]:
-                    errors.append(f"{where}: no heading for anchor: {target}")
+        for number, target in link_targets(prose_lines(document)):
+            if re.match(r"^[a-z][a-z0-9+.\-]*:", target):
+                continue
+            file_part, _, fragment = target.partition("#")
+            destination = (
+                document if not file_part else (document.parent / file_part)
+            ).resolve()
+            where = f"{document.relative_to(root)}:{number}"
+            if not destination.exists():
+                errors.append(f"{where}: link target does not exist: {target}")
+                continue
+            if not fragment or destination.suffix != ".md":
+                continue
+            if destination not in anchor_cache:
+                anchor_cache[destination] = anchors(destination)
+            if fragment.lower() not in anchor_cache[destination]:
+                errors.append(f"{where}: no heading for anchor: {target}")
     return errors
 
 
@@ -220,7 +242,8 @@ def check_task_resume_blocks(root: Path) -> list[str]:
 
 def names(text: str, name: str) -> bool:
     """Whether `text` contains `name` as a whole file or plan name."""
-    return re.search(rf"(?<![\w.\-]){re.escape(name)}(?![\w\-])", text) is not None
+    pattern = rf"(?<![\w.\-]){re.escape(name)}(?![\w\-]|\.\w)"
+    return re.search(pattern, text) is not None
 
 
 def check_indexes(root: Path) -> list[str]:
