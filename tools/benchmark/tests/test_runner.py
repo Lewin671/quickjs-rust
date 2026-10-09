@@ -160,11 +160,14 @@ class RunnerTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         marker = Path(temporary.name) / "orphan-finished"
-        child = f"import time, pathlib; time.sleep(.3); pathlib.Path({str(marker)!r}).write_text('bad')"
+        # The orphan must outlive everything `run_process` does after the
+        # parent exits (reading counters, then two 0.1 s pipe joins) by a wide
+        # margin, or it finishes on a busy host before containment is due.
+        child = f"import time, pathlib; time.sleep(2); pathlib.Path({str(marker)!r}).write_text('bad')"
         parent = "import subprocess, sys; subprocess.Popen([sys.executable, '-c', sys.argv[1]])"
-        result = run_process(["python3", "-c", parent, child], 1)
+        result = run_process(["python3", "-c", parent, child], 5)
         self.assertEqual(result.exit_code, 0)
-        time.sleep(0.35)
+        time.sleep(2.2)
         self.assertFalse(marker.exists())
 
     def test_version_probe_uses_requested_path_flag_and_bounded_output(self) -> None:
