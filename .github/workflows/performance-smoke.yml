@@ -528,6 +528,26 @@ jobs:
       RUN_CANDIDATE_CLONE_URL: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.clone_url || github.event.repository.clone_url }}
       RUN_BASE_CLONE_URL: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.repo.clone_url || github.event.repository.clone_url }}
     steps:
+      # A stage artifact outlives the attempt that uploaded it, and this job
+      # can be repeated on its own. Replacing the artifact before anything
+      # here can fail means a lane that dies in checkout or download leaves
+      # this attempt's unfinished record, never an earlier attempt's success.
+      - name: Record that this lane started in this attempt
+        run: |
+          mkdir -p "$RUNNER_TEMP/preview-lane-start"
+          printf '{"message":"the lane job stopped before measurement began","phase":"job_setup","run_attempt":"%s","schema_version":2,"stage":"%s","state":"pending"}\n' \
+            "$GITHUB_RUN_ATTEMPT" "$PREVIEW_LANE" \
+            > "$RUNNER_TEMP/preview-lane-start/$PREVIEW_LANE-status.json"
+
+      - name: Upload the start record over any earlier attempt's evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: preview-part-${{ matrix.lane }}
+          path: ${{ runner.temp }}/preview-lane-start/
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 1
+
       # The harness is the base revision in a pull request and the pushed
       # revision on main, exactly as in the build job. A lane checks out no
       # candidate source: it only executes the recorded executables.

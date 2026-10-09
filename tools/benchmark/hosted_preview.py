@@ -200,7 +200,10 @@ def _stage(output: Path, stage: str) -> dict[str, str]:
     """A stage's recorded state, or `missing` when it left no record."""
     status = _load(output / f"{stage}-status.json")
     if status is None or status.get("stage") != stage:
-        return {"state": "missing", "phase": "not_started", "message": "no status was recorded"}
+        return {
+            "state": "missing", "phase": "not_started",
+            "message": "no status was recorded", "run_attempt": "None",
+        }
     return {
         "state": str(status.get("state")),
         "phase": str(status.get("phase")),
@@ -290,6 +293,8 @@ def collect(
                 f"the build stage did not produce the three executables "
                 f"(state {build['state']}, phase {build['phase']})."
             )
+        elif record["state"] == "missing":
+            notes[lane] = f"the {label} left no record: its job did not start or uploaded nothing."
         elif _predates(record["run_attempt"], stages["build"]["run_attempt"]):
             notes[lane] = (
                 f"the {label} left no record in this attempt: what it uploaded "
@@ -297,8 +302,6 @@ def collect(
             )
         elif record["state"] == "incomplete":
             notes[lane] = record["message"]
-        elif record["state"] == "missing":
-            notes[lane] = f"the {label} left no record: its job did not start or uploaded nothing."
         elif record["state"] != "success":
             notes[lane] = (
                 f"the {label} did not finish (state {record['state']}, "

@@ -206,6 +206,33 @@ class PublishTests(unittest.TestCase):
         stage(self.output, "build", attempt="1")
         self.assertFalse(self.run_publish()[0])
 
+    def test_a_lane_without_any_record_is_reported_and_the_rest_published(self) -> None:
+        for lane, expected in (("sentinel", True), ("broad", False), ("external", False)):
+            with self.subTest(lane=lane):
+                self.step_summary.unlink(missing_ok=True)
+                whole_run(self.output)
+                (self.output / f"{lane}-status.json").unlink()
+                complete, markdown, status = self.run_publish()
+                self.assertEqual(complete, expected)
+                self.assertEqual(status["stages"][lane]["state"], "missing")
+                self.assertNotIn(lane, status["lanes_with_evidence"])
+                self.assertEqual(len(status["lanes_with_evidence"]), 2)
+                self.assertIn(f"the {lane} lane left no record", markdown)
+
+    def test_a_lane_that_stopped_before_measuring_replaces_its_earlier_success(self) -> None:
+        # The record a lane job uploads before its checkout, exactly as the
+        # workflow writes it, standing where an earlier success used to be.
+        whole_run(self.output)
+        (self.output / "broad-status.json").write_text(
+            '{"message":"the lane job stopped before measurement began",'
+            '"phase":"job_setup","run_attempt":"2","schema_version":2,'
+            '"stage":"broad","state":"pending"}\n', encoding="utf-8",
+        )
+        complete, markdown, status = self.run_publish()
+        self.assertFalse(complete)
+        self.assertEqual(status["lanes_with_evidence"], ["external", "sentinel"])
+        self.assertIn("state pending, phase job\\_setup", markdown)
+
     def test_a_stage_record_names_the_attempt_that_produced_it(self) -> None:
         import os
 

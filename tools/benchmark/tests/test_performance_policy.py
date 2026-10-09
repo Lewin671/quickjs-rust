@@ -624,6 +624,16 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
             lane_job.index("Measure one lane with the recorded executables"),
             lane_job.index("Upload lane evidence"),
         )
+        # This job can be repeated alone, so it replaces its earlier upload
+        # with this attempt's unfinished record before anything can fail --
+        # before the checkout, and without any repository code.
+        start = lane_job.split("steps:", 1)[1].split("- name: Checkout the harness revision", 1)[0]
+        self.assertIn('"$GITHUB_RUN_ATTEMPT" "$PREVIEW_LANE"', start)
+        self.assertIn('"state":"pending"', start)
+        self.assertIn("name: preview-part-${{ matrix.lane }}\n", start)
+        self.assertIn("overwrite: true", start)
+        self.assertNotIn("python3", start)
+        self.assertNotIn("scripts/", start)
         # Publication runs whatever happened upstream, tolerates a stage that
         # uploaded nothing, executes no lane script, and uploads after it.
         self.assertIn("needs: [base-owned-build, main-push-build, measure-lane]", publish_job)
@@ -634,8 +644,8 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         # every stage upload replaces its predecessor, and a build that fails
         # in this attempt cannot be outvoted by an earlier attempt's record.
         stage_artifacts = workflow.split("name: performance-preview-${{ github.event_name }}")[0]
-        self.assertNotIn("run_attempt", stage_artifacts)
-        self.assertEqual(workflow.count("overwrite: true"), 5)
+        self.assertNotIn("github.run_attempt", stage_artifacts)
+        self.assertEqual(workflow.count("overwrite: true"), 6)
         self.assertIn(
             "PREVIEW_BUILD_RESULT: ${{ (needs.base-owned-build.result == 'success' || "
             "needs.main-push-build.result == 'success') && 'success' || 'failure' }}",
@@ -653,8 +663,8 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         )
         self.assertGreaterEqual(workflow.count("if: always()"), 5)
         self.assertIn("retention-days: 14", publish_job)
-        self.assertEqual(workflow.count("retention-days: 1\n"), 5)
-        self.assertEqual(workflow.count("if-no-files-found: error"), 3)
+        self.assertEqual(workflow.count("retention-days: 1\n"), 6)
+        self.assertEqual(workflow.count("if-no-files-found: error"), 4)
         self.assertGreaterEqual(workflow.count('mkdir -p "$EVIDENCE_DIR"'), 3)
         self.assertNotIn("pull-requests: write", workflow)
         self.assertNotIn("secrets.", workflow)
