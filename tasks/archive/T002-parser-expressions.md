@@ -1,5 +1,19 @@
 # T002: Parser Expressions
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: historical-campaign (open-ended bootstrap work item; it never had a
+  finite exit).
+- Implementation: present (`crates/qjs-parser/`); this file never recorded
+  which slices landed.
+- Verified at: not recorded in this file. Later conformance record: 42,672 of
+  42,672 configured Test262 cases pass at `9d344a0f`, 2026-09-06
+  (`docs/conformance/burndown.jsonl`, last entry).
+- Evidence: `docs/conformance/burndown.jsonl`.
+- Unresolved: none recorded.
+- Next action: none. New work in this area is selected through the gap queue
+  (`AGENTS.md`), not this file.
+
 ## Goal
 
 Expand expression parsing precedence while keeping parser behavior deterministic

@@ -1,5 +1,18 @@
 # T020: Unify realm binding storage behind the shared cell
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-landed.
+- Implementation: present (`RealmState.bindings: DynamicBindings` in
+  `crates/qjs-runtime/src/function/env.rs`).
+- Verified at: `bfcd53da`, 2026-07-21: runtime tests, Test262 subset,
+  `compare-qjs.sh`, seven exact gap scans and `check.sh` (listed under
+  "Verification performed").
+- Evidence: local measurements only, described below; not retained.
+- Unresolved: none for this task. The remaining call and global-variable gap
+  it names belongs to T018.
+- Next action: none.
+
 ## Status: Landed (commit `bfcd53da`, 2026-07-21)
 
 The originally-scoped "slice 1" (make reads cell-aware first, keep the raw
@@ -91,10 +104,14 @@ into a separate registry.
 
 ## Notes
 
-Scoped and landed 2026-07-21 during the `perf-2x-campaign-2026-07-21` session
-(see agent memory of the same name), after landing 10 unrelated,
-safely-verified micro-fixes to the same store paths in the same session (see
-commits `f8ad7b44`..`cefd08f7` on `main`, landed before this one). The
+Scoped and landed 2026-07-21, after landing 10 unrelated, safely-verified
+micro-fixes to the same store paths in the same session (commits
+`f8ad7b44`, `f4cebb87`, `8ec4b669`, `3bc654b1`, `2e5136a9`, `64b3b108`,
+`bb01703e`, `7198757c`, `f4e8bd73` and `cefd08f7` on `main`, landed before
+this one). Recorded in session notes 2026-07-21: a same-binary A/B on the
+development host swung about 15% in that session, so its local ratios are
+directional only; on a 20M-iteration top-level `var` write loop the ten
+commits took user time from about 9.3 s (`4de7d590`) to about 5.7-6.0 s. The
 remaining gap between qjs-rust and QuickJS-NG on `top_level_function_call`
 (and similar call/global-var-heavy cases) after this commit still requires
 further work — this removed the redundant hashing but not the fundamental

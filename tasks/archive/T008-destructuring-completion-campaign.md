@@ -1,5 +1,20 @@
 # T008: Destructuring Completion Campaign
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-landed.
+- Implementation: present.
+- Verified at: S1-S4 ticked through `537cae99`, 2026-06-09 (last edit of this
+  file); per-slice check results not recorded. Later conformance record:
+  42,672 of 42,672 configured Test262 cases pass at `9d344a0f`, 2026-09-06
+  (`docs/conformance/burndown.jsonl`, last entry).
+- Evidence: `docs/conformance/burndown.jsonl`.
+- Unresolved: S5 (re-cluster the remaining gaps) was never ticked. It is a
+  planning step with nothing left to plan: the actionable gap is zero at
+  `9d344a0f`.
+- Next action: none. New work in this area is selected through the gap queue
+  (`AGENTS.md`), not this file.
+
 ## Goal
 
 Finish destructuring across all binding and assignment positions. At commit

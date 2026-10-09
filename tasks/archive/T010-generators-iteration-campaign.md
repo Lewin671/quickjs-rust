@@ -1,5 +1,21 @@
 # T010: Generators and Iteration Campaign
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-landed (the file states "Campaign core is complete").
+- Implementation: present.
+- Verified at: S1-S5 ticked through `e377f3c3`, 2026-06-11 (last edit of this
+  file); per-slice check results not recorded. Later conformance record:
+  42,672 of 42,672 configured Test262 cases pass at `9d344a0f`, 2026-09-06
+  (`docs/conformance/burndown.jsonl`, last entry).
+- Evidence: `docs/conformance/burndown.jsonl`; suspension design in
+  `docs/design/generator-suspension.md`.
+- Unresolved: the follow-ups named below (callable `%GeneratorFunction%`
+  constructor, `Iterator.concat`, `Iterator.zip*`) were left to the gap queue;
+  their current state is not recorded here.
+- Next action: none. New work in this area is selected through the gap queue
+  (`AGENTS.md`), not this file.
+
 ## Goal
 
 Implement generator functions and round out the iteration protocol. At commit

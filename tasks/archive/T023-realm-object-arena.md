@@ -1,5 +1,19 @@
 # T023: Realm-local object arena
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-rejected, 2026-07-30 (S1 failed its frozen fast gate).
+- Implementation: reverted (no `ObjectCell` in `crates/qjs-runtime/src/`).
+- Verified at: fast gate only, 2026-07-30: HashMap 1.016x and A* 1.088x
+  against the `32a00b0e`-equivalent base; broad controls and full conformance
+  were not run.
+- Evidence: frozen plan `tasks/performance-units/realm-object-arena.json`.
+  Paths under `target/` and `/tmp` below are local artifacts, not retained;
+  regenerate before reuse.
+- Unresolved: none.
+- Next action: none. A tracing GC needs a new profile and a newly frozen T022
+  plan.
+
 ## Status: rejected after S1 fast gate (2026-07-30)
 
 The implementation was deliberately removed after the single frozen attempt.

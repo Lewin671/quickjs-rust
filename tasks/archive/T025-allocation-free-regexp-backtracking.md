@@ -1,5 +1,23 @@
 # T025: Allocation-free RegExp backtracking
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-rejected, 2026-08-03 (formal Stage 3 decision `abort`; it
+  closes this implementation shape, not the RegExp mechanism family).
+- Implementation: partial: Stages 1-3 are present
+  (`crates/qjs-runtime/src/regexp/matcher/first.rs`, commits
+  `6da38970`..`2093eeab`); Stage 4 was not attempted.
+- Verified at: candidate `2093eeab` against migration base `c62314aa`, trusted
+  fixed-base run `30849231375`: tagcloud 0.8218, regexp-dna 0.6865,
+  `closure_allocation_call` 1.1089 against a 1.10 budget.
+- Evidence: frozen plan
+  `tasks/performance-units/regexp-choice-stack-capture-undo.json`; decision
+  SHA-256 `7d8a7daf...` recorded below. The decision artifact itself is not in
+  the repository.
+- Unresolved: none.
+- Next action: none. A future RegExp unit needs a new current profile and a
+  newly frozen plan.
+
 ## Status: closed after Stage 3 abort
 
 This was the T018 structural unit selected by the exact T022 queue at
@@ -15,7 +33,7 @@ repetition scratch. Preserve ECMAScript leftmost-first, greedy/lazy, capture,
 lookaround, backreference, Unicode, and reverse-capture semantics.
 
 The frozen schema-2 plan is
-`performance-units/regexp-choice-stack-capture-undo.json`. Its final fast gate
+`tasks/performance-units/regexp-choice-stack-capture-undo.json`. Its final fast gate
 requires `string-tagcloud <= 0.80` candidate/base, every declared control
 `<= 1.03`, and allocator samples at least halved. An improvement without the
 allocation drop falsifies the attribution and requires a new profile before

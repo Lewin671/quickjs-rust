@@ -1,9 +1,25 @@
 # T028: Discarded binary-branch superinstruction
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-rejected, 2026-08-03.
+- Implementation: reverted (the fused opcode is absent from
+  `crates/qjs-runtime/src/`).
+- Verified at: prototype against base `e11b5d19`: 2,039 runtime tests passed;
+  HashMap 0.9837x against a 0.97 target; controls and promotion evidence not
+  run.
+- Evidence: frozen plan
+  `tasks/performance-units/discarded-binary-branch-superinstruction.json`;
+  receipt hashes recorded below. The receipts and any `target/` path below are
+  local artifacts, not retained.
+- Unresolved: none.
+- Next action: none. The closing paragraph below names what must not be
+  retried.
+
 ## Status: rejected after the frozen one-attempt gate
 
 This T018 leaf unit is frozen in
-`performance-units/discarded-binary-branch-superinstruction.json` against the
+`tasks/performance-units/discarded-binary-branch-superinstruction.json` against the
 latest completed exact runtime evidence for `e11b5d19`. The later `bced98c4`
 revision adds only the T027 rejection record; its runtime is source-identical.
 

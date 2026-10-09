@@ -1,10 +1,25 @@
 # T031: Realm-owned single-code-unit String values
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-landed (formal promotion decision `retained`).
+- Implementation: present
+  (`crates/qjs-runtime/src/string/code_unit_strings.rs`).
+- Verified at: `5702c789`, 2026-09-06, against base `a8e9d253`: 30-block
+  promotion, 76 comparisons passed; CI and Test262 coverage passed with 42,672
+  configured cases and zero gap.
+- Evidence: frozen plan
+  `tasks/performance-units/realm-single-code-unit-strings.json`; decision
+  SHA-256 `443c853b...` recorded below. Paths under `target/` are local
+  artifacts, not retained; regenerate before reuse.
+- Unresolved: none for this unit.
+- Next action: none.
+
 ## Status
 
 Retained after formal same-host promotion. Code commit:
 `5702c78900d20317e765711a06e2659d774d2014`. Base: `a8e9d253b3ddf8e63e5963e37a5b6ac11cfba632`.
-The frozen plan is `performance-units/realm-single-code-unit-strings.json`.
+The frozen plan is `tasks/performance-units/realm-single-code-unit-strings.json`.
 The frozen promotion gate passed for all 76 watched comparisons. This is a
 unit-level result on the recorded macOS series, not whole-engine superiority.
 

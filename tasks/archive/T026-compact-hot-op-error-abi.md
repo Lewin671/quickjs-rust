@@ -1,11 +1,26 @@
 # T026: Compact hot-op error ABI
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-rejected, 2026-08-03.
+- Implementation: reverted (no `HotOpError` in `crates/qjs-runtime/src/`).
+- Verified at: prototype against runtime base `2093eeab`: HashMap 1.0073x,
+  public-field Raytrace 0.9963x, both against a 0.97 target; broad, hosted and
+  Test262 promotion evidence not run.
+- Evidence: frozen plan
+  `tasks/performance-units/compact-hot-op-error-abi.json`; receipt hashes
+  recorded below. The receipts and any `target/` path below are local
+  artifacts, not retained.
+- Unresolved: none.
+- Next action: none. The closing paragraph below names what must not be
+  retried.
+
 ## Status: closed after mechanism and fast-gate rejection
 
 This is the next T018 leaf unit selected from the exact T022 queue for runtime
 candidate `2093eeab`. The current `39f3b530` descendant changes task documents
 only and produces the same release executable. The frozen plan is
-`performance-units/compact-hot-op-error-abi.json`.
+`tasks/performance-units/compact-hot-op-error-abi.json`.
 
 ## Goal
 

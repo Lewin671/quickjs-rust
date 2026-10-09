@@ -1,5 +1,24 @@
 # T032: Slot reads for object-literal prototypes
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-landed (formal promotion decision `retained` on the 60-block
+  confirmation).
+- Implementation: present (`prototype_data_slot_value` in
+  `crates/qjs-runtime/src/value/object/slot_reads.rs`).
+- Verified at: `9d344a0f`, 2026-09-06, against base `5702c789`: 60-block
+  confirmation, 76 comparisons passed; CI and Test262 coverage passed with
+  42,672 configured cases and zero gap.
+- Evidence: frozen plan
+  `tasks/performance-units/shaped-prototype-slot-reads.json`; decision SHA-256
+  `e980b690...` recorded below; `docs/conformance/burndown.jsonl` last entry
+  is this commit. Paths under `target/` are local artifacts, not retained;
+  regenerate before reuse.
+- Unresolved: none for this unit. The "Remaining NG target" ratios below are
+  the standing at `9d344a0f`, not a current one.
+- Next action: none. Work against QuickJS-NG is selected through T018 and
+  T022.
+
 ## Goal and evidence
 
 Close the cache coverage gap for ordinary prototypes stored as `Shaped` or
@@ -9,7 +28,7 @@ first at 5.2186x NG. The exact runtime base is `5702c789`; starting checkout
 of the exact candidate executable are in `target/performance-current-5702c789/`.
 
 The profile and frozen plan are bound by
-`performance-units/shaped-prototype-slot-reads.json`. HashMap's prototype is
+`tasks/performance-units/shaped-prototype-slot-reads.json`. HashMap's prototype is
 an object literal, but `own_data_slot` accepts only Small storage, so the
 prototype cache cannot record its otherwise stable method slots. This unit
 adds addressability for already-existing literal slots. It does not change

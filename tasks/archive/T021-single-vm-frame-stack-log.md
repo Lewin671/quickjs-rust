@@ -1,7 +1,7 @@
 # T021: Single-VM Frame Stack And Compact Execution Core
 
-> Archived verbatim experiment log. The active task file is
-> [`../T021-single-vm-frame-stack.md`](../T021-single-vm-frame-stack.md); nothing here sets current priority.
+> Archived verbatim experiment log. The closed task record is
+> [`T021-single-vm-frame-stack.md`](T021-single-vm-frame-stack.md); nothing here sets current priority.
 
 ## Goal
 

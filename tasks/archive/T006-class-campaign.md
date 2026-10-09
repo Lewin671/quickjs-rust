@@ -1,5 +1,21 @@
 # T006: Class Campaign
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-landed.
+- Implementation: present.
+- Verified at: slices ticked through `52d24e59`, 2026-06-10 (last edit of this
+  file); per-slice check results not recorded. Later conformance record:
+  42,672 of 42,672 configured Test262 cases pass at `9d344a0f`, 2026-09-06
+  (`docs/conformance/burndown.jsonl`, last entry).
+- Evidence: `docs/conformance/burndown.jsonl`.
+- Unresolved: the S6 parent box is unticked although its three sub-slices are
+  ticked. The follow-ups named below (`super(...)` inside an arrow,
+  subclassing exotic built-ins, `new.target` syntax, `obj?.#x`) were not
+  tracked in this file; no configured Test262 case fails at `9d344a0f`.
+- Next action: none. New work in this area is selected through the gap queue
+  (`AGENTS.md`), not this file.
+
 ## Goal
 
 Implement `class` declarations and expressions end to end so the Test262
