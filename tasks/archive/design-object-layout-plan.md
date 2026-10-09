@@ -1,3 +1,16 @@
+# Archived: runtime value object-layout rewrite (T019 design note)
+
+> Historical record, moved verbatim from `docs/design/object-layout-rewrite.md`
+> as it stood at commit `d1313d52` (2026-10-09), when that file was deleted.
+> It describes the T019 plan and its measurements at the revisions it names.
+> Its slice list is stale: it leaves S5 open, while the T019 task record
+> reports S5 and S6 as rejected; the task record is the authority for slice
+> status. Nothing here sets current priority. The representation that exists
+> today is summarised in
+> [`../../docs/architecture.md`](../../docs/architecture.md#object-representation).
+
+---
+
 # Runtime value object-layout rewrite
 
 Status: in progress; S1 and S4 landed, S2 was rejected after measuring no

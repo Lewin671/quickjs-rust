@@ -1,3 +1,15 @@
+# Archived: Realm-local object arena (T023 design note)
+
+> Historical record, moved verbatim from `docs/design/realm-object-arena.md` as
+> it stood at commit `d1313d52` (2026-10-09), when that file was deleted. It
+> records a design rejected by T023 S1 on 2026-07-30; the implementation was
+> removed and is not in the source tree. The report it cites under `target/`
+> is a local artifact, not retained; regenerate before reuse. Nothing here
+> sets current priority. The representation that exists today is summarised
+> in [`../../docs/architecture.md`](../../docs/architecture.md#object-representation).
+
+---
+
 # Realm-local object arena
 
 ## Status
