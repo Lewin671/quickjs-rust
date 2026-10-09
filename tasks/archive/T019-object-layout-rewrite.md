@@ -1,5 +1,31 @@
 # T019: Runtime value object-layout rewrite
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-landed (S1 and S4 landed; S2, S3, S5 and S6 rejected; no
+  slice remains).
+- Implementation: partial: S1
+  (`PropertyStorage::Dynamic(Box<DynamicPropertyStorage>)`) and S4
+  (`AccessorState` behind `Property`) are in `crates/qjs-runtime/src/value/`;
+  S2, S5 and S6 were reverted; S3 was never implemented.
+- Verified at: S4 candidate `fb3d7645`, 2026-07-22: hosted Performance Preview
+  `29948718553`, CI `29948717681` and Test262 Coverage `29948984533` passed
+  (recorded below). S5 and S6 rejected 2026-07-30.
+- Evidence: frozen plans
+  `tasks/performance-units/box-shaped-pair-storage.json` and
+  `tasks/performance-units/lazy-weak-object-refcount.json`;
+  `docs/design/object-layout-rewrite.md`. Paths under `target/` and `/tmp`
+  below are local artifacts, not retained; regenerate before reuse.
+- Unresolved: the three acceptance boxes were never ticked. Per-slice gates
+  and local A/B are recorded in the notes for S1 and S4 only. The final
+  `Object`/`Array` gap scan is not recorded here; the burndown shows zero
+  actionable gap at `9d344a0f`. The goal itself was not reached: the notes
+  call S1 "not a family-closing one" and the allocation family stayed above
+  QuickJS-NG.
+- Next action: none. The global `var` sync lever named in the last section was
+  taken up by T020 (`bfcd53da`, 2026-07-21). Reopening layout work needs a
+  current T022 queue and a frozen plan.
+
 ## Goal
 
 Close the `allocation` critical family's gap to QuickJS-NG (T018's
@@ -307,7 +333,11 @@ external promotion run was used to hunt for a favorable result; the runtime
 implementation was reverted immediately and only the frozen plan plus this
 negative evidence remain.
 
-### A much larger lever found outside this campaign's scope: global `var` sync
+### Recorded 2026-07-20: global `var` sync, a larger lever outside this scope
+
+This section is the state on 2026-07-20. The work it names as the next
+priority was done on 2026-07-21: commits `f8ad7b44`..`cefd08f7` and T020
+(`bfcd53da`, `T020-realm-binding-cell-unification.md`).
 
 While re-measuring, the full 25-case candidate/QuickJS-NG standing (from the
 S1 A/B raw data, not the stale initial-baseline table in T018) showed
@@ -325,8 +355,8 @@ three times, and does two to four more `HashMap` lookups/inserts (`realm
 T019 scope (it is VM dispatch / environment-sync work, not object/array
 layout) and it is **not** a safe quick fix: it sits in the same
 historically fragile realm/globalThis-sync territory that took many
-dedicated sessions to stabilize (see memory `Parity progress` sessions on
-realm semantics). Recorded here and in `archive/T018-broad-performance-log.md` as the
+dedicated sessions to stabilize (the supporting note was not kept in the
+repository). Recorded here and in `T018-broad-performance-log.md` as the
 clear next priority, deliberately not attempted without a full session's
 verification budget (focused Annex B / sloppy-var Test262 scans before and
 after, not just the broad-micro portfolio).

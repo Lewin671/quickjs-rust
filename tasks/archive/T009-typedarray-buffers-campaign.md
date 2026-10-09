@@ -1,5 +1,21 @@
 # T009: TypedArray and Buffers Campaign
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-landed.
+- Implementation: present.
+- Verified at: S1-S4 ticked; S5 progress notes run through `674f3206`,
+  2026-06-25 (last edit of this file). Later conformance record: 42,672 of
+  42,672 configured Test262 cases pass at `9d344a0f`, 2026-09-06
+  (`docs/conformance/burndown.jsonl`, last entry).
+- Evidence: `docs/conformance/burndown.jsonl`.
+- Unresolved: S5 (re-cluster) was never ticked, and its notes stop with gaps
+  open (Atomics wait queue and agent behaviour, resizable-buffer variants).
+  The file does not record their closure; the burndown shows zero actionable
+  gap and zero not-run cases at `9d344a0f`.
+- Next action: none. New work in this area is selected through the gap queue
+  (`AGENTS.md`), not this file.
+
 ## Goal
 
 Implement ArrayBuffer, the TypedArray family, and DataView. At commit

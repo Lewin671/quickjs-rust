@@ -1,5 +1,25 @@
 # T015: Explicit Resource Management (`using` / `await using`)
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-landed.
+- Implementation: present (`crates/qjs-runtime/src/bytecode/vm_dispose.rs`,
+  `DisposeScope` ops in `bytecode/ir.rs`).
+- Verified at: this file was last edited at `c5826370`, 2026-06-19, with
+  slices B.2, B.3 and C.2 still marked TODO. Later commits continued the work
+  without updating it (`87808b65`, `d65cc86d` on 2026-06-19; `2f38dbe0` on
+  2026-06-20). Later conformance record: 42,672 of 42,672 configured Test262
+  cases pass at `9d344a0f`, 2026-09-06 (`docs/conformance/burndown.jsonl`,
+  last entry); the pinned QuickJS-NG `test262.conf` enables
+  `explicit-resource-management`, so those cases are among the configured
+  ones.
+- Evidence: `docs/conformance/burndown.jsonl`; `git log --grep=using`.
+- Unresolved: the TODO slices below were never ticked. Their closure is
+  inferred from the git log and the zero-gap burndown, not re-verified slice
+  by slice against source.
+- Next action: none. New work in this area is selected through the gap queue
+  (`AGENTS.md`), not this file.
+
 ## Goal
 
 Implement Explicit Resource Management so `using` / `await using` declarations

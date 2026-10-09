@@ -1,5 +1,20 @@
 # T018: Broad Performance Campaign
 
+- Status: active. This is the performance campaign contract.
+- Implementation: partial. Milestones B1-B2 are complete; B3-B6 are open.
+- Verified at: PENDING-INTEGRATOR
+- Evidence: no formal performance standing exists for HEAD. The loop-template
+  plans were removed on 2026-10-09 (`d1313d52`) and nothing has been formally
+  measured since; a formal comparison for `d1313d52` is in progress and the
+  integrator will fill in the line above. Earlier results are in
+  `tasks/archive/` and apply only to their own revisions.
+- Unresolved: none of the completion thresholds below is recorded as met.
+- Next action: select the next unit through
+  `tasks/T022-performance-priority-controller.md` from a queue generated for
+  the current revision.
+
+This file holds the contract only. It does not record units or select work.
+
 ## Goal
 
 Beat the pinned QuickJS-NG reference by at least 2x on every admitted benchmark
@@ -58,7 +73,7 @@ ordinary JavaScript mechanisms beyond the repository's own benchmark shapes.
 - `docs/architecture.md`
 - `docs/benchmarking.md`
 - `docs/harness.md`
-- `tasks/T016-environment-model-rewrite.md`
+- `tasks/archive/T016-environment-model-rewrite.md`
 
 ## Portfolio Contract
 
@@ -131,42 +146,23 @@ an incomplete neutral shell port is an upstream suite score.
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/benchmark/tests -v
 ./scripts/performance-policy-audit.sh
-./scripts/benchmark.sh --dry-run --blocks 3
-./scripts/benchmark.sh --candidate target/release/qjs \
-  --base target/release/qjs \
-  --quickjs-ng third_party/quickjs-ng/build/qjs \
-  --blocks 3 --output target/benchmarks/broad-v2-baseline.jsonl
-./scripts/benchmark-report.sh \
-  --input target/benchmarks/broad-v2-baseline.jsonl \
-  --output target/benchmarks/broad-v2-baseline-report.json
-./scripts/external-performance-preview.sh audit
-./scripts/external-performance-preview.sh run \
-  --cache-root target/benchmarks/external-cache \
-  --work-root target/benchmarks/external-work \
-  --output-dir target/benchmarks/external-result \
-  --candidate target/release/qjs \
-  --base /path/to/base/qjs \
-  --quickjs-ng third_party/quickjs-ng/build/qjs
 ./scripts/check.sh
 ```
 
+How to run the complete candidate/base/QuickJS-NG comparison, the external
+preview and the reports: [the performance workflow](../docs/performance-workflow.md)
+and `docs/benchmarking.md`, "Running".
 
-## Status
+## Where the rest lives
 
-B1-B2 are complete; B3-B6 remain open. This file holds the campaign contract
-only. It does not record units or select work:
-
-- selection and acceptance: `docs/performance-workflow.md` and
-  `tasks/T022-performance-priority-controller.md`;
-- durable measurement rules: `docs/performance-knowledge.md`;
-- units since August 2026: one task file per structural unit (`T023` onward)
-  plus its plan and decision under `tasks/performance-units/`.
-
-## History
-
-The broad v1/v2 baselines, the external generalization reset, and the unit
-log through 2026-07-29 (Units 1-92 and the dated entries that followed) are
-preserved verbatim in
-[`archive/T018-broad-performance-log.md`](archive/T018-broad-performance-log.md).
-They are historical evidence bound to their own revisions, not current
-ratios or priorities.
+- Selection and acceptance of units: `docs/performance-workflow.md` and
+  `tasks/T022-performance-priority-controller.md`.
+- Durable measurement rules: `docs/performance-knowledge.md`.
+- Frozen unit plans: `tasks/performance-units/`.
+- Closed unit records (`T019` to `T032`) and experiment logs:
+  `tasks/archive/`. The broad v1/v2 baselines, the external generalization
+  reset and the unit log through 2026-07-29 (Units 1-92 and the dated entries
+  that followed) are preserved verbatim in
+  [`archive/T018-broad-performance-log.md`](archive/T018-broad-performance-log.md).
+  They are historical evidence bound to their own revisions, not current
+  ratios or priorities.

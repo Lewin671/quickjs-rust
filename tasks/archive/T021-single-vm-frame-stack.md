@@ -1,5 +1,18 @@
 # T021: Single-VM Frame Stack And Compact Execution Core
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-rejected, 2026-08-01 (both structural theses were built and
+  measured; neither was promoted).
+- Implementation: partial: the compact register tier is present
+  (`crates/qjs-runtime/src/bytecode/compact_fn/`); the windowed frame stack
+  and the virtual stack were reverted.
+- Verified at: not recorded in this file; per-experiment results are in the
+  log.
+- Evidence: `T021-single-vm-frame-stack-log.md`.
+- Unresolved: none.
+- Next action: none. New work in this area starts from a current T022 queue.
+
 ## Goal
 
 Remove recursive per-call VM construction from ordinary synchronous bytecode
@@ -13,7 +26,7 @@ contract, not permission to specialize benchmark identities or loop shapes.
 
 Both structural theses were built to completion and measured. Neither is
 the answer, so this task is closed; its experiments are preserved verbatim in
-[`archive/T021-single-vm-frame-stack-log.md`](archive/T021-single-vm-frame-stack-log.md).
+[`T021-single-vm-frame-stack-log.md`](T021-single-vm-frame-stack-log.md).
 New work in this area starts from current evidence under T022, not from this
 task's plan or its historical "next" entries.
 

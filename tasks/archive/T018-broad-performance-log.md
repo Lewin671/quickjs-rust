@@ -61,7 +61,7 @@ ordinary JavaScript mechanisms beyond the repository's own benchmark shapes.
 - `docs/architecture.md`
 - `docs/benchmarking.md`
 - `docs/harness.md`
-- `tasks/T016-environment-model-rewrite.md`
+- `tasks/archive/T016-environment-model-rewrite.md`
 
 ## Portfolio Contract
 
@@ -8487,7 +8487,7 @@ on `object_allocation`/`array_allocation`; S2/S3 (bitset-pack scattered
 `Cell<bool>` fields) were attempted and rejected — Rust's default struct
 layout already absorbs single-byte fields into existing alignment padding,
 so consolidating them saves zero bytes here. Full writeup in
-`tasks/T019-object-layout-rewrite.md`.
+`tasks/archive/T019-object-layout-rewrite.md`.
 
 2026-07-20: re-measuring the full 25-case portfolio against QuickJS-NG (not
 the stale initial-baseline table above) surfaced a much larger, previously

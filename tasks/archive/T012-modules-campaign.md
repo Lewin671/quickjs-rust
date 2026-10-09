@@ -1,5 +1,20 @@
 # T012: ES Modules Campaign
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-landed (the file states the campaign core S1-S5 is complete).
+- Implementation: present (`crates/qjs-runtime/src/module/`).
+- Verified at: S1-S5 ticked; last edit `b753464b`, 2026-07-14; per-slice check
+  results not recorded. Later conformance record: 42,672 of 42,672 configured
+  Test262 cases pass at `9d344a0f`, 2026-09-06
+  (`docs/conformance/burndown.jsonl`, last entry).
+- Evidence: `docs/conformance/burndown.jsonl`.
+- Unresolved: the KNOWN GAP notes below (primitive live-binding indirection,
+  top-level await in cycles, source-phase and defer imports) were left to the
+  gap queue; their current state is not recorded here.
+- Next action: none. New work in this area is selected through the gap queue
+  (`AGENTS.md`), not this file.
+
 ## Goal
 
 Bring up ECMAScript modules end to end — parser goal symbol, module records,
@@ -133,7 +148,7 @@ flow through the normal gap queue.
 ## References
 
 - `docs/architecture.md`
-- `tasks/T007-async-foundation-campaign.md` (job queue, async suspension).
+- `tasks/archive/T007-async-foundation-campaign.md` (job queue, async suspension).
 - QuickJS-NG: `third_party/quickjs-ng/quickjs.c`
   (`js_parse_export`, `js_parse_import`, `js_create_module_*`,
   `js_inner_module_*`, `js_dynamic_import`).

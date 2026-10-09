@@ -1,5 +1,21 @@
 # T016: Environment / binding model rewrite (shared upvalue cells)
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-landed.
+- Implementation: present (`crates/qjs-runtime/src/function/upvalue.rs`,
+  `bytecode/upvalue_resolver.rs`; `captured_env` and `CaptureWriteback`
+  survive only in a module comment).
+- Verified at: `cc4a8d2d`, 2026-07-14: 16-shard CI aggregate 42,672 pass, 0
+  fail, 0 timeout, 0 not run (recorded below). Later conformance record:
+  42,672 of 42,672 configured Test262 cases pass at `9d344a0f`, 2026-09-06
+  (`docs/conformance/burndown.jsonl`, last entry).
+- Evidence: `docs/conformance/burndown.jsonl`;
+  `docs/design/env-model-rewrite.md`. The `target/test262-gaps/` path below is
+  a local artifact, not retained.
+- Unresolved: none.
+- Next action: none. The binding model is a protected boundary (`AGENTS.md`).
+
 ## Goal
 
 Replace the per-frame `HashMap<String, Value>` snapshot + `captured_env` cell +
@@ -12,7 +28,7 @@ This campaign subsumes:
 
 - `T014-var-closure-binding-staleness.md` — capture staleness is removed at the
   root because every captured binding is one shared cell, read/written by index.
-- `archive/T011-call-performance.md` — `with_frame_locals` / `function_capture_env` stop
+- `T011-call-performance.md` — `with_frame_locals` / `function_capture_env` stop
   cloning a per-call name-keyed locals map, cutting the dominant nested-call
   cost behind the ~536 `TypedArray/*` timeouts.
 

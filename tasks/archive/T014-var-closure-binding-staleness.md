@@ -1,5 +1,20 @@
 # T014: Stale `var` binding across sibling-function mutation
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-superseded by T016 (`T016-environment-model-rewrite.md`),
+  2026-06-21.
+- Implementation: none in the form described: the leaf-call slot-refresh fix
+  landed, then T016 S5 deleted the snapshot model it patched. Shared upvalue
+  cells now provide the behaviour.
+- Verified at: not recorded for this task. T016 records the cell model at
+  `cc4a8d2d`, 2026-07-14 (CI aggregate 42,672 pass).
+- Evidence: `T016-environment-model-rewrite.md`;
+  `docs/design/env-model-rewrite.md`.
+- Unresolved: none. The source paths and line numbers cited below describe the
+  deleted snapshot model.
+- Next action: none.
+
 > **Status (2026-06-21): subsumed by `T016-environment-model-rewrite.md`.**
 > The leaf-call slot-refresh fix landed and stays correct, but the root is the
 > snapshot capture model. Do not extend the heuristic further — the full fix is

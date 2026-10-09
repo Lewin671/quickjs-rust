@@ -1,5 +1,19 @@
 # T024: General Register Execution Core
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-rejected, 2026-08-03 (dispatch-mechanics thesis falsified).
+- Implementation: partial: the scalar-only `bytecode/general_core/` slice was
+  reverted (absent from source); the dispatch-preamble split landed as
+  `4153f720`, 2026-08-02. The current shape of `run_current_activation` was
+  not re-verified for this edit.
+- Verified at: `4153f720`: external corpus 0.9906 over 39 cases, six sentinels
+  0.9989 (recorded below); checks run are not recorded.
+- Evidence: local measurements described below; not retained.
+- Unresolved: none.
+- Next action: none. The sequencing section below is the 2026-08-03 plan, not
+  a current queue.
+
 ## Status: closed after the dispatch-mechanics falsification (2026-08-03)
 
 The retained dispatch-preamble split moved the external corpus by only about

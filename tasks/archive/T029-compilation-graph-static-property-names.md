@@ -1,5 +1,22 @@
 # T029: Compilation-graph static property-name identity
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-rejected, 2026-08-03.
+- Implementation: reverted (the prototype commit `82a00257` exists; its
+  runtime changes were reverted).
+- Verified at: prototype commit `82a00257` against base `13e5d229`: hosted
+  Performance Preview `30866529461` measured N-body 0.96469x against a 0.95
+  target; Test262 Coverage `30866752218` 42,672/42,672; CI `30866499527`
+  passed.
+- Evidence: frozen plan
+  `tasks/performance-units/compilation-graph-static-property-names.json`;
+  receipt hashes recorded below. The receipts and any `target/` path below are
+  local artifacts, not retained.
+- Unresolved: none.
+- Next action: none. The closing paragraph below names what must not be
+  retried.
+
 ## Status: rejected after the exact promotion gate
 
 This T018 leaf unit is bound to the completed exact Performance Preview for

@@ -1,5 +1,19 @@
 # T007: Async Foundation Campaign
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-landed (the file states "Campaign core is complete").
+- Implementation: present.
+- Verified at: S1-S5 ticked through `67959e14`, 2026-06-10 (last edit of this
+  file); per-slice check results not recorded. Later conformance record:
+  42,672 of 42,672 configured Test262 cases pass at `9d344a0f`, 2026-09-06
+  (`docs/conformance/burndown.jsonl`, last entry).
+- Evidence: `docs/conformance/burndown.jsonl`.
+- Unresolved: the follow-ups named under S5 were left to the gap queue; no
+  configured Test262 case fails at `9d344a0f`.
+- Next action: none. New work in this area is selected through the gap queue
+  (`AGENTS.md`), not this file.
+
 ## Goal
 
 Build the asynchrony foundation — a job queue, async functions, and the

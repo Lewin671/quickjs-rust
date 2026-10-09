@@ -1,5 +1,21 @@
 # T030: Packed typed-loop scalars
 
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-rejected, 2026-08-03.
+- Implementation: reverted (reverted before the remaining gates, as recorded
+  below; the typed-loop scalar layout was not re-measured for this edit).
+- Verified at: prototype against base `e68abfc9`: 2,039 runtime tests passed;
+  bits-in-byte 1.01702x against a 0.90 target; second target, controls and
+  promotion evidence not run.
+- Evidence: frozen plan
+  `tasks/performance-units/packed-typed-loop-scalars.json`; receipt hashes
+  recorded below. The receipts and any `target/` path below are local
+  artifacts, not retained.
+- Unresolved: none.
+- Next action: none. The closing paragraph below names what must not be
+  retried.
+
 ## Status: rejected after the fast target gate
 
 This T018 leaf unit is bound to the completed exact Performance Preview for
