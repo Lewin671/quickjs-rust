@@ -514,6 +514,70 @@ fn sibling_calls_share_a_captured_global_var_cell() {
 }
 
 #[test]
+fn a_nested_function_assigning_a_global_var_updates_the_global_object() {
+    // The outer function only hands the name on; the write is two levels
+    // down. Every form of assignment must reach the global object's property
+    // as well as the binding.
+    let source = r#"
+var n = 0;
+var seen = [];
+function note() { seen.push(n + ':' + globalThis.n); }
+function plain() { function inner() { n = 5; } inner(); }
+function update() { return function () { return function () { n++; }; }; }
+function compound() { function inner() { n += 3; n *= 2; } inner(); }
+function pattern() { function inner() { [n] = [9]; } inner(); }
+function method() { class C { m() { n = 4; } } new C().m(); }
+function arrow() { var f = () => { n = 6; }; f(); }
+function evaluated() { function inner() { eval('n = 7'); } inner(); }
+plain(); note();
+update()()(); note();
+compound(); note();
+pattern(); note();
+method(); note();
+arrow(); note();
+evaluated(); note();
+seen.join(' ');"#;
+    assert_eq!(
+        eval(source),
+        Ok(Value::String(
+            "5:5 6:6 18:18 9:9 4:4 6:6 7:7".to_owned().into()
+        ))
+    );
+}
+
+#[test]
+fn a_direct_eval_sees_a_global_var_a_nested_closure_wrote() {
+    // Derived from test/language/expressions/call/eval-spread-empty.js: the
+    // iterator's `next` is created inside another function and writes a
+    // global `var`; the script reads it after a direct eval ran.
+    let source = r#"
+var nextCount = 0;
+var iter = {};
+iter[Symbol.iterator] = function () {
+  return { next: function () { var i = nextCount++; return { done: true, value: undefined }; } };
+};
+var result = eval(...iter);
+String(result) + ' ' + nextCount + ' ' + globalThis.nextCount;"#;
+    assert_eq!(
+        eval(source),
+        Ok(Value::String("undefined 1 1".to_owned().into()))
+    );
+}
+
+#[test]
+fn a_nested_reader_of_a_global_var_sees_writes_from_every_side() {
+    let source = r#"
+var n = 0;
+function outer() { function read() { return n; } return read(); }
+var seen = [outer()];
+n = 1; seen.push(outer());
+globalThis.n = 2; seen.push(outer());
+(function () { n = 3; })(); seen.push(outer());
+seen.join(' ');"#;
+    assert_eq!(eval(source), Ok(Value::String("0 1 2 3".to_owned().into())));
+}
+
+#[test]
 fn global_descriptor_write_updates_a_captured_global_var_cell() {
     assert_eq!(
         eval(
