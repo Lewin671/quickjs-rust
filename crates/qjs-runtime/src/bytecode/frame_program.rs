@@ -1,19 +1,19 @@
-//! What code and accelerators a frame runs, and who owns them.
+//! What code a frame runs, and who owns it.
 //!
-//! A frame used to borrow its bytecode, its selected instruction stream, and
-//! four compiled loop-plan slices from one `&'a Bytecode` that outlived the
-//! whole VM. That is why a callee could not run on its caller's VM: the
-//! callee's bytecode is owned by a `Function` on the caller's stack, not by
-//! anything with the root's lifetime.
+//! A frame owns a handle on its bytecode ([`FrameBytecode`]): borrowed for a
+//! root script or eval body, a shared `Rc` for an ordinary call, so a callee's
+//! frame does not depend on anything with its caller's lifetime.
 //!
-//! [`FrameBytecode`] lets a frame own that handle instead. The slices cannot
-//! then live in the frame -- they would point into a value the frame also owns
-//! -- so they move to [`FrameProgramView`], derived once per interpreter
-//! activation from a *stack-local* owner. The view borrows that local rather
-//! than the VM, which is what lets an instruction handler mutate the VM while
-//! the current instruction stays borrowed.
+//! Slices into that bytecode cannot live in the frame -- they would point into
+//! a value the frame also owns -- so the selected instruction stream lives in
+//! [`FrameProgramView`], derived once per interpreter activation from a
+//! *stack-local* clone of the handle. The view borrows that local rather than
+//! the VM, which is what lets an instruction handler mutate the VM while the
+//! current instruction stays borrowed. The two loop-accelerator slices
+//! (`LoopPlanView`: typed loop programs and numeric-mutation plans) are
+//! derived from the same owner at the backward edge that needs them.
 //!
-//! The invariant that keeps this sound is small and worth stating plainly:
+//! The invariant that keeps this sound:
 //!
 //! > While a `FrameProgramView` is alive, the frame it was derived from must
 //! > not be replaced. A handler may *request* that the driver enter, leave, or
@@ -21,8 +21,8 @@
 //!
 //! Re-selecting a frame's instruction stream (`refresh_virtual_object_execution`)
 //! therefore only updates selection inputs. The next activation derives the
-//! stream those inputs imply. A future caller that needs the stream re-selected
-//! from *inside* the dispatch loop must return a restart boundary rather than
+//! stream those inputs imply. A caller that needs the stream re-selected from
+//! *inside* the dispatch loop must return a restart boundary rather than
 //! replace code underneath a live view.
 
 use std::ops::Deref;
@@ -81,12 +81,11 @@ impl From<Rc<Bytecode>> for FrameBytecode<'_> {
 /// done per instruction, because the selection inputs cannot change during an
 /// activation and re-deriving would cost a probe per dispatch.
 ///
-/// The loop accelerators are *not* here. Four of the six pointers a combined
-/// view would carry are theirs, and a call-heavy workload reaches a backward
-/// edge in a small minority of frames: 12,700,004 frames against 100,000 edges
-/// on the recursion sentinel. Holding them across the dispatch loop would make
-/// every frame pay register pressure for something almost none of them use, so
-/// they are derived where they are needed instead.
+/// The loop accelerators are *not* here. A call-heavy workload reaches a
+/// backward edge in a small minority of its frames, and holding the two plan
+/// slices across the dispatch loop would make every frame pay register
+/// pressure for something few of them use, so they are derived where they are
+/// needed instead.
 pub(super) struct FrameProgramView<'a> {
     pub(super) bytecode: &'a Bytecode,
     pub(super) execution_code: &'a [Op],

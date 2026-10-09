@@ -138,24 +138,11 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
     if ops.is_empty() || !ops.iter().any(|op| matches!(op, TypedOp::Exit { .. })) {
         return None;
     }
-    // A region used to be rejected here when more than a third of its operations
-    // were boxed, on the reasoning that the interpreter's own inline caches
-    // already answer the property protocol as well as this tier does. What that
-    // rule actually excluded was the whole surrounding region: a loop that keeps
-    // an object in a local, or reads two elements per iteration, crosses the
-    // ratio and then pays generic dispatch for its arithmetic, its induction
-    // variable, and its branches as well. The generic dispatch it fell back to is
-    // not free -- it reloads the frame pointer, the instruction pointer, and the
-    // bytecode bounds from the stack for every instruction -- so the comparison
-    // the rule assumed was never between two equal dispatchers.
-    //
-    // Measured on the six generic-path sentinels, admitting these regions leaves
-    // five unchanged (0.996-1.004) and takes the property-read sentinel to
-    // 0.5228 [0.5118, 0.5309]; its executed instruction count falls from 5.2M to
-    // 2,579 because the region now runs natively instead of declining on every
-    // backedge. The 40-case SunSpider/Kraken corpus that motivated the rule is
-    // 0.9955 with no repeatable per-case regression, including the three cases
-    // the rule was introduced to protect.
+    // There is deliberately no limit on the share of boxed operations. Such a
+    // limit excludes the whole surrounding region: a loop that keeps an object
+    // in a local, or reads two elements per iteration, would then pay generic
+    // dispatch for its arithmetic, its induction variable, and its branches as
+    // well, and decline on every backedge.
     //
     // Admission is a performance decision only: every operation still guards its
     // own assumptions and deoptimizes to the exact bytecode instruction it came
@@ -979,8 +966,7 @@ impl<'a> Builder<'a> {
         // Deliberately no discovery here. Demanding a boxed key from
         // every read whose key came from an element read would force
         // an ordinary `a[b[i]]` through the computed access as well,
-        // which measured a 19% regression on `regexp-dna` and 1% over
-        // the 40-case corpus. A dictionary loop reaches the boxed key
+        // which is slower for it. A dictionary loop reaches the boxed key
         // through its *write* instead -- `SetProp`'s `pop_boxed`
         // discovers it -- and the read then follows on the next pass.
         let (index, _) = self.pop()?;
@@ -1638,10 +1624,10 @@ impl<'a> Builder<'a> {
                     });
                     // Deliberately the *existing* closed-form operation rather
                     // than one of its own. An unresolved call differs from a
-                    // resolved one only in having no receiver, and adding a
-                    // twenty-second arm to this dispatch loop measured 8-11% on
-                    // `heterogeneous_property_read` with the operation never
-                    // even reached -- the register allocator, not the work.
+                    // resolved one only in having no receiver, and a new arm
+                    // in this dispatch loop costs every loop the tier runs
+                    // even when the operation is never reached -- the
+                    // register allocator, not the work.
                     let receiver = self.boxed_constant_register(&Value::Undefined)?;
                     let dst = self.slot_boxed()?;
                     self.emit(TypedOp::CallClosedFormLeaf {

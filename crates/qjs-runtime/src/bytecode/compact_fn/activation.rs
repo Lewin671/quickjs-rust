@@ -1,28 +1,24 @@
 //! A VM-free activation for bodies the compact tier admits.
 //!
-//! The compact executor removed generic dispatch and bought ~5% on the
-//! recursive sentinel, which established that dispatch is not what makes a
-//! recursive call slow: at ~212 ns per call against QuickJS-NG's ~35 ns,
-//! roughly two thirds of the remaining time is spent building and tearing down
-//! the activation itself (`tasks/archive/T021-single-vm-frame-stack-log.md`).
+//! What makes a small recursive call slow on the interpreter is building and
+//! tearing down the activation, more than dispatching the body (measurements
+//! in `tasks/archive/T021-single-vm-frame-stack-log.md`). A `Vm` carries a
+//! `FrameState` holding unwinding state, suspension state, loop-plan decline
+//! bitsets, prototype caches and an operand stack, and an admitted compact
+//! body can use none of them: it has no handler, cannot suspend, runs no loop
+//! plans, and keeps its operands in registers. This module gives such a body
+//! only what it needs.
 //!
-//! A `Vm` carries a 704-byte `FrameState` with 36 fields -- unwinding state,
-//! suspension state, loop-plan decline bitsets, prototype caches, an operand
-//! stack -- and an admitted compact body can use none of them. It has no
-//! handler, cannot suspend, runs no loop plans, and keeps its operands in
-//! registers. This module gives such a body the four things it actually needs
-//! and nothing else.
-//!
-//! The calling convention is no longer nested. An admitted callee runs on the
+//! The calling convention is not nested. An admitted callee runs on the
 //! *same* dispatch loop as its caller: this module owns an explicit frame
 //! stack and one contiguous register stack, so a compact-to-compact call is a
 //! frame push and a base change rather than a Rust call that reconstructs an
 //! activation, takes a pooled register file from behind an `Rc<RefCell<..>>`,
 //! and propagates a `Result` back through the native stack. Only a callee this
-//! tier cannot admit still re-enters the ordinary call path.
+//! tier cannot admit re-enters the ordinary call path.
 //!
-//! Two consequences beyond speed. Recursion through admitted bodies no longer
-//! consumes native stack, so its depth is bounded by `MAX_FRAMES` and reports
+//! Two consequences beyond speed. Recursion through admitted bodies consumes
+//! no native stack, so its depth is bounded by `MAX_FRAMES` and reports
 //! a catchable `RangeError` instead of whatever the native stack does. And the
 //! arguments of an inlined call are *moved* into the callee's parameter
 //! registers: `Op::Call` pops its operand registers, so nothing else can

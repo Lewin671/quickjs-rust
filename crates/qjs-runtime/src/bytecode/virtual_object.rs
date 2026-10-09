@@ -1,10 +1,13 @@
-//! Control-flow and alias analysis foundation for virtual object lowering.
+//! Scalar replacement of object, array and function literals that never
+//! escape.
 //!
-//! This pass is intentionally analysis-only. It proves which literal
-//! allocation sites have no observable identity before a later change teaches
-//! the VM how to scalar-replace them. Keeping the proof separate from the
-//! rewrite makes every unsupported bytecode effect fail closed and prevents a
-//! benchmark-shaped instruction matcher from becoming a semantic shortcut.
+//! `flow` proves, over the control-flow graph (`cfg`), which literal
+//! allocation sites have no observable identity; `lower` rewrites the proven
+//! ones one-for-one into virtual-slot instructions that
+//! `vm_virtual_object.rs` executes. This file holds the analysis result types
+//! and `SlotAuthority`. The proof stays separate from the rewrite: an
+//! unsupported bytecode effect marks its candidates escaped (or the whole
+//! analysis incomplete) and the body keeps its ordinary allocations.
 
 #![allow(dead_code)]
 

@@ -1,299 +1,239 @@
-# Comparing qjs-rust with QuickJS-NG
+# Performance workflow
 
-The objective is a generally faster, correct engine. No single microbenchmark
-or geometric mean establishes that result. Keep the three performance lanes
-separate, and inspect resource measurements before a production-performance
-claim. Durable measurement and codegen rules that apply to every lane are in
-[performance-knowledge.md](performance-knowledge.md).
+How to select, measure and decide one performance unit. This is the only
+procedural document for performance work. Tool and artifact meanings are in
+[benchmarking.md](benchmarking.md), rules that hold across revisions in
+[performance-knowledge.md](performance-knowledge.md), campaign targets in
+T018 and T022. Priority comes from an opportunity queue that is generated
+from a fresh formal run and is not stored in the repository (step 1).
 
-| Lane | Question | Acceptance use |
+## Terms
+
+| Lane | Inventory | What a run measures |
 | --- | --- | --- |
-| Broad, 25 cases | Do the specializing tiers still accelerate their recognized workloads? | Specializer regression coverage |
-| Generic sentinels, 6 cases | How fast are dynamic calls and property access? | Mandatory controls for every optimization |
-| External, 45 cases | How long do pinned application-like scripts take from process spawn to exit? | Generalization and whole-process latency |
-| Resource lanes | What do startup, peak RSS and binary size cost? | Independent production-readiness evidence |
+| Broad | 25 cases of `benchmarks/workloads/broad-micro.js`, listed in `benchmarks/manifest.json` | ns per declared operation of small single-operation loops |
+| Sentinel | 6 cases, `benchmarks/generic-sentinels-manifest.json` | ns per operation of calls and property access whose callee, receiver or key varies at run time |
+| External | 45 cases in 3 suites, `benchmarks/external-preview.json` | whole-process wall time of pinned SunSpider, Kraken and JetStream 3 subset scripts |
 
-A faster valid specialization is useful. It does not establish that ordinary
-calls got faster. Likewise, external process-wall measurements include parsing,
-startup and shutdown; they must never be labeled VM-only throughput. The
-external stdout sentinel proves the adapter reached the end; correctness also
-relies on each upstream workload's assertions/validation hook and Test262, not
-on the sentinel alone.
+Broad cases are answered by whichever tier admits each loop, and that
+changes with the engine. Do not assume which tier a broad case runs on, or
+use one as a neutrality control, until
+its [execution counters](benchmarking.md#execution-counters) show it runs
+the path under test. The six sentinels are mandatory controls for every
+unit. External times include startup, parsing and shutdown.
 
-## One complete local comparison
+- A **diagnostic screen** compares two executables on hardware counters in
+  minutes. It writes no decision artifact and cannot retain or reject a unit.
+- A **formal run** is one sealed three-engine bundle from
+  `scripts/perf-compare.sh` at 30 or 60 blocks. `queue` and `decide` read
+  that bundle.
+- A **leaf unit** is one mechanism that must pay for itself within its
+  attempt budget. A **migration** (`"unit_kind": "migration"`) has stages
+  judged only against a regression budget; the payoff gate applies at the
+  last stage.
 
-On the development host, one command builds candidate and base at exact
-commits in clean worktrees (cached per commit), verifies the pinned QuickJS-NG
-build, writes truthful receipts, and runs the comparison below:
+## Prerequisites
 
-```sh
-./scripts/perf-compare.sh --base <plan base_sha> --candidate <commit> \
-  --blocks 30 --output-dir target/comparison/run-001
-```
+- macOS arm64 with the toolchain pinned in `rust-toolchain.toml`. The
+  checked-in recipes in `benchmarks/manifest.json` describe that host, and
+  `perf-compare.sh` refuses a `rustc`/`cargo` that differs from them.
+- A built reference engine at `third_party/quickjs-ng/build/qjs`, with the
+  submodule clean at the pinned revision:
 
-The rest of this section describes what it runs. Build candidate, comparison
-base and the pinned NG reference separately. Use
-verified build receipts matching the measurement manifests, as described in
-[benchmarking.md](benchmarking.md#running). Do not reuse a receipt after
-rebuilding an executable. The checked-in manifests describe macOS arm64; a
-Linux run needs matching prepared manifests and receipts, as used by the hosted
-preview. Both internal lanes must use the same build recipes and profile.
+  ```sh
+  cmake -S third_party/quickjs-ng -B third_party/quickjs-ng/build \
+    -DCMAKE_BUILD_TYPE=Release -DBUILD_QJS_LIBC=ON
+  cmake --build third_party/quickjs-ng/build --target qjs
+  ```
 
-```sh
-python3 -m tools.benchmark.compare \
-  --candidate /path/to/candidate/qjs \
-  --candidate-receipt /path/to/candidate-receipt.json \
-  --base /path/to/base/qjs \
-  --base-receipt /path/to/base-receipt.json \
-  --quickjs-ng /path/to/quickjs-ng/qjs \
-  --quickjs-ng-receipt /path/to/quickjs-ng-receipt.json \
-  --blocks 30 \
-  --output-dir target/comparison/run-001
-```
+  The frozen recipe records `-DBUILD_QJS_LIBC=ON`, so pass it; the pinned
+  `CMakeLists.txt` defines no option of that name.
+- A committed candidate. `perf-compare.sh` builds candidate and base from
+  commits in clean worktrees and caches each executable as
+  `target/perf-loop/rev-<sha>/qjs`. Keep that cache between the queue run
+  and the decision run: `decide` requires the decision's base executable to
+  be byte-identical to the queue's candidate.
+- Serialized timing. `compare`, `screen` and `front_end` hold
+  `target/.perf-measure.lock`; `compare` (up to 300 s) and `screen`
+  (`--settle`, default 30 s) then wait for running `cargo`, `rustc`,
+  linker, C compiler and `qjs` processes and warn if any remain. The lock
+  is per checkout: measurements from different worktrees are not queued
+  against each other, so run them one at a time.
 
-The runner validates receipts before measurement, then runs the lanes
-sequentially on one host. It builds nothing. External sources are fetched into
-the hash-checked cache when absent. Existing output directories are refused.
-`status.json` records the active phase and preserves failures; completed raw
-files remain available even if a later phase fails. `summary.md` keeps separate
-per-case lane tables. `summary.json` provides engine identities and decision
-readiness and a sealed inventory of all artifact hashes. Readiness is only permission to evaluate a unit's gates, not a
-performance claim or an accepted optimization.
+## 1. Regenerate the opportunity queue
 
-Use `--blocks 3` for quick diagnostic feedback. Use a predeclared 30- or
-60-block run for decisions. Do not repeat experiments until a favorable
-interval appears, discard outliers, or pool unrelated runs. The frozen A/A
-noise calibration and hardware-qualification work remains necessary before
-turning this into a public claim or required CI performance gate.
-
-## Counter screen during implementation
-
-Iterate on a change with the counter screen before spending a formal run. It
-compares two executables on hardware counters, which background load barely
-moves, and reports wall time only as context:
+A queue from an older revision does not establish priority. Build one from
+a formal bundle whose candidate is the revision you start from:
 
 ```sh
-python3 -m tools.benchmark.screen \
-  --candidate target/release/qjs --base /path/to/base/qjs \
-  --case sentinel --case external/jetstream3-js-subset/hash-map
-python3 -m tools.benchmark.screen --candidate target/release/qjs --aa
-```
-
-`--case` accepts `sentinel`, `broad`, `sentinel/<id>`, `broad/<id>`,
-`external/<suite>/<case>` (fetched into the hash-checked cache) and
-`file:<path>`; the default is the six sentinels. Internal cases calibrate N and
-keep the N-to-2N increment, which removes startup and parsing; external cases
-and scripts are whole-process. Candidate and base must print the same checksum
-or external sentinel, and a missing counter is an error, never a silent
-fallback to wall time. `--aa` screens the candidate against itself to show the
-current host's counter noise. Before starting, the screen waits up to
-`--settle` seconds for the load average to fall below `--max-load` (half the
-logical CPUs by default); on a host that stays busy it runs anyway and marks
-the wall column unreliable, since the counter ratios it judges tolerate load.
-`--require-quiet` refuses instead. Every measuring entry point holds one
-host-wide lock (`target/.perf-measure.lock`) for its whole run, so concurrent
-screens from parallel agents queue instead of disturbing each other, and each
-first waits for running `cargo`, `rustc`, linker, or `qjs` processes to finish.
-
-On macOS the counters come from `/usr/bin/time -l`; on Linux from `perf stat`,
-which needs a kernel that exposes user-space counters. The screen writes no
-decision artifact: its JSON output carries `"decision_evidence": false`, and
-acceptance still follows the formal procedure below.
-
-`./scripts/perf-loop.sh --plan tasks/performance-units/<unit>.json` wraps
-the whole iteration: it builds and caches the plan's base executable, builds
-the working tree, screens the plan's gate cases, prints the verdict below and
-the largest function-size changes, and with `--trace <case>` adds the
-typed-loop trace histograms from a perf-counters build. `--base <ref>` runs an
-exploratory screen without a plan or verdict.
-
-### Screen gate
-
-The screen runs after the unit plan is frozen (see below), so its cases and
-thresholds come from the plan's `fast_gate`, never from screen results. Screen
-each implementation attempt against the plan's base executable on
-`fast_gate.target_ids`, `fast_gate.control_ids`, and the six sentinels:
-
-- **pass** — every target's median cycles ratio is at most
-  `target_max_candidate_over_base` and every one of its pairs is below 1.0;
-  every control's and sentinel's median cycles ratio is at most
-  `control_max_candidate_over_base`;
-- **fail** — anything else. Failed screens count against the plan's
-  `max_attempts`, exactly as failed fast gates did. The unit's task file
-  records each screen result in one line; no formal run or decision artifact
-  is produced.
-
-Instructions and wall time are context: an instruction ratio that moves
-opposite to cycles usually means a layout or inlining change (see
-[performance-knowledge.md](performance-knowledge.md#codegen)), which is worth
-understanding before the formal run. Only a passing screen spends a formal
-measurement.
-
-## Evidence replay and opportunity queue
-
-Keep the generated filenames together in the evidence directory:
-`raw.jsonl`, `manifest.json`, `report.json`, `sentinel-raw.jsonl`,
-`sentinel-manifest.json`, `sentinel-report.json`, `external-raw.jsonl`,
-`external-manifest.json`, `external-report.json`, and `summary.json`.
-
-```sh
+./scripts/perf-compare.sh --base <earlier-commit> --candidate <start-sha> \
+  --blocks 30 --output-dir target/comparison/<run>
 ./scripts/performance-decision.sh queue \
-  --summary target/comparison/run-001/summary.json \
-  --broad-report target/comparison/run-001/report.json \
-  --sentinel-report target/comparison/run-001/sentinel-report.json \
-  --external-report target/comparison/run-001/external-report.json \
-  --output target/comparison/opportunity.json
+  --summary target/comparison/<run>/summary.json \
+  --broad-report target/comparison/<run>/report.json \
+  --sentinel-report target/comparison/<run>/sentinel-report.json \
+  --external-report target/comparison/<run>/external-report.json \
+  --output target/comparison/<run>-queue.json
 ```
 
-The CLI reconstructs reports from raw data before trusting their metrics. It
-checks the sealed same-directory artifact inventory, exact case inventories,
-frozen measurement semantics, engine revisions,
-executable hashes, reference pin, internal linearity/coverage, and consistent
-host metadata. External replay additionally checks adapter flags, capability
-results, the seeded role order, complete block identities, nonoverlapping
-monotonic timers, and consistent workload/executable hashes. A content hash
-alone is not evidence that two files belong to the same experiment.
+If no bundle exists for the starting revision, run the comparison first;
+`--base` is then any earlier commit, normally the previous formal base.
+The output directory and queue file must be new, and the reports must be
+the files in the summary's own sealed directory. The queue ranks, per lane,
+cases whose candidate/QuickJS-NG ratio exceeds `--target-ratio` (default
+0.5). It names workloads to profile, not tactics.
 
-Archived internal manifests are temporarily copied under `benchmarks/` to
-resolve their frozen protocol inventory against this checkout, then removed.
-Replay requires the matching measurement protocol and the current analyzer;
-legacy report formats cannot silently pass. External schema-2 reports can be
-reconstructed separately with:
+## 2. Profile, then freeze the plan
 
-```sh
-./scripts/external-performance-preview.sh report \
-  --input target/comparison/run-001/external-raw.jsonl \
-  --output target/comparison/replayed-external-report.json
-```
-
-Older external raw files lacking effective block/timeout and host metadata, or
-bundles lacking a sealed inventory, need a fresh run. Sealing prevents accidental
-file replacement/mixing; it is not authentication against a malicious producer. The historical plans remain structurally readable through
-`check-unit`; new queues use schema 2 and bind engine identities. A historical
-plan's missing raw profile is not grandfathered into a new decision.
-
-## Profiles before implementation
-
-Profile the exact queue candidate executable on an identified workload. Keep
-the actual sampler command and version, raw stacks/counters, and the exact
-workload source. Import those existing artifacts into a portable receipt:
+Profile the queue's candidate executable (`target/perf-loop/rev-<sha>/qjs`)
+on a ranked workload (`python3 -m tools.benchmark.bundles` writes each
+external case to `target/bundles/<suite>--<case>.js` as a run executes it),
+then import the sampler output into a receipt:
 
 ```sh
 python3 -m tools.benchmark.profile \
-  --input /path/to/current.sample \
-  --binary /path/to/base/qjs \
-  --workload /path/to/profile.js \
+  --input /path/to/case.sample --workload /path/to/case.js \
+  --binary target/perf-loop/rev-<sha>/qjs \
   --base-sha <full-queue-candidate-sha> \
-  --opportunity-id external/sunspider-1.0/3d-cube \
-  --tool 'sample <recorded-version>' \
-  --command-json '["sample","<recorded-pid>","10","-file","/path/to/current.sample"]' \
-  --output-dir target/profiles/current-case
+  --tool 'sample <version>' --opportunity-id external/sunspider-1.0/3d-cube \
+  --command-json '["sample","<pid>","10","-file","/path/to/case.sample"]' \
+  --output-dir target/profiles/<run>/<case>
 ```
 
-The output supplies the receipt filename and SHA-256 for the plan's
-`profile_evidence.source` and `sha256`. `source` is relative to `--profile-root`.
-The receipt copies and hashes both raw profile and workload. Validation checks
-those files and requires the exact queue candidate binary hash, not merely a
-matching commit message or revision. An instrumented build with a different
-binary hash is supplemental diagnosis; it cannot replace the exact-binary
-sampling receipt. The `shared_cost` interpretation and `inclusive_fraction`
-remain human-reviewed claims: inclusive stack counts overlap and must not be
-summed as independent removable costs.
+A profile of an instrumented build is supplemental; the receipt must
+describe the exact queue candidate binary. Write
+`tasks/performance-units/<unit>.json`
+([field reference](benchmarking.md#unit-plans-and-decisions)) with
+`base_sha` equal to the queue's candidate, the queue file's SHA-256, each
+receipt's path relative to `--profile-root` and its SHA-256, the target and
+control cases, both thresholds and `max_attempts`. Validate before writing
+runtime code, commit the plan, and add its row to
+[the plan index](../tasks/performance-units/README.md):
 
 ```sh
 ./scripts/performance-decision.sh validate-unit \
   --unit tasks/performance-units/<unit>.json \
-  --queue target/comparison/opportunity.json \
-  --profile-root target/profiles/current-case
+  --queue target/comparison/<run>-queue.json \
+  --profile-root target/profiles/<run>
 ```
 
-For multiple receipts, place their directories under one profile root and use
-relative paths such as `case-a/receipt.json` in the plan. `check-unit` checks
-only plan structure; `validate-unit` checks actual profile artifacts too.
+`check-unit --unit <plan>` checks structure only, without a queue.
 
-## Diagnostic helpers
+## 3. Implement and screen
 
-Tools for finding and checking work between formal runs; none of them
-produces decision evidence.
+`./scripts/perf-loop.sh --plan tasks/performance-units/<unit>.json` builds
+and caches the plan's base, builds the working tree, screens the plan's
+targets, controls and the six sentinels, and prints PASS or FAIL with the
+largest function-size changes. `--trace <case>` adds the typed-loop trace
+histograms from a `perf-counters` build, `--case <spec>` adds cases, and
+`--base <ref>` instead of `--plan` screens without a verdict.
 
-- **Whole-corpus A/B.** `python3 -m tools.benchmark.screen --candidate B
-  --base A --case external --pairs 3` alternates the two executables over
-  every external bundle and reports instruction and cycle ratios. Prefer it
-  to ad-hoc loops: it validates output, holds the measurement lock, and
-  waits for builds. An instruction ratio near 1.0 with a cycles ratio that
-  moves is layout, not the change (see performance-knowledge.md).
-- **Bundles on disk.** `python3 -m tools.benchmark.bundles` writes each
-  case to `target/bundles/<suite>--<case>.js` exactly as a run executes it,
-  for `sample` profiles and trace runs.
-- **Front-end cost.** `python3 -m tools.benchmark.front_end --binary B
-  --reference third_party/quickjs-ng/build/qjs` measures lexing, parsing and
-  compiling alone (each bundle wrapped in a function never called, process
-  start subtracted) against QuickJS-NG, with each case's share of its whole
-  run; `--base A` compares two builds instead.
-- **Executor placement.** `scripts/layout-scan.sh --offsets 0x0,0x200,0x400`
-  pins the typed-loop executor at each offset, relinks to a fixed point and
-  screens the layout canaries; run it after editing the executor or a
-  pinned callee (`tools/benchmark/layout_pin.py`).
-- **Typed-loop programs.** On a `perf-counters` build, `QJS_TL_TRACE=4`
-  prints each program as it runs (after register packing, hoisting and
-  copy forwarding) and `QJS_TL_NO_FORWARD=1` disables forwarding, so one
-  binary can A/B it (docs/benchmarking.md).
+### Screen gate
 
-## Acceptance after implementation
+Cases and thresholds come from the frozen plan's `fast_gate`, never from
+screen results. The screen judges cycles. It passes when every target's
+median ratio is at most `target_max_candidate_over_base` with every pair
+below 1.0, and every control's and sentinel's median is at most
+`control_max_candidate_over_base`. Anything else fails.
 
-Measure the candidate against the same base executable represented by the
-queue, then evaluate the frozen plan:
+Each implementation attempt gets one screen, and a failed screen consumes
+one of the plan's `fast_gate.max_attempts` (the validator accepts 1 or 2).
+No tool counts attempts: record every screen result as one line in the
+unit's task file. When the budget is spent the mechanism is closed; new work
+needs a new profile and plan. Only a passing screen spends a formal run.
+
+An instruction ratio that moves opposite to cycles usually means a layout or
+inlining change: check the function-size list and re-pin the layout (below).
+
+## 4. Formal run and decision
+
+Commit the candidate, then measure it against the plan's `base_sha` and
+evaluate the frozen plan:
 
 ```sh
+./scripts/perf-compare.sh --base <plan base_sha> --candidate <commit> \
+  --blocks 30 --output-dir target/comparison/<run2>
 ./scripts/performance-decision.sh decide --mode promotion \
   --unit tasks/performance-units/<unit>.json \
-  --queue target/comparison/opportunity.json \
-  --profile-root target/profiles/current-case \
-  --summary target/comparison/run-002/summary.json \
-  --broad-report target/comparison/run-002/report.json \
-  --sentinel-report target/comparison/run-002/sentinel-report.json \
-  --external-report target/comparison/run-002/external-report.json \
+  --queue target/comparison/<run>-queue.json \
+  --profile-root target/profiles/<run> \
+  --summary target/comparison/<run2>/summary.json \
+  --broad-report target/comparison/<run2>/report.json \
+  --sentinel-report target/comparison/<run2>/sentinel-report.json \
+  --external-report target/comparison/<run2>/external-report.json \
   --test262-burndown /path/to/exact-candidate-burndown.json \
-  --require-retained --output target/comparison/decision.json
+  --require-retained --output target/comparison/<run2>-decision.json
 ```
 
-The judged metric is cycles when every lane carries counters and wall time
-otherwise; see [benchmarking.md](benchmarking.md#performance-priority-and-decision-gate).
-A local run on a shared machine therefore does not need a quiet host to reach
-precise intervals, but it still holds the measurement lock and waits for
-builds before starting. Each watched comparison needs at least 30 complete paired blocks, a 95%
-confidence interval and at most 3% relative half-width. The entire interval
-must be within the target or control threshold to pass; an interval crossing
-the threshold is inconclusive. A precise interval wholly beyond the threshold
-rejects the change. Three samples cannot certify a 3% improvement.
-
-`fast` checks declared targets/controls plus all six sentinels. `promotion`
-also checks **every** broad and external case against the frozen control
-regression ceiling, requires complete comparisons with NG, and requires the
-exact candidate's zero-gap Test262 burndown covering the complete pinned Git
-inventory, with consistent result counts. Improving one target cannot hide
-a tenfold regression elsewhere. Migration `stage` uses the same evidence and
-sentinel controls with its predeclared cumulative regression budget; it still
-produces `advance`/`abort`, not a final performance claim.
+The base is the plan's frozen `base_sha`, not the commit preceding the
+candidate. `--mode fast` checks the declared targets and controls plus the
+six sentinels. `--mode promotion` also holds every broad and external case
+to the control ceiling and needs complete QuickJS-NG comparisons and the
+candidate's zero-gap Test262 burndown. Do not rerun until a favorable
+interval appears, drop outliers, or pool runs; `--blocks 3` bundles are
+diagnostic. Decision states are defined in
+[benchmarking.md](benchmarking.md#unit-plans-and-decisions). Record the
+result in the owning task and in the plan index. `rejected` is evidence to
+keep; `inconclusive` means complete the evidence; `retained` means this
+unit passed its gates on this run, not that the engine beats QuickJS-NG.
 
 ### Batched promotion
 
-Units that passed the screen and were planned from the same queue share one
-`base_sha`, so one formal run can serve all of them: stack the units on one
-candidate, measure it once against that base, and run `decide` separately
-for each unit's frozen plan against the same bundle and the candidate's
-Test262 burndown. Each decision records the other unit IDs in the batch. The
-formal run then pays for the 30-block measurement and full Test262 once per
-batch instead of once per unit.
+Units that passed their screens and share one `base_sha` may share one
+formal run: stack them on one candidate, measure once, and run `decide` per
+plan against the same bundle. Every unit must pass its own gates; if any is
+`rejected` or `inconclusive`, split the batch and remeasure each remaining
+unit alone. Units whose targets overlap go in separate batches.
 
-Batching never relaxes a unit's gates. Every unit in the batch must pass its
-own targets and controls. If any unit is `rejected` or `inconclusive`, split
-the batch: remeasure each remaining unit on its own candidate before claiming
-it. Each unit's own screen result is what shows that its change, not a
-neighbour's, moved its targets; units whose targets overlap belong in
-separate batches.
+### Migration stages
 
-`retained` means this optimization passed its unit gates on this experiment.
-It never means the whole engine has surpassed NG. That broader conclusion
-requires the separately reported NG comparisons, representative coverage,
-resource evidence, conformance and calibrated hardware/noise policy.
+Keep `base_sha` fixed, so every stage is measured against the migration
+base. Advance `migration.current_stage` in the plan (the one permitted edit
+to a committed plan) and judge with `decide --mode stage` and the arguments
+above. `advance` permits the next stage and is not a performance claim.
+`abort` closes that stage's implementation shape, not the mechanism family;
+record which, in those words. `--mode fast` and `--mode promotion` are
+refused until `current_stage == stages`.
+
+## Diagnostic helpers
+
+- `python3 -m tools.benchmark.screen --candidate B --base A --case <spec>`:
+  counter A/B. `--case` is repeatable and accepts `sentinel`, `broad`,
+  `external`, `sentinel/<id>`, `broad/<id>`, `external/<suite>/<case>` and
+  `file:<path>` (default: the six sentinels). `--aa` (without `--base`)
+  screens the candidate against itself for the host's noise floor.
+- `python3 -m tools.benchmark.front_end --binary B --reference
+  third_party/quickjs-ng/build/qjs`: lexing, parsing and compiling cost
+  alone; `--base A` compares two builds.
+- `./scripts/external-corpus-ab.py A B --reps 3`: amplified ranking of
+  short cases ([benchmarking.md](benchmarking.md#measurement-artifacts)).
+- Execution counters and the `QJS_TL_TRACE` / `QJS_CF_TRACE` traces on a
+  `perf-counters` build ([benchmarking.md](benchmarking.md#execution-counters)).
+
+## Re-pinning the code layout
+
+`crates/qjs-cli/hot-functions.order` pins the hot functions' link order and
+the typed-loop executor's address. Re-pin in the commit that adds a hot
+function or changes the executor, a pinned callee or a pinned function's
+size, so every formal candidate carries a current file. Repeat the last two
+commands until the file stops changing:
+
+```sh
+cargo build --release -p qjs-cli
+python3 -m tools.benchmark.layout_pin --binary target/release/qjs
+cargo build --release -p qjs-cli
+```
+
+When the hot set changes, rebuild the ranking with
+`python3 -m tools.benchmark.order_file --binary target/release/qjs` (it
+samples every case and applies the pin) and relink. Add a hot executor
+callee to `CALLEES` in `tools/benchmark/layout_pin.py`.
+
+After editing the executor itself, run
+`./scripts/layout-scan.sh --offsets 0x0,0x200,0x400` and adopt the centre
+of the fast window by setting `DEFAULT_OFFSET` in `layout_pin.py`. The scan
+rewrites `hot-functions.order` and relinks `target/release/qjs` for each
+offset, and restores the order file when it exits: do not build, commit or
+measure from that checkout while it runs. Its default canaries are the six
+sentinels, `ai-astar`, `imaging-desaturate`, `access-nsieve` and
+`access-nbody`.

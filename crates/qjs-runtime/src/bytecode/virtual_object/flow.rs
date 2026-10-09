@@ -1,3 +1,15 @@
+//! The escape analysis behind virtual-object lowering.
+//!
+//! A forward dataflow over the control-flow graph tracks, for every stack
+//! entry and local, which literal allocation it may alias. Each use either
+//! records a `VirtualUse` the lowering knows how to redirect or adds an
+//! `EscapeReason`; a candidate is virtualizable only with none.
+//!
+//! The analysis fails closed. An instruction it does not model, an
+//! inconsistent stack depth at a join, dynamic scope, or any `try` region
+//! marks candidates escaped or the whole analysis incomplete, and the body
+//! then keeps its ordinary allocations.
+
 use std::{
     collections::{BTreeSet, VecDeque},
     rc::Rc,
@@ -744,7 +756,7 @@ impl<'a> Analyzer<'a> {
             if is_array_length {
                 AbstractValue::known_non_function()
             } else {
-                // The analysis does not yet maintain a field-value lattice.
+                // The analysis maintains no field-value lattice.
                 // A data field may hold a function whose later object-literal
                 // insertion performs SetFunctionName/home-object work, so a
                 // field read must retain that possibility.

@@ -1,3 +1,10 @@
+//! Expression lowering (`compile_expr`), optional chains, and the `if`,
+//! `while`, `do`-`while` and `for` statements.
+//!
+//! A loop opens a fresh per-iteration scope only when its body both
+//! declares a lexical binding and creates a closure that could capture it;
+//! every other loop keeps one environment.
+
 use std::rc::Rc;
 
 use qjs_ast::{AssignmentOp, BinaryOp, Expr, ForInit, Literal, Stmt, UnaryOp, VarKind};
@@ -300,9 +307,8 @@ impl Compiler {
         else {
             return None;
         };
-        // Only the ascending `<` form is normalized: it is the header shape
-        // every specialized loop tier matches, and the descending forms are
-        // recognized elsewhere with the literal in place.
+        // Only the ascending `<` form is normalized; every other comparison
+        // keeps its literal in place.
         if !matches!(op, BinaryOp::Lt) {
             return None;
         }
@@ -354,10 +360,9 @@ impl Compiler {
         // A counted loop whose bound is a numeric literal reads that literal
         // out of the constant pool on every iteration. Materializing it into a
         // compiler temporary before the loop makes the bound a plain local
-        // read, which is both one fewer pool access and the shape the
-        // specialized loop tiers recognize -- they only accept a local bound,
-        // so `i < 1000` used to be excluded from native execution while the
-        // otherwise identical `i < limit` was not.
+        // read: one fewer pool access per iteration, and the same header
+        // bytecode as `i < limit`, which is the bound form the dense
+        // numeric-mutation plan accepts (`DynamicLimit::LocalNumber`).
         let hoisted_limit_slot = test
             .and_then(|test| self.hoistable_numeric_loop_bound(test))
             .map(|bound| {

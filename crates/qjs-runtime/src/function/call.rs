@@ -1,3 +1,15 @@
+//! `[[Call]]` and `[[Construct]]`: `call_function`, `construct_function`, and
+//! the direct-leaf entry the VM and the accelerator tiers use.
+//!
+//! `call_function` first settles the callable kind (Proxy, bound, native,
+//! generator, async) and then builds the callee's `CallEnv`.
+//! `call_direct_leaf_function` skips that for a callee passing
+//! `is_direct_leaf_function` and tries, in order, the numeric leaf, the
+//! this-property leaf, a compact tier in the caller's environment, then a
+//! slot-seeded frame. Ordinary bindings do not travel through `CallEnv`
+//! (see `env.rs`): never add a per-call name-keyed copy of the caller's
+//! locals.
+
 use std::{collections::HashMap, rc::Rc};
 
 use qjs_ast::{BindingPattern, FunctionParams};

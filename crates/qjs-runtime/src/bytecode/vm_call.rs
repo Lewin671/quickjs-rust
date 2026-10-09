@@ -1,3 +1,12 @@
+//! Call opcodes: plain, resolved and spread calls, and direct `eval`.
+//!
+//! A call takes one of three routes: a guarded native fast path
+//! (`try_fast_global_native_call`), the direct-leaf path
+//! (`function::call_direct_leaf_function`), or the general
+//! `function::call_function` with a `CallEnv` built by `vm_call_env.rs`.
+//! The direct-leaf path hands the callee no caller bindings, so only a
+//! callee passing `is_direct_leaf_function` may take it.
+
 use std::collections::HashMap;
 
 #[cfg(test)]

@@ -1,5 +1,24 @@
 # T022: Evidence-bound performance priority controller
 
+- Status: active. Standing selection and stop rules for T018.
+- Implementation: present (`scripts/performance-decision.sh`,
+  `tools/benchmark/performance_decision.py`,
+  `tools/benchmark/performance_evaluation.py`). One acceptance box is open.
+- Verified at: not recorded for a specific commit. This file was last edited
+  at `ee6f9e52`, 2026-10-09 (text only).
+- Evidence: frozen unit plans in `tasks/performance-units/`. Opportunity
+  queues and decision files are generated artifacts under `target/`; they
+  are not stored in the repository, and a plan binds their SHA-256 values.
+- Unresolved: no repository ruleset requires a `Performance decision` check
+  (last acceptance box). No opportunity queue is recorded for the tree after
+  the 2026-10-09 removal of the loop-template plans.
+- Next action: generate a queue from a formal comparison of the current
+  revision, then profile its top external opportunities (Operating rule).
+
+Commands and their interpretation are in
+[the performance workflow](../docs/performance-workflow.md); schemas and
+protocol mechanics are in `docs/benchmarking.md`. This file states the rules.
+
 ## Goal
 
 Prevent an optimization campaign from spending successive commits on a
@@ -137,19 +156,24 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
 ## Operating rule
 
 The next runtime optimization starts by generating a queue from the exact
-parent revision's preview artifact and profiling the top external opportunities.
-It may proceed only after its plan passes `validate-unit`. Each implementation
-attempt is first checked with the hardware-counter screen; only a passing
-screen spends a formal run, and screened units planned from the same queue may
-share one batched promotion run (gates and batching rules in
-[the performance workflow](../docs/performance-workflow.md#screen-gate)). Two
-failed screens close that mechanism and require a new profile; they do not
-justify a third variation of the same leaf specialization.
+parent revision's preview artifact and profiling the top external
+opportunities. The queue is a generated artifact: `performance-decision.sh
+queue --output <path>` writes it under `target/`, and it is not stored in the
+repository. Generate it for the revision being worked on; `validate-unit`
+refuses a stale one. The work may proceed only after its plan passes
+`validate-unit`. Each implementation attempt is first checked with the
+hardware-counter screen; only a passing screen spends a formal run, and
+screened units planned from the same queue may share one batched promotion
+run (gates and batching rules in
+[the performance workflow](../docs/performance-workflow.md#screen-gate)).
+Exhausting the plan's attempt budget (`max_attempts`, at most two failed
+screens) closes that mechanism and requires a new profile; it does not
+justify another variation of the same leaf specialization.
 
 A neutrality control must execute the path it is guarding. Broad portfolio
 cases do not: at 100,000 nominal iterations `plain_function_call` performs five
 real calls and `property_read` eleven real property operations, because the
 loop is folded whole (measured before the loop-template plans were removed on
-2026-10-09; re-check each case with counters before relying on it). Use `benchmarks/generic-sentinels-manifest.json` and the
-`perf-counters` build to control generic-path work, and keep broad cases for
-what they actually measure — specializer coverage.
+2026-10-09; re-check each case with counters before relying on it). Use
+`benchmarks/generic-sentinels-manifest.json` and the `perf-counters` build to
+control generic-path work.

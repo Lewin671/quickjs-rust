@@ -33,7 +33,7 @@
 //! re-exported by value is seeded as a snapshot at link time: a later
 //! reassignment of an exported `let`/`var` in the exporter is not yet reflected
 //! at the importer's binding. Full primitive live-binding indirection is
-//! deferred; see `tasks/T012-modules-campaign.md`.
+//! deferred; see `tasks/archive/T012-modules-campaign.md`.
 
 mod host;
 mod link;

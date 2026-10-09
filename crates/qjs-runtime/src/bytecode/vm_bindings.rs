@@ -1,3 +1,15 @@
+//! Binding access for the interpreter: initial frame slots and cells, local
+//! and global loads and stores, and write-back from a callee's environment.
+//!
+//! A local slot is *authoritative* (a bit in `authoritative_slots`) when no
+//! name-addressed state can supersede it; such a slot is read and written
+//! directly, and the accelerator tiers rely on that bit. Every other slot --
+//! one captured in an upvalue cell, a realm global, a module binding, a
+//! sloppy-global fallback, anything under direct eval or `with` -- takes the
+//! slow path, which keeps the slot, its cell and the realm in step.
+//! `refresh_authoritative_slots` recomputes the masks after a frame's cells
+//! or environment change.
+
 use std::collections::{HashMap, HashSet};
 
 use crate::{
@@ -24,8 +36,8 @@ pub(super) struct TypedLoopSloppyGlobalWrite {
     /// The global object's own-property slot for `name`, with the layout
     /// revision it was resolved at: while the layout holds, each write goes
     /// straight to the slot instead of hashing the name into the global
-    /// object's table (`math-partial-sums` writes eleven such globals per
-    /// iteration). `None` for a name whose store has a side effect of its own.
+    /// object's table. `None` for a name whose store has a side effect of
+    /// its own.
     property_slot: Option<(usize, u64)>,
 }
 
@@ -60,11 +72,10 @@ impl Vm<'_> {
     fn split_body_deopt_scope(&mut self, parameter_bindings: crate::function::DynamicBindings) {
         // Every frame in a script that contains a direct eval anywhere reaches
         // this, so the discovery below must not allocate when it finds nothing.
-        // Building the `PREFIX + name` marker for each local did: on
-        // `string-tagcloud`, whose source evals a JSON payload, those `format!`
-        // calls were 11% of the profile's allocator traffic, all of it to
-        // discover an empty set. The bindings are the smaller side and already
-        // carry the marker, so strip the prefix from them instead.
+        // Building the `PREFIX + name` marker for each local would allocate
+        // per local, usually to discover an empty set (a script that evals
+        // a JSON payload is the case). The bindings are the smaller side and
+        // already carry the marker, so strip the prefix from them instead.
         let mut split_slots: Vec<usize> = Vec::new();
         {
             let bytecode = &self.current.bytecode;

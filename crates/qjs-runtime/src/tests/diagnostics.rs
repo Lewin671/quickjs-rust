@@ -129,9 +129,9 @@ fn a_prototype_dispatched_method_is_not_folded() {
 
 #[test]
 fn an_unrecognized_loop_probes_every_engine_and_enters_none() {
-    // Four loop engines are consulted per ordinary backward edge. When none
-    // applies, the probes are pure overhead -- this records the ratio the
-    // dispatch-table unit would remove.
+    // Two loop accelerators are consulted per ordinary backward edge: the
+    // numeric-mutation plans, then the typed loop. When neither applies, the
+    // probes are pure overhead, and this counter pair records it.
     let (_, counters) = counted(
         "var seen = [];
          for (var i = 0; i < 50; i++) { seen.push({ index: i }); }

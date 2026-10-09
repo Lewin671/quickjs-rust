@@ -1,3 +1,14 @@
+//! The JavaScript value representation.
+//!
+//! `Value` is one enum. Numbers, booleans, `null` and `undefined` are
+//! inline; strings, BigInts and every object kind are `Rc` handles, so a
+//! clone is at most a reference-count bump and object identity is handle
+//! identity (`ptr_eq`). Reference cycles are not collected. `teardown` only
+//! keeps the drop of a long ownership chain from recursing.
+//!
+//! Strings are immutable to JavaScript and held in the runtime's WTF-16
+//! sentinel form; host UTF-8 enters through `Value::string_from_utf8`.
+
 use std::fmt;
 use std::rc::Rc;
 

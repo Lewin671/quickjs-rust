@@ -1,8 +1,8 @@
 //! Compact bodies over numbers only, run on `f64` registers with their calls.
 //!
-//! A recursive numeric body -- `fib`, `ack`, `tak` -- runs on the compact
-//! tier at about 900 instructions a call against QuickJS-NG's 400, most of it
-//! frame machinery for `Value` registers. When every register of the body
+//! A recursive numeric body -- `fib`, `ack`, `tak` -- spends most of a
+//! compact-tier call on frame machinery for `Value` registers. When every
+//! register of the body
 //! only ever holds a number, a boolean or `undefined`, and every call it makes
 //! reaches another such body through a captured cell, the whole call tree can
 //! run on `f64` registers with a frame stack of its own: a boolean as 0 or 1

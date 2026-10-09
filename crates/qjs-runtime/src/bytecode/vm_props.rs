@@ -1,3 +1,12 @@
+//! Property reads, deletion and key enumeration for the interpreter, the
+//! global-store paths, and the number fast paths other tiers share.
+//!
+//! `get_property` is the full `[[Get]]`. The `try_direct_get*` and
+//! `try_cached_get_string` readers answer only when the result is a data
+//! value found without running user code; otherwise they return `None` and
+//! the caller takes the full path. A fast path here is never the only
+//! implementation of a behaviour.
+
 use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::value::{OwnDataPropertyRead, OwnDataPropertyWrite};

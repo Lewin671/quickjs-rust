@@ -1,3 +1,12 @@
+//! String concatenation that extends the left operand's buffer in place.
+//!
+//! JavaScript strings are immutable, so a buffer may be grown only while it
+//! is uniquely held. Before a compound string assignment the handlers here
+//! drop the engine-internal copies of the old value (the local slot, its
+//! cell, the realm mirror, dead completion temporaries); the store that
+//! follows restores the binding. A reference JavaScript can reach is never
+//! dropped: it keeps the string shared and forces a copy.
+
 use qjs_ast::BinaryOp;
 
 use crate::{RuntimeError, Value, operations};

@@ -1,0 +1,107 @@
+# T007: Async Foundation Campaign
+
+> Historical record. Describes the repository at the revisions named below; not current guidance.
+
+- Status: closed-landed (the file states "Campaign core is complete").
+- Implementation: present.
+- Verified at: S1-S5 ticked through `67959e14`, 2026-06-10 (last edit of this
+  file); per-slice check results not recorded. Later conformance record:
+  42,672 of 42,672 configured Test262 cases pass at `9d344a0f`, 2026-09-06
+  (`docs/conformance/burndown.jsonl`, last entry).
+- Evidence: `docs/conformance/burndown.jsonl`.
+- Unresolved: the follow-ups named under S5 were left to the gap queue; no
+  configured Test262 case fails at `9d344a0f`.
+- Next action: none. New work in this area is selected through the gap queue
+  (`AGENTS.md`), not this file.
+
+## Goal
+
+Build the asynchrony foundation — a job queue, async functions, and the
+Test262 async harness channel — so the 5,290 QuickJS-NG-passing async-flagged
+cases (commit `3e7feb0`, 2026-06-09 full scan) stop being structurally
+not-run, plus the 277 async-iteration actionable gaps.
+
+## Evidence
+
+- `comparison.ng_pass_rust_not_run` async bucket: 5,290 cases. The baseline
+  skips any test with the `async` flag (`skip_reason` in
+  `scripts/test262-baseline.sh`).
+- Actionable gaps tagged `async-iteration`: 277.
+- Async Test262 cases report completion through `doneprintHandle.js`
+  (`$DONE`), which requires print output and a drained job queue.
+
+## Slices
+
+- [x] S1 Runtime: promise job queue — enqueue promise reactions as jobs,
+      drain the queue after script evaluation. Existing Promise surface keeps
+      its semantics; ordering tests at the runtime layer.
+- [x] S2 Parser: `async function` declarations/expressions and `await`
+      expressions, including arrow forms. Parser-only; spans and focused
+      tests.
+- [x] S3 Runtime: evaluate async functions — suspend/resume on `await`,
+      return promises, propagate rejections. Plain async functions, methods,
+      and arrows reuse the generator suspension machinery; async generators and
+      `for await ... of` stay structurally rejected (S5).
+- [x] S4 Harness: support the async test channel — run `doneprintHandle.js`
+      includes, treat `$DONE`-reported success/failure as the case result,
+      drain jobs before judging. Narrow the async skip in
+      `scripts/test262-baseline.sh` to cases the harness still cannot judge,
+      and record a fresh burndown entry.
+- [x] S5 Parser + runtime: `for await ... of` and async generators. Async
+      generator objects reuse the generator suspension machinery with a
+      per-generator request queue; suspensions are tagged await vs yield;
+      `yield` awaits its operand; for-await-of wraps sync iterators via
+      CreateAsyncFromSyncIterator. Probes: for-await-of 1216/1234 pass,
+      expressions/async-generator 356/623. Follow-ups: callable
+      %AsyncGeneratorFunction% constructor (matches the skipped
+      %GeneratorFunction%/%AsyncFunction% constructors), remaining
+      async-generator early errors.
+
+Campaign core is complete; remaining async gaps flow through the normal
+gap queue.
+
+## Scope
+
+- Allowed paths: `crates/qjs-ast/**`, `crates/qjs-lexer/**`,
+  `crates/qjs-parser/**`, `crates/qjs-runtime/**`; S4 also
+  `scripts/test262-baseline.sh`, `tests/test262/**`.
+- Forbidden paths: `third_party/**`.
+- Owner boundary: one slice per owner; S1 must integrate before S3.
+- No threads or host async runtime: the job queue is a deterministic
+  single-threaded drain loop, consistent with the no-async/no-threads
+  engineering standard in `AGENTS.md` (this task explicitly authorizes the
+  language-level feature, not host concurrency).
+
+## References
+
+- `docs/architecture.md`
+- QuickJS-NG: `third_party/quickjs-ng/quickjs.c` (`JS_ExecutePendingJob`,
+  async function state machines).
+- Test262: `harness/doneprintHandle.js`, `test/built-ins/Promise/**`,
+  `test/language/expressions/await/**`,
+  `test/language/statements/async-function/**`.
+
+## Acceptance Criteria
+
+- Job-queue ordering matches QuickJS-NG on comparison fixtures under
+  `tests/fixtures/compare-qjs/`.
+- After S4, async-flagged cases appear as pass/fail signal in
+  `./scripts/find-qjsng-gaps.sh` output instead of not-run.
+- Campaign exit: the async not-run bucket in the burndown series drops to
+  cases blocked on async generators only.
+
+## Verification
+
+```sh
+cargo test -p qjs-runtime
+./scripts/compare-qjs.sh
+./scripts/find-qjsng-gaps.sh --filter test/language/statements/async-function --all
+./scripts/check.sh
+```
+
+## Notes
+
+S1 is also a prerequisite for unhandled-rejection semantics and dynamic
+import (696 module not-run cases stay out of scope here). Keep `$DONE`
+handling inside the baseline harness layer; engine crates must not know about
+Test262 conventions.

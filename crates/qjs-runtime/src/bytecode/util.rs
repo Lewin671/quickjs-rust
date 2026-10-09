@@ -139,8 +139,8 @@ pub(super) fn unsupported_stmt(stmt: &Stmt) -> RuntimeError {
     }
 }
 
-/// Module `import`/`export` items parse under the Module goal but the runtime
-/// does not yet support module linking or evaluation (T012).
+/// The error for a module `import`/`export` item reaching the script
+/// statement compiler. Modules compile through `compiler::compile_module`.
 pub(super) fn unsupported_module_item() -> RuntimeError {
     RuntimeError {
         thrown: None,

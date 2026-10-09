@@ -5,9 +5,9 @@
 //! [`CallEnv`] carries only the cross-call runtime context that is still
 //! naturally name-addressed:
 //!
-//! - `realm` is shared into every frame. It owns intrinsics, true global
-//!   bindings, and the lazily allocated cells for captured globals, so global
-//!   writes are immediately visible without copying or write-back.
+//! - `realm` is shared into every frame. It owns intrinsics and one cell per
+//!   global binding (`RealmState.bindings`), so global writes are immediately
+//!   visible without copying or write-back.
 //! - `frame_bindings` is a small cell vector for call metadata and native or
 //!   dynamic compatibility consumers. Ordinary user-function setup inserts
 //!   directly into it and never builds a per-call locals `HashMap`.

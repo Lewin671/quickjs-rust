@@ -1,5 +1,58 @@
 # T018: Broad Performance Campaign
 
+- Status: active. This is the performance campaign contract.
+- Implementation: partial. Milestones B1-B2 are complete; B3-B6 are open.
+- Verified at: `d1313d52`, 2026-10-09, one formal 30-block three-engine
+  comparison against base `7a83b568` and the pinned QuickJS-NG
+  (`scripts/perf-compare.sh`, same-host diagnostic, not a fixed-hardware
+  claim). Results are under "Standing at d1313d52".
+- Evidence: the numbers below. The bundle
+  (`target/comparison/template-removal-d1313d52/`, `summary.json` SHA-256
+  `6b2c98f4...c71b6cf`) is a local artifact, not retained. Earlier results
+  are in `tasks/archive/` and apply only to their own revisions.
+- Unresolved: none of the completion thresholds below is recorded as met.
+  The broad lane produced no ratios at `d1313d52`: `many_locals_call` and
+  `property_read` failed the linearity check on the candidate, so the run's
+  decision readiness is "inconclusive".
+- Next action: generate a queue for the current revision
+  (`docs/performance-workflow.md`, step 1) and select a unit through
+  `tasks/T022-performance-priority-controller.md`. Explain the two
+  non-linear broad cases first; no broad result can be read until they pass.
+
+This file holds the contract and the last formal standing. It does not
+record units or select work.
+
+## Standing at d1313d52
+
+Candidate `d1313d52` is the first revision without the loop-template plans;
+base `7a83b568` is the last with them. Ratios are paired medians over 30
+blocks, lower is faster.
+
+| Lane | Candidate / QuickJS-NG | Candidate / base |
+| --- | --- | --- |
+| Broad (25 cases) | no ratios (linearity failed, see above) | no ratios |
+| Sentinel `recursive_call_tree` | 0.742 | 0.994 |
+| Sentinel `prototype_method_call` | 1.002 | 1.004 |
+| Sentinel `polymorphic_call_site` | 0.820 | 1.007 |
+| Sentinel `capturing_closure_call` | 0.741 | 1.000 |
+| Sentinel `heterogeneous_property_read` | 1.022 | 1.022 |
+| Sentinel `string_key_map_churn` | 0.919 | 1.015 |
+| External, JetStream 3 subset (5) | 0.981 | 1.015 |
+| External, Kraken 1.1 (14) | 0.606 | 1.126 |
+| External, SunSpider 1.0 (26) | 1.024 | 1.161 |
+
+External cases slower than QuickJS-NG by more than 10%:
+`bitops-bitwise-and` 4.357, `date-format-tofte` 1.415, `hash-map` 1.351,
+`cdjs` 1.344, `3d-raytrace` 1.328, `access-binary-trees` 1.291,
+`string-validate-input` 1.238, `crypto-md5` 1.235,
+`raytrace-public-class-fields` 1.177, `date-format-xparb` 1.146.
+
+External cases that moved against the base by more than 3%:
+`bitops-bitwise-and` 22.069, `audio-dft` 5.258, `bitops-nsieve-bits` 2.055,
+`crypto-md5` 1.049, `hash-map` 1.032. The first three ran on removed
+template plans; `audio-dft` (0.786) and `bitops-nsieve-bits` (0.854) are
+still faster than QuickJS-NG.
+
 ## Goal
 
 Beat the pinned QuickJS-NG reference by at least 2x on every admitted benchmark
@@ -58,7 +111,7 @@ ordinary JavaScript mechanisms beyond the repository's own benchmark shapes.
 - `docs/architecture.md`
 - `docs/benchmarking.md`
 - `docs/harness.md`
-- `tasks/T016-environment-model-rewrite.md`
+- `tasks/archive/T016-environment-model-rewrite.md`
 
 ## Portfolio Contract
 
@@ -131,42 +184,23 @@ an incomplete neutral shell port is an upstream suite score.
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/benchmark/tests -v
 ./scripts/performance-policy-audit.sh
-./scripts/benchmark.sh --dry-run --blocks 3
-./scripts/benchmark.sh --candidate target/release/qjs \
-  --base target/release/qjs \
-  --quickjs-ng third_party/quickjs-ng/build/qjs \
-  --blocks 3 --output target/benchmarks/broad-v2-baseline.jsonl
-./scripts/benchmark-report.sh \
-  --input target/benchmarks/broad-v2-baseline.jsonl \
-  --output target/benchmarks/broad-v2-baseline-report.json
-./scripts/external-performance-preview.sh audit
-./scripts/external-performance-preview.sh run \
-  --cache-root target/benchmarks/external-cache \
-  --work-root target/benchmarks/external-work \
-  --output-dir target/benchmarks/external-result \
-  --candidate target/release/qjs \
-  --base /path/to/base/qjs \
-  --quickjs-ng third_party/quickjs-ng/build/qjs
 ./scripts/check.sh
 ```
 
+How to run the complete candidate/base/QuickJS-NG comparison, the external
+preview and the reports: [the performance workflow](../docs/performance-workflow.md)
+and `docs/benchmarking.md`, "Running".
 
-## Status
+## Where the rest lives
 
-B1-B2 are complete; B3-B6 remain open. This file holds the campaign contract
-only. It does not record units or select work:
-
-- selection and acceptance: `docs/performance-workflow.md` and
-  `tasks/T022-performance-priority-controller.md`;
-- durable measurement rules: `docs/performance-knowledge.md`;
-- units since August 2026: one task file per structural unit (`T023` onward)
-  plus its plan and decision under `tasks/performance-units/`.
-
-## History
-
-The broad v1/v2 baselines, the external generalization reset, and the unit
-log through 2026-07-29 (Units 1-92 and the dated entries that followed) are
-preserved verbatim in
-[`archive/T018-broad-performance-log.md`](archive/T018-broad-performance-log.md).
-They are historical evidence bound to their own revisions, not current
-ratios or priorities.
+- Selection and acceptance of units: `docs/performance-workflow.md` and
+  `tasks/T022-performance-priority-controller.md`.
+- Durable measurement rules: `docs/performance-knowledge.md`.
+- Frozen unit plans: `tasks/performance-units/`.
+- Closed unit records (`T019` to `T032`) and experiment logs:
+  `tasks/archive/`. The broad v1/v2 baselines, the external generalization
+  reset and the unit log through 2026-07-29 (Units 1-92 and the dated entries
+  that followed) are preserved verbatim in
+  [`archive/T018-broad-performance-log.md`](archive/T018-broad-performance-log.md).
+  They are historical evidence bound to their own revisions, not current
+  ratios or priorities.

@@ -1,183 +1,82 @@
 # Tasks
 
-Use these as agent-sized work items. Keep each task independently testable.
-Concrete task files live next to this index. For new tasks, copy
-`tasks/TEMPLATE.md` and fill in scope, owner boundary, acceptance criteria, and
-verification commands before assigning an agent.
+Which task should I open? Active and blocked tasks are files in this
+directory; each opens with a resume block that says what is next. Everything
+else is a historical record under `archive/`.
 
-## Bootstrap Tasks
+For a new task, copy [TEMPLATE.md](TEMPLATE.md). One slice of a task is one
+reviewable unit: verify it with its focused command before and after, and
+update the resume block in the commit that lands it. When a task closes, move
+it to `archive/` with `git mv` and move its row below.
 
-Early-engine work items; largely landed, kept for reference and residual
-follow-ups.
+## Active
 
-- `T001-lexer-coverage.md` — lexer comments, templates, punctuators.
-- `T002-parser-expressions.md` — expression precedence parsing.
-- `T003-runtime-values.md` — value types, coercion, environments, errors.
-- `T004-quickjs-comparison.md` — QuickJS-NG smoke comparison runner.
-- `T005-test262-subset.md` — curated Test262 subset harness.
+| Task | Status | What it is |
+| --- | --- | --- |
+| [T018](T018-broad-performance.md) broad performance | active | The performance campaign contract and its targets against QuickJS-NG. Start performance work here, then follow [the workflow](../docs/performance-workflow.md). |
+| [T022](T022-performance-priority-controller.md) priority controller | active | The rules that select and stop performance units. |
+| [T033](T033-wide-tier-interpreter-exits.md) wide-tier interpreter exits | active | Code is present; the frozen unit was formally rejected; candidates for the next unit are listed there. |
+| [T017](T017-performance-benchmark-system.md) benchmark system | blocked | The measurement platform; the remaining milestones need fixed hardware. |
+| [T013](T013-temporal-campaign.md) Temporal | blocked | Not started. Temporal is outside ES2025 and the reference engine's Test262 configuration skips it. |
 
-## Conformance Campaigns
+Conformance has no open campaign: the last recorded full scan passes every
+configured case (see [conformance records](../docs/conformance/README.md)).
+Take conformance work from `./scripts/find-qjsng-gaps.sh`.
 
-Campaigns decompose the broad features that the quickwins gap strategy
-intentionally de-prioritizes. Sizes are QuickJS-NG-passing Test262 cases
-measured at commit `3e7feb0` (2026-06-09 full scan); recheck against the
-latest `docs/conformance/burndown.jsonl` entry before starting new work. This
-table is historical planning input, not the current pass/fail status.
+Performance entries record scope and outcomes, not priority. Priority comes
+from a freshly generated opportunity queue. Reopening a closed proposal needs
+a new profile and a newly frozen plan; a rejected implementation does not ban
+its whole mechanism family (T022 states the rule).
 
-| Task | Campaign | Unlocks (approx.) | Mostly blocked as |
-| --- | --- | ---: | --- |
-| `T006-class-campaign.md` | class | 7,138 | not-run (syntax filter) |
-| `T007-async-foundation-campaign.md` | async/jobs | 5,567 | not-run (async filter) |
-| `T008-destructuring-completion-campaign.md` | destructuring | 2,580 | engine failures |
-| `T009-typedarray-buffers-campaign.md` | TypedArray/buffers | 2,480 | engine failures |
-| `T010-generators-iteration-campaign.md` | generators/iteration | 1,960 | engine failures |
-| `T012-modules-campaign.md` | ES modules | 1,621 | not-run (module filter) + fails |
-| `T013-temporal-campaign.md` | Temporal | 4,603 | engine failures (not implemented) |
-| `T015-explicit-resource-management-campaign.md` | using/await using | ~113 | parser landed; disposal runtime pending |
+## Closed
 
-Campaign working rules:
+Each file is under `archive/` and opens with its own resume block. The
+outcome column says what happened, not what to do next.
 
-- One slice from a campaign's checklist is one reviewable unit; verify with
-  the slice's focused command before and after, like any gap-queue area.
-- Tick the slice checkbox in the task file in the same commit that lands it,
-  so the next session resumes without re-deriving state.
-- When `find-qjsng-gaps.sh` still offers non-hard quick wins, those stay
-  first choice; switch to the highest-priority campaign slice when the
-  recommendation queue is dominated by hard-hinted areas.
-- Smaller feature clusters not yet campaign-sized (BigInt 830,
-  regexp-unicode-property-escapes 581, Proxy 292, explicit-resource-management
-  273) stay in the normal gap queue; promote one to a campaign file when its
-  slices stop fitting in single reviewable units.
+| Task | Outcome |
+| --- | --- |
+| `T001-lexer-coverage.md` | Bootstrap work item. |
+| `T002-parser-expressions.md` | Bootstrap work item. |
+| `T003-runtime-values.md` | Bootstrap work item. |
+| `T004-quickjs-comparison.md` | Bootstrap work item. |
+| `T005-test262-subset.md` | Bootstrap work item. |
+| `T006-class-campaign.md` | Landed. |
+| `T007-async-foundation-campaign.md` | Landed. |
+| `T008-destructuring-completion-campaign.md` | Landed. |
+| `T009-typedarray-buffers-campaign.md` | Landed. |
+| `T010-generators-iteration-campaign.md` | Landed. |
+| `T011-call-performance.md` | Superseded by T016. |
+| `T012-modules-campaign.md` | Landed. |
+| `T014-var-closure-binding-staleness.md` | Superseded by T016. |
+| `T015-explicit-resource-management-campaign.md` | Landed. |
+| `T016-environment-model-rewrite.md` | Landed. Slot-indexed locals and shared upvalue cells; the protected binding model. Invariants: [env-model-rewrite](../docs/design/env-model-rewrite.md). |
+| `T019-object-layout-rewrite.md` | Boxing the cold dynamic property payload and the 32-byte `Property` landed; bit packing and the weak-count slices were rejected. |
+| `T020-realm-binding-cell-unification.md` | Landed. One name-to-cell map per realm. |
+| `T021-single-vm-frame-stack.md` | The compact register tier landed; the single-VM frame stack and virtual stack were reverted. Log: `T021-single-vm-frame-stack-log.md`. |
+| `T023-realm-object-arena.md` | Rejected and reverted. A realm-local object arena regressed its frozen gate. |
+| `T024-general-register-core.md` | Rejected. The dispatch-preamble split is kept; it moved the external corpus by about one percent, which falsified dispatch overhead as the main cost. |
+| `T025-allocation-free-regexp-backtracking.md` | Stopped at stage 3 when a control crossed its regression budget; the earlier stages are present. |
+| `T026-compact-hot-op-error-abi.md` | Rejected and reverted. |
+| `T027-frame-verified-direct-local-opcodes.md` | Rejected and reverted. |
+| `T028-discarded-binary-branch-superinstruction.md` | Rejected and reverted. |
+| `T029-compilation-graph-static-property-names.md` | Rejected and reverted. |
+| `T030-packed-typed-loop-scalars.md` | Rejected and reverted. |
+| `T031-realm-code-unit-strings.md` | Retained, then removed when String wrapper index properties became lazy. |
+| `T032-shaped-prototype-slot-reads.md` | Retained. |
 
-## Landed keystone
+## Other Records In `archive/`
 
-- `T016-environment-model-rewrite.md` — **landed.** It replaced the snapshot +
-  `captured_env` + `CaptureWriteback` trio with slot-indexed locals + indexed
-  shared upvalue cells (`docs/design/env-model-rewrite.md`). It subsumes T011
-  and T014; preserve this representation rather than reviving heuristic
-  snapshots.
+- Experiment logs split out of task files: `T017-performance-benchmark-system-log.md`,
+  `T018-broad-performance-log.md`, `T033-screen-log.md`.
+- Plans and measurements moved out of current documents:
+  `design-env-model-migration.md`, `design-generator-suspension-plan.md`,
+  `design-object-layout-plan.md`, `design-realm-object-arena-plan.md`,
+  `benchmarking-history.md`, `performance-observations.md`,
+  `source-comment-measurements.md`, `harness-convergence-risks.md`,
+  `task-index-2026-10-09.md`.
+- Frozen unit plans and their outcomes are indexed in
+  [performance-units/README.md](performance-units/README.md).
 
-## Engine Correctness
-
-- `T014-var-closure-binding-staleness.md` — **subsumed by T016.** A `var`
-  mutated by one function is lost when a sibling reassigned it first
-  (snapshot-model desync). The leaf-call fix landed; the full fix is T016 S2+.
-
-## Performance
-
-Entries below record campaign scope and historical outcomes, not execution
-priority. Select new work through `docs/performance-workflow.md` and T022 using
-current exact evidence, profiles, and a validated unit plan. Reopening a past
-proposal requires the same process.
-
-- `T018-broad-performance.md` — establish the 25-case, eight-family broad
-  black-box benchmark, then drive candidate/QuickJS-NG overall wall ns/op to
-  at most 0.50x without regressing any critical family above 1.00x or weakening
-  correctness. This is the active performance campaign; each runtime change
-  remains a separately measured, reviewable unit. The file holds the contract;
-  its unit log through 2026-07-29 is in `archive/`.
-- `T019-object-layout-rewrite.md` — feeds T018 B3/B4. Shrinks `ObjectData`/
-  `ArrayData`/`PropertyStorage` layout to close the `allocation` critical
-  family's persistent QuickJS-NG gap, as a narrower alternative to a full
-  GC/arena rewrite (`docs/design/object-layout-rewrite.md`). S1 (box the cold
-  `PropertyStorage::Dynamic` payload) and S4 (`Property` 56B -> 32B with cold
-  accessor state) landed; S2/S3 proved bit packing could not reduce aligned
-  layouts. Serialize on one branch.
-- `T020-realm-binding-cell-unification.md` — **landed** (`bfcd53da`). Feeds
-  T018's `call`/global-var families. `RealmState`'s raw
-  `HashMap<String, Value>` and its separate `binding_cells` registry are
-  unified into one `DynamicBindings` map, so a cell-backed global no longer
-  costs two name-table hash lookups per store. Verified with the full test
-  suite, Test262 subset, `compare-qjs.sh`, and exact gap scans across
-  eval/module/global-code/with/for/Function; zero regressions.
-- `T021-single-vm-frame-stack.md` — **closed.** Both structural theses (a
-  single-VM frame stack and compact dispatch) were built and measured; the
-  compact register tier landed, the windowed frame stack and virtual stack
-  were reverted. The full experiment log is in `archive/`. New work in this
-  area requires current T022 selection.
-- `T024-general-register-core.md` — **closed after falsification.** The retained
-  dispatch-preamble split moved the external corpus by only about one percent,
-  below its structural mechanism gate. Preserve its negative evidence; do not
-  infer current priority from it.
-- `T025-allocation-free-regexp-backtracking.md` — **closed after Stage 3
-  abort.** The staged migration moved `string-tagcloud` to 0.8218x and
-  regexp-dna to 0.6865x against its fixed base, but the predeclared closure
-  allocation control reached 1.1089x and crossed the 1.10 cumulative budget.
-  Preserve the implementation, stop before Stage 4, and require a new current
-  profile and frozen plan before revisiting the broader RegExp mechanism.
-- `T026-compact-hot-op-error-abi.md` — **rejected.** The prototype removed sret
-  from all sixteen covered hot handlers, but the dispatch frame remained 448B
-  and its symbol grew 272B. HashMap measured 1.0073x and Raytrace 0.9963x
-  against the frozen base, missing the required 0.97 target in both cases; the
-  runtime changes were reverted.
-- `T027-frame-verified-direct-local-opcodes.md` — **rejected.** The prototype
-  preserved 96-byte opcodes and moved 99.9999% of HashMap's authoritative
-  local hits through frame-verified direct variants, with all 2,040 runtime
-  tests passing. HashMap improved only to 0.9841x candidate/base, missing the
-  frozen 0.97 target, so all runtime changes were reverted.
-- `T028-discarded-binary-branch-superinstruction.md` — **rejected.** The
-  prototype covered 99.9999% of the frozen HashMap sequence and removed 9.73%
-  of its generic dispatch with all 2,039 prototype runtime tests passing, but
-  improved HashMap only to 0.9837x candidate/base against the frozen 0.97
-  target. The one-attempt runtime changes were reverted.
-- `T029-compilation-graph-static-property-names.md` — **rejected.** The
-  prototype routed 99.12% of eligible N-body comparisons through shared name
-  identity and cut sampled `memcmp` about 96.8%, with all correctness gates
-  passing. Exact hosted N-body improved only to 0.96469x against the frozen
-  0.95 target, so the runtime changes were reverted.
-- `T030-packed-typed-loop-scalars.md` — **rejected.** The one-attempt prototype
-  safely reduced its private scalar from 16 to eight bytes with unchanged
-  execution-path diagnostics and all focused correctness gates passing, but
-  the first frozen target, bits-in-byte, regressed to 1.01702x candidate/base
-  against the required 0.90x. The runtime changes were reverted before the
-  remaining timing and promotion gates.
-- `T031-realm-code-unit-strings.md` — **retained** (`5702c789`). Bounded
-  realm-owned character values reduce String-box allocation without changing
-  indexed descriptors or ordinary object layout. Formal 30-block promotion
-  passed all 76 comparisons: tagcloud 0.8840x and date-format-xparb 0.9733x
-  candidate/base; maximum non-target regression 1.0211x, inside the 1.03 cap.
-- `T032-shaped-prototype-slot-reads.md` — **retained** (`9d344a0f`). Extend
-  prototype slot caching to object-literal storage while isolating existing
-  readers. A predeclared independent 60-block confirmation passed all 76
-  comparisons: HashMap 0.920749x base; maximum regression 1.022257x (upper
-  1.026347), inside the 1.03 cap. Exact Test262 parity is zero-gap. HashMap
-  still takes 5.022x NG time; the all-benchmark NG target remains open.
-- `T033-wide-tier-interpreter-exits.md` — the wide compact tier runs a body up
-  to an instruction it leaves to the interpreter, then hands its state to an
-  interpreter frame that resumes there. Screen gate passed (hash-map, cdjs);
-  formal promotion pending.
-- `T022-performance-priority-controller.md` — evidence-bound selection and
-  stop mechanism for T018. It derives the next profiling queue from current
-  artifacts, freezes a unit's targets before timing, and records explicit
-  retain/reject/inconclusive decisions. Static task text is never a substitute
-  for this current evidence.
-- `T023-realm-object-arena.md` — **S1 rejected.** The Realm-local intrusive
-  object-cell arena regressed the frozen HashMap and A* fast gate despite
-  removing per-object allocation, so do not retry this ownership/counting
-  mechanism or broaden its admission. A future tracing/GC design needs a new
-  profile and independently frozen plan.
-- `T017-performance-benchmark-system.md` — versioned candidate/base/QuickJS-NG
-  black-box benchmark platform. M0-M4 landed, including independent throughput,
-  resource lanes, and diagnostic public-boundary Criterion lifecycle benches;
-  M5 governance now records five blocked source-pinned candidates and two
-  excluded evidence-backed decisions in a deny-only v1 registry; future
-  admission requires a separately reviewed v2 audit bundle before any gate.
-  Hosted same-repository PRs now publish strict three-block informational
-  previews from a base-owned `pull_request_target` harness, while every `main`
-  push uses the after revision as head-owned harness/candidate and the before
-  revision as base. Both paths retain complete provenance and phase-aware
-  durable failure status; fork previews are unsupported and fail-closed M6/M7 policy infrastructure is ready,
-  while fixed-hardware A/A calibration and every performance gate remain
-  intentionally incomplete and disabled.
-- `archive/T011-call-performance.md` — **subsumed by T016.** Cut per-call
-  environment-cloning cost. The leaf-call activation-snapshot clone landed; the
-  remaining per-call locals-map clone is deleted by T016 S5, which unblocks the
-  `TypedArray/*` cases that time out under heavy nested-call load.
-
-## Archive
-
-`tasks/archive/` holds closed tasks and the verbatim experiment logs split
-out of long-running task files. They are historical evidence bound to their
-own revisions; they never establish current priority. Active task files stay
-under the `scripts/check-file-size.sh` limit by moving finished logs here
-rather than growing without bound.
+Search before repeating an experiment:
+`grep -rn -i "<mechanism>" tasks/`. Records describe the revisions they name
+and never establish current priority.

@@ -106,7 +106,8 @@ qjs_check_stage "benchmark tool tests" \
   env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR" \
   python3 -m unittest discover -s "$ROOT_DIR/tools/benchmark/tests" -v
 qjs_check_stage "performance unit plans" qjs_check_performance_units
-qjs_check_stage "Test262 aggregate tests" \
+qjs_check_stage "agent context" "$ROOT_DIR/scripts/check-context.py"
+qjs_check_stage "script tests" \
   env PYTHONDONTWRITEBYTECODE=1 \
   python3 -m unittest discover -s "$ROOT_DIR/scripts/tests" -v
 qjs_check_stage "git hook worktree isolation" \

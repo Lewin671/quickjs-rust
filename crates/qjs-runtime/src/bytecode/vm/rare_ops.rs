@@ -1,17 +1,14 @@
 //! Opcodes the dispatch loop keeps out of its own machine code.
 //!
-//! `Vm::run_current_activation` disassembled as a single 25,020-instruction
-//! function with a 4.3 KB stack frame and 335 distinct spill slots: the
-//! register allocator had given up, so every dispatch reloaded `self`, the code
-//! pointer and the code length *from the stack* before any opcode did any work.
-//! That preamble is paid by the opcodes a benchmark actually executes, and it
-//! is caused by the ones it never executes -- `NewFunction`, `TypeofGlobal`,
-//! the `super` family and the generator suspensions each inline a large body
-//! into the same function and compete for the same registers.
+//! `NewFunction`, `TypeofGlobal`, the `super` family, the generator
+//! suspensions and the like each have a large body. Inlined into
+//! `Vm::run_current_activation` they compete with the hot opcodes for
+//! registers and force spills on every dispatch, although a typical loop
+//! never executes them.
 //!
 //! Everything here is reached at most once per closure, class, `with` block,
 //! iterator protocol step or suspension, so one extra call is not measurable on
-//! it; what matters is that its registers are no longer the dispatch loop's
+//! it; what matters is that its registers are not the dispatch loop's
 //! problem. The split is by *dispatch frequency*, not by semantic family, which
 //! is why this module reads as a list rather than as a subsystem.
 

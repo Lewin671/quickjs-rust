@@ -407,8 +407,8 @@ fn evaluates_variable_declaration_rest_destructuring() {
         eval("const {p, ...rest} = {p: 1, q: 2, r: 3}; p + ':' + Object.keys(rest).join('|');"),
         Ok(Value::String("1:q|r".to_owned().into()))
     );
-    // A hand-rolled iterable stands in for a generator until generator
-    // evaluation lands in T010 S2.
+    // A hand-rolled iterable exercises the iterator protocol without a
+    // generator.
     assert_eq!(
         eval(
             "function range() {

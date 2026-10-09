@@ -17,9 +17,9 @@ use crate::{Property, Value};
 /// The insertion-ordered entries of a small or dynamic storage, where a slot
 /// is an index and each entry carries its interned name -- what a shared
 /// slot is validated against. A constructor that adds its twelfth property
-/// moves its objects to dynamic storage (3d-raytrace's triangles); reading
-/// only small storage by shared slot sent every such read to a per-object
-/// cache entry, which a dozen triangles thrashed.
+/// moves its objects to dynamic storage; reading only small storage by
+/// shared slot would send every such read to a per-object cache entry, which
+/// a handful of receivers thrash.
 #[inline(always)]
 fn named_entries(storage: &PropertyStorage) -> Option<&[(Rc<str>, Property)]> {
     match storage {
@@ -167,9 +167,9 @@ impl ObjectRef {
             return None;
         }
         // Small storage only: this read is inlined into the typed-loop
-        // executor, whose hot arm grew and re-rolled its register allocation
-        // with a dynamic-storage case (access-nbody +7% instructions). A
-        // dynamic object takes the executor's general read instead.
+        // executor, and a dynamic-storage case here grows that executor's
+        // hot arm and changes its register allocation. A dynamic object
+        // takes the executor's general read instead.
         match &*self.0.properties.borrow() {
             PropertyStorage::Small { entries } => {
                 let (name, property) = entries.get(slot)?;

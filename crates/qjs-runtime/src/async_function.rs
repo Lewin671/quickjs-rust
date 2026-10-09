@@ -3,8 +3,8 @@
 //!
 //! An async function reuses the generator suspend/resume machinery. Calling one
 //! captures its call frame, creates the promise it returns, and drives the body
-//! until the first `await` (compiled to the same `Op::Yield` suspension point a
-//! generator uses) or completion. `await v` resolves `v` to a promise and
+//! until the first `await` (compiled to `Op::Await`, a suspension point of the
+//! same kind as a generator's `Op::Yield`) or completion. `await v` resolves `v` to a promise and
 //! schedules reactions that resume the suspended body via the realm job queue,
 //! so code after `await` always runs in a later microtask — never synchronously.
 //!

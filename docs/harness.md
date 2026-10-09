@@ -1,513 +1,242 @@
 # Harness Runbook
 
-This runbook defines the expected operating model for autonomous agents working
-on this repository.
+How do I verify and integrate a change? `AGENTS.md` states the rules (commit
+boundaries, ownership, definition of done); this file gives the mechanics,
+and `scripts/README.md` indexes the scripts. Performance measurement has its
+own procedure: [performance-workflow.md](performance-workflow.md).
 
-Known structural risks in this operating model are recorded in
-`docs/harness-convergence-risks.md`.
+## Local checks
 
-## Baseline
+Prerequisites: Rust (through `rustup`), `python3`, ripgrep (`rg`), `git`,
+and `make`, `cmake` and a C compiler for the QuickJS-NG reference (built on
+demand by `make -C third_party/quickjs-ng`). A fresh checkout or worktree
+runs `./scripts/bootstrap.sh` once. It initialises the two top-level
+submodules (network), links each git hook that is not already installed,
+and runs `cargo fetch`.
 
-The repository's default ECMAScript conformance baseline is the latest
-ratified standard, ECMA-262 16th edition, June 2025 (ECMAScript 2025 / ES2025).
-Use the `tc39/ecma262@es2025` specification tag as the normative text anchor.
-Test262 has no edition-specific stable tag, so use the pinned
-`third_party/test262` commit for executable coverage and the pinned QuickJS-NG
-build for differential behavior. TC39 living-draft and Stage 3+ Test262 cases
-remain valid campaign inputs, but do not redefine the default baseline until
-the corresponding ECMAScript edition is ratified and this document is updated.
+- `./scripts/check-touched.sh --staged --explain`: before each commit.
+  Checks selected from the staged paths.
+- `./scripts/check-touched.sh --base <ref> --explain`: the same selection
+  for an accumulated branch slice (`<ref>...HEAD`).
+- `./scripts/check.sh`: the full gate, before handoff or push.
+- `./scripts/check-ci.sh`: the hosted `check` job, for changes to CI,
+  scripts or test scheduling.
+- `./scripts/compare-qjs.sh`: the `tests/fixtures/compare-qjs/` fixtures
+  against QuickJS-NG; not part of `check.sh`.
 
-`main` is the stable integration branch. Before starting parallel work:
+`check-touched.sh` selects by path: format, clippy and the file-size guard
+for Rust, Cargo, script or workflow changes; the tests of each touched crate
+(the whole workspace for Cargo changes); the benchmark-tool tests and
+`check-unit` for benchmark files and performance plans; and Test262
+allowlist slices mapped from runtime, parser and lexer paths. It always runs
+`check-context.py` (document budgets, Markdown links, task resume blocks,
+the task and plan indexes); a change that touches only Markdown or `docs/`
+runs that check and nothing else. When engine files changed and no slice
+matched, it says so; run `check.sh`.
 
-```sh
-git switch main
-git pull --ff-only
-./scripts/bootstrap.sh
-./scripts/check.sh
-git rev-parse HEAD
-```
+`check.sh` runs `cargo fmt --check`; clippy for the workspace, then with the
+`agents` feature and with the `perf-counters` feature, each followed by that
+feature's tests; the workspace tests; the benchmark-tool Python tests
+(`tools/benchmark/tests`); `performance-decision.sh check-unit` over every
+`tasks/performance-units/*.json` (listed with `rg`); `check-context.py`;
+the script tests (`scripts/tests`); `test-git-hooks.sh`; `bash -n` over the
+benchmark, hook and check scripts; `check-file-size.sh`; and the Test262
+subset. It prints per-stage timings. Two switches change it:
 
-Record the resulting commit as the task `base sha`.
+- `QJS_CHECK_SKIP_TEST262=1` skips the subset stage.
+- `QJS_CHECK_SPLIT_RUNTIME_TESTS=1` runs the `qjs-runtime` tests in several
+  smaller processes instead of one `cargo test --workspace`.
 
-## Single-Agent Task
+`check-ci.sh` is `check.sh` with both switches set and
+`RUST_TEST_THREADS=1`, which is what the hosted `check` job runs.
 
-Use a normal feature branch when only one agent is editing:
+`check-file-size.sh` limits lines per file: 2000 for Rust and shell, 800 for
+Python sources, 1200 for Python tests, 600 for top-level `tasks/*.md`.
+`tasks/archive/` and `third_party/` are exempt.
 
-```sh
-git switch -c agent/<task-slug>/<owner-id>
-./scripts/bootstrap.sh
-```
+**Git hooks.** `scripts/pre-commit` runs
+`check-touched.sh --staged --explain`. `scripts/pre-push` runs the full
+`check.sh` on every push. `QJS_SKIP_PRE_PUSH=1` makes the pre-push hook exit
+without checking; the script states no condition for using it, and
+`AGENTS.md` requires `check.sh` before a push either way. Hooks are stored in
+the shared git directory, so every worktree of a clone uses them.
 
-Keep the commit focused on one reviewable unit. Run the task-specific checks and
-then `./scripts/check.sh`.
+## Branches and worktrees
 
-Push the branch after it has a locally verified commit when early GitHub Actions
-signal is useful:
-
-```sh
-git push -u origin agent/<task-slug>/<owner-id>
-gh run list --branch agent/<task-slug>/<owner-id> --limit 1
-gh run watch <run-id> --exit-status
-```
-
-Remote CI is an additional signal, not a replacement for local verification.
-Do not merge or stack dependent work on a branch whose latest pushed CI run is
-red or still unexplained.
-
-For changes that can affect runtime scheduling, CI scripts, or hosted-runner
-resource usage, run the GitHub Actions check job locally through the parity
-wrapper:
-
-```sh
-./scripts/check-ci.sh
-```
-
-This uses serialized split runtime tests and skips the Test262 subset because
-CI runs that subset in a separate job. `scripts/check.sh` prints coarse stage
-timings in both normal and split modes so a canceled remote step leaves enough
-context to distinguish compile, lint, runtime, file-size, and subset failures.
-
-For AI iteration and pre-commit validation, use the touched-file gate:
-
-```sh
-./scripts/check-touched.sh --staged --explain
-```
-
-The touched gate keeps commits fast by selecting crate tests and focused
-Test262 allowlist prefixes from changed paths. Use `--base <ref> --explain`
-when validating an accumulated branch slice. It is an early warning gate, not a
-replacement for `./scripts/check.sh` before final handoff or push.
-
-## Parallel Task
-
-Use isolated worktrees only when ownership boundaries are clear:
+`main` is the integration branch. Before starting, update it
+(`git pull --ff-only`), run `./scripts/check.sh`, and record
+`git rev-parse HEAD` as the task's base sha. One agent works on a branch
+named `agent/<task-slug>/<owner-id>`. Parallel owners each get a worktree:
 
 ```sh
-./scripts/create-agent-worktree.sh <task-slug> <owner-id> <base-sha>
+./scripts/create-agent-worktree.sh <task-slug> <owner-id> [base-ref]
 ```
 
-Each owner must receive:
+The script creates the branch at the base and a worktree at
+`../<repo>-worktrees/wt-<repo>-<task-slug>-<owner-id>`, then runs
+`bootstrap.sh` inside it, so it needs network access and initialises the
+submodules there. It prints the handoff fields. Brief each owner with: task
+and goal, base sha, branch, worktree path, allowed paths, forbidden paths,
+and the verification command. Which files stay with the main agent, and when
+to serialize instead of parallelizing, is defined in `AGENTS.md` ("Parallel
+Agent Workflow").
 
-- task id and goal;
-- base sha;
-- branch name;
-- worktree path;
-- allowed paths;
-- forbidden paths;
-- verification command.
+Owners may build and test in parallel; `AGENTS.md` serializes performance
+timing through the main agent. An owner's handoff reports branch, tip sha,
+base sha, changed files, verification run, the CI run URL and status if
+pushed, and residual risks.
 
-When an owner produces a locally verified commit, they may push their feature
-branch immediately to trigger branch CI while other owners continue in separate
-worktrees. The main agent should poll or watch those runs with `gh`, record any
-failed run URL in the handoff, and route fixes back to the same owner branch.
-
-Performance timing does not parallelize. Concurrent builds, test runs and
-other owners' work on the same host distort wall time and can turn slow cases
-into spurious timeouts. Owners may implement, build, test, and collect
-diagnostic counters or traces in parallel; any comparison whose timing feeds a
-decision runs one at a time, queued through the main agent, on an otherwise
-idle host. The measurement rules themselves are in
-[performance-knowledge.md](performance-knowledge.md).
-
-Global files stay main-agent owned unless explicitly assigned:
-
-- `Cargo.toml`
-- `Cargo.lock`
-- `rust-toolchain.toml`
-- `.gitmodules`
-- `AGENTS.md`
-- `README.md`
-- `docs/architecture.md`
-- shared scripts and CI files
-
-## Owner Handoff
-
-Each coding owner must report:
-
-- branch name;
-- tip commit sha;
-- base sha used;
-- changed files;
-- verification run;
-- pushed CI run URL and status, when the branch was pushed;
-- residual risks.
-
-## Integration
-
-The main agent integrates one branch at a time.
-
-Before merging, validate branch scope:
+**Integration.** The main agent integrates one branch at a time:
 
 ```sh
 ./scripts/validate-agent-branch.sh <branch> <base-sha> <allowed-path>...
-```
-
-Then inspect and integrate:
-
-```sh
 git diff --stat <base-sha>..<branch>
 git merge --no-ff <branch>
 ./scripts/check.sh
+./scripts/compare-qjs.sh      # when the merge touches crates/qjs-runtime
 ```
 
-Run additional checks when relevant:
+`validate-agent-branch.sh` fails unless the branch descends from the base,
+has changes, and changes only files under the allowed paths. For a pushed
+branch, check its latest CI run first (see below).
+
+**Cleanup.** `git worktree remove` refuses a worktree whose submodules are
+initialised ("working trees containing submodules cannot be moved or
+removed"), which is every worktree the script creates. Remove it this way:
 
 ```sh
-./scripts/compare-qjs.sh
-./scripts/find-qjsng-gaps.sh --filter test/built-ins/String --limit 100
-./scripts/test262-subset.sh
-./scripts/microbench.sh
+rm -rf <worktree-path>
+git worktree prune
+git branch -d <branch>
 ```
 
-For performance changes, `scripts/microbench.sh` is only a fast diagnostic.
-Use the versioned black-box runner for reviewable evidence, with engine builds
-kept outside the measurement process:
+**Failure handling.** If scope validation fails, do not merge; re-brief the
+owner with the out-of-scope files, or re-baseline the task. If a check fails
+after a merge, stop integrating until the target branch is fixed or restored.
+Keep a failed branch or worktree only for diagnosis, and report it.
 
-```sh
-cargo build --release -p qjs-cli
-./scripts/benchmark.sh --candidate target/release/qjs --blocks 1 \
-  --case plain_function_call \
-  --output target/benchmarks/single-role-smoke.jsonl
-./scripts/lifecycle-bench.sh --quick
-```
+## Hosted CI
 
-The black-box command is a local single-role smoke only; it cannot be passed to
-the three-role report tool. Report-grade evidence requires the full frozen
-portfolio, all three binaries, clean recipe-matching receipts, and an explicit
-new output path:
+The workflow files under `.github/workflows/` are the source of truth.
 
-```sh
-./scripts/benchmark.sh \
-  --candidate /path/to/candidate/qjs \
-  --candidate-receipt /path/to/candidate-receipt.json \
-  --base /path/to/base/qjs \
-  --base-receipt /path/to/base-receipt.json \
-  --quickjs-ng /path/to/quickjs-ng/qjs \
-  --quickjs-ng-receipt /path/to/quickjs-ng-receipt.json \
-  --blocks 30 --seed 20250713 \
-  --output target/benchmarks/report-grade-run.jsonl
-./scripts/benchmark-report.sh --analysis-manifest benchmarks/analysis.json \
-  --input target/benchmarks/report-grade-run.jsonl \
-  --output target/benchmarks/report-grade-report.json
-```
+- `ci.yml`: pull requests, and pushes to `main` and `agent/**`. Jobs
+  `check`, `compare-qjs` and `test262-subset`.
+- `test262-coverage.yml`: after each successful `CI` run, or manual. The
+  full Test262 comparison and parity gate (below).
+- `performance-smoke.yml`: pushes and pull requests to `main`, or manual.
+  Described in `docs/benchmarking.md`.
+- `release.yml`: `v*` tags.
 
-The production experiment contract, profile/series identity, QuickJS-NG
-comparison ordering, and external-corpus admission rules are in
-`docs/benchmarking.md`.
-
-`scripts/external-corpus-audit.sh` validates the deny-only external-corpus v1
-registry without fetching or executing anything. `--registry <path>` performs
-structural validation of custom input and cannot be combined with
-`--require-admitted <id>`. The latter consults only the checked-in trust root
-and always fails because v1 cannot represent admission. The registry has five
-blocked source-pinned candidates and two excluded evidence-backed decisions;
-it is governance metadata, not a benchmark result or performance claim. Real
-admission requires a separately reviewed, content-hashed v2 audit bundle.
-
-`scripts/performance-policy-audit.sh` validates the checked-in fail-closed CI
-policy and cross-checks the four current benchmark protocol hashes, direct
-QuickJS-NG pin, full control/audit-chain aggregate hash, and external registry
-state. `--require-gate nightly|release|pr_sentinel` always
-fails in v2. `--policy <path>` only validates custom structure and is mutually
-exclusive with gate requirements. The hosted
-`.github/workflows/performance-smoke.yml` runs `performance-preview.sh` for
-explicit candidate/base SHAs and pinned QuickJS-NG. Its `pull_request_target`
-path uses the base-owned workflow, setup action, and harness for
-same-repository PRs targeting `main`; fork preview is unsupported. Its `push`
-path runs for every `main` update, including merges and direct pushes, using
-`github.event.after` as the head-owned harness/candidate and
-`github.event.before` as the base. Push admission rejects the wrong event, ref,
-repository, malformed or zero SHAs, or an after SHA different from
-`github.sha`. A manual `main` dispatch can additionally supply `base_sha` to
-compare the selected current `main` candidate against one explicit fixed
-base. The base must be a full non-zero SHA from the same repository and an
-ancestor of that candidate; the workflow fetches enough history to verify the
-relationship from the full candidate checkout before measurement, while the
-separate base checkout stays pinned to the exact build source. Omitting
-`base_sha` preserves the same-revision integrity smoke. The current `main`
-checkout still owns the
-harness in both manual forms. Both paths use read-only permissions without
-secrets. This is a cooperative integrity scope, not a malicious candidate
-sandbox. It publishes ratios only after a strict three-block, 25-case
-non-claim health check. Pending or failed runs still publish a status summary
-and any available provenance, but no ratio conclusion. Phase status identifies
-the failed build/measurement/summary stage, and even pre-orchestrator failure
-creates Markdown and JSON evidence. There is no threshold or gate.
-
-The main-push path first runs `reference-engine-cache`, which restores the
-exact pinned QuickJS-NG executable or builds and saves it before measurement.
-The dependent preview job uses `always()`, so failed cache preparation
-degrades to the orchestrator's normal rebuild path rather than skipping that
-main update. The preparation job never runs a benchmark and never caches
-evidence; all 25 cases are measured again on every push.
-
-The hosted workflow restores exact-key, content-addressed final engine
-executables to avoid recompiling unchanged Rust inputs and the fixed QuickJS-NG
-revision. Candidate/base share the Rust content namespace. Keys cover tracked
-Cargo/workspace/crate inputs, hosted image, OS release/kernel/libc, targets,
-actual compiler/linker paths, identities and digests, all effective
-build-affecting environment, and exact recipes; QuickJS-NG also binds its pin.
-Every entry is revalidated against metadata, executable mode,
-size, and SHA-256 or rebuilt. Cache misses revalidate clean source immediately
-after compilation and before atomic storage. PR-target runs restore only; trusted `main` pushes
-pre-save the pinned reference before measurement, then independently
-revalidate and can save fallback entries even after a later measurement/report
-failure. Cache-service errors degrade to rebuild/no-save.
-Measurements, receipts, reports,
-summaries, and artifacts always regenerate, with provenance in
-`build-cache.json`.
-
-Fixed-hardware qualification, A/A calibration, a noise envelope, and the PR
-false-positive budget remain future reviewed work.
-
-The lifecycle command is a Rust-native parser/compiler diagnostic. Its normal
-mode uses the frozen Criterion configuration and writes standard artifacts
-under `target/criterion`; `--quick` is only a smoke, forced to
-`target/criterion-smoke` with baseline output discarded. The wrapper rejects
-all options except positional filters, the documented exact long display/run
-flags, exact `-v`/`-n`/`-h`, and equals-only `--color`/`--format` values. It
-never runs as part of `check.sh`, is not compared with QuickJS-NG, and is not a
-CI threshold. Fixture v1 length and FNV-1a drift sentinels fail closed; content
-changes require a v2 ID. Output destruction is deferred outside timing. The
-realm-construction boundary is absent until the engine naturally exposes a
-production public API.
-
-`scripts/find-qjsng-gaps.sh` is the first-choice entrypoint for discovering
-behavior supported by the pinned QuickJS-NG reference but not yet supported by
-quickjs-rust. It runs `scripts/test262-baseline.sh --engine both`, stores the
-raw summary and case results under `target/test262-gaps/`, and prints a compact
-report with the total QuickJS-NG-pass/quickjs-rust actionable gap count, the
-split between runtime failures, included timeouts, excluded stress timeouts, and
-quickjs-rust not-run cases, top affected areas, and the first cases to
-investigate. Use
-`--filter test/<prefix>` to focus the scan on one Test262 subtree and `--all`
-when the focused scan should be exhaustive. It prints a greedy next area by
-default. For unfiltered `--all` recommendation runs, the default is a bounded
-greedy probe over `TEST262_GAP_PROBE_LIMIT` cases, currently 100, from four
-shards of 16. When no explicit selection is given via `--probe-shards` or
-`TEST262_GAP_PROBE_SHARDS`, the default shard set rotates one step per probe
-run (state in `target/test262-gaps/.probe-rotation`), so four consecutive
-probes sweep all 16 shards instead of resampling the same files. Those
-probe shards run concurrently, and the report merges their case results before
-ranking areas. This gives the agent broader Test262 coverage per iteration
-without paying for a full audit or biasing entirely toward the first sorted
-Test262 directories. After that sampled candidate queue is built, the default
-global probe exact-checks the top `TEST262_GAP_VERIFY_CANDIDATES` areas,
-currently 8. These focused verification runs execute concurrently, then the
-script prints the final recommendation and a greedy queue from those exact
-focused results. To keep the default greedy loop fast, exact verification skips
-candidate subtrees with more than `TEST262_GAP_VERIFY_AREA_MAX_FILES`
-JavaScript files, currently 150. Broad skipped areas remain visible in the raw
-probe queue, but they do not block the verified recommendation. This costs a
-few additional focused baseline runs, prevents a sampled broad area from hiding
-smaller parity wins, and gives the agent several ready follow-up areas from one
-global probe.
-The default recommendation strategy is quickwins greedy. It prefers real
-quickjs-rust engine failures when they fit in a small reviewable batch. After
-that, it prefers small harness-only batches when at least one case does not
-carry a hard-feature hint, because those mixed batches are often faster to
-verify or clear than a broad semantic area. Harness-only batches where every
-case is hard-hinted remain visible, but they rank below mixed quick wins. It
-also computes `hard hints` from Test262 feature metadata, paths, and skip metadata
-that usually imply larger missing features, such as async, destructuring, class,
-yield, proxy/realm/species behavior, resizable or growable buffers, Atomics
-agent wait/notify coordination, or Annex B global-code semantics. It also
-hard-hints known stress-shaped timeout cases, such as large typed-array concat
-and full BMP regexp escape sweeps, as performance work. The ranking weights
-those hints by expected breadth, so resizable or growable buffers, Atomics
-agent coordination, async, stress timeouts, and Annex B global-code work rank
-below narrower realm/proxy/species failures when the engine-gap count is
-otherwise similar. Those hints do not hide gaps; they only lower an area's
-default ranking so an agent can find reviewable parity wins before getting
-stuck on known broad features. Hard-hinted areas that still contain executable
-engine failures stay ahead of pure `$262.agent`/harness not-run areas, so the
-queue does not recommend host-only support before reachable semantic work. Use
-`--strategy fast` for the older small-batch-first behavior,
-`--strategy largest` to restore largest-gap-first recommendation, or
-`--recommend-batch-cap N` to tune how large a default batch may be. Use
-`--recommend-queue N` or `TEST262_GAP_RECOMMEND_QUEUE` to tune how many ranked
-areas the report prints for continuous or parallel follow-up work. Use
-`--verify-candidates N` to tune the exact candidate follow-up,
-`--verify-area-max-files N` to tune how wide a subtree may be before default
-verification skips it, or `--verify-candidates 0` when the fastest possible
-sampled recommendation is more useful than a verified one.
-After a global probe has produced a candidate queue, use
-`--from-report target/test262-gaps/<run>` or `--from-latest-report` to recompute
-the recommendation from the saved `cases.jsonl` without executing Test262
-again. Pair it with `--skip-area test/<prefix>` when the current top area is
-already being worked or has just been rechecked, so the agent can pick the next
-largest known gap immediately. This replay mode is only a planning shortcut:
-focused verification still needs `--filter test/<prefix> --all`, and final
-completion still needs `--exact --all`.
-Use `--exact --all` when the task needs a complete report or when a probe finds
-no gaps and the agent needs to prove the exit condition. Under the default
-quickwins strategy, mixed harness-only areas remain first-class candidates when
-they are small enough to check quickly, and broad-feature areas remain visible
-in the candidate queue with their `hard` count. Stress timeouts are excluded
-from the default actionable gap list so large conformance stress loops do not
-hide missing behavior; use
-`--include-timeouts` when performance parity is the task. Use `--probe-limit N`
-and `--probe-shards I/N[,I/N...]` to tune recommendation speed versus
-confidence; `--probe-shard I/N` remains as a single-shard shorthand for very
-fast local checks. Use `--no-recommend` when only the raw gap report is needed.
-Treat one recommended queue area as the smallest useful planning and commit
-boundary unless the area is too broad to review as one change. When several
-queue entries touch independent subsystems, agents may work them as separate
-reviewable units after focused `--filter ... --all` verification; avoid
-splitting follow-up work into one commit per individual Test262 case.
-
-`scripts/test262-subset.sh` runs the curated Test262 allowlist. Allowlist
-entries may point to local derived cases under `tests/test262/cases/` or pinned
-upstream cases under `third_party/test262/test/`. Upstream entries are expanded
-into temporary files with Test262 `assert.js`, `sta.js`, and metadata
-`includes` before execution. Entries in `tests/test262/expected-failures.txt`
-must also be in the allowlist and must include a reason. Expected-failure cases
-may fail without failing the subset run; if one passes, the script fails and
-asks for the stale entry to be removed. GitHub CI gives individual subset cases
-a wider timeout than the local default to avoid false failures on shared
-runners, and `scripts/check.sh` uses the same 30-second subset timeout unless
-`TEST262_CASE_TIMEOUT_SECONDS` is set explicitly. Direct `test262-subset.sh`
-runs keep the 10-second default for tighter interactive probes. Allowlist
-validation and case execution both run in parallel;
-`TEST262_JOBS` overrides the default of one worker per online CPU.
-
-The pinned Test262 revision predates the official immutable-ArrayBuffer
-metadata fix in `tc39/test262@250f204f23a9249ff204be2baec29600faae7b75`.
-Both runners source `scripts/test262-upstream-amendments.sh` to backport exactly
-the eleven upstream `["immutable"]` TypedArray factory exclusions until the
-gitlink advances past that fix. The affected files still execute every mutable
-constructor-argument factory and every assertion; no test file is skipped, and
-immutable-ArrayBuffer-specific coverage remains unchanged. Remove the backport
-when the pinned submodule contains the upstream commit.
-
-`scripts/test262-baseline.sh` scans upstream Test262 coverage. It can run a
-bounded sample, a full scan with `--all`, a shard with `--shard I/N`, and a
-quickjs-rust/QuickJS-NG comparison with `--engine both`. In that mode QuickJS-NG
-config skips are applied as the shared baseline. The quickjs-rust side reports
-not-run cases only for structural harness limits such as unsupported harness
-includes, `$262.agent`/`atomicsHelper.js` multi-agent coordination, intl402,
-and fixtures; there is no source-syntax pre-filter anymore
-(the former for-of destructuring and class filters were lifted once those
-features landed). Module-flagged cases are no longer structurally skipped: they
-run through the `qjs --module --prelude <file>` channel, where the test file is
-evaluated under the Module goal, relative specifiers resolve against the test
-file's directory (`_FIXTURE.js` files are the imported modules and stay
-non-executed standalone), and the harness includes are installed as a script
-prelude in the module graph's realm. Module resolution-phase negatives surface
-as early errors and are matched accordingly. Async-flagged cases are no longer
-structurally skipped: the harness includes `doneprintHandle.js` like
-quickjs-ng's runner, the `qjs` CLI exposes a host `print` global and drains the
-promise job queue after evaluation, and positive async cases are judged by the
-`Test262:AsyncTestComplete` / `Test262:AsyncTestFailure` markers `$DONE` prints
-(missing marker or a non-zero exit counts as a failure). Async negative cases
-stay on the negative-metadata path. Test262
-`features` metadata is parsed for QuickJS-NG config alignment, but it does not
-preemptively skip quickjs-rust cases; runnable cases produce normal pass, fail,
-or timeout signal. Negative Test262 cases are runnable by the quickjs-rust
-baseline harness; parse, early, runtime, and resolution failures are matched
-against the Test262 negative metadata before being counted as expected results.
-Raw Test262 cases run without injected harness files. `--stop-after-limit` is
-reserved for bounded probe callers such as `find-qjsng-gaps.sh`; do not use it
-for coverage accounting because it stops enumeration once the run limit is
-reached. Set `QJS_CLI_BIN` to reuse a prebuilt quickjs-rust binary across
-multiple shard runs, or set `QJS_CLI_PROFILE=release` to have the harness build
-and run an optimized `qjs-cli` binary for timeout- or performance-sensitive
-gap scans. Case enumeration and skip classification stay serial, but
-case execution runs through a parallel worker pool sized by
-`TEST262_BASELINE_JOBS` (default: one worker per online CPU); summary counts,
-JSONL artifacts, and diagnostic ordering are unchanged, while per-case
-progress lines on stdout interleave in completion order. Lower
-`TEST262_BASELINE_JOBS` when several baseline instances share one machine. Set
-`TEST262_TIMEOUT_RETRIES` to rerun only cases that hit the timeout wrapper; the
-default is `0`, and each retry uses the same per-case timeout so stable
-performance gaps remain reported as timeouts.
-The quickjs-rust baseline case builder injects Test262 harness files on demand:
-`assert.js` for assert helpers, `sta.js` when a case, required assertion helper,
-or included harness file needs `Test262Error`/`$DONOTEVALUATE`, the `$262` host
-shim for `$262`, `doneprintHandle.js` for async completion, plus declared
-metadata includes. Include-only stress cases therefore do not pay for the full
-assertion, `Test262Error`, and host prelude unless those helpers are used by the
-case or by an included harness file. The `assert.sameValue` fast path is
-installed by assigning `assert.sameValue = __quickjsRustAssertSameValue` after
-`assert.js` loads; the harness does not rewrite test source identifiers, because
-doing so changes observable `with`/Proxy name resolution.
-The cross-realm `Array` shim forwards through `Reflect.construct` with the
-incoming `new.target`, so proxy-wrapped constructor targets still exercise
-`GetFunctionRealm`-style fallback behavior.
-The
-`Test262 Coverage` GitHub Actions workflow starts for each successful `CI`
-commit, but a newer push to the same branch cancels a superseded in-flight
-run, so rapid push sequences settle on the latest commit's scan. It
-runs the sharded quickjs-rust scan and QuickJS-NG baseline in parallel,
-uploads shard summaries, and aggregates the result into the workflow summary.
-The aggregate is a conformance gate: it fails when QuickJS-NG passes a case
-that quickjs-rust fails, times out, or cannot run. The burndown and merged
-comparison artifacts still upload on that failure so the exact cases remain
-diagnosable. CI uploads the checked commit's
-optimized `qjs-cli` binary, and coverage jobs reuse that release artifact
-instead of rebuilding the runner binary on every shard group; local
-release-profile scans use the same runner profile for diagnosing timeout
-credibility and runtime-performance gaps. The
-quickjs-rust scan uses 16 coverage groups; each group runs its two Test262
-shards sequentially, and each shard saturates the runner's cores through the
-baseline script's internal worker pool while keeping the full 32-shard scan
-complete. The quickjs-rust coverage shards retry timeout cases once with the
-same 10-second case timeout to reduce shared-runner flake without hiding stable
-slow cases. The
-workflow reuses a full QuickJS-NG baseline cache when available;
-when that cache is missing, it falls back to sharded baseline jobs and saves a
-full cache for later commits.
-
-`scripts/test262-burndown.sh` records the conformance burndown time series in
-`docs/conformance/burndown.jsonl`. Use `--report DIR` with the output of a
-complete local scan (sharded `test262-baseline.sh --all --engine both` runs or
-`find-qjsng-gaps.sh --exact --all`), or `--entry FILE` with the
-`test262-burndown` artifact that the Test262 Coverage workflow uploads for
-each aggregated commit. The script refuses partial or filtered scans so every
-entry in the series is comparable. Record an entry after each full exact scan
-and when a CI aggregate provides a fresh per-commit measurement; the
-`comparison.actionable_gap` and `comparison.ng_pass_rust_not_run` trends are
-the convergence signal that decides when the recommendation strategy or
-campaign priorities should change. See `docs/conformance/README.md` for the
-schema.
-
-The coverage workflow also uploads `test262-comparison-cases`, a merged
-per-case JSONL generated by `scripts/test262-aggregate.py`. Use that artifact,
-not the rust-only `test262-coverage-*` shard artifacts, when reusing a complete
-CI scan to choose follow-up gap areas. Rows include `comparison` buckets and an
-`actionable_gap` boolean for cases where QuickJS-NG passes while quickjs-rust
-fails or times out.
-
-`scripts/microbench.sh` runs the repository's current QuickJS microbenchmark
-subset from `tests/benchmarks/quickjs/microbench.js`. Use `--engine quickjs-ng`
-or `--engine both` to compare the same subset against the pinned QuickJS-NG
-reference, and pass benchmark name prefixes to narrow a run.
-
-Do not integrate another owner branch until the target branch is green. For
-pushed owner branches, also check the latest branch CI status before merging:
+`ci.yml` cancels an in-progress run when the same branch is pushed again, so
+an older run shown as cancelled was superseded, not failed. Its `check` job
+runs `check-ci.sh` and then builds the release CLI with the `agents` feature
+and uploads it as `qjs-cli-release-linux`. Read results with:
 
 ```sh
 gh run list --branch <branch> --limit 1
 gh run view <run-id> --json status,conclusion,url,jobs
 ```
 
-## Cleanup
+A red or unexplained latest run blocks integration. Green CI does not
+replace the local checks.
 
-After a branch is merged and verified:
+## Test262
+
+The language target and the pinned corpus are defined in `AGENTS.md` and
+[conformance/README.md](conformance/README.md).
+
+**Subset** (`scripts/test262-subset.sh`). Runs `tests/test262/allowlist.txt`.
+An entry is a derived case under `tests/test262/cases/` or an upstream path
+under `third_party/test262/test/`; upstream cases get `assert.js`, `sta.js`
+and their metadata includes. Every entry in
+`tests/test262/expected-failures.txt` must be allowlisted and carry a
+reason; if one passes, the run fails until the stale entry is removed.
+`--filter <prefix>` runs a slice. The per-case timeout is
+`TEST262_CASE_TIMEOUT_SECONDS`: 10 by default, 30 under `check.sh`,
+`check-touched.sh` and CI. `TEST262_JOBS` sets the worker count.
+
+**Scan** (`scripts/test262-baseline.sh`). Enumerates the upstream corpus and
+runs `--limit N` cases (default 50), everything with `--all`, a
+`--filter test/<prefix>`, or a `--shard I/N`. `--engine both` also runs
+QuickJS-NG and applies its config skips as the shared baseline. It runs
+positive, negative, raw, async and module cases. The cases quickjs-rust does
+not run are structural only:
+
+- `_FIXTURE.js` files, which other cases import;
+- `test/intl402/` and `test/staging/intl402/`;
+- cases that include a harness file missing from the pinned checkout;
+- three named SpiderMonkey staging stress patterns (`stress-timeout` in the
+  script's `skip_reason`);
+- `$262.agent` cases, unless `QJS_AGENTS=1` (below).
+
+`QJS_CLI_BIN` reuses a prebuilt binary; otherwise the script builds one, in
+release mode when `QJS_CLI_PROFILE=release`. `TEST262_CASE_TIMEOUT_SECONDS`
+(default 10), `TEST262_TIMEOUT_RETRIES` (default 0; reruns only timeouts,
+with the same timeout) and `TEST262_BASELINE_JOBS` (default: one per CPU)
+tune a run. Load turns slow cases into timeouts: lower the job count when
+scans share a machine, and re-check a timeout serially before treating it
+as a gap. `--stop-after-limit` is for bounded probes, never for coverage
+accounting. The harness never rewrites identifiers in a test's source,
+because that changes observable name resolution.
+
+**Agents and matching CI.** The `$262.agent` cases need OS threads, which the
+engine provides only behind the cargo feature `agents`. With `QJS_AGENTS=1`
+the scripts build the CLI with that feature and run those cases with
+`--agent`; without it they are counted as not run. A prebuilt `QJS_CLI_BIN`
+must itself have been built with `--features agents`. The hosted coverage
+run uses a release binary and the settings below; `test262-coverage.yml` is
+their source. A local scan comparable to it is:
 
 ```sh
-git worktree remove <worktree-path>
-git branch -d <branch>
+QJS_AGENTS=1 QJS_CLI_PROFILE=release TEST262_TIMEOUT_RETRIES=1 \
+  TEST262_CASE_TIMEOUT_SECONDS=20 ./scripts/find-qjsng-gaps.sh --exact --all
 ```
 
-Retain failed branches or worktrees only when they are needed for diagnosis, and
-record that residual state in the final report.
+Use `QJS_AGENTS=1` only with `--exact` or `--filter`: the default sampled
+probe builds its own CLI without the feature.
 
-## Failure Handling
+**Gap discovery** (`scripts/find-qjsng-gaps.sh`). Wraps the scan with
+`--engine both`, writes the summary and per-case results under
+`target/test262-gaps/`, and reports the cases QuickJS-NG passes and
+quickjs-rust fails, with a ranked queue of areas. Its `--help` documents the
+ranking strategies, probe sampling and tuning variables. The three modes
+that matter:
 
-If validation fails, do not merge. Re-brief the owner with the out-of-scope
-files or re-baseline the task.
+- default, unfiltered `--all`: a sampled probe that recommends areas. It is
+  not evidence that no gap exists.
+- `--filter test/<prefix> --all`: exhaustive for one area. Run it before
+  implementing and again before committing.
+- `--exact --all`: the complete scan. Only this proves an exit condition or
+  feeds the burndown.
 
-If post-merge verification fails, stop integrating other branches. Keep the
-failing result isolated until the failure is understood and the target branch is
-restored or fixed.
+`--from-report <dir>` or `--from-latest-report` recomputes a recommendation
+from saved results without running anything. quickjs-rust timeouts are
+listed apart from the gap list unless `--include-timeouts` is given.
+
+**Coverage workflow.** `test262-coverage.yml` scans the commit of each
+successful `CI` run, reusing that run's CLI artifact; a newer run on the
+same branch cancels it. The quickjs-rust side runs as 16 groups of two
+shards (32 in total); the QuickJS-NG side comes from a cache keyed on both
+submodule commits and the scan scripts, or is rebuilt in 16 shards. The
+`aggregate` job runs `scripts/test262-aggregate.py --require-complete-parity`
+and fails when QuickJS-NG passes a case that quickjs-rust fails, times out
+on, or does not run. It uploads two artifacts even then: `test262-burndown`
+(one ledger line) and `test262-comparison-cases` (per-case JSONL with a
+`comparison` bucket and an `actionable_gap` flag). Use the latter, not the
+per-group `test262-coverage-*` artifacts, to pick follow-up areas.
+
+**Burndown.** `scripts/test262-burndown.sh --entry <file>` appends a CI
+`test262-burndown` artifact to `docs/conformance/burndown.jsonl`;
+`--report <dir>` appends a local complete scan. It rejects partial or
+filtered scans and a second entry for the same commit. Fields and
+provenance: [conformance/README.md](conformance/README.md).
+
+**Upstream amendments.** `scripts/test262-upstream-amendments.sh` backports
+one upstream metadata fix (`tc39/test262@250f204f23a9`) to eleven TypedArray
+cases: it excludes the immutable-ArrayBuffer factory, and every other
+assertion still runs. Remove it when the submodule passes that commit.
+
+**Untested harness logic.** `find-qjsng-gaps.sh` and `test262-baseline.sh`
+hold real program logic (ranking, sampling, sharding, case construction) in
+bash and awk with no tests of their own; only `test262-aggregate.py` has
+unit tests (`scripts/tests/`).

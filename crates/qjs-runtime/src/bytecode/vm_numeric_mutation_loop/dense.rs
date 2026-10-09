@@ -1,11 +1,21 @@
-//! Typed dense-array mutation plans compiled from immutable bytecode.
+//! Dense-array mutation plans compiled from immutable bytecode.
 //!
-//! Computed-index loops translate one straight-line body into a bounded Number
-//! register program spanning several dense-array receivers. Writable regions
-//! require distinct receivers and stage every store; pure-read reductions use
-//! shared immutable leases and safely accept receiver aliases. A failed guard
-//! can publish only completed scalar iterations before replaying the current
-//! iteration at the header.
+//! `compiler` translates the straight-line body of a counted loop with
+//! computed-index element access into a bounded Number register program
+//! (`DynamicDensePlan`) spanning several dense-array receivers. Writable
+//! regions require distinct receivers and stage every store; read-only regions
+//! use shared immutable leases and safely accept receiver aliases. A failed
+//! guard can publish only completed scalar iterations before replaying the
+//! current iteration at the header.
+//!
+//! Two executors run such a program, chosen once in
+//! `DenseNumericMutationLoopPlan::from_dynamic`. `legacy` is the compact one
+//! for plans whose inputs are all local slots; it also runs Number TypedArray
+//! receivers. The executor in this file takes the rest: own-data sources
+//! (`this.field` arrays and bounds), loop-invariant loads, and guarded
+//! `Math.round`. `hole_tail_append` handles a store that can materialize an
+//! array's implicit hole tail, and `nested` runs one dense loop together with
+//! its enclosing counted loop.
 
 use std::cell::{Ref, RefMut};
 
