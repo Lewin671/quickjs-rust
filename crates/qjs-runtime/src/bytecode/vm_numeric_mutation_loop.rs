@@ -1,9 +1,5 @@
 use std::rc::Rc;
 
-use qjs_ast::{BinaryOp, UpdateOp};
-
-use crate::{Value, value::OwnDataPropertyWrite};
-
 use super::{
     ir::{Bytecode, Op},
     vm::Vm,
@@ -28,58 +24,21 @@ use dense::{
 use predicate_scan::{DenseNumericPredicateScanPlan, PredicateScanRun};
 use scalar_bitwise::{ScalarBitwiseLoopPlan, ScalarBitwiseLoopRun};
 
-#[derive(Clone, Copy, Debug)]
-enum NumericMutationOp {
-    Add,
-    Subtract,
-}
-
-impl NumericMutationOp {
-    fn apply(self, value: f64, constant: f64) -> f64 {
-        match self {
-            Self::Add => value + constant,
-            Self::Subtract => value - constant,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-struct NumericMutation {
-    source: usize,
-    target: usize,
-    operation: NumericMutationOp,
-    constant: f64,
-}
-
-/// A counted loop that scalar-replaces writable numeric fields on one ordinary
-/// object. Every source iteration still performs each recurrence step; only
-/// the unobservable intermediate property storage is sunk to the loop exit.
-#[derive(Clone, Debug)]
-struct NamedNumericMutationLoopPlan {
-    counter_slot: usize,
-    limit_slot: usize,
-    accumulator_slot: usize,
-    block_result_slot: usize,
-    loop_result_slot: usize,
-    receiver_slot: usize,
-    fields: Vec<Rc<str>>,
-    mutations: Vec<NumericMutation>,
-    checksum_field: usize,
-}
-
-/// A fail-closed numeric property-mutation accelerator compiled from immutable
-/// source bytecode before virtual-object lowering.
+/// A fail-closed numeric loop accelerator compiled from immutable source
+/// bytecode before virtual-object lowering.
 #[derive(Clone, Debug)]
 pub(super) struct NumericMutationLoopPlan {
     header: usize,
     backedge: usize,
+    // Every surviving plan kind carries its own exit; nothing reads this copy
+    // since the named-property plan went away.
+    #[allow(dead_code)]
     exit: usize,
     kind: NumericMutationLoopKind,
 }
 
 #[derive(Clone, Debug)]
 enum NumericMutationLoopKind {
-    Named(NamedNumericMutationLoopPlan),
     Dense(Rc<DenseNumericMutationLoopPlan>),
     Special(Rc<SpecialPlan>),
 }
@@ -162,7 +121,6 @@ impl NumericMutationLoopPlan {
     #[cfg(feature = "perf-counters")]
     pub(super) fn kind_name(&self) -> &'static str {
         match &self.kind {
-            NumericMutationLoopKind::Named(_) => "named",
             NumericMutationLoopKind::Special(_) => "special",
             NumericMutationLoopKind::Dense(_) => "dense",
         }
@@ -174,9 +132,7 @@ impl NumericMutationLoopPlan {
 
     pub(super) fn contains_instruction(&self, ip: usize) -> bool {
         match &self.kind {
-            NumericMutationLoopKind::Named(_) | NumericMutationLoopKind::Dense(_) => {
-                (self.header..=self.backedge).contains(&ip)
-            }
+            NumericMutationLoopKind::Dense(_) => (self.header..=self.backedge).contains(&ip),
             NumericMutationLoopKind::Special(plan) => plan.contains_instruction(ip),
         }
     }
@@ -187,30 +143,12 @@ impl NumericMutationLoopPlan {
         backedge: usize,
         enclosing_outer: Option<EnclosingOuter>,
     ) -> Option<Self> {
-        if let Some(named) = NamedNumericMutationLoopPlan::compile(bytecode, header, backedge) {
-            return Some(Self {
-                header,
-                backedge,
-                exit: named.exit,
-                kind: NumericMutationLoopKind::Named(named.plan),
-            });
-        }
         if let Some(plan) = ScalarBitwiseLoopPlan::compile(bytecode, header, backedge) {
             return Some(Self {
                 header,
                 backedge,
                 exit: plan.exit(),
                 kind: NumericMutationLoopKind::Special(Rc::new(SpecialPlan::ScalarBitwise(plan))),
-            });
-        }
-        if let Some(dense) =
-            DenseNumericMutationLoopPlan::compile_fixed_only(bytecode, header, backedge)
-        {
-            return Some(Self {
-                header,
-                backedge,
-                exit: dense.exit(),
-                kind: NumericMutationLoopKind::Dense(Rc::new(dense)),
             });
         }
         if let Some(enclosing_outer) = enclosing_outer {
@@ -262,9 +200,6 @@ impl NumericMutationLoopPlan {
 
     fn try_run(&self, vm: &mut Vm<'_>) -> NumericMutationLoopRun {
         match &self.kind {
-            NumericMutationLoopKind::Named(plan) => {
-                NumericMutationLoopRun::from_handled(plan.try_run(vm, self.exit))
-            }
             NumericMutationLoopKind::Dense(plan) => match plan.try_run(vm) {
                 DenseNumericMutationLoopRun::Handled => NumericMutationLoopRun::Handled,
                 DenseNumericMutationLoopRun::Declined => NumericMutationLoopRun::Declined,
@@ -282,341 +217,6 @@ enum NumericMutationLoopRun {
     SuppressPlan,
     HandledAndSuppressPlan,
     SwitchToDense(Rc<DenseNumericMutationLoopPlan>),
-}
-
-impl NumericMutationLoopRun {
-    fn from_handled(handled: bool) -> Self {
-        if handled {
-            Self::Handled
-        } else {
-            Self::Declined
-        }
-    }
-}
-
-struct CompiledNamedPlan {
-    exit: usize,
-    plan: NamedNumericMutationLoopPlan,
-}
-
-/// Matches the completion suffix a loop body emits after a value-producing
-/// statement. Where a statement completion value is observable the statement
-/// duplicates its value into the block and loop result slots; inside a
-/// function body only the block slot is written. Returns the cursor just past
-/// the suffix.
-/// Matches the write-back of an accumulator statement together with whatever
-/// completion bookkeeping follows it. A statement whose value nobody observes
-/// is compiled without the duplication, so the write appears either as
-/// `Dup; AssignLocal(slot); <completion suffix>` or as a bare `AssignLocal`.
-/// Returns the assigned slot and the cursor just past the write.
-pub(super) fn match_accumulator_commit(
-    code: &[Op],
-    cursor: usize,
-    block_result_slot: usize,
-    loop_result_slot: usize,
-) -> Option<(usize, usize)> {
-    match (code.get(cursor)?, code.get(cursor + 1)) {
-        (Op::Dup, Some(Op::AssignLocal(slot))) => {
-            let end =
-                match_completion_suffix(code, cursor + 2, block_result_slot, loop_result_slot)?;
-            Some((*slot, end))
-        }
-        (Op::AssignLocal(slot), _) => Some((*slot, cursor + 1)),
-        _ => None,
-    }
-}
-
-pub(super) fn match_completion_suffix(
-    code: &[Op],
-    cursor: usize,
-    block_result_slot: usize,
-    loop_result_slot: usize,
-) -> Option<usize> {
-    if let (Some(Op::Dup), Some(Op::StoreLocal(block)), Some(Op::StoreLocal(loop_slot))) =
-        (code.get(cursor), code.get(cursor + 1), code.get(cursor + 2))
-        && *block == block_result_slot
-        && *loop_slot == loop_result_slot
-    {
-        return Some(cursor + 3);
-    }
-    match code.get(cursor)? {
-        Op::StoreLocal(block) if *block == block_result_slot => Some(cursor + 1),
-        _ => None,
-    }
-}
-
-impl NamedNumericMutationLoopPlan {
-    fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<CompiledNamedPlan> {
-        let code = &bytecode.code;
-        let (
-            Op::LoadLocal(counter_slot),
-            Op::LoadLocal(limit_slot),
-            Op::Binary(BinaryOp::Lt),
-            Op::JumpIfFalse(exit),
-            Op::Pop,
-        ) = (
-            code.get(header)?,
-            code.get(header + 1)?,
-            code.get(header + 2)?,
-            code.get(header + 3)?,
-            code.get(header + 4)?,
-        )
-        else {
-            return None;
-        };
-        if !matches!(code.get(*exit), Some(Op::Pop)) {
-            return None;
-        }
-        // The block-result seed is only emitted where a statement completion
-        // value is observable. Its slot is always named again by the loop tail.
-        let (body_start, seeded_block_result_slot) =
-            match (code.get(header + 5), code.get(header + 6)) {
-                (Some(Op::LoadConst(_)), Some(Op::StoreLocal(slot))) => (header + 7, Some(*slot)),
-                _ => (header + 5, None),
-            };
-
-        let tail = backedge.checked_sub(8)?;
-        let (
-            Op::LoadLocal(tail_block_result_slot),
-            Op::StoreLocal(loop_result_slot),
-            Op::LoadLocal(tail_counter_slot),
-            Op::ToNumeric,
-            Op::Dup,
-            Op::Update(UpdateOp::Increment),
-            Op::AssignLocal(assigned_counter_slot),
-            Op::Pop,
-            Op::Jump(tail_header),
-        ) = (
-            code.get(tail)?,
-            code.get(tail + 1)?,
-            code.get(tail + 2)?,
-            code.get(tail + 3)?,
-            code.get(tail + 4)?,
-            code.get(tail + 5)?,
-            code.get(tail + 6)?,
-            code.get(tail + 7)?,
-            code.get(tail + 8)?,
-        )
-        else {
-            return None;
-        };
-        if tail + 8 != backedge
-            || tail_header != &header
-            || seeded_block_result_slot.is_some_and(|slot| slot != *tail_block_result_slot)
-            || tail_counter_slot != counter_slot
-            || assigned_counter_slot != counter_slot
-        {
-            return None;
-        }
-        let block_result_slot = tail_block_result_slot;
-
-        let mut cursor = body_start;
-        let mut receiver_slot = None;
-        let mut fields = Vec::new();
-        let mut mutations = Vec::new();
-        while let Some((mutation, next, slot)) = compile_mutation(
-            bytecode,
-            cursor,
-            *block_result_slot,
-            *loop_result_slot,
-            &mut fields,
-        ) {
-            if receiver_slot.is_some_and(|current| current != slot) {
-                return None;
-            }
-            receiver_slot = Some(slot);
-            mutations.push(mutation);
-            cursor = next;
-        }
-        if mutations.is_empty() || mutations.len() > 8 {
-            return None;
-        }
-
-        let (
-            Op::LoadLocal(accumulator_slot),
-            Op::GetPropNamed { key, cache },
-            Op::Binary(BinaryOp::Add),
-        ) = (
-            code.get(cursor)?,
-            code.get(cursor + 1)?,
-            code.get(cursor + 2)?,
-        )
-        else {
-            return None;
-        };
-        let (assigned_accumulator_slot, accumulator_end) =
-            match_accumulator_commit(code, cursor + 3, *block_result_slot, *loop_result_slot)?;
-        let assigned_accumulator_slot = &assigned_accumulator_slot;
-        let receiver_slot = receiver_slot?;
-        if accumulator_end != tail
-            || cache.local_slot() != Some(receiver_slot)
-            || assigned_accumulator_slot != accumulator_slot
-        {
-            return None;
-        }
-        let checksum_field = field_index(&mut fields, key);
-
-        Some(CompiledNamedPlan {
-            exit: *exit,
-            plan: Self {
-                counter_slot: *counter_slot,
-                limit_slot: *limit_slot,
-                accumulator_slot: *accumulator_slot,
-                block_result_slot: *block_result_slot,
-                loop_result_slot: *loop_result_slot,
-                receiver_slot,
-                fields,
-                mutations,
-                checksum_field,
-            },
-        })
-    }
-
-    fn try_run(&self, vm: &mut Vm<'_>, exit: usize) -> bool {
-        if vm.direct_eval_with_stack {
-            return false;
-        }
-        for slot in [
-            self.counter_slot,
-            self.limit_slot,
-            self.accumulator_slot,
-            self.block_result_slot,
-            self.loop_result_slot,
-            self.receiver_slot,
-        ] {
-            if !vm.slot_is_authoritative(slot) {
-                return false;
-            }
-        }
-        let Some(mut counter) = local_number(vm, self.counter_slot) else {
-            return false;
-        };
-        let Some(limit) = local_number(vm, self.limit_slot) else {
-            return false;
-        };
-        let Some(mut accumulator) = local_number(vm, self.accumulator_slot) else {
-            return false;
-        };
-        let Some(Some(Value::Object(object))) = vm.locals.get(self.receiver_slot) else {
-            return false;
-        };
-        if vm.is_global_object(&Value::Object(object.clone()))
-            || crate::symbol::is_symbol_primitive(object)
-            || crate::typed_array::is_typed_array_object(object)
-            || object.is_module_namespace_exotic()
-        {
-            return false;
-        }
-        let mut values = Vec::with_capacity(self.fields.len());
-        for field in &self.fields {
-            let Some(value) = object.writable_own_data_number(field) else {
-                return false;
-            };
-            values.push(value);
-        }
-        let object = object.clone();
-
-        while counter < limit {
-            for mutation in &self.mutations {
-                values[mutation.target] = mutation
-                    .operation
-                    .apply(values[mutation.source], mutation.constant);
-            }
-            accumulator += values[self.checksum_field];
-            counter += 1.0;
-        }
-        for mutation in &self.mutations {
-            let key = &self.fields[mutation.target];
-            let value = Value::Number(values[mutation.target]);
-            if !matches!(
-                object.write_existing_own_data_property(key, &value),
-                OwnDataPropertyWrite::Written
-            ) {
-                return false;
-            }
-        }
-
-        set_local_number(vm, self.counter_slot, counter);
-        set_local_number(vm, self.accumulator_slot, accumulator);
-        set_local_number(vm, self.block_result_slot, accumulator);
-        set_local_number(vm, self.loop_result_slot, accumulator);
-        vm.ip = exit + 1;
-        true
-    }
-}
-
-fn compile_mutation(
-    bytecode: &Bytecode,
-    cursor: usize,
-    block_result_slot: usize,
-    loop_result_slot: usize,
-    fields: &mut Vec<Rc<str>>,
-) -> Option<(NumericMutation, usize, usize)> {
-    let code = &bytecode.code;
-    let (
-        Op::LoadLocal(receiver_slot),
-        Op::GetPropNamed {
-            key: source_key,
-            cache,
-        },
-        Op::LoadConst(constant_index),
-        Op::Binary(operation),
-        Op::SetPropNamed {
-            key: target_key, ..
-        },
-    ) = (
-        code.get(cursor)?,
-        code.get(cursor + 1)?,
-        code.get(cursor + 2)?,
-        code.get(cursor + 3)?,
-        code.get(cursor + 4)?,
-    )
-    else {
-        return None;
-    };
-    let write_end = match_completion_suffix(code, cursor + 5, block_result_slot, loop_result_slot)?;
-    if cache.local_slot() != Some(*receiver_slot) {
-        return None;
-    }
-    let Value::Number(constant) = bytecode.constants.get(*constant_index)? else {
-        return None;
-    };
-    let operation = match operation {
-        BinaryOp::Add => NumericMutationOp::Add,
-        BinaryOp::Sub => NumericMutationOp::Subtract,
-        _ => return None,
-    };
-    let source = field_index(fields, source_key);
-    let target = field_index(fields, target_key);
-    Some((
-        NumericMutation {
-            source,
-            target,
-            operation,
-            constant: *constant,
-        },
-        write_end,
-        *receiver_slot,
-    ))
-}
-
-fn field_index(fields: &mut Vec<Rc<str>>, key: &Rc<str>) -> usize {
-    if let Some(index) = fields.iter().position(|field| field == key) {
-        return index;
-    }
-    fields.push(key.clone());
-    fields.len() - 1
-}
-
-fn local_number(vm: &Vm<'_>, slot: usize) -> Option<f64> {
-    match vm.local_slot_value(slot)? {
-        Value::Number(value) => Some(value),
-        _ => None,
-    }
-}
-
-fn set_local_number(vm: &mut Vm<'_>, slot: usize, value: f64) {
-    vm.locals[slot] = Some(Value::Number(value));
 }
 
 pub(super) fn try_run_numeric_mutation_loop(
@@ -684,6 +284,7 @@ mod tests {
     use super::*;
     use crate::bytecode::compiler;
     use crate::{Value, eval};
+    use qjs_ast::UpdateOp;
 
     fn nested_function(source: &str) -> Bytecode {
         let script = qjs_parser::parse_script(source).expect("source should parse");
@@ -1032,26 +633,7 @@ mod tests {
     }
 
     #[test]
-    fn recognizes_named_numeric_recurrence() {
-        let bytecode = nested_function(
-            "function run(n) { var o = { a: 0, b: 0, c: 0 }; var sum = 0; for (var i = 0; i < n; i++) { o.a = o.c + 1; o.b = o.a + 1; o.c = o.b - 1; sum += o.c; } return sum; }",
-        );
-        assert_eq!(NumericMutationLoopPlan::compile_all(&bytecode).len(), 1);
-    }
-
-    #[test]
-    fn recognizes_fixed_dense_numeric_recurrence() {
-        let bytecode = nested_function(
-            "function run(n) { var a = [0, 0, 0, 0]; var sum = 0; for (var i = 0; i < n; i++) { a[0] = a[3] + 1; a[1] = a[0] + 1; a[2] = a[1] - 1; a[3] = a[2]; sum += a[3]; } return sum; }",
-        );
-        let plans = NumericMutationLoopPlan::compile_all(&bytecode);
-        assert_eq!(plans.len(), 1, "{:#?}", bytecode.code);
-        assert!(matches!(plans[0].kind, NumericMutationLoopKind::Dense(_)));
-    }
-
-    #[test]
     fn commits_fixed_dense_recurrence_at_loop_exit() {
-        dense::reset_test_iterations();
         assert_eq!(
             eval(
                 "function run(n) { var a = [0, 0, 0, 0]; var sum = 0; for (var i = 0; i < n; i++) { a[0] = a[3] + 1; a[1] = a[0] + 1; a[2] = a[1] - 1; a[3] = a[2]; sum += a[3]; } return sum + ':' + a.join(':'); } run(1000);"
@@ -1060,31 +642,26 @@ mod tests {
                 "500500:1000:1001:1000:1000".to_owned().into()
             ))
         );
-        assert!(dense::test_iterations() > 0);
     }
 
     #[test]
     fn fixed_dense_recurrence_preserves_self_and_overlapping_writes() {
-        dense::reset_test_iterations();
         assert_eq!(
             eval(
                 "function run(n) { var a = [0, 0]; var sum = 0; for (var i = 0; i < n; i++) { a[0] = a[0] + 1; a[1] = a[0] + 1; a[0] = a[1] - 1; sum += a[0]; } return sum + ':' + a[0] + ':' + a[1]; } run(4);"
             ),
             Ok(Value::String("10:4:5".to_owned().into()))
         );
-        assert!(dense::test_iterations() > 0);
     }
 
     #[test]
     fn fixed_dense_recurrence_falls_back_for_non_number_elements() {
-        dense::reset_test_iterations();
         assert_eq!(
             eval(
                 "function run(n) { var hits = 0; var marker = { valueOf: function () { hits += 1; return 1; } }; var a = [0, 0, marker]; var sum = 0; for (var i = 0; i < n; i++) { a[0] = a[0] + 1; a[1] = a[0] + 1; a[0] = a[1] - 1; sum += a[2]; } return sum + ':' + a[0] + ':' + a[1] + ':' + hits; } run(4);"
             ),
             Ok(Value::String("4:4:5:4".to_owned().into()))
         );
-        assert_eq!(dense::test_iterations(), 0);
     }
 
     #[test]
@@ -1854,7 +1431,7 @@ mod tests {
 
     #[test]
     fn unrelated_virtual_literal_coexists_with_dense_mutation_plan() {
-        let source = "function run(n) { var scratch = { x: 2, y: 3 }; var a = [0, 0, 0, 0]; var sum = 0; for (var i = 0; i < n; i++) { a[0] = a[3] + 1; a[1] = a[0] + 1; a[2] = a[1] - 1; a[3] = a[2]; sum += a[3]; } return sum + scratch.x + scratch.y; }";
+        let source = "function run(n) { var scratch = { x: 2, y: 3 }; var a = [0, 0, 0, 0]; for (var i = 0; i < n; i++) { a[i] = a[i] + 1; } return a[0] + a[3] + scratch.x + scratch.y; }";
         let bytecode = nested_function(source);
         let lowered = super::super::virtual_object::lower(&bytecode);
         let lowered_code = lowered.code(&bytecode.code);
@@ -1869,8 +1446,14 @@ mod tests {
         );
 
         dense::reset_test_iterations();
-        assert_eq!(eval(&format!("{source} run(4);")), Ok(Value::Number(15.0)));
+        assert_eq!(eval(&format!("{source} run(4);")), Ok(Value::Number(7.0)));
         assert!(dense::test_iterations() > 0);
+    }
+
+    #[test]
+    fn fixed_index_recurrence_runs_beside_an_unrelated_virtual_literal() {
+        let source = "function run(n) { var scratch = { x: 2, y: 3 }; var a = [0, 0, 0, 0]; var sum = 0; for (var i = 0; i < n; i++) { a[0] = a[3] + 1; a[1] = a[0] + 1; a[2] = a[1] - 1; a[3] = a[2]; sum += a[3]; } return sum + scratch.x + scratch.y; }";
+        assert_eq!(eval(&format!("{source} run(4);")), Ok(Value::Number(15.0)));
     }
 
     #[test]
