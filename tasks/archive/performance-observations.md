@@ -1,0 +1,122 @@
+# Performance observations (historical)
+
+> Historical. Dated measurements, offsets and slot budgets removed from
+> `docs/performance-knowledge.md` on 2026-10-09 because that document admits
+> only rules that hold across revisions. Each entry describes the engine,
+> toolchain and host at the date it names, up to `d1313d52`. Nothing here is
+> maintained or describes current behaviour: offsets, budgets and percentages
+> must be re-measured before use. The current re-pin procedure is in
+> [`docs/performance-workflow.md`](../../docs/performance-workflow.md); the
+> current offsets and callee list are constants in
+> `tools/benchmark/layout_pin.py`. The text is unchanged apart from headings.
+
+## 2026-09-26: byte-identical binaries at different paths
+
+Historical: from the Measuring section, lines 36-43.
+
+- **Compare like with like.** Candidate and base run through the same
+  harness, from the same directory, with the same build recipe, interleaved
+  on one host. The same script has measured differently from different
+  filesystem locations; never compare numbers taken along different paths.
+  The same holds for binaries: two byte-identical `qjs` copies at different
+  paths measured ai-astar 1-2% apart, consistently (2026-09-26). Warm each
+  binary once before an A/B too -- a freshly built one runs its first
+  process slower.
+
+## 2026-09-24 to 2026-09-26: codegen and layout observations
+
+Historical: the complete Codegen section, lines 76-166. It includes the
+2026-09-24 order-file and executor-offset measurements, the 2026-09-25
+callee-slot measurements, and the register-file indirection measurement.
+
+- **Unrelated edits change inlining and layout.** Adding code elsewhere in a
+  crate can make the compiler stop inlining or unrolling a hot function. When
+  a case regresses without an explanation, diff symbol sizes between the two
+  builds (`nm -S` / `nm -n`) before blaming the change's own logic, and pin
+  load-bearing hot helpers with `#[inline(always)]` or `#[inline(never)]`.
+- **Pin the hot layout.** Where a function lands decides which cache sets
+  and branch-predictor entries its loops share, so an edit that only moves
+  hot code can change a case's cycles with identical instruction counts.
+  The linker places the functions listed in `crates/qjs-cli/hot-functions.order`
+  first, in that order. A change that adds hot functions, or that makes the
+  profile's hottest set differ, regenerates the list in the same commit;
+  until then the new functions sit outside the pinned region and their
+  measurements carry layout noise.
+- **A stale order file hides as a regression several commits later.** New
+  hot helpers (an out-of-line read path, a memo check) land after the
+  pinned region, and any later edit anywhere in the crate shifts them: on
+  2026-09-24 a 32-byte size change in an unrelated string function moved
+  them and cost the call sentinels 15-22% and ai-astar 18% with identical
+  instruction counts, invisible to per-commit A/B runs whose base had the
+  same stale file. Canaries: `capturing_closure_call` and ai-astar cycles
+  against the last formal base. Regenerating the file restored both
+  exactly; do it in the commit that adds a hot function, and before any
+  formal run.
+- **The typed-loop executor's own address is the big layout lever, so it
+  is pinned by address.** Measured 2026-09-24 with byte-identical code:
+  `capturing_closure_call` and ai-astar run 18-25% more cycles unless
+  `try_run_typed_loop<WideLoopFrame>` starts in a narrow window modulo
+  4 KiB (0xf80..0xfe0; 0xd90..0xdc0 after one added operation), with its
+  callees in a fixed order right after it. Stack placement (env
+  size), heap placement (JS-level allocations, malloc settings), jump-table
+  offsets and loop alignment all measured flat; shifting only the executor
+  flipped the state every time. An order file alone could not hold it: the
+  functions listed before the executor (VM, wide driver) change size with
+  most edits, and codegen-unit changes resize even untouched ones.
+  `python3 -m tools.benchmark.layout_pin --binary <qjs>` puts standard-library
+  functions of fixed size first, sized so the executor lands at the pinned
+  offset, then the executor and its callees; `order_file` applies it after
+  every regeneration. The executor is the dispatch loop, `run<WideLoopFrame>`,
+  which the compiler has kept out of line since 2026-09-25 -- the tool had
+  been pinning its 132-instruction caller while the loop itself floated in
+  the unordered tail; it now looks the loop up in the binary first. After editing the executor itself, re-scan the offset
+  (`--offset`, one relink and the two canaries per probe, ~15 s each) and
+  keep the centre of the fast window. The executor is generic and is
+  instantiated in its caller's codegen unit: moving `run_typed_loop_here`
+  into another module recompiled it (48 more instructions) and lost the fast
+  state at the same address, so keep that caller in `wide/activation.rs`.
+  The interpreter's instantiation, `run<Vm>` (a script's top-level loops:
+  74% of access-fannkuch, 48% of math-partial-sums), is pinned too
+  (`--vm-offset`, 0xc40): unpinned it moved 0xc40 -> 0x870 with an
+  unrelated edit and partial-sums ran 4.7% more cycles on fewer
+  instructions. Its page scan at 0x100 steps was flat within 2%. It is
+  placed first, ahead of the wide executor: a name defined once per codegen
+  unit (`Value::clone`, `drop_in_place<Value>`) is placed once per copy, and
+  the number of copies changes with unrelated edits, so anything pinned
+  after the callees drifted (0xc40 -> 0xe60 from a `vm_call.rs` change).
+  **The callees' own addresses matter as much** (2026-09-25, identical
+  instructions and identical executor code): an unpinned property helper
+  moving cost `string_key_map_churn` 22%, and a pinned callee growing
+  176 bytes shifted the rest and cost `heterogeneous_property_read` 4%. So
+  the executor and every listed callee now own a fixed-size slot padded
+  with standard-library filler; slot sizes persist in the order file
+  (`# budget` lines) and change only when a function outgrows its slot.
+  The per-codegen-unit copies go last. Re-run `layout_pin` after every
+  code change (fillers are sized from the binary it reads), and add a hot
+  executor callee to `CALLEES` instead of letting it float. With the
+  callees fixed, the executor's offset was re-scanned to 0x200. Check the
+  executor's own size in `nm` between builds as well: a codegen-unit shift
+  inlined `math_binary` into it (+176 bytes, access-nsieve +4% at equal
+  instructions), now kept out of line.
+- **Know each case's codegen noise band before blaming a change.** The
+  functions that hold a dispatch loop are re-compiled differently by edits
+  anywhere in the crate (an inlined thread-local access, a helper's inline
+  decision), which moves call-heavy cases by several percent with identical
+  execution counts. A base that happens to be a good roll makes every
+  later change look like a regression on those cases. Measure the band with
+  a semantically neutral rebuild of the base (a reachable-but-never-run edit,
+  an out-of-lined helper) and treat a control regression inside it, with
+  every other hot function byte-identical, as codegen noise to be judged on
+  the aggregate.
+- **Hand a dispatch loop the storage, not its owner.** Reaching a register
+  file through `&mut Owner { file: Box<[T; N]> }` instead of `&mut [T; N]`
+  added a pointer load the loop could not keep in a register: the typed
+  loop's fixed register file ran 3-5% fewer instructions and 6-18% more
+  cycles (ai-astar, the sentinels) until `execute` borrowed the array
+  itself. When instructions fall and cycles rise, suspect an extra
+  indirection before alignment.
+- **Keep hot dispatch arms tiny.** Growing an arm of a hot interpreter
+  `match` can degrade register allocation and layout for the whole loop, and
+  slow workloads that never reach the new arm. Put new work behind a single
+  out-of-line call from the arm, and measure the aggregate even when the
+  change only adds a case.
