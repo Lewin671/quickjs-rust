@@ -86,24 +86,4 @@ impl Vm<'_> {
                 owner.upvalues.get(index)
             })
     }
-
-    /// Whether `cell` aliases any live upvalue in this frame, including the
-    /// direct read-only source used by slot-seeded frames. Numeric loop guards
-    /// use this to avoid scalarizing a callee update that can reach back into
-    /// the caller through a shared cell.
-    pub(super) fn has_local_upvalue_cell(&self, cell: &Upvalue) -> bool {
-        self.local_upvalues
-            .iter()
-            .flatten()
-            .any(|candidate| candidate.ptr_eq(cell))
-            || self
-                .direct_readonly_upvalue_owner
-                .as_ref()
-                .is_some_and(|owner| {
-                    owner
-                        .upvalues
-                        .iter()
-                        .any(|candidate| candidate.ptr_eq(cell))
-                })
-    }
 }

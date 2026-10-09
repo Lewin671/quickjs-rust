@@ -15,14 +15,12 @@ mod dense_typed_array_tests;
 #[cfg(test)]
 mod nested_dense_tests;
 mod predicate_scan;
-mod scalar_bitwise;
 
 use dense::{
     DenseNumericMutationLoopPlan, DenseNumericMutationLoopRun, EnclosingOuter, NestedDensePlan,
     NestedDensePlanRun, NestedDenseProbe, discover_enclosing_outers,
 };
 use predicate_scan::{DenseNumericPredicateScanPlan, PredicateScanRun};
-use scalar_bitwise::{ScalarBitwiseLoopPlan, ScalarBitwiseLoopRun};
 
 /// A fail-closed numeric loop accelerator compiled from immutable source
 /// bytecode before virtual-object lowering.
@@ -43,10 +41,13 @@ enum NumericMutationLoopKind {
     Special(Rc<SpecialPlan>),
 }
 
+// Every `SpecialPlan` already lives behind the `Rc` in
+// `NumericMutationLoopKind::Special`, so boxing a variant would only add a
+// second allocation.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
 enum SpecialPlan {
     PredicateScan(DenseNumericPredicateScanPlan),
-    ScalarBitwise(ScalarBitwiseLoopPlan),
     NestedDense {
         plan: NestedDensePlan,
         fallback: Rc<DenseNumericMutationLoopPlan>,
@@ -58,7 +59,6 @@ impl SpecialPlan {
     fn contains_instruction(&self, ip: usize) -> bool {
         match self {
             Self::PredicateScan(plan) => plan.contains_instruction(ip),
-            Self::ScalarBitwise(plan) => plan.contains_instruction(ip),
             Self::NestedDense { plan, .. } => plan.contains_instruction(ip),
         }
     }
@@ -69,10 +69,6 @@ impl SpecialPlan {
             Self::PredicateScan(plan) => match plan.try_run(vm) {
                 PredicateScanRun::Handled => NumericMutationLoopRun::Handled,
                 PredicateScanRun::Suppress => NumericMutationLoopRun::SuppressPlan,
-            },
-            Self::ScalarBitwise(plan) => match plan.try_run(vm) {
-                ScalarBitwiseLoopRun::Handled => NumericMutationLoopRun::Handled,
-                ScalarBitwiseLoopRun::Suppress => NumericMutationLoopRun::SuppressPlan,
             },
             Self::NestedDense { plan, fallback } => match plan.try_run(vm) {
                 NestedDensePlanRun::Handled => NumericMutationLoopRun::Handled,
@@ -111,7 +107,7 @@ impl NumericMutationLoopPlan {
 
     /// The bytecode range this plan owns, header through backedge.
     /// Whether this is one of the special executors -- a predicate scan or a
-    /// scalar bitwise recurrence -- which run their shape far faster than a
+    /// nested dense plan -- which run their shape far faster than a
     /// typed-loop region running the same loop through element operations.
     pub(super) fn is_special(&self) -> bool {
         matches!(self.kind, NumericMutationLoopKind::Special(_))
@@ -143,14 +139,6 @@ impl NumericMutationLoopPlan {
         backedge: usize,
         enclosing_outer: Option<EnclosingOuter>,
     ) -> Option<Self> {
-        if let Some(plan) = ScalarBitwiseLoopPlan::compile(bytecode, header, backedge) {
-            return Some(Self {
-                header,
-                backedge,
-                exit: plan.exit(),
-                kind: NumericMutationLoopKind::Special(Rc::new(SpecialPlan::ScalarBitwise(plan))),
-            });
-        }
         if let Some(enclosing_outer) = enclosing_outer {
             match NestedDensePlan::probe(bytecode, header, backedge, enclosing_outer) {
                 NestedDenseProbe::Nested {
@@ -600,19 +588,8 @@ mod tests {
     }
 
     #[test]
-    fn scalar_bitwise_plan_does_not_claim_ordinary_numeric_loops() {
+    fn ordinary_numeric_accumulation_loop_keeps_its_result() {
         let source = "function sum(limit) { var value = 0; for (var index = 0; index < limit; index++) value += index; return value + ':' + index; }";
-        let bytecode = nested_function(source);
-        let plans = NumericMutationLoopPlan::compile_all(&bytecode);
-        assert!(
-            plans.iter().all(|plan| !matches!(
-                &plan.kind,
-                NumericMutationLoopKind::Special(special)
-                    if matches!(special.as_ref(), SpecialPlan::ScalarBitwise(_))
-            )),
-            "{:#?}",
-            bytecode.code
-        );
         assert_eq!(
             eval(&format!("{source} sum(9);")),
             Ok(Value::String("36:9".to_owned().into()))
@@ -620,7 +597,7 @@ mod tests {
     }
 
     #[test]
-    fn scalar_bitwise_plan_defers_indexed_bitwise_loops_to_dense_planning() {
+    fn indexed_bitwise_loops_use_dense_planning() {
         let source = "function mask(values, limit, bits) { for (var index = 0; index < limit; index++) values[index] &= bits; return values.join(':') + ':' + index; }";
         let bytecode = nested_function(source);
         let plans = NumericMutationLoopPlan::compile_all(&bytecode);

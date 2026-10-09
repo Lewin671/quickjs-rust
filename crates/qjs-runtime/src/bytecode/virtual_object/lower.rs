@@ -93,43 +93,18 @@ pub(in crate::bytecode) fn lower(bytecode: &Bytecode) -> VirtualObjectProgram {
     // and silently discard an already-proven faster execution route. Keep any
     // candidate touched by a specialized loop materialized until the plans can
     // consume virtual slots directly.
-    let numeric_loop_plans = bytecode
-        .numeric_loop_plans
-        .get_or_init(|| super::super::vm_numeric_loop::NumericLoopPlan::compile_all(bytecode));
-    let control_loop_plans = bytecode
-        .control_loop_plans
-        .get_or_init(|| super::super::vm_control_loop::ControlLoopPlan::compile_all(bytecode));
     let numeric_mutation_loop_plans = bytecode.numeric_mutation_loop_plans.get_or_init(|| {
         super::super::vm_numeric_mutation_loop::NumericMutationLoopPlan::compile_all(bytecode)
     });
 
-    let full = lower_variant(
-        bytecode,
-        &analysis,
-        numeric_loop_plans,
-        control_loop_plans,
-        numeric_mutation_loop_plans,
-        true,
-    );
+    let full = lower_variant(bytecode, &analysis, numeric_mutation_loop_plans, true);
     let has_virtual_function = analysis.candidates.iter().any(|candidate| {
         candidate.is_virtualizable()
             && matches!(candidate.kind, VirtualKind::Function(_))
-            && !candidate_intersects_specialized_loop(
-                candidate,
-                numeric_loop_plans,
-                control_loop_plans,
-                numeric_mutation_loop_plans,
-            )
+            && !candidate_intersects_specialized_loop(candidate, numeric_mutation_loop_plans)
     });
     let data_only = if has_virtual_function {
-        lower_variant(
-            bytecode,
-            &analysis,
-            numeric_loop_plans,
-            control_loop_plans,
-            numeric_mutation_loop_plans,
-            false,
-        )
+        lower_variant(bytecode, &analysis, numeric_mutation_loop_plans, false)
     } else {
         full.clone()
     };
@@ -139,8 +114,6 @@ pub(in crate::bytecode) fn lower(bytecode: &Bytecode) -> VirtualObjectProgram {
 fn lower_variant(
     bytecode: &Bytecode,
     analysis: &super::VirtualObjectAnalysis,
-    numeric_loop_plans: &[super::super::vm_numeric_loop::NumericLoopPlan],
-    control_loop_plans: &[super::super::vm_control_loop::ControlLoopPlan],
     numeric_mutation_loop_plans: &[
         super::super::vm_numeric_mutation_loop::NumericMutationLoopPlan
     ],
@@ -152,12 +125,7 @@ fn lower_variant(
     for candidate in analysis.candidates.iter().filter(|candidate| {
         candidate.is_virtualizable()
             && (include_functions || !matches!(candidate.kind, VirtualKind::Function(_)))
-            && !candidate_intersects_specialized_loop(
-                candidate,
-                numeric_loop_plans,
-                control_loop_plans,
-                numeric_mutation_loop_plans,
-            )
+            && !candidate_intersects_specialized_loop(candidate, numeric_mutation_loop_plans)
     }) {
         let Some(candidate_replacements) = candidate_replacements(bytecode, candidate, slot_count)
         else {
@@ -224,15 +192,9 @@ fn lower_variant(
 
 fn candidate_intersects_specialized_loop(
     candidate: &VirtualCandidate,
-    numeric: &[super::super::vm_numeric_loop::NumericLoopPlan],
-    control: &[super::super::vm_control_loop::ControlLoopPlan],
     mutation: &[super::super::vm_numeric_mutation_loop::NumericMutationLoopPlan],
 ) -> bool {
-    let in_plan = |ip| {
-        numeric.iter().any(|plan| plan.contains_instruction(ip))
-            || control.iter().any(|plan| plan.contains_instruction(ip))
-            || mutation.iter().any(|plan| plan.contains_instruction(ip))
-    };
+    let in_plan = |ip| mutation.iter().any(|plan| plan.contains_instruction(ip));
     in_plan(candidate.allocation_ip) || candidate.uses.iter().map(virtual_use_ip).any(in_plan)
 }
 
@@ -1012,67 +974,6 @@ mod tests {
                 _ => None,
             })
             .expect("function bytecode should be nested in the script")
-    }
-
-    #[test]
-    fn preserves_materialized_aliases_used_by_specialized_numeric_loops() {
-        let object = nested_function(
-            "function run(n) { var value = { a: 1, b: 2, c: 3 }; var total = 0; for (var i = 0; i < n; i++) { total += value.a; total += value.b; total += value.c; } return total; }",
-        );
-        assert!(
-            !super::super::super::vm_numeric_loop::NumericLoopPlan::compile_all(&object).is_empty()
-        );
-        let object_program = lower(&object);
-        let object_code = object_program.code(&object.code);
-        assert!(
-            object_code
-                .iter()
-                .any(|op| matches!(op, Op::NewObjectDataLiteral { .. }))
-        );
-        assert!(
-            !object_code
-                .iter()
-                .any(|op| matches!(op, Op::InitVirtualObject { .. }))
-        );
-
-        let array = nested_function(
-            "function run(n) { var value = [1, 2, 3, 4]; var total = 0; for (var i = 0; i < n; i++) { total += value[0]; total += value[1]; total += value[2]; total += value[3]; } return total; }",
-        );
-        assert!(
-            !super::super::super::vm_numeric_loop::NumericLoopPlan::compile_all(&array).is_empty()
-        );
-        let array_program = lower(&array);
-        let array_code = array_program.code(&array.code);
-        assert!(
-            array_code
-                .iter()
-                .any(|op| matches!(op, Op::NewArray { .. }))
-        );
-        assert!(
-            !array_code
-                .iter()
-                .any(|op| matches!(op, Op::InitVirtualObject { .. }))
-        );
-
-        let function = nested_function(
-            "function run(n) { var add = function (value) { return value + 1; }; var total = 0; for (var i = 0; i < n; i++) { total += add(i); } return total; }",
-        );
-        assert!(
-            !super::super::super::vm_numeric_loop::NumericLoopPlan::compile_all(&function)
-                .is_empty()
-        );
-        let function_program = lower(&function);
-        let function_code = function_program.code(&function.code);
-        assert!(
-            function_code
-                .iter()
-                .any(|op| matches!(op, Op::NewFunction { .. }))
-        );
-        assert!(
-            !function_code
-                .iter()
-                .any(|op| matches!(op, Op::InitVirtualFunction { .. }))
-        );
     }
 
     #[test]

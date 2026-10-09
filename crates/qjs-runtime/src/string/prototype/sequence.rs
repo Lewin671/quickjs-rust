@@ -88,20 +88,6 @@ pub(crate) fn native_string_prototype_slice(
     )))
 }
 
-/// Returns the UTF-16 length of a numeric `String.prototype.slice` result.
-///
-/// The numeric-loop caller has already proved that the receiver is a stable
-/// primitive string, both arguments are numbers, and the intrinsic `slice`
-/// method is unchanged. Computing the selected code-unit range directly keeps
-/// that general admission contract while avoiding a temporary substring that
-/// would otherwise be allocated, copied, measured, and immediately dropped.
-pub(crate) fn numeric_string_slice_code_unit_len(value: &JsString, start: f64, end: f64) -> usize {
-    let length = crate::string::js_string_code_unit_len(value);
-    let start = numeric_string_slice_index(length, start);
-    let end = numeric_string_slice_index(length, end);
-    end.saturating_sub(start)
-}
-
 pub(crate) fn native_string_prototype_split(
     this_value: Value,
     argument_values: &[Value],
@@ -459,18 +445,6 @@ fn string_slice_code_units(
     }
 }
 
-fn numeric_string_slice_index(length: usize, number: f64) -> usize {
-    if number.is_nan() {
-        return 0;
-    }
-    let integer = number.trunc();
-    if integer < 0.0 {
-        (length as f64 + integer).max(0.0) as usize
-    } else {
-        integer.min(length as f64) as usize
-    }
-}
-
 fn string_substr_start(
     length: usize,
     value: Value,
@@ -507,63 +481,4 @@ fn string_substr_count(
         return Ok(remaining);
     }
     Ok((number.trunc() as usize).min(remaining))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::numeric_string_slice_code_unit_len;
-    use crate::JsString;
-
-    #[test]
-    fn numeric_slice_length_uses_utf16_code_units_without_materializing() {
-        let ascii = JsString::from("abcdef");
-        assert_eq!(numeric_string_slice_code_unit_len(&ascii, 1.0, 4.0), 3);
-        assert_eq!(numeric_string_slice_code_unit_len(&ascii, 1.9, 4.9), 3);
-        assert_eq!(numeric_string_slice_code_unit_len(&ascii, -4.0, -1.0), 3);
-        assert_eq!(numeric_string_slice_code_unit_len(&ascii, 4.0, 1.0), 0);
-
-        let supplementary = JsString::from("😀x");
-        assert_eq!(
-            numeric_string_slice_code_unit_len(&supplementary, 0.0, 1.0),
-            1
-        );
-        assert_eq!(
-            numeric_string_slice_code_unit_len(&supplementary, 0.0, 2.0),
-            2
-        );
-        assert_eq!(
-            numeric_string_slice_code_unit_len(&supplementary, 1.0, 2.0),
-            1
-        );
-
-        let escaped_surrogates = JsString::from(crate::string::string_from_code_units(&[
-            0xD800, 0x61, 0xDC00,
-        ]));
-        assert_eq!(
-            numeric_string_slice_code_unit_len(&escaped_surrogates, 0.0, 1.0),
-            1
-        );
-        assert_eq!(
-            numeric_string_slice_code_unit_len(&escaped_surrogates, 0.0, 3.0),
-            3
-        );
-    }
-
-    #[test]
-    fn numeric_slice_length_normalizes_non_finite_and_out_of_range_indices() {
-        let value = JsString::from("abcdef");
-        assert_eq!(
-            numeric_string_slice_code_unit_len(&value, f64::NAN, f64::INFINITY),
-            6
-        );
-        assert_eq!(
-            numeric_string_slice_code_unit_len(&value, f64::NEG_INFINITY, -1.0),
-            5
-        );
-        assert_eq!(
-            numeric_string_slice_code_unit_len(&value, f64::INFINITY, f64::NEG_INFINITY),
-            0
-        );
-        assert_eq!(numeric_string_slice_code_unit_len(&value, -100.0, 100.0), 6);
-    }
 }
