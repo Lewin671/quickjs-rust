@@ -90,7 +90,14 @@ def _code(identifier: str) -> str:
 
 
 def _beyond(ratio: float, noise: float) -> bool:
-    return abs(math.log(ratio)) >= math.log(noise)
+    """Whether a time ratio differs from 1 by at least the floor, as displayed.
+
+    The floor is applied to the same quantity the reader is shown -- the
+    percentage change in time -- so a row is never listed as beyond 7% while
+    reading "6.6% faster". The small tolerance keeps a ratio that is exactly
+    at the floor on the listed side despite floating-point representation.
+    """
+    return abs(ratio - 1) >= (noise - 1) - 1e-12
 
 
 def _percent(ratio: float) -> str:
@@ -222,7 +229,9 @@ def _verdict(
 ) -> list[str]:
     measured = [group for group in groups if group["base"] is not None]
     if not measured:
-        return []
+        # No comparison with the base at all; the reference still has an answer.
+        reference = _reference_verdict(groups)
+        return [" ".join(reference), ""] if reference else []
     slower = [g["name"] for g in measured if g["base"] > 1 and _beyond(g["base"], GROUP_NOISE)]
     faster = [g["name"] for g in measured if g["base"] < 1 and _beyond(g["base"], GROUP_NOISE)]
     if identical:
@@ -243,16 +252,20 @@ def _verdict(
         headline = f"**{subject} looks faster than {base}** on {_join(faster)}."
     else:
         headline = f"**{subject}: no clear change in speed** compared with {base}."
-    compared = [group for group in measured if group["reference"] is not None]
+    return [" ".join([headline, *_reference_verdict(groups)]), ""]
+
+
+def _reference_verdict(groups: list[dict[str, Any]]) -> list[str]:
+    """How the groups stand against the reference, whatever their base coverage."""
+    compared = [group for group in groups if group["reference"] is not None]
+    if not compared:
+        return []
     behind = sum(g["reference"] > 1 and _beyond(g["reference"], GROUP_NOISE) for g in compared)
     ahead = sum(g["reference"] < 1 and _beyond(g["reference"], GROUP_NOISE) for g in compared)
-    lines = [headline]
-    if compared:
-        lines.append(
-            f"Against QuickJS-NG it is slower on {behind} and faster on {ahead} of "
-            f"{len(compared)} workload groups."
-        )
-    return [" ".join(lines), ""]
+    return [
+        f"Against QuickJS-NG it is slower on {behind} and faster on {ahead} of "
+        f"{len(compared)} workload groups."
+    ]
 
 
 def _overview(groups: list[dict[str, Any]], absent: list[str], short_base: str) -> list[str]:
@@ -279,6 +292,7 @@ def _moved_tests(
     external: dict[str, Any] | None,
     sentinel: dict[str, Any] | None,
     short_base: str,
+    identical: bool = False,
 ) -> list[str]:
     observed: list[tuple[str, str, float, float | None, float | None]] = []
     for suite in (external or {}).get("suites", ()):
@@ -308,6 +322,17 @@ def _moved_tests(
             "",
         ]
     moved.sort(key=lambda item: (-abs(math.log(item[2])), item[0], item[1]))
+    if identical:
+        # The builds are the same bytes, so these are not candidates for a
+        # second look; they measure how noisy this particular run was.
+        _, identifier, ratio, _, _ = moved[0]
+        return [
+            f"**{len(moved)} of {len(observed)} tests still differed by more than "
+            f"{limit}** between the two identical builds (the furthest: "
+            f"{_code(identifier)}, {_percent(ratio)}). That is this run's own noise, "
+            "and more of it than these machines usually show.",
+            "",
+        ]
     lines = [
         f"**Tests that moved by more than {limit} against the {short_base}** "
         f"({len(moved)} of {len(observed)})",
@@ -345,9 +370,16 @@ def _not_compared(external: dict[str, Any] | None, sides: tuple[str, ...]) -> li
                     ("QuickJS-NG", capability.get("quickjs-ng", "not_run")),
                 )
             )
+            suite_name = escape_markdown(suite["name"])
+            if case["candidate_over_base"] is not None:
+                excluded = f"the {suite_name} comparison with QuickJS-NG"
+            elif case["candidate_over_quickjs_ng"] is not None:
+                excluded = f"the {suite_name} comparison with {sides[1]}"
+            else:
+                excluded = f"both {suite_name} comparisons"
             entries.append(
                 f"- {_code(suite['id'] + '/' + case['id'])} — {states}. "
-                f"It is left out of the {escape_markdown(suite['name'])} numbers."
+                f"It is left out of {excluded}."
             )
     if not entries:
         return []
@@ -450,6 +482,53 @@ def _broad_details(broad: dict[str, Any] | None, short_base: str, column: str) -
         )
     lines.extend(["", "</details>", ""])
     return lines
+
+
+def _exact_cell(ratio: float | None, lower: float | None, upper: float | None) -> str:
+    if ratio is None:
+        return "—"
+    interval = "" if lower is None or upper is None else f" [{lower:.4f}, {upper:.4f}]"
+    return f"{ratio:.4f}{interval}"
+
+
+def _exact(
+    broad: dict[str, Any] | None,
+    external: dict[str, Any] | None,
+    sentinel: dict[str, Any] | None,
+) -> list[str]:
+    """Every ratio the summary words, as the number and interval it came from."""
+    rows: list[str] = []
+    for suite in (external or {}).get("suites", ()):
+        for case in suite["cases"]:
+            rows.append(
+                f"| {_code(suite['id'] + '/' + case['id'])} | "
+                f"{_exact_cell(case['candidate_over_base'], *_external_interval(case, 'base'))} | "
+                f"{_exact_cell(case['candidate_over_quickjs_ng'], *_external_interval(case, 'quickjs-ng'))} |"
+            )
+    for lane in (sentinel, broad):
+        for row in _lane_rows(lane):
+            base, reference = row["base"], row["reference"]
+            rows.append(
+                f"| {_code(row['id'])} | "
+                f"{_exact_cell(base['ratio'], base.get('ci_lower'), base.get('ci_upper'))} | "
+                f"{_exact_cell(reference['ratio'], reference.get('ci_lower'), reference.get('ci_upper'))} |"
+            )
+    if not rows:
+        return []
+    return [
+        "<details>",
+        f"<summary>Exact ratios and intervals — all {len(rows)} tests</summary>",
+        "",
+        "Candidate time ÷ comparator time, with the 95% interval where the lane "
+        "computes one. Below 1 the candidate took less time.",
+        "",
+        "| Test | Candidate ÷ base | Candidate ÷ QuickJS-NG |",
+        "| --- | --- | --- |",
+        *rows,
+        "",
+        "</details>",
+        "",
+    ]
 
 
 def _method(
@@ -561,10 +640,11 @@ def render_preview(
         ])
     lines.extend(_overview(groups, absent, short_base))
     lines.extend([HOW_TO_READ, ""])
-    lines.extend(_moved_tests(broad, external, sentinel, short_base))
+    lines.extend(_moved_tests(broad, external, sentinel, short_base, identical))
     lines.extend(_not_compared(external, sides))
     lines.extend(_external_details(external, short_base, column))
     lines.extend(_sentinel_details(sentinel, short_base))
     lines.extend(_broad_details(broad, short_base, column))
+    lines.extend(_exact(broad, external, sentinel))
     lines.extend(_method(broad, external, sentinel))
     return "\n".join(lines)

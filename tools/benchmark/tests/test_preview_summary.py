@@ -174,8 +174,12 @@ class VerdictTests(unittest.TestCase):
         at = render_preview(broad({"a": 1.0}, overall=GROUP_NOISE))
         self.assertIn("looks slower", at)
         self.assertIn("🔴 2.0% slower", at)
-        mirrored = render_preview(broad({"a": 1.0}, overall=1 / GROUP_NOISE))
+        # The floor is the percentage the reader is shown, on both sides.
+        mirrored = render_preview(broad({"a": 1.0}, overall=2 - GROUP_NOISE))
         self.assertIn("looks faster", mirrored)
+        self.assertIn("🟢 2.0% faster", mirrored)
+        near = render_preview(broad({"a": 1.0}, overall=2 - GROUP_NOISE + 0.001))
+        self.assertIn("⚪ no clear change (1.9% faster)", near)
 
     def test_byte_identical_builds_are_called_noise_whatever_was_measured(self) -> None:
         markdown = render_preview(broad({"a": 1.0}, overall=1.06, base_binary="1"))
@@ -185,6 +189,20 @@ class VerdictTests(unittest.TestCase):
             markdown,
         )
         self.assertNotIn("looks slower", markdown)
+
+    def test_identical_builds_report_a_moved_test_as_the_runs_own_noise(self) -> None:
+        markdown = render_preview(
+            broad({"steady": 1.0, "jumpy": 1.117, "also": 0.92}, base_binary="1")
+        )
+        self.assertIn(
+            "**2 of 3 tests still differed by more than 7%** between the two identical "
+            "builds (the furthest: `jumpy`, 11.7% slower). That is this run's own noise",
+            markdown,
+        )
+        self.assertNotIn("worth a second look", markdown)
+        self.assertNotIn("| Test | Workload |", above_the_fold(markdown))
+        quiet = render_preview(broad({"steady": 1.0}, base_binary="1"))
+        self.assertIn("**No single test moved by more than 7%**", quiet)
 
     def test_the_two_builds_are_named_by_what_the_run_compared(self) -> None:
         for mode, subject, other, heading in (
@@ -200,6 +218,53 @@ class VerdictTests(unittest.TestCase):
         # Without the broad lane nothing says which event this was.
         fallback = render_preview(None, external([external_case("x", 1.0, 1.2)]))
         self.assertIn("**The candidate: no clear change in speed** compared with its base.", fallback)
+
+
+class ReferenceVerdictTests(unittest.TestCase):
+    def test_a_group_without_a_base_comparison_still_counts_against_the_reference(self) -> None:
+        report = external([external_case("only-reference", None, 0.8, base="timeout")])
+        report["suites"][0].update(
+            diagnostic_candidate_over_base_geomean_ratio=None,
+            diagnostic_comparable_case_geomean_ratio=0.8,
+            base_comparable_case_count=0, comparable_case_count=1,
+        )
+        with_broad = render_preview(broad({"a": 1.0}, reference=1.5), report)
+        self.assertIn("| Kraken 1\\.1 |", with_broad)
+        self.assertIn("| — | 🟢 1.25× faster |", with_broad)
+        self.assertIn(
+            "Against QuickJS-NG it is slower on 1 and faster on 1 of 2 workload groups.",
+            with_broad,
+        )
+        # With no base comparison anywhere, the reference still gets its sentence.
+        alone = render_preview(None, report)
+        self.assertEqual(
+            alone.split("\n\n")[1],
+            "Against QuickJS-NG it is slower on 0 and faster on 1 of 1 workload groups.",
+        )
+
+
+class ExactNumberTests(unittest.TestCase):
+    def test_every_worded_ratio_keeps_its_number_and_interval_in_the_fold(self) -> None:
+        markdown = render_preview(
+            broad({"plain_function_call": 1.0234}, reference=1.5),
+            external([
+                external_case("ai-astar", 1.015, 1.353),
+                external_case("no-base", None, 0.9, base="timeout"),
+            ]),
+            sentinel({"recursive_call_tree": 0.97}, reference=1.25),
+        )
+        self.assertNotIn("1.0150", above_the_fold(markdown))
+        exact = markdown.split("<summary>Exact ratios and intervals — all 4 tests</summary>", 1)[1]
+        exact = exact.split("</details>", 1)[0]
+        for row in (
+            "| `kraken-1.1/ai-astar` | 1.0150 [0.9845, 1.0454] | 1.3530 [1.3124, 1.3936] |",
+            "| `kraken-1.1/no-base` | — | 0.9000 [0.8730, 0.9270] |",
+            "| `recursive_call_tree` | 0.9700 [0.8730, 1.0670] | 1.2500 [1.1250, 1.3750] |",
+            "| `plain_function_call` | 1.0234 [1.0029, 1.0439] | 1.5000 [1.4700, 1.5300] |",
+        ):
+            self.assertIn(row, exact)
+        # A lane without evidence contributes no rows, and no rows means no section.
+        self.assertNotIn("Exact ratios", render_preview(None, None, None))
 
 
 class OverviewTests(unittest.TestCase):
@@ -236,7 +301,7 @@ class OverviewTests(unittest.TestCase):
             self.assertNotIn(jargon, body.lower())
         self.assertNotIn("(inconclusive)", markdown)
         self.assertEqual(markdown.count("<details>"), markdown.count("</details>"))
-        self.assertEqual(markdown.count("<details>"), 4)
+        self.assertEqual(markdown.count("<details>"), 5)
         self.assertIn("`" + "1" * 40 + "` / `" + "1" * 64 + "`", markdown)
         self.assertIn("informational only — non-gating — not a fixed-hardware claim", markdown)
 
@@ -324,6 +389,20 @@ class MovedTestTests(unittest.TestCase):
         self.assertIn("`case_6`", rows[0])
         self.assertNotIn("just_inside", section)
 
+    def test_a_test_is_never_listed_beyond_a_floor_its_own_row_contradicts(self) -> None:
+        # 0.934 is "6.6% faster": inside a 7% floor, however the ratio is
+        # compared, so it must not appear under "moved by more than 7%".
+        inside = render_preview(broad({"just_inside": 0.934, "other": 1.0}))
+        self.assertIn("**No single test moved by more than 7%**", inside)
+        listed = render_preview(broad({"at_floor": 0.93, "over": 1.0701, "under": 1.0699}))
+        section = listed.split("**Tests that moved", 1)[1].split("<details>", 1)[0]
+        self.assertIn("| `at_floor` | Micro-operations | 7.0% faster |", section)
+        self.assertIn("| `over` | Micro-operations | 7.0% slower |", section)
+        self.assertNotIn("`under`", section)
+        for row in (line for line in section.splitlines() if line.startswith("| `")):
+            shown = float(row.split("|")[3].strip().split("%")[0])
+            self.assertGreaterEqual(shown, round((TEST_NOISE - 1) * 100, 6))
+
     def test_nothing_beyond_the_floor_is_said_in_one_sentence(self) -> None:
         markdown = render_preview(
             broad({"a": 1.05, "b": 0.96}), None, sentinel({"c": 1.03}),
@@ -354,14 +433,35 @@ class NotComparedTests(unittest.TestCase):
         top = above_the_fold(markdown)
         self.assertIn(
             "- `kraken-1.1/imaging-gaussian-blur` — this commit timed out, the commit "
-            "before it timed out, QuickJS-NG finished. It is left out of the Kraken 1\\.1 "
-            "numbers.",
+            "before it timed out, QuickJS-NG finished. It is left out of both Kraken 1\\.1 "
+            "comparisons.",
             top,
         )
         self.assertIn("| Kraken 1\\.1 | 1 of 2 programs |", top)
         self.assertIn(
             "| `imaging-gaussian-blur` | — | — | 13,050.1 | — | — | — |", markdown
         )
+
+    def test_a_one_sided_gap_names_the_comparison_it_affects(self) -> None:
+        report = external([
+            external_case("ai-astar", 1.0, 1.3),
+            external_case("no-reference", 1.01, None, **{"quickjs-ng": "timeout"}),
+            external_case("no-base", None, 0.9, base="timeout"),
+        ])
+        report["suites"][0]["comparable_case_count"] = 2
+        top = above_the_fold(render_preview(broad({"a": 1.0}), report))
+        self.assertIn(
+            "- `kraken-1.1/no-reference` — this commit finished, the commit before it "
+            "finished, QuickJS-NG timed out. It is left out of the Kraken 1\\.1 comparison "
+            "with QuickJS-NG.",
+            top,
+        )
+        self.assertIn(
+            "QuickJS-NG finished. It is left out of the Kraken 1\\.1 comparison with the "
+            "commit before it.",
+            top,
+        )
+        self.assertNotIn("both Kraken", top)
 
     def test_hostile_identifiers_and_names_cannot_inject_markup(self) -> None:
         report = external([
