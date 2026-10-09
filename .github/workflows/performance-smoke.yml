@@ -236,11 +236,15 @@ jobs:
             --binaries "$GITHUB_WORKSPACE/target/performance-preview/binaries" \
             --build-cache-root "$GITHUB_WORKSPACE/target/performance-preview/build-cache"
 
+      # Stage artifacts are named without the run attempt and overwritten, so
+      # "Re-run failed jobs" finds what the jobs it does not repeat left
+      # behind. Each stage's status records the attempt that produced it.
       - name: Upload the three executables for the lane jobs
         uses: actions/upload-artifact@v6
         with:
-          name: preview-binaries-${{ github.run_attempt }}
+          name: preview-binaries
           path: target/performance-preview/binaries/
+          overwrite: true
           if-no-files-found: error
           retention-days: 1
 
@@ -248,7 +252,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: preview-part-build-${{ github.run_attempt }}
+          name: preview-part-build
+          overwrite: true
           path: target/performance-preview/evidence/
           if-no-files-found: warn
           retention-days: 1
@@ -408,11 +413,15 @@ jobs:
             --binaries "$GITHUB_WORKSPACE/target/performance-preview/binaries" \
             --build-cache-root "$GITHUB_WORKSPACE/target/performance-preview/build-cache"
 
+      # Stage artifacts are named without the run attempt and overwritten, so
+      # "Re-run failed jobs" finds what the jobs it does not repeat left
+      # behind. Each stage's status records the attempt that produced it.
       - name: Upload the three executables for the lane jobs
         uses: actions/upload-artifact@v6
         with:
-          name: preview-binaries-${{ github.run_attempt }}
+          name: preview-binaries
           path: target/performance-preview/binaries/
+          overwrite: true
           if-no-files-found: error
           retention-days: 1
 
@@ -490,7 +499,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: preview-part-build-${{ github.run_attempt }}
+          name: preview-part-build
+          overwrite: true
           path: target/performance-preview/evidence/
           if-no-files-found: warn
           retention-days: 1
@@ -533,7 +543,7 @@ jobs:
       - name: Download the three executables
         uses: actions/download-artifact@v7
         with:
-          name: preview-binaries-${{ github.run_attempt }}
+          name: preview-binaries
           path: target/performance-preview/binaries
 
       # The step deadline is shorter than the job's so a measurement that
@@ -555,7 +565,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: preview-part-${{ matrix.lane }}-${{ github.run_attempt }}
+          name: preview-part-${{ matrix.lane }}
+          overwrite: true
           path: target/performance-preview/evidence/
           if-no-files-found: warn
           retention-days: 1
@@ -573,6 +584,9 @@ jobs:
       QJS_HARNESS_MODE: ${{ github.event_name == 'pull_request_target' && 'base_owned_harness' || (github.event_name == 'workflow_dispatch' && 'manual_main_head_owned_harness' || 'main_push_head_owned_harness') }}
       EVIDENCE_DIR: ${{ github.workspace }}/target/performance-preview/evidence
       PYTHONDONTWRITEBYTECODE: '1'
+      # A build stage record left by an earlier attempt must not stand in for
+      # a build that failed in this one.
+      PREVIEW_BUILD_RESULT: ${{ (needs.base-owned-build.result == 'success' || needs.main-push-build.result == 'success') && 'success' || 'failure' }}
     steps:
       # Publication renders with harness code on validated JSON. It executes
       # no candidate code and no file a lane rendered.
@@ -591,7 +605,7 @@ jobs:
         uses: actions/download-artifact@v7
         continue-on-error: true
         with:
-          pattern: preview-part-*-${{ github.run_attempt }}
+          pattern: preview-part-*
           path: target/performance-preview/evidence
           merge-multiple: true
 
@@ -604,7 +618,8 @@ jobs:
           mkdir -p "$EVIDENCE_DIR"
           if [ -f "$QJS_HARNESS_ROOT/tools/benchmark/hosted_preview.py" ]; then
             python3 -m tools.benchmark.hosted_preview publish \
-              --output-dir "$EVIDENCE_DIR" --step-summary "$GITHUB_STEP_SUMMARY"
+              --output-dir "$EVIDENCE_DIR" --step-summary "$GITHUB_STEP_SUMMARY" \
+              --build-result "$PREVIEW_BUILD_RESULT"
           else
             printf '%s\n' '{"classification":"no_performance_conclusion","schema_version":2,"stages":{},"state":"failed"}' > "$EVIDENCE_DIR/status.json"
             printf '%s\n' '## Performance Preview' '' '> **No complete performance conclusion was produced.** Checkout failed before publication.' > "$EVIDENCE_DIR/summary.md"

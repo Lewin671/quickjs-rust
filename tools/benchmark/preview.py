@@ -602,6 +602,9 @@ def status(args: argparse.Namespace) -> None:
             "quickjs-ng": _revision(args.reference_revision, "reference revision"),
         },
         "message": _string(args.message, "status message"),
+        # Stage artifacts outlive a partial rerun, so the record says which
+        # attempt of the workflow run produced it.
+        "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
     }
     output = args.output_dir.expanduser().resolve()
     _write_replace(output / f"{args.stage}-status.json", _json_bytes(payload))

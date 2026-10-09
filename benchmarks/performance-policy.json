@@ -73,7 +73,7 @@
       "tools/benchmark/preview_sentinel.py",
       "tools/benchmark/preview_summary.py"
     ],
-    "aggregate_sha256": "0f8a4688d5dd59b9b1e286ec75c9aba223e8a182d28c51c5fb6919d7f0b1bd7a"
+    "aggregate_sha256": "515823176e4b298ebbd6582eaac32676a1339aadacc41e63aa58bfcafdef60a8"
   },
   "hosted_pr": {
     "tier": "informational_preview",
@@ -83,7 +83,7 @@
     "provider_url": "https://docs.github.com/actions/using-github-hosted-runners/about-github-hosted-runners",
     "runner": "ubuntu-latest",
     "workflow_path": ".github/workflows/performance-smoke.yml",
-    "workflow_sha256": "80b79dbee97100b920ca877d281a4d3df9423b03c3a147d160099f9d8f608cc3",
+    "workflow_sha256": "08cd7cc4c60109a2b2da87c1daca62ada6a42a54bc79d9c103ae4a65974b7bd0",
     "gate": false,
     "slowdown_threshold": null,
     "upload_timing_evidence": true,

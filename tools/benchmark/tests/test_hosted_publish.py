@@ -130,6 +130,67 @@ class PublishTests(unittest.TestCase):
         self.assertIn("reported success but its evidence is unreadable", notes["broad"])
         self.assertIn("reported success but its evidence is unreadable", notes["external"])
 
+    def test_parseable_but_malformed_evidence_cannot_stop_publication(self) -> None:
+        whole_run(self.output)
+        # Correct hashes, so only the missing structure can keep these out.
+        write(self.output / "external-report.json", {"binary_sha256": BINARIES})
+        machine = json.loads((self.output / "summary.json").read_text())
+        del machine["comparisons"]["candidate vs base"]["cases"][0]["ratio"]
+        write(self.output / "summary.json", machine)
+        write(self.output / "sentinel-summary.json", {"comparisons": {
+            "candidate vs base": {"cases": "not a list"},
+            "candidate vs QuickJS-NG": {"cases": []},
+        }})
+        complete, markdown, status = self.run_publish()
+        self.assertFalse(complete)
+        self.assertEqual(status["lanes_with_evidence"], [])
+        self.assertEqual(markdown.count("reported success but its evidence is malformed"), 3)
+
+        # One malformed lane leaves the healthy ones published.
+        self.step_summary.unlink()
+        whole_run(self.output)
+        write(self.output / "sentinel-summary.json", {"comparisons": {"candidate vs base": 7}})
+        complete, markdown, status = self.run_publish()
+        self.assertTrue(complete)
+        self.assertEqual(status["lanes_with_evidence"], ["broad", "external"])
+        self.assertIn("the sentinel lane reported success but its evidence is malformed", markdown)
+
+    def test_an_earlier_attempts_build_record_cannot_outvote_a_failed_build(self) -> None:
+        whole_run(self.output)
+        complete = publish(self.output, self.step_summary, build_succeeded=False)
+        status = json.loads((self.output / "status.json").read_text())
+        self.assertFalse(complete)
+        self.assertEqual(status["lanes_with_evidence"], [])
+        self.assertEqual(status["stages"]["build"]["state"], "superseded")
+        result = subprocess.run(
+            [
+                sys.executable, "-m", "tools.benchmark.hosted_preview", "publish",
+                "--output-dir", str(self.output),
+                "--step-summary", str(self.root / "again.md"), "--build-result", "failure",
+            ],
+            cwd=ROOT, capture_output=True, text=True, timeout=20, check=False,
+        )
+        self.assertEqual(result.returncode, 2, result.stderr)
+
+    def test_a_stage_record_names_the_attempt_that_produced_it(self) -> None:
+        import os
+
+        result = subprocess.run(
+            [
+                sys.executable, "-m", "tools.benchmark.preview", "status",
+                "--stage", "external", "--state", "success", "--phase", "complete",
+                "--output-dir", str(self.output), "--harness-mode", PUSH_MODE,
+                "--harness-revision", "a" * 40, "--candidate-revision", "a" * 40,
+                "--base-revision", "c" * 40, "--reference-revision", "d" * 40,
+                "--message", "done",
+            ],
+            cwd=ROOT, env={**os.environ, "GITHUB_RUN_ATTEMPT": "3"},
+            capture_output=True, text=True, timeout=20, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        stages, _, _ = collect(self.output)
+        self.assertEqual(stages["external"]["run_attempt"], "3")
+
     def test_no_build_means_no_lane_is_admitted_whatever_it_claims(self) -> None:
         whole_run(self.output)
         stage(self.output, "build", "failed", "build_candidate", "cargo failed")

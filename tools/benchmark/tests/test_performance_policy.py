@@ -599,8 +599,8 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         for build_job in (base_job, main_job):
             self.assertNotIn("--stage \"$PREVIEW_LANE\"", build_job)
             self.assertIn("--stage build --state pending --phase pre_setup", build_job)
-            self.assertIn("name: preview-binaries-${{ github.run_attempt }}", build_job)
-            self.assertIn("name: preview-part-build-${{ github.run_attempt }}", build_job)
+            self.assertIn("name: preview-binaries\n", build_job)
+            self.assertIn("name: preview-part-build\n", build_job)
         # A lane has the harness and the recorded executables, nothing else:
         # no candidate checkout, no toolchain, no cache, no source argument.
         self.assertEqual(lane_job.count("uses: actions/checkout@v6"), 1)
@@ -615,8 +615,8 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
             "needs.main-push-build.result == 'success'",
             lane_job,
         )
-        self.assertIn("name: preview-binaries-${{ github.run_attempt }}", lane_job)
-        self.assertIn("name: preview-part-${{ matrix.lane }}-${{ github.run_attempt }}", lane_job)
+        self.assertIn("name: preview-binaries\n", lane_job)
+        self.assertIn("name: preview-part-${{ matrix.lane }}\n", lane_job)
         # The measurement deadline leaves the job room to upload what it has.
         self.assertIn("timeout-minutes: 35", lane_job)
         self.assertIn("timeout-minutes: 28", lane_job)
@@ -628,7 +628,20 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         # uploaded nothing, executes no lane script, and uploads after it.
         self.assertIn("needs: [base-owned-build, main-push-build, measure-lane]", publish_job)
         self.assertIn("always() &&", publish_job)
-        self.assertIn("pattern: preview-part-*-${{ github.run_attempt }}", publish_job)
+        self.assertIn("pattern: preview-part-*\n", publish_job)
+        # "Re-run failed jobs" raises the attempt without repeating the jobs
+        # that succeeded, so nothing a later job consumes is named by attempt,
+        # every stage upload replaces its predecessor, and a build that fails
+        # in this attempt cannot be outvoted by an earlier attempt's record.
+        stage_artifacts = workflow.split("name: performance-preview-${{ github.event_name }}")[0]
+        self.assertNotIn("run_attempt", stage_artifacts)
+        self.assertEqual(workflow.count("overwrite: true"), 5)
+        self.assertIn(
+            "PREVIEW_BUILD_RESULT: ${{ (needs.base-owned-build.result == 'success' || "
+            "needs.main-push-build.result == 'success') && 'success' || 'failure' }}",
+            publish_job,
+        )
+        self.assertIn('--build-result "$PREVIEW_BUILD_RESULT"', publish_job)
         self.assertIn("merge-multiple: true", publish_job)
         self.assertEqual(publish_job.count("continue-on-error: true"), 1)
         self.assertNotIn("performance-preview.sh", publish_job)

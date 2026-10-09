@@ -205,6 +205,7 @@ def _stage(output: Path, stage: str) -> dict[str, str]:
         "state": str(status.get("state")),
         "phase": str(status.get("phase")),
         "message": str(status.get("message")),
+        "run_attempt": str(status.get("run_attempt")),
     }
 
 
@@ -227,15 +228,40 @@ def _lane_binaries(output: Path, lane: str, evidence: dict[str, Any]) -> dict[st
     return {role: (receipt or {}).get("binary_sha256") for role, receipt in receipts.items()}
 
 
-def collect(output: Path) -> tuple[dict[str, dict[str, str]], dict[str, Any], dict[str, str]]:
+def _renders(lane: str, evidence: dict[str, Any]) -> bool:
+    """Whether a lane's evidence has the structure the summary reads.
+
+    The renderer is the consumer, so it is also the check: evidence that
+    parses but lacks a field would otherwise raise while composing and take
+    every healthy lane's publication down with it.
+    """
+    from .preview_summary import render_preview
+
+    try:
+        render_preview(**{"broad": None, lane: evidence})
+    except (KeyError, TypeError, ValueError, AttributeError, IndexError, ArithmeticError):
+        return False
+    return True
+
+
+def collect(
+    output: Path, build_succeeded: bool = True,
+) -> tuple[dict[str, dict[str, str]], dict[str, Any], dict[str, str]]:
     """Read every stage's record and admit only evidence that is whole.
 
     Returns the stage records, the admitted evidence by lane, and for each
     lane without admitted evidence the reason a reader should be given. A
     lane is admitted only when its stage reached `success`, its evidence
-    parses, and it measured exactly the executables the build job recorded.
+    parses and has the structure the summary reads, and it measured exactly
+    the executables the build job recorded. `build_succeeded` is the build
+    job's own conclusion in this attempt; a build record cannot outvote it.
     """
     stages = {stage: _stage(output, stage) for stage in STAGES}
+    if not build_succeeded and stages["build"]["state"] == "success":
+        stages["build"] = {
+            **stages["build"], "state": "superseded", "phase": "build_job",
+            "message": "the build job did not succeed in this attempt",
+        }
     identity = _load(output / "build-identity.json") or {}
     built = identity.get("binaries") if stages["build"]["state"] == "success" else None
     evidence: dict[str, Any] = {}
@@ -266,12 +292,14 @@ def collect(output: Path) -> tuple[dict[str, dict[str, str]], dict[str, Any], di
                 notes[lane] = (
                     f"the {label} did not measure the executables the build stage recorded."
                 )
+            elif not _renders(lane, loaded):
+                notes[lane] = f"the {label} reported success but its evidence is malformed."
             else:
                 evidence[lane] = loaded
     return stages, evidence, notes
 
 
-def publish(output_dir: Path, step_summary: Path) -> bool:
+def publish(output_dir: Path, step_summary: Path, build_succeeded: bool = True) -> bool:
     """Compose and publish the summary; report whether the preview is whole.
 
     Publication never depends on success: the summary and status are written
@@ -284,7 +312,7 @@ def publish(output_dir: Path, step_summary: Path) -> bool:
 
     output = output_dir.expanduser().resolve()
     output.mkdir(parents=True, exist_ok=True)
-    stages, evidence, notes = collect(output)
+    stages, evidence, notes = collect(output, build_succeeded)
     complete = all(lane in evidence for lane in REQUIRED_LANES)
     banner = None
     if not complete:
@@ -365,7 +393,7 @@ def _admit_dispatch(args: argparse.Namespace) -> None:
 
 
 def _publish(args: argparse.Namespace) -> None:
-    if not publish(args.output_dir, args.step_summary):
+    if not publish(args.output_dir, args.step_summary, args.build_result == "success"):
         raise HostedPreviewError("required preview evidence is missing; see the summary")
 
 
@@ -407,6 +435,7 @@ def _parser() -> argparse.ArgumentParser:
     publisher = commands.add_parser("publish")
     publisher.add_argument("--output-dir", type=Path, required=True)
     publisher.add_argument("--step-summary", type=Path, required=True)
+    publisher.add_argument("--build-result", choices=("success", "failure"), default="success")
     publisher.set_defaults(function=_publish)
     return parser
 

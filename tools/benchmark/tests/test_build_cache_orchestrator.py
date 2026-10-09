@@ -247,7 +247,11 @@ exec "$TEST_REAL_PYTHON" "$@"
             self.assertEqual(sentinel.returncode, 0, sentinel.stderr)
             self.assertEqual(stage_status(sentinel_output, "sentinel")["state"], "incomplete")
             self.assertFalse((sentinel_output / "sentinel-summary.json").exists())
-            self.assertEqual(list((harness / "benchmarks").glob(".hosted-*")), [])
+            # The fixture shares the real benchmarks directory, so look only
+            # for this run's own derived manifests.
+            self.assertEqual(
+                list((harness / "benchmarks").glob(f".hosted-*-{CANDIDATE_SHA[:12]}-*")), []
+            )
 
             # Executables built for another event are refused before anything runs.
             foreign, foreign_output = lane("external", "first", candidate_sha="c" * 40)
