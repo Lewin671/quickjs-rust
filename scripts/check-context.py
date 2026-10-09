@@ -61,14 +61,21 @@ STATUSES = (
 )
 RESUME_WINDOW = 30
 
-# A link destination: <anything up to the bracket>, or a run without spaces.
-DESTINATION = r"(?:<([^>\n]*)>|([^)\s<]+))"
-# An inline link, with or without a title: [text](target "title").
-LINK = re.compile(r"(?<!\!)\[[^\]\n]*\]\(\s*" + DESTINATION + r"(?:\s+[^)\n]*)?\)")
-# A reference definition: [label]: target "title". The target may sit on the
-# next line. `[^note]:` is a footnote, not a link.
-REFERENCE = re.compile(r"^ {0,3}\[(?!\^)[^\]\n]+\]:\s*(?:" + DESTINATION + r")?")
-BARE_DESTINATION = re.compile(r"^\s*" + DESTINATION)
+# Link destinations, following CommonMark. Either form may be written
+# <in angle brackets>, which is how a destination contains spaces. Group 1 is
+# the bracketed form, group 2 the bare one.
+# Inside `(...)` a bare destination ends at whitespace or at the closing
+# parenthesis; parentheses within it must be balanced.
+INLINE_DESTINATION = r"(?:<([^>\n]*)>|((?:[^()\s<]|\([^()\s]*\))+))"
+# In a reference definition a bare destination is any run without whitespace.
+DEFINITION_DESTINATION = r"(?:<([^>\n]*)>|([^\s<]\S*))"
+# An inline link or image, with or without a title: [text](target "title").
+LINK = re.compile(r"\]\(\s*" + INLINE_DESTINATION + r"(?:\s+[^\n]*?)?\)")
+# A reference definition: [label]: target "title". `[^note]:` is a footnote,
+# not a link.
+REFERENCE = re.compile(r"^ {0,3}\[(?!\^)[^\]\n]+\]:(.*)$")
+DEFINITION_TARGET = re.compile(r"^\s*" + DEFINITION_DESTINATION)
+CODE_SPAN = re.compile(r"(`+)(?:(?!\1).)+?\1")
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 FENCE = re.compile(r"^\s*(```|~~~)")
 TASK_NAME = re.compile(r"^T\d{3}-.+\.md$")
@@ -103,20 +110,20 @@ def prose_lines(path: Path) -> list[str]:
 def link_targets(lines: list[str]) -> list[tuple[int, str]]:
     """Every link destination in `lines`, with its 1-based line number."""
     found = []
+    lines = [CODE_SPAN.sub("", line) for line in lines]
     for index, line in enumerate(lines):
         for angled, bare in LINK.findall(line):
             found.append((index + 1, angled or bare))
         definition = REFERENCE.match(line)
         if not definition:
             continue
-        target = definition.group(1) or definition.group(2)
-        if target is None and definition.end() == len(line.rstrip()):
-            following = lines[index + 1] if index + 1 < len(lines) else ""
-            continued = BARE_DESTINATION.match(following)
-            if continued:
-                target = continued.group(1) or continued.group(2)
+        rest = definition.group(1)
+        if not rest.strip() and index + 1 < len(lines):
+            # The destination may sit on the line after the label.
+            rest = lines[index + 1]
+        target = DEFINITION_TARGET.match(rest)
         if target:
-            found.append((index + 1, target))
+            found.append((index + 1, target.group(1) or target.group(2)))
     return found
 
 
@@ -261,7 +268,7 @@ def check_indexes(root: Path) -> list[str]:
     if unit_index.is_file():
         text = unit_index.read_text(encoding="utf-8")
         for path in sorted(units.glob("*.json")):
-            if not names(text, path.stem):
+            if not (names(text, path.stem) or names(text, path.name)):
                 errors.append(
                     f"tasks/performance-units/README.md does not list {path.name}"
                 )

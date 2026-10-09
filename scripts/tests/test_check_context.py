@@ -94,6 +94,27 @@ class ContextCheckTests(unittest.TestCase):
         self.write("README.md", "See [g][g].\n\n[g]:\n    docs/architecture.md\n")
         self.assertEqual(self.errors(), [])
 
+    def test_a_label_with_trailing_spaces_still_takes_the_next_line(self):
+        self.write("README.md", "See [g][g].\n\n[g]:   \n    gone.md\n")
+        self.assertTrue(any("gone.md" in e for e in self.errors()))
+
+    def test_parentheses_in_destinations_are_kept(self):
+        self.write("docs/guide(v2).md", "# Guide\n")
+        self.write(
+            "README.md",
+            "[a](docs/guide(v2).md) [b](docs/guide(v2).md 'B (two)') [c][c]\n\n"
+            "[c]: docs/guide(v2).md\n",
+        )
+        self.assertEqual(self.errors(), [])
+        self.write("README.md", "[c][c]\n\n[c]: docs/gone(v2).md\n")
+        self.assertTrue(any("docs/gone(v2).md" in e for e in self.errors()))
+
+    def test_image_targets_are_checked_and_code_spans_are_not(self):
+        self.write("README.md", "![shot](docs/missing.png)\n")
+        self.assertTrue(any("docs/missing.png" in e for e in self.errors()))
+        self.write("README.md", "Write `[text](target.md)` or ``[a](`b`.md)``.\n")
+        self.assertEqual(self.errors(), [])
+
     def test_footnotes_are_not_links(self):
         self.write("README.md", "Text.[^1]\n\n[^1]: This is explanatory text.\n")
         self.assertEqual(self.errors(), [])
@@ -159,8 +180,9 @@ class ContextCheckTests(unittest.TestCase):
                 any("does not list tasks/T001-example.md" in e for e in self.errors())
             )
         self.write("tasks/README.md", "# Tasks\n\nSee T001-example.md.\n")
-        self.write("tasks/performance-units/README.md", "# Plans\n\n`wide`.\n")
-        self.assertEqual(self.errors(), [])
+        for entry in ("`wide`.", "[Plan](wide.json)", "`wide.json`"):
+            self.write("tasks/performance-units/README.md", f"# Plans\n\n{entry}\n")
+            self.assertEqual(self.errors(), [], entry)
 
 
 if __name__ == "__main__":
