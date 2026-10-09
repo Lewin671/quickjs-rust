@@ -1,11 +1,29 @@
 # T013: Temporal Campaign
 
+- Status: blocked. Not started. Temporal is outside the default ES2025
+  target (`AGENTS.md`, Prime Directive), so it needs an owner decision that
+  opts in before any slice starts.
+- Implementation: none. There is no `crates/qjs-runtime/src/temporal/` and no
+  `Temporal` identifier under `crates/` (checked at `d1313d52`).
+- Verified at: nothing to verify.
+- Evidence: `third_party/quickjs-ng/test262.conf` sets `Temporal=skip` at the
+  pinned revision `f7830186`, and its `quickjs.c` contains no Temporal code.
+  `docs/harness.md` applies those config skips to both engines, so the
+  Temporal cases are among the 10,900 `ng_config_skipped` cases in
+  `docs/conformance/burndown.jsonl` and not among the 42,672 configured.
+- Unresolved: the pinned QuickJS-NG cannot serve as the reference or the
+  pass baseline for this campaign, and `find-qjsng-gaps.sh` does not report
+  Temporal cases as gaps. A reference and a measurement route must be chosen
+  first. `README.md` lists Temporal under active work; no task file records
+  work on it.
+- Next action: none until the opt-in decision. Then re-count the cases
+  against the pinned `third_party/test262` and start at S1.
+
 ## Goal
 
-Bring up the `Temporal` proposal end to end so the dominant remaining
-conformance gap — `test/built-ins/Temporal` (~4,600 cases that QuickJS-NG
-passes) — turns from structurally-failing into pass/fail signal. Land the
-shared internals (options parsing, ISO date-time records, balancing/constrain,
+Bring up the `Temporal` proposal end to end so `test/built-ins/Temporal`
+turns from structurally failing into pass/fail signal. Land the shared
+internals (options parsing, ISO date-time records, balancing/constrain,
 rounding) once, then build each Temporal type on top of it.
 
 ## Scope decisions
@@ -24,8 +42,8 @@ rounding) once, then build each Temporal type on top of it.
 
 ## Evidence
 
-`find third_party/test262/test/built-ins/Temporal -name '*.js'` counts at
-campaign start (4,603 total `*.js`):
+`find third_party/test262/test/built-ins/Temporal -name '*.js'` counts when
+this file was written (2026-06-12, 4,603 total `*.js`; not re-counted since):
 
 | Type | Cases |
 | --- | ---: |
@@ -40,8 +58,8 @@ campaign start (4,603 total `*.js`):
 | Now | 66 |
 | toStringTag / prop-desc / keys / getOwnPropertyNames | 5 |
 
-QuickJS-NG (`third_party/quickjs-ng`, read-only) implements Temporal and is the
-reference for semantics where the spec text is ambiguous.
+The pinned QuickJS-NG does not implement Temporal (see Evidence above), so
+it is not a semantic reference here. Use the proposal specification.
 
 ## Slices
 
@@ -97,7 +115,6 @@ prior one's records and helpers.
   `crates/qjs-runtime/src/math.rs` as namespace/constructor install patterns.
 - ECMAScript Temporal proposal spec (Abstract Operations: `GetOption`,
   `RoundNumberToIncrement`, `BalanceTime`, `RegulateISODate`, ...).
-- QuickJS-NG: `third_party/quickjs-ng/quickjs.c` Temporal implementation.
 - Test262: `test/built-ins/Temporal/**`, `harness/temporalHelpers.js`.
 
 ## Acceptance Criteria
@@ -116,7 +133,8 @@ prior one's records and helpers.
 
 ```sh
 cargo test -p qjs-runtime
-./scripts/find-qjsng-gaps.sh --filter test/built-ins/Temporal --all
+./scripts/test262-baseline.sh --engine quickjs-rust \
+  --filter test/built-ins/Temporal --all --no-fail
 ./scripts/check.sh
 ./scripts/compare-qjs.sh
 ```

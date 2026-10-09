@@ -1,44 +1,41 @@
 # T000: Task Title
 
+- Status: active | blocked | closed-landed | closed-rejected |
+  closed-superseded | historical-campaign.
+- Implementation: present | partial | reverted | none. State this
+  independently of whether the evidence was accepted.
+- Verified at: commit, date, and the checks that were run at that commit.
+- Evidence: a path in the repository, or "local artifact, not retained".
+- Unresolved: open issues, or "none".
+- Next action: the next justified step, or "none".
+
+Keep this block first and current; update it at every handoff or completed
+unit. Write "not recorded" where a field is unknown. Results apply only to
+the revision they name. When the status becomes closed or historical, move
+the file to `tasks/archive/` with `git mv`. Keep an active file under 200
+lines by moving its finished log to `tasks/archive/<Tnnn>-log.md`.
+
 ## Goal
 
-Describe the intended outcome and observable success criteria. Let the problem
-determine the design scope; keep implementation units independently verifiable.
+The intended outcome and the observable success criteria.
 
-## Design and Stages (structural changes only)
-
-- Target architecture and invariants:
-- Design reference:
-- Migration stages and their acceptance criteria:
-
-For performance work, follow `docs/performance-workflow.md` and T022. Link the
-validated `tasks/performance-units/<unit>.json` plan and decision evidence;
-do not duplicate their targets, budgets, or metrics here.
+For a structural change, name the target architecture, its invariants and
+the migration stages, or link the design note that does. For performance
+work, follow `docs/performance-workflow.md` and
+`tasks/T022-performance-priority-controller.md`; link the frozen
+`tasks/performance-units/<unit>.json` plan instead of restating its targets,
+budgets or metrics.
 
 ## Scope
 
 - Allowed paths:
 - Forbidden paths:
 - Owner boundary:
+- Base sha, branch and worktree (parallel work only):
 
-## Parallel Assignment
+## Acceptance
 
-- Base sha:
-- Branch:
-- Worktree:
-- Owner id:
-- Integration owner:
-
-## References
-
-- `AGENTS.md`
-- `docs/architecture.md`
-- Relevant QuickJS-NG files:
-- Relevant Test262 files:
-
-## Acceptance Criteria
-
-- 
+- [ ]
 
 ## Verification
 
@@ -46,18 +43,4 @@ do not duplicate their targets, budgets, or metrics here.
 ./scripts/check.sh
 ```
 
-Add narrower commands here when useful.
-
-## Notes
-
-Record assumptions, expected failures, and follow-up work.
-
-## Resume State
-
-- Current status and stage:
-- Verified revision (SHA), checks, and evidence references:
-- Unresolved issues:
-- Next action:
-
-Update at a handoff or completed unit. Historical results apply only to their
-recorded revisions; revalidate selection and evidence before starting new work.
+Add narrower commands when useful.
