@@ -9,6 +9,7 @@ Prose rules go stale; these do not. The checks are deliberately few:
 * Relative Markdown links, images and `#anchors` in current documents
   resolve. Inline links and reference definitions are read the way
   CommonMark reads them; fenced code blocks and code spans are skipped.
+  A line that starts with `|` is read as a table row, a block of its own.
   Not covered: indented code blocks (a link inside one is still checked),
   raw HTML links, and a `[text][label]` whose label has no definition.
 * Every active task opens with the resume block from `tasks/TEMPLATE.md`.
@@ -69,8 +70,11 @@ RESUME_WINDOW = 30
 # literal, and `[^note]:` is a footnote, not a link.
 REFERENCE = re.compile(r"^ {0,3}\[(?!\^)(?:[^\]\\\n]|\\.)+\]:(.*)$")
 # A line that starts a new block inside a run of non-blank lines: a list
-# item, a heading, a block quote, or a table row.
-BLOCK_START = re.compile(r"^\s*(?:[-*+]\s|\d+[.)]\s|#{1,6}\s|>|\|)")
+# item, a heading, or a table row.
+BLOCK_START = re.compile(r"^\s*(?:[-*+]\s|\d+[.)]\s|#{1,6}\s|\|)")
+# The markers of a block quote; its content is read as if they were absent,
+# so a quoted paragraph continues across its lines.
+QUOTE_MARKERS = re.compile(r"^ {0,3}(?:>[ \t]?)+")
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 FENCE = re.compile(r"^\s*(```|~~~)")
 TASK_NAME = re.compile(r"^T\d{3}-.+\.md$")
@@ -197,6 +201,7 @@ def definition_target(rest: str) -> str | None:
 def link_targets(lines: list[str]) -> list[tuple[int, str]]:
     """Every link destination in `lines`, with its 1-based line number."""
     found = []
+    lines = [QUOTE_MARKERS.sub("", line) for line in lines]
     # Inline links are scanned a block at a time, because a code span or a
     # link's text may wrap across the lines of one paragraph or list item but
     # never across two blocks.

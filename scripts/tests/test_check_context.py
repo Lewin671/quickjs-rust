@@ -167,6 +167,15 @@ class ContextCheckTests(unittest.TestCase):
         found = [e for e in self.errors() if "archi\\tecture.md" in e]
         self.assertEqual(len(found), 2)
 
+    def test_a_block_quote_paragraph_continues_across_its_lines(self):
+        self.write("README.md", '> [guide](docs/missing.md\n> "Title")\n')
+        self.assertTrue(any("README.md:1" in e and "docs/missing.md" in e for e in self.errors()))
+        self.write("README.md", "> Write `[text](docs/missing.md)\n> more`.\n>\n> [r]: gone.md\n")
+        errors = self.errors()
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("README.md:4", errors[0])
+        self.assertIn("gone.md", errors[0])
+
     def test_footnotes_are_not_links(self):
         self.write("README.md", "Text.[^1]\n\n[^1]: This is explanatory text.\n")
         self.assertEqual(self.errors(), [])
