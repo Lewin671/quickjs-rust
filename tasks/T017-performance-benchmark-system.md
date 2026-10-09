@@ -5,9 +5,9 @@
 - Implementation: partial. M0-M5 and the hosted preview infrastructure are
   present (`benchmarks/`, `tools/benchmark/`, `scripts/benchmark*.sh`,
   `scripts/performance-*.sh`). M6 and M7 are not started.
-- Verified at: not recorded per milestone. The hosted preview's staged
-  workflow was verified at `35121b6a`, 2026-10-09 (see "Hosted preview
-  record"). At `d1313d52`, `benchmarks/performance-policy.json`
+- Verified at: not recorded per milestone. The hosted preview's staged,
+  sharded workflow and its report were verified at `d9fb83f3`, 2026-10-09
+  (see "Hosted preview record"). At `d1313d52`, `benchmarks/performance-policy.json`
   still has `fixed_hardware.configured` false, an empty `evidence_entries`
   list and every gate disabled.
 - Evidence: `benchmarks/performance-policy.json`; `docs/benchmarking.md`.
@@ -79,6 +79,16 @@ from creation to conclusion; build job 37 s, then broad 828 s, external
 396 s and sentinel 130 s side by side, publish 5 s. The run is now the build
 plus the broad lane.
 
+**2026-10-09, broad lane in two shards (`d9fb83f3`).** Run 37963316916:
+494 s from creation to conclusion; build job 48 s, then `broad-1` 421 s,
+`broad-2` 409 s, external 286 s and sentinel 134 s side by side, publish 7 s.
+Checked against criteria written before landing, using run 37950725509
+(unsharded) as the reference: all 25 cases present with linearity passing;
+per-case candidate/base ratios within 5% for 22 of 25 (required 20, and
+equal to the unsharded run-to-run figure) with a mean shift of 0.9970
+(required 0.99 to 1.01); total under 600 s. The two executables were
+byte-identical in this run, and the report said so.
+
 **Where the broad lane's time goes (run 37933477498, sample durations).** Of
 814 s: linearity diagnostics 475 s (600 samples), calibration 183 s, warmup
 40 s, the three measurement blocks 116 s. The sentinel lane has the same
@@ -111,8 +121,7 @@ per-case candidate/base deviation went from 0.9% to 7.0%. It changes the
 reading, not only its noise, so it was not landed. The code was never
 committed.
 
-The remaining levers on the broad lane both change what it measures and
-need their own qualification: fewer or shorter linearity probes (a
-measurement-protocol change, also binding the formal lanes), or sharding the
-25 cases across runners (the lane's overall ratio would no longer come from
-one host).
+A run is now the build plus the slowest of four similar jobs, so a third
+broad shard would not shorten it. The remaining lever on per-case cost is
+fewer or shorter linearity probes, which is a measurement-protocol change
+that also binds the formal lanes and needs its own qualification.
