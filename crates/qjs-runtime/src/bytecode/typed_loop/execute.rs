@@ -65,12 +65,10 @@ pub(crate) fn try_run_typed_loop<F: LoopFrame>(
     // The converse holds for the special mutation plans: a region that
     // *encloses* a loop a predicate scan or nested dense plan claims would
     // run that loop itself and the plan would never be consulted, and those
-    // executors run their shape far faster -- an FFT butterfly went
-    // 0.58 s -> 1.30 s through this tier's element operations
-    // (audio-fft). A dense recurrence plan is not faster than an enclosing
-    // typed region: fannkuch's outer loop, enclosing two, runs 1.36 vs 1.96
-    // against QuickJS-NG when it is declined instead. So only the special
-    // plans keep their enclosing region on the interpreter.
+    // executors run their shape faster than this tier's element operations
+    // do. A plain dense plan is not faster than an enclosing typed region,
+    // so only the special plans keep their enclosing region on the
+    // interpreter.
     let encloses_special_region =
         |plan: &super::super::vm_numeric_mutation_loop::NumericMutationLoopPlan| {
             let (plan_header, plan_backedge) = plan.region();
@@ -783,9 +781,8 @@ fn perform_hoisted_reads<F: LoopFrame>(
 }
 
 /// `CallClosedFormLeaf`, whole. Out of line so the dispatch loop's arm is a
-/// call and a test: a branch on the argument mode inside the arm itself,
-/// executed a few thousand times, cost ai-astar 15% by re-rolling the
-/// loop's register allocation.
+/// call and a test: even a rarely taken branch inside the arm itself changes
+/// the loop's register allocation for every other arm.
 #[inline(never)]
 fn call_leaf(
     program: &TypedLoopProgram,
@@ -999,7 +996,7 @@ fn call_number_only_leaf(
 ) -> Option<Value> {
     // `x[i + j]` past the end of a hash's input is `undefined`, which
     // `safe_add` turns to NaN and then 0 like any number operator would;
-    // declining it deoptimized crypto-sha1's whole block loop.
+    // declining it would deoptimize the whole enclosing block loop.
     let numbers = typed_numbers(
         args,
         super::super::vm_numeric_leaf::number_only_leaf_converts_arguments(bytecode),
@@ -1060,8 +1057,7 @@ fn call_closed_form_leaf(
     // Before the closed-form evaluators, not after. Preparation already
     // refused to flatten any body they can answer, so a graph hit here is a
     // body they would decline -- and reaching it through them first means
-    // building an argument array and walking the body twice, which cost
-    // `imaging-darkroom` 4.1%.
+    // building an argument array and walking the body twice.
     if let Some(value) = program.helper_graphs.borrow().call(callee, args) {
         return Some(value.to_value());
     }
@@ -1230,9 +1226,8 @@ fn get_named_object(
     // The executor's inline read only takes a number from small storage: a
     // dynamic-storage receiver (a constructor's twelfth property on) arrives
     // here with the site's slot still valid, and re-resolving the name each
-    // time was a hash lookup per read (audio-dft +3% instructions). After
-    // the shapes: checked first, a polymorphic site's small-storage misses
-    // paid for it (heterogeneous_property_read +6% cycles).
+    // time would be a hash lookup per read. Checked after the shapes: checked
+    // first, a polymorphic site's small-storage misses would pay for it.
     if let Some((key, slot)) = shapes.slot.as_ref()
         && let Some(value) = object.shared_dynamic_slot_value(key, *slot)
     {
@@ -1519,8 +1514,8 @@ fn fill_hole_or_grow_value<F: LoopFrame>(
 /// length, or one past it.
 ///
 /// `new Array(n)` produces `n` holes, so `for (i = 0; i < n; i++) a[i] = v` --
-/// the first loop of `access-nsieve` and of most sieve or table code -- was a
-/// hole fill on *every* iteration and deoptimized the whole region. The three
+/// the first loop of most sieve or table code -- is a hole fill on *every*
+/// iteration and would otherwise deoptimize the whole region. The three
 /// conditions are exactly the ones the interpreter's own `a[i] = x` fast path
 /// checks before reaching `ArrayRef::set`, so the two agree by construction;
 /// they are evaluated here rather than per write because an overwrite, which is

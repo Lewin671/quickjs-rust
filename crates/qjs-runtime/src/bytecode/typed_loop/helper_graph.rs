@@ -1,12 +1,9 @@
 //! Bounded numeric helper graphs, prepared once per typed-loop entry.
 //!
-//! A call to an ordinary JavaScript function used to abort a whole loop region
-//! at compile time, because the tier could only lower an intrinsic reached
-//! through the `Math` global. That single gap is the terminal blocker on the
-//! generic-path half of the external corpus: `imaging-darkroom`,
-//! `stanford-crypto-aes`, `crypto-aes`, `access-nsieve` and `string-fasta` all
-//! give up on an `Op::Call`, and `imaging-darkroom` alone dispatches 449 M
-//! generic instructions with every one of its 1.9 M backedges declining.
+//! Loops in ordinary code call small JavaScript helper functions, and a call
+//! the tier cannot lower aborts the whole loop region at compile time. This
+//! module lets a region keep such a call when the callee is a bounded graph
+//! of numeric helpers.
 //!
 //! The helper bodies that matter are pure arithmetic over their parameters:
 //!
@@ -22,8 +19,8 @@
 //! intrinsics are all in hand — into a register program over [`Typed`] values.
 //!
 //! **Preparation happens once per entry, never per call.** Rebuilding and
-//! re-guarding the graph at every helper invocation was measured on this
-//! workload and regressed it to 1.13x
+//! re-guarding the graph at every helper invocation was measured and is a
+//! regression
 //! (`tasks/performance-units/typed-loop-entry-prepared-numeric-helper-graph.json`).
 //! What remains per call is one function-identity comparison.
 //!
@@ -145,9 +142,7 @@ pub(super) struct HelperGraph {
     /// Each program's body over `f64` registers, when it holds only values
     /// that encoding represents (`numeric`). Kept beside `programs` rather
     /// than in them: `call` is inlined into the typed loop's dispatch, and
-    /// changing the layout it walks re-rolled that loop's register
-    /// allocation -- ai-astar and the call sentinels moved 18-25% with
-    /// identical instructions.
+    /// changing the layout it walks changes that loop's register allocation.
     numeric: Vec<Option<numeric::NumProgram>>,
 }
 
@@ -348,9 +343,8 @@ impl Preparation {
             let callee = vm.local_slot_value(site.callee_slot as usize)?;
             // A body the closed-form evaluators already answer is left to
             // them: they resolve it in one pass with no interpretation, and
-            // shadowing one cost `math-cordic` 3.7%. The site then simply has
-            // no graph entry, which is the state every call site was in before
-            // this module existed.
+            // shadowing one is slower. The site then simply has no graph
+            // entry.
             if closed_form_already_answers(&callee, site.arity) {
                 continue;
             }

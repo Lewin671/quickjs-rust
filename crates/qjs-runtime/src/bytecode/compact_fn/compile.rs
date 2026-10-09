@@ -80,9 +80,9 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<CompactFunctionProgram> {
             // An executable parameter prologue would run before instruction
             // zero's semantics; only the canonical single marker is admitted.
             Op::FunctionPrologueEnd if ip != 0 => return None,
-            // Backward edges are loops. Nothing in this unit bounds or tests
-            // them, and the sentinel it targets has none, so they are rejected
-            // rather than left to work by accident.
+            // Backward edges are loops. This tier neither bounds nor tests
+            // them (the wide tier admits them), so they are rejected rather
+            // than left to work by accident.
             Op::Jump(target) | Op::JumpIfFalse(target) if *target <= ip => return None,
             Op::Jump(target) | Op::JumpIfFalse(target) if *target > code.len() => return None,
             Op::LoadConst(index) if *index >= bytecode.constants.len() => return None,
@@ -119,7 +119,7 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<CompactFunctionProgram> {
             // The register window passes any arity, but a wide call is not a
             // shape the tier is tested for. Eight covers the hash and cipher
             // round functions (`md5_ff(a, b, c, d, x, s, t)`) whose calls
-            // used to fall to a frame with a nested `Vm` per round.
+            // would otherwise fall to a frame with a nested `Vm` per round.
             Op::Call(argc) if *argc > MAX_CALL_ARITY => return None,
             _ => {}
         }

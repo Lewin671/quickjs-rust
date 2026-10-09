@@ -1420,9 +1420,8 @@ fn run_frames(
 
 /// `left == right` where no conversion can run: `null` or `undefined`
 /// against anything -- nothing else equals them but the IsHTMLDDA host
-/// object -- and two numbers. Kept out of the shared operator helpers, whose
-/// growth re-rolled this tier's dispatch codegen (crypto-md5 +2.5% cycles at
-/// identical instructions).
+/// object -- and two numbers. Kept out of the shared operator helpers:
+/// growing those changes this tier's dispatch codegen.
 #[inline(never)]
 fn loose_equality_without_conversion(left: &Value, right: &Value) -> Option<bool> {
     match (left, right) {

@@ -11,15 +11,14 @@ use crate::{
 ///
 /// Two covers a monomorphic site and misses the moment a call site sees three
 /// object shapes, which ordinary code produces as soon as one function reads a
-/// field from objects built by different literals. Four costs 1-1.5% on the
-/// workloads whose sites stay monomorphic -- the state is twice the size and
-/// a thrashing site rewrites twice as many entries -- and is worth 18% where a
+/// field from objects built by different literals. Four costs a little on
+/// the workloads whose sites stay monomorphic -- the state is twice the size
+/// and a thrashing site rewrites twice as many entries -- and pays where a
 /// third shape exists.
 ///
 /// Holding the extra entries behind a lazily allocated box instead was
 /// measured and is worse: a site that rotates through more receivers than it
-/// can hold then allocates on every other update, which cost 4.7% on
-/// prototype-dispatched reads.
+/// can hold then allocates on every other update.
 const POLYMORPHIC_CACHE_SLOTS: usize = 4;
 
 #[cfg(test)]
@@ -65,11 +64,8 @@ enum NamedPropertyCacheEntry {
     },
     /// A read that resolved on the receiver's direct prototype.
     ///
-    /// Every method call has this shape, and it was the one shape this cache
-    /// could not hold: a receiver miss cleared the whole site and walked the
-    /// chain again on the next read. Measured, that made a prototype-resolved
-    /// read cost about 20 ns more than an own-property read, against 2.5 ns
-    /// for QuickJS-NG.
+    /// Every method call has this shape. Without this entry a receiver miss
+    /// would clear the whole site and walk the chain again on the next read.
     ///
     /// It is keyed on the *holder*, not the receiver, which is what makes it
     /// work for the many-receivers case: every instance of one constructor
@@ -219,8 +215,8 @@ impl NamedPropertyCache {
         let state = self.0.borrow();
         let mut candidate = None;
         // Unrolled by hand: whether LLVM unrolled the walk varied from build
-        // to build with unrelated code (1792 or 1392 bytes), and the rolled
-        // loop cost call-heavy property workloads 2-4% (crypto-md5, cdjs).
+        // to build with unrelated code, and the rolled loop is measurably
+        // slower on call-heavy property workloads.
         const _: () = assert!(POLYMORPHIC_CACHE_SLOTS == 4);
         macro_rules! probe_entry {
             ($index:expr) => {
@@ -298,8 +294,8 @@ impl NamedPropertyCache {
 
     /// Inlined into `probe` unconditionally: left to LLVM, whether this is
     /// inlined and the four-entry walk unrolled varied from build to build
-    /// with unrelated code, and a build that keeps it out of line is about
-    /// 4% slower on every property-heavy workload (3d-raytrace, access-nbody).
+    /// with unrelated code, and a build that keeps it out of line is slower
+    /// on every property-heavy workload.
     #[inline(always)]
     fn read_entry(entry: &NamedPropertyCacheEntry, object: &ObjectRef) -> Option<Value> {
         let value = match entry {
