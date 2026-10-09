@@ -118,6 +118,28 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
 - Existing global variables assigned on the tier (7477de9e): fasta 0.80.
 - Earlier stack runs and measurements (perf8 through perf20) are in
   `tasks/archive/T033-screen-log-early.md`.
+- Removed (2026-10-09, owner decision, base 7a83b568; not yet measured):
+  the loop and algorithm template matchers that recognized only
+  benchmark-shaped code. Gone: the control-loop plan (`vm_control_loop.rs`),
+  the numeric-loop plan and its selector (`vm_numeric_loop`) with
+  `NumericLoopCall` and its transactional realm-global writes, and inside
+  `vm_numeric_mutation_loop` the named property recurrence, the fixed-index
+  array recurrence, the scalar bitwise recurrence, both packed-bitset
+  kernels and the dot-product reduction kernels. Kept: `typed_loop`,
+  `compact_fn` (wide included), `virtual_object`, the numeric-leaf and
+  this-property-leaf call evaluators, string append reuse, and in
+  `vm_numeric_mutation_loop` the dynamic dense register programs,
+  TypedArray programs, binary bundles, nested dense plans, hole-tail append
+  and the non-packed predicate scan. A backedge now consults two engines,
+  numeric-mutation then typed (`vm_loop_dispatch.rs`); `TLCLAIM` reports
+  only those two kinds; virtual-object lowering keeps a literal
+  materialized only for a numeric-mutation plan. Broad cases those matchers
+  answered whole now run on the general tiers or the interpreter, so every
+  broad-lane number in this file predates this. Nested dense plans and the general
+  predicate scan remain as candidates for later consolidation into the
+  typed loop. Fixed alongside: a typed-loop store at the join of
+  `x = c ? a : b` rewrote the fall-through arm's copy and left `x`
+  unwritten on the other arm (`typed_loop/compile.rs`, `join_floor`).
 - perf21 units (c096993c..e73471e6): a cached direct eval that writes and
   deletes no binding skips the caller's frame write-back (apply_env, 8% of
   date-format-tofte; tofte 0.917); run<Vm> pinned ahead of the wide
@@ -221,7 +243,8 @@ Plan and evidence: `tasks/performance-units/wide-tier-interpreter-exits.json`
   is the cost. A discarded-value `x++` statement form in the compiler: the
   loop-plan matchers (control, numeric, mutation, predicate scan, virtual
   object) key on the six-op postfix statement shape, and the wide lowering
-  already folds it where a `Pop` follows.
+  already folds it where a `Pop` follows. (2026-10-09: the control and
+  numeric matchers were since removed; see the removal entry above.)
 - Measured (2026-09-26, instructions per operation against QuickJS-NG,
   wide tier): method call `l.g()` 728 vs 343, own read `l.item` ~180 vs 22,
   `if (l === l) n++` 309 vs 132 (the `if` join keeps the postfix copy);
