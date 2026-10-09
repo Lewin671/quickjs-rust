@@ -452,7 +452,7 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertEqual(workflow.count("branches: [main]"), 2)
         self.assertNotIn("\n  pull_request:\n", workflow)
         self.assertNotIn("schedule:", workflow)
-        self.assertEqual(workflow.count("runs-on: ubuntu-latest"), 4)
+        self.assertEqual(workflow.count("runs-on: ubuntu-latest"), 6)
         self.assertNotIn("self-hosted", workflow)
         self.assertIn("repository: ${{ github.event.pull_request.base.repo.full_name }}", workflow)
         self.assertIn("ref: ${{ github.event.pull_request.base.sha }}", workflow)
@@ -461,6 +461,13 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertIn("path: target/performance-preview/candidate-source", workflow)
         self.assertIn("repository: ${{ github.repository }}", workflow)
         self.assertIn("ref: ${{ github.sha }}", workflow)
+        harness_ref = (
+            "ref: ${{ github.event_name == 'pull_request_target' && "
+            "github.event.pull_request.base.sha || github.sha }}"
+        )
+        # Lane and publish jobs run the same harness revision the build job
+        # does: the base in a pull request, never the candidate head.
+        self.assertEqual(workflow.count(harness_ref), 2)
         self.assertIn(
             "RUN_EVENT_REPOSITORY: ${{ github.event.repository.full_name }}", workflow
         )
@@ -469,7 +476,7 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
             workflow,
         )
         self.assertIn("path: target/performance-preview/base-source", workflow)
-        self.assertEqual(workflow.count("fetch-depth: 1"), 4)
+        self.assertEqual(workflow.count("fetch-depth: 1"), 6)
         self.assertIn(
             "fetch-depth: ${{ github.event_name == 'workflow_dispatch' && '0' || '1' }}",
             workflow,
@@ -509,26 +516,41 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
         self.assertIn("github.event_name == 'workflow_dispatch'", workflow)
         self.assertIn("uses: ./.github/actions/setup-rust", workflow)
         self.assertNotIn("candidate-source/.github/actions/setup-rust", workflow)
-        self.assertEqual(workflow.count("PYTHONDONTWRITEBYTECODE: '1'"), 3)
+        self.assertEqual(workflow.count("PYTHONDONTWRITEBYTECODE: '1'"), 5)
         self.assertIn("source-root:", setup_action)
         self.assertIn("working-directory: ${{ inputs.source-root }}", setup_action)
         self.assertIn("inputs.source-root", setup_action)
-        self.assertIn('"$QJS_HARNESS_ROOT/scripts/performance-preview.sh"', workflow)
-        self.assertIn("timeout-minutes: 47", workflow)
-        self.assertIn("QJS_PREVIEW_JOB_STARTED_AT", workflow)
+        self.assertEqual(
+            workflow.count('"$QJS_HARNESS_ROOT/scripts/performance-preview.sh" --stage build'), 2
+        )
+        self.assertEqual(
+            workflow.count(
+                '"$QJS_HARNESS_ROOT/scripts/performance-preview.sh" --stage "$PREVIEW_LANE"'
+            ),
+            1,
+        )
+        self.assertIn("lane: [broad, external, sentinel]", workflow)
+        self.assertIn("fail-fast: false", workflow)
         self.assertIn("$GITHUB_STEP_SUMMARY", workflow)
         self.assertIn("actions/upload-artifact@v6", workflow)
+        self.assertEqual(workflow.count("uses: actions/download-artifact@v7"), 2)
         self.assertEqual(workflow.count("uses: actions/cache/restore@v5"), 7)
         self.assertEqual(workflow.count("uses: actions/cache/save@v5"), 4)
-        self.assertEqual(workflow.count("continue-on-error: true"), 11)
+        self.assertEqual(workflow.count("continue-on-error: true"), 12)
         self.assertNotIn("restore-keys:", workflow)
         reference_job = workflow.split("  reference-engine-cache:", 1)[1].split(
-            "  base-owned-preview:", 1
+            "  base-owned-build:", 1
         )[0]
-        base_job = workflow.split("  base-owned-preview:", 1)[1].split(
-            "  main-push-preview:", 1
+        base_job = workflow.split("  base-owned-build:", 1)[1].split(
+            "  main-push-build:", 1
         )[0]
-        main_job = workflow.split("  main-push-preview:", 1)[1].split(
+        main_job = workflow.split("  main-push-build:", 1)[1].split(
+            "  measure-lane:", 1
+        )[0]
+        lane_job = workflow.split("  measure-lane:", 1)[1].split(
+            "  publish-preview:", 1
+        )[0]
+        publish_job = workflow.split("  publish-preview:", 1)[1].split(
             "  fork-preview-unsupported:", 1
         )[0]
         candidate_checkout = main_job.split(
@@ -564,19 +586,86 @@ class PerformancePreviewWorkflowTests(unittest.TestCase):
             reference_job.index("Save pinned QuickJS-NG executable cache before measurement"),
         )
         self.assertGreaterEqual(main_job.count("always() && !cancelled()"), 6)
+        # The executables reach the lanes before the cache bookkeeping, and a
+        # build job never measures.
         self.assertLess(
-            main_job.index("Build and measure three pinned engines"),
+            main_job.index("Build three pinned engines"),
+            main_job.index("Upload the three executables for the lane jobs"),
+        )
+        self.assertLess(
+            main_job.index("Upload the three executables for the lane jobs"),
             main_job.index("Revalidate candidate executable cache for trusted save"),
         )
-        self.assertLess(
-            main_job.index("Save QuickJS-NG executable cache from trusted main"),
-            main_job.index("Publish complete or durable failure summary"),
+        for build_job in (base_job, main_job):
+            self.assertNotIn("--stage \"$PREVIEW_LANE\"", build_job)
+            self.assertIn("--stage build --state pending --phase pre_setup", build_job)
+            self.assertIn("name: preview-binaries\n", build_job)
+            self.assertIn("name: preview-part-build\n", build_job)
+        # A lane has the harness and the recorded executables, nothing else:
+        # no candidate checkout, no toolchain, no cache, no source argument.
+        self.assertEqual(lane_job.count("uses: actions/checkout@v6"), 1)
+        for forbidden in (
+            "candidate-source", "base-source", "setup-rust", "actions/cache",
+            "head.sha }}\n          path", "tools.benchmark.build_cache",
+        ):
+            self.assertNotIn(forbidden, lane_job)
+        self.assertIn("needs: [base-owned-build, main-push-build]", lane_job)
+        self.assertIn(
+            "needs.base-owned-build.result == 'success' || "
+            "needs.main-push-build.result == 'success'",
+            lane_job,
         )
-        self.assertGreaterEqual(workflow.count("if: always()"), 4)
-        self.assertIn("retention-days: 14", workflow)
-        self.assertEqual(workflow.count("if-no-files-found: error"), 2)
-        self.assertGreaterEqual(workflow.count('mkdir -p "$EVIDENCE_DIR"'), 4)
-        self.assertIn("tools.benchmark.hosted_preview publish", workflow)
+        self.assertIn("name: preview-binaries\n", lane_job)
+        self.assertIn("name: preview-part-${{ matrix.lane }}\n", lane_job)
+        # The measurement deadline leaves the job room to upload what it has.
+        self.assertIn("timeout-minutes: 35", lane_job)
+        self.assertIn("timeout-minutes: 28", lane_job)
+        self.assertLess(
+            lane_job.index("Measure one lane with the recorded executables"),
+            lane_job.index("Upload lane evidence"),
+        )
+        # This job can be repeated alone, so it replaces its earlier upload
+        # with this attempt's unfinished record before anything can fail --
+        # before the checkout, and without any repository code.
+        start = lane_job.split("steps:", 1)[1].split("- name: Checkout the harness revision", 1)[0]
+        self.assertIn('"$GITHUB_RUN_ATTEMPT" "$PREVIEW_LANE"', start)
+        self.assertIn('"state":"pending"', start)
+        self.assertIn("name: preview-part-${{ matrix.lane }}\n", start)
+        self.assertIn("overwrite: true", start)
+        self.assertNotIn("python3", start)
+        self.assertNotIn("scripts/", start)
+        # Publication runs whatever happened upstream, tolerates a stage that
+        # uploaded nothing, executes no lane script, and uploads after it.
+        self.assertIn("needs: [base-owned-build, main-push-build, measure-lane]", publish_job)
+        self.assertIn("always() &&", publish_job)
+        self.assertIn("pattern: preview-part-*\n", publish_job)
+        # "Re-run failed jobs" raises the attempt without repeating the jobs
+        # that succeeded, so nothing a later job consumes is named by attempt,
+        # every stage upload replaces its predecessor, and a build that fails
+        # in this attempt cannot be outvoted by an earlier attempt's record.
+        stage_artifacts = workflow.split("name: performance-preview-${{ github.event_name }}")[0]
+        self.assertNotIn("github.run_attempt", stage_artifacts)
+        self.assertEqual(workflow.count("overwrite: true"), 6)
+        self.assertIn(
+            "PREVIEW_BUILD_RESULT: ${{ (needs.base-owned-build.result == 'success' || "
+            "needs.main-push-build.result == 'success') && 'success' || 'failure' }}",
+            publish_job,
+        )
+        self.assertIn('--build-result "$PREVIEW_BUILD_RESULT"', publish_job)
+        self.assertIn("merge-multiple: true", publish_job)
+        self.assertEqual(publish_job.count("continue-on-error: true"), 1)
+        self.assertNotIn("performance-preview.sh", publish_job)
+        self.assertNotIn("preview-binaries", publish_job)
+        self.assertIn("tools.benchmark.hosted_preview publish", publish_job)
+        self.assertLess(
+            publish_job.index("tools.benchmark.hosted_preview publish"),
+            publish_job.index("Upload complete or partial preview evidence"),
+        )
+        self.assertGreaterEqual(workflow.count("if: always()"), 5)
+        self.assertIn("retention-days: 14", publish_job)
+        self.assertEqual(workflow.count("retention-days: 1\n"), 6)
+        self.assertEqual(workflow.count("if-no-files-found: error"), 4)
+        self.assertGreaterEqual(workflow.count('mkdir -p "$EVIDENCE_DIR"'), 3)
         self.assertNotIn("pull-requests: write", workflow)
         self.assertNotIn("secrets.", workflow)
         self.assertNotIn("threshold", workflow.lower())

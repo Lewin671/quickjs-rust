@@ -74,8 +74,8 @@ artifacts mean.
   Benchmarking.
 - `resource-benchmark.sh`, `resource-benchmark-report.sh`: the same for the
   resource lanes (fresh start, RSS, size). Benchmarking.
-- `performance-preview.sh`: the hosted, non-gating preview that CI runs.
-  Benchmarking.
+- `performance-preview.sh`: one stage of the hosted, non-gating preview that
+  CI runs (`build`, or one of the three measurement lanes). Benchmarking.
 - `performance-policy-audit.sh`: validates the checked-in CI performance
   policy and its hashes. Benchmarking.
 - `lifecycle-bench.sh`: Criterion diagnostics for the parser and compiler.

@@ -319,14 +319,40 @@ three-engine preview on a GitHub-hosted Linux runner through
   before it;
 - on manual dispatch from `main`, with an optional `base_sha` input.
 
-It runs the broad lane, then the external lane, then the sentinel lane if
-the remaining step and job budget admit it
-(`tools/benchmark/preview_admission.py`), at three blocks. It has
-read-only permissions, no threshold and no gate. A slower result never
-fails the job; missing or malformed evidence does. Artifacts are retained
-for 14 days. Three-block hosted results can show a direction. They cannot
-retain or reject a unit, and durations from separate hosted runs are not
-comparable.
+The script runs one stage per invocation, and the workflow gives each stage
+its own job:
+
+1. `build` validates both sources, builds or restores the three executables,
+   and records their identity (`tools/benchmark/preview_identity.py`):
+   revisions, toolchains, and each executable's SHA-256.
+2. `broad`, `external` and `sentinel` run in parallel, one runner each. A
+   lane job checks out only the harness revision, downloads the recorded
+   executables, refuses any that do not match the record or the event it was
+   started for, and measures all three engines on its own runner at three
+   blocks. Every ratio is therefore still a same-host comparison; ratios
+   from different lanes come from different hosts and are never combined.
+3. The publish job always runs. It reads each stage's `<stage>-status.json`,
+   admits a lane's evidence only when that stage succeeded, its evidence
+   parses and it measured the recorded executables, writes and publishes the
+   summary, and only then fails if the broad or external lane has no
+   admitted evidence. A sentinel lane that runs out of its 600-second
+   measurement deadline is recorded as incomplete and reported, not failed.
+
+It has read-only permissions, no threshold and no gate. A slower result
+never fails a job; missing or malformed evidence does. The combined evidence
+artifact is retained for 14 days; the per-stage artifacts that carry
+executables and evidence between jobs for one day. Three-block hosted
+results can show a direction. They cannot retain or reject a unit, and
+durations from separate hosted runs are not comparable.
+
+The published summary is one document rendered by
+`tools/benchmark/preview_summary.py` from the lanes' validated machine
+summaries: an overview row per workload group (sentinels, each external
+suite, then the broad lane), the five largest observed changes against the
+base across all lanes, any case without a complete comparison, and then the
+per-case tables and provenance folded away. A lane that produced no evidence
+is named with its reason. The largest-changes list is selected by magnitude,
+so it is never empty and never a finding by itself.
 
 `benchmarks/performance-policy.json` is the fail-closed policy for that
 path: protocol hashes, the reference pin, the hash of the hosted

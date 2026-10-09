@@ -1,26 +1,38 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# When this run began, so the optional sentinel lane can refuse to start
-# without a guaranteed budget rather than gamble that enough of the step is
-# left.
-PREVIEW_STARTED_AT="$(date +%s)"
+# The hosted performance preview, one stage per invocation.
+#
+#   build      validate both sources, build or restore the three executables,
+#              and record their identity for the lanes
+#   broad      measure the broad portfolio
+#   external   measure the pinned external corpora
+#   sentinel   measure the generic-path sentinels
+#
+# Each lane runs in its own job on its own runner, with all three engines on
+# that runner, so every ratio is still a same-host comparison while the lanes
+# no longer wait for each other. A lane has no source trees: it measures the
+# executables the build stage recorded and nothing else. Every stage leaves
+# `<stage>-status.json`; `tools.benchmark.hosted_preview publish` composes
+# the summary from whichever stages left admitted evidence.
 
 HARNESS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PYTHONDONTWRITEBYTECODE=1
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/performance-preview.sh \
+Usage: ./scripts/performance-preview.sh --stage <build|broad|external|sentinel> \
   --harness-mode <base_owned_harness|main_push_head_owned_harness|manual_main_head_owned_harness> \
-  --candidate-source <path> --base-source <path> \
   --candidate-sha <full-sha> --base-sha <full-sha> \
   --candidate-repo <https-github-clone-url> \
-  --base-repo <https-github-clone-url> [--output <directory>] \
-  [--build-cache-root <directory>]
+  --base-repo <https-github-clone-url> --output <directory> \
+  --binaries <directory>
+  build stage only:  --candidate-source <path> --base-source <path> \
+                     [--build-cache-root <directory>]
 EOF
 }
 
+STAGE=""
 HARNESS_MODE=""
 CANDIDATE_SOURCE=""
 BASE_SOURCE=""
@@ -29,11 +41,12 @@ BASE_REVISION=""
 CANDIDATE_REPO=""
 BASE_REPO=""
 OUTPUT=""
+BINARIES=""
 BUILD_CACHE_ROOT=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --harness-mode|--candidate-source|--base-source|--candidate-sha|--base-sha|--candidate-repo|--base-repo|--output|--build-cache-root)
+    --stage|--harness-mode|--candidate-source|--base-source|--candidate-sha|--base-sha|--candidate-repo|--base-repo|--output|--binaries|--build-cache-root)
       if [ "$#" -lt 2 ]; then
         echo "error: $1 requires a value" >&2
         exit 2
@@ -41,6 +54,7 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
   case "$1" in
+    --stage) STAGE="$2"; shift 2 ;;
     --harness-mode) HARNESS_MODE="$2"; shift 2 ;;
     --candidate-source) CANDIDATE_SOURCE="$2"; shift 2 ;;
     --base-source) BASE_SOURCE="$2"; shift 2 ;;
@@ -49,18 +63,28 @@ while [ "$#" -gt 0 ]; do
     --candidate-repo) CANDIDATE_REPO="$2"; shift 2 ;;
     --base-repo) BASE_REPO="$2"; shift 2 ;;
     --output) OUTPUT="$2"; shift 2 ;;
+    --binaries) BINARIES="$2"; shift 2 ;;
     --build-cache-root) BUILD_CACHE_ROOT="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "error: unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
-for value_name in HARNESS_MODE CANDIDATE_SOURCE BASE_SOURCE CANDIDATE_REVISION BASE_REVISION CANDIDATE_REPO BASE_REPO OUTPUT; do
+case "$STAGE" in
+  build) REQUIRED="HARNESS_MODE CANDIDATE_SOURCE BASE_SOURCE CANDIDATE_REVISION BASE_REVISION CANDIDATE_REPO BASE_REPO OUTPUT BINARIES" ;;
+  broad|external|sentinel) REQUIRED="HARNESS_MODE CANDIDATE_REVISION BASE_REVISION CANDIDATE_REPO BASE_REPO OUTPUT BINARIES" ;;
+  *) echo "error: --stage must be build, broad, external, or sentinel" >&2; exit 2 ;;
+esac
+for value_name in $REQUIRED; do
   if [ -z "${!value_name}" ]; then
     echo "error: missing required $value_name" >&2
     exit 2
   fi
 done
+if [ "$STAGE" != "build" ] && [ -n "$CANDIDATE_SOURCE$BASE_SOURCE$BUILD_CACHE_ROOT" ]; then
+  echo "error: a lane stage measures recorded executables and takes no source or cache path" >&2
+  exit 2
+fi
 case "$CANDIDATE_REVISION$BASE_REVISION" in
   *[!0-9a-f]*) invalid_revision=1 ;;
   *) invalid_revision=0 ;;
@@ -74,58 +98,51 @@ fi
 canonical_path() {
   python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).expanduser().resolve())' "$1"
 }
-CANDIDATE_SOURCE="$(canonical_path "$CANDIDATE_SOURCE")"
-BASE_SOURCE="$(canonical_path "$BASE_SOURCE")"
 OUTPUT="$(canonical_path "$OUTPUT")"
-[ -n "$BUILD_CACHE_ROOT" ] || BUILD_CACHE_ROOT="$(dirname "$OUTPUT")/build-cache"
-BUILD_CACHE_ROOT="$(canonical_path "$BUILD_CACHE_ROOT")"
+BINARIES="$(canonical_path "$BINARIES")"
 case "$HARNESS_MODE" in
-  base_owned_harness)
+  base_owned_harness|main_push_head_owned_harness|manual_main_head_owned_harness) ;;
+  *) echo "error: invalid harness mode" >&2; exit 2 ;;
+esac
+if [ "$HARNESS_MODE" != "base_owned_harness" ] && [ "$CANDIDATE_REPO" != "$BASE_REPO" ]; then
+  echo "error: main candidate and base repositories must match" >&2
+  exit 2
+fi
+if [ "$STAGE" = "build" ]; then
+  CANDIDATE_SOURCE="$(canonical_path "$CANDIDATE_SOURCE")"
+  BASE_SOURCE="$(canonical_path "$BASE_SOURCE")"
+  [ -n "$BUILD_CACHE_ROOT" ] || BUILD_CACHE_ROOT="$(dirname "$OUTPUT")/build-cache"
+  BUILD_CACHE_ROOT="$(canonical_path "$BUILD_CACHE_ROOT")"
+  # The harness is the base in a pull request and the candidate on main; the
+  # other source is only ever a benchmark subject.
+  if [ "$HARNESS_MODE" = "base_owned_harness" ]; then
     [ "$HARNESS_ROOT" = "$BASE_SOURCE" ] || {
       echo "error: base-owned harness must execute from the base source" >&2; exit 2;
     }
-    OUTPUT_OWNER="$BASE_SOURCE"
-    ;;
-  main_push_head_owned_harness)
+  else
     [ "$HARNESS_ROOT" = "$CANDIDATE_SOURCE" ] || {
-      echo "error: main-push harness must execute from the candidate source" >&2; exit 2;
+      echo "error: main harness must execute from the candidate source" >&2; exit 2;
     }
-    [ "$CANDIDATE_REPO" = "$BASE_REPO" ] || {
-      echo "error: main-push candidate and base repositories must match" >&2; exit 2;
-    }
-    OUTPUT_OWNER="$CANDIDATE_SOURCE"
-    ;;
-  manual_main_head_owned_harness)
-    [ "$HARNESS_ROOT" = "$CANDIDATE_SOURCE" ] || {
-      echo "error: manual-main harness must execute from the candidate source" >&2; exit 2;
-    }
-    [ "$CANDIDATE_REPO" = "$BASE_REPO" ] || {
-      echo "error: manual-main candidate and base repositories must match" >&2; exit 2;
-    }
-    OUTPUT_OWNER="$CANDIDATE_SOURCE"
-    ;;
-  *) echo "error: invalid harness mode" >&2; exit 2 ;;
-esac
-case "$OUTPUT" in
-  "$OUTPUT_OWNER"/target/*) ;;
-  *) echo "error: --output must stay under the selected harness target directory" >&2; exit 2 ;;
-esac
-case "$BUILD_CACHE_ROOT" in
-  "$OUTPUT_OWNER"/target/*) ;;
-  *) echo "error: --build-cache-root must stay under the selected harness target directory" >&2; exit 2 ;;
-esac
+  fi
+  case "$BUILD_CACHE_ROOT" in
+    "$HARNESS_ROOT"/target/*) ;;
+    *) echo "error: --build-cache-root must stay under the harness target directory" >&2; exit 2 ;;
+  esac
+fi
+for owned in "$OUTPUT" "$BINARIES"; do
+  case "$owned" in
+    "$HARNESS_ROOT"/target/*) ;;
+    *) echo "error: --output and --binaries must stay under the harness target directory" >&2; exit 2 ;;
+  esac
+done
 if [ -e "$OUTPUT" ]; then
   [ -d "$OUTPUT" ] || { echo "error: output exists and is not a directory" >&2; exit 2; }
-  unexpected="$(find "$OUTPUT" -mindepth 1 -maxdepth 1 ! -name summary.md ! -name status.json -print -quit)"
+  unexpected="$(find "$OUTPUT" -mindepth 1 -maxdepth 1 ! -name "$STAGE-status.json" -print -quit)"
   [ -z "$unexpected" ] || {
     echo "error: refusing output directory containing prior evidence: $unexpected" >&2; exit 2;
   }
 fi
 
-BUILD_ROOT="$(dirname "$OUTPUT")/build"
-BUILD_CACHE_PLAN="$(dirname "$OUTPUT")/build-cache-plan"
-QUICKJS_SOURCE="$HARNESS_ROOT/third_party/quickjs-ng"
-MANIFEST="$HARNESS_ROOT/benchmarks/.hosted-preview-${CANDIDATE_REVISION:0:12}-${BASE_REVISION:0:12}-$$.json"
 REFERENCE_REPO="$(cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview reference \
   --manifest benchmarks/manifest.json --field repo)"
 REFERENCE_REVISION="$(cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview reference \
@@ -134,6 +151,15 @@ HARNESS_REVISION="$(git -C "$HARNESS_ROOT" rev-parse HEAD)"
 RUN_COMPLETED=0
 CURRENT_PHASE="initialization"
 FAILURE_PHASE=""
+MANIFEST=""
+
+write_status() {
+  (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview status \
+    --stage "$STAGE" --state "$1" --phase "$2" --output-dir "$OUTPUT" \
+    --harness-mode "$HARNESS_MODE" --harness-revision "$HARNESS_REVISION" \
+    --candidate-revision "$CANDIDATE_REVISION" --base-revision "$BASE_REVISION" \
+    --reference-revision "$REFERENCE_REVISION" --message "$3")
+}
 
 record_error() {
   exit_status="$?"
@@ -143,15 +169,10 @@ record_error() {
 
 cleanup() {
   exit_status="$?"
-  rm -f "$MANIFEST"
+  [ -z "$MANIFEST" ] || rm -f "$MANIFEST"
   if [ "$RUN_COMPLETED" -ne 1 ] && [ -d "$OUTPUT" ]; then
-    (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview status \
-      --state failed --output-dir "$OUTPUT" \
-      --phase "${FAILURE_PHASE:-$CURRENT_PHASE}" \
-      --harness-mode "$HARNESS_MODE" --harness-revision "$HARNESS_REVISION" \
-      --candidate-revision "$CANDIDATE_REVISION" --base-revision "$BASE_REVISION" \
-      --reference-revision "$REFERENCE_REVISION" \
-      --message "orchestration failed in phase ${FAILURE_PHASE:-$CURRENT_PHASE} with exit status $exit_status") || true
+    write_status failed "${FAILURE_PHASE:-$CURRENT_PHASE}" \
+      "the $STAGE stage failed in phase ${FAILURE_PHASE:-$CURRENT_PHASE} with exit status $exit_status" || true
   fi
   exit "$exit_status"
 }
@@ -160,13 +181,8 @@ trap record_error ERR
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-mkdir -p "$OUTPUT" "$BUILD_ROOT"
-(cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview status \
-  --state pending --phase initialization --output-dir "$OUTPUT" \
-  --harness-mode "$HARNESS_MODE" --harness-revision "$HARNESS_REVISION" \
-  --candidate-revision "$CANDIDATE_REVISION" --base-revision "$BASE_REVISION" \
-  --reference-revision "$REFERENCE_REVISION" \
-  --message "measurement did not finish; no performance conclusion is available")
+mkdir -p "$OUTPUT" "$BINARIES"
+write_status pending initialization "the $STAGE stage did not finish"
 
 # Candidate compilation and execution are not a security sandbox. Remove the
 # GitHub command channels and ambient service credentials before candidate code
@@ -177,6 +193,27 @@ for name in \
   ACTIONS_RESULTS_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL; do
   unset "$name" || true
 done
+
+CANDIDATE_BINARY="$BINARIES/candidate-qjs"
+BASE_BINARY="$BINARIES/base-qjs"
+QUICKJS_BINARY="$BINARIES/quickjs-ng-qjs"
+identity() {
+  local command="$1"
+  shift
+  (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview_identity "$command" \
+    --binaries "$BINARIES" \
+    --harness-mode "$HARNESS_MODE" --harness-revision "$HARNESS_REVISION" \
+    --candidate-repo "$CANDIDATE_REPO" --candidate-revision "$CANDIDATE_REVISION" \
+    --base-repo "$BASE_REPO" --base-revision "$BASE_REVISION" \
+    --reference-revision "$REFERENCE_REVISION" "$@")
+}
+
+if [ "$STAGE" = "build" ]; then
+
+BUILD_ROOT="$(dirname "$OUTPUT")/build"
+BUILD_CACHE_PLAN="$(dirname "$OUTPUT")/build-cache-plan"
+QUICKJS_SOURCE="$HARNESS_ROOT/third_party/quickjs-ng"
+mkdir -p "$BUILD_ROOT"
 
 verify_source() {
   (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview verify-source \
@@ -232,7 +269,6 @@ QUICKJS_CACHE_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[
 CANDIDATE_CACHE_ENTRY="$BUILD_CACHE_ROOT/rust/$CANDIDATE_CACHE_KEY"
 BASE_CACHE_ENTRY="$BUILD_CACHE_ROOT/rust/$BASE_CACHE_KEY"
 QUICKJS_CACHE_ENTRY="$BUILD_CACHE_ROOT/quickjs-ng/$QUICKJS_CACHE_KEY"
-mkdir -p "$BUILD_ROOT/binaries"
 
 RUST_FLAGS="$(cd "$HARNESS_ROOT" && python3 -m tools.benchmark.build_cache recipe \
   --kind rust --field environment --name CARGO_ENCODED_RUSTFLAGS)"
@@ -273,9 +309,6 @@ store_and_materialize_cache() {
     mv -f "$temporary_binary" "$output_binary"
   fi
 }
-CANDIDATE_BINARY="$BUILD_ROOT/binaries/candidate-qjs"
-BASE_BINARY="$BUILD_ROOT/binaries/base-qjs"
-QUICKJS_BINARY="$BUILD_ROOT/binaries/quickjs-ng-qjs"
 CURRENT_PHASE="build_candidate"
 if materialize_cache "$CANDIDATE_CACHE_ENTRY" "$BUILD_CACHE_PLAN/candidate.json" "$CANDIDATE_BINARY"; then
   CANDIDATE_CACHE_STATUS="hit"
@@ -355,178 +388,128 @@ pathlib.Path(sys.argv[1]).write_text(
 )
 PY
 
-CURRENT_PHASE="receipt_preparation"
+CURRENT_PHASE="build_identity"
 PROFILE_PLATFORM="$(uname -s)-$(uname -m)"
 PROFILE_ID="github-hosted-$(printf '%s' "$PROFILE_PLATFORM" | tr '[:upper:]' '[:lower:]')-informational-v1"
-(cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview prepare \
-  --template benchmarks/manifest.json --manifest-output "$MANIFEST" \
-  --candidate-binary "$CANDIDATE_BINARY" --base-binary "$BASE_BINARY" \
-  --quickjs-binary "$QUICKJS_BINARY" \
-  --candidate-receipt "$OUTPUT/candidate-receipt.json" \
-  --base-receipt "$OUTPUT/base-receipt.json" \
-  --quickjs-receipt "$OUTPUT/quickjs-ng-receipt.json" \
-  --candidate-repo "$CANDIDATE_REPO" --candidate-revision "$CANDIDATE_REVISION" \
-  --base-repo "$BASE_REPO" --base-revision "$BASE_REVISION" \
-  --profile-id "$PROFILE_ID" --platform "$PROFILE_PLATFORM" \
+identity record \
+  --profile-id "$PROFILE_ID" --profile-platform "$PROFILE_PLATFORM" \
   --rust-toolchain "$RUST_TOOLCHAIN" --rust-target "$RUST_TARGET" \
   --quickjs-toolchain "$QUICKJS_TOOLCHAIN" --quickjs-target "$QUICKJS_TARGET" \
-  --quickjs-cc "$QUICKJS_CC")
+  --quickjs-cc "$QUICKJS_CC"
+cp "$BINARIES/build-identity.json" "$OUTPUT/build-identity.json"
 
-CURRENT_PHASE="measurement"
-(cd "$HARNESS_ROOT" && ./scripts/benchmark.sh --manifest "$MANIFEST" --blocks 3 \
-  --candidate "$CANDIDATE_BINARY" --candidate-receipt "$OUTPUT/candidate-receipt.json" \
-  --base "$BASE_BINARY" --base-receipt "$OUTPUT/base-receipt.json" \
-  --quickjs-ng "$QUICKJS_BINARY" --quickjs-ng-receipt "$OUTPUT/quickjs-ng-receipt.json" \
-  --output "$OUTPUT/raw.jsonl")
-CURRENT_PHASE="report"
-(cd "$HARNESS_ROOT" && ./scripts/benchmark-report.sh \
-  --manifest "$MANIFEST" --analysis-manifest benchmarks/analysis.json \
-  --input "$OUTPUT/raw.jsonl" --output "$OUTPUT/report.json")
-cp "$MANIFEST" "$OUTPUT/manifest.json"
-rm -f "$MANIFEST"
-
-CURRENT_PHASE="post_measure_validation"
-verify_source "$CANDIDATE_SOURCE" "$CANDIDATE_REVISION"
-verify_source "$BASE_SOURCE" "$BASE_REVISION"
-verify_source "$QUICKJS_SOURCE" "$REFERENCE_REVISION"
-(cd "$HARNESS_ROOT" && ./scripts/performance-policy-audit.sh)
-(cd "$HARNESS_ROOT" && ./scripts/external-corpus-audit.sh)
-
-CURRENT_PHASE="summary"
-(cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview summary \
-  --report "$OUTPUT/report.json" --markdown "$OUTPUT/summary.md" \
-  --json-output "$OUTPUT/summary.json" --status-output "$OUTPUT/status.json" \
-  --harness-mode "$HARNESS_MODE" --harness-revision "$HARNESS_REVISION")
-
-# The generic-path sentinel lane. It runs after the broad lane's summary is
-# durable so a sentinel problem can never cost the preview its conclusion:
-# every step below is allowed to fail, and the section simply records that.
-#
-# It exists because the broad portfolio cannot answer what the ordinary
-# interpreter costs -- its cases are folded rather than accelerated -- so a
-# preview that reported only broad numbers would steer by a reading the
-# engine's own execution counters contradict.
-
-# External corpora remain non-claim evidence in every admitted hosted mode.
-# The base-owned PR harness keeps corpus selection and reporting code trusted;
-# source files are downloaded at pinned revisions into a sibling cache and are
-# never uploaded with the evidence artifact.
-CURRENT_PHASE="external_corpus_preview"
-EXTERNAL_CACHE_ROOT="$(dirname "$OUTPUT")/external-corpora"
-EXTERNAL_WORK_ROOT="$(dirname "$OUTPUT")/external-work"
-(cd "$HARNESS_ROOT" && ./scripts/external-performance-preview.sh audit)
-(cd "$HARNESS_ROOT" && ./scripts/external-performance-preview.sh run \
-  --cache-root "$EXTERNAL_CACHE_ROOT" --work-root "$EXTERNAL_WORK_ROOT" \
-  --output-dir "$OUTPUT" --candidate "$CANDIDATE_BINARY" \
-  --base "$BASE_BINARY" \
-  --quickjs-ng "$QUICKJS_BINARY")
-verify_source "$CANDIDATE_SOURCE" "$CANDIDATE_REVISION"
-verify_source "$BASE_SOURCE" "$BASE_REVISION"
-verify_source "$QUICKJS_SOURCE" "$REFERENCE_REVISION"
-printf '\n' >> "$OUTPUT/summary.md"
-cat "$OUTPUT/external-summary.md" >> "$OUTPUT/summary.md"
-
-# The generic-path sentinel lane, deliberately last.
-#
-# The broad portfolio cannot answer what the ordinary interpreter costs -- its
-# cases are folded rather than accelerated -- so a preview reporting only broad
-# numbers steers by a reading the engine's own execution counters contradict.
-# This lane supplies the missing one, and everything it needs is already
-# durable by the time it runs.
-#
-# Running last is what makes its budget arithmetic honest: only the fallback
-# write and the publisher follow it, so the reserve does not have to cover the
-# external corpus work as well.
-#
-# Being skipped is acceptable; being killed is not, because the always-run
-# publisher would then replace the broad lane's durable conclusion. Admission
-# therefore consults both the step and the *job* deadline -- a job carries
-# setup, cache, and publication steps this script never sees -- and the whole
-# pipeline, not just the measurement, runs against one deadline. The decision
-# itself lives in `tools/benchmark/preview_admission.py`, where it is tested.
-#
-# Isolating the lane in its own non-fatal workflow step would remove the
-# arithmetic entirely; that needs the lane's inputs threaded out of this
-# script, so it is left for a change that can carry it.
-CURRENT_PHASE="sentinel_admission"
-SENTINEL_TIMEOUT_SECONDS="${QJS_SENTINEL_TIMEOUT_SECONDS:-600}"
-SENTINEL_RESERVE_SECONDS="${QJS_SENTINEL_RESERVE_SECONDS:-120}"
-PREVIEW_STEP_BUDGET_SECONDS="${QJS_PREVIEW_STEP_BUDGET_SECONDS:-2820}"
-PREVIEW_JOB_BUDGET_SECONDS="${QJS_PREVIEW_JOB_BUDGET_SECONDS:-3420}"
-# The workflow records when the job began; without it the job clock is assumed
-# to have started with this script, which is the most permissive reading and
-# so is only correct for a local run.
-PREVIEW_JOB_STARTED_AT="${QJS_PREVIEW_JOB_STARTED_AT:-$PREVIEW_STARTED_AT}"
-SENTINEL_ADMISSION="$(cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview_admission \
-  --now "$(date +%s)" \
-  --needed-seconds "$SENTINEL_TIMEOUT_SECONDS" \
-  --reserve-seconds "$SENTINEL_RESERVE_SECONDS" \
-  --step-started-at "$PREVIEW_STARTED_AT" \
-  --step-budget-seconds "$PREVIEW_STEP_BUDGET_SECONDS" \
-  --job-started-at "$PREVIEW_JOB_STARTED_AT" \
-  --job-budget-seconds "$PREVIEW_JOB_BUDGET_SECONDS")" && SENTINEL_ADMITTED=1 || SENTINEL_ADMITTED=0
-if [ "$SENTINEL_ADMITTED" -ne 1 ]; then
-  printf '%s\n' "" "### Generic-path sentinels" "" \
-    "> The sentinel lane was not started: ${SENTINEL_ADMISSION#refuse }." \
-    "> The broad summary above stands, but reports specializer coverage only;" \
-    "> no ordinary-interpreter reading was produced for this run." "" \
-    > "$OUTPUT/sentinel-summary.md"
 else
-  # One deadline for the whole pipeline. Wrapping only the measurement would
-  # leave preparation, reporting, and rendering unbounded, so a slow report
-  # could still exhaust the step after a measurement that finished in time.
-  CURRENT_PHASE="sentinel_measurement"
-  SENTINEL_DEADLINE=$(( $(date +%s) + SENTINEL_TIMEOUT_SECONDS ))
-  sentinel_phase() {
-    local remaining=$(( SENTINEL_DEADLINE - $(date +%s) ))
-    [ "$remaining" -gt 0 ] || return 1
-    (cd "$HARNESS_ROOT" && ./scripts/run-with-timeout.sh "$remaining" "$@")
-  }
-  # `preview prepare` writes its receipts with a refuse-to-overwrite guard, so
-  # this lane needs its own receipt paths; reusing the broad lane's would fail
-  # every run and silently reduce this section to "did not complete".
-  SENTINEL_MANIFEST="$HARNESS_ROOT/benchmarks/.hosted-sentinel-${CANDIDATE_REVISION:0:12}-${BASE_REVISION:0:12}-$$.json"
-  if sentinel_phase python3 -m tools.benchmark.preview prepare \
-        --template benchmarks/generic-sentinels-manifest.json \
-        --manifest-output "$SENTINEL_MANIFEST" \
-        --candidate-binary "$CANDIDATE_BINARY" --base-binary "$BASE_BINARY" \
-        --quickjs-binary "$QUICKJS_BINARY" \
-        --candidate-receipt "$OUTPUT/sentinel-candidate-receipt.json" \
-        --base-receipt "$OUTPUT/sentinel-base-receipt.json" \
-        --quickjs-receipt "$OUTPUT/sentinel-quickjs-ng-receipt.json" \
-        --candidate-repo "$CANDIDATE_REPO" --candidate-revision "$CANDIDATE_REVISION" \
-        --base-repo "$BASE_REPO" --base-revision "$BASE_REVISION" \
-        --profile-id "$PROFILE_ID" --platform "$PROFILE_PLATFORM" \
-        --rust-toolchain "$RUST_TOOLCHAIN" --rust-target "$RUST_TARGET" \
-        --quickjs-toolchain "$QUICKJS_TOOLCHAIN" --quickjs-target "$QUICKJS_TARGET" \
-        --quickjs-cc "$QUICKJS_CC" \
-     && sentinel_phase ./scripts/benchmark.sh --manifest "$SENTINEL_MANIFEST" --blocks 3 \
-        --candidate "$CANDIDATE_BINARY" \
-        --candidate-receipt "$OUTPUT/sentinel-candidate-receipt.json" \
-        --base "$BASE_BINARY" --base-receipt "$OUTPUT/sentinel-base-receipt.json" \
-        --quickjs-ng "$QUICKJS_BINARY" \
-        --quickjs-ng-receipt "$OUTPUT/sentinel-quickjs-ng-receipt.json" \
-        --output "$OUTPUT/sentinel-raw.jsonl" \
-     && sentinel_phase ./scripts/benchmark-report.sh \
-        --manifest "$SENTINEL_MANIFEST" --analysis-manifest benchmarks/analysis.json \
-        --input "$OUTPUT/sentinel-raw.jsonl" --output "$OUTPUT/sentinel-report.json" \
-     && sentinel_phase python3 -m tools.benchmark.preview sentinel-summary \
-        --report "$OUTPUT/sentinel-report.json" \
-        --markdown "$OUTPUT/sentinel-summary.md"; then
-    cp "$SENTINEL_MANIFEST" "$OUTPUT/sentinel-manifest.json"
-  else
-    printf '%s\n' "" "### Generic-path sentinels" "" \
-      "> The sentinel lane did not complete within its deadline. The broad" \
-      "> summary above stands, but reports specializer coverage only; no" \
-      "> ordinary-interpreter reading was produced for this run." "" \
-      > "$OUTPUT/sentinel-summary.md"
-  fi
-  rm -f "$SENTINEL_MANIFEST"
-fi
-cat "$OUTPUT/sentinel-summary.md" >> "$OUTPUT/summary.md"
 
-CURRENT_PHASE="seal_evidence"
-(cd "$HARNESS_ROOT" && python3 -m tools.benchmark.bundle --output-dir "$OUTPUT")
-RUN_COMPLETED=1
+# A lane measures exactly what the build stage recorded, for the event this
+# job itself was started for; anything else stops here.
+CURRENT_PHASE="executable_admission"
+FACTS=()
+while IFS= read -r fact; do FACTS+=("$fact"); done < <(identity verify)
+[ "${#FACTS[@]}" -eq 7 ] || { echo "error: recorded executables were not admitted" >&2; exit 2; }
+PROFILE_ID="${FACTS[0]}"
+PROFILE_PLATFORM="${FACTS[1]}"
+RUST_TOOLCHAIN="${FACTS[2]}"
+RUST_TARGET="${FACTS[3]}"
+QUICKJS_TOOLCHAIN="${FACTS[4]}"
+QUICKJS_TARGET="${FACTS[5]}"
+QUICKJS_CC="${FACTS[6]}"
+
+# Measures one frozen portfolio with all three engines on this runner. $1 is
+# the manifest template and $2 prefixes the lane's evidence file names. A
+# nonzero $3 bounds the measurement itself, in seconds.
+measure_portfolio() {
+  local template="$1" prefix="$2" limit="${3:-0}"
+  local -a bounded=()
+  [ "$limit" -eq 0 ] || bounded=(./scripts/run-with-timeout.sh "$limit")
+  MANIFEST="$HARNESS_ROOT/benchmarks/.hosted-$STAGE-${CANDIDATE_REVISION:0:12}-${BASE_REVISION:0:12}-$$.json"
+  (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview prepare \
+    --template "$template" --manifest-output "$MANIFEST" \
+    --candidate-binary "$CANDIDATE_BINARY" --base-binary "$BASE_BINARY" \
+    --quickjs-binary "$QUICKJS_BINARY" \
+    --candidate-receipt "$OUTPUT/${prefix}candidate-receipt.json" \
+    --base-receipt "$OUTPUT/${prefix}base-receipt.json" \
+    --quickjs-receipt "$OUTPUT/${prefix}quickjs-ng-receipt.json" \
+    --candidate-repo "$CANDIDATE_REPO" --candidate-revision "$CANDIDATE_REVISION" \
+    --base-repo "$BASE_REPO" --base-revision "$BASE_REVISION" \
+    --profile-id "$PROFILE_ID" --platform "$PROFILE_PLATFORM" \
+    --rust-toolchain "$RUST_TOOLCHAIN" --rust-target "$RUST_TARGET" \
+    --quickjs-toolchain "$QUICKJS_TOOLCHAIN" --quickjs-target "$QUICKJS_TARGET" \
+    --quickjs-cc "$QUICKJS_CC") || return "$?"
+  (cd "$HARNESS_ROOT" && ${bounded[@]+"${bounded[@]}"} \
+    ./scripts/benchmark.sh --manifest "$MANIFEST" --blocks 3 \
+    --candidate "$CANDIDATE_BINARY" --candidate-receipt "$OUTPUT/${prefix}candidate-receipt.json" \
+    --base "$BASE_BINARY" --base-receipt "$OUTPUT/${prefix}base-receipt.json" \
+    --quickjs-ng "$QUICKJS_BINARY" --quickjs-ng-receipt "$OUTPUT/${prefix}quickjs-ng-receipt.json" \
+    --output "$OUTPUT/${prefix}raw.jsonl") || return "$?"
+  (cd "$HARNESS_ROOT" && ./scripts/benchmark-report.sh \
+    --manifest "$MANIFEST" --analysis-manifest benchmarks/analysis.json \
+    --input "$OUTPUT/${prefix}raw.jsonl" --output "$OUTPUT/${prefix}report.json") || return "$?"
+  cp "$MANIFEST" "$OUTPUT/${prefix}manifest.json" || return "$?"
+  rm -f "$MANIFEST"
+  MANIFEST=""
+}
+
+case "$STAGE" in
+broad)
+  CURRENT_PHASE="measurement"
+  measure_portfolio benchmarks/manifest.json ""
+  CURRENT_PHASE="post_measure_validation"
+  (cd "$HARNESS_ROOT" && ./scripts/performance-policy-audit.sh)
+  (cd "$HARNESS_ROOT" && ./scripts/external-corpus-audit.sh)
+  CURRENT_PHASE="summary"
+  (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview summary \
+    --report "$OUTPUT/report.json" --json-output "$OUTPUT/summary.json" \
+    --harness-mode "$HARNESS_MODE" --harness-revision "$HARNESS_REVISION")
+  ;;
+external)
+  # External corpora remain non-claim evidence in every admitted hosted mode.
+  # Corpus selection and reporting code is the harness's; source files are
+  # downloaded at pinned revisions into a sibling cache and are never uploaded
+  # with the evidence artifact.
+  CURRENT_PHASE="external_corpus_preview"
+  EXTERNAL_CACHE_ROOT="$(dirname "$OUTPUT")/external-corpora"
+  EXTERNAL_WORK_ROOT="$(dirname "$OUTPUT")/external-work"
+  (cd "$HARNESS_ROOT" && ./scripts/external-performance-preview.sh audit)
+  (cd "$HARNESS_ROOT" && ./scripts/external-performance-preview.sh run \
+    --cache-root "$EXTERNAL_CACHE_ROOT" --work-root "$EXTERNAL_WORK_ROOT" \
+    --output-dir "$OUTPUT" --candidate "$CANDIDATE_BINARY" \
+    --base "$BASE_BINARY" \
+    --quickjs-ng "$QUICKJS_BINARY")
+  # The publisher renders the report; the lane's own Markdown is not evidence.
+  rm -f "$OUTPUT/external-summary.md"
+  ;;
+sentinel)
+  # The broad portfolio cannot answer what the ordinary interpreter costs --
+  # its cases are folded rather than accelerated -- so a preview reporting
+  # only broad numbers steers by a reading the engine's own execution
+  # counters contradict. This lane supplies the missing one.
+  #
+  # Its measurement is bounded by a deadline shorter than the job's, so
+  # running out of time ends as a recorded "incomplete" with the partial
+  # evidence uploaded, never as a killed job with nothing to publish.
+  CURRENT_PHASE="sentinel_measurement"
+  SENTINEL_TIMEOUT_SECONDS="${QJS_SENTINEL_TIMEOUT_SECONDS:-600}"
+  if measure_portfolio benchmarks/generic-sentinels-manifest.json sentinel- \
+        "$SENTINEL_TIMEOUT_SECONDS" \
+     && (cd "$HARNESS_ROOT" && python3 -m tools.benchmark.preview sentinel-summary \
+        --report "$OUTPUT/sentinel-report.json" \
+        --json-output "$OUTPUT/sentinel-summary.json"); then
+    :
+  else
+    # A machine summary from a run that then failed must not be published.
+    rm -f "$OUTPUT/sentinel-summary.json"
+    write_status incomplete sentinel_measurement \
+      "the sentinel lane did not produce a valid reading within its ${SENTINEL_TIMEOUT_SECONDS}-second deadline, so this run has no ordinary-interpreter reading."
+    RUN_COMPLETED=1
+    printf 'performance preview %s stage: incomplete\n' "$STAGE"
+    exit 0
+  fi
+  ;;
+esac
+
+fi
+
 CURRENT_PHASE="complete"
-printf 'performance preview evidence: %s\n' "$OUTPUT"
+write_status success complete "the $STAGE stage completed"
+RUN_COMPLETED=1
+printf 'performance preview %s stage: %s\n' "$STAGE" "$OUTPUT"
