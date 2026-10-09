@@ -37,7 +37,6 @@ pub(super) use prototype::{
     native_string_prototype_to_string, native_string_prototype_to_upper_case,
     native_string_prototype_to_well_formed, native_string_prototype_trim,
     native_string_prototype_trim_end, native_string_prototype_trim_start,
-    numeric_string_slice_code_unit_len,
 };
 
 pub(crate) const STRING_DATA_PROPERTY: &str = "\0StringData";

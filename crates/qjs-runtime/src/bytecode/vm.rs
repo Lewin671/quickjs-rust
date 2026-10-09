@@ -135,15 +135,6 @@ pub(super) struct FrameState<'a> {
     /// frame owns rather than borrows.
     pub(super) virtual_function_context_safe: bool,
     pub(super) ip: usize,
-    /// Two saturating decline counters per numeric loop plan, for the first
-    /// 64 plans. A plan that matched an instruction range but could not run
-    /// rebuilds its whole preparation state -- write targets, forbidden cells,
-    /// prepared terms -- before discovering that again on the next backedge,
-    /// which is every iteration of a loop containing a call. Plans are pure
-    /// accelerators, so a frame stops retrying one after it has declined
-    /// three times; the retries cover a plan that only becomes admissible once
-    /// the loop's values settle.
-    pub(super) declined_numeric_loop_plans: u128,
     /// One bit per typed loop program this frame has already declined, so a
     /// region the frame cannot run natively is not re-examined per iteration.
     pub(super) declined_typed_loop_programs: u128,
@@ -201,14 +192,6 @@ pub(super) struct FrameState<'a> {
     /// global lexical bindings. Indirect eval uses global-scope bytecode, but
     /// its lexical environment is ephemeral.
     pub(super) persist_global_lexicals: bool,
-    /// Only a fresh ordinary script VM may batch realm-global loop writes.
-    /// Eval, module, dynamic-function, and cross-realm entry points construct
-    /// their frames through `new_with_globals*` and leave this disabled.
-    pub(super) transactional_realm_globals: bool,
-    /// Dynamic source evaluation can replace global descriptors and binding
-    /// identities outside the current bytecode stream. Once observed, guarded
-    /// realm-global loop batching stays disabled for the rest of this frame.
-    pub(super) dynamic_code_executed: bool,
 }
 
 /// The part of a frame that an ordinary activation never reads or writes.

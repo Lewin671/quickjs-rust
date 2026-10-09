@@ -261,23 +261,6 @@ impl Vm<'_> {
         direct_eval: bool,
         direct_eval_strict: bool,
     ) -> Result<(), RuntimeError> {
-        if matches!(
-            &callee,
-            Value::Function(function)
-                if matches!(
-                    function.native,
-                    Some(
-                        NativeFunction::Eval
-                            | NativeFunction::EvalScript
-                            | NativeFunction::Function
-                            | NativeFunction::GeneratorFunction
-                            | NativeFunction::AsyncFunction
-                            | NativeFunction::AsyncGeneratorFunction
-                    )
-                )
-        ) {
-            self.dynamic_code_executed = true;
-        }
         if matches!(&callee, Value::Function(function) if function.native.is_some()) {
             // Most fast native paths never touch an environment, so the realm
             // frame is built only by the arms that need one instead of once

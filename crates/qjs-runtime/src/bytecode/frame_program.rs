@@ -169,8 +169,8 @@ mod tests {
             from_shared.execution_code
         ));
         assert!(std::ptr::eq(
-            from_borrowed.loop_plans().numeric,
-            from_shared.loop_plans().numeric
+            from_borrowed.loop_plans().typed,
+            from_shared.loop_plans().typed
         ));
     }
 

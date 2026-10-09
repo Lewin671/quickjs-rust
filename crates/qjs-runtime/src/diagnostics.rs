@@ -84,7 +84,7 @@ declare_counters! {
     loop_backedges,
     /// Backward edges where a loop-plan engine actually ran a region.
     loop_plan_entries,
-    /// Backward edges where all four loop engines were consulted and all four
+    /// Backward edges where every loop engine was consulted and every one
     /// declined. On such an edge the entire probe chain is overhead, so this
     /// counter -- not a raw probe count -- is what a dispatch-table unit would
     /// have to justify itself against.

@@ -47,7 +47,6 @@ mod vm_literals;
 mod vm_loop_dispatch;
 mod vm_module;
 mod vm_numeric_leaf;
-mod vm_numeric_loop;
 mod vm_numeric_mutation_loop;
 mod vm_ops;
 mod vm_private;

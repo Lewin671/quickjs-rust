@@ -78,22 +78,17 @@ pub(crate) fn try_run_typed_loop<F: LoopFrame>(
                 && (header..=backedge).contains(&plan_backedge)
                 && !(plan_header == header && plan_backedge == backedge)
         };
-    if plans
-        .numeric
-        .iter()
-        .any(|plan| claimed_by_enclosing_region(plan.region()))
-        || plans.shared_numeric_mutation.iter().any(|plan| {
-            #[cfg(feature = "perf-counters")]
-            if encloses_special_region(plan) && std::env::var_os("QJS_TL_TRACE").is_some() {
-                eprintln!(
-                    "TLENCLOSE region {header}..{backedge} plan {:?} kind {:?}",
-                    plan.region(),
-                    plan.kind_name()
-                );
-            }
-            claimed_by_enclosing_region(plan.region()) || encloses_special_region(plan)
-        })
-    {
+    if plans.shared_numeric_mutation.iter().any(|plan| {
+        #[cfg(feature = "perf-counters")]
+        if encloses_special_region(plan) && std::env::var_os("QJS_TL_TRACE").is_some() {
+            eprintln!(
+                "TLENCLOSE region {header}..{backedge} plan {:?} kind {:?}",
+                plan.region(),
+                plan.kind_name()
+            );
+        }
+        claimed_by_enclosing_region(plan.region()) || encloses_special_region(plan)
+    }) {
         return decline(vm);
     }
     // The programs live in the bytecode, whose borrow outlives the frame, so

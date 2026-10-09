@@ -91,11 +91,11 @@ fn every_call_attempt_is_attributed_to_exactly_one_tier() {
 }
 
 #[test]
-fn a_folded_loop_reports_far_fewer_calls_than_it_claims() {
+fn a_counted_loop_calling_a_resolvable_leaf_keeps_its_result() {
     // The shape `broad-micro.js` uses everywhere: a statically resolvable
-    // callee in a counted loop. The engine is free to fold it -- the point is
-    // that the counter makes the folding visible instead of letting a
-    // nanoseconds-per-call figure imply the calls happened.
+    // callee in a counted loop. The whole-loop plan that used to fold these
+    // calls away is gone, so the counter may now report every call; only the
+    // result is pinned here.
     let (value, counters) = counted(
         "function addOne(value) { return value + 1; }
          var checksum = 0;
@@ -103,13 +103,7 @@ fn a_folded_loop_reports_far_fewer_calls_than_it_claims() {
          checksum;",
     );
     assert_eq!(value, Value::Number(12_502_500.0));
-    assert!(
-        counters.ordinary_call_attempts < 5000,
-        "this shape is expected to fold; if it stops folding, the broad \
-         portfolio's numbers changed meaning and its notes need revisiting \
-         (attempts: {})",
-        counters.ordinary_call_attempts
-    );
+    assert!(counters.ordinary_call_attempts <= 5000);
 }
 
 #[test]
@@ -406,7 +400,7 @@ fn supplying_loop_plans_externally_does_not_change_which_plan_claims_a_site() {
             0,
         ),
         // The same loop at global scope, where the counters are realm
-        // bindings: no engine claims it, and every edge consults all four.
+        // bindings: no engine claims it, and every edge consults them all.
         (
             "var total = 0;
              for (var i = 0; i < 200; i++) { total += i; }

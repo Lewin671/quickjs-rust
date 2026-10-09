@@ -289,7 +289,7 @@ fn counted_loop_headers_fuse_without_changing_semantics() {
 
 #[test]
 fn loops_stay_correct_when_a_plan_is_retired_after_repeated_declines() {
-    // A numeric loop plan that keeps declining is retired for the rest of the
+    // A loop plan that keeps declining is retired for the rest of the
     // frame, so the loop simply runs on the ordinary interpreter. That is a
     // speed decision with no semantic content, and these loops must produce
     // the same results either way: one that never admits the plan, one that
@@ -649,4 +649,390 @@ fn scalar_bitwise_recurrence_with_fractional_limit_and_single_iteration() {
         ),
         Ok(Value::String("3:1".to_owned().into()))
     );
+}
+
+// The tests below ran through the removed numeric loop plan (a counted loop
+// accumulating stable reads or numeric leaf calls into one variable). They
+// keep its JavaScript-visible contract on whichever tier now runs the loop.
+
+fn assert_string(source: &str, expected: &str) {
+    assert_eq!(
+        eval(source),
+        Ok(Value::String(expected.to_owned().into())),
+        "{source}"
+    );
+}
+
+fn assert_number(source: &str, expected: f64) {
+    assert_eq!(eval(source), Ok(Value::Number(expected)), "{source}");
+}
+
+#[test]
+fn top_level_var_accumulation_loops_update_global_bindings() {
+    assert_string(
+        "function addOne(value) { return value + 1; } \
+         var limit = 1000; var checksum = 0; \
+         for (var index = 0; index < limit; index++) checksum += addOne(index); \
+         checksum + ':' + index + ':' + globalThis.checksum + ':' + \
+           Object.getOwnPropertyNames(globalThis).filter(function (name) { \
+             return name.length >= 2 && name.charCodeAt(0) === 0 && name.charCodeAt(1) === 0; \
+           }).length;",
+        "500500:1000:500500:0",
+    );
+    assert_string(
+        "function addOne(value) { return value + 1; } var limit = 4, sum = 0; \
+         Object.defineProperty(globalThis, 'sum', { value: 5 }); \
+         for (var index = 0; index < limit; index++) sum += addOne(index); \
+         sum + ':' + globalThis.sum;",
+        "15:15",
+    );
+}
+
+#[test]
+fn top_level_accumulation_loops_observe_aliased_global_reads() {
+    assert_string(
+        "var limit = 4, sum = 0; function addCurrent(value) { return value + sum; } \
+         for (var index = 0; index < limit; index++) sum += addCurrent(index); \
+         sum + ':' + index;",
+        "11:4",
+    );
+    for source in [
+        "var mirror = globalThis, limit = 4, sum = 0; for (var index = 0; index < limit; index++) sum += mirror.index; sum + ':' + index;",
+        "var mirror = globalThis, key = 'index', limit = 4, sum = 0; for (var index = 0; index < limit; index++) sum += mirror[key]; sum + ':' + index;",
+    ] {
+        assert_string(source, "6:4");
+    }
+}
+
+#[test]
+fn top_level_accumulation_loops_respect_descriptors_and_dynamic_scopes() {
+    for (source, expected) in [
+        (
+            "function addOne(value) { return value + 1; } var limit = 4, sum = 0; Object.defineProperty(globalThis, 'sum', { writable: false }); for (var index = 0; index < limit; index++) sum += addOne(index); sum + ':' + index;",
+            "0:4",
+        ),
+        (
+            "function addOne(value) { return value + 1; } var limit = 4, sum = 0; eval('sum = 5'); for (var index = 0; index < limit; index++) sum += addOne(index); sum + ':' + index;",
+            "15:4",
+        ),
+        (
+            "function addOne(value) { return value + 1; } var limit = 4, sum = 0; (0, eval)('sum = 5'); for (var index = 0; index < limit; index++) sum += addOne(index); sum + ':' + index;",
+            "15:4",
+        ),
+        (
+            "function addOne(value) { return value + 1; } var limit = 4, sum = 0; eval.call(undefined, 'sum = 5'); for (var index = 0; index < limit; index++) sum += addOne(index); sum + ':' + index;",
+            "15:4",
+        ),
+        (
+            "function addOne(value) { return value + 1; } var limit = 4, sum = 0; Reflect.apply(eval, undefined, ['sum = 5']); for (var index = 0; index < limit; index++) sum += addOne(index); sum + ':' + index;",
+            "15:4",
+        ),
+        (
+            "function addOne(value) { return value + 1; } var limit = 4, sum = 0; Function('sum = 5')(); for (var index = 0; index < limit; index++) sum += addOne(index); sum + ':' + index;",
+            "15:4",
+        ),
+        (
+            "function addOne(value) { return value + 1; } var limit = 4, sum = 0; with ({}) {} for (var index = 0; index < limit; index++) sum += addOne(index); sum + ':' + index;",
+            "10:4",
+        ),
+    ] {
+        assert_string(source, expected);
+    }
+    assert_string(
+        "var limit = 4, reads = 0; \
+         Object.defineProperty(globalThis, 'sloppySum', { configurable: true, \
+           get: function () { reads += 1; return 1; } }); \
+         for (var index = 0; index < limit; index++) sloppySum += index; \
+         delete globalThis.sloppySum; sloppySum = 9; \
+         reads + ':' + sloppySum;",
+        "4:9",
+    );
+    for (limit, expected) in [("0", "0:0"), ("'3'", "6:3"), ("NaN", "0:0")] {
+        assert_string(
+            &format!(
+                "var sum = 0; for (var index = 0; index < {limit}; index++) sum += index + 1; sum + ':' + index;"
+            ),
+            expected,
+        );
+    }
+}
+
+#[test]
+fn eval_loops_never_publish_compiler_temporaries() {
+    let scratch_count = "Object.getOwnPropertyNames(globalThis).filter(function (name) { \
+        return name.length >= 2 && name.charCodeAt(0) === 0 && name.charCodeAt(1) === 0; \
+    }).length";
+    for eval_call in [
+        "eval('var evalTotal = 0; for (var evalIndex = 0; evalIndex < 4; evalIndex++) evalTotal += evalIndex;')",
+        "(0, eval)('var evalTotal = 0; for (var evalIndex = 0; evalIndex < 4; evalIndex++) evalTotal += evalIndex;')",
+    ] {
+        assert_string(
+            &format!("{eval_call}; evalTotal + ':' + ({scratch_count});"),
+            "6:0",
+        );
+    }
+    assert_string(
+        "function run() { \
+            var total = 10; \
+            eval('for (var inner = 0; inner < 4; inner++) total += inner;'); \
+            for (var outer = 0; outer < 3; outer++) total += outer; \
+            return total; \
+        } \
+        run() + ':' + Object.getOwnPropertyNames(globalThis).filter(function (name) { \
+            return name.length >= 2 && name.charCodeAt(0) === 0 && name.charCodeAt(1) === 0; \
+        }).length;",
+        "19:0",
+    );
+}
+
+#[test]
+fn accumulation_loops_over_literals_declared_in_the_function() {
+    assert_number(
+        "function run(n) { var value = { a: 1, b: 2, c: 3 }; var total = 0; for (var i = 0; i < n; i++) { total += value.a; total += value.b; total += value.c; } return total; } run(5);",
+        30.0,
+    );
+    assert_number(
+        "function run(n) { var value = [1, 2, 3, 4]; var total = 0; for (var i = 0; i < n; i++) { total += value[0]; total += value[1]; total += value[2]; total += value[3]; } return total; } run(5);",
+        50.0,
+    );
+    assert_number(
+        "function run(n) { var add = function (value) { return value + 1; }; var total = 0; for (var i = 0; i < n; i++) { total += add(i); } return total; } run(5);",
+        15.0,
+    );
+    assert_string(
+        "function run(n) { var reads = 0, o = {}, key = 'a', sum = 0; Object.defineProperty(o, 'a', { get: function () { reads += 1; return 2; } }); for (var i = 0; i < n; i++) { sum += o[key]; } return sum + ':' + reads; } run(4);",
+        "8:4",
+    );
+    assert_number(
+        "var value = 2; function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s += value; } return s; } sum(4);",
+        8.0,
+    );
+}
+
+#[test]
+fn accumulation_loops_calling_numeric_leaves() {
+    for (source, expected) in [
+        (
+            "function addOne(value) { return value + 1; } \
+             function run(iterations) { var checksum = 0; \
+               for (var i = 0; i < iterations; i++) checksum += addOne(i); \
+               return checksum; } run(1000);",
+            500500.0,
+        ),
+        (
+            "function run(iterations) { \
+               var receiver = { addOne: function (value) { return value + 1; } }; \
+               var checksum = 0; \
+               for (var i = 0; i < iterations; i++) checksum += receiver.addOne(i); \
+               return checksum; } run(1000);",
+            500500.0,
+        ),
+        (
+            "var broadGlobalOne = 1; \
+             function run(iterations) { var checksum = 0; \
+               for (var i = 0; i < iterations; i++) checksum += broadGlobalOne; \
+               return checksum; } run(1000);",
+            1000.0,
+        ),
+        (
+            "function leaf(value) { return value + 1; } function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s = leaf(i) + s; } return s; } sum(1000);",
+            500500.0,
+        ),
+        (
+            "function sum(n) { var offset = 1; var leaf = function (value) { return value + offset; }; var s = 0; for (var i = 0; i < n; i++) { s = leaf(i) + s; } return s; } sum(1000);",
+            500500.0,
+        ),
+        (
+            "function leaf(value) { if (value === 1) { leaf = function (next) { return next + 10; }; } return value + 1; } function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s = leaf(i) + s; } return s; } sum(3);",
+            15.0,
+        ),
+    ] {
+        assert_number(source, expected);
+    }
+    assert_string(
+        "function leaf(value) { return 'x' + value; } function sum(n) { var s = 0; for (var i = 0; i < n; i++) { s = leaf(i) + s; } return s; } sum(3);",
+        "x2x1x00",
+    );
+}
+
+#[test]
+fn accumulation_loops_over_string_slice_lengths() {
+    for (source, expected) in [
+        (
+            "function sum(n) { var text = 'the quick brown fox'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(1, 4).length; } return s; } sum(1000);",
+            3000.0,
+        ),
+        (
+            "function sum(n) { var text = '😀x'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(0, 1).length; } return s; } sum(4);",
+            4.0,
+        ),
+        (
+            "function sum(n) { var text = '😀x'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(i, 3).length; } return s; } sum(4);",
+            6.0,
+        ),
+        (
+            "function sum(n) { var text = '\\u{F0000}x'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(i, 3).length; } return s; } sum(4);",
+            6.0,
+        ),
+        (
+            "function sum(n) { var text = 'abcdef'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(-3, -1).length; } return s; } sum(4);",
+            8.0,
+        ),
+        (
+            "String.prototype.slice = function () { return { length: 7 }; }; function sum(n) { var text = 'abc'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(1, 2).length; } return s; } sum(4);",
+            28.0,
+        ),
+    ] {
+        assert_number(source, expected);
+    }
+    assert_string(
+        "var reads = 0; var slice = String.prototype.slice; Object.defineProperty(String.prototype, 'slice', { get: function () { reads += 1; return slice; } }); function sum(n) { var text = 'abc'; var s = 0; for (var i = 0; i < n; i++) { s += text.slice(1, 2).length; } return s + ':' + reads; } sum(4);",
+        "4:4",
+    );
+    // The index normalization the removed direct length helper implemented:
+    // fractional, negative, reversed, non-finite and out-of-range bounds, and
+    // code-unit (not code-point) positions.
+    for (text, start, end, expected) in [
+        ("'abcdef'", "1", "4", 3.0),
+        ("'abcdef'", "1.9", "4.9", 3.0),
+        ("'abcdef'", "-4", "-1", 3.0),
+        ("'abcdef'", "4", "1", 0.0),
+        ("'😀x'", "0", "1", 1.0),
+        ("'😀x'", "0", "2", 2.0),
+        ("'😀x'", "1", "2", 1.0),
+        ("'\\uD800a\\uDC00'", "0", "1", 1.0),
+        ("'\\uD800a\\uDC00'", "0", "3", 3.0),
+        ("'abcdef'", "NaN", "Infinity", 6.0),
+        ("'abcdef'", "-Infinity", "-1", 5.0),
+        ("'abcdef'", "Infinity", "-Infinity", 0.0),
+        ("'abcdef'", "-100", "100", 6.0),
+    ] {
+        assert_number(
+            &format!(
+                "function sum(n) {{ var text = {text}; var s = 0; for (var i = 0; i < n; i++) {{ s += text.slice({start}, {end}).length; }} return s; }} sum(3);"
+            ),
+            expected * 3.0,
+        );
+    }
+}
+
+// Loops whose body first selects one of two locals from a bitwise test of the
+// counter and then accumulates a read or call through the selected value.
+
+#[test]
+fn selected_method_loops_preserve_zero_one_and_many_iterations() {
+    let source = "function run(n) { var first = { f: function (value, offset) { return value + offset; } }; var second = { f: function (value, offset) { return value - offset; } }; var receiver; var sum = 0; for (var i = 0; i < n; i++) { receiver = (i & 3) === 2 ? first : second; sum += receiver.f(i, 2); } return sum + ':' + (receiver === first ? 'first' : receiver === second ? 'second' : 'none'); }";
+    for (count, expected) in [
+        (0, "0:none"),
+        (1, "-2:second"),
+        (2, "-3:second"),
+        (3, "1:first"),
+        (6, "7:second"),
+    ] {
+        assert_string(&format!("{source} run({count});"), expected);
+    }
+}
+
+#[test]
+fn selected_receiver_loops_over_methods_reads_calls_and_builtins() {
+    for (source, expected) in [
+        (
+            "function run(n) { var first = { f: function (value) { return value + 3; } }; var second = { f: function (value) { return value + 20; } }; var receiver, sum = 0; for (var i = 0; i < n; i++) { receiver = (i & 7) === 4 ? first : second; sum += receiver.f(i); } return sum; } run(9);",
+            199.0,
+        ),
+        (
+            "function run(n) { var source = { f: function (value) { return value + 1; } }; var receiver, sum = 0; for (var i = 0; i < n; i++) { receiver = (i & 1) === 0 ? source : source; sum += receiver.f(i); } return sum; } run(6);",
+            21.0,
+        ),
+        (
+            "function run(n) { var left = 3, right = 20; var first = { f: function (value) { return value + left; } }; var second = { f: function (value) { return value + right; } }; var receiver, sum = 0; for (var i = 0; i < n; i++) { receiver = (i & 1) === 0 ? first : second; sum += receiver.f(i); } return sum; } run(6);",
+            84.0,
+        ),
+        (
+            "function run(n) { var first = { value: 2 }, second = { value: 5 }, selected, sum = 0; for (var i = 0; i < n; i++) { selected = (i & 1) === 0 ? first : second; sum += selected.value; } return sum; } run(6);",
+            21.0,
+        ),
+        (
+            "function run(n) { var first = [2], second = [5], selected, sum = 0; for (var i = 0; i < n; i++) { selected = (i & 1) === 0 ? first : second; sum += selected[0]; } return sum; } run(6);",
+            21.0,
+        ),
+        (
+            "function run(n) { var first = { a: 2 }, second = { a: 5 }, key = 'a', selected, sum = 0; for (var i = 0; i < n; i++) { selected = (i & 1) === 0 ? first : second; sum += selected[key]; } return sum; } run(6);",
+            21.0,
+        ),
+        (
+            "function run(n) { var first = function (value) { return value + 1; }, second = function (value) { return value + 10; }, selected, sum = 0; for (var i = 0; i < n; i++) { selected = (i & 1) === 0 ? first : second; sum += selected(i); } return sum; } run(6);",
+            48.0,
+        ),
+        (
+            "function run(n) { var first = 'abcd', second = 'x', selected, sum = 0; for (var i = 0; i < n; i++) { selected = (i & 1) === 0 ? first : second; sum += selected.slice(1, 3).length; } return sum; } run(6);",
+            6.0,
+        ),
+        (
+            "function run(n) { var first = [1, 3], second = [3, 1], selected, sum = 0; for (var i = 0; i < n; i++) { selected = (i & 1) === 0 ? first : second; sum += selected.indexOf(3); } return sum; } run(6);",
+            3.0,
+        ),
+    ] {
+        assert_number(source, expected);
+    }
+}
+
+#[test]
+fn selected_receiver_loops_with_observable_or_non_numeric_methods() {
+    assert_string(
+        "function run(n) { var reads = 0, first = {}, second = {}; function f(value) { return value + 1; } Object.defineProperty(first, 'f', { get: function () { reads += 1; return f; } }); Object.defineProperty(second, 'f', { get: function () { reads += 1; return f; } }); var receiver, sum = 0; for (var i = 0; i < n; i++) { receiver = (i & 1) === 0 ? first : second; sum += receiver.f(i); } return sum + ':' + reads; } run(4);",
+        "10:4",
+    );
+    assert_number(
+        "function run(n) { var proto = { f: function (value) { return value + 1; } }; var first = Object.create(proto), second = Object.create(proto), receiver, sum = 0; for (var i = 0; i < n; i++) { receiver = (i & 1) === 0 ? first : second; sum += receiver.f(i); } return sum; } run(4);",
+        10.0,
+    );
+    assert_number(
+        "function run(n) { var first = new Proxy({ f: function (value) { return value + 1; } }, {}), second = new Proxy({ f: function (value) { return value + 1; } }, {}), receiver, sum = 0; for (var i = 0; i < n; i++) { receiver = (i & 1) === 0 ? first : second; sum += receiver.f(i); } return sum; } run(4);",
+        10.0,
+    );
+    assert_string(
+        "function run(n) { var first = { f: function (value) { return value + 1; } }, second = { f: 1 }, receiver, sum = 0; for (var i = 0; i < n; i++) { receiver = (i & 1) === 0 ? first : second; sum += receiver.f(i); } return sum; } try { run(4); 'missed'; } catch (error) { 'caught'; }",
+        "caught",
+    );
+    assert_string(
+        "function run(n) { var first = { f: function () { return 'a'; } }, second = { f: function () { return 'b'; } }, receiver, sum = 0; for (var i = 0; i < n; i++) { receiver = (i & 1) === 0 ? first : second; sum += receiver.f(); } return sum; } run(4);",
+        "0abab",
+    );
+    assert_string(
+        "function run(n) { var writes = 0; var first = { f: function () { writes += 1; return writes; } }, second = { f: function () { writes += 10; return writes; } }, receiver, sum = 0; for (var i = 0; i < n; i++) { receiver = (i & 1) === 0 ? first : second; sum += receiver.f(); } return sum + ':' + writes; } run(4);",
+        "46:22",
+    );
+}
+
+#[test]
+fn selected_receiver_loops_whose_callees_observe_or_mutate_loop_state() {
+    for (source, expected) in [
+        (
+            "function run(n) { var first = { f: function (value) { return value + i; } }, second = { f: function (value) { return value + i; } }, receiver, sum = 0; for (var i = 0; i < n; i++) { receiver = (i & 1) === 0 ? first : second; sum += receiver.f(i); } return sum; } run(4);",
+            12.0,
+        ),
+        (
+            "function run(n) { var first = { f: function (value) { return value + sum; } }, second = { f: function (value) { return value + sum; } }, receiver, sum = 1; for (var i = 0; i < n; i++) { receiver = (i & 1) === 0 ? first : second; sum += receiver.f(i); } return sum; } run(4);",
+            27.0,
+        ),
+        (
+            "function run(n) { var first = {}, second = {}; first.f = function (value) { second.f = function (next) { return next + 100; }; return value + 1; }; second.f = function (value) { return value + 2; }; var receiver, sum = 0; for (var i = 0; i < n; i++) { receiver = (i & 1) === 0 ? first : second; sum += receiver.f(i); } return sum; } run(4);",
+            208.0,
+        ),
+        (
+            "function run(n) { var first, second, receiver, sum = 0; first = { f: function (value) { return value + (receiver === first ? 1 : 10); } }; second = { f: function (value) { return value + (receiver === first ? 1 : 10); } }; for (var i = 0; i < n; i++) { receiver = (i & 1) === 0 ? first : second; sum += receiver.f(i); } return sum; } run(4);",
+            28.0,
+        ),
+        (
+            "function run(n) { eval(''); var first = { f: function (value) { return value + 1; } }, second = { f: function (value) { return value + 1; } }, receiver, sum = 0; for (var i = 0; i < n; i++) { receiver = (i & 1) === 0 ? first : second; sum += receiver.f(i); } return sum; } run(4);",
+            10.0,
+        ),
+        (
+            "function run(n) { with ({}) {} var first = { f: function (value) { return value + 1; } }, second = { f: function (value) { return value + 1; } }, receiver, sum = 0; for (var i = 0; i < n; i++) { receiver = (i & 1) === 0 ? first : second; sum += receiver.f(i); } return sum; } run(4);",
+            10.0,
+        ),
+    ] {
+        assert_number(source, expected);
+    }
 }
