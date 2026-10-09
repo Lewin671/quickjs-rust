@@ -149,6 +149,24 @@ class ContextCheckTests(unittest.TestCase):
         self.write("README.md", "`code`\n\nthen [a](gone.md)\nmore` text\n")
         self.assertTrue(any("README.md:3" in e and "gone.md" in e for e in self.errors()))
 
+    def test_a_code_span_does_not_reach_across_list_items(self):
+        self.write(
+            "README.md",
+            "- literal `\n- [guide](docs/missing.md)\n- literal `\n",
+        )
+        self.assertTrue(any("README.md:2" in e and "docs/missing.md" in e for e in self.errors()))
+
+    def test_text_after_a_destination_must_be_a_title(self):
+        self.write("README.md", "[outer](<README.md>suffix [guide](docs/missing.md))\n")
+        self.assertTrue(any("docs/missing.md" in e for e in self.errors()))
+        self.write("README.md", "[a](docs/architecture.md (a title)) [b](README.md\n'B')\n")
+        self.assertEqual(self.errors(), [])
+
+    def test_a_backslash_before_a_letter_is_kept(self):
+        self.write("README.md", "[guide](docs/archi\\tecture.md)\n\n[r]: docs/archi\\tecture.md\n")
+        found = [e for e in self.errors() if "archi\\tecture.md" in e]
+        self.assertEqual(len(found), 2)
+
     def test_footnotes_are_not_links(self):
         self.write("README.md", "Text.[^1]\n\n[^1]: This is explanatory text.\n")
         self.assertEqual(self.errors(), [])

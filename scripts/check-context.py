@@ -68,6 +68,9 @@ RESUME_WINDOW = 30
 # A reference definition: [label]: target "title". Backticks in a label are
 # literal, and `[^note]:` is a footnote, not a link.
 REFERENCE = re.compile(r"^ {0,3}\[(?!\^)(?:[^\]\\\n]|\\.)+\]:(.*)$")
+# A line that starts a new block inside a run of non-blank lines: a list
+# item, a heading, a block quote, or a table row.
+BLOCK_START = re.compile(r"^\s*(?:[-*+]\s|\d+[.)]\s|#{1,6}\s|>|\|)")
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 FENCE = re.compile(r"^\s*(```|~~~)")
 TASK_NAME = re.compile(r"^T\d{3}-.+\.md$")
@@ -100,7 +103,8 @@ def prose_lines(path: Path) -> list[str]:
 
 
 def unescape(text: str) -> str:
-    return re.sub(r"\\(.)", r"\1", text)
+    """Drop the backslash from an escaped ASCII punctuation character."""
+    return re.sub(r"\\([!-/:-@\[-`{-~])", r"\1", text)
 
 
 def inline_destination(line: str, start: int) -> tuple[str | None, int]:
@@ -135,8 +139,16 @@ def inline_destination(line: str, start: int) -> tuple[str | None, int]:
         if depth:
             return None, start
         destination = unescape(line[begin:pos])
-    # Anything between the destination and the closing parenthesis is a title.
-    close = line.find(")", pos)
+    # The link closes here, or after a title that whitespace separates from
+    # the destination and that starts with a quote or a parenthesis.
+    after = pos
+    while after < len(line) and line[after].isspace():
+        after += 1
+    if after < len(line) and line[after] == ")":
+        return destination, after + 1
+    if after == pos or after >= len(line) or line[after] not in "\"'(":
+        return None, start
+    close = line.find(")", after + 1)
     if close < 0:
         return None, start
     return destination, close + 1
@@ -185,16 +197,18 @@ def definition_target(rest: str) -> str | None:
 def link_targets(lines: list[str]) -> list[tuple[int, str]]:
     """Every link destination in `lines`, with its 1-based line number."""
     found = []
-    # Inline links are scanned a paragraph at a time, because a code span or
-    # a link's text may wrap across lines.
+    # Inline links are scanned a block at a time, because a code span or a
+    # link's text may wrap across the lines of one paragraph or list item but
+    # never across two blocks.
     start = 0
     for index in range(len(lines) + 1):
-        if index < len(lines) and lines[index].strip():
+        ends_block = index == len(lines) or not lines[index].strip()
+        if not ends_block and not (index > start and BLOCK_START.match(lines[index])):
             continue
         paragraph = "\n".join(lines[start:index])
         for offset, target in inline_targets(paragraph):
             found.append((start + 1 + paragraph.count("\n", 0, offset), target))
-        start = index + 1
+        start = index + 1 if ends_block else index
     for index, line in enumerate(lines):
         definition = REFERENCE.match(line)
         if not definition:
