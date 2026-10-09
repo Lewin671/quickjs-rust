@@ -98,13 +98,13 @@ jobs:
           path: target/performance-preview/build-cache/quickjs-ng/${{ steps.reference-cache-plan.outputs.quickjs-key }}
           key: performance-preview-quickjs-ng-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.reference-cache-plan.outputs.quickjs-key }}
 
-  base-owned-preview:
-    name: Base-owned preview - cooperative same-repository PR
+  base-owned-build:
+    name: Build - base-owned harness, cooperative same-repository PR
     if: >-
       github.event_name == 'pull_request_target' &&
       github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-latest
-    timeout-minutes: 57
+    timeout-minutes: 30
     env:
       QJS_HARNESS_ROOT: ${{ github.workspace }}
       QJS_HARNESS_MODE: base_owned_harness
@@ -121,12 +121,6 @@ jobs:
       PR_BASE_CLONE_URL: ${{ github.event.pull_request.base.repo.clone_url }}
       PR_HEAD_CLONE_URL: ${{ github.event.pull_request.head.repo.clone_url }}
     steps:
-      # The orchestrator can only see its own step's clock. The sentinel lane
-      # must also respect the job deadline, because a job carries setup, cache,
-      # and publication steps that the script never observes.
-      - name: Record when this job began
-        run: echo "QJS_PREVIEW_JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
-
       - name: Checkout explicit PR base as base-owned harness
         uses: actions/checkout@v6
         with:
@@ -164,7 +158,7 @@ jobs:
           reference_revision="$(python3 -m tools.benchmark.preview reference \
             --manifest benchmarks/manifest.json --field revision)"
           python3 -m tools.benchmark.preview status \
-            --state pending --phase pre_setup --output-dir "$EVIDENCE_DIR" \
+            --stage build --state pending --phase pre_setup --output-dir "$EVIDENCE_DIR" \
             --harness-mode "$QJS_HARNESS_MODE" \
             --harness-revision "$PR_BASE_SHA" \
             --candidate-revision "$PR_HEAD_SHA" \
@@ -182,7 +176,7 @@ jobs:
           reference_revision="$(python3 -m tools.benchmark.preview reference \
             --manifest benchmarks/manifest.json --field revision)"
           python3 -m tools.benchmark.preview status \
-            --state pending --phase audit --output-dir "$EVIDENCE_DIR" \
+            --stage build --state pending --phase audit --output-dir "$EVIDENCE_DIR" \
             --harness-mode "$QJS_HARNESS_MODE" \
             --harness-revision "$PR_BASE_SHA" \
             --candidate-revision "$PR_HEAD_SHA" \
@@ -227,14 +221,10 @@ jobs:
           path: target/performance-preview/build-cache/quickjs-ng/${{ steps.build-cache-plan.outputs.quickjs-key }}
           key: performance-preview-quickjs-ng-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-cache-plan.outputs.quickjs-key }}
 
-      # 47 rather than 35: the sentinel lane adds a hard-bounded 600 seconds
-      # after the broad lane, and the step must have room for that bound plus
-      # the fallback write, or a timeout here would discard the broad lane's
-      # durable conclusion.
-      - name: Build and measure three pinned engines
-        timeout-minutes: 47
+      - name: Build three pinned engines
+        timeout-minutes: 20
         run: |
-          "$QJS_HARNESS_ROOT/scripts/performance-preview.sh" \
+          "$QJS_HARNESS_ROOT/scripts/performance-preview.sh" --stage build \
             --harness-mode "$QJS_HARNESS_MODE" \
             --candidate-source "$GITHUB_WORKSPACE/target/performance-preview/candidate-source" \
             --base-source "$GITHUB_WORKSPACE" \
@@ -243,41 +233,35 @@ jobs:
             --candidate-repo "$PR_HEAD_CLONE_URL" \
             --base-repo "$PR_BASE_CLONE_URL" \
             --output "$EVIDENCE_DIR" \
+            --binaries "$GITHUB_WORKSPACE/target/performance-preview/binaries" \
             --build-cache-root "$GITHUB_WORKSPACE/target/performance-preview/build-cache"
 
-      - name: Publish complete or durable failure summary
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p "$EVIDENCE_DIR"
-          if [ -f "$QJS_HARNESS_ROOT/tools/benchmark/hosted_preview.py" ]; then
-            python3 -m tools.benchmark.hosted_preview publish \
-              --output-dir "$EVIDENCE_DIR" --step-summary "$GITHUB_STEP_SUMMARY" \
-              --job-status "${{ job.status }}"
-          else
-            printf '%s\n' '{"classification":"no_performance_conclusion","message":"checkout failed before evidence initialization","phase":"pre_orchestrator","schema_version":1,"state":"failed"}' > "$EVIDENCE_DIR/status.json"
-            printf '%s\n' '## Performance Preview Failed' '' '> **No performance conclusion was produced.**' '> Checkout failed before evidence initialization.' '' '- Failure phase: `pre_orchestrator`' > "$EVIDENCE_DIR/summary.md"
-            cat "$EVIDENCE_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
-          fi
+      - name: Upload the three executables for the lane jobs
+        uses: actions/upload-artifact@v6
+        with:
+          name: preview-binaries-${{ github.run_attempt }}
+          path: target/performance-preview/binaries/
+          if-no-files-found: error
+          retention-days: 1
 
-      - name: Upload complete or partial preview evidence
+      - name: Upload build stage evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: performance-preview-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: preview-part-build-${{ github.run_attempt }}
           path: target/performance-preview/evidence/
-          if-no-files-found: error
-          retention-days: 14
+          if-no-files-found: warn
+          retention-days: 1
 
-  main-push-preview:
-    name: Head-owned preview - trusted main update
+  main-push-build:
+    name: Build - head-owned harness, trusted main update
     needs: reference-engine-cache
     if: >-
       always() &&
       (github.event_name == 'push' ||
        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
-    timeout-minutes: 57
+    timeout-minutes: 30
     env:
       QJS_HARNESS_ROOT: ${{ github.workspace }}
       QJS_HARNESS_MODE: ${{ github.event_name == 'workflow_dispatch' && 'manual_main_head_owned_harness' || 'main_push_head_owned_harness' }}
@@ -292,11 +276,6 @@ jobs:
       RUN_WORKFLOW_SHA: ${{ github.sha }}
       RUN_CLONE_URL: ${{ github.event.repository.clone_url }}
     steps:
-      # Same reason as the base-owned job: the job deadline is not visible to
-      # the orchestrator unless it is recorded here.
-      - name: Record when this job began
-        run: echo "QJS_PREVIEW_JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
-
       - name: Checkout exact main revision as head-owned harness and candidate
         uses: actions/checkout@v6
         with:
@@ -351,7 +330,7 @@ jobs:
           reference_revision="$(python3 -m tools.benchmark.preview reference \
             --manifest benchmarks/manifest.json --field revision)"
           python3 -m tools.benchmark.preview status \
-            --state pending --phase pre_setup --output-dir "$EVIDENCE_DIR" \
+            --stage build --state pending --phase pre_setup --output-dir "$EVIDENCE_DIR" \
             --harness-mode "$QJS_HARNESS_MODE" \
             --harness-revision "$RUN_CANDIDATE_SHA" \
             --candidate-revision "$RUN_CANDIDATE_SHA" \
@@ -369,7 +348,7 @@ jobs:
           reference_revision="$(python3 -m tools.benchmark.preview reference \
             --manifest benchmarks/manifest.json --field revision)"
           python3 -m tools.benchmark.preview status \
-            --state pending --phase audit --output-dir "$EVIDENCE_DIR" \
+            --stage build --state pending --phase audit --output-dir "$EVIDENCE_DIR" \
             --harness-mode "$QJS_HARNESS_MODE" \
             --harness-revision "$RUN_CANDIDATE_SHA" \
             --candidate-revision "$RUN_CANDIDATE_SHA" \
@@ -414,14 +393,10 @@ jobs:
           path: target/performance-preview/build-cache/quickjs-ng/${{ steps.build-cache-plan.outputs.quickjs-key }}
           key: performance-preview-quickjs-ng-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-cache-plan.outputs.quickjs-key }}
 
-      # 47 rather than 35: the sentinel lane adds a hard-bounded 600 seconds
-      # after the broad lane, and the step must have room for that bound plus
-      # the fallback write, or a timeout here would discard the broad lane's
-      # durable conclusion.
-      - name: Build and measure three pinned engines
-        timeout-minutes: 47
+      - name: Build three pinned engines
+        timeout-minutes: 20
         run: |
-          "$QJS_HARNESS_ROOT/scripts/performance-preview.sh" \
+          "$QJS_HARNESS_ROOT/scripts/performance-preview.sh" --stage build \
             --harness-mode "$QJS_HARNESS_MODE" \
             --candidate-source "$GITHUB_WORKSPACE" \
             --base-source "$GITHUB_WORKSPACE/target/performance-preview/base-source" \
@@ -430,7 +405,16 @@ jobs:
             --candidate-repo "$RUN_CLONE_URL" \
             --base-repo "$RUN_CLONE_URL" \
             --output "$EVIDENCE_DIR" \
+            --binaries "$GITHUB_WORKSPACE/target/performance-preview/binaries" \
             --build-cache-root "$GITHUB_WORKSPACE/target/performance-preview/build-cache"
+
+      - name: Upload the three executables for the lane jobs
+        uses: actions/upload-artifact@v6
+        with:
+          name: preview-binaries-${{ github.run_attempt }}
+          path: target/performance-preview/binaries/
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Revalidate candidate executable cache for trusted save
         if: always() && !cancelled()
@@ -502,19 +486,130 @@ jobs:
           path: target/performance-preview/build-cache/quickjs-ng/${{ steps.build-cache-plan.outputs.quickjs-key }}
           key: performance-preview-quickjs-ng-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-cache-plan.outputs.quickjs-key }}
 
-      - name: Publish complete or durable failure summary
+      - name: Upload build stage evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: preview-part-build-${{ github.run_attempt }}
+          path: target/performance-preview/evidence/
+          if-no-files-found: warn
+          retention-days: 1
+
+  measure-lane:
+    name: Measure ${{ matrix.lane }} lane - three engines on one runner
+    needs: [base-owned-build, main-push-build]
+    if: >-
+      always() &&
+      (needs.base-owned-build.result == 'success' || needs.main-push-build.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [broad, external, sentinel]
+    env:
+      QJS_HARNESS_ROOT: ${{ github.workspace }}
+      QJS_HARNESS_MODE: ${{ github.event_name == 'pull_request_target' && 'base_owned_harness' || (github.event_name == 'workflow_dispatch' && 'manual_main_head_owned_harness' || 'main_push_head_owned_harness') }}
+      EVIDENCE_DIR: ${{ github.workspace }}/target/performance-preview/evidence
+      PYTHONDONTWRITEBYTECODE: '1'
+      PREVIEW_LANE: ${{ matrix.lane }}
+      RUN_CANDIDATE_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
+      RUN_BASE_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || (github.event_name == 'push' && github.event.before || inputs.base_sha || github.sha) }}
+      RUN_CANDIDATE_CLONE_URL: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.clone_url || github.event.repository.clone_url }}
+      RUN_BASE_CLONE_URL: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.repo.clone_url || github.event.repository.clone_url }}
+    steps:
+      # The harness is the base revision in a pull request and the pushed
+      # revision on main, exactly as in the build job. A lane checks out no
+      # candidate source: it only executes the recorded executables.
+      - name: Checkout the harness revision
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+
+      - name: Download the three executables
+        uses: actions/download-artifact@v7
+        with:
+          name: preview-binaries-${{ github.run_attempt }}
+          path: target/performance-preview/binaries
+
+      # The step deadline is shorter than the job's so a measurement that
+      # runs out of time still leaves its status and partial evidence
+      # uploaded for the publisher.
+      - name: Measure one lane with the recorded executables
+        timeout-minutes: 28
+        run: |
+          "$QJS_HARNESS_ROOT/scripts/performance-preview.sh" --stage "$PREVIEW_LANE" \
+            --harness-mode "$QJS_HARNESS_MODE" \
+            --candidate-sha "$RUN_CANDIDATE_SHA" \
+            --base-sha "$RUN_BASE_SHA" \
+            --candidate-repo "$RUN_CANDIDATE_CLONE_URL" \
+            --base-repo "$RUN_BASE_CLONE_URL" \
+            --output "$EVIDENCE_DIR" \
+            --binaries "$GITHUB_WORKSPACE/target/performance-preview/binaries"
+
+      - name: Upload lane evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: preview-part-${{ matrix.lane }}-${{ github.run_attempt }}
+          path: target/performance-preview/evidence/
+          if-no-files-found: warn
+          retention-days: 1
+
+  publish-preview:
+    name: Publish the composed preview
+    needs: [base-owned-build, main-push-build, measure-lane]
+    if: >-
+      always() &&
+      (needs.base-owned-build.result != 'skipped' || needs.main-push-build.result != 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      QJS_HARNESS_ROOT: ${{ github.workspace }}
+      QJS_HARNESS_MODE: ${{ github.event_name == 'pull_request_target' && 'base_owned_harness' || (github.event_name == 'workflow_dispatch' && 'manual_main_head_owned_harness' || 'main_push_head_owned_harness') }}
+      EVIDENCE_DIR: ${{ github.workspace }}/target/performance-preview/evidence
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      # Publication renders with harness code on validated JSON. It executes
+      # no candidate code and no file a lane rendered.
+      - name: Checkout the harness revision
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+
+      # A stage that failed early uploaded nothing; its absence is reported
+      # by the publisher rather than stopping publication here.
+      - name: Download every stage's evidence
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          pattern: preview-part-*-${{ github.run_attempt }}
+          path: target/performance-preview/evidence
+          merge-multiple: true
+
+      # The summary and status are written and published first; only then
+      # does this step fail for a required lane without admitted evidence.
+      - name: Publish the summary, then fail if required evidence is missing
         if: always()
         shell: bash
         run: |
           mkdir -p "$EVIDENCE_DIR"
           if [ -f "$QJS_HARNESS_ROOT/tools/benchmark/hosted_preview.py" ]; then
             python3 -m tools.benchmark.hosted_preview publish \
-              --output-dir "$EVIDENCE_DIR" --step-summary "$GITHUB_STEP_SUMMARY" \
-              --job-status "${{ job.status }}"
+              --output-dir "$EVIDENCE_DIR" --step-summary "$GITHUB_STEP_SUMMARY"
           else
-            printf '%s\n' '{"classification":"no_performance_conclusion","message":"checkout failed before evidence initialization","phase":"pre_orchestrator","schema_version":1,"state":"failed"}' > "$EVIDENCE_DIR/status.json"
-            printf '%s\n' '## Performance Preview Failed' '' '> **No performance conclusion was produced.**' '> Checkout failed before evidence initialization.' '' '- Failure phase: `pre_orchestrator`' > "$EVIDENCE_DIR/summary.md"
+            printf '%s\n' '{"classification":"no_performance_conclusion","schema_version":2,"stages":{},"state":"failed"}' > "$EVIDENCE_DIR/status.json"
+            printf '%s\n' '## Performance Preview' '' '> **No complete performance conclusion was produced.** Checkout failed before publication.' > "$EVIDENCE_DIR/summary.md"
             cat "$EVIDENCE_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
 
       - name: Upload complete or partial preview evidence

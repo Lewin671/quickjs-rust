@@ -569,46 +569,29 @@ def summary(args: argparse.Namespace) -> None:
         harness_mode=args.harness_mode,
         harness_revision=args.harness_revision,
     )
-    _write_replace(args.markdown, markdown.encode("utf-8"))
+    if args.markdown is not None:
+        _write_replace(args.markdown, markdown.encode("utf-8"))
     _write_replace(args.json_output, _json_bytes(machine))
-    _write_replace(args.status_output, _json_bytes(machine))
 
 
-def _optional_object(path: Path, where: str) -> dict[str, Any] | None:
-    return _read_object(path, where) if path.is_file() else None
-
-
-def compose(args: argparse.Namespace) -> None:
-    """Rewrite the published summary from the evidence a run has so far.
-
-    The broad lane's machine summary is the anchor; the external report and
-    the sentinel machine summary join it when they exist, and a lane that has
-    not produced evidence is named with the reason the orchestrator gives.
-    """
-    output = args.output_dir.expanduser().resolve()
-    notes = {
-        lane: note for lane, note in (
-            ("external", args.external_note), ("sentinel", args.sentinel_note),
-        ) if note
-    }
-    markdown = render_preview(
-        _read_object(output / "summary.json", "broad machine summary"),
-        _optional_object(output / "external-report.json", "external report"),
-        _optional_object(output / "sentinel-summary.json", "sentinel machine summary"),
-        notes,
-    )
-    _write_replace(output / "summary.md", markdown.encode("utf-8"))
+STAGES = ("build", "broad", "external", "sentinel")
 
 
 def status(args: argparse.Namespace) -> None:
+    """Record where one stage of the preview stands.
+
+    Each stage runs in its own job and owns `<stage>-status.json`. The
+    publisher reads these rather than job conclusions, so a stage that never
+    reached `success` is reported with the phase it stopped in.
+    """
     mode = _string(args.harness_mode, "harness mode")
     if mode not in HARNESS_MODES:
         raise PreviewError("unknown harness ownership mode")
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "stage": args.stage,
         "state": args.state,
-        "phase": _string(args.phase, "failure phase"),
-        "classification": "no_performance_conclusion",
+        "phase": _string(args.phase, "stage phase"),
         "harness": {
             "mode": mode,
             "revision": _revision(args.harness_revision, "harness revision"),
@@ -620,18 +603,8 @@ def status(args: argparse.Namespace) -> None:
         },
         "message": _string(args.message, "status message"),
     }
-    heading = "Pending / Failed" if args.state == "pending" else "Failed"
-    markdown = "\n".join([
-        f"## Performance Preview {heading}", "",
-        "> **No performance conclusion was produced.**",
-        f"> {escape_markdown(args.message)}", "",
-        f"- Failure phase: `{escape_markdown(payload['phase'])}`",
-        f"- Harness ownership mode: `{mode}` at `{payload['harness']['revision']}`",
-        f"- Integrity scope: `{_integrity_scope(mode)}`", "",
-    ])
     output = args.output_dir.expanduser().resolve()
-    _write_replace(output / "status.json", _json_bytes(payload))
-    _write_replace(output / "summary.md", markdown.encode())
+    _write_replace(output / f"{args.stage}-status.json", _json_bytes(payload))
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -663,15 +636,17 @@ def _parser() -> argparse.ArgumentParser:
 
     render = commands.add_parser("summary")
     render.add_argument("--report", type=Path, required=True)
-    render.add_argument("--markdown", type=Path, required=True)
+    render.add_argument("--markdown", type=Path)
     render.add_argument("--json-output", type=Path, required=True)
-    render.add_argument("--status-output", type=Path, required=True)
     render.add_argument("--harness-mode", choices=HARNESS_MODES, required=True)
     render.add_argument("--harness-revision", required=True)
     render.set_defaults(function=summary)
 
     state = commands.add_parser("status")
-    state.add_argument("--state", choices=("pending", "failed"), required=True)
+    state.add_argument("--stage", choices=STAGES, required=True)
+    state.add_argument(
+        "--state", choices=("pending", "failed", "incomplete", "success"), required=True
+    )
     state.add_argument("--phase", required=True)
     state.add_argument("--output-dir", type=Path, required=True)
     state.add_argument("--harness-mode", choices=HARNESS_MODES, required=True)
@@ -690,12 +665,6 @@ def _parser() -> argparse.ArgumentParser:
     sentinel.add_argument("--report", type=Path, required=True)
     sentinel.add_argument("--json-output", type=Path, required=True)
     sentinel.set_defaults(function=sentinel_summary)
-
-    combine = commands.add_parser("compose")
-    combine.add_argument("--output-dir", type=Path, required=True)
-    combine.add_argument("--external-note")
-    combine.add_argument("--sentinel-note")
-    combine.set_defaults(function=compose)
     return parser
 
 

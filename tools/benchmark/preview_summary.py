@@ -423,15 +423,20 @@ def render_preview(
     external: dict[str, Any] | None = None,
     sentinel: dict[str, Any] | None = None,
     notes: dict[str, str] | None = None,
+    *,
+    banner: str | None = None,
 ) -> str:
     """Render the published summary from whichever lanes produced evidence.
 
     `broad` and `sentinel` are the lanes' validated machine summaries and
     `external` is the external report. A lane passed as `None` is reported as
-    absent with its entry in `notes`.
+    absent with its entry in `notes`, which must already be safe Markdown.
+    `banner` leads the document when the preview as a whole is incomplete.
     """
     notes = notes or {}
     lines = ["## Performance Preview", ""]
+    if banner:
+        lines.extend([f"> {banner}", ""])
     if broad is not None:
         engines = broad["engines"]
         lines.extend([

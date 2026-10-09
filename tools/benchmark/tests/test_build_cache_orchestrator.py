@@ -140,7 +140,8 @@ exec "$TEST_REAL_PYTHON" "$@"
             ) -> tuple[subprocess.CompletedProcess[str], dict[str, object] | None]:
                 output = harness / f"target/{run}/evidence"
                 command = [
-                    "bash", str(preview_script),
+                    "bash", str(preview_script), "--stage", "build",
+                    "--binaries", str(harness / f"target/{run}/binaries"),
                     "--harness-mode", "main_push_head_owned_harness",
                     "--candidate-source", str(harness), "--base-source", str(base),
                     "--candidate-sha", CANDIDATE_SHA, "--base-sha", BASE_SHA,
@@ -164,7 +165,22 @@ exec "$TEST_REAL_PYTHON" "$@"
                 return result, provenance
 
             first, first_cache = invoke("first")
-            self.assertEqual(first.returncode, 42, first.stderr)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            first_status = json.loads(
+                (harness / "target/first/evidence/build-status.json").read_text()
+            )
+            self.assertEqual(
+                (first_status["stage"], first_status["state"]), ("build", "success")
+            )
+            identity = json.loads(
+                (harness / "target/first/binaries/build-identity.json").read_text()
+            )
+            self.assertEqual(set(identity["binaries"]), {"candidate", "base", "quickjs-ng"})
+            self.assertEqual(identity["sources"]["candidate"]["revision"], CANDIDATE_SHA)
+            self.assertEqual(
+                (harness / "target/first/evidence/build-identity.json").read_bytes(),
+                (harness / "target/first/binaries/build-identity.json").read_bytes(),
+            )
             self.assertEqual(log.read_text(encoding="utf-8").splitlines(), ["cargo", "make"])
             self.assertEqual(
                 rustflags_log.read_text(encoding="utf-8").split("\x1f"),
@@ -187,12 +203,86 @@ exec "$TEST_REAL_PYTHON" "$@"
                 self.assertTrue(ready_entry(entry, spec)[0], role)
 
             second, second_cache = invoke("second")
-            self.assertEqual(second.returncode, 42, second.stderr)
+            self.assertEqual(second.returncode, 0, second.stderr)
             self.assertEqual(log.read_text(encoding="utf-8").splitlines(), ["cargo", "make"])
             self.assertEqual(
                 {role: value["status"] for role, value in second_cache["roles"].items()},
                 {"candidate": "hit", "base": "hit", "quickjs-ng": "hit"},
             )
+
+            def lane(
+                stage: str, run: str, candidate_sha: str = CANDIDATE_SHA
+            ) -> tuple[subprocess.CompletedProcess[str], Path]:
+                output = harness / f"target/{run}/{stage}-evidence"
+                result = subprocess.run(
+                    [
+                        "bash", str(preview_script), "--stage", stage,
+                        "--binaries", str(harness / f"target/{run}/binaries"),
+                        "--harness-mode", "main_push_head_owned_harness",
+                        "--candidate-sha", candidate_sha, "--base-sha", BASE_SHA,
+                        "--candidate-repo", "https://github.com/example/repo.git",
+                        "--base-repo", "https://github.com/example/repo.git",
+                        "--output", str(output),
+                    ],
+                    env=environment, capture_output=True, text=True,
+                    timeout=30, check=False,
+                )
+                return result, output
+
+            def stage_status(output: Path, stage: str) -> dict[str, object]:
+                return json.loads((output / f"{stage}-status.json").read_text())
+
+            # A lane admits the recorded executables and reaches measurement
+            # preparation, which the mock interpreter stops with status 42.
+            broad, broad_output = lane("broad", "first")
+            self.assertEqual(broad.returncode, 42, broad.stderr)
+            self.assertEqual(
+                (stage_status(broad_output, "broad")["state"],
+                 stage_status(broad_output, "broad")["phase"]),
+                ("failed", "measurement"),
+            )
+            # The sentinel lane records the same stop as incomplete and exits
+            # cleanly, so its job can still upload what it has.
+            sentinel, sentinel_output = lane("sentinel", "first")
+            self.assertEqual(sentinel.returncode, 0, sentinel.stderr)
+            self.assertEqual(stage_status(sentinel_output, "sentinel")["state"], "incomplete")
+            self.assertFalse((sentinel_output / "sentinel-summary.json").exists())
+            self.assertEqual(list((harness / "benchmarks").glob(".hosted-*")), [])
+
+            # Executables built for another event are refused before anything runs.
+            foreign, foreign_output = lane("external", "first", candidate_sha="c" * 40)
+            self.assertNotEqual(foreign.returncode, 0)
+            self.assertIn("does not match the event this lane was started for", foreign.stderr)
+            self.assertEqual(
+                stage_status(foreign_output, "external")["phase"], "executable_admission"
+            )
+
+            # So is an executable that changed after the build stage recorded it.
+            tampered = harness / "target/second/binaries/candidate-qjs"
+            tampered.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+            changed, changed_output = lane("broad", "second")
+            self.assertNotEqual(changed.returncode, 0)
+            self.assertIn("does not match the build job's record", changed.stderr)
+            self.assertEqual(
+                stage_status(changed_output, "broad")["phase"], "executable_admission"
+            )
+
+            # A lane takes no source tree: it cannot be pointed at one.
+            sourced = subprocess.run(
+                [
+                    "bash", str(preview_script), "--stage", "broad",
+                    "--binaries", str(harness / "target/first/binaries"),
+                    "--candidate-source", str(harness),
+                    "--harness-mode", "main_push_head_owned_harness",
+                    "--candidate-sha", CANDIDATE_SHA, "--base-sha", BASE_SHA,
+                    "--candidate-repo", "https://github.com/example/repo.git",
+                    "--base-repo", "https://github.com/example/repo.git",
+                    "--output", str(harness / "target/sourced/evidence"),
+                ],
+                env=environment, capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(sourced.returncode, 2)
+            self.assertIn("takes no source or cache path", sourced.stderr)
 
             dirty_log = temp / "dirty-builds.log"
             dirty_cache = harness / "target/dirty-cache"
