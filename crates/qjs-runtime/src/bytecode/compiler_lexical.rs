@@ -197,8 +197,16 @@ impl Compiler {
             {
                 continue;
             }
+            // A function nested inside this one that assigns the name counts
+            // as a write here too: it would otherwise inherit the realm cell
+            // as an ordinary captured local and store to it directly, leaving
+            // the global object's property behind.
             let read_only_global = !function_bytecode.contains_direct_eval()
                 && !written_names.iter().any(|written| written == name)
+                && !function_bytecode
+                    .closure_written_binding_names_ref()
+                    .iter()
+                    .any(|written| written == name)
                 && (global_names.iter().any(|global| global == name)
                     || function_bytecode
                         .local_slot(name)
