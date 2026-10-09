@@ -603,3 +603,46 @@ fn multi_output_non_array_receivers_suppress_stable_retries() {
     assert_eq!(dense::test_compact_dynamic_hits(), 0);
     assert_eq!(dense::test_compact_dynamic_suppressions(), 1);
 }
+
+#[test]
+fn bitset_word_clear_set_and_toggle_run_with_dynamic_layout_inputs() {
+    for (assignment, initial, expected) in [
+        ("&= ~(bit << (j & mask))", "-1", "-16"),
+        ("|= bit << (j & mask)", "0", "15"),
+        ("^= bit << (j & mask)", "0", "15"),
+    ] {
+        dense::reset_test_iterations();
+        let source = format!(
+            "function run(words, j, m, step, shift, mask, bit) {{ for (; j < m; j += step) words[j >> shift] {assignment}; return j + ':' + words[0]; }} run([{initial}], 0, 4, 1, 5, 31, 1);"
+        );
+        assert_eq!(
+            eval(&source),
+            Ok(Value::String(format!("4:{expected}").into())),
+            "{assignment}"
+        );
+        assert_eq!(dense::test_iterations(), 3, "{assignment}");
+        assert_eq!(dense::test_single_path_hits(), 1, "{assignment}");
+    }
+}
+
+#[test]
+fn bitset_word_update_replays_the_first_non_number_word_after_committing_prior_updates() {
+    dense::reset_test_iterations();
+    assert_eq!(
+        eval(
+            "var calls = 0; var marker = { valueOf: function () { calls++; return -1; } }; function run(words) { var j = 0; for (; j < 34; j += 1) words[j >> 5] &= ~(1 << (j & 31)); return j + ':' + words[0] + ':' + words[1] + ':' + calls; } run([-1, marker]);",
+        ),
+        Ok(Value::String("34:0:-4:1".into()))
+    );
+    assert_eq!(dense::test_iterations(), 32);
+}
+
+#[test]
+fn bitset_word_update_compiles_to_the_dense_plan() {
+    let bytecode = nested_function(
+        "function run(words, j, m, step, shift, mask, bit) { for (; j < m; j += step) words[j >> shift] &= ~(bit << (j & mask)); return j + ':' + words[0]; }",
+    );
+    let plans = NumericMutationLoopPlan::compile_all(&bytecode);
+    assert_eq!(plans.len(), 1, "{:#?}", bytecode.code);
+    assert!(matches!(plans[0].kind, NumericMutationLoopKind::Dense(_)));
+}

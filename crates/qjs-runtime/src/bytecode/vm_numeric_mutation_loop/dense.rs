@@ -1155,14 +1155,6 @@ impl DenseNumericMutationLoopPlan {
     }
 
     #[cfg(test)]
-    pub(super) fn has_packed_bitset_mutation(&self) -> bool {
-        matches!(
-            &self.kind,
-            DensePlanKind::LegacyDynamic(plan) if plan.has_packed_bitset_mutation()
-        )
-    }
-
-    #[cfg(test)]
     pub(super) fn legacy_input_layout(&self) -> Option<(usize, usize, usize)> {
         match &self.kind {
             DensePlanKind::LegacyDynamic(plan) | DensePlanKind::LegacySuppressingDynamic(plan) => {

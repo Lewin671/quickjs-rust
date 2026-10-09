@@ -50,14 +50,6 @@ fn record_false_iteration() {
 }
 
 #[inline]
-fn record_false_iterations(iterations: usize) {
-    #[cfg(test)]
-    FALSE_ITERATIONS.set(FALSE_ITERATIONS.get() + iterations);
-    #[cfg(not(test))]
-    let _ = iterations;
-}
-
-#[inline]
 fn record_body_handoff() {
     #[cfg(test)]
     BODY_HANDOFFS.set(BODY_HANDOFFS.get() + 1);
@@ -271,128 +263,6 @@ struct TranslatedPredicate {
     predicate: Register,
 }
 
-#[derive(Clone, Debug)]
-enum PredicateKernel {
-    Interpreted {
-        operations: Vec<ScanInstruction>,
-        predicate: Register,
-    },
-    /// A packed-bitset membership test of the general form
-    /// `words[index >> shift] & (bit << (index & mask))`.
-    PackedBitset(PackedBitset),
-}
-
-#[derive(Clone, Copy, Debug)]
-struct PackedBitset {
-    word_shift: f64,
-    word_operation: BinaryOp,
-    bit_mask: f64,
-    bit: f64,
-}
-
-impl PredicateKernel {
-    fn compile(
-        operations: Vec<ScanInstruction>,
-        predicate: Register,
-        counter_local: usize,
-    ) -> Self {
-        if let Some(kernel) = compile_packed_bitset(&operations, predicate, counter_local) {
-            return kernel;
-        }
-        Self::Interpreted {
-            operations,
-            predicate,
-        }
-    }
-}
-
-fn compile_packed_bitset(
-    operations: &[ScanInstruction],
-    predicate: Register,
-    counter_local: usize,
-) -> Option<PredicateKernel> {
-    if operations.len() != 10 {
-        return None;
-    }
-    let ScanInstruction::Binary {
-        operation: BinaryOp::BitwiseAnd,
-        left,
-        right,
-    } = *operations.get(predicate)?
-    else {
-        return None;
-    };
-    let ((word_local, word_shift, word_operation), (bit_local, bit_mask, bit)) =
-        parse_dense_word(operations, left)
-            .zip(parse_shifted_bit(operations, right))
-            .or_else(|| {
-                parse_dense_word(operations, right).zip(parse_shifted_bit(operations, left))
-            })?;
-    if word_local != counter_local || bit_local != counter_local {
-        return None;
-    }
-    Some(PredicateKernel::PackedBitset(PackedBitset {
-        word_shift,
-        word_operation,
-        bit_mask,
-        bit,
-    }))
-}
-
-fn parse_dense_word(
-    operations: &[ScanInstruction],
-    register: Register,
-) -> Option<(usize, f64, BinaryOp)> {
-    let ScanInstruction::DenseLoad { index } = *operations.get(register)? else {
-        return None;
-    };
-    let ScanInstruction::Binary {
-        operation: operation @ (BinaryOp::Shr | BinaryOp::UShr),
-        left,
-        right,
-    } = *operations.get(index)?
-    else {
-        return None;
-    };
-    let (ScanInstruction::LoadLocal(local), ScanInstruction::Constant(shift)) =
-        (*operations.get(left)?, *operations.get(right)?)
-    else {
-        return None;
-    };
-    Some((local, shift, operation))
-}
-
-fn parse_shifted_bit(
-    operations: &[ScanInstruction],
-    register: Register,
-) -> Option<(usize, f64, f64)> {
-    let ScanInstruction::Binary {
-        operation: BinaryOp::Shl,
-        left,
-        right,
-    } = *operations.get(register)?
-    else {
-        return None;
-    };
-    let ScanInstruction::Constant(bit) = *operations.get(left)? else {
-        return None;
-    };
-    let ScanInstruction::Binary {
-        operation: BinaryOp::BitwiseAnd,
-        left,
-        right,
-    } = *operations.get(right)?
-    else {
-        return None;
-    };
-    let (ScanInstruction::LoadLocal(local), ScanInstruction::Constant(mask)) =
-        (*operations.get(left)?, *operations.get(right)?)
-    else {
-        return None;
-    };
-    Some((local, mask, bit))
-}
-
 /// A counted loop whose leading dense numeric predicate can skip consecutive
 /// false iterations without suppressing any true-body behavior.
 #[derive(Clone, Debug)]
@@ -403,7 +273,6 @@ pub(super) struct DenseNumericPredicateScanPlan {
     body_entry: usize,
     false_path_start: usize,
     counter_slot: usize,
-    limit_slot: usize,
     counter_local: usize,
     limit_local: usize,
     counter_condition: BinaryOp,
@@ -411,7 +280,8 @@ pub(super) struct DenseNumericPredicateScanPlan {
     receiver_slot: usize,
     false_completion_slot: Option<usize>,
     local_slots: Vec<usize>,
-    predicate: PredicateKernel,
+    operations: Vec<ScanInstruction>,
+    predicate: Register,
 }
 
 impl DenseNumericPredicateScanPlan {
@@ -512,11 +382,6 @@ impl DenseNumericPredicateScanPlan {
                     *slot = local_index(*slot)?;
                 }
             }
-            let predicate = PredicateKernel::compile(
-                translated.operations,
-                translated.predicate,
-                local_index(*counter_slot)?,
-            );
             return Some(Self {
                 header,
                 backedge,
@@ -524,7 +389,6 @@ impl DenseNumericPredicateScanPlan {
                 body_entry: predicate_jump + 2,
                 false_path_start: *false_target,
                 counter_slot: *counter_slot,
-                limit_slot: *limit_slot,
                 counter_local: local_index(*counter_slot)?,
                 limit_local: local_index(*limit_slot)?,
                 counter_condition: *counter_condition,
@@ -532,7 +396,8 @@ impl DenseNumericPredicateScanPlan {
                 receiver_slot: translated.receiver_slot,
                 false_completion_slot,
                 local_slots,
-                predicate,
+                operations: translated.operations,
+                predicate: translated.predicate,
             });
         }
         None
@@ -570,40 +435,19 @@ impl DenseNumericPredicateScanPlan {
             return PredicateScanRun::Suppress;
         };
         let array = array.clone();
-        let (outcome, skipped, completed_counter) = match &self.predicate {
-            PredicateKernel::Interpreted {
-                operations,
-                predicate,
-            } => {
-                let mut locals = [0.0; MAX_SCAN_LOCALS];
-                for (local, slot) in self.local_slots.iter().enumerate() {
-                    let Some(value) = local_number(vm, *slot) else {
-                        return PredicateScanRun::Suppress;
-                    };
-                    locals[local] = value;
-                }
-                let Some((outcome, skipped)) = array.with_dense_readable_elements(|elements| {
-                    self.scan_interpreted(&mut locals, elements, operations, *predicate)
-                }) else {
-                    return PredicateScanRun::Suppress;
-                };
-                (outcome, skipped, locals[self.counter_local])
-            }
-            PredicateKernel::PackedBitset(packed) => {
-                let (Some(mut counter), Some(limit)) = (
-                    local_number(vm, self.counter_slot),
-                    local_number(vm, self.limit_slot),
-                ) else {
-                    return PredicateScanRun::Suppress;
-                };
-                let Some((outcome, skipped)) = array.with_dense_readable_elements(|elements| {
-                    self.scan_packed_bitset(&mut counter, limit, elements, packed)
-                }) else {
-                    return PredicateScanRun::Suppress;
-                };
-                (outcome, skipped, counter)
-            }
+        let mut locals = [0.0; MAX_SCAN_LOCALS];
+        for (local, slot) in self.local_slots.iter().enumerate() {
+            let Some(value) = local_number(vm, *slot) else {
+                return PredicateScanRun::Suppress;
+            };
+            locals[local] = value;
+        }
+        let Some((outcome, skipped)) =
+            array.with_dense_readable_elements(|elements| self.scan(&mut locals, elements))
+        else {
+            return PredicateScanRun::Suppress;
         };
+        let completed_counter = locals[self.counter_local];
 
         if skipped != 0 {
             set_local_number(vm, self.counter_slot, completed_counter);
@@ -630,12 +474,10 @@ impl DenseNumericPredicateScanPlan {
         }
     }
 
-    fn scan_interpreted(
+    fn scan(
         &self,
         locals: &mut [f64; MAX_SCAN_LOCALS],
         elements: &[Value],
-        operations: &[ScanInstruction],
-        predicate: Register,
     ) -> (ScanOutcome, usize) {
         let mut registers = [ScanValue::Number(0.0); MAX_SCAN_OPS];
         let mut skipped = 0;
@@ -645,14 +487,14 @@ impl DenseNumericPredicateScanPlan {
             if !apply_counter_condition(self.counter_condition, counter, limit) {
                 return (ScanOutcome::Exit, skipped);
             }
-            for (register, instruction) in operations.iter().enumerate() {
+            for (register, instruction) in self.operations.iter().enumerate() {
                 let Some(value) = apply_instruction(*instruction, locals, &registers, elements)
                 else {
                     return (ScanOutcome::Deopt, skipped);
                 };
                 registers[register] = value;
             }
-            if registers[predicate].is_truthy() {
+            if registers[self.predicate].is_truthy() {
                 return (ScanOutcome::Body, skipped);
             }
             self.advance_counter(locals, counter);
@@ -661,144 +503,12 @@ impl DenseNumericPredicateScanPlan {
         }
     }
 
-    fn scan_packed_bitset(
-        &self,
-        counter: &mut f64,
-        limit: f64,
-        elements: &[Value],
-        packed: &PackedBitset,
-    ) -> (ScanOutcome, usize) {
-        if let Some(outcome) = self.scan_packed_words(counter, limit, elements, packed) {
-            return outcome;
-        }
-
-        let mut skipped = 0;
-        loop {
-            if !apply_counter_condition(self.counter_condition, *counter, limit) {
-                return (ScanOutcome::Exit, skipped);
-            }
-            let shifted = match packed.word_operation {
-                BinaryOp::Shr => f64::from(
-                    to_int32_number(*counter) >> (to_uint32_number(packed.word_shift) & 0x1f),
-                ),
-                BinaryOp::UShr => f64::from(
-                    to_uint32_number(*counter) >> (to_uint32_number(packed.word_shift) & 0x1f),
-                ),
-                _ => unreachable!("packed bitset compiler only admits shifts"),
-            };
-            let Some(index) = array_index_from_number(shifted) else {
-                return (ScanOutcome::Deopt, skipped);
-            };
-            let Some(Value::Number(word)) = elements.get(index) else {
-                return (ScanOutcome::Deopt, skipped);
-            };
-            let offset = to_uint32_number(f64::from(
-                to_int32_number(*counter) & to_int32_number(packed.bit_mask),
-            )) & 0x1f;
-            let selected = to_int32_number(*word) & (to_int32_number(packed.bit) << offset);
-            if selected != 0 {
-                return (ScanOutcome::Body, skipped);
-            }
-            *counter = match self.counter_update {
-                UpdateOp::Increment => *counter + 1.0,
-                UpdateOp::Decrement => *counter - 1.0,
-            };
-            skipped += 1;
-            record_false_iteration();
-        }
-    }
-
-    fn scan_packed_words(
-        &self,
-        counter: &mut f64,
-        limit: f64,
-        elements: &[Value],
-        packed: &PackedBitset,
-    ) -> Option<(ScanOutcome, usize)> {
-        if self.counter_condition != BinaryOp::Lt
-            || self.counter_update != UpdateOp::Increment
-            || !matches!(packed.word_operation, BinaryOp::Shr | BinaryOp::UShr)
-        {
-            return None;
-        }
-        let shift = to_uint32_number(packed.word_shift) & 0x1f;
-        if shift > 5 {
-            return None;
-        }
-        let width = 1_u32 << shift;
-        if to_int32_number(packed.bit_mask) as u32 != width - 1 {
-            return None;
-        }
-        let bit = to_int32_number(packed.bit) as u32;
-        if bit.count_ones() != 1 {
-            return None;
-        }
-        let base_bit = bit.trailing_zeros();
-        if base_bit + width > u32::BITS {
-            return None;
-        }
-
-        if !apply_counter_condition(self.counter_condition, *counter, limit) {
-            return Some((ScanOutcome::Exit, 0));
-        }
-        if !counter.is_finite() || *counter < 0.0 || counter.fract() != 0.0 || !limit.is_finite() {
-            return None;
-        }
-        let end = limit.ceil();
-        if end > f64::from(i32::MAX) + 1.0 || end <= *counter {
-            return None;
-        }
-
-        let mut current = *counter as usize;
-        let end = end as usize;
-        let width = width as usize;
-        let shift = shift as usize;
-        let base_bit = base_bit as usize;
-        let mut skipped = 0;
-        while current < end {
-            let group_base = (current >> shift) << shift;
-            let group_end = (group_base + width).min(end);
-            let index = current >> shift;
-            let Some(Value::Number(word)) = elements.get(index) else {
-                return Some((ScanOutcome::Deopt, skipped));
-            };
-            let first_bit = base_bit + current - group_base;
-            let end_bit = base_bit + group_end - group_base;
-            let range = low_bits(end_bit) & !low_bits(first_bit);
-            let matching = to_int32_number(*word) as u32 & range;
-            if matching != 0 {
-                let found = group_base + matching.trailing_zeros() as usize - base_bit;
-                debug_assert!((current..group_end).contains(&found));
-                let false_count = found - current;
-                skipped += false_count;
-                record_false_iterations(false_count);
-                *counter = found as f64;
-                return Some((ScanOutcome::Body, skipped));
-            }
-            let false_count = group_end - current;
-            skipped += false_count;
-            record_false_iterations(false_count);
-            current = group_end;
-            *counter = current as f64;
-        }
-        Some((ScanOutcome::Exit, skipped))
-    }
-
     #[inline(always)]
     fn advance_counter(&self, locals: &mut [f64; MAX_SCAN_LOCALS], counter: f64) {
         locals[self.counter_local] = match self.counter_update {
             UpdateOp::Increment => counter + 1.0,
             UpdateOp::Decrement => counter - 1.0,
         };
-    }
-}
-
-#[inline(always)]
-fn low_bits(bits: usize) -> u32 {
-    if bits == u32::BITS as usize {
-        u32::MAX
-    } else {
-        (1_u32 << bits) - 1
     }
 }
 
@@ -1023,14 +733,6 @@ mod tests {
             "function primes(isPrime, n) { var i, count = 0, m = 10000 << n; for (i = 2; i < m; i++) if (isPrime[i >> 5] & (1 << (i & 31))) { for (var j = i + i; j < m; j += i) isPrime[j >> 5] &= ~(1 << (j & 31)); count++; } return count; }",
         );
         assert_eq!(predicate_scan_count(&nsieve), 1, "{:#?}", nsieve.code);
-        assert!(nsieve.code.iter().enumerate().any(|(backedge, op)| {
-            let Op::Jump(header) = op else {
-                return false;
-            };
-            *header < backedge
-                && DenseNumericPredicateScanPlan::compile(&nsieve, *header, backedge)
-                    .is_some_and(|plan| matches!(plan.predicate, PredicateKernel::PackedBitset(_)))
-        }));
 
         let call = nested_function(
             "function run(a, n, test) { for (var i = 0; i < n; i++) if (test(a[i])) return i; return -1; }",
@@ -1084,7 +786,7 @@ mod tests {
     }
 
     #[test]
-    fn packed_bitset_scan_stops_at_each_first_true_bit_and_at_the_limit() {
+    fn bitset_membership_scan_stops_at_each_first_true_bit_and_at_the_limit() {
         reset_test_counters();
         assert_eq!(
             eval(
@@ -1106,7 +808,7 @@ mod tests {
     }
 
     #[test]
-    fn packed_bitset_fields_are_not_tied_to_32_bit_groups_or_bit_zero() {
+    fn bitset_membership_fields_are_not_tied_to_32_bit_groups_or_bit_zero() {
         reset_test_counters();
         assert_eq!(
             eval(
