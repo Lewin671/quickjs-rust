@@ -22,6 +22,7 @@ Replace the per-frame `HashMap<String, Value>` snapshot + `captured_env` cell +
 `CaptureWriteback` heuristic trio with a single representation: **slot-indexed
 locals plus indexed shared upvalue cells** (`Upvalue = Rc<RefCell<Value>>`).
 This is the keystone named in `AGENTS.md`. Full design and slice rationale:
+`tasks/archive/design-env-model-migration.md`; current invariants:
 `docs/design/env-model-rewrite.md`.
 
 This campaign subsumes:

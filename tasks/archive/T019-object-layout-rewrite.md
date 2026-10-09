@@ -14,7 +14,7 @@
 - Evidence: frozen plans
   `tasks/performance-units/box-shaped-pair-storage.json` and
   `tasks/performance-units/lazy-weak-object-refcount.json`;
-  `docs/design/object-layout-rewrite.md`. Paths under `target/` and `/tmp`
+  `tasks/archive/design-object-layout-plan.md`. Paths under `target/` and `/tmp`
   below are local artifacts, not retained; regenerate before reuse.
 - Unresolved: the three acceptance boxes were never ticked. Per-slice gates
   and local A/B are recorded in the notes for S1 and S4 only. The final
@@ -37,7 +37,7 @@ reference counting plus a periodic cycle-collecting mark/sweep pass
 (`gc_decref`/`JS_RunGC`), not a tracing/moving GC, so its allocation-family
 edge over quickjs-rust is attributed to `JSObject`'s flat, hand-tuned C
 layout rather than to having a fundamentally different memory model. Full
-design and slice rationale: `docs/design/object-layout-rewrite.md`.
+design and slice rationale: `tasks/archive/design-object-layout-plan.md`.
 
 This campaign feeds T018's B3/B4 milestones (structural bottleneck
 optimization toward <= 0.50x overall, <= 1.00x per critical family). It does

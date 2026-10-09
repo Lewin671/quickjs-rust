@@ -38,7 +38,7 @@ artifacts mean.
   and the pinned QuickJS-NG. Harness.
 - `find-qjsng-gaps.sh`: first entry point for conformance work; reports cases
   QuickJS-NG passes and this engine does not, with a recommendation queue.
-  Harness.
+  Harness; `--help` for strategies and probe flags.
 - `test262-subset.sh`: runs the curated allowlist
   (`tests/test262/allowlist.txt`). Harness.
 - `test262-baseline.sh`: samples or scans upstream Test262 for one or both
