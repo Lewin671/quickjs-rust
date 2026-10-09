@@ -2,18 +2,56 @@
 
 - Status: active. This is the performance campaign contract.
 - Implementation: partial. Milestones B1-B2 are complete; B3-B6 are open.
-- Verified at: PENDING-INTEGRATOR
-- Evidence: no formal performance standing exists for HEAD. The loop-template
-  plans were removed on 2026-10-09 (`d1313d52`) and nothing has been formally
-  measured since; a formal comparison for `d1313d52` is in progress and the
-  integrator will fill in the line above. Earlier results are in
-  `tasks/archive/` and apply only to their own revisions.
+- Verified at: `d1313d52`, 2026-10-09, one formal 30-block three-engine
+  comparison against base `7a83b568` and the pinned QuickJS-NG
+  (`scripts/perf-compare.sh`, same-host diagnostic, not a fixed-hardware
+  claim). Results are under "Standing at d1313d52".
+- Evidence: the numbers below. The bundle
+  (`target/comparison/template-removal-d1313d52/`, `summary.json` SHA-256
+  `6b2c98f4...c71b6cf`) is a local artifact, not retained. Earlier results
+  are in `tasks/archive/` and apply only to their own revisions.
 - Unresolved: none of the completion thresholds below is recorded as met.
-- Next action: select the next unit through
-  `tasks/T022-performance-priority-controller.md` from a queue generated for
-  the current revision.
+  The broad lane produced no ratios at `d1313d52`: `many_locals_call` and
+  `property_read` failed the linearity check on the candidate, so the run's
+  decision readiness is "inconclusive".
+- Next action: generate a queue for the current revision
+  (`docs/performance-workflow.md`, step 1) and select a unit through
+  `tasks/T022-performance-priority-controller.md`. Explain the two
+  non-linear broad cases first; no broad result can be read until they pass.
 
-This file holds the contract only. It does not record units or select work.
+This file holds the contract and the last formal standing. It does not
+record units or select work.
+
+## Standing at d1313d52
+
+Candidate `d1313d52` is the first revision without the loop-template plans;
+base `7a83b568` is the last with them. Ratios are paired medians over 30
+blocks, lower is faster.
+
+| Lane | Candidate / QuickJS-NG | Candidate / base |
+| --- | --- | --- |
+| Broad (25 cases) | no ratios (linearity failed, see above) | no ratios |
+| Sentinel `recursive_call_tree` | 0.742 | 0.994 |
+| Sentinel `prototype_method_call` | 1.002 | 1.004 |
+| Sentinel `polymorphic_call_site` | 0.820 | 1.007 |
+| Sentinel `capturing_closure_call` | 0.741 | 1.000 |
+| Sentinel `heterogeneous_property_read` | 1.022 | 1.022 |
+| Sentinel `string_key_map_churn` | 0.919 | 1.015 |
+| External, JetStream 3 subset (5) | 0.981 | 1.015 |
+| External, Kraken 1.1 (14) | 0.606 | 1.126 |
+| External, SunSpider 1.0 (26) | 1.024 | 1.161 |
+
+External cases slower than QuickJS-NG by more than 10%:
+`bitops-bitwise-and` 4.357, `date-format-tofte` 1.415, `hash-map` 1.351,
+`cdjs` 1.344, `3d-raytrace` 1.328, `access-binary-trees` 1.291,
+`string-validate-input` 1.238, `crypto-md5` 1.235,
+`raytrace-public-class-fields` 1.177, `date-format-xparb` 1.146.
+
+External cases that moved against the base by more than 3%:
+`bitops-bitwise-and` 22.069, `audio-dft` 5.258, `bitops-nsieve-bits` 2.055,
+`crypto-md5` 1.049, `hash-map` 1.032. The first three ran on removed
+template plans; `audio-dft` (0.786) and `bitops-nsieve-bits` (0.854) are
+still faster than QuickJS-NG.
 
 ## Goal
 
