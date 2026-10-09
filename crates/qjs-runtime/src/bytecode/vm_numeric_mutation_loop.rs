@@ -28,10 +28,6 @@ use predicate_scan::{DenseNumericPredicateScanPlan, PredicateScanRun};
 pub(super) struct NumericMutationLoopPlan {
     header: usize,
     backedge: usize,
-    // Every surviving plan kind carries its own exit; nothing reads this copy
-    // since the named-property plan went away.
-    #[allow(dead_code)]
-    exit: usize,
     kind: NumericMutationLoopKind,
 }
 
@@ -148,7 +144,6 @@ impl NumericMutationLoopPlan {
                     return Some(Self {
                         header,
                         backedge,
-                        exit: nested.exit(),
                         kind: NumericMutationLoopKind::Special(Rc::new(SpecialPlan::NestedDense {
                             plan: nested,
                             fallback,
@@ -159,7 +154,6 @@ impl NumericMutationLoopPlan {
                     return Some(Self {
                         header,
                         backedge,
-                        exit: dynamic.exit(),
                         kind: NumericMutationLoopKind::Dense(Rc::new(dynamic)),
                     });
                 }
@@ -171,7 +165,6 @@ impl NumericMutationLoopPlan {
             return Some(Self {
                 header,
                 backedge,
-                exit: dense.exit(),
                 kind: NumericMutationLoopKind::Dense(Rc::new(dense)),
             });
         }
@@ -179,7 +172,6 @@ impl NumericMutationLoopPlan {
         Some(Self {
             header,
             backedge,
-            exit: predicate_scan.exit(),
             kind: NumericMutationLoopKind::Special(Rc::new(SpecialPlan::PredicateScan(
                 predicate_scan,
             ))),
@@ -250,7 +242,6 @@ pub(super) fn try_run_numeric_mutation_loop(
                     NumericMutationLoopPlan {
                         header: plan.header,
                         backedge: plan.backedge,
-                        exit: fallback.exit(),
                         kind: NumericMutationLoopKind::Dense(fallback),
                     };
             }

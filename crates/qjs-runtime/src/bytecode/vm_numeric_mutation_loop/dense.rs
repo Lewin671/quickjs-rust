@@ -1014,6 +1014,7 @@ impl DenseNumericMutationLoopPlan {
         Self { exit, kind }
     }
 
+    #[cfg(test)]
     pub(super) fn exit(&self) -> usize {
         self.exit
     }

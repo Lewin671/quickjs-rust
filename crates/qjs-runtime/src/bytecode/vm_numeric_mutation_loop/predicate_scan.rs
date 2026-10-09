@@ -403,10 +403,6 @@ impl DenseNumericPredicateScanPlan {
         None
     }
 
-    pub(super) fn exit(&self) -> usize {
-        self.exit
-    }
-
     /// Instructions interpreted by the scalar VM on a true predicate remain
     /// eligible for virtual-object lowering. Only the header/predicate prefix
     /// and the false epilogue that this plan may bypass need to stay in their
