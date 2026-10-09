@@ -79,10 +79,6 @@ thread_local! {
     static COMPACT_CONSTANT_PREFIX_LOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static COMPACT_LOCAL_PREFIX_LOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static COMPACT_LOGICAL_OPERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    static REDUCTION_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    static REDUCTION_ITERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    static EXACT_INDEX_REDUCTION_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    static SHARED_SAMPLE_STRIDE_REDUCTION_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static TYPED_ARRAY_DENSE_PATH_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static TYPED_ARRAY_DENSE_SUPPRESSIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static TYPED_ARRAY_DENSE_ATTEMPTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -130,10 +126,6 @@ pub(super) fn reset_test_iterations() {
     COMPACT_CONSTANT_PREFIX_LOADS.set(0);
     COMPACT_LOCAL_PREFIX_LOADS.set(0);
     COMPACT_LOGICAL_OPERATIONS.set(0);
-    REDUCTION_PATH_HITS.set(0);
-    REDUCTION_ITERATIONS.set(0);
-    EXACT_INDEX_REDUCTION_PATH_HITS.set(0);
-    SHARED_SAMPLE_STRIDE_REDUCTION_PATH_HITS.set(0);
     TYPED_ARRAY_DENSE_PATH_HITS.set(0);
     TYPED_ARRAY_DENSE_SUPPRESSIONS.set(0);
     TYPED_ARRAY_DENSE_ATTEMPTS.set(0);
@@ -249,26 +241,6 @@ pub(super) fn test_compact_local_prefix_loads() -> usize {
 #[cfg(test)]
 pub(super) fn test_compact_logical_operations() -> usize {
     COMPACT_LOGICAL_OPERATIONS.get()
-}
-
-#[cfg(test)]
-pub(super) fn test_reduction_path_hits() -> usize {
-    REDUCTION_PATH_HITS.get()
-}
-
-#[cfg(test)]
-pub(super) fn test_reduction_iterations() -> usize {
-    REDUCTION_ITERATIONS.get()
-}
-
-#[cfg(test)]
-pub(super) fn test_exact_index_reduction_path_hits() -> usize {
-    EXACT_INDEX_REDUCTION_PATH_HITS.get()
-}
-
-#[cfg(test)]
-pub(super) fn test_shared_sample_stride_reduction_path_hits() -> usize {
-    SHARED_SAMPLE_STRIDE_REDUCTION_PATH_HITS.get()
 }
 
 #[cfg(test)]
@@ -397,16 +369,6 @@ pub(super) fn test_dynamic_dense_compilations() -> usize {
 }
 
 #[cfg(test)]
-pub(super) fn test_checked_array_index_product(left: usize, right: usize) -> Option<usize> {
-    legacy::test_checked_array_index_product(left, right)
-}
-
-#[cfg(test)]
-pub(super) fn test_checked_next_array_index(index: usize, step: usize) -> Option<usize> {
-    legacy::test_checked_next_array_index(index, step)
-}
-
-#[cfg(test)]
 pub(super) fn test_legacy_direct_this_array_source_resolves(value: &Value, key: &str) -> bool {
     legacy::test_direct_this_own_data_array_resolves(value, key)
 }
@@ -453,27 +415,6 @@ fn record_compact_logical_operations(count: usize) {
     COMPACT_LOGICAL_OPERATIONS.set(COMPACT_LOGICAL_OPERATIONS.get() + count);
     #[cfg(not(test))]
     let _ = count;
-}
-
-fn record_reduction_path_hit() {
-    #[cfg(test)]
-    REDUCTION_PATH_HITS.set(REDUCTION_PATH_HITS.get() + 1);
-}
-
-fn record_reduction_iteration() {
-    #[cfg(test)]
-    REDUCTION_ITERATIONS.set(REDUCTION_ITERATIONS.get() + 1);
-}
-
-#[cfg(test)]
-fn record_exact_index_reduction_path_hit() {
-    EXACT_INDEX_REDUCTION_PATH_HITS.set(EXACT_INDEX_REDUCTION_PATH_HITS.get() + 1);
-}
-
-#[cfg(test)]
-fn record_shared_sample_stride_reduction_path_hit() {
-    SHARED_SAMPLE_STRIDE_REDUCTION_PATH_HITS
-        .set(SHARED_SAMPLE_STRIDE_REDUCTION_PATH_HITS.get() + 1);
 }
 
 #[inline]
@@ -1136,22 +1077,6 @@ impl DenseNumericMutationLoopPlan {
     #[cfg(test)]
     pub(super) fn is_suppressing_legacy_dynamic(&self) -> bool {
         matches!(self.kind, DensePlanKind::LegacySuppressingDynamic(_))
-    }
-
-    #[cfg(test)]
-    pub(super) fn is_legacy_reduction(&self) -> bool {
-        matches!(
-            &self.kind,
-            DensePlanKind::LegacyDynamic(plan) if plan.is_reduction()
-        )
-    }
-
-    #[cfg(test)]
-    pub(super) fn is_two_lane_strided_reduction(&self) -> bool {
-        matches!(
-            &self.kind,
-            DensePlanKind::LegacyDynamic(plan) if plan.is_two_lane_strided_reduction()
-        )
     }
 
     #[cfg(test)]
