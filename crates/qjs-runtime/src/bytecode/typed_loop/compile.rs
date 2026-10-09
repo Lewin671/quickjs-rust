@@ -379,6 +379,10 @@ struct Builder<'a> {
     boxed_constants: Vec<(u16, Value)>,
     /// Whether each instruction in the region is the target of a jump.
     is_target: Vec<bool>,
+    /// How many operations had been emitted when the walk last reached a jump
+    /// target. Operations before this index run on the fall-through path only,
+    /// so an instruction at or after the join must not rewrite them.
+    join_floor: usize,
     /// Instructions the last compiled operation subsumed, which the walk skips.
     pending_skip: usize,
     /// Whether the walk is past an unconditional jump, so the next instruction
@@ -436,6 +440,7 @@ impl<'a> Builder<'a> {
             constants: Vec::new(),
             boxed_constants: Vec::new(),
             is_target: is_target(bytecode, header, backedge),
+            join_floor: 0,
             boxed_slots,
             discovered_boxed: Vec::new(),
             boxed_element_reads,
@@ -487,7 +492,15 @@ impl<'a> Builder<'a> {
     /// when nothing else still refers to `register` and the caller emits no
     /// further operation for this instruction: the operand-stack entry naming
     /// `register` disappears with the copy.
+    ///
+    /// The producing operation must also belong to this instruction's own
+    /// straight-line run. At the join of `x = c ? a : b` the last operation is
+    /// the fall-through arm's copy into the join register; the other arm jumps
+    /// past it, so redirecting it would leave `x` unwritten on that path.
     fn fold_into_destination(&mut self, register: u16, dst: u16) -> bool {
+        if self.ops.len() <= self.join_floor {
+            return false;
+        }
         if usize::from(register) >= MAX_STACK_DEPTH
             || self
                 .stack
@@ -888,6 +901,9 @@ impl<'a> Builder<'a> {
                 None => self.states[offset] = Some(self.stack.clone()),
             }
             self.program_index[offset] = u32::try_from(self.ops.len()).ok();
+            if self.is_target[offset] {
+                self.join_floor = self.ops.len();
+            }
             self.open_site(ip)?;
             match self.compile_element_assignment(ip) {
                 None => {

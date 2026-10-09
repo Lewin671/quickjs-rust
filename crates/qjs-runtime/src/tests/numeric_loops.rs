@@ -478,3 +478,33 @@ run(6);"#;
         ))
     );
 }
+
+#[test]
+fn conditional_value_stored_in_a_loop_is_written_on_both_arms() {
+    let source = r#"
+function plain(n) {
+  var first = 2, second = 5, selected, sum = 0;
+  for (var i = 0; i < n; i++) { selected = (i & 1) === 0 ? first : second; sum += selected; }
+  return sum;
+}
+function declared(n) {
+  var a = 2, b = 5, s = 0;
+  for (var i = 0; i < n; i++) { var x = (i & 1) ? a : b; s += x * i; }
+  return s;
+}
+function subtracted(n) {
+  var a = 2, b = 5, x, s = 0;
+  for (var i = 0; i < n; i++) { x = (i & 1) ? a : b; s = s - x; }
+  return s;
+}
+function computed(n) {
+  var first = 2, second = 5, selected, sum = 0;
+  for (var i = 0; i < n; i++) { selected = (i & 1) === 0 ? first + 1 : second + 1; sum += selected; }
+  return sum;
+}
+[plain(6), declared(6), subtracted(6), computed(6), plain(0), declared(1)].join(' ');"#;
+    assert_eq!(
+        eval(source),
+        Ok(Value::String("21 48 -21 27 0 0".to_owned().into()))
+    );
+}
