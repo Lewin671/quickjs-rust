@@ -1,3 +1,15 @@
+//! Closed-form evaluation of straight-line numeric function bodies: the
+//! first tier a direct-leaf call tries (`try_eval_numeric_leaf`).
+//!
+//! A body made of local loads and stores and primitive numeric operations
+//! compiles once into a `NumericLeafPlan` and is evaluated on a fixed-size
+//! scratch frame, with no `Vm`. Evaluation is transactional: writes to
+//! received upvalues are deferred to `Return`, so an unsupported value or
+//! opcode returns `None` with nothing observable done and the call runs
+//! again on the ordinary path.
+//!
+//! The `Math` and number helpers at the end are shared with other tiers.
+
 use qjs_ast::{BinaryOp, FunctionParams, UpdateOp};
 
 use crate::{NativeFunction, Value, function::Upvalue};
@@ -651,9 +663,8 @@ pub(super) fn math_unary(native: NativeFunction, argument: f64) -> Option<f64> {
 /// than Rust's, which disagree on both.
 ///
 /// Out of line: whether LLVM inlined it into the typed-loop executor flipped
-/// with unrelated edits elsewhere in the crate, and the inlined copy grew
-/// the executor by 176 bytes and re-rolled its code (access-nsieve +4%,
-/// heterogeneous_property_read +5% cycles at equal instructions).
+/// with unrelated edits elsewhere in the crate, and the inlined copy grows
+/// the executor and changes its code layout.
 #[inline(never)]
 pub(super) fn math_binary(native: NativeFunction, left: f64, right: f64) -> Option<f64> {
     let value = match native {
@@ -716,16 +727,6 @@ impl FastValue {
     }
 }
 
-/// Executes a side-effect-free numeric leaf without constructing a nested VM.
-///
-/// The fixed-size scratch frame admits only local loads/stores and primitive
-/// numeric operations. Received upvalue writes are delayed until a supported
-/// `Return`, so an unsupported value or opcode can fall back to the full VM
-/// without duplicating observable work.
-/// Whether a direct-leaf body already compiled to a number-only plan. Only a
-/// discriminant read, so a caller can test it before paying for a call; a
-/// body whose plan is not built yet answers `false` and builds it on the
-/// general evaluator's first visit.
 #[inline(always)]
 /// Whether the number-only program takes any argument by `ToNumber`
 /// (`NumberOnlyProgram::converts_arguments`).
@@ -736,6 +737,10 @@ pub(super) fn number_only_leaf_converts_arguments(bytecode: &Bytecode) -> bool {
     )
 }
 
+/// Whether a direct-leaf body already compiled to a number-only plan. Only a
+/// discriminant read, so a caller can test it before paying for a call; a
+/// body whose plan is not built yet answers `false` and builds it on the
+/// general evaluator's first visit.
 pub(super) fn has_number_only_leaf(bytecode: &Bytecode) -> bool {
     matches!(
         bytecode.numeric_leaf_plan.get(),
@@ -763,6 +768,12 @@ pub(super) fn eval_number_only_leaf(
     program.eval_numbers(arguments)
 }
 
+/// Executes a side-effect-free numeric leaf without constructing a nested VM.
+///
+/// The fixed-size scratch frame admits only local loads/stores and primitive
+/// numeric operations. Received upvalue writes are delayed until a supported
+/// `Return`, so an unsupported value or opcode can fall back to the full VM
+/// without duplicating observable work.
 pub(crate) fn try_eval_numeric_leaf(
     bytecode: &Bytecode,
     params: &FunctionParams,

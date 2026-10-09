@@ -1,3 +1,11 @@
+//! Lexical scopes at compile time: declaring `let`/`const`/class slots,
+//! resolving a name through the scope stack, and computing which enclosing
+//! slots a nested function captures (`active_lexical_captures`). Also the
+//! early scans for lexically declared and Annex B blocked names.
+//!
+//! Captures are `(storage name, parent slot)` pairs, never names alone: the
+//! runtime wires a closure to its parent's cells by slot index.
+
 use qjs_ast::{BindingPattern, ForInLeft, ForInit, FunctionParams, Stmt, SwitchCase, VarKind};
 
 use crate::RuntimeError;
@@ -258,7 +266,8 @@ impl Compiler {
             .find_map(|scope| scope.get(name).copied())
     }
 
-    /// Resolves bindings that have moved onto shared cells through T016 S4.
+    /// Resolves the slot of a binding a nested function may capture as a
+    /// shared cell.
     /// Lexical scopes win over same-named function-environment bindings;
     /// parameters and body `var`/function declarations are otherwise
     /// capturable even though they live in `local_slots` rather than

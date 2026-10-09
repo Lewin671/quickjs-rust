@@ -1,3 +1,17 @@
+//! The bytecode IR: the `Op` instruction set, `Local` slot metadata, and
+//! `Bytecode`, the compiled form of one script or function body.
+//!
+//! A `Bytecode`'s code, constants and locals do not change once it is built,
+//! and it is shared behind `Rc`. Everything else it holds is derived from
+//! them: per-call facts precomputed at construction (`cached_*`), each
+//! accelerator tier's program in a `OnceCell` filled on first use (a cached
+//! `None` or empty list records a refusal), and per-body storage pools.
+//!
+//! Jump operands are absolute indices into `code`, and the tiers record
+//! those indices in their own programs. Nothing may insert or remove an
+//! instruction after construction; a lowered stream (`virtual_object`) keeps
+//! the original offsets one-for-one.
+
 use std::{
     cell::{OnceCell, RefCell},
     collections::{BTreeSet, HashMap, HashSet},
@@ -701,9 +715,10 @@ pub struct Bytecode {
     pub(super) global_scope: bool,
     /// Compiler temporaries that only ever hold a statement completion value
     /// in a function body, where no completion value is observable. They are
-    /// dead stores kept for the operand-stack contract the loop recognizers
-    /// match; the string append fast path may drop a value they hold so the
-    /// appended string stays uniquely owned. Empty for script and eval code.
+    /// dead stores: the typed loop reads one as `undefined` and discards a
+    /// store into one, and the string append fast path may drop a value they
+    /// hold so the appended string stays uniquely owned. Empty for script and
+    /// eval code.
     pub(super) dead_completion_slots: Vec<usize>,
     /// Whether this bytecode was compiled in strict mode after applying any
     /// source prologue. Direct eval needs this to choose the correct
@@ -717,19 +732,19 @@ pub struct Bytecode {
     /// value, while accessors, prototypes, proxies, and primitive receivers
     /// retain the ordinary VM path.
     pub(super) this_property_leaf_plan: Option<super::vm_this_property_leaf::ThisPropertyLeafPlan>,
+    /// The wide compact tier's program for this body, compiled on first use.
+    pub(super) compact_wide_program: OnceCell<Option<super::compact_fn::wide::WideProgram>>,
     /// Whole-function register program for a body the compact tier admits, or
     /// `None` once compilation has proved it cannot be represented. Caching
     /// the negative answer is what keeps an unadmitted body at one `OnceCell`
     /// read per call.
-    /// The wide compact tier's program for this body, compiled on first use.
-    pub(super) compact_wide_program: OnceCell<Option<super::compact_fn::wide::WideProgram>>,
     pub(super) compact_function_program:
         OnceCell<Option<super::compact_fn::CompactFunctionProgram>>,
     /// The compact program lowered to `f64` registers, when every value it
     /// holds is a number, boolean or `undefined` (`compact_fn::numeric_plan`).
     pub(super) compact_numeric_plan: OnceCell<Option<std::rc::Rc<super::compact_fn::NumericPlan>>>,
-    /// Shape-independent register programs for this body's numeric loop
-    /// regions, compiled on first entry to any loop.
+    /// Typed-loop register programs for this body's loop regions, compiled
+    /// on first use.
     pub(super) typed_loop_programs: OnceCell<Vec<super::typed_loop::TypedLoopProgram>>,
     pub(super) numeric_mutation_loop_plans:
         OnceCell<Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>>,

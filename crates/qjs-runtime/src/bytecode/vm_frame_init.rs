@@ -3,9 +3,8 @@
 //!
 //! This is deliberately separate from the interpreter loop. Building an
 //! activation and running one are different responsibilities with different
-//! costs, and construction is what the call-frame migration rewrites; keeping
-//! it in its own module lets that work be reviewed without reading the
-//! dispatch match.
+//! costs; keeping construction in its own module lets it be reviewed without
+//! reading the dispatch match.
 
 use super::DirectCallSlots;
 use super::frame_program::FrameBytecode;
@@ -394,15 +393,15 @@ impl<'a> Vm<'a> {
     /// - In a direct eval's top-level code with no `eval` or `with` of its
     ///   own, the scope is a fork only that code writes, and its `var`s are
     ///   in it from the start: no name can appear later, so the closure drops
-    ///   it (`Drop`). `format0 = function () { return this.getFullYear() +
-    ///   ... }` in date-format-xparb is the case.
+    ///   it (`Drop`). A formatter assigned in eval'd source, `format0 =
+    ///   function () { return this.getFullYear() + ... }`, is the case.
     /// - In a function body that has a direct `eval`, a later `eval` there
     ///   can add a `var` the closure would then have to see, so the closure
     ///   keeps the scope but bypasses it until the scope next changes which
     ///   names it binds (`Bypass`; `DynamicBindings::bypass`). A frame that
     ///   can suspend is left alone: its `eval` could run while one of these
-    ///   closures is mid-call. date-format-tofte's formatters and
-    ///   string-tagcloud's `walk` are the case.
+    ///   closures is mid-call. Helper closures created inside a function
+    ///   that also calls `eval` are the case.
     pub(super) fn closure_scope_use(
         &self,
         closure: &Bytecode,
@@ -441,7 +440,7 @@ impl<'a> Vm<'a> {
     /// overlaid, no name has been remapped since (its generation), and the
     /// frame would overlay exactly the same cells in the same order. The
     /// check walks the frame's locals but hashes no name, where the overlay
-    /// hashed every one (date-format-tofte spent 15% there).
+    /// hashes every one.
     pub(super) fn frame_deopt_bindings_memoized(&mut self) -> Option<DynamicBindings> {
         let bindings = self.env.deopt_bindings()?.clone();
         if let Some(memo) = self

@@ -1,3 +1,7 @@
+//! The full [[Set]]: `set_property` and `set_property_key` for every
+//! receiver kind, including primitives, functions, arrays, Proxies and
+//! setters found on the prototype chain.
+
 use crate::CallEnv;
 use crate::{
     ObjectRef, Property, PropertyKey, RuntimeError, Value, array_prototype, call_function,

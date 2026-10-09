@@ -5,9 +5,7 @@
 //! resolves names through the realm gets an empty realm frame, and only a
 //! callee that can actually see the caller's dynamic name view gets that view
 //! materialized. Recording which of those a call produced -- its provenance --
-//! is what lets the call path skip bookkeeping that is absent by construction,
-//! and it is the fact the frame-stack migration needs to decide whether a
-//! callee can run on the caller's own VM.
+//! is what lets the call path skip bookkeeping that is absent by construction.
 
 use crate::function::CallEnv;
 use crate::value::Value;

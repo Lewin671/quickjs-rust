@@ -1,3 +1,7 @@
+//! Class evaluation for the interpreter: `Op::NewClass` (constructor,
+//! heritage, methods, fields, static blocks) and the `super` property,
+//! method and call operations.
+
 use std::{collections::HashMap, rc::Rc};
 
 use crate::{

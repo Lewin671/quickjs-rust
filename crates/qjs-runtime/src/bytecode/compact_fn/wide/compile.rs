@@ -1,11 +1,16 @@
 //! Lowers a stack-machine body into the wide register form.
 //!
 //! The transformation is the numeric tier's: every operand-stack depth is a
-//! fixed register, locals occupy the low registers, and admission is
-//! all-or-nothing. What differs is the admitted set -- named property reads
-//! and writes, `this`, resolved calls, `Dup`, and backward edges -- and the
-//! side tables that hold the named-property sites so the operation word
-//! stays eight bytes.
+//! fixed register and locals occupy the low registers. What differs is the
+//! admitted set -- named property reads and writes, `this`, resolved calls,
+//! `Dup`, and backward edges -- and the side tables that hold the
+//! named-property sites so the operation word stays eight bytes.
+//!
+//! Admission is decided for the whole body at compile time, but an admitted
+//! body need not run here to completion: at an `is_exit_safe` operation, and
+//! at a backward edge a loop accelerator may claim, the lowering emits
+//! `WideOp::Exit`, which hands the activation to an interpreter frame at that
+//! exact instruction. Any other unsupported operation rejects the body.
 
 use std::rc::Rc;
 
@@ -420,8 +425,8 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
     // they are take the local directly; every other operation, and every
     // join, first materializes the pending copies (`materialize`), so the
     // stack registers hold what the bytecode's operand stack holds wherever
-    // anything else can observe them. `Move` was the most executed wide
-    // operation on the corpus -- a third of cdjs's -- mostly such copies.
+    // anything else can observe them. Without this, `Move` is the most
+    // executed wide operation, and most moves are such copies.
     let mut aliases: Vec<Option<u16>> = vec![None; stack_registers];
 
     for (ip, op) in code.iter().enumerate() {

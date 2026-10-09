@@ -1,3 +1,10 @@
+//! Translation of a loop region's bytecode into a dense Number program.
+//!
+//! `Translator` interprets the region's operand stack abstractly and emits
+//! one `NumberInstruction` per value, so a register's index is the index of
+//! the operation that produces it. Any opcode or operand it does not model
+//! makes compilation return `None`; nothing is partially admitted.
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::*;

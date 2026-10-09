@@ -8,12 +8,17 @@
 //!
 //! Everything else lands here. The split is not semantic: property access,
 //! calls and the slow halves of the arithmetic opcodes are hot, and they are
-//! out of line precisely *because* they are large. Disassembled, the single
-//! 25,020-instruction dispatch function spilled `self`, the code pointer and
-//! the length across every dispatch, so all ~90 opcodes paid an eight-memory-op
-//! preamble before doing any work. An opcode that already costs a property
-//! lookup or a call absorbs one extra call; an opcode that costs four
-//! instructions cannot.
+//! out of line precisely *because* they are large. Inlined, they make the
+//! dispatch function spill `self`, the code pointer and the length across
+//! every dispatch. An opcode that already costs a property lookup or a call
+//! absorbs one extra call; an opcode that costs four instructions cannot,
+//! which is why the hottest opcodes each get their own `op_*` body instead
+//! of going through `run_general_op`.
+//!
+//! The split keeps the dispatch function small. Its measured effect on
+//! whole-program time was about one percent
+//! (`tasks/T024-general-register-core.md`), so do not expect further gains
+//! from rearranging it.
 //!
 //! `self.ip` is authoritative on entry and on exit, so an opcode that jumps,
 //! calls, throws or suspends behaves exactly as it did inline.

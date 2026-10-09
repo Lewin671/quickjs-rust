@@ -1,12 +1,13 @@
 //! A wide activation as the frame a typed loop program runs against.
 //!
-//! At a probed backedge the tier used to hand the whole activation to an
-//! interpreter frame so the typed loop tier could claim the loop there. For a
-//! function called many times around a short loop -- a bit count, a vector
-//! kernel -- building that frame and interpreting the rest of the call cost
-//! more than the loop. The program now runs against the activation's own
-//! registers: its locals are the frame's own bindings, received cells are read
-//! through their cells, and anything else declines.
+//! At a probed backedge the typed loop program runs against the wide
+//! activation's own registers, rather than the tier handing the whole
+//! activation to an interpreter frame for the typed loop tier to claim the
+//! loop there. For a function called many times around a short loop -- a bit
+//! count, a vector kernel -- building that frame and interpreting the rest of
+//! the call costs more than the loop. The activation's locals are the frame's
+//! own bindings, received cells are read through their cells, and anything
+//! else declines.
 
 use std::rc::Rc;
 

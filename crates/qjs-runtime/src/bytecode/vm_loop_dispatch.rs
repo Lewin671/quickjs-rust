@@ -9,7 +9,7 @@
 //!
 //! Keeping that decision in its own module separates "which accelerator runs
 //! this region" from the interpreter's opcode dispatch, and gives the probe
-//! chain one place to be measured and, later, narrowed.
+//! chain one place to be measured.
 
 use super::typed_loop::TypedLoopProgram;
 use super::vm::Vm;
@@ -17,11 +17,10 @@ use super::vm_numeric_mutation_loop::NumericMutationLoopPlan;
 
 /// The compiled loop accelerators available at one backward edge.
 ///
-/// The engines used to read these straight off `FrameState`, which is why the
-/// frame had to borrow them from its bytecode for its whole lifetime. Passing
-/// them in instead means the slices can come from wherever the caller can
-/// prove they live -- today the frame, and next from a stack-local bytecode
-/// owner the frame owns rather than borrows.
+/// The caller passes these in rather than the accelerators reading them off
+/// `FrameState`, so the slices borrow from whatever bytecode owner the caller
+/// holds -- for the interpreter, the activation's stack-local handle
+/// (`frame_program.rs`) -- and the frame need not borrow its bytecode.
 #[derive(Clone, Copy)]
 pub(super) struct LoopPlanView<'a> {
     pub(super) typed: &'a [TypedLoopProgram],
@@ -94,7 +93,7 @@ impl Vm<'_> {
             crate::diagnostics::count!(loop_plan_entries);
             return true;
         }
-        // Reaching here means both engines were consulted and both
+        // Reaching here means both accelerators were consulted and both
         // declined, so the whole probe chain was overhead on this edge.
         crate::diagnostics::count!(declined_loop_plan_edges);
         // With the typed-loop trace on, name the edge: a histogram of these

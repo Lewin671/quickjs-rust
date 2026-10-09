@@ -1,11 +1,12 @@
-//! Upvalue classification for the environment-model rewrite (T016 / S1).
+//! Upvalue classification for a compiled frame.
 //!
-//! Given a compiled frame, decide — once, at compile time — which of its
-//! bindings must live in shared [`Upvalue`](crate::function) cells and how each
-//! nested function sources the bindings it closes over, indexed rather than
-//! name-keyed. This is the pure analysis that the cell-slot migration
-//! (`docs/design/env-model-rewrite.md`, S2+) consumes; it is introduced ahead of
-//! its first consumer, so the items are `dead_code`-allowed until then.
+//! Given a compiled frame, decide which of its bindings must live in shared
+//! [`Upvalue`](crate::function) cells and how each nested function sources the
+//! bindings it closes over, indexed rather than name-keyed. The analysis is
+//! pure. Frame construction (`Vm::initial_local_upvalues` in
+//! `vm_bindings.rs`) consumes `UpvaluePlan::cell_slots`; the plan's other
+//! fields are read only by tests, which is why the items stay
+//! `dead_code`-allowed.
 //!
 //! ## What the existing data already tells us
 //!
@@ -29,15 +30,15 @@
 //! `captured_upvalues_for_function` path; they do not contribute to this
 //! frame-entry plan. Function-scope parameter and `var` captures are
 //! parent-local cells; only globals remain realm-backed. Dynamic name exposure
-//! is handled separately by the direct-eval/`with` deopt path documented in the
-//! design doc.
+//! is handled separately by the direct-eval/`with` deopt bindings
+//! (`function/env.rs`).
 
 use super::ir::{Bytecode, Local, Op};
 
 /// Where a nested function reads one captured binding from, resolved against the
 /// enclosing frame at closure-creation time.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[allow(dead_code)] // Consumed starting at T016 S2; see module docs.
+#[allow(dead_code)] // Partly test-only; see module docs.
 pub(super) enum UpvalueSource {
     /// A non-captured local slot of the enclosing frame, boxed into a cell.
     ParentLocal(usize),
@@ -47,7 +48,7 @@ pub(super) enum UpvalueSource {
 
 /// The per-frame upvalue plan.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-#[allow(dead_code)] // Consumed starting at T016 S2; see module docs.
+#[allow(dead_code)] // Partly test-only; see module docs.
 pub(super) struct UpvaluePlan {
     /// This frame's own `from_env` slots, in slot order. The index into this
     /// `Vec` is the frame's upvalue index — the cells it receives from its
@@ -64,7 +65,7 @@ pub(super) struct UpvaluePlan {
 
 /// Classifies the upvalue plan for a compiled frame. Pure; depends only on the
 /// frame's `locals` flags and its nested functions' `lexical_captures`.
-#[allow(dead_code)] // Consumed starting at T016 S2; see module docs.
+#[allow(dead_code)] // Partly test-only; see module docs.
 pub(super) fn resolve_upvalues(bytecode: &Bytecode) -> UpvaluePlan {
     let children: Vec<&[(String, usize)]> = bytecode
         .code
@@ -82,7 +83,7 @@ pub(super) fn resolve_upvalues(bytecode: &Bytecode) -> UpvaluePlan {
 /// Core classification, factored out of [`resolve_upvalues`] so it can be tested
 /// without constructing whole `Op::NewFunction` payloads. `children` is each
 /// nested function's `lexical_captures`, in code order.
-#[allow(dead_code)] // Consumed starting at T016 S2; see module docs.
+#[allow(dead_code)] // Partly test-only; see module docs.
 fn resolve_from_parts(locals: &[Local], children: &[&[(String, usize)]]) -> UpvaluePlan {
     let upvalue_slots: Vec<usize> = locals
         .iter()

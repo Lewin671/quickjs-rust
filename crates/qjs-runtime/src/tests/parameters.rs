@@ -521,8 +521,8 @@ fn destructured_parameters_iterate_iterables() {
         eval("function f([[k, v]]) { return k + '=' + v; } f(new Map([['a', 1]]));"),
         Ok(Value::String("a=1".to_owned().into()))
     );
-    // A hand-rolled iterable stands in for a generator until generator
-    // evaluation lands in T010 S2.
+    // A hand-rolled iterable exercises the iterator protocol without a
+    // generator.
     assert_eq!(
         eval(
             "function range() {

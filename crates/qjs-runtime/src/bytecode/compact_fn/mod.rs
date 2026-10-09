@@ -1,18 +1,16 @@
 //! Whole-function compact register execution.
 //!
-//! `Vm::run_current_activation` is one 24,792-instruction function whose
-//! register allocator has given up: every dispatch reloads `self`, `self.ip`,
-//! and the code pointer from the stack before any opcode does work. That
-//! preamble is most of the per-instruction gap against QuickJS-NG, and it is
-//! paid by all ninety-odd opcodes at once, so no per-opcode change can remove
-//! it (`tasks/archive/T021-single-vm-frame-stack-log.md`, 2026-08-01 root cause).
+//! Where `typed_loop` accelerates a *loop region* with scalar registers, this
+//! tier runs a *whole function body* on `Value` registers, in a small executor
+//! of its own that builds no `Vm` and no `FrameState`. That is what a
+//! recursive body needs: its cost is spread across activations, not
+//! concentrated in a backedge.
 //!
-//! This module is the other half of the answer that `typed_loop` gives for
-//! loops: a small, separate executor that keeps its program counter and
-//! register base in machine registers. Where `typed_loop` accelerates a *loop
-//! region* with scalar registers, this accelerates a *whole function body*
-//! with `Value` registers, which is what a recursive body needs -- its cost is
-//! spread across an activation, not concentrated in a backedge.
+//! This module is the numeric tier: constants, local moves, binary operators,
+//! jumps, calls and returns (`CompactOp`). `numeric_plan` lowers an admitted
+//! body further, to `f64` registers, and `wide` is a second executor for
+//! bodies that also touch properties, call methods, or loop. Entry points are
+//! `try_run_in_caller_env` and `try_run_standalone` (`activation`).
 //!
 //! Deliberate boundaries, which are what make the tier safe:
 //!

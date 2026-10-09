@@ -1,3 +1,7 @@
+//! Global-object setup and the global functions: `eval`, the URI and
+//! `escape` families, `isFinite`/`isNaN`, `print`, and the native Test262
+//! harness helpers.
+
 use qjs_parser::{EvalParseContext, parse_direct_eval_wtf16_script, parse_eval_script};
 use std::{collections::HashSet, rc::Rc};
 

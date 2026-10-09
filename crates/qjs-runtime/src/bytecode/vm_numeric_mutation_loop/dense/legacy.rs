@@ -1,8 +1,17 @@
 //! Compact executor for dense loops whose inputs all live in VM local slots.
 //!
+//! "Legacy" is a historical name, not a deprecation: this is the original
+//! local-only instruction set, selected for every plan `supports` accepts.
 //! Own-data sources and guarded native calls need the general executor in the
-//! parent module. Keeping the long-standing local-only instruction shape here
-//! avoids charging those extensions to the common local-array dispatch loop.
+//! parent module; keeping the local-only instruction shape here avoids
+//! charging those extensions to the common local-array dispatch loop. This
+//! module also owns the Number TypedArray executor (`typed_array`) and the
+//! Binary-bundle metadata it uses (`binary_bundle`).
+//!
+//! The dense compiler always produces the general plan. `supports` decides
+//! whether a plan may run here and `from_extended` converts it, so the two
+//! must agree: an instruction or source `from_extended` cannot represent has
+//! to be rejected by `supports` first.
 
 use std::rc::Rc;
 

@@ -1,3 +1,19 @@
+//! The bytecode compiler: its state, scope bookkeeping, and statements.
+//!
+//! `Compiler` turns one script, eval body, module or function body into a
+//! `Bytecode`. The `compiler_*.rs` files are further `impl Compiler` blocks
+//! split by syntax family; this file owns slot allocation, hoisting, and the
+//! loop, label and `try` context stacks.
+//!
+//! - Every local binding resolves to a slot index at compile time.
+//!   Global-scope `var` and function declarations live in the realm instead
+//!   (`global_hoisted`), and free names compile to name-keyed global
+//!   operations.
+//! - Jumps are absolute and patched after emission. A peephole that rewrites
+//!   the tail of `code` must respect `highest_jump_target`.
+//! - Completion values are threaded only where they are observable
+//!   (`tracks_completion_values`: script and eval code, not function bodies).
+
 use crate::value::name_hash::{NameMap, NameSet};
 
 use qjs_ast::{ForInLeft, ForInit, FunctionParams, Script, Stmt, VarKind};

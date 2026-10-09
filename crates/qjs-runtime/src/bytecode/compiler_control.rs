@@ -1,3 +1,10 @@
+//! Lowering for `for`-`in`, `for`-`of`, `for await`, `switch` and `with`.
+//!
+//! An iterator loop records its iterator and done slots in the loop context
+//! (`LoopIterator`), so a `break`, `continue` or `return` that leaves the
+//! loop emits the iterator close. `with_depth` likewise makes every exit
+//! from a `with` body emit its `ExitWith`.
+
 use qjs_ast::{
     AssignmentTarget, BinaryOp, BindingPattern, Expr, ForInLeft, Stmt, SwitchCase, VarKind,
 };

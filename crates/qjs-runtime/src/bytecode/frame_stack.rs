@@ -1,20 +1,18 @@
 //! Driving more than one frame on a single VM.
 //!
-//! Every ordinary call today constructs a whole nested [`Vm`] on the Rust
-//! stack -- 12,700,004 of them for a workload performing 12,700,004 calls --
-//! and recurses into it. That is the cost the call-frame migration exists to
-//! remove, and it is also why JavaScript recursion past roughly a thousand
-//! frames aborts the process with a native stack overflow instead of throwing
-//! a catchable `RangeError`.
+//! This driver lets a VM keep its callers on a heap stack, run one frame at a
+//! time, and resume the caller when the frame above it finishes.
 //!
-//! This module installs the driver that makes a second frame possible: the VM
-//! keeps its callers on a heap stack, runs one frame at a time, and resumes
-//! the caller when the frame above it finishes. **Nothing routes production
-//! calls here yet.** The point of landing it alone is that the completion and
-//! unwinding protocol can be proved correct before any call depends on it.
+//! **It is dormant.** Every call that needs a frame constructs a nested
+//! [`Vm`] on the Rust stack and recurses into it; no production path pushes
+//! a second frame, and only this module's tests do. `Vm::run` still goes
+//! through `run_completion`, which with no suspended callers is exactly one
+//! activation. The driver is kept so the completion and unwinding protocol
+//! stays tested independently of any routing; the routing experiments are
+//! recorded in `tasks/archive/T021-single-vm-frame-stack-log.md`.
 //!
 //! The load-bearing part is the error path. When a callee fails, the caller
-//! must get exactly what it gets today from a nested `Vm` returning `Err`:
+//! must get exactly what it gets from a nested `Vm` returning `Err`:
 //! its own `try`/`catch`/`finally` machinery, reached through
 //! `handle_runtime_error`, and propagation outward only when the caller has no
 //! handler. Reusing that function rather than re-implementing unwinding is
@@ -42,11 +40,10 @@ pub(super) enum FrameExit {
 
 /// What a caller does with the completion of the frame above it.
 ///
-/// Only one shape exists while nothing routes: an ordinary call expression
-/// leaves its result on the caller's operand stack. Constructors, `super`
-/// calls, and completion policies arrive with the stage that needs them.
-// Constructed by the stage that routes ordinary calls onto this VM. It exists
-// now so the completion protocol can be proved before any call depends on it.
+/// Only one shape exists: an ordinary call expression leaves its result on
+/// the caller's operand stack. Constructors, `super` calls, and completion
+/// policies are not represented.
+// Constructed only by tests: no production call routes onto this VM.
 #[allow(dead_code)]
 pub(super) enum FrameContinuation {
     PushResult,
@@ -76,7 +73,7 @@ impl<'a> Vm<'a> {
 
     /// Runs frames until the bottom one completes.
     ///
-    /// With no callers -- which is every execution until calls are routed --
+    /// With no callers -- which is every production execution --
     /// this is exactly one activation, and the loop below runs once.
     pub(super) fn run_completion(&mut self) -> Result<Completion, RuntimeError> {
         loop {
@@ -131,7 +128,7 @@ impl<'a> Vm<'a> {
 
     /// Restores `caller` and raises `error` inside it.
     ///
-    /// This is the same path a nested `Vm`'s `Err` takes today: the caller's
+    /// This is the same path a nested `Vm`'s `Err` takes: the caller's
     /// `try`/`catch`/`finally` claims it when the caller has a handler, and it
     /// propagates outward when it does not.
     fn resume_caller_with_error(
@@ -153,14 +150,14 @@ mod tests {
     use qjs_parser::parse_script;
 
     /// An ordinary evaluation, which must still take exactly one activation
-    /// and be unaffected by the driver until calls are routed.
+    /// and be unaffected by the driver.
     fn undriven(source: &str) -> Result<Value, RuntimeError> {
         eval(source)
     }
 
     #[test]
     fn a_script_with_no_callers_still_runs_exactly_one_activation() {
-        // The driver must be invisible until something routes into it.
+        // The driver must be invisible when nothing routes into it.
         assert_eq!(undriven("1 + 2;").unwrap(), Value::Number(3.0));
         assert_eq!(
             undriven("var total = 0; for (var i = 0; i < 5; i++) { total += i; } total;").unwrap(),
@@ -194,7 +191,7 @@ mod tests {
     #[test]
     fn a_throwing_frame_without_a_caller_handler_propagates() {
         // No live `try` at the caller, so the error must leave the driver --
-        // the same rule a nested `Vm`'s `Err` follows today.
+        // the same rule a nested `Vm`'s `Err` follows.
         let outer = parse_script("0;").expect("outer parses");
         let outer = compile_script(&outer).expect("outer compiles");
         let inner =

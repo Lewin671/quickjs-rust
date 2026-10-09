@@ -87,12 +87,11 @@ pub(in crate::bytecode) fn lower(bytecode: &Bytecode) -> VirtualObjectProgram {
         return original_program();
     }
 
-    // Loop plans are compiled from the immutable source stream and prepare
-    // stable receivers/callees from their real local values. Replacing one of
-    // those aliases with an undefined placeholder would make preparation fail
-    // and silently discard an already-proven faster execution route. Keep any
-    // candidate touched by a specialized loop materialized until the plans can
-    // consume virtual slots directly.
+    // Numeric-mutation loop plans are compiled from the immutable source
+    // stream and prepare stable receivers from their real local values.
+    // Replacing one of those aliases with an undefined placeholder would make
+    // preparation fail and silently discard the plan. The plans cannot read
+    // virtual slots, so any candidate one of them touches stays materialized.
     let numeric_mutation_loop_plans = bytecode.numeric_mutation_loop_plans.get_or_init(|| {
         super::super::vm_numeric_mutation_loop::NumericMutationLoopPlan::compile_all(bytecode)
     });
@@ -160,13 +159,12 @@ fn lower_variant(
         *op = replacement;
     }
     let fused = fuse_superinstructions(bytecode, analysis, &mut code, has_replacements);
-    // A function with no virtualizable object literal used to skip lowering
-    // entirely, which also skipped every shared-dispatch superinstruction --
-    // so ordinary code never got one. The compare-and-branch fusion depends on
-    // nothing but slot authority and basic-block shape, so it now runs for
-    // every analyzable function. The remaining fusions stay tied to scalar
-    // replacement: measured on their own they cost more than they save on
-    // loops the specialized loop plans already execute natively.
+    // The compare-and-branch fusion depends on nothing but slot authority and
+    // basic-block shape, so it runs for every analyzable function, including
+    // one with no virtualizable object literal. The remaining fusions stay
+    // tied to scalar replacement: on their own they were measured to cost
+    // more than they save (not re-measured since the loop-template plans were
+    // removed at d1313d52).
     if !has_replacements && !fused {
         return original_variant();
     }
